@@ -965,6 +965,7 @@ export function attachWebSockets(
           cursor: message.cursor,
           selection: Array.isArray(message.selection) ? message.selection : [],
           textSelection: selectedText,
+          ...(message.signal !== undefined ? { signal: message.signal } : {}),
         });
       };
       if (vouched.has(actor.id)) { void beat().catch(() => {}); return; }

@@ -2,11 +2,12 @@ import type {
   Actor,
   CanvasContents,
   Capability,
+  CursorSignal,
   Operation,
   PresenceActivity,
   PresenceSession,
 } from "@isocan/core";
-import { groupChangeItemIds, narrowed, newId, textAttention } from "@isocan/core";
+import { cursorSignal, groupChangeItemIds, narrowed, newId, textAttention } from "@isocan/core";
 
 /**
  * The ephemeral plane. Presence lives in daemon memory and WS fan-out only —
@@ -105,6 +106,7 @@ export class PresenceHub {
       cursor?: { x: number; y: number } | null;
       selection?: string[];
       textSelection?: import("@isocan/core").TextAttention | null;
+      signal?: CursorSignal | string | null;
       status?: string | null;
       statusSource?: "explicit" | "lifecycle" | "inferred";
       activity?: PresenceActivity | null;
@@ -157,6 +159,7 @@ export class PresenceHub {
       ...session,
       via: origin,
       ...(session.textSelection !== undefined ? { textSelection: textAttention(session.textSelection) } : {}),
+      ...(session.signal !== undefined ? { signal: cursorSignal(session.signal) } : {}),
     }));
   }
 
@@ -236,6 +239,7 @@ export class PresenceHub {
       const next: SessionState = {
         ...incoming,
         ...(incoming.textSelection !== undefined ? { textSelection: textAttention(incoming.textSelection) } : {}),
+        ...(incoming.signal !== undefined ? { signal: cursorSignal(incoming.signal) } : {}),
         origin,
         lastSeenMs: Date.now(),
         statusSource: null,
@@ -367,7 +371,8 @@ function patchSession(
     actor?: Actor;
     cursor?: { x: number; y: number } | null;
     selection?: string[];
-      textSelection?: import("@isocan/core").TextAttention | null;
+    textSelection?: import("@isocan/core").TextAttention | null;
+    signal?: CursorSignal | string | null;
     status?: string | null;
     statusSource?: "explicit" | "lifecycle" | "inferred";
     activity?: PresenceActivity | null;
@@ -380,6 +385,7 @@ function patchSession(
   if (patch.cursor !== undefined) session.cursor = patch.cursor;
   if (patch.selection !== undefined) session.selection = patch.selection;
   if (patch.textSelection !== undefined) session.textSelection = textAttention(patch.textSelection);
+  if (patch.signal !== undefined) session.signal = cursorSignal(patch.signal);
   if (patch.status !== undefined) {
     // Words the actor said outrank narration the system derived; lifecycle
     // turns (parking, waking, a posted comment) outrank everything. The

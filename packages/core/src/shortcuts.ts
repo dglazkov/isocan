@@ -116,7 +116,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["⌘⏎"], does: "Send the comment you are writing", group: "Talking", note: "Works from a reply box too, where ⏎ is a new line" },
   { keys: ["@"], does: "Address someone", note: "They wake for it", group: "Talking" },
   { keys: ["#"], does: "Point at an item", note: "It rides along as a card", group: "Talking" },
-  { keys: ["/"], does: "Ask for a known piece of work", group: "Talking", note: "At the start of a message only — that is the only place it counts" },
+  { keys: ["/"], does: "Signal on your cursor, or ask for a known piece of work", group: "Talking", note: "On the canvas, type a short message in place of your name for 20s (Esc clears); at the start of a message, opens slash commands" },
   { keys: ["?"], does: "This list", group: "Talking" },
 ];
 

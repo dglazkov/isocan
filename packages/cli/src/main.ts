@@ -11914,13 +11914,33 @@ session
 
 session
   .command("say [status]")
-  .description("Set (or clear) the status line under your cursor")
+  .description("Set (or clear) the status line under your cursor (or --signal to replace your cursor name for 20s)")
+  .option("--signal", "show temporarily in place of your name on the cursor chip for 20 seconds")
   .action(
-    run(async (status: string | undefined, _opts: unknown, cmd: Command) => {
+    run(async (status: string | undefined, opts: { signal?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
+      if (opts.signal) {
+        const { cursorSignal } = await import("@isocan/core");
+        await touchSession(ctx, p.id, { signal: status ? cursorSignal(status) : null });
+        console.log(status ? `signal: ${status} (20s)` : "signal cleared");
+        return;
+      }
       await touchSession(ctx, p.id, { status: status ?? null });
       console.log(status ? `status: ${status}` : "status cleared");
+    }),
+  );
+
+session
+  .command("signal [text]")
+  .description("Temporarily replace your name on your cursor for 20 seconds; omit text to clear")
+  .action(
+    run(async (text: string | undefined, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const p = await resolveCanvas(ctx);
+      const { cursorSignal } = await import("@isocan/core");
+      await touchSession(ctx, p.id, { signal: text ? cursorSignal(text) : null });
+      console.log(text ? `signal: ${text} (20s)` : "signal cleared");
     }),
   );
 

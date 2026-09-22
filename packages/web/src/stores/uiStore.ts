@@ -1,4 +1,4 @@
-import type { GroupBox, TextAnchor } from "@isocan/core";
+import type { CursorSignal, GroupBox, TextAnchor } from "@isocan/core";
 import { create } from "zustand";
 import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
@@ -160,6 +160,11 @@ interface UiStore {
    * comment code already reads — the two never disagree. */
   activeTool: Tool;
   commentMode: boolean;
+  /** True while the "/" inline cursor-chip input is open. */
+  cursorSignalEditing: boolean;
+  /** Active 20-second cursor signal replacing the username on your cursor. */
+  cursorSignal: CursorSignal | null;
+  setCursorSignalState: (state: { cursorSignalEditing?: boolean; cursorSignal?: CursorSignal | null }) => void;
   /** The mark being PLACED: while set, a click on a sketch on the wall puts
    *  this emoji where the click landed (sprint phase 4's heat map). Local,
    *  like a tool; Escape clears it. Null is the ordinary pointer. */
@@ -648,6 +653,9 @@ export const useUiStore = create<UiStore>((set, get) => {
     inkColor: readInkColor(),
     activeTool: "select",
     commentMode: false,
+    cursorSignalEditing: false,
+    cursorSignal: null,
+    setCursorSignalState: (state) => set(state),
     stamp: null,
     adding: null,
     trashOpen: false,

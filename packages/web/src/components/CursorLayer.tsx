@@ -4,7 +4,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { markOf } from "@isocan/core";
+import { cursorChipLabel, markOf } from "@isocan/core";
 import { useActorMarks } from "../lib/marks.ts";
 import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
@@ -169,6 +169,16 @@ export function CursorLayer() {
     return () => clearInterval(timer);
   }, [visible.length]);
 
+  const nextSignalExpiry = visible.reduce((min, s) => {
+    const exp = s.signal?.expiresAt;
+    return exp && exp > Date.now() && (min === 0 || exp < min) ? exp : min;
+  }, 0);
+  useEffect(() => {
+    if (!nextSignalExpiry) return;
+    const timer = setTimeout(() => force((n) => n + 1), Math.max(0, nextSignalExpiry - Date.now()) + 20);
+    return () => clearTimeout(timer);
+  }, [nextSignalExpiry]);
+
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 25 }}>
       {visible.map((session) => {
@@ -178,7 +188,7 @@ export function CursorLayer() {
         const pos = rec ?? fallback!;
         const screen = worldToScreen(viewport, pos.x, pos.y);
         const color = actorColorIn(colors, session.actor.id);
-        const name = session.label ?? session.actor.name;
+        const name = cursorChipLabel(session.signal, session.label ?? session.actor.name);
         /**
          * **The mark, in front of the name.**
          *

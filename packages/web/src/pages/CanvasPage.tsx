@@ -19,12 +19,14 @@ import {
   workbenchPath,
 } from "@isocan/core";
 import {
+  clearCursorSignal,
   connectToCanvas,
   disconnect,
   setNotice,
   loadBacking,
   publishSelection,
   setPresenceActor,
+  startCursorSignal,
   useCanvasStore,
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -785,7 +787,8 @@ function CanvasSurface({
         // Watching is the outermost mode: Esc hands the camera back first.
         // A mark being placed is the innermost: it is the thing under the
         // pointer right now.
-        if (ui.drag || ui.resize || ui.groupPreview) { ui.setDrag(null); ui.setResize(null); ui.setGroupPreview(null); ui.setGroupDropTarget(null); ui.setGuides([]); }
+        if (ui.cursorSignalEditing || ui.cursorSignal) { clearCursorSignal(); }
+        else if (ui.drag || ui.resize || ui.groupPreview) { ui.setDrag(null); ui.setResize(null); ui.setGroupPreview(null); ui.setGroupDropTarget(null); ui.setGuides([]); }
         else if (ui.stamp) ui.setStamp(null);
         else if (ui.renamingItemId) ui.setRenaming(null);
         else if (ui.followSessionId) ui.setFollow(null);
@@ -905,6 +908,9 @@ function CanvasSurface({
            borrow for one gesture, and holding C to place one comment would
            fight the click that places it. */
         ui.setCommentMode(!ui.commentMode);
+      } else if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) {
+        e.preventDefault();
+        startCursorSignal();
       } else if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.repeat) {
         // The key every app with shortcuts has trained people to try.
         e.preventDefault();

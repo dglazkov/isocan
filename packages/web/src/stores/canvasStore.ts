@@ -20,6 +20,8 @@ import type {
   RefusalNotice,
 } from "@isocan/core";
 import {
+  CURSOR_SIGNAL_MS,
+  cursorSignal,
   CURRENT_CLIENT_FEATURES,
   CANVAS_GROUPS_REQUIRED,
   CLIENT_FEATURES_PARAM,
@@ -605,6 +607,54 @@ export function publishSelection(): void {
   schedulePresenceFlush();
 }
 
+let signalTimer: ReturnType<typeof setTimeout> | null = null;
+function resetSignalTimer(ms = CURSOR_SIGNAL_MS): void {
+  if (signalTimer) clearTimeout(signalTimer);
+  signalTimer = setTimeout(() => {
+    signalTimer = null;
+    useUiStore.getState().setCursorSignalState({ cursorSignalEditing: false, cursorSignal: null });
+    flushPresence();
+  }, ms);
+}
+
+/** Enter "/" edit mode on your cursor chip; reverts to your username after 20s of inactivity. */
+export function startCursorSignal(): void {
+  const ui = useUiStore.getState();
+  if (ui.activeTool !== "select" || ui.commentMode) ui.setActiveTool("select");
+  ui.setCursorSignalState({ cursorSignalEditing: true });
+  resetSignalTimer();
+}
+
+/** Live-update the temporary cursor signal as you type, resetting the 20s countdown on each keystroke. */
+export function setCursorSignalText(raw: string): void {
+  const next = cursorSignal(raw);
+  useUiStore.getState().setCursorSignalState({ cursorSignal: next });
+  resetSignalTimer();
+  schedulePresenceFlush();
+}
+
+/** Finish typing (Enter / blur): keep a non-empty message on your cursor for 20s, or clean up if blank. */
+export function commitCursorSignal(raw: string): void {
+  const next = cursorSignal(raw);
+  if (!next) {
+    clearCursorSignal();
+    return;
+  }
+  useUiStore.getState().setCursorSignalState({ cursorSignalEditing: false, cursorSignal: next });
+  resetSignalTimer();
+  flushPresence();
+}
+
+/** Immediately clean up the cursor signal (Esc) and restore your username. */
+export function clearCursorSignal(): void {
+  if (signalTimer) {
+    clearTimeout(signalTimer);
+    signalTimer = null;
+  }
+  useUiStore.getState().setCursorSignalState({ cursorSignalEditing: false, cursorSignal: null });
+  flushPresence();
+}
+
 function schedulePresenceFlush(): void {
   if (presenceTimer) return;
   const wait = Math.max(0, PRESENCE_INTERVAL_MS - (Date.now() - lastFlush));
@@ -615,13 +665,15 @@ function flushPresence(): void {
   presenceTimer = null;
   lastFlush = Date.now();
   if (!presenceActor || !socket || socket.readyState !== WebSocket.OPEN) return;
+  const ui = useUiStore.getState();
   const message: ClientMessage = {
     type: "presence",
     sessionId: CLIENT_ID,
     actor: presenceActor,
     cursor: lastCursor,
-    selection: useUiStore.getState().selectedItemIds,
+    selection: ui.selectedItemIds,
     textSelection: selectedText,
+    signal: cursorSignal(ui.cursorSignal),
   };
   socket.send(JSON.stringify(message));
 }

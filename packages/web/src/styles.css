@@ -4324,6 +4324,12 @@ button.mt-card:hover { border-color: var(--accent); }
    scale ratchet is right that a seventeenth size earns nothing. A hair of
    space so it does not touch the first letter. */
 .cursor-mark { font-weight: 400; margin-right: 3px; }
+.cursor-chip-row { display: flex; align-items: center; gap: 8px; }
+.cursor-chip-input {
+  border: 0; outline: none; background: transparent; color: inherit; font: inherit;
+  padding: 0; margin: 0; min-width: 120px; caret-color: currentColor;
+}
+.cursor-chip-input::placeholder { color: inherit; }
 .cursor-chip em { font-style: normal; font-weight: 400; font-size: 10px; opacity: 0.85; }
 /* Quiet-but-alive: the agent hasn't touched the daemon in a while but its
    session is live — breathe instead of freezing, so thinking reads as

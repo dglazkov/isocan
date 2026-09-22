@@ -3086,7 +3086,7 @@ still manages people and access. `session select` still shares quoted text.
 
 `isocan --help` covers everything; the commands you'll live in:
 `comment list|add|reply|anchor|main|rm`,
-`session start|on|work|say|point|select|end|move`,
+`session start|on|work|say|signal|point|select|end|move`,
 `canvas create|list|show|edit|archive|delete` (delete needs `--force` and is
 NOT undoable — confirm on the thread first, and never delete a canvas you did
 not make). **`canvas archive` is the one to reach for instead**: it takes a
