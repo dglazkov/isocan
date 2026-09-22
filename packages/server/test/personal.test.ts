@@ -207,14 +207,43 @@ it("forwards destination birth and private reads to the authority, without a rep
   expect(linked.link.home).toBe(home.base);
   const metadata = await json(await request(local, localBadge, "POST", "/api/projects/prj_destination/personal/read", { actorId: person.id, itemId: linked.link.itemId, mode: "summary" }));
   expect(metadata).toMatchObject({ home: home.base, sourceCanvasId: source });
-  const snapshot = vi.spyOn(local.daemon.engine, "getSnapshot"); const log = vi.spyOn(local.daemon.engine, "getLog");
+  /**
+   * **Only what the REQUEST read, which is not the same as what the replica
+   * touched** — and telling those apart is what makes this assertion a fact
+   * rather than a race.
+   *
+   * A replica holds the private canvas's bytes; the claim under test is that a
+   * scoped read is answered by the authority and never off them. But the
+   * replica's own `HomeLink` reads its local copy on its own schedule for its
+   * own bookkeeping — `localSeq()` for the cursor it dials with, and the
+   * presence relay for the canvas's agents — so a bare spy on this engine
+   * counts the daemon's housekeeping as if a client had asked. It passed here
+   * because those reads land in the milliseconds BEFORE the spies do, and
+   * failed twice on a loaded CI shard when one landed after, blocking two
+   * releases with a canvas id no request had ever read (21/22 Sep 2026).
+   * Polling could not have fixed it: the value is not late, it is not the
+   * request's.
+   *
+   * The synchronous stack at the moment of the call names the immediate
+   * caller, so the link's two reads are excluded by the file they come from
+   * and everything else — every route in `http.ts` — still counts.
+   */
+  const reads: string[] = [];
+  const spyLocal = (method: "getSnapshot" | "getLog") => {
+    const real = local.daemon.engine[method].bind(local.daemon.engine) as (...args: unknown[]) => unknown;
+    vi.spyOn(local.daemon.engine, method).mockImplementation(((...args: unknown[]) => {
+      if (args[0] === source && !(new Error().stack ?? "").includes("home-link.ts")) reads.push(`${method} ${String(args[0])}`);
+      return real(...args);
+    }) as never);
+  };
+  spyLocal("getSnapshot"); spyLocal("getLog");
   const policy = { mode: "direct" as const, actorId: person.id, intent: "read" as const };
   const scoped = { ...localBadge.headers, [SOURCE_POLICY_HEADER]: sourcePolicyHeader({ policy, expectedHome: home.base }), "Content-Type": "application/json" };
   const current = await fetch(`${local.base}/api/projects/${source}/canvas`, { headers: scoped });
   expect(current.status, await current.clone().text()).toBe(200);
   const watch = await fetch(`${local.base}/api/oplog/watch`, { method: "POST", headers: scoped, body: JSON.stringify({ only: [source], cursors: { [source]: 0 }, holdMs: 0 }) });
   expect(watch.status, await watch.clone().text()).toBe(200);
-  expect(snapshot.mock.calls.filter(([id]) => id === source)).toEqual([]); expect(log.mock.calls.filter(([id]) => id === source)).toEqual([]);
+  expect(reads).toEqual([]);
 });
 
 it("flat space membership enforces source intent and actor identity before reading a personal source", async () => {

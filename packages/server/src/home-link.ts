@@ -1628,7 +1628,7 @@ export class HomeLink implements HomeConnection {
       for (const actorId of local.actorIds) {
         const record = agents[actorId];
         if (!record) continue;
-        const key = `${link.canvasId} ${actorId}`;
+        const key = `${link.canvasId}\u0000${actorId}`;
         const ok = await this.ensureClaim(record.actor).then(
           () => true,
           (err: unknown) => {
