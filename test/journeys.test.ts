@@ -202,6 +202,17 @@ describe("the journeys runner", () => {
   });
 });
 
+describe("an editor chord means what it means on the runner's platform", () => {
+  // Two journeys were written on a Mac with a raw ⌘A. The nightly runs on
+  // Linux, where CodeMirror's Mod-a is Ctrl, so ⌘A selected nothing and the
+  // replacement text was inserted at the caret — a DESIGN.md spliced into
+  // itself, reported six nights running as a product bug (lesson #89).
+  it("selects all through rig.selectAll, never a hard-coded ⌘A", () => {
+    expect(runner).not.toMatch(/modifiers: 4, key: "a"/);
+    expect(runner).toMatch(/selectAll: async[\s\S]{0,200}process\.platform === "darwin" \? 4 : 2/);
+  });
+});
+
 describe("the journeys persona", () => {
   it("has no push-time goal, however often it walks", () => {
     /* `ratchet.mjs` runs every persona's goals on every push. A ninety-second

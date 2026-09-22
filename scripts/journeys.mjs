@@ -247,6 +247,19 @@ async function rig() {
       await sleep(600);
     },
     /**
+     * Select all in the focused editor. CodeMirror binds Mod-a, which is ⌘ on a
+     * Mac and Ctrl everywhere else — and the nightly runs on Linux, where ⌘A
+     * selects nothing and the next insertText lands at the caret, splicing the
+     * new document into the middle of the old one. The browser runs on this
+     * machine, so this machine's platform is the editor's.
+     */
+    selectAll: async () => {
+      const k = { windowsVirtualKeyCode: 65, key: "a", code: "KeyA" };
+      const modifiers = process.platform === "darwin" ? 4 : 2;
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers, ...k });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers, ...k });
+    },
+    /**
      * A key held DOWN, with the release handed back — the gesture a tap is
      * not. T and H are tap-to-latch, hold-to-borrow, and since 4a758df6 a held
      * T that placed something keeps itself, so the hold has to be a real one:
@@ -376,7 +389,7 @@ export const JOURNEYS = [
       const snapshot = async () => (await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json())`)).canvas;
       const readItem = async item => { const hash = item.versions.find(v => v.id === item.currentVersionId).blobHash; return b.ev(`fetch('/api/projects/${id}/blobs/${hash}').then(r => r.text())`); };
       const openScreen = async () => { await rig.go(`/p/${id}/w/${added.itemId}`); await until(b, `!!document.querySelector('.stage-editor') || !!document.querySelector('button[title="Open the editor"]')`, "screen editor access"); if (!await b.ev(`!!document.querySelector('.stage-editor')`)) await rig.click('button[title="Open the editor"]'); await until(b, `!!document.querySelector('[data-design-policy]')`, "effective contract report"); };
-      const replaceEditor = async text => { await rig.click(".cm-content", "document editor"); await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 }); await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 }); await b.send("Input.insertText", { text }); };
+      const replaceEditor = async text => { await rig.click(".cm-content", "document editor"); await rig.selectAll(); await b.send("Input.insertText", { text }); };
       await openScreen();
       same(await b.ev(`document.querySelector('[data-design-policy]').dataset.designLiterals`), initial.policy.effective.literals, "CLI/browser literal policy");
       same(await b.ev(`[...document.querySelectorAll('[data-design-code]')].map(el => el.dataset.designCode)`), initial.diagnostics.map(one => one.code), "CLI/browser contract findings");
@@ -424,7 +437,7 @@ export const JOURNEYS = [
       await replaceEditor(repaired);
       await until(b, `document.querySelector('.design-lint-summary')?.dataset.designFindings === '0'`, "authored HTML repair check");
       await rig.clickText(".design-lint button", "Save repair");
-      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair saved as one version')`, "HTML repair accepted");
+      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair saved as one operation')`, "HTML repair accepted");
       const after = await snapshot();
       same(after.items[initial.governing.itemId], restoredPolicy, "HTML repair kept governing version stack");
       same(await readItem(after.items[initial.governing.itemId]), design, "HTML repair kept governing bytes");
@@ -506,7 +519,7 @@ export const JOURNEYS = [
       await b.send("Input.insertText", { text: "#112233" });
       await until(b, `document.querySelector('.design-lint-summary')?.dataset.designFindings === '0'`, "repaired draft check");
       await rig.clickText(".design-lint button", "Save repair");
-      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair saved as one version')`, "accepted repair receipt");
+      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair saved as one operation')`, "accepted repair receipt");
       let item = (await snapshot()).items[webItem.id];
       same(item.versions.length, webItem.versions.length + 1, "repair version count");
       const savedVersion = item.currentVersionId;
@@ -522,9 +535,16 @@ export const JOURNEYS = [
       same(await readItem((await snapshot()).items[webItem.id]), bad, "undo restored original bytes");
       await rig.go(`/p/${id}/w/${webItem.id}`);
       await until(b, `!!document.querySelector('.cm-content')`, "editor after undo");
+      // An accepted repair is done: a second one starts from inputs a person
+      // re-reviewed, not from the first repair's capture (cdcf22d3).
+      await until(b, `[...document.querySelectorAll('.design-lint button')].some(el => el.textContent === 'Review current repair inputs' && !el.disabled)`, "review current repair inputs");
+      await rig.clickText(".design-lint button", "Review current repair inputs");
+      await until(b, `[...document.querySelectorAll('.design-lint button')].some(el => el.textContent.startsWith('I reviewed these inputs'))`, "reviewed inputs");
+      await b.ev(`[...document.querySelectorAll('.design-lint button')].find(el => el.textContent.startsWith('I reviewed these inputs')).scrollIntoView({block:'center'})`);
+      await rig.clickText(".design-lint button", "I reviewed these inputs; retain my edits");
+      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Current inputs explicitly reviewed')`, "fresh repair capture");
       await rig.click(".cm-content", "HTML editor");
-      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
-      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
+      await rig.selectAll();
       await b.send("Input.insertText", { text: good });
       await until(b, `document.querySelector('.design-lint-summary')?.dataset.designFindings === '0'`, "new repair draft");
       runCli("--canvas", id, "edit", webItem.id, newerFile);
@@ -532,7 +552,7 @@ export const JOURNEYS = [
       await until(b, `[...document.querySelectorAll('.design-lint button')].some(el => el.textContent === 'Save repair' && !el.disabled)`, "fresh draft report retaining opened base");
       const concurrent = (await snapshot()).items[webItem.id];
       await rig.clickText(".design-lint button", "Save repair");
-      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair not saved')`, "stale repair refusal");
+      await until(b, `document.querySelector('.design-lint-receipt')?.textContent.includes('Repair refused')`, "stale repair refusal");
       item = (await snapshot()).items[webItem.id];
       same(item.currentVersionId, concurrent.currentVersionId, "stale repair kept concurrent version");
       same(item.versions.length, concurrent.versions.length, "stale repair added no version");
@@ -547,8 +567,7 @@ export const JOURNEYS = [
       const upload = await Promise.race([uploadPaused, sleep(5000).then(() => { throw new Error("normal save did not upload"); })]);
       const laterDraft = `${good}<!-- typed during upload -->`;
       await rig.click(".cm-content", "editable source during upload");
-      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
-      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 4, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
+      await rig.selectAll();
       await b.send("Input.insertText", { text: laterDraft });
       await b.send("Fetch.continueRequest", { requestId: upload.requestId });
       await b.send("Fetch.disable");
