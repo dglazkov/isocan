@@ -20,6 +20,28 @@ measures.
 below are what was actually on screen.** From step 6 on, nothing has been
 tried by anyone.
 
+**Partly walked, 22 September — on the build BEFORE that day's fixes.** Dion
+held a live session on `isocan.io` and reported it worked: the session opens,
+the provider answers, and the tools run. That is worth having and it is what
+steps 6 onward are mostly about.
+
+It is not a walk of what shipped later the same day, and the difference is the
+point of saying so. `isocan.io` was serving `8da3956` at the time; `f7f83e3`
+changed four things a person can only judge by using them, and **each one is a
+thing the earlier session would have shown the WRONG behaviour of**:
+
+| What to watch | Before (what was seen) | After (what should happen) |
+| --- | --- | --- |
+| The reply's colour | The wave turned the reply's colour early and briefly — the meter was fed when audio ARRIVED, not when it played | The colour tracks what you can actually hear |
+| What it said | Only the last fragment: `Enceladus: you need on the canvas.` | The whole sentence, written across the panel as it is spoken |
+| The wave | A short stub at the left of the bar | Bars across the full width of the row, rising with the glow |
+| A burst of tool calls | Seven `move_item → done` rows filling the panel | One row and `×7` |
+
+There is a fifth, and it is not visible in the panel at all: **the session
+block posted to Chat no longer wakes every agent on the canvas.** To see it,
+park an agent on the canvas, hold a session, stop it, and check the agent did
+not begin answering your transcript.
+
 ---
 
 ## 1. Build the app
