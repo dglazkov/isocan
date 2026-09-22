@@ -435,7 +435,28 @@ export async function runTool(
     }
     if (op.type === "thread.reply" || op.type === "thread.create") {
       const body = String(op.body ?? "");
-      const comment = { id: newCommentId(), body, at: new Date().toISOString() };
+      /**
+       * **A spoken request carries what it is about, the way a typed one
+       * does.**
+       *
+       * The Chat composer attaches the selection to every message a person
+       * sends, so an agent picking up "/redesign this" knows which item
+       * "this" is. A comment the voice posted carried the words alone — so
+       * the one path that HAS to delegate (generating a screen's contents is
+       * not a canvas operation, it is work for an agent that can think) sent
+       * its request with the subject stripped off.
+       *
+       * Absent rather than empty when nothing is picked: `items: []` says the
+       * message is about no items in particular, which is a different claim
+       * from not saying.
+       */
+      const attached = facts.selection ?? [];
+      const comment = {
+        id: newCommentId(),
+        body,
+        at: new Date().toISOString(),
+        ...(attached.length > 0 ? { items: [...attached] } : {}),
+      };
       if (op.type === "thread.reply") {
         const threadId = String(op.threadId ?? mainThread(facts.canvas)?.id ?? "");
         if (!threadId) {
@@ -1364,8 +1385,10 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
     const body =
       `### 🎙 Voice session · ${stamp}\n\n` +
       said.map((l) => `**${l.who === "you" ? host.viewer.name : voiceName}:** ${l.text}`).join("\n\n");
-    await runTool("say", { text: body }, { canvasId, canvas, host, canEdit: true, groupMode, selection });
-  }, [host, canvasId, canvas, groupMode, selection, voiceName]);
+    /* No selection attached: this is the RECORD of a conversation, not a
+       request about whatever happened to be picked out when it ended. */
+    await runTool("say", { text: body }, { canvasId, canvas, host, canEdit: true, groupMode, selection: [] });
+  }, [host, canvasId, canvas, groupMode, voiceName]);
 
   /* Fires on the EDGE out of live, and once: a session that ends by failing
      posts what was said just as one ended by pressing stop, and a re-render

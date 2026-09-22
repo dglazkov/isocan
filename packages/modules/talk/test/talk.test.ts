@@ -397,6 +397,28 @@ describe("a spoken request becomes the same operations a click sends", () => {
     expect((op.comment as Record<string, unknown>).id).toMatch(/^cmt_/);
   });
 
+  it("a spoken request carries what it is about, the way a typed one does", async () => {
+    /**
+     * The Chat composer attaches the selection to every message a person
+     * sends, so an agent picking up "/redesign this" knows which item "this"
+     * is. The voice posted the words alone — so the one path that HAS to
+     * delegate (generating a screen's contents is not a canvas operation, it
+     * is work for an agent that can think) sent its request with the subject
+     * stripped off.
+     */
+    await runTool("say", { text: "/redesign this screen" }, { ...facts, selection: ["itm_1"] });
+    const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
+    expect((op.comment as Record<string, unknown>).items).toEqual(["itm_1"]);
+  });
+
+  it("attaches nothing when nothing is picked out", async () => {
+    // An empty `items` would say the message is about no items in
+    // particular, which is a different claim from not saying.
+    await runTool("say", { text: "hello everyone" }, facts);
+    const op = sent.at(-1)!.ops[0] as Record<string, unknown>;
+    expect(op.comment as Record<string, unknown>).not.toHaveProperty("items");
+  });
+
   it("read_canvas answers from the facts, with nothing sent", async () => {
     const before = sent.length;
     const result = await runTool("read_canvas", {}, facts);
