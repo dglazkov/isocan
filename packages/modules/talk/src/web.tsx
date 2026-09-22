@@ -77,9 +77,83 @@ const METER_CSS = `
 `;
 
 /** One line of the conversation, for the caption the person reads. */
-interface Line {
+export interface Line {
   who: "you" | "model" | "system";
   text: string;
+  /**
+   * **How many times this same system line happened in a row.** Absent means
+   * once, so an ordinary line is the object it always was.
+   *
+   * A voice turn that rearranges a canvas emits one `move_item → done` per
+   * item, and seven of them filled the transcript with a form while the
+   * sentence that caused them scrolled out of sight. They are one fact —
+   * "it moved things" — repeated, and the count is the honest way to say so
+   * in one row.
+   */
+  count?: number;
+  /**
+   * **This speaker has finished the turn.** Transcription arrives in pieces
+   * and is appended to the line in progress; `turnComplete` is what says the
+   * next piece belongs to a new line rather than to this one.
+   */
+  done?: boolean;
+}
+
+/** How much of a conversation the panel keeps. Long enough to scroll back
+ *  through a few exchanges, bounded so a long session cannot grow without
+ *  end — the whole thing is posted to the Chat when it stops. */
+const MAX_LINES = 60;
+
+/**
+ * **Two pieces of one sentence, joined.**
+ *
+ * Straight concatenation, because that is what an incremental text field
+ * means: the provider's pieces carry their own leading spaces, and inserting
+ * one here would break every word it split mid-token. The only tidying is
+ * collapsing a doubled space, which is what happens when a piece brings a
+ * leading space to a line that already ended in one.
+ */
+function joinSpeech(before: string, piece: string): string {
+  return `${before}${piece}`.replace(/ {2,}/g, " ");
+}
+
+/** The last line of actual SPEECH, skipping the tool rows that landed inside
+ *  it; -1 when nobody has spoken yet. */
+function lastSpoken(lines: readonly Line[]): number {
+  let at = lines.length - 1;
+  while (at >= 0 && lines[at]!.who === "system") at--;
+  return at;
+}
+
+/**
+ * **One piece of transcription folded into the conversation so far** — the
+ * whole of the panel's line bookkeeping, as a function of what came before,
+ * so it can be tested without a socket or a microphone.
+ *
+ * See `useTalkSession`'s `say` for why a piece is appended rather than
+ * replacing, and why a system row in between does not end a sentence.
+ */
+export function foldLine(lines: readonly Line[], who: Line["who"], text: string): Line[] {
+  if (who === "system") {
+    const last = lines[lines.length - 1];
+    if (last?.who === "system" && last.text === text) {
+      return [...lines.slice(0, -1), { ...last, count: (last.count ?? 1) + 1 }];
+    }
+    return [...lines, { who, text }].slice(-MAX_LINES);
+  }
+  const at = lastSpoken(lines);
+  const open = at >= 0 && lines[at]!.who === who && !lines[at]!.done;
+  if (!open) return [...lines, { who, text }].slice(-MAX_LINES);
+  const grown = { ...lines[at]!, text: joinSpeech(lines[at]!.text, text) };
+  return [...lines.slice(0, at), grown, ...lines.slice(at + 1)];
+}
+
+/** The speaker's turn is over: the next piece starts a new line. A second
+ *  call changes nothing, so two end-of-turn signals cost one seal. */
+export function sealLines(lines: readonly Line[]): Line[] {
+  const at = lastSpoken(lines);
+  if (at < 0 || lines[at]!.done) return [...lines];
+  return [...lines.slice(0, at), { ...lines[at]!, done: true }, ...lines.slice(at + 1)];
 }
 
 /** One WebSocket frame, decoded — the browser delivers binary frames as
@@ -555,7 +629,10 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   // The page's own meter maths: dB gating, attack, release, a held peak.
   // Raw PCM RMS would read 0..32767, which is how the first bars pegged.
   const inMeter = useRef(new LevelMeter(METER_COUNT));
-  const outMeter = useRef(new LevelMeter(METER_COUNT));
+  /* There is no out meter beside it: the reply's level is read from the
+     playback itself (`Playback.level`), because what a listener wants the
+     colour to follow is what the speaker is SAYING, and the chunks arrive
+     long before they are spoken. */
   // The latest facts, read by the socket handlers: a handler closed over the
   // facts object from when start() ran would resolve tool calls against a
   // stale canvas (an item added earlier in the conversation would not exist).
@@ -565,18 +642,42 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   // is still pending must not hand a live capture to an idle panel.
   const abortRef = useRef<AbortController | null>(null);
 
+  /**
+   * **Transcription arrives in PIECES, and the pieces are appended.**
+   *
+   * This used to replace the speaker's previous line, on the belief that the
+   * provider sent growing partials ("read", "read the", "read the canvas").
+   * It does not. `LiveServerContent` is documented as an *incremental* server
+   * update, and the API carries a separate `interimInputTranscription` for
+   * the low-latency field that IS re-sent as it grows — which is the tell:
+   * a delta field and a partial field would not both exist if they meant the
+   * same thing.
+   *
+   * So replacing kept only the LAST piece. On screen a whole answer read as
+   * `Enceladus: you need on the canvas.` — the end of a sentence whose
+   * beginning had been overwritten several times a second. Appending is both
+   * the correct reading of the wire and the thing that was wanted from it:
+   * the reply writes itself across the panel while it is being spoken.
+   *
+   * **A system line in between does not break the sentence.** Tool rows land
+   * mid-turn, and treating them as a speaker change split one answer into
+   * fragments around them, so the run being appended to is the last line of
+   * actual SPEECH, wherever the tool rows fell.
+   *
+   * **Repeated system lines collapse.** Identical consecutive ones become one
+   * row and a count rather than a column of the same sentence.
+   */
   const say = useCallback((who: Line["who"], text: string) => {
-    setLines((prev) => {
-      // Transcriptions arrive as PARTIALS that grow within a turn ("read",
-      // "read the", "read the canvas") — a person's line and the model's line
-      // each REPLACE their previous one until the next speaker, so the
-      // captions evolve instead of stacking. System lines still append.
-      const rest = (who === "you" || who === "model") &&
-          prev.length > 0 && prev[prev.length - 1]!.who === who
-        ? prev.slice(0, -1)
-        : prev;
-      return [...rest.slice(-40), { who, text }];
-    });
+    setLines((prev) => foldLine(prev, who, text));
+  }, []);
+
+  /**
+   * **The turn is over; the next piece starts a line.** Called on the
+   * provider's own end-of-turn signals rather than guessed at from a pause,
+   * because a pause mid-sentence is a person thinking, not a turn ending.
+   */
+  const seal = useCallback(() => {
+    setLines((prev) => sealLines(prev));
   }, []);
 
   const stop = useCallback(() => {
@@ -589,7 +690,6 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     // browser only allows so many — repeated sessions used to leak one each.
     playbackRef.current?.close();
     inMeter.current.reset();
-    outMeter.current.reset();
     inPaintRef.current(0);
     outPaintRef.current(0);
     setState("idle");
@@ -679,9 +779,14 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         // play on over the new turn — stopNow exists for exactly this.
         if (content.interrupted) {
           playbackRef.current?.stopNow();
-          outMeter.current.reset();
+          seal();
           say("system", "interrupted");
         }
+        // The provider's own end-of-turn. `generationComplete` fires when the
+        // model stops producing and `turnComplete` when the turn is closed;
+        // either one means the next piece of transcription belongs to a new
+        // line, and sealing twice is a no-op.
+        if (content.turnComplete || content.generationComplete) seal();
         for (const part of (content.modelTurn as { parts?: unknown[] } | undefined)?.parts ?? []) {
           const inline = (part as { inlineData?: { data?: string; mimeType?: string } }).inlineData;
           if (inline?.data) {
@@ -693,7 +798,6 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
             if (mime.startsWith("audio/")) {
               const bytes = Uint8Array.from(atob(inline.data), (c) => c.charCodeAt(0));
               const pcm = await fromBytes(bytes.buffer as ArrayBuffer);
-              outMeter.current.feed(pcm);
               await playback.push(pcm);
             } else if (mime.startsWith("image/")) {
               say("system", "the model sent an image part — this dialog speaks and writes; the pen tool draws with strokes");
@@ -760,7 +864,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       say("system", `microphone refused — ${String((err as Error).message ?? err)}`);
       socket.close();
     }
-  }, [key, model, say]);
+  }, [key, model, say, seal]);
 
   // The door was the press: with a key already in the shelf, open means
   // listen.
@@ -778,7 +882,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     if (state !== "live") return;
     const timer = setInterval(() => {
       inPaintRef.current(inMeter.current.tick().level);
-      outPaintRef.current(outMeter.current.tick().level);
+      outPaintRef.current(playbackRef.current?.level() ?? 0);
     }, METER_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [state]);
@@ -812,7 +916,21 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
 
 /** How many bars the wave draws. Odd, so there is a middle one for the arch
  *  to peak on. */
-const WAVE_BARS = 11;
+/**
+ * **How many bars the wave is made of.**
+ *
+ * Eleven, at a fixed 3px each, drew a 63px stub at the left of a row three
+ * times that wide — the bars had a fixed width while only their CONTAINER
+ * stretched, so "the voice pattern is really small" was literally true. The
+ * bars flex now, and the count is what sets density rather than extent: at a
+ * composer's width this is a bar every few pixels, which reads as a
+ * waveform, where a dozen fat ones read as a bar chart.
+ */
+const WAVE_BARS = 40;
+/** Resting height of a bar, px — a flat line that is still visible. */
+const WAVE_FLOOR = 3;
+/** Fallback for the first frame, before the row has been measured. */
+const WAVE_HEIGHT = 28;
 
 /**
  * **One wave for the conversation, coloured by whoever is talking.**
@@ -840,9 +958,22 @@ const WAVE_BARS = 11;
  * level changes many times a second and React has no business seeing it.
  */
 function Wave({
+  level,
   inLevel,
   outLevel,
 }: {
+  /**
+   * **The glow's own smoothed level**, handed back by `VoiceBeam.onLevel`.
+   *
+   * The wave used to take the raw meter while the beam under it applied its
+   * own attack, release and idle breathing, so the two read as two different
+   * reactions to one voice — the bars snapping while the glow swelled behind
+   * them. They are one instrument, so they move on one number, and the
+   * number is the beam's because the beam is the thing being matched.
+   */
+  level: { current: number };
+  /** Still the raw pair, and only for the COLOUR: who is speaking is a
+   *  question about which meter is live, not about how bright the glow is. */
   inLevel: { current: number };
   outLevel: { current: number };
 }) {
@@ -854,26 +985,31 @@ function Wave({
     const tick = () => {
       const heard = inLevel.current;
       const spoken = outLevel.current;
-      const level = Math.max(heard, spoken);
       /* A small margin so a breath while it is answering does not flip the
          colour back and forth mid-sentence. */
       root.current?.setAttribute(
         "data-who",
         spoken > heard + 0.04 ? "voice" : heard > 0.02 ? "you" : "idle",
       );
+      const loud = level.current;
       const t = performance.now() / 240;
+      const height = root.current?.clientHeight ?? WAVE_HEIGHT;
       for (let i = 0; i < bars.current.length; i++) {
         const bar = bars.current[i];
         if (!bar) continue;
+        /* Tall in the middle, short at the ends, so a voice blooms from the
+           centre the way the glow under it does rather than filling the row
+           like a level meter. */
         const arch = Math.sin(((i + 1) / (WAVE_BARS + 1)) * Math.PI);
-        const wobble = 0.7 + 0.3 * Math.sin(t + i * 0.8);
-        bar.style.height = `${(3 + level * arch * wobble * 19).toFixed(1)}px`;
+        const wobble = 0.55 + 0.45 * Math.sin(t + i * 0.55);
+        const reach = Math.max(0, height - WAVE_FLOOR);
+        bar.style.height = `${(WAVE_FLOOR + loud * arch * wobble * reach).toFixed(1)}px`;
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [inLevel, outLevel]);
+  }, [level, inLevel, outLevel]);
 
   return (
     /* Decorative: whether it heard you is carried by the transcript, which a
@@ -1004,6 +1140,12 @@ function Transcript({
           return (
             <p key={i} className="talk-log-note">
               {line.text}
+              {/* The count rides the row rather than repeating it. `×7` is
+                  the whole difference between "it moved something" and "it
+                  moved seven things", in the width of two characters. */}
+              {line.count && line.count > 1 ? (
+                <span className="talk-log-times"> ×{line.count}</span>
+              ) : null}
             </p>
           );
         }
@@ -1220,11 +1362,14 @@ const COMPOSER_CSS = `
       /* The wave takes the room the two meters had, which is the point: one
          thing that says who is talking, rather than two that say how loud. */
       .talk-wave {
-        display: flex; align-items: center; gap: 3px;
-        flex: 1; min-width: 0; height: 24px;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 2px; flex: 1; min-width: 0; height: 28px;
       }
+      /* Flexing the bars is the fix for a wave that sat in the corner of its
+         own row: they now divide the width they are given instead of taking
+         3px each and leaving the rest empty. */
       .talk-wave span {
-        width: 3px; height: 3px; border-radius: 2px;
+        flex: 1 1 0; min-width: 1px; height: 3px; border-radius: 2px;
         background: var(--line);
         /* No height transition: the frame loop already moves it, and a
            transition on top of that lags the voice by its own duration. */
@@ -1292,10 +1437,20 @@ const COMPOSER_CSS = `
   }
   .talk-log-text { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
   .talk-log-you .talk-log-text { color: var(--muted); }
+  /* **Tool rows cost less room than speech.** They are what the session DID,
+     and the sentence that caused them is what a person is reading — so they
+     are set tighter and dimmer than a spoken line rather than given the same
+     weight. A turn that moves seven things is now one row and a count, but
+     even one row per DIFFERENT act adds up, and this is what keeps a burst of
+     them from pushing the conversation off the top. */
   .talk-log-note {
-    margin: 2px 0; text-align: center; color: var(--muted);
-    font-size: 11px; font-style: italic;
+    margin: 0; text-align: center; color: var(--muted);
+    font-size: 11px; font-style: italic; line-height: 1.3;
+    opacity: 0.8;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  /* The count reads as a tally, not as part of the sentence. */
+  .talk-log-times { font-style: normal; font-weight: 600; opacity: 0.75; }
   /* The name is dropped from a repeated speaker's row for the eye, and kept
      for a screen reader, which has no column to see. */
   .talk-log-sr {
@@ -1344,6 +1499,14 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
   const quietSince = useRef<number>(0);
   const [thinking, setThinking] = useState(false);
   const readLevel = useCallback(() => Math.max(inLevel.current, outLevel.current), []);
+  /* What the BEAM settled on for this frame — its own attack, release and
+     idle breathing applied to `readLevel`. The wave draws from this rather
+     than from the raw meters so the bars and the glow are one movement; see
+     `Wave`'s `level`. */
+  const beamLevel = useRef(0);
+  const takeBeamLevel = useCallback((level: number) => {
+    beamLevel.current = level;
+  }, []);
 
   /* The levels are tapped once, here, rather than by whatever happens to be
      drawing them — so the wave and the glow read the same numbers and a
@@ -1477,6 +1640,8 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
            the package samples this once per frame, so the glow is smooth
            without React re-rendering the row 60 times a second. */
         level={readLevel}
+        /* Handed straight to a ref, never to state: this fires every frame. */
+        onLevel={takeBeamLevel}
         /* Silence in a live session is the reply being thought about, which
            is exactly what the travelling beam is for. */
         processing={thinking}
@@ -1492,7 +1657,7 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
           onExpand={() => setExpanded((v) => !v)}
         />
         <div className="talk-bar">
-          <Wave inLevel={inLevel} outLevel={outLevel} />
+          <Wave level={beamLevel} inLevel={inLevel} outLevel={outLevel} />
           {/* No toast here: the transcript above says the same thing with a
               name on it, and two copies of the last line is the one-string-
               two-spellings bug in pixels. The floating mic keeps its toast —

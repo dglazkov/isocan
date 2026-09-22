@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { mainThread } from "@isocan/core";
 import type { DialogFacts } from "@isocan/core";
 import { canvasSnapshotText, commandsBrief } from "../src/live.ts";
-import { decodeMessage, runTool, snapshotItemsFor, talkWeb } from "../src/web.tsx";
+import { decodeMessage, foldLine, runTool, sealLines, snapshotItemsFor, talkWeb } from "../src/web.tsx";
+import type { Line } from "../src/web.tsx";
 
 /**
  * **Talk: the dialog's tool-call half, driven with a fake host.**
@@ -568,5 +569,81 @@ describe("a spoken request becomes the same operations a click sends", () => {
   it("a tool the dialog does not wire is said so, not faked", async () => {
     const result = await runTool("viewport_focus", { x: 1, y: 2 }, facts);
     expect(result.ok).toBe(false);
+  });
+});
+
+/**
+ * **The transcript, which was reading the wire backwards.**
+ *
+ * `LiveServerContent` is an *incremental* update: the transcription fields
+ * carry PIECES of a sentence, and the API has a separate
+ * `interimInputTranscription` for the field that is re-sent as it grows. The
+ * panel folded them as though every field were the growing kind and replaced
+ * the speaker's line with each piece — so a whole answer rendered as its last
+ * fragment, `Enceladus: you need on the canvas.`
+ *
+ * These are the shapes that got it wrong, held so it cannot come back: pieces
+ * join, a tool row in the middle does not end a sentence, an end-of-turn does,
+ * and a burst of identical tool rows is one row and a count.
+ */
+describe("what was said, folded from the pieces it arrives in", () => {
+  const fold = (pieces: [Line["who"], string][]) =>
+    pieces.reduce<Line[]>((lines, [who, text]) => foldLine(lines, who, text), []);
+
+  it("joins the pieces of one turn into the whole sentence", () => {
+    const lines = fold([["model", "you"], ["model", " need"], ["model", " on the canvas."]]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.text).toBe("you need on the canvas.");
+  });
+
+  it("keeps a sentence whole across the tool rows that land inside it", () => {
+    const lines = fold([
+      ["model", "Moving these"],
+      ["system", "move_item → done"],
+      ["model", " so they do not overlap."],
+    ]);
+    const spoken = lines.filter((l) => l.who === "model");
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]!.text).toBe("Moving these so they do not overlap.");
+  });
+
+  it("starts a new line once the turn is sealed", () => {
+    const first = fold([["model", "Done."]]);
+    const next = foldLine(sealLines(first), "model", "Anything else?");
+    expect(next.map((l) => l.text)).toEqual(["Done.", "Anything else?"]);
+  });
+
+  it("sealing twice costs one seal", () => {
+    const once = sealLines(fold([["you", "hello"]]));
+    expect(sealLines(once)).toEqual(once);
+  });
+
+  it("a change of speaker starts a line without needing a seal", () => {
+    const lines = fold([["you", "select the top screen"], ["model", "Selecting it."]]);
+    expect(lines.map((l) => l.who)).toEqual(["you", "model"]);
+  });
+
+  it("collapses a burst of identical tool rows into one row and a count", () => {
+    const lines = fold(Array(7).fill(["system", "move_item → done"]) as [Line["who"], string][]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.count).toBe(7);
+  });
+
+  it("counts only a RUN — a different act in between starts a new row", () => {
+    const lines = fold([
+      ["system", "move_item → done"],
+      ["system", "move_item → done"],
+      ["system", "select → done"],
+      ["system", "move_item → done"],
+    ]);
+    expect(lines.map((l) => [l.text, l.count ?? 1])).toEqual([
+      ["move_item → done", 2],
+      ["select → done", 1],
+      ["move_item → done", 1],
+    ]);
+  });
+
+  it("does not glue a doubled space where a piece brings its own", () => {
+    expect(fold([["model", "one "], ["model", " two"]])[0]!.text).toBe("one two");
   });
 });

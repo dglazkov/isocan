@@ -418,6 +418,29 @@ export class Playback {
   private nextStartTime = 0;
   /** Arrival order, counted here so the log can prove it was preserved. */
   private seq = 0;
+  /**
+   * **What is coming out of the speaker right now** — every chunk plays
+   * through this on its way to the destination, so reading it is reading the
+   * reply as it is heard.
+   *
+   * It exists because the output meter used to be fed at `push`, when the
+   * PCM ARRIVED. The model sends faster than real time and the chunks are
+   * queued against `nextStartTime`, so arrival and playback are different
+   * clocks: the meter spiked while the network delivered a sentence and sat
+   * at zero while that sentence was still being spoken. On screen that read
+   * as the colour flicking to the reply's and back before it had said
+   * anything — "it happens quickly", which is exactly what a meter measuring
+   * the wrong clock looks like.
+   *
+   * An analyser in the path answers the question actually being asked. It is
+   * never disconnected while the context lives, so a gap between chunks
+   * reads as the silence it is rather than as a torn-down graph.
+   */
+  private analyser: AnalyserNode | null = null;
+  /** Scratch for `level`, allocated once: it is read every animation frame.
+   *  Typed over `ArrayBuffer` rather than `ArrayBufferLike`, which is what
+   *  `getFloatTimeDomainData` will accept. */
+  private scope: Float32Array<ArrayBuffer> | null = null;
   /** Every chunk's schedule: sequence, bytes, when it was asked to start. */
   onSchedule?: (info: ScheduleInfo) => void;
 
@@ -481,6 +504,12 @@ export class Playback {
     if (!this.context) {
       this.context = new AudioContext({ sampleRate: 24000 });
       this.routed = null;
+      // Small window: this is a level, not a spectrum, and a long one would
+      // average across the gaps between words the wave exists to show.
+      this.analyser = this.context.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.analyser.connect(this.context.destination);
+      this.scope = new Float32Array(this.analyser.fftSize);
     }
     if (this.context.state === "suspended") await this.context.resume();
     // A stored choice is applied when the context appears — which is the first
@@ -504,7 +533,7 @@ export class Playback {
     for (let i = 0; i < pcm.length; i++) channel[i] = (pcm[i] ?? 0) / 0x8000;
     const source = context.createBufferSource();
     source.buffer = buffer;
-    source.connect(context.destination);
+    source.connect(this.analyser ?? context.destination);
     source.onended = () => {
       this.playing = this.playing.filter((one) => one !== source);
     };
@@ -528,6 +557,23 @@ export class Playback {
     this.onSchedule?.(info);
   }
 
+  /**
+   * **How loud the reply is, right now** — RMS of what the analyser is
+   * passing to the speaker, 0 when nothing is playing.
+   *
+   * Raised by a root so a speaking voice reads as movement rather than as a
+   * twitch near zero: RMS over a short window of speech sits low, and the
+   * wave this drives is answering "is it talking" rather than reporting
+   * decibels.
+   */
+  level(): number {
+    if (!this.analyser || !this.scope) return 0;
+    this.analyser.getFloatTimeDomainData(this.scope);
+    let sum = 0;
+    for (let i = 0; i < this.scope.length; i++) sum += this.scope[i]! * this.scope[i]!;
+    return Math.min(1, Math.sqrt(Math.sqrt(sum / this.scope.length)) * 1.4);
+  }
+
   /** `interrupted` is the server saying the person spoke over the model. */
   stopNow(): void {
     for (const source of this.playing) {
@@ -547,6 +593,8 @@ export class Playback {
     this.stopNow();
     void this.context?.close();
     this.context = null;
+    this.analyser = null;
+    this.scope = null;
   }
 }
 
