@@ -211,6 +211,13 @@ describe("an editor chord means what it means on the runner's platform", () => {
     expect(runner).not.toMatch(/modifiers: 4, key: "a"/);
     expect(runner).toMatch(/selectAll: async[\s\S]{0,200}process\.platform === "darwin" \? 4 : 2/);
   });
+
+  // The same mistake one layer up: since #44 (21 Sep) a label prints the
+  // platform's spelling, so on the Linux runner the Undo button is titled
+  // "Undo (Ctrl+Z)" and a selector naming ⌘ finds nothing.
+  it("never selects an element by a ⌘ in its label", () => {
+    expect(runner).not.toMatch(/\[(?:title|aria-label)[~^$*|]?="[^"]*⌘/);
+  });
 });
 
 describe("the journeys persona", () => {

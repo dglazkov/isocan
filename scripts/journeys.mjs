@@ -422,7 +422,7 @@ export const JOURNEYS = [
       if (!await b.ev(`document.querySelector('.design-lint-source').textContent.includes(${JSON.stringify(changed.currentVersionId)})`)) throw new Error("browser did not report changed governing version");
       await rig.go(`/p/${id}`);
       await until(b, `!!document.querySelector('.zoom-controls')`, "canvas Undo controls");
-      await rig.click('button[title="Undo (⌘Z)"]', "governing document Undo");
+      await rig.click('button[title^="Undo ("]', "governing document Undo");
       await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.canvas.items[${JSON.stringify(initial.governing.itemId)}].currentVersionId === ${JSON.stringify(initial.governing.versionId)})`, "policy Undo restored version");
       const restoredPolicy = (await snapshot()).items[initial.governing.itemId];
       same(await readItem(restoredPolicy), design, "Undo restored policy bytes");
@@ -530,7 +530,7 @@ export const JOURNEYS = [
       same(await readItem(item), good, "accepted repaired bytes");
       await rig.go(`/p/${id}`);
       await until(b, `!!document.querySelector('.zoom-controls')`, "canvas undo controls");
-      await rig.click('button[title="Undo (⌘Z)"]', "canvas version Undo");
+      await rig.click('button[title^="Undo ("]', "canvas version Undo");
       await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.canvas.items['${webItem.id}'].currentVersionId === '${original}')`, "repair undo");
       same(await readItem((await snapshot()).items[webItem.id]), bad, "undo restored original bytes");
       await rig.go(`/p/${id}/w/${webItem.id}`);
