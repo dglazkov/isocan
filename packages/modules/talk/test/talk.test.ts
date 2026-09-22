@@ -401,8 +401,29 @@ describe("a spoken request becomes the same operations a click sends", () => {
     const before = sent.length;
     const result = await runTool("read_canvas", {}, facts);
     expect(result.ok).toBe(true);
-    expect(String(result.answer)).toContain("Checkout screen [itm_1]");
+    expect(String(result.answer)).toContain("Checkout screen");
     expect(sent.length).toBe(before);
+  });
+
+  it("re-reading does not hand back LESS than the session was told at setup", async () => {
+    /* It used to answer with its own shorter list — titles and ids and
+       nothing else — so a model that re-read the canvas lost the geometry it
+       opened with. Re-reading to check something is exactly when the facts
+       must not get thinner, so this answers in the projection's one wording. */
+    const answer = String((await runTool("read_canvas", {}, facts)).answer);
+    expect(answer, "the coordinate convention").toContain("x grows right");
+    expect(answer, "geometry per row").toMatch(/\d+x\d+ at \(-?\d+,-?\d+\)/);
+  });
+
+  it("says which item the person has picked out, when one is picked", async () => {
+    /* The session could `selection_set` and `selection_clear` and had no way
+       to READ one, so "can you see what I've selected?" was a question it
+       could only guess at. */
+    const picked = await runTool("read_canvas", {}, { ...facts, selection: ["itm_1"] });
+    expect(String(picked.answer)).toContain("SELECTED");
+    expect(String(picked.answer), "the marker is explained where it appears").toContain("when they say");
+    const none = await runTool("read_canvas", {}, facts);
+    expect(String(none.answer), "no marker, and no line about one").not.toContain("SELECTED");
   });
 
   it("resolves a relative move against the item's real position", async () => {

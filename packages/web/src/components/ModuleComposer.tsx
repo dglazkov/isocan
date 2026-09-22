@@ -53,6 +53,7 @@ export function ModuleComposerControls({
   useUiStore((s) => s.experiments);
   const host = useWebHost(canvasId, actor);
   const theme = useTheme((s) => s.resolved);
+  const selection = useUiStore((s) => s.selectedItemIds);
   if (!canvas) return null;
 
   const here = modules().flatMap((m) =>
@@ -81,6 +82,7 @@ export function ModuleComposerControls({
               host={host}
               groupMode={project?.groupMode ?? "legacy"}
               theme={theme}
+              selection={selection}
               active={active}
               takeOver={(on: boolean) => onTakeOver(module, on)}
             />

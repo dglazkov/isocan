@@ -841,6 +841,20 @@ export interface SnapshotItem {
    * the browser and the harness quietly disagreeing about what "red" means.
    */
   properties?: Record<string, string>;
+  /**
+   * **Whether the person has this one picked out right now.**
+   *
+   * The session could already `selection_set` and `selection_clear` and had
+   * no way to READ one, so "can you see what I've selected?" was a question
+   * it could only guess at — and guessing is what it did. The selection is
+   * the cheapest thing a person does to say "this one", and it was the one
+   * fact the projection left out.
+   *
+   * Absent rather than false where a surface has no selection to report: a
+   * standing agent has no viewport and no pointer, and `false` from it would
+   * claim nothing is selected rather than that it cannot tell.
+   */
+  selected?: boolean;
 }
 
 /**
@@ -929,7 +943,8 @@ export function canvasSnapshotText(
       `- ${JSON.stringify(i.title ?? "untitled")} [${i.id}] ${i.kind} ` +
       `${Math.round(i.width)}x${Math.round(i.height)} at (${Math.round(i.x)},${Math.round(i.y)})` +
       (colour ? ` ${colour}` : "") +
-      (i.containerId ? ` inside [${i.containerId}]` : "")
+      (i.containerId ? ` inside [${i.containerId}]` : "") +
+      (i.selected ? " SELECTED" : "")
     );
   };
   const heading = ordered.length === 0
@@ -943,6 +958,15 @@ export function canvasSnapshotText(
     "A colour word appears on a row only where the canvas KNOWS the colour (a note's paper, an area's tint, a drawing's ink); " +
       "no colour word means the colour is UNKNOWN to the canvas, never that the item is not that colour — most items look like " +
       "something the data does not record, so ask rather than ruling them out.",
+    // Said only when there IS one. A line explaining a marker that appears
+    // nowhere below is a line that teaches the model to look for it and find
+    // nothing, which is how "the selected one" becomes a guess.
+    ...(shown.some((i) => i.selected)
+      ? [
+          "SELECTED marks what the person has picked out — when they say \"this\", \"that one\" or \"the selected one\", that is what " +
+            "they mean. It is true as of this reading; read the canvas again if you need to be sure it still is.",
+        ]
+      : []),
     heading,
     ...shown.map(row),
     ...(rest > 0

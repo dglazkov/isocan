@@ -729,6 +729,15 @@ export interface ComposerFacts {
    * cannot read the shell's stores without becoming unremovable.
    */
   theme: "light" | "dark";
+  /**
+   * **What the person has selected**, by item id, or empty.
+   *
+   * Selection is the shell's — it is UI state, not canvas state, so a module
+   * cannot read it and a second collaborator does not share it. It is here
+   * for the same reason `theme` and `groupMode` are: the alternative is a
+   * module reaching into the shell's stores and becoming unremovable.
+   */
+  selection: readonly string[];
   /** Ask for the composer's row, or hand it back. */
   takeOver: (active: boolean) => void;
   /** Whether this control currently has it — the shell's answer, not the

@@ -98,7 +98,12 @@ interface Line {
  * the shell hands this module ordinary `Item`s. Both surfaces must arrive at
  * the same row, so this is the one place the browser's half is spelled.
  */
-export function snapshotItemsFor(canvas: CanvasContents): SnapshotItem[] {
+export function snapshotItemsFor(
+  canvas: CanvasContents,
+  /** What the person has picked out, by id. The shell's, handed over. */
+  selection: readonly string[] = [],
+): SnapshotItem[] {
+  const picked = new Set(selection);
   return Object.values(canvas.items ?? {}).map((i) => ({
     id: i.id,
     title: i.title,
@@ -112,6 +117,7 @@ export function snapshotItemsFor(canvas: CanvasContents): SnapshotItem[] {
     // keeps "red" meaning one thing on both.
     properties: i.properties,
     ...(i.containerId ? { containerId: i.containerId } : {}),
+    ...(picked.has(i.id) ? { selected: true } : {}),
   }));
 }
 
@@ -134,6 +140,9 @@ export async function decodeMessage(data: unknown): Promise<Record<string, unkno
  *  carry more, the overlay's fewer, and the session asks for nothing else. */
 export interface PanelFacts {
   canvasId: string;
+  /** What the person has picked out, when the surface has a selection to
+   *  report. Absent from the ⌘K dialog, which is configuration. */
+  selection?: readonly string[];
   canvas: CanvasContents;
   host: WebHost;
   canEdit: boolean;
@@ -160,13 +169,20 @@ export async function runTool(
   // The four read tools the planner marks, answered locally — the model
   // asked what the canvas holds, and the shell already told the dialog.
   if (what === "__read_canvas__") {
-    const items = Object.values(facts.canvas.items ?? {});
+    /**
+     * **The same wording the session opened with.** This used to answer with
+     * a shorter list of its own — titles and ids and nothing else — so a
+     * model that re-read the canvas got LESS than it was told at setup: no
+     * geometry, no colour, no selection. Re-reading to check something is
+     * exactly when the facts must not get thinner.
+     */
     const threads = Object.values(facts.canvas.threads ?? {});
     return {
       ok: true,
-      answer:
-        `items: ${items.map((i) => `${i.title ?? "untitled"} [${i.id}]`).join("; ") || "none"}\n` +
-        `threads: ${threads.map((t) => `${t.id} (${t.comments.length} comments)`).join("; ") || "none"}`,
+      answer: canvasSnapshotText(
+        snapshotItemsFor(facts.canvas, facts.selection ?? []),
+        threads as { id: string; comments: unknown[] }[],
+      ),
     };
   }
   if (what === "__read_item__") {
@@ -174,9 +190,34 @@ export async function runTool(
     const item = Object.values(facts.canvas.items ?? {}).find(
       (i) => i.id === ref || (i.title ?? "").toLowerCase().startsWith(ref.toLowerCase()),
     );
-    return item
-      ? { ok: true, answer: `${item.title ?? "untitled"} [${item.id}]` }
-      : { ok: false, error: `no item matches "${ref}"` };
+    if (!item) return { ok: false, error: `no item matches "${ref}"` };
+    /**
+     * **It used to answer with the title and the id.**
+     *
+     * Both of which the asker already had — that is how it addressed the
+     * item. So "tell me about this one" returned nothing, and the session
+     * filled the gap the way models do. One row of the projection says more
+     * than the old answer did, so this answers in that wording and then adds
+     * what a single item can say and a list cannot.
+     */
+    const [row] = snapshotItemsFor(facts.canvas, facts.selection ?? [])
+      .filter((one) => one.id === item.id);
+    const current = item.versions?.find((v) => v.id === item.currentVersionId);
+    const reactions = Object.entries(item.reactions ?? {})
+      .map(([mark, who]) => `${mark}×${who.length}`)
+      .join(" ");
+    return {
+      ok: true,
+      answer: [
+        row ? canvasSnapshotText([row], []).split("\n").find((l) => l.startsWith("- ")) : null,
+        item.description ? `description: ${item.description}` : null,
+        current?.filename ? `file: ${current.filename} (${current.mimeType ?? "unknown type"})` : null,
+        item.versions && item.versions.length > 1 ? `versions: ${item.versions.length}` : null,
+        reactions ? `reactions: ${reactions}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    };
   }
   if (what === "__read_threads__") {
     const threads = Object.values(facts.canvas.threads ?? {});
@@ -507,7 +548,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       // titles are what a person reads. The shell handed the module these
       // facts, so no store and no route were needed to know them.
       const snapshot = canvasSnapshotText(
-        snapshotItemsFor(factsRef.current.canvas),
+        snapshotItemsFor(factsRef.current.canvas, factsRef.current.selection ?? []),
         Object.values(factsRef.current.canvas.threads ?? {}).map((t) => ({ id: t.id, comments: t.comments })),
       );
       const instructions = { source: "canvas", text: [commandsBrief(), snapshot].join("\n\n") };
@@ -1065,8 +1106,8 @@ const COMPOSER_CSS = `
  * It shares `useTalkSession` with the floating mic rather than opening a
  * second one, so the two doors are two ways into ONE conversation.
  */
-function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOver }: ComposerFacts) {
-  const session = useTalkSession({ canvasId, canvas, canEdit: true, groupMode, host });
+function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, active, takeOver }: ComposerFacts) {
+  const session = useTalkSession({ canvasId, canvas, canEdit: true, groupMode, host, selection });
   const [configOpen, setConfigOpen] = useState(false);
   const live = session.state === "live";
 
@@ -1118,8 +1159,8 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, active, takeOve
     const body =
       `### 🎙 Voice session · ${stamp}\n\n` +
       said.map((l) => `**${l.who === "you" ? host.viewer.name : "Voice"}:** ${l.text}`).join("\n\n");
-    await runTool("say", { text: body }, { canvasId, canvas, host, canEdit: true, groupMode });
-  }, [host, canvasId, canvas, groupMode]);
+    await runTool("say", { text: body }, { canvasId, canvas, host, canEdit: true, groupMode, selection });
+  }, [host, canvasId, canvas, groupMode, selection]);
 
   /* Fires on the EDGE out of live, and once: a session that ends by failing
      posts what was said just as one ended by pressing stop, and a re-render
