@@ -1283,6 +1283,7 @@ function inYourThread(thread, actorId, names, joined) {
   );
 }
 function reasonFor(comment, thread, actorId, names, joined, candidates) {
+  if (comment.record) return null;
   if (addressesActor(comment, names, joined)) return "mentioned";
   if (addressesOthers(comment, names, joined, candidates)) return null;
   if (thread?.main) return "main-thread";
@@ -1406,6 +1407,7 @@ function policyWords(policy, nameOf, viewerId, joined, now = Date.now()) {
 }
 function turnedAway(op, authorId, agent) {
   if (op.type !== "thread.create" && op.type !== "thread.reply") return false;
+  if (op.comment.record) return false;
   if (isSystemActor(authorId) || sameActor(agent.joined, authorId, agent.actorId)) return false;
   if (admits(agent.policy, authorId, agent)) return false;
   return addressesActor(op.comment, agent.names, agent.joined);
