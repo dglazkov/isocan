@@ -145,6 +145,7 @@ interface PassToken {
   secret: string;
 }
 
+/** The one writer of a pass token — the dot shape, named for which id it carries. */
 export function formatPassToken(passId: string, secret: string): string {
   return formatDotToken(passId, secret);
 }
@@ -205,6 +206,10 @@ export const passRoute = (canvasId: string, passId: string): string =>
  */
 export const PASS_REDEEM_ROUTE = "/api/passes/redeem";
 
+/**
+ * `POST passesRoute(canvasId)`: mint a pass for this canvas, optionally handing over one of
+ * the minter's own identities.
+ */
 export interface MintPassRequest {
   /**
    * Which of the minting badge's claims to hand over. Omitted for an
@@ -221,6 +226,7 @@ export interface MintPassRequest {
   actorId?: string;
 }
 
+/** What minting hands back: the row, and the token that will never be shown again. */
 export interface MintPassResponse {
   pass: Pass;
   /**
@@ -238,6 +244,9 @@ export interface PassResponse {
   pass: Pass;
 }
 
+/**
+ * `POST PASS_REDEEM_ROUTE`: spend a pass. The canvas comes from the pass, not from the caller.
+ */
 export interface RedeemPassRequest {
   token: string;
   /**
@@ -265,6 +274,7 @@ export interface RedeemPassRequest {
   adoptIdentity?: boolean;
 }
 
+/** What redeeming did: which canvas the badge is now admitted to, and as whom. */
 export interface RedeemPassResponse {
   /** The canvas the redeeming badge is now admitted to. */
   canvasId: string;

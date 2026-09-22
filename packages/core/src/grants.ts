@@ -500,20 +500,6 @@ export function normalizeSubject(subject: GrantSubject): GrantSubject {
 }
 
 /**
- * **Does anything this badge has proved satisfy this row?** — the door's test
- * over attestations, and the whole of what phase 9 added to the door.
- *
- * `link` is deliberately NOT answered here: it is satisfied by presenting the
- * address, which is a fact about the request rather than about the holder, and
- * this function only ever sees the holder. `server/grants.ts` keeps that
- * branch where the request is.
- *
- * Equality and not a fuzzy match, at either subject type. A `repo:` subject is
- * "can read exactly this repository", not "is a member of this org" — the
- * design's sentence is *"the subject IS 'can read the repo'"*, and an
- * org-wide reading would silently widen every marker anybody ever committed.
- */
-/**
  * Add an attestation to a badge's list, replacing any earlier proof of the
  * SAME attribute.
  *
@@ -541,6 +527,20 @@ export function upsertAttestation(
   return [...(existing ?? []).filter((a) => a.attribute !== row.attribute), row];
 }
 
+/**
+ * **Does anything this badge has proved satisfy this row?** — the door's test
+ * over attestations, and the whole of what phase 9 added to the door.
+ *
+ * `link` is deliberately NOT answered here: it is satisfied by presenting the
+ * address, which is a fact about the request rather than about the holder, and
+ * this function only ever sees the holder. `server/grants.ts` keeps that
+ * branch where the request is.
+ *
+ * Equality and not a fuzzy match, at either subject type. A `repo:` subject is
+ * "can read exactly this repository", not "is a member of this org" — the
+ * design's sentence is *"the subject IS 'can read the repo'"*, and an
+ * org-wide reading would silently widen every marker anybody ever committed.
+ */
 export function attestationSatisfying(
   subject: GrantSubject,
   attestations: readonly Attestation[],

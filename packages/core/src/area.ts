@@ -35,8 +35,11 @@ import { isPaper, type Paper } from "./textnode.ts";
  * one exception is `areaOf`, which answers for an item, not for an area.
  */
 
+/** `properties.kind` on an item that is an area — the whole of what makes one. */
 export const AREA_KIND = "area";
+/** The properties a new area is born with; spread, never mutated, by the caller. */
 export const AREA_PROPERTIES: Record<string, string> = { kind: AREA_KIND };
+/** An area's blob is its card — markdown, like a text node's. */
 export const AREA_MIME = "text/markdown";
 export const AREA_FILENAME = "area.md";
 
@@ -63,6 +66,7 @@ export const AREA_HEAD = AREA_TITLE_HEIGHT + AREA_CARD_HEIGHT;
 /** Inset from the sheet's edge for anything placed inside it. */
 export const AREA_INSET = 24;
 
+/** Is this item a sheet things are placed in, rather than a thing placed on one? */
 export function isArea(item: Item): boolean {
   return item.properties.kind === AREA_KIND;
 }
@@ -269,10 +273,14 @@ export function areaEnclosing(
  * top-left, because that is how a person reads a table.
  */
 export const AREA_ROWS_PROP = "rows";
+/** `properties.cols` — the column count; a grid needs both this and `rows` to exist. */
 export const AREA_COLS_PROP = "cols";
+/** `properties.rowNames` — comma-separated, in order; fewer names than rows is fine. */
 export const AREA_ROW_NAMES_PROP = "rowNames";
+/** `properties.colNames` — comma-separated, in order; fewer names than columns is fine. */
 export const AREA_COL_NAMES_PROP = "colNames";
 
+/** The grid read off a sheet's four properties, already validated by `areaGrid`. */
 export interface AreaGrid {
   rows: number;
   cols: number;

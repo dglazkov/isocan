@@ -83,6 +83,7 @@ interface DotToken {
   secret: string;
 }
 
+/** The one writer of the `<id>.<secret>` shape `parseDotToken` reads back. */
 export function formatDotToken(id: string, secret: string): string {
   return `${id}.${secret}`;
 }
@@ -105,10 +106,12 @@ interface BadgeToken {
   secret: string;
 }
 
+/** A badge's token, in the shared dot shape — the field name says which kind of id it is. */
 export function formatBadgeToken(badgeId: string, secret: string): string {
   return formatDotToken(badgeId, secret);
 }
 
+/** A presented badge token, or null when it is not one — refused the same as a missing one. */
 export function parseBadgeToken(raw: string | undefined | null): BadgeToken | null {
   const parsed = parseDotToken(raw);
   return parsed ? { badgeId: parsed.id, secret: parsed.secret } : null;
@@ -116,6 +119,7 @@ export function parseBadgeToken(raw: string | undefined | null): BadgeToken | nu
 
 // ---- the door ----
 
+/** What a caller tells the door about itself: which carrier, and whether it is framed. */
 export interface DoorRequest {
   /** Default `bearer`. */
   carrier?: BadgeCarrier;
@@ -138,6 +142,7 @@ export interface DoorRequest {
   framed?: boolean;
 }
 
+/** What the door hands back: the new badge's id, and its secret only for a bearer. */
 export interface DoorResponse {
   badgeId: string;
   /**
@@ -211,6 +216,10 @@ export type DoorAnswer =
   | { badge: StoredBadge }
   | { refused: { status: number; error: string; code?: string } };
 
+/**
+ * Knock on the door at `base` for a bearer badge, and keep the refusal if there is one:
+ * never throws, and an unreachable door is a refusal with status 0.
+ */
 export async function askTheDoor(base: string, timeoutMs = 10_000, signal?: AbortSignal): Promise<DoorAnswer> {
   try {
     const res = await fetch(`${base}${DOOR_ROUTE}`, {
@@ -272,6 +281,10 @@ export const BADGE_RESTART_HINT =
 
 /** WebSocket close codes, continuing ws.ts's 4400/4404/4500 convention. */
 export const WS_NO_BADGE = 4401;
+/**
+ * The socket was opened from an origin this daemon does not serve — a 403, and nothing a
+ * new badge would fix, so a client must not answer it by knocking.
+ */
 export const WS_BAD_ORIGIN = 4403;
 /**
  * There is no canvas at that address — the socket half of a 404, and the one
@@ -417,6 +430,7 @@ export interface BadgeSummary {
   attested?: string[];
 }
 
+/** `GET /api/badges`: every surface that shares the caller's identity. */
 export interface BadgesResponse {
   badges: BadgeSummary[];
 }
@@ -430,6 +444,7 @@ export interface BadgesResponse {
  * laptop is not in one room, it is in all of them.
  */
 export const BADGES_ROUTE = "/api/badges";
+/** One badge's route under `BADGES_ROUTE` — the target of the stolen-laptop `DELETE`. */
 export const badgeRoute = (badgeId: string): string =>
   `${BADGES_ROUTE}/${encodeURIComponent(badgeId)}`;
 

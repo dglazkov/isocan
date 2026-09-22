@@ -9,6 +9,10 @@ import type { GroupLayout, GroupDeletionCohort, GroupCohortRecord, GroupMigratio
  * an Actor is created, not this model.
  */
 
+/**
+ * Who did something: stamped onto every op, comment and version. The name is what they were
+ * called at the time — the registry (`claims.ts`) holds what they are called now.
+ */
 export interface Actor {
   id: string;
   name: string;
@@ -36,6 +40,10 @@ export function isSystemActor(actorId: string): boolean {
   return actorId.startsWith("sys_");
 }
 
+/**
+ * The canvas RECORD — title, description, properties, and who touched it last. What is ON
+ * the canvas is `CanvasContents`; `CanvasState` below explains why the two travel apart.
+ */
 export interface Canvas {
   id: string;
   /** Missing is historical area mode; the public writer defaults new canvases to groups. */
@@ -80,6 +88,10 @@ export interface Canvas {
   lastOp?: string;
 }
 
+/**
+ * A second rendering of a version, when the artifact has one distinct from its source —
+ * a rendered page beside the markdown that made it. `visualFaceOf` reads it with the fallback.
+ */
 export interface VisualFace {
   /** sha256 of visual content; stored at blobs/<hash>.<ext> */
   blobHash: string;
@@ -88,6 +100,10 @@ export interface VisualFace {
   size?: number;
 }
 
+/**
+ * One entry in an item's stack: a blob by content hash, and who made it when. Versions are
+ * appended, never edited — re-editing an item is `item.addVersion`, so every wording is kept.
+ */
 export interface ItemVersion {
   /** Canonical design admission and flat retention; ordinary version input cannot supply this marker. */
   designRecord?: import("./design-record.ts").DesignRecordMarker;
@@ -157,6 +173,10 @@ export function hasDistinctVisualFace(version: ItemVersion): boolean {
   return version.visual !== undefined && version.visual.blobHash !== version.blobHash;
 }
 
+/**
+ * One thing on the canvas: a box in world coordinates, a stack of versions, and free-form
+ * `properties` — which is where every kind (text node, drawing, area) says what it is.
+ */
 export interface Item {
   id: string;
   /** Explicit canvas membership; coordinates remain in world space. */
@@ -207,6 +227,10 @@ export interface Item {
   updatedBy: Actor;
 }
 
+/**
+ * One message in a thread. The `design*` fields are writer-minted facts that an ordinary
+ * comment write cannot supply; most comments carry none of them.
+ */
 export interface Comment {
   id: string;
   author: Actor;
@@ -234,6 +258,10 @@ export interface Comment {
   editedAt?: string;
 }
 
+/**
+ * A conversation pinned to a point: freestanding in world space, or anchored to an item so
+ * the pin moves with it. The canvas's Chat is a thread too, marked `main`.
+ */
 export interface CommentThread {
   id: string;
   /** Freestanding: world coordinates of the pin. Anchored: offset from the
@@ -256,6 +284,10 @@ export interface CommentThread {
   createdBy: Actor;
 }
 
+/**
+ * A deleted item, whole, with who deleted it — deletion is a move to here, which is what
+ * makes it undoable.
+ */
 export interface TrashEntry {
   item: Item;
   deletedAt: string;
@@ -311,6 +343,10 @@ export interface EnrolledAgent {
   invitedFrom?: string;
 }
 
+/**
+ * Everything ON one canvas: items, threads, the trash, and the agents with standing here.
+ * What the reducer mutates, and what the web client replicates.
+ */
 export interface CanvasContents {
   items: Record<string, Item>;
   threads: Record<string, CommentThread>;
@@ -338,6 +374,9 @@ export interface CanvasState {
   canvas: CanvasContents;
 }
 
+/**
+ * A canvas with nothing on it — the state a new canvas starts from, and a reducer test's floor.
+ */
 export function emptyCanvas(): CanvasContents {
   return { items: {}, threads: {}, trash: [], agents: {} };
 }

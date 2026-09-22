@@ -34,6 +34,7 @@ import type { Paper } from "./textnode.ts";
  * etiquette, and the research note says so in as many words.
  */
 
+/** `properties.sprint` — `sprint=<phase>` on an item says it was handed in for that phase. */
 export const SPRINT_PROP = "sprint";
 
 /** What kind of moment a phase is — decides what the surfaces hide. */
@@ -90,6 +91,7 @@ export type BoardKey =
   | "test"
   | "wrap";
 
+/** One sheet of the sprint board, as a template: what `sprint board` lays out as an area. */
 export interface BoardArea {
   key: BoardKey;
   title: string;
@@ -105,6 +107,7 @@ export const BOARD_PROP = "board";
 /** Between sheets, in world units. */
 export const BOARD_GAP = 200;
 
+/** The board, sheet by sheet, in the order the week walks it — left to right. */
 export const SPRINT_BOARD: readonly BoardArea[] = [
   {
     key: "brief",
@@ -196,6 +199,7 @@ export const SPRINT_BOARD: readonly BoardArea[] = [
   },
 ];
 
+/** One sheet's template by key. Every `BoardKey` has one, so this never misses. */
 export function boardArea(key: BoardKey): BoardArea {
   return SPRINT_BOARD.find((one) => one.key === key)!;
 }
@@ -238,6 +242,7 @@ export function boardOf(canvas: CanvasContents): Item[] {
  */
 export const BRIEF_PROP = "brief";
 
+/** What a brief says. Every field optional: a brief that says less is honest. */
 export interface Brief {
   goal?: string;
   questions?: string[];
@@ -246,6 +251,9 @@ export interface Brief {
   cut?: string;
 }
 
+/**
+ * The brief as the markdown its card shows — empty fields left out rather than written as TBD.
+ */
 export function briefCard(brief: Brief): string {
   const lines: string[] = ["# Brief", ""];
   if (brief.goal) lines.push(`**Goal.** ${brief.goal}`, "");
@@ -322,6 +330,7 @@ export const PHASES: readonly PhaseSpec[] = [
 /** The word that closes a sprint. Not a phase: after it there is no clock. */
 export const SPRINT_END = "end";
 
+/** A phase by the word after `/sprint`, either case — or null for a word that names none. */
 export function phaseSpec(name: string): PhaseSpec | null {
   const key = name.toLowerCase();
   return PHASES.find((p) => p.name === key) ?? null;
@@ -379,6 +388,9 @@ export function parseSprintCommand(body: string): SprintCommand | null {
   return { phase: first, seconds, note: rest.join(" ") };
 }
 
+/**
+ * What `sprintState` reads off the Chat: the running phase, its clock, and what was handed in.
+ */
 export interface SprintState {
   phase: PhaseSpec;
   note: string;

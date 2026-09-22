@@ -23,13 +23,17 @@ import type { Item } from "./model.ts";
  * somebody would have made by hand.
  */
 
+/** A text node's blob is markdown — the file somebody would have made by hand. */
 export const TEXT_MIME = "text/markdown";
+/** The filename every text node's version carries, so `isocan get` hands back a `.md`. */
 export const TEXT_FILENAME = "text.md";
 
 /** `properties.kind` on an item born from the Text tool. */
 export const TEXT_KIND = "text";
+/** The properties a new text node is born with; spread, never mutated, by the caller. */
 export const TEXT_PROPERTIES: Record<string, string> = { kind: TEXT_KIND };
 
+/** Draw it chromeless? True only for an item the Text tool (or `isocan text`) made. */
 export function isTextItem(item: Item): boolean {
   return item.properties.kind === TEXT_KIND;
 }
@@ -64,8 +68,10 @@ export const TEXT_SIZE = 16;
  * it only works if everyone is on it.
  */
 export const TEXT_STYLES = ["body", "heading", "title", "display"] as const;
+/** One rung of the size ladder — the property's value and the CLI's word for it. */
 export type TextStyle = (typeof TEXT_STYLES)[number];
 
+/** World-unit size per rung. Each doubles the last, so each survives twice as far out. */
 export const TEXT_STYLE_SIZE: Record<TextStyle, number> = {
   body: TEXT_SIZE,
   heading: 32,
@@ -105,6 +111,7 @@ export function textStyleFrom(value: string): TextStyle | null {
  *  node made before the ladder existed says, and it stays correct. */
 export const TEXT_STYLE_PROP = "textStyle";
 
+/** The rung this node sits on; anything absent or unrecognised reads as `body`. */
 export function textStyleOf(item: Item): TextStyle {
   const raw = item.properties[TEXT_STYLE_PROP];
   return isTextStyle(raw) ? raw : "body";
@@ -156,6 +163,7 @@ export function textSizeOf(item: Item): number {
  * who is looking.
  */
 export const TEXT_FACES = ["sans", "mono", "serif", "hand"] as const;
+/** One of the closed set of faces a text node may be set in. */
 export type TextFace = (typeof TEXT_FACES)[number];
 
 /**
@@ -179,6 +187,10 @@ export function textFaceLabel(face: TextFace): string {
   }
 }
 
+/**
+ * The CSS `font-family` each face resolves to — stacks that exist everywhere, or the
+ * one file this app hosts, never a font only one collaborator has.
+ */
 export const TEXT_FACE_STACK: Record<TextFace, string> = {
   sans: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   mono: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -210,8 +222,10 @@ export function textDrawSize(item: Item): number {
   return Math.round(textSizeOf(item) * TEXT_FACE_SCALE[textFaceOf(item)]);
 }
 
+/** `properties.textFace` — absent means `sans`, the face every node had before the choice. */
 export const TEXT_FACE_PROP = "textFace";
 
+/** The face this node is set in; anything absent or unrecognised reads as `sans`. */
 export function textFaceOf(item: Item): TextFace {
   const raw = item.properties[TEXT_FACE_PROP];
   return isTextFace(raw) ? raw : "sans";
@@ -245,6 +259,7 @@ function isTextFace(value: unknown): value is TextFace {
  * another's.
  */
 export const PAPERS = ["yellow", "pink", "blue", "green", "grey"] as const;
+/** One of the closed set of post-it colours. A colour, never a category. */
 export type Paper = (typeof PAPERS)[number];
 
 /** What a paper is called where somebody picks one. Every id is already the
@@ -254,6 +269,7 @@ export function paperLabel(paper: Paper): string {
   return paper.charAt(0).toUpperCase() + paper.slice(1);
 }
 
+/** `properties.paper` — the one property that turns a caption into a post-it. */
 export const PAPER_PROP = "paper";
 
 /** The paper this node is written on, or null for none — a plain text node. */
@@ -262,6 +278,7 @@ export function paperOf(item: Item): Paper | null {
   return isPaper(raw) ? raw : null;
 }
 
+/** Guard for a value read off `properties`, which are strings anybody could have written. */
 export function isPaper(value: unknown): value is Paper {
   return typeof value === "string" && (PAPERS as readonly string[]).includes(value);
 }
@@ -322,6 +339,10 @@ export function textIsLegible(worldSize: number, scale: number): boolean {
  */
 export const TEXT_MARK_MAX = 14;
 
+/**
+ * Screen-pixel size of the glyph drawn in place of illegible words: most of the node's
+ * smaller side, never below 1px, never above `TEXT_MARK_MAX`.
+ */
 export function textMarkSize(
   boxWidth: number,
   boxHeight: number,
@@ -364,14 +385,6 @@ export function textTitle(body: string): string {
   return bare.length <= 48 ? bare : `${bare.slice(0, 47).trimEnd()}…`;
 }
 
-/**
- * A box for this text before anything has measured it.
- *
- * An estimate, and only ever a starting point: the app measures what it
- * actually rendered and corrects the item, and `⇧F` re-fits at any time. It
- * exists so that a node made from the CLI — where there is nothing to measure
- * with — lands at a size somebody can read rather than at a default square.
- */
 /**
  * **How wide a column each step wraps in, and why it is not proportional.**
  *
@@ -475,6 +488,15 @@ function bareLine(line: string): string {
     .trim();
 }
 
+/**
+ * A box for this text before anything has measured it.
+ *
+ * An estimate, and only ever a starting point: the app measures what it
+ * actually rendered and corrects the item, and `⇧F` re-fits at any time. It
+ * exists so that a node made from the CLI — where there is nothing to measure
+ * with — lands at a size somebody can read rather than at a default square.
+ * How it errs, and why large, is the comment above the constants.
+ */
 export function textBox(
   body: string,
   style: TextStyle = "body",

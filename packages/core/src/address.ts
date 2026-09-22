@@ -59,6 +59,7 @@ export function canvasPath(canvasId: string): string {
  */
 const ITEM_PATH_SEGMENT = "i";
 
+/** The path of one item full screen, origin-relative — `/p/<canvas>/i/<item>`. */
 export function itemPath(canvasId: string, itemId: string): string {
   return `${canvasPath(canvasId)}/${ITEM_PATH_SEGMENT}/${encodeURIComponent(itemId)}`;
 }
@@ -78,12 +79,14 @@ export function itemUrl(origin: string, canvasId: string, itemId: string): strin
  * full screen is one: it is an address either surface can hand you.
  */
 const DECK_PATH_SEGMENT = "deck";
+/** The router's pattern for the deck view, built from `CANVAS_ROUTE` so the two agree. */
 export const DECK_ROUTE = `${CANVAS_ROUTE}/${DECK_PATH_SEGMENT}`;
 
 export function deckPath(canvasId: string): string {
   return `${canvasPath(canvasId)}/${DECK_PATH_SEGMENT}`;
 }
 
+/** The deck view's whole address — what the CLI's headless Chrome prints from. */
 export function deckUrl(origin: string, canvasId: string): string {
   return `${origin.replace(/\/+$/, "")}${deckPath(canvasId)}`;
 }
@@ -96,12 +99,17 @@ export function deckUrl(origin: string, canvasId: string): string {
  * surface can hand you, and `isocan open --page <segment>` does.
  */
 const MODULE_PAGE_PATH_SEGMENT = "x";
+/** The router's pattern for a module's page; `:segment` is the module's own name for it. */
 export const MODULE_PAGE_ROUTE = `${CANVAS_ROUTE}/${MODULE_PAGE_PATH_SEGMENT}/:segment`;
 
+/**
+ * A module page's path, origin-relative. The segment goes in unencoded: it is a name a module declared.
+ */
 export function modulePagePath(canvasId: string, segment: string): string {
   return `${canvasPath(canvasId)}/${MODULE_PAGE_PATH_SEGMENT}/${segment}`;
 }
 
+/** A module page's whole address — what `isocan open --page` hands somebody. */
 export function modulePageUrl(origin: string, canvasId: string, segment: string): string {
   return `${origin.replace(/\/+$/, "")}${modulePagePath(canvasId, segment)}`;
 }
@@ -126,7 +134,9 @@ export function modulePageUrl(origin: string, canvasId: string, segment: string)
  */
 const WORKBENCH_PATH_SEGMENT = "w";
 
+/** The router's pattern for the workbench with nothing on the stage. */
 export const WORKBENCH_ROUTE = `${CANVAS_ROUTE}/${WORKBENCH_PATH_SEGMENT}`;
+/** The workbench with one artifact staged; `wbItemId`, not `itemId`, for the reason above. */
 export const WORKBENCH_ITEM_ROUTE = `${WORKBENCH_ROUTE}/:wbItemId`;
 
 /** The workbench with nothing focused — the agent room itself. */

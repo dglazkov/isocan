@@ -20,6 +20,10 @@ import { inCanvasScope } from "./canvas-scope.ts";
  * registry instead of calling anything by name.
  */
 
+/**
+ * A connection a module says exists between two items — read off the canvas each time,
+ * never stored, and written out as an edge when the canvas exports as JSON Canvas.
+ */
 export interface ModuleEdge {
   from: Item;
   to: Item;
@@ -46,6 +50,10 @@ export interface ModuleKind {
   icon?: string;
 }
 
+/**
+ * What a module hands core: its name, the property keys it owns, and the pure readers core
+ * calls without knowing the module by name.
+ */
 export interface CoreModule {
   /** The package name — `@isocan/<name>` — which is also how an item made by
    *  a module that is not installed can be named from its mime alone. */
@@ -258,14 +266,17 @@ export function registerModule(record: CoreModule): void {
   REGISTRY.set(record.name, record);
 }
 
+/** Forget a module by name — the "removed means removed" half of `registerModule`. */
 export function unregisterModule(name: string): void {
   REGISTRY.delete(name);
 }
 
+/** Every module registered right now, in the order they first registered. A copy. */
 export function modules(): CoreModule[] {
   return [...REGISTRY.values()];
 }
 
+/** What every loaded module adds to the context an agent is handed about this canvas. */
 export function moduleContextPieces(canvas: CanvasContents): ContextPiece[] {
   return modules().flatMap((m) => m.contextPieces?.(canvas) ?? []);
 }
@@ -274,6 +285,7 @@ export function moduleEdges(canvas: CanvasContents): ModuleEdge[] {
   return modules().flatMap((m) => m.edges?.(canvas) ?? []);
 }
 
+/** Every kind every loaded module adds — what `itemKind()` asks before its own mime tests. */
 export function moduleKinds(): ModuleKind[] {
   return modules().flatMap((m) => m.kinds ?? []);
 }
@@ -451,6 +463,10 @@ export interface ModuleActionFacts {
   selection: readonly string[];
 }
 
+/**
+ * One ⌘K palette entry a module adds: offered when `available` says so, and either the ops it
+ * sends or a dialog it opens.
+ */
 export interface ModuleAction {
   id: string;
   name: string;
@@ -527,6 +543,7 @@ export interface RendererFacts {
   readText: () => Promise<string>;
 }
 
+/** How a module draws its own mimes on a card and the stage, ahead of the built-in chain. */
 export interface ModuleRenderer<R> {
   /** The mimes this draws — the same list the module's kind claims. */
   mimes: readonly string[];
@@ -548,6 +565,7 @@ export interface InspectorFacts {
   host: WebHost;
 }
 
+/** A panel beside the workbench stage, mounted for items of the kinds it names. */
 export interface ModuleInspector<I> {
   /** The kinds it inspects — built-in ids or a module's. */
   kinds: readonly string[];
@@ -567,6 +585,7 @@ export interface PageFacts {
   host: WebHost;
 }
 
+/** A whole page a module adds, served at `x/<segment>` under the canvas's path. */
 export interface ModulePage<P> {
   /** The path segment: lowercase letters, digits, dashes. */
   segment: string;
@@ -777,6 +796,10 @@ interface ModuleOverlay<O> {
   component: O;
 }
 
+/**
+ * The browser half of a module: its `CoreModule` plus the pieces only the web app mounts.
+ * Generic in each component type so core never imports React.
+ */
 export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never, X = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */

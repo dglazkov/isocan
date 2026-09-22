@@ -68,6 +68,10 @@ interface ActorNameRow {
 /** Actor id → the name they go by now. */
 type ActorNamesRegistry = Record<string, ActorNameRow>;
 
+/**
+ * The PUBLIC half of the registry described above: what everyone may know about everyone
+ * else, keyed by actor id. It replicates and replays; who may speak as whom does neither.
+ */
 export interface ActorRegistry {
   /**
    * The name each actor goes by now, keyed by ACTOR id.
@@ -122,6 +126,7 @@ export interface ActorRegistry {
   harnesses?: Record<string, string>;
 }
 
+/** A registry nobody has claimed anything in — every field present, so readers need no `??`. */
 export const emptyActorRegistry = (): ActorRegistry => ({
   names: {},
   colors: {},
@@ -140,6 +145,10 @@ export const emptyActorRegistry = (): ActorRegistry => ({
  */
 export const PERSON_HARNESSES: ReadonlySet<string> = new Set(["web", "home", "cli", "person"]);
 
+/**
+ * Is this harness an agent's? Anything not a known person's harness is — empty or missing
+ * is neither, and reads as not an agent.
+ */
 export const isAgentHarness = (harness: string | null | undefined): boolean =>
   harness !== null && harness !== undefined && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase());
 
@@ -149,6 +158,10 @@ export const isAgentHarness = (harness: string | null | undefined): boolean =>
  *  which is the safe direction for a face and the honest one for a count. */
 export type ActorKinds = Record<string, "agent">;
 
+/**
+ * Which actors are agents, from the harness each last claimed from — keyed by the actor an
+ * id has joined, so an agent that merged into another is counted as the one it became.
+ */
 export function actorKinds(registry: ActorRegistry): ActorKinds {
   const kinds: ActorKinds = {};
   for (const [id, harness] of Object.entries(registry.harnesses ?? {})) {
@@ -290,6 +303,10 @@ function firstFree(roster: readonly string[], taken: Set<string>, seed: string):
   return null;
 }
 
+/**
+ * The harness a session key names: the part before its first `:` — `claude-code:abc` is
+ * `claude-code` — or null for no key.
+ */
 export function harnessOf(sessionKey: string | undefined): string | null {
   const harness = sessionKey?.split(":")[0]?.trim();
   return harness ? harness : null;
@@ -332,6 +349,10 @@ export interface FreeNameResponse {
  */
 const CLAIM_STANDS_MS = 30 * 60 * 1000;
 
+/**
+ * Everything a claim is judged against besides the op itself: the registry, and which claims
+ * the presenting badge already holds.
+ */
 export interface ClaimContext {
   registry: ActorRegistry;
   /**
