@@ -143,3 +143,41 @@ describe("every Node comes from .nvmrc", () => {
     );
   });
 });
+
+/**
+ * **Renovate's lanes, held to what AGENTS.md says they are.**
+ *
+ * Three details that each look like tidying and each break something: the
+ * fixtures' `package.json`s are inputs to the design-lint tests, so bumping
+ * them changes what the tests test; `.nvmrc` and the Dockerfile must move in
+ * ONE pull request or the major check above fails it; and `config:recommended`
+ * carries presets that quietly peel packages out into their own PRs
+ * (react, vitest, commander were the first three), which is how one lane
+ * becomes nine.
+ */
+describe("renovate.json keeps its lanes", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const config = JSON.parse(readFileSync(`${root}/renovate.json`, "utf8"));
+
+  it("leaves the test fixtures alone", () => {
+    expect(config.ignorePaths).toContain("test/fixtures/**");
+  });
+
+  it("moves .nvmrc and the image's Node together", () => {
+    const node = config.packageRules.find((r: { groupSlug?: string }) => r.groupSlug === "node");
+    expect(node?.matchManagers).toEqual(expect.arrayContaining(["nvm", "dockerfile"]));
+    expect(node?.separateMajorMinor).toBe(false);
+    expect(node?.automerge).toBe(false);
+  });
+
+  it("turns off the presets that split a lane", () => {
+    expect(config.ignorePresets).toEqual(
+      expect.arrayContaining(["group:monorepos", "group:recommended", "workarounds:groupings"]),
+    );
+  });
+
+  it("merges by itself only what is not a major", () => {
+    const auto = config.packageRules.filter((r: { automerge?: boolean }) => r.automerge);
+    for (const rule of auto) expect(rule.matchUpdateTypes ?? []).not.toContain("major");
+  });
+});

@@ -1,0 +1,88 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Why each rule is shaped this way: AGENTS.md, 'The night shift's pull requests' \u2192 Renovate.",
+  "extends": [
+    "config:recommended"
+  ],
+  "ignorePresets": [
+    "group:monorepos",
+    "group:recommended",
+    "workarounds:groupings"
+  ],
+  "timezone": "America/Denver",
+  "schedule": [
+    "before 6am"
+  ],
+  "dependencyDashboard": true,
+  "rangeStrategy": "bump",
+  "labels": [
+    "dependencies"
+  ],
+  "prConcurrentLimit": 4,
+  "ignorePaths": [
+    "**/node_modules/**",
+    "test/fixtures/**"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ],
+    "automerge": true,
+    "automergeType": "pr"
+  },
+  "packageRules": [
+    {
+      "description": "The workspace's own packages are source, not dependencies.",
+      "matchPackageNames": [
+        "@isocan/**",
+        "isocan"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Daily lane: every patch and minor update, npm and Actions alike, in ONE pull request that merges itself when the suite is green.",
+      "matchUpdateTypes": [
+        "patch",
+        "minor",
+        "digest",
+        "pin"
+      ],
+      "groupName": "patch and minor updates",
+      "groupSlug": "patch-minor",
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Weekly lane: majors change behaviour, so they wait for a person, together, once a week.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "major updates",
+      "groupSlug": "weekly",
+      "schedule": [
+        "before 6am on monday"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Node is one version across .nvmrc and the image (test/workflows.test.ts holds them to one major), so it moves in its own pull request, weekly, read by a person. This rule comes last so it wins over the two lanes above.",
+      "matchDepNames": [
+        "node",
+        "@types/node"
+      ],
+      "matchManagers": [
+        "nvm",
+        "dockerfile",
+        "npm"
+      ],
+      "groupName": "Node",
+      "groupSlug": "node",
+      "schedule": [
+        "before 6am on monday"
+      ],
+      "automerge": false,
+      "separateMajorMinor": false
+    }
+  ]
+}

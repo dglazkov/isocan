@@ -116,9 +116,32 @@ merged draft on `main` stays editable where a closed PR does not. And the one
 supersede-close: when the day's page already exists on `main`, written by a
 person, the run closes its own PR and says so.
 
+**Dependencies are Renovate's, in four lanes** (22 Sep 2026). `renovate.json`
+is the whole policy; one branch per lane, updated in place, so the rule above
+holds without anybody draining anything:
+
+- `renovate/patch-minor`, **daily** — every patch and minor bump, npm and
+  Actions alike, one PR, merged by Renovate itself once the checks are green.
+- `renovate/lock-file-maintenance`, **Mondays** — the lockfile refreshed,
+  merged the same way.
+- `renovate/major-weekly`, **Mondays** — every major together, for a person:
+  a major changes behaviour, and jsdom 30 raising its Node floor is what one
+  looks like.
+- `renovate/node`, **Mondays** — `.nvmrc`, the Dockerfile's image and
+  `@types/node` in one PR, for a person, because `test/workflows.test.ts`
+  holds the first two to one major and a split PR would fail it.
+
+Renovate's PRs come from its app, not `GITHUB_TOKEN`, so unlike the three
+above they DO run `pr.yml` — automerge is waiting on the real suite, not
+trusting it. `test/fixtures/` is ignored (its `package.json`s are inputs, not
+dependencies), as are the `@isocan/*` workspaces, and the presets that would
+split the lanes (`group:monorepos`, `group:recommended`,
+`workarounds:groupings`) are turned off. The Dependency Dashboard issue is the
+one place to see what is pending.
+
 Three bounds hold all of them:
 
-- **A workflow touches only its own branches** (`changelog/`, `grades/`,
+- **A workflow touches only its own branches** (`changelog/`, `grades/`, `renovate/`,
   `personas/`) — never another workflow's PRs, never a person's.
 - **A merge is checked, not trusted — and the check has to be run, not
   awaited.** PRs opened by `GITHUB_TOKEN` fire no `pull_request` workflows, so
