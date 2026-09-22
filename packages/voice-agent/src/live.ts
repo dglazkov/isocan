@@ -128,6 +128,60 @@ export function liveUrl(key: string, host = "generativelanguage.googleapis.com")
   );
 }
 
+/* ---- VIEW_ONLY ---- */
+/**
+ * **The tools that change nobody's canvas** — a person's selection, their
+ * camera, and the reads.
+ *
+ * They are marked `NON_BLOCKING` so the model can keep talking while they
+ * run, which is the difference between "can you select the checkout screen
+ * and tell me about it" happening as one sentence and happening as a pause in
+ * the middle of one.
+ *
+ * **Mutations are deliberately NOT here.** A model that narrates "done" while
+ * the operation is still in flight is a model that will eventually say it
+ * about one that failed. The pause on a write is the write landing, and it is
+ * worth hearing.
+ *
+ * **Measured on 21 Sep 2026, because the docs and the behaviour disagree
+ * about which models honour it.** On `gemini-2.5-flash-native-audio-latest`
+ * audio resumed 172ms BEFORE the tool response arrived — it genuinely kept
+ * speaking. On `gemini-3.8-live` the setup ACCEPTS the field and ignores it:
+ * the turn completed 16ms after the tool call and stayed silent until
+ * answered, identically to a run with the field removed. So this is free on
+ * the default model and real on the other, and the only way to know that was
+ * to send both.
+ */
+const VIEW_ONLY = new Set([
+  "selection_set",
+  "selection_clear",
+  "viewport_focus",
+  "viewport_pan",
+  "find_items",
+  "read_canvas",
+  "read_item",
+  "read_threads",
+  "read_presence",
+  "project_list",
+]);
+
+/**
+ * How a tool's answer should reach a model that did not wait for it. Only
+ * meaningful for a `NON_BLOCKING` tool; harmless on the rest.
+ *
+ * `WHEN_IDLE` rather than `INTERRUPT`: the point of not blocking is that the
+ * sentence in progress finishes, and cutting it off to announce that a
+ * selection landed undoes the thing this is for.
+ */
+export function toolScheduling(name: string): "WHEN_IDLE" | undefined {
+  return VIEW_ONLY.has(name) ? "WHEN_IDLE" : undefined;
+}
+
+/** Is this one of the tools that may run while the model keeps speaking? */
+export function viewOnlyTool(name: string): boolean {
+  return VIEW_ONLY.has(name);
+}
+
 /* ---- LIVE_TOOLS ---- */
 /** The tool surface: the canvas's operation vocabulary and read tools,
  * declared so the model calls them directly and decides what to do. */
@@ -803,7 +857,13 @@ export function liveSetup(
       systemInstruction: {
         parts: [{ text: voiceInstruction(rules, instructions) }],
       },
-      tools: [{ functionDeclarations: LIVE_TOOLS }],
+      tools: [
+        {
+          functionDeclarations: LIVE_TOOLS.map((tool) =>
+            viewOnlyTool(tool.name) ? { ...tool, behavior: "NON_BLOCKING" } : tool,
+          ),
+        },
+      ],
     },
   };
 }

@@ -20,7 +20,7 @@ import {
 } from "@isocan/core";
 import { VoiceBeam } from "voice-glow";
 import { LevelMeter, Playback, capture, fromBytes, type Capture } from "./audio.ts";
-import { LIVE_MODEL, LIVE_VOICES, canvasSnapshotText, commandsBrief, isLiveVoice, liveSetup, liveUrl, planForCall, type SnapshotItem } from "./live.ts";
+import { LIVE_MODEL, LIVE_VOICES, canvasSnapshotText, commandsBrief, isLiveVoice, liveSetup, liveUrl, planForCall, toolScheduling, type SnapshotItem } from "./live.ts";
 import { voiceCore } from "./core.ts";
 
 /**
@@ -247,7 +247,67 @@ export async function runTool(
   if (what === "__read_presence__") {
     return { ok: false, error: "presence is not carried by the browser voice dialog yet" };
   }
-  if (what) return { ok: false, error: what };
+  /**
+   * **The person's own view: selection and camera.**
+   *
+   * Neither is written — a selection and a camera are one person's, not the
+   * canvas's — so these go through the host rather than through an operation,
+   * and nobody else's screen moves.
+   *
+   * They were DECLARED and unwired: the model called `selection_set`, got
+   * `{ok:false, error:"__selection_set__"}` back, and had an internal token
+   * where a sentence should be. "Can you select the checkout screen" failed,
+   * and the model could not say why because nothing told it.
+   */
+  if (what === "__selection_set__" || what === "__selection_clear__" || what === "__viewport_focus__") {
+    const items = Object.values(facts.canvas.items ?? {});
+    const refs = Array.isArray(args.item_refs) ? (args.item_refs as unknown[]).map(String) : [];
+    const one = typeof args.item_ref === "string" ? [args.item_ref] : [];
+    const wanted = [...refs, ...one];
+    const found = wanted
+      .map((ref) => items.find((i) => i.id === ref || (i.title ?? "").toLowerCase().startsWith(ref.toLowerCase())))
+      .filter((i): i is NonNullable<typeof i> => i !== undefined);
+    if (what === "__selection_clear__") {
+      facts.host.select([]);
+      return { ok: true, answer: "selection cleared" };
+    }
+    const missing = wanted.length - found.length;
+    if (found.length === 0) {
+      return { ok: false, error: `nothing here matches ${wanted.map((w) => JSON.stringify(w)).join(", ") || "that"}` };
+    }
+    if (what === "__selection_set__") facts.host.select(found.map((i) => i.id));
+    facts.host.reveal(found.map((i) => i.id));
+    const named = found.map((i) => `${i.title ?? "untitled"} [${i.id}]`).join("; ");
+    return {
+      ok: true,
+      answer:
+        (what === "__selection_set__" ? `selected ${named}` : `showing ${named}`) +
+        (missing > 0 ? ` — ${missing} of what you named is not on this canvas` : ""),
+    };
+  }
+  if (what === "__find_items__") {
+    /* Answered from the facts the shell already handed over, in the
+       projection's wording, so a search reads like the canvas does. */
+    const query = String(args.query ?? args.text ?? "").toLowerCase().trim();
+    const rows = snapshotItemsFor(facts.canvas, facts.selection ?? []).filter(
+      (i) => query === "" || (i.title ?? "").toLowerCase().includes(query) || i.kind.toLowerCase().includes(query),
+    );
+    if (rows.length === 0) return { ok: true, answer: `nothing matches ${JSON.stringify(query)}` };
+    return { ok: true, answer: canvasSnapshotText(rows, []) };
+  }
+  if (what === "__viewport_pan__") {
+    /* `reveal` glides to ITEMS; there is no pan-by-delta on the host, and
+       inventing one that scrolled a person's canvas by a guess is worse than
+       saying so. Naming the thing that does work is what keeps the model from
+       trying this again next turn. */
+    return {
+      ok: false,
+      error: "panning by an amount is not carried here — name the items to look at instead and they will be shown",
+    };
+  }
+  /* A sentinel is an internal token. If one ever reaches here it must not be
+     handed to the model as though it were an explanation. */
+  if (what) return { ok: false, error: `${name} is not carried by the browser voice dialog yet` };
   if (plans.length === 0) return { ok: false, error: `the model called ${name}, which this dialog does not wire` };
 
   const items = Object.values(facts.canvas.items ?? {});
@@ -626,7 +686,14 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         for (const call of calls) {
           const response = await runTool(call.name, call.args ?? {}, factsRef.current);
           say("system", `${call.name} → ${response.ok ? "done" : String(response.error)}`);
-          responses.push({ id: call.id, name: call.name, response });
+          /* A non-blocking tool's answer says WHEN it should reach the
+             model; a blocking one's needs no scheduling and carries none. */
+          const scheduling = toolScheduling(call.name);
+          responses.push({
+            id: call.id,
+            name: call.name,
+            response: scheduling ? { ...response, scheduling } : response,
+          });
         }
         socket.send(JSON.stringify({ toolResponse: { functionResponses: responses } }));
       }

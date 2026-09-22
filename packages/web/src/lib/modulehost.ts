@@ -99,6 +99,15 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
       throw new Error(`the rc did not enrol ${ask.name} — its terminal says why`);
     },
     viewer: { id: actor.id, name: actor.name },
+    /** The shell's own selection action, handed to modules unchanged — so a
+     *  module's "select these" and a person's click land in exactly the same
+     *  state, side effects and all. Unknown ids are dropped rather than
+     *  stored: a selection naming something that is not there is a selection
+     *  no gesture could have made. */
+    select(itemIds: readonly string[]): void {
+      const items = useCanvasStore.getState().canvas?.items ?? {};
+      useUiStore.getState().setSelection(itemIds.filter((id) => items[id]));
+    },
     reveal(itemIds: readonly string[]): void {
       const items = itemIds
         .map((id) => useCanvasStore.getState().canvas?.items[id])

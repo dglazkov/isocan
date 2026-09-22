@@ -371,6 +371,17 @@ export interface WebHost {
    * For the moment a dialog closes on something it just made off-screen.
    */
   reveal: (itemIds: readonly string[]) => void;
+  /**
+   * **Pick these out for this viewer** (proposed: `host`) — the sibling of
+   * `reveal`, and one for the same reason: a selection is one person's, not
+   * the canvas's, so nothing is written and nobody else's screen moves.
+   *
+   * It exists because the voice session could already be TOLD to select
+   * something and had no way to do it: `selection_set` was declared, the
+   * model called it, and the dialog answered with an internal token. An empty
+   * list clears.
+   */
+  select: (itemIds: readonly string[]) => void;
 }
 
 /** What a component asks the parked rc to enrol. */
