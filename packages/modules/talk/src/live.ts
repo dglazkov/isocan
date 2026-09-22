@@ -603,7 +603,10 @@ export const LIVE_TOOLS = [
   },
   {
     name: "viewport_focus",
-    description: "Center and zoom the collaborator's canvas view onto a specific item.",
+    description:
+      "Center and zoom the collaborator's canvas view onto a specific item — for showing, looking at, or finding " +
+      "something. This does NOT select it: if they asked you to select, pick or highlight something, use selection_set. " +
+      "Resolve a phrase about where a thing is to an id yourself, from the canvas state.",
     parameters: {
       type: "OBJECT",
       properties: {
@@ -627,13 +630,20 @@ export const LIVE_TOOLS = [
   },
   {
     name: "selection_set",
-    description: "Select one or more items on the canvas.",
+    description:
+      "Select one or more items on the canvas — use this whenever somebody says to select, pick, highlight or choose " +
+      "something. A phrase about WHERE a thing is (the top one, the left one, the big one, the red one) is yours to " +
+      "resolve from the canvas state you were given, which carries every item's size, corner and colour: work out which " +
+      "id they mean and pass that. Do not pass the phrase itself, and do not move the camera instead — selecting and " +
+      "looking are different things.",
     parameters: {
       type: "OBJECT",
       properties: {
         item_refs: {
           type: "ARRAY",
-          description: "List of item titles, prefixes, or ids to select.",
+          description:
+            "The items to select, as ids from the canvas state. A title or a title prefix also resolves; a description " +
+            "of position or appearance does not — resolve that to an id yourself first.",
           items: { type: "STRING" },
         },
       },

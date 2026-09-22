@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   besideBox,
   isBesideSide,
@@ -917,11 +917,35 @@ function Transcript({
   onExpand: () => void;
 }) {
   const foot = useRef<HTMLDivElement | null>(null);
+  const log = useRef<HTMLDivElement | null>(null);
   /* Follow the newest line. A transcript that has to be scrolled to see the
      thing that just arrived is a transcript nobody reads while talking. */
   useEffect(() => {
     foot.current?.scrollIntoView({ block: "end" });
   }, [lines]);
+
+  /**
+   * **Is there anything to expand TO?**
+   *
+   * Two lines in a box that fits two lines had an Expand button that did
+   * nothing when pressed — a control whose only effect is to disappoint. So
+   * it appears when the log is actually taller than its box, and stays while
+   * expanded so the state is always escapable.
+   *
+   * A ResizeObserver rather than a measurement on new lines alone: the Chat
+   * panel is resizable, and a button that was right when the last line
+   * arrived is wrong the moment somebody drags the panel taller.
+   */
+  const [overflowing, setOverflowing] = useState(false);
+  useLayoutEffect(() => {
+    const el = log.current;
+    if (!el) return;
+    const measure = () => setOverflowing(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [lines, expanded]);
 
   if (lines.length === 0) return null;
   /* A first name in the column, the whole one to a screen reader and on
@@ -936,17 +960,20 @@ function Transcript({
             collaborator — so the person talking should know that while they
             are talking, not discover it afterwards. */}
         <span className="talk-log-dest">lands in Chat when you stop</span>
-        <button
-          type="button"
-          className="talk-log-act"
-          onClick={onExpand}
-          aria-expanded={expanded}
-          title={expanded ? "Show fewer lines" : "Show more of the conversation"}
-        >
-          {expanded ? "Shrink" : "Expand"}
-        </button>
+        {(expanded || overflowing) && (
+          <button
+            type="button"
+            className="talk-log-act"
+            onClick={onExpand}
+            aria-expanded={expanded}
+            title={expanded ? "Show fewer lines" : "Show more of the conversation"}
+          >
+            {expanded ? "Shrink" : "Expand"}
+          </button>
+        )}
       </div>
       <div
+        ref={log}
         className={`talk-log${expanded ? " talk-log-tall" : ""}`}
         aria-live="polite"
         aria-label="What has been said"
