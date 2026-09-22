@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor, Canvas, CommandMetadata, Space } from "@isocan/core";
-import { ago, groupSwitchRows, isShelved, keyFor, litRuns, rankCanvases, type ShelfScope, type SwitchRow } from "@isocan/core";
+import { ago, groupSwitchRows, isShelved, keyFor, litRuns, rankCanvases, type ShelfScope, type SwitchRow, renderKeys } from "@isocan/core";
 import { useUiStore, type PaletteMode } from "../stores/uiStore.ts";
 import { useCommands } from "../lib/commands.ts";
 import { availableActions, type Action, type ActionContext } from "../lib/actions.ts";
@@ -298,7 +298,7 @@ export function CommandPalette({
               onChange={toggleArchived}
             />
             <span>Include archived</span>
-            <kbd className="palette-keys">{keyFor(INCLUDE_ARCHIVED)}</kbd>
+            <kbd className="palette-keys">{renderKeys(keyFor(INCLUDE_ARCHIVED) ?? "")}</kbd>
           </label>
         )}
         <div className="palette-rows" ref={list} role="listbox">
@@ -344,7 +344,7 @@ export function CommandPalette({
                       </span>
                       {hintOf(row) && <span className="palette-hint">{hintOf(row)}</span>}
                       {row.kind === "action" && row.action.keys && (
-                        <kbd className="palette-keys">{row.action.keys}</kbd>
+                        <kbd className="palette-keys">{renderKeys(row.action.keys)}</kbd>
                       )}
                       {row.kind === "ask" && <span className="palette-posts">posts a message</span>}
                     </>

@@ -55,6 +55,11 @@ export interface CursorSignal {
 
 /** Cursor signals revert back to the actor's name after 20 seconds. */
 export const CURSOR_SIGNAL_MS = 20_000;
+/** How much of a signal a cursor chip carries. It rides presence and is read
+ *  at a glance beside a moving pointer, so the bound is about what stays
+ *  legible there rather than about what a field can hold — `cursorSignal`
+ *  trims to it rather than refusing, because a message cut short still says
+ *  something and a refused one says nothing. */
 export const CURSOR_SIGNAL_MAX_LENGTH = 80;
 
 /** Normalize a cursor signal and bound its lifetime to 20 seconds; return null if blank or expired. */

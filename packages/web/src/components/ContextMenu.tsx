@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { keyFor } from "@isocan/core";
+import { keyFor, renderKeys } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 
 /**
@@ -185,7 +185,7 @@ export function ContextMenu({
                 {entry.checked ? "✓" : ""}
               </span>
             )}
-            {entry.shortcutFor && <kbd>{keyFor(entry.shortcutFor) ?? ""}</kbd>}
+            {entry.shortcutFor && <kbd>{renderKeys(keyFor(entry.shortcutFor) ?? "")}</kbd>}
           </button>
         ),
       )}

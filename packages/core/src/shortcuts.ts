@@ -140,11 +140,18 @@ export function shortcutsIn(group: ShortcutGroup): Shortcut[] {
  * what a menu offers has never had one — and it is the reason this returns
  * rather than throws.
  */
+/**
+ * The canonical key, in the glyphs the table is authored in.
+ *
+ * **Deliberately NOT translated here.** Rendering inside this function was
+ * tried and is wrong: half a dozen tests compare what one surface offers
+ * against what another prints, and they can only do that while both sides
+ * speak one vocabulary. Translate at the point of DISPLAY — `renderKeys` —
+ * so comparison stays canonical and only the pixels change.
+ */
 export function keyFor(does: string): string | null {
   const found = SHORTCUTS.find((shortcut) => shortcut.does === does);
-  /* Rendered, not raw: the table is authored in the Mac glyphs and every
-     reader of this wants the spelling for the platform it is printing on. */
-  return found?.keys[0] !== undefined ? renderKeys(found.keys[0]) : null;
+  return found?.keys[0] ?? null;
 }
 
 /** The whole list as text, for a terminal or a comment: the same answer the
@@ -153,7 +160,9 @@ export function shortcutsAsText(): string {
   // The column is measured, not guessed: a fixed 24 ran "Double-click the
   // name" straight into its description, and the next long key would have done
   // it again. One width for the whole list so the descriptions line up.
-  const keysOf = (s: Shortcut) => s.keys.join(" / ");
+  /* Rendered here because this IS the display: it is what `isocan shortcuts`
+     prints and what an agent is handed. The table stays canonical. */
+  const keysOf = (s: Shortcut) => s.keys.map((key) => renderKeys(key)).join(" / ");
   const column = Math.max(...SHORTCUTS.map((s) => keysOf(s).length)) + 2;
   return SHORTCUT_GROUPS.map((group) => {
     const rows = shortcutsIn(group).map((s) => {
