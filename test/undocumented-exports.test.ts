@@ -52,7 +52,14 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * measure working as intended: it asked, somebody read, and the answer was
  * "thirty of these, not a hundred and eight".
  *
- * ## Why the ceiling is 331
+ * 331 → 238 on 22 September, after the reviewer had asked fifteen nights
+ * running: 93 of core's exports — the data model, the op vocabulary, the
+ * badge door, passes, claims, the module registry — given the sentence each
+ * was missing. The `ids.ts` generators and the `Actor*Op` narrowings stayed
+ * bare, for the reason above. The goal was met by documenting, not by
+ * moving it.
+ *
+ * ## Why the ceiling is 238
  *
  * It is the measurement after that pass — the same trade
  * `test/bundle-budget.test.ts` and `test/unused-exports.test.ts` make, for
@@ -63,7 +70,7 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  * declares, so the suite and the nightly can never answer differently for one
  * name (`docs/reviews/lessons.md` #5).
  */
-const CEILING = 331;
+const CEILING = 238;
 const GOAL = 253;
 
 describe("exports with no comment above them", () => {
