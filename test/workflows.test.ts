@@ -102,3 +102,44 @@ describe("the sharded gate covers the whole suite", () => {
     expect(release).toMatch(/fail-fast: false/);
   });
 });
+
+/**
+ * **One Node, named once.**
+ *
+ * Until 22 Sep 2026 the suite ran on 24 (the shared setup action), five
+ * nightly workflows on 22, the image on `node:24-slim`, and laptops on
+ * whatever fnm last installed — one of them on 24.5.0, below the 24.15 that
+ * jsdom 30 asks for. Nobody chose that spread; each file was right the day it
+ * was written. `.nvmrc` is now the version, and fnm, nvm and `setup-node`
+ * all read it. The Dockerfile cannot read it, so it is held to the same
+ * major, which is the promise `node:24-slim` makes.
+ */
+describe("every Node comes from .nvmrc", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const nvmrc = readFileSync(`${root}/.nvmrc`, "utf8").trim();
+  const action = readFileSync(`${root}/.github/actions/suite-setup/action.yml`, "utf8");
+  const sources = [...files.map((f) => [f, read(f)] as const), ["actions/suite-setup", action] as const];
+
+  it("names an exact version", () => {
+    expect(nvmrc).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it("is what every setup-node step reads", () => {
+    const setups = sources.filter(([, text]) => /actions\/setup-node@/.test(text));
+    expect(setups.length, "no setup-node step found — a search over nothing always passes").toBeGreaterThan(0);
+    const pinned = setups.filter(([, text]) => /node-version:/.test(text) || !/node-version-file: \.nvmrc/.test(text));
+    expect(
+      pinned.map(([name]) => name),
+      "these choose their own Node. Use `node-version-file: .nvmrc` so CI runs what a laptop runs.",
+    ).toEqual([]);
+  });
+
+  it("is the image's major too", () => {
+    const docker = readFileSync(`${root}/Dockerfile`, "utf8");
+    const majors = [...docker.matchAll(/^FROM node:(\d+)/gm)].map((m) => m[1]);
+    expect(majors.length).toBeGreaterThan(0);
+    expect(new Set(majors), `the Dockerfile's node images should be ${nvmrc.split(".")[0]}, the major in .nvmrc`).toEqual(
+      new Set([nvmrc.split(".")[0]]),
+    );
+  });
+});

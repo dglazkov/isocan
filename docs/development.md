@@ -23,7 +23,8 @@ This guide is about working *on* isocan. To start a project *on a canvas*, see
 
 Install:
 
-* Node.js 24
+* Node.js 24 — the exact version is in `.nvmrc`, which CI reads too;
+  `fnm use` or `nvm use` in the checkout picks it up
 * Git
 
 In this guide, `isocan` refers to the CLI in your checkout:

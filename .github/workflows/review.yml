@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - run: npm ci
       # `bundle-bytes` measures a built artifact; without this it would read a
       # stale one or none, and a number nobody rebuilt is a lie rather than a
