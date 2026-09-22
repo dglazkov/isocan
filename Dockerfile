@@ -6,12 +6,19 @@
 # the same sources the CLI runs from. If the container ran a build output and
 # the CLI ran the sources, they would be two programs.
 #
-# Node 24, not 22. Three reasons, all checkable: `.github/workflows/release.yml`
-# pins node-version 24 and is the gate that decides what ships;
-# @google-cloud/firestore 9 and @google-cloud/storage 8 both declare
-# `engines.node >= 22` and are tested on current LTS; and the machine this was
-# written on runs 24.11. The architecture table still says 22 — that is a
-# lagging line, not a decision, and Phase 5's report says so.
+# Node 24, and `.nvmrc` is where that is SAID — every `setup-node` step reads
+# it, and `test/workflows.test.ts` holds these two `FROM` lines to its major,
+# because a Dockerfile cannot read it. This comment used to carry the argument
+# for 24 on its own and called the architecture table "a lagging line, not a
+# decision"; the table is corrected and the number lives in one file now.
+#
+# **Why 24 and not 26, as of 22 Sep 2026** — the question this comment exists
+# to answer next time somebody asks it. 26 has been Current since May and goes
+# Active LTS in October. @google-cloud/firestore and @google-cloud/storage
+# declare `engines.node >= 22` and are tested on current LTS, and this image is
+# what runs the home, so it follows the LTS line rather than leading it.
+# **Revisit in October**: 24 enters maintenance in the same month 26 leaves
+# Current, so that is a move to make deliberately rather than to drift into.
 #
 # ---- the two things that would have failed on Cloud Run ----
 #

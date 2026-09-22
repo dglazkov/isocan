@@ -113,7 +113,7 @@ properties and reactions in the log.
 
 | layer | choice |
 | --- | --- |
-| language / runtime | TypeScript on Node 22, run with `tsx` as today — the container pins the toolchain, and an always-on instance makes cold-start economics moot |
+| language / runtime | TypeScript on Node 24 (`.nvmrc`), run with `tsx` as today — the container pins the toolchain, and an always-on instance makes cold-start economics moot |
 | the home | the existing daemon (`@isocan/server`), containerized, on **Cloud Run** — one service, **exactly one instance** (min = max = 1, CPU always allocated, concurrency raised for sockets) |
 | op durability | **Firestore** (native mode) — one document per op |
 | blobs, snapshots | **Cloud Storage** — one bucket per environment |
