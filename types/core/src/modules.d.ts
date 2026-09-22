@@ -261,6 +261,17 @@ export interface WebHost {
      * For the moment a dialog closes on something it just made off-screen.
      */
     reveal: (itemIds: readonly string[]) => void;
+    /**
+     * **Pick these out for this viewer** (proposed: `host`) — the sibling of
+     * `reveal`, and one for the same reason: a selection is one person's, not
+     * the canvas's, so nothing is written and nobody else's screen moves.
+     *
+     * It exists because the voice session could already be TOLD to select
+     * something and had no way to do it: `selection_set` was declared, the
+     * model called it, and the dialog answered with an internal token. An empty
+     * list clears.
+     */
+    select: (itemIds: readonly string[]) => void;
 }
 /** What a component asks the parked rc to enrol. */
 export interface EnrolAsk {
@@ -607,6 +618,15 @@ export interface ComposerFacts {
      * cannot read the shell's stores without becoming unremovable.
      */
     theme: "light" | "dark";
+    /**
+     * **What the person has selected**, by item id, or empty.
+     *
+     * Selection is the shell's — it is UI state, not canvas state, so a module
+     * cannot read it and a second collaborator does not share it. It is here
+     * for the same reason `theme` and `groupMode` are: the alternative is a
+     * module reaching into the shell's stores and becoming unremovable.
+     */
+    selection: readonly string[];
     /** Ask for the composer's row, or hand it back. */
     takeOver: (active: boolean) => void;
     /** Whether this control currently has it — the shell's answer, not the

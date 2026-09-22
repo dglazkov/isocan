@@ -38,6 +38,15 @@ export declare function shortcutsIn(group: ShortcutGroup): Shortcut[];
  * what a menu offers has never had one — and it is the reason this returns
  * rather than throws.
  */
+/**
+ * The canonical key, in the glyphs the table is authored in.
+ *
+ * **Deliberately NOT translated here.** Rendering inside this function was
+ * tried and is wrong: half a dozen tests compare what one surface offers
+ * against what another prints, and they can only do that while both sides
+ * speak one vocabulary. Translate at the point of DISPLAY — `renderKeys` —
+ * so comparison stays canonical and only the pixels change.
+ */
 export declare function keyFor(does: string): string | null;
 /** The whole list as text, for a terminal or a comment: the same answer the
  * overlay gives, in the medium an agent can pass on. */

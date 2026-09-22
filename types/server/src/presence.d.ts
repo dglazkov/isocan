@@ -1,4 +1,4 @@
-import type { Actor, CanvasContents, Capability, Operation, PresenceActivity, PresenceSession } from "../../core/src/index.js";
+import type { Actor, CanvasContents, Capability, CursorSignal, Operation, PresenceActivity, PresenceSession } from "../../core/src/index.js";
 export declare const SESSION_TTL_MS: number;
 export declare class PresenceHub {
     private readonly ttlMs;
@@ -28,6 +28,7 @@ export declare class PresenceHub {
         } | null;
         selection?: string[];
         textSelection?: import("../../core/src/index.js").TextAttention | null;
+        signal?: CursorSignal | string | null;
         status?: string | null;
         statusSource?: "explicit" | "lifecycle" | "inferred";
         activity?: PresenceActivity | null;

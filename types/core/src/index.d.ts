@@ -75,6 +75,7 @@ export { DESIGN_SECTIONS, canonicalSection, parseFrontMatter, parseDesign, refer
 export type { DesignTypography, DesignTokens, DesignDoc } from "./designmd.js";
 export * from "./contrast.js";
 export * from "./colour.js";
+export * from "./shortcut.js";
 export * from "./designcheck.js";
 export * from "./tokens.js";
 export * from "./fit.js";

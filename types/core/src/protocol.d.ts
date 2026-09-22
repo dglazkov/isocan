@@ -1,4 +1,4 @@
-import type { TextAttention } from "./text-attention.js";
+import type { CursorSignal, TextAttention } from "./text-attention.js";
 import type { Capability } from "./grants.js";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.js";
 import type { Actor, Canvas, CanvasContents } from "./model.js";
@@ -208,6 +208,7 @@ export type ClientMessage = {
     } | null;
     selection: string[];
     textSelection?: TextAttention | null;
+    signal?: CursorSignal | null;
 }
 /**
  * A whole roster, from a connection that speaks for several people at once.
@@ -305,6 +306,8 @@ export interface PresenceSession {
     selection: string[];
     /** Temporary text attention, absent on older clients. */
     textSelection?: TextAttention | null;
+    /** Temporary 20-second cursor signal replacing the username on the cursor chip. */
+    signal?: CursorSignal | null;
     status: string | null;
     /**
      * Who is speaking when `status` is set — the same tri-state the update
@@ -409,6 +412,7 @@ export interface UpdateSessionRequest {
     } | null;
     selection?: string[];
     textSelection?: TextAttention | null;
+    signal?: CursorSignal | string | null;
     status?: string | null;
     /** Who is speaking when `status` is set. "explicit" (default) — the actor
      * said it (`session say/work --say`); it sticks until they post a comment
