@@ -32,8 +32,11 @@ import { type Paper } from "./textnode.js";
  * Areas do not nest for membership: an area is never *in* another area. The
  * one exception is `areaOf`, which answers for an item, not for an area.
  */
+/** `properties.kind` on an item that is an area — the whole of what makes one. */
 export declare const AREA_KIND = "area";
+/** The properties a new area is born with; spread, never mutated, by the caller. */
 export declare const AREA_PROPERTIES: Record<string, string>;
+/** An area's blob is its card — markdown, like a text node's. */
 export declare const AREA_MIME = "text/markdown";
 export declare const AREA_FILENAME = "area.md";
 /** The tint the sheet is drawn in — the paper palette, reused on purpose:
@@ -54,6 +57,7 @@ export declare const AREA_CARD_HEIGHT = 120;
 export declare const AREA_HEAD: number;
 /** Inset from the sheet's edge for anything placed inside it. */
 export declare const AREA_INSET = 24;
+/** Is this item a sheet things are placed in, rather than a thing placed on one? */
 export declare function isArea(item: Item): boolean;
 /** The tint an area wears, or null for the plain sheet. */
 export declare function areaTint(item: Item): Paper | null;
@@ -132,9 +136,13 @@ export declare function areaEnclosing(area: Item, items: readonly Item[]): {
  * top-left, because that is how a person reads a table.
  */
 export declare const AREA_ROWS_PROP = "rows";
+/** `properties.cols` — the column count; a grid needs both this and `rows` to exist. */
 export declare const AREA_COLS_PROP = "cols";
+/** `properties.rowNames` — comma-separated, in order; fewer names than rows is fine. */
 export declare const AREA_ROW_NAMES_PROP = "rowNames";
+/** `properties.colNames` — comma-separated, in order; fewer names than columns is fine. */
 export declare const AREA_COL_NAMES_PROP = "colNames";
+/** The grid read off a sheet's four properties, already validated by `areaGrid`. */
 export interface AreaGrid {
     rows: number;
     cols: number;

@@ -1,3 +1,7 @@
+/**
+ * `<prefix>_` and ten nanoid characters. The prefix is what lets a person — or a log
+ * line — tell an item id from a thread id at a glance; every minter below goes through here.
+ */
 export declare function newId(prefix: string): string;
 /** **`prj_` is a deliberate holdout** (phase 13.5's rename): every id ever
  * minted carries it, and every share link ever pasted contains it. The
@@ -7,6 +11,7 @@ export declare const newItemId: () => string;
 export declare const newVersionId: () => string;
 export declare const newThreadId: () => string;
 export declare const newCommentId: () => string;
+/** `op_` — an operation envelope's id; `isOpId` below is the shape a client's own must match. */
 export declare const newOpId: () => string;
 /** A gesture's name — see `LogEntry.group`. One per act, however many ops
  *  the act turns out to write. */
@@ -24,5 +29,7 @@ export declare const newGroupId: () => string;
  * take.)
  */
 export declare const isOpId: (value: unknown) => value is string;
+/** `usr_` — an actor, person or agent alike. */
 export declare const newActorId: () => string;
+/** `cli_` — one browser tab, so it can recognise its own ops when they are broadcast back. */
 export declare const newClientId: () => string;

@@ -21,11 +21,15 @@ import type { Item } from "./model.js";
  * without being asked to, the app already renders it, and a `.md` is the file
  * somebody would have made by hand.
  */
+/** A text node's blob is markdown — the file somebody would have made by hand. */
 export declare const TEXT_MIME = "text/markdown";
+/** The filename every text node's version carries, so `isocan get` hands back a `.md`. */
 export declare const TEXT_FILENAME = "text.md";
 /** `properties.kind` on an item born from the Text tool. */
 export declare const TEXT_KIND = "text";
+/** The properties a new text node is born with; spread, never mutated, by the caller. */
 export declare const TEXT_PROPERTIES: Record<string, string>;
+/** Draw it chromeless? True only for an item the Text tool (or `isocan text`) made. */
 export declare function isTextItem(item: Item): boolean;
 /** How wide a text node starts, in world units — and the width its title is
  * measured against. Wide enough for a sentence, narrow enough that a
@@ -55,7 +59,9 @@ export declare const TEXT_SIZE = 16;
  * it only works if everyone is on it.
  */
 export declare const TEXT_STYLES: readonly ["body", "heading", "title", "display"];
+/** One rung of the size ladder — the property's value and the CLI's word for it. */
 export type TextStyle = (typeof TEXT_STYLES)[number];
+/** World-unit size per rung. Each doubles the last, so each survives twice as far out. */
 export declare const TEXT_STYLE_SIZE: Record<TextStyle, number>;
 /**
  * **What each step is CALLED on a control: a size, not a role.**
@@ -78,6 +84,7 @@ export declare function textStyleFrom(value: string): TextStyle | null;
 /** `properties.textStyle` — absent means `body`, which is what every text
  *  node made before the ladder existed says, and it stays correct. */
 export declare const TEXT_STYLE_PROP = "textStyle";
+/** The rung this node sits on; anything absent or unrecognised reads as `body`. */
 export declare function textStyleOf(item: Item): TextStyle;
 /** World-unit size of a node's words. */
 export declare function textSizeOf(item: Item): number;
@@ -118,6 +125,7 @@ export declare function textSizeOf(item: Item): number;
  * who is looking.
  */
 export declare const TEXT_FACES: readonly ["sans", "mono", "serif", "hand"];
+/** One of the closed set of faces a text node may be set in. */
 export type TextFace = (typeof TEXT_FACES)[number];
 /**
  * **What a face is called where somebody picks one** (9 Sep 2026).
@@ -128,6 +136,10 @@ export type TextFace = (typeof TEXT_FACES)[number];
  * exists rather than a `capitalize()` at the call site.
  */
 export declare function textFaceLabel(face: TextFace): string;
+/**
+ * The CSS `font-family` each face resolves to — stacks that exist everywhere, or the
+ * one file this app hosts, never a font only one collaborator has.
+ */
 export declare const TEXT_FACE_STACK: Record<TextFace, string>;
 /**
  * How much bigger a face has to be drawn to hold the ladder's promise.
@@ -141,7 +153,9 @@ export declare const TEXT_FACE_STACK: Record<TextFace, string>;
 export declare const TEXT_FACE_SCALE: Record<TextFace, number>;
 /** The world-unit size to actually draw this node's words at. */
 export declare function textDrawSize(item: Item): number;
+/** `properties.textFace` — absent means `sans`, the face every node had before the choice. */
 export declare const TEXT_FACE_PROP = "textFace";
+/** The face this node is set in; anything absent or unrecognised reads as `sans`. */
 export declare function textFaceOf(item: Item): TextFace;
 /**
  * **Paper: the same words, on something you could pick up.**
@@ -167,14 +181,17 @@ export declare function textFaceOf(item: Item): TextFace;
  * another's.
  */
 export declare const PAPERS: readonly ["yellow", "pink", "blue", "green", "grey"];
+/** One of the closed set of post-it colours. A colour, never a category. */
 export type Paper = (typeof PAPERS)[number];
 /** What a paper is called where somebody picks one. Every id is already the
  *  word, and this exists so a second surface offering these cannot spell them
  *  differently — the fold `themeLabel` and `cursorLabel` already are. */
 export declare function paperLabel(paper: Paper): string;
+/** `properties.paper` — the one property that turns a caption into a post-it. */
 export declare const PAPER_PROP = "paper";
 /** The paper this node is written on, or null for none — a plain text node. */
 export declare function paperOf(item: Item): Paper | null;
+/** Guard for a value read off `properties`, which are strings anybody could have written. */
 export declare function isPaper(value: unknown): value is Paper;
 /**
  * The patch that puts a note on paper or takes it off — one place, so the app
@@ -210,6 +227,10 @@ export declare function textIsLegible(worldSize: number, scale: number): boolean
  * capped so it never reads as a letter somebody typed.
  */
 export declare const TEXT_MARK_MAX = 14;
+/**
+ * Screen-pixel size of the glyph drawn in place of illegible words: most of the node's
+ * smaller side, never below 1px, never above `TEXT_MARK_MAX`.
+ */
 export declare function textMarkSize(boxWidth: number, boxHeight: number, scale: number): number;
 /**
  * The name this text goes by — its first line, trimmed of markdown's own
@@ -221,14 +242,6 @@ export declare function textMarkSize(boxWidth: number, boxHeight: number, scale:
  * and a `#Title` chip worth reading.
  */
 export declare function textTitle(body: string): string;
-/**
- * A box for this text before anything has measured it.
- *
- * An estimate, and only ever a starting point: the app measures what it
- * actually rendered and corrects the item, and `⇧F` re-fits at any time. It
- * exists so that a node made from the CLI — where there is nothing to measure
- * with — lands at a size somebody can read rather than at a default square.
- */
 /**
  * **How wide a column each step wraps in, and why it is not proportional.**
  *
@@ -264,6 +277,15 @@ export declare const TEXT_COLUMN: Record<TextStyle, number>;
  * decided how these steps relate, and a second table would drift from it.
  */
 export declare const TEXT_COLUMN_MAX: Record<TextStyle, number>;
+/**
+ * A box for this text before anything has measured it.
+ *
+ * An estimate, and only ever a starting point: the app measures what it
+ * actually rendered and corrects the item, and `⇧F` re-fits at any time. It
+ * exists so that a node made from the CLI — where there is nothing to measure
+ * with — lands at a size somebody can read rather than at a default square.
+ * How it errs, and why large, is the comment above the constants.
+ */
 export declare function textBox(body: string, style?: TextStyle, face?: TextFace): {
     width: number;
     height: number;

@@ -10,6 +10,10 @@ import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./m
  * clients never issue them directly; they exist so every user-facing op has a
  * first-class inverse.
  */
+/**
+ * A version as an op carries it: the blob is already uploaded, so the op names it by hash
+ * and the reducer stamps who and when — which is why this is `ItemVersion` minus those.
+ */
 export interface NewVersion {
     /** Canonical writer output only; new public item/version writes cannot forge design admission. */
     designRecord?: import("./design-record.js").DesignRecordMarker;
@@ -54,6 +58,10 @@ export type Placement = {
 } | {
     anchorItemId: string;
 };
+/**
+ * A comment as an op carries it, before the reducer stamps its author and time. The client
+ * resolves mentions and #references at authoring time, against what its author could see.
+ */
 export interface NewComment {
     id: string;
     body: string;
@@ -66,6 +74,10 @@ export interface NewComment {
     /** Canonical writer output only; public callers cannot supply retained metadata. */
     context?: import("./canvas-group-context.js").ContextManifest;
 }
+/**
+ * A change to a title, description or properties. `properties` MERGES, so taking a key
+ * away is `removeProperties` — leaving a value out of the merge would leave it set forever.
+ */
 export interface MetaPatch {
     title?: string;
     description?: string;
@@ -73,6 +85,10 @@ export interface MetaPatch {
     properties?: Record<string, string>;
     removeProperties?: string[];
 }
+/**
+ * Every mutation there is, as one union. Adding a case here is adding a user-visible act
+ * to both surfaces at once — see the header above, and `AGENTS.md`'s "done on both surfaces".
+ */
 export type Operation = {
     /**
      * Naming yourself, as a mutation like any other (#57). Home-scoped:
@@ -520,9 +536,16 @@ export type Operation = {
     type: "agent.withdraw";
     actorId: string;
 };
+/**
+ * The discriminant every op-branching table keys on — `INTERNAL_OP_TYPES` below, the activity words.
+ */
 export type OperationType = Operation["type"];
 /** Ops the engine accepts directly from clients (everything non-internal). */
 export declare const INTERNAL_OP_TYPES: ReadonlySet<OperationType>;
+/**
+ * An op as it travels and as the log holds it: the op, who did it, which canvas, and the
+ * daemon's timestamp. The id doubles as a client-supplied idempotency key (`isOpId`).
+ */
 export interface OpEnvelope {
     /** Op id (nanoid). */
     id: string;
@@ -536,6 +559,10 @@ export interface OpEnvelope {
     ts: string;
     op: Operation;
 }
+/**
+ * One line of a canvas's oplog: the envelope as normalized, its sequence number, and the
+ * inverse computed before it applied — the whole of what undo needs, stored rather than re-derived.
+ */
 export interface LogEntry {
     /** Monotonic per canvas. */
     seq: number;

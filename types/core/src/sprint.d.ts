@@ -28,6 +28,7 @@ import type { Paper } from "./textnode.js";
  * reacted, and the app simply does not draw it until the bell. The curtain is
  * etiquette, and the research note says so in as many words.
  */
+/** `properties.sprint` — `sprint=<phase>` on an item says it was handed in for that phase. */
 export declare const SPRINT_PROP = "sprint";
 /** What kind of moment a phase is — decides what the surfaces hide. */
 type PhaseKind = "group" | "silent" | "vote" | "decide";
@@ -69,6 +70,7 @@ interface PhaseSpec {
  * questions → target → … → wrap. Not a grid: the order IS the week.
  */
 export type BoardKey = "brief" | "map" | "experts" | "target" | "demos" | "sketches" | "vote" | "storyboard" | "prototype" | "test" | "wrap";
+/** One sheet of the sprint board, as a template: what `sprint board` lays out as an area. */
 export interface BoardArea {
     key: BoardKey;
     title: string;
@@ -82,7 +84,9 @@ export interface BoardArea {
 export declare const BOARD_PROP = "board";
 /** Between sheets, in world units. */
 export declare const BOARD_GAP = 200;
+/** The board, sheet by sheet, in the order the week walks it — left to right. */
 export declare const SPRINT_BOARD: readonly BoardArea[];
+/** One sheet's template by key. Every `BoardKey` has one, so this never misses. */
 export declare function boardArea(key: BoardKey): BoardArea;
 /**
  * Where each sheet goes: one row from `origin`, top-aligned, a gap between.
@@ -109,6 +113,7 @@ export declare function boardOf(canvas: CanvasContents): Item[];
  * that says less is honest, and the next version fills it.
  */
 export declare const BRIEF_PROP = "brief";
+/** What a brief says. Every field optional: a brief that says less is honest. */
 export interface Brief {
     goal?: string;
     questions?: string[];
@@ -116,6 +121,9 @@ export interface Brief {
     sketchers?: string[];
     cut?: string;
 }
+/**
+ * The brief as the markdown its card shows — empty fields left out rather than written as TBD.
+ */
 export declare function briefCard(brief: Brief): string;
 /** The brief card on this canvas, or null. */
 export declare function briefItem(canvas: CanvasContents): Item | null;
@@ -149,6 +157,7 @@ export declare function deskTitle(name: string): string;
 export declare const PHASES: readonly PhaseSpec[];
 /** The word that closes a sprint. Not a phase: after it there is no clock. */
 export declare const SPRINT_END = "end";
+/** A phase by the word after `/sprint`, either case — or null for a word that names none. */
 export declare function phaseSpec(name: string): PhaseSpec | null;
 /**
  * `8m`, `90s`, `1h`, `1h30m`, `20` (minutes) → seconds; null for anything
@@ -173,6 +182,9 @@ interface SprintCommand {
  * (the slash command's body says what to do with them) and derive no state.
  */
 export declare function parseSprintCommand(body: string): SprintCommand | null;
+/**
+ * What `sprintState` reads off the Chat: the running phase, its clock, and what was handed in.
+ */
 export interface SprintState {
     phase: PhaseSpec;
     note: string;

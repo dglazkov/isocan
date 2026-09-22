@@ -17,6 +17,10 @@ import type { CommandMetadata, SlashCommand } from "./commands.js";
  * "removed" can mean removed, and it is why the functions below read a
  * registry instead of calling anything by name.
  */
+/**
+ * A connection a module says exists between two items — read off the canvas each time,
+ * never stored, and written out as an edge when the canvas exports as JSON Canvas.
+ */
 export interface ModuleEdge {
     from: Item;
     to: Item;
@@ -41,6 +45,10 @@ export interface ModuleKind {
      *  shipping pixels. Unset, the kind wears the plain file mark. */
     icon?: string;
 }
+/**
+ * What a module hands core: its name, the property keys it owns, and the pure readers core
+ * calls without knowing the module by name.
+ */
 export interface CoreModule {
     /** The package name — `@isocan/<name>` — which is also how an item made by
      *  a module that is not installed can be named from its mime alone. */
@@ -161,10 +169,14 @@ export declare function moduleCommands(): SlashCommand[];
 export declare function withModuleCommands<T extends CommandMetadata>(commands: readonly T[]): (T | SlashCommand)[];
 /** Idempotent by name, so a surface that registers twice (HMR, a test) holds one. */
 export declare function registerModule(record: CoreModule): void;
+/** Forget a module by name — the "removed means removed" half of `registerModule`. */
 export declare function unregisterModule(name: string): void;
+/** Every module registered right now, in the order they first registered. A copy. */
 export declare function modules(): CoreModule[];
+/** What every loaded module adds to the context an agent is handed about this canvas. */
 export declare function moduleContextPieces(canvas: CanvasContents): ContextPiece[];
 export declare function moduleEdges(canvas: CanvasContents): ModuleEdge[];
+/** Every kind every loaded module adds — what `itemKind()` asks before its own mime tests. */
 export declare function moduleKinds(): ModuleKind[];
 /** The module kind that owns a mime, if a loaded module claims it. */
 export declare function moduleKindOf(mime: string): ModuleKind | null;
@@ -326,6 +338,10 @@ export interface ModuleActionFacts {
     canvas: CanvasContents;
     selection: readonly string[];
 }
+/**
+ * One ⌘K palette entry a module adds: offered when `available` says so, and either the ops it
+ * sends or a dialog it opens.
+ */
 export interface ModuleAction {
     id: string;
     name: string;
@@ -403,6 +419,7 @@ export interface RendererFacts {
     url: string;
     readText: () => Promise<string>;
 }
+/** How a module draws its own mimes on a card and the stage, ahead of the built-in chain. */
 export interface ModuleRenderer<R> {
     /** The mimes this draws — the same list the module's kind claims. */
     mimes: readonly string[];
@@ -422,6 +439,7 @@ export interface InspectorFacts {
      *  An `item.addVersion` naming a hash from `host.putBlob` is how. */
     host: WebHost;
 }
+/** A panel beside the workbench stage, mounted for items of the kinds it names. */
 export interface ModuleInspector<I> {
     /** The kinds it inspects — built-in ids or a module's. */
     kinds: readonly string[];
@@ -439,6 +457,7 @@ export interface PageFacts {
     canvas: CanvasContents;
     host: WebHost;
 }
+/** A whole page a module adds, served at `x/<segment>` under the canvas's path. */
 export interface ModulePage<P> {
     /** The path segment: lowercase letters, digits, dashes. */
     segment: string;
@@ -652,6 +671,10 @@ interface ModuleOverlay<O> {
     label: string;
     component: O;
 }
+/**
+ * The browser half of a module: its `CoreModule` plus the pieces only the web app mounts.
+ * Generic in each component type so core never imports React.
+ */
 export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never, X = never> {
     core: CoreModule;
     /** Drawn inside `.world`, under the items, in world units. */

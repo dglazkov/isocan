@@ -61,6 +61,10 @@ interface ActorNameRow {
 }
 /** Actor id → the name they go by now. */
 type ActorNamesRegistry = Record<string, ActorNameRow>;
+/**
+ * The PUBLIC half of the registry described above: what everyone may know about everyone
+ * else, keyed by actor id. It replicates and replays; who may speak as whom does neither.
+ */
 export interface ActorRegistry {
     /**
      * The name each actor goes by now, keyed by ACTOR id.
@@ -114,6 +118,7 @@ export interface ActorRegistry {
      */
     harnesses?: Record<string, string>;
 }
+/** A registry nobody has claimed anything in — every field present, so readers need no `??`. */
 export declare const emptyActorRegistry: () => ActorRegistry;
 /**
  * The harnesses a PERSON claims from. Everything else — a coding harness,
@@ -124,12 +129,20 @@ export declare const emptyActorRegistry: () => ActorRegistry;
  * that counts a bot's receipts as somebody asking.
  */
 export declare const PERSON_HARNESSES: ReadonlySet<string>;
+/**
+ * Is this harness an agent's? Anything not a known person's harness is — empty or missing
+ * is neither, and reads as not an agent.
+ */
 export declare const isAgentHarness: (harness: string | null | undefined) => boolean;
 /** Actor id → "agent", for every actor whose last claim came from a harness
  *  that is not a person's. People are absent rather than "person", so a
  *  reader can `kinds[id] === "agent"` and an unknown actor reads as a person,
  *  which is the safe direction for a face and the honest one for a count. */
 export type ActorKinds = Record<string, "agent">;
+/**
+ * Which actors are agents, from the harness each last claimed from — keyed by the actor an
+ * id has joined, so an agent that merged into another is counted as the one it became.
+ */
 export declare function actorKinds(registry: ActorRegistry): ActorKinds;
 /** A claim row as served over the API — to the badge that holds it, and to
  * nobody else. `key` is the claim's `sessionKey`: a client's own index into
@@ -151,6 +164,10 @@ export interface NameHolder {
     /** Wearing it at this moment, rather than remembered from the history. */
     live: boolean;
 }
+/**
+ * The harness a session key names: the part before its first `:` — `claude-code:abc` is
+ * `claude-code` — or null for no key.
+ */
 export declare function harnessOf(sessionKey: string | undefined): string | null;
 /** Names hiding in the letters of "isocan" — where allocation starts when the
  * harness is unknown, and where it lands when a letter's names run out. */
@@ -169,6 +186,10 @@ export declare const FREE_NAME_ROUTE = "/api/actors/free-name";
 export interface FreeNameResponse {
     name: string;
 }
+/**
+ * Everything a claim is judged against besides the op itself: the registry, and which claims
+ * the presenting badge already holds.
+ */
 export interface ClaimContext {
     registry: ActorRegistry;
     /**

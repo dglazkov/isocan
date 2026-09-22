@@ -67,6 +67,7 @@ interface DotToken {
     id: string;
     secret: string;
 }
+/** The one writer of the `<id>.<secret>` shape `parseDotToken` reads back. */
 export declare function formatDotToken(id: string, secret: string): string;
 /** Split a presented token. Null for anything that is not one — a malformed
  * token is refused the same way a missing one is. */
@@ -76,8 +77,11 @@ interface BadgeToken {
     badgeId: string;
     secret: string;
 }
+/** A badge's token, in the shared dot shape — the field name says which kind of id it is. */
 export declare function formatBadgeToken(badgeId: string, secret: string): string;
+/** A presented badge token, or null when it is not one — refused the same as a missing one. */
 export declare function parseBadgeToken(raw: string | undefined | null): BadgeToken | null;
+/** What a caller tells the door about itself: which carrier, and whether it is framed. */
 export interface DoorRequest {
     /** Default `bearer`. */
     carrier?: BadgeCarrier;
@@ -99,6 +103,7 @@ export interface DoorRequest {
      */
     framed?: boolean;
 }
+/** What the door hands back: the new badge's id, and its secret only for a bearer. */
 export interface DoorResponse {
     badgeId: string;
     /**
@@ -173,6 +178,10 @@ export type DoorAnswer = {
         code?: string;
     };
 };
+/**
+ * Knock on the door at `base` for a bearer badge, and keep the refusal if there is one:
+ * never throws, and an unreachable door is a refusal with status 0.
+ */
 export declare function askTheDoor(base: string, timeoutMs?: number, signal?: AbortSignal): Promise<DoorAnswer>;
 /** `Authorization: Bearer <badgeId>.<secret>` — the one place that spelling
  * is written, so a holder cannot get the separator wrong on its own. */
@@ -184,6 +193,10 @@ export declare function bearerHeader(badge: StoredBadge): Record<string, string>
 export declare const BADGE_RESTART_HINT = "if this is an isocan CLI from before the door, `isocan restart` brings up this build's daemon";
 /** WebSocket close codes, continuing ws.ts's 4400/4404/4500 convention. */
 export declare const WS_NO_BADGE = 4401;
+/**
+ * The socket was opened from an origin this daemon does not serve — a 403, and nothing a
+ * new badge would fix, so a client must not answer it by knocking.
+ */
 export declare const WS_BAD_ORIGIN = 4403;
 /**
  * There is no canvas at that address — the socket half of a 404, and the one
@@ -319,6 +332,7 @@ export interface BadgeSummary {
      */
     attested?: string[];
 }
+/** `GET /api/badges`: every surface that shares the caller's identity. */
 export interface BadgesResponse {
     badges: BadgeSummary[];
 }
@@ -331,6 +345,7 @@ export interface BadgesResponse {
  * laptop is not in one room, it is in all of them.
  */
 export declare const BADGES_ROUTE = "/api/badges";
+/** One badge's route under `BADGES_ROUTE` — the target of the stolen-laptop `DELETE`. */
 export declare const badgeRoute: (badgeId: string) => string;
 /**
  * What killing one did. Both halves are load-bearing: `killed` is the summary

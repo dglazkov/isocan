@@ -32,16 +32,26 @@ export declare const CANVAS_ROUTE = "/p/:canvasId";
 export declare const ITEM_ROUTE = "/p/:canvasId/i/:itemId";
 /** The path a canvas is served at, origin-relative. */
 export declare function canvasPath(canvasId: string): string;
+/** The path of one item full screen, origin-relative — `/p/<canvas>/i/<item>`. */
 export declare function itemPath(canvasId: string, itemId: string): string;
 /** The whole address of one item, full screen: origin + path. */
 export declare function itemUrl(origin: string, canvasId: string, itemId: string): string;
+/** The router's pattern for the deck view, built from `CANVAS_ROUTE` so the two agree. */
 export declare const DECK_ROUTE = "/p/:canvasId/deck";
 export declare function deckPath(canvasId: string): string;
+/** The deck view's whole address — what the CLI's headless Chrome prints from. */
 export declare function deckUrl(origin: string, canvasId: string): string;
+/** The router's pattern for a module's page; `:segment` is the module's own name for it. */
 export declare const MODULE_PAGE_ROUTE = "/p/:canvasId/x/:segment";
+/**
+ * A module page's path, origin-relative. The segment goes in unencoded: it is a name a module declared.
+ */
 export declare function modulePagePath(canvasId: string, segment: string): string;
+/** A module page's whole address — what `isocan open --page` hands somebody. */
 export declare function modulePageUrl(origin: string, canvasId: string, segment: string): string;
+/** The router's pattern for the workbench with nothing on the stage. */
 export declare const WORKBENCH_ROUTE = "/p/:canvasId/w";
+/** The workbench with one artifact staged; `wbItemId`, not `itemId`, for the reason above. */
 export declare const WORKBENCH_ITEM_ROUTE = "/p/:canvasId/w/:wbItemId";
 /** The workbench with nothing focused — the agent room itself. */
 export declare function workbenchPath(canvasId: string): string;
