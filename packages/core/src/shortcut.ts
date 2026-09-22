@@ -30,12 +30,20 @@
 export function applePlatform(hint?: string): boolean {
   const raw =
     hint ??
-    (typeof navigator === "undefined"
-      ? ""
-      : (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform ||
+    (typeof navigator !== "undefined"
+      ? (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform ||
         navigator.platform ||
-        navigator.userAgent);
-  return /mac|iphone|ipad|ipod/i.test(raw);
+        navigator.userAgent
+      : /* A terminal has no navigator, and `isocan shortcuts` prints this
+           list into one. Answering "Ctrl" on a Mac's own terminal would be
+           exactly the bug this file exists to remove, in the other
+           direction.
+
+           Read off `globalThis` rather than the `process` global: core is
+           browser-safe and carries no node types, and a bare `process` here
+           would make every surface that bundles core depend on them. */
+        (globalThis as { process?: { platform?: string } }).process?.platform ?? "");
+  return /mac|darwin|iphone|ipad|ipod/i.test(raw);
 }
 
 /** The modifier's name on its own: `⌘` or `Ctrl`. */
@@ -81,4 +89,36 @@ export function shortcut(
 /** A click with the modifier held, for a tooltip: `⌘-click` / `Ctrl-click`. */
 export function modifierClick(hint?: string): string {
   return `${cmdKey(hint)}-click`;
+}
+
+/**
+ * **A shortcut from the table, written for this platform.**
+ *
+ * `SHORTCUTS` is authored in the Mac glyphs — that is the canonical spelling
+ * and the one the table has always held — so this translates on the way OUT
+ * rather than forking the data. One place to change, and the help panel, the
+ * palette and `isocan shortcuts` cannot come to disagree, which is what
+ * `switcher.test.ts` is watching for.
+ *
+ * Modifiers come out in the order Windows and Linux write them (Ctrl first),
+ * not in the order the glyphs happened to be typed — `⇧⌘Z` is `Ctrl+Shift+Z`,
+ * never `Shift+Ctrl+Z`.
+ */
+export function renderKeys(keys: string, hint?: string): string {
+  if (applePlatform(hint)) return keys;
+  const mods: string[] = [];
+  let rest = keys;
+  for (const [glyph, word] of [["⌘", "Ctrl"], ["⌃", "Ctrl"], ["⇧", "Shift"], ["⌥", "Alt"]] as const) {
+    if (rest.includes(glyph)) {
+      if (!mods.includes(word)) mods.push(word);
+      rest = rest.split(glyph).join("");
+    }
+  }
+  const key = SPELLED[rest] ?? rest;
+  const parts = [...mods, key].filter((part) => part !== "");
+  /* `⌘+` joined with a plus is `Ctrl++`, which reads as a typo and is
+     ambiguous about which plus is the key. A space is how the convention
+     writes a shortcut whose key IS a separator. */
+  const separator = /^[+\-−=]$/.test(key) ? " " : "+";
+  return parts.join(separator);
 }

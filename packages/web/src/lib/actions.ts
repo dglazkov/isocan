@@ -227,7 +227,7 @@ export const ACTIONS: readonly Action[] = [
     id: "switch-canvas",
     name: "Switch canvas…",
     hint: "the ones you were on lately first; type to find any",
-    keys: shortcut("O"),
+    keys: keyFor("Switch canvas") ?? "",
     group: "Open",
     /* The palette handles this one itself — it flips the window to the
        switcher rather than closing it — so `run` is what a caller OUTSIDE the

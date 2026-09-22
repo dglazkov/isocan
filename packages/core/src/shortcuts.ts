@@ -1,3 +1,4 @@
+import { renderKeys } from "./shortcut.ts";
 /**
  * Every key the canvas answers to, written down once.
  *
@@ -141,7 +142,9 @@ export function shortcutsIn(group: ShortcutGroup): Shortcut[] {
  */
 export function keyFor(does: string): string | null {
   const found = SHORTCUTS.find((shortcut) => shortcut.does === does);
-  return found?.keys[0] ?? null;
+  /* Rendered, not raw: the table is authored in the Mac glyphs and every
+     reader of this wants the spelling for the platform it is printing on. */
+  return found?.keys[0] !== undefined ? renderKeys(found.keys[0]) : null;
 }
 
 /** The whole list as text, for a terminal or a comment: the same answer the

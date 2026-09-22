@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applePlatform, cmdKey, modifierClick, shiftKey, shortcut } from "../src/index.ts";
+import { SHORTCUTS, applePlatform, cmdKey, modifierClick, renderKeys, shiftKey, shortcut } from "../src/index.ts";
 
 /**
  * **The label, not the key.** The handlers accept `metaKey || ctrlKey` and
@@ -47,5 +47,67 @@ describe("the modifier key, named for the person reading it", () => {
     expect(cmdKey("")).toBe("Ctrl");
     expect(modifierClick("")).toBe("Ctrl-click");
     expect(modifierClick(mac)).toBe("⌘-click");
+  });
+});
+
+/**
+ * **The table is authored in Mac glyphs and translated on the way out.**
+ *
+ * This is the half that only fails on somebody else's machine, which is how
+ * it got to CI: a sweep converted one of the two places `⌘O` was spelled, the
+ * two agreed on a Mac and disagreed on Linux, and `switcher.test.ts` — whose
+ * whole subject is that the key prints the same everywhere — went red there
+ * and nowhere else.
+ */
+describe("a shortcut from the table, written for the platform reading it", () => {
+  const win = "Win32";
+
+  it("leaves the Mac spelling alone on a Mac", () => {
+    expect(renderKeys("⌘O", "MacIntel")).toBe("⌘O");
+    expect(renderKeys("⇧⌘Z", "MacIntel")).toBe("⇧⌘Z");
+  });
+
+  it("writes the modifiers in the order the other platforms write them", () => {
+    // Ctrl first, whatever order the glyphs were typed in.
+    expect(renderKeys("⌘O", win)).toBe("Ctrl+O");
+    expect(renderKeys("⇧⌘Z", win)).toBe("Ctrl+Shift+Z");
+    expect(renderKeys("⌥A", win)).toBe("Alt+A");
+    expect(renderKeys("⇧1", win)).toBe("Shift+1");
+  });
+
+  it("leaves a bare key bare — most of the table has no modifier at all", () => {
+    expect(renderKeys("W", win)).toBe("W");
+    expect(renderKeys("Esc", win)).toBe("Esc");
+  });
+
+  it("leaves no glyph untranslated anywhere in the real table", () => {
+    /* The guard against a modifier nobody thought about. A glyph this does
+       not know would sail through and be printed at somebody who has no such
+       key — which is the whole bug, surviving the fix for it.
+
+       `Ctrl++` is what this caught the first time: `⌘+` joined with a plus,
+       where the key IS a plus. That reads as a typo and is ambiguous about
+       which plus you press, so a separator key joins with a space. */
+    for (const row of SHORTCUTS) {
+      for (const key of row.keys) {
+        const out = renderKeys(key, win);
+        expect(out, `${row.does}: ${key}`).not.toBe("");
+        expect(out, `${row.does}: ${key} left a glyph`).not.toMatch(/[⌘⇧⌥⌃]/);
+        expect(out, `${row.does}: ${key} doubled a separator`).not.toContain("++");
+      }
+    }
+  });
+
+  it("writes a shortcut whose key is a separator with a space", () => {
+    expect(renderKeys("⌘+", win)).toBe("Ctrl +");
+    expect(renderKeys("⌘−", win)).toBe("Ctrl −");
+  });
+
+  it("knows a terminal on a Mac is still a Mac", () => {
+    // `isocan shortcuts` prints into a terminal, which has no navigator at
+    // all — and node calls it "darwin".
+    expect(applePlatform("darwin")).toBe(true);
+    expect(renderKeys("⌘O", "darwin")).toBe("⌘O");
+    expect(renderKeys("⌘O", "linux")).toBe("Ctrl+O");
   });
 });
