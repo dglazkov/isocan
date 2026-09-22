@@ -242,3 +242,56 @@ describe("both surfaces ask the same question", () => {
     expect(cli).not.toMatch(/reason:\s*"(main-thread|in-your-thread)"/);
   });
 });
+
+/**
+ * **A record reports; it never summons.**
+ *
+ * A voice session's transcript is posted to the Chat when the session stops,
+ * and the Chat wakes everybody by design — so every parked agent was handed
+ * somebody's spoken half of a conversation with a DIFFERENT agent and read it
+ * as an ask. The screenshot that filed this shows Scout beginning to answer a
+ * transcript of a person talking to Enceladus.
+ *
+ * The mention case is the one worth holding: it is deliberate, and it is the
+ * opposite of how every other rule here works. Speech is transcribed and
+ * transcription is full of names, so a record that could page somebody by
+ * mention would page somebody on nearly every long session.
+ */
+describe("a record summons nobody", () => {
+  const record = (body: string, mentions?: string[]) => ({
+    ...comment("c1", kenny, body, "2026-09-22T10:00:00.000Z", mentions),
+    record: true as const,
+  });
+  const main = (one: ReturnType<typeof record>) =>
+    canvasWith({ t1: { id: "t1", main: true, comments: [one] } });
+
+  it("is not in the inbox although it landed in the main thread", () => {
+    expect(inboxOn(main(record("🎙 Voice session\n\nDion: move the screens")), dion, names, "prj_1")).toEqual([]);
+  });
+
+  it("is not in the inbox although it names you", () => {
+    expect(inboxOn(main(record("🎙 Voice session\n\nKenny: Dion should look at this")), dion, names, "prj_1")).toEqual([]);
+  });
+
+  it("is not in the inbox although it RESOLVED a mention of you", () => {
+    expect(inboxOn(main(record("🎙 Voice session", [dion.id])), dion, names, "prj_1")).toEqual([]);
+  });
+
+  it("the same comment without the mark is in the inbox, so the mark is what did it", () => {
+    const plain = canvasWith({
+      t1: { id: "t1", main: true, comments: [comment("c1", kenny, "move the screens", "2026-09-22T10:00:00.000Z")] },
+    });
+    expect(inboxOn(plain, dion, names, "prj_1")).toHaveLength(1);
+  });
+
+  it("a reply in the thread is ordinary again — the mark is per comment, not per thread", () => {
+    const canvas = canvasWith({
+      t1: {
+        id: "t1",
+        main: true,
+        comments: [record("🎙 Voice session"), comment("c2", kenny, "so — thoughts?", "2026-09-22T10:01:00.000Z")],
+      },
+    });
+    expect(inboxOn(canvas, dion, names, "prj_1").map((e) => e.comment.id)).toEqual(["c2"]);
+  });
+});

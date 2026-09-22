@@ -244,6 +244,21 @@ export interface Comment {
   /** Actor ids @-mentioned in the body, resolved at authoring time against
    * the actors the author could see. Absent on older comments. */
   mentions?: string[];
+  /**
+   * **A record of something that already happened, which summons nobody.**
+   *
+   * See `reasonFor` in `inbox.ts` for the routing rule this sets. The short
+   * version: a voice session's transcript is not an ask, and posting one to
+   * the Chat woke every parked agent, each of which read somebody's spoken
+   * half of a conversation as a request addressed to it.
+   *
+   * Unlike the other typed fields here it is NOT writer-owned, and the
+   * asymmetry is the argument for letting ordinary comment input carry it:
+   * `designDecision` and `design` confer authority, so minting one has to be
+   * impossible. This takes authority AWAY. The worst an author can do with it
+   * is decline to page people they could simply not have named.
+   */
+  record?: true;
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];

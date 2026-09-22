@@ -237,6 +237,16 @@ export async function runTool(
   name: string,
   args: Record<string, unknown>,
   facts: PanelFacts,
+  /**
+   * **What the PANEL adds to a call the model did not make.**
+   *
+   * `record` is the only one: the session block posts through `say` so it
+   * takes that path's thread birth and undo, but a record is a thing the
+   * panel knows and the model must not be able to claim — it is absent from
+   * the tool declarations for that reason, so it cannot ride in on `args`
+   * and the planner never sees it.
+   */
+  from: { record?: true } = {},
 ): Promise<Record<string, unknown>> {
   const { plans, what } = planForCall(name, args);
 
@@ -530,6 +540,7 @@ export async function runTool(
         body,
         at: new Date().toISOString(),
         ...(attached.length > 0 ? { items: [...attached] } : {}),
+        ...(from.record ? { record: true as const } : {}),
       };
       if (op.type === "thread.reply") {
         const threadId = String(op.threadId ?? mainThread(facts.canvas)?.id ?? "");
@@ -1550,7 +1561,11 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
       said.map((l) => `**${l.who === "you" ? host.viewer.name : voiceName}:** ${l.text}`).join("\n\n");
     /* No selection attached: this is the RECORD of a conversation, not a
        request about whatever happened to be picked out when it ended. */
-    await runTool("say", { text: body }, { canvasId, canvas, host, canEdit: true, groupMode, selection: [] });
+    /* `record`: the block is what WAS said, not a thing being asked of
+       anybody. Without it the Chat wakes every parked agent and each one
+       reads a person's half of a conversation with the voice as a request
+       addressed to it — see `reasonFor` in core's `inbox.ts`. */
+    await runTool("say", { text: body }, { canvasId, canvas, host, canEdit: true, groupMode, selection: [] }, { record: true });
   }, [host, canvasId, canvas, groupMode, voiceName]);
 
   /* Fires on the EDGE out of live, and once: a session that ends by failing

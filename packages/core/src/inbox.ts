@@ -157,6 +157,29 @@ export function reasonFor(
   /** Known actors on the canvas, so un-resolved text mentions of other actors are recognized as for others. */
   candidates?: readonly MentionCandidate[],
 ): InboxReason | null {
+  /**
+   * **A record reports; it never summons** — the same sentence the system
+   * voice earns in `dispatchReason`, for the same reason, one rung lower so
+   * a record posted by a PERSON gets it too.
+   *
+   * A voice session's transcript lands in the Chat when the session stops,
+   * and the Chat wakes everybody by design. So every parked agent was handed
+   * somebody's spoken half of a conversation with a different agent and read
+   * it as an ask: the screenshot that filed this shows Scout beginning to
+   * answer a transcript of a person talking to Enceladus.
+   *
+   * **Before the mention check, deliberately**, which is the one surprising
+   * thing here. Speech is transcribed, transcription is full of names, and
+   * "Scout should look at this" said out loud to a voice agent is not a
+   * summons to Scout — it is a sentence about Scout. A record that could page
+   * somebody by mention would page somebody on nearly every long session.
+   * Addressing an agent stays a deliberate act: type it, or let the agent you
+   * are talking to do it as its own comment.
+   *
+   * It is a de-escalation and can only ever silence its own author's comment,
+   * so it is safe for ordinary input to carry — see `Comment.record`.
+   */
+  if ((comment as Comment).record) return null;
   if (addressesActor(comment, names, joined)) return "mentioned";
   if (addressesOthers(comment, names, joined, candidates)) return null;
   if (thread?.main) return "main-thread";
@@ -707,6 +730,10 @@ export function turnedAway(
   },
 ): boolean {
   if (op.type !== "thread.create" && op.type !== "thread.reply") return false;
+  // A record asked nobody for anything, so there is no refusal to narrate —
+  // and an rc posting "Scout couldn't answer" under a transcript would be
+  // answering a question that was never put.
+  if (op.comment.record) return false;
   if (isSystemActor(authorId) || sameActor(agent.joined, authorId, agent.actorId)) return false;
   if (admits(agent.policy, authorId, agent)) return false;
   return addressesActor(op.comment, agent.names, agent.joined);

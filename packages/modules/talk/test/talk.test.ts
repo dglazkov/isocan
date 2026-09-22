@@ -647,3 +647,32 @@ describe("what was said, folded from the pieces it arrives in", () => {
     expect(fold([["model", "one "], ["model", " two"]])[0]!.text).toBe("one two");
   });
 });
+
+/**
+ * **The session block is a record, and the model cannot claim to be one.**
+ *
+ * The block rides the `say` tool so it takes that path's thread birth, minted
+ * id and undo — but `record` is the panel's word, not the model's. It is
+ * absent from the tool declarations and the planner never sees it, so a model
+ * that names it in its arguments changes nothing.
+ */
+describe("a voice session lands as a record", () => {
+  const lastComment = () =>
+    (sent.at(-1)!.ops[0] as { comment: Record<string, unknown> }).comment;
+
+  it("the panel's own channel marks the comment", async () => {
+    const result = await runTool("say", { text: "\u{1f399} Voice session" }, facts, { record: true });
+    expect(result.ok).toBe(true);
+    expect(lastComment().record).toBe(true);
+  });
+
+  it("an ordinary spoken comment is not a record", async () => {
+    await runTool("say", { text: "done" }, facts);
+    expect("record" in lastComment()).toBe(false);
+  });
+
+  it("the model cannot mint one through its arguments", async () => {
+    await runTool("say", { text: "quiet please", record: true }, facts);
+    expect("record" in lastComment()).toBe(false);
+  });
+});

@@ -708,6 +708,7 @@ function toItemVersion(v: NewVersion, actor: Actor, ts: string): ItemVersion {
 function toComment(c: NewComment, actor: Actor, ts: string): Comment {
   const comment: Comment = { id: c.id, author: actor, body: c.body, createdAt: ts };
   if (c.mentions && c.mentions.length > 0) comment.mentions = [...c.mentions];
+  if (c.record) comment.record = true;
   if (c.items && c.items.length > 0) comment.items = [...c.items];
   if (c.context) {
     validateContextManifest(c.context, c.context.canvasId);

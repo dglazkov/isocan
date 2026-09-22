@@ -64,6 +64,8 @@ export interface NewComment {
   body: string;
   /** Resolved @-mentions (actor ids); see Comment.mentions. */
   mentions?: string[];
+  /** A record rather than an ask, which summons nobody; see Comment.record. */
+  record?: true;
   /** Resolved #item-references (item ids); see Comment.items. */
   items?: string[];
   /** Public attachment intent; the home resolves it at one canvas revision. */

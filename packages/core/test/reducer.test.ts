@@ -300,6 +300,19 @@ describe("semantics", () => {
     expect("mentions" in s.canvas.threads["thr_1"]!.comments[0]!).toBe(false);
   });
 
+  it("a comment keeps its record mark, which is what stops it summoning anybody", () => {
+    const s = apply(seedState(), {
+      type: "thread.reply",
+      threadId: "thr_1",
+      comment: { id: "cmt_r", body: "\u{1f399} Voice session", record: true },
+    })!;
+    const stored = s.canvas.threads["thr_1"]!.comments.find((c) => c.id === "cmt_r")!;
+    expect(stored.record).toBe(true);
+    // Absent, not false, on everything else — an ordinary comment is the
+    // object it always was, so nothing downstream has a new case to read.
+    expect("record" in s.canvas.threads["thr_1"]!.comments[0]!).toBe(false);
+  });
+
   /**
    * The reducer's own contract: "Every mutation stamps updatedAt/updatedBy
    * from the envelope." It was believed rather than checked. Only ONE op's

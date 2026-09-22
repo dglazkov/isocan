@@ -342,6 +342,29 @@ describe("dispatchReason — THE routing composition (phase 4)", () => {
     ).toBe("change");
   });
 
+  /**
+   * **The bug this whole field exists for.** A voice session posts its
+   * transcript to the Chat when it stops, the Chat wakes every parked agent,
+   * and each one read a person's spoken half of a conversation with a
+   * DIFFERENT agent as a request addressed to it.
+   */
+  it("a record in the main thread wakes nobody, mention or not", () => {
+    const enrolled = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    const s = apply(enrolled, {
+      type: "thread.create", threadId: "th_main", x: 0, y: 0, anchorItemId: null,
+      main: true, comment: { id: "cmt_0", body: "hello" },
+    })!;
+    const reply = (body: string, record?: true) =>
+      ({ type: "thread.reply", threadId: "th_main", comment: { id: "cmt_x", body, ...(record ? { record } : {}) } }) as never;
+    // First the control: the same comment, unmarked, is exactly what wakes it.
+    expect(dispatchReason(reply("\u{1f399} Voice session\n\nDion: move the screens"), "usr_alice", sianCtx(), s.canvas)).toBe("main-thread");
+    expect(dispatchReason(reply("\u{1f399} Voice session\n\nDion: move the screens", true), "usr_alice", sianCtx(), s.canvas)).toBeNull();
+    // And it does not wake on a name either — speech is transcribed, and
+    // transcription is full of names.
+    expect(dispatchReason(reply("@Sian should look at this"), "usr_alice", sianCtx(), s.canvas)).toBe("mentioned");
+    expect(dispatchReason(reply("@Sian should look at this", true), "usr_alice", sianCtx(), s.canvas)).toBeNull();
+  });
+
   it("rulesOf reads the opaque field tolerantly", () => {
     expect(rulesOf(null)).toEqual({});
     expect(rulesOf("nonsense")).toEqual({});
