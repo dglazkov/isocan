@@ -15,6 +15,7 @@ import { FileDesk } from "../src/file-desk.ts";
 import { mintBadge } from "../src/badges.ts";
 import { startDaemon } from "../src/daemon.ts";
 import { mintTestBadge } from "./badge.ts";
+import { untilReplicaCurrent } from "./replica.ts";
 import { WebSocket } from "ws";
 const human = { id: "usr_repair_human", name: "Acme Person" }, agent = { id: "usr_repair_agent", name: "Acme Builder" }, other = { id: "usr_repair_other", name: "Acme Teammate" };
 const canvasId = "prj_repair", threadId = "thr_repair";
@@ -128,7 +129,7 @@ describe("canonical conditional design repair", () => {
       const relayHome = `http://127.0.0.1:${(relay.app.server.address() as { port: number }).port}`, relayBadge = await mintTestBadge(relayHome); await relayBadge.speakAs(agent, "codex:acme-repair-relay");
       const pass = await request(`/api/projects/${canvasId}/passes`, { actorId: agent.id }); expect(pass.status).toBe(200); const { token } = await pass.json() as { token: string };
       const redeemed = await fetch(relayHome + "/api/passes/redeem", { method: "POST", headers: { ...relayBadge.headers, "Content-Type": "application/json" }, body: JSON.stringify({ home, token }) }); expect(redeemed.status, await redeemed.clone().text()).toBe(200);
-      await expect.poll(() => relay!.store.canvasExists(canvasId)).toBe(true);
+      await untilReplicaCurrent(relay!, engine, canvasId);
       const policy = sourcePolicyHeader({ policy: { mode: "direct", actorId: agent.id, intent: "edit" }, expectedHome: home });
       for (const [url, payload] of [[`/api/projects/${canvasId}/design/repairs`, undefined], [`/api/projects/${canvasId}/oplog/archive`, undefined], ["/api/ops", body]] as const) for (const features of [oldFeatures, CURRENT_CLIENT_FEATURES]) {
         const result = await fetch(relayHome + url, { method: payload === undefined ? "GET" : "POST", headers: { ...relayBadge.headers, [SOURCE_POLICY_HEADER]: policy, [CLIENT_FEATURES_HEADER]: features, ...(payload === undefined ? {} : { "Content-Type": "application/json" }) }, ...(payload === undefined ? {} : { body: JSON.stringify(payload) }) });

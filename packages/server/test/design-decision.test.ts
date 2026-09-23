@@ -11,6 +11,7 @@ import { FileDesk } from "../src/file-desk.ts";
 import { WebSocket } from "ws";
 import { startDaemon } from "../src/daemon.ts";
 import { mintTestBadge } from "./badge.ts";
+import { untilReplicaCurrent } from "./replica.ts";
 import { mintBadge } from "../src/badges.ts";
 const human = { id: "usr_acme_human", name: "Acme Person" }, agent = { id: "usr_acme_agent", name: "Acme Builder" }, other = { id: "usr_acme_other", name: "Acme Teammate" };
 const canvasId = "prj_compare", threadId = "thr_compare";
@@ -157,7 +158,7 @@ describe("canonical paired adoption", () => {
       const relayHome = `http://127.0.0.1:${relayAddress.port}`, relayBadge = await mintTestBadge(relayHome); await relayBadge.speakAs(human, "web:acme-decision-relay");
       const pass = await request(`/api/projects/${canvasId}/passes`, { actorId: human.id }); expect(pass.status).toBe(200); const { token } = await pass.json() as { token: string };
       const redeemed = await fetch(relayHome + "/api/passes/redeem", { method: "POST", headers: { ...relayBadge.headers, "Content-Type": "application/json" }, body: JSON.stringify({ home, token }) }); expect(redeemed.status, await redeemed.clone().text()).toBe(200);
-      await expect.poll(() => relay!.store.canvasExists(canvasId)).toBe(true);
+      await untilReplicaCurrent(relay!, engine, canvasId);
       const policy = sourcePolicyHeader({ policy: { mode: "direct", actorId: human.id, intent: "edit" }, expectedHome: home });
       for (const [url, body] of [[`/api/projects/${canvasId}/oplog/archive`, undefined], ["/api/ops", { canvasId, actor: human, opId: "op_http_choice", op: s.op }]] as const) for (const features of [oldFeatures, CURRENT_CLIENT_FEATURES]) {
         const result = await fetch(relayHome + url, { method: body === undefined ? "GET" : "POST", headers: { ...relayBadge.headers, [SOURCE_POLICY_HEADER]: policy, [CLIENT_FEATURES_HEADER]: features, ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });

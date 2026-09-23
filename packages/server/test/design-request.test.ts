@@ -11,6 +11,7 @@ import { FileDesk } from "../src/file-desk.ts";
 import { mintBadge } from "../src/badges.ts";
 import { startDaemon } from "../src/daemon.ts";
 import { mintTestBadge } from "./badge.ts";
+import { untilReplicaCurrent } from "./replica.ts";
 
 const person = { id: "usr_owner", name: "Acme Owner" }, agent = { id: "usr_builder", name: "Acme Builder" };
 const canvasId = "prj_design", authority = "https://example.test", threadId = "thr_source";
@@ -99,7 +100,7 @@ describe("canonical request lifecycle", () => {
       const pass = await request(`/api/projects/${canvasId}/passes`, { actorId: by.id }); expect(pass.status, await pass.clone().text()).toBe(200);
       const { token } = await pass.json() as { token: string };
       const redeemed = await fetch(`${relayBase}/api/passes/redeem`, { method: "POST", headers: { ...relayBadge.headers, "content-type": "application/json" }, body: JSON.stringify({ home: base, token }) }); expect(redeemed.status, await redeemed.clone().text()).toBe(200);
-      await expect.poll(() => relay!.store.canvasExists(canvasId)).toBe(true);
+      await untilReplicaCurrent(relay!, daemon.engine, canvasId);
       const policy = sourcePolicyHeader({ policy: { mode: "direct", actorId: by.id, intent: "edit" }, expectedHome: base });
       for (const [url, value] of [[`/api/projects/${canvasId}/canvas`, undefined], [`/api/projects/${canvasId}/design/requests`, undefined], ["/api/oplog/watch", { only: [canvasId], cursors: { [canvasId]: 0 }, waitMs: 0 }], ["/api/ops", body]] as const) for (const features of [oldFeatures, CURRENT_CLIENT_FEATURES]) {
         const result = await fetch(relayBase + url, { method: value === undefined ? "GET" : "POST", headers: { ...relayBadge.headers, [SOURCE_POLICY_HEADER]: policy, [CLIENT_FEATURES_HEADER]: features, ...(value === undefined ? {} : { "content-type": "application/json" }) }, ...(value === undefined ? {} : { body: JSON.stringify(value) }) });

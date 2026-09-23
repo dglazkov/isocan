@@ -5,6 +5,7 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import { startDaemon } from "../src/daemon.ts";
 import { mintTestBadge } from "./badge.ts";
+import { untilReplicaCurrent } from "./replica.ts";
 import { CURRENT_CLIENT_FEATURES, CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, CLIENT_FEATURES_PARAM, WS_STALE_CLIENT, QUESTIONNAIRES_REQUIRED, SOURCE_POLICY_HEADER, sourcePolicyHeader, blobsNamedBy, type Actor, type DesignArtifactRef, type DesignBrief, type DesignQuestionSet, type DesignResponse, type Operation } from "@isocan/core";
 import { questionnaireStates, legacyQuestionSet, parseLegacyQuestionnaire } from "@isocan/core/questionnaire";
 import { Engine } from "../src/engine.ts";
@@ -368,7 +369,7 @@ describe("questionnaire HTTP and socket capability boundary", () => {
       const { token } = await pass.json() as { token: string };
       const redeemed = await fetch(`${relayBase}/api/passes/redeem`, { method: "POST", headers: { ...relayBadge.headers, "Content-Type": "application/json" }, body: JSON.stringify({ home: base, token }) });
       expect(redeemed.status, await redeemed.clone().text()).toBe(200);
-      await expect.poll(() => relay!.store.canvasExists(canvasId)).toBe(true);
+      await untilReplicaCurrent(relay!, daemon.engine, canvasId);
       const policy = sourcePolicyHeader({ policy: { mode: "direct", actorId: actor.id, intent: "edit" }, expectedHome: base });
       async function relayed(url: string, body: unknown, features: string) {
         return fetch(relayBase + url, { method: body === undefined ? "GET" : "POST", headers: { ...relayBadge.headers, [SOURCE_POLICY_HEADER]: policy, [CLIENT_FEATURES_HEADER]: features, ...(body === undefined ? {} : { "Content-Type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
