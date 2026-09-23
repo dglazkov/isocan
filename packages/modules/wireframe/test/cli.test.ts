@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Command } from "commander";
 import { describe, expect, it, vi } from "vitest";
-import type { Operation } from "@isocan/core";
+import { FIDELITY_PROP, type Operation } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import wireframeCli from "../src/cli.ts";
 import { blueprint, readWire, renderWire, wireSize, wireframe } from "../src/core.ts";
@@ -97,8 +97,9 @@ describe("isocan wire render", () => {
     expect({ width: op.width, height: op.height }).toEqual(wireSize(spec));
     expect(op.placement).toEqual({ x: 100, y: 200, chosen: true });
     expect(op.title).toBe("Acme sign in");
-    // No property the module owns: the screen is an ordinary HTML item.
-    expect(op.properties).toBeUndefined();
+    // No property the module owns: the screen is an ordinary HTML item. The one
+    // property is core's — its fidelity — which the design-system gate reads.
+    expect(op.properties).toEqual({ [FIDELITY_PROP]: "wireframe" });
   });
 
   it("adds a blueprint as readily as a wireframe", async () => {

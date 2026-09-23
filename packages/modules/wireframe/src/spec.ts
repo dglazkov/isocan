@@ -30,6 +30,25 @@ export interface WireSpec {
   slots: WireSlot[];
   /** Item id of the screen this varies. */
   variantOf?: string;
+  /**
+   * How many of the composer's three rounds have answered this screen: 0 is
+   * the single blueprint a request makes before any model has spoken, 1 a
+   * screen whose archetype the flow round chose, 2 one whose blocks are
+   * chosen, 3 one whose props and intents are. Absent on a hand-drawn spec.
+   * It is what lets `wire questions` find the pending round on the canvas
+   * alone, with no state kept anywhere else.
+   */
+  round?: 0 | 1 | 2 | 3;
+  /** The flow's chrome, fixed once in round 1 and the same on every screen. */
+  chrome?: WireChrome;
+}
+
+/** What round 1 fixes for a whole flow, so its screens agree. */
+export interface WireChrome {
+  /** A nav block id (`tab-bar`, `side-nav`, `navbar`) or `none`. */
+  nav: string;
+  /** A header block id (`app-bar`, `page-header`, `navbar`). */
+  header: string;
 }
 
 export interface WireSlot {
@@ -121,7 +140,7 @@ export function resolveSlot(archetype: string, slot: string, block: string, prop
     throw new Error(`${r.id}'s ${slot} offers ${section.options.join(" | ")}, not ${block}`);
   }
   const c = component(block);
-  const resolved = { ...defaultProps(c), ...(props ?? {}) };
+  const resolved = { ...defaultProps(c), ...(r.props?.[c.id] ?? {}), ...(props ?? {}) };
   const elements = presentElements(c, resolved);
   const out: WireSlot = { slot, block, props: resolved };
   if (elements.length > 0) out.intents = Object.fromEntries(elements.map((e) => [e, defaultIntent(r, c, e)]));
@@ -194,6 +213,10 @@ export function validateWire(input: unknown): string[] {
     if (typeof spec[key] !== "string") problems.push(`${key} must be a string`);
   }
   if (!PLATFORMS.includes(spec.platform as Platform)) problems.push(`platform must be one of ${PLATFORMS.join(", ")}`);
+  if (spec.round !== undefined && ![0, 1, 2, 3].includes(spec.round)) problems.push("round must be 0, 1, 2 or 3");
+  if (spec.chrome !== undefined && (typeof spec.chrome !== "object" || typeof spec.chrome?.nav !== "string" || typeof spec.chrome?.header !== "string")) {
+    problems.push("chrome must be { nav, header }");
+  }
   let r: Recipe;
   try {
     r = recipe(String(spec.archetype));

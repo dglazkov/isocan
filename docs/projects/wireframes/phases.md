@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phase 0 is CLOSED (23 Sep 2026) — the catalog is data, and it draws.** `packages/modules/wireframe/` holds wave 1 (18 archetypes, 28 blocks, 22 primitives, 49 intents) and `renderWire`, which draws a blue-on-white blueprint where a slot is undecided and a grey wireframe where it is chosen; `isocan wire render|spec|catalog` put screens on a canvas. **Next: wireframes phase 1** — Jev draws a flow, local, with the key.
+**Where we are: phases 0 and 1 are CLOSED (23 Sep 2026).** The catalog draws (phase 0), and `isocan wire "<request>"` has Jev compose a whole flow skeleton-first — a blueprint on the canvas in 44 ms, then three rounds filling the screens in place, one op group, about $0.001 and 7–11 s per flow (phase 1). **Next: wireframes phase 2** — variations and keep.
 
 ## Phase 0 — The catalog, drawn
 
@@ -60,7 +60,7 @@ adds the screen to a canvas as an HTML item with its spec embedded. No model.
 
 ## Phase 1 — Jev draws a flow
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 23 September 2026.** Two live Jev flows (the journey's warehouse request: 9 screens, 19 calls, $0.000815, 7.3 s; the conductor's own recipe-sharing request: 12 screens, 25 calls, $0.001122, 11.2 s), each screen's version history blueprint → filled in place, one undo removing each whole flow, the agent path without a key, and 397 tests.
 
 **Outcome:** `isocan wire "<request>"` composes a flow: a blueprint appears
 at once, round 1 (flow) turns it into one blueprint per archetype, rounds 2–3
@@ -77,6 +77,15 @@ Measured: calls, latency per round, input tokens and cost for a real flow.
    the screens, the measured latency and spend written into this phase's
    record. A person watching the canvas sees blue first, then grey.
 3. One undo removes the whole flow.
+
+### Trajectory
+
+- **2026-09-23** — Jev on wireframe rounds is **1.8–4.9 s per round**, not judge phase 0's 193–351 ms: round 1 carries ~21 questions in one call. A flow is 7–11 s of model time, which makes skeleton-first the whole experience rather than a nicety. Cost matched the estimate (~$0.001 a flow).
+- **2026-09-23** — The first live run drew a different tab bar on each screen. Chrome's *props* are now asked once per flow and copied to every screen (only `selected` stays per screen), and no block may carry the same intent twice. Design §4's "fixes the chrome" meant blocks; it now means blocks and their props.
+- **2026-09-23** — The design-system gate exempts wireframes by a core property, `fidelity: "wireframe"` (`isWireframeScreen` in `design-scope.ts`), not by the file's marker, because the gate reads item metadata and never file contents.
+- **2026-09-23** — Watching blue turn grey live was not walked: `canvas shot` takes ~17 s against a 7 s flow. The version history proves the in-place fill; the live watch moves to phase 4's browser walk, where a person asks from the canvas.
+- **2026-09-23** — Open: screens are titled by archetype (*List*, *Detail*), not by domain (*Deliveries*), and a lone button can draw unlabelled (Profile's edit action). Both need words Jev cannot write — an agent's copy pass, or a decision in phase 2.
+- **2026-09-23** — Open: round 1's yes ≥ 0.5 admits borderline screens (search 0.50, verify 0.71 for a request that never mentioned verification). Phase 2's variations or phase 5's calibration should set the cut, not a guess.
 
 ## Phase 2 — Variations and keep
 

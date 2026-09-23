@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { designScopeStanding, designStanding, selectDesignSystem, selectGoverningDesign, type CanvasContents, type Item } from "../src/index.ts";
+import { FIDELITY_PROP, isWireframeScreen, designScopeStanding, designStanding, selectDesignSystem, selectGoverningDesign, type CanvasContents, type Item } from "../src/index.ts";
 
 const author = { id: "usr_acme", name: "Acme designer" }, ts = "2026-01-01T00:00:00.000Z";
 function item(id: string, options: { group?: string; kind?: string; system?: boolean; time?: string; x?: number } = {}): Item {
@@ -43,6 +43,17 @@ describe("one governing scope", () => {
     state.items.a_system = item("a_system", { group: a.id, system: true });
     expect(designScopeStanding(state, screens)).toMatchObject({ standing: "fine", uncoveredIds: [] });
     expect(designStanding(state, screens.length)).toBe("overdue");
+  });
+  it("does not count wireframes as undesigned screens — six sketches do not refuse the seventh real screen", () => {
+    const wires = Array.from({ length: 12 }, (_, i) => ({ ...item(`wire_${i}`), properties: { [FIDELITY_PROP]: "wireframe" } }));
+    const real = [item("real_0")];
+    const state = canvas([...wires, ...real]);
+    expect(wires.every(isWireframeScreen)).toBe(true);
+    expect(real.some(isWireframeScreen)).toBe(false);
+    expect(designScopeStanding(state, [...wires, ...real])).toMatchObject({ standing: "fine", screenCount: 1, uncoveredIds: real.map((s) => s.id) });
+    // The same twelve as real screens are past the limit: the exemption is the property, not the count.
+    const unmarked = wires.map((w) => ({ ...w, properties: {} }));
+    expect(designScopeStanding(canvas([...unmarked, ...real]), [...unmarked, ...real]).standing).toBe("overdue");
   });
   it("keeps exemption independent from an incumbent and refuses an unavailable explicit target", () => {
     const system = item("system", { system: true }), state = canvas([system]);

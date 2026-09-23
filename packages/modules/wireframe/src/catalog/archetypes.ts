@@ -1,5 +1,5 @@
 import type { IntentId } from "./intents.ts";
-import type { Platform } from "./types.ts";
+import type { Platform, Props } from "./types.ts";
 
 /**
  * **Wave 1's 18 archetype recipes** (research §2).
@@ -33,6 +33,14 @@ export interface Recipe {
   sections: Section[];
   /** Per-archetype defaults for an element's intent, keyed by component then element. */
   intents?: Record<string, Record<string, IntentId>>;
+  /**
+   * Per-archetype prop defaults, keyed by component — what this screen's
+   * place in a flow already settles. Home is a top-level screen, so its app
+   * bar has no Back chevron; the component's own default (`back`) is right
+   * for a pushed screen and wrong here. They sit under whatever a spec
+   * chooses, and the composer does not ask about a prop a recipe sets.
+   */
+  props?: Record<string, Props>;
 }
 
 /**
@@ -76,6 +84,7 @@ const WAVE_1: Array<Omit<Recipe, "sections"> & { recipe: string }> = [
     id: "home", title: "Home", platforms: ["app", "web"],
     recipe: "shell: app-shell; header: app-bar | page-header; nav: tab-bar | side-nav; main: stats-row? → chart? → (data-table | stacked-list | card-grid | feed-post); aside: (filter-panel | stacked-list)?",
     intents: { "app-bar": { "action-1": "notifications", "action-2": "search", "action-3": "add" } },
+    props: { "app-bar": { leading: "none" } },
   },
   {
     id: "list", title: "List", platforms: ["app", "web"],
@@ -115,6 +124,7 @@ const WAVE_1: Array<Omit<Recipe, "sections"> & { recipe: string }> = [
     id: "feed", title: "Feed", platforms: ["app"],
     recipe: "header: app-bar; nav: tab-bar; main: (tabs | chip)? → (feed-post | blog-list); fab: fab?",
     intents: { "app-bar": { "action-1": "messages", "action-2": "notifications", "action-3": "search" } },
+    props: { "app-bar": { leading: "none" } },
   },
   {
     id: "search", title: "Search", platforms: ["app", "web"],

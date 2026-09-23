@@ -9,6 +9,27 @@ lands as an ordinary HTML item with its spec embedded in it, so comments,
 versions, undo and `isocan get` all work on it, and it still renders on a
 home without this module.
 
+- `isocan wire "<request>"` composes a **flow** from words: a blueprint
+  titled with the request lands at once, then an answerer is asked in three
+  rounds — the flow (which archetypes, the platform, the shared nav and
+  header), each screen's structure, each screen's props and intents — and
+  each round writes a new version into the same items, so the row goes blue
+  then grey in place. The whole request is one op group: one `isocan undo`
+  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`
+  is set) asks Jev; `--answerer stub` (the default without a key) draws a
+  random but valid flow, deterministic under `--seed`; `--answerer agent`
+  leaves the rounds to you. The last line says who answered, the latency
+  per round, calls, input tokens and cost. `--save <dir>` keeps every
+  round's request and response; `--at x,y` starts the row somewhere.
+- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,
+  default the newest waiting) as a file of calls, each a request in Jev's
+  shape (`state` and named questions, of type `noul` — yes/no — `choice` or
+  `score`). Fill each call's `"response"` in Jev's response shape
+  (`{"answers": {"<id>": {"type": "choice", "choice": "…", "probabilities":
+  {…}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,
+  "probabilities": {"0": …}}`) and `isocan wire answer <file>` applies it;
+  repeat until it says the flow is drawn. An answer with an option its
+  question never offered is refused, and nothing is written.
 - `isocan wire catalog` lists every archetype and each slot's options;
   `--json` adds every block's props and every intent.
 - `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);

@@ -1,17 +1,22 @@
 import guideText from "../agent-guide.md";
 import { readFile } from "node:fs/promises";
 import type { Command } from "commander";
-import { newItemId, newVersionId } from "@isocan/core";
+import { FIDELITY_PROP, newItemId, newVersionId } from "@isocan/core";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
 import {
   BLOCKS, INTENTS, PLATFORMS, PRIMITIVES, RECIPES, blueprint, renderWire, validateWire, wireSize, wireframe,
   type Component, type Platform, type WireSpec,
 } from "./core.ts";
 import { wireframeModule } from "./record.ts";
+import { answer, questions, registerCompose } from "./compose-cli.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
  * and the same renderer the web app would use.
+ *
+ * `wire "<request>"` is phase 1's: a flow composed in three rounds by an
+ * answerer (Jev, the stub, or an agent through `wire questions|answer`),
+ * skeleton first and filled in place — `compose-cli.ts`.
  *
  * `wire render` is the phase-0 act: a spec in, a screen out, as ONE
  * `item.add` of an ordinary HTML file with the spec inside it. Nothing new
@@ -34,7 +39,21 @@ function register(host: CliHost): void {
   const { run, ctxOf, resolveCanvas, sendOp, printJson, placementFor } = host;
   const wire = host.program
     .command("wire")
-    .description("Wireframes: screens drawn from a catalog of blocks — a blue blueprint where a slot is undecided, grey where it is chosen");
+    .description("Wireframes: `wire \"<request>\"` composes a flow of screens from a catalog of blocks — a blue blueprint where a slot is undecided, grey where it is chosen");
+  registerCompose(host, wire);
+
+  wire
+    .command("questions")
+    .description("Print the pending round of a wireframe flow as a question file, in Jev's request shape — for an agent to answer in Jev's place")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "which flow (default: the newest one waiting on answers)")
+    .action(run((opts: { flow?: string }, cmd: Command) => questions(host, opts, cmd)));
+
+  wire
+    .command("answer <file>")
+    .description("Apply a question file whose calls each carry a `response` in Jev's response shape — the screens fill in place, in the flow's op group")
+    .option("--canvas <canvas>")
+    .action(run((file: string, _opts: unknown, cmd: Command) => answer(host, file, cmd)));
 
   wire
     .command("render <spec>")
@@ -46,7 +65,10 @@ function register(host: CliHost): void {
     .option("--in <group>", "insert into this group")
     .option("--cell <row,col>", "with --in: one cell of the sheet's grid")
     .action(
-      run(async (file: string, opts: { title?: string; at?: string; anchor?: string; in?: string; cell?: string }, cmd: Command) => {
+      run(async (file: string, _local: unknown, cmd: Command) => {
+        // `--at` is `wire`'s own flag too (it starts a composed row), so read
+        // it wherever commander put it.
+        const opts = cmd.optsWithGlobals() as { title?: string; at?: string; anchor?: string; in?: string; cell?: string };
         let spec: WireSpec;
         try {
           spec = JSON.parse(await readFile(file, "utf8")) as WireSpec;
@@ -74,6 +96,7 @@ function register(host: CliHost): void {
           height,
           placement: placementFor(snapshot, opts, { width, height }) as never,
           title,
+          properties: { [FIDELITY_PROP]: "wireframe" },
         });
         const at = host.insertionReceiptPlacement(result.envelope.op, itemId);
         const slots = spec.slots.length;
