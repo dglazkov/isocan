@@ -953,7 +953,7 @@ var require_help = __commonJS({
         if (option.argChoices) {
           extraInfo.push(
             // use stringify to match the display of the default value
-            `choices: ${option.argChoices.map((choice) => JSON.stringify(choice)).join(", ")}`
+            `choices: ${option.argChoices.map((choice2) => JSON.stringify(choice2)).join(", ")}`
           );
         }
         if (option.defaultValue !== void 0) {
@@ -986,7 +986,7 @@ var require_help = __commonJS({
         if (argument.argChoices) {
           extraInfo.push(
             // use stringify to match the display of the default value
-            `choices: ${argument.argChoices.map((choice) => JSON.stringify(choice)).join(", ")}`
+            `choices: ${argument.argChoices.map((choice2) => JSON.stringify(choice2)).join(", ")}`
           );
         }
         if (argument.defaultValue !== void 0) {
@@ -1092,8 +1092,8 @@ var require_help = __commonJS({
        * @param {string} str
        * @returns {number}
        */
-      displayWidth(str) {
-        return stripColor(str).length;
+      displayWidth(str2) {
+        return stripColor(str2).length;
       }
       /**
        * Style the title for displaying in the help. Called with 'Usage:', 'Options:', etc.
@@ -1101,11 +1101,11 @@ var require_help = __commonJS({
        * @param {string} str
        * @returns {string}
        */
-      styleTitle(str) {
-        return str;
+      styleTitle(str2) {
+        return str2;
       }
-      styleUsage(str) {
-        return str.split(" ").map((word) => {
+      styleUsage(str2) {
+        return str2.split(" ").map((word) => {
           if (word === "[options]") return this.styleOptionText(word);
           if (word === "[command]") return this.styleSubcommandText(word);
           if (word[0] === "[" || word[0] === "<")
@@ -1113,46 +1113,46 @@ var require_help = __commonJS({
           return this.styleCommandText(word);
         }).join(" ");
       }
-      styleCommandDescription(str) {
-        return this.styleDescriptionText(str);
+      styleCommandDescription(str2) {
+        return this.styleDescriptionText(str2);
       }
-      styleOptionDescription(str) {
-        return this.styleDescriptionText(str);
+      styleOptionDescription(str2) {
+        return this.styleDescriptionText(str2);
       }
-      styleSubcommandDescription(str) {
-        return this.styleDescriptionText(str);
+      styleSubcommandDescription(str2) {
+        return this.styleDescriptionText(str2);
       }
-      styleArgumentDescription(str) {
-        return this.styleDescriptionText(str);
+      styleArgumentDescription(str2) {
+        return this.styleDescriptionText(str2);
       }
-      styleDescriptionText(str) {
-        return str;
+      styleDescriptionText(str2) {
+        return str2;
       }
-      styleOptionTerm(str) {
-        return this.styleOptionText(str);
+      styleOptionTerm(str2) {
+        return this.styleOptionText(str2);
       }
-      styleSubcommandTerm(str) {
-        return str.split(" ").map((word) => {
+      styleSubcommandTerm(str2) {
+        return str2.split(" ").map((word) => {
           if (word === "[options]") return this.styleOptionText(word);
           if (word[0] === "[" || word[0] === "<")
             return this.styleArgumentText(word);
           return this.styleSubcommandText(word);
         }).join(" ");
       }
-      styleArgumentTerm(str) {
-        return this.styleArgumentText(str);
+      styleArgumentTerm(str2) {
+        return this.styleArgumentText(str2);
       }
-      styleOptionText(str) {
-        return str;
+      styleOptionText(str2) {
+        return str2;
       }
-      styleArgumentText(str) {
-        return str;
+      styleArgumentText(str2) {
+        return str2;
       }
-      styleSubcommandText(str) {
-        return str;
+      styleSubcommandText(str2) {
+        return str2;
       }
-      styleCommandText(str) {
-        return str;
+      styleCommandText(str2) {
+        return str2;
       }
       /**
        * Calculate the pad width from the maximum term length.
@@ -1175,8 +1175,8 @@ var require_help = __commonJS({
        * @param {string} str
        * @returns {boolean}
        */
-      preformatted(str) {
-        return /\n[^\S\r\n]/.test(str);
+      preformatted(str2) {
+        return /\n[^\S\r\n]/.test(str2);
       }
       /**
        * Format the "item", which consists of a term and description. Pad the term and wrap the description, indenting the following lines.
@@ -1222,9 +1222,9 @@ ${itemIndentStr}`);
        * @param {number} width
        * @returns {string}
        */
-      boxWrap(str, width) {
-        if (width < this.minWidthToWrap) return str;
-        const rawLines = str.split(/\r\n|\n/);
+      boxWrap(str2, width) {
+        if (width < this.minWidthToWrap) return str2;
+        const rawLines = str2.split(/\r\n|\n/);
         const chunkPattern = /[\s]*[^\s]+/g;
         const wrappedLines = [];
         rawLines.forEach((line) => {
@@ -1252,9 +1252,9 @@ ${itemIndentStr}`);
         return wrappedLines.join("\n");
       }
     };
-    function stripColor(str) {
+    function stripColor(str2) {
       const sgrPattern = /\x1b\[\d*(;\d*)*m/g;
-      return str.replace(sgrPattern, "");
+      return str2.replace(sgrPattern, "");
     }
     exports.Help = Help2;
     exports.stripColor = stripColor;
@@ -1513,9 +1513,9 @@ var require_option = __commonJS({
         return option.negate === (negativeValue === value);
       }
     };
-    function camelcase(str) {
-      return str.split("-").reduce((str2, word) => {
-        return str2 + word[0].toUpperCase() + word.slice(1);
+    function camelcase(str2) {
+      return str2.split("-").reduce((str3, word) => {
+        return str3 + word[0].toUpperCase() + word.slice(1);
       });
     }
     function splitOptionFlags(flags) {
@@ -1696,14 +1696,14 @@ var require_command = __commonJS({
         this._showSuggestionAfterError = true;
         this._savedState = null;
         this._outputConfiguration = {
-          writeOut: (str) => process2.stdout.write(str),
-          writeErr: (str) => process2.stderr.write(str),
-          outputError: (str, write) => write(str),
+          writeOut: (str2) => process2.stdout.write(str2),
+          writeErr: (str2) => process2.stderr.write(str2),
+          outputError: (str2, write) => write(str2),
           getOutHelpWidth: () => process2.stdout.isTTY ? process2.stdout.columns : void 0,
           getErrHelpWidth: () => process2.stderr.isTTY ? process2.stderr.columns : void 0,
           getOutHasColors: () => useColor() ?? (process2.stdout.isTTY && process2.stdout.hasColors?.()),
           getErrHasColors: () => useColor() ?? (process2.stderr.isTTY && process2.stderr.hasColors?.()),
-          stripColor: (str) => stripColor(str)
+          stripColor: (str2) => stripColor(str2)
         };
         this._hidden = false;
         this._helpOption = void 0;
@@ -2838,11 +2838,11 @@ Expecting one of '${allowedValues.join("', '")}'`);
         };
         this._checkNumberOfArguments();
         const processedArgs = [];
-        this.registeredArguments.forEach((declaredArg, index) => {
+        this.registeredArguments.forEach((declaredArg, index2) => {
           let value = declaredArg.defaultValue;
           if (declaredArg.variadic) {
-            if (index < this.args.length) {
-              value = this.args.slice(index);
+            if (index2 < this.args.length) {
+              value = this.args.slice(index2);
               if (declaredArg.parseArg) {
                 value = value.reduce((processed, v) => {
                   return myParseArg(declaredArg, v, processed);
@@ -2851,13 +2851,13 @@ Expecting one of '${allowedValues.join("', '")}'`);
             } else if (value === void 0) {
               value = [];
             }
-          } else if (index < this.args.length) {
-            value = this.args[index];
+          } else if (index2 < this.args.length) {
+            value = this.args[index2];
             if (declaredArg.parseArg) {
               value = myParseArg(declaredArg, value, declaredArg.defaultValue);
             }
           }
-          processedArgs[index] = value;
+          processedArgs[index2] = value;
         });
         this.processedArgs = processedArgs;
       }
@@ -3143,10 +3143,10 @@ Expecting one of '${allowedValues.join("', '")}'`);
             }
           }
           if (/^--[^=]+=/.test(arg)) {
-            const index = arg.indexOf("=");
-            const option = this._findOption(arg.slice(0, index));
+            const index2 = arg.indexOf("=");
+            const option = this._findOption(arg.slice(0, index2));
             if (option && (option.required || option.optional)) {
-              this.emit(`option:${option.name()}`, arg.slice(index + 1));
+              this.emit(`option:${option.name()}`, arg.slice(index2 + 1));
               continue;
             }
           }
@@ -3348,10 +3348,10 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} flag
        * @private
        */
-      unknownOption(flag) {
+      unknownOption(flag2) {
         if (this._allowUnknownOption) return;
         let suggestion = "";
-        if (flag.startsWith("--") && this._showSuggestionAfterError) {
+        if (flag2.startsWith("--") && this._showSuggestionAfterError) {
           let candidateFlags = [];
           let command2 = this;
           do {
@@ -3359,9 +3359,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
             candidateFlags = candidateFlags.concat(moreFlags);
             command2 = command2.parent;
           } while (command2 && !command2._enablePositionalOptions);
-          suggestion = suggestSimilar(flag, candidateFlags);
+          suggestion = suggestSimilar(flag2, candidateFlags);
         }
-        const message = `error: unknown option '${flag}'${suggestion}`;
+        const message = `error: unknown option '${flag2}'${suggestion}`;
         this.error(message, { code: "commander.unknownOption" });
       }
       /**
@@ -3409,18 +3409,18 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [description]
        * @return {(this | string | undefined)} `this` command for chaining, or version string if no arguments
        */
-      version(str, flags, description) {
-        if (str === void 0) return this._version;
-        this._version = str;
+      version(str2, flags, description) {
+        if (str2 === void 0) return this._version;
+        this._version = str2;
         flags = flags || "-V, --version";
         description = description || "output the version number";
         const versionOption = this.createOption(flags, description);
         this._versionOptionName = versionOption.attributeName();
         this._registerOption(versionOption);
         this.on("option:" + versionOption.name(), () => {
-          this._outputConfiguration.writeOut(`${str}
+          this._outputConfiguration.writeOut(`${str2}
 `);
-          this._exit(0, "commander.version", str);
+          this._exit(0, "commander.version", str2);
         });
         return this;
       }
@@ -3431,10 +3431,10 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {object} [argsDescription]
        * @return {(string|Command)}
        */
-      description(str, argsDescription) {
-        if (str === void 0 && argsDescription === void 0)
+      description(str2, argsDescription) {
+        if (str2 === void 0 && argsDescription === void 0)
           return this._description;
-        this._description = str;
+        this._description = str2;
         if (argsDescription) {
           this._argsDescription = argsDescription;
         }
@@ -3446,9 +3446,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [str]
        * @return {(string|Command)}
        */
-      summary(str) {
-        if (str === void 0) return this._summary;
-        this._summary = str;
+      summary(str2) {
+        if (str2 === void 0) return this._summary;
+        this._summary = str2;
         return this;
       }
       /**
@@ -3496,8 +3496,8 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [str]
        * @return {(string|Command)}
        */
-      usage(str) {
-        if (str === void 0) {
+      usage(str2) {
+        if (str2 === void 0) {
           if (this._usage) return this._usage;
           const args = this.registeredArguments.map((arg) => {
             return humanReadableArgName(arg);
@@ -3508,7 +3508,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
             this.registeredArguments.length ? args : []
           ).join(" ");
         }
-        this._usage = str;
+        this._usage = str2;
         return this;
       }
       /**
@@ -3517,9 +3517,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [str]
        * @return {(string|Command)}
        */
-      name(str) {
-        if (str === void 0) return this._name;
-        this._name = str;
+      name(str2) {
+        if (str2 === void 0) return this._name;
+        this._name = str2;
         return this;
       }
       /**
@@ -3590,17 +3590,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
         let hasColors;
         let helpWidth;
         if (error) {
-          baseWrite = (str) => this._outputConfiguration.writeErr(str);
+          baseWrite = (str2) => this._outputConfiguration.writeErr(str2);
           hasColors = this._outputConfiguration.getErrHasColors();
           helpWidth = this._outputConfiguration.getErrHelpWidth();
         } else {
-          baseWrite = (str) => this._outputConfiguration.writeOut(str);
+          baseWrite = (str2) => this._outputConfiguration.writeOut(str2);
           hasColors = this._outputConfiguration.getOutHasColors();
           helpWidth = this._outputConfiguration.getOutHelpWidth();
         }
-        const write = (str) => {
-          if (!hasColors) str = this._outputConfiguration.stripColor(str);
-          return baseWrite(str);
+        const write = (str2) => {
+          if (!hasColors) str2 = this._outputConfiguration.stripColor(str2);
+          return baseWrite(str2);
         };
         return { error, write, hasColors, helpWidth };
       }
@@ -4017,9 +4017,9 @@ var PINNED = {
     }
   }
 };
-function platformKey(platform = process.platform, arch = process.arch) {
+function platformKey(platform = process.platform, arch2 = process.arch) {
   const os5 = platform === "win32" ? "windows" : platform;
-  const cpu = arch === "arm64" ? "aarch64" : arch === "x64" ? "x86_64" : arch;
+  const cpu = arch2 === "arm64" ? "aarch64" : arch2 === "x64" ? "x86_64" : arch2;
   return `${os5}-${cpu}`;
 }
 var adaptersDir = (home) => path.join(home, "adapters");
@@ -4046,18 +4046,18 @@ async function refreshIndex(home, url = process.env.ISOCAN_ACP_REGISTRY || REGIS
   return cached;
 }
 async function registryEntry(home, id3, options = {}) {
-  let index = await readIndex(home);
-  const stale = !index || Date.now() - Date.parse(index.fetchedAt) > INDEX_FRESH_MS;
+  let index2 = await readIndex(home);
+  const stale = !index2 || Date.now() - Date.parse(index2.fetchedAt) > INDEX_FRESH_MS;
   if (options.refresh && stale) {
     try {
-      index = await refreshIndex(home);
+      index2 = await refreshIndex(home);
     } catch (err) {
       options.narrate?.(
-        `the ACP registry could not be read (${err.message}) \u2014 using ${index ? "the cached index" : "the built-in pin"}`
+        `the ACP registry could not be read (${err.message}) \u2014 using ${index2 ? "the cached index" : "the built-in pin"}`
       );
     }
   }
-  return index?.agents.find((a) => a.id === id3) ?? PINNED[id3] ?? null;
+  return index2?.agents.find((a) => a.id === id3) ?? PINNED[id3] ?? null;
 }
 function specFromEntry(home, harness, entry) {
   const env = BUILTIN_ENV[harness];
@@ -4271,15 +4271,15 @@ async function updateRcAgents(home, change) {
   }
 }
 function replaceRow(rows2, row) {
-  const index = rows2.findIndex((r) => r.canvasId === row.canvasId && r.actorId === row.actorId);
-  if (index < 0) rows2.push(row);
-  else rows2[index] = row;
+  const index2 = rows2.findIndex((r) => r.canvasId === row.canvasId && r.actorId === row.actorId);
+  if (index2 < 0) rows2.push(row);
+  else rows2[index2] = row;
 }
 async function upsertRcAgent(home, row) {
   await updateRcAgents(home, (rows2) => {
-    const next = { ...row };
-    delete next.preparationId;
-    replaceRow(rows2, next);
+    const next2 = { ...row };
+    delete next2.preparationId;
+    replaceRow(rows2, next2);
   });
 }
 async function withPreparedRcAgent(home, row, publish) {
@@ -4298,11 +4298,11 @@ async function withPreparedRcAgent(home, row, publish) {
     throw error;
   } finally {
     await updateRcAgents(home, (rows2) => {
-      const index = rows2.findIndex((r) => r.canvasId === row.canvasId && r.actorId === row.actorId && r.preparationId === preparationId);
-      if (index < 0) return;
-      if (!refused) delete rows2[index].preparationId;
-      else if (previous) rows2[index] = previous;
-      else rows2.splice(index, 1);
+      const index2 = rows2.findIndex((r) => r.canvasId === row.canvasId && r.actorId === row.actorId && r.preparationId === preparationId);
+      if (index2 < 0) return;
+      if (!refused) delete rows2[index2].preparationId;
+      else if (previous) rows2[index2] = previous;
+      else rows2.splice(index2, 1);
     });
   }
 }
@@ -4324,8 +4324,8 @@ async function setRcSessionId(home, canvasId, actorId, sessionId) {
 }
 async function removeRcAgent(home, canvasId, actorId) {
   await updateRcAgents(home, (rows2) => {
-    const index = rows2.findIndex((r) => r.canvasId === canvasId && r.actorId === actorId);
-    if (index >= 0) rows2.splice(index, 1);
+    const index2 = rows2.findIndex((r) => r.canvasId === canvasId && r.actorId === actorId);
+    if (index2 >= 0) rows2.splice(index2, 1);
   });
 }
 function fileRcRows(home) {
@@ -4698,7 +4698,7 @@ function registerCanvasGroups(canvas2, context2 = makeCtx) {
     if (result2.status === "already-groups") return console.log(`already uses groups at revision ${result2.revision}; nothing changed`);
     console.log(`${result2.dryRun ? "preview" : "applied"} migration at revision ${result2.revision}${result2.seq !== void 0 ? ` \u2192 ${result2.seq}` : ""}`);
     printTable([...result2.live.map((row) => ({ ...row, location: "live" })), ...result2.trash.map((row) => ({ ...row, location: "trash" }))].map((row) => ({ id: row.itemId, title: row.title, state: row.location, kind: `${row.kindBefore ?? "item"} \u2192 ${row.kindAfter ?? "item"}`, parent: row.parentAfter ?? "canvas", frame: `${row.boxAfter.x},${row.boxAfter.y} ${row.boxAfter.width}x${row.boxAfter.height}`, restore: row.restorePolicy ?? "" })));
-    for (const choice of result2.ambiguities) console.log(`overlap ${choice.itemId}: chose ${choice.chosenId} from ${choice.candidateIds.join(", ")}`);
+    for (const choice2 of result2.ambiguities) console.log(`overlap ${choice2.itemId}: chose ${choice2.chosenId} from ${choice2.candidateIds.join(", ")}`);
     for (const repair of result2.repairs) console.log(`repair ${repair.location} ${repair.itemId}: ${repair.reasons.join(", ")}`);
     for (const id3 of result2.danglingAnnotations) console.log(`dangling annotation ${id3}: attachment retained for repair`);
     console.log(result2.history.explanation);
@@ -5044,19 +5044,19 @@ Source: ${projection.source.itemId}@${projection.source.versionId}${options.refr
   ${value.states.join(", ")}`);
   }));
   design.command("recipe <id>").description("Inspect or export one installed HTML reference and its authored DESIGN.md").option("--out <directory>", "write both runnable files into a new directory").option("--design", "print the reference DESIGN.md instead of HTML").action(act(async (ctx, [id3, options]) => {
-    const recipe = await readDesignRecipe(id3);
+    const recipe2 = await readDesignRecipe(id3);
     if (options.out) {
       if (options.design) throw new Error("--out exports both files; omit --design.");
       const folder = path3.resolve(options.out);
       await fs5.mkdir(folder);
-      await fs5.writeFile(path3.join(folder, recipe.htmlFilename), recipe.html, { flag: "wx" });
-      await fs5.writeFile(path3.join(folder, recipe.designFilename), recipe.design, { flag: "wx" });
-      if (ctx.json) printJson({ id: recipe.id, directory: folder, files: [recipe.htmlFilename, recipe.designFilename] });
+      await fs5.writeFile(path3.join(folder, recipe2.htmlFilename), recipe2.html, { flag: "wx" });
+      await fs5.writeFile(path3.join(folder, recipe2.designFilename), recipe2.design, { flag: "wx" });
+      if (ctx.json) printJson({ id: recipe2.id, directory: folder, files: [recipe2.htmlFilename, recipe2.designFilename] });
       else console.log(`${folder}
-${recipe.htmlFilename}
-${recipe.designFilename}`);
-    } else if (ctx.json) printJson(recipe);
-    else process.stdout.write(options.design ? recipe.design : recipe.html);
+${recipe2.htmlFilename}
+${recipe2.designFilename}`);
+    } else if (ctx.json) printJson(recipe2);
+    else process.stdout.write(options.design ? recipe2.design : recipe2.html);
   }));
 }
 
@@ -5195,7 +5195,7 @@ ${result3.data}`);
     for (const saved of result2.receipts) {
       console.log(`${saved.receipt.id} \xB7 ${saved.receipt.status} \xB7 evidence ${saved.status}
 ${saved.ref.itemId}@${saved.ref.versionId}`);
-      for (const check of saved.receipt.checks) console.log(`  ${check.id}: ${check.kind} \xB7 reported ${check.result} \xB7 ${check.coverage}`);
+      for (const check2 of saved.receipt.checks) console.log(`  ${check2.id}: ${check2.kind} \xB7 reported ${check2.result} \xB7 ${check2.coverage}`);
       for (const freshness of saved.checkFreshness) if (freshness.status !== "current") console.log(`  ${freshness.checkId}: evidence ${freshness.status} \xB7 ${freshness.reasons.join(" ")}`);
       for (const reason of saved.reasons) console.log(`  ${reason}`);
       for (const limit of saved.receipt.unresolved) console.log(`  ${limit.severity}: ${limit.description}`);
@@ -5340,10 +5340,10 @@ function printPolicy(policy, write) {
   write(`    Effective policy: ${contract ? `${contract.literals} (v${contract.version}, ${policy.status})` : `${policy.status}; rules unexamined`}`);
   for (const problem of policy.problems) write(`      Unsupported ${problem.path}: ${problem.message} (${problem.code})`);
   if (contract) {
-    for (const [name, recipe] of Object.entries(contract.recipes)) {
-      write(`      Recipe ${name}: owns ${Object.entries(recipe.owns).map(([property, value]) => `${property}: ${value}`).join("; ") || "nothing"}`);
-      write(`        Caller controls: ${recipe.allow.join(", ") || "none declared"}`);
-      for (const [name2, treatment] of Object.entries(recipe.treatments)) write(`        Treatment ${name2}: ${Object.entries(treatment).map(([property, value]) => `${property}: ${value}`).join("; ")}`);
+    for (const [name, recipe2] of Object.entries(contract.recipes)) {
+      write(`      Recipe ${name}: owns ${Object.entries(recipe2.owns).map(([property, value]) => `${property}: ${value}`).join("; ") || "nothing"}`);
+      write(`        Caller controls: ${recipe2.allow.join(", ") || "none declared"}`);
+      for (const [name2, treatment] of Object.entries(recipe2.treatments)) write(`        Treatment ${name2}: ${Object.entries(treatment).map(([property, value]) => `${property}: ${value}`).join("; ")}`);
     }
     for (const [name, exception] of Object.entries(contract.exceptions)) write(`      Exception ${name} (${exception.recipe}; ${exception.properties.join(", ")}): ${exception.reason}`);
   }
@@ -5394,7 +5394,7 @@ function designRepairCapture(value, canvasId, itemId) {
   if (report2.canvasId !== canvasId || !item || item.status !== "audited" || item.canvasId !== canvasId || !item.versionId || typeof report2.ruleVersion !== "string" || item.ruleVersion !== report2.ruleVersion || !item.input || !/^[a-f0-9]{64}$/.test(item.input.sha256)) throw new Error("The capture does not contain a supported completed audit of this canvas and item. Capture a fresh design audit --item report.");
   if (item.input.kind !== "stored" && item.input.kind !== "draft" || item.input.kind === "draft" && (item.input.baseVersionId !== item.versionId || item.blobHash !== null) || item.input.kind === "stored" && !item.blobHash) throw new Error("The capture does not identify a stored screen or an editor draft's actual base version.");
   const governing = item.governing;
-  if (!governing || [governing.canvasId, governing.itemId, governing.versionId, governing.blobHash].some((field) => typeof field !== "string" || !field)) throw new Error("The capture has no complete governing-design identity.");
+  if (!governing || [governing.canvasId, governing.itemId, governing.versionId, governing.blobHash].some((field2) => typeof field2 !== "string" || !field2)) throw new Error("The capture has no complete governing-design identity.");
   if (!item.repairBasis) throw new Error("This historical audit has no original target metadata/scope capture. Run a fresh design audit before preparing a repair.");
   return { expectedVersionId: item.versionId, expectedGoverning: governing, expectedRuleVersion: report2.ruleVersion, basis: item.repairBasis };
 }
@@ -5506,7 +5506,7 @@ async function finish(ctx, handle, requestId, runId, file) {
     if (result3.status !== "accepted") return { results, result: result3 };
   }
   const fresh = (await handle.designBrief({ requestId })).requests[0];
-  const prior = fresh.receipts.find((receipt) => receipt.receipt.checks.some((check) => check.evidence.some((ref) => ref.itemId === row.ref.itemId && ref.versionId === row.ref.versionId && ref.blobHash === row.ref.blobHash)));
+  const prior = fresh.receipts.find((receipt) => receipt.receipt.checks.some((check2) => check2.evidence.some((ref) => ref.itemId === row.ref.itemId && ref.versionId === row.ref.versionId && ref.blobHash === row.ref.blobHash)));
   if (prior) return { results, result: { status: "accepted", opId: prior.marker.opId, submittedOpId: prior.marker.opId, consistency: { status: prior.status, reasons: prior.reasons } } };
   const payload = await prepareDesignReviewReceipt(io, { canvasId: handle.id, runId, base: row.ref, itemId: newItemId(), receiptId: newOpId(), ...identities2() });
   const result2 = await deliver(ctx, file, { actorId: ctx.actor.id, canvasId: handle.id, requestId, kind: "receipt", payload }, false);
@@ -7694,8 +7694,8 @@ function competitionTally(bout, agentIds) {
   );
   const dropped = [];
   const voters = { people: /* @__PURE__ */ new Set(), agents: /* @__PURE__ */ new Set() };
-  MEDALS.forEach((medal, index) => {
-    const rank = index + 1;
+  MEDALS.forEach((medal, index2) => {
+    const rank = index2 + 1;
     const byActor = /* @__PURE__ */ new Map();
     for (const entry of entries) {
       for (const actor of reactors(entry, medal)) byActor.set(actor, [...byActor.get(actor) ?? [], entry]);
@@ -8308,9 +8308,9 @@ your own rc, each named for its principle \u2014 an homage, never the person.
       const assets = path7.join(dir, "assets/packs", id3);
       await fs10.mkdir(assets, { recursive: true });
       await fs10.copyFile(opts.design, path7.join(assets, "DESIGN.md"));
-      const avatar = opts.avatar ? await fs10.readFile(opts.avatar, "utf8") : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90"><rect width="120" height="90" fill="#eeeeee"/><circle cx="60" cy="45" r="22" fill="#555555"/></svg>`;
-      if (/<script|href=|<image|<foreignObject/i.test(avatar)) throw new Error("an avatar is an emblem: no script, no images, no links");
-      await fs10.writeFile(path7.join(assets, "avatar.svg"), avatar);
+      const avatar2 = opts.avatar ? await fs10.readFile(opts.avatar, "utf8") : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90"><rect width="120" height="90" fill="#eeeeee"/><circle cx="60" cy="45" r="22" fill="#555555"/></svg>`;
+      if (/<script|href=|<image|<foreignObject/i.test(avatar2)) throw new Error("an avatar is an emblem: no script, no images, no links");
+      await fs10.writeFile(path7.join(assets, "avatar.svg"), avatar2);
       await fs10.writeFile(path7.join(assets, "critique.md"), `# ${title} \u2014 critique
 
 ${pack.critique.map((q, i) => `${i + 1}. ${q}`).join("\n")}
@@ -8967,8 +8967,8 @@ async function requestAnalysis(io, options = {}, retryOf, dispatch = true) {
   if (existing2) return dispatch && !existing2.dispatched ? dispatchRun(io, existing2.id) : readRun(io, existing2.id);
   const canvas2 = await io.snapshot();
   const targetKey = JSON.stringify([normalize(target2.repository), target2.analysisId]);
-  const history = [...receipts.filter((r) => r.run && r.run.analysisId === target2.analysisId && normalize(r.run.repository) === normalize(target2.repository)).map((r) => r.id), ...Object.values(canvas2.trash).filter((entry) => entry.item.properties[PROP.requestTarget] === targetKey).map((entry) => entry.item.id)].sort();
-  const key = JSON.stringify([normalize(target2.repository), target2.analysisId, history]);
+  const history2 = [...receipts.filter((r) => r.run && r.run.analysisId === target2.analysisId && normalize(r.run.repository) === normalize(target2.repository)).map((r) => r.id), ...Object.values(canvas2.trash).filter((entry) => entry.item.properties[PROP.requestTarget] === targetKey).map((entry) => entry.item.id)].sort();
+  const key = JSON.stringify([normalize(target2.repository), target2.analysisId, history2]);
   const digest2 = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
   const id3 = `itm_${Array.from(new Uint8Array(digest2)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 24)}`;
   const run2 = { ...target2, threadId: mainThread(canvas2)?.id ?? newThreadId(), commentId: newCommentId(), status: "requested", cancelRequested: false, ...retryOf ? { retryOf } : {} };
@@ -9232,9 +9232,9 @@ async function importProject(io, input) {
       )
     });
   }
-  for (const [index, checkpoint] of project.checkpoints.entries()) {
+  for (const [index2, checkpoint] of project.checkpoints.entries()) {
     ops.push(
-      await checkpointOp(io, projectId, checkpoint, x, -330 - index * 280)
+      await checkpointOp(io, projectId, checkpoint, x, -330 - index2 * 280)
     );
   }
   ops.push({
@@ -9252,7 +9252,7 @@ async function importProject(io, input) {
 async function saveProject(io, item, project) {
   const body = projectBody(parseProject(project));
   body.lastUpdated = (/* @__PURE__ */ new Date()).toISOString();
-  const next = await version2(
+  const next2 = await version2(
     io,
     body,
     PROJECT_MIME,
@@ -9264,7 +9264,7 @@ async function saveProject(io, item, project) {
       {
         type: "item.edit",
         itemId: item.id,
-        version: next,
+        version: next2,
         expectedVersionId: item.currentVersionId,
         expectedMetadata: { title: item.title, properties: item.properties },
         patch: { title: project.projectName }
@@ -9284,7 +9284,7 @@ async function saveNode(io, canvas2, projectItem, project, input, base) {
   const nativeId = existing2?.id ?? newItemId();
   const ids = new Map(items.map((i) => [originId(i), i.id]));
   ids.set(node.id, nativeId);
-  const next = await version2(
+  const next2 = await version2(
     io,
     nodeBody(node),
     NODE_MIME,
@@ -9296,7 +9296,7 @@ async function saveNode(io, canvas2, projectItem, project, input, base) {
     {
       type: "item.edit",
       itemId: nativeId,
-      version: next,
+      version: next2,
       expectedVersionId: base?.versionId ?? existing2.currentVersionId,
       expectedMetadata: base ?? { title: existing2.title, properties: existing2.properties },
       patch: { title: node.title, properties: props }
@@ -9305,7 +9305,7 @@ async function saveNode(io, canvas2, projectItem, project, input, base) {
     {
       type: "item.add",
       itemId: nativeId,
-      version: next,
+      version: next2,
       title: node.title,
       properties: props,
       ...NODE_SIZE,
@@ -9324,11 +9324,11 @@ async function saveNode(io, canvas2, projectItem, project, input, base) {
 }
 async function saveEdge(io, canvas2, projectItem, project, input) {
   const edge = edgeSchema.parse(input);
-  const next = {
+  const next2 = {
     ...project,
     edges: [...project.edges.filter((e) => e.id !== edge.id), edge]
   };
-  validateGraph(next.nodes, next.edges);
+  validateGraph(next2.nodes, next2.edges);
   const items = nodesOn(canvas2, projectItem.id);
   const ids = new Map(items.map((i) => [originId(i), i.id]));
   const affected = items.filter(
@@ -9340,7 +9340,7 @@ async function saveEdge(io, canvas2, projectItem, project, input) {
       type: "item.update",
       itemId: item.id,
       patch: {
-        properties: { [PROP.edges]: edgeProps(next, originId(item), ids) }
+        properties: { [PROP.edges]: edgeProps(next2, originId(item), ids) }
       }
     })),
     newGroupId()
@@ -9398,9 +9398,9 @@ async function restoreCheckpoint(io, canvas2, projectItem, input) {
   const wanted = new Set(checkpoint.nodes.map((n) => n.id));
   const ops = [];
   const edgeProject = { edges: checkpoint.edges };
-  for (const [index, node] of checkpoint.nodes.entries()) {
+  for (const [index2, node] of checkpoint.nodes.entries()) {
     const existing2 = byOrigin.get(node.id);
-    const next = await version2(
+    const next2 = await version2(
       io,
       nodeBody(node),
       NODE_MIME,
@@ -9412,7 +9412,7 @@ async function restoreCheckpoint(io, canvas2, projectItem, input) {
     };
     if (existing2)
       ops.push(
-        { type: "item.addVersion", itemId: existing2.id, version: next },
+        { type: "item.addVersion", itemId: existing2.id, version: next2 },
         {
           type: "item.update",
           itemId: existing2.id,
@@ -9425,9 +9425,9 @@ async function restoreCheckpoint(io, canvas2, projectItem, input) {
         itemId: ids.get(node.id),
         title: node.title,
         ...NODE_SIZE,
-        version: next,
+        version: next2,
         properties: props,
-        placement: { x: projectItem.x + 460, y: projectItem.y + index * 300 }
+        placement: { x: projectItem.x + 460, y: projectItem.y + index2 * 300 }
       });
   }
   const removed = items.filter((i) => !wanted.has(originId(i))).map((i) => i.id);
@@ -9443,7 +9443,7 @@ async function attachSource(io, canvas2, projectItem, project, sourceId, text, f
   const existing2 = Object.values(canvas2.items).find(
     (i) => i.properties[PROP.project] === projectItem.id && i.properties[PROP.source] === sourceId
   );
-  const next = {
+  const next2 = {
     ...await io.put(text, mime, filename),
     id: newVersionId(),
     mimeType: mime,
@@ -9452,7 +9452,7 @@ async function attachSource(io, canvas2, projectItem, project, sourceId, text, f
   const itemId = existing2?.id ?? newItemId();
   if (existing2) await assertFresh(io, [existing2]);
   await io.send(
-    existing2 ? [{ type: "item.addVersion", itemId, version: next }] : [
+    existing2 ? [{ type: "item.addVersion", itemId, version: next2 }] : [
       {
         type: "item.add",
         itemId,
@@ -9464,7 +9464,7 @@ async function attachSource(io, canvas2, projectItem, project, sourceId, text, f
           [PROP.project]: projectItem.id,
           [PROP.source]: sourceId
         },
-        version: next
+        version: next2
       }
     ]
   );
@@ -10013,8 +10013,1693 @@ var talkCli = {
   }
 };
 
+// packages/modules/wireframe/agent-guide.md
+var agent_guide_default10 = "## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype's recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module.\n\n- `isocan wire catalog` lists every archetype and each slot's options;\n  `--json` adds every block's props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n\n**Words are typed, never free.** A button's label is its **intent**'s label\n(`sign-in` \u2192 \"Sign in\", `back` \u2192 \"Back\"), chosen from a fixed vocabulary of\n49; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec's `title`; everything else is grey bars, never lorem ipsum. If you want\nreal copy on a screen, that is a separate, honest act \u2014 write an HTML screen\nyourself \u2014 not a label smuggled into a spec.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot's `block` to another of its options with `\"props\": {}` and no\n`intents` (the new block's defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means \"not on this screen\".\n";
+
+// packages/modules/wireframe/src/cli.ts
+import { readFile } from "node:fs/promises";
+
+// packages/modules/wireframe/src/record.ts
+var wireframeModule = {
+  name: "@isocan/wireframe"
+};
+
+// packages/modules/wireframe/src/catalog/intents.ts
+var next = { to: "next", transition: "push" };
+var history = { to: "history", transition: "pop" };
+var none = { to: "none", transition: "none" };
+var arch = (archetype, transition = "push") => ({ to: "archetype", archetype, transition });
+var overlay = (component2) => ({ to: "overlay", component: component2, transition: "overlay" });
+var INTENTS = [
+  // forward (10)
+  { id: "continue", label: "Continue", group: "forward", nav: next },
+  { id: "next", label: "Next", group: "forward", nav: next },
+  { id: "get-started", label: "Get started", group: "forward", nav: next },
+  { id: "done", label: "Done", group: "forward", nav: next },
+  { id: "submit", label: "Submit", group: "forward", nav: next },
+  { id: "save", label: "Save", group: "forward", nav: next },
+  { id: "apply", label: "Apply", group: "forward", nav: next },
+  { id: "confirm", label: "Confirm", group: "forward", nav: next },
+  { id: "accept", label: "Accept", group: "forward", nav: next },
+  { id: "skip", label: "Skip", group: "forward", nav: { to: "after-run", transition: "dissolve" } },
+  // auth (4)
+  { id: "sign-in", label: "Sign in", group: "auth", nav: { to: "post-auth", transition: "dissolve" } },
+  { id: "sign-up", label: "Sign up", group: "auth", nav: arch("sign-up") },
+  { id: "forgot-password", label: "Forgot password?", group: "auth", nav: arch("verify") },
+  { id: "log-out", label: "Log out", group: "auth", nav: arch("sign-in", "dissolve") },
+  // back (4)
+  { id: "back", label: "Back", group: "back", nav: history },
+  { id: "cancel", label: "Cancel", group: "back", nav: history },
+  { id: "close", label: "Close", group: "back", nav: history },
+  { id: "dismiss", label: "Dismiss", group: "back", nav: history },
+  // detail (1)
+  { id: "open", label: "Open", group: "detail", nav: arch("detail") },
+  // form (2)
+  { id: "add", label: "Add", group: "form", nav: arch("form") },
+  { id: "edit", label: "Edit", group: "form", nav: arch("form") },
+  // overlay (7)
+  { id: "filter", label: "Filter", group: "overlay", nav: overlay("filter-panel") },
+  { id: "sort", label: "Sort", group: "overlay", nav: overlay("sheet") },
+  { id: "share", label: "Share", group: "overlay", nav: overlay("sheet") },
+  { id: "delete", label: "Delete", group: "overlay", nav: arch("confirm", "overlay") },
+  { id: "more", label: "More", group: "overlay", nav: overlay("dropdown-menu") },
+  { id: "menu", label: "Menu", group: "overlay", nav: overlay("drawer") },
+  { id: "info", label: "Info", group: "overlay", nav: overlay("popover") },
+  // jump to an archetype (13)
+  { id: "search", label: "Search", group: "jump", nav: arch("search") },
+  { id: "settings", label: "Settings", group: "jump", nav: arch("settings") },
+  { id: "profile", label: "Profile", group: "jump", nav: arch("profile") },
+  { id: "notifications", label: "Notifications", group: "jump", nav: arch("notifications") },
+  { id: "cart", label: "Cart", group: "jump", nav: arch("cart") },
+  { id: "checkout", label: "Checkout", group: "jump", nav: arch("checkout") },
+  { id: "buy", label: "Buy", group: "jump", nav: arch("order-placed") },
+  { id: "home", label: "Home", group: "jump", nav: arch("home", "none") },
+  { id: "terms", label: "Terms", group: "jump", nav: arch("legal") },
+  { id: "contact", label: "Contact", group: "jump", nav: arch("contact") },
+  { id: "upgrade", label: "Upgrade", group: "jump", nav: arch("pricing") },
+  { id: "help", label: "Help", group: "jump", nav: arch("contact") },
+  { id: "messages", label: "Messages", group: "jump", nav: arch("chat") },
+  // in place (8)
+  { id: "like", label: "Like", group: "in-place", nav: none },
+  { id: "follow", label: "Follow", group: "in-place", nav: none },
+  { id: "play", label: "Play", group: "in-place", nav: none },
+  { id: "select", label: "Select", group: "in-place", nav: none },
+  { id: "copy", label: "Copy", group: "in-place", nav: none },
+  { id: "retry", label: "Retry", group: "in-place", nav: none },
+  { id: "upload", label: "Upload", group: "in-place", nav: none },
+  { id: "remember", label: "Remember me", group: "in-place", nav: none }
+];
+var INTENT_BY_ID = new Map(INTENTS.map((i) => [i.id, i]));
+function intentsIn(...groups) {
+  return INTENTS.filter((i) => groups.includes(i.group)).map((i) => i.id);
+}
+var ALL_INTENTS = INTENTS.map((i) => i.id);
+
+// packages/modules/wireframe/src/catalog/draw.ts
+function esc(text) {
+  return text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+var WIDTHS = [92, 78, 86, 64, 95, 72, 58, 88, 70, 82];
+function bar(width, cls = "") {
+  return `<i class="bar${cls ? ` ${cls}` : ""}" style="width:${width}%"></i>`;
+}
+function bars(n, offset = 0, cls = "") {
+  let out = "";
+  for (let i = 0; i < n; i++) out += bar(WIDTHS[(i + offset) % WIDTHS.length], cls);
+  return out;
+}
+function btn(label, variant = "primary", cls = "") {
+  return `<span class="btn ${variant}${cls ? ` ${cls}` : ""}">${label}</span>`;
+}
+var GLYPHS = {
+  home: "\u2302",
+  search: "\u2315",
+  notifications: "\u25D4",
+  messages: "\u2709",
+  profile: "\u25EF",
+  settings: "\u2699",
+  cart: "\u229E",
+  help: "?",
+  contact: "\u260F",
+  terms: "\xA7",
+  upgrade: "\u2191",
+  checkout: "\u2713",
+  buy: "\u2713",
+  like: "\u2661",
+  share: "\u2197",
+  more: "\u22EF",
+  menu: "\u2261",
+  info: "i",
+  filter: "\u25BD",
+  add: "+",
+  edit: "\u270E",
+  delete: "\u2715",
+  close: "\u2715",
+  back: "\u2039",
+  cancel: "\u2715",
+  dismiss: "\u2715",
+  follow: "+",
+  play: "\u25B6",
+  copy: "\u29C9",
+  upload: "\u2191",
+  retry: "\u21BB",
+  sort: "\u21C5",
+  select: "\u2713",
+  open: "\u203A"
+};
+function glyph(intent) {
+  return GLYPHS[intent] ?? "\u2022";
+}
+function ibtn(intent, label) {
+  return `<span class="ibtn" title="${label}" aria-label="${label}">${glyph(intent)}</span>`;
+}
+function img(ratio2 = "4/3", cls = "") {
+  return `<div class="img${cls ? ` ${cls}` : ""}" style="aspect-ratio:${ratio2}"></div>`;
+}
+function avatar(size = "m") {
+  return `<span class="av ${size}"></span>`;
+}
+function icon() {
+  return `<span class="ico"></span>`;
+}
+function field(label, offset = 0) {
+  return `<div class="fld">${label ? `<span class="lbl">${label}</span>` : bar(30 + offset % 3 * 8, "lbl-bar")}<div class="box">${bar(40 + offset % 4 * 10, "ph")}</div></div>`;
+}
+function check(label) {
+  return `<div class="chk"><span class="cb"></span>${label}</div>`;
+}
+function chip(on = false) {
+  return `<span class="chip${on ? " on" : ""}">${bar(100, "in")}</span>`;
+}
+function toggle(on) {
+  return `<span class="tg${on ? " on" : ""}"></span>`;
+}
+function heading(title, level = 1) {
+  return `<div class="h h${level}">${title}</div>`;
+}
+function rowsOf(n, fn) {
+  let out = "";
+  for (let i = 0; i < n; i++) out += fn(i);
+  return out;
+}
+function num(props, key) {
+  return Number(props[key]);
+}
+function str(props, key) {
+  return String(props[key]);
+}
+function flag(props, key) {
+  return props[key] === true;
+}
+var choice = (values, dflt) => ({ kind: "choice", values, default: dflt ?? values[0] });
+var yn = (dflt = false) => ({ kind: "flag", default: dflt });
+var count = (min, max, dflt) => ({ kind: "count", min, max, default: dflt ?? min });
+var index = (max, dflt = 1) => ({ kind: "index", max, default: dflt });
+
+// packages/modules/wireframe/src/catalog/primitives.ts
+function upTo(n, prefix, key, accepts, defaults) {
+  const out = {};
+  for (let i = 1; i <= n; i++) {
+    out[`${prefix}-${i}`] = {
+      accepts,
+      default: defaults[(i - 1) % defaults.length],
+      when: (p) => typeof p[key] === "boolean" ? p[key] === true : Number(p[key]) >= i
+    };
+  }
+  return out;
+}
+var NAV_JUMPS = intentsIn("jump");
+var ACTIONS = [...intentsIn("form", "overlay", "jump")];
+var PRIMARY = [...intentsIn("forward", "auth", "form", "jump")];
+var ratio = (r) => r.replace(":", "/");
+var PRIMITIVES = [
+  // ---- display
+  {
+    id: "image",
+    kind: "primitive",
+    category: "display",
+    namedBy: 10,
+    h: 180,
+    props: { kind: choice(["photo", "illustration", "logo"]), ratio: choice(["1:1", "4:3", "16:9", "3:4"], "4:3"), caption: yn() },
+    draw: ({ props }) => {
+      const logo = str(props, "kind") === "logo";
+      return `<div class="${logo ? "logo" : ""}">${img(logo ? "1/1" : ratio(str(props, "ratio")), logo ? "sm" : "")}${flag(props, "caption") ? bar(40, "cap") : ""}</div>`;
+    }
+  },
+  {
+    id: "heading",
+    kind: "primitive",
+    category: "display",
+    namedBy: 6,
+    h: 44,
+    props: { level: count(1, 4, 1), align: choice(["start", "center"]) },
+    draw: ({ props, title }) => `<div style="text-align:${str(props, "align") === "center" ? "center" : "left"}">${heading(title, num(props, "level"))}</div>`
+  },
+  {
+    id: "text",
+    kind: "primitive",
+    category: "display",
+    namedBy: 8,
+    h: 72,
+    props: { lines: count(1, 8, 3), size: choice(["s", "m", "l"], "m"), style: choice(["body", "caption", "quote"]), redacted: yn(true) },
+    draw: ({ props }) => `<div class="txt ${str(props, "size")} ${str(props, "style")}">${bars(num(props, "lines"))}</div>`
+  },
+  {
+    id: "description-list",
+    kind: "primitive",
+    category: "display",
+    namedBy: 2,
+    h: 160,
+    props: { pairs: count(2, 10, 4), layout: choice(["stacked", "inline"]) },
+    draw: ({ props }) => `<dl class="dlist ${str(props, "layout")}">${rowsOf(num(props, "pairs"), (i) => `<div>${bar(30 + i % 3 * 6, "k")}${bar(50 + i % 4 * 9)}</div>`)}</dl>`
+  },
+  {
+    id: "chip",
+    kind: "primitive",
+    category: "display",
+    namedBy: 3,
+    h: 40,
+    props: { count: count(1, 8, 4), selectable: yn(true), removable: yn() },
+    draw: ({ props }) => `<div class="chips">${rowsOf(num(props, "count"), (i) => chip(flag(props, "selectable") && i === 0))}</div>`
+  },
+  {
+    id: "list",
+    kind: "primitive",
+    category: "display",
+    namedBy: 7,
+    h: 320,
+    props: {
+      rows: count(3, 12, 6),
+      leading: choice(["none", "icon", "avatar", "thumbnail", "checkbox"], "icon"),
+      trailing: choice(["none", "chevron", "switch", "meta", "badge"], "chevron"),
+      lines: count(1, 3, 1),
+      dividers: yn(true)
+    },
+    draw: ({ props }) => listRows(props)
+  },
+  // ---- input
+  {
+    id: "button",
+    kind: "primitive",
+    category: "input",
+    namedBy: 9,
+    h: 48,
+    props: {
+      variant: choice(["primary", "secondary", "tertiary", "destructive"]),
+      size: choice(["s", "m", "l"], "m"),
+      icon: choice(["none", "leading", "only"]),
+      state: choice(["default", "disabled", "loading"])
+    },
+    elements: { action: { accepts: ALL_INTENTS, default: "continue" } },
+    draw: ({ props, label, intent }) => {
+      const only = str(props, "icon") === "only";
+      const lead = str(props, "icon") === "leading" ? `${glyph(intent("action"))} ` : "";
+      const inner = only ? glyph(intent("action")) : `${lead}${label("action")}`;
+      return `<div class="actions">${btn(inner, str(props, "variant"), `${str(props, "size")} ${str(props, "state")} block`)}</div>`;
+    }
+  },
+  {
+    id: "button-group",
+    kind: "primitive",
+    category: "input",
+    namedBy: 4,
+    h: 104,
+    props: { count: count(2, 4, 2), variant: choice(["primary-first", "equal"]) },
+    elements: upTo(4, "button", "count", PRIMARY.concat(intentsIn("back", "overlay", "in-place")), ["continue", "cancel", "more", "help"]),
+    draw: ({ props, label }) => `<div class="actions stack">${rowsOf(num(props, "count"), (i) => btn(label(`button-${i + 1}`), i === 0 || str(props, "variant") === "equal" ? i === 0 ? "primary" : "secondary" : "tertiary", "block"))}</div>`
+  },
+  {
+    id: "link",
+    kind: "primitive",
+    category: "navigation",
+    namedBy: 5,
+    h: 32,
+    props: {},
+    elements: { action: { accepts: ALL_INTENTS, default: "help" } },
+    draw: ({ label }) => `<div class="link-row"><span class="lnk">${label("action")}</span></div>`
+  },
+  {
+    id: "search-field",
+    kind: "primitive",
+    category: "navigation",
+    namedBy: 6,
+    h: 56,
+    props: { scope: yn(), state: choice(["empty", "typing", "filled"]) },
+    draw: ({ props }) => `<div class="search"><span class="ico-t">${glyph("search")}</span>${str(props, "state") === "empty" ? `<span class="ph-t">Search</span>` : bar(45, "in")}${flag(props, "scope") ? `<span class="scope">${bar(100, "in")}</span>` : ""}</div>`
+  },
+  {
+    id: "segmented-control",
+    kind: "primitive",
+    category: "input",
+    namedBy: 4,
+    h: 44,
+    props: { count: count(2, 5, 3), selected: index(5) },
+    draw: ({ props }) => `<div class="seg">${rowsOf(num(props, "count"), (i) => `<span class="${i + 1 === sel(props, "selected", "count") ? "on" : ""}">${bar(60, "in")}</span>`)}</div>`
+  },
+  {
+    id: "fab",
+    kind: "primitive",
+    category: "input",
+    namedBy: 2,
+    h: 64,
+    props: { extended: yn() },
+    elements: { action: { accepts: [...intentsIn("form"), "upload", "share", "messages", "search"], default: "add" } },
+    draw: ({ props, label, intent }) => `<div class="fab-wrap"><span class="fab${flag(props, "extended") ? " ext" : ""}">${glyph(intent("action"))}${flag(props, "extended") ? ` ${label("action")}` : ""}</span></div>`
+  },
+  // ---- navigation
+  {
+    id: "app-bar",
+    kind: "primitive",
+    category: "navigation",
+    namedBy: 3,
+    h: 56,
+    props: { title: yn(true), leading: choice(["none", "back", "menu", "close"], "back"), actions: count(0, 3, 1), search: yn() },
+    elements: upTo(3, "action", "actions", ACTIONS, ["more", "share", "add"]),
+    draw: ({ props, label, intent, title }) => {
+      const lead = str(props, "leading");
+      return `<div class="appbar">${lead === "none" ? "" : ibtn(lead, lead === "back" ? "Back" : lead === "menu" ? "Menu" : "Close")}<span class="t">${flag(props, "title") ? title : ""}</span>${flag(props, "search") ? ibtn("search", "Search") : ""}${rowsOf(num(props, "actions"), (i) => ibtn(intent(`action-${i + 1}`), label(`action-${i + 1}`)))}</div>`;
+    }
+  },
+  {
+    id: "tab-bar",
+    kind: "primitive",
+    category: "navigation",
+    namedBy: 4,
+    h: 64,
+    props: { items: count(3, 5, 4), selected: index(5), labels: yn(true) },
+    elements: upTo(5, "tab", "items", NAV_JUMPS, ["home", "search", "notifications", "profile", "settings"]),
+    draw: ({ props, label, intent }) => `<nav class="tabbar">${rowsOf(num(props, "items"), (i) => `<span class="tab${i + 1 === sel(props, "selected", "items") ? " on" : ""}"><b>${glyph(intent(`tab-${i + 1}`))}</b>${flag(props, "labels") ? `<small>${label(`tab-${i + 1}`)}</small>` : ""}</span>`)}</nav>`
+  },
+  {
+    id: "side-nav",
+    kind: "primitive",
+    category: "navigation",
+    namedBy: 4,
+    h: 400,
+    props: { items: count(3, 10, 5), selected: index(10), groups: count(0, 3, 0), collapsed: yn() },
+    elements: upTo(10, "item", "items", NAV_JUMPS, ["home", "search", "notifications", "messages", "settings", "profile", "help", "contact", "terms", "upgrade"]),
+    draw: ({ props, label, intent }) => {
+      const collapsed = flag(props, "collapsed");
+      const groups = num(props, "groups");
+      return `<nav class="sidenav${collapsed ? " collapsed" : ""}">${rowsOf(num(props, "items"), (i) => `${groups > 0 && i > 0 && i % Math.ceil(num(props, "items") / (groups + 1)) === 0 ? `<hr>` : ""}<span class="nav-i${i + 1 === sel(props, "selected", "items") ? " on" : ""}"><b>${glyph(intent(`item-${i + 1}`))}</b>${collapsed ? "" : label(`item-${i + 1}`)}</span>`)}</nav>`;
+    }
+  },
+  {
+    id: "tabs",
+    kind: "primitive",
+    category: "navigation",
+    namedBy: 9,
+    h: 44,
+    props: { count: count(2, 6, 3), selected: index(6), style: choice(["line", "pill", "vertical"]) },
+    draw: ({ props }) => `<div class="tabs ${str(props, "style")}">${rowsOf(num(props, "count"), (i) => `<span class="${i + 1 === sel(props, "selected", "count") ? "on" : ""}">${bar(70, "in")}</span>`)}</div>`
+  },
+  {
+    id: "page-indicator",
+    kind: "primitive",
+    category: "navigation",
+    namedBy: 2,
+    h: 24,
+    props: { count: count(2, 6, 3), current: index(6) },
+    draw: ({ props }) => `<div class="dots">${rowsOf(num(props, "count"), (i) => `<i class="${i + 1 === sel(props, "current", "count") ? "on" : ""}"></i>`)}</div>`
+  },
+  {
+    id: "steps",
+    kind: "primitive",
+    category: "navigation",
+    namedBy: 2,
+    h: 40,
+    props: { count: count(2, 6, 3), current: index(6), labels: yn() },
+    draw: ({ props }) => stepsRow(num(props, "count"), sel(props, "current", "count"), flag(props, "labels"))
+  },
+  // ---- data
+  {
+    id: "chart",
+    kind: "primitive",
+    category: "data",
+    namedBy: 3,
+    h: 200,
+    props: { kind: choice(["bar", "column", "line", "area", "pie", "donut", "sparkline"]), series: count(1, 4, 1), legend: yn() },
+    draw: ({ props }) => chartSvg(str(props, "kind"), num(props, "series"), flag(props, "legend"))
+  },
+  // ---- overlay
+  {
+    id: "drawer",
+    kind: "primitive",
+    category: "overlay",
+    namedBy: 4,
+    h: 480,
+    props: { edge: choice(["left", "right"]), items: count(3, 10, 6) },
+    elements: upTo(10, "item", "items", NAV_JUMPS, ["home", "profile", "notifications", "messages", "settings", "help", "terms", "contact", "search", "upgrade"]),
+    draw: ({ props, label, intent }) => `<div class="drawer ${str(props, "edge")}"><div class="drawer-head">${avatar("m")}${bar(50)}</div>${rowsOf(num(props, "items"), (i) => `<span class="nav-i"><b>${glyph(intent(`item-${i + 1}`))}</b>${label(`item-${i + 1}`)}</span>`)}</div>`
+  },
+  {
+    id: "sheet",
+    kind: "primitive",
+    category: "overlay",
+    namedBy: 2,
+    h: 300,
+    props: { edge: choice(["bottom", "side"]), detent: choice(["half", "full"]), kind: choice(["sheet", "action-sheet"], "action-sheet") },
+    elements: {
+      ...Object.fromEntries(["share", "copy", "delete"].map((dflt, i) => [`action-${i + 1}`, {
+        accepts: [...intentsIn("overlay", "form", "in-place")],
+        default: dflt,
+        when: (p) => p.kind === "action-sheet"
+      }])),
+      primary: { accepts: ALL_INTENTS, default: "done", when: (p) => p.kind === "sheet" },
+      cancel: { accepts: intentsIn("back"), default: "cancel" }
+    },
+    draw: ({ props, label }) => {
+      const action = str(props, "kind") === "action-sheet";
+      const body = action ? `<div class="sheet-actions">${rowsOf(3, (i) => `<span class="sheet-a${i === 2 ? " destructive" : ""}">${label(`action-${i + 1}`)}</span>`)}</div>` : `<div class="grab"></div>${bar(40, "k")}${bars(4)}<div class="actions">${btn(label("primary"), "primary", "block")}</div>`;
+      return `<div class="sheet ${str(props, "edge")} ${str(props, "detent")}">${body}<div class="actions">${btn(label("cancel"), "secondary", "block")}</div></div>`;
+    }
+  },
+  {
+    id: "modal",
+    kind: "primitive",
+    category: "overlay",
+    namedBy: 9,
+    h: 260,
+    props: { kind: choice(["dialog", "alert", "fullscreen"]), actions: count(1, 3, 2), destructive: yn(), dismiss: yn(true) },
+    elements: upTo(3, "action", "actions", [...intentsIn("forward", "back", "overlay")], ["confirm", "cancel", "more"]),
+    draw: ({ props, label }) => `<div class="dialog ${str(props, "kind")}">${flag(props, "dismiss") ? `<span class="x">${glyph("close")}</span>` : ""}${bar(55, "k")}${bars(3)}<div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? flag(props, "destructive") ? "destructive" : "primary" : "secondary"))}</div></div>`
+  }
+];
+function sel(props, key, of) {
+  return Math.min(num(props, key), num(props, of));
+}
+function listRows(props, action = "") {
+  const lead = str(props, "leading");
+  const trail = str(props, "trailing");
+  const leading = (i) => lead === "icon" ? icon() : lead === "avatar" ? avatar("m") : lead === "thumbnail" ? `<span class="thumb"></span>` : lead === "checkbox" ? `<span class="cb${i === 0 ? " on" : ""}"></span>` : "";
+  const trailing = (i) => trail === "chevron" || trail === "action" ? `<span class="chev">\u203A</span>` : trail === "switch" ? toggle(i % 2 === 0) : trail === "meta" ? bar(14, "meta") : trail === "badge" ? `<span class="badge"></span>` : "";
+  return `<div class="list${props.dividers === false ? "" : " div"}">${rowsOf(num(props, "rows"), (i) => `<div class="row">${leading(i)}<div class="row-t">${bars(Number(props.lines ?? 1), i)}</div>${trailing(i)}${action}</div>`)}</div>`;
+}
+function stepsRow(n, current, labels) {
+  return `<div class="steps">${rowsOf(n, (i) => `<span class="step${i + 1 < current ? " done" : i + 1 === current ? " on" : ""}"><b>${i + 1}</b>${labels ? bar(70, "in") : ""}</span>`)}</div>`;
+}
+function chartSvg(kind, series, legend) {
+  const shades = ["#555555", "#8a8a8a", "#b0b0b0", "#cfcfcf"];
+  let marks = "";
+  if (kind === "pie" || kind === "donut") {
+    marks = `<circle cx="100" cy="60" r="48" fill="#cfcfcf"/><path d="M100 60 L100 12 A48 48 0 0 1 145 76 Z" fill="#555555"/>${kind === "donut" ? `<circle cx="100" cy="60" r="24" fill="#ffffff"/>` : ""}`;
+  } else if (kind === "bar" || kind === "column") {
+    const vals = [40, 70, 55, 90, 65, 80];
+    marks = vals.map((v, i) => rowsOf(series, (s) => kind === "column" ? `<rect x="${12 + i * 31 + s * (24 / series)}" y="${110 - v * (1 - s * 0.15)}" width="${24 / series - 1}" height="${v * (1 - s * 0.15)}" fill="${shades[s]}"/>` : `<rect x="10" y="${8 + i * 17 + s * (14 / series)}" width="${v * 1.9 * (1 - s * 0.15)}" height="${14 / series - 1}" fill="${shades[s]}"/>`)).join("");
+  } else {
+    marks = rowsOf(series, (s) => {
+      const pts = [70, 55, 62, 35, 48, 22, 30].map((v, i) => `${10 + i * 30},${v + s * 14}`).join(" ");
+      return kind === "area" ? `<polygon points="10,110 ${pts} 190,110" fill="${shades[s + 1] ?? shades[3]}"/><polyline points="${pts}" fill="none" stroke="${shades[s]}" stroke-width="2"/>` : `<polyline points="${pts}" fill="none" stroke="${shades[s]}" stroke-width="2"/>`;
+    });
+  }
+  const axis2 = kind === "pie" || kind === "donut" || kind === "sparkline" ? "" : `<line x1="8" y1="110" x2="194" y2="110" stroke="#c8c8c8"/>`;
+  return `<div class="chart k-${esc(kind)}"><svg viewBox="0 0 200 ${kind === "sparkline" ? 90 : 116}" preserveAspectRatio="none">${axis2}${marks}</svg>${legend ? `<div class="legend">${rowsOf(series, (s) => `<span><i style="background:${shades[s]}"></i>${bar(100, "in")}</span>`)}</div>` : ""}</div>`;
+}
+
+// packages/modules/wireframe/src/catalog/blocks.ts
+var FORWARD = intentsIn("forward");
+var BACKS = intentsIn("back");
+var JUMPS = intentsIn("jump");
+var FIELD_KINDS = ["Email", "Password", null, "Phone", null, null, "Number", null, null, null];
+var BLOCKS = [
+  // ---- navigation
+  {
+    id: "navbar",
+    kind: "block",
+    category: "navigation",
+    namedBy: 4,
+    h: 64,
+    props: { links: count(3, 7, 4), cta: count(0, 2, 1), search: yn(), mobile: choice(["hamburger", "links"]) },
+    elements: {
+      ...upTo(7, "link", "links", JUMPS, ["home", "search", "upgrade", "contact", "help", "terms", "messages"]),
+      ...upTo(2, "cta", "cta", [...intentsIn("auth", "forward"), ...JUMPS], ["sign-up", "sign-in"])
+    },
+    draw: ({ props, label, wide }) => {
+      const links = wide || str(props, "mobile") === "links" ? `<span class="links">${rowsOf(num(props, "links"), (i) => `<span class="lnk">${label(`link-${i + 1}`)}</span>`)}</span>` : "";
+      return `<div class="navbar"><span class="brand">${img("1/1", "sm")}</span>${links}<span class="sp"></span>${flag(props, "search") ? ibtn("search", "Search") : ""}${rowsOf(num(props, "cta"), (i) => btn(label(`cta-${i + 1}`), i === 0 ? "primary" : "secondary", "s"))}${!wide && str(props, "mobile") === "hamburger" ? ibtn("menu", "Menu") : ""}</div>`;
+    }
+  },
+  // ---- layout
+  {
+    id: "app-shell",
+    kind: "block",
+    category: "layout",
+    namedBy: 2,
+    h: 24,
+    props: { nav: choice(["top", "side", "bottom", "none"], "bottom"), aside: yn() },
+    draw: ({ wide }) => wide ? `<div class="chrome web"><i></i><i></i><i></i>${bar(30, "url")}</div>` : `<div class="chrome app">${bar(12, "clock")}<span class="sp"></span><i></i><i></i><i></i></div>`
+  },
+  {
+    id: "page-header",
+    kind: "block",
+    category: "layout",
+    namedBy: 1,
+    h: 96,
+    props: { breadcrumbs: yn(), actions: count(0, 3, 1), tabs: yn(), meta: yn() },
+    elements: upTo(3, "action", "actions", [...intentsIn("form", "overlay", "forward"), ...JUMPS], ["add", "share", "more"]),
+    draw: ({ props, label, title }) => `<div class="pagehead">${flag(props, "breadcrumbs") ? `<div class="crumbs">${bar(12, "in")}<span>/</span>${bar(12, "in")}<span>/</span>${bar(14, "in")}</div>` : ""}<div class="ph-row"><div class="h h1">${title}</div><span class="sp"></span>${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary", "s"))}</div>${flag(props, "meta") ? bar(35, "meta") : ""}${flag(props, "tabs") ? `<div class="tabs line">${rowsOf(3, (i) => `<span class="${i === 0 ? "on" : ""}">${bar(70, "in")}</span>`)}</div>` : ""}</div>`
+  },
+  // ---- auth
+  {
+    id: "sign-in-form",
+    kind: "block",
+    category: "auth",
+    namedBy: 3,
+    h: 360,
+    props: { social: count(0, 3, 0), remember: yn(), forgot: yn(true), "signup-link": yn(true) },
+    elements: {
+      submit: { accepts: ["sign-in", "continue", "next"], default: "sign-in" },
+      ...upTo(3, "social", "social", ["sign-in", "continue"], ["continue"]),
+      remember: { accepts: ["remember"], default: "remember", when: (p) => p.remember === true },
+      forgot: { accepts: ["forgot-password", "help"], default: "forgot-password", when: (p) => p.forgot === true },
+      "signup-link": { accepts: ["sign-up"], default: "sign-up", when: (p) => p["signup-link"] === true }
+    },
+    draw: ({ props, label }) => `<div class="form">${field("Email")}${field("Password", 1)}${flag(props, "remember") || flag(props, "forgot") ? `<div class="between">${flag(props, "remember") ? check(label("remember")) : "<span></span>"}${flag(props, "forgot") ? `<span class="lnk">${label("forgot")}</span>` : ""}</div>` : ""}<div class="actions">${btn(label("submit"), "primary", "block")}</div>${num(props, "social") > 0 ? `<div class="or">${bar(100, "rule")}</div><div class="actions stack">${rowsOf(num(props, "social"), (i) => btn(`<span class="logo-dot"></span>${label(`social-${i + 1}`)}`, "secondary", "block"))}</div>` : ""}${flag(props, "signup-link") ? `<div class="link-row">${bar(28, "in")}<span class="lnk">${label("signup-link")}</span></div>` : ""}</div>`
+  },
+  {
+    id: "sign-up-form",
+    kind: "block",
+    category: "auth",
+    namedBy: 3,
+    h: 420,
+    props: { fields: count(2, 6, 3), social: count(0, 3, 0), terms: yn(true), "signin-link": yn(true) },
+    elements: {
+      submit: { accepts: ["sign-up", "continue", "next", "submit"], default: "sign-up" },
+      ...upTo(3, "social", "social", ["sign-up", "continue"], ["continue"]),
+      terms: { accepts: ["terms", "accept"], default: "terms", when: (p) => p.terms === true },
+      "signin-link": { accepts: ["sign-in"], default: "sign-in", when: (p) => p["signin-link"] === true }
+    },
+    draw: ({ props, label }) => `<div class="form">${rowsOf(num(props, "fields"), (i) => field(i === 0 ? null : FIELD_KINDS[i - 1] ?? null, i))}${flag(props, "terms") ? `<div class="chk"><span class="cb"></span>${bar(30, "in")}<span class="lnk">${label("terms")}</span></div>` : ""}<div class="actions">${btn(label("submit"), "primary", "block")}</div>${num(props, "social") > 0 ? `<div class="actions stack">${rowsOf(num(props, "social"), (i) => btn(`<span class="logo-dot"></span>${label(`social-${i + 1}`)}`, "secondary", "block"))}</div>` : ""}${flag(props, "signin-link") ? `<div class="link-row">${bar(28, "in")}<span class="lnk">${label("signin-link")}</span></div>` : ""}</div>`
+  },
+  {
+    id: "verify-code",
+    kind: "block",
+    category: "auth",
+    namedBy: 2,
+    h: 260,
+    props: { digits: count(4, 8, 6), resend: yn(true) },
+    elements: {
+      submit: { accepts: FORWARD, default: "confirm" },
+      resend: { accepts: ["retry"], default: "retry", when: (p) => p.resend === true }
+    },
+    draw: ({ props, label }) => `<div class="form center">${bars(2)}<div class="code">${rowsOf(num(props, "digits"), () => "<span></span>")}</div><div class="actions">${btn(label("submit"), "primary", "block")}</div>${flag(props, "resend") ? `<div class="link-row">${bar(24, "in")}<span class="lnk">${label("resend")}</span></div>` : ""}</div>`
+  },
+  {
+    id: "forgot-password",
+    kind: "block",
+    category: "auth",
+    namedBy: 1,
+    h: 240,
+    props: { step: choice(["request", "sent"]) },
+    elements: {
+      submit: { accepts: FORWARD, default: "continue", when: (p) => p.step === "request" },
+      back: { accepts: ["sign-in", "back"], default: "sign-in" }
+    },
+    draw: ({ props, label }) => str(props, "step") === "request" ? `<div class="form">${bars(2)}${field("Email")}<div class="actions">${btn(label("submit"), "primary", "block")}</div><div class="link-row"><span class="lnk">${label("back")}</span></div></div>` : `<div class="form center"><div class="glyph">\u2709</div>${bars(2)}<div class="actions">${btn(label("back"), "secondary", "block")}</div></div>`
+  },
+  // ---- onboarding
+  {
+    id: "onboarding-step",
+    kind: "block",
+    category: "onboarding",
+    namedBy: 4,
+    h: 480,
+    props: { media: choice(["illustration", "image", "none"]), steps: count(2, 5, 3), current: index(5), skip: yn(true) },
+    elements: {
+      next: { accepts: FORWARD, default: "next" },
+      skip: { accepts: ["skip"], default: "skip", when: (p) => p.skip === true }
+    },
+    draw: ({ props, label }) => `<div class="onb">${flag(props, "skip") ? `<div class="right"><span class="lnk">${label("skip")}</span></div>` : ""}${str(props, "media") === "none" ? "" : img(str(props, "media") === "image" ? "4/3" : "1/1", str(props, "media"))}<div class="center">${bar(60, "k")}${bars(2)}</div><div class="dots">${rowsOf(num(props, "steps"), (i) => `<i class="${i + 1 === sel(props, "current", "steps") ? "on" : ""}"></i>`)}</div><div class="actions">${btn(label("next"), "primary", "block")}</div></div>`
+  },
+  // ---- input
+  {
+    id: "wizard",
+    kind: "block",
+    category: "input",
+    namedBy: 3,
+    h: 420,
+    props: { steps: count(2, 6, 3), current: index(6), summary: yn() },
+    elements: {
+      next: { accepts: FORWARD, default: "next" },
+      back: { accepts: BACKS, default: "back" }
+    },
+    draw: ({ props, label }) => `<div class="wizard">${stepsRow(num(props, "steps"), sel(props, "current", "steps"), true)}${flag(props, "summary") ? `<div class="card">${bars(2)}</div>` : ""}${field(null, 0)}${field(null, 1)}${field(null, 2)}<div class="actions row">${btn(label("back"), "secondary")}${btn(label("next"), "primary")}</div></div>`
+  },
+  {
+    id: "form-block",
+    kind: "block",
+    category: "input",
+    namedBy: 5,
+    h: 400,
+    props: { fields: count(2, 10, 4), sections: count(1, 3, 1), actions: choice(["submit", "submit+cancel"]) },
+    elements: {
+      submit: { accepts: FORWARD, default: "save" },
+      cancel: { accepts: BACKS, default: "cancel", when: (p) => p.actions === "submit+cancel" }
+    },
+    draw: ({ props, label }) => {
+      const perSection = Math.ceil(num(props, "fields") / num(props, "sections"));
+      let i = 0;
+      const sections = rowsOf(num(props, "sections"), (s) => {
+        let out = num(props, "sections") > 1 ? `<div class="sec">${bar(35, "k")}</div>` : "";
+        for (let j = 0; j < perSection && i < num(props, "fields"); j++, i++) out += field(null, i + s);
+        return out;
+      });
+      return `<div class="form">${sections}<div class="actions row">${str(props, "actions") === "submit+cancel" ? btn(label("cancel"), "secondary") : ""}${btn(label("submit"), "primary")}</div></div>`;
+    }
+  },
+  {
+    id: "filter-panel",
+    kind: "block",
+    category: "input",
+    namedBy: 3,
+    h: 360,
+    props: { groups: count(2, 6, 3), apply: yn(true) },
+    elements: {
+      apply: { accepts: ["apply", "done"], default: "apply", when: (p) => p.apply === true },
+      reset: { accepts: BACKS, default: "cancel", when: (p) => p.apply === true }
+    },
+    draw: ({ props, label }) => `<div class="filters">${bar(35, "k")}${rowsOf(num(props, "groups"), (g) => `<div class="grp">${bar(30 + g % 3 * 8, "k")}${rowsOf(3, (i) => `<div class="chk"><span class="cb${(i + g) % 3 === 0 ? " on" : ""}"></span>${bar(50 + i * 10, "in")}</div>`)}</div>`)}${flag(props, "apply") ? `<div class="actions row">${btn(label("reset"), "secondary")}${btn(label("apply"), "primary")}</div>` : ""}</div>`
+  },
+  {
+    id: "settings-group",
+    kind: "block",
+    category: "input",
+    namedBy: 5,
+    h: 420,
+    props: { groups: count(1, 4, 2), rows: count(2, 8, 4), row: choice(["switch", "chevron", "value", "mixed"], "mixed") },
+    draw: ({ props }) => {
+      const kind = str(props, "row");
+      const trail = (i) => {
+        const k = kind === "mixed" ? ["switch", "chevron", "value"][i % 3] : kind;
+        return k === "switch" ? toggle(i % 2 === 0) : k === "chevron" ? `<span class="chev">\u203A</span>` : bar(18, "meta");
+      };
+      return `<div class="settings">${rowsOf(num(props, "groups"), (g) => `<div class="sec">${bar(25 + g * 5, "k")}</div><div class="list div inset">${rowsOf(num(props, "rows"), (i) => `<div class="row">${icon()}<div class="row-t">${bar(40 + (i + g) % 4 * 10)}</div>${trail(i)}</div>`)}</div>`)}</div>`;
+    }
+  },
+  // ---- data
+  {
+    id: "stats-row",
+    kind: "block",
+    category: "data",
+    namedBy: 4,
+    h: 104,
+    props: { count: count(2, 4, 3), trend: yn(true), chart: yn() },
+    draw: ({ props }) => `<div class="stats c${num(props, "count")}">${rowsOf(num(props, "count"), (i) => `<div class="stat">${bar(60, "k")}<div class="big">${bar(50 + i % 3 * 12, "fat")}</div>${flag(props, "trend") ? `<span class="trend">${i % 2 ? "\u25BC" : "\u25B2"} ${bar(30, "in")}</span>` : ""}${flag(props, "chart") ? chartSvg("sparkline", 1, false) : ""}</div>`)}</div>`
+  },
+  {
+    id: "stacked-list",
+    kind: "block",
+    category: "data",
+    namedBy: 3,
+    h: 360,
+    props: {
+      rows: count(3, 12, 6),
+      leading: choice(["icon", "avatar", "thumbnail", "none"], "avatar"),
+      trailing: choice(["chevron", "meta", "action", "none"]),
+      sections: count(0, 3, 0)
+    },
+    elements: { "row-action": { accepts: [...intentsIn("in-place", "overlay")], default: "follow", when: (p) => p.trailing === "action" } },
+    draw: ({ props, label }) => {
+      const sections = num(props, "sections");
+      const rows2 = num(props, "rows");
+      const per = sections > 0 ? Math.ceil(rows2 / sections) : rows2;
+      const body = (n) => listRows({ rows: n, leading: str(props, "leading"), trailing: str(props, "trailing") === "action" ? "none" : str(props, "trailing"), lines: 2, dividers: true }, str(props, "trailing") === "action" ? btn(label("row-action"), "secondary", "s") : "");
+      if (sections === 0) return body(rows2);
+      return rowsOf(sections, (s) => `<div class="sec">${bar(22 + s * 6, "k")}</div>${body(Math.min(per, rows2 - s * per))}`);
+    }
+  },
+  {
+    id: "card-grid",
+    kind: "block",
+    category: "data",
+    namedBy: 3,
+    h: 400,
+    props: { items: count(3, 12, 6), columns: count(2, 4, 2), media: yn(true) },
+    draw: ({ props, wide }) => `<div class="grid" style="grid-template-columns:repeat(${wide ? num(props, "columns") : Math.min(2, num(props, "columns"))},1fr)">${rowsOf(num(props, "items"), (i) => `<div class="card">${flag(props, "media") ? img("4/3") : ""}${bar(70 - i % 3 * 10, "k")}${bar(45)}</div>`)}</div>`
+  },
+  {
+    id: "data-table",
+    kind: "block",
+    category: "data",
+    namedBy: 4,
+    h: 420,
+    props: { columns: count(3, 8, 4), rows: count(5, 15, 6), toolbar: yn(true), pagination: yn(), select: yn() },
+    elements: upTo(3, "tool", "toolbar", [...intentsIn("overlay", "form"), "search"], ["filter", "sort", "add"]),
+    draw: ({ props, label, intent, wide }) => {
+      const cols = wide ? num(props, "columns") : Math.min(3, num(props, "columns"));
+      const cell = (i, j) => `<td>${bar(40 + (i + j) % 5 * 12, j === 0 ? "k" : "")}</td>`;
+      return `<div class="table">${flag(props, "toolbar") ? `<div class="toolbar"><div class="search sm"><span class="ico-t">${glyph("search")}</span><span class="ph-t">Search</span></div><span class="sp"></span>${rowsOf(3, (i) => i === 2 ? btn(label("tool-3"), "primary", "s") : ibtn(intent(`tool-${i + 1}`), label(`tool-${i + 1}`)))}</div>` : ""}<table><thead><tr>${flag(props, "select") ? `<th class="sel"><span class="cb"></span></th>` : ""}${rowsOf(cols, (j) => `<th>${bar(50, "k")}</th>`)}</tr></thead><tbody>${rowsOf(num(props, "rows"), (i) => `<tr>${flag(props, "select") ? `<td class="sel"><span class="cb${i === 1 ? " on" : ""}"></span></td>` : ""}${rowsOf(cols, (j) => cell(i, j))}</tr>`)}</tbody></table>${flag(props, "pagination") ? `<div class="pager"><span>\u2039</span><span class="on">1</span><span>2</span><span>3</span><span>\u203A</span></div>` : ""}</div>`;
+    }
+  },
+  // ---- content
+  {
+    id: "blog-list",
+    kind: "block",
+    category: "content",
+    namedBy: 3,
+    h: 420,
+    props: { posts: count(3, 9, 4), layout: choice(["list", "grid", "featured"]) },
+    draw: ({ props, wide }) => {
+      const layout = str(props, "layout");
+      const post = (i) => `<div class="post ${layout}">${img(layout === "list" ? "1/1" : "16/9", layout === "list" ? "thumb-img" : "")}<div>${bar(35, "meta")}${bar(85 - i % 3 * 10, "k")}${bars(2, i)}</div></div>`;
+      if (layout === "grid") return `<div class="grid" style="grid-template-columns:repeat(${wide ? 3 : 2},1fr)">${rowsOf(num(props, "posts"), post)}</div>`;
+      return `<div class="posts">${rowsOf(num(props, "posts"), (i) => layout === "featured" && i === 0 ? `<div class="post featured-top">${img("16/9")}${bar(90, "k")}${bars(2)}</div>` : post(i))}</div>`;
+    }
+  },
+  {
+    id: "long-form",
+    kind: "block",
+    category: "content",
+    namedBy: 3,
+    h: 480,
+    props: { sections: count(1, 6, 3), toc: yn() },
+    draw: ({ props }) => `<div class="long">${flag(props, "toc") ? `<div class="toc">${rowsOf(num(props, "sections"), (i) => bar(40 + i % 3 * 12, "in"))}</div>` : ""}${rowsOf(num(props, "sections"), (s) => `<div class="sec">${bar(45 + s % 3 * 10, "k")}</div>${bars(4, s)}`)}</div>`
+  },
+  {
+    id: "detail-header",
+    kind: "block",
+    category: "content",
+    namedBy: 2,
+    h: 320,
+    props: { media: choice(["none", "hero", "carousel"], "hero"), meta: count(0, 4, 2), actions: count(0, 3, 2) },
+    elements: upTo(3, "action", "actions", [...intentsIn("form", "overlay", "in-place"), "buy", "cart", "messages"], ["edit", "share", "like"]),
+    draw: ({ props, label }) => `<div class="detail">${str(props, "media") === "none" ? "" : `${img("16/9")}${str(props, "media") === "carousel" ? `<div class="dots">${rowsOf(4, (i) => `<i class="${i === 0 ? "on" : ""}"></i>`)}</div>` : ""}`}${bar(75, "title")}<div class="metas">${rowsOf(num(props, "meta"), (i) => `<span class="meta-i">${icon()}${bar(60 + i % 2 * 20, "in")}</span>`)}</div><div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary"))}</div></div>`
+  },
+  // ---- social
+  {
+    id: "comment-list",
+    kind: "block",
+    category: "social",
+    namedBy: 1,
+    h: 360,
+    props: { comments: count(2, 10, 3), nested: yn(), composer: yn(true) },
+    elements: { post: { accepts: ["submit", "done", "save"], default: "submit", when: (p) => p.composer === true } },
+    draw: ({ props, label }) => `<div class="comments">${bar(25, "k")}${rowsOf(num(props, "comments"), (i) => `<div class="comment${flag(props, "nested") && i % 2 === 1 ? " nested" : ""}">${avatar("s")}<div class="row-t">${bar(30, "k")}${bars(2, i)}</div></div>`)}${flag(props, "composer") ? `<div class="composer"><div class="box">${bar(40, "ph")}</div>${btn(label("post"), "primary", "s")}</div>` : ""}</div>`
+  },
+  {
+    id: "profile-header",
+    kind: "block",
+    category: "social",
+    namedBy: 2,
+    h: 240,
+    props: { avatar: choice(["s", "l"], "l"), stats: count(0, 3, 3), actions: count(0, 2, 1), cover: yn() },
+    elements: upTo(2, "action", "actions", ["follow", "messages", "edit", "share", "settings", "more"], ["edit", "share"]),
+    draw: ({ props, label }) => `<div class="profile${flag(props, "cover") ? " covered" : ""}">${flag(props, "cover") ? img("3/1", "cover") : ""}${avatar(str(props, "avatar") === "l" ? "l" : "m")}${bar(40, "title")}${bar(28, "meta")}${num(props, "stats") > 0 ? `<div class="pstats">${rowsOf(num(props, "stats"), () => `<span>${bar(50, "fat")}${bar(70, "in")}</span>`)}</div>` : ""}<div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary"))}</div></div>`
+  },
+  {
+    id: "feed-post",
+    kind: "block",
+    category: "social",
+    namedBy: 2,
+    h: 440,
+    props: { media: choice(["none", "image", "video", "link"], "image"), actions: count(2, 4, 3), count: count(1, 6, 2) },
+    elements: upTo(4, "action", "actions", [...intentsIn("in-place", "overlay"), "messages"], ["like", "messages", "share", "more"]),
+    draw: ({ props, label, intent }) => rowsOf(num(props, "count"), (p) => {
+      const media = str(props, "media");
+      return `<div class="fpost"><div class="fhead">${avatar("s")}<div class="row-t">${bar(35, "k")}${bar(20, "meta")}</div></div>${bars(2, p)}${media === "image" ? img("4/3") : media === "video" ? `<div class="video">${img("16/9")}<span class="play">\u25B6</span></div>` : media === "link" ? `<div class="linkcard">${img("1/1", "thumb-img")}<div>${bar(70, "k")}${bar(40, "meta")}</div></div>` : ""}<div class="factions">${rowsOf(num(props, "actions"), (i) => `<span class="fa">${glyph(intent(`action-${i + 1}`))} ${label(`action-${i + 1}`)}</span>`)}</div></div>`;
+    })
+  },
+  // ---- media
+  {
+    id: "gallery-section",
+    kind: "block",
+    category: "media",
+    namedBy: 3,
+    h: 440,
+    props: { items: count(4, 12, 9), layout: choice(["grid", "masonry", "carousel"]) },
+    draw: ({ props, wide }) => {
+      const layout = str(props, "layout");
+      if (layout === "carousel") return `<div class="carousel">${img("4/3")}<div class="dots">${rowsOf(Math.min(6, num(props, "items")), (i) => `<i class="${i === 0 ? "on" : ""}"></i>`)}</div></div>`;
+      const ratios = layout === "masonry" ? ["3/4", "1/1", "4/3", "1/1", "3/4", "4/3"] : ["1/1"];
+      return `<div class="${layout === "masonry" ? "masonry" : "grid tight"}" style="${layout === "masonry" ? `column-count:${wide ? 4 : 2}` : `grid-template-columns:repeat(${wide ? 4 : 3},1fr)`}">${rowsOf(num(props, "items"), (i) => img(ratios[i % ratios.length]))}</div>`;
+    }
+  },
+  // ---- commerce
+  {
+    id: "product-card-list",
+    kind: "block",
+    category: "commerce",
+    namedBy: 2,
+    h: 440,
+    props: { items: count(3, 12, 6), layout: choice(["grid", "list"]), price: yn(true), rating: yn() },
+    draw: ({ props, wide }) => {
+      const card = (i) => `<div class="card product">${img(str(props, "layout") === "list" ? "1/1" : "1/1", str(props, "layout") === "list" ? "thumb-img" : "")}<div>${bar(75 - i % 3 * 10, "k")}${flag(props, "rating") ? `<span class="stars">\u2605\u2605\u2605\u2605\u2606</span>` : ""}${flag(props, "price") ? bar(30, "fat") : ""}</div></div>`;
+      return str(props, "layout") === "list" ? `<div class="plist">${rowsOf(num(props, "items"), card)}</div>` : `<div class="grid" style="grid-template-columns:repeat(${wide ? 4 : 2},1fr)">${rowsOf(num(props, "items"), card)}</div>`;
+    }
+  },
+  // ---- feedback
+  {
+    id: "empty-state",
+    kind: "block",
+    category: "feedback",
+    namedBy: 2,
+    h: 320,
+    props: { media: yn(true), action: count(0, 2, 1), cause: choice(["first-use", "no-results", "cleared"]) },
+    elements: upTo(2, "action", "action", [...intentsIn("form", "forward", "jump"), "retry", "upload"], ["add", "search"]),
+    draw: ({ props, label }) => `<div class="state">${flag(props, "media") ? img("1/1", "sm") : ""}${bar(55, "title")}${bars(2)}<div class="actions stack">${rowsOf(num(props, "action"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary"))}</div></div>`
+  },
+  {
+    id: "error-state",
+    kind: "block",
+    category: "feedback",
+    namedBy: 1,
+    h: 320,
+    props: { kind: choice(["404", "offline", "generic", "permission"]), retry: yn(true) },
+    elements: { retry: { accepts: ["retry", "back", "home"], default: "retry", when: (p) => p.retry === true } },
+    draw: ({ props, label }) => {
+      const name = { "404": "404", offline: "Offline", generic: "Error", permission: "No access" }[str(props, "kind")];
+      return `<div class="state"><div class="glyph big">${name}</div>${bars(2)}<div class="actions stack">${flag(props, "retry") ? btn(label("retry"), "primary") : ""}</div></div>`;
+    }
+  },
+  {
+    id: "success-state",
+    kind: "block",
+    category: "feedback",
+    namedBy: 2,
+    h: 320,
+    props: { summary: yn(), actions: count(1, 2, 1) },
+    elements: upTo(2, "action", "actions", [...FORWARD, ...JUMPS], ["done", "home"]),
+    draw: ({ props, label }) => `<div class="state"><div class="glyph">\u2713</div>${bar(50, "title")}${bars(2)}${flag(props, "summary") ? `<div class="card">${bars(3)}</div>` : ""}<div class="actions stack">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary"))}</div></div>`
+  },
+  // ---- overlay
+  {
+    id: "confirm-dialog",
+    kind: "block",
+    category: "overlay",
+    namedBy: 3,
+    h: 220,
+    props: { destructive: yn(), input: yn() },
+    elements: {
+      confirm: { accepts: ["confirm", "delete", "accept", "done", "submit", "log-out"], default: "confirm" },
+      cancel: { accepts: BACKS, default: "cancel" }
+    },
+    draw: ({ props, label }) => `<div class="dialog">${bar(60, "title")}${bars(2)}${flag(props, "input") ? field(null) : ""}<div class="actions row">${btn(label("cancel"), "secondary")}${btn(label("confirm"), flag(props, "destructive") ? "destructive" : "primary")}</div></div>`
+  }
+];
+
+// packages/modules/wireframe/src/catalog/archetypes.ts
+var ARCHETYPE_IDS = [
+  "welcome",
+  "onboarding",
+  "sign-in",
+  "sign-up",
+  "verify",
+  "home",
+  "list",
+  "gallery",
+  "detail",
+  "form",
+  "settings",
+  "menu",
+  "profile",
+  "feed",
+  "search",
+  "confirm",
+  "state",
+  "legal",
+  "storefront",
+  "cart",
+  "checkout",
+  "order-placed",
+  "pricing",
+  "landing",
+  "about",
+  "contact",
+  "blog",
+  "master-detail",
+  "chat",
+  "notifications",
+  "player",
+  "map",
+  "editor",
+  "comments"
+];
+var WAVE_1 = [
+  {
+    id: "welcome",
+    title: "Welcome",
+    platforms: ["app"],
+    recipe: "main: image \u2192 heading \u2192 text? \u2192 (button | button-group) \u2192 link?",
+    intents: { button: { action: "get-started" }, "button-group": { "button-1": "get-started", "button-2": "sign-in" }, link: { action: "sign-in" } }
+  },
+  {
+    id: "onboarding",
+    title: "Onboarding",
+    platforms: ["app"],
+    recipe: "main: onboarding-step | wizard; footer: (page-indicator | steps) \u2192 (button | button-group)",
+    intents: { button: { action: "next" }, "button-group": { "button-1": "next", "button-2": "skip" } }
+  },
+  {
+    id: "sign-in",
+    title: "Sign in",
+    platforms: ["app", "site"],
+    recipe: "header: (app-bar | navbar)?; main: image? \u2192 heading \u2192 sign-in-form; footer: link?",
+    intents: { link: { action: "sign-up" } }
+  },
+  {
+    id: "sign-up",
+    title: "Sign up",
+    platforms: ["app", "site"],
+    recipe: "header: app-bar?; main: heading \u2192 (sign-up-form | wizard); footer: link?",
+    intents: { link: { action: "sign-in" }, wizard: { next: "continue" } }
+  },
+  {
+    id: "verify",
+    title: "Verify",
+    platforms: ["app", "site"],
+    recipe: "header: app-bar; main: verify-code | forgot-password"
+  },
+  {
+    id: "home",
+    title: "Home",
+    platforms: ["app", "web"],
+    recipe: "shell: app-shell; header: app-bar | page-header; nav: tab-bar | side-nav; main: stats-row? \u2192 chart? \u2192 (data-table | stacked-list | card-grid | feed-post); aside: (filter-panel | stacked-list)?",
+    intents: { "app-bar": { "action-1": "notifications", "action-2": "search", "action-3": "add" } }
+  },
+  {
+    id: "list",
+    title: "List",
+    platforms: ["app", "web"],
+    recipe: "header: app-bar | page-header; nav: (tab-bar | side-nav)?; main: search-field? \u2192 (chip | segmented-control | tabs)? \u2192 (stacked-list | card-grid | data-table); fab: fab?",
+    intents: { "app-bar": { "action-1": "filter", "action-2": "sort", "action-3": "add" } }
+  },
+  {
+    id: "gallery",
+    title: "Gallery",
+    platforms: ["app", "site"],
+    recipe: "header: app-bar | navbar; main: chip? \u2192 (card-grid | gallery-section | product-card-list)",
+    intents: { "app-bar": { "action-1": "search", "action-2": "filter", "action-3": "share" } }
+  },
+  {
+    id: "detail",
+    title: "Detail",
+    platforms: ["app", "web"],
+    recipe: "header: app-bar; main: detail-header \u2192 (text | long-form | description-list) \u2192 (comment-list | card-grid)?; footer: (button | button-group)?",
+    intents: { "app-bar": { "action-1": "share", "action-2": "more", "action-3": "edit" }, button: { action: "edit" }, "button-group": { "button-1": "edit", "button-2": "delete" } }
+  },
+  {
+    id: "form",
+    title: "Form",
+    platforms: ["app", "web"],
+    recipe: "header: app-bar | page-header; main: form-block | wizard; footer: button | button-group",
+    intents: { "app-bar": { "action-1": "info", "action-2": "more", "action-3": "help" }, button: { action: "save" }, "button-group": { "button-1": "save", "button-2": "cancel" } }
+  },
+  {
+    id: "settings",
+    title: "Settings",
+    platforms: ["app", "web"],
+    recipe: "header: app-bar | page-header; nav: side-nav?; main: profile-header? \u2192 (settings-group | form-block)",
+    intents: { "app-bar": { "action-1": "help", "action-2": "more", "action-3": "info" }, "page-header": { "action-1": "save", "action-2": "help", "action-3": "more" } }
+  },
+  {
+    id: "menu",
+    title: "Menu",
+    platforms: ["app"],
+    recipe: "main: profile-header? \u2192 list; overlay: drawer | sheet"
+  },
+  {
+    id: "profile",
+    title: "Profile",
+    platforms: ["app", "web"],
+    recipe: "header: app-bar; main: profile-header \u2192 (tabs | segmented-control)? \u2192 (card-grid | stacked-list | feed-post)",
+    intents: { "app-bar": { "action-1": "settings", "action-2": "share", "action-3": "more" } }
+  },
+  {
+    id: "feed",
+    title: "Feed",
+    platforms: ["app"],
+    recipe: "header: app-bar; nav: tab-bar; main: (tabs | chip)? \u2192 (feed-post | blog-list); fab: fab?",
+    intents: { "app-bar": { "action-1": "messages", "action-2": "notifications", "action-3": "search" } }
+  },
+  {
+    id: "search",
+    title: "Search",
+    platforms: ["app", "web"],
+    recipe: "header: search-field; main: chip? \u2192 (stacked-list | card-grid | empty-state); aside: filter-panel?"
+  },
+  {
+    id: "confirm",
+    title: "Confirm",
+    platforms: ["app", "web"],
+    recipe: "overlay: confirm-dialog | sheet | modal"
+  },
+  {
+    id: "state",
+    title: "Status",
+    platforms: ["app", "web"],
+    recipe: "main: empty-state | error-state | success-state"
+  },
+  {
+    id: "legal",
+    title: "Terms",
+    platforms: ["app", "site"],
+    recipe: "header: app-bar; main: long-form; footer: button?",
+    intents: { button: { action: "accept" }, "app-bar": { "action-1": "share", "action-2": "info", "action-3": "more" } }
+  }
+];
+var REGIONS = ["shell", "header", "nav", "main", "aside", "footer", "fab", "overlay"];
+function parseRecipe(text) {
+  const sections = [];
+  for (const part of text.split(";")) {
+    const m = /^\s*([a-z]+):\s*(.+?)\s*$/.exec(part);
+    if (!m) throw new Error(`recipe part does not read as "region: sequence": ${part}`);
+    const region = m[1];
+    if (!REGIONS.includes(region)) throw new Error(`unknown region "${region}"`);
+    const body = m[2];
+    const items = body.includes("\u2192") || !body.includes("|") || body.startsWith("(") ? body.split("\u2192") : [body];
+    const inRegion = items.map((raw) => {
+      let item = raw.trim();
+      const optional = item.endsWith("?");
+      if (optional) item = item.slice(0, -1).trim();
+      if (item.startsWith("(") && item.endsWith(")")) item = item.slice(1, -1);
+      const options = item.split("|").map((o) => o.trim());
+      for (const o of options) if (!/^[a-z][a-z-]*$/.test(o)) throw new Error(`"${o}" is not a component id`);
+      return { region, options, optional };
+    });
+    inRegion.forEach((s, i) => sections.push({ slot: inRegion.length === 1 ? region : `${region}.${i + 1}`, ...s }));
+  }
+  return sections;
+}
+var RECIPES = WAVE_1.map(({ recipe: recipe2, ...rest }) => ({ ...rest, sections: parseRecipe(recipe2) }));
+var RECIPE_BY_ID = new Map(RECIPES.map((r) => [r.id, r]));
+
+// packages/modules/wireframe/src/catalog/index.ts
+var COMPONENTS = new Map([...PRIMITIVES, ...BLOCKS].map((c) => [c.id, c]));
+function component(id3) {
+  const found = COMPONENTS.get(id3);
+  if (!found) throw new Error(`no component "${id3}" in the wireframe catalog`);
+  return found;
+}
+
+// packages/modules/wireframe/src/spec.ts
+var PLATFORMS = ["app", "web", "site"];
+var PLATFORM_SIZE = {
+  app: { width: 390, height: 844 },
+  web: { width: 1280, height: 800 },
+  site: { width: 1280, height: 800 }
+};
+var CAPTION_HEIGHT = 32;
+function recipe(archetype) {
+  const found = RECIPE_BY_ID.get(archetype);
+  if (!found) {
+    const known = ARCHETYPE_IDS.includes(archetype);
+    throw new Error(
+      known ? `"${archetype}" is a later wave's archetype and has no recipe yet \u2014 wave 1 is: ${RECIPES.map((r) => r.id).join(", ")}` : `no archetype "${archetype}" \u2014 wave 1 is: ${RECIPES.map((r) => r.id).join(", ")}`
+    );
+  }
+  return found;
+}
+function sectionOf(r, slot) {
+  const found = r.sections.find((s) => s.slot === slot);
+  if (!found) throw new Error(`${r.id} has no slot "${slot}" \u2014 it has ${r.sections.map((s) => s.slot).join(", ")}`);
+  return found;
+}
+function defaultProps(c) {
+  const out = {};
+  for (const [key, def] of Object.entries(c.props)) out[key] = def.default;
+  return out;
+}
+function presentElements(c, props) {
+  return Object.entries(c.elements ?? {}).filter(([, el]) => !el.when || el.when(props)).map(([id3]) => id3);
+}
+function defaultIntent(r, c, element) {
+  const el = c.elements?.[element];
+  if (!el) throw new Error(`${c.id} has no actionable element "${element}"`);
+  return r.intents?.[c.id]?.[element] ?? el.default;
+}
+function blueprint(archetype, opts = {}) {
+  const r = recipe(archetype);
+  return {
+    v: 1,
+    request: opts.request ?? "",
+    flow: opts.flow ?? "",
+    archetype: r.id,
+    title: opts.title ?? r.title,
+    platform: opts.platform ?? r.platforms[0],
+    slots: r.sections.map((s) => ({ slot: s.slot, block: null, props: {} }))
+  };
+}
+function resolveSlot(archetype, slot, block, props) {
+  const r = recipe(archetype);
+  const section = sectionOf(r, slot);
+  if (!section.options.includes(block)) {
+    throw new Error(`${r.id}'s ${slot} offers ${section.options.join(" | ")}, not ${block}`);
+  }
+  const c = component(block);
+  const resolved2 = { ...defaultProps(c), ...props ?? {} };
+  const elements = presentElements(c, resolved2);
+  const out = { slot, block, props: resolved2 };
+  if (elements.length > 0) out.intents = Object.fromEntries(elements.map((e) => [e, defaultIntent(r, c, e)]));
+  return out;
+}
+function wireframe(archetype, opts = {}, pick = (s) => s.options[0]) {
+  const spec = blueprint(archetype, opts);
+  const r = recipe(archetype);
+  const slots = [];
+  r.sections.forEach((section, i) => {
+    const choice2 = pick(section, i);
+    if (choice2 === "omit") {
+      if (!section.optional) throw new Error(`${r.id}'s ${section.slot} is not optional`);
+      return;
+    }
+    slots.push(choice2 === null ? { slot: section.slot, block: null, props: {} } : resolveSlot(r.id, section.slot, choice2));
+  });
+  return { ...spec, slots };
+}
+function wireSize(spec) {
+  const base = PLATFORM_SIZE[spec.platform];
+  if (spec.platform !== "site") return { width: base.width, height: base.height + CAPTION_HEIGHT };
+  const r = recipe(spec.archetype);
+  const tall = spec.slots.reduce((sum, s) => {
+    const section = r.sections.find((x) => x.slot === s.slot);
+    const id3 = s.block ?? section?.options[0];
+    return sum + (id3 ? (COMPONENTS.get(id3)?.h ?? 0) + 24 : 0);
+  }, 48);
+  return { width: base.width, height: Math.max(base.height, tall) + CAPTION_HEIGHT };
+}
+function propProblem(def, value) {
+  switch (def.kind) {
+    case "choice":
+      return typeof value === "string" && def.values.includes(value) ? null : `must be one of ${def.values.join(", ")}`;
+    case "flag":
+      return typeof value === "boolean" ? null : "must be true or false";
+    case "count":
+      return Number.isInteger(value) && value >= def.min && value <= def.max ? null : `must be a whole number ${def.min}\u2013${def.max}`;
+    case "index":
+      return Number.isInteger(value) && value >= 1 && value <= def.max ? null : `must be a whole number 1\u2013${def.max}`;
+  }
+}
+function validateWire(input) {
+  const problems = [];
+  const spec = input;
+  if (!spec || typeof spec !== "object") return ["a spec is a JSON object"];
+  if (spec.v !== 1) problems.push(`v must be 1`);
+  for (const key of ["request", "flow", "title"]) {
+    if (typeof spec[key] !== "string") problems.push(`${key} must be a string`);
+  }
+  if (!PLATFORMS.includes(spec.platform)) problems.push(`platform must be one of ${PLATFORMS.join(", ")}`);
+  let r;
+  try {
+    r = recipe(String(spec.archetype));
+  } catch (error) {
+    return [...problems, error.message];
+  }
+  if (!Array.isArray(spec.slots)) return [...problems, "slots must be an array"];
+  let last = -1;
+  const seen = /* @__PURE__ */ new Set();
+  for (const slot of spec.slots) {
+    const where = `slot ${JSON.stringify(slot?.slot)}`;
+    const at2 = r.sections.findIndex((s) => s.slot === slot?.slot);
+    if (at2 < 0) {
+      problems.push(`${where}: ${r.id} has no such slot (it has ${r.sections.map((s) => s.slot).join(", ")})`);
+      continue;
+    }
+    if (seen.has(slot.slot)) problems.push(`${where}: appears twice`);
+    if (at2 < last) problems.push(`${where}: out of recipe order`);
+    seen.add(slot.slot);
+    last = Math.max(last, at2);
+    const section = r.sections[at2];
+    const props = slot.props;
+    if (!props || typeof props !== "object" || Array.isArray(props)) {
+      problems.push(`${where}: props must be an object`);
+      continue;
+    }
+    if (slot.block === null) {
+      if (Object.keys(props).length > 0) problems.push(`${where}: an undecided slot has no props`);
+      if (slot.intents && Object.keys(slot.intents).length > 0) problems.push(`${where}: an undecided slot has no intents`);
+      continue;
+    }
+    if (typeof slot.block !== "string" || !section.options.includes(slot.block)) {
+      problems.push(`${where}: block must be null or one of ${section.options.join(", ")}`);
+      continue;
+    }
+    const c = component(slot.block);
+    for (const [key, value] of Object.entries(props)) {
+      const def = c.props[key];
+      if (!def) problems.push(`${where}: ${c.id} has no prop "${key}"`);
+      else {
+        const problem = propProblem(def, value);
+        if (problem) problems.push(`${where}: ${c.id}.${key} ${problem}`);
+      }
+    }
+    for (const [element, intent] of Object.entries(slot.intents ?? {})) {
+      const el = c.elements?.[element];
+      if (!el) problems.push(`${where}: ${c.id} has no actionable element "${element}"`);
+      else if (!INTENT_BY_ID.has(intent)) problems.push(`${where}: "${intent}" is not an intent`);
+      else if (!el.accepts.includes(intent)) problems.push(`${where}: ${c.id}'s ${element} cannot take "${intent}"`);
+    }
+    if (slot.p !== void 0 && !(typeof slot.p === "number" && slot.p >= 0 && slot.p <= 1)) problems.push(`${where}: p must be 0\u20131`);
+    for (const alt of slot.alternatives ?? []) {
+      if (!section.options.includes(alt.block)) problems.push(`${where}: alternative ${alt.block} is not one of ${section.options.join(", ")}`);
+    }
+  }
+  for (const section of r.sections) {
+    if (!section.optional && !seen.has(section.slot)) problems.push(`slot "${section.slot}" is required by ${r.id}`);
+  }
+  return problems;
+}
+function propsFor(c, props) {
+  return { ...defaultProps(c), ...props };
+}
+
+// packages/modules/wireframe/src/render.ts
+var WIRE_MARKER = "<!-- isocan:wireframe -->";
+var WIRE_SCRIPT_ID = "isocan-wireframe";
+var SKELETON_COLORS = ["#2f6fed", "#7fa3f3", "#f3f7fe"];
+var [BLUE, BLUE_SOFT, BLUE_GROUND] = SKELETON_COLORS;
+var WIRE_CSS = `
+*{box-sizing:border-box}
+html,body{margin:0;background:#fafafa}
+body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#222222;padding:0}
+.cap{height:${CAPTION_HEIGHT}px;display:flex;align-items:center;gap:8px;padding:0 4px;font-size:13px;font-weight:700;color:#222222}
+.cap small{font-weight:500;color:#555555;text-transform:uppercase;letter-spacing:.06em;font-size:10px}
+.frame{position:relative;display:flex;flex-direction:column;background:#ffffff;border:1.5px solid #c8c8c8;border-radius:4px;overflow:hidden}
+.frame.app{border-radius:28px}
+.frame.site{overflow:visible}
+.frame>.body{flex:1;display:flex;min-height:0}
+.frame>.body>.main{flex:1;display:flex;flex-direction:column;gap:12px;padding:16px;min-width:0;overflow:hidden}
+.frame.site>.body>.main{overflow:visible}
+.frame>.body>.side{width:232px;border-right:1px solid #ececec;display:flex;flex-direction:column}
+.frame.app>.body>.side{width:84px}
+.frame>.body>.aside{width:300px;border-left:1px solid #ececec;padding:16px;display:flex;flex-direction:column;gap:12px}
+.frame>.foot{padding:12px 16px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:8px}
+.fabs{position:absolute;right:20px;bottom:88px}
+.frame.web .fabs,.frame.site .fabs{bottom:24px}
+.layer{position:absolute;inset:0;background:rgba(34,34,34,.28);display:flex;flex-direction:column;justify-content:flex-end}
+.layer.center{justify-content:center;align-items:center;padding:24px}
+.layer.left{justify-content:flex-start;align-items:stretch;flex-direction:row}
+.layer>.slot{width:100%}
+.layer.center>.slot{max-width:340px}
+.layer.left>.slot{width:78%;max-width:320px}
+.slot{min-width:0}
+.bar{display:block;height:8px;border-radius:4px;background:#dcdcdc;margin:5px 0;max-width:100%}
+.bar.k{background:#bdbdbd;height:10px}
+.bar.title{background:#555555;height:16px;margin:8px 0}
+.bar.fat{background:#555555;height:18px}
+.bar.meta{background:#e3e3e3;height:7px}
+.bar.in{display:inline-block;margin:0;vertical-align:middle}
+.bar.ph{background:#e6e6e6;margin:0}
+.bar.lbl-bar{height:7px;margin:0 0 6px}
+.bar.cap{margin-top:8px}
+.bar.rule{height:1px;background:#ececec}
+.h{font-weight:700;color:#222222;line-height:1.2}
+.h1{font-size:26px}.h2{font-size:22px}.h3{font-size:18px}.h4{font-size:16px}
+.txt.s .bar{height:6px}.txt.l .bar{height:10px}.txt.quote{border-left:3px solid #c8c8c8;padding-left:10px}.txt.caption .bar{background:#e6e6e6}
+.img{width:100%;border:1.5px solid #c8c8c8;border-radius:4px;background:#ececec linear-gradient(to top right,transparent calc(50% - 1px),#c8c8c8 calc(50% - 1px),#c8c8c8 calc(50% + 1px),transparent calc(50% + 1px)),linear-gradient(to bottom right,transparent calc(50% - 1px),#c8c8c8 calc(50% - 1px),#c8c8c8 calc(50% + 1px),transparent calc(50% + 1px))}
+.img.sm{width:72px}
+.logo{display:flex;justify-content:center}
+.img.illustration{border-radius:50%;width:70%;margin:0 auto}
+.img.cover{height:auto;border-radius:0}
+.img.thumb-img{width:64px;flex:none}
+.actions{display:flex;gap:8px}
+.actions.stack{flex-direction:column}
+.actions.row{justify-content:flex-end;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 18px;border-radius:4px;font-weight:700;font-size:15px;border:1.5px solid #222222;white-space:nowrap}
+.btn.block{flex:1;width:100%}
+.btn.primary{background:#222222;color:#ffffff}
+.btn.secondary{background:#ffffff;color:#222222}
+.btn.tertiary{background:transparent;border-color:transparent;color:#222222;text-decoration:underline}
+.btn.destructive{background:#ffffff;color:#222222;border-width:3px}
+.btn.s{height:32px;padding:0 12px;font-size:13px}
+.btn.l{height:52px}
+.btn.disabled{background:#ececec;border-color:#c8c8c8;color:#555555}
+.btn.loading::after{content:"\u2026"}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-size:18px;color:#222222;flex:none}
+.lnk{color:#222222;font-weight:600;text-decoration:underline;font-size:14px}
+.link-row{display:flex;gap:8px;justify-content:center;align-items:center;padding:6px 0}
+.link-row .bar{width:90px!important}
+.av{display:inline-block;border-radius:50%;background:#ececec;border:1.5px solid #c8c8c8;flex:none}
+.av.s{width:28px;height:28px}.av.m{width:40px;height:40px}.av.l{width:88px;height:88px}
+.ico{display:inline-block;width:24px;height:24px;border-radius:6px;background:#ececec;border:1.5px solid #c8c8c8;flex:none}
+.fld{display:flex;flex-direction:column;gap:6px}
+.lbl{font-size:13px;font-weight:600;color:#555555}
+.fld .box,.composer .box{height:44px;border:1.5px solid #c8c8c8;border-radius:4px;display:flex;align-items:center;padding:0 12px}
+.fld .box .bar{width:45%!important}
+.form{display:flex;flex-direction:column;gap:14px}
+.form.center,.center{text-align:center;align-items:center}
+.between{display:flex;justify-content:space-between;align-items:center}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px}
+.chk .bar{width:90px!important}
+.cb{display:inline-block;width:18px;height:18px;border:1.5px solid #555555;border-radius:3px;flex:none}
+.cb.on{background:#555555}
+.or{padding:4px 0}
+.logo-dot{display:inline-block;width:16px;height:16px;border-radius:50%;background:#c8c8c8}
+.code{display:flex;gap:8px;justify-content:center}
+.code span{width:40px;height:48px;border:1.5px solid #c8c8c8;border-radius:4px}
+.glyph{font-size:40px;color:#555555;line-height:1.2}
+.glyph.big{font-size:44px;font-weight:800;color:#222222}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:15px;border:1.5px solid #c8c8c8}
+.chip .bar{width:36px!important}
+.chip.on{background:#555555;border-color:#555555}
+.chip.on .bar{background:#ffffff}
+.tg{display:inline-block;width:40px;height:24px;border-radius:12px;background:#ececec;border:1.5px solid #c8c8c8;position:relative;flex:none}
+.tg::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#ffffff;border:1px solid #c8c8c8}
+.tg.on{background:#555555;border-color:#555555}.tg.on::after{left:18px}
+.list .row,.settings .row{display:flex;align-items:center;gap:12px;padding:10px 0;min-height:52px}
+.list.div .row+.row{border-top:1px solid #ececec}
+.list.inset{border:1px solid #ececec;border-radius:6px;padding:0 12px}
+.row-t{flex:1;min-width:0}
+.chev{color:#555555;font-size:22px}
+.thumb{width:48px;height:48px;border-radius:4px;background:#ececec;border:1.5px solid #c8c8c8;flex:none}
+.badge{width:22px;height:18px;border-radius:9px;background:#555555}
+.sec{padding-top:6px}
+.search{display:flex;align-items:center;gap:8px;height:44px;border:1.5px solid #c8c8c8;border-radius:22px;padding:0 14px}
+.search.sm{height:34px;width:220px}
+.ico-t{font-size:18px;color:#555555}
+.ph-t{color:#555555}
+.scope{margin-left:auto;border-left:1px solid #c8c8c8;padding-left:10px}
+.seg{display:flex;border:1.5px solid #c8c8c8;border-radius:6px;overflow:hidden}
+.seg span{flex:1;display:flex;justify-content:center;align-items:center;height:36px}
+.seg span+span{border-left:1.5px solid #c8c8c8}
+.seg span.on{background:#555555}.seg span.on .bar{background:#ffffff}
+.seg .bar{width:50%!important}
+.tabs{display:flex;gap:18px;border-bottom:1px solid #ececec}
+.tabs span{padding:10px 0;min-width:56px}
+.tabs .bar{width:100%!important}
+.tabs span.on{border-bottom:3px solid #222222}
+.tabs span.on .bar{background:#555555}
+.tabs.pill{border:0;gap:8px}.tabs.pill span{padding:8px 14px;border-radius:18px;border:1.5px solid #c8c8c8}.tabs.pill span.on{background:#555555;border-color:#555555}
+.tabs.vertical{flex-direction:column;gap:0;border-bottom:0;border-left:1px solid #ececec}.tabs.vertical span{padding:8px 12px}
+.fab-wrap{display:flex;justify-content:flex-end}
+.fab{display:inline-flex;align-items:center;justify-content:center;min-width:56px;height:56px;border-radius:28px;background:#222222;color:#ffffff;font-size:24px;font-weight:700;padding:0 18px}
+.fab.ext{font-size:15px;gap:6px}
+.appbar{display:flex;align-items:center;gap:4px;height:56px;padding:0 8px;border-bottom:1px solid #ececec}
+.appbar .t{flex:1;font-weight:700;font-size:17px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabbar{display:flex;height:64px;border-top:1px solid #ececec}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#555555}
+.tab b{font-size:20px;font-weight:400}.tab small{font-size:11px;font-weight:600}
+.tab.on{color:#222222}.tab.on small{text-decoration:underline}
+.sidenav{display:flex;flex-direction:column;gap:2px;padding:12px 8px;flex:1}
+.sidenav hr{border:0;border-top:1px solid #ececec;width:100%}
+.nav-i{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;font-weight:600;color:#555555;font-size:14px}
+.nav-i b{font-weight:400;font-size:17px;width:22px;text-align:center}
+.nav-i.on{background:#ececec;color:#222222}
+.frame.app .sidenav .nav-i{flex-direction:column;gap:2px;font-size:10px;padding:8px 2px;text-align:center}
+.dots{display:flex;gap:8px;justify-content:center;padding:8px 0}
+.dots i{width:8px;height:8px;border-radius:50%;background:#c8c8c8}
+.dots i.on{background:#222222;width:20px;border-radius:4px}
+.steps{display:flex;gap:8px;align-items:flex-start}
+.step{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
+.step b{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid #c8c8c8;font-size:12px;color:#555555}
+.step.on b{border-color:#222222;color:#222222}
+.step.done b{background:#555555;border-color:#555555;color:#ffffff}
+.step .bar{width:70%!important}
+.chart{border:1px solid #ececec;border-radius:6px;padding:12px}
+.chart svg{width:100%;height:150px;display:block}
+.chart.k-sparkline svg{height:40px}
+.stat .chart{border:0;padding:0}
+.legend{display:flex;gap:14px;padding-top:8px}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px}
+.legend .bar{width:48px!important}
+.drawer{height:100%;background:#ffffff;padding:16px 10px;display:flex;flex-direction:column;gap:2px}
+.drawer-head{display:flex;align-items:center;gap:12px;padding:8px 8px 16px;border-bottom:1px solid #ececec;margin-bottom:8px}
+.drawer-head .bar{flex:1}
+.sheet{background:#ffffff;border-radius:16px 16px 0 0;padding:14px 16px 20px;display:flex;flex-direction:column;gap:10px}
+.sheet.full{min-height:78%}
+.sheet.side{border-radius:0;height:100%}
+.grab{width:40px;height:5px;border-radius:3px;background:#c8c8c8;margin:0 auto 6px}
+.sheet-actions{display:flex;flex-direction:column;border:1px solid #ececec;border-radius:10px}
+.sheet-a{padding:14px;text-align:center;font-weight:600;font-size:16px}
+.sheet-a+.sheet-a{border-top:1px solid #ececec}
+.sheet-a.destructive{font-weight:800;text-decoration:underline}
+.dialog{position:relative;background:#ffffff;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:10px;border:1.5px solid #c8c8c8}
+.dialog.fullscreen{border-radius:0;min-height:100%}
+.dialog .x{position:absolute;right:14px;top:10px;color:#555555}
+.navbar{display:flex;align-items:center;gap:18px;height:64px;padding:0 20px;border-bottom:1px solid #ececec}
+.navbar .brand .img{width:32px}
+.navbar .links{display:flex;gap:18px}
+.sp{flex:1}
+.chrome{display:flex;align-items:center;gap:6px;height:24px;padding:0 20px;background:#ffffff}
+.chrome i{width:14px;height:8px;border-radius:2px;background:#c8c8c8}
+.chrome.web{height:32px;background:#ececec;padding:0 12px}
+.chrome.web i{width:10px;height:10px;border-radius:50%}
+.chrome.web .url{margin-left:12px;background:#ffffff;height:16px}
+.chrome .clock{width:36px!important;background:#555555}
+.pagehead{display:flex;flex-direction:column;gap:6px;padding:16px 20px;border-bottom:1px solid #ececec}
+.ph-row{display:flex;align-items:center;gap:8px}
+.crumbs{display:flex;gap:6px;align-items:center;color:#c8c8c8}
+.crumbs .bar{width:48px!important}
+.onb{display:flex;flex-direction:column;gap:18px;justify-content:center;flex:1}
+.right{text-align:right}
+.wizard,.filters,.settings,.comments,.long,.posts,.plist{display:flex;flex-direction:column;gap:12px}
+.card{border:1.5px solid #c8c8c8;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.card .img{border:0;border-radius:3px}
+.grp{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;border-bottom:1px solid #ececec}
+.stats{display:grid;gap:10px}
+.stats.c2{grid-template-columns:repeat(2,1fr)}.stats.c3{grid-template-columns:repeat(3,1fr)}.stats.c4{grid-template-columns:repeat(4,1fr)}
+.stat{border:1.5px solid #c8c8c8;border-radius:6px;padding:10px}
+.stat .big{padding:4px 0}
+.trend{font-size:11px;color:#555555;display:flex;gap:4px;align-items:center}
+.trend .bar{width:40px!important}
+.grid{display:grid;gap:10px}
+.grid.tight{gap:4px}
+.grid.tight .img{border-radius:2px}
+.masonry{column-gap:6px}.masonry .img{margin-bottom:6px;break-inside:avoid}
+.table{border:1px solid #ececec;border-radius:6px;overflow:hidden}
+.toolbar{display:flex;align-items:center;gap:6px;padding:8px;border-bottom:1px solid #ececec}
+.table table{width:100%;border-collapse:collapse;table-layout:fixed}
+.table th,.table td{padding:9px 10px;border-bottom:1px solid #ececec;text-align:left}
+.table th{background:#fafafa}
+.table .sel{width:36px}
+.pager{display:flex;gap:6px;justify-content:flex-end;padding:8px;font-size:13px;color:#555555}
+.pager span{min-width:24px;text-align:center;padding:2px 4px;border-radius:4px}
+.pager .on{background:#222222;color:#ffffff}
+.post{display:flex;gap:12px}
+.post.grid,.post.featured{flex-direction:column}
+.post.list .img{width:88px;flex:none}
+.post>div{flex:1;min-width:0}
+.featured-top{display:flex;flex-direction:column;gap:4px}
+.toc{border-left:3px solid #c8c8c8;padding-left:10px}
+.detail{display:flex;flex-direction:column;gap:6px}
+.metas{display:flex;gap:14px;flex-wrap:wrap}
+.meta-i{display:flex;gap:6px;align-items:center}
+.meta-i .ico{width:16px;height:16px}
+.meta-i .bar{width:60px!important}
+.comment{display:flex;gap:10px}
+.comment.nested{margin-left:38px}
+.composer{display:flex;gap:8px;align-items:center}
+.composer .box{flex:1}
+.profile{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.profile .bar{margin-left:auto;margin-right:auto}
+.profile.covered .av{margin-top:-44px;background:#ffffff}
+.pstats{display:flex;gap:28px;padding:6px 0}
+.pstats span{display:flex;flex-direction:column;align-items:center;width:56px}
+.fpost{display:flex;flex-direction:column;gap:8px;padding-bottom:12px;border-bottom:1px solid #ececec}
+.fhead{display:flex;gap:10px;align-items:center}
+.factions{display:flex;gap:18px;font-size:13px;font-weight:600;color:#555555}
+.video{position:relative}
+.play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:#222222}
+.linkcard{display:flex;gap:10px;border:1.5px solid #c8c8c8;border-radius:6px;padding:8px}
+.linkcard>div{flex:1}
+.carousel{display:flex;flex-direction:column;gap:4px}
+.product .stars{font-size:12px;color:#555555;letter-spacing:1px}
+.plist .card.product{flex-direction:row;align-items:center;gap:12px}
+.plist .card.product>div{flex:1}
+.state{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;flex:1;padding:24px}
+.state .bar{margin-left:auto;margin-right:auto}
+.state .actions{margin-top:12px;min-width:200px}
+.dlist{margin:0;display:flex;flex-direction:column}
+.dlist>div{padding:8px 0;border-bottom:1px solid #ececec}
+.dlist.inline>div{display:flex;gap:16px;align-items:center}
+.dlist.inline>div .bar{flex:none}
+`;
+var SKELETON_CSS = `
+.sk-frame{border-color:${BLUE}!important;background:#ffffff linear-gradient(${BLUE_GROUND} 1px,transparent 1px) 0 0/100% 24px}
+.sk-cap small{color:${BLUE}}
+.sk{display:flex;flex-direction:column}
+.sk .sk-box{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;border:1px solid ${BLUE};border-radius:3px;background:#ffffff;padding:8px;text-align:center}
+.sk.opt .sk-box{border-style:dashed}
+.sk .sk-name{font:600 11px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:${BLUE}}
+.sk .sk-opts{font:500 10px/1.3 system-ui,-apple-system,sans-serif;color:${BLUE_SOFT}}
+.sk.grow{flex:1}
+`;
+var SITE_MIN = PLATFORM_SIZE.site.height;
+function humanize(id3) {
+  return id3.replace(/-/g, " ");
+}
+function slotName(section) {
+  return section.options.length === 1 ? humanize(section.options[0]) : humanize(section.region);
+}
+function navPlacement(slot, section, spec) {
+  if (slot.block) return slot.block === "side-nav" ? "side" : "bottom";
+  if (!section.options.includes("tab-bar")) return "side";
+  if (!section.options.includes("side-nav")) return "bottom";
+  return spec.platform === "app" ? "bottom" : "side";
+}
+function overlayPlacement(slot, section) {
+  const id3 = slot.block ?? section.options[0];
+  if (id3 === "drawer") return "left";
+  if (id3 === "sheet") return "bottom";
+  return "center";
+}
+function drawSlot(spec, slot, section, grow) {
+  const attrs = `data-slot="${esc(slot.slot)}" data-region="${section.region}"`;
+  if (slot.block === null) {
+    const c2 = component(section.options[0]);
+    const h = section.region === "nav" && navPlacement(slot, section, spec) === "side" ? 0 : c2.h;
+    const classes = ["slot", "sk", section.optional ? "opt" : "", grow ? "grow" : ""].filter(Boolean).join(" ");
+    return `<section class="${classes}" ${attrs} data-block="" data-state="skeleton"><div class="sk-box" style="min-height:${h}px"><span class="sk-name">${esc(slotName(section))}</span>${section.options.length > 1 ? `<span class="sk-opts">${section.options.map((o) => esc(humanize(o))).join(" \xB7 ")}</span>` : ""}${section.optional ? `<span class="sk-opts">optional</span>` : ""}</div></section>`;
+  }
+  const r = recipe(spec.archetype);
+  const c = component(slot.block);
+  const props = propsFor(c, slot.props);
+  const intentOf = (element) => slot.intents?.[element] ?? defaultIntent(r, c, element);
+  const ctx = {
+    props,
+    intent: intentOf,
+    label: (element) => esc(INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
+    title: esc(spec.title),
+    platform: spec.platform,
+    wide: spec.platform !== "app"
+  };
+  return `<section class="slot w" ${attrs} data-block="${esc(c.id)}" data-state="wire">${c.draw(ctx)}</section>`;
+}
+function specJson(spec) {
+  return JSON.stringify(spec).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+function renderWire(spec) {
+  const problems = validateWire(spec);
+  if (problems.length > 0) throw new Error(`not a drawable wireframe spec:
+  ${problems.join("\n  ")}`);
+  const r = recipe(spec.archetype);
+  const bySlot = new Map(spec.slots.map((s) => [s.slot, s]));
+  const placed = r.sections.filter((s) => bySlot.has(s.slot)).map((section) => ({ section, slot: bySlot.get(section.slot) }));
+  const undecided = spec.slots.some((s) => s.block === null);
+  const state = spec.slots.every((s) => s.block === null) ? "blueprint" : undecided ? "drawing" : "wireframe";
+  const regions = {
+    shell: [],
+    header: [],
+    nav: [],
+    main: [],
+    aside: [],
+    footer: [],
+    fab: [],
+    overlay: [],
+    side: [],
+    bottom: []
+  };
+  const mainSlots = placed.filter((p) => p.section.region === "main" || spec.platform === "app" && p.section.region === "aside");
+  const lastMain = mainSlots[mainSlots.length - 1];
+  let overlayAt = "center";
+  for (const p of placed) {
+    const side = p.section.region === "nav" && navPlacement(p.slot, p.section, spec) === "side";
+    const grow = (p === lastMain || side) && p.slot.block === null;
+    const html = drawSlot(spec, p.slot, p.section, grow);
+    const region = p.section.region;
+    if (region === "nav") regions[navPlacement(p.slot, p.section, spec)].push(html);
+    else if (region === "aside" && spec.platform === "app") regions.main.push(html);
+    else {
+      if (region === "overlay") overlayAt = overlayPlacement(p.slot, p.section);
+      regions[region].push(html);
+    }
+  }
+  const { width, height } = PLATFORM_SIZE[spec.platform];
+  const size = spec.platform === "site" ? `width:${width}px;min-height:${SITE_MIN}px` : `width:${width}px;height:${height}px`;
+  const frame = [
+    `<div class="frame ${spec.platform}${undecided ? " sk-frame" : ""}" style="${size}">`,
+    ...regions.shell,
+    ...regions.header,
+    `<div class="body">`,
+    regions.side.length ? `<div class="side">${regions.side.join("")}</div>` : "",
+    `<div class="main">${regions.main.join("")}</div>`,
+    regions.aside.length ? `<div class="aside">${regions.aside.join("")}</div>` : "",
+    `</div>`,
+    regions.footer.length ? `<div class="foot">${regions.footer.join("")}</div>` : "",
+    ...regions.bottom,
+    regions.fab.length ? `<div class="fabs">${regions.fab.join("")}</div>` : "",
+    regions.overlay.length ? `<div class="layer ${overlayAt}">${regions.overlay.join("")}</div>` : "",
+    `</div>`
+  ].join("");
+  const title = esc(spec.title);
+  return `<!doctype html>
+${WIRE_MARKER}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=${width}">
+<title>${title}</title>
+<script type="application/json" id="${WIRE_SCRIPT_ID}">${specJson(spec)}</script>
+<style>${WIRE_CSS}${undecided ? SKELETON_CSS : ""}</style>
+</head>
+<body data-archetype="${esc(spec.archetype)}" data-state="${state}">
+<div class="cap${undecided ? " sk-cap" : ""}">${title}<small>${state}</small></div>
+${frame}
+</body>
+</html>
+`;
+}
+
+// packages/modules/wireframe/src/cli.ts
+function slugOf(title) {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "screen";
+}
+function asData({ id: id3, category, props, elements }) {
+  return { id: id3, category, props, elements: Object.fromEntries(Object.entries(elements ?? {}).map(([k, e]) => [k, { accepts: e.accepts, default: e.default }])) };
+}
+function register6(host) {
+  const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, sendOp: sendOp2, printJson: printJson2, placementFor: placementFor2 } = host;
+  const wire = host.program.command("wire").description("Wireframes: screens drawn from a catalog of blocks \u2014 a blue blueprint where a slot is undecided, grey where it is chosen");
+  wire.command("render <spec>").description("Draw a wireframe spec (a JSON file) and add it to the canvas as an HTML screen with the spec inside it").option("--canvas <canvas>").option("--title <title>", "the item's title (default: the spec's title)").option("--at <x,y>", "place at world coordinates").option("--anchor <item>", "place to the left of this item").option("--in <group>", "insert into this group").option("--cell <row,col>", "with --in: one cell of the sheet's grid").action(
+    run2(async (file, opts, cmd) => {
+      let spec;
+      try {
+        spec = JSON.parse(await readFile(file, "utf8"));
+      } catch (error) {
+        throw new Error(`${file} is not a JSON file this can read: ${error.message}`);
+      }
+      const problems = validateWire(spec);
+      if (problems.length > 0) {
+        throw new Error(`${file} is not a drawable wireframe spec:
+  ${problems.join("\n  ")}
+  \`isocan wire spec <archetype>\` prints one that is.`);
+      }
+      const html = renderWire(spec);
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const title = opts.title ?? spec.title;
+      const filename = `${slugOf(title)}.html`;
+      const upload = await ctx.client.uploadBlob(p.id, Buffer.from(html, "utf8"), "text/html", filename);
+      const { width, height } = wireSize(spec);
+      const itemId = newItemId();
+      const result2 = await sendOp2(ctx, p.id, {
+        type: "item.add",
+        itemId,
+        version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size },
+        width,
+        height,
+        placement: placementFor2(snapshot, opts, { width, height }),
+        title
+      });
+      const at2 = host.insertionReceiptPlacement(result2.envelope.op, itemId);
+      const slots = spec.slots.length;
+      const open = spec.slots.filter((s) => s.block === null).length;
+      if (ctx.json) return printJson2({ itemId, title, archetype: spec.archetype, platform: spec.platform, slots, undecided: open, ...at2 });
+      console.log(`${itemId}  ${title} \u2014 ${spec.archetype}, ${spec.platform}, ${open === 0 ? "wireframe" : open === slots ? "blueprint" : `${slots - open} of ${slots} slots chosen`}`);
+    })
+  );
+  wire.command("spec <archetype>").description("Print a spec for an archetype \u2014 a blueprint (every slot undecided), or with --resolved each slot's first block at its defaults").option("--platform <platform>", `one of ${PLATFORMS.join(", ")} (default: the archetype's first)`).option("--resolved", "choose each slot's first option, with default props and intents").option("--title <title>").option("--request <words>", "the words that asked for it").action(
+    run2(async (archetype, opts) => {
+      if (opts.platform !== void 0 && !PLATFORMS.includes(opts.platform)) {
+        throw new Error(`--platform must be one of ${PLATFORMS.join(", ")} \u2014 got: ${opts.platform}`);
+      }
+      const o = {
+        ...opts.platform ? { platform: opts.platform } : {},
+        ...opts.title ? { title: opts.title } : {},
+        ...opts.request ? { request: opts.request } : {}
+      };
+      console.log(JSON.stringify(opts.resolved ? wireframe(archetype, o) : blueprint(archetype, o), null, 2));
+    })
+  );
+  wire.command("catalog").description("List the archetypes (with each slot's options), and count the blocks, primitives and intents").action(
+    run2(async (_opts, cmd) => {
+      if (cmd.optsWithGlobals().json) {
+        return printJson2({
+          archetypes: RECIPES,
+          blocks: BLOCKS.map(asData),
+          primitives: PRIMITIVES.map(asData),
+          intents: INTENTS
+        });
+      }
+      for (const r of RECIPES) {
+        console.log(`${r.id} (${r.platforms.join(", ")})`);
+        for (const s of r.sections) console.log(`  ${s.slot.padEnd(9)} ${s.options.join(" | ")}${s.optional ? "  (optional)" : ""}`);
+      }
+      console.log(`
+${RECIPES.length} archetypes, ${BLOCKS.length} blocks, ${PRIMITIVES.length} primitives, ${INTENTS.length} intents \u2014 \`isocan wire catalog --json\` has every prop and intent.`);
+    })
+  );
+}
+var wireframeCli = {
+  core: wireframeModule,
+  register: register6,
+  guide: agent_guide_default10
+};
+
 // packages/cli/src/modules.ts
-var CLI_MODULES = [mindmapCli, mermaidCli, documentsCli, stickersCli, sandboxCli, competitionCli, anatomyCli, talkCli];
+var CLI_MODULES = [mindmapCli, mermaidCli, documentsCli, stickersCli, sandboxCli, competitionCli, anatomyCli, talkCli, wireframeCli];
 
 // packages/cli/src/runtime-modules.ts
 import { readFileSync as readFileSync3 } from "node:fs";
@@ -10672,7 +12357,7 @@ function clientAt(ctx, home) {
   return home === ctx.client.base ? ctx.client : new DaemonClient(home, ctx.home);
 }
 function erasedLine(gone) {
-  const n = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+  const n = (count2, one, many) => `${count2} ${count2 === 1 ? one : many}`;
   return `${n(gone.files, "file", "files")} (${formatBytes(gone.bytes)}), ${n(gone.ops, "log entry", "log entries")}, ${n(gone.objects, "stored object", "stored objects")}`;
 }
 function printEndReach(reach) {
@@ -11345,10 +13030,10 @@ async function runFenced(home, request, env = process.env, platform = process.pl
         truncated = true;
         return buffer;
       }
-      const next = buffer + chunk.toString("utf8");
-      if (next.length <= maxBytes) return next;
+      const next2 = buffer + chunk.toString("utf8");
+      if (next2.length <= maxBytes) return next2;
       truncated = true;
-      return next.slice(0, maxBytes);
+      return next2.slice(0, maxBytes);
     };
     child.stdout.on("data", (c) => out = keep(out, c));
     child.stderr.on("data", (c) => err = keep(err, c));
@@ -12914,7 +14599,7 @@ function roleLine(summary, base) {
   const parts = [];
   if (local > 0) parts.push(`home of ${local} canvas${local === 1 ? "" : "es"}`);
   if (remote.size > 0) {
-    const listed = [...remote.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([url, count]) => `${url} (${count})`);
+    const listed = [...remote.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([url, count2]) => `${url} (${count2})`);
     const last = listed.pop();
     parts.push(`replica of ${listed.length > 0 ? `${listed.join(", ")} and ${last}` : last}`);
   }
@@ -13629,7 +15314,7 @@ function canvasScope(ctx, canvas2) {
     grants: async () => (await ctx.client.grants(canvas2.id)).grants,
     invite: (subject, rung) => ctx.client.createGrant(canvas2.id, subject, rung, ctx.actor.id),
     bar: (subject) => ctx.client.bar(canvas2.id, subject, ctx.actor.id),
-    revoke: (grantId, bar) => ctx.client.revokeGrant(canvas2.id, grantId, ctx.actor.id, bar)
+    revoke: (grantId, bar2) => ctx.client.revokeGrant(canvas2.id, grantId, ctx.actor.id, bar2)
   };
 }
 function spaceScope(ctx, space) {
@@ -13638,7 +15323,7 @@ function spaceScope(ctx, space) {
     grants: async () => (await ctx.client.spaceGrants(space.id)).grants,
     invite: (subject, rung) => ctx.client.createSpaceGrant(space.id, subject, rung, ctx.actor.id),
     bar: (subject) => ctx.client.barOnSpace(space.id, subject, ctx.actor.id),
-    revoke: (grantId, bar) => ctx.client.revokeSpaceGrant(space.id, grantId, ctx.actor.id, bar)
+    revoke: (grantId, bar2) => ctx.client.revokeSpaceGrant(space.id, grantId, ctx.actor.id, bar2)
   };
 }
 function reachedLine(answer) {
@@ -13687,13 +15372,13 @@ async function shareRows(ctx, scope, who, opts, sweepAlso) {
   }
   if (opts.unbar !== void 0) {
     const subject = normalizeSubject(grantSubjectOf(opts.unbar));
-    const bar = (await scope.grants()).find((g) => g.subject === subject && isBar(g));
-    if (!bar) {
+    const bar2 = (await scope.grants()).find((g) => g.subject === subject && isBar(g));
+    if (!bar2) {
       throw new Error(
         `nobody is kept out of ${scope.what} as ${subject} \u2014 \`isocan share\` lists who is`
       );
     }
-    const answer = await scope.revoke(bar.id);
+    const answer = await scope.revoke(bar2.id);
     sweepAlso(answer.swept);
     console.log(`let ${subject} back in to ${scope.what}${reachedLine(answer)} \u2014 the link or an invitation now decides`);
   }
@@ -14910,10 +16595,10 @@ function placementFor(snapshot, opts, size) {
   );
   return leftmost ? { anchorItemId: leftmost.id } : { x: 0, y: 0 };
 }
-function pickOne(flag, value, allowed, fallback) {
+function pickOne(flag2, value, allowed, fallback) {
   if (value === void 0) return fallback;
   const found = allowed.find((a) => a === value.toLowerCase());
-  if (!found) throw new Error(`--${flag} must be one of: ${allowed.join(", ")} \u2014 got: ${value}`);
+  if (!found) throw new Error(`--${flag2} must be one of: ${allowed.join(", ")} \u2014 got: ${value}`);
   return found;
 }
 async function scoreScreenOnArrival(ctx, canvasId, itemId, mimeType) {
@@ -16585,10 +18270,10 @@ program2.command("versions <item>").description("List an item's version stack").
     });
     if (ctx.json) return printJson(item.versions);
     printTable(
-      item.versions.map((v, index) => ({
+      item.versions.map((v, index2) => ({
         "": v.id === item.currentVersionId ? "\u25B6" : "",
         id: v.id,
-        n: String(index + 1),
+        n: String(index2 + 1),
         filename: v.filename,
         size: String(v.size),
         created: `${v.createdAt} by ${actorNameIn(snapshot.names, v.createdBy)}`
@@ -19691,17 +21376,17 @@ rcCommand.option("--all", "answer on every canvas this machine's enrolments name
     await Promise.all(rooms.map((p) => runRcRoom(ctx, p, shared)));
   })
 );
-async function settleDefaultHarness(ctx, rooms, flag) {
+async function settleDefaultHarness(ctx, rooms, flag2) {
   let scan = await scanHarnesses(ctx.home);
-  if (flag !== void 0) {
-    const pick = scan.rows.find((r) => r.name === flag);
+  if (flag2 !== void 0) {
+    const pick = scan.rows.find((r) => r.name === flag2);
     if (!pick?.runnable) {
       const runnable3 = scan.rows.filter((r) => r.runnable).map((r) => r.name);
       throw new Error(
-        `--default-harness ${flag}: ${pick ? "not runnable here" : "not a harness this machine knows"}` + (runnable3.length > 0 ? ` \u2014 runnable: ${runnable3.join(", ")}` : " \u2014 nothing is") + " (`isocan harness` lists them)"
+        `--default-harness ${flag2}: ${pick ? "not runnable here" : "not a harness this machine knows"}` + (runnable3.length > 0 ? ` \u2014 runnable: ${runnable3.join(", ")}` : " \u2014 nothing is") + " (`isocan harness` lists them)"
       );
     }
-    await setDefaultHarness(ctx.home, flag);
+    await setDefaultHarness(ctx.home, flag2);
     scan = await scanHarnesses(ctx.home);
   }
   if (scan.default) {
@@ -19932,10 +21617,10 @@ ${marks.length} seams across ${entries.length} entries`);
     const buckets = track(entries, Number(opts.width ?? 48));
     if (ctx.json) return printJson({ entries: entries.length, buckets });
     const peak = Math.max(...buckets.map((b) => b.weight), 1);
-    const BLOCKS = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
-    const bar = buckets.map((b) => BLOCKS[Math.min(8, Math.round(b.weight / peak * 8))]).join("");
+    const BLOCKS2 = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
+    const bar2 = buckets.map((b) => BLOCKS2[Math.min(8, Math.round(b.weight / peak * 8))]).join("");
     const ticks = buckets.map((b) => b.majors.length > 0 ? "\u2502" : " ").join("");
-    console.log(bar);
+    console.log(bar2);
     console.log(ticks);
     console.log(
       `seq ${buckets[0].fromSeq}\u2013${buckets[buckets.length - 1].toSeq} \xB7 ${entries.length} entries \xB7 ${marks.length} seams` + (archived.length > 0 ? ` \xB7 ${archived.length} from the archive` : "")
