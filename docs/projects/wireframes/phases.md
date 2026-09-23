@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–4 are CLOSED; phase 5 is PART-DONE (23 Sep 2026).** Everything a person does from the terminal is built, and the web door is built and walked locally: `/wire <request>` in the Chat composes a flow through the home's `/api/judgment` (the key never reaches the browser), with keep, the canvas arrows between kept screens, `/wire prototype` and `/wire style`. **Next: wireframes phase 6** — calibration against Enrico, which needs nothing from the web — and, alongside it, the dev.isocan.io walk that closes phase 5 once CI has deployed it.
+**Where we are: phases 0–4 are CLOSED; phase 5 is PART-DONE (23 Sep 2026).** Everything a person does from the terminal is built, and the web door is built and walked locally: `/wire <request>` in the Chat composes a flow through the home's `/api/judgment` (the key never reaches the browser), with keep, the canvas arrows between kept screens, `/wire prototype` and `/wire style`. Phase 6 is CLOSED too: Jev reads a screen's archetype right a third of the time and is overconfident by ~0.4, so round 1 should over-include rather than cut at 0.5. **Next: the walk that closes wireframes phase 5**, then the Opens below (round 1's cut, plain-words options, `by` on the spec).
 
 ## Phase 0 — The catalog, drawn
 
@@ -185,7 +185,9 @@ re-provision keeps it.
 
 ## Phase 6 — Is Jev any good at this?
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 23 September 2026.** The archetype question put to Jev over Enrico's labelled screens (1,318 usable of 1,460; 142 in topics with no archetype), twice (34 options, 20 options) plus a stub baseline, for $0.148 of the approved $1.00; the conductor recomputed the headline from the raw answers. This phase measures rather than draws, so its canvas-rule artifact is the reading below, not a screen.
+
+**The reading.** Strict accuracy **33.3%** over 34 options (**40.3%** over 20), lenient 38.3% / 47.3%; chance is 3%, always-*list* 20.1%; the truth is in Jev's top 3 **61.5% / 70.4%** of the time. Calibration: ECE **0.39** — accuracy rises with p in every bin but sits ~0.4 below it; at p ≥ 0.9 (29% of screens) Jev is right **47.7%** of the time. Latency p50 161 ms, p90 245 ms. The confusions are siblings that share a shape: gallery → list (45), onboarding → welcome (39), sign-in → welcome (35), menu → home (33), form → sign-up (27, mean p 0.86), list → settings (23, mean p 0.90). Reproduce with `packages/modules/wireframe/scripts/calibrate.ts`.
 
 **Outcome:** the archetype question put to Jev against Enrico's 1,460
 labelled screens (research §4, *A calibration set that already exists*), and
@@ -194,3 +196,12 @@ exactly the decisions Jev was unsure of — the calibration data judge needs,
 produced for free.
 
 **Proof:** the curve, the accuracy, and what it changes, written here.
+
+### Trajectory
+
+- **2026-09-23** — Round 1's *leave-out* rule is wrong in kind. Jev's p ranks archetypes (the curve rises monotonically) but is overconfident by ~0.4 everywhere, and no cut reaches 60% accuracy — so p can order screens, not exclude them. Round 1 should over-include (top-k, or a 0.3 floor) and let keep/unkeep prune, which is what phase 2 built them for.
+- **2026-09-23** — The failures are shape-siblings (gallery/list/feed, sign-in/welcome/sign-up, menu/home), and the options Jev sees are component-id recipes. Rewording each archetype in plain words is the cheapest next measurement (~$0.08 a run, the script already exists) and may be most of the fix.
+- **2026-09-23** — A flat stub is perfectly calibrated (ECE 0.001) and useless (3%): ECE is never a gate on its own, only beside accuracy.
+- **2026-09-23** — Open: round 1's cut — change `yes ≥ 0.5` to over-include (top-k or a 0.3 floor), re-measured against this script. Owed to a follow-up phase.
+- **2026-09-23** — Open: keep marks are not yet calibration labels (11 kept, one tied to a single decision). `WireSpec` needs who answered (`by`) and round 1's P(yes) on each screen so every future kept variation labels one decision.
+- **2026-09-23** — Open: re-run the calibration with plain-words archetype options before changing anything else.
