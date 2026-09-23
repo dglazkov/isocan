@@ -11,7 +11,7 @@ import {
   packPath,
   packProblems,
   rosterClashes
-} from "./chunk-Y32BN66M.mjs";
+} from "./chunk-6PENQTJU.mjs";
 import {
   CanvasHandle,
   DEFAULT_MODE,
@@ -51,7 +51,7 @@ import {
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity
-} from "./chunk-A67Q3OU4.mjs";
+} from "./chunk-E6WPVZ7G.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -62,8 +62,8 @@ import {
   prepareDesignVerifierOffer,
   submitDesignReviewWrite,
   validatePreparedDesignReviewWrite
-} from "./chunk-U2MJFXWG.mjs";
-import "./chunk-SG4MAWPR.mjs";
+} from "./chunk-E65Z6RDK.mjs";
+import "./chunk-LV7HK5OI.mjs";
 import {
   parseDesignProjection,
   prepareDesignReconciliation,
@@ -72,11 +72,11 @@ import {
   readDesignSystem,
   reconcileDesignProjection,
   writeDesignDirection
-} from "./chunk-WLLT2M3X.mjs";
+} from "./chunk-DOODWCZH.mjs";
 import {
   changeDesignRequest,
   publishDesignReceipt
-} from "./chunk-VI2PGDZU.mjs";
+} from "./chunk-VL2CA3MI.mjs";
 import {
   actorNamesOn,
   itemCenter,
@@ -84,13 +84,13 @@ import {
   nameResolver,
   runRoom,
   threadLocus
-} from "./chunk-BFXZFQ2Q.mjs";
+} from "./chunk-KVZ6WN4X.mjs";
 import {
   parseDesignRepairBasis,
   prepareDesignRepair,
   submitDesignRepair,
   validatePreparedDesignRepair
-} from "./chunk-4V3F7RFK.mjs";
+} from "./chunk-E66SZLYM.mjs";
 import {
   CanvasGroups,
   DaemonClient,
@@ -104,7 +104,7 @@ import {
   resolveCanvasGroupRef,
   resolved,
   shaOfRoot
-} from "./chunk-PHSGCIRG.mjs";
+} from "./chunk-H2OWY6TA.mjs";
 import {
   bindableRoot,
   buildStamp,
@@ -132,26 +132,26 @@ import {
   updateConfigFile,
   writeGoogleToken,
   writeMarker
-} from "./chunk-32NZJL2K.mjs";
+} from "./chunk-7LHDOUVF.mjs";
 import {
   DaemonRoutes
-} from "./chunk-N37LXSWG.mjs";
+} from "./chunk-3QAFYW7M.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import {
   auditDesignSource,
   designAuditFails,
   readDesignAuditAdvisory,
   readDesignSourceAudit
-} from "./chunk-EHGYAAVY.mjs";
+} from "./chunk-A4C6OHDO.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import {
   prepareDesignDecision
-} from "./chunk-CSFNNBJP.mjs";
+} from "./chunk-TCWRAQEW.mjs";
 import {
   classifyAutomaticSource,
   questionnaireSubmissionIds
-} from "./chunk-OQWKPAAY.mjs";
-import "./chunk-BDAEQ3TK.mjs";
+} from "./chunk-OA4UADPF.mjs";
+import "./chunk-SV5RAW6R.mjs";
 import {
   ALIGN_EDGES,
   AREA_FILENAME,
@@ -185,6 +185,7 @@ import {
   DRAWING_TITLE,
   ENDED,
   EXPORT_LAYOUT,
+  FIDELITY_PROP,
   FILE_PROP,
   FORMAT_MODES,
   GROUND_MAX_BYTES,
@@ -518,7 +519,7 @@ import {
   wallFor,
   withModuleCommands,
   workbenchUrl
-} from "./chunk-B7JOBMSP.mjs";
+} from "./chunk-4JILTJDB.mjs";
 import {
   serializeDesign,
   toCss,
@@ -1647,7 +1648,7 @@ var require_command = __commonJS({
   "node_modules/commander/lib/command.js"(exports) {
     var EventEmitter = __require("node:events").EventEmitter;
     var childProcess = __require("node:child_process");
-    var path16 = __require("node:path");
+    var path17 = __require("node:path");
     var fs17 = __require("node:fs");
     var process2 = __require("node:process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
@@ -2647,9 +2648,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
         let launchWithNode = false;
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
-          const localBin = path16.resolve(baseDir, baseName);
+          const localBin = path17.resolve(baseDir, baseName);
           if (fs17.existsSync(localBin)) return localBin;
-          if (sourceExt.includes(path16.extname(baseName))) return void 0;
+          if (sourceExt.includes(path17.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
             (ext) => fs17.existsSync(`${localBin}${ext}`)
           );
@@ -2667,17 +2668,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
-          executableDir = path16.resolve(
-            path16.dirname(resolvedScriptPath),
+          executableDir = path17.resolve(
+            path17.dirname(resolvedScriptPath),
             executableDir
           );
         }
         if (executableDir) {
           let localFile = findFile(executableDir, executableFile);
           if (!localFile && !subcommand._executableFile && this._scriptPath) {
-            const legacyName = path16.basename(
+            const legacyName = path17.basename(
               this._scriptPath,
-              path16.extname(this._scriptPath)
+              path17.extname(this._scriptPath)
             );
             if (legacyName !== this._name) {
               localFile = findFile(
@@ -2688,7 +2689,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
           }
           executableFile = localFile || executableFile;
         }
-        launchWithNode = sourceExt.includes(path16.extname(executableFile));
+        launchWithNode = sourceExt.includes(path17.extname(executableFile));
         let proc;
         if (process2.platform !== "win32") {
           if (launchWithNode) {
@@ -3535,7 +3536,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @return {Command}
        */
       nameFromFilename(filename) {
-        this._name = path16.basename(filename, path16.extname(filename));
+        this._name = path17.basename(filename, path17.extname(filename));
         return this;
       }
       /**
@@ -3549,9 +3550,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [path]
        * @return {(string|null|Command)}
        */
-      executableDir(path17) {
-        if (path17 === void 0) return this._executableDir;
-        this._executableDir = path17;
+      executableDir(path18) {
+        if (path18 === void 0) return this._executableDir;
+        this._executableDir = path18;
         return this;
       }
       /**
@@ -3866,11 +3867,11 @@ function parseXY(value) {
 }
 
 // packages/cli/src/personal-context.ts
-function statusText(answer) {
-  console.log(`${answer.owner.name}'s personal canvas at ${answer.home}`);
-  if (answer.source) console.log(`${answer.source.state}: ${canvasUrl(answer.home, answer.source.canvasId)}`);
+function statusText(answer2) {
+  console.log(`${answer2.owner.name}'s personal canvas at ${answer2.home}`);
+  if (answer2.source) console.log(`${answer2.source.state}: ${canvasUrl(answer2.home, answer2.source.canvasId)}`);
   else console.log("Not created. Run `isocan context personal` to create it privately.");
-  for (const source of answer.preserved) console.log(`preserved ${source.state}: ${canvasUrl(answer.home, source.canvasId)}`);
+  for (const source of answer2.preserved) console.log(`preserved ${source.state}: ${canvasUrl(answer2.home, source.canvasId)}`);
 }
 function registerPersonalContext(context2, contextOf) {
   const personal = context2.command("personal").description("Open or create your private canvas at a home; inspect links, read and delegate explicitly").option("--home <url>", "use this authoritative home instead of the connected daemon");
@@ -3894,58 +3895,58 @@ function registerPersonalContext(context2, contextOf) {
     }
   };
   personal.action(act(async (ctx) => {
-    const answer = await ctx.client.ensurePersonal(ctx.actor.id);
-    if (ctx.json) return printJson(answer);
-    statusText(answer);
+    const answer2 = await ctx.client.ensurePersonal(ctx.actor.id);
+    if (ctx.json) return printJson(answer2);
+    statusText(answer2);
   }));
   personal.command("status").description("Inspect your binding without creating a canvas").action(act(async (ctx) => {
-    const answer = await ctx.client.personalStatus(ctx.actor.id);
-    if (ctx.json) return printJson(answer);
-    statusText(answer);
+    const answer2 = await ctx.client.personalStatus(ctx.actor.id);
+    if (ctx.json) return printJson(answer2);
+    statusText(answer2);
   }));
   personal.command("link").description("Link your personal canvas here with one undoable card").option("--request-id <id>", "reuse this ID only when retrying the same gesture").action(act(async (ctx, [options]) => {
     const canvas2 = await resolveCanvas(ctx);
-    const answer = await ctx.client.linkPersonal(canvas2.id, { actorId: ctx.actor.id, requestId: options.requestId ?? newOpId() });
-    if (ctx.json) return printJson(answer);
-    console.log(`${answer.link.owner.name}'s canvas ${answer.link.linked ? "linked" : "not linked"} as ${answer.link.itemId} at ${answer.link.home}${answer.link.refused ? ` \u2014 ${answer.link.refused}` : ""}`);
+    const answer2 = await ctx.client.linkPersonal(canvas2.id, { actorId: ctx.actor.id, requestId: options.requestId ?? newOpId() });
+    if (ctx.json) return printJson(answer2);
+    console.log(`${answer2.link.owner.name}'s canvas ${answer2.link.linked ? "linked" : "not linked"} as ${answer2.link.itemId} at ${answer2.link.home}${answer2.link.refused ? ` \u2014 ${answer2.link.refused}` : ""}`);
   }));
   personal.command("links").description("List concrete personal cards and your current availability").action(act(async (ctx) => {
     const canvas2 = await resolveCanvas(ctx);
-    const answer = await ctx.client.personalLinks(canvas2.id, ctx.actor.id);
-    if (ctx.json) return printJson(answer);
-    if (!answer.links.length) return console.log("No personal canvases linked here.");
-    for (const link of answer.links) console.log(`${link.itemId} ${link.owner.name}'s canvas \u2014 ${link.available ? "available" : link.refused ?? "unavailable"} \xB7 ${link.home}`);
+    const answer2 = await ctx.client.personalLinks(canvas2.id, ctx.actor.id);
+    if (ctx.json) return printJson(answer2);
+    if (!answer2.links.length) return console.log("No personal canvases linked here.");
+    for (const link of answer2.links) console.log(`${link.itemId} ${link.owner.name}'s canvas \u2014 ${link.available ? "available" : link.refused ?? "unavailable"} \xB7 ${link.home}`);
   }));
   personal.command("unlink <item>").description("Delete your concrete personal card; ordinary undo restores its consent").option("--request-id <id>", "reuse this ID only when retrying the same gesture").action(act(async (ctx, [itemId, options]) => {
     const canvas2 = await resolveCanvas(ctx);
-    const answer = await ctx.client.unlinkPersonal(canvas2.id, { actorId: ctx.actor.id, requestId: options.requestId ?? newOpId(), itemId });
-    if (ctx.json) return printJson(answer);
+    const answer2 = await ctx.client.unlinkPersonal(canvas2.id, { actorId: ctx.actor.id, requestId: options.requestId ?? newOpId(), itemId });
+    if (ctx.json) return printJson(answer2);
     console.log(`Unlinked ${itemId}. Undo restores the same card and consent.`);
   }));
   personal.command("delegates").description("Inspect agents allowed by the owner of this exact personal dataset").requiredOption("--source <canvas-id>", "the personal dataset whose access list to inspect").action(act(async (ctx, [options]) => {
-    const answer = await ctx.client.personalDelegates(options.source, ctx.actor.id);
-    if (ctx.json) return printJson(answer);
-    for (const one of answer.delegates) console.log(`${one.agentId} ${one.allowed ? "allowed" : "revoked"} ${one.at}`);
-    if (!answer.delegates.length) console.log("No agents allowed.");
+    const answer2 = await ctx.client.personalDelegates(options.source, ctx.actor.id);
+    if (ctx.json) return printJson(answer2);
+    for (const one of answer2.delegates) console.log(`${one.agentId} ${one.allowed ? "allowed" : "revoked"} ${one.at}`);
+    if (!answer2.delegates.length) console.log("No agents allowed.");
   }));
   for (const name of ["allow", "revoke"]) personal.command(`${name} <agent-id>`).description(`${name === "allow" ? "Allow" : "Revoke"} one agent's personal Context access on this exact dataset`).requiredOption("--source <canvas-id>", "the personal dataset whose owner is granting or revoking access").action(act(async (ctx, [agentId, options]) => {
-    const answer = await ctx.client.setPersonalDelegate(options.source, agentId, { actorId: ctx.actor.id, allowed: name === "allow" });
-    if (ctx.json) return printJson(answer);
-    console.log(`${agentId} ${answer.delegation.allowed ? "allowed" : "revoked"} on ${options.source}. ${name === "revoke" ? "The next personal read rechecks access." : "Reading also requires this source's concrete link on the destination."}`);
+    const answer2 = await ctx.client.setPersonalDelegate(options.source, agentId, { actorId: ctx.actor.id, allowed: name === "allow" });
+    if (ctx.json) return printJson(answer2);
+    console.log(`${agentId} ${answer2.delegation.allowed ? "allowed" : "revoked"} on ${options.source}. ${name === "revoke" ? "The next personal read rechecks access." : "Reading also requires this source's concrete link on the destination."}`);
   }));
   personal.command("read <item>").description("Read current private pinned context through this exact destination card").option("--cursor <cursor>", "opaque continuation returned by the previous page").option("--limit <pieces>", "contributions per page, 1..64 (default 16)").action(act(async (ctx, [itemId, options]) => {
     const limit = options.limit === void 0 ? void 0 : Number(options.limit);
     if (limit !== void 0 && (!Number.isInteger(limit) || limit <= 0 || limit > 64)) throw new Error("--limit expects a piece count from 1 to 64");
     const canvas2 = await resolveCanvas(ctx);
-    const answer = await ctx.client.readPersonal(canvas2.id, { actorId: ctx.actor.id, itemId, mode: "content", ...options.cursor ? { cursor: options.cursor } : {}, ...limit !== void 0 ? { limit } : {} });
-    if (ctx.json) return printJson(answer);
-    console.log(`Private personal context from ${answer.owner.name}'s canvas (${answer.sourceCanvasId}) at ${answer.home}`);
-    for (const piece of answer.pieces) console.log(`
+    const answer2 = await ctx.client.readPersonal(canvas2.id, { actorId: ctx.actor.id, itemId, mode: "content", ...options.cursor ? { cursor: options.cursor } : {}, ...limit !== void 0 ? { limit } : {} });
+    if (ctx.json) return printJson(answer2);
+    console.log(`Private personal context from ${answer2.owner.name}'s canvas (${answer2.sourceCanvasId}) at ${answer2.home}`);
+    for (const piece of answer2.pieces) console.log(`
 ${piece.title}
 ${piece.text ?? piece.unavailable ?? `${piece.mimeType ?? "No current version"} \u2014 metadata only`}`);
-    if (answer.nextCursor) console.log(`
-Continue with --cursor ${answer.nextCursor}`);
-    if (answer.truncated) console.log("Response bounded; more context may remain.");
+    if (answer2.nextCursor) console.log(`
+Continue with --cursor ${answer2.nextCursor}`);
+    if (answer2.truncated) console.log("Response bounded; more context may remain.");
   }));
 }
 
@@ -4887,9 +4888,9 @@ Source ${state.source.threadId} / ${state.source.commentId} / revision ${state.s
       }
     }
     if (typeof threadId !== "string" || !threadId.trim()) throw new Error("An existing --thread is required.");
-    const questions = parseDesignQuestionSet(raw);
-    const ids = await questionnaireSubmissionIds("ask", questions.id);
-    reportSubmission(ctx, await handle.designAsk({ threadId, questions, ...ids, ...legacySource ? { legacySource } : {} }));
+    const questions2 = parseDesignQuestionSet(raw);
+    const ids = await questionnaireSubmissionIds("ask", questions2.id);
+    reportSubmission(ctx, await handle.designAsk({ threadId, questions: questions2, ...ids, ...legacySource ? { legacySource } : {} }));
   }));
   design.command("answer [payload]").description("Answer an exact question with choices, text, references, skip, dismiss or delegation").option("--file <file>", "saved DesignResponse JSON; retain its id when retrying").option("--id <id>", "stable response ID for a flag-based answer; required without --file").option("--question <id>", "exact question ID for a flag-based answer").option("--option <id>", "selected option ID; repeat for a multi-select question", collect, []).option("--text <text>", "freeform answer, including Other for choices").option("--references <file>", "JSON array of versioned DesignReference records").option("--skip", "explicitly skip a skippable question").option("--dismiss", "explicitly dismiss the question").option("--delegate <actor>", "delegate this question to the named agent").option("--supersedes <id>", "explicitly replace an earlier response; retain every resolved question").action(act(async (handle, ctx, [payload, options]) => {
     let response;
@@ -5223,8 +5224,8 @@ function envelope(value, kind, thread) {
   return { payload, threadId, ...wrapped && value.commentId !== void 0 ? { commentId: value.commentId } : {}, ...wrapped && value.opId !== void 0 ? { opId: value.opId } : {}, ...wrapped && value.retry !== void 0 ? { retry: value.retry } : {} };
 }
 function identities(kind, id3, saved) {
-  const hash = createHash2("sha256").update(`design-${kind}:${id3}`).digest("hex").slice(0, 32);
-  const opId = saved.opId ?? `op_${hash}`, commentId = saved.commentId ?? `cmt_${hash}`;
+  const hash2 = createHash2("sha256").update(`design-${kind}:${id3}`).digest("hex").slice(0, 32);
+  const opId = saved.opId ?? `op_${hash2}`, commentId = saved.commentId ?? `cmt_${hash2}`;
   if (typeof opId !== "string" || !opId.trim() || typeof commentId !== "string" || !commentId.trim() || saved.retry !== void 0 && typeof saved.retry !== "boolean") throw new Error("Invalid saved retry identities.");
   return { opId, commentId, ...saved.retry === void 0 ? {} : { retry: saved.retry } };
 }
@@ -5681,7 +5682,7 @@ async function codexSandboxSpec(spec, home, daemon, platform = process.platform)
 import { existsSync as existsSync3, promises as fs16 } from "node:fs";
 import { spawnSync as spawnSync4 } from "node:child_process";
 import os4 from "node:os";
-import path15 from "node:path";
+import path16 from "node:path";
 
 // node_modules/commander/esm.mjs
 var import_index = __toESM(require_commander(), 1);
@@ -8299,7 +8300,7 @@ your own rc, each named for its principle \u2014 an homage, never the person.
         quote: null,
         ...opts.self ? { self: true } : {}
       };
-      const problems = (await import("./packs-MDHOJA4A.mjs")).packProblems(pack);
+      const problems = (await import("./packs-7ANSHS2S.mjs")).packProblems(pack);
       if (problems.length) {
         const hint = problems.some((p) => /reference/.test(p)) ? ' \u2014 add one with --ref "Title|https://\u2026|what to learn"' : "";
         throw new Error(`this pack would be refused: ${problems.join("; ")}${hint}`);
@@ -9577,7 +9578,7 @@ function register5(host) {
     const ctx = await host.ctxOf(cmd);
     const canvas2 = await host.resolveCanvas(ctx);
     const io = {
-      read: async (hash) => (await ctx.client.downloadBlob(canvas2.id, hash)).toString("utf8"),
+      read: async (hash2) => (await ctx.client.downloadBlob(canvas2.id, hash2)).toString("utf8"),
       put: (text, mime, filename) => ctx.client.uploadBlob(canvas2.id, Buffer.from(text), mime, filename),
       send: async (ops, group) => {
         for (const op of ops) await host.sendOp(ctx, canvas2.id, op, group);
@@ -10014,10 +10015,10 @@ var talkCli = {
 };
 
 // packages/modules/wireframe/agent-guide.md
-var agent_guide_default10 = "## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype's recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module.\n\n- `isocan wire catalog` lists every archetype and each slot's options;\n  `--json` adds every block's props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n\n**Words are typed, never free.** A button's label is its **intent**'s label\n(`sign-in` \u2192 \"Sign in\", `back` \u2192 \"Back\"), chosen from a fixed vocabulary of\n49; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec's `title`; everything else is grey bars, never lorem ipsum. If you want\nreal copy on a screen, that is a separate, honest act \u2014 write an HTML screen\nyourself \u2014 not a label smuggled into a spec.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot's `block` to another of its options with `\"props\": {}` and no\n`intents` (the new block's defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means \"not on this screen\".\n";
+var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; `--answerer stub` (the default without a key) draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n49; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; everything else is grey bars, never lorem ipsum. If you want\nreal copy on a screen, that is a separate, honest act \u2014 write an HTML screen\nyourself \u2014 not a label smuggled into a spec.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
 
 // packages/modules/wireframe/src/cli.ts
-import { readFile } from "node:fs/promises";
+import { readFile as readFile2 } from "node:fs/promises";
 
 // packages/modules/wireframe/src/record.ts
 var wireframeModule = {
@@ -10954,7 +10955,8 @@ var WAVE_1 = [
     title: "Home",
     platforms: ["app", "web"],
     recipe: "shell: app-shell; header: app-bar | page-header; nav: tab-bar | side-nav; main: stats-row? \u2192 chart? \u2192 (data-table | stacked-list | card-grid | feed-post); aside: (filter-panel | stacked-list)?",
-    intents: { "app-bar": { "action-1": "notifications", "action-2": "search", "action-3": "add" } }
+    intents: { "app-bar": { "action-1": "notifications", "action-2": "search", "action-3": "add" } },
+    props: { "app-bar": { leading: "none" } }
   },
   {
     id: "list",
@@ -11009,7 +11011,8 @@ var WAVE_1 = [
     title: "Feed",
     platforms: ["app"],
     recipe: "header: app-bar; nav: tab-bar; main: (tabs | chip)? \u2192 (feed-post | blog-list); fab: fab?",
-    intents: { "app-bar": { "action-1": "messages", "action-2": "notifications", "action-3": "search" } }
+    intents: { "app-bar": { "action-1": "messages", "action-2": "notifications", "action-3": "search" } },
+    props: { "app-bar": { leading: "none" } }
   },
   {
     id: "search",
@@ -11126,7 +11129,7 @@ function resolveSlot(archetype, slot, block, props) {
     throw new Error(`${r.id}'s ${slot} offers ${section.options.join(" | ")}, not ${block}`);
   }
   const c = component(block);
-  const resolved2 = { ...defaultProps(c), ...props ?? {} };
+  const resolved2 = { ...defaultProps(c), ...r.props?.[c.id] ?? {}, ...props ?? {} };
   const elements = presentElements(c, resolved2);
   const out = { slot, block, props: resolved2 };
   if (elements.length > 0) out.intents = Object.fromEntries(elements.map((e) => [e, defaultIntent(r, c, e)]));
@@ -11178,6 +11181,10 @@ function validateWire(input) {
     if (typeof spec[key] !== "string") problems.push(`${key} must be a string`);
   }
   if (!PLATFORMS.includes(spec.platform)) problems.push(`platform must be one of ${PLATFORMS.join(", ")}`);
+  if (spec.round !== void 0 && ![0, 1, 2, 3].includes(spec.round)) problems.push("round must be 0, 1, 2 or 3");
+  if (spec.chrome !== void 0 && (typeof spec.chrome !== "object" || typeof spec.chrome?.nav !== "string" || typeof spec.chrome?.header !== "string")) {
+    problems.push("chrome must be { nav, header }");
+  }
   let r;
   try {
     r = recipe(String(spec.archetype));
@@ -11610,9 +11617,761 @@ ${frame}
 </html>
 `;
 }
+function readWire(html) {
+  if (!html.includes(WIRE_MARKER)) return null;
+  const m = new RegExp(`<script type="application/json" id="${WIRE_SCRIPT_ID}">([\\s\\S]*?)</script>`).exec(html);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[1]);
+  } catch {
+    return null;
+  }
+}
+
+// packages/modules/wireframe/src/answerer.ts
+var JEV_URL = "https://api.typesafe.ai/v1/systemone";
+var JEV_MODEL = "jev-latest";
+var JEV_INPUT_PRICE = 0.042 / 1e6;
+function responseProblems(request, body) {
+  const res = body;
+  if (!res || typeof res !== "object") return ["a response is a JSON object with `answers`"];
+  if (res.detail !== void 0) return [`the answerer refused the request: ${detailText(res.detail)}`];
+  if (!res.answers || typeof res.answers !== "object") return ["a response has `answers`, one per question"];
+  const problems = [];
+  const isP = (v) => typeof v === "number" && v >= 0 && v <= 1;
+  for (const [id3, q] of Object.entries(request.questions)) {
+    const a = res.answers[id3];
+    const where = `answer "${id3}"`;
+    if (!a || typeof a !== "object") {
+      problems.push(`${where} is missing`);
+      continue;
+    }
+    if (a.type !== q.type) {
+      problems.push(`${where} must be a ${q.type}, not ${String(a.type)}`);
+      continue;
+    }
+    if (q.type === "noul") {
+      if (!isP(a.noul)) problems.push(`${where}: noul must be a number 0\u20131`);
+      continue;
+    }
+    const keys = q.type === "choice" ? Object.keys(q.criteria) : q.criteria.map((_, i) => String(i));
+    const probs = a.probabilities;
+    if (!probs || typeof probs !== "object") {
+      problems.push(`${where}: probabilities are missing`);
+      continue;
+    }
+    for (const [k, v] of Object.entries(probs)) {
+      if (!keys.includes(k)) problems.push(`${where}: "${k}" is not one of its options (${keys.join(", ")})`);
+      else if (!isP(v)) problems.push(`${where}: probability of "${k}" must be 0\u20131`);
+    }
+    if (q.type === "choice" && !keys.includes(String(a.choice))) problems.push(`${where}: choice "${String(a.choice)}" is not one of ${keys.join(", ")}`);
+    if (q.type === "score" && typeof a.score !== "number") problems.push(`${where}: score must be a number`);
+  }
+  for (const id3 of Object.keys(res.answers)) if (!(id3 in request.questions)) problems.push(`answer "${id3}" answers no question`);
+  return problems;
+}
+function readResponse(request, body, from = "the answerer") {
+  const problems = responseProblems(request, body);
+  if (problems.length > 0) throw new Error(`${from} gave answers this cannot apply:
+  ${problems.join("\n  ")}`);
+  return body;
+}
+function detailText(detail) {
+  if (Array.isArray(detail)) {
+    return detail.map((d) => {
+      const e = d;
+      return `${(e.loc ?? []).join(".")}: ${e.msg ?? JSON.stringify(d)}`;
+    }).join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    const e = detail;
+    return e.message ?? e.error_type ?? JSON.stringify(detail);
+  }
+  return String(detail);
+}
+function chosenOption(q, a) {
+  if (q.type === "noul" && a.type === "noul") {
+    const yes = a.noul >= 0.5;
+    return { value: yes ? "true" : "false", p: yes ? a.noul : 1 - a.noul, distribution: { true: a.noul, false: 1 - a.noul } };
+  }
+  if (q.type === "choice" && a.type === "choice") {
+    const distribution = Object.fromEntries(Object.keys(q.criteria).map((k) => [k, a.probabilities[k] ?? 0]));
+    return { value: a.choice, p: distribution[a.choice] ?? 0, distribution };
+  }
+  if (q.type === "score" && a.type === "score") {
+    const levels = q.criteria.map((_, i) => a.probabilities[String(i)] ?? 0);
+    const top = Math.max(...levels);
+    let best = 0;
+    levels.forEach((p, i) => {
+      if (p === top && (levels[best] !== top || Math.abs(i - a.score) < Math.abs(best - a.score))) best = i;
+    });
+    return { value: q.criteria[best], p: top, distribution: Object.fromEntries(q.criteria.map((c, i) => [c, levels[i]])) };
+  }
+  throw new Error(`a ${q.type} question answered as ${a.type}`);
+}
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 1831565813 >>> 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function stubAnswerer(seed = 1) {
+  return {
+    name: "stub",
+    async answer(request) {
+      const answers = {};
+      for (const [id3, q] of Object.entries(request.questions)) {
+        const draw = seeded(seed ^ hash(`${JSON.stringify(request.state)}|${id3}`))();
+        if (q.type === "noul") {
+          answers[id3] = { type: "noul", noul: Math.round(draw * 100) / 100 };
+        } else if (q.type === "choice") {
+          const keys = Object.keys(q.criteria);
+          answers[id3] = { type: "choice", choice: keys[Math.floor(draw * keys.length)], probabilities: Object.fromEntries(keys.map((k) => [k, 1 / keys.length])), confidence: 0 };
+        } else {
+          const pick = Math.floor(draw * q.criteria.length);
+          answers[id3] = { type: "score", score: pick, probabilities: Object.fromEntries(q.criteria.map((_, i) => [String(i), 1 / q.criteria.length])), confidence: 0 };
+        }
+      }
+      return { response: { model: "stub", answers, usage: { input_tokens: 0, output_tokens: 0 } }, ms: 0, by: `stub (seed ${seed})` };
+    }
+  };
+}
+function jevAnswerer(opts) {
+  const key = opts.key;
+  if (!key) throw new Error("the Jev answerer needs TYPESAFE_API_KEY in the environment \u2014 or `--answerer stub` (random, seeded) or `--answerer agent` (answer the questions yourself)");
+  const doFetch = opts.fetch ?? fetch;
+  const backoff = opts.backoff ?? [500, 1e3, 2e3, 4e3];
+  const sleep2 = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const now = opts.now ?? (() => Date.now());
+  return {
+    name: "jev",
+    async answer(request) {
+      for (let attempt = 0; ; attempt++) {
+        const t0 = now();
+        const res = await doFetch(JEV_URL, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+          body: JSON.stringify(request)
+        });
+        const ms = now() - t0;
+        if ((res.status === 429 || res.status === 529) && attempt < backoff.length) {
+          await sleep2(backoff[attempt]);
+          continue;
+        }
+        let body;
+        try {
+          body = await res.json();
+        } catch {
+          body = null;
+        }
+        if (!res.ok) {
+          const detail = body?.detail;
+          throw new Error(`Jev answered ${res.status}${detail !== void 0 ? `: ${detailText(detail)}` : ""}`);
+        }
+        const response = readResponse(request, body, "Jev");
+        return { response, ms, by: response.model ?? JEV_MODEL };
+      }
+    }
+  };
+}
+
+// packages/modules/wireframe/src/compose.ts
+function requestBlueprint(request, flow) {
+  return { ...blueprint("home", { request, flow, title: request }), round: 0 };
+}
+function platformFor(r, platform) {
+  if (r.platforms.includes(platform)) return platform;
+  const twin = platform === "web" ? "site" : platform === "site" ? "web" : null;
+  return twin && r.platforms.includes(twin) ? twin : null;
+}
+var HEADER_OPTIONS = [
+  ...new Set(RECIPES.flatMap((r) => r.sections.filter((s) => s.region === "header" && s.options.length > 1).flatMap((s) => s.options)))
+];
+var NAV_OPTIONS = [
+  .../* @__PURE__ */ new Set([...RECIPES.flatMap((r) => r.sections.filter((s) => s.region === "nav").flatMap((s) => s.options)), "navbar", "none"])
+];
+var PLATFORM_WORDS = {
+  app: "a phone app",
+  web: "a web app used at a desk",
+  site: "a public, scrolling website"
+};
+var CHROME_WORDS = {
+  "tab-bar": "tabs along the bottom of the screen",
+  "side-nav": "a navigation column down the side",
+  navbar: "a navigation bar across the top",
+  none: "no persistent navigation",
+  "app-bar": "a compact bar: a title and icon actions",
+  "page-header": "a large page title with actions"
+};
+function describeRecipe(r) {
+  return r.sections.map((s) => `${s.options.join(" or ")}${s.optional ? " (optional)" : ""}`).join(", ");
+}
+function flowRequest(request) {
+  const questions2 = {};
+  for (const r of RECIPES) {
+    questions2[`needs:${r.id}`] = {
+      type: "noul",
+      instructions: `Does the product in the request need a "${r.title}" screen \u2014 ${describeRecipe(r)}? Yes only if the request implies one.`
+    };
+  }
+  questions2.platform = {
+    type: "choice",
+    instructions: "Which platform is this product for?",
+    criteria: Object.fromEntries(PLATFORMS.map((p) => [p, PLATFORM_WORDS[p]]))
+  };
+  questions2.nav = {
+    type: "choice",
+    instructions: "Which persistent navigation should every screen of this product share?",
+    criteria: Object.fromEntries(NAV_OPTIONS.map((n) => [n, CHROME_WORDS[n] ?? null]))
+  };
+  questions2.header = {
+    type: "choice",
+    instructions: "Which header should every screen of this product share?",
+    criteria: Object.fromEntries(HEADER_OPTIONS.map((h) => [h, CHROME_WORDS[h] ?? null]))
+  };
+  return { model: JEV_MODEL, state: { request }, questions: questions2 };
+}
+function decideFlow(req, res) {
+  const answer2 = (id3) => chosenOption(req.questions[id3], res.answers[id3]);
+  const platform = answer2("platform");
+  const nav = answer2("nav");
+  const header = answer2("header");
+  const archetypes = [];
+  const declined = [];
+  let best = null;
+  for (const r of RECIPES) {
+    const yes = res.answers[`needs:${r.id}`].noul;
+    if (!best || yes > best.p) best = { id: r.id, p: yes };
+    if (yes < 0.5) declined.push({ id: r.id, p: yes, why: "no" });
+    else if (!platformFor(r, platform.value)) declined.push({ id: r.id, p: yes, why: "platform" });
+    else archetypes.push({ id: r.id, p: yes });
+  }
+  if (archetypes.length === 0 && best) {
+    const r = recipe(best.id);
+    if (platformFor(r, platform.value)) {
+      archetypes.push(best);
+      declined.splice(declined.findIndex((d) => d.id === best.id), 1);
+    }
+  }
+  if (archetypes.length === 0) throw new Error(`no wave-1 archetype draws on ${platform.value} for this request`);
+  return {
+    platform: platform.value,
+    chrome: { nav: nav.value, header: header.value },
+    archetypes,
+    declined,
+    distributions: { platform: platform.distribution, nav: nav.distribution, header: header.distribution }
+  };
+}
+function alternativesOf(distribution, options, chosen) {
+  return options.filter((o) => o !== chosen && (distribution[o] ?? 0) > 0).map((o) => ({ block: o, p: distribution[o] })).sort((a, b) => b.p - a.p);
+}
+function chromeFor(section, chrome) {
+  if (section.region === "header" && section.options.includes(chrome.header)) return { block: chrome.header };
+  if (section.region === "nav") {
+    if (section.options.includes(chrome.nav)) return { block: chrome.nav };
+    if (chrome.nav === "none" && section.optional) return "declined";
+  }
+  return null;
+}
+function flowScreen(archetype, request, flow, decision) {
+  const r = recipe(archetype);
+  const platform = platformFor(r, decision.platform);
+  const spec = blueprint(archetype, { request, flow, platform });
+  const slots = [];
+  for (const section of r.sections) {
+    const fixed = chromeFor(section, decision.chrome);
+    if (fixed === "declined") continue;
+    if (fixed === null) {
+      slots.push({ slot: section.slot, block: null, props: {} });
+      continue;
+    }
+    const distribution = section.region === "header" ? decision.distributions.header : decision.distributions.nav;
+    const alternatives = alternativesOf(distribution, section.options, fixed.block);
+    slots.push({
+      ...resolveSlot(r.id, section.slot, fixed.block),
+      p: distribution[fixed.block] ?? 0,
+      ...alternatives.length ? { alternatives } : {}
+    });
+  }
+  return { ...spec, slots, round: 1, chrome: decision.chrome };
+}
+function structureRequest(spec, flowTitles) {
+  const r = recipe(spec.archetype);
+  const questions2 = {};
+  for (const slot of spec.slots) {
+    if (slot.block !== null) continue;
+    const section = r.sections.find((s) => s.slot === slot.slot);
+    if (section.optional) {
+      questions2[`${section.slot}:include`] = {
+        type: "noul",
+        instructions: `Does the ${spec.title} screen need ${section.options.join(" or ")} in its ${section.region}?`
+      };
+    }
+    if (section.options.length > 1) {
+      questions2[section.slot] = {
+        type: "choice",
+        instructions: `Which block fills the ${section.region} of the ${spec.title} screen here?`,
+        criteria: Object.fromEntries(section.options.map((o) => [o, `a ${component(o).category} block`]))
+      };
+    }
+  }
+  return {
+    model: JEV_MODEL,
+    state: { request: spec.request, platform: spec.platform, screens: flowTitles, screen: spec.title, chrome: spec.chrome },
+    questions: questions2
+  };
+}
+function applyStructure(spec, req, res) {
+  const r = recipe(spec.archetype);
+  const slots = [];
+  for (const slot of spec.slots) {
+    if (slot.block !== null) {
+      slots.push(slot);
+      continue;
+    }
+    const section = r.sections.find((s) => s.slot === slot.slot);
+    let pInclude = 1;
+    if (section.optional) {
+      const include = chosenOption(req.questions[`${section.slot}:include`], res.answers[`${section.slot}:include`]);
+      if (include.value === "false") continue;
+      pInclude = include.p;
+    }
+    if (section.options.length > 1) {
+      const pick = chosenOption(req.questions[section.slot], res.answers[section.slot]);
+      const alternatives = alternativesOf(pick.distribution, section.options, pick.value);
+      slots.push({ ...resolveSlot(r.id, section.slot, pick.value), p: pick.p, ...alternatives.length ? { alternatives } : {} });
+    } else {
+      slots.push({ ...resolveSlot(r.id, section.slot, section.options[0]), ...section.optional ? { p: pInclude } : {} });
+    }
+  }
+  return { ...spec, slots, round: 2 };
+}
+function propQuestion(label, def) {
+  switch (def.kind) {
+    case "choice":
+      if (def.values.length < 2) return null;
+      return { q: { type: "choice", instructions: `${label}: which?`, criteria: Object.fromEntries(def.values.map((v) => [v, null])) }, read: (v) => v };
+    case "flag":
+      return { q: { type: "noul", instructions: `${label}: yes or no?` }, read: (v) => v === "true" };
+    case "count": {
+      const levels = Array.from({ length: def.max - def.min + 1 }, (_, i) => String(def.min + i));
+      if (levels.length < 2) return null;
+      const q = levels.length <= 10 ? { type: "score", instructions: `${label}: how many?`, criteria: levels } : { type: "choice", instructions: `${label}: how many?`, criteria: Object.fromEntries(levels.map((l) => [l, null])) };
+      return { q, read: (v) => Number(v) };
+    }
+    case "index": {
+      if (def.max < 2) return null;
+      const levels = Array.from({ length: def.max }, (_, i) => String(i + 1));
+      return { q: { type: "choice", instructions: `${label}: which one, counted from 1?`, criteria: Object.fromEntries(levels.map((l) => [l, null])) }, read: (v) => Number(v) };
+    }
+  }
+}
+var PER_SCREEN_NAV_PROPS = /* @__PURE__ */ new Set(["selected"]);
+function isNavChrome(r, slot) {
+  return r.sections.find((s) => s.slot === slot.slot)?.region === "nav";
+}
+function propsRequest(spec, sharedNav = /* @__PURE__ */ new Set()) {
+  const r = recipe(spec.archetype);
+  const questions2 = {};
+  for (const slot of spec.slots) {
+    if (slot.block === null) continue;
+    const c = component(slot.block);
+    const settled = r.props?.[c.id] ?? {};
+    const shared = isNavChrome(r, slot) && sharedNav.has(c.id);
+    for (const [key, def] of Object.entries(c.props)) {
+      if (key in settled || shared && !PER_SCREEN_NAV_PROPS.has(key)) continue;
+      const pq = propQuestion(`The ${c.id} in the ${slot.slot} of the ${spec.title} screen \u2014 ${key}`, def);
+      if (pq) questions2[`${slot.slot}:${c.id}.${key}`] = pq.q;
+    }
+    for (const [element, el] of Object.entries(c.elements ?? {})) {
+      if (el.accepts.length < 2 || shared) continue;
+      questions2[`${slot.slot}:${c.id}#${element}`] = {
+        type: "choice",
+        instructions: `What does ${element} of the ${c.id} on the ${spec.title} screen do?`,
+        criteria: Object.fromEntries(el.accepts.map((i) => [i, null]))
+      };
+    }
+  }
+  return {
+    model: JEV_MODEL,
+    state: {
+      request: spec.request,
+      platform: spec.platform,
+      screen: spec.title,
+      blocks: Object.fromEntries(spec.slots.filter((s) => s.block).map((s) => [s.slot, s.block]))
+    },
+    questions: questions2
+  };
+}
+function applyProps(spec, req, res) {
+  const r = recipe(spec.archetype);
+  const slots = spec.slots.map((slot) => {
+    if (slot.block === null) return slot;
+    const c = component(slot.block);
+    const settled = r.props?.[c.id] ?? {};
+    const props = {};
+    for (const [key, def] of Object.entries(c.props)) {
+      if (key in settled) continue;
+      const id3 = `${slot.slot}:${c.id}.${key}`;
+      const pq = propQuestion("", def);
+      if (!pq || !req.questions[id3]) continue;
+      props[key] = pq.read(chosenOption(req.questions[id3], res.answers[id3]).value);
+    }
+    const resolved2 = resolveSlot(r.id, slot.slot, slot.block, props);
+    const present = presentElements(c, resolved2.props);
+    const intents = { ...resolved2.intents ?? {} };
+    const used = /* @__PURE__ */ new Set();
+    for (const element of present) {
+      const id3 = `${slot.slot}:${c.id}#${element}`;
+      if (req.questions[id3]) {
+        const pick = chosenOption(req.questions[id3], res.answers[id3]);
+        const ranked = [pick.value, ...Object.entries(pick.distribution).sort((a, b) => b[1] - a[1]).map(([k]) => k)];
+        intents[element] = ranked.find((k) => !used.has(k)) ?? pick.value;
+      }
+      used.add(intents[element]);
+    }
+    const out = { ...resolved2 };
+    if (present.length > 0) out.intents = intents;
+    if (slot.p !== void 0) out.p = slot.p;
+    if (slot.alternatives) out.alternatives = slot.alternatives;
+    return out;
+  });
+  return { ...spec, slots, round: 3 };
+}
+function navOwners(specs) {
+  const owners = /* @__PURE__ */ new Map();
+  specs.forEach((spec, i) => {
+    const r = recipe(spec.archetype);
+    for (const slot of spec.slots) if (slot.block && isNavChrome(r, slot) && !owners.has(slot.block)) owners.set(slot.block, i);
+  });
+  return owners;
+}
+function propsRequests(specs) {
+  const owners = navOwners(specs);
+  return specs.map((spec, i) => propsRequest(spec, new Set([...owners].filter(([, owner]) => owner !== i).map(([block]) => block))));
+}
+function shareNav(specs) {
+  const owners = navOwners(specs);
+  return specs.map((spec, i) => {
+    const r = recipe(spec.archetype);
+    const slots = spec.slots.map((slot) => {
+      if (!slot.block || !isNavChrome(r, slot)) return slot;
+      const owner = owners.get(slot.block);
+      if (owner === i) return slot;
+      const from = specs[owner].slots.find((s) => s.block === slot.block && isNavChrome(recipe(specs[owner].archetype), s));
+      const props = { ...from.props, ...Object.fromEntries([...PER_SCREEN_NAV_PROPS].filter((k) => k in slot.props).map((k) => [k, slot.props[k]])) };
+      const c = component(slot.block);
+      const present = presentElements(c, props);
+      const out = { ...slot, props };
+      if (present.length > 0) out.intents = Object.fromEntries(present.map((e) => [e, from.intents[e]]));
+      else delete out.intents;
+      for (const key of PER_SCREEN_NAV_PROPS) {
+        const def = c.props[key];
+        const cap = typeof props.items === "number" ? props.items : def?.kind === "index" ? def.max : void 0;
+        if (typeof out.props[key] === "number" && cap !== void 0 && out.props[key] > cap) out.props = { ...out.props, [key]: cap };
+      }
+      return out;
+    });
+    return { ...spec, slots };
+  });
+}
+function applyPropsRound(specs, requests, responses) {
+  return shareNav(specs.map((spec, i) => applyProps(spec, requests[i], responses[i])));
+}
+function pendingRound(specs) {
+  const rounds = specs.map((s) => s.round ?? 3);
+  const lowest = Math.min(...rounds);
+  return lowest >= 3 ? null : lowest + 1;
+}
+function roundCalls(round, screens) {
+  if (round === 1) return [{ item: screens[0].item, request: flowRequest(screens[0].spec.request) }];
+  const titles = screens.map((s) => s.spec.title);
+  if (round === 3) {
+    const requests = propsRequests(screens.map((s) => s.spec));
+    return screens.map(({ item }, i) => ({ item, request: requests[i] }));
+  }
+  return screens.map(({ item, spec }) => ({ item, request: structureRequest(spec, titles) }));
+}
+function answeredResponse(call, from) {
+  return readResponse(call.request, call.response, from);
+}
+
+// packages/modules/wireframe/src/compose-cli.ts
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path8 from "node:path";
+var GAP = 80;
+function slugOf(title) {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "screen";
+}
+var FlowCanvas = class {
+  constructor(host, ctx, canvasId, group) {
+    this.host = host;
+    this.ctx = ctx;
+    this.canvasId = canvasId;
+    this.group = group;
+  }
+  host;
+  ctx;
+  canvasId;
+  group;
+  async version(spec) {
+    const html = renderWire(spec);
+    const filename = `${slugOf(spec.title)}.html`;
+    const upload = await this.ctx.client.uploadBlob(this.canvasId, Buffer.from(html, "utf8"), "text/html", filename);
+    return { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
+  }
+  send(op) {
+    return this.host.sendOp(this.ctx, this.canvasId, op, this.group);
+  }
+  async add(spec, placement) {
+    const { width, height } = wireSize(spec);
+    const itemId = newItemId();
+    const result2 = await this.send({
+      type: "item.add",
+      itemId,
+      version: await this.version(spec),
+      width,
+      height,
+      placement,
+      title: spec.title,
+      properties: { [FIDELITY_PROP]: "wireframe" }
+    });
+    const at2 = this.host.insertionReceiptPlacement(result2.envelope.op, itemId);
+    return { item: itemId, spec, x: at2.x ?? 0, y: at2.y ?? 0, width, height };
+  }
+  /** A new version of the same item — the screen fills in place — and its title and size if they moved. */
+  async write(screen, spec) {
+    await this.send({ type: "item.addVersion", itemId: screen.item, version: await this.version(spec) });
+    if (spec.title !== screen.spec.title) await this.send({ type: "item.update", itemId: screen.item, patch: { title: spec.title } });
+    const { width, height } = wireSize(spec);
+    if (width !== screen.width || height !== screen.height) await this.send({ type: "item.resize", itemId: screen.item, width, height });
+    return { ...screen, spec, width, height };
+  }
+};
+function rowStart(snapshot) {
+  const items = Object.values(snapshot.canvas.items ?? {});
+  if (items.length === 0) return { x: 0, y: 0, chosen: true };
+  const left = Math.min(...items.map((i) => i.x));
+  const bottom = Math.max(...items.map((i) => i.y + i.height));
+  return { x: Math.round(left), y: Math.round(bottom + 160), chosen: true };
+}
+async function ask(answerer, round, calls, save) {
+  const t0 = Date.now();
+  let by = answerer.name;
+  const answered = await Promise.all(calls.map(async (call) => {
+    if (Object.keys(call.request.questions).length === 0) return { response: { answers: {} }, asked: false };
+    const a = await answerer.answer(call.request);
+    by = a.by;
+    return { response: a.response, asked: true };
+  }));
+  const ms = Date.now() - t0;
+  if (save) {
+    await mkdir(save, { recursive: true });
+    await Promise.all(calls.map(async (call, i) => {
+      const name = `round-${round}.${i + 1}`;
+      await writeFile(path8.join(save, `${name}.request.json`), JSON.stringify(call.request, null, 2));
+      await writeFile(path8.join(save, `${name}.response.json`), JSON.stringify(answered[i].response, null, 2));
+    }));
+  }
+  const responses = answered.map((a) => a.response);
+  return {
+    responses,
+    by,
+    tally: {
+      round,
+      calls: answered.filter((a) => a.asked).length,
+      ms,
+      inputTokens: responses.reduce((sum, r) => sum + (r.usage?.input_tokens ?? 0), 0)
+    }
+  };
+}
+var pct = (p) => p === void 0 ? "\u2014" : p.toFixed(2);
+function describeFlow(d) {
+  const chosen = d.archetypes.map((a) => `${a.id} ${pct(a.p)}`).join(", ");
+  const declined = d.declined.map((a) => `${a.id} ${pct(a.p)}${a.why === "platform" ? ` (not on ${d.platform})` : ""}`).join(", ");
+  return `flow: ${d.platform} ${pct(d.distributions.platform[d.platform])} \xB7 nav ${d.chrome.nav} ${pct(d.distributions.nav[d.chrome.nav])} \xB7 header ${d.chrome.header} ${pct(d.distributions.header[d.chrome.header])}
+  screens: ${chosen}
+  declined: ${declined || "none"}`;
+}
+function screenLine(s, note) {
+  const open = s.spec.slots.filter((x) => x.block === null).length;
+  const state = open === 0 ? "wireframe" : open === s.spec.slots.length ? "blueprint" : `${s.spec.slots.length - open} of ${s.spec.slots.length} slots chosen`;
+  return `${s.item}  ${s.spec.title} \u2014 ${s.spec.archetype}, ${s.spec.platform}, ${state}${note ? ` \xB7 ${note}` : ""}`;
+}
+async function applyRound(canvas2, round, screens, calls, responses, say2) {
+  if (round === 1) {
+    const first = screens[0];
+    const decision = decideFlow(calls[0].request, responses[0]);
+    say2(describeFlow(decision));
+    const specs2 = decision.archetypes.map((a) => flowScreen(a.id, first.spec.request, first.spec.flow, decision));
+    const out2 = [await canvas2.write(first, specs2[0])];
+    for (const spec of specs2.slice(1)) {
+      const prev = out2[out2.length - 1];
+      out2.push(await canvas2.add(spec, { x: prev.x + prev.width + GAP, y: prev.y, chosen: true }));
+    }
+    out2.forEach((s, i) => say2(screenLine(s, `p(yes) ${pct(decision.archetypes[i].p)}`)));
+    return out2;
+  }
+  const specs = round === 2 ? screens.map((screen, i) => applyStructure(screen.spec, calls[i].request, responses[i])) : applyPropsRound(screens.map((s) => s.spec), calls.map((c) => c.request), responses);
+  const out = [];
+  for (const [i, screen] of screens.entries()) out.push(await canvas2.write(screen, specs[i]));
+  if (round === 3) for (const s of out) say2(screenLine(s, ""));
+  return out;
+}
+async function flowsOn(ctx, canvasId, snapshot) {
+  const flows = /* @__PURE__ */ new Map();
+  const items = Object.values(snapshot.canvas.items ?? {}).filter((i) => i.properties?.[FIDELITY_PROP] === "wireframe");
+  const read = await Promise.all(items.map(async (item) => {
+    const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[item.versions.length - 1];
+    if (!current || current.mimeType !== "text/html") return null;
+    const spec = readWire(Buffer.from(await ctx.client.downloadBlob(canvasId, current.blobHash)).toString("utf8"));
+    return spec && spec.flow ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height } : null;
+  }));
+  const order = (s) => RECIPES.findIndex((r) => r.id === s.spec.archetype);
+  for (const s of read) {
+    if (!s) continue;
+    flows.set(s.spec.flow, [...flows.get(s.spec.flow) ?? [], s]);
+  }
+  for (const list of flows.values()) list.sort((a, b) => order(a) - order(b));
+  return flows;
+}
+function pickFlow(flows, wanted) {
+  if (wanted) {
+    const screens = flows.get(wanted);
+    if (!screens) throw new Error(`no wireframe flow "${wanted}" on this canvas`);
+    const round = pendingRound(screens.map((s) => s.spec));
+    if (!round) throw new Error(`flow ${wanted} is drawn \u2014 every screen has answered all three rounds`);
+    return { flow: wanted, screens, round };
+  }
+  const pending = [...flows.entries()].flatMap(([flow, screens]) => {
+    const round = pendingRound(screens.map((s) => s.spec));
+    return round ? [{ flow, screens, round }] : [];
+  });
+  if (pending.length === 0) throw new Error('no wireframe flow on this canvas is waiting on answers \u2014 `isocan wire "<request>" --answerer agent` starts one');
+  return pending[pending.length - 1];
+}
+function chooseAnswerer(name, seed) {
+  const key = process.env.TYPESAFE_API_KEY;
+  const chosen = name ?? (key ? "jev" : "stub");
+  if (chosen === "agent") return "agent";
+  if (chosen === "stub") return stubAnswerer(seed);
+  if (chosen === "jev") return jevAnswerer({ key });
+  throw new Error(`--answerer must be jev, stub or agent \u2014 got: ${chosen}`);
+}
+function costLine(tallies, by, screens) {
+  const tokens = tallies.reduce((s, t) => s + t.inputTokens, 0);
+  const calls = tallies.reduce((s, t) => s + t.calls, 0);
+  const rounds = tallies.map((t) => `round ${t.round} ${t.ms} ms`).join(" \xB7 ");
+  return `${screens} screens, one op group \u2014 answered by ${by} \xB7 ${rounds} \xB7 ${calls} calls \xB7 ${tokens.toLocaleString("en-US")} input tokens \xB7 $${(tokens * JEV_INPUT_PRICE).toFixed(6)}`;
+}
+function registerCompose(host, wire) {
+  const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, printJson: printJson2, placementFor: placementFor2 } = host;
+  wire.argument("[request...]", "what the screens are for, in words \u2014 composes a flow").option("--answerer <name>", "jev (needs TYPESAFE_API_KEY), stub (random, seeded) or agent (you answer: `wire questions` / `wire answer`) \u2014 default jev when the key is set, else stub").option("--seed <n>", "the stub's seed", "1").option("--save <dir>", "write each round's requests and responses there as JSON").option("--canvas <canvas>").option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)").action(
+    run2(async (words, opts, cmd) => {
+      const request = words.join(" ").trim();
+      if (!request) {
+        cmd.help();
+        return;
+      }
+      const answerer = chooseAnswerer(opts.answerer, Number(opts.seed));
+      const ctx = await ctxOf2(cmd);
+      const say2 = (line) => {
+        if (!ctx.json) console.log(line);
+      };
+      const t0 = Date.now();
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const flow = newGroupId();
+      const canvas2 = new FlowCanvas(host, ctx, p.id, flow);
+      const placement = opts.at ? placementFor2(snapshot, { at: opts.at }) : rowStart(snapshot);
+      let screens = [await canvas2.add(requestBlueprint(request, flow), placement)];
+      const firstMs = Date.now() - t0;
+      say2(`${screens[0].item}  "${request}" \u2014 a blueprint, on the canvas in ${firstMs} ms, before any answer`);
+      if (answerer === "agent") {
+        if (ctx.json) return printJson2({ flow, items: [screens[0].item], round: 1, answerer: "agent", firstBlueprintMs: firstMs });
+        say2(`flow ${flow} is waiting on round 1 of 3. Answer it yourself:
+  isocan wire questions > round.json    # Jev's request shape, one call per screen
+  (fill each call's "response" in Jev's response shape)
+  isocan wire answer round.json          # repeat until the flow is drawn`);
+        return;
+      }
+      say2(`answering with ${answerer.name === "stub" ? `the stub (seed ${opts.seed})${process.env.TYPESAFE_API_KEY ? "" : " \u2014 no TYPESAFE_API_KEY here"}` : "Jev"}`);
+      const tallies = [];
+      let by = answerer.name;
+      for (const round of [1, 2, 3]) {
+        const calls = roundCalls(round, screens);
+        const asked = await ask(answerer, round, calls, opts.save);
+        tallies.push(asked.tally);
+        by = asked.by;
+        screens = await applyRound(canvas2, round, screens, calls, asked.responses, say2);
+      }
+      const totalMs = Date.now() - t0;
+      if (ctx.json) {
+        return printJson2({
+          flow,
+          answerer: by,
+          firstBlueprintMs: firstMs,
+          totalMs,
+          screens: screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots })),
+          rounds: tallies,
+          inputTokens: tallies.reduce((s, t) => s + t.inputTokens, 0),
+          cost: tallies.reduce((s, t) => s + t.inputTokens, 0) * JEV_INPUT_PRICE
+        });
+      }
+      say2(costLine(tallies, by, screens.length) + ` \xB7 ${totalMs} ms in all \u2014 \`isocan undo\` takes the whole flow back`);
+    })
+  );
+}
+async function questions(host, opts, cmd) {
+  const { ctxOf: ctxOf2, resolveCanvas: resolveCanvas2 } = host;
+  const ctx = await ctxOf2(cmd);
+  const p = await resolveCanvas2(ctx);
+  const snapshot = await ctx.client.snapshot(p.id);
+  const { flow, screens, round } = pickFlow(await flowsOn(ctx, p.id, snapshot), opts.flow);
+  const file = { flow, round, calls: roundCalls(round, screens) };
+  console.log(JSON.stringify(file, null, 2));
+}
+async function answer(host, file, cmd) {
+  const { ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, printJson: printJson2 } = host;
+  let answered;
+  try {
+    answered = JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    throw new Error(`${file} is not a JSON file this can read: ${error.message}`);
+  }
+  const ctx = await ctxOf2(cmd);
+  const say2 = (line) => {
+    if (!ctx.json) console.log(line);
+  };
+  const p = await resolveCanvas2(ctx);
+  const snapshot = await ctx.client.snapshot(p.id);
+  const { flow, screens, round } = pickFlow(await flowsOn(ctx, p.id, snapshot), answered.flow);
+  if (answered.round !== round) throw new Error(`${file} answers round ${answered.round}, but flow ${flow} is waiting on round ${round} \u2014 \`isocan wire questions\` prints it`);
+  const calls = roundCalls(round, screens);
+  const responses = calls.map((call) => {
+    const mine = (answered.calls ?? []).find((c) => c.item === call.item);
+    if (!mine) throw new Error(`${file} has no call for ${call.item} \u2014 every screen in round ${round} needs its answers`);
+    if (Object.keys(call.request.questions).length === 0) return { answers: {} };
+    return answeredResponse({ ...call, response: mine.response }, `${file}'s call for ${call.item}`);
+  });
+  const canvas2 = new FlowCanvas(host, ctx, p.id, flow);
+  const after = await applyRound(canvas2, round, screens, calls, responses, say2);
+  const next2 = pendingRound(after.map((s) => s.spec));
+  if (ctx.json) return printJson2({ flow, round, items: after.map((s) => s.item), next: next2 });
+  say2(next2 ? `round ${round} applied \u2014 round ${next2} is next: \`isocan wire questions\`` : `round 3 applied \u2014 flow ${flow} is drawn; \`isocan undo\` takes the whole flow back`);
+}
 
 // packages/modules/wireframe/src/cli.ts
-function slugOf(title) {
+function slugOf2(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "screen";
 }
 function asData({ id: id3, category, props, elements }) {
@@ -11620,12 +12379,16 @@ function asData({ id: id3, category, props, elements }) {
 }
 function register6(host) {
   const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, sendOp: sendOp2, printJson: printJson2, placementFor: placementFor2 } = host;
-  const wire = host.program.command("wire").description("Wireframes: screens drawn from a catalog of blocks \u2014 a blue blueprint where a slot is undecided, grey where it is chosen");
+  const wire = host.program.command("wire").description('Wireframes: `wire "<request>"` composes a flow of screens from a catalog of blocks \u2014 a blue blueprint where a slot is undecided, grey where it is chosen');
+  registerCompose(host, wire);
+  wire.command("questions").description("Print the pending round of a wireframe flow as a question file, in Jev's request shape \u2014 for an agent to answer in Jev's place").option("--canvas <canvas>").option("--flow <flow>", "which flow (default: the newest one waiting on answers)").action(run2((opts, cmd) => questions(host, opts, cmd)));
+  wire.command("answer <file>").description("Apply a question file whose calls each carry a `response` in Jev's response shape \u2014 the screens fill in place, in the flow's op group").option("--canvas <canvas>").action(run2((file, _opts, cmd) => answer(host, file, cmd)));
   wire.command("render <spec>").description("Draw a wireframe spec (a JSON file) and add it to the canvas as an HTML screen with the spec inside it").option("--canvas <canvas>").option("--title <title>", "the item's title (default: the spec's title)").option("--at <x,y>", "place at world coordinates").option("--anchor <item>", "place to the left of this item").option("--in <group>", "insert into this group").option("--cell <row,col>", "with --in: one cell of the sheet's grid").action(
-    run2(async (file, opts, cmd) => {
+    run2(async (file, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
       let spec;
       try {
-        spec = JSON.parse(await readFile(file, "utf8"));
+        spec = JSON.parse(await readFile2(file, "utf8"));
       } catch (error) {
         throw new Error(`${file} is not a JSON file this can read: ${error.message}`);
       }
@@ -11640,7 +12403,7 @@ function register6(host) {
       const p = await resolveCanvas2(ctx);
       const snapshot = await ctx.client.snapshot(p.id);
       const title = opts.title ?? spec.title;
-      const filename = `${slugOf(title)}.html`;
+      const filename = `${slugOf2(title)}.html`;
       const upload = await ctx.client.uploadBlob(p.id, Buffer.from(html, "utf8"), "text/html", filename);
       const { width, height } = wireSize(spec);
       const itemId = newItemId();
@@ -11651,7 +12414,8 @@ function register6(host) {
         width,
         height,
         placement: placementFor2(snapshot, opts, { width, height }),
-        title
+        title,
+        properties: { [FIDELITY_PROP]: "wireframe" }
       });
       const at2 = host.insertionReceiptPlacement(result2.envelope.op, itemId);
       const slots = spec.slots.length;
@@ -11703,7 +12467,7 @@ var CLI_MODULES = [mindmapCli, mermaidCli, documentsCli, stickersCli, sandboxCli
 
 // packages/cli/src/runtime-modules.ts
 import { readFileSync as readFileSync3 } from "node:fs";
-import path8 from "node:path";
+import path9 from "node:path";
 import { pathToFileURL } from "node:url";
 async function loadRuntimeModules(home, host) {
   const loaded = [];
@@ -11725,7 +12489,7 @@ async function loadRuntimeModules(home, host) {
     let templates;
     if (manifest.guide) {
       try {
-        guide = readFileSync3(path8.join(dir, manifest.guide), "utf8");
+        guide = readFileSync3(path9.join(dir, manifest.guide), "utf8");
       } catch {
         guide = null;
       }
@@ -11733,7 +12497,7 @@ async function loadRuntimeModules(home, host) {
     if (manifest.cli) {
       globalThis.isocan ??= { core: src_exports };
       try {
-        const mod = await import(pathToFileURL(path8.join(dir, manifest.cli)).href);
+        const mod = await import(pathToFileURL(path9.join(dir, manifest.cli)).href);
         const record2 = mod.default;
         record2?.register?.(host);
         if (!guide && typeof record2?.guide === "string") guide = record2.guide;
@@ -12097,13 +12861,13 @@ var AcpAgentProcess = class _AcpAgentProcess {
 // packages/cli/src/agent-key.ts
 import { createHmac, randomBytes } from "node:crypto";
 import { promises as fs11 } from "node:fs";
-import path9 from "node:path";
+import path10 from "node:path";
 var AGENT_SECRET_FILE = "agent-secret";
 var AGENT_HARNESS = "agent";
 var PREFIX = `${AGENT_HARNESS}:`;
 var MAC_BYTES = 24;
 var SECRET_BYTES = 32;
-var agentSecretFile = (home) => path9.join(home, AGENT_SECRET_FILE);
+var agentSecretFile = (home) => path10.join(home, AGENT_SECRET_FILE);
 var legacyAgentKey = (name) => `${PREFIX}${name}`;
 function agentSessionOf(key) {
   if (!key.startsWith(PREFIX)) throw new Error(`not an agent key: ${key}`);
@@ -12371,8 +13135,8 @@ function printEndReach(reach) {
   for (const s of reach.enrolments) console.log(`  ${line(s)}`);
   console.log(`passes outstanding: ${reach.passes}`);
 }
-function printRefuse(answer, lifting) {
-  const { refusal, reach } = answer;
+function printRefuse(answer2, lifting) {
+  const { refusal, reach } = answer2;
   const shown = refusal.subject.replace(/^(email|repo|actor|net):/, "");
   if (lifting) {
     console.log(`${shown} is not refused any more. This home will admit it again.`);
@@ -12396,9 +13160,9 @@ the ledger \u2014 \`isocan operator log --target ${refusal.subject}\`.`
   }
   pairs["ends"] = refusal.expiresAt ? `on its own, ${refusalUntil(refusal.expiresAt)}` : "when you lift it";
   printKeyValues(pairs);
-  if (answer.sentence) console.log(`
+  if (answer2.sentence) console.log(`
 The person reads, from this home:
-  ${answer.sentence}`);
+  ${answer2.sentence}`);
   console.log(`
 ${REFUSAL_LIMIT}`);
   console.log(`
@@ -12507,12 +13271,12 @@ open this, once:
           home,
           lifting ? `lift the takedown on ${canvasId}` : `take down ${canvasId}`
         );
-        const answer = await client.operatorTakedown(canvasId, proof, {
+        const answer2 = await client.operatorTakedown(canvasId, proof, {
           ...opts.reason ? { reason: opts.reason } : {},
           ...opts.note ? { note: opts.note } : {},
           ...lifting ? { lift: true } : {}
         });
-        if (ctx.json) return printJson(answer);
+        if (ctx.json) return printJson(answer2);
         if (lifting) {
           console.log(`${canvasId} is served again. Nothing had been erased, so nothing is lost.`);
           console.log(
@@ -12522,7 +13286,7 @@ and syncs. Both rows are in the ledger \u2014 \`isocan operator log --target ${c
           );
           return;
         }
-        const { reach, takedown, cdn } = answer;
+        const { reach, takedown, cdn } = answer2;
         printKeyValues({
           canvas: canvasId,
           reason: takedown.reason,
@@ -12565,9 +13329,9 @@ laptop \u2014 and \`isocan operator takedown ${canvasId} --lift\` brings it all 
       const home = await operatorHome(ctx, canvasId, opts.home);
       const client = clientAt(ctx, home);
       const proof = await operatorProof(client, home, `purge ${canvasId} \u2014 erase it`);
-      const answer = await client.operatorPurge(canvasId, proof, { force: true });
-      if (ctx.json) return printJson(answer);
-      const { erased, survives, takedown } = answer;
+      const answer2 = await client.operatorPurge(canvasId, proof, { force: true });
+      if (ctx.json) return printJson(answer2);
+      const { erased, survives, takedown } = answer2;
       printKeyValues({
         canvas: canvasId,
         "taken down": `${takedown.at.slice(0, 10)} \u2014 ${takedown.reason}`,
@@ -12617,27 +13381,27 @@ record stays \u2014 \`isocan operator log --target ${canvasId}\`. There is no --
           const readline = await import("node:readline/promises");
           const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
           try {
-            const answer2 = await rl.question(
+            const answer3 = await rl.question(
               `End the ${preview.reach.enrolments.length} enrolment(s) too? They outlive their creating badge otherwise. [y/N] `
             );
-            withEnrolments = /^y(es)?$/i.test(answer2.trim());
+            withEnrolments = /^y(es)?$/i.test(answer3.trim());
           } finally {
             rl.close();
           }
         }
-        const answer = await client.operatorEnd(target2, proof, { ...request, withEnrolments });
-        if (ctx.json) return printJson(answer);
+        const answer2 = await client.operatorEnd(target2, proof, { ...request, withEnrolments });
+        if (ctx.json) return printJson(answer2);
         printKeyValues({
-          ended: answer.ended.length === 0 ? "nothing" : answer.ended.join(", "),
-          "tabs and daemons closed": `${answer.reached.sockets} here`,
-          "waits ended": String(answer.reached.waits),
-          "swept from their canvases": sweptLine(answer.swept),
-          "passes refused from now": String(answer.reach.passes),
+          ended: answer2.ended.length === 0 ? "nothing" : answer2.ended.join(", "),
+          "tabs and daemons closed": `${answer2.reached.sockets} here`,
+          "waits ended": String(answer2.reached.waits),
+          "swept from their canvases": sweptLine(answer2.swept),
+          "passes refused from now": String(answer2.reach.passes),
           enrolments: withEnrolments ? "ended with them" : preview.reach.enrolments.length === 0 ? "none" : `${preview.reach.enrolments.length} left standing \u2014 \`--with-enrolments\` ends them`
         });
-        if (answer.sentence) console.log(`
+        if (answer2.sentence) console.log(`
 The people on them read, from this home:
-  ${answer.sentence}`);
+  ${answer2.sentence}`);
         console.log(
           `
 Ending is not refusing: they can knock again and be a stranger, with none of these
@@ -12658,24 +13422,24 @@ claims. The record is in the ledger \u2014 \`isocan operator log --target ${targ
         const client = clientAt(ctx, home);
         const subject = who.trim() === LINK ? LINK : normalizeSubject(grantSubjectOf(who));
         const proof = await operatorProof(client, home, `turn off ${subject} on ${target2}`);
-        const answer = await client.operatorRevoke(target2, proof, {
+        const answer2 = await client.operatorRevoke(target2, proof, {
           subject,
           ...opts.reason ? { reason: opts.reason } : {},
           ...opts.note ? { note: opts.note } : {},
           ...opts.bar ? { bar: true } : {}
         });
-        if (ctx.json) return printJson(answer);
+        if (ctx.json) return printJson(answer2);
         printKeyValues({
-          [answer.target.kind]: answer.target.id,
+          [answer2.target.kind]: answer2.target.id,
           subject,
-          "was granted": `${answer.grant.at.slice(0, 10)} by ${answer.grant.grantedBy}`,
-          reached: answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`,
-          swept: sweptLine(answer.swept),
-          "kept out": answer.bar ? `yes \u2014 until an owner lifts it (${answer.bar.id})` : "no \u2014 `--bar` would"
+          "was granted": `${answer2.grant.at.slice(0, 10)} by ${answer2.grant.grantedBy}`,
+          reached: answer2.reached === 1 ? "1 canvas" : `${answer2.reached} canvases`,
+          swept: sweptLine(answer2.swept),
+          "kept out": answer2.bar ? `yes \u2014 until an owner lifts it (${answer2.bar.id})` : "no \u2014 `--bar` would"
         });
         console.log(`
 The owner reads, in Share and in \`isocan share\`:
-  ${answer.sentence}`);
+  ${answer2.sentence}`);
         console.log(
           `
 The owner can turn it back on \u2014 a revoke they can undo is a request. If it has to
@@ -12702,14 +13466,14 @@ stay off, the order is \`isocan operator takedown\`. The record is in the ledger
           home,
           lifting ? `lift the refusal on ${subject}` : `refuse ${subject}`
         );
-        const answer = await client.operatorRefuse(subject, proof, {
+        const answer2 = await client.operatorRefuse(subject, proof, {
           ...opts.reason ? { reason: opts.reason } : {},
           ...opts.note ? { note: opts.note } : {},
           ...opts.for ? { for: opts.for } : {},
           ...lifting ? { lift: true } : {}
         });
-        if (ctx.json) return printJson(answer);
-        printRefuse(answer, lifting);
+        if (ctx.json) return printJson(answer2);
+        printRefuse(answer2, lifting);
       }
     )
   );
@@ -12747,16 +13511,16 @@ stay off, the order is \`isocan operator takedown\`. The record is in the ledger
 import { spawn as spawn3 } from "node:child_process";
 import { promises as fs12 } from "node:fs";
 import os3 from "node:os";
-import path10 from "node:path";
+import path11 from "node:path";
 async function sandboxAsked(home, flags) {
   if (flags.sandbox) return true;
   if (flags.unsandboxed) return false;
   return (await readConfigFile(home)).sandbox === true;
 }
 async function whichBin(bin, env) {
-  for (const dir of (env.PATH ?? "").split(path10.delimiter)) {
+  for (const dir of (env.PATH ?? "").split(path11.delimiter)) {
     if (!dir) continue;
-    const candidate = path10.join(dir, bin);
+    const candidate = path11.join(dir, bin);
     try {
       await fs12.access(candidate, fs12.constants.X_OK);
       return candidate;
@@ -12768,16 +13532,16 @@ async function whichBin(bin, env) {
 async function packageRootOf(bin) {
   let dir;
   try {
-    dir = path10.dirname(await fs12.realpath(bin));
+    dir = path11.dirname(await fs12.realpath(bin));
   } catch {
     return null;
   }
   for (let up = 0; up < 5; up++) {
     try {
-      await fs12.access(path10.join(dir, "package.json"));
+      await fs12.access(path11.join(dir, "package.json"));
       return dir;
     } catch {
-      const parent = path10.dirname(dir);
+      const parent = path11.dirname(dir);
       if (parent === dir) break;
       dir = parent;
     }
@@ -12831,13 +13595,13 @@ function harnessPaths(harness, env) {
   const home = os3.homedir();
   switch (harness) {
     case "claude-code":
-      return [env.CLAUDE_CONFIG_DIR?.trim() || path10.join(home, ".claude"), path10.join(home, ".claude.json")];
+      return [env.CLAUDE_CONFIG_DIR?.trim() || path11.join(home, ".claude"), path11.join(home, ".claude.json")];
     case "codex":
-      return [env.CODEX_HOME?.trim() || path10.join(home, ".codex")];
+      return [env.CODEX_HOME?.trim() || path11.join(home, ".codex")];
     case "pi":
-      return [path10.join(home, ".pi")];
+      return [path11.join(home, ".pi")];
     case "antigravity":
-      return [path10.join(home, ".gemini")];
+      return [path11.join(home, ".gemini")];
     default:
       return [];
   }
@@ -12868,10 +13632,10 @@ async function policyFor(options) {
   const env = options.env ?? process.env;
   const raw = await readConfigFile(options.home);
   const strings = (value) => Array.isArray(value) ? value.filter((v) => typeof v === "string" && v.trim().length > 0) : [];
-  const nodeRoot = path10.dirname(path10.dirname(process.execPath));
-  const npmCache = env.npm_config_cache?.trim() || path10.join(os3.homedir(), ".npm");
+  const nodeRoot = path11.dirname(path11.dirname(process.execPath));
+  const npmCache = env.npm_config_cache?.trim() || path11.join(os3.homedir(), ".npm");
   const harness = harnessPaths(options.harness, env);
-  const caDirs = [env.NODE_EXTRA_CA_CERTS, env.SSL_CERT_FILE, env.CURL_CA_BUNDLE].filter((p) => Boolean(p?.trim())).map((p) => path10.dirname(p));
+  const caDirs = [env.NODE_EXTRA_CA_CERTS, env.SSL_CERT_FILE, env.CURL_CA_BUNDLE].filter((p) => Boolean(p?.trim())).map((p) => path11.dirname(p));
   return {
     network: {
       allowedDomains: dedupe([
@@ -12947,9 +13711,9 @@ function wrapSpec(spec, scan, settingsFile) {
   };
 }
 async function writeSandboxSettings(home, key, policy) {
-  const dir = path10.join(home, "sandbox");
+  const dir = path11.join(home, "sandbox");
   await fs12.mkdir(dir, { recursive: true });
-  const file = path10.join(dir, `${key.replace(/[^A-Za-z0-9_.-]/g, "-")}.json`);
+  const file = path11.join(dir, `${key.replace(/[^A-Za-z0-9_.-]/g, "-")}.json`);
   await fs12.writeFile(file, `${JSON.stringify(policy, null, 2)}
 `);
   return file;
@@ -13065,14 +13829,14 @@ async function runFenced(home, request, env = process.env, platform = process.pl
 // packages/cli/src/upgrade.ts
 import { promises as fs13 } from "node:fs";
 import { spawnSync as spawnSync2 } from "node:child_process";
-import path11 from "node:path";
+import path12 from "node:path";
 async function whichInstall(root, home = paths_exports.isocanHome()) {
-  const inside = path11.relative(resolved(paths_exports.buildsDir(home)), resolved(root));
-  if (inside && !inside.startsWith("..") && !path11.isAbsolute(inside)) {
+  const inside = path12.relative(resolved(paths_exports.buildsDir(home)), resolved(root));
+  if (inside && !inside.startsWith("..") && !path12.isAbsolute(inside)) {
     return { kind: "managed", root };
   }
-  if (await exists(path11.join(root, ".git"))) return { kind: "checkout", root };
-  if (root.includes(`${path11.sep}_npx${path11.sep}`)) return { kind: "npx", root };
+  if (await exists(path12.join(root, ".git"))) return { kind: "checkout", root };
+  if (root.includes(`${path12.sep}_npx${path12.sep}`)) return { kind: "npx", root };
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   const globalRoot = spawnSync2(npm, ["root", "-g"], { encoding: "utf8" }).stdout?.trim();
   if (globalRoot && resolved(root).startsWith(resolved(globalRoot))) {
@@ -13133,14 +13897,14 @@ async function exists(target2) {
 import { promises as fs14 } from "node:fs";
 import { spawn as spawn4 } from "node:child_process";
 import net from "node:net";
-import path13 from "node:path";
+import path14 from "node:path";
 
 // packages/cli/src/onpath.ts
 import { accessSync, constants, realpathSync } from "node:fs";
 import { spawnSync as spawnSync3 } from "node:child_process";
-import path12 from "node:path";
-var NPX_CACHE = `${path12.sep}_npx${path12.sep}`;
-var LOCAL_BIN = `${path12.sep}node_modules${path12.sep}.bin`;
+import path13 from "node:path";
+var NPX_CACHE = `${path13.sep}_npx${path13.sep}`;
+var LOCAL_BIN = `${path13.sep}node_modules${path13.sep}.bin`;
 function transientDir(dir) {
   return dir.includes(NPX_CACHE) || dir.endsWith(LOCAL_BIN);
 }
@@ -13161,23 +13925,23 @@ function real(file) {
 }
 function findOnPath(command2, pathVar = process.env.PATH ?? "", executable = runnable) {
   const names = process.platform === "win32" ? [`${command2}.cmd`, `${command2}.exe`, command2] : [command2];
-  for (const dir of pathVar.split(path12.delimiter)) {
+  for (const dir of pathVar.split(path13.delimiter)) {
     if (!dir || transientDir(dir)) continue;
     for (const name of names) {
-      const file = path12.join(dir, name);
+      const file = path13.join(dir, name);
       if (executable(file) && !transientDir(real(file))) return file;
     }
   }
   return null;
 }
 function rootOfBin(bin) {
-  return path12.resolve(path12.dirname(real(bin)), "../../..");
+  return path13.resolve(path13.dirname(real(bin)), "../../..");
 }
 function globalBinDir() {
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   const prefix = spawnSync3(npm, ["prefix", "-g"], { encoding: "utf8" }).stdout?.trim();
   if (!prefix) return null;
-  return process.platform === "win32" ? prefix : path12.join(prefix, "bin");
+  return process.platform === "win32" ? prefix : path13.join(prefix, "bin");
 }
 
 // packages/cli/src/managed.ts
@@ -13206,7 +13970,7 @@ async function listBuilds(home) {
 async function currentSha(home) {
   try {
     const target2 = await fs14.readlink(paths_exports.currentLink(home));
-    const sha = path13.basename(target2);
+    const sha = path14.basename(target2);
     return sha.length > 0 ? sha : null;
   } catch {
     return null;
@@ -13225,7 +13989,7 @@ async function currentBuild(home) {
 async function flipTo(home, sha) {
   const link = paths_exports.currentLink(home);
   const tmp = `${link}.tmp-${process.pid}`;
-  const target2 = process.platform === "win32" ? paths_exports.buildDir(home, sha) : path13.join("builds", sha);
+  const target2 = process.platform === "win32" ? paths_exports.buildDir(home, sha) : path14.join("builds", sha);
   await fs14.mkdir(home, { recursive: true });
   await fs14.rm(tmp, { force: true });
   await fs14.symlink(target2, tmp, process.platform === "win32" ? "junction" : "dir");
@@ -13250,9 +14014,9 @@ function strip(result2) {
 }
 async function smokeAttempt(home, root, expect, timeoutMs) {
   await fs14.mkdir(paths_exports.buildsDir(home), { recursive: true });
-  const scratch = await fs14.mkdtemp(path13.join(paths_exports.buildsDir(home), ".smoke-"));
-  const bin = path13.join(root, "packages", "cli", "bin", "isocan.js");
-  const logFile = path13.join(scratch, "smoke.log");
+  const scratch = await fs14.mkdtemp(path14.join(paths_exports.buildsDir(home), ".smoke-"));
+  const bin = path14.join(root, "packages", "cli", "bin", "isocan.js");
+  const logFile = path14.join(scratch, "smoke.log");
   const port = await freePort();
   const env = {
     ...process.env,
@@ -13398,7 +14162,7 @@ async function installBuild(options) {
   let stamped = null;
   try {
     const manifest = JSON.parse(
-      await fs14.readFile(path13.join(paths_exports.buildRoot(staging), "package.json"), "utf8")
+      await fs14.readFile(path14.join(paths_exports.buildRoot(staging), "package.json"), "utf8")
     );
     stamped = plausibleSha(manifest.isocan?.commit);
   } catch {
@@ -13470,7 +14234,7 @@ async function shelveExisting(home, root, sha) {
   if (!sha) return null;
   const dir = paths_exports.buildDir(home, sha);
   if (await exists2(dir)) return null;
-  const prefix = path13.resolve(root, "..", "..");
+  const prefix = path14.resolve(root, "..", "..");
   if (!await exists2(paths_exports.buildRoot(prefix))) return null;
   await fs14.mkdir(paths_exports.buildsDir(home), { recursive: true });
   try {
@@ -13482,11 +14246,11 @@ async function shelveExisting(home, root, sha) {
   return buildOf(home, sha, stat.mtimeMs);
 }
 function binOfInstall(root) {
-  const prefix = path13.resolve(root, "..", "..", "..");
-  return process.platform === "win32" ? path13.join(prefix, "isocan.cmd") : path13.join(prefix, "bin", "isocan");
+  const prefix = path14.resolve(root, "..", "..", "..");
+  return process.platform === "win32" ? path14.join(prefix, "isocan.cmd") : path14.join(prefix, "bin", "isocan");
 }
 async function adoptGlobal(home, bin = findOnPath("isocan")) {
-  const target2 = path13.join(
+  const target2 = path14.join(
     paths_exports.currentLink(home),
     "node_modules",
     "isocan",
@@ -13508,7 +14272,7 @@ async function adoptGlobal(home, bin = findOnPath("isocan")) {
     linked = await fs14.readlink(bin);
   } catch {
   }
-  if (linked && path13.resolve(path13.dirname(bin), linked) === path13.resolve(target2)) {
+  if (linked && path14.resolve(path14.dirname(bin), linked) === path14.resolve(target2)) {
     return { managed: true, moved: false, bin, why: `${bin} already resolves through current` };
   }
   const kind = (await whichInstall(rootOfBin(bin), home)).kind;
@@ -13595,19 +14359,19 @@ async function upgradePolicy(home, kind) {
   };
 }
 async function withUpgradeLock(home, work) {
-  const lock = path13.join(paths_exports.buildsDir(home), ".lock");
+  const lock = path14.join(paths_exports.buildsDir(home), ".lock");
   await fs14.mkdir(paths_exports.buildsDir(home), { recursive: true });
   const claim = async () => {
     try {
       await fs14.mkdir(lock);
-      await fs14.writeFile(path13.join(lock, "pid"), String(process.pid));
+      await fs14.writeFile(path14.join(lock, "pid"), String(process.pid));
       return true;
     } catch {
       return false;
     }
   };
   if (!await claim()) {
-    const owner = Number(await fs14.readFile(path13.join(lock, "pid"), "utf8").catch(() => ""));
+    const owner = Number(await fs14.readFile(path14.join(lock, "pid"), "utf8").catch(() => ""));
     const alive = Number.isInteger(owner) && owner > 0 && isAlive(owner);
     if (alive) return null;
     await fs14.rm(lock, { recursive: true, force: true });
@@ -13739,7 +14503,7 @@ async function autoUpgrade(options) {
     return `isocan: upgrade attempt failed \u2014 ${err.message}`;
   }
 }
-var refusalFile = (home) => path13.join(home, ".upgrade-failed");
+var refusalFile = (home) => path14.join(home, ".upgrade-failed");
 async function lastRefusal(home) {
   try {
     const raw = JSON.parse(await fs14.readFile(refusalFile(home), "utf8"));
@@ -13756,7 +14520,7 @@ function mimeFor(filename) {
 
 // packages/cli/src/inline.ts
 import { existsSync as existsSync2, promises as fs15 } from "node:fs";
-import path14 from "node:path";
+import path15 from "node:path";
 async function resolveImageToDataUri(rawRef, baseDir) {
   if (!rawRef) return null;
   const trimmed = rawRef.trim();
@@ -13770,11 +14534,11 @@ async function resolveImageToDataUri(rawRef, baseDir) {
   } catch {
   }
   const candidates = [];
-  if (path14.isAbsolute(unescaped)) {
+  if (path15.isAbsolute(unescaped)) {
     candidates.push(unescaped);
-    candidates.push(path14.resolve(baseDir, "." + unescaped));
+    candidates.push(path15.resolve(baseDir, "." + unescaped));
   } else {
-    candidates.push(path14.resolve(baseDir, unescaped));
+    candidates.push(path15.resolve(baseDir, unescaped));
   }
   for (const candidate of candidates) {
     if (existsSync2(candidate)) {
@@ -13816,7 +14580,7 @@ async function inlineCssUrls(css, baseDir) {
   );
 }
 async function inlineHtmlAssets(filePath, html) {
-  const baseDir = path14.dirname(path14.resolve(filePath));
+  const baseDir = path15.dirname(path15.resolve(filePath));
   const linkRegex = /<link\b(?=[^>]*?\brel=["']stylesheet["'])(?=[^>]*?\bhref=["']([^"']+)["'])[^>]*>/gi;
   const linksToReplace = /* @__PURE__ */ new Map();
   let linkMatch;
@@ -13828,11 +14592,11 @@ async function inlineHtmlAssets(filePath, html) {
       if (!rawHref.startsWith("http:") && !rawHref.startsWith("https:") && !rawHref.startsWith("//")) {
         const clean = rawHref.split(/[?#]/)[0];
         if (clean) {
-          const cssPath = path14.isAbsolute(clean) ? clean : path14.resolve(baseDir, clean);
+          const cssPath = path15.isAbsolute(clean) ? clean : path15.resolve(baseDir, clean);
           if (existsSync2(cssPath)) {
             try {
               const rawCss = await fs15.readFile(cssPath, "utf8");
-              const inlinedCss = await inlineCssUrls(rawCss, path14.dirname(cssPath));
+              const inlinedCss = await inlineCssUrls(rawCss, path15.dirname(cssPath));
               linksToReplace.set(fullTag, `<style>/* inlined: ${rawHref} */
 ${inlinedCss}
 </style>`);
@@ -13858,7 +14622,7 @@ ${inlinedCss}
       if (!rawSrc.startsWith("http:") && !rawSrc.startsWith("https:") && !rawSrc.startsWith("//")) {
         const clean = rawSrc.split(/[?#]/)[0];
         if (clean) {
-          const jsPath = path14.isAbsolute(clean) ? clean : path14.resolve(baseDir, clean);
+          const jsPath = path15.isAbsolute(clean) ? clean : path15.resolve(baseDir, clean);
           if (existsSync2(jsPath)) {
             try {
               const rawJs = await fs15.readFile(jsPath, "utf8");
@@ -13948,7 +14712,7 @@ async function inlineMarkdownAssets(filePath, markdown) {
     const target2 = node.type === "imageReference" ? definitions.get(node.identifier ?? "") : node;
     const start = node.position?.start.offset, end = node.position?.end.offset;
     if (!target2?.url || start === void 0 || end === void 0) continue;
-    const data = await resolveImageToDataUri(target2.url, path14.dirname(path14.resolve(filePath)));
+    const data = await resolveImageToDataUri(target2.url, path15.dirname(path15.resolve(filePath)));
     if (!data) continue;
     const alt = (node.alt ?? "").replace(/\\/g, "\\\\").replace(/\[/g, "\\[").replace(/\]/g, "\\]");
     const title = target2.title == null ? "" : ` "${target2.title.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
@@ -14062,7 +14826,7 @@ async function writeSessionFile(home, actorId, session2) {
   if (session2 === null) {
     await fs16.rm(file, { force: true });
   } else {
-    await fs16.mkdir(path15.dirname(file), { recursive: true });
+    await fs16.mkdir(path16.dirname(file), { recursive: true });
     await fs16.writeFile(file, JSON.stringify(session2, null, 2));
   }
 }
@@ -14420,7 +15184,7 @@ program2.command("mcp").description(
   "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)"
 ).action(
   run(async () => {
-    const { serveStdio } = await import("./src-AQ2Z42T5.mjs");
+    const { serveStdio } = await import("./src-EYG3OTOC.mjs");
     await serveStdio({ version: buildStamp().version });
     await new Promise(() => {
     });
@@ -14435,14 +15199,14 @@ program2.command("serve").alias("start").description("Run the state daemon (auto
       throw refuseDaemonVerb("serve", declared.at ?? "its home");
     }
     if (opts.foreground) {
-      const { runDaemon } = await import("./daemon-CUJ6R3BT.mjs");
+      const { runDaemon } = await import("./daemon-4ARBWGXF.mjs");
       await runDaemon({ port, home, ...opts.force ? { takeover: true } : {} });
       return new Promise(() => {
       });
     }
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
     if (opts.force) {
-      const { stopDaemons } = await import("./daemon-CUJ6R3BT.mjs");
+      const { stopDaemons } = await import("./daemon-4ARBWGXF.mjs");
       const stopped = await stopDaemons(port, home);
       if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
     } else if (await client.health()) {
@@ -14541,7 +15305,7 @@ home: NOT ANSWERING \u2014 every command against this canvas will fail until it 
        */
       upgrades: await upgradePolicy(
         paths_exports.isocanHome(),
-        (await whichInstall(path15.resolve(myRoot()), paths_exports.isocanHome())).kind
+        (await whichInstall(path16.resolve(myRoot()), paths_exports.isocanHome())).kind
       ).then((policy) => `${policy.mode} \u2014 ${policy.why}`),
       /**
        * **A build this machine tried and refused** (journey Scene 2). The
@@ -14633,12 +15397,12 @@ async function rosterCaveat(ctx, canvasId) {
   return why === null ? null : `this is only who this machine can see \u2014 ${why}`;
 }
 async function restartDaemon(home, port) {
-  const { stopDaemons } = await import("./daemon-CUJ6R3BT.mjs");
+  const { stopDaemons } = await import("./daemon-4ARBWGXF.mjs");
   const stopped = await stopDaemons(port, home);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
   await client.ensureDaemon();
   const health = await client.healthz(2e3);
-  await fs16.rm(path15.join(home, ".stale-warned"), { force: true });
+  await fs16.rm(path16.join(home, ".stale-warned"), { force: true });
   return { stopped, health, client };
 }
 program2.command("restart").description("Stop the daemon and start this build in its place \u2014 what an upgrade needs").action(
@@ -14652,7 +15416,7 @@ program2.command("restart").description("Stop the daemon and start this build in
     const mineNow = shaOfRoot(home, myRoot());
     const applied = await autoUpgrade({
       home,
-      install: await whichInstall(path15.resolve(myRoot()), home),
+      install: await whichInstall(path16.resolve(myRoot()), home),
       health: await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz(),
       spec: INSTALL_SPEC,
       ...mineNow ? { protect: [mineNow] } : {}
@@ -14965,14 +15729,14 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
       );
       say(await adoptGlobal(home));
       if (opts.restart !== false) {
-        const bin = path15.join(found.root, "packages", "cli", "bin", "isocan.js");
+        const bin = path16.join(found.root, "packages", "cli", "bin", "isocan.js");
         spawnSync4(process.execPath, [bin, "--port", String(port), "restart"], {
           stdio: "inherit"
         });
       }
       return;
     }
-    const install = await whichInstall(path15.resolve(myRoot()), home);
+    const install = await whichInstall(path16.resolve(myRoot()), home);
     const plan = planUpgrade(
       install,
       install.kind === "checkout" ? checkoutState(install.root) : null,
@@ -15001,7 +15765,7 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
           return;
         }
       }
-      const bin = moved ? path15.join(moved.root, "packages", "cli", "bin", "isocan.js") : path15.join(install.root, "packages", "cli", "bin", "isocan.js");
+      const bin = moved ? path16.join(moved.root, "packages", "cli", "bin", "isocan.js") : path16.join(install.root, "packages", "cli", "bin", "isocan.js");
       spawnSync4(process.execPath, [bin, "--port", String(port), "restart"], {
         stdio: "inherit"
       });
@@ -15106,7 +15870,7 @@ function say(adoption) {
 }
 program2.command("stop").description("Stop the daemon \u2014 asks the port who it is, so a stale one can't hide").action(
   run(async (_opts, cmd) => {
-    const { stopDaemons } = await import("./daemon-CUJ6R3BT.mjs");
+    const { stopDaemons } = await import("./daemon-4ARBWGXF.mjs");
     const declared = await resolveDeclared(paths_exports.isocanHome());
     if (declared?.mode === "direct") {
       throw refuseDaemonVerb("stop", declared.at ?? "its home");
@@ -15326,8 +16090,8 @@ function spaceScope(ctx, space) {
     revoke: (grantId, bar2) => ctx.client.revokeSpaceGrant(space.id, grantId, ctx.actor.id, bar2)
   };
 }
-function reachedLine(answer) {
-  return answer.reached === void 0 ? "" : ` \u2014 reached ${answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`}`;
+function reachedLine(answer2) {
+  return answer2.reached === void 0 ? "" : ` \u2014 reached ${answer2.reached === 1 ? "1 canvas" : `${answer2.reached} canvases`}`;
 }
 async function shareRows(ctx, scope, who, opts, sweepAlso) {
   const barWith = opts.bar === true;
@@ -15349,25 +16113,25 @@ async function shareRows(ctx, scope, who, opts, sweepAlso) {
     if (isBar(live)) {
       throw new Error(`${subject} is kept out of ${scope.what}, not invited \u2014 \`--unbar\` lets them back in`);
     }
-    const answer = await scope.revoke(live.id, barWith);
-    sweepAlso(answer.swept);
-    if (answer.bar) {
-      console.log(`revoked ${subject} on ${scope.what}, and kept out${reachedLine(answer)} \u2014 they are refused at the door until \`--unbar\``);
+    const answer2 = await scope.revoke(live.id, barWith);
+    sweepAlso(answer2.swept);
+    if (answer2.bar) {
+      console.log(`revoked ${subject} on ${scope.what}, and kept out${reachedLine(answer2)} \u2014 they are refused at the door until \`--unbar\``);
     } else {
-      console.log(`revoked ${subject} on ${scope.what}${reachedLine(answer)}`);
-      if (answer.stillAdmittedBy === "link") {
+      console.log(`revoked ${subject} on ${scope.what}${reachedLine(answer2)}`);
+      if (answer2.stillAdmittedBy === "link") {
         console.log("they can still enter by the link; `--bar` to keep them out");
-      } else if (answer.stillAdmittedBy === "space") {
+      } else if (answer2.stillAdmittedBy === "space") {
         console.log("they can still enter by the space this canvas is in; `isocan share --space <name> --revoke` removes them from every canvas in it");
       }
     }
   }
   if (barWho !== void 0) {
     const subject = normalizeSubject(grantSubjectOf(barWho));
-    const answer = await scope.bar(subject);
-    sweepAlso(answer.swept);
+    const answer2 = await scope.bar(subject);
+    sweepAlso(answer2.swept);
     console.log(
-      `kept out ${subject} on ${scope.what} (${answer.grant.id})${reachedLine(answer)} \u2014 they are refused at the door whatever the link allows, until \`--unbar\``
+      `kept out ${subject} on ${scope.what} (${answer2.grant.id})${reachedLine(answer2)} \u2014 they are refused at the door whatever the link allows, until \`--unbar\``
     );
   }
   if (opts.unbar !== void 0) {
@@ -15378,9 +16142,9 @@ async function shareRows(ctx, scope, who, opts, sweepAlso) {
         `nobody is kept out of ${scope.what} as ${subject} \u2014 \`isocan share\` lists who is`
       );
     }
-    const answer = await scope.revoke(bar2.id);
-    sweepAlso(answer.swept);
-    console.log(`let ${subject} back in to ${scope.what}${reachedLine(answer)} \u2014 the link or an invitation now decides`);
+    const answer2 = await scope.revoke(bar2.id);
+    sweepAlso(answer2.swept);
+    console.log(`let ${subject} back in to ${scope.what}${reachedLine(answer2)} \u2014 the link or an invitation now decides`);
   }
   if (opts.as !== void 0 && who === void 0) {
     throw new Error("--as says what an invitation admits to; name somebody to invite");
@@ -15391,12 +16155,12 @@ async function shareRows(ctx, scope, who, opts, sweepAlso) {
       throw new Error(`--as wants own, edit, read or view, got: ${opts.as}`);
     }
     const subject = await subjectOf(ctx, who);
-    const answer = await scope.invite(subject, rung);
-    sweepAlso(answer.swept);
-    const { grant } = answer;
+    const answer2 = await scope.invite(subject, rung);
+    sweepAlso(answer2.swept);
+    const { grant } = answer2;
     const groupId = groupIdOf(grant.subject);
     console.log(
-      `granted ${grant.subject} on ${scope.what} as ${capabilityWord.dialog[capabilityOf(grant)]} (${grant.id})${reachedLine(answer)} \u2014 ` + (groupId !== null ? "its members get in by proving an address in the group; who is in it is read at the door" : "they get in by proving that address; nothing was emailed from here")
+      `granted ${grant.subject} on ${scope.what} as ${capabilityWord.dialog[capabilityOf(grant)]} (${grant.id})${reachedLine(answer2)} \u2014 ` + (groupId !== null ? "its members get in by proving an address in the group; who is in it is read at the door" : "they get in by proving that address; nothing was emailed from here")
     );
   }
 }
@@ -15412,11 +16176,11 @@ async function shareSpace(ctx, space, who, opts) {
     if (capability === null) {
       throw new Error(`--link wants on, off, edit, read or view, got: ${opts.link}`);
     }
-    const answer = await ctx.client.setSpaceLink(space.id, capability, ctx.actor.id);
-    sweepAlso(answer.swept);
-    const reached = answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`;
+    const answer2 = await ctx.client.setSpaceLink(space.id, capability, ctx.actor.id);
+    sweepAlso(answer2.swept);
+    const reached = answer2.reached === 1 ? "1 canvas" : `${answer2.reached} canvases`;
     console.log(
-      `link ${capability === "edit" ? "on" : capability} on every canvas in ${space.name} \u2014 reached ${reached}` + (answer.changed === answer.reached ? "" : ` (${answer.changed} changed; the rest already stood so)`) + "; each canvas's own link can be set again with `isocan share --link`"
+      `link ${capability === "edit" ? "on" : capability} on every canvas in ${space.name} \u2014 reached ${reached}` + (answer2.changed === answer2.reached ? "" : ` (${answer2.changed} changed; the rest already stood so)`) + "; each canvas's own link can be set again with `isocan share --link`"
     );
   }
   await shareRows(ctx, spaceScope(ctx, space), who, opts, sweepAlso);
@@ -15502,9 +16266,9 @@ spaceCommand.command("add <name> <canvas...>").description("Put canvases in a sp
     const canvases = await ctx.client.listCanvases();
     for (const ref of refs) {
       const canvas2 = matchRef(canvases, ref);
-      const answer = await ctx.client.addToSpace(space.id, canvas2.id, ctx.actor.id);
-      if (ctx.json) printJson(answer);
-      else console.log(`${canvas2.title} (${canvas2.id}) is in ${space.name}${answer.reached === 0 ? " \u2014 it already was" : ""}`);
+      const answer2 = await ctx.client.addToSpace(space.id, canvas2.id, ctx.actor.id);
+      if (ctx.json) printJson(answer2);
+      else console.log(`${canvas2.title} (${canvas2.id}) is in ${space.name}${answer2.reached === 0 ? " \u2014 it already was" : ""}`);
     }
   })
 );
@@ -15515,10 +16279,10 @@ spaceCommand.command("remove <name> <canvas...>").description("Take canvases out
     const canvases = await ctx.client.listCanvases();
     for (const ref of refs) {
       const canvas2 = matchRef(canvases, ref);
-      const answer = await ctx.client.removeFromSpace(space.id, canvas2.id, ctx.actor.id);
-      if (ctx.json) printJson(answer);
-      else if (answer.reached === 0) console.log(`${canvas2.title} (${canvas2.id}) was not in ${space.name}`);
-      else console.log(`${canvas2.title} (${canvas2.id}) is out of ${space.name} \u2014 ${sweptLine(answer.swept)}`);
+      const answer2 = await ctx.client.removeFromSpace(space.id, canvas2.id, ctx.actor.id);
+      if (ctx.json) printJson(answer2);
+      else if (answer2.reached === 0) console.log(`${canvas2.title} (${canvas2.id}) was not in ${space.name}`);
+      else console.log(`${canvas2.title} (${canvas2.id}) is out of ${space.name} \u2014 ${sweptLine(answer2.swept)}`);
     }
   })
 );
@@ -15526,10 +16290,10 @@ spaceCommand.command("delete <name>").description("Delete a space \u2014 every c
   run(async (name, _opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const space = await resolveSpace(ctx, name);
-    const answer = await ctx.client.deleteSpace(space.id, ctx.actor.id);
-    if (ctx.json) return printJson(answer);
-    const reached = answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`;
-    console.log(`deleted the space ${space.name} (${space.id}) \u2014 ${reached} kept, each with its own sharing; ${sweptLine(answer.swept)}`);
+    const answer2 = await ctx.client.deleteSpace(space.id, ctx.actor.id);
+    if (ctx.json) return printJson(answer2);
+    const reached = answer2.reached === 1 ? "1 canvas" : `${answer2.reached} canvases`;
+    console.log(`deleted the space ${space.name} (${space.id}) \u2014 ${reached} kept, each with its own sharing; ${sweptLine(answer2.swept)}`);
   })
 );
 async function resolveGroup(ctx, ref) {
@@ -15600,16 +16364,16 @@ groupCommand.command("add <name> <address...>").description("Put people in a gro
     const group = await resolveGroup(ctx, name);
     for (const address of addresses) {
       const member = normalizeSubject(grantSubjectOf(address));
-      const answer = await ctx.client.addGroupMember(group.id, member, ctx.actor.id);
-      if (ctx.json) printJson(answer);
-      else if (answer.reached === 0 && answer.group.size === group.size) {
+      const answer2 = await ctx.client.addGroupMember(group.id, member, ctx.actor.id);
+      if (ctx.json) printJson(answer2);
+      else if (answer2.reached === 0 && answer2.group.size === group.size) {
         console.log(`${member} was already in ${group.name}`);
       } else {
         console.log(
-          `${member} is in ${group.name} (${answer.group.size})` + (answer.reached ? ` \u2014 reached ${answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`}; ${sweptLine(answer.swept)}` : "")
+          `${member} is in ${group.name} (${answer2.group.size})` + (answer2.reached ? ` \u2014 reached ${answer2.reached === 1 ? "1 canvas" : `${answer2.reached} canvases`}; ${sweptLine(answer2.swept)}` : "")
         );
       }
-      group.size = answer.group.size;
+      group.size = answer2.group.size;
     }
   })
 );
@@ -15619,16 +16383,16 @@ groupCommand.command("remove <name> <address...>").description("Take people out 
     const group = await resolveGroup(ctx, name);
     for (const address of addresses) {
       const member = normalizeSubject(grantSubjectOf(address));
-      const answer = await ctx.client.removeGroupMember(group.id, member, ctx.actor.id);
-      if (ctx.json) printJson(answer);
-      else if (answer.reached === 0 && answer.group.size === group.size) {
+      const answer2 = await ctx.client.removeGroupMember(group.id, member, ctx.actor.id);
+      if (ctx.json) printJson(answer2);
+      else if (answer2.reached === 0 && answer2.group.size === group.size) {
         console.log(`${member} was not in ${group.name}`);
       } else {
         console.log(
-          `${member} is out of ${group.name} (${answer.group.size})` + (answer.reached ? ` \u2014 reached ${answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`}; ${sweptLine(answer.swept)}` : "")
+          `${member} is out of ${group.name} (${answer2.group.size})` + (answer2.reached ? ` \u2014 reached ${answer2.reached === 1 ? "1 canvas" : `${answer2.reached} canvases`}; ${sweptLine(answer2.swept)}` : "")
         );
       }
-      group.size = answer.group.size;
+      group.size = answer2.group.size;
     }
   })
 );
@@ -15636,10 +16400,10 @@ groupCommand.command("delete <name>").description("Delete a group \u2014 its row
   run(async (name, _opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const group = await resolveGroup(ctx, name);
-    const answer = await ctx.client.deleteGroup(group.id, ctx.actor.id);
-    if (ctx.json) return printJson(answer);
-    const reached = answer.reached === 1 ? "1 canvas" : `${answer.reached ?? 0} canvases`;
-    console.log(`deleted the group ${group.name} (${group.id}) \u2014 reached ${reached}; ${sweptLine(answer.swept ?? { expelled: 0, rerooted: 0 })}`);
+    const answer2 = await ctx.client.deleteGroup(group.id, ctx.actor.id);
+    if (ctx.json) return printJson(answer2);
+    const reached = answer2.reached === 1 ? "1 canvas" : `${answer2.reached ?? 0} canvases`;
+    console.log(`deleted the group ${group.name} (${group.id}) \u2014 reached ${reached}; ${sweptLine(answer2.swept ?? { expelled: 0, rerooted: 0 })}`);
   })
 );
 function linkLine(capability, at2) {
@@ -15861,7 +16625,7 @@ program2.command("clone <repo> [dir]").description(
     async (repo, dir, opts, cmd) => {
       const globals = cmd.optsWithGlobals();
       const remote = gitRemote(repo);
-      const target2 = path15.resolve(dir ?? defaultCloneDir(remote));
+      const target2 = path16.resolve(dir ?? defaultCloneDir(remote));
       if (await exists3(target2)) {
         throw new Error(
           `${target2} already exists \u2014 \`isocan setup ${dir ?? defaultCloneDir(remote)}\` readies a directory you already have.`
@@ -15874,7 +16638,7 @@ program2.command("clone <repo> [dir]").description(
       }
       const report2 = { repo: remote, directory: target2 };
       const skill = await installSkill(target2, opts.force ?? false);
-      report2.skill = skill.state === "differs" ? `${path15.relative(target2, skill.path)} \u2014 differs from this build's copy; --force to refresh` : `${path15.relative(target2, skill.path)} (${skill.state})`;
+      report2.skill = skill.state === "differs" ? `${path16.relative(target2, skill.path)} \u2014 differs from this build's copy; --force to refresh` : `${path16.relative(target2, skill.path)} (${skill.state})`;
       const home = paths_exports.isocanHome();
       const port = daemonPort(cmd);
       const { base, direct } = await baseForCwd(home, port);
@@ -15896,8 +16660,8 @@ program2.command("clone <repo> [dir]").description(
       }
       if (globals.json) return printJson(report2);
       printKeyValues(report2);
-      const node = await exists3(path15.join(target2, "package.json"));
-      const rel = path15.relative(process.cwd(), target2) || ".";
+      const node = await exists3(path16.join(target2, "package.json"));
+      const rel = path16.relative(process.cwd(), target2) || ".";
       console.log(
         `
 cd ${rel}` + (node ? "\nnpm install        # not run for you: it executes the repo's own scripts" : "") + "\n\nTell your agent to use the isocan-collab skill (or to run `isocan --agent-help`,\nwhich is the same instructions, shipped with this build)."
@@ -15912,26 +16676,26 @@ async function exists3(target2) {
 }
 async function installSkill(dir, force) {
   const source = skillSource2();
-  const dest = path15.join(dir, ".agents", "skills", SKILL_NAME);
+  const dest = path16.join(dir, ".agents", "skills", SKILL_NAME);
   const already = await exists3(dest);
   let state = "installed";
   if (already && !force) {
     const [theirs, ours] = await Promise.all([
-      fs16.readFile(path15.join(dest, "SKILL.md"), "utf8").catch(() => ""),
-      fs16.readFile(path15.join(source, "SKILL.md"), "utf8")
+      fs16.readFile(path16.join(dest, "SKILL.md"), "utf8").catch(() => ""),
+      fs16.readFile(path16.join(source, "SKILL.md"), "utf8")
     ]);
     state = theirs === ours ? "current" : "differs";
   } else {
-    await fs16.mkdir(path15.dirname(dest), { recursive: true });
+    await fs16.mkdir(path16.dirname(dest), { recursive: true });
     await fs16.rm(dest, { recursive: true, force: true });
     await fs16.cp(source, dest, { recursive: true });
     state = already ? "refreshed" : "installed";
   }
-  const doorway = path15.join(dir, ".claude", "skills", SKILL_NAME);
+  const doorway = path16.join(dir, ".claude", "skills", SKILL_NAME);
   const link = await fs16.lstat(doorway).catch(() => null);
   if (!link) {
-    await fs16.mkdir(path15.dirname(doorway), { recursive: true });
-    await fs16.symlink(path15.join("..", "..", ".agents", "skills", SKILL_NAME), doorway).catch(() => {
+    await fs16.mkdir(path16.dirname(doorway), { recursive: true });
+    await fs16.symlink(path16.join("..", "..", ".agents", "skills", SKILL_NAME), doorway).catch(() => {
     });
   }
   return { path: dest, state };
@@ -15971,7 +16735,7 @@ program2.command("setup [target]").description(
     async (target2, opts, cmd) => {
       const globals = cmd.optsWithGlobals();
       const arrival = target2 === void 0 ? null : setupAddress(target2);
-      const work = arrival ? process.cwd() : path15.resolve(target2 ?? process.cwd());
+      const work = arrival ? process.cwd() : path16.resolve(target2 ?? process.cwd());
       if (!await exists3(work)) throw new Error(`no such directory: ${work}`);
       const report2 = {};
       const isocanHome = paths_exports.isocanHome();
@@ -15996,7 +16760,7 @@ program2.command("setup [target]").description(
         report2.mode = `direct (${because}) \u2014 no daemon or local copy here; commands speak to ${direct} itself. \`isocan direct --clear\` for a daemon`;
       }
       const skill = await installSkill(work, opts.force ?? false);
-      report2.skill = skill.state === "differs" ? `${path15.relative(work, skill.path)} \u2014 differs from this build's copy; --force to refresh` : `${path15.relative(work, skill.path)} (${skill.state})`;
+      report2.skill = skill.state === "differs" ? `${path16.relative(work, skill.path)} \u2014 differs from this build's copy; --force to refresh` : `${path16.relative(work, skill.path)} (${skill.state})`;
       let durableBin = findOnPath("isocan");
       if (durableBin) {
         report2.cli = `already on PATH (${durableBin})`;
@@ -16013,7 +16777,7 @@ program2.command("setup [target]").description(
         if (durableBin) {
           report2.cli = `installed globally (${durableBin})`;
         } else if (bin) {
-          durableBin = path15.join(bin, "isocan");
+          durableBin = path16.join(bin, "isocan");
           report2.cli = `installed at ${durableBin} \u2014 not on this PATH; export PATH="${bin}:$PATH"`;
         } else {
           report2.cli = `install failed \u2014 run \`npm i -g ${INSTALL_SPEC}\` yourself`;
@@ -16022,7 +16786,7 @@ program2.command("setup [target]").description(
       const home = isocanHome;
       const port = daemonPort(cmd);
       const client = new DaemonClient(direct ?? `http://127.0.0.1:${port}`, home);
-      const transient = (await whichInstall(path15.resolve(myRoot()))).kind === "npx";
+      const transient = (await whichInstall(path16.resolve(myRoot()))).kind === "npx";
       const handOff = transient && !direct ? durableBin : null;
       if (direct) {
         const answering = await client.awaitHealth(5e3);
@@ -16032,7 +16796,7 @@ program2.command("setup [target]").description(
           const before = await client.healthz();
           if (handOff) {
             const owner = rootOfBin(handOff);
-            if (!before || path15.resolve(before.root ?? "") !== owner) {
+            if (!before || path16.resolve(before.root ?? "") !== owner) {
               const done = spawnSync4(handOff, ["restart", "--port", String(port)], {
                 encoding: "utf8",
                 shell: process.platform === "win32",
@@ -16045,9 +16809,9 @@ program2.command("setup [target]").description(
               }
             }
           } else if (before && stalenessOf(before).stale) {
-            const { stopDaemons } = await import("./daemon-CUJ6R3BT.mjs");
+            const { stopDaemons } = await import("./daemon-4ARBWGXF.mjs");
             await stopDaemons(port, home);
-            await fs16.rm(path15.join(home, ".stale-warned"), { force: true });
+            await fs16.rm(path16.join(home, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
           }
           await client.ensureDaemon();
@@ -16113,14 +16877,14 @@ program2.command("setup [target]").description(
         report2.identity = "NOT redeemed \u2014 the daemon did not come up, so this pass is unspent and this machine is not admitted. Run `isocan setup` again with the same address.";
       }
       if (arrival?.pass && daemonUp) {
-        const answer = await client.redeemPass(arrival.pass, arrival.origin, !direct);
-        if (!answer.actor) {
+        const answer2 = await client.redeemPass(arrival.pass, arrival.origin, !direct);
+        if (!answer2.actor) {
           report2.identity = 'admitted \u2014 this pass carried no identity, so this machine has no person yet: `isocan identity --home --name "You"` names one here, or redeem a pass minted as you (the app\'s "Bring your own agent" line, or `isocan pass` on a machine that already is you)';
         } else {
-          const saved = direct ? await adoptIdentity(home, answer.actor) : answer.identity;
+          const saved = direct ? await adoptIdentity(home, answer2.actor) : answer2.identity;
           if (!saved) throw new Error("the daemon did not confirm saving the pass identity \u2014 restart it with this version of isocan");
           const { actor, adopted } = saved;
-          report2.identity = adopted ? `${actor.name} (${actor.id}) \u2014 handed over by the pass, saved to ${paths_exports.identityFile(home)}` : `this machine already answers to ${actor.name} (${actor.id}); the pass's ${answer.actor.name} (${answer.actor.id}) is admitted but not made default \u2014 \`isocan whoami\` shows which`;
+          report2.identity = adopted ? `${actor.name} (${actor.id}) \u2014 handed over by the pass, saved to ${paths_exports.identityFile(home)}` : `this machine already answers to ${actor.name} (${actor.id}); the pass's ${answer2.actor.name} (${answer2.actor.id}) is admitted but not made default \u2014 \`isocan whoami\` shows which`;
         }
       }
       const birthHome = daemonUp ? (await client.healthz(2e3))?.home ?? null : null;
@@ -16273,7 +17037,7 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     let ownerInput;
     if (access.kind !== "ordinary") {
       if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
-      const { personalCaptureOwner } = await import("./personal-capture-RGKM6VV3.mjs");
+      const { personalCaptureOwner } = await import("./personal-capture-MOWQTNXF.mjs");
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }
@@ -16443,7 +17207,7 @@ canvas.command("background [theme]").description(`The ground this canvas stands 
         throw new Error(`--picture and \`${theme}\` are two answers to one question: pick one`);
       }
       const data = await fs16.readFile(opts.picture);
-      const filename = path15.basename(opts.picture);
+      const filename = path16.basename(opts.picture);
       const mimeType = mimeFor(filename);
       if (!mimeType.startsWith("image/")) {
         throw new Error(`a ground has to be an image; ${filename} is ${mimeType}`);
@@ -16683,7 +17447,7 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
       }
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       const rawSource = await fs16.readFile(file);
-      const filename = path15.basename(file);
+      const filename = path16.basename(file);
       const mimeType = mimeFor(filename);
       if (opts.drawing && mimeType !== DRAWING_MIME) {
         throw new Error(`--drawing needs an SVG; ${filename} is ${mimeType}`);
@@ -16695,7 +17459,7 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
       let visualFace;
       if (opts.visual) {
         const visRaw = await fs16.readFile(opts.visual);
-        const visFilename = path15.basename(opts.visual);
+        const visFilename = path16.basename(opts.visual);
         const visMime = mimeFor(visFilename);
         let visData = visRaw;
         if (visMime === "text/html") {
@@ -16726,9 +17490,9 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
         }
       }
       const upload = await ctx.client.uploadBlob(p.id, rawSource, mimeType, filename);
-      const visualFileProp = opts.visual ? cleanFilePath(opts.visual) ?? path15.basename(opts.visual) : void 0;
-      const sourcePath = cleanFilePath(path15.relative(process.cwd(), path15.resolve(file)));
-      const fileProp = opts.visual ? cleanFilePath(file) ?? path15.basename(file) : void 0;
+      const visualFileProp = opts.visual ? cleanFilePath(opts.visual) ?? path16.basename(opts.visual) : void 0;
+      const sourcePath = cleanFilePath(path16.relative(process.cwd(), path16.resolve(file)));
+      const fileProp = opts.visual ? cleanFilePath(file) ?? path16.basename(file) : void 0;
       const properties = {
         ...sourcePath ? { [SOURCE_PATH_PROP]: sourcePath } : {},
         ...opts.prop,
@@ -16778,7 +17542,7 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
 program2.command("inline <file>").description("Inline referenced local images in an HTML or Markdown file as base64 data URIs").option("-o, --output <file>", "write to output file instead of stdout").action(
   run(async (file, opts) => {
     const raw = await fs16.readFile(file, "utf8");
-    const filename = path15.basename(file);
+    const filename = path16.basename(file);
     const mimeType = mimeFor(filename);
     const inlined = mimeType === "text/markdown" ? await inlineMarkdownAssets(file, raw) : await inlineHtmlAssets(file, raw);
     if (opts.output) {
@@ -16999,7 +17763,7 @@ program2.command("blobs").description("Check that this canvas's bytes reached it
       return;
     }
     console.log(`missing  ${report2.missing.length}`);
-    for (const hash of report2.missing) console.log(`         ${hash}`);
+    for (const hash2 of report2.missing) console.log(`         ${hash2}`);
     if (report2.pushed.length > 0) {
       console.log(`pushed   ${report2.pushed.length} \u2014 re-check to confirm they landed`);
     } else {
@@ -17097,10 +17861,10 @@ var moduleHost = {
    * cursor and the rc row — with the template's directory as the row's cwd
    * when one is named, so the agent's harness starts where its `AGENTS.md` is.
    */
-  enrol: async (ctx, canvasId, ask) => {
-    const prepared = ask.template ? await prepareFromTemplate(ctx.home, canvasId, ask.name, ask.template, ask.args ?? {}) : null;
-    const harness = ask.harness ?? prepared?.harness ?? ctx.harness ?? null;
-    const agent = await mintAndEnrol(ctx, canvasId, ask.name, { cwd: prepared?.dir ?? process.cwd(), harness });
+  enrol: async (ctx, canvasId, ask2) => {
+    const prepared = ask2.template ? await prepareFromTemplate(ctx.home, canvasId, ask2.name, ask2.template, ask2.args ?? {}) : null;
+    const harness = ask2.harness ?? prepared?.harness ?? ctx.harness ?? null;
+    const agent = await mintAndEnrol(ctx, canvasId, ask2.name, { cwd: prepared?.dir ?? process.cwd(), harness });
     return { actorId: agent.id, dir: prepared?.dir ?? null };
   },
   /** `rc remove`, promoted: the standing goes, the history and the directory stay. */
@@ -17123,7 +17887,7 @@ function enrolTemplate(id3) {
 async function prepareFromTemplate(home, canvasId, name, id3, args) {
   const template = enrolTemplate(id3);
   if (!template) throw new Error(`no module on this machine offers the template ${id3} \u2014 isocan module ls`);
-  const dir = path15.join(home, "templates", id3, canvasId, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent");
+  const dir = path16.join(home, "templates", id3, canvasId, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent");
   await fs16.mkdir(dir, { recursive: true });
   const out = await template.prepare(args, dir);
   return { dir, ...out?.harness ? { harness: out.harness } : {} };
@@ -17253,7 +18017,7 @@ program2.command("export [target]").description(
   run(
     async (target2, opts, cmd) => {
       const ctx = await ctxOf(cmd);
-      const out = path15.resolve(process.cwd(), opts.to ?? "isocan-backup");
+      const out = path16.resolve(process.cwd(), opts.to ?? "isocan-backup");
       const say2 = ctx.json ? () => {
       } : (line) => console.log(line);
       let by;
@@ -17301,13 +18065,13 @@ program2.command("export [target]").description(
         const candidates = [
           EXPORT_LAYOUT.manifest,
           EXPORT_LAYOUT.names,
-          ...report2.canvases.map((row) => path15.join(EXPORT_LAYOUT.canvases, row.id)),
-          ...report2.items.map((row) => path15.join(EXPORT_LAYOUT.items, row.canvasId, row.itemId))
+          ...report2.canvases.map((row) => path16.join(EXPORT_LAYOUT.canvases, row.id)),
+          ...report2.items.map((row) => path16.join(EXPORT_LAYOUT.items, row.canvasId, row.itemId))
         ];
         const present = [];
         for (const rel of candidates) {
           try {
-            await fs16.access(path15.join(out, rel));
+            await fs16.access(path16.join(out, rel));
             present.push(rel);
           } catch {
           }
@@ -17325,13 +18089,13 @@ program2.command("export [target]").description(
       printKeyValues({ from: report2.from, to: out });
       for (const row of report2.canvases) {
         console.log(`  ${describeExportedCanvas(row)}`);
-        for (const hash of row.missing) console.log(`    missing at the home: ${hash}`);
+        for (const hash2 of row.missing) console.log(`    missing at the home: ${hash2}`);
       }
       for (const row of report2.items) {
         console.log(
           `  ${row.title} (${row.itemId}) \u2014 ${row.versions} version${row.versions === 1 ? "" : "s"}, ${row.ops} op${row.ops === 1 ? "" : "s"}`
         );
-        for (const hash of row.missing) console.log(`    missing at the home: ${hash}`);
+        for (const hash2 of row.missing) console.log(`    missing at the home: ${hash2}`);
       }
       if (report2.dryRun) {
         console.log("");
@@ -17364,7 +18128,7 @@ program2.command("import <dir>").description("Restore a backup made by `isocan e
     const client = opts.to ? new DaemonRoutes(normalizeHomeUrl2(opts.to), fileBadgeStore(ctx.home, normalizeHomeUrl2(opts.to))) : ctx.client;
     const say2 = ctx.json ? () => {
     } : (line) => console.log(line);
-    const report2 = await importExport(client, path15.resolve(process.cwd(), dir), {
+    const report2 = await importExport(client, path16.resolve(process.cwd(), dir), {
       dryRun: opts.dryRun === true,
       ...opts.only ? { only: opts.only } : {},
       say: say2
@@ -18054,7 +18818,7 @@ program2.command("set <item>").description("Update an item's title/description/p
       let did = false;
       if (opts.visual) {
         const visRaw = await fs16.readFile(opts.visual);
-        const visFilename = path15.basename(opts.visual);
+        const visFilename = path16.basename(opts.visual);
         const visMime = mimeFor(visFilename);
         let visData = visRaw;
         if (visMime === "text/html") {
@@ -18134,12 +18898,12 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
     let mimeType;
     if (file) {
       const raw = await fs16.readFile(file);
-      filename = path15.basename(file);
+      filename = path16.basename(file);
       mimeType = mimeFor(filename);
       data = raw;
       if (opts.visual) {
         const visRaw = await fs16.readFile(opts.visual);
-        const visFilename = path15.basename(opts.visual);
+        const visFilename = path16.basename(opts.visual);
         const visMime = mimeFor(visFilename);
         let visData = visRaw;
         if (visMime === "text/html") {
@@ -18176,7 +18940,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
       filename = current.filename;
       mimeType = current.mimeType;
       const visRaw = await fs16.readFile(opts.visual);
-      const visFilename = path15.basename(opts.visual);
+      const visFilename = path16.basename(opts.visual);
       const visMime = mimeFor(visFilename);
       let visData = visRaw;
       if (visMime === "text/html") {
@@ -18197,7 +18961,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
       const editor = process.env.EDITOR ?? process.env.VISUAL;
       if (!editor) throw new Error("no $EDITOR set \u2014 pass a file instead");
       const original = await ctx.client.downloadBlob(p.id, current.blobHash);
-      const tmp = path15.join(await fs16.mkdtemp(path15.join(os4.tmpdir(), "isocan-edit-")), current.filename);
+      const tmp = path16.join(await fs16.mkdtemp(path16.join(os4.tmpdir(), "isocan-edit-")), current.filename);
       await fs16.writeFile(tmp, original);
       const status2 = spawnSync4(editor, [tmp], { stdio: "inherit", shell: false });
       if (status2.status !== 0) throw new Error(`${editor} exited with ${status2.status}`);
@@ -18210,7 +18974,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
       mimeType = current.mimeType;
       if (opts.visual) {
         const visRaw = await fs16.readFile(opts.visual);
-        const visFilename = path15.basename(opts.visual);
+        const visFilename = path16.basename(opts.visual);
         const visMime = mimeFor(visFilename);
         let visData = visRaw;
         if (visMime === "text/html") {
@@ -18225,7 +18989,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
           size: visUpload.size
         };
       } else if (mimeType === "text/html" && current.visual || mimeType === "text/markdown" && (!current.visual || current.visual.mimeType === mimeType && !item.properties[VISUAL_FILE_PROP])) {
-        const assetBase = mimeType === "text/markdown" ? path15.resolve(item.properties[FILE_PROP] ?? item.properties[SOURCE_PATH_PROP] ?? current.filename) : tmp;
+        const assetBase = mimeType === "text/markdown" ? path16.resolve(item.properties[FILE_PROP] ?? item.properties[SOURCE_PATH_PROP] ?? current.filename) : tmp;
         const inlined = await (mimeType === "text/markdown" ? inlineMarkdownAssets : inlineHtmlAssets)(assetBase, data.toString("utf8"));
         const inlinedData = Buffer.from(inlined, "utf8");
         const visUpload = await ctx.client.uploadBlob(p.id, inlinedData, mimeType, filename);
@@ -18440,20 +19204,20 @@ program2.command("choose <item>").description("This one won: fold a variation ba
   })
 );
 async function personaFiles(root) {
-  const dir = path15.join(root, PERSONA_DIR);
+  const dir = path16.join(root, PERSONA_DIR);
   const names = await fs16.readdir(dir).catch(() => []);
   const out = [];
   for (const name of names.filter((n) => n.endsWith(".md")).sort()) {
-    const text = await fs16.readFile(path15.join(dir, name), "utf8").catch(() => null);
+    const text = await fs16.readFile(path16.join(dir, name), "utf8").catch(() => null);
     if (text === null) continue;
     const persona2 = parsePersona(text, name);
-    if (persona2) out.push({ file: path15.join(PERSONA_DIR, name), persona: persona2 });
+    if (persona2) out.push({ file: path16.join(PERSONA_DIR, name), persona: persona2 });
   }
   return out;
 }
 async function personaRoot(ctx, cmd) {
   const chosen = cmd.optsWithGlobals().root;
-  if (chosen) return path15.resolve(chosen);
+  if (chosen) return path16.resolve(chosen);
   return ctx.binding?.root ?? process.cwd();
 }
 var persona = program2.command("persona").description("The roles an agent can take on here \u2014 `.agents/personas/`").option(
@@ -18519,11 +19283,11 @@ persona.command("runs <name>").description("What this persona's runs found, and 
     const found = await personaFiles(root);
     const match = found.find((f) => f.persona.name === name) ?? found.find((f) => f.persona.name.startsWith(name));
     if (!match) throw new Error(`no persona called "${name}"`);
-    const dir = path15.join(root, match.persona.runs ?? "docs/reviews/");
+    const dir = path16.join(root, match.persona.runs ?? "docs/reviews/");
     const names = (await fs16.readdir(dir).catch(() => [])).filter((f) => f.endsWith(`-${match.persona.name}.md`)).sort().reverse();
     const runs = [];
     for (const file of names) {
-      const page2 = await fs16.readFile(path15.join(dir, file), "utf8").catch(() => null);
+      const page2 = await fs16.readFile(path16.join(dir, file), "utf8").catch(() => null);
       if (page2 !== null) runs.push({ page: file, findings: runFindings(page2) });
     }
     if (ctx.json) return console.log(JSON.stringify(runs, null, 2));
@@ -18546,7 +19310,7 @@ var doc = program2.command("doc").description("What this repo's own documents sa
 doc.command("status <file>").description("Where one document stands, and what is wrong with how it says so").action(
   run(async (file, _opts, cmd) => {
     const ctx = await ctxOf(cmd);
-    const text = await fs16.readFile(path15.resolve(process.cwd(), file), "utf8");
+    const text = await fs16.readFile(path16.resolve(process.cwd(), file), "utf8");
     const status2 = docStatus(text);
     const problems = statusProblems(status2);
     if (ctx.json) return printJson({ ...status2, problems });
@@ -18570,7 +19334,7 @@ async function writeJsonCanvas(ctx, client, canvasId, snapshot, file) {
   const { file: out, lost } = toJsonCanvas(snapshot.canvas, {
     bodyOf: (item) => bodies.get(item.id) ?? null
   });
-  await fs16.writeFile(path15.resolve(process.cwd(), file), JSON.stringify(out, null, 2) + "\n");
+  await fs16.writeFile(path16.resolve(process.cwd(), file), JSON.stringify(out, null, 2) + "\n");
   if (ctx.json) return printJson({ file, nodes: out.nodes.length, edges: out.edges.length, lost });
   console.log(`${file} \u2014 ${out.nodes.length} nodes, ${out.edges.length} edges`);
   const losses = describeLosses(lost);
@@ -18812,7 +19576,7 @@ slidesCmd.command("export <out>").description("The deck as a document: deck.pdf 
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
     const pages = deckPages(snapshot.canvas);
     if (pages.length === 0) throw new Error("nothing to export \u2014 this canvas has no items");
-    const ext = path15.extname(out).toLowerCase();
+    const ext = path16.extname(out).toLowerCase();
     const written = [];
     const textOf = async (blobHash) => (await ctx.client.downloadBlob(p.id, blobHash)).toString("utf8");
     if (ext === ".html" || ext === ".htm") {
@@ -19388,7 +20152,7 @@ style.command("set").description("Write the design system (a new version when on
     const ctx = await ctxOf(cmd);
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
     const data = await fs16.readFile(file);
-    const filename = path15.basename(file);
+    const filename = path16.basename(file);
     const mimeType = mimeFor(filename);
     const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
     const version4 = {
@@ -19422,7 +20186,7 @@ style.command("import").description("Land somebody else's theme as this canvas's
   run(async (file, opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const text = await fs16.readFile(file, "utf8");
-    const { tokens, problems, notes, format } = importDesign(text, path15.basename(file));
+    const { tokens, problems, notes, format } = importDesign(text, path16.basename(file));
     const counts = {
       colors: Object.keys(tokens.colors ?? {}).length,
       typography: Object.keys(tokens.typography ?? {}).length,
@@ -19432,10 +20196,10 @@ style.command("import").description("Land somebody else's theme as this canvas's
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     if (total === 0) {
       throw new Error(
-        `nothing to import from ${path15.basename(file)}${problems.length ? ` \u2014 ${problems[0]}` : ""}`
+        `nothing to import from ${path16.basename(file)}${problems.length ? ` \u2014 ${problems[0]}` : ""}`
       );
     }
-    const body = importedBody(path15.basename(file), tokens);
+    const body = importedBody(path16.basename(file), tokens);
     const markdown = serializeDesign(tokens, body);
     for (const problem of problems) console.error(`note: ${problem}`);
     for (const note of notes) console.error(`note: ${note}`);
@@ -19467,7 +20231,7 @@ style.command("import").description("Land somebody else's theme as this canvas's
       await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing2.id, version: version4 });
       if (ctx.json) return printJson({ itemId: existing2.id, format, counts, problems, notes });
       console.error(
-        `${existing2.id} \u2014 design system v${existing2.versions.length + 1} from ${path15.basename(file)}`
+        `${existing2.id} \u2014 design system v${existing2.versions.length + 1} from ${path16.basename(file)}`
       );
       return;
     }
@@ -19483,7 +20247,7 @@ style.command("import").description("Land somebody else's theme as this canvas's
       properties: designSystemProperties()
     });
     if (ctx.json) return printJson({ itemId, format, counts, problems, notes });
-    console.error(`${itemId} \u2014 design system for ${p.title}, imported from ${path15.basename(file)}`);
+    console.error(`${itemId} \u2014 design system for ${p.title}, imported from ${path16.basename(file)}`);
   })
 );
 var tool = program2.command("tool").description("Tools this canvas puts in the rail").addHelpText(
@@ -19555,7 +20319,7 @@ gets answered before it lands rather than after.`
 read that? then: isocan tool add ${file} --yes`);
       return;
     }
-    const filename = path15.basename(file);
+    const filename = path16.basename(file);
     const upload = await ctx.client.uploadBlob(p.id, Buffer.from(text, "utf8"), "application/json", filename);
     const itemId = newItemId();
     await sendOp(ctx, p.id, {
@@ -19643,7 +20407,7 @@ It is an item, so \`isocan rm <item>\` takes one out of the dock again.`
 read that? then: isocan panel add ${file} --yes`);
       return;
     }
-    const filename = path15.basename(file);
+    const filename = path16.basename(file);
     const upload = await ctx.client.uploadBlob(p.id, Buffer.from(text, "utf8"), "application/json", filename);
     const itemId = newItemId();
     await sendOp(ctx, p.id, {
@@ -19807,17 +20571,17 @@ function gitSpecToClone(spec) {
   return { url: head, ref: ref ?? null };
 }
 async function fetchModuleSpec(spec) {
-  if (!GIT_SPEC.test(spec)) return { dir: path15.resolve(spec), cleanup: async () => {
+  if (!GIT_SPEC.test(spec)) return { dir: path16.resolve(spec), cleanup: async () => {
   } };
   const { url, ref } = gitSpecToClone(spec);
-  const tmp = await fs16.mkdtemp(path15.join(os4.tmpdir(), "isocan-module-"));
+  const tmp = await fs16.mkdtemp(path16.join(os4.tmpdir(), "isocan-module-"));
   const args = ["clone", "--quiet", "--depth", "1", ...ref ? ["--branch", ref] : [], url, tmp];
   const cloned = spawnSync4("git", args, { encoding: "utf8" });
   if (cloned.status !== 0) {
     await fs16.rm(tmp, { recursive: true, force: true });
     throw new Error(`could not clone ${url}${ref ? `#${ref}` : ""}: ${(cloned.stderr || "").trim().split("\n").pop() ?? "git failed"}`);
   }
-  const dir = existsSync3(path15.join(tmp, "manifest.json")) ? tmp : path15.join(tmp, "build");
+  const dir = existsSync3(path16.join(tmp, "manifest.json")) ? tmp : path16.join(tmp, "build");
   return { dir, cleanup: () => fs16.rm(tmp, { recursive: true, force: true }) };
 }
 moduleCmd.command("add <dir-or-spec>").description("Install a built module from a directory or a git spec (github:owner/repo#ref) \u2014 prints what it declares, installs nothing until --yes").option("--yes", "install it, having read what it declares").option("--proposed", "allow a module that uses parts of the API we intend to change").action(
@@ -19832,7 +20596,7 @@ moduleCmd.command("add <dir-or-spec>").description("Install a built module from 
   })
 );
 async function addModuleFrom(dir, dirArg, opts, globals) {
-  const file = path15.join(dir, "manifest.json");
+  const file = path16.join(dir, "manifest.json");
   if (!existsSync3(file)) throw new Error(`${dir} has no manifest.json \u2014 build the module first (scripts/module-build.mjs)`);
   const manifest = JSON.parse(await fs16.readFile(file, "utf8"));
   if (typeof manifest.name !== "string" || !/^(@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(manifest.name)) {
@@ -19852,12 +20616,12 @@ async function addModuleFrom(dir, dirArg, opts, globals) {
     );
   }
   for (const half of [manifest.web, manifest.cli, manifest.guide, ...(manifest.assets ?? []).map((a) => a.path)]) {
-    if (half && !existsSync3(path15.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
+    if (half && !existsSync3(path16.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
   }
   const tooBig = assetProblems(manifest.assets);
   if (tooBig.length > 0) throw new Error(`${manifest.name} refused: ${tooBig.join("; ")}`);
   const slug = moduleSlug(manifest.name);
-  const target2 = path15.join(modulesDir(paths_exports.isocanHome()), slug);
+  const target2 = path16.join(modulesDir(paths_exports.isocanHome()), slug);
   if (!opts.yes) {
     if (globals.json) return printJson({ manifest, target: target2, installed: false });
     console.log(describeManifest(manifest, dir));
@@ -19866,7 +20630,7 @@ read that? then: isocan module add ${dirArg} --yes`);
     return;
   }
   await fs16.rm(target2, { recursive: true, force: true });
-  await fs16.mkdir(path15.dirname(target2), { recursive: true });
+  await fs16.mkdir(path16.dirname(target2), { recursive: true });
   await fs16.cp(dir, target2, { recursive: true });
   if (globals.json) return printJson({ manifest, target: target2, installed: true });
   console.error(`${manifest.name} installed at ${target2} \u2014 loaded on the next isocan command and the next page load (isocan module rm ${slug})`);
@@ -19875,7 +20639,7 @@ moduleCmd.command("rm <name>").description("Remove a module \u2014 its items sta
   run(async (name, _opts, cmd) => {
     const globals = cmd.optsWithGlobals();
     const slug = moduleSlug(name);
-    const target2 = path15.join(modulesDir(paths_exports.isocanHome()), slug);
+    const target2 = path16.join(modulesDir(paths_exports.isocanHome()), slug);
     if (!existsSync3(target2)) throw new Error(`no module called ${slug} here \u2014 isocan module ls`);
     await fs16.rm(target2, { recursive: true, force: true });
     if (globals.json) return printJson({ removed: slug });
@@ -19973,7 +20737,7 @@ async function readCommentDocument(ctx, canvasId, item) {
   const face = visualFaceOf(version4);
   if (!["text/markdown", "text/plain"].includes(face.mimeType)) throw new Error("Text comments need a Markdown or plain-text item");
   const { markdownText } = await import("./markdown-text-ME77MLUY.mjs");
-  const { isTextItem: isTextItem2 } = await import("./src-C2AWUR7J.mjs");
+  const { isTextItem: isTextItem2 } = await import("./src-R4U2KHX3.mjs");
   const flavor = face.mimeType === "text/plain" ? "plain" : isTextItem2(item) ? "text-node" : "document";
   const text = markdownText((await ctx.client.downloadBlob(canvasId, face.blobHash)).toString("utf8"), flavor);
   return { text, versionId: version4.id, blobHash: face.blobHash, flavor };
@@ -20078,12 +20842,12 @@ comment.command("list").description("List comment threads").option("--item <item
         console.log("nothing is waiting on an answer");
         return;
       }
-      for (const ask of asks) {
-        const thread = snapshot.canvas.threads[ask.threadId];
+      for (const ask2 of asks) {
+        const thread = snapshot.canvas.threads[ask2.threadId];
         const where = thread.main ? "the Chat" : thread.anchorItemId ? `"${snapshot.canvas.items[thread.anchorItemId]?.title ?? thread.anchorItemId}"` : `${thread.x},${thread.y}`;
-        console.log(`${actorNameIn(snapshot.names, { id: ask.askerId, name: ask.askerId })} \xB7 on ${where}`);
-        console.log(`  ${ask.body}`);
-        console.log(`  reply: isocan comment reply ${ask.threadId} "\u2026"`);
+        console.log(`${actorNameIn(snapshot.names, { id: ask2.askerId, name: ask2.askerId })} \xB7 on ${where}`);
+        console.log(`  ${ask2.body}`);
+        console.log(`  reply: isocan comment reply ${ask2.threadId} "\u2026"`);
       }
       return;
     }
@@ -20238,7 +21002,7 @@ session.command("select [item]").description("Point to a quote in saved Markdown
   if (!ref || !opts.quote) throw new Error("pass an item and --quote, or --clear");
   const item = resolveItem(snapshot, ref);
   const doc2 = await readCommentDocument(ctx, p.id, item);
-  const { TEXT_ATTENTION_MS } = await import("./src-C2AWUR7J.mjs");
+  const { TEXT_ATTENTION_MS } = await import("./src-R4U2KHX3.mjs");
   const range = quoteRange(doc2.text, opts.quote, opts.occurrence === void 0 ? void 0 : Number(opts.occurrence));
   const textSelection = {
     itemId: item.id,
@@ -20304,7 +21068,7 @@ session.command("say [status]").description("Set (or clear) the status line unde
     const ctx = await ctxOf(cmd);
     const p = await resolveCanvas(ctx);
     if (opts.signal) {
-      const { cursorSignal } = await import("./src-C2AWUR7J.mjs");
+      const { cursorSignal } = await import("./src-R4U2KHX3.mjs");
       await touchSession(ctx, p.id, { signal: status2 ? cursorSignal(status2) : null });
       console.log(status2 ? `signal: ${status2} (20s)` : "signal cleared");
       return;
@@ -20317,7 +21081,7 @@ session.command("signal [text]").description("Temporarily replace your name on y
   run(async (text, _opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const p = await resolveCanvas(ctx);
-    const { cursorSignal } = await import("./src-C2AWUR7J.mjs");
+    const { cursorSignal } = await import("./src-R4U2KHX3.mjs");
     await touchSession(ctx, p.id, { signal: text ? cursorSignal(text) : null });
     console.log(text ? `signal: ${text} (20s)` : "signal cleared");
   })
@@ -20587,10 +21351,10 @@ command or reply. No \`session start\` needed after a wake.`
       return area.id;
     });
     const filtered = wantedItems.length > 0 || wantedTypes.length > 0 || wantedAreas.length > 0;
-    const seeded = (await ctx.client.watchLog({ only: [p.id] })).cursors;
+    const seeded2 = (await ctx.client.watchLog({ only: [p.id] })).cursors;
     let lease = null;
     let redeliverUpTo = null;
-    let start = opts.since !== void 0 ? Number(opts.since) : seeded[p.id] ?? (await ctx.client.snapshot(p.id)).lastSeq;
+    let start = opts.since !== void 0 ? Number(opts.since) : seeded2[p.id] ?? (await ctx.client.snapshot(p.id)).lastSeq;
     try {
       const claim = await ctx.client.parkClaim({
         canvasId: p.id,
@@ -20639,7 +21403,7 @@ command or reply. No \`session start\` needed after a wake.`
     const waitRules = filtered ? { items: wantedItems, ops: wantedTypes, ...wantedAreas.length ? { areas: wantedAreas } : {} } : opts.allOps ? { ops: ["*"] } : void 0;
     let offlineSince = null;
     let complained = false;
-    const install = await whichInstall(path15.resolve(myRoot()), ctx.home);
+    const install = await whichInstall(path16.resolve(myRoot()), ctx.home);
     const parkedOn = shaOfRoot(ctx.home, myRoot());
     let upgraded = null;
     let upgrading = false;
@@ -20904,7 +21668,7 @@ async function enrolAgent(cmd, name, opts, contained) {
     );
   }
   const p = await resolveCanvas(ctx);
-  const cwd = path15.resolve(opts.dir ?? process.cwd());
+  const cwd = path16.resolve(opts.dir ?? process.cwd());
   const harness = opts.harness ?? ctx.harness ?? null;
   const snap = await ctx.client.snapshot(p.id);
   const existing2 = Object.values(snap.canvas.agents ?? {}).find(
@@ -21419,8 +22183,8 @@ async function settleDefaultHarness(ctx, rooms, flag2) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     for (; ; ) {
-      const answer = (await rl.question(`rc: harness [1-${runnable2.length}]: `)).trim();
-      const chosen = runnable2[Number(answer) - 1] ?? runnable2.find((n) => n === answer);
+      const answer2 = (await rl.question(`rc: harness [1-${runnable2.length}]: `)).trim();
+      const chosen = runnable2[Number(answer2) - 1] ?? runnable2.find((n) => n === answer2);
       if (chosen) {
         await setDefaultHarness(ctx.home, chosen);
         console.log(`rc: ${defaultLine(await scanHarnesses(ctx.home))}`);
@@ -21440,7 +22204,7 @@ async function runRcRoom(ctx, p, shared) {
   const rcCwd = process.cwd();
   const limitsConfig = await readConfigFile(ctx.home);
   const origin = await ctx.homeOf(p.id).catch(() => null) ?? ctx.client.base;
-  const install = await whichInstall(path15.resolve(myRoot()), ctx.home);
+  const install = await whichInstall(path16.resolve(myRoot()), ctx.home);
   const parkedOn = shaOfRoot(ctx.home, myRoot());
   const considerUpgrade = () => {
     const state = shared.upgrade;
@@ -21501,9 +22265,9 @@ async function runRcRoom(ctx, p, shared) {
       }
       return { harness: spec.harness, open: (turn) => openAdapter(ctx, p, shared, spec, row, turn) };
     },
-    enrol: async (ask) => {
-      const prepared = ask.template ? await prepareFromTemplate(ctx.home, p.id, ask.name, ask.template, ask.args ?? {}) : null;
-      await mintAndEnrol(ctx, p.id, ask.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null, say: print });
+    enrol: async (ask2) => {
+      const prepared = ask2.template ? await prepareFromTemplate(ctx.home, p.id, ask2.name, ask2.template, ask2.args ?? {}) : null;
+      await mintAndEnrol(ctx, p.id, ask2.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null, say: print });
     },
     agentKey: (name) => machineAgentKey(ctx.home, name),
     narrate: print,
@@ -21933,11 +22697,11 @@ evals.command("corpus", { isDefault: true }).description("Every ask on this canv
     );
     console.log("");
     const budget = Number(opts.recent ?? 20);
-    for (const ask of corpus.asks.slice(-budget)) {
-      const said = ask.body.replace(/\s+/g, " ").slice(0, 60);
-      const how = ask.produced.length === 0 ? "no ops" : `${ask.produced.length} ops (${ask.produced.filter((o) => o.how !== "window").length} established)`;
+    for (const ask2 of corpus.asks.slice(-budget)) {
+      const said = ask2.body.replace(/\s+/g, " ").slice(0, 60);
+      const how = ask2.produced.length === 0 ? "no ops" : `${ask2.produced.length} ops (${ask2.produced.filter((o) => o.how !== "window").length} established)`;
       console.log(
-        `${ask.at.slice(0, 16).replace("T", " ")}  ${ask.outcome.padEnd(9)} ${ask.category.padEnd(11)} ${how.padEnd(24)} ${ask.askedBy.name}: ${said}`
+        `${ask2.at.slice(0, 16).replace("T", " ")}  ${ask2.outcome.padEnd(9)} ${ask2.category.padEnd(11)} ${how.padEnd(24)} ${ask2.askedBy.name}: ${said}`
       );
     }
     if (corpus.asks.length > budget) {
