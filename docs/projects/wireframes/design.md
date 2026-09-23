@@ -3,6 +3,7 @@ status: designed
 since: 2026-09-23
 see: wireframes, judge, design-partner, slides, modules, mindmap
 note: the mechanism. Screens are HTML items carrying their spec as embedded JSON; a module holds the catalog (archetype recipes, blocks, primitives, intents), the renderer (blue skeleton → grey wireframe), the Jev composer (three rounds), link inference and the prototype assembler. No new op. The keep mark is a property, like a slide.
+issue: 350
 ---
 
 # Wireframes — the design

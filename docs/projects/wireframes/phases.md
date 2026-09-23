@@ -3,6 +3,7 @@ status: designed
 since: 2026-09-23
 see: wireframes, judge
 note: the walk. Phase 0 is the catalog and the renderer (skeleton and wire), no model. Phase 1 is Jev composing a flow skeleton-first on a canvas. Phase 2 variations and keep. Phase 3 links and the prototype. Phase 4 the web door. Phase 5 calibration against Enrico.
+issue: 350
 ---
 
 # Wireframes — the walk
@@ -21,11 +22,11 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phase 0 is next.** Nothing is built.
+**Where we are: phase 0 is CLOSED (23 Sep 2026) — the catalog is data, and it draws.** `packages/modules/wireframe/` holds wave 1 (18 archetypes, 28 blocks, 22 primitives, 49 intents) and `renderWire`, which draws a blue-on-white blueprint where a slot is undecided and a grey wireframe where it is chosen; `isocan wire render|spec|catalog` put screens on a canvas. **Next: wireframes phase 1** — Jev draws a flow, local, with the key.
 
 ## Phase 0 — The catalog, drawn
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 23 September 2026.** 370 tests hold the catalog and the renderer; the 36-screen gallery was looked at on a canvas and at full size (blueprint, half-drawn, wireframe), and the module was removed and restored with `wire` leaving and returning.
 
 **Outcome:** `packages/modules/wireframe/` exists as a module (core, web, cli,
 agent guide), holding wave 1's catalog as data — 18 archetype recipes, 28
@@ -49,6 +50,13 @@ adds the screen to a canvas as an HTML item with its spec embedded. No model.
    and as wireframes in the row below, screenshotted, and looked at.
 4. Removing the module from both lists: the screens still render (they are
    HTML), `wire` is gone from `--help`.
+
+### Trajectory
+
+- **2026-09-23** — The web half registers after all: `test/modules.test.ts` requires a module in both lists or neither. It registers only the record (+46 bytes); the entry chunk is 727,779 against 727,800, so **21 bytes** of margin remain for phases 2–4's web work.
+- **2026-09-23** — A declined optional slot is absent from `slots`; an undecided one is present with `block: null`. The design's spec had no way to say *declined*; `alternatives` still cannot offer "none" for an optional slot, which phase 2's variations will need.
+- **2026-09-23** — Open: the design-system gate (`refuseUnsystematisedScreen`) counts wireframes as undesigned screens — after six, a real HTML screen's `isocan add` is refused. Wireframes should be exempt (detectable by `readWire`). Phase 1 composes whole flows, so it meets this first.
+- **2026-09-23** — Open: recipes set default intents but not default props, so *Home* draws a Back chevron in its app bar. A per-recipe prop override is needed before phase 1's screens look right.
 
 ## Phase 1 — Jev draws a flow
 

@@ -3,6 +3,7 @@ status: designed
 since: 2026-09-23
 see: judge, design-partner, modules, mindmap
 note: surveyed what seventeen sources — eleven wireframing tools and kits, four pattern references and datasets, two generative-UI catalogs — treat as a component, for a feature where TypeSafe's Jev composes screens by choosing from a fixed catalog. The union, de-duplicated, is 123 entries — 73 primitives, every one named by at least two of ten enumerated sources (29 by five or more), and 50 composite blocks. The finding that shapes the build is that Jev cannot write a tree, so it must choose composites into slots of a fixed recipe, which is what the two catalog-choosing products (Figma First Draft, Relume) already do; once a screen's archetype is chosen, no structural question over 34 recipes has more than 4 options, so the 255-option ceiling never binds. The binding constraint is instead that Jev writes no prose — and a prototype's links hang on labels — so actionable text becomes a typed `intent` (49 values, 40 of them concepts by name in Rico's lexicon of 197 mined button labels) and links are computed from intents, archetypes and canvas order rather than generated. Wave 1 is 18 archetypes and 28 blocks, covering 90.7% of Enrico's 1,460 human-labelled screens; the same labels are a free calibration set for the archetype question.
+issue: 350
 ---
 
 # Wireframes a typed model can choose

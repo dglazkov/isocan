@@ -1,0 +1,21 @@
+{
+  "name": "@isocan/wireframe",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Wireframes: a catalog of archetype recipes, blocks, primitives and intents, and a renderer that draws a spec as a blue blueprint or a grey wireframe — every screen an ordinary HTML item",
+  "exports": {
+    "./core": "./src/core.ts",
+    "./web": "./src/web.tsx",
+    "./cli": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@isocan/core": "*"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1"
+  }
+}

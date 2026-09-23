@@ -71,6 +71,7 @@ COPY packages/modules/stickers/package.json packages/modules/stickers/package.js
 COPY packages/modules/sandbox/package.json packages/modules/sandbox/package.json
 COPY packages/modules/design-competition/package.json packages/modules/design-competition/package.json
 COPY packages/modules/talk/package.json packages/modules/talk/package.json
+COPY packages/modules/wireframe/package.json packages/modules/wireframe/package.json
 
 # --ignore-scripts: the root `prepare` (scripts/prepare.mjs) exists to build the
 # web bundle for people installing from git, and it does it by shelling out to
