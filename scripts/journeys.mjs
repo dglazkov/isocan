@@ -926,6 +926,73 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "summons-receipt",
+    /**
+     * **A summons you can see — #197 phase 1, walked.**
+     *
+     * Naming an agent used to produce a reply or silence, and the thread under
+     * the ask read "Nobody is parked" whether the agent was named or not. The
+     * receipt is core's (`threadSummonses` → `summonsLine`), and a guard can
+     * prove the words; only the running app proves they reach the thread,
+     * and that they turn over when the answer lands.
+     *
+     * The agent's turn is the terminal speaking as Percy, not a model: what is
+     * under test is the receipt, and a reply is a reply whoever typed it.
+     * Nothing is parked, so nothing here may claim Percy picked it up.
+     */
+    what: "an ask that names an agent says 'asked', then 'answered' once the agent replies",
+    async run(rig) {
+      const env = { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port };
+      const runCli = (args, extra = {}) =>
+        execFileSync(process.execPath, [cli, ...args], { cwd: rig.home, encoding: "utf8", env: { ...env, ...extra } });
+
+      writeFileSync(
+        path.join(rig.home, "identity.json"),
+        JSON.stringify({ id: "usr_receipt_theo", name: "Theo", createdAt: new Date().toISOString() }),
+      );
+      runCli(["bench", "add", "Percy", "--actor", "usr_receipt_percy", "--harness", "pi"]);
+      const id = JSON.parse(runCli(["--json", "canvas", "create", "Receipt journey"])).canvasId;
+      const { address } = JSON.parse(runCli(["--json", "--canvas", id, "pass"]));
+      await rig.b.ev(`(() => { localStorage.clear(); return true; })()`);
+      await rig.b.send("Page.navigate", { url: address });
+      await sleep(2500);
+      await until(rig.b, `!!document.querySelector(".world")`, "the canvas to open for Theo");
+
+      // Percy stands here — the bench's Join, the same door bench-join walks.
+      await rig.click('button[aria-label="More"]', "the ··· menu");
+      await rig.clickText(".menu-entry,[role=menuitem],.ctx-entry", "Agents", "the Agents entry");
+      await until(rig.b, `!!document.querySelector(".tray-bench .tray-bench-join")`, "Percy's Join");
+      await rig.click(".tray-bench .tray-bench-join", "Percy's Join");
+      await until(
+        rig.b,
+        `[...document.querySelectorAll(".agents-body")].some(b => b.textContent.includes("Percy"))`,
+        "Percy to stand on this canvas",
+      );
+
+      // Theo asks, from the terminal, in the Chat.
+      const ask = JSON.parse(runCli(["--json", "--canvas", id, "comment", "add", "@Percy tidy the header", "--at", "200,200"]));
+      const threadId = ask.threadId ?? ask.thread?.id;
+      if (!threadId) throw new Error(`comment add named no thread: ${JSON.stringify(ask)}`);
+      runCli(["--canvas", id, "comment", "main", threadId]);
+      await rig.click('button[aria-label="More"]', "the ··· menu");
+      await rig.clickText(".menu-entry,[role=menuitem],.ctx-entry", "Chat", "the Chat entry");
+      const receipt = `[...document.querySelectorAll(".onit-row")].map(r => r.textContent).join(" | ")`;
+      await until(rig.b, `${receipt}.includes("asked Percy")`, "the receipt to say 'asked Percy' under the ask");
+      const asked = await rig.b.ev(receipt);
+      if (/picked it up|is on it|Nobody is parked/.test(asked)) {
+        throw new Error(`the receipt claims more (or less) than was asked: ${asked}`);
+      }
+
+      // Percy answers — the terminal, speaking as the agent's own session.
+      const percy = { ISOCAN_SESSION_ID: "journey-percy" };
+      runCli(["identity", "--as", "usr_receipt_percy", "--name", "Percy"], percy);
+      runCli(["--canvas", id, "comment", "reply", threadId, "Done — the header is tidy."], percy);
+      await until(rig.b, `${receipt}.includes("Percy answered (")`, "the receipt to turn over to 'Percy answered'", 10_000);
+      const errors = rig.b.takeErrors();
+      if (errors.length > 0) throw new Error(`the thread threw: ${errors[0]}`);
+    },
+  },
+  {
     name: "panels",
     /** The bug: the Personas panel's header collapsed to `display: block` and
      *  its icon sat on its own title, while every test passed. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANSWER_WITHIN_MS, summonsLine, summonsState, waitingLine, wokenLine } from "../src/index.ts";
+import { ANSWER_WITHIN_MS, summonsLine, summonsState, threadSummonses, waitingLine, wokenLine } from "../src/index.ts";
 import type { Comment, CommentThread, PresenceSession } from "../src/index.ts";
 
 /**
@@ -224,5 +224,70 @@ describe("the line when nothing was woken at all", () => {
     // The signature is the guard: there is no `waitedMs` to thread through, so
     // a future edit cannot quietly make this branch time out.
     expect(waitingLine.length).toBe(1);
+  });
+});
+
+describe("the receipts a thread shows for the asker's open summons", () => {
+  /**
+   * `threadSummonses` is what the web's `OnIt` renders, row for row, so the
+   * thread reads the same lifecycle `summonsState` computes — asked, answered,
+   * nothing answered, refused — instead of a second derivation of its own.
+   */
+  const ALICE = "usr_alice";
+  const agents = { [AGENT]: { actor: { id: AGENT, name: "Percy" } } };
+  const asking = (over: Partial<Comment> = {}): Partial<Comment> => ({
+    author: { id: ALICE, name: "Alice" },
+    mentions: [AGENT],
+    ...over,
+  });
+  const seen = (over: Partial<Parameters<typeof threadSummonses>[2]> = {}) => ({
+    agents,
+    sessions: [] as PresenceSession[],
+    answering: new Set<string>([AGENT]),
+    ...over,
+  });
+
+  it("says asked while the ask is fresh, then nothing answered — naming the parked rc", () => {
+    const t = thread([asking()]);
+    const [early] = threadSummonses(t, ALICE, seen(), T0 + 3_000);
+    expect(summonsLine("Percy", early!.state)).toBe("asked Percy");
+    const [late] = threadSummonses(t, ALICE, seen(), T0 + ANSWER_WITHIN_MS);
+    expect(summonsLine("Percy", late!.state)).toBe("nothing answered — the rc is parked but did not respond");
+    const [nobody] = threadSummonses(t, ALICE, seen({ answering: new Set() }), T0 + ANSWER_WITHIN_MS);
+    expect(summonsLine("Percy", nobody!.state)).toBe("nothing answered — nothing is listening for Percy here");
+  });
+
+  it("keeps the receipt under the answer, with how long it took", () => {
+    const t = thread([asking(), { createdAt: new Date(T0 + 6_000).toISOString() }]);
+    const [row] = threadSummonses(t, ALICE, seen(), T0 + 600_000);
+    expect(summonsLine("Percy", row!.state)).toBe("Percy answered (6s)");
+  });
+
+  it("says picked up once presence puts the agent on this thread", () => {
+    const working = session({ onThread: THREAD } as Partial<PresenceSession>);
+    const [row] = threadSummonses(thread([asking()]), ALICE, seen({ sessions: [working] }), T0 + 4_000);
+    expect(row!.state.state).toBe("picked-up");
+  });
+
+  it("says refused at once, carrying the gate the rc announced", () => {
+    const policy = { owner: { id: "usr_nico", name: "Nico" }, listen: [] };
+    const [row] = threadSummonses(thread([asking()]), ALICE, seen({ policies: { [AGENT]: policy } }), T0 + 1_000);
+    expect(row!.state).toEqual({ state: "refused", policy });
+  });
+
+  it("asks nothing of a person, and nothing of anybody once the conversation moved on", () => {
+    // A person named is being talked to, not summoned.
+    expect(threadSummonses(thread([asking({ mentions: ["usr_bob"] })]), ALICE, seen(), T0 + 60_000)).toEqual([]);
+    // Somebody other than the named agent spoke after the ask.
+    const moved = thread([asking(), { author: { id: "usr_bob", name: "Bob" } }]);
+    expect(threadSummonses(moved, ALICE, seen(), T0 + 60_000)).toEqual([]);
+    // Another viewer's ask is not this viewer's receipt.
+    expect(threadSummonses(thread([asking()]), "usr_bob", seen(), T0 + 60_000)).toEqual([]);
+  });
+
+  it("leaves an agent parked on wait to the woken line, never 'nothing is listening'", () => {
+    const parked = session({ kind: "cli" } as Partial<PresenceSession>);
+    const t = thread([asking()]);
+    expect(threadSummonses(t, ALICE, seen({ sessions: [parked], answering: new Set() }), T0 + 60_000)).toEqual([]);
   });
 });

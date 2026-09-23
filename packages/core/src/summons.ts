@@ -1,7 +1,8 @@
 import type { ActorJoins } from "./identity.ts";
 import type { Comment, CommentThread } from "./model.ts";
 import type { PresenceSession, RcPolicy } from "./protocol.ts";
-import { mayWake, policyWords } from "./inbox.ts";
+import { mayWake, policyWords, refusedMentions } from "./inbox.ts";
+import { summonedBy } from "./onit.ts";
 
 /**
  * **Did the thing you asked for actually reach anybody.**
@@ -141,6 +142,63 @@ export function summonsState(
     return { state: "unanswered", waitedMs, rcParked: seen.rcParked };
   }
   return { state: "asked", waitedMs };
+}
+
+/**
+ * **Every summons the asker has open on this thread, and where each stands**
+ * — the receipts the thread shows under the ask (#197 phase 1, web half).
+ *
+ * The ask is the asker's latest comment, and it stays open for as long as
+ * everything said after it is an answer from somebody it named: once anybody
+ * else speaks, or the asker speaks again, it is a conversation that moved
+ * on, and a receipt under it would be about a question nobody is looking at.
+ * Only enrolled agents are summoned — a person named in a comment is being
+ * talked to, not asked to wake, and "nothing answered" about them would be a
+ * lie.
+ *
+ * An agent parked on `wait` that this ask woke is left out while the ask is
+ * the last word: `wokenLine` speaks for it, and a receipt reading "nothing is
+ * listening" about an agent the daemon just reached would contradict it. A
+ * refusal is read once, by `refusedMentions`, so the clause a lapsed grant
+ * adds travels with it.
+ */
+export function threadSummonses(
+  thread: CommentThread,
+  askerId: string,
+  seen: {
+    agents: Readonly<Record<string, unknown>> | undefined;
+    sessions: readonly PresenceSession[];
+    /** Who an rc holds a connection for (`rcAnswering`'s `actorIds`). */
+    answering: ReadonlySet<string>;
+    policies?: Readonly<Record<string, RcPolicy>> | undefined;
+    joined?: ActorJoins | undefined;
+  },
+  now: number,
+): { actorId: string; state: SummonsState; lapsed?: string | undefined }[] {
+  const comments = thread.comments;
+  let i = comments.length - 1;
+  while (i >= 0 && comments[i]!.author.id !== askerId) i--;
+  const ask = comments[i];
+  const named = [...new Set(ask?.mentions)].filter((id) => seen.agents?.[id]);
+  if (!ask || !comments.slice(i + 1).every((c) => named.includes(c.author.id))) return [];
+  const pending = i === comments.length - 1;
+  const woken = pending ? summonedBy([...seen.sessions], thread).map((s) => s.actor.id) : [];
+  const refused = pending ? refusedMentions(named, askerId, seen.policies, seen.joined, now) : [];
+  const askedAt = Date.parse(ask.createdAt);
+  return named
+    .filter((id) => !woken.includes(id))
+    .map((actorId) => {
+      const turnedAway = refused.find((r) => r.actorId === actorId);
+      if (turnedAway) {
+        return { actorId, state: { state: "refused", policy: turnedAway.policy } as const, lapsed: turnedAway.lapsed };
+      }
+      const state = summonsState(
+        { actorId, threadId: thread.id, askedAt },
+        { sessions: seen.sessions, thread, rcParked: seen.answering.has(actorId) },
+        now,
+      );
+      return { actorId, state };
+    });
 }
 
 /**

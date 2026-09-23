@@ -273,9 +273,14 @@ describe("the tray's standing-agent doors", () => {
   });
 
   it("an ask the gate will turn away says so under it, never 'Sent' (owner-only summons)", () => {
+    // Since the summons receipts (#197 phase 1, web half) the refusal is one
+    // of core's `threadSummonses` rows, read there by `refusedMentions`; the
+    // behaviour is proved in `core/test/summons.test.ts`. What is pinned here
+    // is that the thread hands core the policies and says core's sentence.
     const onit = read("components/OnIt.tsx");
-    expect(onit).toMatch(/refusedMentions\(last\?\.mentions, actor\.id, policies, joined\)/);
-    expect(onit).toMatch(/state: "refused"/);
+    expect(onit).toMatch(/threadSummonses\(thread, actor\.id, \{ agents, sessions, answering, policies, joined \}/);
+    expect(onit).toMatch(/summonsLine\(/);
+    expect(read("../../core/src/summons.ts")).toMatch(/refusedMentions\(named, askerId, seen\.policies, seen\.joined, now\)/);
   });
 
   it("dismiss appears exactly on rows with standing, and sends the withdraw op", () => {

@@ -1,7 +1,7 @@
 import {
   ANSWER_WITHIN_MS,
   listeners,
-  refusedMentions,
+  threadSummonses,
   summonedBy,
   summonsLine,
   untilWords,
@@ -12,7 +12,7 @@ import {
   type CommentThread,
 } from "@isocan/core";
 import { undo } from "../lib/api.ts";
-import { useRcPolicies } from "../lib/answerable.ts";
+import { useAnswerable, useRcPolicies } from "../lib/answerable.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { makeComment } from "./CommentLayer.tsx";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
@@ -55,6 +55,7 @@ export function OnIt({
   // happens to be working right now.
   const second = useClockSecond();
   const policies = useRcPolicies(canvasId);
+  const answering = useAnswerable(canvasId);
   const joined = useCanvasStore((s) => s.actorJoins);
   const agents = useCanvasStore((s) => s.canvas?.agents);
   const names = useActorNames();
@@ -85,42 +86,41 @@ export function OnIt({
     );
   }
 
-  // Nothing has been asked, or it has already been answered.
-  if (!waiting) return null;
+  /**
+   * **A summons you can see** (#197 phase 1, web half). Every agent your
+   * latest comment named gets a receipt — asked, answered, nothing answered,
+   * or turned away at the gate — computed by core, worded by core, so this
+   * thread and anything else that reads a summons say the same sentence.
+   * "Picked up" is the working branch above, in the agent's own status.
+   *
+   * A refusal is known the instant the ask lands (owner-only summons, 11 Sep
+   * 2026), from the policy the rc announced, and is never counted as
+   * "nothing answered": nothing was asked of the agent at all.
+   */
+  const receipts = threadSummonses(thread, actor.id, { agents, sessions, answering, policies, joined }, second * 1000);
+  const nameOf = (id: string) => actorNameIn(names, { id, name: id });
+  const rows = receipts.map(({ actorId, state, lapsed }) => (
+    <div className="onit-row" key={actorId}>
+      <span className="onit-dot idle" />
+      <span>
+        {summonsLine(agents?.[actorId]?.actor.name ?? nameOf(actorId), state, nameOf)}
+        {/* Turned away WITH a grant that ran out is a different fact
+            from turned away with none (#272 phase 3): the same words,
+            plus the one clause that says which this is. */}
+        {lapsed && ` Your access ${untilWords(lapsed)}.`}
+      </span>
+    </div>
+  ));
+  const late = receipts.some((r) => r.state.state === "unanswered");
+
+  // Answered, or never asked. The receipt outlives the wait for as long as
+  // only the agents you named have spoken since.
+  if (!waiting) return rows.length > 0 ? <div className="onit" aria-live="polite">{rows}</div> : null;
 
   // How long the ask has gone unanswered. No new state: the last comment in
   // the thread IS the ask, so its timestamp is when you asked.
   const last = thread.comments[thread.comments.length - 1];
   const waitedMs = last ? Math.max(0, second * 1000 - Date.parse(last.createdAt)) : 0;
-
-  /**
-   * **Turned away at the gate** (owner-only summons, 11 Sep 2026). An agent
-   * you named whose rc does not take your word will not pick this up, and
-   * the rc will say so in the thread a moment from now — but "Sent" or a
-   * clock here meanwhile would be a promise already broken. Known the
-   * instant the ask lands, from the policy the rc announced; never counted
-   * as "nothing answered", because nothing was asked of the agent at all.
-   */
-  const refused = refusedMentions(last?.mentions, actor.id, policies, joined);
-  if (refused.length > 0) {
-    const nameOf = (id: string) => actorNameIn(names, { id, name: id });
-    return (
-      <div className="onit waiting" aria-live="polite">
-        {refused.map(({ actorId, policy, lapsed }) => (
-          <div className="onit-row" key={actorId}>
-            <span className="onit-dot idle" />
-            <span>
-              {summonsLine(agents?.[actorId]?.actor.name ?? nameOf(actorId), { state: "refused", policy }, nameOf)}
-              {/* Turned away WITH a grant that ran out is a different fact
-                  from turned away with none (#272 phase 3): the same words,
-                  plus the one clause that says which this is. */}
-              {lapsed && ` Your access ${untilWords(lapsed)}.`}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  }
 
   // Woken, but not a word yet. Worth saying on its own: it is the difference
   // between "did that go anywhere?" and "give it a second". It also needs
@@ -143,9 +143,10 @@ export function OnIt({
      * reading.
      */
     const names = woken.map((session) => session.label ?? session.actor.name);
-    const overdue = waitedMs >= ANSWER_WITHIN_MS;
+    const overdue = late || waitedMs >= ANSWER_WITHIN_MS;
     return (
       <div className={`onit waiting${overdue ? " overdue" : ""}`} aria-live="polite">
+        {rows}
         <div className="onit-row">
           <span className="onit-dot idle" />
           <span>{wokenLine(names, waitedMs)}</span>
@@ -168,15 +169,18 @@ export function OnIt({
    * so its timestamp is when you asked. `useSecond` re-renders this once a
    * second and stops entirely while the tab is hidden.
    */
-  // No clock on this one, on purpose: reaching here means nobody was woken,
-  // and a line that aged into "nothing answered" would be an accusation about
-  // a request that was never delivered to anybody.
+  // No clock on the head-count, on purpose: reaching here means nobody was
+  // woken, and a line that aged into "nothing answered" would be an accusation
+  // about a request that was never delivered to anybody. An agent you NAMED
+  // was asked, and its receipt above carries the clock; the head-count is for
+  // an ask that named nobody.
   const parked = listeners(sessions).length;
   return (
-    <div className="onit waiting" aria-live="polite">
+    <div className={`onit waiting${late ? " overdue" : ""}`} aria-live="polite">
+      {rows}
       <div className="onit-row">
-        <span className="onit-dot idle" />
-        <span>{waitingLine(parked)}</span>
+        {rows.length === 0 && <span className="onit-dot idle" />}
+        {rows.length === 0 && <span>{waitingLine(parked)}</span>}
         {/* Nothing has read it yet, so it can simply stop existing. Undoable
             like any other op — this is `comment.remove`, not a shred. */}
         <button className="onit-cancel" onClick={() => void retract(canvasId, actor, thread)}>
