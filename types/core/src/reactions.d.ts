@@ -7,6 +7,18 @@ import type { CanvasContents, Item } from "./model.js";
  * operation, because a count that clients incremented would lose one of every
  * two simultaneous reactions.
  */
+/**
+ * A short, opinionated starter set: what the picker shows before anybody has
+ * a history, and the fallback when recents are empty.
+ *
+ * A canvas of screens gets asked the same handful of questions — is this the
+ * one, does it need work, is it funny, is it done — and these eight answer
+ * them. The rest of the set is one keystroke away for everything else.
+ *
+ * Here rather than beside the set in `emoji.ts` because the recents list reads
+ * it eagerly and the set is fetched only with the picker; see that file.
+ */
+export declare const QUICK_REACTIONS: readonly ["👍", "🎉", "👀", "🤔", "❤️", "🔥", "🚧", "✅"];
 /** One emoji as it renders: the mark, how many wear it, and whether you do. */
 interface Reaction {
     emoji: string;

@@ -11,7 +11,7 @@ import {
   packPath,
   packProblems,
   rosterClashes
-} from "./chunk-3TT3PTGX.mjs";
+} from "./chunk-Y32BN66M.mjs";
 import {
   CanvasHandle,
   DEFAULT_MODE,
@@ -51,7 +51,7 @@ import {
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity
-} from "./chunk-YVR77ISA.mjs";
+} from "./chunk-A67Q3OU4.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -62,8 +62,8 @@ import {
   prepareDesignVerifierOffer,
   submitDesignReviewWrite,
   validatePreparedDesignReviewWrite
-} from "./chunk-GO4OWGBQ.mjs";
-import "./chunk-67ISKFHL.mjs";
+} from "./chunk-U2MJFXWG.mjs";
+import "./chunk-SG4MAWPR.mjs";
 import {
   parseDesignProjection,
   prepareDesignReconciliation,
@@ -72,11 +72,11 @@ import {
   readDesignSystem,
   reconcileDesignProjection,
   writeDesignDirection
-} from "./chunk-M6XS3ZHU.mjs";
+} from "./chunk-WLLT2M3X.mjs";
 import {
   changeDesignRequest,
   publishDesignReceipt
-} from "./chunk-V4HA6NJJ.mjs";
+} from "./chunk-VI2PGDZU.mjs";
 import {
   actorNamesOn,
   itemCenter,
@@ -84,13 +84,13 @@ import {
   nameResolver,
   runRoom,
   threadLocus
-} from "./chunk-3BS6AKVB.mjs";
+} from "./chunk-BFXZFQ2Q.mjs";
 import {
   parseDesignRepairBasis,
   prepareDesignRepair,
   submitDesignRepair,
   validatePreparedDesignRepair
-} from "./chunk-WCMXRRIT.mjs";
+} from "./chunk-4V3F7RFK.mjs";
 import {
   CanvasGroups,
   DaemonClient,
@@ -104,7 +104,7 @@ import {
   resolveCanvasGroupRef,
   resolved,
   shaOfRoot
-} from "./chunk-E36WCCDF.mjs";
+} from "./chunk-PHSGCIRG.mjs";
 import {
   bindableRoot,
   buildStamp,
@@ -132,26 +132,26 @@ import {
   updateConfigFile,
   writeGoogleToken,
   writeMarker
-} from "./chunk-QVAV3OBE.mjs";
+} from "./chunk-32NZJL2K.mjs";
 import {
   DaemonRoutes
-} from "./chunk-YFJUOJLA.mjs";
+} from "./chunk-N37LXSWG.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import {
   auditDesignSource,
   designAuditFails,
   readDesignAuditAdvisory,
   readDesignSourceAudit
-} from "./chunk-RUSJ7JFX.mjs";
+} from "./chunk-EHGYAAVY.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import {
   prepareDesignDecision
-} from "./chunk-JTJK77YY.mjs";
+} from "./chunk-CSFNNBJP.mjs";
 import {
   classifyAutomaticSource,
   questionnaireSubmissionIds
-} from "./chunk-ZXAJCYDK.mjs";
-import "./chunk-JLQ6QJS3.mjs";
+} from "./chunk-OQWKPAAY.mjs";
+import "./chunk-BDAEQ3TK.mjs";
 import {
   ALIGN_EDGES,
   AREA_FILENAME,
@@ -518,7 +518,7 @@ import {
   wallFor,
   withModuleCommands,
   workbenchUrl
-} from "./chunk-WHUBDAMU.mjs";
+} from "./chunk-B7JOBMSP.mjs";
 import {
   serializeDesign,
   toCss,
@@ -8299,7 +8299,7 @@ your own rc, each named for its principle \u2014 an homage, never the person.
         quote: null,
         ...opts.self ? { self: true } : {}
       };
-      const problems = (await import("./packs-537L5MTY.mjs")).packProblems(pack);
+      const problems = (await import("./packs-MDHOJA4A.mjs")).packProblems(pack);
       if (problems.length) {
         const hint = problems.some((p) => /reference/.test(p)) ? ' \u2014 add one with --ref "Title|https://\u2026|what to learn"' : "";
         throw new Error(`this pack would be refused: ${problems.join("; ")}${hint}`);
@@ -10528,6 +10528,25 @@ function openInBrowser(url) {
 // packages/cli/src/operator.ts
 import { createServer } from "node:http";
 import { randomBytes as randomBytes2 } from "node:crypto";
+
+// packages/cli/src/run.ts
+function run(fn) {
+  return async (...args) => {
+    try {
+      await fn(...args);
+    } catch (err) {
+      console.error(`error: ${err.message}`);
+      if (err instanceof ApiError && err.code === BADGE_ENDED) {
+        console.error(
+          "This machine's badge was ended by the operator of that home, so it will not knock for a new one under your name. You can still open the home as a stranger; write to the address above about the rest."
+        );
+      }
+      process.exitCode = 1;
+    }
+  };
+}
+
+// packages/cli/src/operator.ts
 function summonedRefusal(env = process.env) {
   const session2 = env["ISOCAN_SESSION_ID"]?.trim();
   if (!session2) return null;
@@ -10612,6 +10631,431 @@ async function readBody(req) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks).toString("utf8");
+}
+async function operatorHome(ctx, canvasId, stated) {
+  if (stated) return normalizeHomeUrl(stated);
+  if (canvasId) {
+    const where = await ctx.homeOf(canvasId).catch(() => null);
+    if (where) return where;
+  }
+  return ctx.birthHome ?? ctx.client.base;
+}
+function refuseInSession() {
+  const refusal = summonedRefusal();
+  if (refusal) throw new Error(refusal);
+}
+async function requireOperatorHome(client, home) {
+  try {
+    await client.operatorLog("");
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    if (err.code === NO_OPERATOR_PROOF) return;
+    if (err.code === NO_OPERATOR) throw new Error(err.message);
+    if (err.status === 404) {
+      throw new Error(
+        `${home} does not answer operator acts \u2014 it is running a build older than this CLI, so there is nothing to prove to yet.`
+      );
+    }
+    throw err;
+  }
+  throw new Error(
+    `${home} answered an operator read to a caller that proved nothing. That home is not checking operator proofs; do not act on it, and tell whoever runs it.`
+  );
+}
+async function operatorProof(client, home, act) {
+  refuseInSession();
+  await requireOperatorHome(client, home);
+  const { idToken } = await proveInBrowser({ home, act });
+  return idToken;
+}
+function clientAt(ctx, home) {
+  return home === ctx.client.base ? ctx.client : new DaemonClient(home, ctx.home);
+}
+function erasedLine(gone) {
+  const n = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+  return `${n(gone.files, "file", "files")} (${formatBytes(gone.bytes)}), ${n(gone.ops, "log entry", "log entries")}, ${n(gone.objects, "stored object", "stored objects")}`;
+}
+function printEndReach(reach) {
+  const line = (s) => `${s.badgeId} (${s.kind}) \u2014 ${s.actors.map((a) => a.name || a.id).join(", ") || "speaks as nobody"}, in ${s.canvases} ${s.canvases === 1 ? "canvas" : "canvases"}, seen ${s.lastSeen.slice(0, 10)}`;
+  printKeyValues({
+    target: `${reach.target.id} (by ${reach.target.kind})`,
+    badges: reach.badges.length === 0 ? "none live" : String(reach.badges.length)
+  });
+  for (const s of reach.badges) console.log(`  ${line(s)}`);
+  console.log(`enrolments: ${reach.enrolments.length === 0 ? "none" : String(reach.enrolments.length)}`);
+  for (const s of reach.enrolments) console.log(`  ${line(s)}`);
+  console.log(`passes outstanding: ${reach.passes}`);
+}
+function printRefuse(answer, lifting) {
+  const { refusal, reach } = answer;
+  const shown = refusal.subject.replace(/^(email|repo|actor|net):/, "");
+  if (lifting) {
+    console.log(`${shown} is not refused any more. This home will admit it again.`);
+    console.log(
+      `
+Every badge the refusal ended STAYS ended \u2014 a lift is not an un-end. Both acts are in
+the ledger \u2014 \`isocan operator log --target ${refusal.subject}\`.`
+    );
+    return;
+  }
+  const pairs = { refused: refusal.subject, why: TAKEDOWN_REASONS[refusal.reason] };
+  if (reach.kind === "email" || reach.kind === "repo") {
+    pairs["badges ended"] = reach.ended.length === 0 ? "none had proved it" : reach.ended.join(", ");
+    pairs["tabs and daemons closed"] = `${reach.reached.sockets} here`;
+    pairs["waits ended"] = String(reach.reached.waits);
+    pairs["swept from their canvases"] = sweptLine(reach.swept);
+  } else if (reach.kind === "actor") {
+    pairs["holders now"] = reach.holders === 0 ? "none \u2014 the name is free, and stays refused" : `${reach.holders} \u2014 a refusal stops the name coming back; \`isocan operator end actor:${shown}\` ends these`;
+  } else {
+    pairs["refuses"] = "minting a badge from that network";
+  }
+  pairs["ends"] = refusal.expiresAt ? `on its own, ${refusalUntil(refusal.expiresAt)}` : "when you lift it";
+  printKeyValues(pairs);
+  if (answer.sentence) console.log(`
+The person reads, from this home:
+  ${answer.sentence}`);
+  console.log(`
+${REFUSAL_LIMIT}`);
+  console.log(`
+The record is in the ledger \u2014 \`isocan operator log --target ${refusal.subject}\`.`);
+}
+function sweptLine(swept) {
+  if (swept.expelled === 0 && swept.rerooted === 0) return "nobody was expelled";
+  const parts = [`${swept.expelled} expelled`];
+  if (swept.rerooted > 0) parts.push(`${swept.rerooted} kept by another grant`);
+  return parts.join(", ");
+}
+function registerOperator(program3, ctxOf2) {
+  const operatorCommand = program3.command("operator").description(
+    "For the person who runs this home. Needs their sign-in in a browser, for each act, and refuses inside an agent session"
+  ).addHelpText(
+    "after",
+    `
+An operator act is not a canvas act. It is refused unless a person proves, in
+a browser, that their address is one this home's configuration names \u2014 freshly,
+for the act the page shows them before it asks anything. Nothing is stored: no
+token on disk, no standing on any badge, nothing an agent could inherit.
+
+Every act is written into this home's ledger before it answers, and
+\`isocan operator log\` is how the operator reads it back.`
+  );
+  operatorCommand.command("show <canvas>").description("What this home holds under that id \u2014 counts, the maker, and nothing else. Changes nothing").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
+    run(async (canvasId, opts, cmd) => {
+      refuseInSession();
+      const ctx = await ctxOf2(cmd);
+      const home = await operatorHome(ctx, canvasId, opts.home);
+      const client = clientAt(ctx, home);
+      const proof = await operatorProof(client, home, `show ${canvasId}`);
+      const { reach, takedown } = await client.operatorShow(canvasId, proof);
+      if (ctx.json) return printJson({ reach, ...takedown ? { takedown } : {} });
+      printKeyValues({
+        canvas: `${reach.title} (${reach.canvasId})`,
+        made: `${reach.madeBy.name || reach.madeBy.id} on ${reach.at.slice(0, 10)}`,
+        link: reach.link ? `on, at ${reach.link}` : "off",
+        grants: String(reach.grants),
+        badges: `${reach.badges} admitted`,
+        sockets: `${reach.sockets} open here`,
+        files: `${reach.files} \u2014 ${formatBytes(reach.bytes)}`,
+        replicas: reach.replicas.length === 0 ? "none relaying now" : `${reach.replicas.length} relaying now`
+      });
+      if (takedown) {
+        console.log(
+          `
+${inForce(takedown) ? "TAKEN DOWN" : "taken down, and lifted"} \u2014 the people on it read:
+  ${takedownSentence(takedown)}` + (takedown.note ? `
+your note: ${takedown.note}` : "") + (takedown.liftedAt ? `
+lifted on ${takedown.liftedAt.slice(0, 10)}` : "")
+        );
+        if (takedown.purgedAt) {
+          const gone = takedown.purged;
+          console.log(
+            `PURGED on ${takedown.purgedAt.slice(0, 10)}` + (gone ? ` \u2014 ${erasedLine(gone)} erased from this home` : "") + ". The id stays taken; nothing can be adopted, teleported or created under it."
+          );
+        }
+      }
+      console.log(
+        "\nNothing was changed, and this look is in this home's ledger \u2014 `isocan operator log`."
+      );
+    })
+  );
+  operatorCommand.command("look <canvas>").description(
+    "Open that canvas read-only in a browser for an hour, to judge a report. Nobody on it is told; the ledger is"
+  ).requiredOption("--reason <why>", "why you are looking \u2014 it goes in the ledger").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
+    run(async (canvasId, opts, cmd) => {
+      refuseInSession();
+      const ctx = await ctxOf2(cmd);
+      const home = await operatorHome(ctx, canvasId, opts.home);
+      const client = clientAt(ctx, home);
+      const proof = await operatorProof(client, home, `look at ${canvasId}`);
+      const { until, token, reach } = await client.operatorLook(canvasId, proof, {
+        reason: opts.reason
+      });
+      const url = operatorLookUrl(home, canvasId, token);
+      if (ctx.json) return printJson({ until, url, reach });
+      printKeyValues({
+        canvas: `${reach.title} (${reach.canvasId})`,
+        made: `${reach.madeBy.name || reach.madeBy.id} on ${reach.at.slice(0, 10)}`,
+        link: reach.link ? `on, at ${reach.link}` : "off",
+        until: `${until.slice(11, 16)} \u2014 an hour from now`
+      });
+      console.log(`
+open this, once:
+  ${url}`);
+      console.log(
+        "\nRead-only, and nobody on the canvas is told you arrived: a view connection is not in\npresence, which is the rule for every viewer. The look is in this home's ledger with\nthe reason you gave \u2014 `isocan operator log`. After an hour the tab shows the refusal\nany stranger gets."
+      );
+      openInBrowser(url);
+    })
+  );
+  operatorCommand.command("takedown <canvas>").description(
+    "Stop this home serving that canvas. Nothing is erased and every replica keeps its copy; --lift brings it back"
+  ).option("--reason <category>", `why, from: ${takedownReasonList()}`).option("--note <text>", "your own note \u2014 recorded, and shown to nobody").option("--lift", "bring back a canvas that was taken down").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
+    run(
+      async (canvasId, opts, cmd) => {
+        refuseInSession();
+        const ctx = await ctxOf2(cmd);
+        const home = await operatorHome(ctx, canvasId, opts.home);
+        const client = clientAt(ctx, home);
+        const lifting = opts.lift === true;
+        const proof = await operatorProof(
+          client,
+          home,
+          lifting ? `lift the takedown on ${canvasId}` : `take down ${canvasId}`
+        );
+        const answer = await client.operatorTakedown(canvasId, proof, {
+          ...opts.reason ? { reason: opts.reason } : {},
+          ...opts.note ? { note: opts.note } : {},
+          ...lifting ? { lift: true } : {}
+        });
+        if (ctx.json) return printJson(answer);
+        if (lifting) {
+          console.log(`${canvasId} is served again. Nothing had been erased, so nothing is lost.`);
+          console.log(
+            `
+Tabs reload into it. A replica that stopped dialling re-dials within ten seconds
+and syncs. Both rows are in the ledger \u2014 \`isocan operator log --target ${canvasId}\`.`
+          );
+          return;
+        }
+        const { reach, takedown, cdn } = answer;
+        printKeyValues({
+          canvas: canvasId,
+          reason: takedown.reason,
+          "tabs and daemons closed": `${reach.sockets} here`,
+          "waits ended": String(reach.waits),
+          "agent parks ended": String(reach.holds),
+          "replicas relaying": `${reach.relays} \u2014 each keeps its copy`,
+          files: `${reach.files} \u2014 ${formatBytes(reach.bytes)}, refused at the content origin from now`
+        });
+        console.log(`
+The people on it read, from this home:
+  ${takedownSentence(takedown)}`);
+        if (cdn) {
+          console.log(
+            `
+One thing this home cannot do for you: a copy at the edge may be served for up to
+${Math.round(cdn.horizonSeconds / 60)} more minutes. To clear it now, run:
+  ${cdn.command}`
+          );
+        }
+        console.log(
+          `
+Nothing has been erased. Every replica keeps its copy \u2014 the operator cannot reach a
+laptop \u2014 and \`isocan operator takedown ${canvasId} --lift\` brings it all back.`
+        );
+      }
+    )
+  );
+  operatorCommand.command("purge <canvas>").description(
+    "Erase what this home holds under a canvas it has taken down. Cannot be lifted; says what survives, and for how long"
+  ).option("--force", "say that you mean it \u2014 a purge is refused without this").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
+    run(async (canvasId, opts, cmd) => {
+      refuseInSession();
+      if (!opts.force) {
+        throw new Error(
+          `a purge erases what the home holds under ${canvasId} and cannot be lifted. \`isocan operator purge ${canvasId} --force\` says you mean it.`
+        );
+      }
+      const ctx = await ctxOf2(cmd);
+      const home = await operatorHome(ctx, canvasId, opts.home);
+      const client = clientAt(ctx, home);
+      const proof = await operatorProof(client, home, `purge ${canvasId} \u2014 erase it`);
+      const answer = await client.operatorPurge(canvasId, proof, { force: true });
+      if (ctx.json) return printJson(answer);
+      const { erased, survives, takedown } = answer;
+      printKeyValues({
+        canvas: canvasId,
+        "taken down": `${takedown.at.slice(0, 10)} \u2014 ${takedown.reason}`,
+        "erased from this home": erasedLine(erased)
+      });
+      console.log("\nWhat still exists, and for how long:");
+      for (const horizon of survives) {
+        console.log(`  - ${horizon.sentence}${horizon.days === null ? "" : ` (${horizon.days} days)`}`);
+      }
+      console.log(
+        `
+The id stays taken: nothing can be adopted, teleported or created under ${canvasId}
+at this home again, and the people who were on it still read the sentence. The
+record stays \u2014 \`isocan operator log --target ${canvasId}\`. There is no --lift.`
+      );
+    })
+  );
+  operatorCommand.command("end <target>").description(
+    "End a surface, and mean it: a badge id, an actor id, or email:<address>. Lists what the id reaches before acting; the person can still knock again as a stranger"
+  ).option("--reason <category>", `why, from: ${takedownReasonList()}`).option("--note <text>", "your own note \u2014 recorded, and shown to nobody").option(
+    "--with-enrolments",
+    "also end the badges those surfaces enrolled by pass, which would otherwise outlive them"
+  ).option("--yes", "act without asking (the enrolments are left unless --with-enrolments)").option("--home <url>", "the home to prove at; by default, this machine's").action(
+    run(
+      async (target2, opts, cmd) => {
+        refuseInSession();
+        const ctx = await ctxOf2(cmd);
+        const home = await operatorHome(ctx, null, opts.home);
+        const client = clientAt(ctx, home);
+        const proof = await operatorProof(client, home, `end ${target2}`);
+        const request = {
+          ...opts.reason ? { reason: opts.reason } : {},
+          ...opts.note ? { note: opts.note } : {}
+        };
+        const preview = await client.operatorEnd(target2, proof, { ...request, preview: true });
+        if (!ctx.json) {
+          printEndReach(preview.reach);
+          console.log();
+        }
+        if (preview.reach.badges.length === 0) {
+          throw new Error(
+            `${target2} names no live badge at ${home} \u2014 it was never here, or it is already ended. \`isocan operator log --target ${target2}\` says which.`
+          );
+        }
+        let withEnrolments = opts.withEnrolments === true;
+        if (!withEnrolments && preview.reach.enrolments.length > 0 && !opts.yes && !ctx.json && process.stdin.isTTY && process.stdout.isTTY) {
+          const readline = await import("node:readline/promises");
+          const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+          try {
+            const answer2 = await rl.question(
+              `End the ${preview.reach.enrolments.length} enrolment(s) too? They outlive their creating badge otherwise. [y/N] `
+            );
+            withEnrolments = /^y(es)?$/i.test(answer2.trim());
+          } finally {
+            rl.close();
+          }
+        }
+        const answer = await client.operatorEnd(target2, proof, { ...request, withEnrolments });
+        if (ctx.json) return printJson(answer);
+        printKeyValues({
+          ended: answer.ended.length === 0 ? "nothing" : answer.ended.join(", "),
+          "tabs and daemons closed": `${answer.reached.sockets} here`,
+          "waits ended": String(answer.reached.waits),
+          "swept from their canvases": sweptLine(answer.swept),
+          "passes refused from now": String(answer.reach.passes),
+          enrolments: withEnrolments ? "ended with them" : preview.reach.enrolments.length === 0 ? "none" : `${preview.reach.enrolments.length} left standing \u2014 \`--with-enrolments\` ends them`
+        });
+        if (answer.sentence) console.log(`
+The people on them read, from this home:
+  ${answer.sentence}`);
+        console.log(
+          `
+Ending is not refusing: they can knock again and be a stranger, with none of these
+claims. The record is in the ledger \u2014 \`isocan operator log --target ${target2}\`.`
+        );
+      }
+    )
+  );
+  operatorCommand.command("revoke <target> <subject>").description(
+    "Turn off one grant on a canvas or a space: `link`, an email, `repo:\u2026` or `group:<id>`. The owner is shown why, and can turn it back on; --bar keeps the subject out as well"
+  ).option("--reason <category>", `why, from: ${takedownReasonList()}`).option("--note <text>", "your own note \u2014 recorded, and shown to nobody").option("--bar", "write a bar too: refused at the door whatever the link allows, until an owner lifts it").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
+    run(
+      async (target2, who, opts, cmd) => {
+        refuseInSession();
+        const ctx = await ctxOf2(cmd);
+        const isSpace = target2.startsWith("spc_");
+        const home = await operatorHome(ctx, isSpace ? null : target2, opts.home);
+        const client = clientAt(ctx, home);
+        const subject = who.trim() === LINK ? LINK : normalizeSubject(grantSubjectOf(who));
+        const proof = await operatorProof(client, home, `turn off ${subject} on ${target2}`);
+        const answer = await client.operatorRevoke(target2, proof, {
+          subject,
+          ...opts.reason ? { reason: opts.reason } : {},
+          ...opts.note ? { note: opts.note } : {},
+          ...opts.bar ? { bar: true } : {}
+        });
+        if (ctx.json) return printJson(answer);
+        printKeyValues({
+          [answer.target.kind]: answer.target.id,
+          subject,
+          "was granted": `${answer.grant.at.slice(0, 10)} by ${answer.grant.grantedBy}`,
+          reached: answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`,
+          swept: sweptLine(answer.swept),
+          "kept out": answer.bar ? `yes \u2014 until an owner lifts it (${answer.bar.id})` : "no \u2014 `--bar` would"
+        });
+        console.log(`
+The owner reads, in Share and in \`isocan share\`:
+  ${answer.sentence}`);
+        console.log(
+          `
+The owner can turn it back on \u2014 a revoke they can undo is a request. If it has to
+stay off, the order is \`isocan operator takedown\`. The record is in the ledger \u2014 \`isocan operator log --target ${target2}\`.`
+        );
+      }
+    )
+  );
+  operatorCommand.command("refuse <subject>").description(
+    "Refuse a subject at the door: email:<address>, repo:<host>/<owner>/<name>, actor:<id> or net:<cidr>. Refusing an address ends every badge that proved it; --for expires it; --lift ends it"
+  ).option("--reason <category>", `why, from: ${takedownReasonList()}`).option("--note <text>", "your own note \u2014 recorded, and shown to nobody").option("--for <duration>", "how long, like 10m, 24h or 7d (a network defaults to 24h)").option("--lift", "end a refusal that is in force").option("--home <url>", "the home to prove at; by default, this machine's").action(
+    run(
+      async (subject, opts, cmd) => {
+        refuseInSession();
+        if (!refusalSubjectOf(subject)) {
+          throw new Error(refusalSubjectRefusal(subject) ?? `not a refusal subject: ${subject}`);
+        }
+        const ctx = await ctxOf2(cmd);
+        const home = await operatorHome(ctx, null, opts.home);
+        const client = clientAt(ctx, home);
+        const lifting = opts.lift === true;
+        const proof = await operatorProof(
+          client,
+          home,
+          lifting ? `lift the refusal on ${subject}` : `refuse ${subject}`
+        );
+        const answer = await client.operatorRefuse(subject, proof, {
+          ...opts.reason ? { reason: opts.reason } : {},
+          ...opts.note ? { note: opts.note } : {},
+          ...opts.for ? { for: opts.for } : {},
+          ...lifting ? { lift: true } : {}
+        });
+        if (ctx.json) return printJson(answer);
+        printRefuse(answer, lifting);
+      }
+    )
+  );
+  operatorCommand.command("log").description("This home's operator ledger, newest first \u2014 every act, with what proved it").option("--home <url>", "the home to prove at; by default, this machine's").option("--target <id>", "one canvas, badge, actor or address").option("--limit <n>", "how many rows", "50").action(
+    run(async (opts, cmd) => {
+      refuseInSession();
+      const ctx = await ctxOf2(cmd);
+      const home = await operatorHome(ctx, opts.target ?? null, opts.home);
+      const client = clientAt(ctx, home);
+      const proof = await operatorProof(
+        client,
+        home,
+        opts.target ? `log for ${opts.target}` : "read the log"
+      );
+      const { acts } = await client.operatorLog(proof, {
+        ...opts.target ? { target: opts.target } : {},
+        ...opts.limit ? { limit: Number(opts.limit) } : {}
+      });
+      if (ctx.json) return printJson(acts);
+      if (acts.length === 0) return console.log("no operator act has been taken at this home.");
+      printTable(
+        acts.map((row) => ({
+          when: row.at.slice(0, 19).replace("T", " "),
+          act: row.act,
+          target: row.target ?? "\u2014",
+          who: row.proof.attribute.replace(/^email:/, ""),
+          outcome: row.outcome
+        }))
+      );
+    })
+  );
 }
 
 // packages/cli/src/sandbox.ts
@@ -11914,21 +12358,6 @@ A typical collaboration loop:
   The loop's only exit is the human saying so: \`session end\` is theirs to
   ask for, not yours to decide. Every other lap ends parked on \`wait\`.`
 );
-function run(fn) {
-  return async (...args) => {
-    try {
-      await fn(...args);
-    } catch (err) {
-      console.error(`error: ${err.message}`);
-      if (err instanceof ApiError && err.code === BADGE_ENDED) {
-        console.error(
-          "This machine's badge was ended by the operator of that home, so it will not knock for a new one under your name. You can still open the home as a stranger; write to the address above about the rest."
-        );
-      }
-      process.exitCode = 1;
-    }
-  };
-}
 function ctxOf(cmd) {
   return makeCtx(cmd);
 }
@@ -12306,7 +12735,7 @@ program2.command("mcp").description(
   "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)"
 ).action(
   run(async () => {
-    const { serveStdio } = await import("./src-TZVHK4RA.mjs");
+    const { serveStdio } = await import("./src-AQ2Z42T5.mjs");
     await serveStdio({ version: buildStamp().version });
     await new Promise(() => {
     });
@@ -12321,14 +12750,14 @@ program2.command("serve").alias("start").description("Run the state daemon (auto
       throw refuseDaemonVerb("serve", declared.at ?? "its home");
     }
     if (opts.foreground) {
-      const { runDaemon } = await import("./daemon-UKCI2V7Z.mjs");
+      const { runDaemon } = await import("./daemon-CUJ6R3BT.mjs");
       await runDaemon({ port, home, ...opts.force ? { takeover: true } : {} });
       return new Promise(() => {
       });
     }
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
     if (opts.force) {
-      const { stopDaemons } = await import("./daemon-UKCI2V7Z.mjs");
+      const { stopDaemons } = await import("./daemon-CUJ6R3BT.mjs");
       const stopped = await stopDaemons(port, home);
       if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
     } else if (await client.health()) {
@@ -12519,7 +12948,7 @@ async function rosterCaveat(ctx, canvasId) {
   return why === null ? null : `this is only who this machine can see \u2014 ${why}`;
 }
 async function restartDaemon(home, port) {
-  const { stopDaemons } = await import("./daemon-UKCI2V7Z.mjs");
+  const { stopDaemons } = await import("./daemon-CUJ6R3BT.mjs");
   const stopped = await stopDaemons(port, home);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
   await client.ensureDaemon();
@@ -12992,7 +13421,7 @@ function say(adoption) {
 }
 program2.command("stop").description("Stop the daemon \u2014 asks the port who it is, so a stale one can't hide").action(
   run(async (_opts, cmd) => {
-    const { stopDaemons } = await import("./daemon-UKCI2V7Z.mjs");
+    const { stopDaemons } = await import("./daemon-CUJ6R3BT.mjs");
     const declared = await resolveDeclared(paths_exports.isocanHome());
     if (declared?.mode === "direct") {
       throw refuseDaemonVerb("stop", declared.at ?? "its home");
@@ -13736,431 +14165,9 @@ program2.command("badges").description("Every surface that carries your identity
     );
   })
 );
-async function operatorHome(ctx, canvasId, stated) {
-  if (stated) return normalizeHomeUrl(stated);
-  if (canvasId) {
-    const where = await ctx.homeOf(canvasId).catch(() => null);
-    if (where) return where;
-  }
-  return ctx.birthHome ?? ctx.client.base;
-}
-function refuseInSession() {
-  const refusal = summonedRefusal();
-  if (refusal) throw new Error(refusal);
-}
-async function requireOperatorHome(client, home) {
-  try {
-    await client.operatorLog("");
-  } catch (err) {
-    if (!(err instanceof ApiError)) throw err;
-    if (err.code === NO_OPERATOR_PROOF) return;
-    if (err.code === NO_OPERATOR) throw new Error(err.message);
-    if (err.status === 404) {
-      throw new Error(
-        `${home} does not answer operator acts \u2014 it is running a build older than this CLI, so there is nothing to prove to yet.`
-      );
-    }
-    throw err;
-  }
-  throw new Error(
-    `${home} answered an operator read to a caller that proved nothing. That home is not checking operator proofs; do not act on it, and tell whoever runs it.`
-  );
-}
-async function operatorProof(client, home, act) {
-  refuseInSession();
-  await requireOperatorHome(client, home);
-  const { idToken } = await proveInBrowser({ home, act });
-  return idToken;
-}
-function clientAt(ctx, home) {
-  return home === ctx.client.base ? ctx.client : new DaemonClient(home, ctx.home);
-}
-var operatorCommand = program2.command("operator").description(
-  "For the person who runs this home. Needs their sign-in in a browser, for each act, and refuses inside an agent session"
-).addHelpText(
-  "after",
-  `
-An operator act is not a canvas act. It is refused unless a person proves, in
-a browser, that their address is one this home's configuration names \u2014 freshly,
-for the act the page shows them before it asks anything. Nothing is stored: no
-token on disk, no standing on any badge, nothing an agent could inherit.
-
-Every act is written into this home's ledger before it answers, and
-\`isocan operator log\` is how the operator reads it back.`
-);
-operatorCommand.command("show <canvas>").description("What this home holds under that id \u2014 counts, the maker, and nothing else. Changes nothing").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
-  run(async (canvasId, opts, cmd) => {
-    refuseInSession();
-    const ctx = await ctxOf(cmd);
-    const home = await operatorHome(ctx, canvasId, opts.home);
-    const client = clientAt(ctx, home);
-    const proof = await operatorProof(client, home, `show ${canvasId}`);
-    const { reach, takedown } = await client.operatorShow(canvasId, proof);
-    if (ctx.json) return printJson({ reach, ...takedown ? { takedown } : {} });
-    printKeyValues({
-      canvas: `${reach.title} (${reach.canvasId})`,
-      made: `${reach.madeBy.name || reach.madeBy.id} on ${reach.at.slice(0, 10)}`,
-      link: reach.link ? `on, at ${reach.link}` : "off",
-      grants: String(reach.grants),
-      badges: `${reach.badges} admitted`,
-      sockets: `${reach.sockets} open here`,
-      files: `${reach.files} \u2014 ${formatBytes(reach.bytes)}`,
-      replicas: reach.replicas.length === 0 ? "none relaying now" : `${reach.replicas.length} relaying now`
-    });
-    if (takedown) {
-      console.log(
-        `
-${inForce(takedown) ? "TAKEN DOWN" : "taken down, and lifted"} \u2014 the people on it read:
-  ${takedownSentence(takedown)}` + (takedown.note ? `
-your note: ${takedown.note}` : "") + (takedown.liftedAt ? `
-lifted on ${takedown.liftedAt.slice(0, 10)}` : "")
-      );
-      if (takedown.purgedAt) {
-        const gone = takedown.purged;
-        console.log(
-          `PURGED on ${takedown.purgedAt.slice(0, 10)}` + (gone ? ` \u2014 ${erasedLine(gone)} erased from this home` : "") + ". The id stays taken; nothing can be adopted, teleported or created under it."
-        );
-      }
-    }
-    console.log(
-      "\nNothing was changed, and this look is in this home's ledger \u2014 `isocan operator log`."
-    );
-  })
-);
-operatorCommand.command("look <canvas>").description(
-  "Open that canvas read-only in a browser for an hour, to judge a report. Nobody on it is told; the ledger is"
-).requiredOption("--reason <why>", "why you are looking \u2014 it goes in the ledger").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
-  run(async (canvasId, opts, cmd) => {
-    refuseInSession();
-    const ctx = await ctxOf(cmd);
-    const home = await operatorHome(ctx, canvasId, opts.home);
-    const client = clientAt(ctx, home);
-    const proof = await operatorProof(client, home, `look at ${canvasId}`);
-    const { until, token, reach } = await client.operatorLook(canvasId, proof, {
-      reason: opts.reason
-    });
-    const url = operatorLookUrl(home, canvasId, token);
-    if (ctx.json) return printJson({ until, url, reach });
-    printKeyValues({
-      canvas: `${reach.title} (${reach.canvasId})`,
-      made: `${reach.madeBy.name || reach.madeBy.id} on ${reach.at.slice(0, 10)}`,
-      link: reach.link ? `on, at ${reach.link}` : "off",
-      until: `${until.slice(11, 16)} \u2014 an hour from now`
-    });
-    console.log(`
-open this, once:
-  ${url}`);
-    console.log(
-      "\nRead-only, and nobody on the canvas is told you arrived: a view connection is not in\npresence, which is the rule for every viewer. The look is in this home's ledger with\nthe reason you gave \u2014 `isocan operator log`. After an hour the tab shows the refusal\nany stranger gets."
-    );
-    openInBrowser(url);
-  })
-);
-operatorCommand.command("takedown <canvas>").description(
-  "Stop this home serving that canvas. Nothing is erased and every replica keeps its copy; --lift brings it back"
-).option("--reason <category>", `why, from: ${takedownReasonList()}`).option("--note <text>", "your own note \u2014 recorded, and shown to nobody").option("--lift", "bring back a canvas that was taken down").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
-  run(
-    async (canvasId, opts, cmd) => {
-      refuseInSession();
-      const ctx = await ctxOf(cmd);
-      const home = await operatorHome(ctx, canvasId, opts.home);
-      const client = clientAt(ctx, home);
-      const lifting = opts.lift === true;
-      const proof = await operatorProof(
-        client,
-        home,
-        lifting ? `lift the takedown on ${canvasId}` : `take down ${canvasId}`
-      );
-      const answer = await client.operatorTakedown(canvasId, proof, {
-        ...opts.reason ? { reason: opts.reason } : {},
-        ...opts.note ? { note: opts.note } : {},
-        ...lifting ? { lift: true } : {}
-      });
-      if (ctx.json) return printJson(answer);
-      if (lifting) {
-        console.log(`${canvasId} is served again. Nothing had been erased, so nothing is lost.`);
-        console.log(
-          `
-Tabs reload into it. A replica that stopped dialling re-dials within ten seconds
-and syncs. Both rows are in the ledger \u2014 \`isocan operator log --target ${canvasId}\`.`
-        );
-        return;
-      }
-      const { reach, takedown, cdn } = answer;
-      printKeyValues({
-        canvas: canvasId,
-        reason: takedown.reason,
-        "tabs and daemons closed": `${reach.sockets} here`,
-        "waits ended": String(reach.waits),
-        "agent parks ended": String(reach.holds),
-        "replicas relaying": `${reach.relays} \u2014 each keeps its copy`,
-        files: `${reach.files} \u2014 ${formatBytes(reach.bytes)}, refused at the content origin from now`
-      });
-      console.log(`
-The people on it read, from this home:
-  ${takedownSentence(takedown)}`);
-      if (cdn) {
-        console.log(
-          `
-One thing this home cannot do for you: a copy at the edge may be served for up to
-${Math.round(cdn.horizonSeconds / 60)} more minutes. To clear it now, run:
-  ${cdn.command}`
-        );
-      }
-      console.log(
-        `
-Nothing has been erased. Every replica keeps its copy \u2014 the operator cannot reach a
-laptop \u2014 and \`isocan operator takedown ${canvasId} --lift\` brings it all back.`
-      );
-    }
-  )
-);
-function erasedLine(gone) {
-  const n = (count, one, many) => `${count} ${count === 1 ? one : many}`;
-  return `${n(gone.files, "file", "files")} (${formatBytes(gone.bytes)}), ${n(gone.ops, "log entry", "log entries")}, ${n(gone.objects, "stored object", "stored objects")}`;
-}
-operatorCommand.command("purge <canvas>").description(
-  "Erase what this home holds under a canvas it has taken down. Cannot be lifted; says what survives, and for how long"
-).option("--force", "say that you mean it \u2014 a purge is refused without this").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
-  run(async (canvasId, opts, cmd) => {
-    refuseInSession();
-    if (!opts.force) {
-      throw new Error(
-        `a purge erases what the home holds under ${canvasId} and cannot be lifted. \`isocan operator purge ${canvasId} --force\` says you mean it.`
-      );
-    }
-    const ctx = await ctxOf(cmd);
-    const home = await operatorHome(ctx, canvasId, opts.home);
-    const client = clientAt(ctx, home);
-    const proof = await operatorProof(client, home, `purge ${canvasId} \u2014 erase it`);
-    const answer = await client.operatorPurge(canvasId, proof, { force: true });
-    if (ctx.json) return printJson(answer);
-    const { erased, survives, takedown } = answer;
-    printKeyValues({
-      canvas: canvasId,
-      "taken down": `${takedown.at.slice(0, 10)} \u2014 ${takedown.reason}`,
-      "erased from this home": erasedLine(erased)
-    });
-    console.log("\nWhat still exists, and for how long:");
-    for (const horizon of survives) {
-      console.log(`  - ${horizon.sentence}${horizon.days === null ? "" : ` (${horizon.days} days)`}`);
-    }
-    console.log(
-      `
-The id stays taken: nothing can be adopted, teleported or created under ${canvasId}
-at this home again, and the people who were on it still read the sentence. The
-record stays \u2014 \`isocan operator log --target ${canvasId}\`. There is no --lift.`
-    );
-  })
-);
-function printEndReach(reach) {
-  const line = (s) => `${s.badgeId} (${s.kind}) \u2014 ${s.actors.map((a) => a.name || a.id).join(", ") || "speaks as nobody"}, in ${s.canvases} ${s.canvases === 1 ? "canvas" : "canvases"}, seen ${s.lastSeen.slice(0, 10)}`;
-  printKeyValues({
-    target: `${reach.target.id} (by ${reach.target.kind})`,
-    badges: reach.badges.length === 0 ? "none live" : String(reach.badges.length)
-  });
-  for (const s of reach.badges) console.log(`  ${line(s)}`);
-  console.log(`enrolments: ${reach.enrolments.length === 0 ? "none" : String(reach.enrolments.length)}`);
-  for (const s of reach.enrolments) console.log(`  ${line(s)}`);
-  console.log(`passes outstanding: ${reach.passes}`);
-}
-operatorCommand.command("end <target>").description(
-  "End a surface, and mean it: a badge id, an actor id, or email:<address>. Lists what the id reaches before acting; the person can still knock again as a stranger"
-).option("--reason <category>", `why, from: ${takedownReasonList()}`).option("--note <text>", "your own note \u2014 recorded, and shown to nobody").option(
-  "--with-enrolments",
-  "also end the badges those surfaces enrolled by pass, which would otherwise outlive them"
-).option("--yes", "act without asking (the enrolments are left unless --with-enrolments)").option("--home <url>", "the home to prove at; by default, this machine's").action(
-  run(
-    async (target2, opts, cmd) => {
-      refuseInSession();
-      const ctx = await ctxOf(cmd);
-      const home = await operatorHome(ctx, null, opts.home);
-      const client = clientAt(ctx, home);
-      const proof = await operatorProof(client, home, `end ${target2}`);
-      const request = {
-        ...opts.reason ? { reason: opts.reason } : {},
-        ...opts.note ? { note: opts.note } : {}
-      };
-      const preview = await client.operatorEnd(target2, proof, { ...request, preview: true });
-      if (!ctx.json) {
-        printEndReach(preview.reach);
-        console.log();
-      }
-      if (preview.reach.badges.length === 0) {
-        throw new Error(
-          `${target2} names no live badge at ${home} \u2014 it was never here, or it is already ended. \`isocan operator log --target ${target2}\` says which.`
-        );
-      }
-      let withEnrolments = opts.withEnrolments === true;
-      if (!withEnrolments && preview.reach.enrolments.length > 0 && !opts.yes && !ctx.json && process.stdin.isTTY && process.stdout.isTTY) {
-        const readline = await import("node:readline/promises");
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        try {
-          const answer2 = await rl.question(
-            `End the ${preview.reach.enrolments.length} enrolment(s) too? They outlive their creating badge otherwise. [y/N] `
-          );
-          withEnrolments = /^y(es)?$/i.test(answer2.trim());
-        } finally {
-          rl.close();
-        }
-      }
-      const answer = await client.operatorEnd(target2, proof, { ...request, withEnrolments });
-      if (ctx.json) return printJson(answer);
-      printKeyValues({
-        ended: answer.ended.length === 0 ? "nothing" : answer.ended.join(", "),
-        "tabs and daemons closed": `${answer.reached.sockets} here`,
-        "waits ended": String(answer.reached.waits),
-        "swept from their canvases": sweptLine(answer.swept),
-        "passes refused from now": String(answer.reach.passes),
-        enrolments: withEnrolments ? "ended with them" : preview.reach.enrolments.length === 0 ? "none" : `${preview.reach.enrolments.length} left standing \u2014 \`--with-enrolments\` ends them`
-      });
-      if (answer.sentence) console.log(`
-The people on them read, from this home:
-  ${answer.sentence}`);
-      console.log(
-        `
-Ending is not refusing: they can knock again and be a stranger, with none of these
-claims. The record is in the ledger \u2014 \`isocan operator log --target ${target2}\`.`
-      );
-    }
-  )
-);
-operatorCommand.command("revoke <target> <subject>").description(
-  "Turn off one grant on a canvas or a space: `link`, an email, `repo:\u2026` or `group:<id>`. The owner is shown why, and can turn it back on; --bar keeps the subject out as well"
-).option("--reason <category>", `why, from: ${takedownReasonList()}`).option("--note <text>", "your own note \u2014 recorded, and shown to nobody").option("--bar", "write a bar too: refused at the door whatever the link allows, until an owner lifts it").option("--home <url>", "the home to prove at; by default, where that canvas lives").action(
-  run(
-    async (target2, who, opts, cmd) => {
-      refuseInSession();
-      const ctx = await ctxOf(cmd);
-      const isSpace = target2.startsWith("spc_");
-      const home = await operatorHome(ctx, isSpace ? null : target2, opts.home);
-      const client = clientAt(ctx, home);
-      const subject = who.trim() === LINK ? LINK : normalizeSubject(grantSubjectOf(who));
-      const proof = await operatorProof(client, home, `turn off ${subject} on ${target2}`);
-      const answer = await client.operatorRevoke(target2, proof, {
-        subject,
-        ...opts.reason ? { reason: opts.reason } : {},
-        ...opts.note ? { note: opts.note } : {},
-        ...opts.bar ? { bar: true } : {}
-      });
-      if (ctx.json) return printJson(answer);
-      printKeyValues({
-        [answer.target.kind]: answer.target.id,
-        subject,
-        "was granted": `${answer.grant.at.slice(0, 10)} by ${answer.grant.grantedBy}`,
-        reached: answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`,
-        swept: sweptLine(answer.swept),
-        "kept out": answer.bar ? `yes \u2014 until an owner lifts it (${answer.bar.id})` : "no \u2014 `--bar` would"
-      });
-      console.log(`
-The owner reads, in Share and in \`isocan share\`:
-  ${answer.sentence}`);
-      console.log(
-        `
-The owner can turn it back on \u2014 a revoke they can undo is a request. If it has to
-stay off, the order is \`isocan operator takedown\`. The record is in the ledger \u2014 \`isocan operator log --target ${target2}\`.`
-      );
-    }
-  )
-);
-operatorCommand.command("refuse <subject>").description(
-  "Refuse a subject at the door: email:<address>, repo:<host>/<owner>/<name>, actor:<id> or net:<cidr>. Refusing an address ends every badge that proved it; --for expires it; --lift ends it"
-).option("--reason <category>", `why, from: ${takedownReasonList()}`).option("--note <text>", "your own note \u2014 recorded, and shown to nobody").option("--for <duration>", "how long, like 10m, 24h or 7d (a network defaults to 24h)").option("--lift", "end a refusal that is in force").option("--home <url>", "the home to prove at; by default, this machine's").action(
-  run(
-    async (subject, opts, cmd) => {
-      refuseInSession();
-      if (!refusalSubjectOf(subject)) {
-        throw new Error(refusalSubjectRefusal(subject) ?? `not a refusal subject: ${subject}`);
-      }
-      const ctx = await ctxOf(cmd);
-      const home = await operatorHome(ctx, null, opts.home);
-      const client = clientAt(ctx, home);
-      const lifting = opts.lift === true;
-      const proof = await operatorProof(
-        client,
-        home,
-        lifting ? `lift the refusal on ${subject}` : `refuse ${subject}`
-      );
-      const answer = await client.operatorRefuse(subject, proof, {
-        ...opts.reason ? { reason: opts.reason } : {},
-        ...opts.note ? { note: opts.note } : {},
-        ...opts.for ? { for: opts.for } : {},
-        ...lifting ? { lift: true } : {}
-      });
-      if (ctx.json) return printJson(answer);
-      printRefuse(answer, lifting);
-    }
-  )
-);
-operatorCommand.command("log").description("This home's operator ledger, newest first \u2014 every act, with what proved it").option("--home <url>", "the home to prove at; by default, this machine's").option("--target <id>", "one canvas, badge, actor or address").option("--limit <n>", "how many rows", "50").action(
-  run(async (opts, cmd) => {
-    refuseInSession();
-    const ctx = await ctxOf(cmd);
-    const home = await operatorHome(ctx, opts.target ?? null, opts.home);
-    const client = clientAt(ctx, home);
-    const proof = await operatorProof(
-      client,
-      home,
-      opts.target ? `log for ${opts.target}` : "read the log"
-    );
-    const { acts } = await client.operatorLog(proof, {
-      ...opts.target ? { target: opts.target } : {},
-      ...opts.limit ? { limit: Number(opts.limit) } : {}
-    });
-    if (ctx.json) return printJson(acts);
-    if (acts.length === 0) return console.log("no operator act has been taken at this home.");
-    printTable(
-      acts.map((row) => ({
-        when: row.at.slice(0, 19).replace("T", " "),
-        act: row.act,
-        target: row.target ?? "\u2014",
-        who: row.proof.attribute.replace(/^email:/, ""),
-        outcome: row.outcome
-      }))
-    );
-  })
-);
+registerOperator(program2, ctxOf);
 function surfaceKind(badge) {
   return badge.kind === "cookie" ? "browser" : "machine";
-}
-function printRefuse(answer, lifting) {
-  const { refusal, reach } = answer;
-  const shown = refusal.subject.replace(/^(email|repo|actor|net):/, "");
-  if (lifting) {
-    console.log(`${shown} is not refused any more. This home will admit it again.`);
-    console.log(
-      `
-Every badge the refusal ended STAYS ended \u2014 a lift is not an un-end. Both acts are in
-the ledger \u2014 \`isocan operator log --target ${refusal.subject}\`.`
-    );
-    return;
-  }
-  const pairs = { refused: refusal.subject, why: TAKEDOWN_REASONS[refusal.reason] };
-  if (reach.kind === "email" || reach.kind === "repo") {
-    pairs["badges ended"] = reach.ended.length === 0 ? "none had proved it" : reach.ended.join(", ");
-    pairs["tabs and daemons closed"] = `${reach.reached.sockets} here`;
-    pairs["waits ended"] = String(reach.reached.waits);
-    pairs["swept from their canvases"] = sweptLine(reach.swept);
-  } else if (reach.kind === "actor") {
-    pairs["holders now"] = reach.holders === 0 ? "none \u2014 the name is free, and stays refused" : `${reach.holders} \u2014 a refusal stops the name coming back; \`isocan operator end actor:${shown}\` ends these`;
-  } else {
-    pairs["refuses"] = "minting a badge from that network";
-  }
-  pairs["ends"] = refusal.expiresAt ? `on its own, ${refusalUntil(refusal.expiresAt)}` : "when you lift it";
-  printKeyValues(pairs);
-  if (answer.sentence) console.log(`
-The person reads, from this home:
-  ${answer.sentence}`);
-  console.log(`
-${REFUSAL_LIMIT}`);
-  console.log(`
-The record is in the ledger \u2014 \`isocan operator log --target ${refusal.subject}\`.`);
-}
-function sweptLine(swept) {
-  if (swept.expelled === 0 && swept.rerooted === 0) return "nobody was expelled";
-  const parts = [`${swept.expelled} expelled`];
-  if (swept.rerooted > 0) parts.push(`${swept.rerooted} kept by another grant`);
-  return parts.join(", ");
 }
 program2.command("clone <repo> [dir]").description(
   "Clone a repo and ready it for canvas work \u2014 the canvas its .isocan marker names, or a fresh one. Installs nothing from the repo"
@@ -14353,7 +14360,7 @@ program2.command("setup [target]").description(
               }
             }
           } else if (before && stalenessOf(before).stale) {
-            const { stopDaemons } = await import("./daemon-UKCI2V7Z.mjs");
+            const { stopDaemons } = await import("./daemon-CUJ6R3BT.mjs");
             await stopDaemons(port, home);
             await fs16.rm(path15.join(home, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
@@ -14581,7 +14588,7 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     let ownerInput;
     if (access.kind !== "ordinary") {
       if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
-      const { personalCaptureOwner } = await import("./personal-capture-IZ7YWXXR.mjs");
+      const { personalCaptureOwner } = await import("./personal-capture-RGKM6VV3.mjs");
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }
@@ -18281,7 +18288,7 @@ async function readCommentDocument(ctx, canvasId, item) {
   const face = visualFaceOf(version4);
   if (!["text/markdown", "text/plain"].includes(face.mimeType)) throw new Error("Text comments need a Markdown or plain-text item");
   const { markdownText } = await import("./markdown-text-ME77MLUY.mjs");
-  const { isTextItem: isTextItem2 } = await import("./src-J54YGUVC.mjs");
+  const { isTextItem: isTextItem2 } = await import("./src-C2AWUR7J.mjs");
   const flavor = face.mimeType === "text/plain" ? "plain" : isTextItem2(item) ? "text-node" : "document";
   const text = markdownText((await ctx.client.downloadBlob(canvasId, face.blobHash)).toString("utf8"), flavor);
   return { text, versionId: version4.id, blobHash: face.blobHash, flavor };
@@ -18546,7 +18553,7 @@ session.command("select [item]").description("Point to a quote in saved Markdown
   if (!ref || !opts.quote) throw new Error("pass an item and --quote, or --clear");
   const item = resolveItem(snapshot, ref);
   const doc2 = await readCommentDocument(ctx, p.id, item);
-  const { TEXT_ATTENTION_MS } = await import("./src-J54YGUVC.mjs");
+  const { TEXT_ATTENTION_MS } = await import("./src-C2AWUR7J.mjs");
   const range = quoteRange(doc2.text, opts.quote, opts.occurrence === void 0 ? void 0 : Number(opts.occurrence));
   const textSelection = {
     itemId: item.id,
@@ -18612,7 +18619,7 @@ session.command("say [status]").description("Set (or clear) the status line unde
     const ctx = await ctxOf(cmd);
     const p = await resolveCanvas(ctx);
     if (opts.signal) {
-      const { cursorSignal } = await import("./src-J54YGUVC.mjs");
+      const { cursorSignal } = await import("./src-C2AWUR7J.mjs");
       await touchSession(ctx, p.id, { signal: status2 ? cursorSignal(status2) : null });
       console.log(status2 ? `signal: ${status2} (20s)` : "signal cleared");
       return;
@@ -18625,7 +18632,7 @@ session.command("signal [text]").description("Temporarily replace your name on y
   run(async (text, _opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const p = await resolveCanvas(ctx);
-    const { cursorSignal } = await import("./src-J54YGUVC.mjs");
+    const { cursorSignal } = await import("./src-C2AWUR7J.mjs");
     await touchSession(ctx, p.id, { signal: text ? cursorSignal(text) : null });
     console.log(text ? `signal: ${text} (20s)` : "signal cleared");
   })

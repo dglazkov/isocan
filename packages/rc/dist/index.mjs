@@ -988,7 +988,6 @@ var EMOJI_GROUPS = [
     ]
   }
 ];
-var ALL_EMOJI = EMOJI_GROUPS.flatMap((group) => group.entries);
 
 // packages/core/src/touches.ts
 function itemsTouchedBy(op, canvas) {

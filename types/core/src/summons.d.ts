@@ -110,6 +110,36 @@ export declare function summonsState(summons: {
     joined?: ActorJoins | undefined;
 }, now: number): SummonsState;
 /**
+ * **Every summons the asker has open on this thread, and where each stands**
+ * — the receipts the thread shows under the ask (#197 phase 1, web half).
+ *
+ * The ask is the asker's latest comment, and it stays open for as long as
+ * everything said after it is an answer from somebody it named: once anybody
+ * else speaks, or the asker speaks again, it is a conversation that moved
+ * on, and a receipt under it would be about a question nobody is looking at.
+ * Only enrolled agents are summoned — a person named in a comment is being
+ * talked to, not asked to wake, and "nothing answered" about them would be a
+ * lie.
+ *
+ * An agent parked on `wait` that this ask woke is left out while the ask is
+ * the last word: `wokenLine` speaks for it, and a receipt reading "nothing is
+ * listening" about an agent the daemon just reached would contradict it. A
+ * refusal is read once, by `refusedMentions`, so the clause a lapsed grant
+ * adds travels with it.
+ */
+export declare function threadSummonses(thread: CommentThread, askerId: string, seen: {
+    agents: Readonly<Record<string, unknown>> | undefined;
+    sessions: readonly PresenceSession[];
+    /** Who an rc holds a connection for (`rcAnswering`'s `actorIds`). */
+    answering: ReadonlySet<string>;
+    policies?: Readonly<Record<string, RcPolicy>> | undefined;
+    joined?: ActorJoins | undefined;
+}, now: number): {
+    actorId: string;
+    state: SummonsState;
+    lapsed?: string | undefined;
+}[];
+/**
  * The sentence a receipt shows.
  *
  * Here rather than in the web app because the words ARE the feature — *"that
