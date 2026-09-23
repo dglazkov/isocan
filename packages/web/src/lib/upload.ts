@@ -6,7 +6,6 @@ import {
   DRAWING_TITLE,
   annotationProperties,
   drawingSvg,
-  drawingProperties,
   inkBounds,
   newGroupId,
   newItemId,
@@ -383,7 +382,14 @@ export async function addDrawing(
   const svg = drawingSvg(strokes, bounds);
   /** The colour goes in now because nothing downstream can work it out: the
    *  strokes are about to become an SVG blob and an `Item` has no colour
-   *  field. One spelling, shared with the live session's `drawing_add`. */
+   *  field. One spelling, shared with the live session's `drawing_add`.
+   *
+   *  Fetched here, on the Pen's release, rather than imported at the top: the
+   *  colour names and the contrast maths they stand on are ~2KB a first visit
+   *  never uses. Through the `@isocan/core/colour` subpath, never the barrel —
+   *  a dynamic `import("@isocan/core")` asks for every export and pins all of
+   *  core into the entry (the `runtimeModules.ts` lesson). */
+  const { drawingProperties } = await import("@isocan/core/colour");
   const born = drawingProperties(strokes);
   const blob = new Blob([svg], { type: DRAWING_MIME });
   const upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);

@@ -7,7 +7,16 @@
  * warning threshold, to answer a question a canvas of screens does not ask.
  * What gets asked here is a small set of things: is this the one, does it need
  * work, is it done, is it funny, who owns it. This set is built for that, wide
- * enough that nobody feels fenced in and small enough to load with the app.
+ * enough that nobody feels fenced in and small enough to load with the picker.
+ *
+ * **Nothing on first paint imports this file, and that is load-bearing.** The
+ * set is ~23KB minified, and the only reader is `EmojiPicker`, which the web
+ * app fetches behind `import()` when somebody presses `+`. The one constant
+ * the eager half needs — `QUICK_REACTIONS`, the recents fallback — lives in
+ * `reactions.ts` for that reason: a bundler places a module, not an export,
+ * so one eager reader of a constant here would pin the whole set back into the
+ * entry chunk (the `arrow.ts` lesson). So would the one top-level call in the
+ * file losing its `@__PURE__` — see `ALL_EMOJI`.
  *
  * The set is ~580 marks across fourteen groups, each with the words somebody
  * would actually type to find it. Keywords are lowercase and matched as
@@ -714,18 +723,18 @@ export const EMOJI_GROUPS: readonly EmojiGroup[] = [
   },
 ];
 
-/** Every entry, flattened — the search corpus. */
-export const ALL_EMOJI: readonly EmojiEntry[] = EMOJI_GROUPS.flatMap((group) => group.entries);
-
 /**
- * A short, opinionated starter set: what the picker shows before anybody has
- * a history, and the fallback when recents are empty.
+ * Every entry, flattened — the search corpus.
  *
- * A canvas of screens gets asked the same handful of questions — is this the
- * one, does it need work, is it funny, is it done — and these eight answer
- * them. The rest of the set is one keystroke away for everything else.
+ * **The `@__PURE__` is what lets this file leave the entry chunk.** Rollup
+ * cannot prove a method call on a module-level value is free of side effects,
+ * so without it this one line made the whole module "effectful" — and an
+ * effectful module is kept wherever it is statically reachable, which through
+ * core's `export *` barrel is every first visit, picker or no picker. Measured:
+ * with the annotation, `emoji.ts` builds into its own chunk beside the picker;
+ * without it, 23.5KB of it stays in the entry however lazily the picker loads.
  */
-export const QUICK_REACTIONS = ["👍", "🎉", "👀", "🤔", "❤️", "🔥", "🚧", "✅"] as const;
+export const ALL_EMOJI: readonly EmojiEntry[] = /* @__PURE__ */ EMOJI_GROUPS.flatMap((group) => group.entries);
 
 /** Words split out of a name or a keyword — the unit search matches against.
  *  Lowercased, because a name is allowed to be a proper noun: every curated

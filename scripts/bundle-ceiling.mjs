@@ -416,11 +416,21 @@
  * The margin is 109 bytes, in line with the argument three entries up: a margin
  * thinner than one ordinary commit is a tax on whoever pushes next. GOAL 640,000
  * and JUMP 20,000 remain unchanged, and 1,080 is well inside JUMP.
+ *
+ * **747,000 → 727,500 on 22 Sep 2026, and it went DOWN** after the nightly read
+ * 756,004 (findings of 21 and 22 Sep). The emoji picker's set (`emoji.ts`,
+ * ~23.5KB) and the picker itself now arrive on the `+`, and the Pen's colour
+ * names (`colour.ts` + `contrast.ts`, ~2.2KB) on the Pen's release: an A/B in
+ * one worktree read 756,060 → 726,962, **−29,098**. The lesson worth keeping is
+ * why the picker alone was not enough: one `flatMap` at the top of `emoji.ts`
+ * made the module effectful, and rollup keeps an effectful module wherever
+ * core's `export *` barrel reaches it — every first visit. `@__PURE__` on that
+ * one call is what let it go. The margin is ~540 bytes over the fresh read.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 747_000;
+export const CEILING = 727_500;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's
