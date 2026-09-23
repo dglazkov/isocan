@@ -4754,9 +4754,9 @@ function registerCanvasGroups(canvas2, context2 = makeCtx) {
 function registerAreaAliases(program3, context2 = makeCtx) {
   const area = program3.command("area").description("Compatibility aliases for canvas groups; legacy sheets remain readable");
   const act = actions(context2);
-  area.command("new <title...>").description("Alias of canvas group new; a legacy canvas needs migration").option("--at <x,y>", "world position; default: beside the current items").option("--size <WxH>", `initial frame (default ${GROUP_DEFAULT_SIZE.width}x${GROUP_DEFAULT_SIZE.height})`).option("--tint <colour>", "yellow | pink | blue | green | grey").option("--note <text>", "the group's Markdown brief").option("--dry-run", "validate without uploading or writing").action(act(async (handle, ctx, [words, opts]) => {
+  area.command("new <title...>").description("Alias of canvas group new; a legacy canvas needs migration").option("--at <x,y>", "world position; default: beside the current items").option("--size <WxH>", `initial frame (default ${GROUP_DEFAULT_SIZE.width}x${GROUP_DEFAULT_SIZE.height})`).option("--tint <colour>", "yellow | pink | blue | green | grey").option("--note <text>", "the group's Markdown brief").option("--dry-run", "validate without uploading or writing").action(act(async (handle, ctx, [words2, opts]) => {
     if (opts.tint !== void 0 && !PAPERS.includes(opts.tint)) throw new Error(`tint expects ${PAPERS.join(", ")}`);
-    report(ctx, await handle.new(words.join(" "), { ...opts.at ? { at: parseXY(opts.at) } : {}, ...opts.size ? { size: sizeOf(opts.size) } : {}, ...opts.note !== void 0 ? { note: opts.note } : {}, ...opts.tint ? { properties: { [AREA_TINT_PROP]: opts.tint } } : {}, dryRun: !!opts.dryRun }));
+    report(ctx, await handle.new(words2.join(" "), { ...opts.at ? { at: parseXY(opts.at) } : {}, ...opts.size ? { size: sizeOf(opts.size) } : {}, ...opts.note !== void 0 ? { note: opts.note } : {}, ...opts.tint ? { properties: { [AREA_TINT_PROP]: opts.tint } } : {}, dryRun: !!opts.dryRun }));
   }));
   area.command("grid <group> [size]").description("Alias of canvas group grid; --clear removes the grid").option("--rows <names>", "comma-separated row labels").option("--cols <names>", "comma-separated column labels").option("--clear", "remove grid counts, names and label gutters").option("--tidy", "place direct members in the saved grid").option("--dry-run", "report grid and frame effects without writing").action(act(async (handle, ctx, [ref, dimensions, opts]) => {
     if (opts.clear) return report(ctx, await handle.grid(ref, null, opts));
@@ -5984,9 +5984,9 @@ function resolveMap(snapshot, ref) {
   if (maps.length === 0) throw new Error("no maps on this canvas \u2014 `isocan map new <title>` starts one");
   throw new Error(`which map? ${maps.map((m) => m.title).join(", ")} \u2014 name one, or use its id`);
 }
-async function addMapNode(host, ctx, canvasId, snapshot, words, mapId, parent) {
-  const upload = await ctx.client.uploadBlob(canvasId, Buffer.from(words, "utf8"), TEXT_MIME, TEXT_FILENAME);
-  const { width, height } = host.sizeFor(void 0, textBox(words, "body"));
+async function addMapNode(host, ctx, canvasId, snapshot, words2, mapId, parent) {
+  const upload = await ctx.client.uploadBlob(canvasId, Buffer.from(words2, "utf8"), TEXT_MIME, TEXT_FILENAME);
+  const { width, height } = host.sizeFor(void 0, textBox(words2, "body"));
   const itemId = newItemId();
   const at2 = parent ? mapNodeSpot(snapshot, mapId, parent) : { x: 0, y: 0 };
   const result2 = await host.sendOp(ctx, canvasId, {
@@ -6003,7 +6003,7 @@ async function addMapNode(host, ctx, canvasId, snapshot, words, mapId, parent) {
     height,
     placement: at2,
     ...snapshot.project.groupMode === "groups" && parent ? { containerId: parent.containerId ?? null, groupPlacement: "auto" } : {},
-    title: textTitle(words),
+    title: textTitle(words2),
     properties: {
       ...TEXT_PROPERTIES,
       [MAP_PROP]: mapId,
@@ -6016,11 +6016,11 @@ function register(host) {
   const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, resolveItem: resolveItem2, sendOp: sendOp2, printJson: printJson2, sizeFor: sizeFor2, placementFor: placementFor2, truncate: truncate2 } = host;
   const map = host.program.command("map").description("Mind maps: nodes you can drag, links that follow");
   map.command("new <words...>").description("Start a map with a root node").option("--canvas <canvas>").option("--at <x,y>", "place the root at world coordinates").option("--in <group>", "insert the root into a canvas group").option("--cell <row,column>", "insert in a 1-based grid cell; requires --in").action(
-    run2(async (words, opts, cmd) => {
+    run2(async (words2, opts, cmd) => {
       const ctx = await ctxOf2(cmd);
       const p = await resolveCanvas2(ctx);
       const snapshot = await ctx.client.snapshot(p.id);
-      const title = words.join(" ");
+      const title = words2.join(" ");
       const mapId = newMapId();
       const upload = await ctx.client.uploadBlob(p.id, Buffer.from(title, "utf8"), TEXT_MIME, TEXT_FILENAME);
       const { width, height } = sizeFor2(void 0, textBox(title, "body"));
@@ -6046,7 +6046,7 @@ function register(host) {
     })
   );
   map.command("add <words...>").description("Add a node under another one").requiredOption("--to <node>", "the parent node").option("--canvas <canvas>").action(
-    run2(async (words, opts, cmd) => {
+    run2(async (words2, opts, cmd) => {
       const ctx = await ctxOf2(cmd);
       const p = await resolveCanvas2(ctx);
       const snapshot = await ctx.client.snapshot(p.id);
@@ -6057,7 +6057,7 @@ function register(host) {
           `"${parent.title}" is not part of a map \u2014 \`isocan map new\` starts one, or link it into an existing map`
         );
       }
-      const made = await addMapNode(host, ctx, p.id, snapshot, words.join(" "), mapId, parent);
+      const made = await addMapNode(host, ctx, p.id, snapshot, words2.join(" "), mapId, parent);
       if (ctx.json) return printJson2(made);
       console.log(`added ${made.itemId} under "${parent.title}" at ${made.x},${made.y}`);
     })
@@ -6193,7 +6193,7 @@ function outlineOf(markdown) {
 }
 function wordCount(markdown) {
   let inFence = false;
-  let words = 0;
+  let words2 = 0;
   for (const raw of markdown.split("\n")) {
     if (/^\s*(```|~~~)/.test(raw)) {
       inFence = !inFence;
@@ -6201,17 +6201,17 @@ function wordCount(markdown) {
     }
     if (inFence) continue;
     const bare = raw.replace(/[#>*_`-]+/g, " ").trim();
-    if (bare) words += bare.split(/\s+/).length;
+    if (bare) words2 += bare.split(/\s+/).length;
   }
-  return words;
+  return words2;
 }
 function outlineText(headings) {
   if (headings.length === 0) return "(no headings)";
   const top = Math.min(...headings.map((h) => h.level));
   return headings.map((h) => `${"  ".repeat(h.level - top)}${h.text}`).join("\n");
 }
-function readingMinutes(words) {
-  return Math.max(1, Math.round(words / 200));
+function readingMinutes(words2) {
+  return Math.max(1, Math.round(words2 / 200));
 }
 var outline = {
   name: "outline",
@@ -6263,8 +6263,8 @@ function register2(host) {
       for (const doc2 of documentsOn(snapshot.canvas)) {
         const current = doc2.versions.find((v) => v.id === doc2.currentVersionId) ?? doc2.versions[0];
         const text = (await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8");
-        const words = wordCount(text);
-        rows2.push({ id: doc2.id, title: doc2.title, filename: current.filename, words, minutes: readingMinutes(words), headings: outlineOf(text).length, updatedAt: doc2.updatedAt });
+        const words2 = wordCount(text);
+        rows2.push({ id: doc2.id, title: doc2.title, filename: current.filename, words: words2, minutes: readingMinutes(words2), headings: outlineOf(text).length, updatedAt: doc2.updatedAt });
       }
       if (ctx.json) return printJson2(rows2);
       if (rows2.length === 0) return console.log("no documents here \u2014 `isocan add notes.md` brings one");
@@ -6283,9 +6283,9 @@ function register2(host) {
       const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
       const text = (await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8");
       const headings = outlineOf(text);
-      const words = wordCount(text);
-      if (ctx.json) return printJson2({ itemId: item.id, title: item.title, words, minutes: readingMinutes(words), headings });
-      console.error(`${item.title} \u2014 ${words} words, about ${readingMinutes(words)} min`);
+      const words2 = wordCount(text);
+      if (ctx.json) return printJson2({ itemId: item.id, title: item.title, words: words2, minutes: readingMinutes(words2), headings });
+      console.error(`${item.title} \u2014 ${words2} words, about ${readingMinutes(words2)} min`);
       console.log(outlineText(headings));
     })
   );
@@ -6940,8 +6940,8 @@ function arenaPlan(input) {
   return { boutId, ops, lanes };
 }
 function shortBrief(brief) {
-  const words = brief.trim().split(/\s+/);
-  return words.length > 8 ? `${words.slice(0, 8).join(" ")}\u2026` : words.join(" ");
+  const words2 = brief.trim().split(/\s+/);
+  return words2.length > 8 ? `${words2.slice(0, 8).join(" ")}\u2026` : words2.join(" ");
 }
 function arenaOrigin(canvas2) {
   const items = Object.values(canvas2.items);
@@ -7926,10 +7926,10 @@ your own rc, each named for its principle \u2014 an homage, never the person.
   );
   family.command("fighters").description("The roster the picker shows \u2014 every pack this build can field, and where it came from").action(
     run2(async (_opts, cmd) => {
-      const json4 = cmd.optsWithGlobals().json;
+      const json5 = cmd.optsWithGlobals().json;
       const all = fighters();
       const clashes = rosterClashes(all);
-      if (json4) {
+      if (json5) {
         return printJson2(
           all.map(({ module, pack }) => ({
             id: pack.id,
@@ -7952,11 +7952,11 @@ your own rc, each named for its principle \u2014 an homage, never the person.
     })
   );
   family.command("new <brief...>").description("Lay an arena: a Brief and one lane per fighter, each with its card, scoped DESIGN.md and references").requiredOption("--fighters <ids>", "two to four fighters, comma-separated \u2014 ids, principles or names (kare,rams,linear)").option("--entry <kind>", "screen (one) or flow (three screens)", "screen").option("--time <spec>", "how long they build: 20m, 90s, 1h", "20m").option("--mode <mode>", "exhibition \u2014 built live in the lanes", "exhibition").option("--attach <item>", "the screen this is about \u2014 copied in as a reference, and what `take` versions").option("--decider <who>", "the person whose \u{1F3C6} decides (default: you)").option("--at <x,y>", "where the arena's top-left goes (default: right of everything)").option("--canvas <canvas>").action(
-    run2(async (words, opts, cmd) => {
+    run2(async (words2, opts, cmd) => {
       const ctx = await ctxOf2(cmd);
       const canvas2 = await resolveCanvas2(ctx);
       const snapshot = await ctx.client.snapshot(canvas2.id);
-      const brief = words.join(" ").trim();
+      const brief = words2.join(" ").trim();
       if (!brief) throw new Error("a bout needs a brief \u2014 what are we designing, and for whom");
       if (opts.mode !== "exhibition") {
         throw new Error("only exhibition bouts are built \u2014 a blind bout needs desks, and faking blindness on live lanes is the one thing it must not do (#262)");
@@ -10018,7 +10018,7 @@ var talkCli = {
 };
 
 // packages/modules/wireframe/agent-guide.md
-var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; `--answerer stub` (the default without a key) draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere.\n- **Variations come at the end of every flow**, in the same op group:\n  under each screen, up to two siblings titled `<Screen> \xB7 <what flipped>`\n  (`List \xB7 data table instead of stacked list`, `Detail \xB7 without button\n  group`, `Home \xB7 with stats row`). Each flips ONE decision to its runner-up,\n  where the answerer was least certain \u2014 the decision whose runner-up held\n  the most probability first \u2014 and nothing whose runner-up is under 0.10.\n  Nothing is asked again: the probabilities are the ones the screen already\n  carries. A screen whose answerer was sure everywhere gets no sibling and\n  says **one way to draw this** under its title. A variation\'s spec has\n  `variantOf` (its screen\'s item id) and `flip` (`{slot, from, to}`; `omit`\n  is a section left out). The header and nav are never varied \u2014 the flow\n  fixed them once for every screen.\n- `isocan wire vary <screen> [--count n]` adds more, the next least certain\n  flips a sibling does not already show, under the lowest sibling, in an op\n  group of their own; `--count` is how many variations the screen should\n  have in all (default 2), so running it twice adds nothing. It refuses a\n  variation (vary its screen) and a hand-drawn screen (no distribution).\n- **Keepers**: `isocan wire keep <items...>` marks screens \u{1F4D0} \u2014 the property\n  `wireKeep=yes` through `item.update`, as a slide is marked, so anyone can\n  take it off with `isocan wire unkeep <items...>`; unmarked siblings stay on\n  the canvas. `isocan wire kept` lists the kept screens in reading order\n  (rows top to bottom, each left to right). A variation can be kept. People\n  do the same from the item menu (\u{1F4D0} Keep / Unkeep) or \u21E7K.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n49; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; everything else is grey bars, never lorem ipsum. If you want\nreal copy on a screen, that is a separate, honest act \u2014 write an HTML screen\nyourself \u2014 not a label smuggled into a spec.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
+var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; `--answerer stub` (the default without a key) draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere.\n- **Variations come at the end of every flow**, in the same op group:\n  under each screen, up to two siblings titled `<Screen> \xB7 <what flipped>`\n  (`List \xB7 data table instead of stacked list`, `Detail \xB7 without button\n  group`, `Home \xB7 with stats row`). Each flips ONE decision to its runner-up,\n  where the answerer was least certain \u2014 the decision whose runner-up held\n  the most probability first \u2014 and nothing whose runner-up is under 0.10.\n  Nothing is asked again: the probabilities are the ones the screen already\n  carries. A screen whose answerer was sure everywhere gets no sibling and\n  says **one way to draw this** under its title. A variation\'s spec has\n  `variantOf` (its screen\'s item id) and `flip` (`{slot, from, to}`; `omit`\n  is a section left out). The header and nav are never varied \u2014 the flow\n  fixed them once for every screen.\n- `isocan wire vary <screen> [--count n]` adds more, the next least certain\n  flips a sibling does not already show, under the lowest sibling, in an op\n  group of their own; `--count` is how many variations the screen should\n  have in all (default 2), so running it twice adds nothing. It refuses a\n  variation (vary its screen) and a hand-drawn screen (no distribution).\n- **Keepers**: `isocan wire keep <items...>` marks screens \u{1F4D0} \u2014 the property\n  `wireKeep=yes` through `item.update`, as a slide is marked, so anyone can\n  take it off with `isocan wire unkeep <items...>`; unmarked siblings stay on\n  the canvas. `isocan wire kept` lists the kept screens in reading order\n  (rows top to bottom, each left to right). A variation can be kept. People\n  do the same from the item menu (\u{1F4D0} Keep / Unkeep) or \u21E7K.\n- **Links are computed, never stored.** `isocan wire links [screen]` prints\n  where every hotspot on the kept screens goes, worked out each time from\n  intents, archetypes and reading order: an intent with a target goes to the\n  first kept screen of that archetype (`sign-in` \u2192 the first home, list or\n  feed; `next`/`continue`/`save` \u2192 the next kept screen); `back` and an app\n  bar\'s chevron go back; a list, grid, table or feed row opens the first kept\n  `detail` after it; tab *i* of a tab bar or side nav whose intent found\n  nothing takes the *i*-th top-level screen (one that draws the nav) no other\n  tab reaches. Anything else that navigates and found nothing is **dashed**\n  and says what it needs (`- - needs Settings`) \u2014 the list of screens still\n  to make. A hotspot\'s key is `<slot>#<element>` (`main.3#row`,\n  `header#leading`, `nav#tab-2`); `--json` has every link with its `rule`.\n- `isocan wire link <screen> <element> <target>` overrides one hotspot \u2014\n  `<element>` is the key or its part after `#` when that is unique \u2014\n  `--none` switches it off, `--back` sends it back, `--clear` gives it back\n  to the rules. It is the property `wireLinks` on the source screen, through\n  `item.update`, so one `isocan undo` takes it back.\n- `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`\n  when more than one flow is kept) as **one self-contained HTML item** to the\n  right of them: every screen, a router with a history stack, the links as\n  click targets, a push / pop / fade / slide-up by link kind, a Restart. Run\n  it again after a kept screen changes and the same item **gains a version**\n  (found by its `wirePrototype` property); with nothing changed it writes\n  nothing. `isocan open <item>` plays it full screen.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n49; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; everything else is grey bars, never lorem ipsum. If you want\nreal copy on a screen, that is a separate, honest act \u2014 write an HTML screen\nyourself \u2014 not a label smuggled into a spec.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
 
 // packages/modules/wireframe/src/cli.ts
 import { readFile as readFile2 } from "node:fs/promises";
@@ -10028,7 +10028,8 @@ var KEEP_PROP = "wireKeep";
 var KEEP_EMOJI = "\u{1F4D0}";
 var wireframeModule = {
   name: "@isocan/wireframe",
-  propertyKeys: [KEEP_PROP],
+  // `wireLinks` (a person's overrides, links.ts) and `wirePrototype` (prototype.ts) are spelled out too.
+  propertyKeys: [KEEP_PROP, "wireLinks", "wirePrototype"],
   marks: [{ property: KEEP_PROP, emoji: KEEP_EMOJI, title: "Kept", on: "Keep", off: "Unkeep", key: "K", offeredOn: { fidelity: "wireframe" } }]
 };
 
@@ -10116,8 +10117,8 @@ function bars(n, offset = 0, cls = "") {
   for (let i = 0; i < n; i++) out += bar(WIDTHS[(i + offset) % WIDTHS.length], cls);
   return out;
 }
-function btn(label, variant = "primary", cls = "") {
-  return `<span class="btn ${variant}${cls ? ` ${cls}` : ""}">${label}</span>`;
+function btn(label, variant = "primary", cls = "", hot = "") {
+  return `<span class="btn ${variant}${cls ? ` ${cls}` : ""}"${hot}>${label}</span>`;
 }
 var GLYPHS = {
   home: "\u2302",
@@ -10158,8 +10159,8 @@ var GLYPHS = {
 function glyph(intent) {
   return GLYPHS[intent] ?? "\u2022";
 }
-function ibtn(intent, label) {
-  return `<span class="ibtn" title="${label}" aria-label="${label}">${glyph(intent)}</span>`;
+function ibtn(intent, label, hot = "") {
+  return `<span class="ibtn" title="${label}" aria-label="${label}"${hot}>${glyph(intent)}</span>`;
 }
 function img(ratio2 = "4/3", cls = "") {
   return `<div class="img${cls ? ` ${cls}` : ""}" style="aspect-ratio:${ratio2}"></div>`;
@@ -10173,8 +10174,8 @@ function icon() {
 function field(label, offset = 0) {
   return `<div class="fld">${label ? `<span class="lbl">${label}</span>` : bar(30 + offset % 3 * 8, "lbl-bar")}<div class="box">${bar(40 + offset % 4 * 10, "ph")}</div></div>`;
 }
-function check(label) {
-  return `<div class="chk"><span class="cb"></span>${label}</div>`;
+function check(label, hot = "") {
+  return `<div class="chk"${hot}><span class="cb"></span>${label}</div>`;
 }
 function chip(on = false) {
   return `<span class="chip${on ? " on" : ""}">${bar(100, "in")}</span>`;
@@ -10299,11 +10300,11 @@ var PRIMITIVES = [
       state: choice(["default", "disabled", "loading"])
     },
     elements: { action: { accepts: ALL_INTENTS, default: "continue" } },
-    draw: ({ props, label, intent }) => {
+    draw: ({ props, label, intent, hot }) => {
       const only = str(props, "icon") === "only";
       const lead = str(props, "icon") === "leading" ? `${glyph(intent("action"))} ` : "";
       const inner = only ? glyph(intent("action")) : `${lead}${label("action")}`;
-      return `<div class="actions">${btn(inner, str(props, "variant"), `${str(props, "size")} ${str(props, "state")} block`)}</div>`;
+      return `<div class="actions">${btn(inner, str(props, "variant"), `${str(props, "size")} ${str(props, "state")} block`, hot("action"))}</div>`;
     }
   },
   {
@@ -10314,7 +10315,7 @@ var PRIMITIVES = [
     h: 104,
     props: { count: count(2, 4, 2), variant: choice(["primary-first", "equal"]) },
     elements: upTo(4, "button", "count", PRIMARY.concat(intentsIn("back", "overlay", "in-place")), ["continue", "cancel", "more", "help"]),
-    draw: ({ props, label }) => `<div class="actions stack">${rowsOf(num(props, "count"), (i) => btn(label(`button-${i + 1}`), i === 0 || str(props, "variant") === "equal" ? i === 0 ? "primary" : "secondary" : "tertiary", "block"))}</div>`
+    draw: ({ props, label, hot }) => `<div class="actions stack">${rowsOf(num(props, "count"), (i) => btn(label(`button-${i + 1}`), i === 0 || str(props, "variant") === "equal" ? i === 0 ? "primary" : "secondary" : "tertiary", "block", hot(`button-${i + 1}`)))}</div>`
   },
   {
     id: "link",
@@ -10324,7 +10325,7 @@ var PRIMITIVES = [
     h: 32,
     props: {},
     elements: { action: { accepts: ALL_INTENTS, default: "help" } },
-    draw: ({ label }) => `<div class="link-row"><span class="lnk">${label("action")}</span></div>`
+    draw: ({ label, hot }) => `<div class="link-row"><span class="lnk"${hot("action")}>${label("action")}</span></div>`
   },
   {
     id: "search-field",
@@ -10352,7 +10353,7 @@ var PRIMITIVES = [
     h: 64,
     props: { extended: yn() },
     elements: { action: { accepts: [...intentsIn("form"), "upload", "share", "messages", "search"], default: "add" } },
-    draw: ({ props, label, intent }) => `<div class="fab-wrap"><span class="fab${flag(props, "extended") ? " ext" : ""}">${glyph(intent("action"))}${flag(props, "extended") ? ` ${label("action")}` : ""}</span></div>`
+    draw: ({ props, label, intent, hot }) => `<div class="fab-wrap"><span class="fab${flag(props, "extended") ? " ext" : ""}"${hot("action")}>${glyph(intent("action"))}${flag(props, "extended") ? ` ${label("action")}` : ""}</span></div>`
   },
   // ---- navigation
   {
@@ -10363,9 +10364,9 @@ var PRIMITIVES = [
     h: 56,
     props: { title: yn(true), leading: choice(["none", "back", "menu", "close"], "back"), actions: count(0, 3, 1), search: yn() },
     elements: upTo(3, "action", "actions", ACTIONS, ["more", "share", "add"]),
-    draw: ({ props, label, intent, title }) => {
+    draw: ({ props, label, intent, hot, title }) => {
       const lead = str(props, "leading");
-      return `<div class="appbar">${lead === "none" ? "" : ibtn(lead, lead === "back" ? "Back" : lead === "menu" ? "Menu" : "Close")}<span class="t">${flag(props, "title") ? title : ""}</span>${flag(props, "search") ? ibtn("search", "Search") : ""}${rowsOf(num(props, "actions"), (i) => ibtn(intent(`action-${i + 1}`), label(`action-${i + 1}`)))}</div>`;
+      return `<div class="appbar">${lead === "none" ? "" : ibtn(lead, lead === "back" ? "Back" : lead === "menu" ? "Menu" : "Close", hot("leading"))}<span class="t">${flag(props, "title") ? title : ""}</span>${flag(props, "search") ? ibtn("search", "Search") : ""}${rowsOf(num(props, "actions"), (i) => ibtn(intent(`action-${i + 1}`), label(`action-${i + 1}`), hot(`action-${i + 1}`)))}</div>`;
     }
   },
   {
@@ -10376,7 +10377,7 @@ var PRIMITIVES = [
     h: 64,
     props: { items: count(3, 5, 4), selected: index(5), labels: yn(true) },
     elements: upTo(5, "tab", "items", NAV_JUMPS, ["home", "search", "notifications", "profile", "settings"]),
-    draw: ({ props, label, intent }) => `<nav class="tabbar">${rowsOf(num(props, "items"), (i) => `<span class="tab${i + 1 === sel(props, "selected", "items") ? " on" : ""}"><b>${glyph(intent(`tab-${i + 1}`))}</b>${flag(props, "labels") ? `<small>${label(`tab-${i + 1}`)}</small>` : ""}</span>`)}</nav>`
+    draw: ({ props, label, intent, hot }) => `<nav class="tabbar">${rowsOf(num(props, "items"), (i) => `<span class="tab${i + 1 === sel(props, "selected", "items") ? " on" : ""}"${hot(`tab-${i + 1}`)}><b>${glyph(intent(`tab-${i + 1}`))}</b>${flag(props, "labels") ? `<small>${label(`tab-${i + 1}`)}</small>` : ""}</span>`)}</nav>`
   },
   {
     id: "side-nav",
@@ -10386,10 +10387,10 @@ var PRIMITIVES = [
     h: 400,
     props: { items: count(3, 10, 5), selected: index(10), groups: count(0, 3, 0), collapsed: yn() },
     elements: upTo(10, "item", "items", NAV_JUMPS, ["home", "search", "notifications", "messages", "settings", "profile", "help", "contact", "terms", "upgrade"]),
-    draw: ({ props, label, intent }) => {
+    draw: ({ props, label, intent, hot }) => {
       const collapsed = flag(props, "collapsed");
       const groups = num(props, "groups");
-      return `<nav class="sidenav${collapsed ? " collapsed" : ""}">${rowsOf(num(props, "items"), (i) => `${groups > 0 && i > 0 && i % Math.ceil(num(props, "items") / (groups + 1)) === 0 ? `<hr>` : ""}<span class="nav-i${i + 1 === sel(props, "selected", "items") ? " on" : ""}"><b>${glyph(intent(`item-${i + 1}`))}</b>${collapsed ? "" : label(`item-${i + 1}`)}</span>`)}</nav>`;
+      return `<nav class="sidenav${collapsed ? " collapsed" : ""}">${rowsOf(num(props, "items"), (i) => `${groups > 0 && i > 0 && i % Math.ceil(num(props, "items") / (groups + 1)) === 0 ? `<hr>` : ""}<span class="nav-i${i + 1 === sel(props, "selected", "items") ? " on" : ""}"${hot(`item-${i + 1}`)}><b>${glyph(intent(`item-${i + 1}`))}</b>${collapsed ? "" : label(`item-${i + 1}`)}</span>`)}</nav>`;
     }
   },
   {
@@ -10438,7 +10439,7 @@ var PRIMITIVES = [
     h: 480,
     props: { edge: choice(["left", "right"]), items: count(3, 10, 6) },
     elements: upTo(10, "item", "items", NAV_JUMPS, ["home", "profile", "notifications", "messages", "settings", "help", "terms", "contact", "search", "upgrade"]),
-    draw: ({ props, label, intent }) => `<div class="drawer ${str(props, "edge")}"><div class="drawer-head">${avatar("m")}${bar(50)}</div>${rowsOf(num(props, "items"), (i) => `<span class="nav-i"><b>${glyph(intent(`item-${i + 1}`))}</b>${label(`item-${i + 1}`)}</span>`)}</div>`
+    draw: ({ props, label, intent, hot }) => `<div class="drawer ${str(props, "edge")}"><div class="drawer-head">${avatar("m")}${bar(50)}</div>${rowsOf(num(props, "items"), (i) => `<span class="nav-i"${hot(`item-${i + 1}`)}><b>${glyph(intent(`item-${i + 1}`))}</b>${label(`item-${i + 1}`)}</span>`)}</div>`
   },
   {
     id: "sheet",
@@ -10456,10 +10457,10 @@ var PRIMITIVES = [
       primary: { accepts: ALL_INTENTS, default: "done", when: (p) => p.kind === "sheet" },
       cancel: { accepts: intentsIn("back"), default: "cancel" }
     },
-    draw: ({ props, label }) => {
+    draw: ({ props, label, hot }) => {
       const action = str(props, "kind") === "action-sheet";
-      const body = action ? `<div class="sheet-actions">${rowsOf(3, (i) => `<span class="sheet-a${i === 2 ? " destructive" : ""}">${label(`action-${i + 1}`)}</span>`)}</div>` : `<div class="grab"></div>${bar(40, "k")}${bars(4)}<div class="actions">${btn(label("primary"), "primary", "block")}</div>`;
-      return `<div class="sheet ${str(props, "edge")} ${str(props, "detent")}">${body}<div class="actions">${btn(label("cancel"), "secondary", "block")}</div></div>`;
+      const body = action ? `<div class="sheet-actions">${rowsOf(3, (i) => `<span class="sheet-a${i === 2 ? " destructive" : ""}"${hot(`action-${i + 1}`)}>${label(`action-${i + 1}`)}</span>`)}</div>` : `<div class="grab"></div>${bar(40, "k")}${bars(4)}<div class="actions">${btn(label("primary"), "primary", "block", hot("primary"))}</div>`;
+      return `<div class="sheet ${str(props, "edge")} ${str(props, "detent")}">${body}<div class="actions">${btn(label("cancel"), "secondary", "block", hot("cancel"))}</div></div>`;
     }
   },
   {
@@ -10470,18 +10471,18 @@ var PRIMITIVES = [
     h: 260,
     props: { kind: choice(["dialog", "alert", "fullscreen"]), actions: count(1, 3, 2), destructive: yn(), dismiss: yn(true) },
     elements: upTo(3, "action", "actions", [...intentsIn("forward", "back", "overlay")], ["confirm", "cancel", "more"]),
-    draw: ({ props, label }) => `<div class="dialog ${str(props, "kind")}">${flag(props, "dismiss") ? `<span class="x">${glyph("close")}</span>` : ""}${bar(55, "k")}${bars(3)}<div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? flag(props, "destructive") ? "destructive" : "primary" : "secondary"))}</div></div>`
+    draw: ({ props, label, hot }) => `<div class="dialog ${str(props, "kind")}">${flag(props, "dismiss") ? `<span class="x">${glyph("close")}</span>` : ""}${bar(55, "k")}${bars(3)}<div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? flag(props, "destructive") ? "destructive" : "primary" : "secondary", "", hot(`action-${i + 1}`)))}</div></div>`
   }
 ];
 function sel(props, key, of) {
   return Math.min(num(props, key), num(props, of));
 }
-function listRows(props, action = "") {
+function listRows(props, action = "", hot = "") {
   const lead = str(props, "leading");
   const trail = str(props, "trailing");
   const leading = (i) => lead === "icon" ? icon() : lead === "avatar" ? avatar("m") : lead === "thumbnail" ? `<span class="thumb"></span>` : lead === "checkbox" ? `<span class="cb${i === 0 ? " on" : ""}"></span>` : "";
   const trailing = (i) => trail === "chevron" || trail === "action" ? `<span class="chev">\u203A</span>` : trail === "switch" ? toggle(i % 2 === 0) : trail === "meta" ? bar(14, "meta") : trail === "badge" ? `<span class="badge"></span>` : "";
-  return `<div class="list${props.dividers === false ? "" : " div"}">${rowsOf(num(props, "rows"), (i) => `<div class="row">${leading(i)}<div class="row-t">${bars(Number(props.lines ?? 1), i)}</div>${trailing(i)}${action}</div>`)}</div>`;
+  return `<div class="list${props.dividers === false ? "" : " div"}">${rowsOf(num(props, "rows"), (i) => `<div class="row"${hot}>${leading(i)}<div class="row-t">${bars(Number(props.lines ?? 1), i)}</div>${trailing(i)}${action}</div>`)}</div>`;
 }
 function stepsRow(n, current, labels) {
   return `<div class="steps">${rowsOf(n, (i) => `<span class="step${i + 1 < current ? " done" : i + 1 === current ? " on" : ""}"><b>${i + 1}</b>${labels ? bar(70, "in") : ""}</span>`)}</div>`;
@@ -10522,9 +10523,9 @@ var BLOCKS = [
       ...upTo(7, "link", "links", JUMPS, ["home", "search", "upgrade", "contact", "help", "terms", "messages"]),
       ...upTo(2, "cta", "cta", [...intentsIn("auth", "forward"), ...JUMPS], ["sign-up", "sign-in"])
     },
-    draw: ({ props, label, wide }) => {
-      const links = wide || str(props, "mobile") === "links" ? `<span class="links">${rowsOf(num(props, "links"), (i) => `<span class="lnk">${label(`link-${i + 1}`)}</span>`)}</span>` : "";
-      return `<div class="navbar"><span class="brand">${img("1/1", "sm")}</span>${links}<span class="sp"></span>${flag(props, "search") ? ibtn("search", "Search") : ""}${rowsOf(num(props, "cta"), (i) => btn(label(`cta-${i + 1}`), i === 0 ? "primary" : "secondary", "s"))}${!wide && str(props, "mobile") === "hamburger" ? ibtn("menu", "Menu") : ""}</div>`;
+    draw: ({ props, label, hot, wide }) => {
+      const links = wide || str(props, "mobile") === "links" ? `<span class="links">${rowsOf(num(props, "links"), (i) => `<span class="lnk"${hot(`link-${i + 1}`)}>${label(`link-${i + 1}`)}</span>`)}</span>` : "";
+      return `<div class="navbar"><span class="brand">${img("1/1", "sm")}</span>${links}<span class="sp"></span>${flag(props, "search") ? ibtn("search", "Search") : ""}${rowsOf(num(props, "cta"), (i) => btn(label(`cta-${i + 1}`), i === 0 ? "primary" : "secondary", "s", hot(`cta-${i + 1}`)))}${!wide && str(props, "mobile") === "hamburger" ? ibtn("menu", "Menu") : ""}</div>`;
     }
   },
   // ---- layout
@@ -10545,7 +10546,7 @@ var BLOCKS = [
     h: 96,
     props: { breadcrumbs: yn(), actions: count(0, 3, 1), tabs: yn(), meta: yn() },
     elements: upTo(3, "action", "actions", [...intentsIn("form", "overlay", "forward"), ...JUMPS], ["add", "share", "more"]),
-    draw: ({ props, label, title }) => `<div class="pagehead">${flag(props, "breadcrumbs") ? `<div class="crumbs">${bar(12, "in")}<span>/</span>${bar(12, "in")}<span>/</span>${bar(14, "in")}</div>` : ""}<div class="ph-row"><div class="h h1">${title}</div><span class="sp"></span>${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary", "s"))}</div>${flag(props, "meta") ? bar(35, "meta") : ""}${flag(props, "tabs") ? `<div class="tabs line">${rowsOf(3, (i) => `<span class="${i === 0 ? "on" : ""}">${bar(70, "in")}</span>`)}</div>` : ""}</div>`
+    draw: ({ props, label, hot, title }) => `<div class="pagehead">${flag(props, "breadcrumbs") ? `<div class="crumbs">${bar(12, "in")}<span>/</span>${bar(12, "in")}<span>/</span>${bar(14, "in")}</div>` : ""}<div class="ph-row"><div class="h h1">${title}</div><span class="sp"></span>${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary", "s", hot(`action-${i + 1}`)))}</div>${flag(props, "meta") ? bar(35, "meta") : ""}${flag(props, "tabs") ? `<div class="tabs line">${rowsOf(3, (i) => `<span class="${i === 0 ? "on" : ""}">${bar(70, "in")}</span>`)}</div>` : ""}</div>`
   },
   // ---- auth
   {
@@ -10562,7 +10563,7 @@ var BLOCKS = [
       forgot: { accepts: ["forgot-password", "help"], default: "forgot-password", when: (p) => p.forgot === true },
       "signup-link": { accepts: ["sign-up"], default: "sign-up", when: (p) => p["signup-link"] === true }
     },
-    draw: ({ props, label }) => `<div class="form">${field("Email")}${field("Password", 1)}${flag(props, "remember") || flag(props, "forgot") ? `<div class="between">${flag(props, "remember") ? check(label("remember")) : "<span></span>"}${flag(props, "forgot") ? `<span class="lnk">${label("forgot")}</span>` : ""}</div>` : ""}<div class="actions">${btn(label("submit"), "primary", "block")}</div>${num(props, "social") > 0 ? `<div class="or">${bar(100, "rule")}</div><div class="actions stack">${rowsOf(num(props, "social"), (i) => btn(`<span class="logo-dot"></span>${label(`social-${i + 1}`)}`, "secondary", "block"))}</div>` : ""}${flag(props, "signup-link") ? `<div class="link-row">${bar(28, "in")}<span class="lnk">${label("signup-link")}</span></div>` : ""}</div>`
+    draw: ({ props, label, hot }) => `<div class="form">${field("Email")}${field("Password", 1)}${flag(props, "remember") || flag(props, "forgot") ? `<div class="between">${flag(props, "remember") ? check(label("remember"), hot("remember")) : "<span></span>"}${flag(props, "forgot") ? `<span class="lnk"${hot("forgot")}>${label("forgot")}</span>` : ""}</div>` : ""}<div class="actions">${btn(label("submit"), "primary", "block", hot("submit"))}</div>${num(props, "social") > 0 ? `<div class="or">${bar(100, "rule")}</div><div class="actions stack">${rowsOf(num(props, "social"), (i) => btn(`<span class="logo-dot"></span>${label(`social-${i + 1}`)}`, "secondary", "block", hot(`social-${i + 1}`)))}</div>` : ""}${flag(props, "signup-link") ? `<div class="link-row">${bar(28, "in")}<span class="lnk"${hot("signup-link")}>${label("signup-link")}</span></div>` : ""}</div>`
   },
   {
     id: "sign-up-form",
@@ -10577,7 +10578,7 @@ var BLOCKS = [
       terms: { accepts: ["terms", "accept"], default: "terms", when: (p) => p.terms === true },
       "signin-link": { accepts: ["sign-in"], default: "sign-in", when: (p) => p["signin-link"] === true }
     },
-    draw: ({ props, label }) => `<div class="form">${rowsOf(num(props, "fields"), (i) => field(i === 0 ? null : FIELD_KINDS[i - 1] ?? null, i))}${flag(props, "terms") ? `<div class="chk"><span class="cb"></span>${bar(30, "in")}<span class="lnk">${label("terms")}</span></div>` : ""}<div class="actions">${btn(label("submit"), "primary", "block")}</div>${num(props, "social") > 0 ? `<div class="actions stack">${rowsOf(num(props, "social"), (i) => btn(`<span class="logo-dot"></span>${label(`social-${i + 1}`)}`, "secondary", "block"))}</div>` : ""}${flag(props, "signin-link") ? `<div class="link-row">${bar(28, "in")}<span class="lnk">${label("signin-link")}</span></div>` : ""}</div>`
+    draw: ({ props, label, hot }) => `<div class="form">${rowsOf(num(props, "fields"), (i) => field(i === 0 ? null : FIELD_KINDS[i - 1] ?? null, i))}${flag(props, "terms") ? `<div class="chk"><span class="cb"></span>${bar(30, "in")}<span class="lnk"${hot("terms")}>${label("terms")}</span></div>` : ""}<div class="actions">${btn(label("submit"), "primary", "block", hot("submit"))}</div>${num(props, "social") > 0 ? `<div class="actions stack">${rowsOf(num(props, "social"), (i) => btn(`<span class="logo-dot"></span>${label(`social-${i + 1}`)}`, "secondary", "block", hot(`social-${i + 1}`)))}</div>` : ""}${flag(props, "signin-link") ? `<div class="link-row">${bar(28, "in")}<span class="lnk"${hot("signin-link")}>${label("signin-link")}</span></div>` : ""}</div>`
   },
   {
     id: "verify-code",
@@ -10590,7 +10591,7 @@ var BLOCKS = [
       submit: { accepts: FORWARD, default: "confirm" },
       resend: { accepts: ["retry"], default: "retry", when: (p) => p.resend === true }
     },
-    draw: ({ props, label }) => `<div class="form center">${bars(2)}<div class="code">${rowsOf(num(props, "digits"), () => "<span></span>")}</div><div class="actions">${btn(label("submit"), "primary", "block")}</div>${flag(props, "resend") ? `<div class="link-row">${bar(24, "in")}<span class="lnk">${label("resend")}</span></div>` : ""}</div>`
+    draw: ({ props, label, hot }) => `<div class="form center">${bars(2)}<div class="code">${rowsOf(num(props, "digits"), () => "<span></span>")}</div><div class="actions">${btn(label("submit"), "primary", "block", hot("submit"))}</div>${flag(props, "resend") ? `<div class="link-row">${bar(24, "in")}<span class="lnk"${hot("resend")}>${label("resend")}</span></div>` : ""}</div>`
   },
   {
     id: "forgot-password",
@@ -10603,7 +10604,7 @@ var BLOCKS = [
       submit: { accepts: FORWARD, default: "continue", when: (p) => p.step === "request" },
       back: { accepts: ["sign-in", "back"], default: "sign-in" }
     },
-    draw: ({ props, label }) => str(props, "step") === "request" ? `<div class="form">${bars(2)}${field("Email")}<div class="actions">${btn(label("submit"), "primary", "block")}</div><div class="link-row"><span class="lnk">${label("back")}</span></div></div>` : `<div class="form center"><div class="glyph">\u2709</div>${bars(2)}<div class="actions">${btn(label("back"), "secondary", "block")}</div></div>`
+    draw: ({ props, label, hot }) => str(props, "step") === "request" ? `<div class="form">${bars(2)}${field("Email")}<div class="actions">${btn(label("submit"), "primary", "block", hot("submit"))}</div><div class="link-row"><span class="lnk"${hot("back")}>${label("back")}</span></div></div>` : `<div class="form center"><div class="glyph">\u2709</div>${bars(2)}<div class="actions">${btn(label("back"), "secondary", "block", hot("back"))}</div></div>`
   },
   // ---- onboarding
   {
@@ -10617,7 +10618,7 @@ var BLOCKS = [
       next: { accepts: FORWARD, default: "next" },
       skip: { accepts: ["skip"], default: "skip", when: (p) => p.skip === true }
     },
-    draw: ({ props, label }) => `<div class="onb">${flag(props, "skip") ? `<div class="right"><span class="lnk">${label("skip")}</span></div>` : ""}${str(props, "media") === "none" ? "" : img(str(props, "media") === "image" ? "4/3" : "1/1", str(props, "media"))}<div class="center">${bar(60, "k")}${bars(2)}</div><div class="dots">${rowsOf(num(props, "steps"), (i) => `<i class="${i + 1 === sel(props, "current", "steps") ? "on" : ""}"></i>`)}</div><div class="actions">${btn(label("next"), "primary", "block")}</div></div>`
+    draw: ({ props, label, hot }) => `<div class="onb">${flag(props, "skip") ? `<div class="right"><span class="lnk"${hot("skip")}>${label("skip")}</span></div>` : ""}${str(props, "media") === "none" ? "" : img(str(props, "media") === "image" ? "4/3" : "1/1", str(props, "media"))}<div class="center">${bar(60, "k")}${bars(2)}</div><div class="dots">${rowsOf(num(props, "steps"), (i) => `<i class="${i + 1 === sel(props, "current", "steps") ? "on" : ""}"></i>`)}</div><div class="actions">${btn(label("next"), "primary", "block", hot("next"))}</div></div>`
   },
   // ---- input
   {
@@ -10631,7 +10632,7 @@ var BLOCKS = [
       next: { accepts: FORWARD, default: "next" },
       back: { accepts: BACKS, default: "back" }
     },
-    draw: ({ props, label }) => `<div class="wizard">${stepsRow(num(props, "steps"), sel(props, "current", "steps"), true)}${flag(props, "summary") ? `<div class="card">${bars(2)}</div>` : ""}${field(null, 0)}${field(null, 1)}${field(null, 2)}<div class="actions row">${btn(label("back"), "secondary")}${btn(label("next"), "primary")}</div></div>`
+    draw: ({ props, label, hot }) => `<div class="wizard">${stepsRow(num(props, "steps"), sel(props, "current", "steps"), true)}${flag(props, "summary") ? `<div class="card">${bars(2)}</div>` : ""}${field(null, 0)}${field(null, 1)}${field(null, 2)}<div class="actions row">${btn(label("back"), "secondary", "", hot("back"))}${btn(label("next"), "primary", "", hot("next"))}</div></div>`
   },
   {
     id: "form-block",
@@ -10644,7 +10645,7 @@ var BLOCKS = [
       submit: { accepts: FORWARD, default: "save" },
       cancel: { accepts: BACKS, default: "cancel", when: (p) => p.actions === "submit+cancel" }
     },
-    draw: ({ props, label }) => {
+    draw: ({ props, label, hot }) => {
       const perSection = Math.ceil(num(props, "fields") / num(props, "sections"));
       let i = 0;
       const sections = rowsOf(num(props, "sections"), (s) => {
@@ -10652,7 +10653,7 @@ var BLOCKS = [
         for (let j = 0; j < perSection && i < num(props, "fields"); j++, i++) out += field(null, i + s);
         return out;
       });
-      return `<div class="form">${sections}<div class="actions row">${str(props, "actions") === "submit+cancel" ? btn(label("cancel"), "secondary") : ""}${btn(label("submit"), "primary")}</div></div>`;
+      return `<div class="form">${sections}<div class="actions row">${str(props, "actions") === "submit+cancel" ? btn(label("cancel"), "secondary", "", hot("cancel")) : ""}${btn(label("submit"), "primary", "", hot("submit"))}</div></div>`;
     }
   },
   {
@@ -10666,7 +10667,7 @@ var BLOCKS = [
       apply: { accepts: ["apply", "done"], default: "apply", when: (p) => p.apply === true },
       reset: { accepts: BACKS, default: "cancel", when: (p) => p.apply === true }
     },
-    draw: ({ props, label }) => `<div class="filters">${bar(35, "k")}${rowsOf(num(props, "groups"), (g) => `<div class="grp">${bar(30 + g % 3 * 8, "k")}${rowsOf(3, (i) => `<div class="chk"><span class="cb${(i + g) % 3 === 0 ? " on" : ""}"></span>${bar(50 + i * 10, "in")}</div>`)}</div>`)}${flag(props, "apply") ? `<div class="actions row">${btn(label("reset"), "secondary")}${btn(label("apply"), "primary")}</div>` : ""}</div>`
+    draw: ({ props, label, hot }) => `<div class="filters">${bar(35, "k")}${rowsOf(num(props, "groups"), (g) => `<div class="grp">${bar(30 + g % 3 * 8, "k")}${rowsOf(3, (i) => `<div class="chk"><span class="cb${(i + g) % 3 === 0 ? " on" : ""}"></span>${bar(50 + i * 10, "in")}</div>`)}</div>`)}${flag(props, "apply") ? `<div class="actions row">${btn(label("reset"), "secondary", "", hot("reset"))}${btn(label("apply"), "primary", "", hot("apply"))}</div>` : ""}</div>`
   },
   {
     id: "settings-group",
@@ -10707,11 +10708,11 @@ var BLOCKS = [
       sections: count(0, 3, 0)
     },
     elements: { "row-action": { accepts: [...intentsIn("in-place", "overlay")], default: "follow", when: (p) => p.trailing === "action" } },
-    draw: ({ props, label }) => {
+    draw: ({ props, label, hot }) => {
       const sections = num(props, "sections");
       const rows2 = num(props, "rows");
       const per = sections > 0 ? Math.ceil(rows2 / sections) : rows2;
-      const body = (n) => listRows({ rows: n, leading: str(props, "leading"), trailing: str(props, "trailing") === "action" ? "none" : str(props, "trailing"), lines: 2, dividers: true }, str(props, "trailing") === "action" ? btn(label("row-action"), "secondary", "s") : "");
+      const body = (n) => listRows({ rows: n, leading: str(props, "leading"), trailing: str(props, "trailing") === "action" ? "none" : str(props, "trailing"), lines: 2, dividers: true }, str(props, "trailing") === "action" ? btn(label("row-action"), "secondary", "s", hot("row-action")) : "", hot("row"));
       if (sections === 0) return body(rows2);
       return rowsOf(sections, (s) => `<div class="sec">${bar(22 + s * 6, "k")}</div>${body(Math.min(per, rows2 - s * per))}`);
     }
@@ -10723,7 +10724,7 @@ var BLOCKS = [
     namedBy: 3,
     h: 400,
     props: { items: count(3, 12, 6), columns: count(2, 4, 2), media: yn(true) },
-    draw: ({ props, wide }) => `<div class="grid" style="grid-template-columns:repeat(${wide ? num(props, "columns") : Math.min(2, num(props, "columns"))},1fr)">${rowsOf(num(props, "items"), (i) => `<div class="card">${flag(props, "media") ? img("4/3") : ""}${bar(70 - i % 3 * 10, "k")}${bar(45)}</div>`)}</div>`
+    draw: ({ props, hot, wide }) => `<div class="grid" style="grid-template-columns:repeat(${wide ? num(props, "columns") : Math.min(2, num(props, "columns"))},1fr)">${rowsOf(num(props, "items"), (i) => `<div class="card"${hot("row")}>${flag(props, "media") ? img("4/3") : ""}${bar(70 - i % 3 * 10, "k")}${bar(45)}</div>`)}</div>`
   },
   {
     id: "data-table",
@@ -10733,10 +10734,10 @@ var BLOCKS = [
     h: 420,
     props: { columns: count(3, 8, 4), rows: count(5, 15, 6), toolbar: yn(true), pagination: yn(), select: yn() },
     elements: upTo(3, "tool", "toolbar", [...intentsIn("overlay", "form"), "search"], ["filter", "sort", "add"]),
-    draw: ({ props, label, intent, wide }) => {
+    draw: ({ props, label, intent, hot, wide }) => {
       const cols = wide ? num(props, "columns") : Math.min(3, num(props, "columns"));
       const cell = (i, j) => `<td>${bar(40 + (i + j) % 5 * 12, j === 0 ? "k" : "")}</td>`;
-      return `<div class="table">${flag(props, "toolbar") ? `<div class="toolbar"><div class="search sm"><span class="ico-t">${glyph("search")}</span><span class="ph-t">Search</span></div><span class="sp"></span>${rowsOf(3, (i) => i === 2 ? btn(label("tool-3"), "primary", "s") : ibtn(intent(`tool-${i + 1}`), label(`tool-${i + 1}`)))}</div>` : ""}<table><thead><tr>${flag(props, "select") ? `<th class="sel"><span class="cb"></span></th>` : ""}${rowsOf(cols, (j) => `<th>${bar(50, "k")}</th>`)}</tr></thead><tbody>${rowsOf(num(props, "rows"), (i) => `<tr>${flag(props, "select") ? `<td class="sel"><span class="cb${i === 1 ? " on" : ""}"></span></td>` : ""}${rowsOf(cols, (j) => cell(i, j))}</tr>`)}</tbody></table>${flag(props, "pagination") ? `<div class="pager"><span>\u2039</span><span class="on">1</span><span>2</span><span>3</span><span>\u203A</span></div>` : ""}</div>`;
+      return `<div class="table">${flag(props, "toolbar") ? `<div class="toolbar"><div class="search sm"><span class="ico-t">${glyph("search")}</span><span class="ph-t">Search</span></div><span class="sp"></span>${rowsOf(3, (i) => i === 2 ? btn(label("tool-3"), "primary", "s", hot("tool-3")) : ibtn(intent(`tool-${i + 1}`), label(`tool-${i + 1}`), hot(`tool-${i + 1}`)))}</div>` : ""}<table><thead><tr>${flag(props, "select") ? `<th class="sel"><span class="cb"></span></th>` : ""}${rowsOf(cols, (j) => `<th>${bar(50, "k")}</th>`)}</tr></thead><tbody>${rowsOf(num(props, "rows"), (i) => `<tr${hot("row")}>${flag(props, "select") ? `<td class="sel"><span class="cb${i === 1 ? " on" : ""}"></span></td>` : ""}${rowsOf(cols, (j) => cell(i, j))}</tr>`)}</tbody></table>${flag(props, "pagination") ? `<div class="pager"><span>\u2039</span><span class="on">1</span><span>2</span><span>3</span><span>\u203A</span></div>` : ""}</div>`;
     }
   },
   // ---- content
@@ -10771,7 +10772,7 @@ var BLOCKS = [
     h: 320,
     props: { media: choice(["none", "hero", "carousel"], "hero"), meta: count(0, 4, 2), actions: count(0, 3, 2) },
     elements: upTo(3, "action", "actions", [...intentsIn("form", "overlay", "in-place"), "buy", "cart", "messages"], ["edit", "share", "like"]),
-    draw: ({ props, label }) => `<div class="detail">${str(props, "media") === "none" ? "" : `${img("16/9")}${str(props, "media") === "carousel" ? `<div class="dots">${rowsOf(4, (i) => `<i class="${i === 0 ? "on" : ""}"></i>`)}</div>` : ""}`}${bar(75, "title")}<div class="metas">${rowsOf(num(props, "meta"), (i) => `<span class="meta-i">${icon()}${bar(60 + i % 2 * 20, "in")}</span>`)}</div><div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary"))}</div></div>`
+    draw: ({ props, label, hot }) => `<div class="detail">${str(props, "media") === "none" ? "" : `${img("16/9")}${str(props, "media") === "carousel" ? `<div class="dots">${rowsOf(4, (i) => `<i class="${i === 0 ? "on" : ""}"></i>`)}</div>` : ""}`}${bar(75, "title")}<div class="metas">${rowsOf(num(props, "meta"), (i) => `<span class="meta-i">${icon()}${bar(60 + i % 2 * 20, "in")}</span>`)}</div><div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary", "", hot(`action-${i + 1}`)))}</div></div>`
   },
   // ---- social
   {
@@ -10782,7 +10783,7 @@ var BLOCKS = [
     h: 360,
     props: { comments: count(2, 10, 3), nested: yn(), composer: yn(true) },
     elements: { post: { accepts: ["submit", "done", "save"], default: "submit", when: (p) => p.composer === true } },
-    draw: ({ props, label }) => `<div class="comments">${bar(25, "k")}${rowsOf(num(props, "comments"), (i) => `<div class="comment${flag(props, "nested") && i % 2 === 1 ? " nested" : ""}">${avatar("s")}<div class="row-t">${bar(30, "k")}${bars(2, i)}</div></div>`)}${flag(props, "composer") ? `<div class="composer"><div class="box">${bar(40, "ph")}</div>${btn(label("post"), "primary", "s")}</div>` : ""}</div>`
+    draw: ({ props, label, hot }) => `<div class="comments">${bar(25, "k")}${rowsOf(num(props, "comments"), (i) => `<div class="comment${flag(props, "nested") && i % 2 === 1 ? " nested" : ""}">${avatar("s")}<div class="row-t">${bar(30, "k")}${bars(2, i)}</div></div>`)}${flag(props, "composer") ? `<div class="composer"><div class="box">${bar(40, "ph")}</div>${btn(label("post"), "primary", "s", hot("post"))}</div>` : ""}</div>`
   },
   {
     id: "profile-header",
@@ -10792,7 +10793,7 @@ var BLOCKS = [
     h: 240,
     props: { avatar: choice(["s", "l"], "l"), stats: count(0, 3, 3), actions: count(0, 2, 1), cover: yn() },
     elements: upTo(2, "action", "actions", ["follow", "messages", "edit", "share", "settings", "more"], ["edit", "share"]),
-    draw: ({ props, label }) => `<div class="profile${flag(props, "cover") ? " covered" : ""}">${flag(props, "cover") ? img("3/1", "cover") : ""}${avatar(str(props, "avatar") === "l" ? "l" : "m")}${bar(40, "title")}${bar(28, "meta")}${num(props, "stats") > 0 ? `<div class="pstats">${rowsOf(num(props, "stats"), () => `<span>${bar(50, "fat")}${bar(70, "in")}</span>`)}</div>` : ""}<div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary"))}</div></div>`
+    draw: ({ props, label, hot }) => `<div class="profile${flag(props, "cover") ? " covered" : ""}">${flag(props, "cover") ? img("3/1", "cover") : ""}${avatar(str(props, "avatar") === "l" ? "l" : "m")}${bar(40, "title")}${bar(28, "meta")}${num(props, "stats") > 0 ? `<div class="pstats">${rowsOf(num(props, "stats"), () => `<span>${bar(50, "fat")}${bar(70, "in")}</span>`)}</div>` : ""}<div class="actions row">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary", "", hot(`action-${i + 1}`)))}</div></div>`
   },
   {
     id: "feed-post",
@@ -10802,9 +10803,9 @@ var BLOCKS = [
     h: 440,
     props: { media: choice(["none", "image", "video", "link"], "image"), actions: count(2, 4, 3), count: count(1, 6, 2) },
     elements: upTo(4, "action", "actions", [...intentsIn("in-place", "overlay"), "messages"], ["like", "messages", "share", "more"]),
-    draw: ({ props, label, intent }) => rowsOf(num(props, "count"), (p) => {
+    draw: ({ props, label, intent, hot }) => rowsOf(num(props, "count"), (p) => {
       const media = str(props, "media");
-      return `<div class="fpost"><div class="fhead">${avatar("s")}<div class="row-t">${bar(35, "k")}${bar(20, "meta")}</div></div>${bars(2, p)}${media === "image" ? img("4/3") : media === "video" ? `<div class="video">${img("16/9")}<span class="play">\u25B6</span></div>` : media === "link" ? `<div class="linkcard">${img("1/1", "thumb-img")}<div>${bar(70, "k")}${bar(40, "meta")}</div></div>` : ""}<div class="factions">${rowsOf(num(props, "actions"), (i) => `<span class="fa">${glyph(intent(`action-${i + 1}`))} ${label(`action-${i + 1}`)}</span>`)}</div></div>`;
+      return `<div class="fpost"${hot("row")}><div class="fhead">${avatar("s")}<div class="row-t">${bar(35, "k")}${bar(20, "meta")}</div></div>${bars(2, p)}${media === "image" ? img("4/3") : media === "video" ? `<div class="video">${img("16/9")}<span class="play">\u25B6</span></div>` : media === "link" ? `<div class="linkcard">${img("1/1", "thumb-img")}<div>${bar(70, "k")}${bar(40, "meta")}</div></div>` : ""}<div class="factions">${rowsOf(num(props, "actions"), (i) => `<span class="fa"${hot(`action-${i + 1}`)}>${glyph(intent(`action-${i + 1}`))} ${label(`action-${i + 1}`)}</span>`)}</div></div>`;
     })
   },
   // ---- media
@@ -10830,8 +10831,8 @@ var BLOCKS = [
     namedBy: 2,
     h: 440,
     props: { items: count(3, 12, 6), layout: choice(["grid", "list"]), price: yn(true), rating: yn() },
-    draw: ({ props, wide }) => {
-      const card = (i) => `<div class="card product">${img(str(props, "layout") === "list" ? "1/1" : "1/1", str(props, "layout") === "list" ? "thumb-img" : "")}<div>${bar(75 - i % 3 * 10, "k")}${flag(props, "rating") ? `<span class="stars">\u2605\u2605\u2605\u2605\u2606</span>` : ""}${flag(props, "price") ? bar(30, "fat") : ""}</div></div>`;
+    draw: ({ props, hot, wide }) => {
+      const card = (i) => `<div class="card product"${hot("row")}>${img(str(props, "layout") === "list" ? "1/1" : "1/1", str(props, "layout") === "list" ? "thumb-img" : "")}<div>${bar(75 - i % 3 * 10, "k")}${flag(props, "rating") ? `<span class="stars">\u2605\u2605\u2605\u2605\u2606</span>` : ""}${flag(props, "price") ? bar(30, "fat") : ""}</div></div>`;
       return str(props, "layout") === "list" ? `<div class="plist">${rowsOf(num(props, "items"), card)}</div>` : `<div class="grid" style="grid-template-columns:repeat(${wide ? 4 : 2},1fr)">${rowsOf(num(props, "items"), card)}</div>`;
     }
   },
@@ -10844,7 +10845,7 @@ var BLOCKS = [
     h: 320,
     props: { media: yn(true), action: count(0, 2, 1), cause: choice(["first-use", "no-results", "cleared"]) },
     elements: upTo(2, "action", "action", [...intentsIn("form", "forward", "jump"), "retry", "upload"], ["add", "search"]),
-    draw: ({ props, label }) => `<div class="state">${flag(props, "media") ? img("1/1", "sm") : ""}${bar(55, "title")}${bars(2)}<div class="actions stack">${rowsOf(num(props, "action"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary"))}</div></div>`
+    draw: ({ props, label, hot }) => `<div class="state">${flag(props, "media") ? img("1/1", "sm") : ""}${bar(55, "title")}${bars(2)}<div class="actions stack">${rowsOf(num(props, "action"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary", "", hot(`action-${i + 1}`)))}</div></div>`
   },
   {
     id: "error-state",
@@ -10854,9 +10855,9 @@ var BLOCKS = [
     h: 320,
     props: { kind: choice(["404", "offline", "generic", "permission"]), retry: yn(true) },
     elements: { retry: { accepts: ["retry", "back", "home"], default: "retry", when: (p) => p.retry === true } },
-    draw: ({ props, label }) => {
+    draw: ({ props, label, hot }) => {
       const name = { "404": "404", offline: "Offline", generic: "Error", permission: "No access" }[str(props, "kind")];
-      return `<div class="state"><div class="glyph big">${name}</div>${bars(2)}<div class="actions stack">${flag(props, "retry") ? btn(label("retry"), "primary") : ""}</div></div>`;
+      return `<div class="state"><div class="glyph big">${name}</div>${bars(2)}<div class="actions stack">${flag(props, "retry") ? btn(label("retry"), "primary", "", hot("retry")) : ""}</div></div>`;
     }
   },
   {
@@ -10867,7 +10868,7 @@ var BLOCKS = [
     h: 320,
     props: { summary: yn(), actions: count(1, 2, 1) },
     elements: upTo(2, "action", "actions", [...FORWARD, ...JUMPS], ["done", "home"]),
-    draw: ({ props, label }) => `<div class="state"><div class="glyph">\u2713</div>${bar(50, "title")}${bars(2)}${flag(props, "summary") ? `<div class="card">${bars(3)}</div>` : ""}<div class="actions stack">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary"))}</div></div>`
+    draw: ({ props, label, hot }) => `<div class="state"><div class="glyph">\u2713</div>${bar(50, "title")}${bars(2)}${flag(props, "summary") ? `<div class="card">${bars(3)}</div>` : ""}<div class="actions stack">${rowsOf(num(props, "actions"), (i) => btn(label(`action-${i + 1}`), i === 0 ? "primary" : "secondary", "", hot(`action-${i + 1}`)))}</div></div>`
   },
   // ---- overlay
   {
@@ -10881,7 +10882,7 @@ var BLOCKS = [
       confirm: { accepts: ["confirm", "delete", "accept", "done", "submit", "log-out"], default: "confirm" },
       cancel: { accepts: BACKS, default: "cancel" }
     },
-    draw: ({ props, label }) => `<div class="dialog">${bar(60, "title")}${bars(2)}${flag(props, "input") ? field(null) : ""}<div class="actions row">${btn(label("cancel"), "secondary")}${btn(label("confirm"), flag(props, "destructive") ? "destructive" : "primary")}</div></div>`
+    draw: ({ props, label, hot }) => `<div class="dialog">${bar(60, "title")}${bars(2)}${flag(props, "input") ? field(null) : ""}<div class="actions row">${btn(label("cancel"), "secondary", "", hot("cancel"))}${btn(label("confirm"), flag(props, "destructive") ? "destructive" : "primary", "", hot("confirm"))}</div></div>`
   }
 ];
 
@@ -11282,6 +11283,148 @@ function propsFor(c, props) {
   return { ...defaultProps(c), ...props };
 }
 
+// packages/modules/wireframe/src/links.ts
+var LINK_BACK = "back";
+var LINK_NONE = "none";
+var LINKS_PROP = "wireLinks";
+function hotKey(slot, element) {
+  return `${slot}#${element}`;
+}
+var ROW_BLOCKS = ["stacked-list", "card-grid", "data-table", "feed-post", "product-card-list"];
+var NAV_ITEMS = { "tab-bar": "tab", "side-nav": "item", navbar: "link", drawer: "item" };
+var POST_AUTH = ["home", "list", "feed"];
+var ONBOARDING_RUN = ["welcome", "onboarding"];
+var OVERLAY_ARCHETYPES = ["confirm", "menu"];
+function hotspots(spec) {
+  const r = recipe(spec.archetype);
+  const out = [];
+  for (const slot of spec.slots) {
+    if (slot.block === null) continue;
+    const c = component(slot.block);
+    const props = propsFor(c, slot.props);
+    if (slot.block === "app-bar" && props.leading !== "none") {
+      const intent = props.leading === "menu" ? "menu" : props.leading === "close" ? "close" : "back";
+      out.push({ key: hotKey(slot.slot, "leading"), slot: slot.slot, block: c.id, element: "leading", intent, kind: "leading" });
+    }
+    const prefix = NAV_ITEMS[c.id];
+    const folded = c.id === "navbar" && spec.platform === "app" && props.mobile !== "links";
+    for (const element of presentElements(c, props)) {
+      if (folded && element.startsWith("link-")) continue;
+      const intent = slot.intents?.[element] ?? defaultIntent(r, c, element);
+      const tab = prefix && element.startsWith(`${prefix}-`) ? Number(element.slice(prefix.length + 1)) : void 0;
+      out.push({ key: hotKey(slot.slot, element), slot: slot.slot, block: c.id, element, intent, kind: "element", ...tab ? { tab } : {} });
+    }
+    if (ROW_BLOCKS.includes(c.id)) out.push({ key: hotKey(slot.slot, "row"), slot: slot.slot, block: c.id, element: "row", kind: "row" });
+  }
+  return out;
+}
+function isTopLevel(spec) {
+  const r = RECIPE_BY_ID.get(spec.archetype);
+  return spec.slots.some((s) => s.block !== null && r?.sections.find((x) => x.slot === s.slot)?.region === "nav");
+}
+function archetypeName(id3) {
+  return RECIPE_BY_ID.get(id3)?.title ?? words(id3);
+}
+function words(id3) {
+  const s = id3.replace(/-/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function readOverrides(value) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter((e) => typeof e[1] === "string"));
+  } catch {
+    return {};
+  }
+}
+function inferLinks(kept2, opts = {}) {
+  const ids = new Set(kept2.map((s) => s.id));
+  const topLevel = kept2.filter((s) => isTopLevel(s.spec)).map((s) => s.id);
+  const firstOf = (archetypes) => kept2.find((s) => archetypes.includes(s.spec.archetype))?.id ?? null;
+  const out = [];
+  kept2.forEach((screen, at2) => {
+    const spots = hotspots(screen.spec);
+    const overlayScreen = OVERLAY_ARCHETYPES.includes(screen.spec.archetype);
+    const decide = (h) => {
+      if (h.kind === "row") {
+        const after = kept2.slice(at2 + 1).find((s) => s.spec.archetype === "detail") ?? kept2.slice(0, at2).reverse().find((s) => s.spec.archetype === "detail");
+        return after ? { to: after.id, transition: "push", rule: "row" } : { to: null, needs: "Detail", transition: "push", rule: "missing" };
+      }
+      const intent = INTENT_BY_ID.get(h.intent);
+      const nav = intent.nav;
+      switch (nav.to) {
+        case "none":
+          return "inert";
+        case "history":
+          return { to: LINK_BACK, transition: overlayScreen ? "overlay" : "pop", rule: "back" };
+        case "next": {
+          if (overlayScreen) return { to: LINK_BACK, transition: "overlay", rule: "back" };
+          const next2 = kept2[at2 + 1];
+          return next2 ? { to: next2.id, transition: nav.transition, rule: "intent" } : { to: null, needs: "a next screen", transition: nav.transition, rule: "missing" };
+        }
+        case "after-run": {
+          let i = at2 + 1;
+          while (i < kept2.length && ONBOARDING_RUN.includes(kept2[i].spec.archetype)) i++;
+          const target2 = kept2[i];
+          return target2 ? { to: target2.id, transition: nav.transition, rule: "intent" } : { to: null, needs: "a screen after onboarding", transition: nav.transition, rule: "missing" };
+        }
+        case "post-auth": {
+          const target2 = firstOf(POST_AUTH);
+          return target2 ? { to: target2, transition: nav.transition, rule: "intent" } : { to: null, needs: "Home", transition: nav.transition, rule: "missing" };
+        }
+        case "archetype": {
+          const target2 = firstOf([nav.archetype]);
+          if (target2) return { to: target2, transition: h.tab ? "none" : nav.transition, rule: "intent" };
+          if (h.tab) return null;
+          return { to: null, needs: archetypeName(nav.archetype), transition: nav.transition, rule: "missing" };
+        }
+        case "overlay": {
+          const target2 = kept2.find((s) => nav.component === "drawer" && s.spec.archetype === "menu" || s.spec.slots.some((x) => x.block === nav.component && x.slot === "overlay"));
+          const needs = nav.component === "drawer" ? archetypeName("menu") : words(nav.component);
+          return target2 ? { to: target2.id, transition: "overlay", rule: "intent" } : { to: null, needs, transition: "overlay", rule: "missing" };
+        }
+      }
+    };
+    const decided = spots.map((h) => ({ h, d: decide(h) }));
+    for (const slot of new Set(decided.filter(({ h, d }) => h.tab && d === null).map(({ h }) => h.slot))) {
+      const items = decided.filter(({ h }) => h.slot === slot && h.tab).sort((a, b) => a.h.tab - b.h.tab);
+      const claimed = new Set(items.map(({ d }) => d && d !== "inert" ? d.to : null).filter(Boolean));
+      const free = topLevel.filter((id3) => !claimed.has(id3));
+      for (const entry of items) {
+        if (entry.d !== null) continue;
+        const target2 = free.shift();
+        const nav = INTENT_BY_ID.get(entry.h.intent).nav;
+        entry.d = target2 ? { to: target2, transition: "none", rule: "tab" } : { to: null, needs: nav.to === "archetype" ? archetypeName(nav.archetype) : words(entry.h.intent), transition: "none", rule: "missing" };
+      }
+    }
+    for (const { h, d } of decided) {
+      const label = h.kind === "row" ? "Row" : h.kind === "leading" ? INTENT_BY_ID.get(h.intent)?.label ?? "Back" : INTENT_BY_ID.get(h.intent)?.label ?? h.element;
+      const base = { from: screen.id, key: h.key, label, ...h.intent ? { intent: h.intent } : {} };
+      const override = screen.overrides?.[h.key];
+      if (override !== void 0) {
+        if (override === LINK_NONE) {
+          if (opts.withNone) out.push({ ...base, to: null, transition: "none", rule: "override" });
+          continue;
+        }
+        if (override === LINK_BACK) {
+          out.push({ ...base, to: LINK_BACK, transition: "pop", rule: "override" });
+          continue;
+        }
+        out.push(ids.has(override) ? { ...base, to: override, transition: "push", rule: "override" } : { ...base, to: null, needs: `a screen that is not kept (${override})`, transition: "push", rule: "override" });
+        continue;
+      }
+      if (d === "inert" || d === null) continue;
+      out.push({ ...base, ...d });
+    }
+  });
+  return out;
+}
+function startScreen(kept2) {
+  return (kept2.find((s) => ["welcome", "sign-in"].includes(s.spec.archetype)) ?? kept2[0])?.id ?? null;
+}
+
 // packages/modules/wireframe/src/render.ts
 var WIRE_MARKER = "<!-- isocan:wireframe -->";
 var WIRE_SCRIPT_ID = "isocan-wireframe";
@@ -11571,6 +11714,7 @@ function drawSlot(spec, slot, section, grow) {
     props,
     intent: intentOf,
     label: (element) => esc(INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
+    hot: (element) => ` data-hot="${esc(hotKey(slot.slot, element))}"`,
     title: esc(spec.title),
     platform: spec.platform,
     wide: spec.platform !== "app"
@@ -11581,6 +11725,32 @@ function specJson(spec) {
   return JSON.stringify(spec).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 }
 function renderWire(spec) {
+  const frame = renderFrame(spec);
+  const undecided = spec.slots.some((s) => s.block === null);
+  const state = spec.slots.every((s) => s.block === null) ? "blueprint" : undecided ? "drawing" : "wireframe";
+  const { width } = PLATFORM_SIZE[spec.platform];
+  const title = esc(wireTitle(spec));
+  return `<!doctype html>
+${WIRE_MARKER}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=${width}">
+<title>${title}</title>
+<script type="application/json" id="${WIRE_SCRIPT_ID}">${specJson(spec)}</script>
+<style>${wireCss(spec)}</style>
+</head>
+<body data-archetype="${esc(spec.archetype)}" data-state="${state}">
+<div class="cap${undecided ? " sk-cap" : ""}${spec.varied === "none" ? " one-way" : ""}"><span>${title}<small>${state}</small></span>${spec.varied === "none" ? "<small>one way to draw this</small>" : ""}</div>
+${frame}
+</body>
+</html>
+`;
+}
+function wireCss(spec) {
+  return `${WIRE_CSS}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
+}
+function renderFrame(spec) {
   const problems = validateWire(spec);
   if (problems.length > 0) throw new Error(`not a drawable wireframe spec:
   ${problems.join("\n  ")}`);
@@ -11588,7 +11758,6 @@ function renderWire(spec) {
   const bySlot = new Map(spec.slots.map((s) => [s.slot, s]));
   const placed = r.sections.filter((s) => bySlot.has(s.slot)).map((section) => ({ section, slot: bySlot.get(section.slot) }));
   const undecided = spec.slots.some((s) => s.block === null);
-  const state = spec.slots.every((s) => s.block === null) ? "blueprint" : undecided ? "drawing" : "wireframe";
   const regions = {
     shell: [],
     header: [],
@@ -11618,7 +11787,7 @@ function renderWire(spec) {
   }
   const { width, height } = PLATFORM_SIZE[spec.platform];
   const size = spec.platform === "site" ? `width:${width}px;min-height:${SITE_MIN}px` : `width:${width}px;height:${height}px`;
-  const frame = [
+  return [
     `<div class="frame ${spec.platform}${undecided ? " sk-frame" : ""}" style="${size}">`,
     ...regions.shell,
     ...regions.header,
@@ -11633,23 +11802,6 @@ function renderWire(spec) {
     regions.overlay.length ? `<div class="layer ${overlayAt}">${regions.overlay.join("")}</div>` : "",
     `</div>`
   ].join("");
-  const title = esc(wireTitle(spec));
-  return `<!doctype html>
-${WIRE_MARKER}
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=${width}">
-<title>${title}</title>
-<script type="application/json" id="${WIRE_SCRIPT_ID}">${specJson(spec)}</script>
-<style>${WIRE_CSS}${undecided ? SKELETON_CSS : ""}</style>
-</head>
-<body data-archetype="${esc(spec.archetype)}" data-state="${state}">
-<div class="cap${undecided ? " sk-cap" : ""}${spec.varied === "none" ? " one-way" : ""}"><span>${title}<small>${state}</small></span>${spec.varied === "none" ? "<small>one way to draw this</small>" : ""}</div>
-${frame}
-</body>
-</html>
-`;
 }
 function readWire(html) {
   if (!html.includes(WIRE_MARKER)) return null;
@@ -11660,6 +11812,112 @@ function readWire(html) {
   } catch {
     return null;
   }
+}
+
+// packages/modules/wireframe/src/prototype.ts
+var PROTOTYPE_MARKER = "<!-- isocan:wireframe-prototype -->";
+var PROTOTYPE_PROP = "wirePrototype";
+var BAR_HEIGHT = 32;
+var PAD = 8;
+function prototypeSize(kept2) {
+  const { width, height } = stageSize(kept2);
+  return { width: width + PAD * 2, height: height + BAR_HEIGHT + PAD * 3 };
+}
+function stageSize(kept2) {
+  let width = 0;
+  let height = 0;
+  for (const s of kept2) {
+    const size = wireSize(s.spec);
+    width = Math.max(width, size.width);
+    height = Math.max(height, size.height - CAPTION_HEIGHT);
+  }
+  return { width, height };
+}
+var PROTO_CSS = `
+body.proto{display:flex;flex-direction:column;align-items:center;gap:${PAD}px;padding:${PAD}px;background:#ececec}
+.pbar{display:flex;align-items:center;gap:10px;height:${BAR_HEIGHT}px;font:600 13px/1.2 system-ui,-apple-system,sans-serif;color:#222222}
+.pbar .sp{flex:1}
+.pbar .pnote{font-weight:500;color:#555555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbar button{font:inherit;border:1.5px solid #222222;background:#ffffff;color:#222222;border-radius:4px;padding:3px 10px;cursor:pointer}
+.stage{position:relative;overflow:hidden}
+.pscreen{position:absolute;left:0;top:0;background:#ececec}
+.pscreen[hidden]{display:none}
+[data-go]{cursor:pointer}
+[data-go]:hover{outline:2px solid rgba(34,34,34,.35);outline-offset:2px}
+[data-needs]{outline:2px dashed #555555;outline-offset:2px;cursor:help}
+`;
+var ROUTER = `(function(){
+var data=JSON.parse(document.getElementById("isocan-prototype").textContent);
+var screens=[].slice.call(document.querySelectorAll(".pscreen"));
+var name=document.getElementById("pname"),note=document.getElementById("pnote");
+var still=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+var stack=[];
+function by(id){for(var i=0;i<screens.length;i++)if(screens[i].getAttribute("data-screen")===id)return screens[i];return null}
+var MOVES={push:[["translateX(100%)","none"],null],pop:[null,["none","translateX(100%)"]],overlay:[["translateY(100%)","none"],null],"overlay-out":[null,["none","translateY(100%)"]],dissolve:[["opacity0","opacity1"],null]};
+function animate(el,frames){if(!el||!frames||still||!el.animate)return null;var kf=frames[0]==="opacity0"?[{opacity:0},{opacity:1}]:[{transform:frames[0]},{transform:frames[1]}];return el.animate(kf,{duration:240,easing:"ease-out"})}
+function run(el,frames,done){var a=animate(el,frames),over=false;function end(){if(over)return;over=true;if(a)try{a.finish()}catch(e){}done()}if(a){a.onfinish=end;setTimeout(end,320)}else end()}
+function off(el){if(el!==by(stack[stack.length-1]))el.hidden=true}
+function show(id,kind){var next=by(id),cur=stack.length?by(stack[stack.length-1]):null;return{next:next,cur:cur,kind:kind}}
+function paint(step){var next=step.next,cur=step.cur,m=MOVES[step.kind]||[null,null];
+screens.forEach(function(s){if(s!==next&&s!==cur)s.hidden=true;s.style.zIndex=""});
+next.hidden=false;
+if(cur&&cur!==next){if(m[1]){cur.style.zIndex=2;run(cur,m[1],function(){off(cur);cur.style.zIndex=""})}else{next.style.zIndex=2;run(next,m[0],function(){off(cur);next.style.zIndex=""})}}
+var id=stack[stack.length-1];document.body.setAttribute("data-at",id);name.textContent=next.getAttribute("data-title");note.textContent=stack.length>1?"\xB7 "+stack.length+" deep":""}
+function go(to,kind){if(to==="back"){if(stack.length<2){note.textContent="\xB7 nothing to go back to";return}var step=show(stack[stack.length-2],kind==="overlay"?"overlay-out":"pop");stack.pop();paint(step);return}
+if(!by(to))return;var s=show(to,kind);if(kind==="dissolve")stack=[to];else if(kind==="none"&&stack.length)stack[stack.length-1]=to;else stack.push(to);paint(s)}
+function restart(){var s=show(data.start,"none");stack=[data.start];paint(s)}
+document.addEventListener("click",function(e){var el=e.target.closest&&e.target.closest("[data-hot]");if(!el||!el.closest(".pscreen"))return;e.preventDefault();
+var needs=el.getAttribute("data-needs");if(needs){note.textContent="\xB7 needs "+needs+" \u2014 not kept yet";return}
+var to=el.getAttribute("data-go");if(to)go(to,el.getAttribute("data-t")||"push")});
+document.getElementById("restart").addEventListener("click",restart);
+[].slice.call(document.querySelectorAll("[data-needs]")).forEach(function(el){el.setAttribute("title","needs: "+el.getAttribute("data-needs"))});
+restart()})();`;
+function bind(frame, links) {
+  let out = frame;
+  for (const l of links) {
+    const attr = ` data-hot="${esc(l.key)}"`;
+    const extra = l.to ? ` data-go="${esc(l.to)}" data-t="${l.transition}"` : l.needs ? ` data-needs="${esc(l.needs)}"` : "";
+    if (extra) out = out.split(attr).join(`${attr}${extra}`);
+  }
+  return out;
+}
+function json4(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+}
+function assemblePrototype(kept2, links, opts = {}) {
+  if (kept2.length === 0) throw new Error("nothing is kept \u2014 a prototype plays the kept screens");
+  const start = startScreen(kept2);
+  const { width, height } = stageSize(kept2);
+  const title = opts.title ?? "Prototype";
+  const sheet = wireCss((kept2.find((s) => s.spec.slots.some((x) => x.block === null)) ?? kept2[0]).spec);
+  const sections = kept2.map((s) => {
+    const mine = links.filter((l) => l.from === s.id);
+    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
+  });
+  const table = {
+    start,
+    screens: kept2.map((s) => ({ id: s.id, title: s.title, hotspots: hotspots(s.spec).length })),
+    links: links.map((l) => ({ from: l.from, key: l.key, to: l.to, ...l.needs ? { needs: l.needs } : {}, t: l.transition, rule: l.rule }))
+  };
+  return `<!doctype html>
+${PROTOTYPE_MARKER}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=${width + PAD * 2}">
+<title>${esc(title)}</title>
+<style>${sheet}${PROTO_CSS}</style>
+</head>
+<body class="proto">
+<div class="pbar" style="width:${width}px"><span id="pname"></span><span class="pnote" id="pnote"></span><span class="sp"></span><button type="button" id="restart">Restart</button></div>
+<div class="stage" style="width:${width}px;height:${height}px">
+${sections.join("\n")}
+</div>
+<script type="application/json" id="isocan-prototype">${json4(table)}</script>
+<script>${ROUTER}</script>
+</body>
+</html>
+`;
 }
 
 // packages/modules/wireframe/src/answerer.ts
@@ -12420,8 +12678,8 @@ function costLine(tallies, by, screens) {
 function registerCompose(host, wire) {
   const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, printJson: printJson2, placementFor: placementFor2 } = host;
   wire.argument("[request...]", "what the screens are for, in words \u2014 composes a flow").option("--answerer <name>", "jev (needs TYPESAFE_API_KEY), stub (random, seeded) or agent (you answer: `wire questions` / `wire answer`) \u2014 default jev when the key is set, else stub").option("--seed <n>", "the stub's seed", "1").option("--save <dir>", "write each round's requests and responses there as JSON").option("--canvas <canvas>").option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)").action(
-    run2(async (words, opts, cmd) => {
-      const request = words.join(" ").trim();
+    run2(async (words2, opts, cmd) => {
+      const request = words2.join(" ").trim();
       if (!request) {
         cmd.help();
         return;
@@ -12565,7 +12823,7 @@ function registerVary(host, wire) {
     const p = await resolveCanvas2(ctx);
     const snapshot = await ctx.client.snapshot(p.id);
     const items = refs.map((ref) => resolveItem2(snapshot, ref));
-    const refused = items.filter((item) => !keepable(item));
+    const refused = items.filter((item) => !keepable(item) || item.properties?.[PROTOTYPE_PROP] !== void 0);
     if (refused.length) {
       throw new Error(`not a wireframe screen: ${refused.map((i) => `"${i.title}"`).join(", ")} \u2014 the keep mark is for screens \`isocan wire\` drew`);
     }
@@ -12600,6 +12858,164 @@ function registerVary(host, wire) {
   );
 }
 
+// packages/modules/wireframe/src/links-cli.ts
+async function keptFlows(ctx, canvasId, snapshot) {
+  const wires = new Map((await wiresOn(ctx, canvasId, snapshot)).map((w) => [w.item, w]));
+  const flows = /* @__PURE__ */ new Map();
+  for (const item of kept(snapshot.canvas)) {
+    const wire = wires.get(item.id);
+    if (!wire) continue;
+    const flow = wire.spec.flow;
+    const entry = flows.get(flow) ?? { flow, request: wire.spec.request, screens: [], items: [] };
+    entry.screens.push({ id: item.id, title: item.title, spec: wire.spec, overrides: readOverrides(item.properties?.[LINKS_PROP]) });
+    entry.items.push(item);
+    flows.set(flow, entry);
+  }
+  return [...flows.values()];
+}
+function pickKeptFlow(flows, wanted) {
+  if (flows.length === 0) throw new Error("nothing is kept \u2014 `isocan wire keep <screens...>` marks the screens a prototype plays");
+  if (wanted !== void 0) {
+    const found = flows.find((f) => f.flow === wanted);
+    if (!found) throw new Error(`no kept screens in flow "${wanted}" \u2014 kept flows: ${flows.map((f) => `${f.flow || "(hand-drawn)"} "${f.request}"`).join(", ")}`);
+    return found;
+  }
+  if (flows.length > 1) {
+    throw new Error(`kept screens come from ${flows.length} flows \u2014 say which with --flow:
+  ${flows.map((f) => `--flow ${f.flow || '""'}  "${f.request}" (${f.screens.length} kept)`).join("\n  ")}`);
+  }
+  return flows[0];
+}
+function linkLine(l, title) {
+  const where = l.to === LINK_BACK ? "back" : l.to ? `\u2192 "${title(l.to)}"` : l.needs ? `- - needs ${l.needs}` : "off";
+  return `  ${l.key.padEnd(18)} ${l.label.padEnd(16)} ${where.padEnd(28)} ${l.rule}${l.to && l.to !== LINK_BACK ? `, ${l.transition}` : ""}`;
+}
+function registerLinks(host, wire) {
+  const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, resolveItem: resolveItem2, sendOp: sendOp2, printJson: printJson2 } = host;
+  wire.command("links [screen]").description("Print where every hotspot on the kept screens goes \u2014 inferred from intents, archetypes and reading order, and any override set with `wire link`").option("--canvas <canvas>").option("--flow <flow>", "which flow's kept screens (default: the only one)").action(
+    run2(async (ref, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const flows = await keptFlows(ctx, p.id, snapshot);
+      const only = ref ? resolveItem2(snapshot, ref) : null;
+      const flow = only ? flows.find((f) => f.screens.some((s) => s.id === only.id)) : pickKeptFlow(flows, opts.flow);
+      if (!flow) throw new Error(`"${only.title}" is not a kept screen \u2014 links run between kept screens (\`isocan wire keep ${only.id}\`)`);
+      const links = inferLinks(flow.screens, { withNone: true });
+      const shown = only ? links.filter((l) => l.from === only.id) : links;
+      if (ctx.json) return printJson2({ flow: flow.flow, request: flow.request, screens: flow.screens.map((s) => ({ itemId: s.id, title: s.title })), links: shown });
+      const title = (id3) => flow.screens.find((s) => s.id === id3)?.title ?? id3;
+      for (const s of flow.screens) {
+        if (only && s.id !== only.id) continue;
+        console.log(`${s.id}  "${s.title}" (${s.spec.archetype})`);
+        const mine = shown.filter((l) => l.from === s.id);
+        if (mine.length === 0) console.log("  (no hotspot that navigates)");
+        for (const l of mine) console.log(linkLine(l, title));
+      }
+      const missing = shown.filter((l) => l.to === null && l.needs);
+      const needs = [...new Set(missing.map((l) => l.needs))];
+      console.log(`
+${shown.length} links \xB7 ${missing.length} dashed${needs.length ? ` \u2014 still to make: ${needs.join(", ")}` : ""}`);
+    })
+  );
+  wire.command("link <screen> <element> [target]").description("Override where one hotspot goes: to a screen, or --none to switch it off; --clear gives it back to the rules. A property on the source screen").option("--canvas <canvas>").option("--none", "the hotspot goes nowhere").option("--back", "the hotspot goes back, whatever the rules say").option("--clear", "forget the override \u2014 the rules decide again").action(
+    run2(async (ref, element, target2, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const given = [target2 !== void 0, Boolean(opts.none), Boolean(opts.back), Boolean(opts.clear)].filter(Boolean).length;
+      if (given !== 1) throw new Error("say where it goes: a <target> screen, or one of --none, --back, --clear");
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const item = resolveItem2(snapshot, ref);
+      const wires = await wiresOn(ctx, p.id, snapshot);
+      const source = wires.find((w) => w.item === item.id);
+      if (!source) throw new Error(`"${item.title}" is not a wireframe screen \u2014 links start on screens \`isocan wire\` drew`);
+      const keys = hotspots(source.spec).map((h) => h.key);
+      const matches = keys.includes(element) ? [element] : keys.filter((k) => k.endsWith(`#${element}`));
+      if (matches.length !== 1) {
+        throw new Error(`${matches.length === 0 ? `"${item.title}" has no hotspot "${element}"` : `"${element}" is on more than one slot`} \u2014 its hotspots: ${keys.join(", ")} (\`isocan wire links ${item.id}\`)`);
+      }
+      const key = matches[0];
+      let value;
+      let to = null;
+      if (opts.clear) value = null;
+      else if (opts.none) value = LINK_NONE;
+      else if (opts.back) value = LINK_BACK;
+      else {
+        to = resolveItem2(snapshot, target2);
+        if (!wires.some((w) => w.item === to.id)) throw new Error(`"${to.title}" is not a wireframe screen \u2014 a link goes to a screen`);
+        value = to.id;
+      }
+      const overrides = readOverrides(item.properties?.[LINKS_PROP]);
+      if (value === null) delete overrides[key];
+      else overrides[key] = value;
+      const patch = Object.keys(overrides).length ? { properties: { [LINKS_PROP]: JSON.stringify(overrides) } } : { removeProperties: [LINKS_PROP] };
+      await sendOp2(ctx, p.id, { type: "item.update", itemId: item.id, patch }, newGroupId());
+      const keptNow = to ? isKept(to) : true;
+      if (ctx.json) return printJson2({ itemId: item.id, key, to: value, overrides });
+      const said = value === null ? "back to the rules" : value === LINK_NONE ? "switched off" : value === LINK_BACK ? "goes back" : `goes to "${to.title}"`;
+      console.log(`${item.id}  "${item.title}" ${key} ${said}${keptNow ? "" : ` \u2014 "${to.title}" is not kept, so the prototype draws it dashed until it is`} \xB7 \`isocan undo\` takes it back`);
+    })
+  );
+  wire.command("prototype").description("Assemble the kept screens as one clickable HTML item beside them \u2014 rebuilt, it gains a version rather than being replaced").option("--canvas <canvas>").option("--flow <flow>", "which flow's kept screens (default: the only one)").action(
+    run2(async (_local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const flow = pickKeptFlow(await keptFlows(ctx, p.id, snapshot), opts.flow);
+      const links = inferLinks(flow.screens);
+      const title = `Prototype \xB7 ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}\u2026` : flow.request || "hand-drawn screens"}`;
+      const html = assemblePrototype(flow.screens, links, { title });
+      const { width, height } = prototypeSize(flow.screens);
+      const filename = "prototype.html";
+      const upload = await ctx.client.uploadBlob(p.id, Buffer.from(html, "utf8"), "text/html", filename);
+      const version4 = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
+      const existing2 = Object.values(snapshot.canvas.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
+      const group = newGroupId();
+      let itemId;
+      let what;
+      if (existing2) {
+        itemId = existing2.id;
+        const current = existing2.versions.find((v) => v.id === existing2.currentVersionId) ?? existing2.versions[existing2.versions.length - 1];
+        if (current?.blobHash === upload.blobHash) what = "unchanged";
+        else {
+          await sendOp2(ctx, p.id, { type: "item.addVersion", itemId, version: version4 }, group);
+          if (existing2.width !== width || existing2.height !== height) await sendOp2(ctx, p.id, { type: "item.resize", itemId, width, height }, group);
+          if (existing2.title !== title) await sendOp2(ctx, p.id, { type: "item.update", itemId, patch: { title } }, group);
+          what = "versioned";
+        }
+      } else {
+        itemId = newItemId();
+        const top = Math.min(...flow.items.map((i) => i.y));
+        const bottom = top + height;
+        const band = Object.values(snapshot.canvas.items ?? {}).filter((i) => i.y < bottom && i.y + i.height > top);
+        const right = Math.max(...flow.items.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
+        await sendOp2(ctx, p.id, {
+          type: "item.add",
+          itemId,
+          version: version4,
+          width,
+          height,
+          placement: { x: Math.round(right + 120), y: Math.round(top), chosen: true },
+          title,
+          // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
+          properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow }
+        }, group);
+        what = "added";
+      }
+      const after = await ctx.client.snapshot(p.id);
+      const versions = after.canvas.items[itemId]?.versions.length ?? 0;
+      const dashed = links.filter((l) => l.to === null && l.needs);
+      if (ctx.json) return printJson2({ itemId, title, flow: flow.flow, screens: flow.screens.length, links: links.length, dashed: dashed.length, versions, [what]: true });
+      console.log(`${itemId}  "${title}" \u2014 ${what === "added" ? "added beside the kept screens" : what === "versioned" ? `version ${versions}` : `unchanged (still version ${versions}) \u2014 nothing kept has changed`}`);
+      console.log(`  ${flow.screens.length} screens: ${flow.screens.map((s) => s.title).join(" \xB7 ")}`);
+      console.log(`  ${links.length} links, ${dashed.length} dashed${dashed.length ? ` (needs ${[...new Set(dashed.map((l) => l.needs))].join(", ")})` : ""} \xB7 \`isocan open ${itemId}\` plays it${what === "unchanged" ? "" : " \xB7 `isocan undo` takes it back"}`);
+    })
+  );
+}
+
 // packages/modules/wireframe/src/cli.ts
 function slugOf2(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "screen";
@@ -12612,6 +13028,7 @@ function register6(host) {
   const wire = host.program.command("wire").description('Wireframes: `wire "<request>"` composes a flow of screens from a catalog of blocks \u2014 a blue blueprint where a slot is undecided, grey where it is chosen');
   registerCompose(host, wire);
   registerVary(host, wire);
+  registerLinks(host, wire);
   wire.command("questions").description("Print the pending round of a wireframe flow as a question file, in Jev's request shape \u2014 for an agent to answer in Jev's place").option("--canvas <canvas>").option("--flow <flow>", "which flow (default: the newest one waiting on answers)").action(run2((opts, cmd) => questions(host, opts, cmd)));
   wire.command("answer <file>").description("Apply a question file whose calls each carry a `response` in Jev's response shape \u2014 the screens fill in place, in the flow's op group").option("--canvas <canvas>").action(run2((file, _opts, cmd) => answer(host, file, cmd)));
   wire.command("render <spec>").description("Draw a wireframe spec (a JSON file) and add it to the canvas as an HTML screen with the spec inside it").option("--canvas <canvas>").option("--title <title>", "the item's title (default: the spec's title)").option("--at <x,y>", "place at world coordinates").option("--anchor <item>", "place to the left of this item").option("--in <group>", "insert into this group").option("--cell <row,col>", "with --in: one cell of the sheet's grid").action(
@@ -16231,7 +16648,7 @@ program2.command("share").description('Who may enter this canvas: the address to
       // only in the error.
       owner,
       public: link && isListedGrant(link) ? "on \u2014 listed on this home; unlisting keeps the link working" : "off \u2014 not listed on this home; the link setting separately controls access",
-      link: link ? linkLine(capabilityOf(link), link.at) : linkOff ? (
+      link: link ? linkLine2(capabilityOf(link), link.at) : linkOff ? (
         // The operator turned it off (operator phase 5; journey 8 step
         // 3): the sentence is the row's, rendered in core, and the
         // owner is told in the same line that it is theirs to undo.
@@ -16637,7 +17054,7 @@ groupCommand.command("delete <name>").description("Delete a group \u2014 its row
     console.log(`deleted the group ${group.name} (${group.id}) \u2014 reached ${reached}; ${sweptLine(answer2.swept ?? { expelled: 0, rerooted: 0 })}`);
   })
 );
-function linkLine(capability, at2) {
+function linkLine2(capability, at2) {
   const since = `(granted ${at2.slice(0, 10)})`;
   switch (capability) {
     case "view":
@@ -17788,10 +18205,10 @@ program2.command("inline <file>").description("Inline referenced local images in
   })
 );
 program2.command("notify <message...>").alias("say").description("Say something in the Chat \u2014 every parked agent hears it, and the human sees it").option("--item <ref...>", "items this is about, carried so a reader can act on them").option("--in <group>", "attach this group and its complete subtree as frozen context").option("--include-excluded", "explicitly include excluded context in this request").action(
-  run(async (words, opts, cmd) => {
+  run(async (words2, opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-    const body = words.join(" ");
+    const body = words2.join(" ");
     const main = mainThread(snapshot.canvas);
     const comment2 = await newComment(ctx, p.id, snapshot, body, { items: opts.item, in: opts.in, includeExcluded: opts.includeExcluded });
     if (main) {
@@ -17815,10 +18232,10 @@ program2.command("notify <message...>").alias("say").description("Say something 
   })
 );
 program2.command("ask <question...>").description("Ask the person a question and stop \u2014 the canvas shows you as waiting").option("--item <item>", "pin the question to a thing, instead of the Chat").option("--in <group>", "attach this group and its complete subtree as frozen context").option("--include-excluded", "explicitly include excluded context in this request").action(
-  run(async (words, opts, cmd) => {
+  run(async (words2, opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-    const question = words.join(" ").trim();
+    const question = words2.join(" ").trim();
     if (question === "") throw new Error("ask what?");
     const body = question.startsWith("/ask") ? question : `/ask ${question}`;
     const comment2 = await newComment(ctx, p.id, snapshot, body, { in: opts.in, includeExcluded: opts.includeExcluded });
@@ -18010,7 +18427,7 @@ program2.command("text [words...]").description("Type words onto the canvas as a
   "S | M | L | XL (or body | heading | title | display) \u2014 how far out it stays readable"
 ).option("--face <face>", "sans | mono | serif").option("--paper <colour>", "yellow | pink | blue | green | grey \u2014 a post-it rather than a caption").action(
   run(
-    async (words, opts, cmd) => {
+    async (words2, opts, cmd) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       const body = opts.file !== void 0 ? opts.file === "-" ? await new Promise((resolve, reject) => {
@@ -18019,7 +18436,7 @@ program2.command("text [words...]").description("Type words onto the canvas as a
         process.stdin.on("data", (chunk) => text += chunk);
         process.stdin.on("end", () => resolve(text));
         process.stdin.on("error", reject);
-      }) : await fs16.readFile(opts.file, "utf8") : words.join(" ");
+      }) : await fs16.readFile(opts.file, "utf8") : words2.join(" ");
       if (body.trim() === "") {
         throw new Error("nothing to say \u2014 pass words, or --file <path> (or `-` for stdin)");
       }
@@ -19865,13 +20282,13 @@ ${notesMarkdown(snapshot.canvas, (note) => bodies.get(note.id) ?? "")}`);
   })
 );
 slidesCmd.command("note <slide> [words...]").description("Write a slide's speaker notes \u2014 under it on the canvas, N in full screen, on the sheet with --notes").option("--canvas <canvas>").option("-f, --file <path>", "take the words from a file, or `-` for stdin").action(
-  run(async (slideRef, words, opts, cmd) => {
+  run(async (slideRef, words2, opts, cmd) => {
     const ctx = await ctxOf(cmd);
     if (opts.canvas) ctx.canvasRef = opts.canvas;
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
     const slide = resolveItem(snapshot, slideRef);
     if (isNote(slide)) throw new Error(`"${slide.title}" is itself a speaker note \u2014 name the slide it speaks for`);
-    const body = opts.file !== void 0 ? opts.file === "-" ? await readStdin() : await fs16.readFile(opts.file, "utf8") : words.join(" ");
+    const body = opts.file !== void 0 ? opts.file === "-" ? await readStdin() : await fs16.readFile(opts.file, "utf8") : words2.join(" ");
     if (body.trim() === "") throw new Error("nothing to say \u2014 pass words, or --file <path> (or `-` for stdin)");
     const upload = await ctx.client.uploadBlob(p.id, Buffer.from(body, "utf8"), TEXT_MIME, TEXT_FILENAME);
     const existing2 = noteFor(snapshot.canvas, slide.id);
@@ -20147,11 +20564,11 @@ sprintCmd.command("brief").description("Write the brief onto the Brief sheet \u2
   )
 );
 sprintCmd.command("desk <name...>").description("A private canvas for one sketcher \u2014 link off, one pass in; hand them the address it prints").option("--canvas <canvas>", "the sprint canvas this desk belongs to").action(
-  run(async (words, opts, cmd) => {
+  run(async (words2, opts, cmd) => {
     const ctx = await ctxOf(cmd);
     if (opts.canvas) ctx.canvasRef = opts.canvas;
     const sprint = await resolveCanvas(ctx);
-    const name = words.join(" ").trim();
+    const name = words2.join(" ").trim();
     if (!name) throw new Error("whose desk? \u2014 `isocan sprint desk Theo`");
     const canvasId = newCanvasId();
     await sendOp(ctx, null, {
@@ -20178,8 +20595,8 @@ sprintCmd.command("end [note...]").description("The sprint is over \u2014 no pha
     if (opts.canvas) ctx.canvasRef = opts.canvas;
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
     if (!sprintState(snapshot.canvas)) throw new Error("no sprint is running here");
-    const words = note.join(" ").trim();
-    const posted = await sayInChat(ctx, p.id, snapshot, `/sprint ${SPRINT_END}${words ? ` ${words}` : ""}`);
+    const words2 = note.join(" ").trim();
+    const posted = await sayInChat(ctx, p.id, snapshot, `/sprint ${SPRINT_END}${words2 ? ` ${words2}` : ""}`);
     if (ctx.json) return printJson(posted);
     console.log("the sprint is over \u2014 said in the Chat");
   })

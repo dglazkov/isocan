@@ -383,6 +383,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   (`isocan area grid Test 5x15`). See
   [the research](docs/research/2026-09-01-design-sprint.md) and
   [the journey](docs/projects/sprint/journey.md).
+- **Wireframes**: `isocan wire "<request>"` draws a flow of screens from a
+  typed catalog — blue blueprint first, grey wireframe as Jev (or the stub, or
+  an agent) answers — with variations under each. Keep the screens you want
+  (📐, ⇧K, `wire keep`) and `wire prototype` adds them as one clickable HTML
+  item: links are inferred from intents, archetypes and reading order, never
+  stored; a hotspot with no kept target is drawn dashed and says which screen
+  it needs; rebuilt, the prototype gains a version. `wire links` prints the
+  flow, `wire link` overrides one hotspot. See
+  [the journey](docs/projects/wireframes/journey.md).
 - **Design competitions**: `/design-competition` or ⌘K opens a lazy picker
   with nine designer-inspired packs. Choose fighters and a brief to create
   explicit lanes in one undoable act. `isocan competition` casts them through

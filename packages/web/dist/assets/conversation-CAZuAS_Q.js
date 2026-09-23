@@ -1,0 +1,1 @@
+import{B as r,af as i,ag as c,J as d,ah as p}from"./index-B3upexFt.js";function f(n,o){const e=r.getState();if(e.canvasId!==n)return;const t=e.canvas?.threads[o];if(t?.main)i(n,!0);else if(t&&e.canvas){const s=c(e.canvas,t),a=d.getState();a.setViewport(p(a.viewport,s.x,s.y,window.innerWidth,window.innerHeight)),a.setOpenThread(t.id)}}export{f as openConversation};
