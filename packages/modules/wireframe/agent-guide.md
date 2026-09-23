@@ -16,9 +16,13 @@ home without this module.
   each round writes a new version into the same items, so the row goes blue
   then grey in place. The whole request is one op group: one `isocan undo`
   takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`
-  is set) asks Jev; `--answerer stub` (the default without a key) draws a
+  is set) asks Jev; without a key the default is `--answerer home` — Jev
+  through the canvas's home, with the home's key — and when the home has no
+  key either it says so and the stub answers; `--answerer stub` draws a
   random but valid flow, deterministic under `--seed`; `--answerer agent`
-  leaves the rounds to you. The last line says who answered, the latency
+  leaves the rounds to you. A person does the same from the Chat with
+  `/wire <request>` (and `/wire prototype`, `/wire style`): the browser
+  runs this same composer against the home's judge, as that person. The last line says who answered, the latency
   per round, calls, input tokens and cost. `--save <dir>` keeps every
   round's request and response; `--at x,y` starts the row somewhere.
 - **Variations come at the end of every flow**, in the same op group:
@@ -87,8 +91,8 @@ home without this module.
   anything by itself — run `wire style` to bring them forward). Running it
   again with nothing changed asks nothing and writes nothing. A kept flow's
   prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the
-  stub answers, and its flat distributions keep every asked role at the
-  default. The spec records it as `style` (`{ "source": "design-system",
+  home's judge maps it; when the home has no key either, the stub answers,
+  and its flat distributions keep every asked role at the default. The spec records it as `style` (`{ "source": "design-system",
   "itemId", "versionId", "roles" }`).
 - `isocan wire "<request>"` starts in the governing system: the mapping is
   asked while round 1 is, and the screens arrive in it. `--in <group>`

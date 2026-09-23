@@ -1,3 +1,4 @@
+import { type JudgmentOptions } from "./judgment.js";
 import type { FastifyInstance } from "fastify";
 import type { Actor } from "../../core/src/index.js";
 import { Engine } from "./engine.js";
@@ -47,6 +48,9 @@ declare module "fastify" {
  */
 export declare const STATIC_TYPES: Record<string, string>;
 interface RouteOptions {
+    /** The home's judge (`judgment.ts`): its key, rate and transport. Absent,
+     * the key is `TYPESAFE_API_KEY` from the environment, read per call. */
+    judgment?: JudgmentOptions;
     /** Local setup persists its pass-returned person in the same process as
      * home badge writes. The route guards local custody before spending a pass. */
     adoptIdentity?: (actor: Actor) => Promise<{

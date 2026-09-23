@@ -1,5 +1,6 @@
 import { type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "../../core/src/index.js";
 import { type InboxResponse } from "../../core/src/index.js";
+import { type JudgmentRequest } from "../../core/src/index.js";
 import { type DesignRecordOperation, type DesignRequestsResponse } from "../../core/src/design-request.js";
 import { type DesignDecisionsResponse } from "../../core/src/design-decision.js";
 import { type DesignRepairsResponse } from "../../core/src/design-repair.js";
@@ -441,6 +442,12 @@ export declare class DaemonRoutes {
     /** What changed, for the person using this — release notes from the home
      *  this CLI is talking to, so what it lists is what that home is running. */
     news(): Promise<NewsResponse>;
+    /**
+     * **Ask the home's judge** (`JUDGMENT_ROUTE`) — a question file in the
+     * judge's request shape, answered with the home's key, in the judge's answer
+     * shape. Refused with `judgment-unavailable` when the home holds no key.
+     */
+    judgment(request: JudgmentRequest): Promise<unknown>;
     /** Every slash command available here: built-ins under this home's own. */
     commands(): Promise<SlashCommand[]>;
     /** Write one for this home. `text` is the file, frontmatter and all. */

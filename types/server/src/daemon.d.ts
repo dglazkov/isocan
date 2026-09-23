@@ -6,6 +6,7 @@ import type { Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
 import { type AuthConfig, type SigningKeys } from "./attest.js";
 import { HomeLinks } from "./home-links.js";
+import type { JudgmentOptions } from "./judgment.js";
 export interface DaemonOptions {
     port?: number;
     home?: string;
@@ -183,6 +184,9 @@ export interface DaemonOptions {
      * The daemon uses the wall when this is absent, which is every real home.
      */
     refusalsNow?: () => number;
+    /** The home's judge (`judgment.ts`) — tests hand it a key and a fake
+     * transport; a running home reads `TYPESAFE_API_KEY` per call. */
+    judgment?: JudgmentOptions;
 }
 export interface RunDaemonOptions extends DaemonOptions {
     /** Stop whatever daemon is already there and take the port. What `npm run

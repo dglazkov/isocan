@@ -162,6 +162,9 @@ function normalizeHomeUrl(raw) {
   }
 }
 
+// packages/core/src/modules.ts
+var JUDGMENT_ROUTE = "/api/judgment";
+
 // packages/core/src/canvas-groups.ts
 var GROUP_KIND = "group";
 function fail(message) {
@@ -1258,6 +1261,9 @@ var BADGE_ENDED = "badge-ended";
 // packages/core/src/refusal.ts
 var NET_REFUSAL_DEFAULT_MS = 24 * 60 * 60 * 1e3;
 
+// packages/core/src/judgment.ts
+var JUDGMENT_MAX_BYTES = 64 * 1024;
+
 // packages/core/src/moduleassets.ts
 var ASSET_MAX_BYTES = 256 * 1024;
 var ASSETS_MAX_BYTES = 2 * 1024 * 1024;
@@ -2198,6 +2204,14 @@ var DaemonRoutes = class {
    *  this CLI is talking to, so what it lists is what that home is running. */
   news() {
     return this.request("GET", NEWS_ROUTE);
+  }
+  /**
+   * **Ask the home's judge** (`JUDGMENT_ROUTE`) — a question file in the
+   * judge's request shape, answered with the home's key, in the judge's answer
+   * shape. Refused with `judgment-unavailable` when the home holds no key.
+   */
+  judgment(request) {
+    return this.request("POST", JUDGMENT_ROUTE, request);
   }
   /** Every slash command available here: built-ins under this home's own. */
   commands() {

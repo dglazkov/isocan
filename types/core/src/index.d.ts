@@ -90,6 +90,7 @@ export * from "./refusal.js";
 export * from "./lane.js";
 export * from "./frameable.js";
 export * from "./modules.js";
+export * from "./judgment.js";
 export * from "./modulemarks.js";
 export * from "./moduleassets.js";
 export * from "./designimport.js";
