@@ -44,6 +44,13 @@ export interface DrawContext {
   label: (element: string) => string;
   /** The intent id an element carries. */
   intent: (element: string) => string;
+  /**
+   * The attribute that makes a part a prototype's hotspot — ` data-hot="<slot>#<element>"`,
+   * with its leading space. Every actionable element carries it, and so do the two parts
+   * that navigate without an intent: a row (`"row"`) and an app bar's chevron (`"leading"`).
+   * The key is the slot and the element, so it is the same every time the spec is drawn.
+   */
+  hot: (element: string) => string;
   /** The screen's title, HTML-escaped — headings come from the archetype. */
   title: string;
   platform: Platform;

@@ -3,6 +3,7 @@ import { newGroupId, type CanvasContents } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { FlowCanvas, addVariations, wiresOn } from "./compose-cli.ts";
 import { KEEP_EMOJI, isKept, keepPatch, keepable, kept } from "./keep.ts";
+import { PROTOTYPE_PROP } from "./prototype.ts";
 import { wireTitle } from "./spec.ts";
 import { DEFAULT_VARIATIONS, decisions, flipWords, honestFlips, VARIATION_FLOOR } from "./vary.ts";
 
@@ -73,7 +74,8 @@ export function registerVary(host: CliHost, wire: Command): void {
       const p = await resolveCanvas(ctx);
       const snapshot = await ctx.client.snapshot(p.id);
       const items = refs.map((ref) => resolveItem(snapshot, ref));
-      const refused = items.filter((item) => !keepable(item));
+      // A prototype wears a wireframe's fidelity (so the design gate passes it) but plays screens; it is not one.
+      const refused = items.filter((item) => !keepable(item) || item.properties?.[PROTOTYPE_PROP] !== undefined);
       if (refused.length) {
         throw new Error(`not a wireframe screen: ${refused.map((i) => `"${i.title}"`).join(", ")} — the keep mark is for screens \`isocan wire\` drew`);
       }

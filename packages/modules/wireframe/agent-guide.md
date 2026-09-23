@@ -44,6 +44,30 @@ home without this module.
   the canvas. `isocan wire kept` lists the kept screens in reading order
   (rows top to bottom, each left to right). A variation can be kept. People
   do the same from the item menu (📐 Keep / Unkeep) or ⇧K.
+- **Links are computed, never stored.** `isocan wire links [screen]` prints
+  where every hotspot on the kept screens goes, worked out each time from
+  intents, archetypes and reading order: an intent with a target goes to the
+  first kept screen of that archetype (`sign-in` → the first home, list or
+  feed; `next`/`continue`/`save` → the next kept screen); `back` and an app
+  bar's chevron go back; a list, grid, table or feed row opens the first kept
+  `detail` after it; tab *i* of a tab bar or side nav whose intent found
+  nothing takes the *i*-th top-level screen (one that draws the nav) no other
+  tab reaches. Anything else that navigates and found nothing is **dashed**
+  and says what it needs (`- - needs Settings`) — the list of screens still
+  to make. A hotspot's key is `<slot>#<element>` (`main.3#row`,
+  `header#leading`, `nav#tab-2`); `--json` has every link with its `rule`.
+- `isocan wire link <screen> <element> <target>` overrides one hotspot —
+  `<element>` is the key or its part after `#` when that is unique —
+  `--none` switches it off, `--back` sends it back, `--clear` gives it back
+  to the rules. It is the property `wireLinks` on the source screen, through
+  `item.update`, so one `isocan undo` takes it back.
+- `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`
+  when more than one flow is kept) as **one self-contained HTML item** to the
+  right of them: every screen, a router with a history stack, the links as
+  click targets, a push / pop / fade / slide-up by link kind, a Restart. Run
+  it again after a kept screen changes and the same item **gains a version**
+  (found by its `wirePrototype` property); with nothing changed it writes
+  nothing. `isocan open <item>` plays it full screen.
 - `isocan wire questions` prints the pending round of a flow (`--flow <id>`,
   default the newest waiting) as a file of calls, each a request in Jev's
   shape (`state` and named questions, of type `noul` — yes/no — `choice` or

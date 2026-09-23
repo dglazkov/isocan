@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–2 are CLOSED (23 Sep 2026).** The catalog draws (0); `isocan wire "<request>"` has Jev compose a flow skeleton-first, about $0.001 and 7–16 s a flow (1); variations appear under each screen where Jev was unsure, and screens are kept with 📐 from the CLI, the item menu or ⇧K (2). **Next: wireframes phase 3** — links and the prototype.
+**Where we are: phases 0–3 are CLOSED (23 Sep 2026).** The catalog draws (0); Jev composes a flow skeleton-first (1); variations and 📐 keep (2); links are computed from intents and canvas order and `isocan wire prototype` assembles one clickable HTML item from the kept screens, missing targets dashed and named (3). **Next: wireframes phase 4** — wires in your design system. The canvas arrows between kept screens moved to phase 5.
 
 ## Phase 0 — The catalog, drawn
 
@@ -110,7 +110,7 @@ from the CLI.
 
 ## Phase 3 — Links and the prototype
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 23 September 2026.** 439 module tests and the full suite; a live Jev flow (8 screens, $0.000818) with four kept, `wire links` showing 11 links and 3 dashed, `wire prototype` re-versioning on a changed screen and not on an unchanged one; the conductor's own click-through of the prototype on the canvas — sign in → home (dissolve) → tab → list → row → detail (2 deep) → back → the dashed Settings tab naming what it needs. The canvas arrows did not ship; they move to phase 5 (see Trajectory).
 
 **Outcome:** `inferLinks` and `assemblePrototype` in the module's core; the
 inferred links drawn as edges between kept screens; `wire prototype` adds the
@@ -120,6 +120,13 @@ one link. Missing targets render dashed and named.
 **Proof:** rule tests (each of the five, and the override); a browser walk
 that clicks through the warehouse prototype — sign in → home → deliveries →
 delivery → back → tab — said out loud; the README's feature line.
+
+### Trajectory
+
+- **2026-09-23** — The canvas arrows between kept screens moved to phase 5. `CoreModule.edges(canvas)` sees item metadata, and a wire's spec lives in its file, so the edge hook cannot compute links; the smallest lazy underlay measured +235 bytes against 15 of margin. Phase 5 must teach the web to read a screen's spec anyway. Storing links as metadata was refused — stored links drift, which design §7 exists to prevent.
+- **2026-09-23** — Rule 1 covers the research table's forward intents (→ the next kept screen) and overlay intents (→ a kept screen drawing that overlay; an overlay's confirm returns beneath it). Rule 4 gives a tab only a top-level screen no other nav item already reaches, or two tabs land on one screen.
+- **2026-09-23** — Open: Jev labelled a tab "Profile" and the tab rule sent it to *List* — the intent vocabulary cannot say *this tab is the list*. Tab intents need a per-archetype target (`open-list`, …) or a wave-2 vocabulary.
+- **2026-09-23** — The entry chunk is 727,785 against 727,800: **15 bytes**. Phase 5's web door must arrive lazy, or answer the ceiling with a reason.
 
 ## Phase 4 — Wires in your design system
 
@@ -155,7 +162,8 @@ blue.
 **Outcome:** asking for wireframes from the canvas itself — the Chat and the
 Add popover — composed by the home using its own `TYPESAFE_API_KEY` (a
 Secret Manager secret on both homes since 23 Sep 2026), with the same
-skeleton-first fill. `infra/70-cloud-run.sh` carries the secret so a full
+skeleton-first fill, and the arrows between kept screens on the canvas
+(moved here from phase 3: the web reads a screen's spec to draw them). `infra/70-cloud-run.sh` carries the secret so a full
 re-provision keeps it.
 
 **Proof:** the journey's scenes 1–6 walked on dev.isocan.io in a browser.

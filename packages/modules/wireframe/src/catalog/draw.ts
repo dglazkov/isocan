@@ -30,8 +30,9 @@ export function bars(n: number, offset = 0, cls = ""): string {
 
 export type Variant = "primary" | "secondary" | "tertiary" | "destructive";
 
-export function btn(label: string, variant: Variant = "primary", cls = ""): string {
-  return `<span class="btn ${variant}${cls ? ` ${cls}` : ""}">${label}</span>`;
+/** `hot` is a `DrawContext.hot(...)` attribute, when the button is an actionable element. */
+export function btn(label: string, variant: Variant = "primary", cls = "", hot = ""): string {
+  return `<span class="btn ${variant}${cls ? ` ${cls}` : ""}"${hot}>${label}</span>`;
 }
 
 const GLYPHS: Record<string, string> = {
@@ -47,8 +48,8 @@ export function glyph(intent: string): string {
 }
 
 /** An icon button: the intent's glyph, with its label for anyone reading rather than looking. */
-export function ibtn(intent: string, label: string): string {
-  return `<span class="ibtn" title="${label}" aria-label="${label}">${glyph(intent)}</span>`;
+export function ibtn(intent: string, label: string, hot = ""): string {
+  return `<span class="ibtn" title="${label}" aria-label="${label}"${hot}>${glyph(intent)}</span>`;
 }
 
 /** The crossed-box image placeholder the IDEO pack names. */
@@ -69,8 +70,8 @@ export function field(label: string | null, offset = 0): string {
   return `<div class="fld">${label ? `<span class="lbl">${label}</span>` : bar(30 + (offset % 3) * 8, "lbl-bar")}<div class="box">${bar(40 + (offset % 4) * 10, "ph")}</div></div>`;
 }
 
-export function check(label: string): string {
-  return `<div class="chk"><span class="cb"></span>${label}</div>`;
+export function check(label: string, hot = ""): string {
+  return `<div class="chk"${hot}><span class="cb"></span>${label}</div>`;
 }
 
 export function chip(on = false): string {

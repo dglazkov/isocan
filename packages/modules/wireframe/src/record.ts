@@ -20,6 +20,7 @@ export const KEEP_EMOJI = "📐";
 // test holds the two equal (`test/vary.test.ts`).
 export const wireframeModule: CoreModule = {
   name: "@isocan/wireframe",
-  propertyKeys: [KEEP_PROP],
+  // `wireLinks` (a person's overrides, links.ts) and `wirePrototype` (prototype.ts) are spelled out too.
+  propertyKeys: [KEEP_PROP, "wireLinks", "wirePrototype"],
   marks: [{ property: KEEP_PROP, emoji: KEEP_EMOJI, title: "Kept", on: "Keep", off: "Unkeep", key: "K", offeredOn: { fidelity: "wireframe" } }],
 };

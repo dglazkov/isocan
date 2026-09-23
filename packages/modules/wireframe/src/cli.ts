@@ -10,6 +10,7 @@ import {
 import { wireframeModule } from "./record.ts";
 import { answer, questions, registerCompose } from "./compose-cli.ts";
 import { registerVary } from "./vary-cli.ts";
+import { registerLinks } from "./links-cli.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
@@ -43,6 +44,7 @@ function register(host: CliHost): void {
     .description("Wireframes: `wire \"<request>\"` composes a flow of screens from a catalog of blocks — a blue blueprint where a slot is undecided, grey where it is chosen");
   registerCompose(host, wire);
   registerVary(host, wire);
+  registerLinks(host, wire);
 
   wire
     .command("questions")

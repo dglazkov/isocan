@@ -1,5 +1,6 @@
 import { INTENT_BY_ID, component, type DrawContext, type Region, type Section } from "./catalog/index.ts";
 import { esc } from "./catalog/draw.ts";
+import { hotKey } from "./links.ts";
 import {
   CAPTION_HEIGHT, PLATFORM_SIZE, defaultIntent, propsFor, recipe, validateWire, wireTitle, type WireSlot, type WireSpec,
 } from "./spec.ts";
@@ -333,6 +334,7 @@ function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolea
     props,
     intent: intentOf,
     label: (element) => esc(INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
+    hot: (element) => ` data-hot="${esc(hotKey(slot.slot, element))}"`,
     title: esc(spec.title),
     platform: spec.platform,
     wide: spec.platform !== "app",
@@ -351,13 +353,47 @@ function specJson(spec: WireSpec): string {
  * worse than one that is not drawn.
  */
 export function renderWire(spec: WireSpec): string {
+  const frame = renderFrame(spec);
+  const undecided = spec.slots.some((s) => s.block === null);
+  const state = spec.slots.every((s) => s.block === null) ? "blueprint" : undecided ? "drawing" : "wireframe";
+  const { width } = PLATFORM_SIZE[spec.platform];
+  const title = esc(wireTitle(spec));
+  return `<!doctype html>
+${WIRE_MARKER}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=${width}">
+<title>${title}</title>
+<script type="application/json" id="${WIRE_SCRIPT_ID}">${specJson(spec)}</script>
+<style>${wireCss(spec)}</style>
+</head>
+<body data-archetype="${esc(spec.archetype)}" data-state="${state}">
+<div class="cap${undecided ? " sk-cap" : ""}${spec.varied === "none" ? " one-way" : ""}"><span>${title}<small>${state}</small></span>${spec.varied === "none" ? "<small>one way to draw this</small>" : ""}</div>
+${frame}
+</body>
+</html>
+`;
+}
+
+/** The stylesheet a screen needs: the greyscale sheet, and the skeleton's only while a slot is undecided. */
+export function wireCss(spec: WireSpec): string {
+  return `${WIRE_CSS}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
+}
+
+/**
+ * **The frame alone** — the device outline and every slot in it, with no
+ * caption, document or stylesheet. `renderWire` wraps it as a screen's file;
+ * the prototype (`prototype.ts`) sets several side by side in one file under
+ * one sheet, which is why it is its own function. Throws as `renderWire` does.
+ */
+export function renderFrame(spec: WireSpec): string {
   const problems = validateWire(spec);
   if (problems.length > 0) throw new Error(`not a drawable wireframe spec:\n  ${problems.join("\n  ")}`);
   const r = recipe(spec.archetype);
   const bySlot = new Map(spec.slots.map((s) => [s.slot, s]));
   const placed = r.sections.filter((s) => bySlot.has(s.slot)).map((section) => ({ section, slot: bySlot.get(section.slot)! }));
   const undecided = spec.slots.some((s) => s.block === null);
-  const state = spec.slots.every((s) => s.block === null) ? "blueprint" : undecided ? "drawing" : "wireframe";
 
   const regions: Record<Region | "side" | "bottom", string[]> = {
     shell: [], header: [], nav: [], main: [], aside: [], footer: [], fab: [], overlay: [], side: [], bottom: [],
@@ -380,7 +416,7 @@ export function renderWire(spec: WireSpec): string {
 
   const { width, height } = PLATFORM_SIZE[spec.platform];
   const size = spec.platform === "site" ? `width:${width}px;min-height:${SITE_MIN}px` : `width:${width}px;height:${height}px`;
-  const frame = [
+  return [
     `<div class="frame ${spec.platform}${undecided ? " sk-frame" : ""}" style="${size}">`,
     ...regions.shell,
     ...regions.header,
@@ -395,24 +431,6 @@ export function renderWire(spec: WireSpec): string {
     regions.overlay.length ? `<div class="layer ${overlayAt}">${regions.overlay.join("")}</div>` : "",
     `</div>`,
   ].join("");
-
-  const title = esc(wireTitle(spec));
-  return `<!doctype html>
-${WIRE_MARKER}
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=${width}">
-<title>${title}</title>
-<script type="application/json" id="${WIRE_SCRIPT_ID}">${specJson(spec)}</script>
-<style>${WIRE_CSS}${undecided ? SKELETON_CSS : ""}</style>
-</head>
-<body data-archetype="${esc(spec.archetype)}" data-state="${state}">
-<div class="cap${undecided ? " sk-cap" : ""}${spec.varied === "none" ? " one-way" : ""}"><span>${title}<small>${state}</small></span>${spec.varied === "none" ? "<small>one way to draw this</small>" : ""}</div>
-${frame}
-</body>
-</html>
-`;
 }
 
 /** The spec a rendered screen carries, or null for a file that is not one. Needs no DOM. */

@@ -93,25 +93,25 @@ export const PRIMITIVES: Component[] = [
       state: choice(["default", "disabled", "loading"]),
     },
     elements: { action: { accepts: ALL_INTENTS, default: "continue" } },
-    draw: ({ props, label, intent }) => {
+    draw: ({ props, label, intent, hot }) => {
       const only = str(props, "icon") === "only";
       const lead = str(props, "icon") === "leading" ? `${glyph(intent("action"))} ` : "";
       const inner = only ? glyph(intent("action")) : `${lead}${label("action")}`;
-      return `<div class="actions">${btn(inner, str(props, "variant") as never, `${str(props, "size")} ${str(props, "state")} block`)}</div>`;
+      return `<div class="actions">${btn(inner, str(props, "variant") as never, `${str(props, "size")} ${str(props, "state")} block`, hot("action"))}</div>`;
     },
   },
   {
     id: "button-group", kind: "primitive", category: "input", namedBy: 4, h: 104,
     props: { count: count(2, 4, 2), variant: choice(["primary-first", "equal"]) },
     elements: upTo(4, "button", "count", PRIMARY.concat(intentsIn("back", "overlay", "in-place")), ["continue", "cancel", "more", "help"]),
-    draw: ({ props, label }) => `<div class="actions stack">${rowsOf(num(props, "count"), (i) =>
-      btn(label(`button-${i + 1}`), i === 0 || str(props, "variant") === "equal" ? (i === 0 ? "primary" : "secondary") : "tertiary", "block"))}</div>`,
+    draw: ({ props, label, hot }) => `<div class="actions stack">${rowsOf(num(props, "count"), (i) =>
+      btn(label(`button-${i + 1}`), i === 0 || str(props, "variant") === "equal" ? (i === 0 ? "primary" : "secondary") : "tertiary", "block", hot(`button-${i + 1}`)))}</div>`,
   },
   {
     id: "link", kind: "primitive", category: "navigation", namedBy: 5, h: 32,
     props: {},
     elements: { action: { accepts: ALL_INTENTS, default: "help" } },
-    draw: ({ label }) => `<div class="link-row"><span class="lnk">${label("action")}</span></div>`,
+    draw: ({ label, hot }) => `<div class="link-row"><span class="lnk"${hot("action")}>${label("action")}</span></div>`,
   },
   {
     id: "search-field", kind: "primitive", category: "navigation", namedBy: 6, h: 56,
@@ -128,35 +128,35 @@ export const PRIMITIVES: Component[] = [
     id: "fab", kind: "primitive", category: "input", namedBy: 2, h: 64,
     props: { extended: yn() },
     elements: { action: { accepts: [...intentsIn("form"), "upload", "share", "messages", "search"], default: "add" } },
-    draw: ({ props, label, intent }) => `<div class="fab-wrap"><span class="fab${flag(props, "extended") ? " ext" : ""}">${glyph(intent("action"))}${flag(props, "extended") ? ` ${label("action")}` : ""}</span></div>`,
+    draw: ({ props, label, intent, hot }) => `<div class="fab-wrap"><span class="fab${flag(props, "extended") ? " ext" : ""}"${hot("action")}>${glyph(intent("action"))}${flag(props, "extended") ? ` ${label("action")}` : ""}</span></div>`,
   },
   // ---- navigation
   {
     id: "app-bar", kind: "primitive", category: "navigation", namedBy: 3, h: 56,
     props: { title: yn(true), leading: choice(["none", "back", "menu", "close"], "back"), actions: count(0, 3, 1), search: yn() },
     elements: upTo(3, "action", "actions", ACTIONS, ["more", "share", "add"]),
-    draw: ({ props, label, intent, title }) => {
+    draw: ({ props, label, intent, hot, title }) => {
       const lead = str(props, "leading");
-      return `<div class="appbar">${lead === "none" ? "" : ibtn(lead, lead === "back" ? "Back" : lead === "menu" ? "Menu" : "Close")}<span class="t">${flag(props, "title") ? title : ""}</span>${
-        flag(props, "search") ? ibtn("search", "Search") : ""}${rowsOf(num(props, "actions"), (i) => ibtn(intent(`action-${i + 1}`), label(`action-${i + 1}`)))}</div>`;
+      return `<div class="appbar">${lead === "none" ? "" : ibtn(lead, lead === "back" ? "Back" : lead === "menu" ? "Menu" : "Close", hot("leading"))}<span class="t">${flag(props, "title") ? title : ""}</span>${
+        flag(props, "search") ? ibtn("search", "Search") : ""}${rowsOf(num(props, "actions"), (i) => ibtn(intent(`action-${i + 1}`), label(`action-${i + 1}`), hot(`action-${i + 1}`)))}</div>`;
     },
   },
   {
     id: "tab-bar", kind: "primitive", category: "navigation", namedBy: 4, h: 64,
     props: { items: count(3, 5, 4), selected: index(5), labels: yn(true) },
     elements: upTo(5, "tab", "items", NAV_JUMPS, ["home", "search", "notifications", "profile", "settings"]),
-    draw: ({ props, label, intent }) => `<nav class="tabbar">${rowsOf(num(props, "items"), (i) =>
-      `<span class="tab${i + 1 === sel(props, "selected", "items") ? " on" : ""}"><b>${glyph(intent(`tab-${i + 1}`))}</b>${flag(props, "labels") ? `<small>${label(`tab-${i + 1}`)}</small>` : ""}</span>`)}</nav>`,
+    draw: ({ props, label, intent, hot }) => `<nav class="tabbar">${rowsOf(num(props, "items"), (i) =>
+      `<span class="tab${i + 1 === sel(props, "selected", "items") ? " on" : ""}"${hot(`tab-${i + 1}`)}><b>${glyph(intent(`tab-${i + 1}`))}</b>${flag(props, "labels") ? `<small>${label(`tab-${i + 1}`)}</small>` : ""}</span>`)}</nav>`,
   },
   {
     id: "side-nav", kind: "primitive", category: "navigation", namedBy: 4, h: 400,
     props: { items: count(3, 10, 5), selected: index(10), groups: count(0, 3, 0), collapsed: yn() },
     elements: upTo(10, "item", "items", NAV_JUMPS, ["home", "search", "notifications", "messages", "settings", "profile", "help", "contact", "terms", "upgrade"]),
-    draw: ({ props, label, intent }) => {
+    draw: ({ props, label, intent, hot }) => {
       const collapsed = flag(props, "collapsed");
       const groups = num(props, "groups");
       return `<nav class="sidenav${collapsed ? " collapsed" : ""}">${rowsOf(num(props, "items"), (i) =>
-        `${groups > 0 && i > 0 && i % Math.ceil(num(props, "items") / (groups + 1)) === 0 ? `<hr>` : ""}<span class="nav-i${i + 1 === sel(props, "selected", "items") ? " on" : ""}"><b>${glyph(intent(`item-${i + 1}`))}</b>${collapsed ? "" : label(`item-${i + 1}`)}</span>`)}</nav>`;
+        `${groups > 0 && i > 0 && i % Math.ceil(num(props, "items") / (groups + 1)) === 0 ? `<hr>` : ""}<span class="nav-i${i + 1 === sel(props, "selected", "items") ? " on" : ""}"${hot(`item-${i + 1}`)}><b>${glyph(intent(`item-${i + 1}`))}</b>${collapsed ? "" : label(`item-${i + 1}`)}</span>`)}</nav>`;
     },
   },
   {
@@ -185,8 +185,8 @@ export const PRIMITIVES: Component[] = [
     id: "drawer", kind: "primitive", category: "overlay", namedBy: 4, h: 480,
     props: { edge: choice(["left", "right"]), items: count(3, 10, 6) },
     elements: upTo(10, "item", "items", NAV_JUMPS, ["home", "profile", "notifications", "messages", "settings", "help", "terms", "contact", "search", "upgrade"]),
-    draw: ({ props, label, intent }) => `<div class="drawer ${str(props, "edge")}"><div class="drawer-head">${avatar("m")}${bar(50)}</div>${rowsOf(num(props, "items"), (i) =>
-      `<span class="nav-i"><b>${glyph(intent(`item-${i + 1}`))}</b>${label(`item-${i + 1}`)}</span>`)}</div>`,
+    draw: ({ props, label, intent, hot }) => `<div class="drawer ${str(props, "edge")}"><div class="drawer-head">${avatar("m")}${bar(50)}</div>${rowsOf(num(props, "items"), (i) =>
+      `<span class="nav-i"${hot(`item-${i + 1}`)}><b>${glyph(intent(`item-${i + 1}`))}</b>${label(`item-${i + 1}`)}</span>`)}</div>`,
   },
   {
     id: "sheet", kind: "primitive", category: "overlay", namedBy: 2, h: 300,
@@ -198,20 +198,20 @@ export const PRIMITIVES: Component[] = [
       primary: { accepts: ALL_INTENTS, default: "done", when: (p) => p.kind === "sheet" },
       cancel: { accepts: intentsIn("back"), default: "cancel" },
     },
-    draw: ({ props, label }) => {
+    draw: ({ props, label, hot }) => {
       const action = str(props, "kind") === "action-sheet";
       const body = action
-        ? `<div class="sheet-actions">${rowsOf(3, (i) => `<span class="sheet-a${i === 2 ? " destructive" : ""}">${label(`action-${i + 1}`)}</span>`)}</div>`
-        : `<div class="grab"></div>${bar(40, "k")}${bars(4)}<div class="actions">${btn(label("primary"), "primary", "block")}</div>`;
-      return `<div class="sheet ${str(props, "edge")} ${str(props, "detent")}">${body}<div class="actions">${btn(label("cancel"), "secondary", "block")}</div></div>`;
+        ? `<div class="sheet-actions">${rowsOf(3, (i) => `<span class="sheet-a${i === 2 ? " destructive" : ""}"${hot(`action-${i + 1}`)}>${label(`action-${i + 1}`)}</span>`)}</div>`
+        : `<div class="grab"></div>${bar(40, "k")}${bars(4)}<div class="actions">${btn(label("primary"), "primary", "block", hot("primary"))}</div>`;
+      return `<div class="sheet ${str(props, "edge")} ${str(props, "detent")}">${body}<div class="actions">${btn(label("cancel"), "secondary", "block", hot("cancel"))}</div></div>`;
     },
   },
   {
     id: "modal", kind: "primitive", category: "overlay", namedBy: 9, h: 260,
     props: { kind: choice(["dialog", "alert", "fullscreen"]), actions: count(1, 3, 2), destructive: yn(), dismiss: yn(true) },
     elements: upTo(3, "action", "actions", [...intentsIn("forward", "back", "overlay")], ["confirm", "cancel", "more"]),
-    draw: ({ props, label }) => `<div class="dialog ${str(props, "kind")}">${flag(props, "dismiss") ? `<span class="x">${glyph("close")}</span>` : ""}${bar(55, "k")}${bars(3)}<div class="actions row">${rowsOf(num(props, "actions"), (i) =>
-      btn(label(`action-${i + 1}`), i === 0 ? (flag(props, "destructive") ? "destructive" : "primary") : "secondary"))}</div></div>`,
+    draw: ({ props, label, hot }) => `<div class="dialog ${str(props, "kind")}">${flag(props, "dismiss") ? `<span class="x">${glyph("close")}</span>` : ""}${bar(55, "k")}${bars(3)}<div class="actions row">${rowsOf(num(props, "actions"), (i) =>
+      btn(label(`action-${i + 1}`), i === 0 ? (flag(props, "destructive") ? "destructive" : "primary") : "secondary", "", hot(`action-${i + 1}`)))}</div></div>`,
   },
 ];
 
@@ -220,7 +220,7 @@ export function sel(props: Props, key: string, of: string): number {
   return Math.min(num(props, key), num(props, of));
 }
 
-export function listRows(props: Props, action = ""): string {
+export function listRows(props: Props, action = "", hot = ""): string {
   const lead = str(props, "leading");
   const trail = str(props, "trailing");
   const leading = (i: number) =>
@@ -228,7 +228,7 @@ export function listRows(props: Props, action = ""): string {
   const trailing = (i: number) =>
     trail === "chevron" || trail === "action" ? `<span class="chev">›</span>` : trail === "switch" ? toggle(i % 2 === 0) : trail === "meta" ? bar(14, "meta") : trail === "badge" ? `<span class="badge"></span>` : "";
   return `<div class="list${props.dividers === false ? "" : " div"}">${rowsOf(num(props, "rows"), (i) =>
-    `<div class="row">${leading(i)}<div class="row-t">${bars(Number(props.lines ?? 1), i)}</div>${trailing(i)}${action}</div>`)}</div>`;
+    `<div class="row"${hot}>${leading(i)}<div class="row-t">${bars(Number(props.lines ?? 1), i)}</div>${trailing(i)}${action}</div>`)}</div>`;
 }
 
 export function stepsRow(n: number, current: number, labels: boolean): string {
