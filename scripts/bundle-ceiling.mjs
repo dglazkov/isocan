@@ -426,11 +426,18 @@
  * made the module effectful, and rollup keeps an effectful module wherever
  * core's `export *` barrel reaches it — every first visit. `@__PURE__` on that
  * one call is what let it go. The margin is ~540 bytes over the fresh read.
+ *
+ * **727,500 → 727,800, the same evening, landed together.** The summons
+ * receipt (#197) went in beside it and costs 771 bytes — `summonsState`, which
+ * the web had never imported, so rollup had been dropping it. Measured
+ * combined: 727,733. Still 19,200 under the 747,000 the reclaim started from;
+ * the margin is 67 bytes, thin on purpose, so the next eager byte is asked
+ * about.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 727_500;
+export const CEILING = 727_800;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's

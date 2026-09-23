@@ -13,7 +13,7 @@ Run by `scripts/persona-run.mjs` at `8da3956`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| lines in the files every feature must edit is 25344, past 25267 | unanswered |
+| lines in the files every feature must edit is 25344, past 25267 | accepted — fixed, not moved: 24619 after the operator family moved to `operator.ts` ("The operator's verbs live in operator.ts", 22 Sep); the bound held at 25267. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report
