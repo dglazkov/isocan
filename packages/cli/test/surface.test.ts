@@ -113,6 +113,7 @@ function registeredCommands(): string[] {
     path.join(repo, "packages/cli/src/design-system.ts"),
     path.join(repo, "packages/cli/src/personal-context.ts"),
     path.join(repo, "packages/cli/src/bench.ts"),
+    path.join(repo, "packages/cli/src/operator.ts"),
     ...moduleDirs().map((dir) => path.join(dir, "src/cli.ts")).filter((f) => existsSync(f)),
   ];
   const names = new Set<string>();
