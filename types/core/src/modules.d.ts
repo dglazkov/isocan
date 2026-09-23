@@ -46,6 +46,28 @@ export interface ModuleKind {
     icon?: string;
 }
 /**
+ * **A mark a module puts on an item** — the slide deck's 🎬, generalised
+ * (wireframes phase 2). A property whose presence is the mark, never a
+ * reaction: a reaction belongs to whoever left it, and a mark is a fact about
+ * the item that anybody may take off (`core/slides.ts` argues it). Data, so
+ * the shell can draw it, offer it in the item menu and answer its key without
+ * importing the module — take the module away and the property is inert.
+ */
+export interface ModuleMark {
+    /** The property whose presence is the mark; set to `"yes"`, removed to unmark. */
+    property: string;
+    emoji: string;
+    /** What the mark says on the item, as its tooltip. */
+    title: string;
+    /** The menu's words to put it on and to take it off. */
+    on: string;
+    off: string;
+    /** The letter that toggles it on the selection, held with Shift (`"K"` is ⇧K). */
+    key?: string;
+    /** Offered only on items whose properties carry these values (`{ fidelity: "wireframe" }`); unset, on any item. */
+    offeredOn?: Readonly<Record<string, string>>;
+}
+/**
  * What a module hands core: its name, the property keys it owns, and the pure readers core
  * calls without knowing the module by name.
  */
@@ -63,6 +85,8 @@ export interface CoreModule {
     contextPieces?: (canvas: CanvasContents) => ContextPiece[];
     edges?: (canvas: CanvasContents) => ModuleEdge[];
     kinds?: readonly ModuleKind[];
+    /** Marks on items, each a property — drawn on the item, toggled from its menu and a key. */
+    marks?: readonly ModuleMark[];
     /**
      * **Slash commands** (phase 4): instructions an agent carries out, merged
      * under the built-ins and the home's own — a third source, `module`, that
@@ -178,6 +202,8 @@ export declare function moduleContextPieces(canvas: CanvasContents): ContextPiec
 export declare function moduleEdges(canvas: CanvasContents): ModuleEdge[];
 /** Every kind every loaded module adds — what `itemKind()` asks before its own mime tests. */
 export declare function moduleKinds(): ModuleKind[];
+/** Every mark every loaded module offers. */
+export declare function moduleMarks(): ModuleMark[];
 /** The module kind that owns a mime, if a loaded module claims it. */
 export declare function moduleKindOf(mime: string): ModuleKind | null;
 /**

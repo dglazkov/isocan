@@ -1,0 +1,1 @@
+function s(e,r){return r.properties?.[e.property]?!0:Object.entries(e.offeredOn??{}).every(([n,t])=>r.properties?.[n]===t)}function a(e,r){const n=o=>!!o.properties?.[r],t=!(e.length>0&&e.every(n));return{on:t,changing:e.filter(o=>n(o)!==t)}}function p(e,r){return r?{properties:{[e]:"yes"}}:{removeProperties:[e]}}export{a,p as b,s as m};
