@@ -18,7 +18,7 @@ import { PROTOTYPE_PROP, assemblePrototype, prototypeSize } from "./prototype.ts
  * rebuild is a version and not a replacement. Each command is one op group.
  */
 
-interface KeptFlow {
+export interface KeptFlow {
   flow: string;
   request: string;
   screens: WireScreen[];
@@ -27,7 +27,12 @@ interface KeptFlow {
 
 /** The kept screens, grouped by flow, each group in reading order. */
 async function keptFlows(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse): Promise<KeptFlow[]> {
-  const wires = new Map((await wiresOn(ctx, canvasId, snapshot)).map((w) => [w.item, w]));
+  return keptFlowsOf(snapshot, await wiresOn(ctx, canvasId, snapshot));
+}
+
+/** The same, from wires already read — `wire style` passes the ones it has just restyled. */
+export function keptFlowsOf(snapshot: CanvasSnapshotResponse, screens: ReadonlyArray<{ item: string; spec: WireScreen["spec"] }>): KeptFlow[] {
+  const wires = new Map(screens.map((w) => [w.item, w]));
   const flows = new Map<string, KeptFlow>();
   for (const item of kept(snapshot.canvas as CanvasContents)) {
     const wire = wires.get(item.id);
@@ -57,6 +62,52 @@ function pickKeptFlow(flows: KeptFlow[], wanted: string | undefined): KeptFlow {
 function linkLine(l: WireLink, title: (id: string) => string): string {
   const where = l.to === LINK_BACK ? "back" : l.to ? `→ "${title(l.to)}"` : l.needs ? `- - needs ${l.needs}` : "off";
   return `  ${l.key.padEnd(18)} ${l.label.padEnd(16)} ${where.padEnd(28)} ${l.rule}${l.to && l.to !== LINK_BACK ? `, ${l.transition}` : ""}`;
+}
+
+/**
+ * Assemble a kept flow's prototype and write it: `item.add` the first time,
+ * `item.addVersion` on the same item (found by `wirePrototype`) after that,
+ * nothing when the file is byte-for-byte what it already plays. Under the
+ * caller's group — `wire prototype`'s own, or `wire style`'s restyle.
+ */
+export async function writePrototype(
+  host: CliHost, ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, flow: KeptFlow, group: string,
+): Promise<{ itemId: string; title: string; links: WireLink[]; what: "added" | "versioned" | "unchanged" }> {
+  const { sendOp } = host;
+  const links = inferLinks(flow.screens);
+  const title = `Prototype · ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}…` : flow.request || "hand-drawn screens"}`;
+  const html = assemblePrototype(flow.screens, links, { title });
+  const { width, height } = prototypeSize(flow.screens);
+  const filename = "prototype.html";
+  const upload = await ctx.client.uploadBlob(canvasId, Buffer.from(html, "utf8"), "text/html", filename);
+  const version = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
+  const existing = Object.values(snapshot.canvas.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
+  if (existing) {
+    const current = existing.versions.find((v) => v.id === existing.currentVersionId) ?? existing.versions[existing.versions.length - 1];
+    if (current?.blobHash === upload.blobHash) return { itemId: existing.id, title, links, what: "unchanged" };
+    await sendOp(ctx, canvasId, { type: "item.addVersion", itemId: existing.id, version }, group);
+    if (existing.width !== width || existing.height !== height) await sendOp(ctx, canvasId, { type: "item.resize", itemId: existing.id, width, height }, group);
+    if (existing.title !== title) await sendOp(ctx, canvasId, { type: "item.update", itemId: existing.id, patch: { title } }, group);
+    return { itemId: existing.id, title, links, what: "versioned" };
+  }
+  const itemId = newItemId();
+  // Right of everything in the kept screens' band — their unkept siblings too — so it covers nothing.
+  const top = Math.min(...flow.items.map((i) => i.y));
+  const bottom = top + height;
+  const band = Object.values(snapshot.canvas.items ?? {}).filter((i) => i.y < bottom && i.y + i.height > top);
+  const right = Math.max(...flow.items.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
+  await sendOp(ctx, canvasId, {
+    type: "item.add",
+    itemId,
+    version,
+    width,
+    height,
+    placement: { x: Math.round(right + 120), y: Math.round(top), chosen: true } as never,
+    title,
+    // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
+    properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow },
+  }, group);
+  return { itemId, title, links, what: "added" };
 }
 
 export function registerLinks(host: CliHost, wire: Command): void {
@@ -153,47 +204,7 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);
         const flow = pickKeptFlow(await keptFlows(ctx, p.id, snapshot), opts.flow);
-        const links = inferLinks(flow.screens);
-        const title = `Prototype · ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}…` : flow.request || "hand-drawn screens"}`;
-        const html = assemblePrototype(flow.screens, links, { title });
-        const { width, height } = prototypeSize(flow.screens);
-        const filename = "prototype.html";
-        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(html, "utf8"), "text/html", filename);
-        const version = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
-        const existing = Object.values(snapshot.canvas.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
-        const group = newGroupId();
-        let itemId: string;
-        let what: "added" | "versioned" | "unchanged";
-        if (existing) {
-          itemId = existing.id;
-          const current = existing.versions.find((v) => v.id === existing.currentVersionId) ?? existing.versions[existing.versions.length - 1];
-          if (current?.blobHash === upload.blobHash) what = "unchanged";
-          else {
-            await sendOp(ctx, p.id, { type: "item.addVersion", itemId, version }, group);
-            if (existing.width !== width || existing.height !== height) await sendOp(ctx, p.id, { type: "item.resize", itemId, width, height }, group);
-            if (existing.title !== title) await sendOp(ctx, p.id, { type: "item.update", itemId, patch: { title } }, group);
-            what = "versioned";
-          }
-        } else {
-          itemId = newItemId();
-          // Right of everything in the kept screens' band — their unkept siblings too — so it covers nothing.
-          const top = Math.min(...flow.items.map((i) => i.y));
-          const bottom = top + height;
-          const band = Object.values(snapshot.canvas.items ?? {}).filter((i) => i.y < bottom && i.y + i.height > top);
-          const right = Math.max(...flow.items.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
-          await sendOp(ctx, p.id, {
-            type: "item.add",
-            itemId,
-            version,
-            width,
-            height,
-            placement: { x: Math.round(right + 120), y: Math.round(top), chosen: true } as never,
-            title,
-            // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
-            properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow },
-          }, group);
-          what = "added";
-        }
+        const { itemId, title, links, what } = await writePrototype(host, ctx, p.id, snapshot, flow, newGroupId());
         const after = await ctx.client.snapshot(p.id);
         const versions = after.canvas.items[itemId]?.versions.length ?? 0;
         const dashed = links.filter((l) => l.to === null && l.needs);

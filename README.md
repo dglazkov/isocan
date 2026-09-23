@@ -390,7 +390,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   item: links are inferred from intents, archetypes and reading order, never
   stored; a hotspot with no kept target is drawn dashed and says which screen
   it needs; rebuilt, the prototype gains a version. `wire links` prints the
-  flow, `wire link` overrides one hotspot. See
+  flow, `wire link` overrides one hotspot. Wires draw in the default grey
+  look, or in the canvas's design system: `wire style` has Jev map the
+  governing `DESIGN.md`'s own tokens onto the wire's roles and restyles every
+  wire as one undo (`--default` goes back; blueprints stay blue). See
   [the journey](docs/projects/wireframes/journey.md).
 - **Design competitions**: `/design-competition` or ⌘K opens a lazy picker
   with nine designer-inspired packs. Choose fighters and a brief to create

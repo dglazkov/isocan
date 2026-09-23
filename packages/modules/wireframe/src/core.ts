@@ -13,7 +13,8 @@ import { wireframeModule } from "./record.ts";
  */
 export * from "./catalog/index.ts";
 export * from "./spec.ts";
-export { SKELETON_COLORS, WIRE_MARKER, WIRE_SCRIPT_ID, readWire, renderFrame, renderWire, wireCss } from "./render.ts";
+export { SKELETON_COLORS, WIRE_MARKER, WIRE_SCRIPT_ID, readWire, renderFrame, renderWire, styleOf, themeCss, wireCss } from "./render.ts";
+export * from "./theme.ts";
 export * from "./links.ts";
 export * from "./prototype.ts";
 export * from "./compose.ts";

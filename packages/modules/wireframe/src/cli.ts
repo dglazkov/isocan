@@ -11,6 +11,7 @@ import { wireframeModule } from "./record.ts";
 import { answer, questions, registerCompose } from "./compose-cli.ts";
 import { registerVary } from "./vary-cli.ts";
 import { registerLinks } from "./links-cli.ts";
+import { registerStyle } from "./style-cli.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
@@ -45,6 +46,7 @@ function register(host: CliHost): void {
   registerCompose(host, wire);
   registerVary(host, wire);
   registerLinks(host, wire);
+  registerStyle(host, wire);
 
   wire
     .command("questions")

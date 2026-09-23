@@ -2,6 +2,7 @@ import {
   ARCHETYPE_IDS, COMPONENTS, INTENT_BY_ID, RECIPES, RECIPE_BY_ID, component,
   type Component, type IntentId, type Platform, type PropDef, type Props, type Recipe, type Section,
 } from "./catalog/index.ts";
+import { styleProblems, type WireStyle } from "./theme.ts";
 
 /**
  * **What a screen is** (design §1).
@@ -55,6 +56,13 @@ export interface WireSpec {
   round?: 0 | 1 | 2 | 3;
   /** The flow's chrome, fixed once in round 1 and the same on every screen. */
   chrome?: WireChrome;
+  /**
+   * How it looks (design §9): absent or `{ source: "default" }` draws the
+   * default greys; `design-system` names the DESIGN.md item and version whose
+   * tokens were mapped onto the roles, and the mapping itself. A blueprint
+   * draws blue whatever this says.
+   */
+  style?: WireStyle;
 }
 
 /** In `alternatives`, `from` and `to`: the optional section left off the screen. */
@@ -273,6 +281,7 @@ export function validateWire(input: unknown): string[] {
   if (spec.chrome !== undefined && (typeof spec.chrome !== "object" || typeof spec.chrome?.nav !== "string" || typeof spec.chrome?.header !== "string")) {
     problems.push("chrome must be { nav, header }");
   }
+  if (spec.style !== undefined) problems.push(...styleProblems(spec.style));
   let r: Recipe;
   try {
     r = recipe(String(spec.archetype));

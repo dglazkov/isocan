@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Command } from "commander";
-import { FIDELITY_PROP, newGroupId, newItemId, newVersionId, type CanvasSnapshotResponse, type Operation } from "@isocan/core";
+import { FIDELITY_PROP, newGroupId, newItemId, newVersionId, type CanvasSnapshotResponse, type Item, type Operation } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { RECIPES } from "./catalog/index.ts";
 import { JEV_INPUT_PRICE, jevAnswerer, stubAnswerer, type Answerer, type JevResponse } from "./answerer.ts";
@@ -12,6 +12,8 @@ import {
 import { readWire, renderWire } from "./render.ts";
 import { wireSize, wireTitle, type WireSpec } from "./spec.ts";
 import { DEFAULT_VARIATIONS, honestFlips, variations } from "./vary.ts";
+import { StyleResolver, governingSystem, mappingAnswerer, mappingLines } from "./style-cli.ts";
+import type { WireStyle } from "./theme.ts";
 
 /**
  * **`isocan wire "<request>"` — a flow, composed in rounds, drawn in place.**
@@ -52,6 +54,14 @@ function slugOf(title: string): string {
 export class FlowCanvas {
   /** Variations this invocation added, in the order they landed. */
   readonly variants: Screen[] = [];
+  /**
+   * The governing design system's mapping (design §9), stamped on every spec
+   * this canvas writes that has none of its own — so a flow asked for where a
+   * system governs arrives in it. Unset: the default look.
+   */
+  style: WireStyle | undefined;
+  /** Merged into every placement this canvas adds at — a group's membership, for `wire --in <group>`. */
+  placeIn: Record<string, unknown> = {};
 
   constructor(
     private host: CliHost,
@@ -59,6 +69,10 @@ export class FlowCanvas {
     private canvasId: string,
     readonly group: string,
   ) {}
+
+  private styled(spec: WireSpec): WireSpec {
+    return this.style && spec.style === undefined ? { ...spec, style: this.style } : spec;
+  }
 
   private async version(spec: WireSpec) {
     const html = renderWire(spec);
@@ -71,7 +85,8 @@ export class FlowCanvas {
     return this.host.sendOp(this.ctx, this.canvasId, op, this.group);
   }
 
-  async add(spec: WireSpec, placement: unknown): Promise<Screen> {
+  async add(given: WireSpec, placement: unknown): Promise<Screen> {
+    const spec = this.styled(given);
     const { width, height } = wireSize(spec);
     const itemId = newItemId();
     const result = await this.send({
@@ -80,7 +95,7 @@ export class FlowCanvas {
       version: await this.version(spec),
       width,
       height,
-      placement: placement as never,
+      placement: { ...(placement as object), ...this.placeIn } as never,
       title: wireTitle(spec),
       properties: { [FIDELITY_PROP]: "wireframe" },
     });
@@ -89,7 +104,8 @@ export class FlowCanvas {
   }
 
   /** A new version of the same item — the screen fills in place — and its title and size if they moved. */
-  async write(screen: Screen, spec: WireSpec): Promise<Screen> {
+  async write(screen: Screen, given: WireSpec): Promise<Screen> {
+    const spec = this.styled(given);
     await this.send({ type: "item.addVersion", itemId: screen.item, version: await this.version(spec) });
     if (wireTitle(spec) !== wireTitle(screen.spec)) await this.send({ type: "item.update", itemId: screen.item, patch: { title: wireTitle(spec) } });
     const { width, height } = wireSize(spec);
@@ -300,8 +316,9 @@ export function registerCompose(host: CliHost, wire: Command): void {
     .option("--save <dir>", "write each round's requests and responses there as JSON")
     .option("--canvas <canvas>")
     .option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)")
+    .option("--in <group>", "compose the flow inside this group — and in its design system, if it has one")
     .action(
-      run(async (words: string[], opts: { answerer?: string; seed: string; save?: string; at?: string }, cmd: Command) => {
+      run(async (words: string[], opts: { answerer?: string; seed: string; save?: string; at?: string; in?: string }, cmd: Command) => {
         const request = words.join(" ").trim();
         if (!request) {
           cmd.help();
@@ -317,8 +334,11 @@ export function registerCompose(host: CliHost, wire: Command): void {
         const snapshot = await ctx.client.snapshot(p.id);
         const flow = newGroupId();
         const canvas = new FlowCanvas(host, ctx, p.id, flow);
-        const placement = opts.at ? placementFor(snapshot, { at: opts.at }) : rowStart(snapshot);
+        const placement = opts.in !== undefined || opts.at ? placementFor(snapshot, { ...(opts.at ? { at: opts.at } : {}), ...(opts.in !== undefined ? { in: opts.in } : {}) }, wireSize(requestBlueprint(request, flow))) : rowStart(snapshot);
         let screens = [await canvas.add(requestBlueprint(request, flow), placement)];
+        // The rest of the flow joins the same group, where the writer puts it.
+        const container = (placement as { containerId?: string }).containerId;
+        if (container) canvas.placeIn = { containerId: container, groupPlacement: "exact" };
         const firstMs = Date.now() - t0;
         say(`${screens[0]!.item}  "${request}" — a blueprint, on the canvas in ${firstMs} ms, before any answer`);
         if (answerer === "agent") {
@@ -326,6 +346,11 @@ export function registerCompose(host: CliHost, wire: Command): void {
           say(`flow ${flow} is waiting on round 1 of 3. Answer it yourself:\n  isocan wire questions > round.json    # Jev's request shape, one call per screen\n  (fill each call's "response" in Jev's response shape)\n  isocan wire answer round.json          # repeat until the flow is drawn`);
           return;
         }
+        // The governing design system's mapping is asked for while round 1 is (design §9): a flow
+        // asked for where a system governs arrives in it, and the wait is the longer of the two.
+        const mapper = new StyleResolver(ctx, p.id, answerer, async () => (await wiresOn(ctx, p.id, await ctx.client.snapshot(p.id))).map((s) => s.spec), opts.save);
+        const styling = styleAt(ctx, p.id, screens[0]!.item, mapper);
+        styling.catch(() => {});
         say(`answering with ${answerer.name === "stub" ? `the stub (seed ${opts.seed})${process.env.TYPESAFE_API_KEY ? "" : " — no TYPESAFE_API_KEY here"}` : "Jev"}`);
         const tallies: RoundTally[] = [];
         let by = answerer.name as string;
@@ -334,6 +359,11 @@ export function registerCompose(host: CliHost, wire: Command): void {
           const asked = await ask(answerer, round, calls, opts.save);
           tallies.push(asked.tally);
           by = asked.by;
+          if (round === 1) {
+            const styled = await styling;
+            canvas.style = styled.system ? styled.style : undefined;
+            for (const line of styled.lines) say(line);
+          }
           screens = await applyRound(canvas, round, screens, calls, asked.responses, say);
         }
         const totalMs = Date.now() - t0;
@@ -346,13 +376,31 @@ export function registerCompose(host: CliHost, wire: Command): void {
             screens: screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots, ...(s.spec.varied ? { varied: s.spec.varied } : {}) })),
             variations: canvas.variants.map((v) => ({ itemId: v.item, title: wireTitle(v.spec), variantOf: v.spec.variantOf, flip: v.spec.flip })),
             rounds: tallies,
-            inputTokens: tallies.reduce((s, t) => s + t.inputTokens, 0),
-            cost: tallies.reduce((s, t) => s + t.inputTokens, 0) * JEV_INPUT_PRICE,
+            style: canvas.style ?? { source: "default" },
+            styleCalls: mapper.calls,
+            inputTokens: tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens,
+            cost: (tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens) * JEV_INPUT_PRICE,
           });
         }
         say(costLine(tallies, by, screens.length) + ` · ${totalMs} ms in all — \`isocan undo\` takes the whole flow back`);
       }),
     );
+}
+
+/**
+ * The style a flow starting at this item takes: the mapping of the design
+ * system governing its place, or the default when none does — with the lines
+ * that say which, for a person.
+ */
+async function styleAt(ctx: Ctx, canvasId: string, itemId: string, mapper: StyleResolver): Promise<{ system: Item | null; style: WireStyle; lines: string[] }> {
+  const snapshot = await ctx.client.snapshot(canvasId);
+  const item = snapshot.canvas.items[itemId];
+  const system = item ? governingSystem(snapshot.canvas, item) : null;
+  const style = await mapper.styleFor(system);
+  if (!system) return { system, style, lines: [] };
+  const m = [...mapper.mappings.values()].find((x) => x.system.id === system.id)!;
+  const cost = mapper.calls ? ` · ${mapper.inputTokens.toLocaleString("en-US")} input tokens · $${mapper.cost().toFixed(6)}` : "";
+  return { system, style, lines: [`style: in the design system that governs here${cost}`, ...mappingLines(m, mapper.who).map((l) => `  ${l}`)] };
 }
 
 /** `isocan wire questions` — the pending round, as a file in Jev's request shape. */
@@ -393,6 +441,12 @@ export async function answer(host: CliHost, file: string, cmd: Command): Promise
     return answeredResponse({ ...call, response: mine.response! }, `${file}'s call for ${call.item}`);
   });
   const canvas = new FlowCanvas(host, ctx, p.id, flow);
+  // An agent's flow arrives in the governing system too. Round 1 asks for the mapping (Jev with a
+  // key, else the stub, whose flat answers keep the default); later rounds read it off the screens.
+  const mapper = new StyleResolver(ctx, p.id, mappingAnswerer(undefined), async () => screens.map((s) => s.spec));
+  const styled = await styleAt(ctx, p.id, screens[0]!.item, mapper);
+  canvas.style = styled.system ? styled.style : undefined;
+  if (round === 1) for (const line of styled.lines) say(line);
   const after = await applyRound(canvas, round, screens, calls, responses, say);
   const next = pendingRound(after.map((s) => s.spec));
   if (ctx.json) return printJson({ flow, round, items: after.map((s) => s.item), next });

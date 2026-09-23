@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–3 are CLOSED (23 Sep 2026).** The catalog draws (0); Jev composes a flow skeleton-first (1); variations and 📐 keep (2); links are computed from intents and canvas order and `isocan wire prototype` assembles one clickable HTML item from the kept screens, missing targets dashed and named (3). **Next: wireframes phase 4** — wires in your design system. The canvas arrows between kept screens moved to phase 5.
+**Where we are: phases 0–4 are CLOSED (23 Sep 2026).** The catalog draws (0); Jev composes a flow skeleton-first (1); variations and 📐 keep (2); links and a clickable prototype (3); every wire draws in the default look or the governing design system, Jev mapping the system's tokens onto the wire's roles, `wire style` restyling all of them as one undo (4). **Next: wireframes phase 5** — the web door, walked on dev.isocan.io, carrying the canvas arrows moved from phase 3.
 
 ## Phase 0 — The catalog, drawn
 
@@ -130,7 +130,7 @@ delivery → back → tab — said out loud; the README's feature line.
 
 ## Phase 4 — Wires in your design system
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 23 September 2026.** 459 module tests and the full suite; live Jev mappings of two design-competition packs (frog: fog ground, magenta pill primary; Linear: dark ground, indigo primary — one call each, ~300 ms, ~$0.0002), the same four screens looked at default / frog / Linear side by side; a scoped group's flow taking its own system while the canvas's flow took the canvas's; verified by the conductor: a no-change rerun asks nothing and writes nothing, `--default` restyles 34 wires in one group, one undo takes exactly those 34 versions back.
 
 **Formerly:** phase 4 was the web door; inserted 23 Sep 2026 when Dion asked
 for wires that use the canvas's design system, and the web door became
@@ -154,6 +154,13 @@ blue.
    this phase's record with its probabilities; the same flow shown default,
    in system A, and in system B, side by side, looked at.
 3. One undo takes a restyle back; a scoped group's flow takes its own system.
+
+### Trajectory
+
+- **2026-09-23** — Jev maps a design system's tokens onto the wire's roles in one call of ~300 ms and ~$0.0002, confidently where the system is clear (primary, ground, ink at 0.98–1.00) and honestly unsure where it is not (frog's copy-bar and base spacing at 0.44–0.45 kept the default and said so). This is the cheap typed question design §9 bet on.
+- **2026-09-23** — One `radius` role is too coarse: frog's pill buttons made text fields pills too, and Linear's `xs` 4px base spacing made screens tight. Radius wants a control/container split and spacing wants asking as "padding inside a card", not "base unit".
+- **2026-09-23** — A mapping records who answered it (`style.by`), so a stub mapping is never reused by a run that has Jev; and a tied answer keeps the default, because 0.5/0.5 is not a choice.
+- **2026-09-23** — `wire "<request>" --in <group>` was added so a flow can be composed inside a scoped group — until now none could be.
 
 ## Phase 5 — The web door
 

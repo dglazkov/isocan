@@ -1,7 +1,8 @@
 import { esc } from "./catalog/draw.ts";
 import { hotspots, startScreen, type WireLink, type WireScreen } from "./links.ts";
-import { renderFrame, wireCss } from "./render.ts";
+import { renderFrame, styleOf, wireCss } from "./render.ts";
 import { CAPTION_HEIGHT, wireSize } from "./spec.ts";
+import { themeDecls } from "./theme.ts";
 
 /**
  * **The prototype — one item** (design §8, journey scene 5).
@@ -43,17 +44,17 @@ function stageSize(kept: readonly WireScreen[]): { width: number; height: number
 }
 
 const PROTO_CSS = `
-body.proto{display:flex;flex-direction:column;align-items:center;gap:${PAD}px;padding:${PAD}px;background:#ececec}
-.pbar{display:flex;align-items:center;gap:10px;height:${BAR_HEIGHT}px;font:600 13px/1.2 system-ui,-apple-system,sans-serif;color:#222222}
+body.proto{display:flex;flex-direction:column;align-items:center;gap:${PAD}px;padding:${PAD}px;background:var(--w-surface)}
+.pbar{display:flex;align-items:center;gap:10px;height:${BAR_HEIGHT}px;font:600 13px/1.2 var(--w-font);color:var(--w-ink)}
 .pbar .sp{flex:1}
-.pbar .pnote{font-weight:500;color:#555555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pbar button{font:inherit;border:1.5px solid #222222;background:#ffffff;color:#222222;border-radius:4px;padding:3px 10px;cursor:pointer}
+.pbar .pnote{font-weight:500;color:var(--w-ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbar button{font:inherit;border:1.5px solid var(--w-ink);background:var(--w-ground);color:var(--w-ink);border-radius:4px;padding:3px 10px;cursor:pointer}
 .stage{position:relative;overflow:hidden}
-.pscreen{position:absolute;left:0;top:0;background:#ececec}
+.pscreen{position:absolute;left:0;top:0;background:var(--w-surface)}
 .pscreen[hidden]{display:none}
 [data-go]{cursor:pointer}
-[data-go]:hover{outline:2px solid rgba(34,34,34,.35);outline-offset:2px}
-[data-needs]{outline:2px dashed #555555;outline-offset:2px;cursor:help}
+[data-go]:hover{outline:2px solid color-mix(in srgb, var(--w-ink) 35%, transparent);outline-offset:2px}
+[data-needs]{outline:2px dashed var(--w-ink-muted);outline-offset:2px;cursor:help}
 `;
 
 /** The router: a history stack, a transition by link kind, and nothing it has to fetch. */
@@ -111,10 +112,15 @@ export function assemblePrototype(kept: readonly WireScreen[], links: readonly W
   const { width, height } = stageSize(kept);
   const title = opts.title ?? "Prototype";
   // One sheet serves every frame; it carries the skeleton's only if some kept screen is still undecided.
-  const sheet = wireCss((kept.find((s) => s.spec.slots.some((x) => x.block === null)) ?? kept[0]!).spec);
+  // Its theme is the start screen's; each screen then sets its own roles on its section (design §9),
+  // so a prototype of screens drawn in two systems plays each in the one that drew it.
+  const undecided = kept.find((s) => s.spec.slots.some((x) => x.block === null));
+  const first = kept.find((s) => s.id === start) ?? kept[0]!;
+  const lead = styleOf(first.spec);
+  const sheet = wireCss({ ...(undecided ?? first).spec, ...(lead ? { style: lead } : {}) });
   const sections = kept.map((s) => {
     const mine = links.filter((l) => l.from === s.id);
-    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
+    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" style="${esc(themeDecls(styleOf(s.spec)))}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
   });
   const table = {
     start,

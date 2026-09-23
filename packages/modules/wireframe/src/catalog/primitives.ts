@@ -235,23 +235,32 @@ export function stepsRow(n: number, current: number, labels: boolean): string {
   return `<div class="steps">${rowsOf(n, (i) => `<span class="step${i + 1 < current ? " done" : i + 1 === current ? " on" : ""}"><b>${i + 1}</b>${labels ? bar(70, "in") : ""}</span>`)}</div>`;
 }
 
+/**
+ * A chart's series shades: the theme's primary, stepped toward the ground —
+ * roles only (design §9), so a chart takes the system's colour with the rest
+ * of the screen. In the default theme they are the old greys, near enough.
+ */
+const SHADES = [77, 53, 36, 22].map((pct) => `color-mix(in srgb, var(--w-primary) ${pct}%, var(--w-ground))`);
+
 export function chartSvg(kind: string, series: number, legend: boolean): string {
-  const shades = ["#555555", "#8a8a8a", "#b0b0b0", "#cfcfcf"];
+  const shades = SHADES;
+  const fill = (c: string) => `style="fill:${c}"`;
+  const stroke = (c: string) => `fill="none" style="stroke:${c}"`;
   let marks = "";
   if (kind === "pie" || kind === "donut") {
-    marks = `<circle cx="100" cy="60" r="48" fill="#cfcfcf"/><path d="M100 60 L100 12 A48 48 0 0 1 145 76 Z" fill="#555555"/>${kind === "donut" ? `<circle cx="100" cy="60" r="24" fill="#ffffff"/>` : ""}`;
+    marks = `<circle cx="100" cy="60" r="48" ${fill(shades[3]!)}/><path d="M100 60 L100 12 A48 48 0 0 1 145 76 Z" ${fill(shades[0]!)}/>${kind === "donut" ? `<circle cx="100" cy="60" r="24" ${fill("var(--w-ground)")}/>` : ""}`;
   } else if (kind === "bar" || kind === "column") {
     const vals = [40, 70, 55, 90, 65, 80];
     marks = vals.map((v, i) => rowsOf(series, (s) => kind === "column"
-      ? `<rect x="${12 + i * 31 + s * (24 / series)}" y="${110 - v * (1 - s * 0.15)}" width="${24 / series - 1}" height="${v * (1 - s * 0.15)}" fill="${shades[s]}"/>`
-      : `<rect x="10" y="${8 + i * 17 + s * (14 / series)}" width="${v * 1.9 * (1 - s * 0.15)}" height="${14 / series - 1}" fill="${shades[s]}"/>`)).join("");
+      ? `<rect x="${12 + i * 31 + s * (24 / series)}" y="${110 - v * (1 - s * 0.15)}" width="${24 / series - 1}" height="${v * (1 - s * 0.15)}" ${fill(shades[s]!)}/>`
+      : `<rect x="10" y="${8 + i * 17 + s * (14 / series)}" width="${v * 1.9 * (1 - s * 0.15)}" height="${14 / series - 1}" ${fill(shades[s]!)}/>`)).join("");
   } else {
     marks = rowsOf(series, (s) => {
       const pts = [70, 55, 62, 35, 48, 22, 30].map((v, i) => `${10 + i * 30},${v + s * 14}`).join(" ");
-      return kind === "area" ? `<polygon points="10,110 ${pts} 190,110" fill="${shades[s + 1] ?? shades[3]}"/><polyline points="${pts}" fill="none" stroke="${shades[s]}" stroke-width="2"/>`
-        : `<polyline points="${pts}" fill="none" stroke="${shades[s]}" stroke-width="2"/>`;
+      return kind === "area" ? `<polygon points="10,110 ${pts} 190,110" ${fill(shades[s + 1] ?? shades[3]!)}/><polyline points="${pts}" ${stroke(shades[s]!)} stroke-width="2"/>`
+        : `<polyline points="${pts}" ${stroke(shades[s]!)} stroke-width="2"/>`;
     });
   }
-  const axis = kind === "pie" || kind === "donut" || kind === "sparkline" ? "" : `<line x1="8" y1="110" x2="194" y2="110" stroke="#c8c8c8"/>`;
+  const axis = kind === "pie" || kind === "donut" || kind === "sparkline" ? "" : `<line x1="8" y1="110" x2="194" y2="110" style="stroke:var(--w-line)"/>`;
   return `<div class="chart k-${esc(kind)}"><svg viewBox="0 0 200 ${kind === "sparkline" ? 90 : 116}" preserveAspectRatio="none">${axis}${marks}</svg>${legend ? `<div class="legend">${rowsOf(series, (s) => `<span><i style="background:${shades[s]}"></i>${bar(100, "in")}</span>`)}</div>` : ""}</div>`;
 }
