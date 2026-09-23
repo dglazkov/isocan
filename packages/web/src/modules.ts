@@ -24,8 +24,8 @@ import { mindmapWeb } from "@isocan/mindmap/web";
 import { mermaidWeb } from "@isocan/mermaid/web";
 import { documentsWeb } from "@isocan/documents/web";
 import { sandboxWeb } from "@isocan/sandbox/web";
-import { wireframeWeb } from "@isocan/wireframe/web";
 import { competitionActivation } from "@isocan/design-competition/activation";
+import { wireframeActivation } from "@isocan/wireframe/activation";
 import { useUiStore } from "./stores/uiStore.ts";
 import { experimentOn } from "./lib/experiments.ts";
 
@@ -57,7 +57,7 @@ export type ShellModule = WebModule<
   ComponentType<ComposerFacts>
 >;
 
-const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb, wireframeWeb];
+const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb];
 
 /**
  * **Modules that are off until a person asks**, by slug (#156, 9 Sep 2026).
@@ -153,6 +153,8 @@ function deferredModule(activation: { core: ShellModule["core"]; actions?: Shell
 }
 
 LIST.push(deferredModule(competitionActivation, () => import("@isocan/design-competition/web") as Promise<{ default: ShellModule }>));
+// Wireframes: `/wire` opens a dialog and two kept screens draw arrows — both fetch the half (phase 5).
+LIST.push(deferredModule(wireframeActivation, () => import("@isocan/wireframe/web") as Promise<{ default: ShellModule }>));
 
 const fetched = new Set<string>();
 

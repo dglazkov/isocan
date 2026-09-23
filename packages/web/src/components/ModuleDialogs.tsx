@@ -1,7 +1,9 @@
 import { Suspense, useEffect, useMemo, useRef } from "react";
-import type { Actor } from "@isocan/core";
+import { JUDGMENT_ROUTE, type Actor, type DialogHost } from "@isocan/core";
 import { moduleDialog } from "../modules.ts";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import { flashNotice, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { fetchBlobText } from "../lib/blobtext.ts";
+import { request } from "../lib/api.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useWebHost } from "../lib/modulehost.ts";
 import { useRcParked } from "../lib/answerable.ts";
@@ -42,7 +44,18 @@ export function ModuleDialogs({ canvasId, actor }: { canvasId: string; actor: Ac
   const groupMode = useCanvasStore((s) => s.project?.groupMode ?? "legacy");
   const rcParked = useRcParked(canvasId);
   const base = useWebHost(canvasId, actor);
-  const host = useMemo(() => ({ ...base, close }), [base, close]);
+  /* A dialog that composes reads the canvas it writes to and asks the home's
+     judge (wireframes phase 5) — here, in the lazy chunk, so a first visit
+     pays for none of it. `getCanvas` reads the store at call time: the
+     `canvas` prop is the one the dialog opened on. */
+  const host = useMemo<DialogHost>(() => ({
+    ...base,
+    close,
+    readText: (hash) => fetchBlobText(canvasId, hash),
+    getCanvas: () => useCanvasStore.getState().canvas!,
+    judge: (question) => request("POST", JUDGMENT_ROUTE, question),
+    notice: (text, problem) => (problem ? setNotice(text) : flashNotice(text, 6000)),
+  }), [base, close, canvasId]);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const dialog = open ? moduleDialog(open.id) : null;

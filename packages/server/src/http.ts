@@ -8,6 +8,8 @@ import { SOURCE_POLICY_HEADER, parseSourcePolicyHeader, SOURCE_ACCESS_ROUTE, per
 import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type SetPublicListingRequest } from "@isocan/core";
 import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
 import { collectInbox, sequenceInbox } from "./inbox.ts";
+import { JUDGMENT_BAD_REQUEST, JUDGMENT_MAX_BYTES, JUDGMENT_RATE_LIMITED, JUDGMENT_ROUTE, JUDGMENT_TOO_LARGE, JUDGMENT_UNAVAILABLE, type JudgmentRequest } from "@isocan/core";
+import { Judge, type JudgmentOptions } from "./judgment.ts";
 import { textAttention } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
@@ -514,6 +516,9 @@ function isOpen(method: string, pathname: string): boolean {
 }
 
 interface RouteOptions {
+  /** The home's judge (`judgment.ts`): its key, rate and transport. Absent,
+   * the key is `TYPESAFE_API_KEY` from the environment, read per call. */
+  judgment?: JudgmentOptions;
   /** Local setup persists its pass-returned person in the same process as
    * home badge writes. The route guards local custody before spending a pass. */
   adoptIdentity?: (actor: Actor) => Promise<{ actor: Actor; adopted: boolean }>;
@@ -1931,6 +1936,61 @@ export function registerRoutes(
       }
     }
     return { seq: entry.seq, envelope: entry.envelope };
+  });
+
+  /**
+   * **`POST /api/judgment` — a typed question, answered with this home's key**
+   * (`@isocan/core`'s `judgment.ts`; `judgment.ts` here holds the key and the
+   * rate). What the web's wireframe composer asks through, so the key never
+   * reaches a browser, and what a CLI with no key of its own asks through too.
+   *
+   * The door is `/api/ops`'s, spelled the same way and for its reason: the
+   * canvas travels in the BODY, so the hook cannot cover this route, and a
+   * judgment is spent on a canvas only by someone who may edit it. In order:
+   * the size (a refusal that costs nothing), the shape, the takedown and the
+   * refused badge, the admission and the edit rung, then — for a canvas homed
+   * elsewhere — that home's own judgment, then the key and the badge's budget.
+   */
+  const judge = new Judge(options.judgment ?? {});
+  app.post(JUDGMENT_ROUTE, { bodyLimit: 1024 * 1024 }, async (req, reply) => {
+    const declared = Number(req.headers["content-length"]);
+    const size = Number.isFinite(declared) && declared > 0 ? declared : Buffer.byteLength(JSON.stringify(req.body ?? null));
+    if (size > JUDGMENT_MAX_BYTES) {
+      return reply.status(413).send({ error: `a question file is at most ${JUDGMENT_MAX_BYTES} bytes — this one is ${size}`, code: JUDGMENT_TOO_LARGE });
+    }
+    const body = req.body as Partial<JudgmentRequest> | null;
+    if (!body || typeof body !== "object" || typeof body.canvasId !== "string" || !body.canvasId) {
+      return reply.status(400).send({ error: "a judgment names the canvas it is for (`canvasId`)", code: JUDGMENT_BAD_REQUEST });
+    }
+    if (!body.questions || typeof body.questions !== "object" || Array.isArray(body.questions) || Object.keys(body.questions).length === 0 || !("state" in body)) {
+      return reply.status(400).send({ error: "a judgment is a question file: one `state` and named `questions`", code: JUDGMENT_BAD_REQUEST });
+    }
+    if (body.model !== undefined && typeof body.model !== "string") {
+      return reply.status(400).send({ error: "`model` names the judge's model", code: JUDGMENT_BAD_REQUEST });
+    }
+    const canvasId = body.canvasId;
+    const down = refusals.of(canvasId);
+    if (down) throw new TakenDownError(down);
+    const refusedBadge = refusals.refusingAttestation(req.badge?.attestations ?? []);
+    if (refusedBadge) throw new RefusedError(refusedBadge);
+    await admit(req, canvasId);
+    if (!atLeast(capabilityIn(req.badge!, canvasId) ?? "edit", "edit")) throw await viewOnly(canvasId);
+    const question = { ...(body.model !== undefined ? { model: body.model } : {}), state: body.state, questions: body.questions };
+    // A canvas homed elsewhere is judged there — with that home's key, against
+    // that home's budget — unless this machine holds a key of its own.
+    const home = options.homes?.for(canvasId) ?? null;
+    if (home && !judge.available()) return home.personalRequest("POST", JUDGMENT_ROUTE, { canvasId, ...question });
+    // No judgment for a canvas that is not here: the door's test admits by
+    // badge, and a canvas nobody holds has no editors to spend on.
+    if (!home) await engine.getSnapshot(canvasId);
+    if (!judge.available()) {
+      return reply.status(503).send({ error: "this home has no judge — nothing can be asked here (the innkeeper sets TYPESAFE_API_KEY)", code: JUDGMENT_UNAVAILABLE });
+    }
+    if (!judge.take(req.badge!.badgeId)) {
+      return reply.status(429).send({ error: "this badge has asked for enough judgments this minute — wait a moment and ask again", code: JUDGMENT_RATE_LIMITED });
+    }
+    const answered = await judge.ask(question);
+    return reply.status(answered.status).send(answered.body);
   });
 
   // ---- the actor registry: who a session key speaks as (#57) ----

@@ -50,6 +50,10 @@ function harness() {
       snapshot: async () => ({ canvas: { items: Object.fromEntries([...items].map(([k, v]) => [k, structuredClone(v)])) }, project: { groupMode: "groups" } }),
       uploadBlob: async (_canvas: string, bytes: Buffer) => ({ blobHash: blob(bytes.toString("utf8")), size: bytes.length }),
       downloadBlob: async (_canvas: string, hash: string) => Buffer.from(blobs.get(hash)!, "utf8"),
+      // A home with no key of its own: what every test daemon is.
+      judgment: async () => {
+        throw Object.assign(new Error("this home has no judge"), { code: "judgment-unavailable" });
+      },
     },
   };
   const apply = (op: Operation) => {

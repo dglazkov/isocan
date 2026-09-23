@@ -1,6 +1,7 @@
 import { SOURCE_POLICY_HEADER, sourcePolicyHeader, parseSourcePolicyHeader, sourceClassificationRoute, SOURCE_ACCESS_ROUTE, personalRoute, personalCanvasRoute, personalDelegatesRoute, type SourceRequestContext, type SourceClassificationRequest, type SourceClassificationResponse, type SourceAccessRequest, type SourceAccessResponse, type PersonalStatusResponse, type PersonalEnsureResponse, type PersonalLinksResponse, type PersonalLinkRequest, type PersonalLinkResponse, type PersonalUnlinkRequest, type PersonalUnlinkResponse, type PersonalDelegatesResponse, type SetPersonalDelegateRequest, type PersonalDelegateResponse, type PersonalReadRequest, type PersonalReadResponse } from "@isocan/core";
 import { inboxRoute, type InboxResponse } from "@isocan/core";
 import { rcAnsweringRoute } from "@isocan/core";
+import { JUDGMENT_ROUTE, type JudgmentRequest } from "@isocan/core";
 import { questionnaireActorsRoute } from "@isocan/core/questionnaire";
 import { designRequestsRoute, type DesignRecordOperation, type DesignRequestsResponse } from "@isocan/core/design-request";
 import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core/design-decision";
@@ -1096,6 +1097,15 @@ export class DaemonRoutes {
    *  this CLI is talking to, so what it lists is what that home is running. */
   news(): Promise<NewsResponse> {
     return this.request("GET", NEWS_ROUTE);
+  }
+
+  /**
+   * **Ask the home's judge** (`JUDGMENT_ROUTE`) — a question file in the
+   * judge's request shape, answered with the home's key, in the judge's answer
+   * shape. Refused with `judgment-unavailable` when the home holds no key.
+   */
+  judgment(request: JudgmentRequest): Promise<unknown> {
+    return this.request("POST", JUDGMENT_ROUTE, request);
   }
 
   /** Every slash command available here: built-ins under this home's own. */

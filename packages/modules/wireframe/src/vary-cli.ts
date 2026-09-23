@@ -1,7 +1,8 @@
 import type { Command } from "commander";
 import { newGroupId, type CanvasContents } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
-import { FlowCanvas, addVariations, wiresOn } from "./compose-cli.ts";
+import { cliPort } from "./cli-port.ts";
+import { FlowCanvas, addVariations, wiresOn } from "./flow.ts";
 import { KEEP_EMOJI, isKept, keepPatch, keepable, kept } from "./keep.ts";
 import { PROTOTYPE_PROP } from "./prototype.ts";
 import { wireTitle } from "./spec.ts";
@@ -34,7 +35,8 @@ export function registerVary(host: CliHost, wire: Command): void {
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);
         const item = resolveItem(snapshot, ref);
-        const wires = await wiresOn(ctx, p.id, snapshot);
+        const port = cliPort(host, ctx, p.id);
+        const wires = await wiresOn(port, snapshot.canvas);
         const screen = wires.find((w) => w.item === item.id);
         if (!screen) throw new Error(`"${item.title}" is not a wireframe screen — \`isocan wire "<request>"\` composes some`);
         if (screen.spec.variantOf) {
@@ -45,7 +47,7 @@ export function registerVary(host: CliHost, wire: Command): void {
           throw new Error(`"${item.title}" carries no answerer's distribution (drawn by hand, or not yet answered) — there is nothing to vary it from`);
         }
         const siblings = wires.filter((w) => w.spec.variantOf === screen.item);
-        const canvas = new FlowCanvas(host, ctx, p.id, newGroupId());
+        const canvas = new FlowCanvas(port, newGroupId());
         const made = await addVariations(canvas, screen, siblings, count);
         const left = honestFlips(screen.spec, [...siblings, ...made].map((v) => v.spec.flip!).filter(Boolean));
         if (ctx.json) {

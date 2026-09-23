@@ -64,6 +64,10 @@ function harness() {
         return { blobHash: store(html), size: bytes.length };
       },
       downloadBlob: async (_canvas: string, hash: string) => Buffer.from(blobs.get(hash)!, "utf8"),
+      // A home with no key of its own: what every test daemon is.
+      judgment: async () => {
+        throw Object.assign(new Error("this home has no judge"), { code: "judgment-unavailable" });
+      },
     },
   };
   const apply = (op: Operation) => {

@@ -10,7 +10,11 @@ export const KEEP_EMOJI = "📐";
  * A screen is an ordinary HTML item, so the module adds no kind and no mime:
  * the canvas already knows how to draw everything it makes. What it adds is
  * one mark, as data — the shell draws 📐, offers Keep / Unkeep in the item
- * menu and answers ⇧K without importing anything from here. The record lives
+ * menu and answers ⇧K without importing anything from here — and one slash
+ * command, `/wire`, whose menu row the Chat must offer before the module's
+ * web half has loaded: on the web it opens the `wire` dialog (`web.tsx`,
+ * lazy), on the terminal its body is the skill (`command.ts`, which both
+ * loaded halves register in place of this `body: ""`). The record lives
  * apart from `core.ts` so the web half can register it without importing the
  * catalog and the renderer, which a first visit to the app has no use for
  * (the entry chunk's budget, `scripts/bundle-ceiling.mjs`).
@@ -23,4 +27,5 @@ export const wireframeModule: CoreModule = {
   // `wireLinks` (a person's overrides, links.ts) and `wirePrototype` (prototype.ts) are spelled out too.
   propertyKeys: [KEEP_PROP, "wireLinks", "wirePrototype"],
   marks: [{ property: KEEP_PROP, emoji: KEEP_EMOJI, title: "Kept", on: "Keep", off: "Unkeep", key: "K", offeredOn: { fidelity: "wireframe" } }],
+  commands: [{ name: "wire", description: "Wireframes from a request", usage: "<request>|prototype|style", source: "module", opens: "wire", body: "" }],
 };

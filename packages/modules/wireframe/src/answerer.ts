@@ -2,8 +2,10 @@
  * **The answerer seam** (design §4, *The answerer is a seam*).
  *
  * A round is a question file in Jev's own request shape — one `state`, named
- * questions — and its answers come back in Jev's response shape. Three things
- * answer it: Jev over HTTP, a seeded uniform stub, and an agent through
+ * questions — and its answers come back in Jev's response shape. Four things
+ * answer it: Jev over HTTP with a key of your own, the home (Jev through the
+ * home's `/api/judgment`, with the home's key — what the web uses, so no key
+ * ever reaches a browser), a seeded uniform stub, and an agent through
  * `isocan wire questions` / `wire answer`. The composer never knows which.
  *
  * Shaped as judge's `Judgment` seam will be (`docs/projects/judge/design.md`):
@@ -52,7 +54,7 @@ export interface Answered {
 
 export interface Answerer {
   /** The agent answers through `wire questions` / `wire answer`, not through this interface. */
-  name: "jev" | "stub";
+  name: "jev" | "stub" | "home";
   answer(request: JevRequest): Promise<Answered>;
 }
 
@@ -251,6 +253,73 @@ export function jevAnswerer(opts: JevOptions): Answerer {
         }
         const response = readResponse(request, body, "Jev");
         return { response, ms, by: response.model ?? JEV_MODEL };
+      }
+    },
+  };
+}
+
+// ---------- the home
+
+/** The refusal the home gives when it holds no key (`@isocan/core`'s `JUDGMENT_UNAVAILABLE`, spelled out so this file stays import-free). */
+export const HOME_HAS_NO_JUDGE = "judgment-unavailable";
+
+/** A question file, as the home's judgment route takes it: Jev's request shape, and the canvas it is for. */
+export type HomeQuestion = JevRequest & { canvasId: string };
+
+/**
+ * **Jev, through the home** — `POST /api/judgment` with the home's key, so
+ * the web composes with Jev and never holds a key, and a CLI on a machine
+ * with no key of its own composes with its home's. `post` is the surface's
+ * own authenticated call (the web's dialog host, the CLI's daemon client);
+ * it throws on a refusal, with the refusal's `code` on the error. The answer
+ * is checked against the question exactly as Jev's is, and says who answered:
+ * the versioned model, via the home.
+ */
+export function homeAnswerer(post: (question: HomeQuestion) => Promise<unknown>, canvasId: string, now: () => number = () => Date.now()): Answerer {
+  return {
+    name: "home",
+    async answer(request) {
+      const t0 = now();
+      const body = await post({ ...request, canvasId });
+      const ms = now() - t0;
+      const response = readResponse(request, body, "the home's judge");
+      return { response, ms, by: `${response.model ?? JEV_MODEL} via the home` };
+    },
+  };
+}
+
+/** Did the home refuse because it holds no key — the one refusal a fallback may answer. */
+export function isNoJudge(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === HOME_HAS_NO_JUDGE;
+}
+
+/**
+ * **The home, else the stub — said out loud.** What the CLI answers with
+ * when it holds no key: its home's judge, and when the home has none either,
+ * the seeded stub, with `onFallback` told once so the person reads which
+ * answered. Only the no-judge refusal falls back; any other failure (a
+ * refusal of the badge, the judge unreachable) is a failure, never random
+ * screens under Jev's name.
+ */
+export function homeOrStub(home: Answerer, stub: Answerer, onFallback: (error: unknown) => void): Answerer {
+  let fell = false;
+  let current = home;
+  return {
+    get name() {
+      return current.name;
+    },
+    async answer(request) {
+      try {
+        return await current.answer(request);
+      } catch (error) {
+        // Calls in a round run in parallel: every one the home refused falls back, not just the first.
+        if (!isNoJudge(error)) throw error;
+        current = stub;
+        if (!fell) {
+          fell = true;
+          onFallback(error);
+        }
+        return stub.answer(request);
       }
     },
   };

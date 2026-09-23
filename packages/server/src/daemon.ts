@@ -27,6 +27,7 @@ import { HomeLinks } from "./home-links.ts";
 import { contentPorts, registerContentRoutes } from "./content.ts";
 import { contentTtl } from "./content-auth.ts";
 import { adoptIdentity } from "./badge-store.ts";
+import type { JudgmentOptions } from "./judgment.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -205,6 +206,9 @@ export interface DaemonOptions {
    * The daemon uses the wall when this is absent, which is every real home.
    */
   refusalsNow?: () => number;
+  /** The home's judge (`judgment.ts`) — tests hand it a key and a fake
+   * transport; a running home reads `TYPESAFE_API_KEY` per call. */
+  judgment?: JudgmentOptions;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
@@ -539,6 +543,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     servesWorld: options.servesWorld ?? !(host === "127.0.0.1" || host === "::1" || host === "localhost"),
     rc,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
+    ...(options.judgment ? { judgment: options.judgment } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);
   /**

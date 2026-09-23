@@ -227,6 +227,14 @@ fi
 # does not produce. Restricting it makes the LB the only way in — and makes
 # the run.app URL stop answering, which is why the check at the end of this
 # script asks the domain instead when it is set.
+#
+# --update-secrets carries the home's judge key (`POST /api/judgment`,
+# `packages/server/src/judgment.ts`): the web composes wireframes through it,
+# so the key stays on the home and never reaches a browser. The secret
+# `typesafe-api-key` exists in both projects since 23 Sep 2026 and was first
+# attached by hand; stating it here is what makes a full re-provision keep it.
+# `--update-` rather than `--set-`, so a secret attached out of band for an
+# experiment is not silently dropped by the next deploy.
 gcloud run deploy "${SERVICE}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
@@ -243,6 +251,7 @@ gcloud run deploy "${SERVICE}" \
   --execution-environment=gen2 \
   --ingress="${INGRESS}" \
   --set-env-vars="^;^${ENV_VARS}" \
+  --update-secrets="TYPESAFE_API_KEY=typesafe-api-key:latest" \
   --quiet
 
 made "revision deployed from ${IMAGE}"

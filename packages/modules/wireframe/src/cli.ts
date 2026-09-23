@@ -7,7 +7,7 @@ import {
   BLOCKS, INTENTS, PLATFORMS, PRIMITIVES, RECIPES, blueprint, renderWire, validateWire, wireSize, wireTitle, wireframe,
   type Component, type Platform, type WireSpec,
 } from "./core.ts";
-import { wireframeModule } from "./record.ts";
+import { wireframeCore } from "./command.ts";
 import { answer, questions, registerCompose } from "./compose-cli.ts";
 import { registerVary } from "./vary-cli.ts";
 import { registerLinks } from "./links-cli.ts";
@@ -156,7 +156,7 @@ function register(host: CliHost): void {
 }
 
 export const wireframeCli: CliModule = {
-  core: wireframeModule,
+  core: wireframeCore,
   register,
   guide: guideText,
 };

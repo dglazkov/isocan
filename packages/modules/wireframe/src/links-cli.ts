@@ -1,10 +1,12 @@
 import type { Command } from "commander";
-import { FIDELITY_PROP, newGroupId, newItemId, newVersionId, type CanvasContents, type CanvasSnapshotResponse, type Item } from "@isocan/core";
-import type { CliHost, Ctx } from "@isocan/cli/modulehost";
-import { wiresOn } from "./compose-cli.ts";
-import { isKept, kept } from "./keep.ts";
-import { LINKS_PROP, LINK_BACK, LINK_NONE, hotspots, inferLinks, readOverrides, type WireLink, type WireScreen } from "./links.ts";
-import { PROTOTYPE_PROP, assemblePrototype, prototypeSize } from "./prototype.ts";
+import { newGroupId, type Item } from "@isocan/core";
+import type { CliHost } from "@isocan/cli/modulehost";
+import { cliPort } from "./cli-port.ts";
+import { wiresOn } from "./flow.ts";
+import { isKept } from "./keep.ts";
+import { keptFlowsOf, pickKeptFlow, writePrototype, type KeptFlow } from "./kept-flows.ts";
+import { LINKS_PROP, LINK_BACK, LINK_NONE, hotspots, inferLinks, readOverrides, type WireLink } from "./links.ts";
+import type { WirePort } from "./port.ts";
 
 /**
  * **`wire links`, `wire link`, `wire prototype`** — phase 3's verbs.
@@ -18,96 +20,15 @@ import { PROTOTYPE_PROP, assemblePrototype, prototypeSize } from "./prototype.ts
  * rebuild is a version and not a replacement. Each command is one op group.
  */
 
-export interface KeptFlow {
-  flow: string;
-  request: string;
-  screens: WireScreen[];
-  items: Item[];
-}
-
 /** The kept screens, grouped by flow, each group in reading order. */
-async function keptFlows(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse): Promise<KeptFlow[]> {
-  return keptFlowsOf(snapshot, await wiresOn(ctx, canvasId, snapshot));
-}
-
-/** The same, from wires already read — `wire style` passes the ones it has just restyled. */
-export function keptFlowsOf(snapshot: CanvasSnapshotResponse, screens: ReadonlyArray<{ item: string; spec: WireScreen["spec"] }>): KeptFlow[] {
-  const wires = new Map(screens.map((w) => [w.item, w]));
-  const flows = new Map<string, KeptFlow>();
-  for (const item of kept(snapshot.canvas as CanvasContents)) {
-    const wire = wires.get(item.id);
-    if (!wire) continue;
-    const flow = wire.spec.flow;
-    const entry = flows.get(flow) ?? { flow, request: wire.spec.request, screens: [], items: [] };
-    entry.screens.push({ id: item.id, title: item.title, spec: wire.spec, overrides: readOverrides(item.properties?.[LINKS_PROP]) });
-    entry.items.push(item);
-    flows.set(flow, entry);
-  }
-  return [...flows.values()];
-}
-
-function pickKeptFlow(flows: KeptFlow[], wanted: string | undefined): KeptFlow {
-  if (flows.length === 0) throw new Error("nothing is kept — `isocan wire keep <screens...>` marks the screens a prototype plays");
-  if (wanted !== undefined) {
-    const found = flows.find((f) => f.flow === wanted);
-    if (!found) throw new Error(`no kept screens in flow "${wanted}" — kept flows: ${flows.map((f) => `${f.flow || "(hand-drawn)"} "${f.request}"`).join(", ")}`);
-    return found;
-  }
-  if (flows.length > 1) {
-    throw new Error(`kept screens come from ${flows.length} flows — say which with --flow:\n  ${flows.map((f) => `--flow ${f.flow || '""'}  "${f.request}" (${f.screens.length} kept)`).join("\n  ")}`);
-  }
-  return flows[0]!;
+async function keptFlows(port: WirePort): Promise<KeptFlow[]> {
+  const canvas = await port.canvas();
+  return keptFlowsOf(canvas, await wiresOn(port, canvas));
 }
 
 function linkLine(l: WireLink, title: (id: string) => string): string {
   const where = l.to === LINK_BACK ? "back" : l.to ? `→ "${title(l.to)}"` : l.needs ? `- - needs ${l.needs}` : "off";
   return `  ${l.key.padEnd(18)} ${l.label.padEnd(16)} ${where.padEnd(28)} ${l.rule}${l.to && l.to !== LINK_BACK ? `, ${l.transition}` : ""}`;
-}
-
-/**
- * Assemble a kept flow's prototype and write it: `item.add` the first time,
- * `item.addVersion` on the same item (found by `wirePrototype`) after that,
- * nothing when the file is byte-for-byte what it already plays. Under the
- * caller's group — `wire prototype`'s own, or `wire style`'s restyle.
- */
-export async function writePrototype(
-  host: CliHost, ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, flow: KeptFlow, group: string,
-): Promise<{ itemId: string; title: string; links: WireLink[]; what: "added" | "versioned" | "unchanged" }> {
-  const { sendOp } = host;
-  const links = inferLinks(flow.screens);
-  const title = `Prototype · ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}…` : flow.request || "hand-drawn screens"}`;
-  const html = assemblePrototype(flow.screens, links, { title });
-  const { width, height } = prototypeSize(flow.screens);
-  const filename = "prototype.html";
-  const upload = await ctx.client.uploadBlob(canvasId, Buffer.from(html, "utf8"), "text/html", filename);
-  const version = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
-  const existing = Object.values(snapshot.canvas.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
-  if (existing) {
-    const current = existing.versions.find((v) => v.id === existing.currentVersionId) ?? existing.versions[existing.versions.length - 1];
-    if (current?.blobHash === upload.blobHash) return { itemId: existing.id, title, links, what: "unchanged" };
-    await sendOp(ctx, canvasId, { type: "item.addVersion", itemId: existing.id, version }, group);
-    if (existing.width !== width || existing.height !== height) await sendOp(ctx, canvasId, { type: "item.resize", itemId: existing.id, width, height }, group);
-    if (existing.title !== title) await sendOp(ctx, canvasId, { type: "item.update", itemId: existing.id, patch: { title } }, group);
-    return { itemId: existing.id, title, links, what: "versioned" };
-  }
-  const itemId = newItemId();
-  // Right of everything in the kept screens' band — their unkept siblings too — so it covers nothing.
-  const top = Math.min(...flow.items.map((i) => i.y));
-  const bottom = top + height;
-  const band = Object.values(snapshot.canvas.items ?? {}).filter((i) => i.y < bottom && i.y + i.height > top);
-  const right = Math.max(...flow.items.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
-  await sendOp(ctx, canvasId, {
-    type: "item.add",
-    itemId,
-    version,
-    width,
-    height,
-    placement: { x: Math.round(right + 120), y: Math.round(top), chosen: true } as never,
-    title,
-    // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
-    properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow },
-  }, group);
-  return { itemId, title, links, what: "added" };
 }
 
 export function registerLinks(host: CliHost, wire: Command): void {
@@ -124,7 +45,7 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const ctx = await ctxOf(cmd);
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);
-        const flows = await keptFlows(ctx, p.id, snapshot);
+        const flows = await keptFlows(cliPort(host, ctx, p.id));
         const only = ref ? resolveItem(snapshot, ref) : null;
         const flow = only ? flows.find((f) => f.screens.some((s) => s.id === only.id)) : pickKeptFlow(flows, opts.flow);
         if (!flow) throw new Error(`"${only!.title}" is not a kept screen — links run between kept screens (\`isocan wire keep ${only!.id}\`)`);
@@ -161,7 +82,7 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);
         const item = resolveItem(snapshot, ref);
-        const wires = await wiresOn(ctx, p.id, snapshot);
+        const wires = await wiresOn(cliPort(host, ctx, p.id), snapshot.canvas);
         const source = wires.find((w) => w.item === item.id);
         if (!source) throw new Error(`"${item.title}" is not a wireframe screen — links start on screens \`isocan wire\` drew`);
         const keys = hotspots(source.spec).map((h) => h.key);
@@ -202,9 +123,10 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const opts = cmd.optsWithGlobals() as { flow?: string };
         const ctx = await ctxOf(cmd);
         const p = await resolveCanvas(ctx);
-        const snapshot = await ctx.client.snapshot(p.id);
-        const flow = pickKeptFlow(await keptFlows(ctx, p.id, snapshot), opts.flow);
-        const { itemId, title, links, what } = await writePrototype(host, ctx, p.id, snapshot, flow, newGroupId());
+        const port = cliPort(host, ctx, p.id);
+        const canvas = await port.canvas();
+        const flow = pickKeptFlow(keptFlowsOf(canvas, await wiresOn(port, canvas)), opts.flow);
+        const { itemId, title, links, what } = await writePrototype(port, canvas, flow, newGroupId());
         const after = await ctx.client.snapshot(p.id);
         const versions = after.canvas.items[itemId]?.versions.length ?? 0;
         const dashed = links.filter((l) => l.to === null && l.needs);

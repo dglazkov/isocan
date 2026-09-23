@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–4 are CLOSED (23 Sep 2026).** The catalog draws (0); Jev composes a flow skeleton-first (1); variations and 📐 keep (2); links and a clickable prototype (3); every wire draws in the default look or the governing design system, Jev mapping the system's tokens onto the wire's roles, `wire style` restyling all of them as one undo (4). **Next: wireframes phase 5** — the web door, walked on dev.isocan.io, carrying the canvas arrows moved from phase 3.
+**Where we are: phases 0–4 are CLOSED; phase 5 is PART-DONE (23 Sep 2026).** Everything a person does from the terminal is built, and the web door is built and walked locally: `/wire <request>` in the Chat composes a flow through the home's `/api/judgment` (the key never reaches the browser), with keep, the canvas arrows between kept screens, `/wire prototype` and `/wire style`. **Next: wireframes phase 6** — calibration against Enrico, which needs nothing from the web — and, alongside it, the dev.isocan.io walk that closes phase 5 once CI has deployed it.
 
 ## Phase 0 — The catalog, drawn
 
@@ -164,7 +164,7 @@ blue.
 
 ## Phase 5 — The web door
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 23 September 2026.** Built and walked on a local daemon (headless Chrome: blueprint at 400 ms, grey by 3.5 s, keep, five arrows, prototype click-through, restyle, one undo); 478 route/module/web tests including one holding the web and the CLI to identical ops. The walk on dev.isocan.io is what closes it.
 
 **Outcome:** asking for wireframes from the canvas itself — the Chat and the
 Add popover — composed by the home using its own `TYPESAFE_API_KEY` (a
@@ -174,6 +174,14 @@ skeleton-first fill, and the arrows between kept screens on the canvas
 re-provision keeps it.
 
 **Proof:** the journey's scenes 1–6 walked on dev.isocan.io in a browser.
+
+### Trajectory
+
+- **2026-09-23** — The home gained one vendor-neutral answerer, `POST /api/judgment`: it forwards a question file with its own `TYPESAFE_API_KEY` behind the same door checks as `/api/ops` plus a per-badge rate limit, and a test holds the key out of every response and log line. Judge phase 2 can adopt it as its hosted seam.
+- **2026-09-23** — The composer's canvas half moved behind a `WirePort`: the web runs the CLI's `composeFlow`, `restyle` and `writePrototype` unchanged, and a test holds both surfaces to identical op shapes. A keyless CLI now answers through its home and says so.
+- **2026-09-23** — The arrows moved from phase 3 landed as a lazy underlay that reads kept screens' files; `UnderlayFacts.readText` and `DialogHost.{readText,getCanvas,judge,notice}` are the shell additions (authoring.md).
+- **2026-09-23** — Open: the entry chunk is **728,367 against CEILING 727,800 — 567 bytes over**, after everything that could be lazy was: the `/wire` command row, the dialog descriptor, and the arrows' "two kept screens?" check must be known at first paint. Under JUMP, so it lands as a performance finding; answering it (raise with this reason, or find 567 bytes elsewhere) is Dion's call.
+- **2026-09-23** — Open: modules cannot contribute a row to the Add popover, so `/wire` is the only door there; an Add row wants a module slot.
 
 ## Phase 6 — Is Jev any good at this?
 

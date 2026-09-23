@@ -5,6 +5,7 @@ import { useContext } from "react";
 import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { fetchBlobText } from "../lib/blobtext.ts";
 
 /**
  * **The first module slot: under the items, in world units.**
@@ -20,11 +21,12 @@ export function ModuleUnderlays() {
   const presentation = usePresentation();
   const activateItem = useContext(CanvasActivation);
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
+  const canvasId = useCanvasStore((s) => s.canvasId);
   const drag = useUiStore((s) => s.drag);
   // A runtime module that arrived after first paint is a new underlay.
   useUiStore((s) => s.modulesGeneration);
   if (!canvas) return null;
-  const facts = { canvas: presentedCanvas(canvas, presentation), presentation: presentation?.items, activateItem, drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null };
+  const facts = { canvas: presentedCanvas(canvas, presentation), presentation: presentation?.items, activateItem, drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null, readText: (hash: string) => fetchBlobText(canvasId!, hash) };
   return (
     <>
       {modules().flatMap((m) =>

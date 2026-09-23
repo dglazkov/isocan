@@ -1,6 +1,7 @@
 import type { ContextPiece } from "./context.ts";
 import type { Canvas, CanvasContents, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
+import type { JudgmentRequest } from "./judgment.ts";
 import type { CommandMetadata, SlashCommand } from "./commands.ts";
 import { inCanvasScope } from "./canvas-scope.ts";
 
@@ -479,6 +480,14 @@ export interface UnderlayFacts {
   activateItem?: ((itemId: string) => boolean) | undefined;
   /** The live drag, so a line can ride the gesture before the replica moves. */
   drag: { itemIds: readonly string[]; dx: number; dy: number } | null;
+  /**
+   * **A blob of this canvas, as text** (wireframes phase 5) — for an underlay
+   * whose lines are computed from what a file SAYS rather than from item
+   * metadata: the wireframe arrows between kept screens read each screen's
+   * spec, because links are computed and never stored (design §7). Cached by
+   * the shell per hash, so asking every render costs one fetch per version.
+   */
+  readText?: ((blobHash: string) => Promise<string>) | undefined;
 }
 
 /**
@@ -539,7 +548,33 @@ export interface DialogFacts {
   /** Whether the viewer may write here — a read-only canvas opens the dialog
    *  and the dialog says what it cannot do. */
   canEdit: boolean;
-  host: WebHost & { close: () => void };
+  host: DialogHost;
+}
+
+/** The home's judgment route (`judgment.ts` has the rest: its limits and refusal codes). */
+export const JUDGMENT_ROUTE = "/api/judgment";
+
+/**
+ * **What a dialog's host adds to `WebHost`** (wireframes phase 5). A dialog
+ * that composes — reads the canvas it is writing to, the files on it, and
+ * asks the home a typed question — needs the three reads a workspace host
+ * already has, and a way to say how it went after it has closed.
+ */
+export interface DialogHost extends WebHost {
+  close: () => void;
+  /** Authenticated, hash-cached UTF-8 blob read for this canvas — `WorkspaceHost.readText`. */
+  readText: (blobHash: string) => Promise<string>;
+  /** The canvas as it is NOW, not as it was when the dialog opened — `WorkspaceHost.getCanvas`. */
+  getCanvas: () => CanvasContents;
+  /**
+   * **Ask the home's judge** (`JUDGMENT_ROUTE`): a question file in the
+   * judge's request shape, answered with the home's key — which never reaches
+   * the browser. Throws the home's refusal, with its `code`
+   * (`judgment-unavailable` when the home holds no key).
+   */
+  judge: (question: JudgmentRequest) => Promise<unknown>;
+  /** Say something in the canvas's notice bar — a problem stays until seen; anything else flashes. */
+  notice: (text: string, problem?: boolean) => void;
 }
 
 /** A dialog a module fills and the shell opens (proposed: `dialogs`). */
