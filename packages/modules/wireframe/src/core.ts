@@ -16,6 +16,8 @@ export * from "./spec.ts";
 export { SKELETON_COLORS, WIRE_MARKER, WIRE_SCRIPT_ID, readWire, renderWire } from "./render.ts";
 export * from "./compose.ts";
 export * from "./answerer.ts";
+export * from "./vary.ts";
+export * from "./keep.ts";
 export { wireframeModule };
 
 export default wireframeModule;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
-import { deck, isNote, noteFor, noteProperties, noteSpot, notesMarkdown, notesOn, slides } from "../src/slides.ts";
+import { deck, isNote, slides } from "../src/slides.ts";
+import { noteFor, noteProperties, noteSpot, notesMarkdown, notesOn } from "../src/slidewrites.ts";
 import { deckPages } from "../src/deckexport.ts";
 import { TEXT_PROPERTIES } from "../src/textnode.ts";
 

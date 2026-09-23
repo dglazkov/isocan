@@ -4,11 +4,12 @@ import type { Command } from "commander";
 import { FIDELITY_PROP, newItemId, newVersionId } from "@isocan/core";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
 import {
-  BLOCKS, INTENTS, PLATFORMS, PRIMITIVES, RECIPES, blueprint, renderWire, validateWire, wireSize, wireframe,
+  BLOCKS, INTENTS, PLATFORMS, PRIMITIVES, RECIPES, blueprint, renderWire, validateWire, wireSize, wireTitle, wireframe,
   type Component, type Platform, type WireSpec,
 } from "./core.ts";
 import { wireframeModule } from "./record.ts";
 import { answer, questions, registerCompose } from "./compose-cli.ts";
+import { registerVary } from "./vary-cli.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
@@ -41,6 +42,7 @@ function register(host: CliHost): void {
     .command("wire")
     .description("Wireframes: `wire \"<request>\"` composes a flow of screens from a catalog of blocks — a blue blueprint where a slot is undecided, grey where it is chosen");
   registerCompose(host, wire);
+  registerVary(host, wire);
 
   wire
     .command("questions")
@@ -83,7 +85,7 @@ function register(host: CliHost): void {
         const ctx = await ctxOf(cmd);
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);
-        const title = opts.title ?? spec.title;
+        const title = opts.title ?? wireTitle(spec);
         const filename = `${slugOf(title)}.html`;
         const upload = await ctx.client.uploadBlob(p.id, Buffer.from(html, "utf8"), "text/html", filename);
         const { width, height } = wireSize(spec);

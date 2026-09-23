@@ -1,7 +1,7 @@
 import { INTENT_BY_ID, component, type DrawContext, type Region, type Section } from "./catalog/index.ts";
 import { esc } from "./catalog/draw.ts";
 import {
-  CAPTION_HEIGHT, PLATFORM_SIZE, defaultIntent, propsFor, recipe, validateWire, type WireSlot, type WireSpec,
+  CAPTION_HEIGHT, PLATFORM_SIZE, defaultIntent, propsFor, recipe, validateWire, wireTitle, type WireSlot, type WireSpec,
 } from "./spec.ts";
 
 /**
@@ -42,6 +42,7 @@ html,body{margin:0;background:#fafafa}
 body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#222222;padding:0}
 .cap{height:${CAPTION_HEIGHT}px;display:flex;align-items:center;gap:8px;padding:0 4px;font-size:13px;font-weight:700;color:#222222}
 .cap small{font-weight:500;color:#555555;text-transform:uppercase;letter-spacing:.06em;font-size:10px}
+.cap small{margin-left:8px}.cap.one-way{flex-direction:column;align-items:flex-start;justify-content:center;gap:0;line-height:1.2}.cap.one-way>small{margin:0;text-transform:none;letter-spacing:0;font-style:italic}
 .frame{position:relative;display:flex;flex-direction:column;background:#ffffff;border:1.5px solid #c8c8c8;border-radius:4px;overflow:hidden}
 .frame.app{border-radius:28px}
 .frame.site{overflow:visible}
@@ -395,7 +396,7 @@ export function renderWire(spec: WireSpec): string {
     `</div>`,
   ].join("");
 
-  const title = esc(spec.title);
+  const title = esc(wireTitle(spec));
   return `<!doctype html>
 ${WIRE_MARKER}
 <html lang="en">
@@ -407,7 +408,7 @@ ${WIRE_MARKER}
 <style>${WIRE_CSS}${undecided ? SKELETON_CSS : ""}</style>
 </head>
 <body data-archetype="${esc(spec.archetype)}" data-state="${state}">
-<div class="cap${undecided ? " sk-cap" : ""}">${title}<small>${state}</small></div>
+<div class="cap${undecided ? " sk-cap" : ""}${spec.varied === "none" ? " one-way" : ""}"><span>${title}<small>${state}</small></span>${spec.varied === "none" ? "<small>one way to draw this</small>" : ""}</div>
 ${frame}
 </body>
 </html>

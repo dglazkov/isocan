@@ -1,6 +1,6 @@
 import { RECIPES, component, type Platform, type Props, type Recipe, type Section } from "./catalog/index.ts";
 import { JEV_MODEL, chosenOption, readResponse, type JevAnswer, type JevQuestion, type JevRequest, type JevResponse } from "./answerer.ts";
-import { PLATFORMS, blueprint, presentElements, recipe, resolveSlot, type WireChrome, type WireSlot, type WireSpec } from "./spec.ts";
+import { LEAVE_OUT, PLATFORMS, blueprint, presentElements, recipe, resolveSlot, type WireChrome, type WireDeclined, type WireSlot, type WireSpec } from "./spec.ts";
 
 /**
  * **The composer's three rounds** (design §4; research §4, *The question
@@ -212,30 +212,42 @@ export function structureRequest(spec: WireSpec, flowTitles: readonly string[]):
   };
 }
 
+/**
+ * Round 2's answers written into a screen. **Every probability is kept**,
+ * including the include decision's: an optional section on the screen carries
+ * `LEAVE_OUT` among its alternatives at P(no), and one left off is recorded in
+ * `declined` at P(no) with the block that would fill it — so phase 2's
+ * variations can flip a section in or out, not only swap a block.
+ */
 export function applyStructure(spec: WireSpec, req: JevRequest, res: JevResponse): WireSpec {
   const r = recipe(spec.archetype);
   const slots: WireSlot[] = [];
+  const declined: WireDeclined[] = [...(spec.declined ?? [])];
   for (const slot of spec.slots) {
     if (slot.block !== null) {
       slots.push(slot);
       continue;
     }
     const section = r.sections.find((s) => s.slot === slot.slot)!;
-    let pInclude = 1;
+    const pick = section.options.length > 1 ? chosenOption(req.questions[section.slot]!, res.answers[section.slot]!) : null;
+    const block = pick?.value ?? section.options[0]!;
+    let pOut = 0;
     if (section.optional) {
       const include = chosenOption(req.questions[`${section.slot}:include`]!, res.answers[`${section.slot}:include`]!);
-      if (include.value === "false") continue;
-      pInclude = include.p;
+      pOut = include.distribution.false!;
+      if (include.value === "false") {
+        declined.push({ slot: section.slot, p: pOut, block });
+        continue;
+      }
     }
-    if (section.options.length > 1) {
-      const pick = chosenOption(req.questions[section.slot]!, res.answers[section.slot]!);
-      const alternatives = alternativesOf(pick.distribution, section.options, pick.value);
-      slots.push({ ...resolveSlot(r.id, section.slot, pick.value), p: pick.p, ...(alternatives.length ? { alternatives } : {}) });
-    } else {
-      slots.push({ ...resolveSlot(r.id, section.slot, section.options[0]!), ...(section.optional ? { p: pInclude } : {}) });
-    }
+    const alternatives = [
+      ...(pick ? alternativesOf(pick.distribution, section.options, block) : []),
+      ...(pOut > 0 ? [{ block: LEAVE_OUT, p: pOut }] : []),
+    ].sort((a, b) => b.p - a.p);
+    const p = pick ? pick.p : section.optional ? 1 - pOut : undefined;
+    slots.push({ ...resolveSlot(r.id, section.slot, block), ...(p !== undefined ? { p } : {}), ...(alternatives.length ? { alternatives } : {}) });
   }
-  return { ...spec, slots, round: 2 };
+  return { ...spec, slots, round: 2, ...(declined.length ? { declined } : {}) };
 }
 
 // ---------- round 3: props and intents

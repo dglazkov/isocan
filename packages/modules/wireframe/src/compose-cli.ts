@@ -10,7 +10,8 @@ import {
   type FlowDecision, type RoundCall, type RoundFile,
 } from "./compose.ts";
 import { readWire, renderWire } from "./render.ts";
-import { wireSize, type WireSpec } from "./spec.ts";
+import { wireSize, wireTitle, type WireSpec } from "./spec.ts";
+import { DEFAULT_VARIATIONS, honestFlips, variations } from "./vary.ts";
 
 /**
  * **`isocan wire "<request>"` — a flow, composed in rounds, drawn in place.**
@@ -32,9 +33,9 @@ import { wireSize, type WireSpec } from "./spec.ts";
 
 const GAP = 80;
 
-type Ctx = Awaited<ReturnType<CliHost["ctxOf"]>>;
+export type Ctx = Awaited<ReturnType<CliHost["ctxOf"]>>;
 
-interface Screen {
+export interface Screen {
   item: string;
   spec: WireSpec;
   x: number;
@@ -48,7 +49,10 @@ function slugOf(title: string): string {
 }
 
 /** The canvas half: every write is one of three existing ops, under the flow's group. */
-class FlowCanvas {
+export class FlowCanvas {
+  /** Variations this invocation added, in the order they landed. */
+  readonly variants: Screen[] = [];
+
   constructor(
     private host: CliHost,
     private ctx: Ctx,
@@ -58,7 +62,7 @@ class FlowCanvas {
 
   private async version(spec: WireSpec) {
     const html = renderWire(spec);
-    const filename = `${slugOf(spec.title)}.html`;
+    const filename = `${slugOf(wireTitle(spec))}.html`;
     const upload = await this.ctx.client.uploadBlob(this.canvasId, Buffer.from(html, "utf8"), "text/html", filename);
     return { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
   }
@@ -77,7 +81,7 @@ class FlowCanvas {
       width,
       height,
       placement: placement as never,
-      title: spec.title,
+      title: wireTitle(spec),
       properties: { [FIDELITY_PROP]: "wireframe" },
     });
     const at = this.host.insertionReceiptPlacement(result.envelope.op, itemId) as { x?: number; y?: number };
@@ -87,7 +91,7 @@ class FlowCanvas {
   /** A new version of the same item — the screen fills in place — and its title and size if they moved. */
   async write(screen: Screen, spec: WireSpec): Promise<Screen> {
     await this.send({ type: "item.addVersion", itemId: screen.item, version: await this.version(spec) });
-    if (spec.title !== screen.spec.title) await this.send({ type: "item.update", itemId: screen.item, patch: { title: spec.title } });
+    if (wireTitle(spec) !== wireTitle(screen.spec)) await this.send({ type: "item.update", itemId: screen.item, patch: { title: wireTitle(spec) } });
     const { width, height } = wireSize(spec);
     if (width !== screen.width || height !== screen.height) await this.send({ type: "item.resize", itemId: screen.item, width, height });
     return { ...screen, spec, width, height };
@@ -162,7 +166,7 @@ function describeFlow(d: FlowDecision): string {
 function screenLine(s: Screen, note: string): string {
   const open = s.spec.slots.filter((x) => x.block === null).length;
   const state = open === 0 ? "wireframe" : open === s.spec.slots.length ? "blueprint" : `${s.spec.slots.length - open} of ${s.spec.slots.length} slots chosen`;
-  return `${s.item}  ${s.spec.title} — ${s.spec.archetype}, ${s.spec.platform}, ${state}${note ? ` · ${note}` : ""}`;
+  return `${s.item}  ${wireTitle(s.spec)} — ${s.spec.archetype}, ${s.spec.platform}, ${state}${note ? ` · ${note}` : ""}`;
 }
 
 /**
@@ -188,27 +192,59 @@ async function applyRound(
   }
   const specs = round === 2
     ? screens.map((screen, i) => applyStructure(screen.spec, calls[i]!.request, responses[i]!))
-    : applyPropsRound(screens.map((s) => s.spec), calls.map((c) => c.request), responses);
+    // A screen with no honest alternative says so in the same version that draws it.
+    : applyPropsRound(screens.map((s) => s.spec), calls.map((c) => c.request), responses)
+        .map((spec) => (honestFlips(spec).length === 0 ? { ...spec, varied: "none" as const } : spec));
   const out: Screen[] = [];
   for (const [i, screen] of screens.entries()) out.push(await canvas.write(screen, specs[i]!));
-  if (round === 3) for (const s of out) say(screenLine(s, ""));
+  if (round === 3) {
+    // Variations close the flow, in its op group: one undo still takes it all back.
+    for (const s of out) {
+      const made = await addVariations(canvas, s, [], DEFAULT_VARIATIONS);
+      say(screenLine(s, s.spec.varied === "none" ? "one way to draw this" : `${made.length} variation${made.length === 1 ? "" : "s"}`));
+      for (const v of made) say(`  ${screenLine(v, "")}`);
+    }
+  }
   return out;
+}
+
+/**
+ * Add a screen's variations directly under it — same x, stacked below the
+ * screen and any sibling already there — up to `count` in all.
+ */
+export async function addVariations(canvas: FlowCanvas, screen: Screen, siblings: readonly Screen[], count: number): Promise<Screen[]> {
+  const specs = variations(screen.spec, screen.item, count, siblings.map((v) => v.spec.flip!).filter(Boolean));
+  const made: Screen[] = [];
+  let bottom = Math.max(screen.y + screen.height, ...siblings.map((v) => v.y + v.height));
+  for (const spec of specs) {
+    const v = await canvas.add(spec, { x: screen.x, y: bottom + GAP, chosen: true });
+    bottom = v.y + v.height;
+    made.push(v);
+    canvas.variants.push(v);
+  }
+  return made;
 }
 
 // ---------- reading a flow back off the canvas
 
-async function flowsOn(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse): Promise<Map<string, Screen[]>> {
-  const flows = new Map<string, Screen[]>();
+/** Every wireframe screen on the canvas whose file carries a spec, read back off its current version. */
+export async function wiresOn(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse): Promise<Screen[]> {
   const items = Object.values(snapshot.canvas.items ?? {}).filter((i) => i.properties?.[FIDELITY_PROP] === "wireframe");
   const read = await Promise.all(items.map(async (item) => {
     const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[item.versions.length - 1];
     if (!current || current.mimeType !== "text/html") return null;
     const spec = readWire(Buffer.from(await ctx.client.downloadBlob(canvasId, current.blobHash)).toString("utf8"));
-    return spec && spec.flow ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height } : null;
+    return spec ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height } : null;
   }));
+  return read.filter((s): s is Screen => s !== null);
+}
+
+async function flowsOn(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse): Promise<Map<string, Screen[]>> {
+  const flows = new Map<string, Screen[]>();
   const order = (s: Screen) => RECIPES.findIndex((r) => r.id === s.spec.archetype);
-  for (const s of read) {
-    if (!s) continue;
+  // A variation shares its screen's flow but is not one of the flow's screens: no round asks it anything.
+  for (const s of await wiresOn(ctx, canvasId, snapshot)) {
+    if (!s.spec.flow || s.spec.variantOf) continue;
     flows.set(s.spec.flow, [...(flows.get(s.spec.flow) ?? []), s]);
   }
   for (const list of flows.values()) list.sort((a, b) => order(a) - order(b));
@@ -307,7 +343,8 @@ export function registerCompose(host: CliHost, wire: Command): void {
             answerer: by,
             firstBlueprintMs: firstMs,
             totalMs,
-            screens: screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots })),
+            screens: screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots, ...(s.spec.varied ? { varied: s.spec.varied } : {}) })),
+            variations: canvas.variants.map((v) => ({ itemId: v.item, title: wireTitle(v.spec), variantOf: v.spec.variantOf, flip: v.spec.flip })),
             rounds: tallies,
             inputTokens: tallies.reduce((s, t) => s + t.inputTokens, 0),
             cost: tallies.reduce((s, t) => s + t.inputTokens, 0) * JEV_INPUT_PRICE,

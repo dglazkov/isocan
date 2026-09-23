@@ -61,7 +61,13 @@ function harness() {
       item.versions.push(op.version);
       item.currentVersionId = op.version.id;
     } else if (op.type === "item.update") {
-      if (op.patch.title) items.get(op.itemId)!.title = op.patch.title;
+      const item = items.get(op.itemId)!;
+      if (op.patch.title) item.title = op.patch.title;
+      if (op.patch.properties) item.properties = { ...item.properties, ...op.patch.properties };
+      if (op.patch.removeProperties) {
+        item.properties = { ...item.properties };
+        for (const key of op.patch.removeProperties) delete item.properties[key];
+      }
     } else if (op.type === "item.resize") {
       Object.assign(items.get(op.itemId)!, { width: op.width, height: op.height });
     } else throw new Error(`the composer sent an op it should not: ${op.type}`);
@@ -77,8 +83,10 @@ function harness() {
     },
     ctxOf: async () => ctx,
     resolveCanvas: async () => ({ id: "canvas-acme", title: "Acme" }),
-    resolveItem: () => {
-      throw new Error("unused");
+    resolveItem: (snapshot: { canvas: { items: Record<string, FakeItem> } }, ref: string) => {
+      const found = snapshot.canvas.items[ref] ?? Object.values(snapshot.canvas.items).find((i) => i.title === ref);
+      if (!found) throw new Error(`no item ${ref}`);
+      return found;
     },
     sendOp: async (_ctx: unknown, _canvas: string, op: Operation, group?: string) => {
       sent.push({ op, ...(group ? { group } : {}) });
@@ -148,7 +156,19 @@ describe('isocan wire "<request>"', () => {
     // Every screen was added once and then versioned, never replaced.
     const adds = h.sent.filter((s) => s.op.type === "item.add").map((s) => (s.op as { itemId: string }).itemId);
     expect(h.items.size).toBe(adds.length);
-    const screens = [...h.items.values()];
+    // The flow's screens, and the variations placed under them (design §5).
+    const screens = [...h.items.values()].filter((i) => !h.specOf(i.id).variantOf);
+    const variants = [...h.items.values()].filter((i) => h.specOf(i.id).variantOf);
+    for (const v of variants) {
+      const spec = h.specOf(v.id);
+      const of = h.items.get(spec.variantOf!)!;
+      expect(validateWire(spec)).toEqual([]);
+      expect(v.versions.length).toBe(1);
+      expect(v.x).toBe(of.x);
+      expect(v.y).toBeGreaterThan(of.y + of.height);
+      expect(v.title.startsWith(`${of.title} · `)).toBe(true);
+      expect(spec.flip).toBeDefined();
+    }
     for (const item of screens) {
       const spec = h.specOf(item.id);
       expect(validateWire(spec)).toEqual([]);
@@ -158,6 +178,10 @@ describe('isocan wire "<request>"', () => {
       // blueprint (round 1) → structure (round 2) → props (round 3), in the same item.
       const rounds = item.versions.map((_, i) => h.specOf(item.id, i).round);
       expect(rounds.slice(-3)).toEqual([1, 2, 3]);
+      // A screen either has siblings under it or says it has no honest alternative — never both, never neither.
+      const mine = variants.filter((v) => h.specOf(v.id).variantOf === item.id).length;
+      expect(mine <= 2).toBe(true);
+      expect(spec.varied === "none").toBe(mine === 0);
     }
     // In a row, in the archetypes' running order.
     const byX = [...screens].sort((a, b) => a.x - b.x).map((i) => RECIPES.findIndex((r) => r.id === h.specOf(i.id).archetype));
@@ -226,5 +250,81 @@ describe("the agent answers in Jev's place: wire questions / wire answer", () =>
     await h.cli("wire", "answer", bad);
     expect(h.errors.at(-1)).toMatch(/choice "fridge" is not one of app, web, site/);
     expect(h.sent.length).toBe(before);
+  });
+});
+
+describe("variations and keep marks from the terminal: wire vary / keep / unkeep / kept", () => {
+  async function drawn() {
+    const h = harness();
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    expect(h.errors).toEqual([]);
+    const all = [...h.items.values()];
+    const screens = all.filter((i) => !h.specOf(i.id).variantOf);
+    const variantsOf = (id: string) => [...h.items.values()].filter((i) => h.specOf(i.id).variantOf === id);
+    return { h, screens, variantsOf, flow: h.specOf(screens[0]!.id).flow };
+  }
+
+  it("adds the next variations under a screen, in a group of their own, and does not repeat a flip a sibling shows", async () => {
+    const { h, screens, variantsOf, flow } = await drawn();
+    // The stub's flat distributions leave most screens more honest flips than the two a flow makes.
+    const screen = screens.find((s) => variantsOf(s.id).length === 2)!;
+    const before = variantsOf(screen.id);
+    const sentBefore = h.sent.length;
+    const printed = await h.cli("wire", "vary", screen.id, "--count", "3");
+    expect(h.errors).toEqual([]);
+    const after = variantsOf(screen.id);
+    expect(after.length).toBe(3);
+    const added = after.find((v) => !before.includes(v))!;
+    expect(printed).toContain(added.title);
+    // Under the screen and under its siblings: same x, below the lowest.
+    expect(added.x).toBe(screen.x);
+    expect(added.y).toBeGreaterThan(Math.max(...before.map((v) => v.y + v.height)));
+    // Its own op group — not the flow's — so undo takes back only this.
+    const groups = new Set(h.sent.slice(sentBefore).map((s) => s.group));
+    expect(groups.size).toBe(1);
+    expect(groups.has(flow)).toBe(false);
+    expect(new Set(after.map((v) => JSON.stringify(h.specOf(v.id).flip))).size).toBe(3);
+    // Asking again adds nothing: --count is how many in all.
+    expect(await h.cli("wire", "vary", screen.id, "--count", "3")).toMatch(/already has 3 variations/);
+    expect(variantsOf(screen.id).length).toBe(3);
+  });
+
+  it("refuses to vary a variation, or a screen drawn by hand that carries no distribution", async () => {
+    const { h, screens, variantsOf } = await drawn();
+    const variant = screens.map((s) => variantsOf(s.id)).find((v) => v.length > 0)![0]!;
+    await h.cli("wire", "vary", variant.id);
+    expect(h.errors.at(-1)).toMatch(/is a variation of ".*" — vary the screen itself/);
+    const dir = mkdtempSync(path.join(tmpdir(), "acme-wire-"));
+    const file = path.join(dir, "detail.json");
+    writeFileSync(file, await h.cli("wire", "spec", "detail", "--resolved", "--title", "Acme hand-drawn"));
+    await h.cli("wire", "render", file);
+    const hand = [...h.items.values()].find((i) => i.title === "Acme hand-drawn")!;
+    await h.cli("wire", "vary", hand.id);
+    expect(h.errors.at(-1)).toMatch(/carries no answerer's distribution/);
+  });
+
+  it("keeps screens and a variation, lists them in reading order, and anyone can unkeep", async () => {
+    const { h, screens, variantsOf } = await drawn();
+    const [first, second] = [screens.sort((x, y) => x.x - y.x)[0]!, screens[1]!];
+    const v = variantsOf(first.id)[0]!;
+    const sentBefore = h.sent.length;
+    // Named out of order on purpose: `kept` answers in reading order, not argument order.
+    await h.cli("wire", "keep", v.id, second.id, first.id);
+    expect(h.errors).toEqual([]);
+    const marks = h.sent.slice(sentBefore);
+    expect(marks.map((s) => s.op)).toEqual([v, second, first].map((i) => ({ type: "item.update", itemId: i.id, patch: { properties: { wireKeep: "yes" } } })));
+    expect(new Set(marks.map((s) => s.group)).size).toBe(1);
+    // Reading order: the row of screens left to right, then the variation under the first.
+    const titles = (printed: string) => printed.split("\n").map((line) => line.split(/\s{2}/).slice(1).join("  "));
+    expect(titles(await h.cli("wire", "kept"))).toEqual([first.title, second.title, v.title]);
+    // Keeping twice writes nothing more.
+    const n = h.sent.length;
+    expect(await h.cli("wire", "keep", second.id)).toContain("was already kept");
+    expect(h.sent.length).toBe(n);
+    // Unkeep: the mark is a property on the item, not somebody's reaction — it simply comes off.
+    await h.cli("wire", "unkeep", second.id);
+    expect(h.sent.at(-1)!.op).toEqual({ type: "item.update", itemId: second.id, patch: { removeProperties: ["wireKeep"] } });
+    expect(h.items.get(second.id)!.properties.wireKeep).toBeUndefined();
+    expect(titles(await h.cli("wire", "kept"))).toEqual([first.title, v.title]);
   });
 });

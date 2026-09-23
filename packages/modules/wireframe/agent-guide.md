@@ -21,6 +21,29 @@ home without this module.
   leaves the rounds to you. The last line says who answered, the latency
   per round, calls, input tokens and cost. `--save <dir>` keeps every
   round's request and response; `--at x,y` starts the row somewhere.
+- **Variations come at the end of every flow**, in the same op group:
+  under each screen, up to two siblings titled `<Screen> · <what flipped>`
+  (`List · data table instead of stacked list`, `Detail · without button
+  group`, `Home · with stats row`). Each flips ONE decision to its runner-up,
+  where the answerer was least certain — the decision whose runner-up held
+  the most probability first — and nothing whose runner-up is under 0.10.
+  Nothing is asked again: the probabilities are the ones the screen already
+  carries. A screen whose answerer was sure everywhere gets no sibling and
+  says **one way to draw this** under its title. A variation's spec has
+  `variantOf` (its screen's item id) and `flip` (`{slot, from, to}`; `omit`
+  is a section left out). The header and nav are never varied — the flow
+  fixed them once for every screen.
+- `isocan wire vary <screen> [--count n]` adds more, the next least certain
+  flips a sibling does not already show, under the lowest sibling, in an op
+  group of their own; `--count` is how many variations the screen should
+  have in all (default 2), so running it twice adds nothing. It refuses a
+  variation (vary its screen) and a hand-drawn screen (no distribution).
+- **Keepers**: `isocan wire keep <items...>` marks screens 📐 — the property
+  `wireKeep=yes` through `item.update`, as a slide is marked, so anyone can
+  take it off with `isocan wire unkeep <items...>`; unmarked siblings stay on
+  the canvas. `isocan wire kept` lists the kept screens in reading order
+  (rows top to bottom, each left to right). A variation can be kept. People
+  do the same from the item menu (📐 Keep / Unkeep) or ⇧K.
 - `isocan wire questions` prints the pending round of a flow (`--flow <id>`,
   default the newest waiting) as a file of calls, each a request in Jev's
   shape (`state` and named questions, of type `noul` — yes/no — `choice` or

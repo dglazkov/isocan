@@ -1,5 +1,6 @@
 import type { CanvasContents, Item } from "./model.ts";
-import { deck, noteFor } from "./slides.ts";
+import { deck } from "./slides.ts";
+import { noteFor } from "./slidewrites.ts";
 
 /**
  * **Taking a deck somewhere else** (`docs/research/2026-09-04-deck-export.md`).

@@ -2,7 +2,7 @@
 status: designed
 since: 2026-09-23
 see: wireframes, judge, design-partner, slides, modules, mindmap
-note: the mechanism. Screens are HTML items carrying their spec as embedded JSON; a module holds the catalog (archetype recipes, blocks, primitives, intents), the renderer (blue skeleton → grey wireframe), the Jev composer (three rounds), link inference and the prototype assembler. No new op. The keep mark is a property, like a slide.
+note: the mechanism. Screens are HTML items carrying their spec as embedded JSON; a module holds the catalog (archetype recipes, blocks, primitives, intents), the renderer (blue skeleton → grey wireframe), the Jev composer (three rounds), link inference and the prototype assembler, and a theme layer — the default wire look, or the governing design system's tokens mapped onto the wire's roles by Jev (§9). No new op. The keep mark is a property, like a slide.
 issue: 350
 ---
 
@@ -182,11 +182,58 @@ item next to the flow and gains a version when rebuilt. It never navigates
 the canvas — screens run in sandboxed frames, and a prototype that routes
 inside itself needs no bridge out.
 
+### 9. Style — the default wire, or your design system
+
+Asked for by Dion on 23 Sep 2026: a default look, and the governing design
+system when there is one, with every wire changing when it changes.
+
+**One spec, two layers.** The spec says *what* is on a screen; a **theme**
+says how it looks. `renderWire(spec, theme?)` draws the wire look from a
+small set of **roles**, CSS custom properties the blocks and primitives use
+and nothing else:
+
+| Role | Default (the IDEO greys) |
+| --- | --- |
+| `ground`, `surface`, `line` | white, light grey, mid grey |
+| `ink`, `ink-muted`, `bar` | near-black, grey, light grey (copy bars) |
+| `primary`, `on-primary` | dark grey, white |
+| `radius` | 8px |
+| `font` | the system sans stack |
+| `space` | 8px unit |
+
+The **blueprint look never takes a theme**: blue on white means *still being
+drawn* in every system, so an unresolved slot is always blue.
+
+**The theme comes from the governing design system.** `designSystem(canvas,
+{ at })` in core already resolves which `DESIGN.md` governs a place (a group's
+scoped system first, then the canvas's). Its parsed tokens are the options.
+**Mapping tokens onto roles is Jev's question**: one `choice` per role over
+the system's own token names (*which of these colours is the primary
+action?*, *which is body text?*), the state carrying each token's name, value
+and group. A role whose answer is unsure (p under 0.5) keeps the default and
+says so. Font, radius and spacing come from the system's typography, radius
+and spacing scales directly when they are unambiguous, and from a Jev choice
+when there are several. The resolved mapping is stored in the spec as
+`style: { source: "default" } | { source: "design-system", itemId, versionId,
+roles }`, so a screen records which system and which version drew it.
+
+**All change, as one act.** `isocan wire style` resolves the governing system
+for each wire on the canvas (a flow in a scoped group takes that group's),
+asks Jev for the mapping once per system version (cached by version, so a
+canvas of forty wires is one call per system, not forty), and writes a new
+version of every wire whose theme changed — one op group, one undo.
+`--default` restores the default look. `wire "<request>"` uses the governing
+system from the start. When a new version of the governing `DESIGN.md`
+arrives, the wires say they are behind it (the spec names the version) and
+`wire style` brings them forward; restyling automatically on every design
+edit is refused for now — it would rewrite forty items behind somebody's
+back.
+
 ## Done means done on both surfaces
 
 1. **Ops** — none new: `item.add`, `item.addVersion`, `item.update`, op groups.
 2. **CLI** — `isocan wire <request>`, `wire vary`, `wire keep|unkeep`,
-   `wire link`, `wire prototype`, `wire questions|answer`, as the module's verbs.
+   `wire link`, `wire prototype`, `wire style`, `wire questions|answer`, as the module's verbs.
 3. **Agent guide** — the module's own `agent-guide.md`.
 4. **Core** — catalog, renderer, link inference and assembler in the module's
    core, so the web and the CLI draw and link identically.

@@ -28,8 +28,22 @@ export interface WireSpec {
   platform: Platform;
   /** In recipe order. */
   slots: WireSlot[];
-  /** Item id of the screen this varies. */
+  /** Item id of the screen this varies (a sibling placed under it — design §5). */
   variantOf?: string;
+  /** On a variation: the one decision flipped from its screen's argmax. */
+  flip?: WireFlip;
+  /**
+   * `"none"` on a screen whose answerer was certain everywhere — no decision's
+   * runner-up reached the floor — so it draws *one way to draw this* rather
+   * than a variation nobody's distribution offered.
+   */
+  varied?: "none";
+  /**
+   * Optional sections an answerer declined, with the probability it gave
+   * leaving them out and the block that would have filled them. Absent from
+   * `slots` still means declined; this is what lets a variation put one back.
+   */
+  declined?: WireDeclined[];
   /**
    * How many of the composer's three rounds have answered this screen: 0 is
    * the single blueprint a request makes before any model has spoken, 1 a
@@ -41,6 +55,45 @@ export interface WireSpec {
   round?: 0 | 1 | 2 | 3;
   /** The flow's chrome, fixed once in round 1 and the same on every screen. */
   chrome?: WireChrome;
+}
+
+/** In `alternatives`, `from` and `to`: the optional section left off the screen. */
+export const LEAVE_OUT = "omit";
+
+/** One decision flipped to its runner-up: a block for another, or a section in ↔ out (`LEAVE_OUT`). */
+export interface WireFlip {
+  slot: string;
+  from: string;
+  to: string;
+}
+
+export interface WireDeclined {
+  slot: string;
+  /** P(leave out) — the probability the declined answer carried. */
+  p: number;
+  /** The block that fills the section if it is put back: the answerer's argmax among its options. */
+  block: string;
+}
+
+/** Words for a block id: `data-table` → "data table". */
+export function blockWords(block: string): string {
+  return block.replace(/-/g, " ");
+}
+
+/** What a flip changed, in the words a title carries: "data table instead of card grid". */
+export function flipWords(flip: WireFlip): string {
+  if (flip.to === LEAVE_OUT) return `without ${blockWords(flip.from)}`;
+  if (flip.from === LEAVE_OUT) return `with ${blockWords(flip.to)}`;
+  return `${blockWords(flip.to)} instead of ${blockWords(flip.from)}`;
+}
+
+/**
+ * The name a screen's item and caption carry: its title, and on a variation
+ * what it flipped — "List · data table instead of stacked list". The heading
+ * inside the frame stays `spec.title`: a variation is the same screen.
+ */
+export function wireTitle(spec: WireSpec): string {
+  return spec.flip ? `${spec.title} · ${flipWords(spec.flip)}` : spec.title;
 }
 
 /** What round 1 fixes for a whole flow, so its screens agree. */
@@ -61,7 +114,10 @@ export interface WireSlot {
   intents?: Record<string, IntentId>;
   /** The probability the answerer gave the chosen block. */
   p?: number;
-  /** Runners-up, for variations. */
+  /**
+   * Runners-up, most likely first, for variations. On an optional section,
+   * one of them may be `LEAVE_OUT` — the probability it should not be here.
+   */
   alternatives?: Array<{ block: string; p: number }>;
 }
 
@@ -269,8 +325,22 @@ export function validateWire(input: unknown): string[] {
     }
     if (slot.p !== undefined && !(typeof slot.p === "number" && slot.p >= 0 && slot.p <= 1)) problems.push(`${where}: p must be 0–1`);
     for (const alt of slot.alternatives ?? []) {
-      if (!section.options.includes(alt.block)) problems.push(`${where}: alternative ${alt.block} is not one of ${section.options.join(", ")}`);
+      if (alt.block === LEAVE_OUT && section.optional) continue;
+      if (!section.options.includes(alt.block)) problems.push(`${where}: alternative ${alt.block} is not one of ${section.options.join(", ")}${section.optional ? ` or ${LEAVE_OUT}` : ""}`);
     }
+  }
+  if (spec.varied !== undefined && spec.varied !== "none") problems.push(`varied must be "none" when present`);
+  if (spec.variantOf !== undefined && typeof spec.variantOf !== "string") problems.push("variantOf must be an item id");
+  if (spec.flip !== undefined && (typeof spec.flip !== "object" || !spec.flip || ![spec.flip.slot, spec.flip.from, spec.flip.to].every((v) => typeof v === "string"))) {
+    problems.push("flip must be { slot, from, to }");
+  }
+  for (const d of spec.declined ?? []) {
+    const section = r.sections.find((s) => s.slot === d?.slot);
+    if (!section) problems.push(`declined ${JSON.stringify(d?.slot)}: ${r.id} has no such slot`);
+    else if (!section.optional) problems.push(`declined "${d.slot}": the section is not optional`);
+    else if (seen.has(d.slot)) problems.push(`declined "${d.slot}": the section is on the screen`);
+    else if (!section.options.includes(d.block)) problems.push(`declined "${d.slot}": block must be one of ${section.options.join(", ")}`);
+    if (d && !(typeof d.p === "number" && d.p >= 0 && d.p <= 1)) problems.push(`declined ${JSON.stringify(d.slot)}: p must be 0–1`);
   }
   for (const section of r.sections) {
     if (!section.optional && !seen.has(section.slot)) problems.push(`slot "${section.slot}" is required by ${r.id}`);

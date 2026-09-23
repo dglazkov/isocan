@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-23
 see: wireframes, judge, design-partner, slides, modules
-note: the ideal, as scenes. A person asks for wireframes; a blue-on-white skeleton appears at once and fills as Jev chooses blocks; variations sit beside each screen; the person marks the screens to keep; a clickable prototype is assembled from them with the obvious transitions already wired. Phase 0 closed 23 Sep 2026 — the catalog (18 archetypes, 28 blocks, 22 primitives, 49 intents) draws as blueprint and as wireframe, and `isocan wire render` places a screen; Phase 1 closed the same day — `isocan wire "<request>"` has Jev compose a flow skeleton-first in 7–11 s for about $0.001, one undo per flow. Variations and keep (phase 2) are next.
+note: the ideal, as scenes. A person asks for wireframes; a blue-on-white skeleton appears at once and fills as Jev chooses blocks; variations sit beside each screen; the person marks the screens to keep; a clickable prototype is assembled from them with the obvious transitions already wired. Phase 0 closed 23 Sep 2026 — the catalog (18 archetypes, 28 blocks, 22 primitives, 49 intents) draws as blueprint and as wireframe, and `isocan wire render` places a screen; Phase 1 closed the same day — `isocan wire "<request>"` has Jev compose a flow skeleton-first in 7–11 s for about $0.001, one undo per flow. Phase 2 closed the same day — variations sit under each screen where Jev was unsure, and 📐 keeps a screen from the CLI, the menu or ⇧K. Links and the prototype (phase 3) are next.
 issue: 350
 ---
 
@@ -104,7 +104,32 @@ canvas order — never stored, so they cannot drift; the prototype is one
 self-contained HTML item (it plays anywhere, as `deck.html` does); missing
 targets are named, not silently dropped.
 
-## 6. It is still an ordinary canvas
+## 6. In your design system
+
+The canvas has a design system — a `DESIGN.md` Priya imported from her
+team's tokens. Until now the wires were the default look: greys, one dark
+primary, system type. She chooses the system (or it already governs the
+canvas, or the group the flow sits in), and every wire changes: the primary
+button takes the brand colour, the type is the brand's, corners and spacing
+follow its scale. The blueprints stay blue — blue means *still being drawn*,
+in any system. Undo, and they are all grey again; one undo, because it was
+one act.
+
+A flow asked for on a canvas that already has a system arrives in it.
+
+```
+isocan wire style                 # restyle every wire to the governing system
+isocan wire style --default       # back to the default wire look
+```
+
+**What the scene forces:** a wire's look is a theme applied to the same
+spec, never a different screen; the theme comes from the governing design
+system when there is one; mapping a system's tokens onto the wire's roles
+is a typed choice (which of *these* colours is the primary action?) — Jev's
+kind of question, never an invented colour; restyling is one op group, and
+each screen gains a version rather than being replaced.
+
+## 7. It is still an ordinary canvas
 
 Every screen is an HTML item. Comment on it, draw on it, undo it — one undo
 takes back a whole *wire* request. Take the wireframes module away and every
@@ -119,4 +144,6 @@ screen still renders; only the verbs are gone.
 3. Variations from the distribution; a keep mark as a property.
 4. Link inference from intents and a prototype assembler, in core, so both
    surfaces produce the same prototype.
-5. No new operation.
+5. A theme layer: the default wire look, or the governing design system's
+   tokens mapped onto the wire's roles (Jev chooses the mapping).
+6. No new operation.

@@ -1,5 +1,6 @@
 import { selectCreatedItems } from "./groupplacement.ts";
-import type { Actor, CanvasCursor, CanvasTheme, Item, ThemeAnchor } from "@isocan/core";
+import type { Actor, CanvasCursor, CanvasTheme, Item, ModuleMark, ThemeAnchor } from "@isocan/core";
+import { markOffered, moduleMarkIntent, moduleMarkPatch, moduleMarks } from "@isocan/core";
 import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
@@ -372,6 +373,17 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
     // there is nothing to hand in to otherwise — and only for items not
     // already in, so the label is the count that will move.
     ...sprintHandIn(items, ctx),
+    // A module's marks (the wireframe's 📐 keep): the deck entry's shape for
+    // any mark a loaded module declares, and the same `item.update` its CLI sends.
+    ...moduleMarks().filter((mark) => items.every((item) => markOffered(mark, item))).map((mark): MenuEntry => {
+      const { on, changing } = moduleMarkIntent(items, mark.property);
+      const n = changing.length > 1 ? ` ${changing.length}` : "";
+      return {
+        label: `${mark.emoji} ${on ? mark.on : mark.off}${n}`,
+        writes: true,
+        run: () => toggleModuleMark(mark, items, ctx.canvasId, ctx.actor),
+      };
+    }),
     { separator: "" },
     {
       label: groupDeleteLabel(items) ?? (many ? `Delete ${items.length} items` : "Delete"),
@@ -404,6 +416,29 @@ function slideLabel(items: readonly Item[]): string {
   return on
     ? `${SLIDE_EMOJI} Make ${changing.length} slides`
     : `${SLIDE_EMOJI} Take ${changing.length} out of the deck`;
+}
+
+/**
+ * **Put a module's mark on a selection, or take it off** — the menu entry and
+ * the mark's key both land here, so the two doors are one act. One gesture is
+ * one op group, so one ⌘Z; the items already right are not written.
+ */
+export function toggleModuleMark(mark: ModuleMark, items: readonly Item[], canvasId: string, actor: Actor): void {
+  const { on, changing } = moduleMarkIntent(items, mark.property);
+  if (changing.length === 0) return;
+  const group = newGroupId();
+  for (const item of changing) {
+    void sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: moduleMarkPatch(mark.property, on) }, group);
+  }
+  const what = changing.length === 1 ? `"${changing[0]!.title}"` : `${changing.length} items`;
+  flashNotice(`${mark.emoji} ${what} — ${on ? mark.on.toLowerCase() : mark.off.toLowerCase()}`);
+}
+
+/** ⇧ and a mark's letter on the selection (`CanvasPage`'s keys), by `KeyboardEvent.code`. */
+export function markByKey(code: string, ids: readonly string[], canvasId: string, actor: Actor): void {
+  const mark = moduleMarks().find((m) => `Key${m.key}` === code);
+  const canvas = useCanvasStore.getState().canvas;
+  if (mark && canvas) toggleModuleMark(mark, ids.flatMap((id) => canvas.items[id] ?? []).filter((item) => markOffered(mark, item)), canvasId, actor);
 }
 
 /** The hand-in entry, or nothing when no sprint phase is running. */

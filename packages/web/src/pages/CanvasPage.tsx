@@ -15,6 +15,7 @@ import {
   THREAD_QUERY,
   anchorOffset,
   itemPath,
+  moduleMarks,
   workbenchItemPath,
   workbenchPath,
 } from "@isocan/core";
@@ -816,6 +817,9 @@ function CanvasSurface({
         // camera and undo nothing, and this writes ops.
         e.preventDefault();
         void import("../lib/fititem.ts").then(({ fitToContent }) => fitToContent(canvasId!, actor, ui.selectedItemIds)).catch((error: Error) => setNotice(error.message));
+      } else if (e.shiftKey && canEditNow() && moduleMarks().some((m) => "Key" + m.key == e.code)) {
+        // ⇧ and a module mark's letter (the wireframe's ⇧K keep): the menu entry's act, fetched with it.
+        void import("../lib/menuentries.tsx").then((m) => m.markByKey(e.code, ui.selectedItemIds, canvasId!, actor));
       } else if (e.key === "0") {
         zoomToFit();
       } else if (e.code === "KeyV" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {

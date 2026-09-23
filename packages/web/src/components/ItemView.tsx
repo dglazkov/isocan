@@ -28,6 +28,7 @@ import {
   AREA_TITLE_HEIGHT,
   isDrawingItem,
   isSlide,
+  moduleMarks,
   noteTarget,
   isTextItem,
   reactionPointsOf,
@@ -1021,6 +1022,8 @@ function ItemViewInner({
             {SLIDE_EMOJI}
           </span>
         )}
+        {/* A module's marks (`ModuleMark`) — the wireframe's 📐 keep. */}
+        {moduleMarks().map((m) => item.properties?.[m.property] && <span className="slide-mark" key={m.property} title={m.title}>{m.emoji}</span>)}
         {renaming ? (
           <NameInput title={item.title} onDone={rename} />
         ) : row.name ? (
