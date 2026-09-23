@@ -476,6 +476,7 @@ import {
   sameGroupName,
   sameSpaceName,
   scopedDesignSystems,
+  selectDesignSystem,
   sessionState,
   setupCommand,
   shelvePatch,
@@ -524,6 +525,10 @@ import {
   workbenchUrl
 } from "./chunk-JM775MAC.mjs";
 import {
+  CONTRAST_BODY,
+  contrastRatio,
+  parseDesign,
+  resolveToken,
   serializeDesign,
   toCss,
   toDtcg
@@ -1651,7 +1656,7 @@ var require_command = __commonJS({
   "node_modules/commander/lib/command.js"(exports) {
     var EventEmitter = __require("node:events").EventEmitter;
     var childProcess = __require("node:child_process");
-    var path17 = __require("node:path");
+    var path18 = __require("node:path");
     var fs17 = __require("node:fs");
     var process2 = __require("node:process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
@@ -2651,9 +2656,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
         let launchWithNode = false;
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
-          const localBin = path17.resolve(baseDir, baseName);
+          const localBin = path18.resolve(baseDir, baseName);
           if (fs17.existsSync(localBin)) return localBin;
-          if (sourceExt.includes(path17.extname(baseName))) return void 0;
+          if (sourceExt.includes(path18.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
             (ext) => fs17.existsSync(`${localBin}${ext}`)
           );
@@ -2671,17 +2676,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
-          executableDir = path17.resolve(
-            path17.dirname(resolvedScriptPath),
+          executableDir = path18.resolve(
+            path18.dirname(resolvedScriptPath),
             executableDir
           );
         }
         if (executableDir) {
           let localFile = findFile(executableDir, executableFile);
           if (!localFile && !subcommand._executableFile && this._scriptPath) {
-            const legacyName = path17.basename(
+            const legacyName = path18.basename(
               this._scriptPath,
-              path17.extname(this._scriptPath)
+              path18.extname(this._scriptPath)
             );
             if (legacyName !== this._name) {
               localFile = findFile(
@@ -2692,7 +2697,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
           }
           executableFile = localFile || executableFile;
         }
-        launchWithNode = sourceExt.includes(path17.extname(executableFile));
+        launchWithNode = sourceExt.includes(path18.extname(executableFile));
         let proc;
         if (process2.platform !== "win32") {
           if (launchWithNode) {
@@ -3539,7 +3544,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @return {Command}
        */
       nameFromFilename(filename) {
-        this._name = path17.basename(filename, path17.extname(filename));
+        this._name = path18.basename(filename, path18.extname(filename));
         return this;
       }
       /**
@@ -3553,9 +3558,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [path]
        * @return {(string|null|Command)}
        */
-      executableDir(path18) {
-        if (path18 === void 0) return this._executableDir;
-        this._executableDir = path18;
+      executableDir(path19) {
+        if (path19 === void 0) return this._executableDir;
+        this._executableDir = path19;
         return this;
       }
       /**
@@ -5199,7 +5204,7 @@ ${result3.data}`);
     for (const saved of result2.receipts) {
       console.log(`${saved.receipt.id} \xB7 ${saved.receipt.status} \xB7 evidence ${saved.status}
 ${saved.ref.itemId}@${saved.ref.versionId}`);
-      for (const check2 of saved.receipt.checks) console.log(`  ${check2.id}: ${check2.kind} \xB7 reported ${check2.result} \xB7 ${check2.coverage}`);
+      for (const check3 of saved.receipt.checks) console.log(`  ${check3.id}: ${check3.kind} \xB7 reported ${check3.result} \xB7 ${check3.coverage}`);
       for (const freshness of saved.checkFreshness) if (freshness.status !== "current") console.log(`  ${freshness.checkId}: evidence ${freshness.status} \xB7 ${freshness.reasons.join(" ")}`);
       for (const reason of saved.reasons) console.log(`  ${reason}`);
       for (const limit of saved.receipt.unresolved) console.log(`  ${limit.severity}: ${limit.description}`);
@@ -5510,7 +5515,7 @@ async function finish(ctx, handle, requestId, runId, file) {
     if (result3.status !== "accepted") return { results, result: result3 };
   }
   const fresh = (await handle.designBrief({ requestId })).requests[0];
-  const prior = fresh.receipts.find((receipt) => receipt.receipt.checks.some((check2) => check2.evidence.some((ref) => ref.itemId === row.ref.itemId && ref.versionId === row.ref.versionId && ref.blobHash === row.ref.blobHash)));
+  const prior = fresh.receipts.find((receipt) => receipt.receipt.checks.some((check3) => check3.evidence.some((ref) => ref.itemId === row.ref.itemId && ref.versionId === row.ref.versionId && ref.blobHash === row.ref.blobHash)));
   if (prior) return { results, result: { status: "accepted", opId: prior.marker.opId, submittedOpId: prior.marker.opId, consistency: { status: prior.status, reasons: prior.reasons } } };
   const payload = await prepareDesignReviewReceipt(io, { canvasId: handle.id, runId, base: row.ref, itemId: newItemId(), receiptId: newOpId(), ...identities2() });
   const result2 = await deliver(ctx, file, { actorId: ctx.actor.id, canvasId: handle.id, requestId, kind: "receipt", payload }, false);
@@ -5685,7 +5690,7 @@ async function codexSandboxSpec(spec, home, daemon, platform = process.platform)
 import { existsSync as existsSync3, promises as fs16 } from "node:fs";
 import { spawnSync as spawnSync4 } from "node:child_process";
 import os4 from "node:os";
-import path16 from "node:path";
+import path17 from "node:path";
 
 // node_modules/commander/esm.mjs
 var import_index = __toESM(require_commander(), 1);
@@ -10018,7 +10023,7 @@ var talkCli = {
 };
 
 // packages/modules/wireframe/agent-guide.md
-var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; `--answerer stub` (the default without a key) draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere.\n- **Variations come at the end of every flow**, in the same op group:\n  under each screen, up to two siblings titled `<Screen> \xB7 <what flipped>`\n  (`List \xB7 data table instead of stacked list`, `Detail \xB7 without button\n  group`, `Home \xB7 with stats row`). Each flips ONE decision to its runner-up,\n  where the answerer was least certain \u2014 the decision whose runner-up held\n  the most probability first \u2014 and nothing whose runner-up is under 0.10.\n  Nothing is asked again: the probabilities are the ones the screen already\n  carries. A screen whose answerer was sure everywhere gets no sibling and\n  says **one way to draw this** under its title. A variation\'s spec has\n  `variantOf` (its screen\'s item id) and `flip` (`{slot, from, to}`; `omit`\n  is a section left out). The header and nav are never varied \u2014 the flow\n  fixed them once for every screen.\n- `isocan wire vary <screen> [--count n]` adds more, the next least certain\n  flips a sibling does not already show, under the lowest sibling, in an op\n  group of their own; `--count` is how many variations the screen should\n  have in all (default 2), so running it twice adds nothing. It refuses a\n  variation (vary its screen) and a hand-drawn screen (no distribution).\n- **Keepers**: `isocan wire keep <items...>` marks screens \u{1F4D0} \u2014 the property\n  `wireKeep=yes` through `item.update`, as a slide is marked, so anyone can\n  take it off with `isocan wire unkeep <items...>`; unmarked siblings stay on\n  the canvas. `isocan wire kept` lists the kept screens in reading order\n  (rows top to bottom, each left to right). A variation can be kept. People\n  do the same from the item menu (\u{1F4D0} Keep / Unkeep) or \u21E7K.\n- **Links are computed, never stored.** `isocan wire links [screen]` prints\n  where every hotspot on the kept screens goes, worked out each time from\n  intents, archetypes and reading order: an intent with a target goes to the\n  first kept screen of that archetype (`sign-in` \u2192 the first home, list or\n  feed; `next`/`continue`/`save` \u2192 the next kept screen); `back` and an app\n  bar\'s chevron go back; a list, grid, table or feed row opens the first kept\n  `detail` after it; tab *i* of a tab bar or side nav whose intent found\n  nothing takes the *i*-th top-level screen (one that draws the nav) no other\n  tab reaches. Anything else that navigates and found nothing is **dashed**\n  and says what it needs (`- - needs Settings`) \u2014 the list of screens still\n  to make. A hotspot\'s key is `<slot>#<element>` (`main.3#row`,\n  `header#leading`, `nav#tab-2`); `--json` has every link with its `rule`.\n- `isocan wire link <screen> <element> <target>` overrides one hotspot \u2014\n  `<element>` is the key or its part after `#` when that is unique \u2014\n  `--none` switches it off, `--back` sends it back, `--clear` gives it back\n  to the rules. It is the property `wireLinks` on the source screen, through\n  `item.update`, so one `isocan undo` takes it back.\n- `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`\n  when more than one flow is kept) as **one self-contained HTML item** to the\n  right of them: every screen, a router with a history stack, the links as\n  click targets, a push / pop / fade / slide-up by link kind, a Restart. Run\n  it again after a kept screen changes and the same item **gains a version**\n  (found by its `wirePrototype` property); with nothing changed it writes\n  nothing. `isocan open <item>` plays it full screen.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n49; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; everything else is grey bars, never lorem ipsum. If you want\nreal copy on a screen, that is a separate, honest act \u2014 write an HTML screen\nyourself \u2014 not a label smuggled into a spec.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
+var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; `--answerer stub` (the default without a key) draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere.\n- **Variations come at the end of every flow**, in the same op group:\n  under each screen, up to two siblings titled `<Screen> \xB7 <what flipped>`\n  (`List \xB7 data table instead of stacked list`, `Detail \xB7 without button\n  group`, `Home \xB7 with stats row`). Each flips ONE decision to its runner-up,\n  where the answerer was least certain \u2014 the decision whose runner-up held\n  the most probability first \u2014 and nothing whose runner-up is under 0.10.\n  Nothing is asked again: the probabilities are the ones the screen already\n  carries. A screen whose answerer was sure everywhere gets no sibling and\n  says **one way to draw this** under its title. A variation\'s spec has\n  `variantOf` (its screen\'s item id) and `flip` (`{slot, from, to}`; `omit`\n  is a section left out). The header and nav are never varied \u2014 the flow\n  fixed them once for every screen.\n- `isocan wire vary <screen> [--count n]` adds more, the next least certain\n  flips a sibling does not already show, under the lowest sibling, in an op\n  group of their own; `--count` is how many variations the screen should\n  have in all (default 2), so running it twice adds nothing. It refuses a\n  variation (vary its screen) and a hand-drawn screen (no distribution).\n- **Keepers**: `isocan wire keep <items...>` marks screens \u{1F4D0} \u2014 the property\n  `wireKeep=yes` through `item.update`, as a slide is marked, so anyone can\n  take it off with `isocan wire unkeep <items...>`; unmarked siblings stay on\n  the canvas. `isocan wire kept` lists the kept screens in reading order\n  (rows top to bottom, each left to right). A variation can be kept. People\n  do the same from the item menu (\u{1F4D0} Keep / Unkeep) or \u21E7K.\n- **Links are computed, never stored.** `isocan wire links [screen]` prints\n  where every hotspot on the kept screens goes, worked out each time from\n  intents, archetypes and reading order: an intent with a target goes to the\n  first kept screen of that archetype (`sign-in` \u2192 the first home, list or\n  feed; `next`/`continue`/`save` \u2192 the next kept screen); `back` and an app\n  bar\'s chevron go back; a list, grid, table or feed row opens the first kept\n  `detail` after it; tab *i* of a tab bar or side nav whose intent found\n  nothing takes the *i*-th top-level screen (one that draws the nav) no other\n  tab reaches. Anything else that navigates and found nothing is **dashed**\n  and says what it needs (`- - needs Settings`) \u2014 the list of screens still\n  to make. A hotspot\'s key is `<slot>#<element>` (`main.3#row`,\n  `header#leading`, `nav#tab-2`); `--json` has every link with its `rule`.\n- `isocan wire link <screen> <element> <target>` overrides one hotspot \u2014\n  `<element>` is the key or its part after `#` when that is unique \u2014\n  `--none` switches it off, `--back` sends it back, `--clear` gives it back\n  to the rules. It is the property `wireLinks` on the source screen, through\n  `item.update`, so one `isocan undo` takes it back.\n- `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`\n  when more than one flow is kept) as **one self-contained HTML item** to the\n  right of them: every screen, a router with a history stack, the links as\n  click targets, a push / pop / fade / slide-up by link kind, a Restart. Run\n  it again after a kept screen changes and the same item **gains a version**\n  (found by its `wirePrototype` property); with nothing changed it writes\n  nothing. `isocan open <item>` plays it full screen.\n- **Wires draw in the canvas\'s design system.** The look is a theme over\n  the same spec: eleven roles (`ground`, `surface`, `line`, `ink`,\n  `ink-muted`, `bar`, `primary`, `on-primary`, `radius`, `font`, `space`),\n  by default the greys. `isocan wire style` restyles every wire on the\n  canvas in the `DESIGN.md` that governs where it sits (a group\'s own system\n  first, then the canvas\'s \u2014 `isocan design set DESIGN.md [--in <group>]`):\n  Jev maps the system\'s own tokens onto the roles \u2014 one choice per role over\n  the token names, once per system *version* \u2014 and every wire whose theme\n  changed gains a version, in one op group, so one `isocan undo` takes the\n  restyle back. The output names the token chosen for each role with its\n  probability; a role Jev is unsure of (under 0.5) keeps the default and says\n  so, and an on-primary under 4.5:1 against primary becomes the system\'s ink\n  or ground. Nothing is ever a colour the system does not hold. Blueprints\n  stay blue in every system. `--default` restores the greys; `--flow <id>`\n  restyles one flow; `--check` writes nothing and lists wires behind the\n  system that governs them (a new `DESIGN.md` version does not restyle\n  anything by itself \u2014 run `wire style` to bring them forward). Running it\n  again with nothing changed asks nothing and writes nothing. A kept flow\'s\n  prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the\n  stub answers, and its flat distributions keep every asked role at the\n  default. The spec records it as `style` (`{ "source": "design-system",\n  "itemId", "versionId", "roles" }`).\n- `isocan wire "<request>"` starts in the governing system: the mapping is\n  asked while round 1 is, and the screens arrive in it. `--in <group>`\n  composes the flow inside a group \u2014 and in that group\'s own system, when it\n  has one.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n49; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; everything else is grey bars, never lorem ipsum. If you want\nreal copy on a screen, that is a separate, honest act \u2014 write an HTML screen\nyourself \u2014 not a label smuggled into a spec.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
 
 // packages/modules/wireframe/src/cli.ts
 import { readFile as readFile2 } from "node:fs/promises";
@@ -10487,21 +10492,24 @@ function listRows(props, action = "", hot = "") {
 function stepsRow(n, current, labels) {
   return `<div class="steps">${rowsOf(n, (i) => `<span class="step${i + 1 < current ? " done" : i + 1 === current ? " on" : ""}"><b>${i + 1}</b>${labels ? bar(70, "in") : ""}</span>`)}</div>`;
 }
+var SHADES = [77, 53, 36, 22].map((pct2) => `color-mix(in srgb, var(--w-primary) ${pct2}%, var(--w-ground))`);
 function chartSvg(kind, series, legend) {
-  const shades = ["#555555", "#8a8a8a", "#b0b0b0", "#cfcfcf"];
+  const shades = SHADES;
+  const fill = (c) => `style="fill:${c}"`;
+  const stroke = (c) => `fill="none" style="stroke:${c}"`;
   let marks = "";
   if (kind === "pie" || kind === "donut") {
-    marks = `<circle cx="100" cy="60" r="48" fill="#cfcfcf"/><path d="M100 60 L100 12 A48 48 0 0 1 145 76 Z" fill="#555555"/>${kind === "donut" ? `<circle cx="100" cy="60" r="24" fill="#ffffff"/>` : ""}`;
+    marks = `<circle cx="100" cy="60" r="48" ${fill(shades[3])}/><path d="M100 60 L100 12 A48 48 0 0 1 145 76 Z" ${fill(shades[0])}/>${kind === "donut" ? `<circle cx="100" cy="60" r="24" ${fill("var(--w-ground)")}/>` : ""}`;
   } else if (kind === "bar" || kind === "column") {
     const vals = [40, 70, 55, 90, 65, 80];
-    marks = vals.map((v, i) => rowsOf(series, (s) => kind === "column" ? `<rect x="${12 + i * 31 + s * (24 / series)}" y="${110 - v * (1 - s * 0.15)}" width="${24 / series - 1}" height="${v * (1 - s * 0.15)}" fill="${shades[s]}"/>` : `<rect x="10" y="${8 + i * 17 + s * (14 / series)}" width="${v * 1.9 * (1 - s * 0.15)}" height="${14 / series - 1}" fill="${shades[s]}"/>`)).join("");
+    marks = vals.map((v, i) => rowsOf(series, (s) => kind === "column" ? `<rect x="${12 + i * 31 + s * (24 / series)}" y="${110 - v * (1 - s * 0.15)}" width="${24 / series - 1}" height="${v * (1 - s * 0.15)}" ${fill(shades[s])}/>` : `<rect x="10" y="${8 + i * 17 + s * (14 / series)}" width="${v * 1.9 * (1 - s * 0.15)}" height="${14 / series - 1}" ${fill(shades[s])}/>`)).join("");
   } else {
     marks = rowsOf(series, (s) => {
       const pts = [70, 55, 62, 35, 48, 22, 30].map((v, i) => `${10 + i * 30},${v + s * 14}`).join(" ");
-      return kind === "area" ? `<polygon points="10,110 ${pts} 190,110" fill="${shades[s + 1] ?? shades[3]}"/><polyline points="${pts}" fill="none" stroke="${shades[s]}" stroke-width="2"/>` : `<polyline points="${pts}" fill="none" stroke="${shades[s]}" stroke-width="2"/>`;
+      return kind === "area" ? `<polygon points="10,110 ${pts} 190,110" ${fill(shades[s + 1] ?? shades[3])}/><polyline points="${pts}" ${stroke(shades[s])} stroke-width="2"/>` : `<polyline points="${pts}" ${stroke(shades[s])} stroke-width="2"/>`;
     });
   }
-  const axis2 = kind === "pie" || kind === "donut" || kind === "sparkline" ? "" : `<line x1="8" y1="110" x2="194" y2="110" stroke="#c8c8c8"/>`;
+  const axis2 = kind === "pie" || kind === "donut" || kind === "sparkline" ? "" : `<line x1="8" y1="110" x2="194" y2="110" style="stroke:var(--w-line)"/>`;
   return `<div class="chart k-${esc(kind)}"><svg viewBox="0 0 200 ${kind === "sparkline" ? 90 : 116}" preserveAspectRatio="none">${axis2}${marks}</svg>${legend ? `<div class="legend">${rowsOf(series, (s) => `<span><i style="background:${shades[s]}"></i>${bar(100, "in")}</span>`)}</div>` : ""}</div>`;
 }
 
@@ -11082,6 +11090,361 @@ function component(id3) {
   return found;
 }
 
+// packages/modules/wireframe/src/answerer.ts
+var JEV_URL = "https://api.typesafe.ai/v1/systemone";
+var JEV_MODEL = "jev-latest";
+var JEV_INPUT_PRICE = 0.042 / 1e6;
+function responseProblems(request, body) {
+  const res = body;
+  if (!res || typeof res !== "object") return ["a response is a JSON object with `answers`"];
+  if (res.detail !== void 0) return [`the answerer refused the request: ${detailText(res.detail)}`];
+  if (!res.answers || typeof res.answers !== "object") return ["a response has `answers`, one per question"];
+  const problems = [];
+  const isP = (v) => typeof v === "number" && v >= 0 && v <= 1;
+  for (const [id3, q] of Object.entries(request.questions)) {
+    const a = res.answers[id3];
+    const where = `answer "${id3}"`;
+    if (!a || typeof a !== "object") {
+      problems.push(`${where} is missing`);
+      continue;
+    }
+    if (a.type !== q.type) {
+      problems.push(`${where} must be a ${q.type}, not ${String(a.type)}`);
+      continue;
+    }
+    if (q.type === "noul") {
+      if (!isP(a.noul)) problems.push(`${where}: noul must be a number 0\u20131`);
+      continue;
+    }
+    const keys = q.type === "choice" ? Object.keys(q.criteria) : q.criteria.map((_, i) => String(i));
+    const probs = a.probabilities;
+    if (!probs || typeof probs !== "object") {
+      problems.push(`${where}: probabilities are missing`);
+      continue;
+    }
+    for (const [k, v] of Object.entries(probs)) {
+      if (!keys.includes(k)) problems.push(`${where}: "${k}" is not one of its options (${keys.join(", ")})`);
+      else if (!isP(v)) problems.push(`${where}: probability of "${k}" must be 0\u20131`);
+    }
+    if (q.type === "choice" && !keys.includes(String(a.choice))) problems.push(`${where}: choice "${String(a.choice)}" is not one of ${keys.join(", ")}`);
+    if (q.type === "score" && typeof a.score !== "number") problems.push(`${where}: score must be a number`);
+  }
+  for (const id3 of Object.keys(res.answers)) if (!(id3 in request.questions)) problems.push(`answer "${id3}" answers no question`);
+  return problems;
+}
+function readResponse(request, body, from = "the answerer") {
+  const problems = responseProblems(request, body);
+  if (problems.length > 0) throw new Error(`${from} gave answers this cannot apply:
+  ${problems.join("\n  ")}`);
+  return body;
+}
+function detailText(detail) {
+  if (Array.isArray(detail)) {
+    return detail.map((d) => {
+      const e = d;
+      return `${(e.loc ?? []).join(".")}: ${e.msg ?? JSON.stringify(d)}`;
+    }).join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    const e = detail;
+    return e.message ?? e.error_type ?? JSON.stringify(detail);
+  }
+  return String(detail);
+}
+function chosenOption(q, a) {
+  if (q.type === "noul" && a.type === "noul") {
+    const yes = a.noul >= 0.5;
+    return { value: yes ? "true" : "false", p: yes ? a.noul : 1 - a.noul, distribution: { true: a.noul, false: 1 - a.noul } };
+  }
+  if (q.type === "choice" && a.type === "choice") {
+    const distribution = Object.fromEntries(Object.keys(q.criteria).map((k) => [k, a.probabilities[k] ?? 0]));
+    return { value: a.choice, p: distribution[a.choice] ?? 0, distribution };
+  }
+  if (q.type === "score" && a.type === "score") {
+    const levels = q.criteria.map((_, i) => a.probabilities[String(i)] ?? 0);
+    const top = Math.max(...levels);
+    let best = 0;
+    levels.forEach((p, i) => {
+      if (p === top && (levels[best] !== top || Math.abs(i - a.score) < Math.abs(best - a.score))) best = i;
+    });
+    return { value: q.criteria[best], p: top, distribution: Object.fromEntries(q.criteria.map((c, i) => [c, levels[i]])) };
+  }
+  throw new Error(`a ${q.type} question answered as ${a.type}`);
+}
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 1831565813 >>> 0;
+    let t = a;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function stubAnswerer(seed = 1) {
+  return {
+    name: "stub",
+    async answer(request) {
+      const answers = {};
+      for (const [id3, q] of Object.entries(request.questions)) {
+        const draw = seeded(seed ^ hash(`${JSON.stringify(request.state)}|${id3}`))();
+        if (q.type === "noul") {
+          answers[id3] = { type: "noul", noul: Math.round(draw * 100) / 100 };
+        } else if (q.type === "choice") {
+          const keys = Object.keys(q.criteria);
+          answers[id3] = { type: "choice", choice: keys[Math.floor(draw * keys.length)], probabilities: Object.fromEntries(keys.map((k) => [k, 1 / keys.length])), confidence: 0 };
+        } else {
+          const pick = Math.floor(draw * q.criteria.length);
+          answers[id3] = { type: "score", score: pick, probabilities: Object.fromEntries(q.criteria.map((_, i) => [String(i), 1 / q.criteria.length])), confidence: 0 };
+        }
+      }
+      return { response: { model: "stub", answers, usage: { input_tokens: 0, output_tokens: 0 } }, ms: 0, by: `stub (seed ${seed})` };
+    }
+  };
+}
+function jevAnswerer(opts) {
+  const key = opts.key;
+  if (!key) throw new Error("the Jev answerer needs TYPESAFE_API_KEY in the environment \u2014 or `--answerer stub` (random, seeded) or `--answerer agent` (answer the questions yourself)");
+  const doFetch = opts.fetch ?? fetch;
+  const backoff = opts.backoff ?? [500, 1e3, 2e3, 4e3];
+  const sleep2 = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const now = opts.now ?? (() => Date.now());
+  return {
+    name: "jev",
+    async answer(request) {
+      for (let attempt = 0; ; attempt++) {
+        const t0 = now();
+        const res = await doFetch(JEV_URL, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+          body: JSON.stringify(request)
+        });
+        const ms = now() - t0;
+        if ((res.status === 429 || res.status === 529) && attempt < backoff.length) {
+          await sleep2(backoff[attempt]);
+          continue;
+        }
+        let body;
+        try {
+          body = await res.json();
+        } catch {
+          body = null;
+        }
+        if (!res.ok) {
+          const detail = body?.detail;
+          throw new Error(`Jev answered ${res.status}${detail !== void 0 ? `: ${detailText(detail)}` : ""}`);
+        }
+        const response = readResponse(request, body, "Jev");
+        return { response, ms, by: response.model ?? JEV_MODEL };
+      }
+    }
+  };
+}
+
+// packages/modules/wireframe/src/theme.ts
+var COLOR_ROLES = ["ground", "surface", "line", "ink", "ink-muted", "bar", "primary", "on-primary"];
+var SCALE_ROLES = ["radius", "font", "space"];
+var ROLES = [...COLOR_ROLES, ...SCALE_ROLES];
+var DEFAULT_THEME = {
+  ground: "#ffffff",
+  surface: "#ececec",
+  line: "#c8c8c8",
+  ink: "#222222",
+  "ink-muted": "#555555",
+  bar: "#dcdcdc",
+  primary: "#222222",
+  "on-primary": "#ffffff",
+  radius: "8px",
+  font: `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`,
+  space: "8px"
+};
+var DEFAULT_STYLE = { source: "default" };
+var HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+var FN_COLOR = /^(?:rgba?|hsla?|oklch|oklab|lab|lch)\([\d.,%\s/+\-a-z]*\)$/i;
+var LENGTH = /^\d+(?:\.\d+)?(?:px|rem|em)$/;
+var FONT = /^[\w\s,'"\-.]+$/;
+function safeRoleValue(role, value) {
+  if (typeof value !== "string" || value.length > 200) return false;
+  if (role === "radius" || role === "space") return LENGTH.test(value);
+  if (role === "font") return FONT.test(value) && !value.includes("--");
+  return HEX.test(value) || FN_COLOR.test(value);
+}
+function styleProblems(input) {
+  const s = input;
+  if (!s || typeof s !== "object") return ['style must be { source: "default" } or { source: "design-system", \u2026 }'];
+  if (s.source === "default") return [];
+  if (s.source !== "design-system") return [`style.source must be "default" or "design-system"`];
+  const problems = [];
+  if (typeof s.itemId !== "string" || !s.itemId) problems.push("style.itemId must be the DESIGN.md item's id");
+  if (typeof s.versionId !== "string" || !s.versionId) problems.push("style.versionId must be the DESIGN.md version it was mapped from");
+  if (s.name !== void 0 && typeof s.name !== "string") problems.push("style.name must be a string");
+  if (s.by !== void 0 && typeof s.by !== "string") problems.push("style.by must be a string");
+  const roles = s.roles;
+  if (!roles || typeof roles !== "object" || Array.isArray(roles)) return [...problems, "style.roles must be an object"];
+  for (const [role, choice2] of Object.entries(roles)) {
+    if (!ROLES.includes(role)) {
+      problems.push(`style.roles: "${role}" is not a role (${ROLES.join(", ")})`);
+      continue;
+    }
+    const c = choice2;
+    if (!c || typeof c !== "object") problems.push(`style.roles.${role} must be { value, why }`);
+    else if (!safeRoleValue(role, c.value)) problems.push(`style.roles.${role}.value is not a ${role === "font" ? "font family list" : role === "radius" || role === "space" ? "length" : "colour"} a stylesheet can hold`);
+    else if (c.p !== void 0 && !(typeof c.p === "number" && c.p >= 0 && c.p <= 1)) problems.push(`style.roles.${role}.p must be 0\u20131`);
+  }
+  return problems;
+}
+function themeValues(style2) {
+  const out = { ...DEFAULT_THEME };
+  if (style2?.source === "design-system") {
+    for (const role of ROLES) {
+      const v = style2.roles[role]?.value;
+      if (v !== void 0 && safeRoleValue(role, v)) out[role] = v;
+    }
+  }
+  return out;
+}
+function themeDecls(style2) {
+  const values = themeValues(style2);
+  return ROLES.map((role) => `--w-${role}:${values[role]}`).join(";");
+}
+function sameStyle(a, b) {
+  return canonical(a ?? DEFAULT_STYLE) === canonical(b ?? DEFAULT_STYLE);
+}
+function canonical(value) {
+  return JSON.stringify(value, (_k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v);
+}
+function resolved2(tokens, value) {
+  return typeof value === "string" && /^\{[^}]+\}$/.test(value.trim()) ? resolveToken(tokens, value) : value;
+}
+function candidatesOf(doc2) {
+  const t = doc2.tokens;
+  const colors = [];
+  for (const [token, raw] of Object.entries(t.colors ?? {})) {
+    const value = resolved2(t, raw);
+    if (typeof value === "string" && safeRoleValue("primary", value.trim())) colors.push({ token, value: value.trim(), group: "colors" });
+  }
+  const fonts = [];
+  for (const [token, type] of Object.entries(t.typography ?? {})) {
+    const value = resolved2(t, type?.fontFamily);
+    if (typeof value !== "string" || !safeRoleValue("font", value.trim())) continue;
+    if (!fonts.some((f) => f.value === value.trim())) fonts.push({ token, value: value.trim(), group: "typography" });
+  }
+  const lengths = (group, role) => {
+    const out2 = [];
+    for (const [token, raw] of Object.entries(t[group] ?? {})) {
+      const r = resolved2(t, raw);
+      const value = typeof r === "number" ? `${r}px` : typeof r === "string" ? r.trim() : null;
+      if (value && safeRoleValue(role, value)) out2.push({ token, value, group });
+    }
+    return out2;
+  };
+  const out = {};
+  for (const role of COLOR_ROLES) out[role] = colors;
+  out.font = fonts;
+  out.radius = lengths("rounded", "radius");
+  out.space = lengths("spacing", "space");
+  return out;
+}
+var ROLE_QUESTIONS = {
+  ground: "Which of this design system's colours is the background a screen sits on \u2014 the ground behind everything else?",
+  surface: "Which colour fills quiet areas inside a screen, one step off the background: image placeholders, avatars, an inactive toggle, a selected navigation row, dividers between list rows?",
+  line: "Which colour draws borders and outlines: the edge of a text field, a card, a chip, an image placeholder?",
+  ink: "Which colour is body text and headings?",
+  "ink-muted": "Which colour is secondary text: field labels, captions, metadata, inactive tab labels?",
+  bar: "Which colour stands for a line of placeholder copy in a wireframe \u2014 a quiet bar that reads as text without being text: lighter than secondary text, darker than the background?",
+  primary: "Which colour is the primary action: the filled primary button, the floating action button, the selected tab?",
+  "on-primary": "Which colour is the text and icon drawn ON the primary action colour \u2014 the label of the filled primary button?",
+  radius: "Which corner radius do buttons, text fields and cards use?",
+  font: "Which typeface is body text and interface labels set in?",
+  space: "Which spacing token is the base unit \u2014 the small gap between related elements that larger spacing is built from?"
+};
+function componentUsage(t) {
+  return Object.entries(t.components ?? {}).map(([name, rules]) => `${name}: ${Object.entries(rules ?? {}).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+}
+function mappingRequest(doc2, candidates = candidatesOf(doc2)) {
+  const t = doc2.tokens;
+  const questions2 = {};
+  for (const role of ROLES) {
+    const options = candidates[role];
+    if (options.length < 2) continue;
+    questions2[role] = {
+      type: "choice",
+      instructions: ROLE_QUESTIONS[role],
+      criteria: Object.fromEntries(options.map((c) => [c.token, `${c.value} (${c.group}.${c.token})`]))
+    };
+  }
+  const state = {
+    task: "Map a design system's tokens onto the roles a greyscale wireframe draws with, so every wire can be restyled in this system. Choose only among the tokens offered.",
+    system: t.name ?? "(unnamed)",
+    ...t.description ? { description: t.description.length > 600 ? `${t.description.slice(0, 599)}\u2026` : t.description } : {},
+    tokens: [
+      ...candidates.primary.map(({ token, value, group }) => ({ token, value, group })),
+      ...candidates.font.map(({ token, value, group }) => ({ token, value, group })),
+      ...candidates.radius.map(({ token, value, group }) => ({ token, value, group })),
+      ...candidates.space.map(({ token, value, group }) => ({ token, value, group }))
+    ],
+    components: componentUsage(t)
+  };
+  return { model: "jev-latest", state, questions: questions2 };
+}
+var ROLE_CONFIDENCE = 0.5;
+function applyMapping(request, response, candidates) {
+  const roles = {};
+  for (const role of ROLES) {
+    const options = candidates[role];
+    if (options.length === 0) {
+      roles[role] = { value: DEFAULT_THEME[role], why: "none" };
+      continue;
+    }
+    if (options.length === 1) {
+      roles[role] = { token: options[0].token, value: options[0].value, why: "only" };
+      continue;
+    }
+    const q = request.questions[role];
+    const a = response.answers[role];
+    if (!q || !a) throw new Error(`the mapping has no answer for ${role}`);
+    const { value: token, p, distribution } = chosenOption(q, a);
+    const picked = options.find((c) => c.token === token);
+    if (!picked) throw new Error(`the answer for ${role} is "${token}", which this system does not offer (${options.map((c) => c.token).join(", ")})`);
+    const rounded = Math.round(p * 1e3) / 1e3;
+    const tied = Object.entries(distribution).some(([k, v]) => k !== token && v >= p);
+    roles[role] = rounded >= ROLE_CONFIDENCE && !tied ? { token, value: picked.value, p: rounded, why: "asked" } : { value: DEFAULT_THEME[role], p: rounded, why: "unsure", leaned: token };
+  }
+  return guardContrast(roles);
+}
+function guardContrast(roles) {
+  const value = (role) => roles[role]?.value ?? DEFAULT_THEME[role];
+  const primary = value("primary");
+  const on = value("on-primary");
+  const now = contrastRatio(primary, on);
+  if (now === null || now >= CONTRAST_BODY) return roles;
+  const better = ["ink", "ground"].map((role) => ({ role, ratio: contrastRatio(primary, value(role)) ?? 0 })).sort((a, b) => b.ratio - a.ratio)[0];
+  if (better.ratio <= now) return roles;
+  const from = roles[better.role];
+  const was = roles["on-primary"];
+  return {
+    ...roles,
+    "on-primary": {
+      ...from?.token ? { token: from.token } : {},
+      value: value(better.role),
+      ...was?.p !== void 0 ? { p: was.p } : {},
+      why: "contrast",
+      ...was?.token ? { leaned: was.token } : was?.leaned ? { leaned: was.leaned } : {}
+    }
+  };
+}
+function roleLine(role, c) {
+  if (!c) return `${role.padEnd(11)} (default) ${DEFAULT_THEME[role]}`;
+  const p = c.p === void 0 ? "" : `p ${c.p.toFixed(2)}`;
+  const note = c.why === "only" ? "the only one" : c.why === "none" ? "the system has none \u2014 default kept" : c.why === "unsure" ? `unsure (leaned ${c.leaned}) \u2014 default kept` : c.why === "contrast" ? `raised for contrast (chosen: ${c.leaned ?? "default"})` : "";
+  return `${role.padEnd(11)} ${(c.token ?? "(default)").padEnd(16)} ${c.value.length > 40 ? `${c.value.slice(0, 39)}\u2026` : c.value}  ${[p, note].filter(Boolean).join(" \xB7 ")}`;
+}
+
 // packages/modules/wireframe/src/spec.ts
 var LEAVE_OUT = "omit";
 function blockWords(block) {
@@ -11149,9 +11512,9 @@ function resolveSlot(archetype, slot, block, props) {
     throw new Error(`${r.id}'s ${slot} offers ${section.options.join(" | ")}, not ${block}`);
   }
   const c = component(block);
-  const resolved2 = { ...defaultProps(c), ...r.props?.[c.id] ?? {}, ...props ?? {} };
-  const elements = presentElements(c, resolved2);
-  const out = { slot, block, props: resolved2 };
+  const resolved3 = { ...defaultProps(c), ...r.props?.[c.id] ?? {}, ...props ?? {} };
+  const elements = presentElements(c, resolved3);
+  const out = { slot, block, props: resolved3 };
   if (elements.length > 0) out.intents = Object.fromEntries(elements.map((e) => [e, defaultIntent(r, c, e)]));
   return out;
 }
@@ -11205,6 +11568,7 @@ function validateWire(input) {
   if (spec.chrome !== void 0 && (typeof spec.chrome !== "object" || typeof spec.chrome?.nav !== "string" || typeof spec.chrome?.header !== "string")) {
     problems.push("chrome must be { nav, header }");
   }
+  if (spec.style !== void 0) problems.push(...styleProblems(spec.style));
   let r;
   try {
     r = recipe(String(spec.archetype));
@@ -11430,46 +11794,53 @@ var WIRE_MARKER = "<!-- isocan:wireframe -->";
 var WIRE_SCRIPT_ID = "isocan-wireframe";
 var SKELETON_COLORS = ["#2f6fed", "#7fa3f3", "#f3f7fe"];
 var [BLUE, BLUE_SOFT, BLUE_GROUND] = SKELETON_COLORS;
+var S = (n) => `calc(var(--w-space) * ${n})`;
+var R = (cap, scale = 1) => scale === 1 ? `min(var(--w-radius), ${cap}px)` : `min(calc(var(--w-radius) * ${scale}), ${cap}px)`;
+var PAGE = "color-mix(in srgb, var(--w-surface) 25%, var(--w-ground))";
+var BAR_KEY = "color-mix(in srgb, var(--w-bar) 83%, var(--w-ink))";
+var BAR_SOFT = "color-mix(in srgb, var(--w-bar) 70%, var(--w-ground))";
+var SELECTED = "color-mix(in srgb, var(--w-primary) 80%, var(--w-ground))";
+var SCRIM = "color-mix(in srgb, var(--w-ink) 28%, transparent)";
 var WIRE_CSS = `
 *{box-sizing:border-box}
-html,body{margin:0;background:#fafafa}
-body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#222222;padding:0}
-.cap{height:${CAPTION_HEIGHT}px;display:flex;align-items:center;gap:8px;padding:0 4px;font-size:13px;font-weight:700;color:#222222}
-.cap small{font-weight:500;color:#555555;text-transform:uppercase;letter-spacing:.06em;font-size:10px}
+html,body{margin:0;background:${PAGE}}
+body{font:14px/1.4 var(--w-font);color:var(--w-ink);padding:0}
+.cap{height:${CAPTION_HEIGHT}px;display:flex;align-items:center;gap:8px;padding:0 4px;font-size:13px;font-weight:700;color:var(--w-ink)}
+.cap small{font-weight:500;color:var(--w-ink-muted);text-transform:uppercase;letter-spacing:.06em;font-size:10px}
 .cap small{margin-left:8px}.cap.one-way{flex-direction:column;align-items:flex-start;justify-content:center;gap:0;line-height:1.2}.cap.one-way>small{margin:0;text-transform:none;letter-spacing:0;font-style:italic}
-.frame{position:relative;display:flex;flex-direction:column;background:#ffffff;border:1.5px solid #c8c8c8;border-radius:4px;overflow:hidden}
+.frame{position:relative;display:flex;flex-direction:column;background:var(--w-ground);border:1.5px solid var(--w-line);border-radius:4px;overflow:hidden}
 .frame.app{border-radius:28px}
 .frame.site{overflow:visible}
 .frame>.body{flex:1;display:flex;min-height:0}
-.frame>.body>.main{flex:1;display:flex;flex-direction:column;gap:12px;padding:16px;min-width:0;overflow:hidden}
+.frame>.body>.main{flex:1;display:flex;flex-direction:column;gap:${S(1.5)};padding:${S(2)};min-width:0;overflow:hidden}
 .frame.site>.body>.main{overflow:visible}
-.frame>.body>.side{width:232px;border-right:1px solid #ececec;display:flex;flex-direction:column}
+.frame>.body>.side{width:232px;border-right:1px solid var(--w-surface);display:flex;flex-direction:column}
 .frame.app>.body>.side{width:84px}
-.frame>.body>.aside{width:300px;border-left:1px solid #ececec;padding:16px;display:flex;flex-direction:column;gap:12px}
-.frame>.foot{padding:12px 16px;border-top:1px solid #ececec;display:flex;flex-direction:column;gap:8px}
+.frame>.body>.aside{width:300px;border-left:1px solid var(--w-surface);padding:${S(2)};display:flex;flex-direction:column;gap:${S(1.5)}}
+.frame>.foot{padding:${S(1.5)} ${S(2)};border-top:1px solid var(--w-surface);display:flex;flex-direction:column;gap:${S(1)}}
 .fabs{position:absolute;right:20px;bottom:88px}
 .frame.web .fabs,.frame.site .fabs{bottom:24px}
-.layer{position:absolute;inset:0;background:rgba(34,34,34,.28);display:flex;flex-direction:column;justify-content:flex-end}
+.layer{position:absolute;inset:0;background:${SCRIM};display:flex;flex-direction:column;justify-content:flex-end}
 .layer.center{justify-content:center;align-items:center;padding:24px}
 .layer.left{justify-content:flex-start;align-items:stretch;flex-direction:row}
 .layer>.slot{width:100%}
 .layer.center>.slot{max-width:340px}
 .layer.left>.slot{width:78%;max-width:320px}
 .slot{min-width:0}
-.bar{display:block;height:8px;border-radius:4px;background:#dcdcdc;margin:5px 0;max-width:100%}
-.bar.k{background:#bdbdbd;height:10px}
-.bar.title{background:#555555;height:16px;margin:8px 0}
-.bar.fat{background:#555555;height:18px}
-.bar.meta{background:#e3e3e3;height:7px}
+.bar{display:block;height:8px;border-radius:4px;background:var(--w-bar);margin:5px 0;max-width:100%}
+.bar.k{background:${BAR_KEY};height:10px}
+.bar.title{background:var(--w-ink-muted);height:16px;margin:8px 0}
+.bar.fat{background:var(--w-ink-muted);height:18px}
+.bar.meta{background:${BAR_SOFT};height:7px}
 .bar.in{display:inline-block;margin:0;vertical-align:middle}
-.bar.ph{background:#e6e6e6;margin:0}
+.bar.ph{background:${BAR_SOFT};margin:0}
 .bar.lbl-bar{height:7px;margin:0 0 6px}
 .bar.cap{margin-top:8px}
-.bar.rule{height:1px;background:#ececec}
-.h{font-weight:700;color:#222222;line-height:1.2}
+.bar.rule{height:1px;background:var(--w-surface)}
+.h{font-weight:700;color:var(--w-ink);line-height:1.2}
 .h1{font-size:26px}.h2{font-size:22px}.h3{font-size:18px}.h4{font-size:16px}
-.txt.s .bar{height:6px}.txt.l .bar{height:10px}.txt.quote{border-left:3px solid #c8c8c8;padding-left:10px}.txt.caption .bar{background:#e6e6e6}
-.img{width:100%;border:1.5px solid #c8c8c8;border-radius:4px;background:#ececec linear-gradient(to top right,transparent calc(50% - 1px),#c8c8c8 calc(50% - 1px),#c8c8c8 calc(50% + 1px),transparent calc(50% + 1px)),linear-gradient(to bottom right,transparent calc(50% - 1px),#c8c8c8 calc(50% - 1px),#c8c8c8 calc(50% + 1px),transparent calc(50% + 1px))}
+.txt.s .bar{height:6px}.txt.l .bar{height:10px}.txt.quote{border-left:3px solid var(--w-line);padding-left:10px}.txt.caption .bar{background:${BAR_SOFT}}
+.img{width:100%;border:1.5px solid var(--w-line);border-radius:${R(12)};background:var(--w-surface) linear-gradient(to top right,transparent calc(50% - 1px),var(--w-line) calc(50% - 1px),var(--w-line) calc(50% + 1px),transparent calc(50% + 1px)),linear-gradient(to bottom right,transparent calc(50% - 1px),var(--w-line) calc(50% - 1px),var(--w-line) calc(50% + 1px),transparent calc(50% + 1px))}
 .img.sm{width:72px}
 .logo{display:flex;justify-content:center}
 .img.illustration{border-radius:50%;width:70%;margin:0 auto}
@@ -11478,98 +11849,98 @@ body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2
 .actions{display:flex;gap:8px}
 .actions.stack{flex-direction:column}
 .actions.row{justify-content:flex-end;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 18px;border-radius:4px;font-weight:700;font-size:15px;border:1.5px solid #222222;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 18px;border-radius:var(--w-radius);font-weight:700;font-size:15px;border:1.5px solid var(--w-primary);white-space:nowrap}
 .btn.block{flex:1;width:100%}
-.btn.primary{background:#222222;color:#ffffff}
-.btn.secondary{background:#ffffff;color:#222222}
-.btn.tertiary{background:transparent;border-color:transparent;color:#222222;text-decoration:underline}
-.btn.destructive{background:#ffffff;color:#222222;border-width:3px}
+.btn.primary{background:var(--w-primary);color:var(--w-on-primary)}
+.btn.secondary{background:var(--w-ground);color:var(--w-primary)}
+.btn.tertiary{background:transparent;border-color:transparent;color:var(--w-primary);text-decoration:underline}
+.btn.destructive{background:var(--w-ground);color:var(--w-ink);border-color:var(--w-ink);border-width:3px}
 .btn.s{height:32px;padding:0 12px;font-size:13px}
 .btn.l{height:52px}
-.btn.disabled{background:#ececec;border-color:#c8c8c8;color:#555555}
+.btn.disabled{background:var(--w-surface);border-color:var(--w-line);color:var(--w-ink-muted)}
 .btn.loading::after{content:"\u2026"}
-.ibtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-size:18px;color:#222222;flex:none}
-.lnk{color:#222222;font-weight:600;text-decoration:underline;font-size:14px}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-size:18px;color:var(--w-ink);flex:none}
+.lnk{color:var(--w-primary);font-weight:600;text-decoration:underline;font-size:14px}
 .link-row{display:flex;gap:8px;justify-content:center;align-items:center;padding:6px 0}
 .link-row .bar{width:90px!important}
-.av{display:inline-block;border-radius:50%;background:#ececec;border:1.5px solid #c8c8c8;flex:none}
+.av{display:inline-block;border-radius:50%;background:var(--w-surface);border:1.5px solid var(--w-line);flex:none}
 .av.s{width:28px;height:28px}.av.m{width:40px;height:40px}.av.l{width:88px;height:88px}
-.ico{display:inline-block;width:24px;height:24px;border-radius:6px;background:#ececec;border:1.5px solid #c8c8c8;flex:none}
+.ico{display:inline-block;width:24px;height:24px;border-radius:6px;background:var(--w-surface);border:1.5px solid var(--w-line);flex:none}
 .fld{display:flex;flex-direction:column;gap:6px}
-.lbl{font-size:13px;font-weight:600;color:#555555}
-.fld .box,.composer .box{height:44px;border:1.5px solid #c8c8c8;border-radius:4px;display:flex;align-items:center;padding:0 12px}
+.lbl{font-size:13px;font-weight:600;color:var(--w-ink-muted)}
+.fld .box,.composer .box{height:44px;border:1.5px solid var(--w-line);border-radius:var(--w-radius);display:flex;align-items:center;padding:0 12px;background:var(--w-ground)}
 .fld .box .bar{width:45%!important}
-.form{display:flex;flex-direction:column;gap:14px}
+.form{display:flex;flex-direction:column;gap:${S(1.75)}}
 .form.center,.center{text-align:center;align-items:center}
 .between{display:flex;justify-content:space-between;align-items:center}
 .chk{display:flex;align-items:center;gap:8px;font-size:14px}
 .chk .bar{width:90px!important}
-.cb{display:inline-block;width:18px;height:18px;border:1.5px solid #555555;border-radius:3px;flex:none}
-.cb.on{background:#555555}
+.cb{display:inline-block;width:18px;height:18px;border:1.5px solid var(--w-ink-muted);border-radius:3px;flex:none}
+.cb.on{background:${SELECTED};border-color:${SELECTED}}
 .or{padding:4px 0}
-.logo-dot{display:inline-block;width:16px;height:16px;border-radius:50%;background:#c8c8c8}
+.logo-dot{display:inline-block;width:16px;height:16px;border-radius:50%;background:var(--w-line)}
 .code{display:flex;gap:8px;justify-content:center}
-.code span{width:40px;height:48px;border:1.5px solid #c8c8c8;border-radius:4px}
-.glyph{font-size:40px;color:#555555;line-height:1.2}
-.glyph.big{font-size:44px;font-weight:800;color:#222222}
+.code span{width:40px;height:48px;border:1.5px solid var(--w-line);border-radius:${R(12)}}
+.glyph{font-size:40px;color:var(--w-ink-muted);line-height:1.2}
+.glyph.big{font-size:44px;font-weight:800;color:var(--w-ink)}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
-.chip{display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:15px;border:1.5px solid #c8c8c8}
+.chip{display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:15px;border:1.5px solid var(--w-line)}
 .chip .bar{width:36px!important}
-.chip.on{background:#555555;border-color:#555555}
-.chip.on .bar{background:#ffffff}
-.tg{display:inline-block;width:40px;height:24px;border-radius:12px;background:#ececec;border:1.5px solid #c8c8c8;position:relative;flex:none}
-.tg::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#ffffff;border:1px solid #c8c8c8}
-.tg.on{background:#555555;border-color:#555555}.tg.on::after{left:18px}
+.chip.on{background:${SELECTED};border-color:${SELECTED}}
+.chip.on .bar{background:var(--w-on-primary)}
+.tg{display:inline-block;width:40px;height:24px;border-radius:12px;background:var(--w-surface);border:1.5px solid var(--w-line);position:relative;flex:none}
+.tg::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--w-ground);border:1px solid var(--w-line)}
+.tg.on{background:${SELECTED};border-color:${SELECTED}}.tg.on::after{left:18px}
 .list .row,.settings .row{display:flex;align-items:center;gap:12px;padding:10px 0;min-height:52px}
-.list.div .row+.row{border-top:1px solid #ececec}
-.list.inset{border:1px solid #ececec;border-radius:6px;padding:0 12px}
+.list.div .row+.row{border-top:1px solid var(--w-surface)}
+.list.inset{border:1px solid var(--w-surface);border-radius:${R(16)};padding:0 12px}
 .row-t{flex:1;min-width:0}
-.chev{color:#555555;font-size:22px}
-.thumb{width:48px;height:48px;border-radius:4px;background:#ececec;border:1.5px solid #c8c8c8;flex:none}
-.badge{width:22px;height:18px;border-radius:9px;background:#555555}
+.chev{color:var(--w-ink-muted);font-size:22px}
+.thumb{width:48px;height:48px;border-radius:${R(12)};background:var(--w-surface);border:1.5px solid var(--w-line);flex:none}
+.badge{width:22px;height:18px;border-radius:9px;background:${SELECTED}}
 .sec{padding-top:6px}
-.search{display:flex;align-items:center;gap:8px;height:44px;border:1.5px solid #c8c8c8;border-radius:22px;padding:0 14px}
+.search{display:flex;align-items:center;gap:8px;height:44px;border:1.5px solid var(--w-line);border-radius:22px;padding:0 14px}
 .search.sm{height:34px;width:220px}
-.ico-t{font-size:18px;color:#555555}
-.ph-t{color:#555555}
-.scope{margin-left:auto;border-left:1px solid #c8c8c8;padding-left:10px}
-.seg{display:flex;border:1.5px solid #c8c8c8;border-radius:6px;overflow:hidden}
+.ico-t{font-size:18px;color:var(--w-ink-muted)}
+.ph-t{color:var(--w-ink-muted)}
+.scope{margin-left:auto;border-left:1px solid var(--w-line);padding-left:10px}
+.seg{display:flex;border:1.5px solid var(--w-line);border-radius:${R(16)};overflow:hidden}
 .seg span{flex:1;display:flex;justify-content:center;align-items:center;height:36px}
-.seg span+span{border-left:1.5px solid #c8c8c8}
-.seg span.on{background:#555555}.seg span.on .bar{background:#ffffff}
+.seg span+span{border-left:1.5px solid var(--w-line)}
+.seg span.on{background:${SELECTED}}.seg span.on .bar{background:var(--w-on-primary)}
 .seg .bar{width:50%!important}
-.tabs{display:flex;gap:18px;border-bottom:1px solid #ececec}
+.tabs{display:flex;gap:18px;border-bottom:1px solid var(--w-surface)}
 .tabs span{padding:10px 0;min-width:56px}
 .tabs .bar{width:100%!important}
-.tabs span.on{border-bottom:3px solid #222222}
-.tabs span.on .bar{background:#555555}
-.tabs.pill{border:0;gap:8px}.tabs.pill span{padding:8px 14px;border-radius:18px;border:1.5px solid #c8c8c8}.tabs.pill span.on{background:#555555;border-color:#555555}
-.tabs.vertical{flex-direction:column;gap:0;border-bottom:0;border-left:1px solid #ececec}.tabs.vertical span{padding:8px 12px}
+.tabs span.on{border-bottom:3px solid var(--w-primary)}
+.tabs span.on .bar{background:var(--w-ink-muted)}
+.tabs.pill{border:0;gap:8px}.tabs.pill span{padding:8px 14px;border-radius:18px;border:1.5px solid var(--w-line)}.tabs.pill span.on{background:${SELECTED};border-color:${SELECTED}}.tabs.pill span.on .bar{background:var(--w-on-primary)}
+.tabs.vertical{flex-direction:column;gap:0;border-bottom:0;border-left:1px solid var(--w-surface)}.tabs.vertical span{padding:8px 12px}
 .fab-wrap{display:flex;justify-content:flex-end}
-.fab{display:inline-flex;align-items:center;justify-content:center;min-width:56px;height:56px;border-radius:28px;background:#222222;color:#ffffff;font-size:24px;font-weight:700;padding:0 18px}
+.fab{display:inline-flex;align-items:center;justify-content:center;min-width:56px;height:56px;border-radius:28px;background:var(--w-primary);color:var(--w-on-primary);font-size:24px;font-weight:700;padding:0 18px}
 .fab.ext{font-size:15px;gap:6px}
-.appbar{display:flex;align-items:center;gap:4px;height:56px;padding:0 8px;border-bottom:1px solid #ececec}
+.appbar{display:flex;align-items:center;gap:4px;height:56px;padding:0 8px;border-bottom:1px solid var(--w-surface)}
 .appbar .t{flex:1;font-weight:700;font-size:17px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tabbar{display:flex;height:64px;border-top:1px solid #ececec}
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#555555}
+.tabbar{display:flex;height:64px;border-top:1px solid var(--w-surface)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--w-ink-muted)}
 .tab b{font-size:20px;font-weight:400}.tab small{font-size:11px;font-weight:600}
-.tab.on{color:#222222}.tab.on small{text-decoration:underline}
+.tab.on{color:var(--w-primary)}.tab.on small{text-decoration:underline}
 .sidenav{display:flex;flex-direction:column;gap:2px;padding:12px 8px;flex:1}
-.sidenav hr{border:0;border-top:1px solid #ececec;width:100%}
-.nav-i{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;font-weight:600;color:#555555;font-size:14px}
+.sidenav hr{border:0;border-top:1px solid var(--w-surface);width:100%}
+.nav-i{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:${R(12)};font-weight:600;color:var(--w-ink-muted);font-size:14px}
 .nav-i b{font-weight:400;font-size:17px;width:22px;text-align:center}
-.nav-i.on{background:#ececec;color:#222222}
+.nav-i.on{background:var(--w-surface);color:var(--w-ink)}
 .frame.app .sidenav .nav-i{flex-direction:column;gap:2px;font-size:10px;padding:8px 2px;text-align:center}
 .dots{display:flex;gap:8px;justify-content:center;padding:8px 0}
-.dots i{width:8px;height:8px;border-radius:50%;background:#c8c8c8}
-.dots i.on{background:#222222;width:20px;border-radius:4px}
+.dots i{width:8px;height:8px;border-radius:50%;background:var(--w-line)}
+.dots i.on{background:var(--w-primary);width:20px;border-radius:4px}
 .steps{display:flex;gap:8px;align-items:flex-start}
 .step{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
-.step b{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid #c8c8c8;font-size:12px;color:#555555}
-.step.on b{border-color:#222222;color:#222222}
-.step.done b{background:#555555;border-color:#555555;color:#ffffff}
+.step b{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--w-line);font-size:12px;color:var(--w-ink-muted)}
+.step.on b{border-color:var(--w-primary);color:var(--w-primary)}
+.step.done b{background:${SELECTED};border-color:${SELECTED};color:var(--w-on-primary)}
 .step .bar{width:70%!important}
-.chart{border:1px solid #ececec;border-radius:6px;padding:12px}
+.chart{border:1px solid var(--w-surface);border-radius:${R(16)};padding:12px}
 .chart svg{width:100%;height:150px;display:block}
 .chart.k-sparkline svg{height:40px}
 .stat .chart{border:0;padding:0}
@@ -11577,65 +11948,65 @@ body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2
 .legend span{display:flex;align-items:center;gap:6px}
 .legend i{width:10px;height:10px;border-radius:2px}
 .legend .bar{width:48px!important}
-.drawer{height:100%;background:#ffffff;padding:16px 10px;display:flex;flex-direction:column;gap:2px}
-.drawer-head{display:flex;align-items:center;gap:12px;padding:8px 8px 16px;border-bottom:1px solid #ececec;margin-bottom:8px}
+.drawer{height:100%;background:var(--w-ground);padding:16px 10px;display:flex;flex-direction:column;gap:2px}
+.drawer-head{display:flex;align-items:center;gap:12px;padding:8px 8px 16px;border-bottom:1px solid var(--w-surface);margin-bottom:8px}
 .drawer-head .bar{flex:1}
-.sheet{background:#ffffff;border-radius:16px 16px 0 0;padding:14px 16px 20px;display:flex;flex-direction:column;gap:10px}
+.sheet{background:var(--w-ground);border-radius:${R(24, 2)} ${R(24, 2)} 0 0;padding:14px 16px 20px;display:flex;flex-direction:column;gap:10px}
 .sheet.full{min-height:78%}
 .sheet.side{border-radius:0;height:100%}
-.grab{width:40px;height:5px;border-radius:3px;background:#c8c8c8;margin:0 auto 6px}
-.sheet-actions{display:flex;flex-direction:column;border:1px solid #ececec;border-radius:10px}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--w-line);margin:0 auto 6px}
+.sheet-actions{display:flex;flex-direction:column;border:1px solid var(--w-surface);border-radius:${R(16)}}
 .sheet-a{padding:14px;text-align:center;font-weight:600;font-size:16px}
-.sheet-a+.sheet-a{border-top:1px solid #ececec}
+.sheet-a+.sheet-a{border-top:1px solid var(--w-surface)}
 .sheet-a.destructive{font-weight:800;text-decoration:underline}
-.dialog{position:relative;background:#ffffff;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:10px;border:1.5px solid #c8c8c8}
+.dialog{position:relative;background:var(--w-ground);border-radius:${R(24, 1.5)};padding:20px;display:flex;flex-direction:column;gap:10px;border:1.5px solid var(--w-line)}
 .dialog.fullscreen{border-radius:0;min-height:100%}
-.dialog .x{position:absolute;right:14px;top:10px;color:#555555}
-.navbar{display:flex;align-items:center;gap:18px;height:64px;padding:0 20px;border-bottom:1px solid #ececec}
+.dialog .x{position:absolute;right:14px;top:10px;color:var(--w-ink-muted)}
+.navbar{display:flex;align-items:center;gap:18px;height:64px;padding:0 20px;border-bottom:1px solid var(--w-surface)}
 .navbar .brand .img{width:32px}
 .navbar .links{display:flex;gap:18px}
 .sp{flex:1}
-.chrome{display:flex;align-items:center;gap:6px;height:24px;padding:0 20px;background:#ffffff}
-.chrome i{width:14px;height:8px;border-radius:2px;background:#c8c8c8}
-.chrome.web{height:32px;background:#ececec;padding:0 12px}
+.chrome{display:flex;align-items:center;gap:6px;height:24px;padding:0 20px;background:var(--w-ground)}
+.chrome i{width:14px;height:8px;border-radius:2px;background:var(--w-line)}
+.chrome.web{height:32px;background:var(--w-surface);padding:0 12px}
 .chrome.web i{width:10px;height:10px;border-radius:50%}
-.chrome.web .url{margin-left:12px;background:#ffffff;height:16px}
-.chrome .clock{width:36px!important;background:#555555}
-.pagehead{display:flex;flex-direction:column;gap:6px;padding:16px 20px;border-bottom:1px solid #ececec}
+.chrome.web .url{margin-left:12px;background:var(--w-ground);height:16px}
+.chrome .clock{width:36px!important;background:var(--w-ink-muted)}
+.pagehead{display:flex;flex-direction:column;gap:6px;padding:16px 20px;border-bottom:1px solid var(--w-surface)}
 .ph-row{display:flex;align-items:center;gap:8px}
-.crumbs{display:flex;gap:6px;align-items:center;color:#c8c8c8}
+.crumbs{display:flex;gap:6px;align-items:center;color:var(--w-line)}
 .crumbs .bar{width:48px!important}
 .onb{display:flex;flex-direction:column;gap:18px;justify-content:center;flex:1}
 .right{text-align:right}
 .wizard,.filters,.settings,.comments,.long,.posts,.plist{display:flex;flex-direction:column;gap:12px}
-.card{border:1.5px solid #c8c8c8;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:4px}
-.card .img{border:0;border-radius:3px}
-.grp{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;border-bottom:1px solid #ececec}
+.card{border:1.5px solid var(--w-line);border-radius:${R(16)};padding:${S(1.25)};display:flex;flex-direction:column;gap:4px;background:var(--w-ground)}
+.card .img{border:0;border-radius:${R(12, 0.5)}}
+.grp{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;border-bottom:1px solid var(--w-surface)}
 .stats{display:grid;gap:10px}
 .stats.c2{grid-template-columns:repeat(2,1fr)}.stats.c3{grid-template-columns:repeat(3,1fr)}.stats.c4{grid-template-columns:repeat(4,1fr)}
-.stat{border:1.5px solid #c8c8c8;border-radius:6px;padding:10px}
+.stat{border:1.5px solid var(--w-line);border-radius:${R(16)};padding:${S(1.25)}}
 .stat .big{padding:4px 0}
-.trend{font-size:11px;color:#555555;display:flex;gap:4px;align-items:center}
+.trend{font-size:11px;color:var(--w-ink-muted);display:flex;gap:4px;align-items:center}
 .trend .bar{width:40px!important}
 .grid{display:grid;gap:10px}
 .grid.tight{gap:4px}
 .grid.tight .img{border-radius:2px}
 .masonry{column-gap:6px}.masonry .img{margin-bottom:6px;break-inside:avoid}
-.table{border:1px solid #ececec;border-radius:6px;overflow:hidden}
-.toolbar{display:flex;align-items:center;gap:6px;padding:8px;border-bottom:1px solid #ececec}
+.table{border:1px solid var(--w-surface);border-radius:${R(16)};overflow:hidden}
+.toolbar{display:flex;align-items:center;gap:6px;padding:8px;border-bottom:1px solid var(--w-surface)}
 .table table{width:100%;border-collapse:collapse;table-layout:fixed}
-.table th,.table td{padding:9px 10px;border-bottom:1px solid #ececec;text-align:left}
-.table th{background:#fafafa}
+.table th,.table td{padding:9px 10px;border-bottom:1px solid var(--w-surface);text-align:left}
+.table th{background:${PAGE}}
 .table .sel{width:36px}
-.pager{display:flex;gap:6px;justify-content:flex-end;padding:8px;font-size:13px;color:#555555}
+.pager{display:flex;gap:6px;justify-content:flex-end;padding:8px;font-size:13px;color:var(--w-ink-muted)}
 .pager span{min-width:24px;text-align:center;padding:2px 4px;border-radius:4px}
-.pager .on{background:#222222;color:#ffffff}
+.pager .on{background:var(--w-primary);color:var(--w-on-primary)}
 .post{display:flex;gap:12px}
 .post.grid,.post.featured{flex-direction:column}
 .post.list .img{width:88px;flex:none}
 .post>div{flex:1;min-width:0}
 .featured-top{display:flex;flex-direction:column;gap:4px}
-.toc{border-left:3px solid #c8c8c8;padding-left:10px}
+.toc{border-left:3px solid var(--w-line);padding-left:10px}
 .detail{display:flex;flex-direction:column;gap:6px}
 .metas{display:flex;gap:14px;flex-wrap:wrap}
 .meta-i{display:flex;gap:6px;align-items:center}
@@ -11647,25 +12018,25 @@ body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#2
 .composer .box{flex:1}
 .profile{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
 .profile .bar{margin-left:auto;margin-right:auto}
-.profile.covered .av{margin-top:-44px;background:#ffffff}
+.profile.covered .av{margin-top:-44px;background:var(--w-ground)}
 .pstats{display:flex;gap:28px;padding:6px 0}
 .pstats span{display:flex;flex-direction:column;align-items:center;width:56px}
-.fpost{display:flex;flex-direction:column;gap:8px;padding-bottom:12px;border-bottom:1px solid #ececec}
+.fpost{display:flex;flex-direction:column;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--w-surface)}
 .fhead{display:flex;gap:10px;align-items:center}
-.factions{display:flex;gap:18px;font-size:13px;font-weight:600;color:#555555}
+.factions{display:flex;gap:18px;font-size:13px;font-weight:600;color:var(--w-ink-muted)}
 .video{position:relative}
-.play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:#222222}
-.linkcard{display:flex;gap:10px;border:1.5px solid #c8c8c8;border-radius:6px;padding:8px}
+.play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;color:var(--w-ink)}
+.linkcard{display:flex;gap:10px;border:1.5px solid var(--w-line);border-radius:${R(16)};padding:8px}
 .linkcard>div{flex:1}
 .carousel{display:flex;flex-direction:column;gap:4px}
-.product .stars{font-size:12px;color:#555555;letter-spacing:1px}
+.product .stars{font-size:12px;color:var(--w-ink-muted);letter-spacing:1px}
 .plist .card.product{flex-direction:row;align-items:center;gap:12px}
 .plist .card.product>div{flex:1}
 .state{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;flex:1;padding:24px}
 .state .bar{margin-left:auto;margin-right:auto}
 .state .actions{margin-top:12px;min-width:200px}
 .dlist{margin:0;display:flex;flex-direction:column}
-.dlist>div{padding:8px 0;border-bottom:1px solid #ececec}
+.dlist>div{padding:8px 0;border-bottom:1px solid var(--w-surface)}
 .dlist.inline>div{display:flex;gap:16px;align-items:center}
 .dlist.inline>div .bar{flex:none}
 `;
@@ -11747,8 +12118,14 @@ ${frame}
 </html>
 `;
 }
+function styleOf(spec) {
+  return spec.slots.every((s) => s.block === null) ? void 0 : spec.style;
+}
+function themeCss(style2) {
+  return `:root{${themeDecls(style2)}}`;
+}
 function wireCss(spec) {
-  return `${WIRE_CSS}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
+  return `${themeCss(styleOf(spec))}${WIRE_CSS}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
 }
 function renderFrame(spec) {
   const problems = validateWire(spec);
@@ -11834,17 +12211,17 @@ function stageSize(kept2) {
   return { width, height };
 }
 var PROTO_CSS = `
-body.proto{display:flex;flex-direction:column;align-items:center;gap:${PAD}px;padding:${PAD}px;background:#ececec}
-.pbar{display:flex;align-items:center;gap:10px;height:${BAR_HEIGHT}px;font:600 13px/1.2 system-ui,-apple-system,sans-serif;color:#222222}
+body.proto{display:flex;flex-direction:column;align-items:center;gap:${PAD}px;padding:${PAD}px;background:var(--w-surface)}
+.pbar{display:flex;align-items:center;gap:10px;height:${BAR_HEIGHT}px;font:600 13px/1.2 var(--w-font);color:var(--w-ink)}
 .pbar .sp{flex:1}
-.pbar .pnote{font-weight:500;color:#555555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pbar button{font:inherit;border:1.5px solid #222222;background:#ffffff;color:#222222;border-radius:4px;padding:3px 10px;cursor:pointer}
+.pbar .pnote{font-weight:500;color:var(--w-ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbar button{font:inherit;border:1.5px solid var(--w-ink);background:var(--w-ground);color:var(--w-ink);border-radius:4px;padding:3px 10px;cursor:pointer}
 .stage{position:relative;overflow:hidden}
-.pscreen{position:absolute;left:0;top:0;background:#ececec}
+.pscreen{position:absolute;left:0;top:0;background:var(--w-surface)}
 .pscreen[hidden]{display:none}
 [data-go]{cursor:pointer}
-[data-go]:hover{outline:2px solid rgba(34,34,34,.35);outline-offset:2px}
-[data-needs]{outline:2px dashed #555555;outline-offset:2px;cursor:help}
+[data-go]:hover{outline:2px solid color-mix(in srgb, var(--w-ink) 35%, transparent);outline-offset:2px}
+[data-needs]{outline:2px dashed var(--w-ink-muted);outline-offset:2px;cursor:help}
 `;
 var ROUTER = `(function(){
 var data=JSON.parse(document.getElementById("isocan-prototype").textContent);
@@ -11889,10 +12266,13 @@ function assemblePrototype(kept2, links, opts = {}) {
   const start = startScreen(kept2);
   const { width, height } = stageSize(kept2);
   const title = opts.title ?? "Prototype";
-  const sheet = wireCss((kept2.find((s) => s.spec.slots.some((x) => x.block === null)) ?? kept2[0]).spec);
+  const undecided = kept2.find((s) => s.spec.slots.some((x) => x.block === null));
+  const first = kept2.find((s) => s.id === start) ?? kept2[0];
+  const lead = styleOf(first.spec);
+  const sheet = wireCss({ ...(undecided ?? first).spec, ...lead ? { style: lead } : {} });
   const sections = kept2.map((s) => {
     const mine = links.filter((l) => l.from === s.id);
-    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
+    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" style="${esc(themeDecls(styleOf(s.spec)))}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
   });
   const table = {
     start,
@@ -11918,162 +12298,6 @@ ${sections.join("\n")}
 </body>
 </html>
 `;
-}
-
-// packages/modules/wireframe/src/answerer.ts
-var JEV_URL = "https://api.typesafe.ai/v1/systemone";
-var JEV_MODEL = "jev-latest";
-var JEV_INPUT_PRICE = 0.042 / 1e6;
-function responseProblems(request, body) {
-  const res = body;
-  if (!res || typeof res !== "object") return ["a response is a JSON object with `answers`"];
-  if (res.detail !== void 0) return [`the answerer refused the request: ${detailText(res.detail)}`];
-  if (!res.answers || typeof res.answers !== "object") return ["a response has `answers`, one per question"];
-  const problems = [];
-  const isP = (v) => typeof v === "number" && v >= 0 && v <= 1;
-  for (const [id3, q] of Object.entries(request.questions)) {
-    const a = res.answers[id3];
-    const where = `answer "${id3}"`;
-    if (!a || typeof a !== "object") {
-      problems.push(`${where} is missing`);
-      continue;
-    }
-    if (a.type !== q.type) {
-      problems.push(`${where} must be a ${q.type}, not ${String(a.type)}`);
-      continue;
-    }
-    if (q.type === "noul") {
-      if (!isP(a.noul)) problems.push(`${where}: noul must be a number 0\u20131`);
-      continue;
-    }
-    const keys = q.type === "choice" ? Object.keys(q.criteria) : q.criteria.map((_, i) => String(i));
-    const probs = a.probabilities;
-    if (!probs || typeof probs !== "object") {
-      problems.push(`${where}: probabilities are missing`);
-      continue;
-    }
-    for (const [k, v] of Object.entries(probs)) {
-      if (!keys.includes(k)) problems.push(`${where}: "${k}" is not one of its options (${keys.join(", ")})`);
-      else if (!isP(v)) problems.push(`${where}: probability of "${k}" must be 0\u20131`);
-    }
-    if (q.type === "choice" && !keys.includes(String(a.choice))) problems.push(`${where}: choice "${String(a.choice)}" is not one of ${keys.join(", ")}`);
-    if (q.type === "score" && typeof a.score !== "number") problems.push(`${where}: score must be a number`);
-  }
-  for (const id3 of Object.keys(res.answers)) if (!(id3 in request.questions)) problems.push(`answer "${id3}" answers no question`);
-  return problems;
-}
-function readResponse(request, body, from = "the answerer") {
-  const problems = responseProblems(request, body);
-  if (problems.length > 0) throw new Error(`${from} gave answers this cannot apply:
-  ${problems.join("\n  ")}`);
-  return body;
-}
-function detailText(detail) {
-  if (Array.isArray(detail)) {
-    return detail.map((d) => {
-      const e = d;
-      return `${(e.loc ?? []).join(".")}: ${e.msg ?? JSON.stringify(d)}`;
-    }).join("; ");
-  }
-  if (detail && typeof detail === "object") {
-    const e = detail;
-    return e.message ?? e.error_type ?? JSON.stringify(detail);
-  }
-  return String(detail);
-}
-function chosenOption(q, a) {
-  if (q.type === "noul" && a.type === "noul") {
-    const yes = a.noul >= 0.5;
-    return { value: yes ? "true" : "false", p: yes ? a.noul : 1 - a.noul, distribution: { true: a.noul, false: 1 - a.noul } };
-  }
-  if (q.type === "choice" && a.type === "choice") {
-    const distribution = Object.fromEntries(Object.keys(q.criteria).map((k) => [k, a.probabilities[k] ?? 0]));
-    return { value: a.choice, p: distribution[a.choice] ?? 0, distribution };
-  }
-  if (q.type === "score" && a.type === "score") {
-    const levels = q.criteria.map((_, i) => a.probabilities[String(i)] ?? 0);
-    const top = Math.max(...levels);
-    let best = 0;
-    levels.forEach((p, i) => {
-      if (p === top && (levels[best] !== top || Math.abs(i - a.score) < Math.abs(best - a.score))) best = i;
-    });
-    return { value: q.criteria[best], p: top, distribution: Object.fromEntries(q.criteria.map((c, i) => [c, levels[i]])) };
-  }
-  throw new Error(`a ${q.type} question answered as ${a.type}`);
-}
-function seeded(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = a + 1831565813 >>> 0;
-    let t = a;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-function hash(text) {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
-function stubAnswerer(seed = 1) {
-  return {
-    name: "stub",
-    async answer(request) {
-      const answers = {};
-      for (const [id3, q] of Object.entries(request.questions)) {
-        const draw = seeded(seed ^ hash(`${JSON.stringify(request.state)}|${id3}`))();
-        if (q.type === "noul") {
-          answers[id3] = { type: "noul", noul: Math.round(draw * 100) / 100 };
-        } else if (q.type === "choice") {
-          const keys = Object.keys(q.criteria);
-          answers[id3] = { type: "choice", choice: keys[Math.floor(draw * keys.length)], probabilities: Object.fromEntries(keys.map((k) => [k, 1 / keys.length])), confidence: 0 };
-        } else {
-          const pick = Math.floor(draw * q.criteria.length);
-          answers[id3] = { type: "score", score: pick, probabilities: Object.fromEntries(q.criteria.map((_, i) => [String(i), 1 / q.criteria.length])), confidence: 0 };
-        }
-      }
-      return { response: { model: "stub", answers, usage: { input_tokens: 0, output_tokens: 0 } }, ms: 0, by: `stub (seed ${seed})` };
-    }
-  };
-}
-function jevAnswerer(opts) {
-  const key = opts.key;
-  if (!key) throw new Error("the Jev answerer needs TYPESAFE_API_KEY in the environment \u2014 or `--answerer stub` (random, seeded) or `--answerer agent` (answer the questions yourself)");
-  const doFetch = opts.fetch ?? fetch;
-  const backoff = opts.backoff ?? [500, 1e3, 2e3, 4e3];
-  const sleep2 = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  const now = opts.now ?? (() => Date.now());
-  return {
-    name: "jev",
-    async answer(request) {
-      for (let attempt = 0; ; attempt++) {
-        const t0 = now();
-        const res = await doFetch(JEV_URL, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-          body: JSON.stringify(request)
-        });
-        const ms = now() - t0;
-        if ((res.status === 429 || res.status === 529) && attempt < backoff.length) {
-          await sleep2(backoff[attempt]);
-          continue;
-        }
-        let body;
-        try {
-          body = await res.json();
-        } catch {
-          body = null;
-        }
-        if (!res.ok) {
-          const detail = body?.detail;
-          throw new Error(`Jev answered ${res.status}${detail !== void 0 ? `: ${detailText(detail)}` : ""}`);
-        }
-        const response = readResponse(request, body, "Jev");
-        return { response, ms, by: response.model ?? JEV_MODEL };
-      }
-    }
-  };
 }
 
 // packages/modules/wireframe/src/compose.ts
@@ -12323,9 +12547,9 @@ function applyProps(spec, req, res) {
       if (!pq || !req.questions[id3]) continue;
       props[key] = pq.read(chosenOption(req.questions[id3], res.answers[id3]).value);
     }
-    const resolved2 = resolveSlot(r.id, slot.slot, slot.block, props);
-    const present = presentElements(c, resolved2.props);
-    const intents = { ...resolved2.intents ?? {} };
+    const resolved3 = resolveSlot(r.id, slot.slot, slot.block, props);
+    const present = presentElements(c, resolved3.props);
+    const intents = { ...resolved3.intents ?? {} };
     const used = /* @__PURE__ */ new Set();
     for (const element of present) {
       const id3 = `${slot.slot}:${c.id}#${element}`;
@@ -12336,7 +12560,7 @@ function applyProps(spec, req, res) {
       }
       used.add(intents[element]);
     }
-    const out = { ...resolved2 };
+    const out = { ...resolved3 };
     if (present.length > 0) out.intents = intents;
     if (slot.p !== void 0) out.p = slot.p;
     if (slot.alternatives) out.alternatives = slot.alternatives;
@@ -12485,8 +12709,384 @@ function kept(canvas2) {
 }
 
 // packages/modules/wireframe/src/compose-cli.ts
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir as mkdir2, readFile, writeFile as writeFile2 } from "node:fs/promises";
+import path9 from "node:path";
+
+// packages/modules/wireframe/src/style-cli.ts
+import { mkdir, writeFile } from "node:fs/promises";
 import path8 from "node:path";
+
+// packages/modules/wireframe/src/links-cli.ts
+async function keptFlows(ctx, canvasId, snapshot) {
+  return keptFlowsOf(snapshot, await wiresOn(ctx, canvasId, snapshot));
+}
+function keptFlowsOf(snapshot, screens) {
+  const wires = new Map(screens.map((w) => [w.item, w]));
+  const flows = /* @__PURE__ */ new Map();
+  for (const item of kept(snapshot.canvas)) {
+    const wire = wires.get(item.id);
+    if (!wire) continue;
+    const flow = wire.spec.flow;
+    const entry = flows.get(flow) ?? { flow, request: wire.spec.request, screens: [], items: [] };
+    entry.screens.push({ id: item.id, title: item.title, spec: wire.spec, overrides: readOverrides(item.properties?.[LINKS_PROP]) });
+    entry.items.push(item);
+    flows.set(flow, entry);
+  }
+  return [...flows.values()];
+}
+function pickKeptFlow(flows, wanted) {
+  if (flows.length === 0) throw new Error("nothing is kept \u2014 `isocan wire keep <screens...>` marks the screens a prototype plays");
+  if (wanted !== void 0) {
+    const found = flows.find((f) => f.flow === wanted);
+    if (!found) throw new Error(`no kept screens in flow "${wanted}" \u2014 kept flows: ${flows.map((f) => `${f.flow || "(hand-drawn)"} "${f.request}"`).join(", ")}`);
+    return found;
+  }
+  if (flows.length > 1) {
+    throw new Error(`kept screens come from ${flows.length} flows \u2014 say which with --flow:
+  ${flows.map((f) => `--flow ${f.flow || '""'}  "${f.request}" (${f.screens.length} kept)`).join("\n  ")}`);
+  }
+  return flows[0];
+}
+function linkLine(l, title) {
+  const where = l.to === LINK_BACK ? "back" : l.to ? `\u2192 "${title(l.to)}"` : l.needs ? `- - needs ${l.needs}` : "off";
+  return `  ${l.key.padEnd(18)} ${l.label.padEnd(16)} ${where.padEnd(28)} ${l.rule}${l.to && l.to !== LINK_BACK ? `, ${l.transition}` : ""}`;
+}
+async function writePrototype(host, ctx, canvasId, snapshot, flow, group) {
+  const { sendOp: sendOp2 } = host;
+  const links = inferLinks(flow.screens);
+  const title = `Prototype \xB7 ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}\u2026` : flow.request || "hand-drawn screens"}`;
+  const html = assemblePrototype(flow.screens, links, { title });
+  const { width, height } = prototypeSize(flow.screens);
+  const filename = "prototype.html";
+  const upload = await ctx.client.uploadBlob(canvasId, Buffer.from(html, "utf8"), "text/html", filename);
+  const version4 = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
+  const existing2 = Object.values(snapshot.canvas.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
+  if (existing2) {
+    const current = existing2.versions.find((v) => v.id === existing2.currentVersionId) ?? existing2.versions[existing2.versions.length - 1];
+    if (current?.blobHash === upload.blobHash) return { itemId: existing2.id, title, links, what: "unchanged" };
+    await sendOp2(ctx, canvasId, { type: "item.addVersion", itemId: existing2.id, version: version4 }, group);
+    if (existing2.width !== width || existing2.height !== height) await sendOp2(ctx, canvasId, { type: "item.resize", itemId: existing2.id, width, height }, group);
+    if (existing2.title !== title) await sendOp2(ctx, canvasId, { type: "item.update", itemId: existing2.id, patch: { title } }, group);
+    return { itemId: existing2.id, title, links, what: "versioned" };
+  }
+  const itemId = newItemId();
+  const top = Math.min(...flow.items.map((i) => i.y));
+  const bottom = top + height;
+  const band = Object.values(snapshot.canvas.items ?? {}).filter((i) => i.y < bottom && i.y + i.height > top);
+  const right = Math.max(...flow.items.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
+  await sendOp2(ctx, canvasId, {
+    type: "item.add",
+    itemId,
+    version: version4,
+    width,
+    height,
+    placement: { x: Math.round(right + 120), y: Math.round(top), chosen: true },
+    title,
+    // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
+    properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow }
+  }, group);
+  return { itemId, title, links, what: "added" };
+}
+function registerLinks(host, wire) {
+  const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, resolveItem: resolveItem2, sendOp: sendOp2, printJson: printJson2 } = host;
+  wire.command("links [screen]").description("Print where every hotspot on the kept screens goes \u2014 inferred from intents, archetypes and reading order, and any override set with `wire link`").option("--canvas <canvas>").option("--flow <flow>", "which flow's kept screens (default: the only one)").action(
+    run2(async (ref, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const flows = await keptFlows(ctx, p.id, snapshot);
+      const only = ref ? resolveItem2(snapshot, ref) : null;
+      const flow = only ? flows.find((f) => f.screens.some((s) => s.id === only.id)) : pickKeptFlow(flows, opts.flow);
+      if (!flow) throw new Error(`"${only.title}" is not a kept screen \u2014 links run between kept screens (\`isocan wire keep ${only.id}\`)`);
+      const links = inferLinks(flow.screens, { withNone: true });
+      const shown = only ? links.filter((l) => l.from === only.id) : links;
+      if (ctx.json) return printJson2({ flow: flow.flow, request: flow.request, screens: flow.screens.map((s) => ({ itemId: s.id, title: s.title })), links: shown });
+      const title = (id3) => flow.screens.find((s) => s.id === id3)?.title ?? id3;
+      for (const s of flow.screens) {
+        if (only && s.id !== only.id) continue;
+        console.log(`${s.id}  "${s.title}" (${s.spec.archetype})`);
+        const mine = shown.filter((l) => l.from === s.id);
+        if (mine.length === 0) console.log("  (no hotspot that navigates)");
+        for (const l of mine) console.log(linkLine(l, title));
+      }
+      const missing = shown.filter((l) => l.to === null && l.needs);
+      const needs = [...new Set(missing.map((l) => l.needs))];
+      console.log(`
+${shown.length} links \xB7 ${missing.length} dashed${needs.length ? ` \u2014 still to make: ${needs.join(", ")}` : ""}`);
+    })
+  );
+  wire.command("link <screen> <element> [target]").description("Override where one hotspot goes: to a screen, or --none to switch it off; --clear gives it back to the rules. A property on the source screen").option("--canvas <canvas>").option("--none", "the hotspot goes nowhere").option("--back", "the hotspot goes back, whatever the rules say").option("--clear", "forget the override \u2014 the rules decide again").action(
+    run2(async (ref, element, target2, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const given = [target2 !== void 0, Boolean(opts.none), Boolean(opts.back), Boolean(opts.clear)].filter(Boolean).length;
+      if (given !== 1) throw new Error("say where it goes: a <target> screen, or one of --none, --back, --clear");
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const item = resolveItem2(snapshot, ref);
+      const wires = await wiresOn(ctx, p.id, snapshot);
+      const source = wires.find((w) => w.item === item.id);
+      if (!source) throw new Error(`"${item.title}" is not a wireframe screen \u2014 links start on screens \`isocan wire\` drew`);
+      const keys = hotspots(source.spec).map((h) => h.key);
+      const matches = keys.includes(element) ? [element] : keys.filter((k) => k.endsWith(`#${element}`));
+      if (matches.length !== 1) {
+        throw new Error(`${matches.length === 0 ? `"${item.title}" has no hotspot "${element}"` : `"${element}" is on more than one slot`} \u2014 its hotspots: ${keys.join(", ")} (\`isocan wire links ${item.id}\`)`);
+      }
+      const key = matches[0];
+      let value;
+      let to = null;
+      if (opts.clear) value = null;
+      else if (opts.none) value = LINK_NONE;
+      else if (opts.back) value = LINK_BACK;
+      else {
+        to = resolveItem2(snapshot, target2);
+        if (!wires.some((w) => w.item === to.id)) throw new Error(`"${to.title}" is not a wireframe screen \u2014 a link goes to a screen`);
+        value = to.id;
+      }
+      const overrides = readOverrides(item.properties?.[LINKS_PROP]);
+      if (value === null) delete overrides[key];
+      else overrides[key] = value;
+      const patch = Object.keys(overrides).length ? { properties: { [LINKS_PROP]: JSON.stringify(overrides) } } : { removeProperties: [LINKS_PROP] };
+      await sendOp2(ctx, p.id, { type: "item.update", itemId: item.id, patch }, newGroupId());
+      const keptNow = to ? isKept(to) : true;
+      if (ctx.json) return printJson2({ itemId: item.id, key, to: value, overrides });
+      const said = value === null ? "back to the rules" : value === LINK_NONE ? "switched off" : value === LINK_BACK ? "goes back" : `goes to "${to.title}"`;
+      console.log(`${item.id}  "${item.title}" ${key} ${said}${keptNow ? "" : ` \u2014 "${to.title}" is not kept, so the prototype draws it dashed until it is`} \xB7 \`isocan undo\` takes it back`);
+    })
+  );
+  wire.command("prototype").description("Assemble the kept screens as one clickable HTML item beside them \u2014 rebuilt, it gains a version rather than being replaced").option("--canvas <canvas>").option("--flow <flow>", "which flow's kept screens (default: the only one)").action(
+    run2(async (_local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const flow = pickKeptFlow(await keptFlows(ctx, p.id, snapshot), opts.flow);
+      const { itemId, title, links, what } = await writePrototype(host, ctx, p.id, snapshot, flow, newGroupId());
+      const after = await ctx.client.snapshot(p.id);
+      const versions = after.canvas.items[itemId]?.versions.length ?? 0;
+      const dashed = links.filter((l) => l.to === null && l.needs);
+      if (ctx.json) return printJson2({ itemId, title, flow: flow.flow, screens: flow.screens.length, links: links.length, dashed: dashed.length, versions, [what]: true });
+      console.log(`${itemId}  "${title}" \u2014 ${what === "added" ? "added beside the kept screens" : what === "versioned" ? `version ${versions}` : `unchanged (still version ${versions}) \u2014 nothing kept has changed`}`);
+      console.log(`  ${flow.screens.length} screens: ${flow.screens.map((s) => s.title).join(" \xB7 ")}`);
+      console.log(`  ${links.length} links, ${dashed.length} dashed${dashed.length ? ` (needs ${[...new Set(dashed.map((l) => l.needs))].join(", ")})` : ""} \xB7 \`isocan open ${itemId}\` plays it${what === "unchanged" ? "" : " \xB7 `isocan undo` takes it back"}`);
+    })
+  );
+}
+
+// packages/modules/wireframe/src/style-cli.ts
+function currentVersion3(item) {
+  return item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[item.versions.length - 1];
+}
+function governingSystem(canvas2, item) {
+  const selected = selectDesignSystem(canvas2, { at: item });
+  return selected.status === "selected" ? selected.item : null;
+}
+var StyleResolver = class {
+  constructor(ctx, canvasId, answerer, loadKnown, save) {
+    this.ctx = ctx;
+    this.canvasId = canvasId;
+    this.answerer = answerer;
+    this.loadKnown = loadKnown;
+    this.save = save;
+  }
+  ctx;
+  canvasId;
+  answerer;
+  loadKnown;
+  save;
+  mappings = /* @__PURE__ */ new Map();
+  calls = 0;
+  inputTokens = 0;
+  by = "";
+  known = null;
+  async styleFor(system) {
+    if (!system) return DEFAULT_STYLE;
+    const m = await this.mapping(system);
+    return { source: "design-system", itemId: system.id, versionId: m.versionId, name: m.name, ...m.by ? { by: m.by } : {}, roles: m.roles };
+  }
+  /** A mapping on the canvas may be lent to this run: anything Jev (or nobody) answered; a stub's only to the stub. */
+  lendable(style2, system, versionId) {
+    if (style2?.source !== "design-system" || style2.itemId !== system.id || style2.versionId !== versionId) return false;
+    return !style2.by?.startsWith("stub") || this.answerer.name === "stub";
+  }
+  async mapping(system) {
+    const current = currentVersion3(system);
+    if (!current) throw new Error(`the design system "${system.title}" has no version to read`);
+    const key = `${system.id}@${current.id}`;
+    const cached = this.mappings.get(key);
+    if (cached) return cached;
+    const base = {
+      system,
+      versionId: current.id,
+      version: system.versions.findIndex((v) => v.id === current.id) + 1,
+      versions: system.versions.length
+    };
+    this.known ??= [...await this.loadKnown()];
+    const lent = this.known.find((s) => this.lendable(s.style, system, current.id));
+    const doc2 = parseDesign(Buffer.from(await this.ctx.client.downloadBlob(this.canvasId, current.blobHash)).toString("utf8"));
+    const name = doc2.tokens.name ?? system.title;
+    if (lent?.style?.source === "design-system") {
+      const m2 = { ...base, name, roles: lent.style.roles, how: "reused", ...lent.style.by ? { by: lent.style.by } : {} };
+      this.mappings.set(key, m2);
+      return m2;
+    }
+    const candidates = candidatesOf(doc2);
+    const request = mappingRequest(doc2, candidates);
+    let response = { answers: {} };
+    let ms;
+    let by;
+    const asking = Object.keys(request.questions).length > 0;
+    if (asking) {
+      const answered = await this.answerer.answer(request);
+      response = answered.response;
+      ms = answered.ms;
+      by = answered.by;
+      this.by = answered.by;
+      this.calls += 1;
+      this.inputTokens += response.usage?.input_tokens ?? 0;
+      if (this.save) {
+        await mkdir(this.save, { recursive: true });
+        const stem = path8.join(this.save, `style-${system.id}-${current.id}`);
+        await writeFile(`${stem}.request.json`, JSON.stringify(request, null, 2));
+        await writeFile(`${stem}.response.json`, JSON.stringify(response, null, 2));
+      }
+    }
+    const m = { ...base, name, roles: applyMapping(request, response, candidates), how: asking ? "asked" : "nothing to ask", request, response, ...ms !== void 0 ? { ms } : {}, ...by ? { by } : {} };
+    this.mappings.set(key, m);
+    return m;
+  }
+  /** Who answers — the versioned model once one has, else the answerer's name. */
+  get who() {
+    return this.by || this.answerer.name;
+  }
+  cost() {
+    return this.inputTokens * JEV_INPUT_PRICE;
+  }
+};
+function mappingAnswerer(name, seed = 1) {
+  const key = process.env.TYPESAFE_API_KEY;
+  const chosen = name === void 0 || name === "agent" ? key ? "jev" : "stub" : name;
+  if (chosen === "jev") return jevAnswerer({ key });
+  if (chosen === "stub") return stubAnswerer(seed);
+  throw new Error(`--answerer must be jev or stub for a style mapping \u2014 got: ${chosen}`);
+}
+function mappingLines(m, by) {
+  const how = m.how === "asked" ? `mapped by ${m.by ?? by}${m.ms !== void 0 ? ` in ${m.ms} ms` : ""}` : m.how === "reused" ? `mapping (by ${m.by ?? "nobody \u2014 nothing to ask"}) reused from a wire already in this version \u2014 nothing asked` : "every role had one candidate or none \u2014 nothing asked";
+  return [
+    `"${m.name}" \u2014 ${m.system.id}, version ${m.version} of ${m.versions} \xB7 ${how}`,
+    ...ROLES.map((role) => `  ${roleLine(role, m.roles[role])}`)
+  ];
+}
+function checkState(spec, system) {
+  const s = spec.style;
+  if (!system) return s?.source === "design-system" ? "no system governs" : "current";
+  if (s?.source !== "design-system") return "not in it yet";
+  if (s.itemId !== system.id) return "other system";
+  return s.versionId === system.currentVersionId ? "current" : "behind";
+}
+function registerStyle(host, wire) {
+  const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, sendOp: sendOp2, printJson: printJson2 } = host;
+  wire.command("style").description("Restyle every wire in the design system that governs it \u2014 Jev maps the system's tokens onto the wire's roles, once per system version; one op group, a version per changed wire. --default restores the greys; --check lists wires behind their system").option("--canvas <canvas>").option("--default", "back to the default wire look (the greys)").option("--check", "write nothing: list the wires that are behind the system that governs them").option("--flow <flow>", "only this flow's screens and their variations").action(
+    run2(async (_local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      if (opts.default && opts.check) throw new Error("--default writes and --check does not \u2014 say one");
+      const ctx = await ctxOf2(cmd);
+      const say2 = (line) => {
+        if (!ctx.json) console.log(line);
+      };
+      const p = await resolveCanvas2(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const all = await wiresOn(ctx, p.id, snapshot);
+      const screens = opts.flow === void 0 ? all : all.filter((s) => s.spec.flow === opts.flow);
+      if (screens.length === 0) {
+        throw new Error(opts.flow === void 0 ? 'no wireframe on this canvas \u2014 `isocan wire "<request>"` composes some' : `no wireframe in flow "${opts.flow}" on this canvas`);
+      }
+      const itemOf = (s) => snapshot.canvas.items[s.item];
+      if (opts.check) return check2(snapshot, screens.map((s) => ({ screen: s, item: itemOf(s) })), ctx.json, printJson2, say2);
+      const resolver = new StyleResolver(ctx, p.id, mappingAnswerer(opts.answerer, Number(opts.seed ?? 1)), async () => all.map((s) => s.spec), opts.save);
+      const targets = [];
+      for (const s of screens) {
+        const item = itemOf(s);
+        const system = opts.default ? null : governingSystem(snapshot.canvas, item);
+        targets.push({ screen: s, item, system, style: await resolver.styleFor(system) });
+      }
+      const group = newGroupId();
+      const changed = [];
+      for (const t of targets) {
+        if (sameStyle(t.screen.spec.style, t.style)) continue;
+        const spec = { ...t.screen.spec, style: t.style };
+        const html = renderWire(spec);
+        const filename = t.item.versions.find((v) => v.id === t.item.currentVersionId)?.filename ?? "wireframe.html";
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(html, "utf8"), "text/html", filename);
+        await sendOp2(ctx, p.id, { type: "item.addVersion", itemId: t.item.id, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
+        t.screen = { ...t.screen, spec };
+        changed.push(t);
+      }
+      const prototypes = [];
+      const touched = new Set(changed.map((t) => t.screen.spec.flow));
+      const now = all.map((s) => targets.find((t) => t.screen.item === s.item)?.screen ?? s);
+      for (const flow of keptFlowsOf(snapshot, now)) {
+        if (!touched.has(flow.flow)) continue;
+        if (!Object.values(snapshot.canvas.items).some((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow)) continue;
+        const written = await writePrototype(host, ctx, p.id, snapshot, flow, group);
+        prototypes.push({ itemId: written.itemId, what: written.what });
+      }
+      const mappings = [...resolver.mappings.values()];
+      const by = resolver.who;
+      if (ctx.json) {
+        return printJson2({
+          group,
+          style: opts.default ? "default" : "design-system",
+          systems: mappings.map((m) => ({ itemId: m.system.id, versionId: m.versionId, version: m.version, name: m.name, how: m.how, roles: m.roles, wires: targets.filter((t) => t.system?.id === m.system.id).length })),
+          restyled: changed.map((t) => ({ itemId: t.item.id, title: wireTitle(t.screen.spec), style: t.style.source === "design-system" ? t.style.itemId : "default" })),
+          unchanged: targets.filter((t) => !changed.includes(t)).map((t) => t.item.id),
+          prototypes,
+          calls: resolver.calls,
+          inputTokens: resolver.inputTokens,
+          cost: resolver.cost(),
+          answerer: by
+        });
+      }
+      for (const m of mappings) {
+        const governed = targets.filter((t) => t.system?.id === m.system.id);
+        for (const line of mappingLines(m, by)) say2(line);
+        say2(`  governs ${governed.length} wire${governed.length === 1 ? "" : "s"}`);
+      }
+      const inDefault = targets.filter((t) => t.style.source === "default").length;
+      if (inDefault) say2(`${inDefault} wire${inDefault === 1 ? "" : "s"} in the default look${opts.default ? "" : " \u2014 no design system governs where they sit"}`);
+      for (const pr of prototypes) say2(`prototype ${pr.itemId} \u2014 ${pr.what === "versioned" ? "rebuilt as a new version" : pr.what}`);
+      const tail = changed.length ? " \u2014 one op group: `isocan undo` takes the restyle back" : " \u2014 nothing written";
+      say2(`${changed.length} of ${targets.length} wires restyled \xB7 ${targets.length - changed.length} unchanged \xB7 ${resolver.calls === 0 ? "nothing asked" : `${resolver.calls} ${resolver.calls === 1 ? "call" : "calls"} to ${by} \xB7 ${resolver.inputTokens.toLocaleString("en-US")} input tokens \xB7 $${resolver.cost().toFixed(6)}`}${tail}`);
+    })
+  );
+}
+function check2(snapshot, wires, json5, printJson2, say2) {
+  const rows2 = wires.map(({ screen, item }) => {
+    const system = governingSystem(snapshot.canvas, item);
+    const state = checkState(screen.spec, system);
+    const drawnBy = screen.spec.style?.source === "design-system" ? screen.spec.style : null;
+    const drawnVersion = drawnBy ? snapshot.canvas.items[drawnBy.itemId]?.versions.findIndex((v) => v.id === drawnBy.versionId) : void 0;
+    return {
+      itemId: item.id,
+      title: wireTitle(screen.spec),
+      state,
+      governedBy: system ? { itemId: system.id, title: system.title, version: system.versions.findIndex((v) => v.id === system.currentVersionId) + 1, versions: system.versions.length } : null,
+      drawnBy: drawnBy ? { itemId: drawnBy.itemId, version: drawnVersion !== void 0 && drawnVersion >= 0 ? drawnVersion + 1 : null, name: drawnBy.name ?? null } : "default"
+    };
+  });
+  if (json5) return printJson2({ wires: rows2, behind: rows2.filter((r) => r.state !== "current").length });
+  const off = rows2.filter((r) => r.state !== "current");
+  for (const r of off) {
+    const d = r.drawnBy;
+    const was = typeof d === "string" ? "the default look" : `"${d.name ?? d.itemId}" version ${d.version ?? "?"}`;
+    const is = r.governedBy ? `"${r.governedBy.title}" version ${r.governedBy.version} of ${r.governedBy.versions}` : "no system";
+    say2(`${r.itemId}  ${r.title} \u2014 ${r.state}: drawn in ${was}, governed by ${is}`);
+  }
+  say2(off.length === 0 ? `all ${rows2.length} wires draw in the system that governs them \u2014 nothing to bring forward` : `${off.length} of ${rows2.length} wires are not in the system that governs them \u2014 \`isocan wire style\` brings them forward`);
+}
+
+// packages/modules/wireframe/src/compose-cli.ts
 var GAP = 80;
 function slugOf(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "screen";
@@ -12504,6 +13104,17 @@ var FlowCanvas = class {
   group;
   /** Variations this invocation added, in the order they landed. */
   variants = [];
+  /**
+   * The governing design system's mapping (design §9), stamped on every spec
+   * this canvas writes that has none of its own — so a flow asked for where a
+   * system governs arrives in it. Unset: the default look.
+   */
+  style;
+  /** Merged into every placement this canvas adds at — a group's membership, for `wire --in <group>`. */
+  placeIn = {};
+  styled(spec) {
+    return this.style && spec.style === void 0 ? { ...spec, style: this.style } : spec;
+  }
   async version(spec) {
     const html = renderWire(spec);
     const filename = `${slugOf(wireTitle(spec))}.html`;
@@ -12513,7 +13124,8 @@ var FlowCanvas = class {
   send(op) {
     return this.host.sendOp(this.ctx, this.canvasId, op, this.group);
   }
-  async add(spec, placement) {
+  async add(given, placement) {
+    const spec = this.styled(given);
     const { width, height } = wireSize(spec);
     const itemId = newItemId();
     const result2 = await this.send({
@@ -12522,7 +13134,7 @@ var FlowCanvas = class {
       version: await this.version(spec),
       width,
       height,
-      placement,
+      placement: { ...placement, ...this.placeIn },
       title: wireTitle(spec),
       properties: { [FIDELITY_PROP]: "wireframe" }
     });
@@ -12530,7 +13142,8 @@ var FlowCanvas = class {
     return { item: itemId, spec, x: at2.x ?? 0, y: at2.y ?? 0, width, height };
   }
   /** A new version of the same item — the screen fills in place — and its title and size if they moved. */
-  async write(screen, spec) {
+  async write(screen, given) {
+    const spec = this.styled(given);
     await this.send({ type: "item.addVersion", itemId: screen.item, version: await this.version(spec) });
     if (wireTitle(spec) !== wireTitle(screen.spec)) await this.send({ type: "item.update", itemId: screen.item, patch: { title: wireTitle(spec) } });
     const { width, height } = wireSize(spec);
@@ -12556,11 +13169,11 @@ async function ask(answerer, round, calls, save) {
   }));
   const ms = Date.now() - t0;
   if (save) {
-    await mkdir(save, { recursive: true });
+    await mkdir2(save, { recursive: true });
     await Promise.all(calls.map(async (call, i) => {
       const name = `round-${round}.${i + 1}`;
-      await writeFile(path8.join(save, `${name}.request.json`), JSON.stringify(call.request, null, 2));
-      await writeFile(path8.join(save, `${name}.response.json`), JSON.stringify(answered[i].response, null, 2));
+      await writeFile2(path9.join(save, `${name}.request.json`), JSON.stringify(call.request, null, 2));
+      await writeFile2(path9.join(save, `${name}.response.json`), JSON.stringify(answered[i].response, null, 2));
     }));
   }
   const responses = answered.map((a) => a.response);
@@ -12677,7 +13290,7 @@ function costLine(tallies, by, screens) {
 }
 function registerCompose(host, wire) {
   const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, printJson: printJson2, placementFor: placementFor2 } = host;
-  wire.argument("[request...]", "what the screens are for, in words \u2014 composes a flow").option("--answerer <name>", "jev (needs TYPESAFE_API_KEY), stub (random, seeded) or agent (you answer: `wire questions` / `wire answer`) \u2014 default jev when the key is set, else stub").option("--seed <n>", "the stub's seed", "1").option("--save <dir>", "write each round's requests and responses there as JSON").option("--canvas <canvas>").option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)").action(
+  wire.argument("[request...]", "what the screens are for, in words \u2014 composes a flow").option("--answerer <name>", "jev (needs TYPESAFE_API_KEY), stub (random, seeded) or agent (you answer: `wire questions` / `wire answer`) \u2014 default jev when the key is set, else stub").option("--seed <n>", "the stub's seed", "1").option("--save <dir>", "write each round's requests and responses there as JSON").option("--canvas <canvas>").option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)").option("--in <group>", "compose the flow inside this group \u2014 and in its design system, if it has one").action(
     run2(async (words2, opts, cmd) => {
       const request = words2.join(" ").trim();
       if (!request) {
@@ -12694,8 +13307,10 @@ function registerCompose(host, wire) {
       const snapshot = await ctx.client.snapshot(p.id);
       const flow = newGroupId();
       const canvas2 = new FlowCanvas(host, ctx, p.id, flow);
-      const placement = opts.at ? placementFor2(snapshot, { at: opts.at }) : rowStart(snapshot);
+      const placement = opts.in !== void 0 || opts.at ? placementFor2(snapshot, { ...opts.at ? { at: opts.at } : {}, ...opts.in !== void 0 ? { in: opts.in } : {} }, wireSize(requestBlueprint(request, flow))) : rowStart(snapshot);
       let screens = [await canvas2.add(requestBlueprint(request, flow), placement)];
+      const container = placement.containerId;
+      if (container) canvas2.placeIn = { containerId: container, groupPlacement: "exact" };
       const firstMs = Date.now() - t0;
       say2(`${screens[0].item}  "${request}" \u2014 a blueprint, on the canvas in ${firstMs} ms, before any answer`);
       if (answerer === "agent") {
@@ -12706,6 +13321,10 @@ function registerCompose(host, wire) {
   isocan wire answer round.json          # repeat until the flow is drawn`);
         return;
       }
+      const mapper = new StyleResolver(ctx, p.id, answerer, async () => (await wiresOn(ctx, p.id, await ctx.client.snapshot(p.id))).map((s) => s.spec), opts.save);
+      const styling = styleAt(ctx, p.id, screens[0].item, mapper);
+      styling.catch(() => {
+      });
       say2(`answering with ${answerer.name === "stub" ? `the stub (seed ${opts.seed})${process.env.TYPESAFE_API_KEY ? "" : " \u2014 no TYPESAFE_API_KEY here"}` : "Jev"}`);
       const tallies = [];
       let by = answerer.name;
@@ -12714,6 +13333,11 @@ function registerCompose(host, wire) {
         const asked = await ask(answerer, round, calls, opts.save);
         tallies.push(asked.tally);
         by = asked.by;
+        if (round === 1) {
+          const styled = await styling;
+          canvas2.style = styled.system ? styled.style : void 0;
+          for (const line of styled.lines) say2(line);
+        }
         screens = await applyRound(canvas2, round, screens, calls, asked.responses, say2);
       }
       const totalMs = Date.now() - t0;
@@ -12726,13 +13350,25 @@ function registerCompose(host, wire) {
           screens: screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots, ...s.spec.varied ? { varied: s.spec.varied } : {} })),
           variations: canvas2.variants.map((v) => ({ itemId: v.item, title: wireTitle(v.spec), variantOf: v.spec.variantOf, flip: v.spec.flip })),
           rounds: tallies,
-          inputTokens: tallies.reduce((s, t) => s + t.inputTokens, 0),
-          cost: tallies.reduce((s, t) => s + t.inputTokens, 0) * JEV_INPUT_PRICE
+          style: canvas2.style ?? { source: "default" },
+          styleCalls: mapper.calls,
+          inputTokens: tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens,
+          cost: (tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens) * JEV_INPUT_PRICE
         });
       }
       say2(costLine(tallies, by, screens.length) + ` \xB7 ${totalMs} ms in all \u2014 \`isocan undo\` takes the whole flow back`);
     })
   );
+}
+async function styleAt(ctx, canvasId, itemId, mapper) {
+  const snapshot = await ctx.client.snapshot(canvasId);
+  const item = snapshot.canvas.items[itemId];
+  const system = item ? governingSystem(snapshot.canvas, item) : null;
+  const style2 = await mapper.styleFor(system);
+  if (!system) return { system, style: style2, lines: [] };
+  const m = [...mapper.mappings.values()].find((x) => x.system.id === system.id);
+  const cost = mapper.calls ? ` \xB7 ${mapper.inputTokens.toLocaleString("en-US")} input tokens \xB7 $${mapper.cost().toFixed(6)}` : "";
+  return { system, style: style2, lines: [`style: in the design system that governs here${cost}`, ...mappingLines(m, mapper.who).map((l) => `  ${l}`)] };
 }
 async function questions(host, opts, cmd) {
   const { ctxOf: ctxOf2, resolveCanvas: resolveCanvas2 } = host;
@@ -12767,6 +13403,10 @@ async function answer(host, file, cmd) {
     return answeredResponse({ ...call, response: mine.response }, `${file}'s call for ${call.item}`);
   });
   const canvas2 = new FlowCanvas(host, ctx, p.id, flow);
+  const mapper = new StyleResolver(ctx, p.id, mappingAnswerer(void 0), async () => screens.map((s) => s.spec));
+  const styled = await styleAt(ctx, p.id, screens[0].item, mapper);
+  canvas2.style = styled.system ? styled.style : void 0;
+  if (round === 1) for (const line of styled.lines) say2(line);
   const after = await applyRound(canvas2, round, screens, calls, responses, say2);
   const next2 = pendingRound(after.map((s) => s.spec));
   if (ctx.json) return printJson2({ flow, round, items: after.map((s) => s.item), next: next2 });
@@ -12858,164 +13498,6 @@ function registerVary(host, wire) {
   );
 }
 
-// packages/modules/wireframe/src/links-cli.ts
-async function keptFlows(ctx, canvasId, snapshot) {
-  const wires = new Map((await wiresOn(ctx, canvasId, snapshot)).map((w) => [w.item, w]));
-  const flows = /* @__PURE__ */ new Map();
-  for (const item of kept(snapshot.canvas)) {
-    const wire = wires.get(item.id);
-    if (!wire) continue;
-    const flow = wire.spec.flow;
-    const entry = flows.get(flow) ?? { flow, request: wire.spec.request, screens: [], items: [] };
-    entry.screens.push({ id: item.id, title: item.title, spec: wire.spec, overrides: readOverrides(item.properties?.[LINKS_PROP]) });
-    entry.items.push(item);
-    flows.set(flow, entry);
-  }
-  return [...flows.values()];
-}
-function pickKeptFlow(flows, wanted) {
-  if (flows.length === 0) throw new Error("nothing is kept \u2014 `isocan wire keep <screens...>` marks the screens a prototype plays");
-  if (wanted !== void 0) {
-    const found = flows.find((f) => f.flow === wanted);
-    if (!found) throw new Error(`no kept screens in flow "${wanted}" \u2014 kept flows: ${flows.map((f) => `${f.flow || "(hand-drawn)"} "${f.request}"`).join(", ")}`);
-    return found;
-  }
-  if (flows.length > 1) {
-    throw new Error(`kept screens come from ${flows.length} flows \u2014 say which with --flow:
-  ${flows.map((f) => `--flow ${f.flow || '""'}  "${f.request}" (${f.screens.length} kept)`).join("\n  ")}`);
-  }
-  return flows[0];
-}
-function linkLine(l, title) {
-  const where = l.to === LINK_BACK ? "back" : l.to ? `\u2192 "${title(l.to)}"` : l.needs ? `- - needs ${l.needs}` : "off";
-  return `  ${l.key.padEnd(18)} ${l.label.padEnd(16)} ${where.padEnd(28)} ${l.rule}${l.to && l.to !== LINK_BACK ? `, ${l.transition}` : ""}`;
-}
-function registerLinks(host, wire) {
-  const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, resolveItem: resolveItem2, sendOp: sendOp2, printJson: printJson2 } = host;
-  wire.command("links [screen]").description("Print where every hotspot on the kept screens goes \u2014 inferred from intents, archetypes and reading order, and any override set with `wire link`").option("--canvas <canvas>").option("--flow <flow>", "which flow's kept screens (default: the only one)").action(
-    run2(async (ref, _local, cmd) => {
-      const opts = cmd.optsWithGlobals();
-      const ctx = await ctxOf2(cmd);
-      const p = await resolveCanvas2(ctx);
-      const snapshot = await ctx.client.snapshot(p.id);
-      const flows = await keptFlows(ctx, p.id, snapshot);
-      const only = ref ? resolveItem2(snapshot, ref) : null;
-      const flow = only ? flows.find((f) => f.screens.some((s) => s.id === only.id)) : pickKeptFlow(flows, opts.flow);
-      if (!flow) throw new Error(`"${only.title}" is not a kept screen \u2014 links run between kept screens (\`isocan wire keep ${only.id}\`)`);
-      const links = inferLinks(flow.screens, { withNone: true });
-      const shown = only ? links.filter((l) => l.from === only.id) : links;
-      if (ctx.json) return printJson2({ flow: flow.flow, request: flow.request, screens: flow.screens.map((s) => ({ itemId: s.id, title: s.title })), links: shown });
-      const title = (id3) => flow.screens.find((s) => s.id === id3)?.title ?? id3;
-      for (const s of flow.screens) {
-        if (only && s.id !== only.id) continue;
-        console.log(`${s.id}  "${s.title}" (${s.spec.archetype})`);
-        const mine = shown.filter((l) => l.from === s.id);
-        if (mine.length === 0) console.log("  (no hotspot that navigates)");
-        for (const l of mine) console.log(linkLine(l, title));
-      }
-      const missing = shown.filter((l) => l.to === null && l.needs);
-      const needs = [...new Set(missing.map((l) => l.needs))];
-      console.log(`
-${shown.length} links \xB7 ${missing.length} dashed${needs.length ? ` \u2014 still to make: ${needs.join(", ")}` : ""}`);
-    })
-  );
-  wire.command("link <screen> <element> [target]").description("Override where one hotspot goes: to a screen, or --none to switch it off; --clear gives it back to the rules. A property on the source screen").option("--canvas <canvas>").option("--none", "the hotspot goes nowhere").option("--back", "the hotspot goes back, whatever the rules say").option("--clear", "forget the override \u2014 the rules decide again").action(
-    run2(async (ref, element, target2, _local, cmd) => {
-      const opts = cmd.optsWithGlobals();
-      const given = [target2 !== void 0, Boolean(opts.none), Boolean(opts.back), Boolean(opts.clear)].filter(Boolean).length;
-      if (given !== 1) throw new Error("say where it goes: a <target> screen, or one of --none, --back, --clear");
-      const ctx = await ctxOf2(cmd);
-      const p = await resolveCanvas2(ctx);
-      const snapshot = await ctx.client.snapshot(p.id);
-      const item = resolveItem2(snapshot, ref);
-      const wires = await wiresOn(ctx, p.id, snapshot);
-      const source = wires.find((w) => w.item === item.id);
-      if (!source) throw new Error(`"${item.title}" is not a wireframe screen \u2014 links start on screens \`isocan wire\` drew`);
-      const keys = hotspots(source.spec).map((h) => h.key);
-      const matches = keys.includes(element) ? [element] : keys.filter((k) => k.endsWith(`#${element}`));
-      if (matches.length !== 1) {
-        throw new Error(`${matches.length === 0 ? `"${item.title}" has no hotspot "${element}"` : `"${element}" is on more than one slot`} \u2014 its hotspots: ${keys.join(", ")} (\`isocan wire links ${item.id}\`)`);
-      }
-      const key = matches[0];
-      let value;
-      let to = null;
-      if (opts.clear) value = null;
-      else if (opts.none) value = LINK_NONE;
-      else if (opts.back) value = LINK_BACK;
-      else {
-        to = resolveItem2(snapshot, target2);
-        if (!wires.some((w) => w.item === to.id)) throw new Error(`"${to.title}" is not a wireframe screen \u2014 a link goes to a screen`);
-        value = to.id;
-      }
-      const overrides = readOverrides(item.properties?.[LINKS_PROP]);
-      if (value === null) delete overrides[key];
-      else overrides[key] = value;
-      const patch = Object.keys(overrides).length ? { properties: { [LINKS_PROP]: JSON.stringify(overrides) } } : { removeProperties: [LINKS_PROP] };
-      await sendOp2(ctx, p.id, { type: "item.update", itemId: item.id, patch }, newGroupId());
-      const keptNow = to ? isKept(to) : true;
-      if (ctx.json) return printJson2({ itemId: item.id, key, to: value, overrides });
-      const said = value === null ? "back to the rules" : value === LINK_NONE ? "switched off" : value === LINK_BACK ? "goes back" : `goes to "${to.title}"`;
-      console.log(`${item.id}  "${item.title}" ${key} ${said}${keptNow ? "" : ` \u2014 "${to.title}" is not kept, so the prototype draws it dashed until it is`} \xB7 \`isocan undo\` takes it back`);
-    })
-  );
-  wire.command("prototype").description("Assemble the kept screens as one clickable HTML item beside them \u2014 rebuilt, it gains a version rather than being replaced").option("--canvas <canvas>").option("--flow <flow>", "which flow's kept screens (default: the only one)").action(
-    run2(async (_local, cmd) => {
-      const opts = cmd.optsWithGlobals();
-      const ctx = await ctxOf2(cmd);
-      const p = await resolveCanvas2(ctx);
-      const snapshot = await ctx.client.snapshot(p.id);
-      const flow = pickKeptFlow(await keptFlows(ctx, p.id, snapshot), opts.flow);
-      const links = inferLinks(flow.screens);
-      const title = `Prototype \xB7 ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}\u2026` : flow.request || "hand-drawn screens"}`;
-      const html = assemblePrototype(flow.screens, links, { title });
-      const { width, height } = prototypeSize(flow.screens);
-      const filename = "prototype.html";
-      const upload = await ctx.client.uploadBlob(p.id, Buffer.from(html, "utf8"), "text/html", filename);
-      const version4 = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
-      const existing2 = Object.values(snapshot.canvas.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
-      const group = newGroupId();
-      let itemId;
-      let what;
-      if (existing2) {
-        itemId = existing2.id;
-        const current = existing2.versions.find((v) => v.id === existing2.currentVersionId) ?? existing2.versions[existing2.versions.length - 1];
-        if (current?.blobHash === upload.blobHash) what = "unchanged";
-        else {
-          await sendOp2(ctx, p.id, { type: "item.addVersion", itemId, version: version4 }, group);
-          if (existing2.width !== width || existing2.height !== height) await sendOp2(ctx, p.id, { type: "item.resize", itemId, width, height }, group);
-          if (existing2.title !== title) await sendOp2(ctx, p.id, { type: "item.update", itemId, patch: { title } }, group);
-          what = "versioned";
-        }
-      } else {
-        itemId = newItemId();
-        const top = Math.min(...flow.items.map((i) => i.y));
-        const bottom = top + height;
-        const band = Object.values(snapshot.canvas.items ?? {}).filter((i) => i.y < bottom && i.y + i.height > top);
-        const right = Math.max(...flow.items.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
-        await sendOp2(ctx, p.id, {
-          type: "item.add",
-          itemId,
-          version: version4,
-          width,
-          height,
-          placement: { x: Math.round(right + 120), y: Math.round(top), chosen: true },
-          title,
-          // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
-          properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow }
-        }, group);
-        what = "added";
-      }
-      const after = await ctx.client.snapshot(p.id);
-      const versions = after.canvas.items[itemId]?.versions.length ?? 0;
-      const dashed = links.filter((l) => l.to === null && l.needs);
-      if (ctx.json) return printJson2({ itemId, title, flow: flow.flow, screens: flow.screens.length, links: links.length, dashed: dashed.length, versions, [what]: true });
-      console.log(`${itemId}  "${title}" \u2014 ${what === "added" ? "added beside the kept screens" : what === "versioned" ? `version ${versions}` : `unchanged (still version ${versions}) \u2014 nothing kept has changed`}`);
-      console.log(`  ${flow.screens.length} screens: ${flow.screens.map((s) => s.title).join(" \xB7 ")}`);
-      console.log(`  ${links.length} links, ${dashed.length} dashed${dashed.length ? ` (needs ${[...new Set(dashed.map((l) => l.needs))].join(", ")})` : ""} \xB7 \`isocan open ${itemId}\` plays it${what === "unchanged" ? "" : " \xB7 `isocan undo` takes it back"}`);
-    })
-  );
-}
-
 // packages/modules/wireframe/src/cli.ts
 function slugOf2(title) {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "screen";
@@ -13029,6 +13511,7 @@ function register6(host) {
   registerCompose(host, wire);
   registerVary(host, wire);
   registerLinks(host, wire);
+  registerStyle(host, wire);
   wire.command("questions").description("Print the pending round of a wireframe flow as a question file, in Jev's request shape \u2014 for an agent to answer in Jev's place").option("--canvas <canvas>").option("--flow <flow>", "which flow (default: the newest one waiting on answers)").action(run2((opts, cmd) => questions(host, opts, cmd)));
   wire.command("answer <file>").description("Apply a question file whose calls each carry a `response` in Jev's response shape \u2014 the screens fill in place, in the flow's op group").option("--canvas <canvas>").action(run2((file, _opts, cmd) => answer(host, file, cmd)));
   wire.command("render <spec>").description("Draw a wireframe spec (a JSON file) and add it to the canvas as an HTML screen with the spec inside it").option("--canvas <canvas>").option("--title <title>", "the item's title (default: the spec's title)").option("--at <x,y>", "place at world coordinates").option("--anchor <item>", "place to the left of this item").option("--in <group>", "insert into this group").option("--cell <row,col>", "with --in: one cell of the sheet's grid").action(
@@ -13115,7 +13598,7 @@ var CLI_MODULES = [mindmapCli, mermaidCli, documentsCli, stickersCli, sandboxCli
 
 // packages/cli/src/runtime-modules.ts
 import { readFileSync as readFileSync3 } from "node:fs";
-import path9 from "node:path";
+import path10 from "node:path";
 import { pathToFileURL } from "node:url";
 async function loadRuntimeModules(home, host) {
   const loaded = [];
@@ -13137,7 +13620,7 @@ async function loadRuntimeModules(home, host) {
     let templates;
     if (manifest.guide) {
       try {
-        guide = readFileSync3(path9.join(dir, manifest.guide), "utf8");
+        guide = readFileSync3(path10.join(dir, manifest.guide), "utf8");
       } catch {
         guide = null;
       }
@@ -13145,7 +13628,7 @@ async function loadRuntimeModules(home, host) {
     if (manifest.cli) {
       globalThis.isocan ??= { core: src_exports };
       try {
-        const mod = await import(pathToFileURL(path9.join(dir, manifest.cli)).href);
+        const mod = await import(pathToFileURL(path10.join(dir, manifest.cli)).href);
         const record2 = mod.default;
         record2?.register?.(host);
         if (!guide && typeof record2?.guide === "string") guide = record2.guide;
@@ -13509,13 +13992,13 @@ var AcpAgentProcess = class _AcpAgentProcess {
 // packages/cli/src/agent-key.ts
 import { createHmac, randomBytes } from "node:crypto";
 import { promises as fs11 } from "node:fs";
-import path10 from "node:path";
+import path11 from "node:path";
 var AGENT_SECRET_FILE = "agent-secret";
 var AGENT_HARNESS = "agent";
 var PREFIX = `${AGENT_HARNESS}:`;
 var MAC_BYTES = 24;
 var SECRET_BYTES = 32;
-var agentSecretFile = (home) => path10.join(home, AGENT_SECRET_FILE);
+var agentSecretFile = (home) => path11.join(home, AGENT_SECRET_FILE);
 var legacyAgentKey = (name) => `${PREFIX}${name}`;
 function agentSessionOf(key) {
   if (!key.startsWith(PREFIX)) throw new Error(`not an agent key: ${key}`);
@@ -14159,16 +14642,16 @@ stay off, the order is \`isocan operator takedown\`. The record is in the ledger
 import { spawn as spawn3 } from "node:child_process";
 import { promises as fs12 } from "node:fs";
 import os3 from "node:os";
-import path11 from "node:path";
+import path12 from "node:path";
 async function sandboxAsked(home, flags) {
   if (flags.sandbox) return true;
   if (flags.unsandboxed) return false;
   return (await readConfigFile(home)).sandbox === true;
 }
 async function whichBin(bin, env) {
-  for (const dir of (env.PATH ?? "").split(path11.delimiter)) {
+  for (const dir of (env.PATH ?? "").split(path12.delimiter)) {
     if (!dir) continue;
-    const candidate = path11.join(dir, bin);
+    const candidate = path12.join(dir, bin);
     try {
       await fs12.access(candidate, fs12.constants.X_OK);
       return candidate;
@@ -14180,16 +14663,16 @@ async function whichBin(bin, env) {
 async function packageRootOf(bin) {
   let dir;
   try {
-    dir = path11.dirname(await fs12.realpath(bin));
+    dir = path12.dirname(await fs12.realpath(bin));
   } catch {
     return null;
   }
   for (let up = 0; up < 5; up++) {
     try {
-      await fs12.access(path11.join(dir, "package.json"));
+      await fs12.access(path12.join(dir, "package.json"));
       return dir;
     } catch {
-      const parent = path11.dirname(dir);
+      const parent = path12.dirname(dir);
       if (parent === dir) break;
       dir = parent;
     }
@@ -14243,13 +14726,13 @@ function harnessPaths(harness, env) {
   const home = os3.homedir();
   switch (harness) {
     case "claude-code":
-      return [env.CLAUDE_CONFIG_DIR?.trim() || path11.join(home, ".claude"), path11.join(home, ".claude.json")];
+      return [env.CLAUDE_CONFIG_DIR?.trim() || path12.join(home, ".claude"), path12.join(home, ".claude.json")];
     case "codex":
-      return [env.CODEX_HOME?.trim() || path11.join(home, ".codex")];
+      return [env.CODEX_HOME?.trim() || path12.join(home, ".codex")];
     case "pi":
-      return [path11.join(home, ".pi")];
+      return [path12.join(home, ".pi")];
     case "antigravity":
-      return [path11.join(home, ".gemini")];
+      return [path12.join(home, ".gemini")];
     default:
       return [];
   }
@@ -14280,10 +14763,10 @@ async function policyFor(options) {
   const env = options.env ?? process.env;
   const raw = await readConfigFile(options.home);
   const strings = (value) => Array.isArray(value) ? value.filter((v) => typeof v === "string" && v.trim().length > 0) : [];
-  const nodeRoot = path11.dirname(path11.dirname(process.execPath));
-  const npmCache = env.npm_config_cache?.trim() || path11.join(os3.homedir(), ".npm");
+  const nodeRoot = path12.dirname(path12.dirname(process.execPath));
+  const npmCache = env.npm_config_cache?.trim() || path12.join(os3.homedir(), ".npm");
   const harness = harnessPaths(options.harness, env);
-  const caDirs = [env.NODE_EXTRA_CA_CERTS, env.SSL_CERT_FILE, env.CURL_CA_BUNDLE].filter((p) => Boolean(p?.trim())).map((p) => path11.dirname(p));
+  const caDirs = [env.NODE_EXTRA_CA_CERTS, env.SSL_CERT_FILE, env.CURL_CA_BUNDLE].filter((p) => Boolean(p?.trim())).map((p) => path12.dirname(p));
   return {
     network: {
       allowedDomains: dedupe([
@@ -14359,9 +14842,9 @@ function wrapSpec(spec, scan, settingsFile) {
   };
 }
 async function writeSandboxSettings(home, key, policy) {
-  const dir = path11.join(home, "sandbox");
+  const dir = path12.join(home, "sandbox");
   await fs12.mkdir(dir, { recursive: true });
-  const file = path11.join(dir, `${key.replace(/[^A-Za-z0-9_.-]/g, "-")}.json`);
+  const file = path12.join(dir, `${key.replace(/[^A-Za-z0-9_.-]/g, "-")}.json`);
   await fs12.writeFile(file, `${JSON.stringify(policy, null, 2)}
 `);
   return file;
@@ -14477,14 +14960,14 @@ async function runFenced(home, request, env = process.env, platform = process.pl
 // packages/cli/src/upgrade.ts
 import { promises as fs13 } from "node:fs";
 import { spawnSync as spawnSync2 } from "node:child_process";
-import path12 from "node:path";
+import path13 from "node:path";
 async function whichInstall(root, home = paths_exports.isocanHome()) {
-  const inside = path12.relative(resolved(paths_exports.buildsDir(home)), resolved(root));
-  if (inside && !inside.startsWith("..") && !path12.isAbsolute(inside)) {
+  const inside = path13.relative(resolved(paths_exports.buildsDir(home)), resolved(root));
+  if (inside && !inside.startsWith("..") && !path13.isAbsolute(inside)) {
     return { kind: "managed", root };
   }
-  if (await exists(path12.join(root, ".git"))) return { kind: "checkout", root };
-  if (root.includes(`${path12.sep}_npx${path12.sep}`)) return { kind: "npx", root };
+  if (await exists(path13.join(root, ".git"))) return { kind: "checkout", root };
+  if (root.includes(`${path13.sep}_npx${path13.sep}`)) return { kind: "npx", root };
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   const globalRoot = spawnSync2(npm, ["root", "-g"], { encoding: "utf8" }).stdout?.trim();
   if (globalRoot && resolved(root).startsWith(resolved(globalRoot))) {
@@ -14545,14 +15028,14 @@ async function exists(target2) {
 import { promises as fs14 } from "node:fs";
 import { spawn as spawn4 } from "node:child_process";
 import net from "node:net";
-import path14 from "node:path";
+import path15 from "node:path";
 
 // packages/cli/src/onpath.ts
 import { accessSync, constants, realpathSync } from "node:fs";
 import { spawnSync as spawnSync3 } from "node:child_process";
-import path13 from "node:path";
-var NPX_CACHE = `${path13.sep}_npx${path13.sep}`;
-var LOCAL_BIN = `${path13.sep}node_modules${path13.sep}.bin`;
+import path14 from "node:path";
+var NPX_CACHE = `${path14.sep}_npx${path14.sep}`;
+var LOCAL_BIN = `${path14.sep}node_modules${path14.sep}.bin`;
 function transientDir(dir) {
   return dir.includes(NPX_CACHE) || dir.endsWith(LOCAL_BIN);
 }
@@ -14573,23 +15056,23 @@ function real(file) {
 }
 function findOnPath(command2, pathVar = process.env.PATH ?? "", executable = runnable) {
   const names = process.platform === "win32" ? [`${command2}.cmd`, `${command2}.exe`, command2] : [command2];
-  for (const dir of pathVar.split(path13.delimiter)) {
+  for (const dir of pathVar.split(path14.delimiter)) {
     if (!dir || transientDir(dir)) continue;
     for (const name of names) {
-      const file = path13.join(dir, name);
+      const file = path14.join(dir, name);
       if (executable(file) && !transientDir(real(file))) return file;
     }
   }
   return null;
 }
 function rootOfBin(bin) {
-  return path13.resolve(path13.dirname(real(bin)), "../../..");
+  return path14.resolve(path14.dirname(real(bin)), "../../..");
 }
 function globalBinDir() {
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   const prefix = spawnSync3(npm, ["prefix", "-g"], { encoding: "utf8" }).stdout?.trim();
   if (!prefix) return null;
-  return process.platform === "win32" ? prefix : path13.join(prefix, "bin");
+  return process.platform === "win32" ? prefix : path14.join(prefix, "bin");
 }
 
 // packages/cli/src/managed.ts
@@ -14618,7 +15101,7 @@ async function listBuilds(home) {
 async function currentSha(home) {
   try {
     const target2 = await fs14.readlink(paths_exports.currentLink(home));
-    const sha = path14.basename(target2);
+    const sha = path15.basename(target2);
     return sha.length > 0 ? sha : null;
   } catch {
     return null;
@@ -14637,7 +15120,7 @@ async function currentBuild(home) {
 async function flipTo(home, sha) {
   const link = paths_exports.currentLink(home);
   const tmp = `${link}.tmp-${process.pid}`;
-  const target2 = process.platform === "win32" ? paths_exports.buildDir(home, sha) : path14.join("builds", sha);
+  const target2 = process.platform === "win32" ? paths_exports.buildDir(home, sha) : path15.join("builds", sha);
   await fs14.mkdir(home, { recursive: true });
   await fs14.rm(tmp, { force: true });
   await fs14.symlink(target2, tmp, process.platform === "win32" ? "junction" : "dir");
@@ -14662,9 +15145,9 @@ function strip(result2) {
 }
 async function smokeAttempt(home, root, expect, timeoutMs) {
   await fs14.mkdir(paths_exports.buildsDir(home), { recursive: true });
-  const scratch = await fs14.mkdtemp(path14.join(paths_exports.buildsDir(home), ".smoke-"));
-  const bin = path14.join(root, "packages", "cli", "bin", "isocan.js");
-  const logFile = path14.join(scratch, "smoke.log");
+  const scratch = await fs14.mkdtemp(path15.join(paths_exports.buildsDir(home), ".smoke-"));
+  const bin = path15.join(root, "packages", "cli", "bin", "isocan.js");
+  const logFile = path15.join(scratch, "smoke.log");
   const port = await freePort();
   const env = {
     ...process.env,
@@ -14810,7 +15293,7 @@ async function installBuild(options) {
   let stamped = null;
   try {
     const manifest = JSON.parse(
-      await fs14.readFile(path14.join(paths_exports.buildRoot(staging), "package.json"), "utf8")
+      await fs14.readFile(path15.join(paths_exports.buildRoot(staging), "package.json"), "utf8")
     );
     stamped = plausibleSha(manifest.isocan?.commit);
   } catch {
@@ -14882,7 +15365,7 @@ async function shelveExisting(home, root, sha) {
   if (!sha) return null;
   const dir = paths_exports.buildDir(home, sha);
   if (await exists2(dir)) return null;
-  const prefix = path14.resolve(root, "..", "..");
+  const prefix = path15.resolve(root, "..", "..");
   if (!await exists2(paths_exports.buildRoot(prefix))) return null;
   await fs14.mkdir(paths_exports.buildsDir(home), { recursive: true });
   try {
@@ -14894,11 +15377,11 @@ async function shelveExisting(home, root, sha) {
   return buildOf(home, sha, stat.mtimeMs);
 }
 function binOfInstall(root) {
-  const prefix = path14.resolve(root, "..", "..", "..");
-  return process.platform === "win32" ? path14.join(prefix, "isocan.cmd") : path14.join(prefix, "bin", "isocan");
+  const prefix = path15.resolve(root, "..", "..", "..");
+  return process.platform === "win32" ? path15.join(prefix, "isocan.cmd") : path15.join(prefix, "bin", "isocan");
 }
 async function adoptGlobal(home, bin = findOnPath("isocan")) {
-  const target2 = path14.join(
+  const target2 = path15.join(
     paths_exports.currentLink(home),
     "node_modules",
     "isocan",
@@ -14920,7 +15403,7 @@ async function adoptGlobal(home, bin = findOnPath("isocan")) {
     linked = await fs14.readlink(bin);
   } catch {
   }
-  if (linked && path14.resolve(path14.dirname(bin), linked) === path14.resolve(target2)) {
+  if (linked && path15.resolve(path15.dirname(bin), linked) === path15.resolve(target2)) {
     return { managed: true, moved: false, bin, why: `${bin} already resolves through current` };
   }
   const kind = (await whichInstall(rootOfBin(bin), home)).kind;
@@ -15007,19 +15490,19 @@ async function upgradePolicy(home, kind) {
   };
 }
 async function withUpgradeLock(home, work) {
-  const lock = path14.join(paths_exports.buildsDir(home), ".lock");
+  const lock = path15.join(paths_exports.buildsDir(home), ".lock");
   await fs14.mkdir(paths_exports.buildsDir(home), { recursive: true });
   const claim = async () => {
     try {
       await fs14.mkdir(lock);
-      await fs14.writeFile(path14.join(lock, "pid"), String(process.pid));
+      await fs14.writeFile(path15.join(lock, "pid"), String(process.pid));
       return true;
     } catch {
       return false;
     }
   };
   if (!await claim()) {
-    const owner = Number(await fs14.readFile(path14.join(lock, "pid"), "utf8").catch(() => ""));
+    const owner = Number(await fs14.readFile(path15.join(lock, "pid"), "utf8").catch(() => ""));
     const alive = Number.isInteger(owner) && owner > 0 && isAlive(owner);
     if (alive) return null;
     await fs14.rm(lock, { recursive: true, force: true });
@@ -15151,7 +15634,7 @@ async function autoUpgrade(options) {
     return `isocan: upgrade attempt failed \u2014 ${err.message}`;
   }
 }
-var refusalFile = (home) => path14.join(home, ".upgrade-failed");
+var refusalFile = (home) => path15.join(home, ".upgrade-failed");
 async function lastRefusal(home) {
   try {
     const raw = JSON.parse(await fs14.readFile(refusalFile(home), "utf8"));
@@ -15168,7 +15651,7 @@ function mimeFor(filename) {
 
 // packages/cli/src/inline.ts
 import { existsSync as existsSync2, promises as fs15 } from "node:fs";
-import path15 from "node:path";
+import path16 from "node:path";
 async function resolveImageToDataUri(rawRef, baseDir) {
   if (!rawRef) return null;
   const trimmed = rawRef.trim();
@@ -15182,11 +15665,11 @@ async function resolveImageToDataUri(rawRef, baseDir) {
   } catch {
   }
   const candidates = [];
-  if (path15.isAbsolute(unescaped)) {
+  if (path16.isAbsolute(unescaped)) {
     candidates.push(unescaped);
-    candidates.push(path15.resolve(baseDir, "." + unescaped));
+    candidates.push(path16.resolve(baseDir, "." + unescaped));
   } else {
-    candidates.push(path15.resolve(baseDir, unescaped));
+    candidates.push(path16.resolve(baseDir, unescaped));
   }
   for (const candidate of candidates) {
     if (existsSync2(candidate)) {
@@ -15228,7 +15711,7 @@ async function inlineCssUrls(css, baseDir) {
   );
 }
 async function inlineHtmlAssets(filePath, html) {
-  const baseDir = path15.dirname(path15.resolve(filePath));
+  const baseDir = path16.dirname(path16.resolve(filePath));
   const linkRegex = /<link\b(?=[^>]*?\brel=["']stylesheet["'])(?=[^>]*?\bhref=["']([^"']+)["'])[^>]*>/gi;
   const linksToReplace = /* @__PURE__ */ new Map();
   let linkMatch;
@@ -15240,11 +15723,11 @@ async function inlineHtmlAssets(filePath, html) {
       if (!rawHref.startsWith("http:") && !rawHref.startsWith("https:") && !rawHref.startsWith("//")) {
         const clean = rawHref.split(/[?#]/)[0];
         if (clean) {
-          const cssPath = path15.isAbsolute(clean) ? clean : path15.resolve(baseDir, clean);
+          const cssPath = path16.isAbsolute(clean) ? clean : path16.resolve(baseDir, clean);
           if (existsSync2(cssPath)) {
             try {
               const rawCss = await fs15.readFile(cssPath, "utf8");
-              const inlinedCss = await inlineCssUrls(rawCss, path15.dirname(cssPath));
+              const inlinedCss = await inlineCssUrls(rawCss, path16.dirname(cssPath));
               linksToReplace.set(fullTag, `<style>/* inlined: ${rawHref} */
 ${inlinedCss}
 </style>`);
@@ -15270,7 +15753,7 @@ ${inlinedCss}
       if (!rawSrc.startsWith("http:") && !rawSrc.startsWith("https:") && !rawSrc.startsWith("//")) {
         const clean = rawSrc.split(/[?#]/)[0];
         if (clean) {
-          const jsPath = path15.isAbsolute(clean) ? clean : path15.resolve(baseDir, clean);
+          const jsPath = path16.isAbsolute(clean) ? clean : path16.resolve(baseDir, clean);
           if (existsSync2(jsPath)) {
             try {
               const rawJs = await fs15.readFile(jsPath, "utf8");
@@ -15360,7 +15843,7 @@ async function inlineMarkdownAssets(filePath, markdown) {
     const target2 = node.type === "imageReference" ? definitions.get(node.identifier ?? "") : node;
     const start = node.position?.start.offset, end = node.position?.end.offset;
     if (!target2?.url || start === void 0 || end === void 0) continue;
-    const data = await resolveImageToDataUri(target2.url, path15.dirname(path15.resolve(filePath)));
+    const data = await resolveImageToDataUri(target2.url, path16.dirname(path16.resolve(filePath)));
     if (!data) continue;
     const alt = (node.alt ?? "").replace(/\\/g, "\\\\").replace(/\[/g, "\\[").replace(/\]/g, "\\]");
     const title = target2.title == null ? "" : ` "${target2.title.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
@@ -15474,7 +15957,7 @@ async function writeSessionFile(home, actorId, session2) {
   if (session2 === null) {
     await fs16.rm(file, { force: true });
   } else {
-    await fs16.mkdir(path16.dirname(file), { recursive: true });
+    await fs16.mkdir(path17.dirname(file), { recursive: true });
     await fs16.writeFile(file, JSON.stringify(session2, null, 2));
   }
 }
@@ -15704,44 +16187,44 @@ program2.command("identity").description("Set or show the identity stamped on yo
       const client = new DaemonClient((await baseForCwd(home, daemonPort(cmd))).base, home);
       await retireStrandedIdentities(process.cwd(), home);
       if (opts.join !== void 0) {
-        const resolved2 = await resolveIdentity(client, home);
-        if (!resolved2) throw new Error(await noIdentityHere(client, home));
+        const resolved3 = await resolveIdentity(client, home);
+        if (!resolved3) throw new Error(await noIdentityHere(client, home));
         const from = opts.join.trim();
-        await client.sendOp(null, resolved2.actor, {
+        await client.sendOp(null, resolved3.actor, {
           type: "actor.join",
           from,
-          into: resolved2.actor.id
+          into: resolved3.actor.id
         });
         console.log(
-          `${from} is now ${resolved2.actor.name} (${resolved2.actor.id}) \u2014 everything it wrote, every mention of it, and its undo are yours; the log keeps the old id on each entry`
+          `${from} is now ${resolved3.actor.name} (${resolved3.actor.id}) \u2014 everything it wrote, every mention of it, and its undo are yours; the log keeps the old id on each entry`
         );
         return;
       }
       if (opts.color !== void 0) {
-        const resolved2 = await resolveIdentity(client, home);
-        if (!resolved2) throw new Error(await noIdentityHere(client, home));
+        const resolved3 = await resolveIdentity(client, home);
+        if (!resolved3) throw new Error(await noIdentityHere(client, home));
         const color = parseIdentityColor(opts.color);
-        await client.sendOp(null, resolved2.actor, {
+        await client.sendOp(null, resolved3.actor, {
           type: "actor.setColor",
-          actorId: resolved2.actor.id,
+          actorId: resolved3.actor.id,
           color
         });
         console.log(
-          color === null ? `${resolved2.actor.name} wears the color their id implies again` : `${resolved2.actor.name} now wears ${color}`
+          color === null ? `${resolved3.actor.name} wears the color their id implies again` : `${resolved3.actor.name} now wears ${color}`
         );
         if (!opts.name && !opts.session && !opts.as) return;
       }
       if (opts.mark !== void 0) {
-        const resolved2 = await resolveIdentity(client, home);
-        if (!resolved2) throw new Error(await noIdentityHere(client, home));
+        const resolved3 = await resolveIdentity(client, home);
+        if (!resolved3) throw new Error(await noIdentityHere(client, home));
         const mark = parseFaceMark(opts.mark);
-        await client.sendOp(null, resolved2.actor, {
+        await client.sendOp(null, resolved3.actor, {
           type: "actor.setMark",
-          actorId: resolved2.actor.id,
+          actorId: resolved3.actor.id,
           mark
         });
         console.log(
-          mark === null ? `${resolved2.actor.name} wears their initial again` : `${resolved2.actor.name} now wears ${mark}`
+          mark === null ? `${resolved3.actor.name} wears their initial again` : `${resolved3.actor.name} now wears ${mark}`
         );
         if (!opts.name && !opts.session && !opts.as && opts.color === void 0) return;
       }
@@ -15794,13 +16277,13 @@ program2.command("identity").description("Set or show the identity stamped on yo
           );
         }
       } else {
-        const resolved2 = await resolveIdentity(client, home);
-        if (!resolved2) throw new Error(await noIdentityHere(client, home));
+        const resolved3 = await resolveIdentity(client, home);
+        if (!resolved3) throw new Error(await noIdentityHere(client, home));
         printKeyValues({
-          id: resolved2.actor.id,
-          name: resolved2.actor.name,
-          scope: resolved2.source === "session" ? `this agent session (${resolved2.harness})` : "this machine's person",
-          file: resolved2.file
+          id: resolved3.actor.id,
+          name: resolved3.actor.name,
+          scope: resolved3.source === "session" ? `this agent session (${resolved3.harness})` : "this machine's person",
+          file: resolved3.file
         });
       }
     }
@@ -15811,19 +16294,19 @@ program2.command("whoami").description("Show your identity").action(
     const home = paths_exports.isocanHome();
     const client = new DaemonClient((await baseForCwd(home, daemonPort(cmd))).base, home);
     await retireStrandedIdentities(process.cwd(), home);
-    const resolved2 = await resolveIdentity(client, home);
-    if (!resolved2) throw new Error(await noIdentityHere(client, home));
+    const resolved3 = await resolveIdentity(client, home);
+    if (!resolved3) throw new Error(await noIdentityHere(client, home));
     if (cmd.optsWithGlobals().json) {
       return printJson({
-        ...resolved2.actor,
-        source: resolved2.source,
-        ...resolved2.harness !== void 0 ? { harness: resolved2.harness } : {},
+        ...resolved3.actor,
+        source: resolved3.source,
+        ...resolved3.harness !== void 0 ? { harness: resolved3.harness } : {},
         badge: await client.badgeId() ?? null,
         home: client.base
       });
     }
-    const suffix = resolved2.source === "session" ? " \u2014 this agent session" : "";
-    console.log(`${resolved2.actor.name} (${resolved2.actor.id})${suffix}`);
+    const suffix = resolved3.source === "session" ? " \u2014 this agent session" : "";
+    console.log(`${resolved3.actor.name} (${resolved3.actor.id})${suffix}`);
     const badgeId = await client.badgeId();
     if (badgeId) console.log(`badge ${badgeId} at ${client.base}`);
   })
@@ -15897,7 +16380,7 @@ home: NOT ANSWERING \u2014 every command against this canvas will fail until it 
     if (globals.json) {
       return printJson({
         ...health,
-        role: roleLine(summary, daemonBase),
+        role: roleLine2(summary, daemonBase),
         ...record2 && !record2.legacy ? { canvases: record2.rows, links: record2.links } : {}
       });
     }
@@ -15907,7 +16390,7 @@ home: NOT ANSWERING \u2014 every command against this canvas will fail until it 
       // What this daemon is. A daemon that stopped serving pages for a canvas
       // without saying so reads as a broken daemon, and `status` is the first
       // place anybody looks.
-      role: roleLine(summary, daemonBase),
+      role: roleLine2(summary, daemonBase),
       pid: String(health.pid),
       since: health.startedAt,
       // The sha, not just `0.1.0` — every build says `0.1.0`, so the field
@@ -15953,7 +16436,7 @@ home: NOT ANSWERING \u2014 every command against this canvas will fail until it 
        */
       upgrades: await upgradePolicy(
         paths_exports.isocanHome(),
-        (await whichInstall(path16.resolve(myRoot()), paths_exports.isocanHome())).kind
+        (await whichInstall(path17.resolve(myRoot()), paths_exports.isocanHome())).kind
       ).then((policy) => `${policy.mode} \u2014 ${policy.why}`),
       /**
        * **A build this machine tried and refused** (journey Scene 2). The
@@ -15996,7 +16479,7 @@ function takenDownLines(links) {
   }
   return lines;
 }
-function roleLine(summary, base) {
+function roleLine2(summary, base) {
   const homeLine = `home \u2014 this daemon holds the canvases and serves the app at ${base}`;
   const replicaLine = (url) => `replica of ${url} \u2014 ops to CLIs, pages at the home`;
   const values = Object.values(summary.rows);
@@ -16050,7 +16533,7 @@ async function restartDaemon(home, port) {
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
   await client.ensureDaemon();
   const health = await client.healthz(2e3);
-  await fs16.rm(path16.join(home, ".stale-warned"), { force: true });
+  await fs16.rm(path17.join(home, ".stale-warned"), { force: true });
   return { stopped, health, client };
 }
 program2.command("restart").description("Stop the daemon and start this build in its place \u2014 what an upgrade needs").action(
@@ -16064,7 +16547,7 @@ program2.command("restart").description("Stop the daemon and start this build in
     const mineNow = shaOfRoot(home, myRoot());
     const applied = await autoUpgrade({
       home,
-      install: await whichInstall(path16.resolve(myRoot()), home),
+      install: await whichInstall(path17.resolve(myRoot()), home),
       health: await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz(),
       spec: INSTALL_SPEC,
       ...mineNow ? { protect: [mineNow] } : {}
@@ -16144,7 +16627,7 @@ program2.command("home [url]").description("Where new canvases are born, and whe
         });
       }
       printKeyValues({
-        role: health ? roleLine(summary, base) : `unknown \u2014 no daemon is running on ${base}`,
+        role: health ? roleLine2(summary, base) : `unknown \u2014 no daemon is running on ${base}`,
         "birth default": live ? `${live} \u2014 a canvas born here is born there; nothing already here moved` : "here \u2014 a canvas born here stays here",
         ...health ? {} : {
           configured: configured ? `${configured} (config.json) \u2014 start a daemon to make it so` : "nothing \u2014 canvases born here stay here"
@@ -16200,7 +16683,7 @@ note: ${canvas2.id} \u2014 ${why}`);
         });
       }
       printKeyValues({
-        role: roleLine(after, base),
+        role: roleLine2(after, base),
         unchanged: target2 ? "canvases born here already go to that home" : "canvases born here already stay here"
       });
       return;
@@ -16217,7 +16700,7 @@ note: ${canvas2.id} \u2014 ${why}`);
       });
     }
     printKeyValues({
-      role: roleLine(after, base),
+      role: roleLine2(after, base),
       birth: moved,
       wrote: paths_exports.configFile(isocanHome),
       daemon: stopped.length > 0 ? `restarted on ${base} (was ${stopped.join(", ")})` : `started on ${base}`,
@@ -16377,14 +16860,14 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
       );
       say(await adoptGlobal(home));
       if (opts.restart !== false) {
-        const bin = path16.join(found.root, "packages", "cli", "bin", "isocan.js");
+        const bin = path17.join(found.root, "packages", "cli", "bin", "isocan.js");
         spawnSync4(process.execPath, [bin, "--port", String(port), "restart"], {
           stdio: "inherit"
         });
       }
       return;
     }
-    const install = await whichInstall(path16.resolve(myRoot()), home);
+    const install = await whichInstall(path17.resolve(myRoot()), home);
     const plan = planUpgrade(
       install,
       install.kind === "checkout" ? checkoutState(install.root) : null,
@@ -16413,7 +16896,7 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
           return;
         }
       }
-      const bin = moved ? path16.join(moved.root, "packages", "cli", "bin", "isocan.js") : path16.join(install.root, "packages", "cli", "bin", "isocan.js");
+      const bin = moved ? path17.join(moved.root, "packages", "cli", "bin", "isocan.js") : path17.join(install.root, "packages", "cli", "bin", "isocan.js");
       spawnSync4(process.execPath, [bin, "--port", String(port), "restart"], {
         stdio: "inherit"
       });
@@ -17273,7 +17756,7 @@ program2.command("clone <repo> [dir]").description(
     async (repo, dir, opts, cmd) => {
       const globals = cmd.optsWithGlobals();
       const remote = gitRemote(repo);
-      const target2 = path16.resolve(dir ?? defaultCloneDir(remote));
+      const target2 = path17.resolve(dir ?? defaultCloneDir(remote));
       if (await exists3(target2)) {
         throw new Error(
           `${target2} already exists \u2014 \`isocan setup ${dir ?? defaultCloneDir(remote)}\` readies a directory you already have.`
@@ -17286,7 +17769,7 @@ program2.command("clone <repo> [dir]").description(
       }
       const report2 = { repo: remote, directory: target2 };
       const skill = await installSkill(target2, opts.force ?? false);
-      report2.skill = skill.state === "differs" ? `${path16.relative(target2, skill.path)} \u2014 differs from this build's copy; --force to refresh` : `${path16.relative(target2, skill.path)} (${skill.state})`;
+      report2.skill = skill.state === "differs" ? `${path17.relative(target2, skill.path)} \u2014 differs from this build's copy; --force to refresh` : `${path17.relative(target2, skill.path)} (${skill.state})`;
       const home = paths_exports.isocanHome();
       const port = daemonPort(cmd);
       const { base, direct } = await baseForCwd(home, port);
@@ -17308,8 +17791,8 @@ program2.command("clone <repo> [dir]").description(
       }
       if (globals.json) return printJson(report2);
       printKeyValues(report2);
-      const node = await exists3(path16.join(target2, "package.json"));
-      const rel = path16.relative(process.cwd(), target2) || ".";
+      const node = await exists3(path17.join(target2, "package.json"));
+      const rel = path17.relative(process.cwd(), target2) || ".";
       console.log(
         `
 cd ${rel}` + (node ? "\nnpm install        # not run for you: it executes the repo's own scripts" : "") + "\n\nTell your agent to use the isocan-collab skill (or to run `isocan --agent-help`,\nwhich is the same instructions, shipped with this build)."
@@ -17324,26 +17807,26 @@ async function exists3(target2) {
 }
 async function installSkill(dir, force) {
   const source = skillSource2();
-  const dest = path16.join(dir, ".agents", "skills", SKILL_NAME);
+  const dest = path17.join(dir, ".agents", "skills", SKILL_NAME);
   const already = await exists3(dest);
   let state = "installed";
   if (already && !force) {
     const [theirs, ours] = await Promise.all([
-      fs16.readFile(path16.join(dest, "SKILL.md"), "utf8").catch(() => ""),
-      fs16.readFile(path16.join(source, "SKILL.md"), "utf8")
+      fs16.readFile(path17.join(dest, "SKILL.md"), "utf8").catch(() => ""),
+      fs16.readFile(path17.join(source, "SKILL.md"), "utf8")
     ]);
     state = theirs === ours ? "current" : "differs";
   } else {
-    await fs16.mkdir(path16.dirname(dest), { recursive: true });
+    await fs16.mkdir(path17.dirname(dest), { recursive: true });
     await fs16.rm(dest, { recursive: true, force: true });
     await fs16.cp(source, dest, { recursive: true });
     state = already ? "refreshed" : "installed";
   }
-  const doorway = path16.join(dir, ".claude", "skills", SKILL_NAME);
+  const doorway = path17.join(dir, ".claude", "skills", SKILL_NAME);
   const link = await fs16.lstat(doorway).catch(() => null);
   if (!link) {
-    await fs16.mkdir(path16.dirname(doorway), { recursive: true });
-    await fs16.symlink(path16.join("..", "..", ".agents", "skills", SKILL_NAME), doorway).catch(() => {
+    await fs16.mkdir(path17.dirname(doorway), { recursive: true });
+    await fs16.symlink(path17.join("..", "..", ".agents", "skills", SKILL_NAME), doorway).catch(() => {
     });
   }
   return { path: dest, state };
@@ -17383,7 +17866,7 @@ program2.command("setup [target]").description(
     async (target2, opts, cmd) => {
       const globals = cmd.optsWithGlobals();
       const arrival = target2 === void 0 ? null : setupAddress(target2);
-      const work = arrival ? process.cwd() : path16.resolve(target2 ?? process.cwd());
+      const work = arrival ? process.cwd() : path17.resolve(target2 ?? process.cwd());
       if (!await exists3(work)) throw new Error(`no such directory: ${work}`);
       const report2 = {};
       const isocanHome = paths_exports.isocanHome();
@@ -17408,7 +17891,7 @@ program2.command("setup [target]").description(
         report2.mode = `direct (${because}) \u2014 no daemon or local copy here; commands speak to ${direct} itself. \`isocan direct --clear\` for a daemon`;
       }
       const skill = await installSkill(work, opts.force ?? false);
-      report2.skill = skill.state === "differs" ? `${path16.relative(work, skill.path)} \u2014 differs from this build's copy; --force to refresh` : `${path16.relative(work, skill.path)} (${skill.state})`;
+      report2.skill = skill.state === "differs" ? `${path17.relative(work, skill.path)} \u2014 differs from this build's copy; --force to refresh` : `${path17.relative(work, skill.path)} (${skill.state})`;
       let durableBin = findOnPath("isocan");
       if (durableBin) {
         report2.cli = `already on PATH (${durableBin})`;
@@ -17425,7 +17908,7 @@ program2.command("setup [target]").description(
         if (durableBin) {
           report2.cli = `installed globally (${durableBin})`;
         } else if (bin) {
-          durableBin = path16.join(bin, "isocan");
+          durableBin = path17.join(bin, "isocan");
           report2.cli = `installed at ${durableBin} \u2014 not on this PATH; export PATH="${bin}:$PATH"`;
         } else {
           report2.cli = `install failed \u2014 run \`npm i -g ${INSTALL_SPEC}\` yourself`;
@@ -17434,7 +17917,7 @@ program2.command("setup [target]").description(
       const home = isocanHome;
       const port = daemonPort(cmd);
       const client = new DaemonClient(direct ?? `http://127.0.0.1:${port}`, home);
-      const transient = (await whichInstall(path16.resolve(myRoot()))).kind === "npx";
+      const transient = (await whichInstall(path17.resolve(myRoot()))).kind === "npx";
       const handOff = transient && !direct ? durableBin : null;
       if (direct) {
         const answering = await client.awaitHealth(5e3);
@@ -17444,7 +17927,7 @@ program2.command("setup [target]").description(
           const before = await client.healthz();
           if (handOff) {
             const owner = rootOfBin(handOff);
-            if (!before || path16.resolve(before.root ?? "") !== owner) {
+            if (!before || path17.resolve(before.root ?? "") !== owner) {
               const done = spawnSync4(handOff, ["restart", "--port", String(port)], {
                 encoding: "utf8",
                 shell: process.platform === "win32",
@@ -17459,7 +17942,7 @@ program2.command("setup [target]").description(
           } else if (before && stalenessOf(before).stale) {
             const { stopDaemons } = await import("./daemon-J4QMYFYU.mjs");
             await stopDaemons(port, home);
-            await fs16.rm(path16.join(home, ".stale-warned"), { force: true });
+            await fs16.rm(path17.join(home, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
           }
           await client.ensureDaemon();
@@ -17570,7 +18053,7 @@ program2.command("setup [target]").description(
       const bound = daemonUp ? await findBinding(work, home) : null;
       const record2 = daemonUp && (arrival || bound || birthHome) ? await readHomeRecord(client, birthHome).catch(() => null) : null;
       if (record2 && (record2.birth || Object.values(record2.rows).some((at2) => at2 !== null))) {
-        report2.app = `${client.base} \u2014 ${roleLine({ birth: record2.birth, rows: record2.rows }, client.base)}`;
+        report2.app = `${client.base} \u2014 ${roleLine2({ birth: record2.birth, rows: record2.rows }, client.base)}`;
       }
       const origin = (bound && record2 ? homeAddressOf(record2, bound.canvasId) : birthHome) ?? client.base;
       const where = bound ? canvasUrl(origin, bound.canvasId) : origin;
@@ -17730,12 +18213,12 @@ canvas.command("list").description("List canvases \u2014 in a bound directory, t
         throw new Error("--public lists a separate catalogue; do not combine it with --all, --archived, --with-archived, --sort or --filter");
       }
       const home = paths_exports.isocanHome();
-      const resolved2 = opts.home !== void 0 ? { base: normalizeHomeUrl2(opts.home), direct: true } : await resolveBase(home, daemonPort(cmd), null);
-      const client = new DaemonClient(resolved2.base, home);
-      if (!resolved2.direct) await client.ensureDaemon();
+      const resolved3 = opts.home !== void 0 ? { base: normalizeHomeUrl2(opts.home), direct: true } : await resolveBase(home, daemonPort(cmd), null);
+      const client = new DaemonClient(resolved3.base, home);
+      if (!resolved3.direct) await client.ensureDaemon();
       const { canvases: canvases2 } = await client.publicCanvases();
       if (cmd.optsWithGlobals().json) return printJson(canvases2);
-      if (canvases2.length === 0) return console.log(`No publicly listed canvases on ${resolved2.base}.`);
+      if (canvases2.length === 0) return console.log(`No publicly listed canvases on ${resolved3.base}.`);
       return printTable(canvases2.map((row) => ({ id: row.id, title: row.title, home: row.home, access: capabilityWord.dialog[row.capability], address: canvasUrl(row.home, row.id) })));
     }
     const ctx = await ctxOf(cmd);
@@ -17855,7 +18338,7 @@ canvas.command("background [theme]").description(`The ground this canvas stands 
         throw new Error(`--picture and \`${theme}\` are two answers to one question: pick one`);
       }
       const data = await fs16.readFile(opts.picture);
-      const filename = path16.basename(opts.picture);
+      const filename = path17.basename(opts.picture);
       const mimeType = mimeFor(filename);
       if (!mimeType.startsWith("image/")) {
         throw new Error(`a ground has to be an image; ${filename} is ${mimeType}`);
@@ -18095,7 +18578,7 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
       }
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
       const rawSource = await fs16.readFile(file);
-      const filename = path16.basename(file);
+      const filename = path17.basename(file);
       const mimeType = mimeFor(filename);
       if (opts.drawing && mimeType !== DRAWING_MIME) {
         throw new Error(`--drawing needs an SVG; ${filename} is ${mimeType}`);
@@ -18107,7 +18590,7 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
       let visualFace;
       if (opts.visual) {
         const visRaw = await fs16.readFile(opts.visual);
-        const visFilename = path16.basename(opts.visual);
+        const visFilename = path17.basename(opts.visual);
         const visMime = mimeFor(visFilename);
         let visData = visRaw;
         if (visMime === "text/html") {
@@ -18138,9 +18621,9 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
         }
       }
       const upload = await ctx.client.uploadBlob(p.id, rawSource, mimeType, filename);
-      const visualFileProp = opts.visual ? cleanFilePath(opts.visual) ?? path16.basename(opts.visual) : void 0;
-      const sourcePath = cleanFilePath(path16.relative(process.cwd(), path16.resolve(file)));
-      const fileProp = opts.visual ? cleanFilePath(file) ?? path16.basename(file) : void 0;
+      const visualFileProp = opts.visual ? cleanFilePath(opts.visual) ?? path17.basename(opts.visual) : void 0;
+      const sourcePath = cleanFilePath(path17.relative(process.cwd(), path17.resolve(file)));
+      const fileProp = opts.visual ? cleanFilePath(file) ?? path17.basename(file) : void 0;
       const properties = {
         ...sourcePath ? { [SOURCE_PATH_PROP]: sourcePath } : {},
         ...opts.prop,
@@ -18190,7 +18673,7 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
 program2.command("inline <file>").description("Inline referenced local images in an HTML or Markdown file as base64 data URIs").option("-o, --output <file>", "write to output file instead of stdout").action(
   run(async (file, opts) => {
     const raw = await fs16.readFile(file, "utf8");
-    const filename = path16.basename(file);
+    const filename = path17.basename(file);
     const mimeType = mimeFor(filename);
     const inlined = mimeType === "text/markdown" ? await inlineMarkdownAssets(file, raw) : await inlineHtmlAssets(file, raw);
     if (opts.output) {
@@ -18535,7 +19018,7 @@ function enrolTemplate(id3) {
 async function prepareFromTemplate(home, canvasId, name, id3, args) {
   const template = enrolTemplate(id3);
   if (!template) throw new Error(`no module on this machine offers the template ${id3} \u2014 isocan module ls`);
-  const dir = path16.join(home, "templates", id3, canvasId, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent");
+  const dir = path17.join(home, "templates", id3, canvasId, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent");
   await fs16.mkdir(dir, { recursive: true });
   const out = await template.prepare(args, dir);
   return { dir, ...out?.harness ? { harness: out.harness } : {} };
@@ -18665,7 +19148,7 @@ program2.command("export [target]").description(
   run(
     async (target2, opts, cmd) => {
       const ctx = await ctxOf(cmd);
-      const out = path16.resolve(process.cwd(), opts.to ?? "isocan-backup");
+      const out = path17.resolve(process.cwd(), opts.to ?? "isocan-backup");
       const say2 = ctx.json ? () => {
       } : (line) => console.log(line);
       let by;
@@ -18713,13 +19196,13 @@ program2.command("export [target]").description(
         const candidates = [
           EXPORT_LAYOUT.manifest,
           EXPORT_LAYOUT.names,
-          ...report2.canvases.map((row) => path16.join(EXPORT_LAYOUT.canvases, row.id)),
-          ...report2.items.map((row) => path16.join(EXPORT_LAYOUT.items, row.canvasId, row.itemId))
+          ...report2.canvases.map((row) => path17.join(EXPORT_LAYOUT.canvases, row.id)),
+          ...report2.items.map((row) => path17.join(EXPORT_LAYOUT.items, row.canvasId, row.itemId))
         ];
         const present = [];
         for (const rel of candidates) {
           try {
-            await fs16.access(path16.join(out, rel));
+            await fs16.access(path17.join(out, rel));
             present.push(rel);
           } catch {
           }
@@ -18776,7 +19259,7 @@ program2.command("import <dir>").description("Restore a backup made by `isocan e
     const client = opts.to ? new DaemonRoutes(normalizeHomeUrl2(opts.to), fileBadgeStore(ctx.home, normalizeHomeUrl2(opts.to))) : ctx.client;
     const say2 = ctx.json ? () => {
     } : (line) => console.log(line);
-    const report2 = await importExport(client, path16.resolve(process.cwd(), dir), {
+    const report2 = await importExport(client, path17.resolve(process.cwd(), dir), {
       dryRun: opts.dryRun === true,
       ...opts.only ? { only: opts.only } : {},
       say: say2
@@ -19466,7 +19949,7 @@ program2.command("set <item>").description("Update an item's title/description/p
       let did = false;
       if (opts.visual) {
         const visRaw = await fs16.readFile(opts.visual);
-        const visFilename = path16.basename(opts.visual);
+        const visFilename = path17.basename(opts.visual);
         const visMime = mimeFor(visFilename);
         let visData = visRaw;
         if (visMime === "text/html") {
@@ -19546,12 +20029,12 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
     let mimeType;
     if (file) {
       const raw = await fs16.readFile(file);
-      filename = path16.basename(file);
+      filename = path17.basename(file);
       mimeType = mimeFor(filename);
       data = raw;
       if (opts.visual) {
         const visRaw = await fs16.readFile(opts.visual);
-        const visFilename = path16.basename(opts.visual);
+        const visFilename = path17.basename(opts.visual);
         const visMime = mimeFor(visFilename);
         let visData = visRaw;
         if (visMime === "text/html") {
@@ -19588,7 +20071,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
       filename = current.filename;
       mimeType = current.mimeType;
       const visRaw = await fs16.readFile(opts.visual);
-      const visFilename = path16.basename(opts.visual);
+      const visFilename = path17.basename(opts.visual);
       const visMime = mimeFor(visFilename);
       let visData = visRaw;
       if (visMime === "text/html") {
@@ -19609,7 +20092,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
       const editor = process.env.EDITOR ?? process.env.VISUAL;
       if (!editor) throw new Error("no $EDITOR set \u2014 pass a file instead");
       const original = await ctx.client.downloadBlob(p.id, current.blobHash);
-      const tmp = path16.join(await fs16.mkdtemp(path16.join(os4.tmpdir(), "isocan-edit-")), current.filename);
+      const tmp = path17.join(await fs16.mkdtemp(path17.join(os4.tmpdir(), "isocan-edit-")), current.filename);
       await fs16.writeFile(tmp, original);
       const status2 = spawnSync4(editor, [tmp], { stdio: "inherit", shell: false });
       if (status2.status !== 0) throw new Error(`${editor} exited with ${status2.status}`);
@@ -19622,7 +20105,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
       mimeType = current.mimeType;
       if (opts.visual) {
         const visRaw = await fs16.readFile(opts.visual);
-        const visFilename = path16.basename(opts.visual);
+        const visFilename = path17.basename(opts.visual);
         const visMime = mimeFor(visFilename);
         let visData = visRaw;
         if (visMime === "text/html") {
@@ -19637,7 +20120,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
           size: visUpload.size
         };
       } else if (mimeType === "text/html" && current.visual || mimeType === "text/markdown" && (!current.visual || current.visual.mimeType === mimeType && !item.properties[VISUAL_FILE_PROP])) {
-        const assetBase = mimeType === "text/markdown" ? path16.resolve(item.properties[FILE_PROP] ?? item.properties[SOURCE_PATH_PROP] ?? current.filename) : tmp;
+        const assetBase = mimeType === "text/markdown" ? path17.resolve(item.properties[FILE_PROP] ?? item.properties[SOURCE_PATH_PROP] ?? current.filename) : tmp;
         const inlined = await (mimeType === "text/markdown" ? inlineMarkdownAssets : inlineHtmlAssets)(assetBase, data.toString("utf8"));
         const inlinedData = Buffer.from(inlined, "utf8");
         const visUpload = await ctx.client.uploadBlob(p.id, inlinedData, mimeType, filename);
@@ -19852,20 +20335,20 @@ program2.command("choose <item>").description("This one won: fold a variation ba
   })
 );
 async function personaFiles(root) {
-  const dir = path16.join(root, PERSONA_DIR);
+  const dir = path17.join(root, PERSONA_DIR);
   const names = await fs16.readdir(dir).catch(() => []);
   const out = [];
   for (const name of names.filter((n) => n.endsWith(".md")).sort()) {
-    const text = await fs16.readFile(path16.join(dir, name), "utf8").catch(() => null);
+    const text = await fs16.readFile(path17.join(dir, name), "utf8").catch(() => null);
     if (text === null) continue;
     const persona2 = parsePersona(text, name);
-    if (persona2) out.push({ file: path16.join(PERSONA_DIR, name), persona: persona2 });
+    if (persona2) out.push({ file: path17.join(PERSONA_DIR, name), persona: persona2 });
   }
   return out;
 }
 async function personaRoot(ctx, cmd) {
   const chosen = cmd.optsWithGlobals().root;
-  if (chosen) return path16.resolve(chosen);
+  if (chosen) return path17.resolve(chosen);
   return ctx.binding?.root ?? process.cwd();
 }
 var persona = program2.command("persona").description("The roles an agent can take on here \u2014 `.agents/personas/`").option(
@@ -19931,11 +20414,11 @@ persona.command("runs <name>").description("What this persona's runs found, and 
     const found = await personaFiles(root);
     const match = found.find((f) => f.persona.name === name) ?? found.find((f) => f.persona.name.startsWith(name));
     if (!match) throw new Error(`no persona called "${name}"`);
-    const dir = path16.join(root, match.persona.runs ?? "docs/reviews/");
+    const dir = path17.join(root, match.persona.runs ?? "docs/reviews/");
     const names = (await fs16.readdir(dir).catch(() => [])).filter((f) => f.endsWith(`-${match.persona.name}.md`)).sort().reverse();
     const runs = [];
     for (const file of names) {
-      const page2 = await fs16.readFile(path16.join(dir, file), "utf8").catch(() => null);
+      const page2 = await fs16.readFile(path17.join(dir, file), "utf8").catch(() => null);
       if (page2 !== null) runs.push({ page: file, findings: runFindings(page2) });
     }
     if (ctx.json) return console.log(JSON.stringify(runs, null, 2));
@@ -19958,7 +20441,7 @@ var doc = program2.command("doc").description("What this repo's own documents sa
 doc.command("status <file>").description("Where one document stands, and what is wrong with how it says so").action(
   run(async (file, _opts, cmd) => {
     const ctx = await ctxOf(cmd);
-    const text = await fs16.readFile(path16.resolve(process.cwd(), file), "utf8");
+    const text = await fs16.readFile(path17.resolve(process.cwd(), file), "utf8");
     const status2 = docStatus(text);
     const problems = statusProblems(status2);
     if (ctx.json) return printJson({ ...status2, problems });
@@ -19982,7 +20465,7 @@ async function writeJsonCanvas(ctx, client, canvasId, snapshot, file) {
   const { file: out, lost } = toJsonCanvas(snapshot.canvas, {
     bodyOf: (item) => bodies.get(item.id) ?? null
   });
-  await fs16.writeFile(path16.resolve(process.cwd(), file), JSON.stringify(out, null, 2) + "\n");
+  await fs16.writeFile(path17.resolve(process.cwd(), file), JSON.stringify(out, null, 2) + "\n");
   if (ctx.json) return printJson({ file, nodes: out.nodes.length, edges: out.edges.length, lost });
   console.log(`${file} \u2014 ${out.nodes.length} nodes, ${out.edges.length} edges`);
   const losses = describeLosses(lost);
@@ -20224,7 +20707,7 @@ slidesCmd.command("export <out>").description("The deck as a document: deck.pdf 
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
     const pages = deckPages(snapshot.canvas);
     if (pages.length === 0) throw new Error("nothing to export \u2014 this canvas has no items");
-    const ext = path16.extname(out).toLowerCase();
+    const ext = path17.extname(out).toLowerCase();
     const written = [];
     const textOf = async (blobHash) => (await ctx.client.downloadBlob(p.id, blobHash)).toString("utf8");
     if (ext === ".html" || ext === ".htm") {
@@ -20800,7 +21283,7 @@ style.command("set").description("Write the design system (a new version when on
     const ctx = await ctxOf(cmd);
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx, { create: true });
     const data = await fs16.readFile(file);
-    const filename = path16.basename(file);
+    const filename = path17.basename(file);
     const mimeType = mimeFor(filename);
     const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
     const version4 = {
@@ -20834,7 +21317,7 @@ style.command("import").description("Land somebody else's theme as this canvas's
   run(async (file, opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const text = await fs16.readFile(file, "utf8");
-    const { tokens, problems, notes, format } = importDesign(text, path16.basename(file));
+    const { tokens, problems, notes, format } = importDesign(text, path17.basename(file));
     const counts = {
       colors: Object.keys(tokens.colors ?? {}).length,
       typography: Object.keys(tokens.typography ?? {}).length,
@@ -20844,10 +21327,10 @@ style.command("import").description("Land somebody else's theme as this canvas's
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     if (total === 0) {
       throw new Error(
-        `nothing to import from ${path16.basename(file)}${problems.length ? ` \u2014 ${problems[0]}` : ""}`
+        `nothing to import from ${path17.basename(file)}${problems.length ? ` \u2014 ${problems[0]}` : ""}`
       );
     }
-    const body = importedBody(path16.basename(file), tokens);
+    const body = importedBody(path17.basename(file), tokens);
     const markdown = serializeDesign(tokens, body);
     for (const problem of problems) console.error(`note: ${problem}`);
     for (const note of notes) console.error(`note: ${note}`);
@@ -20879,7 +21362,7 @@ style.command("import").description("Land somebody else's theme as this canvas's
       await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing2.id, version: version4 });
       if (ctx.json) return printJson({ itemId: existing2.id, format, counts, problems, notes });
       console.error(
-        `${existing2.id} \u2014 design system v${existing2.versions.length + 1} from ${path16.basename(file)}`
+        `${existing2.id} \u2014 design system v${existing2.versions.length + 1} from ${path17.basename(file)}`
       );
       return;
     }
@@ -20895,7 +21378,7 @@ style.command("import").description("Land somebody else's theme as this canvas's
       properties: designSystemProperties()
     });
     if (ctx.json) return printJson({ itemId, format, counts, problems, notes });
-    console.error(`${itemId} \u2014 design system for ${p.title}, imported from ${path16.basename(file)}`);
+    console.error(`${itemId} \u2014 design system for ${p.title}, imported from ${path17.basename(file)}`);
   })
 );
 var tool = program2.command("tool").description("Tools this canvas puts in the rail").addHelpText(
@@ -20967,7 +21450,7 @@ gets answered before it lands rather than after.`
 read that? then: isocan tool add ${file} --yes`);
       return;
     }
-    const filename = path16.basename(file);
+    const filename = path17.basename(file);
     const upload = await ctx.client.uploadBlob(p.id, Buffer.from(text, "utf8"), "application/json", filename);
     const itemId = newItemId();
     await sendOp(ctx, p.id, {
@@ -21055,7 +21538,7 @@ It is an item, so \`isocan rm <item>\` takes one out of the dock again.`
 read that? then: isocan panel add ${file} --yes`);
       return;
     }
-    const filename = path16.basename(file);
+    const filename = path17.basename(file);
     const upload = await ctx.client.uploadBlob(p.id, Buffer.from(text, "utf8"), "application/json", filename);
     const itemId = newItemId();
     await sendOp(ctx, p.id, {
@@ -21219,17 +21702,17 @@ function gitSpecToClone(spec) {
   return { url: head, ref: ref ?? null };
 }
 async function fetchModuleSpec(spec) {
-  if (!GIT_SPEC.test(spec)) return { dir: path16.resolve(spec), cleanup: async () => {
+  if (!GIT_SPEC.test(spec)) return { dir: path17.resolve(spec), cleanup: async () => {
   } };
   const { url, ref } = gitSpecToClone(spec);
-  const tmp = await fs16.mkdtemp(path16.join(os4.tmpdir(), "isocan-module-"));
+  const tmp = await fs16.mkdtemp(path17.join(os4.tmpdir(), "isocan-module-"));
   const args = ["clone", "--quiet", "--depth", "1", ...ref ? ["--branch", ref] : [], url, tmp];
   const cloned = spawnSync4("git", args, { encoding: "utf8" });
   if (cloned.status !== 0) {
     await fs16.rm(tmp, { recursive: true, force: true });
     throw new Error(`could not clone ${url}${ref ? `#${ref}` : ""}: ${(cloned.stderr || "").trim().split("\n").pop() ?? "git failed"}`);
   }
-  const dir = existsSync3(path16.join(tmp, "manifest.json")) ? tmp : path16.join(tmp, "build");
+  const dir = existsSync3(path17.join(tmp, "manifest.json")) ? tmp : path17.join(tmp, "build");
   return { dir, cleanup: () => fs16.rm(tmp, { recursive: true, force: true }) };
 }
 moduleCmd.command("add <dir-or-spec>").description("Install a built module from a directory or a git spec (github:owner/repo#ref) \u2014 prints what it declares, installs nothing until --yes").option("--yes", "install it, having read what it declares").option("--proposed", "allow a module that uses parts of the API we intend to change").action(
@@ -21244,7 +21727,7 @@ moduleCmd.command("add <dir-or-spec>").description("Install a built module from 
   })
 );
 async function addModuleFrom(dir, dirArg, opts, globals) {
-  const file = path16.join(dir, "manifest.json");
+  const file = path17.join(dir, "manifest.json");
   if (!existsSync3(file)) throw new Error(`${dir} has no manifest.json \u2014 build the module first (scripts/module-build.mjs)`);
   const manifest = JSON.parse(await fs16.readFile(file, "utf8"));
   if (typeof manifest.name !== "string" || !/^(@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(manifest.name)) {
@@ -21264,12 +21747,12 @@ async function addModuleFrom(dir, dirArg, opts, globals) {
     );
   }
   for (const half of [manifest.web, manifest.cli, manifest.guide, ...(manifest.assets ?? []).map((a) => a.path)]) {
-    if (half && !existsSync3(path16.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
+    if (half && !existsSync3(path17.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
   }
   const tooBig = assetProblems(manifest.assets);
   if (tooBig.length > 0) throw new Error(`${manifest.name} refused: ${tooBig.join("; ")}`);
   const slug = moduleSlug(manifest.name);
-  const target2 = path16.join(modulesDir(paths_exports.isocanHome()), slug);
+  const target2 = path17.join(modulesDir(paths_exports.isocanHome()), slug);
   if (!opts.yes) {
     if (globals.json) return printJson({ manifest, target: target2, installed: false });
     console.log(describeManifest(manifest, dir));
@@ -21278,7 +21761,7 @@ read that? then: isocan module add ${dirArg} --yes`);
     return;
   }
   await fs16.rm(target2, { recursive: true, force: true });
-  await fs16.mkdir(path16.dirname(target2), { recursive: true });
+  await fs16.mkdir(path17.dirname(target2), { recursive: true });
   await fs16.cp(dir, target2, { recursive: true });
   if (globals.json) return printJson({ manifest, target: target2, installed: true });
   console.error(`${manifest.name} installed at ${target2} \u2014 loaded on the next isocan command and the next page load (isocan module rm ${slug})`);
@@ -21287,7 +21770,7 @@ moduleCmd.command("rm <name>").description("Remove a module \u2014 its items sta
   run(async (name, _opts, cmd) => {
     const globals = cmd.optsWithGlobals();
     const slug = moduleSlug(name);
-    const target2 = path16.join(modulesDir(paths_exports.isocanHome()), slug);
+    const target2 = path17.join(modulesDir(paths_exports.isocanHome()), slug);
     if (!existsSync3(target2)) throw new Error(`no module called ${slug} here \u2014 isocan module ls`);
     await fs16.rm(target2, { recursive: true, force: true });
     if (globals.json) return printJson({ removed: slug });
@@ -21563,15 +22046,15 @@ comment.command("edit <thread> <comment> <text>").description("Rewrite a comment
     const thread = resolveThread(snapshot, threadRef);
     const existing2 = thread.comments.find((c) => c.id === commentId);
     if (!existing2) throw new Error(`no comment ${commentId} on ${thread.id}`);
-    const resolved2 = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
+    const resolved3 = await newComment(ctx, p.id, snapshot, text, { in: opts.in, includeExcluded: opts.includeExcluded });
     const receipt = await sendOp(ctx, p.id, {
       type: "comment.update",
       threadId: thread.id,
       commentId,
       body: text,
-      ...resolved2.contextRequest ? { contextRequest: resolved2.contextRequest } : {},
-      ...resolved2.mentions ? { mentions: resolved2.mentions } : {},
-      ...resolved2.items ? { items: resolved2.items } : {}
+      ...resolved3.contextRequest ? { contextRequest: resolved3.contextRequest } : {},
+      ...resolved3.mentions ? { mentions: resolved3.mentions } : {},
+      ...resolved3.items ? { items: resolved3.items } : {}
     });
     const took = elapsedLabel(existing2.createdAt, (/* @__PURE__ */ new Date()).toISOString());
     if (ctx.json) return printJson({ threadId: thread.id, commentId, took, ...contextReceipt(receipt) });
@@ -22051,7 +22534,7 @@ command or reply. No \`session start\` needed after a wake.`
     const waitRules = filtered ? { items: wantedItems, ops: wantedTypes, ...wantedAreas.length ? { areas: wantedAreas } : {} } : opts.allOps ? { ops: ["*"] } : void 0;
     let offlineSince = null;
     let complained = false;
-    const install = await whichInstall(path16.resolve(myRoot()), ctx.home);
+    const install = await whichInstall(path17.resolve(myRoot()), ctx.home);
     const parkedOn = shaOfRoot(ctx.home, myRoot());
     let upgraded = null;
     let upgrading = false;
@@ -22316,7 +22799,7 @@ async function enrolAgent(cmd, name, opts, contained) {
     );
   }
   const p = await resolveCanvas(ctx);
-  const cwd = path16.resolve(opts.dir ?? process.cwd());
+  const cwd = path17.resolve(opts.dir ?? process.cwd());
   const harness = opts.harness ?? ctx.harness ?? null;
   const snap = await ctx.client.snapshot(p.id);
   const existing2 = Object.values(snap.canvas.agents ?? {}).find(
@@ -22852,7 +23335,7 @@ async function runRcRoom(ctx, p, shared) {
   const rcCwd = process.cwd();
   const limitsConfig = await readConfigFile(ctx.home);
   const origin = await ctx.homeOf(p.id).catch(() => null) ?? ctx.client.base;
-  const install = await whichInstall(path16.resolve(myRoot()), ctx.home);
+  const install = await whichInstall(path17.resolve(myRoot()), ctx.home);
   const parkedOn = shaOfRoot(ctx.home, myRoot());
   const considerUpgrade = () => {
     const state = shared.upgrade;

@@ -68,6 +68,32 @@ home without this module.
   it again after a kept screen changes and the same item **gains a version**
   (found by its `wirePrototype` property); with nothing changed it writes
   nothing. `isocan open <item>` plays it full screen.
+- **Wires draw in the canvas's design system.** The look is a theme over
+  the same spec: eleven roles (`ground`, `surface`, `line`, `ink`,
+  `ink-muted`, `bar`, `primary`, `on-primary`, `radius`, `font`, `space`),
+  by default the greys. `isocan wire style` restyles every wire on the
+  canvas in the `DESIGN.md` that governs where it sits (a group's own system
+  first, then the canvas's — `isocan design set DESIGN.md [--in <group>]`):
+  Jev maps the system's own tokens onto the roles — one choice per role over
+  the token names, once per system *version* — and every wire whose theme
+  changed gains a version, in one op group, so one `isocan undo` takes the
+  restyle back. The output names the token chosen for each role with its
+  probability; a role Jev is unsure of (under 0.5) keeps the default and says
+  so, and an on-primary under 4.5:1 against primary becomes the system's ink
+  or ground. Nothing is ever a colour the system does not hold. Blueprints
+  stay blue in every system. `--default` restores the greys; `--flow <id>`
+  restyles one flow; `--check` writes nothing and lists wires behind the
+  system that governs them (a new `DESIGN.md` version does not restyle
+  anything by itself — run `wire style` to bring them forward). Running it
+  again with nothing changed asks nothing and writes nothing. A kept flow's
+  prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the
+  stub answers, and its flat distributions keep every asked role at the
+  default. The spec records it as `style` (`{ "source": "design-system",
+  "itemId", "versionId", "roles" }`).
+- `isocan wire "<request>"` starts in the governing system: the mapping is
+  asked while round 1 is, and the screens arrive in it. `--in <group>`
+  composes the flow inside a group — and in that group's own system, when it
+  has one.
 - `isocan wire questions` prints the pending round of a flow (`--flow <id>`,
   default the newest waiting) as a file of calls, each a request in Jev's
   shape (`state` and named questions, of type `noul` — yes/no — `choice` or
