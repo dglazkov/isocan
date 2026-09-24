@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ARCHETYPE_IDS, stubAnswerer } from "../src/core.ts";
+import { ARCHETYPE_IDS, ARCHETYPE_WORDS, plainOptions, stubAnswerer } from "../src/core.ts";
 import {
-  ENRICO_IDS, TOPIC_MAP, archetypeCriteria, cuts, flatten, readTopics, reliability, report, screenRequest, type Row,
+  ENRICO_IDS, TOPIC_MAP, archetypeCriteria, cuts, flatten, readTopics, reliability, report, screenRequest, spread, type Row,
 } from "../scripts/calibrate.ts";
 
 /**
@@ -48,6 +48,25 @@ describe("the Enrico label map", () => {
     expect(Object.keys(archetypeCriteria("enrico"))).toEqual(ENRICO_IDS);
     expect(ENRICO_IDS).toHaveLength(20);
     expect(archetypeCriteria().welcome).toMatch(/^Welcome: image, heading/);
+  });
+
+  it("offers plain words as the options and reads the answer back as the id, or describes the ids in them", () => {
+    const words = archetypeCriteria("enrico", "words");
+    expect(Object.keys(words)).toEqual(ENRICO_IDS.map((id) => ARCHETYPE_WORDS[id as keyof typeof ARCHETYPE_WORDS]));
+    expect(Object.values(words).every((v) => v === null)).toBe(true);
+    const { idOf } = plainOptions(ENRICO_IDS);
+    for (const id of ENRICO_IDS) expect(idOf(ARCHETYPE_WORDS[id as keyof typeof ARCHETYPE_WORDS])).toBe(id);
+    expect(archetypeCriteria("enrico", "described").gallery).toBe(ARCHETYPE_WORDS.gallery);
+  });
+
+  it("words every archetype id, each differently", () => {
+    expect(Object.keys(ARCHETYPE_WORDS).sort()).toEqual([...ARCHETYPE_IDS].sort());
+    expect(new Set(Object.values(ARCHETYPE_WORDS)).size).toBe(ARCHETYPE_IDS.length);
+  });
+
+  it("spreads a sample evenly, the same every time", () => {
+    expect(spread([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 3)).toEqual([1, 4, 7]);
+    expect(spread([1, 2], 5)).toEqual([1, 2]);
   });
 
   it("reads design_topics.csv", () => {

@@ -1,4 +1,4 @@
-import { RECIPES, component, type Platform, type Props, type Recipe, type Section } from "./catalog/index.ts";
+import { ARCHETYPE_WORDS, RECIPES, component, type Platform, type Props, type Recipe, type Section } from "./catalog/index.ts";
 import { JEV_MODEL, chosenOption, readResponse, type JevAnswer, type JevQuestion, type JevRequest, type JevResponse } from "./answerer.ts";
 import { LEAVE_OUT, PLATFORMS, blueprint, presentElements, recipe, resolveSlot, type WireChrome, type WireDeclined, type WireSlot, type WireSpec } from "./spec.ts";
 
@@ -72,7 +72,8 @@ export function flowRequest(request: string): JevRequest {
   for (const r of RECIPES) {
     questions[`needs:${r.id}`] = {
       type: "noul",
-      instructions: `Does the product in the request need a "${r.title}" screen — ${describeRecipe(r)}? Yes only if the request implies one.`,
+      // Plain words, not the recipe's component ids: on Enrico they read 1–3 points more accurately for ~20% fewer tokens (24 Sep 2026).
+      instructions: `Does the product in the request need this screen: ${ARCHETYPE_WORDS[r.id as keyof typeof ARCHETYPE_WORDS]}? Yes only if the request implies one.`,
     };
   }
   questions.platform = {
@@ -114,6 +115,11 @@ export function flowRequest(request: string): JevRequest {
  * screen, not round 1's yes/no over a request, so the transfer is an
  * assumption, and the number is the one the data could support rather than
  * one it measured for this question.
+ *
+ * Re-measured 24 Sep 2026 with the options in plain words
+ * (`ARCHETYPE_WORDS`, 350 of the same screens, 20 and 34 options): 0.3–0.5
+ * was the truth 28–37% of the time against 29–30% for 0.5–0.7, and under
+ * 0.3 it fell to 15–24%. The floor stands.
  */
 export const NEEDS_YES = 0.5;
 export const MAYBE_FLOOR = 0.3;

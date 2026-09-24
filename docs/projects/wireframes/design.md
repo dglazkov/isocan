@@ -80,7 +80,13 @@ In the module's core (`packages/modules/wireframe/src/catalog/`):
   where it has one, a navigation rule.
 
 Everything a Jev question offers is an id from these tables, so a question's
-options are generated, never typed by hand.
+options are generated, never typed by hand. The one exception is how an
+archetype *reads* to the model: `ARCHETYPE_WORDS` says each in plain words
+("a list of things you can scroll…"), round 1 asks about each in them, and
+an answer maps back to the id — the spec never holds the words. On 350 of
+Enrico's screens they read 1–3 points more accurately than the recipe's
+component ids, for ~20% fewer input tokens, with calibration unchanged
+(ECE ~0.35).
 
 ### 3. The renderer — skeleton, then wire
 

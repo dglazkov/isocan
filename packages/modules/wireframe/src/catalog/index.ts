@@ -4,6 +4,7 @@ import type { Component } from "./types.ts";
 
 export * from "./archetypes.ts";
 export * from "./intents.ts";
+export * from "./words.ts";
 export type * from "./types.ts";
 export { BLOCKS } from "./blocks.ts";
 export { PRIMITIVES } from "./primitives.ts";

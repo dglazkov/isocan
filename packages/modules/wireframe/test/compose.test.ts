@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { FIDELITY_PROP, applyOperation, invertOperation, type CanvasState, type Operation } from "@isocan/core";
 import {
-  HEADER_OPTIONS, JEV_URL, MAYBE_FLOOR, MAYBE_PROP, assemblePrototype, keepPatch, maybeItems, maybeMarked, maybeProperties, NAV_OPTIONS, NEEDS_YES, RECIPES, applyProps, applyPropsRound, applyStructure, navOwners, propsRequests, blueprint, component, decideFlow, flowRequest, flowScreen,
+  ARCHETYPE_WORDS, HEADER_OPTIONS, JEV_URL, MAYBE_FLOOR, MAYBE_PROP, assemblePrototype, keepPatch, maybeItems, maybeMarked, maybeProperties, NAV_OPTIONS, NEEDS_YES, RECIPES, applyProps, applyPropsRound, applyStructure, navOwners, propsRequests, blueprint, component, decideFlow, flowRequest, flowScreen,
   jevAnswerer, pendingRound, presentElements, propsRequest, readResponse, recipe, renderWire, requestBlueprint, responseProblems,
   structureRequest, stubAnswerer, validateWire, wireframe,
   type Answerer, type JevRequest, type JevResponse, type WireSpec,
@@ -48,6 +48,9 @@ describe("round 1: the flow", () => {
     const needs = Object.keys(req.questions).filter((k) => k.startsWith("needs:"));
     expect(needs).toEqual(RECIPES.map((r) => `needs:${r.id}`));
     for (const id of needs) expect(req.questions[id]!.type).toBe("noul");
+    // Each archetype is asked about in plain words, never its recipe's component ids (24 Sep 2026).
+    expect(req.questions["needs:list"]!.instructions).toContain(ARCHETYPE_WORDS.list);
+    for (const id of needs) expect(req.questions[id]!.instructions).not.toMatch(/stacked-list|card-grid|app-bar/);
     const choiceKeys = (id: string) => Object.keys((req.questions[id] as Extract<JevRequest["questions"][string], { type: "choice" }>).criteria);
     expect(choiceKeys("platform")).toEqual(["app", "web", "site"]);
     expect(choiceKeys("header")).toEqual([...HEADER_OPTIONS]);
