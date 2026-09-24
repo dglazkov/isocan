@@ -180,6 +180,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/grid.test.ts", secs: 9.4, why: "a single case that walks once" },
   { file: "packages/cli/test/tools.test.ts", secs: 7.7, why: "three cases sharing one daemon" },
   { file: "packages/cli/test/panels.test.ts", secs: 9.3, why: "three cases, the tools file's shape; 18 September, and NOT measured on the run that built this list — it is 16.4s on the machine where tools.test.ts is 13.6s, scaled by that anchor to the 7.7 recorded there. The closest file to the line after correspondence, so it is one to re-measure rather than trust" },
+  { file: "packages/web/test/choose.test.ts", secs: 5.4, why: "two cases on one daemon, nine spawns: the item menu's \"Choose this variation\" held equal to `isocan choose`, and one undo of it" },
   { file: "test/ratchetroot.test.ts", secs: 1.5, why: "spawns the binary four times over temp directories — no daemon, no canvas, just files on disk" },
   { file: "packages/cli/test/setup.test.ts", secs: 7.8, why: "five cases, and the first thing a new person runs — worth keeping in the ordinary run" },
   { file: "packages/cli/test/rehome.test.ts", secs: 7.3, why: "eight cases, one command each" },

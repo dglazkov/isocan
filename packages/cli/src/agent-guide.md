@@ -798,7 +798,9 @@ every sibling — the winner included — goes to the trash.
 The winner goes too, and that is deliberate: its content now lives on the
 source's stack, so leaving it would be two copies of one decision and an
 invitation to edit the wrong one. Nothing is lost. `--dry-run` says what would
-happen and does nothing.
+happen and does nothing. A person does the same from the app: right-click the
+variation → **Choose this variation** sends exactly the ops `choose` sends, so
+if somebody asks you to "keep this one", either door is the same decision.
 
 **One undo takes the whole decision back**, because the version and the
 deletions share a group. The version comes off the source and every child

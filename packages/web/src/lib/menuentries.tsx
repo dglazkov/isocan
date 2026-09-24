@@ -1,7 +1,7 @@
 import { selectCreatedItems } from "./groupplacement.ts";
 import type { Actor, CanvasCursor, CanvasTheme, Item, ModuleMark, ThemeAnchor } from "@isocan/core";
 import { markOffered, moduleMarkIntent, moduleMarkPatch, moduleMarks } from "@isocan/core";
-import { canvasScopes, isDesignSystem } from "@isocan/core";
+import { canvasScopes, isDesignSystem, parentOf } from "@isocan/core";
 import { isDesignFile } from "@isocan/core/design-use";
 import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
@@ -387,6 +387,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       };
     }),
     ...(one ? designSystemEntry(one, ctx) : []),
+    ...(one ? chooseEntry(one, ctx) : []),
     { separator: "" },
     {
       label: groupDeleteLabel(items) ?? (many ? `Delete ${items.length} items` : "Delete"),
@@ -417,6 +418,23 @@ function designSystemEntry(item: Item, ctx: MenuContext): MenuEntry[] {
     label: `${on ? "Use as" : "Stop using as"} ${scope ? "this group's " : ""}design system`,
     writes: true,
     run: () => void import("./designuse.ts").then((m) => m.chooseDesignSystem(ctx.canvasId, ctx.actor, item.id, on)),
+  }];
+}
+
+/**
+ * **This one won** — the web's door to `isocan choose`. Offered on a
+ * variation whose source is still on the canvas (an item made from nothing,
+ * or from something since deleted, has nowhere to fold back into). The ops
+ * are built on the click, in their own chunk (`choose.ts`), by the same core
+ * plan the CLI uses, and undo as one.
+ */
+function chooseEntry(item: Item, ctx: MenuContext): MenuEntry[] {
+  const parent = parentOf(item);
+  if (!parent || !useCanvasStore.getState().canvas?.items[parent]) return [];
+  return [{
+    label: "Choose this variation",
+    writes: true,
+    run: () => void import("./choose.ts").then((m) => m.chooseVariation(ctx.canvasId, ctx.actor, item.id)),
   }];
 }
 

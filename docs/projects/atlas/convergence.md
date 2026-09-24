@@ -17,9 +17,11 @@ in three places, each on purpose or on the record:
   source's next version, and every child — the winner included — is trashed,
   recoverable and restored by the one undo. The roads not taken survive as
   named items in the trash, which is weaker than this doc asked for.
-- **No decision post, and no web door.** `choose` does not write the decision
-  to the parent's thread, and the web has no "Keep this" action; the CLI and
-  the agent guide are the only surfaces.
+- **No decision post.** `choose` does not write the decision to the parent's
+  thread. (The web door exists since 24 Sep 2026: the item menu's **Choose
+  this variation** on a variation whose source is still here, through the same
+  `convergePlan` and `convergeOps` as the verb, one group —
+  `packages/web/test/choose.test.ts` holds the two surfaces' ops equal.)
 
 The projects index said from 29 Aug to 11 Sep that `choose` was a different
 convergence from this one. It is not — Scene 8 and this doc both name

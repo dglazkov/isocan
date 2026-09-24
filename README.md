@@ -310,6 +310,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   once an item is too small to wear a label. It steps up to the top edge only
   when a comment pin is literally on it, because a pin marks a place a person
   chose and the badge is ours to move.
+- **Choosing a variation**: right-click a variation (anything `/variation`
+  made from a screen) → **Choose this variation**, or `isocan choose <item>`:
+  its content becomes the next version of the screen it came from and the
+  whole exploration goes to the trash — the same ops from either surface, and
+  one ⌘Z takes the decision back. `isocan prefer <winner> --over <other>` is
+  the lighter half, a recorded preference that moves nothing.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking

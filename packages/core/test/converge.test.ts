@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
-import { convergePlan, isRefusal } from "../src/converge.ts";
+import { convergeOps, convergePlan, isRefusal } from "../src/converge.ts";
 import { lineageProperties } from "../src/lineage.ts";
 
 /**
@@ -86,5 +86,18 @@ describe("what it will not do, and says why", () => {
     const empty = { ...child("itm_a", "Bold"), versions: [], currentVersionId: "" } as unknown as Item;
     const plan = convergePlan(canvasOf([source(), empty]), "itm_a");
     expect(isRefusal(plan) && plan.refused).toContain("no content");
+  });
+});
+
+describe("what a choice sends", () => {
+  it("is the version onto the source first, then every child to the trash", () => {
+    // Both surfaces send this list under one group; the order is part of
+    // what they agree on, so the log reads the same from either.
+    const plan = convergePlan(canvasOf([source(), child("itm_a", "Bold"), child("itm_b", "Quiet")]), "itm_b");
+    if (isRefusal(plan)) throw new Error(plan.refused);
+    const ops = convergeOps(plan);
+    expect(ops[0]).toEqual({ type: "item.addVersion", itemId: "itm_src", version: plan.version });
+    expect(ops.slice(1)).toEqual(plan.trash.map((itemId) => ({ type: "item.delete", itemId })));
+    expect(ops).toHaveLength(3);
   });
 });

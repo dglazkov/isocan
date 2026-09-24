@@ -299,6 +299,7 @@ import {
   contextPieces,
   contextReport,
   convergePlan,
+  convergeOps,
   docketAnswer,
   docketSlug,
   docketVerdict,
@@ -8414,15 +8415,8 @@ program
        * on the source and the named children in the trash.
        */
       const group = newGroupId();
-      await sendOp(
-        ctx,
-        p.id,
-        { type: "item.addVersion", itemId: plan.parentId, version: plan.version },
-        group,
-      );
-      for (const id of plan.trash) {
-        await sendOp(ctx, p.id, { type: "item.delete", itemId: id }, group);
-      }
+      // Core's list, so the web's "Choose this variation" sends the same ops.
+      for (const op of convergeOps(plan)) await sendOp(ctx, p.id, op, group);
 
       if (ctx.json) {
         return printJson({ parentId: plan.parentId, trashed: plan.trash, label: plan.label });
