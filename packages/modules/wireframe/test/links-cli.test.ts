@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FIDELITY_PROP, type Operation } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import wireframeCli from "../src/cli.ts";
-import { LINKS_PROP, PROTOTYPE_MARKER, PROTOTYPE_PROP, renderWire, resolveSlot, wireframe, type WireSpec } from "../src/core.ts";
+import { LINKS_PROP, PROTOTYPE_AT_PROP, PROTOTYPE_CLEAR, PROTOTYPE_MARKER, PROTOTYPE_PROP, renderWire, resolveSlot, wireframe, type WireSpec } from "../src/core.ts";
 
 /**
  * **`wire links`, `wire link`, `wire prototype` against a canvas in memory.**
@@ -11,7 +11,7 @@ import { LINKS_PROP, PROTOTYPE_MARKER, PROTOTYPE_PROP, renderWire, resolveSlot, 
  * Four kept screens in a row — Acme's sign in, home, deliveries, delivery —
  * and one unkept settings screen. What this holds: `link` is one
  * `item.update` of that hotspot's own `wireLink:<key>` on the source screen; `prototype` is one
- * `item.add` beside the kept screens the first time and an `item.addVersion`
+ * `item.add` centred above the kept screens the first time and an `item.addVersion`
  * on the same item after a kept screen changes, each under one op group; a
  * rebuild with nothing changed writes nothing.
  */
@@ -89,6 +89,8 @@ function harness() {
       for (const key of op.patch.removeProperties ?? []) delete item.properties[key];
     } else if (op.type === "item.resize") {
       Object.assign(items.get(op.itemId)!, { width: op.width, height: op.height });
+    } else if (op.type === "item.move") {
+      Object.assign(items.get(op.itemId)!, { x: op.x, y: op.y });
     } else throw new Error(`sent an op it should not: ${op.type}`);
   };
   const host = {
@@ -209,19 +211,22 @@ describe("isocan wire link", () => {
 });
 
 describe("isocan wire prototype", () => {
-  it("adds one HTML item beside the kept screens, then versions it when a kept screen changes", async () => {
+  it("adds one HTML item centred above the kept screens, then versions it when a kept screen changes", async () => {
     const h = harness();
     const first = await h.cli("wire", "prototype");
     expect(h.errors).toEqual([]);
     const add = h.sent.find((s) => s.op.type === "item.add")!.op as Extract<Operation, { type: "item.add" }>;
-    expect(add.properties).toEqual({ [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: "flw_acme" });
-    // Right of the whole row, the unkept Settings screen at 2000 included, so it covers nothing.
-    expect((add.placement as { x: number }).x).toBeGreaterThan(2000 + 390);
+    const at = add.placement as { x: number; y: number };
+    expect(add.properties).toEqual({ [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: "flw_acme", [PROTOTYPE_AT_PROP]: `${at.x},${at.y}` });
+    // Centred over the kept row (0 … 1500 + 390), its bottom over every lane the arrows ride.
+    expect(at.x + add.width / 2).toBeCloseTo((0 + 1890) / 2, 0);
+    expect(at.y + add.height).toBeLessThanOrEqual(-PROTOTYPE_CLEAR);
+    expect(PROTOTYPE_CLEAR).toBeGreaterThanOrEqual(96 + 5 * 26 + 16);
     const html = h.blobs.get(add.version.blobHash)!;
     expect(html).toContain(PROTOTYPE_MARKER);
     for (const id of ["it_signin", "it_home", "it_list", "it_detail"]) expect(html).toContain(`data-screen="${id}"`);
     expect(html).not.toContain('data-screen="it_settings"');
-    expect(first).toMatch(/added beside the kept screens/);
+    expect(first).toMatch(/added above the kept screens/);
     expect(first).toMatch(/4 screens: Sign in · Home · Deliveries · Delivery/);
 
     // Nothing changed: nothing written.
@@ -239,6 +244,39 @@ describe("isocan wire prototype", () => {
     expect(h.items.get(add.itemId)!.versions).toHaveLength(2);
     expect(again).toMatch(/version 2/);
     expect([...h.items.values()].filter((i) => i.properties[PROTOTYPE_PROP])).toHaveLength(1);
+  });
+
+  it("moves back above its flow on a rebuild, in the rebuild's group — unless a person moved it", async () => {
+    const h = harness();
+    await h.cli("wire", "prototype");
+    const proto = () => [...h.items.values()].find((i) => i.properties[PROTOTYPE_PROP])!;
+    // The row changes: Delivery is no longer kept, so the row is 0 … 1000 + 390 and the prototype's centre moves.
+    delete h.items.get("it_detail")!.properties.wireKeep;
+    const before = h.sent.length;
+    expect(await h.cli("wire", "prototype")).toMatch(/version 2/);
+    const rebuilt = h.sent.slice(before);
+    expect(rebuilt.map((s) => s.op.type)).toEqual(["item.addVersion", "item.move", "item.update"]);
+    expect(new Set(rebuilt.map((s) => s.group)).size).toBe(1);
+    expect(proto().x + proto().width / 2).toBeCloseTo(1390 / 2, 0);
+    expect(proto().properties[PROTOTYPE_AT_PROP]).toBe(`${proto().x},${proto().y}`);
+    // A person drags it somewhere else; the next rebuild versions it where it stands.
+    Object.assign(proto(), { x: proto().x + 700, y: 3000 });
+    h.items.get("it_detail")!.properties.wireKeep = "yes";
+    const n = h.sent.length;
+    await h.cli("wire", "prototype");
+    expect(h.sent.slice(n).map((s) => s.op.type)).toEqual(["item.addVersion"]);
+    expect(proto().y).toBe(3000);
+  });
+
+  it("goes higher when something already stands over the row, and overlaps nothing", async () => {
+    const h = harness();
+    // A tall note right where the prototype would go.
+    h.items.set("it_note", { id: "it_note", title: "Acme note", x: 700, y: -900, width: 600, height: 500, properties: {}, currentVersionId: "v", versions: [] });
+    await h.cli("wire", "prototype");
+    const add = h.sent.find((s) => s.op.type === "item.add")!.op as Extract<Operation, { type: "item.add" }>;
+    const at = add.placement as { x: number; y: number };
+    expect(at.y + add.height).toBeLessThan(-900);
+    expect(at.x + add.width / 2).toBeCloseTo(945, 0);
   });
 
   it("refuses to keep a prototype — it plays screens, it is not one", async () => {

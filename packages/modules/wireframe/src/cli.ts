@@ -190,7 +190,7 @@ async function rerenderAll(host: CliHost, cmd: Command, flow: string | undefined
     });
   }
   for (const line of rerenderLines(r)) console.log(line);
-  for (const pr of r.prototypes) if (pr.what !== "unchanged") console.log(`prototype ${pr.itemId} — rebuilt as a new version`);
+  for (const pr of r.prototypes) if (pr.what !== "unchanged") console.log(`prototype ${pr.itemId} — ${pr.what === "moved" ? "moved back above its flow" : "rebuilt as a new version"}`);
   console.log(rerenderSummary(r).replace("one undo takes", "`isocan undo` takes"));
 }
 

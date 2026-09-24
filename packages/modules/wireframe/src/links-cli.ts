@@ -133,7 +133,7 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const versions = after.canvas.items[itemId]?.versions.length ?? 0;
         const dashed = links.filter((l) => l.to === null && l.needs);
         if (ctx.json) return printJson({ itemId, title, flow: flow.flow, screens: flow.screens.length, links: links.length, dashed: dashed.length, versions, [what]: true });
-        console.log(`${itemId}  "${title}" — ${what === "added" ? "added beside the kept screens" : what === "versioned" ? `version ${versions}` : `unchanged (still version ${versions}) — nothing kept has changed`}`);
+        console.log(`${itemId}  "${title}" — ${what === "added" ? "added above the kept screens" : what === "versioned" ? `version ${versions}` : what === "moved" ? `moved back above its flow (still version ${versions})` : `unchanged (still version ${versions}) — nothing kept has changed`}`);
         console.log(`  ${flow.screens.length} screens: ${flow.screens.map((s) => s.title).join(" · ")}`);
         console.log(`  ${links.length} links, ${dashed.length} dashed${dashed.length ? ` (needs ${[...new Set(dashed.map((l) => l.needs))].join(", ")})` : ""} · \`isocan open ${itemId}\` plays it${what === "unchanged" ? "" : " · `isocan undo` takes it back"}`);
       }),

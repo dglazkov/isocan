@@ -165,7 +165,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
     }
     const { itemId, links, what } = result.written;
     const dashed = links.filter((l) => l.to === null && l.needs).length;
-    const said = `Prototype ${what === "added" ? "added beside the kept screens" : what === "versioned" ? "rebuilt as a new version" : "unchanged — nothing kept has changed"} · ${links.length} links${dashed ? `, ${dashed} dashed` : ""}`;
+    const said = `Prototype ${what === "added" ? "added above the kept screens" : what === "versioned" ? "rebuilt as a new version" : what === "moved" ? "moved back above its flow" : "unchanged — nothing kept has changed"} · ${links.length} links${dashed ? `, ${dashed} dashed` : ""}`;
     host.notice(said);
     if (what !== "unchanged") record(host, result.group!, [`${said}. It plays ${result.flow!.screens.length} screens: ${result.flow!.screens.map((s) => s.title).join(" · ")}.`], [itemId]);
     host.close();

@@ -4,6 +4,7 @@ import { inferLinks, type WireLink, type WireScreen } from "./links.ts";
 import { overridesOf } from "./link-override.ts";
 import { currentVersionOf, type WirePort } from "./port.ts";
 import { PROTOTYPE_PROP, assemblePrototype, prototypeSize } from "./prototype.ts";
+import { LABEL_H, LANE, LANE0, MAX_LANES } from "./route.ts";
 
 /**
  * **The kept screens, by flow, and the prototype they play** — phase 3's
@@ -82,12 +83,66 @@ export function sharedGroup(items: readonly Item[]): { containerId: string; grou
 }
 
 /**
+ * Where the composer last put a prototype, as `x,y` — set by the op that
+ * places it. A prototype whose position still reads the same was never moved
+ * by hand, so a rebuild may place it again; one that reads otherwise was put
+ * somewhere on purpose, and stays.
+ */
+export const PROTOTYPE_AT_PROP = "wirePrototypeAt";
+
+/**
+ * How far above the kept row a prototype's bottom edge sits: over every lane
+ * the arrows ride (`LANE0`, then `LANE` a lane, the crowded fifth included),
+ * their labels, and a margin — so no arrow is drawn under it.
+ */
+export const PROTOTYPE_CLEAR = LANE0 + (MAX_LANES + 1) * LANE + LABEL_H + 24;
+
+type Box = { x: number; y: number; width: number; height: number };
+const meets = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/**
+ * **Where a flow's prototype goes** (24 Sep 2026, Dion: "the prototype sits
+ * above its flow"): centred over the flow's own kept screens, its bottom
+ * `PROTOTYPE_CLEAR` above their top — and, when something is already there,
+ * higher, until it overlaps nothing (a group's frame aside: the prototype
+ * joins the group its screens share). `self` is the prototype itself, which
+ * never counts as in its own way.
+ */
+export function prototypeSpot(canvas: CanvasContents, flow: KeptFlow, size: { width: number; height: number }, self?: string): { x: number; y: number } {
+  const own = flow.items.filter((i) => !flow.guests.includes(i.id));
+  const left = Math.min(...own.map((i) => i.x));
+  const right = Math.max(...own.map((i) => i.x + i.width));
+  const top = Math.min(...own.map((i) => i.y));
+  const x = Math.round((left + right) / 2 - size.width / 2);
+  let y = Math.round(top - PROTOTYPE_CLEAR - size.height);
+  const others = Object.values(canvas.items ?? {}).filter((i) => i.id !== self && i.properties?.kind !== "group");
+  // The item's title strip rides above it, so the box it needs clear is a little taller than the item.
+  for (let i = 0; i < 50; i++) {
+    const want = { x: x - 20, y: y - 60, width: size.width + 40, height: size.height + 80 };
+    const hit = others.filter((o) => meets(want, { x: o.x, y: o.y, width: o.width, height: o.height }));
+    if (hit.length === 0) break;
+    y = Math.round(Math.min(...hit.map((o) => o.y)) - 80 - size.height);
+  }
+  return { x, y };
+}
+
+const atOf = (p: { x: number; y: number }) => `${Math.round(p.x)},${Math.round(p.y)}`;
+
+/** Whether a prototype still stands where the composer put it — never moved by hand. An older one that never recorded it is taken as placed. */
+export function placedByComposer(item: Item): boolean {
+  const at = item.properties?.[PROTOTYPE_AT_PROP];
+  return typeof at !== "string" || at === atOf(item);
+}
+
+/**
  * Assemble a kept flow's prototype and write it, under the caller's group —
- * a prototype's own, or a restyle's.
+ * a prototype's own, or a restyle's. It lands centred above the flow's kept
+ * row (`prototypeSpot`), and a rebuild moves it there again — in the same
+ * group — unless a person has moved it since.
  */
 export async function writePrototype(
   port: WirePort, canvas: CanvasContents, flow: KeptFlow, group: string,
-): Promise<{ itemId: string; title: string; links: WireLink[]; what: "added" | "versioned" | "unchanged" }> {
+): Promise<{ itemId: string; title: string; links: WireLink[]; what: "added" | "versioned" | "moved" | "unchanged" }> {
   const links = inferLinks(flow.screens);
   const title = prototypeTitle(flow);
   const html = assemblePrototype(flow.screens, links, { title });
@@ -96,35 +151,46 @@ export async function writePrototype(
   const upload = await port.put(html, "text/html", filename);
   const version = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
   const existing = Object.values(canvas.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
-  if (existing) {
-    if (currentVersionOf(existing)?.blobHash === upload.blobHash) return { itemId: existing.id, title, links, what: "unchanged" };
-    await port.send({ type: "item.addVersion", itemId: existing.id, version }, group);
-    if (existing.width !== width || existing.height !== height) await port.send({ type: "item.resize", itemId: existing.id, width, height }, group);
-    if (existing.title !== title) await port.send({ type: "item.update", itemId: existing.id, patch: { title } }, group);
-    return { itemId: existing.id, title, links, what: "versioned" };
-  }
-  const itemId = newItemId();
-  // Right of everything in the kept screens' band — their unkept siblings too — so it covers nothing.
   // The flow's own screens: a guest from another flow sits elsewhere.
   const own = flow.items.filter((i) => !flow.guests.includes(i.id));
-  const top = Math.min(...own.map((i) => i.y));
-  const bottom = top + height;
-  const band = Object.values(canvas.items ?? {}).filter((i) => i.y < bottom && i.y + i.height > top);
-  const right = Math.max(...own.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
-  await port.send({
+  if (existing) {
+    const same = currentVersionOf(existing)?.blobHash === upload.blobHash;
+    if (!same) await port.send({ type: "item.addVersion", itemId: existing.id, version }, group);
+    if (existing.width !== width || existing.height !== height) await port.send({ type: "item.resize", itemId: existing.id, width, height }, group);
+    if (existing.title !== title) await port.send({ type: "item.update", itemId: existing.id, patch: { title } }, group);
+    // Back over its flow, unless somebody put it somewhere on purpose.
+    const moved = placedByComposer(existing) ? await place(port, canvas, flow, existing.id, { width, height }, existing, group) : false;
+    return { itemId: existing.id, title, links, what: !same ? "versioned" : moved ? "moved" : "unchanged" };
+  }
+  const itemId = newItemId();
+  const spot = prototypeSpot(canvas, flow, { width, height });
+  const landed = await port.send({
     type: "item.add",
     itemId,
     version,
     width,
     height,
-    placement: { x: Math.round(right + 120), y: Math.round(top), chosen: true } as never,
+    placement: { ...spot, chosen: true } as never,
     title,
     // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
-    properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow },
+    properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow, [PROTOTYPE_AT_PROP]: atOf(spot) },
     // In the group its screens live in, when they share one (Porchlight #6).
     ...(sharedGroup(own) ?? {}),
   }, group);
+  // A group may have put it elsewhere: what is recorded is where it is.
+  if (landed && atOf(landed) !== atOf(spot)) await port.send({ type: "item.update", itemId, patch: { properties: { [PROTOTYPE_AT_PROP]: atOf(landed) } } }, group);
   return { itemId, title, links, what: "added" };
+}
+
+/** Move a placed prototype to its spot over the flow, and record where it landed. False when it is already there. */
+async function place(port: WirePort, canvas: CanvasContents, flow: KeptFlow, itemId: string, size: { width: number; height: number }, item: Item, group: string): Promise<boolean> {
+  const spot = prototypeSpot(canvas, flow, size, itemId);
+  const recorded = item.properties?.[PROTOTYPE_AT_PROP];
+  if (atOf(item) === atOf(spot) && recorded === atOf(spot)) return false;
+  if (atOf(item) !== atOf(spot)) await port.send({ type: "item.move", itemId, x: spot.x, y: spot.y }, group);
+  const now = (await port.canvas()).items[itemId];
+  await port.send({ type: "item.update", itemId, patch: { properties: { [PROTOTYPE_AT_PROP]: atOf(now ?? spot) } } }, group);
+  return true;
 }
 
 /**

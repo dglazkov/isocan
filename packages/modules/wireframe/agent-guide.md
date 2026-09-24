@@ -107,13 +107,18 @@ bar, tab bar) stays.
   screen, the hotspot pointed out — what an arrow's *Play from here* opens;
   it writes nothing.
 - `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`
-  when more than one flow is kept) as **one self-contained HTML item** to the
-  right of them — inside the canvas group the kept screens share, when they
-  share one: every screen, a router with a history stack, the links as
-  click targets, a push / pop / fade / slide-up by link kind, a Restart. Run
-  it again after a kept screen changes and the same item **gains a version**
-  (found by its `wirePrototype` property); with nothing changed it writes
-  nothing. `isocan open <item>` plays it full screen.
+  when more than one flow is kept) as **one self-contained HTML item**
+  centred **above** them, clear of the arrows' lanes and of anything already
+  there (higher still if it must be) — inside the canvas group the kept
+  screens share, when they share one: every screen, a router with a history
+  stack, the links as click targets, a push / pop / fade / slide-up by link
+  kind, a Restart. Run it again after a kept screen changes and the same
+  item **gains a version** (found by its `wirePrototype` property); with
+  nothing changed it writes nothing. A rebuild (this, `wire style`, `wire
+  flesh`, `wire render --all`) also moves it back above its flow, in the
+  same op group — unless it was moved by hand: `wirePrototypeAt` records
+  where it was placed, and a prototype standing anywhere else stays put.
+  `isocan open <item>` plays it full screen.
 - **Wires draw in the canvas's design system.** The look is a theme over
   the same spec: eleven roles (`ground`, `surface`, `line`, `ink`,
   `ink-muted`, `bar`, `primary`, `on-primary`, `radius`, `font`, `space`),

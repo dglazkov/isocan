@@ -195,7 +195,10 @@ The canvas draws the inferred links between kept screens as module edges
 `deckHtml`. One self-contained HTML file: every kept screen as a section, a
 tiny router, the links as click handlers, a slide/fade transition by link
 kind (push for forward, pop for back, none for tab). It is added as an HTML
-item next to the flow and gains a version when rebuilt. It never navigates
+item centred above the flow's kept row — over the arrows' highest lane, and
+higher if something is already there — and gains a version when rebuilt; a
+rebuild puts it back above the row unless a person has moved it
+(`wirePrototypeAt` records where the composer placed it). It never navigates
 the canvas — screens run in sandboxed frames, and a prototype that routes
 inside itself needs no bridge out.
 
