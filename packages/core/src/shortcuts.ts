@@ -23,7 +23,7 @@ export interface Shortcut {
 }
 
 /** The help panel's columns. */
-export type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
+type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
 
 export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   "Tools",

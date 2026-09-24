@@ -97,7 +97,9 @@ describe("⇧K is the menu entry's act", () => {
   it("is answered by the canvas's key handler and listed in the help panel", () => {
     const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
     expect(read("../src/pages/CanvasPage.tsx")).toMatch(/moduleMarks\(\)\.some\(\(m\) => "Key" \+ m\.key == e\.code\)/);
-    expect(read("../src/components/HelpPanel.tsx")).toContain("moduleMarks()");
+    // The panel lists them through core's `markShortcuts`, which reads the loaded marks — the same rows `isocan shortcuts` prints.
+    expect(read("../src/components/HelpPanel.tsx")).toContain("markShortcuts()");
+    expect(read("../../core/src/shortcuttext.ts")).toContain("moduleMarks()");
     expect(read("../src/components/ItemView.tsx")).toContain("moduleMarks().map(");
   });
 });
