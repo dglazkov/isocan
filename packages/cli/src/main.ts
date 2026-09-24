@@ -8,6 +8,8 @@ import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./
 import { registerContextReads, reportContext, contextReceipt } from "./context-reads.ts";
 import { registerQuestionnaires } from "./questionnaire.ts";
 import { registerDesignSystems } from "./design-system.ts";
+import { designGovernsNotes, designReleasedNotes } from "./design-scope-notes.ts";
+import { designUnuse, designUse, ownDesignSystemAt } from "@isocan/core/design-use";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
 import { registerDesignReviews, runDesignRepair } from "./design-review.ts";
@@ -9692,13 +9694,25 @@ function designScope(snapshot: CanvasSnapshotResponse, ref: string | undefined):
  * the canvas's because the lane had none yet.
  */
 function ownDesignSystem(snapshot: CanvasSnapshotResponse, ref: string | undefined): Item | null {
-  if (ref === undefined) return designSystem(snapshot.canvas);
-  const area = designScope(snapshot, ref).at!;
-  const mine = scopedDesignSystems(snapshot.canvas)
-    .filter((s) => s.area.id === area.id)
-    .map((s) => s.item)
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-  return mine[0] ?? null;
+  // Core's, so `design use` and the web's item menu version the same system
+  // `design set` does — the one at exactly this level.
+  return ownDesignSystemAt(snapshot.canvas, ref === undefined ? null : designScope(snapshot, ref).at!.id);
+}
+
+/**
+ * **Say what a system governs once it is written** — the note a move already
+ * prints (`designScopeNotes`), for `design set`, `import` and `use`. Read after
+ * the op lands, so the sentence is about the canvas as it now is. Advice, never
+ * a failure: the write already happened.
+ */
+async function noteDesignGoverns(ctx: Ctx, canvasId: string, itemId: string, released?: { scopeId: string | null }): Promise<void> {
+  try {
+    const canvas = (await ctx.client.snapshot(canvasId)).canvas;
+    const lines = released ? designReleasedNotes(canvas, itemId, released.scopeId) : designGovernsNotes(canvas, itemId);
+    for (const line of lines) console.error(`note: ${line}`);
+  } catch {
+    // The note is about a write that already landed; never a failure of it.
+  }
 }
 
 const style = program
@@ -9936,6 +9950,7 @@ style
         // is the thing you will want to compare against tomorrow.
         await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing.id, version });
         console.error(`${existing.id} — design system v${existing.versions.length + 1} (V shows the stack)`);
+        await noteDesignGoverns(ctx, p.id, existing.id);
         return;
       }
       const itemId = newItemId();
@@ -9950,6 +9965,34 @@ style
         properties: designSystemProperties(),
       });
       console.error(`${itemId} — design system for ${opts.in ? `${opts.in} on ` : ""}${p.title} (isocan design)`);
+      await noteDesignGoverns(ctx, p.id, itemId);
+    }),
+  );
+
+/**
+ * **Choose a DESIGN.md already on the canvas** — the verb behind the web's
+ * item-menu entry, through the same core function, so the two send one op.
+ * `design set` takes a file; this takes an item, and governs the scope the
+ * item sits in (`core/design-use.ts` says why it is a version of that scope's
+ * system when there is one, and the property otherwise). `--off` is the
+ * reverse. One op either way, so `isocan undo` takes it back.
+ */
+style
+  .command("use")
+  .description("Make a DESIGN.md on the canvas the design system of where it sits (--off to stop)")
+  .argument("<item>", "a markdown item — its id, title or #ref")
+  .option("--off", "stop it governing: the item and its words stay")
+  .action(
+    run(async (ref: string, opts: { off?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      const use = opts.off ? designUnuse(snapshot.canvas, item) : designUse(snapshot.canvas, item);
+      await sendOp(ctx, p.id, use.op);
+      if (ctx.json) printJson({ itemId: item.id, op: use.op.type, governing: opts.off ? null : (use.into ?? item).id, scopeId: use.scope?.id ?? null });
+      else if (use.into) console.error(`${use.into.id} — design system v${use.into.versions.length + 1}, from “${item.title}” (V shows the stack)`);
+      else console.error(`${item.id} — ${opts.off ? "no longer a design system" : "design system"}`);
+      await noteDesignGoverns(ctx, p.id, opts.off ? item.id : (use.into ?? item).id, opts.off ? { scopeId: use.scope?.id ?? null } : undefined);
     }),
   );
 
@@ -10018,6 +10061,7 @@ style
         // to, and it matters more here: an import is exactly the moment
         // somebody discovers they wanted the old one back.
         await sendOp(ctx, p.id, { type: "item.addVersion", itemId: existing.id, version });
+        await noteDesignGoverns(ctx, p.id, existing.id);
         if (ctx.json) return printJson({ itemId: existing.id, format, counts, problems, notes });
         console.error(
           `${existing.id} — design system v${existing.versions.length + 1} from ${path.basename(file)}`,
@@ -10035,6 +10079,7 @@ style
         title: opts.title,
         properties: designSystemProperties(),
       });
+      await noteDesignGoverns(ctx, p.id, itemId);
       if (ctx.json) return printJson({ itemId, format, counts, problems, notes });
       console.error(`${itemId} — design system for ${p.title}, imported from ${path.basename(file)}`);
     }),

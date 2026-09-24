@@ -136,6 +136,10 @@ export const DEEP: readonly DeepFile[] = [
   // 23 Sep: five cases, one daemon, ~25 spawns — a text node restyled,
   // re-worded and fitted over the real binary on both canvas modes.
   { file: "packages/cli/test/text-refit.test.ts", secs: 21.7 },
+  // 24 Sep: four cases, one daemon, ~20 spawns — the web's "Use as the
+  // design system" op held equal to `design use` and `design set` over the
+  // real binary.
+  { file: "packages/web/test/designuse.test.ts", secs: 19.8 },
   { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
 ];
 

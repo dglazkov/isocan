@@ -18,6 +18,7 @@
     "./design-direction": "./src/design-direction.ts",
     "./design-decision": "./src/design-decision.ts",
     "./design-repair": "./src/design-repair.ts",
+    "./design-use": "./src/design-use.ts",
     "./colour": "./src/colour.ts",
     "./jev": "./src/jev.ts"
   },

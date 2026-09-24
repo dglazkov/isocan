@@ -1,6 +1,8 @@
 import { selectCreatedItems } from "./groupplacement.ts";
 import type { Actor, CanvasCursor, CanvasTheme, Item, ModuleMark, ThemeAnchor } from "@isocan/core";
 import { markOffered, moduleMarkIntent, moduleMarkPatch, moduleMarks } from "@isocan/core";
+import { canvasScopes, isDesignSystem } from "@isocan/core";
+import { isDesignFile } from "@isocan/core/design-use";
 import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
@@ -384,6 +386,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         run: () => toggleModuleMark(mark, items, ctx.canvasId, ctx.actor),
       };
     }),
+    ...(one ? designSystemEntry(one, ctx) : []),
     { separator: "" },
     {
       label: groupDeleteLabel(items) ?? (many ? `Delete ${items.length} items` : "Delete"),
@@ -393,6 +396,26 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       run: () => void deleteItems(ctx.canvasId, ctx.actor, ids),
     },
   ]);
+}
+
+/**
+ * **Which DESIGN.md governs, chosen where you are looking at it** — the web's
+ * door to `isocan design use`. Offered on a markdown item called DESIGN.md
+ * (every note on a canvas offering to become its design system would be a
+ * menu nobody reads), and on a system, to stop it. The scope is where the
+ * item sits, because that is what a DESIGN.md governs by; the label names it.
+ * The op is built on the click, in its own chunk (`designuse.ts`).
+ */
+function designSystemEntry(item: Item, ctx: MenuContext): MenuEntry[] {
+  const on = !isDesignSystem(item);
+  if (on && !isDesignFile(item)) return [];
+  const canvas = useCanvasStore.getState().canvas;
+  const scope = canvas && canvasScopes(canvas, item)[0];
+  return [{
+    label: `${on ? "Use as" : "Stop using as"} the design system for ${scope ? `the group “${scope.title}”` : "this canvas"}`,
+    writes: true,
+    run: () => void import("./designuse.ts").then((m) => m.chooseDesignSystem(ctx.canvasId, ctx.actor, item.id, on)),
+  }];
 }
 
 /**
