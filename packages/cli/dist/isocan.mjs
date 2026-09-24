@@ -11,7 +11,7 @@ import {
   packPath,
   packProblems,
   rosterClashes
-} from "./chunk-6ST4G25D.mjs";
+} from "./chunk-DMSNGAIF.mjs";
 import {
   CanvasHandle,
   DEFAULT_MODE,
@@ -51,7 +51,7 @@ import {
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity
-} from "./chunk-UVZGUY2E.mjs";
+} from "./chunk-5SWYWSDD.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -62,8 +62,8 @@ import {
   prepareDesignVerifierOffer,
   submitDesignReviewWrite,
   validatePreparedDesignReviewWrite
-} from "./chunk-7NLF7E34.mjs";
-import "./chunk-5RGFSO2S.mjs";
+} from "./chunk-S2STDR3H.mjs";
+import "./chunk-HCFVICTU.mjs";
 import {
   parseDesignProjection,
   prepareDesignReconciliation,
@@ -72,11 +72,11 @@ import {
   readDesignSystem,
   reconcileDesignProjection,
   writeDesignDirection
-} from "./chunk-23BZEPFW.mjs";
+} from "./chunk-OKIP47NS.mjs";
 import {
   changeDesignRequest,
   publishDesignReceipt
-} from "./chunk-DEZYUUTP.mjs";
+} from "./chunk-DVLX5IHT.mjs";
 import {
   actorNamesOn,
   itemCenter,
@@ -84,13 +84,13 @@ import {
   nameResolver,
   runRoom,
   threadLocus
-} from "./chunk-FFIULNP5.mjs";
+} from "./chunk-2BE22J63.mjs";
 import {
   parseDesignRepairBasis,
   prepareDesignRepair,
   submitDesignRepair,
   validatePreparedDesignRepair
-} from "./chunk-SXDBDSNQ.mjs";
+} from "./chunk-SCKFEQNI.mjs";
 import {
   CanvasGroups,
   DaemonClient,
@@ -104,7 +104,7 @@ import {
   resolveCanvasGroupRef,
   resolved,
   shaOfRoot
-} from "./chunk-IUSGVETE.mjs";
+} from "./chunk-AX2NUIAM.mjs";
 import {
   bindableRoot,
   buildStamp,
@@ -132,26 +132,26 @@ import {
   updateConfigFile,
   writeGoogleToken,
   writeMarker
-} from "./chunk-NOG2AKBY.mjs";
+} from "./chunk-BSASSNMV.mjs";
 import {
   DaemonRoutes
-} from "./chunk-362G7JI7.mjs";
+} from "./chunk-2JU4YCQY.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import {
   auditDesignSource,
   designAuditFails,
   readDesignAuditAdvisory,
   readDesignSourceAudit
-} from "./chunk-VCXIZFYZ.mjs";
+} from "./chunk-UMNSYLX4.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import {
   prepareDesignDecision
-} from "./chunk-XO5S5P2U.mjs";
+} from "./chunk-WFKLUV4E.mjs";
 import {
   classifyAutomaticSource,
   questionnaireSubmissionIds
-} from "./chunk-OY7MZFSI.mjs";
-import "./chunk-JNO6CSXZ.mjs";
+} from "./chunk-CFZSTY7Y.mjs";
+import "./chunk-M3AFCINQ.mjs";
 import {
   ALIGN_EDGES,
   AREA_FILENAME,
@@ -531,7 +531,7 @@ import {
   wallFor,
   withModuleCommands,
   workbenchUrl
-} from "./chunk-5CQWGZGQ.mjs";
+} from "./chunk-TBDCHV6U.mjs";
 import {
   CONTRAST_BODY,
   contrastRatio,
@@ -8414,7 +8414,7 @@ your own rc, each named for its principle \u2014 an homage, never the person.
         quote: null,
         ...opts.self ? { self: true } : {}
       };
-      const problems = (await import("./packs-22FG7QVW.mjs")).packProblems(pack);
+      const problems = (await import("./packs-CJ3L6NEF.mjs")).packProblems(pack);
       if (problems.length) {
         const hint = problems.some((p) => /reference/.test(p)) ? ' \u2014 add one with --ref "Title|https://\u2026|what to learn"' : "";
         throw new Error(`this pack would be refused: ${problems.join("; ")}${hint}`);
@@ -18441,7 +18441,7 @@ program2.command("mcp").description(
   "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)"
 ).action(
   run(async () => {
-    const { serveStdio } = await import("./src-TRZSTJUM.mjs");
+    const { serveStdio } = await import("./src-RV3RPZ46.mjs");
     await serveStdio({ version: buildStamp().version });
     await new Promise(() => {
     });
@@ -18456,14 +18456,14 @@ program2.command("serve").alias("start").description("Run the state daemon (auto
       throw refuseDaemonVerb("serve", declared.at ?? "its home");
     }
     if (opts.foreground) {
-      const { runDaemon } = await import("./daemon-BU5S6GV2.mjs");
+      const { runDaemon } = await import("./daemon-MMJ6LVMO.mjs");
       await runDaemon({ port, home, ...opts.force ? { takeover: true } : {} });
       return new Promise(() => {
       });
     }
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
     if (opts.force) {
-      const { stopDaemons } = await import("./daemon-BU5S6GV2.mjs");
+      const { stopDaemons } = await import("./daemon-MMJ6LVMO.mjs");
       const stopped = await stopDaemons(port, home);
       if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
     } else if (await client.health()) {
@@ -18654,7 +18654,7 @@ async function rosterCaveat(ctx, canvasId) {
   return why === null ? null : `this is only who this machine can see \u2014 ${why}`;
 }
 async function restartDaemon(home, port) {
-  const { stopDaemons } = await import("./daemon-BU5S6GV2.mjs");
+  const { stopDaemons } = await import("./daemon-MMJ6LVMO.mjs");
   const stopped = await stopDaemons(port, home);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
   await client.ensureDaemon();
@@ -19127,7 +19127,7 @@ function say(adoption) {
 }
 program2.command("stop").description("Stop the daemon \u2014 asks the port who it is, so a stale one can't hide").action(
   run(async (_opts, cmd) => {
-    const { stopDaemons } = await import("./daemon-BU5S6GV2.mjs");
+    const { stopDaemons } = await import("./daemon-MMJ6LVMO.mjs");
     const declared = await resolveDeclared(paths_exports.isocanHome());
     if (declared?.mode === "direct") {
       throw refuseDaemonVerb("stop", declared.at ?? "its home");
@@ -20066,7 +20066,7 @@ program2.command("setup [target]").description(
               }
             }
           } else if (before && stalenessOf(before).stale) {
-            const { stopDaemons } = await import("./daemon-BU5S6GV2.mjs");
+            const { stopDaemons } = await import("./daemon-MMJ6LVMO.mjs");
             await stopDaemons(port, home);
             await fs16.rm(path16.join(home, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
@@ -20294,7 +20294,7 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     let ownerInput;
     if (access.kind !== "ordinary") {
       if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
-      const { personalCaptureOwner } = await import("./personal-capture-NM66SUMH.mjs");
+      const { personalCaptureOwner } = await import("./personal-capture-VENZCCQG.mjs");
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }
@@ -24096,7 +24096,7 @@ async function readCommentDocument(ctx, canvasId, item) {
   const face = visualFaceOf(version4);
   if (!["text/markdown", "text/plain"].includes(face.mimeType)) throw new Error("Text comments need a Markdown or plain-text item");
   const { markdownText } = await import("./markdown-text-ME77MLUY.mjs");
-  const { isTextItem: isTextItem2 } = await import("./src-WZVTFNF4.mjs");
+  const { isTextItem: isTextItem2 } = await import("./src-BRJ3WYZO.mjs");
   const flavor = face.mimeType === "text/plain" ? "plain" : isTextItem2(item) ? "text-node" : "document";
   const text = markdownText((await ctx.client.downloadBlob(canvasId, face.blobHash)).toString("utf8"), flavor);
   return { text, versionId: version4.id, blobHash: face.blobHash, flavor };
@@ -24361,7 +24361,7 @@ session.command("select [item]").description("Point to a quote in saved Markdown
   if (!ref || !opts.quote) throw new Error("pass an item and --quote, or --clear");
   const item = resolveItem(snapshot, ref);
   const doc2 = await readCommentDocument(ctx, p.id, item);
-  const { TEXT_ATTENTION_MS } = await import("./src-WZVTFNF4.mjs");
+  const { TEXT_ATTENTION_MS } = await import("./src-BRJ3WYZO.mjs");
   const range = quoteRange(doc2.text, opts.quote, opts.occurrence === void 0 ? void 0 : Number(opts.occurrence));
   const textSelection = {
     itemId: item.id,
@@ -24427,7 +24427,7 @@ session.command("say [status]").description("Set (or clear) the status line unde
     const ctx = await ctxOf(cmd);
     const p = await resolveCanvas(ctx);
     if (opts.signal) {
-      const { cursorSignal } = await import("./src-WZVTFNF4.mjs");
+      const { cursorSignal } = await import("./src-BRJ3WYZO.mjs");
       await touchSession(ctx, p.id, { signal: status2 ? cursorSignal(status2) : null });
       console.log(status2 ? `signal: ${status2} (20s)` : "signal cleared");
       return;
@@ -24440,7 +24440,7 @@ session.command("signal [text]").description("Temporarily replace your name on y
   run(async (text, _opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const p = await resolveCanvas(ctx);
-    const { cursorSignal } = await import("./src-WZVTFNF4.mjs");
+    const { cursorSignal } = await import("./src-BRJ3WYZO.mjs");
     await touchSession(ctx, p.id, { signal: text ? cursorSignal(text) : null });
     console.log(text ? `signal: ${text} (20s)` : "signal cleared");
   })
