@@ -36,6 +36,13 @@ second week.
 - **Wireframes draw the maybes.** A screen Jev isn't sure your app needs is
   still drawn, with a dashed outline and a *maybe* tag; keep it (⇧K) and the
   mark goes. Arrow labels no longer sit on top of each other.
+- **Wireframes arrive clickable.** `/wire` now finishes with a prototype of its
+  best guess at each screen, above the flow. The menu says *Use in prototype*
+  (⇧K, as before): swap a variation in, then `/wire prototype` rebuilds it. One
+  undo takes the whole flow back, prototype included; `/wire basic` picks
+  nothing.
+- **When an agent joins,** a small note by the faces in the top right says so,
+  and fades. Nothing is written to the Chat.
 - **`/wire` comes back with content.** Words and small pictures that fit what
   you asked for are filled in as part of composing, and one undo still takes
   the whole flow back. `/wire basic …` gives you plain grey wires instead.
