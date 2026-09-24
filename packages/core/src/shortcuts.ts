@@ -1,5 +1,3 @@
-import { renderKeys } from "./shortcut.ts";
-import { moduleMarks } from "./modules.ts";
 /**
  * Every key the canvas answers to, written down once.
  *
@@ -11,7 +9,8 @@ import { moduleMarks } from "./modules.ts";
  * against this file, and impossible to check against a screenshot.
  */
 
-interface Shortcut {
+/** One key (or several for one act), what it does, where the help panel files it. */
+export interface Shortcut {
   /** As a person would say it, e.g. "⌘K" or "Shift-drag". Several when the
    * same act has more than one key. */
   keys: string[];
@@ -23,7 +22,8 @@ interface Shortcut {
   note?: string;
 }
 
-type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
+/** The help panel's columns. */
+export type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
 
 export const SHORTCUT_GROUPS: ShortcutGroup[] = [
   "Tools",
@@ -154,41 +154,4 @@ export function shortcutsIn(group: ShortcutGroup): Shortcut[] {
 export function keyFor(does: string): string | null {
   const found = SHORTCUTS.find((shortcut) => shortcut.does === does);
   return found?.keys[0] ?? null;
-}
-
-/**
- * **The keys loaded modules add** — each `ModuleMark` with a `key` answers
- * ⇧ and that letter (the wireframes' ⇧K keeps a screen). They are not in
- * `SHORTCUTS` because they exist only while their module is loaded; this
- * turns the loaded ones into rows in the same shape, so the help panel and
- * `isocan shortcuts` say them in the same words (24 Sep 2026: ⇧K was in the
- * panel and not in the CLI's list).
- */
-export function markShortcuts(): Shortcut[] {
-  return moduleMarks().filter((mark) => mark.key).map((mark) => ({
-    keys: [`⇧${mark.key}`],
-    does: `${mark.emoji} ${mark.on} or ${mark.off.toLowerCase()} the selection`,
-    group: "Items" as const,
-    note: "A property on the item, so anybody can take it off",
-  }));
-}
-
-/** The whole list as text, for a terminal or a comment: the same answer the
- * overlay gives, in the medium an agent can pass on — the loaded modules'
- * keys included (`markShortcuts`). */
-export function shortcutsAsText(): string {
-  // The column is measured, not guessed: a fixed 24 ran "Double-click the
-  // name" straight into its description, and the next long key would have done
-  // it again. One width for the whole list so the descriptions line up.
-  /* Rendered here because this IS the display: it is what `isocan shortcuts`
-     prints and what an agent is handed. The table stays canonical. */
-  const keysOf = (s: Shortcut) => s.keys.map((key) => renderKeys(key)).join(" / ");
-  const column = Math.max(...SHORTCUTS.map((s) => keysOf(s).length)) + 2;
-  return SHORTCUT_GROUPS.map((group) => {
-    const rows = [...shortcutsIn(group), ...markShortcuts().filter((s) => s.group === group)].map((s) => {
-      const head = `  ${keysOf(s).padEnd(column)}${s.does}`;
-      return s.note ? `${head}\n  ${"".padEnd(column)}${s.note}` : head;
-    });
-    return `${group}\n${rows.join("\n")}`;
-  }).join("\n\n");
 }

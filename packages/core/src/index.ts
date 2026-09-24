@@ -59,6 +59,7 @@ export * from "./commands.ts";
 export * from "./command-catalogue.ts";
 export * from "./command-bodies.ts";
 export * from "./shortcuts.ts";
+export * from "./shortcuttext.ts";
 export * from "./bytes.ts";
 export * from "./format.ts";
 export * from "./merge.ts";
