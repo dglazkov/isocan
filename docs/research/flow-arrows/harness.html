@@ -1,0 +1,268 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;background:#fbfbf9;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}
+#vp{position:absolute;inset:0;background-image:radial-gradient(circle,#c9ccc4 1px,transparent 1px);background-size:22px 22px}
+.world{position:absolute;left:0;top:0;transform-origin:0 0}
+.item{position:absolute;border:0;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.14);border-radius:6px;z-index:1}
+svg.under{position:absolute;left:0;top:0;z-index:0;overflow:visible;width:1px;height:1px}
+svg.over{position:absolute;left:0;top:0;z-index:4;overflow:visible;width:1px;height:1px;pointer-events:none}
+.wire-arrow{fill:none;stroke:#1f3fd0;opacity:.7;stroke-width:calc(2px / var(--scale,1));stroke-linecap:round}
+.wire-arrowhead{fill:#1f3fd0}
+.fa{fill:none;stroke:#1f3fd0;stroke-width:calc(1.5px / var(--scale));stroke-linejoin:round}
+.fa.overlay{stroke-dasharray:calc(5px / var(--scale)) calc(4px / var(--scale))}
+.fa.tab{stroke:#686e75;stroke-dasharray:calc(1.5px / var(--scale)) calc(3.5px / var(--scale));stroke-linecap:round}
+.fa.missing{stroke:#686e75;stroke-dasharray:calc(4px / var(--scale)) calc(3px / var(--scale))}
+.fa.dim{opacity:.22}
+.fa.hot{stroke-width:calc(2.5px / var(--scale))}
+.port{fill:#1f3fd0}
+.port.dim{opacity:.22}
+.stubend{fill:#fbfbf9;stroke:#686e75;stroke-width:calc(1.5px / var(--scale))}
+.head{fill:#1f3fd0}
+.head.grey{fill:#686e75}
+.halo{fill:none;stroke:#1f3fd0;stroke-opacity:.35;stroke-width:calc(6px / var(--scale))}
+.hotrect{fill:rgba(31,63,208,.10);stroke:#1f3fd0;stroke-width:calc(2px / var(--scale))}
+.handle{fill:none;stroke:#1f3fd0;stroke-width:calc(2px / var(--scale))}
+.label{position:absolute;z-index:0;transform:translate(-50%,-50%) scale(calc(1 / var(--scale)));font:600 11px/1.1 system-ui,-apple-system,sans-serif;color:#1f3fd0;background:#fbfbf9;padding:2px 5px;border-radius:4px;white-space:nowrap}
+.label.grey{color:#686e75}
+.label.dim{opacity:.3}
+.toolbar{position:absolute;z-index:5;transform:translate(-50%,calc(-100% - 10px)) scale(calc(1 / var(--scale)));transform-origin:50% 100%;display:flex;gap:2px;background:#fff;border:1px solid #e2e3dd;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.14);padding:3px;font:500 12px/1 system-ui,-apple-system,sans-serif;color:#23262b;white-space:nowrap}
+.toolbar span{padding:6px 8px;border-radius:5px}
+.toolbar span:first-child{background:#1f3fd0;color:#fff}
+.toolbar .sep{width:1px;background:#e2e3dd;padding:0;margin:2px 1px}
+#meta{position:absolute;right:6px;bottom:4px;font:11px system-ui;color:#999}
+</style></head>
+<body><div id="vp"><div class="world" id="world"></div></div><div id="meta"></div>
+<script src="harness-data.js"></script>
+<script>
+const q = new URLSearchParams(location.search);
+const MODE = q.get("mode") || "proposed";
+const S = Number(q.get("scale") || 0.3);
+const OX = Number(q.get("ox") || 40), OY = Number(q.get("oy") || 170);
+const HOVER = q.get("hover"), SEL = q.get("sel"), SCREENHOVER = q.get("screen");
+const world = document.getElementById("world");
+world.style.transform = `translate(${OX}px,${OY}px) scale(${S})`;
+world.style.setProperty("--scale", S);
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
+const { screens, links, edges, BACK } = window.DATA;
+const byId = Object.fromEntries(screens.map((s) => [s.id, s]));
+let loaded = 0;
+const t0 = performance.now();
+for (const s of screens) {
+  const f = document.createElement("iframe");
+  f.className = "item"; f.setAttribute("sandbox", "allow-same-origin");
+  Object.assign(f.style, { left: s.x + "px", top: s.y + "px", width: s.w + "px", height: s.h + "px" });
+  f.srcdoc = s.html; f.dataset.id = s.id;
+  f.onload = () => { if (++loaded === screens.length) measured(); };
+  world.appendChild(f);
+}
+const hot = {}; // screen id -> key -> rect (item-local world units)
+function measured() {
+  const t1 = performance.now();
+  let n = 0;
+  for (const f of world.querySelectorAll("iframe")) {
+    const doc = f.contentDocument; const map = (hot[f.dataset.id] = {});
+    for (const e of doc.querySelectorAll("[data-hot]")) {
+      const r = e.getBoundingClientRect(); if (r.width === 0 && r.height === 0) continue;
+      const k = e.getAttribute("data-hot");
+      if (!map[k]) { map[k] = { x: r.left, y: r.top, w: r.width, h: r.height }; n++; }
+    }
+  }
+  const t2 = performance.now();
+  window.MEASURE = { screens: screens.length, hotspots: n, loadMs: Math.round(t1 - t0), measureMs: +(t2 - t1).toFixed(2) };
+  (MODE === "current" ? drawCurrent : drawProposed)();
+  document.getElementById("meta").textContent = `${MODE} · scale ${S}`;
+  window.DONE = true;
+}
+// ---------- today's arrows.tsx, ported line for line ----------
+function drawCurrent() {
+  const svg = el("svg", { class: "under" }, world);
+  const defs = el("defs", {}, svg);
+  const mk = el("marker", { id: "wire-arrowhead", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 8, markerHeight: 8, orient: "auto-start-reverse" }, defs);
+  el("path", { class: "wire-arrowhead", d: "M 0 0 L 10 5 L 0 10 z" }, mk);
+  const kept = screens.filter((s) => !s.unkept);
+  const box = (id) => { const s = byId[id]; return { x: s.x, y: s.y, w: s.w, h: s.h }; };
+  const pairs = new Set(edges.map((e) => `${e.from}>${e.to}`));
+  for (const { from, to } of edges) {
+    const a = box(from), b = box(to);
+    const both = pairs.has(`${to}>${from}`);
+    const dx = b.x + b.w / 2 - (a.x + a.w / 2), dy = b.y + b.h / 2 - (a.y + a.h / 2);
+    let x1, y1, x2, y2;
+    if (Math.abs(dx) >= Math.abs(dy)) { const right = dx >= 0; const shift = both ? (right ? -18 : 18) : 0; x1 = right ? a.x + a.w : a.x; x2 = right ? b.x : b.x + b.w; y1 = a.y + a.h / 2 + shift; y2 = b.y + b.h / 2 + shift; }
+    else { const down = dy >= 0; const shift = both ? (down ? 18 : -18) : 0; y1 = down ? a.y + a.h : a.y; y2 = down ? b.y : b.y + b.h; x1 = a.x + a.w / 2 + shift; x2 = b.x + b.w / 2 + shift; }
+    const skip = Math.abs(dx) > (a.w + b.w) / 2 + 200 && Math.abs(dy) < Math.min(a.h, b.h);
+    const lift = skip ? Math.min(240, Math.abs(dx) * 0.18) : 0;
+    const mx = (x1 + x2) / 2;
+    const d = skip ? `M ${x1} ${a.y} C ${x1} ${a.y - lift}, ${x2} ${b.y - lift}, ${x2} ${b.y}` : `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+    el("path", { class: "wire-arrow", d, "marker-end": "url(#wire-arrowhead)" }, svg);
+  }
+}
+// ---------- the proposal ----------
+const GAP = 10;          // world units between the head's tip and the target (tldraw's BOUND_ARROW_OFFSET)
+const HEAD = 9, HEADW = 8; // screen px, whatever the zoom
+const LANE0 = 44, LANE = 26; // world units: first lane above the row, and lane pitch
+const R = 18;            // corner radius, world units
+function rowsOf(list) { const byTop = [...list].sort((a, b) => a.y - b.y || a.x - b.x); const rows = []; let bottom = -Infinity; for (const it of byTop) { if (!rows.length || it.y >= bottom) { rows.push([it]); bottom = it.y + it.h; } else { rows[rows.length - 1].push(it); bottom = Math.max(bottom, it.y + it.h); } } return rows.map((r) => r.sort((a, b) => a.x - b.x)); }
+function rounded(pts) { // orthogonal polyline -> path with rounded corners
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i - 1], [cx, cy] = pts[i], [nx, ny] = pts[i + 1];
+    const l1 = Math.hypot(cx - px, cy - py), l2 = Math.hypot(nx - cx, ny - cy);
+    const r = Math.min(R, l1 / 2, l2 / 2);
+    const ax = cx - ((cx - px) / l1) * r, ay = cy - ((cy - py) / l1) * r;
+    const bx = cx + ((nx - cx) / l2) * r, by = cy + ((ny - cy) / l2) * r;
+    d += ` L ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`;
+  }
+  const [lx, ly] = pts[pts.length - 1];
+  return d + ` L ${lx} ${ly}`;
+}
+function drawProposed() {
+  const under = el("svg", { class: "under" }, world);
+  const over = el("svg", { class: "over" }, world);
+  const kept = screens.filter((s) => !s.unkept);
+  const rows = rowsOf(kept); const rowOf = {}; rows.forEach((r, i) => r.forEach((s) => (rowOf[s.id] = i)));
+  const drawn = []; const needs = [];
+  const showScreen = SCREENHOVER;
+  for (const l of links) {
+    const tab = l.rule === "tab" || (l.transition === "none" && l.rule !== "override");
+    if (l.to === BACK) continue;                                 // history, not a place — never drawn
+    if (l.to === null) { if (l.from === showScreen && l.needs) needs.push(l); continue; }
+    if (l.to === l.from) continue;
+    if (tab && l.from !== showScreen) continue;                   // chrome: only for the screen you point at
+    drawn.push({ l, kind: tab ? "tab" : l.transition === "overlay" ? "overlay" : "screen" });
+  }
+  // route
+  const lanes = []; // per row: list of occupied [x0,x1,lane]
+  const routed = [];
+  const hs = (l) => { const r = hot[l.from][l.key]; return r ? { cx: r.x + r.w / 2, cy: r.y + r.h / 2, r } : null; };
+  // adjacent first, then jumps sorted by span (short spans take low lanes)
+  const items = drawn.map((d) => { const a = byId[d.l.from], b = d.l.to ? byId[d.l.to] : null, h = hs(d.l); return { ...d, a, b, h }; }).filter((d) => d.h);
+  const between = (a, b) => kept.filter((s) => rowOf[s.id] === rowOf[a.id] && s.id !== a.id && s.id !== b.id && s.x > Math.min(a.x, b.x) && s.x < Math.max(a.x, b.x));
+  for (const d of items) d.adjacent = d.b && rowOf[d.a.id] === rowOf[d.b.id] && between(d.a, d.b).length === 0;
+  const jumps = items.filter((d) => d.b && !d.adjacent).sort((p, q2) => Math.abs(p.b.x - p.a.x) - Math.abs(q2.b.x - q2.a.x));
+  // source ports on the top edge: the hotspot's column, nudged apart
+  const tops = {};
+  for (const d of jumps) (tops[d.a.id] ??= []).push(d);
+  for (const list of Object.values(tops)) { list.sort((p, q2) => p.h.cx - q2.h.cx); let last = -Infinity; for (const d of list) { d.sx = Math.max(d.a.x + d.h.cx, last + 22); last = d.sx; } }
+  // lanes first, from a provisional entry at the target's middle (short spans take the low lanes)
+  for (const d of jumps) {
+    d.ex = d.b.x + d.b.w / 2;
+    const row = rowOf[d.a.id]; const occ = (lanes[row] ??= []);
+    const x0 = Math.min(d.sx, d.ex) - 30, x1 = Math.max(d.sx, d.ex) + 30;
+    let lane = 0; while (occ.some((o) => o.lane === lane && !(x1 < o.x0 || x0 > o.x1))) lane++;
+    occ.push({ x0, x1, lane }); d.lane = lane;
+  }
+  // then ORDER the legs on each top edge so no lane crosses another leg (the nudging step, Wybrow et al. 2009):
+  // legs whose horizontal runs left sit on the left, lowest lane outermost; legs running right sit on the right, lowest lane outermost.
+  if (!q.has("naive")) for (const scr of kept) {
+    const legs = [];
+    for (const d of jumps) {
+      if (d.a.id === scr.id) legs.push({ d, end: "s", x: d.sx, fixed: true, dir: Math.sign(d.ex - d.sx), lane: d.lane });
+      if (d.b.id === scr.id) legs.push({ d, end: "e", fixed: false, dir: Math.sign(d.sx - d.ex), lane: d.lane });
+    }
+    if (!legs.length) continue;
+    const key = (g) => (g.dir < 0 ? g.lane : 1000 - g.lane);
+    legs.sort((p, q2) => key(p) - key(q2));
+    const lo = scr.x + scr.w * 0.12, hi = scr.x + scr.w * 0.88;
+    let i = 0;
+    while (i < legs.length) {
+      if (legs[i].fixed) { i++; continue; }
+      let j = i; while (j < legs.length && !legs[j].fixed) j++;
+      const left = i > 0 ? legs[i - 1].x + 24 : lo, right = j < legs.length ? legs[j].x - 24 : hi;
+      for (let k = i; k < j; k++) legs[k].x = left + ((right - left) * (k - i + 1)) / (j - i + 1);
+      i = j;
+    }
+    for (const g of legs) if (g.end === "e") g.d.ex = g.x;
+  } else {
+    const entries = {};
+    for (const d of jumps) (entries[d.b.id] ??= []).push(d);
+    for (const [id, list] of Object.entries(entries)) { const b = byId[id]; list.sort((p, q2) => (p.a.x + p.h.cx) - (q2.a.x + q2.h.cx)); list.forEach((d, i) => (d.ex = b.x + b.w * (0.3 + (0.4 * (i + 1)) / (list.length + 1)))); }
+  }
+  for (const d of jumps) {
+    const row = rowOf[d.a.id];
+    const top = Math.min(...rows[row].map((s) => s.y));
+    const ly = top - LANE0 - d.lane * LANE;
+    d.pts = [[d.sx, d.a.y], [d.sx, ly], [d.ex, ly], [d.ex, d.b.y - GAP]];
+    d.labelAt = [(d.sx + d.ex) / 2, ly]; d.seg = Math.abs(d.ex - d.sx);
+  }
+  // count crossings between routed polylines (orthogonal segments only)
+  const segs = (pts) => pts.slice(1).map((p, i) => [pts[i], p]);
+  let crossings = 0;
+  for (let a1 = 0; a1 < jumps.length; a1++) for (let b1 = a1 + 1; b1 < jumps.length; b1++)
+    for (const [p1, p2] of segs(jumps[a1].pts)) for (const [p3, p4] of segs(jumps[b1].pts)) {
+      const h1 = p1[1] === p2[1], h2 = p3[1] === p4[1]; if (h1 === h2) continue;
+      const [H1, H2, V1, V2] = h1 ? [p1, p2, p3, p4] : [p3, p4, p1, p2];
+      const x = V1[0], y = H1[1];
+      if (x > Math.min(H1[0], H2[0]) && x < Math.max(H1[0], H2[0]) && y > Math.min(V1[1], V2[1]) && y < Math.max(V1[1], V2[1])) crossings++;
+    }
+  window.CROSSINGS = crossings;
+  // gutter arrows: straight, at the hotspot's height
+  const gut = items.filter((d) => d.adjacent);
+  const used = {};
+  for (const d of gut) {
+    const dir = Math.sign(d.b.x - d.a.x) || 1;
+    let y = d.a.y + d.h.cy;
+    y = Math.max(d.b.y + 48, Math.min(d.b.y + d.b.h - 24, y));
+    const g = `${Math.min(d.a.x, d.b.x)}`; const ys = (used[g] ??= []);
+    while (ys.some((u) => Math.abs(u - y) < 16)) y += 16; ys.push(y);
+    const x1 = dir > 0 ? d.a.x + d.a.w : d.a.x, x2 = dir > 0 ? d.b.x - GAP : d.b.x + d.b.w + GAP;
+    d.pts = [[x1, y], [x2, y]]; d.labelAt = [(x1 + x2) / 2, y]; d.seg = Math.abs(x2 - x1);
+  }
+  for (const d of items.filter((d) => !d.b)) { // missing: a short stub out of the side
+    const y = d.a.y + d.h.cy; const x1 = d.a.x + d.a.w; d.pts = [[x1, y], [x1 + 60, y]]; d.labelAt = [x1 + 60, y]; d.seg = 999; d.stub = true;
+  }
+  const focus = HOVER || SEL;
+  const keyOf = (d) => `${d.l.from}|${d.l.key}`;
+  for (const d of items) {
+    const isHot = focus && keyOf(d) === focus;
+    const dim = focus && !isHot;
+    const cls = `fa ${d.kind === "screen" ? "" : d.kind}${dim ? " dim" : ""}${isHot ? " hot" : ""}`;
+    const path = el("path", { class: cls, d: rounded(d.pts) }, under);
+    // port: where it leaves, on the source's edge
+    el("circle", { class: `port${dim ? " dim" : ""}`, cx: d.pts[0][0], cy: d.pts[0][1], r: 2.6 / S }, under);
+    // head: drawn, not a marker, so we know exactly where the tip is
+    const [px, py] = d.pts[d.pts.length - 2], [tx, ty] = d.pts[d.pts.length - 1];
+    if (d.stub) { el("circle", { class: "stubend", cx: tx, cy: ty, r: 3.5 / S }, under); }
+    else {
+      const L = Math.hypot(tx - px, ty - py), ux = (tx - px) / L, uy = (ty - py) / L;
+      const len = HEAD / S, w = HEADW / S / 2, notch = len * 0.25;
+      const bx = tx - ux * len, by = ty - uy * len;
+      const hd = `M ${tx} ${ty} L ${bx - uy * w} ${by + ux * w} L ${tx - ux * (len - notch)} ${ty - uy * (len - notch)} L ${bx + uy * w} ${by - ux * w} Z`;
+      el("path", { class: `head${d.kind === "tab" ? " grey" : ""}`, d: hd, opacity: dim ? 0.22 : 1 }, under);
+    }
+    // label: when the straight run can hold it, or when this is the one you point at
+    const text = d.stub ? `needs ${d.l.needs}` : d.l.label;
+    const need = text.length * 6.4 + 26;
+    if (d.seg * S >= need || isHot || d.stub) {
+      const lab = document.createElement("div");
+      lab.className = `label${d.kind === "tab" || d.stub ? " grey" : ""}${dim ? " dim" : ""}`;
+      lab.textContent = text;
+      let [lx, ly] = d.labelAt;
+      if (d.stub) { lx += 8 / S; lab.style.transform = `translate(0,-50%) scale(calc(1 / var(--scale)))`; lab.style.transformOrigin = "0 50%"; }
+      else if (d.seg * S < need) { ly -= 12 / S; }
+      lab.style.left = lx + "px"; lab.style.top = ly + "px";
+      world.appendChild(lab);
+      d.labelEl = [lx, ly];
+    }
+    if (isHot) {
+      const r = d.h.r; // the hotspot lights up ON the source screen (a layer above the items)
+      el("rect", { class: "hotrect", x: d.a.x + r.x - 3, y: d.a.y + r.y - 3, width: r.w + 6, height: r.h + 6, rx: 6 }, over);
+      if (d.b) el("rect", { class: "halo", x: d.b.x - 6 / S, y: d.b.y - 6 / S, width: d.b.w + 12 / S, height: d.b.h + 12 / S, rx: 10 }, under);
+      if (SEL && d.b) {
+        el("circle", { class: "handle", cx: tx - 3 / S, cy: ty, r: 9 / S }, over);
+        const tb = document.createElement("div"); tb.className = "toolbar";
+        tb.innerHTML = `<span>▶ Play from here</span><span>Go to ${d.b.title}</span><span class="sep"></span><span>Change target…</span><span>Remove</span>`;
+        const [lx, ly] = d.labelEl || d.labelAt; tb.style.left = lx + "px"; tb.style.top = (ly - 10 / S) + "px";
+        world.appendChild(tb);
+      }
+    }
+  }
+  for (const l of needs) { const r = hot[l.from][l.key]; if (!r) continue; const a = byId[l.from];
+    el("rect", { x: a.x + r.x - 3, y: a.y + r.y - 3, width: r.w + 6, height: r.h + 6, rx: 6, fill: "none", stroke: "#686e75", "stroke-width": 1.5 / S, "stroke-dasharray": `${4 / S} ${3 / S}` }, over);
+    const tag = document.createElement("div"); tag.className = "label grey"; tag.style.zIndex = 5; tag.textContent = `needs ${l.needs}`;
+    tag.style.left = (a.x + r.x + r.w / 2) + "px"; tag.style.top = (a.y + r.y - 12 / S) + "px"; world.appendChild(tag); }
+  if (showScreen) { const a = byId[showScreen]; el("rect", { class: "halo", x: a.x - 6 / S, y: a.y - 6 / S, width: a.w + 12 / S, height: a.h + 12 / S, rx: 10, "stroke-opacity": 0.18 }, under); }
+  window.ROUTED_CROSSINGS = window.CROSSINGS; window.ROUTED = items.map((d) => ({ key: keyOf(d), label: d.l.label, kind: d.kind, adjacent: !!d.adjacent, lane: d.lane, pts: d.pts.map((p) => p.map((v) => Math.round(v))) }));
+}
+</script></body></html>

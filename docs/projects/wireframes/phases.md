@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–6 are CLOSED; phase 7 (sample content) is PART-DONE — built and proved locally, the isocan.io walk waits on a promotion (23 Sep 2026).** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
+**Where we are: phases 0–6 are CLOSED; phase 7 (sample content) is PART-DONE — built and proved locally, the isocan.io walk waits on a promotion (23 Sep 2026).** **Next: wireframes phase 8** — true arrows, just the screen, finding prototypes, `/wire` in the Chat, and Porchlight's findings. Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
 
 ## Phase 0 — The catalog, drawn
 
@@ -246,3 +246,60 @@ survives `wire style`, variations and `wire prototype`.
 - **2026-09-23** — The lazy wireframes chunk grew ~92 KB (pack data), first paint unchanged. If it matters, the packs become their own chunk.
 - **2026-09-23** — Open: a flesh or restyle writes only where the spec changed, so a renderer change never reaches screens already on a canvas. A "re-render" verb is owed before renderer changes ship (phase 8's title/frame change needs it).
 - **2026-09-23** — Open: the walk canvas fleshed on isocan.io after a promotion (proof 3).
+
+## Phase 8 — From real use: true arrows, just the screen, and what people tripped on
+
+**Status: NOT STARTED.**
+
+Everything Dion raised on 23 Sep 2026 looking at the walk canvas and
+Porchlight, plus Porchlight's own `docs/isocan-notes.md`, in one phase with
+two builders split by file ownership. The arrow design is the research note
+[Flow arrows](../../research/2026-09-23-flow-arrows.md).
+
+**A · Arrows (the research's recommendation, both of its phases).**
+Orthogonal flow arrows, one per hotspot, starting at the hotspot on the
+source screen: a straight run between neighbours, longer jumps routed over
+the row on ordered lanes (no crossings), filled 9×8 px heads stopping 10 world
+units short of the target, labelled with the hotspot's words where the run
+can hold them; tab, back and missing links drawn only while a screen is
+pointed at; drawn per kept flow (the cross-flow phantom link is a bug).
+Clickable: the underlay gains the write access overlays already have (a shell
+change, measured); a selected arrow offers *Play from here* (the prototype
+opens at the source screen via a fragment), *Go to <target>*, *Change
+target…* (drag the head onto another screen) and *Remove* / *Reset* — the
+existing `wire link` override, no new op. `/wire links` in the dialog lists
+every hotspot with a target picker for keyboard use.
+
+**B · Just the screen.** A wire is the screen itself: no name strip above
+it duplicating the node's title, no phone frame drawn inside the item's frame
+(the mismatched corners) — the item's own frame is the device. Because a
+renderer change never reaches screens already on a canvas (phase 7's Open),
+`isocan wire render --all` / `/wire rerender` re-renders every wire from its
+spec as one op group.
+
+**C · Finding prototypes and the record.** A way to see which items are
+prototypes on a busy canvas — a "Prototypes" filter/highlight and a strong
+highlight on the minimap while it is hovered — and `/wire` results posted into
+the Chat as the Wire builder's message (what was made, the numbers), not only
+a popup.
+
+**D · Porchlight's findings.** A second flow placed clear of the first (no
+overlap); variations and prototypes created inside the flow's group; `wire
+link` exiting when its write lands (it took minutes), and two concurrent
+`wire link` calls both surviving (read-modify-write race); a link to a screen
+kept in another flow resolved; `wire style` a true no-op on a rerun (it
+re-versioned 48 wires); text links not coloured with a light primary below
+AA contrast; moving a DESIGN.md into a group says it changes what it governs.
+
+**Proof:**
+
+1. Tests for the routing (no crossings on the recorded flow; per-flow
+   drawing; per-hotspot starts), the menu actions mapping to `wire link`,
+   re-render as one group, placement clear of an existing flow, group
+   membership of variations and prototypes, the link race, the style no-op,
+   the contrast rule.
+2. A browser walk on a local daemon: arrows as designed, an arrow selected,
+   retargeted by drag, Play from here opening the prototype at that screen;
+   the screen-only render; the prototypes highlight and the minimap
+   highlight; `/wire` results in the Chat history.
+3. The walk canvas on isocan.io after a promotion.
