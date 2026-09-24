@@ -278,6 +278,34 @@ export declare const TEXT_COLUMN: Record<TextStyle, number>;
  */
 export declare const TEXT_COLUMN_MAX: Record<TextStyle, number>;
 /**
+ * **The largest a heading is drawn, as a multiple of the node's own words.**
+ *
+ * The stylesheet sets a text node's headings in `em` (`.item.textnode
+ * .md-view h1` at 1.5em, h2 and h3 smaller, never below 1em), so a `#` line
+ * is bigger than the words under it at EVERY step. It used to borrow the card
+ * renderer's fixed 18px, which is larger than body text at 16 and a seventh
+ * the size of it at display's 128 — a heading smaller than its own paragraph.
+ *
+ * The estimate sizes EVERY heading level at this, h1's, because the box must
+ * err large and one number is lighter in the first paint than six: an `##`
+ * gets a little more room than it draws, invisibly, since a caption has no
+ * card. What it must never do is think a heading is smaller than it draws —
+ * that is a box that crops it (lesson #94's shape) — and
+ * `packages/web/test/textheading.test.ts` holds this equal to the
+ * stylesheet's h1 and every other level at or under it.
+ */
+export declare const TEXT_HEADING_EM = 1.5;
+/**
+ * A markdown heading line — multiline, so the one pattern answers for a line
+ * and for a whole body. `#Roadmap` is an item reference, not a heading.
+ *
+ * The app's composer asks it of a whole body: its mirror measures the RAW
+ * words, where `# Plan` is one line at the node's size, and the canvas then
+ * draws it half again as large — so a composer holding a heading asks
+ * `textRefit` too, and keeps whichever box is bigger.
+ */
+export declare const TEXT_HEADING_LINE: RegExp;
+/**
  * A box for this text before anything has measured it.
  *
  * An estimate, and only ever a starting point: the app's composer commits

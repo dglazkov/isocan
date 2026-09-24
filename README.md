@@ -239,7 +239,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   their original version and preserve edits when the source changes. Inspect
   three runnable receiving, editorial and campaign references with their design
   rationale. Library creation uses groups for explicit scope; legacy canvases
-  retain previews, downloads and source editing until migrated.
+  retain previews, downloads and source editing until migrated. Right-click a
+  DESIGN.md for **Use as design system** — the canvas's, or **this group's**
+  inside a group — and **Stop using** on one that governs — the op `isocan design use`
+  sends; `design set`, `import` and `use` say what the system now governs.
 - **Useful alternatives and durable choices**: agents publish exact working
   wireframes or visual directions with a recommendation and tradeoffs. Try each,
   choose, delegate or ask for more or a specific combination. Adopting a choice
@@ -868,7 +871,7 @@ isocan gc [--all] [--dry-run] [--keep-ops N]   # compact the oplog, sweep
 isocan session start|on|work|point|move|say|end · isocan who   # presence
 isocan session on <thread> --say "…"    # picked it up; shows live in the thread
 isocan activity [who] [-n N]           # what has been happening here, newest first
-isocan design [--css|--tokens] · design set <file> · design check
+isocan design [--css|--tokens] · design set <file> · design use <item> [--off] · design check
 #   the canvas's own design system: a DESIGN.md whose front matter is
 #   typed design tokens (W3C-compatible) and whose sections are the reasoning
 isocan design direction [intent.json] [--in <group>|--item <item>] --json

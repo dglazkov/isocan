@@ -730,6 +730,11 @@ box to hold the words at the new look, and `isocan fit <item>` re-fits a
 caption to its words from scratch — the repair for one that was left a line
 short. `--size` still wins when you give it.
 
+A markdown heading inside a node scales with it: `#` is drawn at one and a
+half times the node's step (`##` and `###` a little less, never smaller than
+the words), so a `--style display` node's heading is bigger than the paragraph
+under it, and the box is sized to hold it.
+
 Markdown lines start with `-` and so do options, so a bullet given as an
 argument needs `--` first. For anything with more than one line in it, pipe it:
 
@@ -2364,6 +2369,20 @@ isocan fit <items...>                  # grow items to the size their content wa
   its ancestors, then the canvas and a linked canvas's. Legacy canvases retain
   their geometric area scope.
 
+  **A DESIGN.md already on the canvas can be chosen in place:** `isocan design
+  use <item>` makes it the system of wherever it sits — the canvas at the
+  root, its group inside one. If that scope already has a system, the item's
+  words land as a new VERSION of it (the op `design set` sends for the same
+  bytes); if not, the item itself becomes the system. `--off` stops one
+  governing and leaves the item. One op either way, so `isocan undo` takes it
+  back. People do the same from the item's right-click menu — "Use as design
+  system" (or "Use as this group's design system" inside a group) on a
+  DESIGN.md, and "Stop using as design system" on one that governs — and both surfaces
+  send the same op. `design set`, `import` and `use` then print a `note:` on
+  stderr saying what the system governs now, which groups keep their own, and
+  which one wins when two sit at one level — the same sentence `mv --in` and
+  `canvas group add/remove` print when a move changes it.
+
   `isocan design audit` parses screen styling and reports departures from each
   screen's governing system: colours, type sizes, radii and declared spacing.
   Findings include original source locations, missing references and candidate
@@ -3132,7 +3151,7 @@ on the thread before putting one on somebody else's canvas,
 `inbox [--mentions] [--new]`, `seen [--mark] [--canvas <name>]`,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
-`design [--css|--tokens] [set|check]`, `design check [--in <scope>] [--provenance]`,
+`design [--css|--tokens] [set|check]`, `design check [--in <scope>] [--provenance]`, `design use <item> [--off]`,
 `design direction [file] [--in <scope>|--item <id>]`, `design project <directory> [--in <scope>|--item <id>] [--refresh]`,
 `design reconcile <directory>`, `design recipes`, `design recipe <id> [--design|--out <directory>]`, `design audit [--item|--in|--file|--fail]`,
 `design repair <item> <file> [--from-audit <report.json>|--request <id> --review <run>] [--retry]`,

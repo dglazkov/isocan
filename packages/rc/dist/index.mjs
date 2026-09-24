@@ -38,18 +38,16 @@ function commentContextRoute(canvasId, threadId, commentId) {
 
 // packages/core/src/textnode.ts
 var TEXT_WIDTH = 320;
+var TEXT_STYLES = ["body", "heading", "title", "display"];
 var TEXT_COLUMN = {
   body: TEXT_WIDTH,
   heading: 480,
   title: 640,
   display: 880
 };
-var TEXT_COLUMN_MAX = {
-  body: TEXT_COLUMN.body * 2,
-  heading: TEXT_COLUMN.heading * 2,
-  title: TEXT_COLUMN.title * 2,
-  display: TEXT_COLUMN.display * 2
-};
+var TEXT_COLUMN_MAX = Object.fromEntries(
+  TEXT_STYLES.map((style) => [style, TEXT_COLUMN[style] * 2])
+);
 
 // packages/core/src/area.ts
 var AREA_KIND = "area";
