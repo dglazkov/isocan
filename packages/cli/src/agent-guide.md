@@ -724,6 +724,12 @@ whole point of having both — put the orientation in the big text.
 words are a command or a path, which yours often are, and `hand` when you
 are scribbling on the board rather than labelling it.
 
+Changing a node later keeps its words whole: `isocan set <item> --prop
+textStyle=title` (or `textFace=…`) and `isocan edit <item> words.md` grow the
+box to hold the words at the new look, and `isocan fit <item>` re-fits a
+caption to its words from scratch — the repair for one that was left a line
+short. `--size` still wins when you give it.
+
 Markdown lines start with `-` and so do options, so a bullet given as an
 argument needs `--` first. For anything with more than one line in it, pipe it:
 

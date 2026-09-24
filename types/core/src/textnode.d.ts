@@ -280,8 +280,9 @@ export declare const TEXT_COLUMN_MAX: Record<TextStyle, number>;
 /**
  * A box for this text before anything has measured it.
  *
- * An estimate, and only ever a starting point: the app measures what it
- * actually rendered and corrects the item, and `⇧F` re-fits at any time. It
+ * An estimate, and only ever a starting point: the app's composer commits
+ * what it measured instead, `textNodeRefit` grows the box when the words or
+ * the look change later, and `⇧F` / `isocan fit` re-fit it at any time. It
  * exists so that a node made from the CLI — where there is nothing to measure
  * with — lands at a size somebody can read rather than at a default square.
  * How it errs, and why large, is the comment above the constants.
@@ -290,3 +291,55 @@ export declare function textBox(body: string, style?: TextStyle, face?: TextFace
     width: number;
     height: number;
 };
+/**
+ * **The box a text node needs AFTER it changed — its words or its look.**
+ *
+ * `textBox` sizes a node at birth. The bug it could not see was the node's
+ * second act: an agent writes a note at body size and then promotes it with
+ * `isocan set --prop textStyle=heading`, or re-words it with `isocan edit`, or
+ * somebody picks L on the bar for a caption that already exists. The words
+ * are then drawn at the NEW size and the box is still the one measured at the
+ * OLD one — a 16px box holding 32px type, so the second line is cut in half.
+ * Reported (23 Sep 2026) as "the wrong height is used so it's always cut off".
+ *
+ * So every surface that changes a node's words or look asks this one
+ * question, with the look the node will have once the change lands. It only
+ * ever GROWS, on both axes: a box somebody dragged wider keeps its width (more
+ * room only means fewer lines, so the estimate's height still holds), and a
+ * note that got smaller does not have the canvas rearranged under it — `⇧F`
+ * and `isocan fit` are the deliberate re-fit. Null when the box already holds
+ * the words, so a caller sends nothing rather than a resize to the same size.
+ *
+ * Paper is not asked: a post-it is a square by decision, and never grows.
+ */
+export declare function textRefit(current: {
+    width: number;
+    height: number;
+}, body: string, style: TextStyle, face: TextFace): {
+    width: number;
+    height: number;
+} | null;
+/**
+ * `textRefit` asked of an ITEM, in the look it will have once `patch` lands —
+ * the form both surfaces call, so neither re-derives which properties decide
+ * the look. Null for anything that is not a caption after the change: another
+ * kind of item, or one on paper.
+ */
+export declare function textNodeRefit(item: Item, body: string, patch?: {
+    properties?: Record<string, string>;
+    removeProperties?: string[];
+}): {
+    width: number;
+    height: number;
+} | null;
+/**
+ * What "fit to content" means for a caption: the box its words need in its
+ * look, from scratch — so, unlike `textNodeRefit`, it may shrink. `⇧F` and
+ * `isocan fit` both ask this, which is how a node already stored a line short
+ * (made before `textNodeRefit` existed) is put right in one gesture from
+ * either surface. Null when it is not a caption: paper keeps its square.
+ */
+export declare function textNodeFit(item: Item, body: string): {
+    width: number;
+    height: number;
+} | null;
