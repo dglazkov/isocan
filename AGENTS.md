@@ -9,10 +9,15 @@ written for you.
 
 If you are here to **collaborate on a canvas** — address comments, build or
 edit items, park on `isocan wait` — run `isocan --agent-help` first. That is
-the protocol in full, and it lives in
-[`packages/cli/src/agent-guide.md`](packages/cli/src/agent-guide.md): shipped
-with the CLI so an upgrade upgrades the instructions too (#75). Instructions
-about using the CLI belong there, not in the skill.
+the cold start — what isocan is, the lap, and every verb on one line — with a
+list of topics; `isocan --agent-help <topic>` prints one, and `all` prints the
+lot. It lives in [`packages/cli/src/guide/start.md`](packages/cli/src/guide/start.md)
+and [`packages/cli/src/agent-guide.md`](packages/cli/src/agent-guide.md), whose
+sections `agent-guide.ts` gathers into topics: shipped with the CLI so an
+upgrade upgrades the instructions too (#75). Instructions about using the CLI
+belong there, not in the skill. The cold start has a token budget (#124,
+`packages/cli/test/agent-guide.test.ts`): new prose goes in a topic, and the
+cold start gets one line.
 
 The skill at
 [`.agents/skills/isocan-collab/SKILL.md`](.agents/skills/isocan-collab/SKILL.md)
@@ -287,10 +292,12 @@ deliberately did not.
 2. **CLI verb** — can an agent do this without a pointer? A gesture (drag,
    pinch, hover) does not need a verb, but the INTENT behind it usually does:
    dragging until edges line up became `isocan align`.
-3. **Agent guide** — `packages/cli/src/agent-guide.md` (`isocan --agent-help`)
-   is what an agent reads before it acts. A verb nobody is told about does not
-   exist. `npm test` fails if a command is missing from the quick reference
-   there.
+3. **Agent guide** — `isocan --agent-help` is what an agent reads before it
+   acts: the cold start (`packages/cli/src/guide/start.md`) and the topics it
+   indexes (`packages/cli/src/agent-guide.md`). A verb nobody is told about
+   does not exist. `npm test` fails if a command is in neither the cold start
+   nor a topic it points to, and if a top-level verb has no line in the cold
+   start's verb index.
 4. **Shared helpers in core** — if the web app and the CLI both compute
    something (a filename from a title, what kind an item is, where "aligned"
    is), the computation belongs in `@isocan/core`, not in one client.

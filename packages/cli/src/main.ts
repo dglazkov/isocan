@@ -501,7 +501,7 @@ import {
   retireStrandedIdentities,
   writeIdentity,
 } from "@isocan/api";
-import { agentGuide } from "./agent-guide.ts";
+import { agentHelp, type ModuleGuide } from "./agent-guide.ts";
 import { printDesignAudit, designRepairCapture } from "./design-audit.ts";
 import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
@@ -571,7 +571,7 @@ program
   .version(describeBuild(buildStamp()))
   .option("--json", "machine-readable JSON output (any command)")
   .option("--port <port>", "daemon port (default 4441)")
-  .option("--agent-help", "how to collaborate on a canvas as an agent: the whole protocol")
+  .option("--agent-help [topic]", "how to collaborate on a canvas as an agent: the protocol, then `--agent-help <topic>` for the rest")
   .option(
     "--canvas <ref>",
     "canvas id or title prefix (default: this directory's binding, then `isocan use --home`)",
@@ -599,9 +599,10 @@ program
     "after",
     `
 Agents, start here:
-  \`isocan --agent-help\` is the collaboration protocol in full — naming
-  yourself, appearing on the canvas, answering comments, parking on \`wait\`.
-  It ships inside this build, so it always describes the commands below.
+  \`isocan --agent-help\` is the collaboration protocol — naming yourself,
+  appearing on the canvas, answering comments, parking on \`wait\` — with
+  every verb on one line and a list of topics; \`--agent-help <topic>\` prints
+  one. It ships inside this build, so it always describes the commands below.
 
 The system:
   A local daemon owns the state; this CLI and the web app are equal clients.
@@ -14374,9 +14375,23 @@ trash
 // `--agent-help` is answered before commander parses anything, so it means the
 // same thing wherever it is typed (`isocan --agent-help`, `isocan comment
 // --agent-help`): stop, and print how to work here. Nothing above this line
-// has run anything — the definitions are registrations only.
-if (process.argv.slice(2).includes("--agent-help")) {
-  console.log(agentGuide([...CLI_MODULES.map((m) => m.guide), ...runtimeModules.flatMap((m) => (m.guide ? [m.guide] : []))]));
+// has run anything — the definitions are registrations only. The word after
+// it, when there is one, is a topic or a verb (`--agent-help sharing`,
+// `--agent-help=wait`, `--agent-help all`) — see `agent-guide.ts`.
+const agentHelpAt = process.argv.slice(2).findIndex((a) => a === "--agent-help" || a.startsWith("--agent-help="));
+if (agentHelpAt >= 0) {
+  const argv = process.argv.slice(2);
+  const flag = argv[agentHelpAt]!;
+  const next = argv[agentHelpAt + 1];
+  const topic = flag.includes("=") ? flag.slice(flag.indexOf("=") + 1) : next && !next.startsWith("-") ? next : undefined;
+  const modules: ModuleGuide[] = [
+    ...CLI_MODULES.map((m) => ({ name: m.core.name, guide: m.guide })),
+    ...runtimeModules.flatMap((m) => (m.guide ? [{ name: m.name, guide: m.guide }] : [])),
+  ];
+  const answer = agentHelp(topic, modules);
+  process.stdout.write(answer.out);
+  process.stderr.write(answer.err);
+  process.exitCode = answer.code;
 } else {
   program.parseAsync().catch((err: unknown) => {
     console.error(`error: ${(err as Error).message}`);

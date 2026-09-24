@@ -192,7 +192,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/managed.test.ts", secs: 6.0, why: "21 cases and under four seconds, because only the two that need a server spawn one" },
   { file: "packages/cli/test/operator-end.test.ts", secs: 3.0, why: "a single case" },
   { file: "packages/cli/test/browse.test.ts", secs: 2.1, why: "two cases, one command each" },
-  { file: "packages/cli/test/agent-help.test.ts", secs: 1.6, why: "four cases; the guard that a verb reached the agent guide, and the one this file's header has always held up as the cheap walk" },
+  { file: "packages/cli/test/agent-help.test.ts", secs: 5.4, why: "six cases, a dozen spawns that touch no daemon — the cold start, a topic, `all`, and every top-level verb read from `--help` (#124); measured 24 September on a loaded machine. The guard that a verb reached the agent guide, and the one this file's header has always held up as the cheap walk" },
   { file: "test/roadmap.test.ts", secs: 1.7, why: "spawns `doc status` three times, not once per document — deliberately, and it says so" },
   { file: "test/deeplist.test.ts", secs: 0.2, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },

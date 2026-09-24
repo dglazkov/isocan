@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const guideFile = fileURLToPath(new URL("../src/agent-guide.md", import.meta.url));
+const startFile = fileURLToPath(new URL("../src/guide/start.md", import.meta.url));
 
 async function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   // A home nothing has ever run in: no identity, no config, no daemon — and
@@ -55,11 +56,53 @@ async function isocan(...args: string[]): Promise<{ code: number; stdout: string
 }
 
 describe("isocan --agent-help", () => {
-  it("prints the guide the CLI ships, in full", async () => {
-    const guide = await fs.readFile(guideFile, "utf8");
+  it("prints the cold start the CLI ships, and an index of the rest", async () => {
+    const start = await fs.readFile(startFile, "utf8");
     const { code, stdout } = await isocan("--agent-help");
     expect(code).toBe(0);
-    expect(stdout).toContain(guide.trimEnd());
+    expect(stdout).toContain(start.trim());
+    expect(stdout).toContain("## Topics");
+    // The cold start is a fraction of the guide (#124), not the guide.
+    expect(stdout).not.toContain("## Practices that earn trust");
+  });
+
+  it("prints everything with `all`, and one topic by name", async () => {
+    const guide = await fs.readFile(guideFile, "utf8");
+    const all = await isocan("--agent-help", "all");
+    expect(all.code).toBe(0);
+    for (const heading of guide.match(/^## .+$/gm) ?? []) expect(all.stdout).toContain(heading);
+
+    const one = await isocan("--agent-help", "sharing");
+    expect(one.code).toBe(0);
+    expect(one.stdout).toContain("## Sharing a canvas");
+    expect(one.stdout.length).toBeLessThan(all.stdout.length / 4);
+
+    const none = await isocan("--agent-help", "no-such-topic");
+    expect(none.code).toBe(2);
+    expect(none.stderr).toContain("topics: protocol");
+  });
+
+  it("names every top-level verb `--help` lists, in the cold start itself", async () => {
+    /**
+     * `surface.test.ts` holds that every registered command is findable —
+     * in the cold start or a topic it points to. This is the stronger half
+     * for the verbs an agent sees first: every top-level door is on a line of
+     * the cold start's index, so no family is one topic-lookup away from
+     * being invisible. Read from `--help`, which knows which commands are
+     * top-level; the source parse in `surface.test.ts` does not.
+     */
+    const PLUMBING = new Set(["serve", "stop", "restart", "status", "upgrade", "help", "gc", "mcp"]);
+    const help = (await isocan("--help")).stdout;
+    const block = help.slice(help.indexOf("Commands:"), help.indexOf("Agents, start here:"));
+    const verbs = [...block.matchAll(/^ {2}([a-z][a-z-]*)/gm)].map((m) => m[1]!);
+    expect(verbs.length).toBeGreaterThan(50);
+    const cold = (await isocan("--agent-help")).stdout;
+    const named = new Set([...cold.matchAll(/`([a-z][a-z-]*)/g)].map((m) => m[1]!));
+    // `browse` and `versions` are older spellings (`add --as site`,
+    // `version ls`) — taught once, in topic `reference`, not in the cold start.
+    const older = new Set(["browse", "versions"]);
+    const missing = verbs.filter((v) => !PLUMBING.has(v) && !older.has(v) && !named.has(v));
+    expect(missing, `add a line for these to packages/cli/src/guide/start.md`).toEqual([]);
   });
 
   it("means the same thing after a subcommand, and runs nothing else", async () => {

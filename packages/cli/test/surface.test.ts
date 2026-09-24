@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { coldStart, guideTopics } from "../src/agent-guide.ts";
+import { CLI_MODULES } from "../src/modules.ts";
 
 /**
  * The house rule with teeth (see AGENTS.md, "Done means done on both
@@ -123,16 +125,33 @@ function registeredCommands(): string[] {
   return [...names].sort();
 }
 
-function wholeGuide(): string {
-  const sections = moduleDirs()
-    .map((dir) => path.join(dir, "agent-guide.md"))
-    .filter((f) => existsSync(f))
-    .map((f) => readFileSync(f, "utf8"));
-  return [readFileSync(path.join(repo, "packages/cli/src/agent-guide.md"), "utf8"), ...sections].join("\n\n");
+/**
+ * **What an agent can reach from the cold start** (#124). `isocan
+ * --agent-help` no longer prints everything: it prints `guide/start.md` — one
+ * line per verb family — and an index of topics, each one a call away. So a
+ * verb counts as findable when the cold start names it, or when a topic the
+ * cold start's index names does. The index is read out of the printed cold
+ * start rather than taken from the topic list, so a topic the index stopped
+ * naming stops counting — which is the rule: a topic nobody is told about
+ * does not exist either.
+ *
+ * The modules are the ones this build carries (`CLI_MODULES`); each is a topic
+ * of its own, printed and indexed only while it is loaded.
+ */
+const moduleGuides = () => CLI_MODULES.map((m) => ({ name: m.core.name, guide: m.guide }));
+
+const indexNames = (cold: string, slug: string) =>
+  new RegExp(`^- \`${slug}\` — `, "m").test(cold.slice(cold.indexOf("## Topics")));
+
+function reachableGuide(): { cold: string; reachable: string } {
+  const topics = guideTopics(moduleGuides());
+  const cold = coldStart(topics);
+  const named = topics.filter((t) => indexNames(cold, t.slug));
+  return { cold, reachable: [cold, ...named.map((t) => t.text)].join("\n\n") };
 }
 
 describe("the agent-facing surface", () => {
-  const guide = wholeGuide();
+  const { cold, reachable: guide } = reachableGuide();
   const skill = readFileSync(path.join(repo, ".agents/skills/isocan-collab/SKILL.md"), "utf8");
   const commands = registeredCommands();
   const documented = documentedVerbs(guide);
@@ -145,9 +164,19 @@ describe("the agent-facing surface", () => {
     expect(commands.length).toBeGreaterThan(20);
   });
 
-  it("names every canvas verb in the guide agents read", () => {
+  it("names every canvas verb in the cold start, or in a topic it points to", () => {
     const missing = commands.filter((name) => !PLUMBING.has(name) && !documented.has(name));
-    expect(missing, `add these to the guide's quick reference: ${missing.join(", ")}`).toEqual([]);
+    expect(
+      missing,
+      `add these to the cold start's verb index (packages/cli/src/guide/start.md) or to a topic: ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("points at every topic from the cold start", () => {
+    // The index is generated, so this guards the generator: if it ever
+    // printed a subset, the verbs in the topics it dropped would stop being
+    // findable and the assertion above would quietly stop counting them.
+    for (const t of guideTopics(moduleGuides())) expect(indexNames(cold, t.slug), t.slug).toBe(true);
   });
 
   it("would notice a verb the guide only mentions in a sentence", () => {
@@ -163,8 +192,9 @@ describe("the agent-facing surface", () => {
 
   it("tells agents that a gap between the surfaces is a bug", () => {
     // The guide has to say this out loud: an agent that finds it cannot do
-    // something a person can should report it, not work around it.
-    expect(guide).toMatch(/bug in isocan/i);
+    // something a person can should report it, not work around it. In the
+    // cold start, since #124: it is a rule for the first lap, not a topic.
+    expect(cold).toMatch(/bug in\s+isocan/i);
   });
 
   it("the skill sends agents to the guide instead of repeating it", () => {

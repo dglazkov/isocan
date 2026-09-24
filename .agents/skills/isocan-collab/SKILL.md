@@ -14,8 +14,9 @@ renders as a named cursor.
 follow what it says:
 
 ```sh
-isocan --agent-help     # the whole protocol: your name, presence, the lap,
-                        # parking on `wait`, the practices that earn trust
+isocan --agent-help     # the protocol: your name, presence, the lap, parking
+                        # on `wait`, every verb — and the topics it lists
+isocan --agent-help <topic>   # one of those topics in full
 ```
 
 It ships inside the CLI, so it describes the build you are actually running —

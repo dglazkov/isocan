@@ -43,9 +43,10 @@ scratch
 # would otherwise be invalidated by a typo fix in a markdown file.
 #
 # NOT excluded, deliberately: package.json (the version /healthz reports),
-# the tsconfigs, and packages/cli/src/agent-guide.md — the CLI's own test
-# reads that file, and a shipped daemon that could not produce it would be a
-# daemon whose --agent-help is a lie.
+# the tsconfigs, and packages/cli/src/agent-guide.md with the cold start in
+# packages/cli/src/guide/ — the CLI's own test reads those files, and a
+# shipped daemon that could not produce them would be a daemon whose
+# --agent-help is a lie.
 LICENSE
 README.md
 AGENTS.md

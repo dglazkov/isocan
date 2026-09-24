@@ -109,10 +109,12 @@ describe("the release CLI is a bundle", () => {
 
       // The guides are inlined, so `--agent-help` is whole without a single
       // `.md` file being in the tree — the base guide and every module's.
-      const guide = run("--agent-help");
+      const guide = run("--agent-help", "all");
       expect(guide.length).toBeGreaterThan(100_000);
       expect(guide).toContain("isocan wait");
-      expect(guide).toContain("mindmap");
+      expect(guide).toContain("Mind maps");
+      // And the cold start (#124) indexes the module topics it can print.
+      expect(run("--agent-help")).toContain("- `mindmap` — ");
 
       // A module verb is registered and answers, which is the other half of
       // "the modules survived the bundling": `map` is the mind map's, `sticker`

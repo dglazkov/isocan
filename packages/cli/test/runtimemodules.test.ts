@@ -104,8 +104,10 @@ describe("isocan module", () => {
     expect(hello.code, hello.stderr).toBe(0);
     expect(hello.stdout).toContain("hi from a module; kinds here:");
     expect(hello.stdout).toContain("greeting");
-    const guide = await isocan("--agent-help");
-    expect(guide.stdout).toContain("## Hello");
+    // A module is a topic (#124): named in the cold start's index, printed
+    // in full by its name.
+    expect((await isocan("--agent-help")).stdout).toContain("- `hello` — Hello");
+    expect((await isocan("--agent-help", "hello")).stdout).toContain("## Hello");
     const rows = await json("module", "ls");
     expect(rows).toContainEqual({ name: "@acme/hello", version: "1.2.0", refused: null });
     expect(rows.some((r: { version: string }) => r.version === "built in")).toBe(true);
@@ -113,7 +115,7 @@ describe("isocan module", () => {
     const removed = await json("module", "rm", "hello");
     expect(removed).toEqual({ removed: "hello" });
     expect((await isocan("hello")).code).not.toBe(0);
-    expect((await isocan("--agent-help")).stdout).not.toContain("## Hello");
+    expect((await isocan("--agent-help", "all")).stdout).not.toContain("## Hello");
   });
 
   it("refuses a module built for another isocan, at add and in the list", async () => {
