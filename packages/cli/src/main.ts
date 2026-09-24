@@ -13059,8 +13059,9 @@ interface RcShared {
    * a module.
    */
   state: RoomState;
-  /** Whether arrivals are said in the Chat at all this run — false under
-   * `--no-announce`; `config.json`'s `rcAnnounce` narrows it per room. */
+  /** Whether `--announce` asked for arrivals in the Chat for every agent this
+   * run; otherwise `config.json`'s `rcAnnounce` decides per room (off when
+   * absent). */
   announce: boolean;
   upgrade: { upgrading: boolean; upgraded: string | null };
   standDowns: (() => Promise<void>)[];
@@ -13093,7 +13094,7 @@ rcCommand
   .option("--sandbox", "fence every adapter: its own directory, ~/.isocan, /tmp, this daemon and its harness's API")
   .option("--codex-sandbox", "opt in to Codex tool sandboxing; exact daemon host and configured domains, no escalation")
   .option("--unsandboxed", "run adapters with your own reach, overriding config.json's sandbox")
-  .option("--no-announce", "say nothing in the Chat when an agent arrives, comes back or steps away (config.json's rcAnnounce: false, always)")
+  .option("--announce", "also say in the Chat when an agent arrives, comes back or steps away (config.json's rcAnnounce: true, always)")
   .action(
   run(async (opts: { all?: boolean; defaultHarness?: string; sandbox?: boolean; unsandboxed?: boolean; codexSandbox?: boolean; announce?: boolean }, cmd: Command) => {
     const ctx = await ctxOf(cmd);
@@ -13143,7 +13144,7 @@ rcCommand
       sandbox: fence,
       codexSandbox: nativeCodex,
       state: rollMemory(ctx.home, mapState()),
-      announce: opts.announce !== false,
+      announce: opts.announce === true,
       upgrade: { upgrading: false, upgraded: null },
       standDowns: [],
     };

@@ -14,6 +14,8 @@ const IdentityMenu = lazy(() => import("./IdentityMenu.tsx").then((m) => ({ defa
  * never open, and it was riding in the entry chunk on every visit.
  */
 const ShareDialog = lazy(() => import("./ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })));
+// Who just showed up — lazy, so a first visit downloads none of it (`lib/arrivals.ts`).
+const ArrivalToasts = lazy(() => import("./ArrivalToasts.tsx"));
 import { ShareGlyph } from "./Glyphs.tsx";
 import { useCanEdit } from "../lib/capability.ts";
 
@@ -125,6 +127,9 @@ export function CanvasPresence({
           handle for being someone else. */}
       <div className="identity-anchor" ref={identityRef}>
         <Presence actor={actor} />
+        <Suspense fallback={null}>
+          <ArrivalToasts actor={actor} />
+        </Suspense>
         {identityOpen && (
           <div className="identity-popover">
             <Suspense fallback={null}>

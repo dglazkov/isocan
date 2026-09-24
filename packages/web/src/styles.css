@@ -632,6 +632,40 @@ img { height: auto; }
 /* The menu behind your own face (and behind your name on the canvas list):
    rename in place, return as someone this browser already knows, or leave. */
 .identity-anchor { position: relative; display: flex; align-items: center; }
+/* **Who just showed up** (`ArrivalToasts` — not `.arrival-notice`, which is
+   about a pass): a small note hung under the presence pile, right-aligned to
+   it, that fades on its own. Toast layer, so a peek card opened later sits
+   under it only while it lasts; not a click target except for its ×. */
+.joined-toasts {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: var(--z-toast);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  pointer-events: none;
+}
+.joined-toast {
+  display: flex; align-items: center; gap: 8px; max-width: 320px; white-space: nowrap;
+  padding: 6px 6px 6px 8px; font-size: 12px; line-height: 1.3; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: var(--shadow-pop); pointer-events: auto;
+  animation: joined-life 5s ease-out forwards;
+}
+.joined-toast .face-mark { width: 22px; height: 22px; font-size: 12px; flex: none; }
+.joined-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.joined-gate { color: var(--ink-muted); }
+.joined-close {
+  flex: none; width: 20px; height: 20px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--ink-muted); cursor: pointer; line-height: 1;
+}
+.joined-close:hover { background: var(--chip-hover); color: var(--ink); }
+/* In, hold, and fade over the last second — the component removes it at 5s. */
+@keyframes joined-life {
+  0% { opacity: 0; transform: translateY(-4px); }
+  6% { opacity: 1; transform: none; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .joined-toast { animation: none; }
+}
 .identity-popover {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: var(--z-popover);
   width: 260px; padding: 12px;

@@ -1256,12 +1256,19 @@ The rc announces its policy with its hold, so the tray and `isocan who` say
 offered to the rc's owner alone. Only the owner's word widens: a gate
 somebody else wrote into the enrolment is set aside, and said.
 
-**A standing agent says when it arrives.** When an `isocan rc` takes up an
-agent on a canvas, the agent posts one line in the Chat in its own name —
-*"Percy is here — answering a mention or the Chat; listens only to Nico."* —
-once its first hold is answering; *is back* after more than five minutes
-away, and *stepped away* when the rc is stopped on purpose. A flapping
-connection or a quick restart says nothing. The lines are records, so they
-summon nobody, and no agent answers another's hello. `isocan rc
---no-announce`, or `rcAnnounce` in `~/.isocan/config.json` (`false`, or a list
-of agent names and canvas ids), keeps it quiet.
+**You see an agent arrive.** When an agent shows up on the canvas you are
+looking at — an `isocan rc` starts answering for it, or its session appears —
+a small note drops in under the presence pile, top right: *"Percy joined ·
+listens only to you (Nico)"*, or *"Percy is back"* after more than five
+minutes away, and fades after a few seconds. It is read from the presence
+the page already has; nothing is written. Agents only, never yourself, and
+never for whoever was already here when you opened the canvas. A flapping
+connection says nothing.
+
+If you want it in the Chat as well, as history, `isocan rc --announce` (or
+`rcAnnounce` in `~/.isocan/config.json`: `true`, or a list of agent names and
+canvas ids) has the agent post one line in its own name — *"Percy is here —
+answering a mention or the Chat; listens only to Nico."*, *is back* after
+five minutes away, *stepped away* on a deliberate stop. Off by default. The
+lines are records, so they summon nobody, and no agent answers another's
+hello.

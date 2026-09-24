@@ -6,8 +6,8 @@ import { mapState } from "@isocan/rc";
 import { announceRule, rollMemory } from "../src/rc.ts";
 
 /**
- * **The laptop's half of the roll call**: which agents stay quiet
- * (`--no-announce`, `config.json`'s `rcAnnounce`), and the `seen:` memory that
+ * **The laptop's half of the roll call**: which agents say it in the Chat
+ * (`--announce`, `config.json`'s `rcAnnounce`), and the `seen:` memory that
  * makes an rc restarted inside five minutes say nothing.
  */
 let home: string;
@@ -21,21 +21,21 @@ afterEach(async () => {
 const acme = { id: "act_acme", name: "Acme helper" };
 const other = { id: "act_other", name: "Wren" };
 
-describe("who stays quiet in the Chat", () => {
-  it("announces by default, and --no-announce or rcAnnounce: false turns it off", () => {
-    expect(announceRule(undefined, true, "prj_acme")?.(acme)).toBe(true);
+describe("who says it in the Chat", () => {
+  it("says nothing by default; --announce or rcAnnounce: true turns it on", () => {
     expect(announceRule(undefined, false, "prj_acme")).toBeUndefined();
-    expect(announceRule(false, true, "prj_acme")).toBeUndefined();
-    expect(announceRule(true, true, "prj_acme")?.(acme)).toBe(true);
+    expect(announceRule(false, false, "prj_acme")).toBeUndefined();
+    expect(announceRule(undefined, true, "prj_acme")?.(acme)).toBe(true);
+    expect(announceRule(true, false, "prj_acme")?.(acme)).toBe(true);
   });
 
-  it("a list names agents (by name or id) and canvases that stay quiet", () => {
-    const rule = announceRule(["acme helper", "act_other"], true, "prj_acme")!;
-    expect(rule(acme)).toBe(false);
-    expect(rule(other)).toBe(false);
-    expect(rule({ id: "act_third", name: "Finch" })).toBe(true);
-    expect(announceRule(["prj_acme"], true, "prj_acme")).toBeUndefined();
-    expect(announceRule(["prj_acme"], true, "prj_board")?.(acme)).toBe(true);
+  it("a list names the agents (by name or id) and canvases that announce", () => {
+    const rule = announceRule(["acme helper", "act_other"], false, "prj_acme")!;
+    expect(rule(acme)).toBe(true);
+    expect(rule(other)).toBe(true);
+    expect(rule({ id: "act_third", name: "Finch" })).toBe(false);
+    expect(announceRule(["prj_acme"], false, "prj_acme")?.({ id: "act_third", name: "Finch" })).toBe(true);
+    expect(announceRule(["prj_acme"], false, "prj_board")?.(acme)).toBe(false);
   });
 });
 

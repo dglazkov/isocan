@@ -233,8 +233,8 @@ export interface RoomDeps {
    * **Whether this agent's arrivals are said in the Chat** — the roll call
    * (`roll.ts` in core): "Percy is here", "Percy is back", and "Percy
    * stepped away" when the room stops on purpose. Absent: never, so a host
-   * opts in; the laptop's `isocan rc` does unless `--no-announce` or
-   * `config.json`'s `rcAnnounce` says otherwise. When the host persists
+   * opts in; the laptop's `isocan rc` does only under `--announce` or
+   * `config.json`'s `rcAnnounce`. When the host persists
    * `state`, the `seen:` keys are what make a restart within the window quiet.
    */
   announce?: (agent: Actor) => boolean;

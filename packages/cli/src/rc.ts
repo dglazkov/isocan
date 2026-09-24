@@ -224,19 +224,25 @@ export function rollMemory(home: string, inner: RoomState): RoomState {
 }
 
 /**
- * **Who stays quiet in the Chat** — `config.json`'s `rcAnnounce`: `false`
- * turns every arrival line off on this machine, and a list names the agents
- * (by name or actor id) and canvases (by id) that stay quiet, for a person who
- * wants Percy announced everywhere but on the board they present from.
- * `isocan rc --no-announce` is the same `false` for one run.
+ * **Who says it in the Chat — nobody, unless asked** (`config.json`'s
+ * `rcAnnounce`, and `isocan rc --announce` for one run).
+ *
+ * On by default for a day (24 Sep 2026), then off: a Chat line is kept
+ * history, and "Percy is here" read a week later is noise taking the space a
+ * conversation wanted. The web says an arrival now, as a toast by the
+ * presence pile that fades (`ArrivalToasts`), derived from presence and
+ * written nowhere. The Chat line stays for whoever wants a record of it:
+ * `--announce` or `rcAnnounce: true` for every agent and canvas, or a list of
+ * agent names/ids and canvas ids for just those.
  */
 export function announceRule(
   config: boolean | string[] | undefined,
   flag: boolean,
   canvasId: string,
 ): ((agent: Actor) => boolean) | undefined {
-  if (!flag || config === false) return undefined;
-  const quiet = new Set(Array.isArray(config) ? config.map((v) => v.toLowerCase()) : []);
-  if (quiet.has(canvasId.toLowerCase())) return undefined;
-  return (agent) => !quiet.has(agent.name.toLowerCase()) && !quiet.has(agent.id.toLowerCase());
+  if (flag || config === true) return () => true;
+  if (!Array.isArray(config)) return undefined;
+  const named = new Set(config.map((v) => v.toLowerCase()));
+  if (named.has(canvasId.toLowerCase())) return () => true;
+  return (agent) => named.has(agent.name.toLowerCase()) || named.has(agent.id.toLowerCase());
 }
