@@ -191,12 +191,12 @@ export function splitSections(markdown: string): { preamble: string; sections: G
 
 /** A module's guide, with the name `--agent-help <slug>` finds it by. */
 export interface ModuleGuide {
-  /** The package name — `@isocan/mindmap`, `@acme/hello`. */
+  /** The package name — `@acme/hello`. */
   name: string;
   guide: string;
 }
 
-/** `@isocan/mindmap` → `mindmap`: the last segment of a package name. */
+/** `@acme/hello` → `hello`: the last segment of a package name. */
 export const moduleSlug = (name: string): string => name.split("/").pop()!.toLowerCase();
 
 /**
