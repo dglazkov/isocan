@@ -89,6 +89,13 @@ export interface CoreModule {
     /** Marks on items, each a property — drawn on the item, toggled from its menu and a key. */
     marks?: readonly ModuleMark[];
     /**
+     * **Items worth finding on a busy canvas** (wireframes phase 8): properties
+     * whose presence the minimap lights up strongly while a pointer is on it —
+     * a prototype among forty screens. Data, like `marks`: the shell tests the
+     * property and never meets the module.
+     */
+    spotlights?: readonly string[];
+    /**
      * **Slash commands** (phase 4): instructions an agent carries out, merged
      * under the built-ins and the home's own — a third source, `module`, that
      * is there while the module is and gone when it is not. Text, like every
@@ -205,6 +212,8 @@ export declare function moduleEdges(canvas: CanvasContents): ModuleEdge[];
 export declare function moduleKinds(): ModuleKind[];
 /** Every mark every loaded module offers. */
 export declare function moduleMarks(): ModuleMark[];
+/** Does a loaded module want this item found — does it carry one of their `spotlights`? */
+export declare function spotlit(item: Item): boolean;
 /** The module kind that owns a mime, if a loaded module claims it. */
 export declare function moduleKindOf(mime: string): ModuleKind | null;
 /**
@@ -253,10 +262,18 @@ export declare function moduleKindOf(mime: string): ModuleKind | null;
  * ## Who gets it
  *
  * The slots a person interacts with: overlays, inspectors and pages.
- * Underlays and renderers DRAW, and nothing has needed to write from one yet
- * — so they do not get it, and the day a module needs that it is a review
- * question rather than a private import, which is the rule `CliHost` already
- * carries and the reason this interface exists at all.
+ * Renderers DRAW, and nothing has needed to write from one yet — so they do
+ * not get it, and the day a module needs that it is a review question rather
+ * than a private import, which is the rule `CliHost` already carries and the
+ * reason this interface exists at all.
+ *
+ * **Underlays asked, on 23 Sep 2026, and got it** (wireframes phase 8,
+ * research *Flow arrows*). The arrows between kept screens became something
+ * a person clicks: select one, drag its head onto another screen, remove it.
+ * Every one of those writes is the `item.update` that `isocan wire link`
+ * already sends, so the host adds no authority — it only lets the arrow make
+ * the write the terminal could. `UnderlayFacts.host` is this object, with
+ * `canEdit` beside it so a reader is never offered a write the door refuses.
  */
 export interface WebHost {
     /** Sent as the viewer, through the door the palette already uses. One
@@ -361,6 +378,24 @@ export interface UnderlayFacts {
      * the shell per hash, so asking every render costs one fetch per version.
      */
     readText?: ((blobHash: string) => Promise<string>) | undefined;
+    /**
+     * **Writing from under the work** (wireframes phase 8) — see `WebHost`'s
+     * "Who gets it". Absent where the shell has no viewer to write as.
+     */
+    host?: WebHost | undefined;
+    /** Whether the viewer may write here: a reader can still select, play and go to. */
+    canEdit?: boolean | undefined;
+    /** The scrubber's past is on screen: draw, but offer nothing to click. */
+    past?: boolean | undefined;
+    /**
+     * **Open an item full screen, at an anchor** (wireframes phase 8, *Play
+     * from here*). The anchor becomes the fragment on the item's frame — the
+     * frame is a blob address, so a fragment costs no fetch and no cache — and
+     * the item's own document decides what it means: a prototype opens at the
+     * screen it names. The route carries it as `?at=` (never the route's own
+     * `#`, which is where a pass rides), so the address bar holds the exact view.
+     */
+    openItem?: ((itemId: string, anchor?: string) => void) | undefined;
 }
 /**
  * **A palette action a module adds**, as data over facts: the shell reads
@@ -391,6 +426,8 @@ export interface ModuleAction {
      * read-only canvas too, and the dialog decides what it can do there.
      */
     opens?: string;
+    /** With `opens`: the words the dialog opens with, as if typed after its command (`/wire prototypes`). */
+    args?: string;
 }
 /**
  * **What a dialog is handed** (proposed: `dialogs`, 11 Sep 2026).
