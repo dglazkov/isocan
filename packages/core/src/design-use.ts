@@ -48,7 +48,7 @@ export interface DesignUse {
  * is in the web's entry chunk, and anything added to it rides along even when
  * only a lazy chunk calls it.
  */
-export function isDesignDocument(item: Item): boolean {
+function isDesignDocument(item: Item): boolean {
   const kind = item.properties.kind;
   if (kind === "text" || kind === "group") return false;
   const current = item.versions.find((v) => v.id === item.currentVersionId);
@@ -65,7 +65,7 @@ export function isDesignFile(item: Item): boolean {
 /** The patch that stops an item governing: every property that made it one
  *  comes off, and the item and its words stay. `removeProperties`, because
  *  `properties` merges. */
-export function designSystemRemoval(): { removeProperties: string[] } {
+function designSystemRemoval(): { removeProperties: string[] } {
   return { removeProperties: Object.keys(designSystemProperties()) };
 }
 

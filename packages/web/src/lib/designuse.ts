@@ -36,7 +36,7 @@ export async function chooseDesignSystem(
 }
 
 /** What the menu says it did — the scope in the words the CLI's note uses. */
-export function designUseNotice(title: string, on: boolean, use: DesignUse): string {
+function designUseNotice(title: string, on: boolean, use: DesignUse): string {
   const where = use.scope ? `only the group “${use.scope.title}”` : "the whole canvas";
   if (!on) return `“${title}” no longer governs ${where}`;
   // Two items are usually both called DESIGN.md, so the one you chose is "this one".
