@@ -1,5 +1,5 @@
 import type {
-  Paper, Actor, Placement } from "@isocan/core";
+  Paper, Actor, Item, Placement } from "@isocan/core";
 import {
   TEXT_FACE_PROP,
   TEXT_FILENAME,
@@ -10,6 +10,7 @@ import {
   newItemId,
   newVersionId,
   textBox,
+  textNodeRefit,
   textTitle,
   type TextFace,
   type TextStyle,
@@ -215,10 +216,11 @@ function lookPatch(
  * chosen, and it is one undo step of its own — the same shape a resize or a
  * move has. The words, if they change, are a separate step when they commit.
  *
- * `box` is for the one restyle that changes the node's SHAPE: a caption
+ * `box` is for the restyles that change the node's SHAPE: a caption
  * putting paper on becomes a square, because a 320×40 post-it is a caption
- * with a background (`core/textnode.ts`). It rides in the same group, so
- * "make it a note" is still one ⌘Z.
+ * with a background (`core/textnode.ts`); and a caption going up a step or
+ * to a wider face grows to hold its words (`restyledTextBox`). It rides in
+ * the same group, so either is still one ⌘Z.
  */
 export async function restyleTextNode(
   canvasId: string,
@@ -234,6 +236,29 @@ export async function restyleTextNode(
   if (box) {
     await sendEchoed(canvasId, actor, { type: "item.resize", itemId, width: box.width, height: box.height }, group);
   }
+}
+
+/**
+ * **The box a caption needs once a new step or face lands on it** — core's
+ * `textNodeRefit`, asked with the look patch this file writes, so the bar and
+ * `isocan set --prop textStyle=…` grow a node by one computation.
+ *
+ * Picking L on a caption that exists used to land the step and keep the box
+ * measured at S: the composer grew while it was open, but closing it with
+ * the words unchanged sent nothing, and the node was left drawing 64px type
+ * in a 16px box. `box` is the node's box as the composer holds it; null when
+ * it already holds the words, or when the node is (or is becoming) paper,
+ * whose square is decided elsewhere.
+ */
+export function restyledTextBox(
+  item: Item,
+  box: { width: number; height: number },
+  body: string,
+  style: TextStyle,
+  face: TextFace,
+  paper: Paper | null,
+): { width: number; height: number } | null {
+  return textNodeRefit({ ...item, ...box }, body, lookPatch(style, face, paper));
 }
 
 /** What committing a composer should actually do. */

@@ -18,10 +18,10 @@ import {
   PAPER_SIZE,
 } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
-import { setNotice } from "../stores/canvasStore.ts";
+import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { creationDestination, QueuedItemError } from "../lib/groupplacement.ts";
 import { groupsEnabled } from "../lib/canvasgroups.ts";
-import { addTextNode, restyleTextNode, reviseTextNode, textCommit } from "../lib/text.ts";
+import { addTextNode, restyleTextNode, restyledTextBox, reviseTextNode, textCommit } from "../lib/text.ts";
 
 /**
  * The Text tool's one moment: a textarea sitting in world space exactly where
@@ -258,17 +258,25 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     // A caption putting paper ON takes the square, unless it is already
     // bigger: a 320×40 post-it is a caption with a background. Taking paper
     // OFF keeps the box; ⇧F re-fits whenever somebody wants that.
+    // A caption changing step or face grows to hold its words at the new
+    // look — the draft's words, since those are what will be drawn. Without
+    // this the step landed and the box stayed the old size, cropping the
+    // words the moment the composer closed (23 Sep 2026).
+    const item = at.itemId ? useCanvasStore.getState().canvas?.items[at.itemId] : undefined;
     const grows =
       at.itemId && paper2 !== null && (at.paper ?? null) === null
         ? { width: Math.max(at.width ?? 0, PAPER_SIZE), height: Math.max(at.height ?? 0, PAPER_SIZE) }
-        : null;
+        : item
+          ? restyledTextBox(item, { width: at.width ?? item.width, height: at.height ?? item.height }, body, style2, face2, paper2)
+          : null;
     ui.setPendingText({
       ...at,
       style: style2,
       face: face2,
       paper: paper2,
-      // A NEW node's column follows its step; an existing one keeps its box,
-      // except for the one restyle that changes its shape.
+      // A NEW node's column follows its step; an existing one keeps its box
+      // unless the restyle changed its shape — paper, or words that no
+      // longer fit — and then the composer takes the box that will land.
       ...(at.itemId ? (grows ?? {}) : { width: TEXT_COLUMN[style2] }),
     });
     ui.setLastText(style2, face2, paper2);

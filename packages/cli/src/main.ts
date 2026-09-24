@@ -274,7 +274,10 @@ import {
   areaEnclosing,
   itemsIn,
   TEXT_STYLE_PROP,
+  isTextItem,
   textBox,
+  textNodeFit,
+  textNodeRefit,
   textTitle,
   fileOf,
   newItemId,
@@ -7521,7 +7524,11 @@ program
         // JPEG carries its dimensions in the header; an HTML page carries
         // nothing, because its size is whatever a browser decides when it lays
         // it out. So the CLI asks for one rather than inventing it.
-        const size = await intrinsicSize(ctx, p.id, item);
+        // A caption's content is its words at its look, which core can size
+        // without a browser — the same answer `⇧F` gets on the canvas.
+        const size = isTextItem(item)
+          ? textNodeFit(item, await currentText(ctx, p.id, item))
+          : await intrinsicSize(ctx, p.id, item);
         if (size) targets.push({ itemId: item.id, ...size });
         else unmeasurable.push(item.title || item.id);
       }
@@ -7884,7 +7891,18 @@ program
             patch.properties = { ...(patch.properties ?? {}), [VISUAL_FILE_PROP]: clean };
           }
         }
-        const requestedSize = opts.size ? sizeFor(opts.size, { width: 0, height: 0 }) : undefined;
+        /**
+         * **A caption restyled by property takes the box its words need at
+         * the new look.** `--prop textStyle=heading` on a note measured at
+         * body size drew 32px type in a 16px box, and the second line was cut
+         * in half (23 Sep 2026). Core's `textNodeRefit` answers, grow-only,
+         * and the resize rides in the same act; `--size` still wins outright.
+         */
+        const refit =
+          !opts.size && (patch.properties || patch.removeProperties) && isTextItem(item)
+            ? textNodeRefit(item, await currentText(ctx, p.id, item), patch)
+            : null;
+        const requestedSize = opts.size ? sizeFor(opts.size, { width: 0, height: 0 }) : (refit ?? undefined);
         if (snapshot.project.groupMode === "groups" && !opts.visual) {
           if (!Object.keys(patch).length && !requestedSize) throw new Error("nothing to change");
           if (!Object.keys(patch).length && requestedSize) return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).resize(item.id, requestedSize, opts));
@@ -7960,6 +7978,8 @@ program
             height: Number(match[2]),
           });
           did = true;
+        } else if (refit) {
+          await sendOp(ctx, p.id, { type: "item.resize", itemId: item.id, ...refit });
         }
         if (!did) throw new Error("nothing to change");
         console.log(`updated ${item.id}`);
@@ -8111,6 +8131,14 @@ program
           ...(visualFace ? { visual: visualFace } : {}),
         },
       });
+      // New words in a caption's old box: grow it to hold them, the same
+      // question `set` asks of a new look (core `textNodeRefit`). A short
+      // label re-worded into a sentence otherwise shows its first line.
+      const refit = mimeType === TEXT_MIME ? textNodeRefit(item, data.toString("utf8")) : null;
+      if (refit) {
+        if (snapshot.project.groupMode === "groups") await new CanvasGroups(ctx.client, p.id, () => ctx.actor).resize(item.id, refit);
+        else await sendOp(ctx, p.id, { type: "item.resize", itemId: item.id, ...refit });
+      }
       const audit = await scoreScreenOnArrival(ctx, p.id, item.id, mimeType);
       if (ctx.json) return printJson({ itemId: item.id, versionId, blobHash: upload.blobHash, versions: item.versions.length + 1, ...(audit ? { audit } : {}) });
       console.log(`new version ${versionId} of ${item.id} (${item.versions.length + 1} total)`);
@@ -14124,6 +14152,12 @@ if (process.argv.slice(2).includes("--agent-help")) {
  * browser decides when it lays the thing out, which is why `isocan fit` asks
  * for `--size` there rather than guessing a number and calling it measured.
  */
+/** A text node's words as they stand — its current version's markdown. */
+async function currentText(ctx: Ctx, canvasId: string, item: Item): Promise<string> {
+  const version = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
+  return version ? (await ctx.client.downloadBlob(canvasId, version.blobHash)).toString("utf8") : "";
+}
+
 async function intrinsicSize(
   ctx: Ctx,
   canvasId: string,

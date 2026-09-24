@@ -133,6 +133,9 @@ export const DEEP: readonly DeepFile[] = [
   // that must leave the row standing.
   { file: "packages/cli/test/bench.test.ts", secs: 22.3 },
   { file: "packages/cli/test/board.test.ts", secs: 42.6 },
+  // 23 Sep: five cases, one daemon, ~25 spawns — a text node restyled,
+  // re-worded and fitted over the real binary on both canvas modes.
+  { file: "packages/cli/test/text-refit.test.ts", secs: 21.7 },
   { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
 ];
 

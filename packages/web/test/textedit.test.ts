@@ -70,7 +70,9 @@ describe("a look change on an existing node lands now", () => {
   });
 
   it("revises words and restyles through the SAME patch, so they cannot drift", () => {
-    expect(text.match(/lookPatch\(style, face, paper\)/g)?.length).toBe(2);
+    // Three readers: the revision, the restyle, and the box a restyle grows
+    // to (`restyledTextBox`), which must size the look the restyle writes.
+    expect(text.match(/lookPatch\(style, face, paper\)/g)?.length).toBe(3);
   });
 });
 

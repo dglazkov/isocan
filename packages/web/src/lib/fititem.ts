@@ -1,6 +1,7 @@
 import type { Actor } from "@isocan/core";
-import { groupFitAction, isGroupItem, fitMoves } from "@isocan/core";
+import { groupFitAction, isGroupItem, isTextItem, fitMoves, textNodeFit } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
+import { fetchBlobText } from "./blobtext.ts";
 
 import { changeCanvasGroup, groupsEnabled } from "./canvasgroups.ts";
 import { naturalSize } from "./measure.ts";
@@ -28,7 +29,12 @@ export async function fitToContent(canvasId: string, actor: Actor, itemIds: stri
     if (!item || (groupsEnabled() && isGroupItem(item))) continue;
     const version = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions.at(-1);
     if (!version) continue;
-    const size = await naturalSize(canvasId, version.blobHash, version.mimeType);
+    // A caption's content is its words at its look — core sizes that, the
+    // same answer `isocan fit` gets. It used to fall through to a screen's
+    // 1280×800, since a markdown blob is not a page a frame can measure.
+    const words = isTextItem(item) ? await fetchBlobText(canvasId, version.blobHash).catch(() => null) : null;
+    const caption = words === null ? null : textNodeFit(item, words);
+    const size = caption ?? (await naturalSize(canvasId, version.blobHash, version.mimeType));
     targets.push({ itemId: id, ...size });
   }
   if (useCanvasStore.getState().canvasId !== canvasId) return;

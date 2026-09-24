@@ -18,6 +18,9 @@ import {
   textFaceOf,
   textIsLegible,
   textMarkSize,
+  textNodeFit,
+  textNodeRefit,
+  textRefit,
   textSizeOf,
   textStyleOf,
   textTitle,
@@ -162,6 +165,66 @@ describe("the box it starts in", () => {
   it("caps a word longer than the hard limit at the limit — the stylesheet breaks it there", () => {
     const w = textBox("x".repeat(400), "display").width;
     expect(w).toBeLessThanOrEqual(TEXT_COLUMN_MAX.display);
+  });
+});
+
+/**
+ * **The box after the node changed** (23 Sep 2026). A note measured at body
+ * and then restyled to heading drew 32px type in a 16px box — the second line
+ * cut in half — because nothing asked what the box should be once the look
+ * changed. `textNodeRefit` is that question, and both surfaces ask it.
+ */
+describe("the box after its words or its look change", () => {
+  const sentence = "Acme step 2 · the review side — and status notes too: step 1 waits on step 2";
+  const paragraphs = `## ${sentence}\n\n${sentence}\n\n- one\n- ${sentence}`;
+  const caption = (properties: Record<string, string>, box: { width: number; height: number }): Item => ({
+    ...item({ kind: TEXT_KIND, ...properties }),
+    ...box,
+  });
+
+  it("grows a body-sized box to hold the words at every larger step and face", () => {
+    for (const body of [sentence, paragraphs]) {
+      const born = caption({}, textBox(body));
+      for (const style of TEXT_STYLES.slice(1)) {
+        for (const face of TEXT_FACES) {
+          const next = textNodeRefit(born, body, { properties: { textStyle: style, textFace: face } });
+          const need = textBox(body, style, face);
+          expect(next, `${style}/${face}`).not.toBeNull();
+          expect(next!.width).toBeGreaterThanOrEqual(need.width);
+          expect(next!.height).toBeGreaterThanOrEqual(need.height);
+        }
+      }
+    }
+  });
+
+  it("grows a label's box when new words wrap onto more lines", () => {
+    const label = caption({ textStyle: "heading" }, textBox("Acme", "heading"));
+    const next = textNodeRefit(label, paragraphs)!;
+    expect(next.height).toBeGreaterThanOrEqual(textBox(paragraphs, "heading").height);
+    expect(next.height).toBeGreaterThan(label.height * 4);
+  });
+
+  it("only grows: a box dragged wider keeps its width, and a step down changes nothing", () => {
+    const wide = caption({ textStyle: "title" }, { width: 1200, height: 40 });
+    expect(textNodeRefit(wide, sentence)!.width).toBe(1200);
+    const big = caption({ textStyle: "title" }, textBox(sentence, "title"));
+    expect(textNodeRefit(big, sentence, { removeProperties: ["textStyle"] })).toBeNull();
+    expect(textRefit(textBox(sentence, "title"), sentence, "title", "sans")).toBeNull();
+  });
+
+  it("leaves paper and anything that is not a caption alone", () => {
+    const small = { width: 40, height: 20 };
+    expect(textNodeRefit(caption({ paper: "yellow" }, small), sentence, { properties: { textStyle: "display" } })).toBeNull();
+    expect(textNodeRefit(caption({}, small), sentence, { properties: { paper: "pink" } })).toBeNull();
+    expect(textNodeRefit({ ...item({}), ...small }, sentence)).toBeNull();
+    // Taking paper OFF makes it a caption again, which must hold its words.
+    expect(textNodeRefit(caption({ paper: "yellow" }, small), sentence, { removeProperties: ["paper"] })).not.toBeNull();
+  });
+
+  it("fits a caption from scratch — which may shrink — and not paper", () => {
+    const stretched = caption({ textStyle: "heading" }, { width: 2000, height: 2000 });
+    expect(textNodeFit(stretched, sentence)).toEqual(textBox(sentence, "heading"));
+    expect(textNodeFit(caption({ paper: "blue" }, { width: 9, height: 9 }), sentence)).toBeNull();
   });
 });
 
