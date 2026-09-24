@@ -37,6 +37,12 @@ export declare function isSystemActor(actorId: string): boolean;
 /**
  * The canvas RECORD — title, description, properties, and who touched it last. What is ON
  * the canvas is `CanvasContents`; `CanvasState` below explains why the two travel apart.
+ *
+ * Glossary (`docs/architecture.md`, "One word each"): a canvas is the surface, a
+ * project is the directory that holds canvases. Today a project holds exactly one,
+ * so this record is both; when a project holds several, it splits into `Project`
+ * (title, description, directory) and `Canvas` (the surface's own record), and the
+ * `project.*` ops move to the first unchanged.
  */
 export interface Canvas {
     id: string;
