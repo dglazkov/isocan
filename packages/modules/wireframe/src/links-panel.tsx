@@ -73,8 +73,8 @@ export function WireLinks({ canvasId, host, selection, canEdit }: { canvasId: st
   }, [canvasId, host, round]);
 
   if (error) return <p className="wire-error" role="alert">{error}</p>;
-  if (!flows) return <p className="wire-status" role="status">Reading the kept screens…</p>;
-  if (flows.length === 0) return <p className="wire-note">Nothing is kept yet — mark the screens a prototype should play with 📐 (⇧K), and their links show here.</p>;
+  if (!flows) return <p className="wire-status" role="status">Reading the screens in the prototype…</p>;
+  if (flows.length === 0) return <p className="wire-note">No screen is in a prototype yet — use screens in one with 📐 (⇧K, or Use in prototype in the item's menu), and their links show here.</p>;
 
   const picked = new Set(selection.filter((id) => flows.some((f) => f.screens.some((s) => s.id === id))));
   const rows = linkRows(flows, picked.size ? picked : null);
@@ -116,7 +116,7 @@ export function WireLinks({ canvasId, host, selection, canEdit }: { canvasId: st
                           <option key={s.id} value={s.id}>{s.title}</option>
                         ))}
                         {row.value !== "" && row.value !== LINK_BACK && row.value !== LINK_NONE && !flow.screens.some((s) => s.id === row.value) && (
-                          <option value={row.value}>A screen that is not kept ({row.value})</option>
+                          <option value={row.value}>A screen not in the prototype ({row.value})</option>
                         )}
                         <option value={LINK_BACK}>Back</option>
                         <option value={LINK_NONE}>Nowhere</option>

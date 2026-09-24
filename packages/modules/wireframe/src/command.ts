@@ -1,5 +1,7 @@
 import type { CoreModule, SlashCommand } from "@isocan/core";
-import { KEEP_PROP, MAYBE_PROP, wireframeModule } from "./record.ts";
+import { wireframeModule } from "./record.ts";
+import { KEEP_PROP } from "./keep.ts";
+import { MAYBE_PROP } from "./maybe.ts";
 
 /**
  * **`/wire`** — local on the web (it opens the Wireframes dialog, which runs
@@ -18,8 +20,8 @@ screen by hand, and never write its copy yourself unless asked.
   TYPESAFE_API_KEY here the canvas's home answers (the CLI says which).
 - \`/wire basic <what the screens are for>\` → \`isocan wire --basic "<request>"\`
   (plain grey wires, no sample content).
-- \`/wire prototype\` → \`isocan wire prototype\` (the kept screens, 📐 — keep
-  some first with \`isocan wire keep <screens…>\` if nothing is kept).
+- \`/wire prototype\` → \`isocan wire prototype\` (the screens marked 📐 — use
+  some in it first with \`isocan wire use <screens…>\` if none is).
 - \`/wire style\` → \`isocan wire style\`; \`/wire style --default\` →
   \`isocan wire style --default\`.
 - \`/wire flesh\` → \`isocan wire flesh\` (sample content instead of grey bars

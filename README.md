@@ -394,13 +394,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   [the journey](docs/projects/sprint/journey.md).
 - **Wireframes**: `isocan wire "<request>"` draws a flow of screens from a
   typed catalog — blue blueprint first, grey wireframe as Jev (or the stub, or
-  an agent) answers — with variations under each. Keep the screens you want
-  (📐, ⇧K, `wire keep`) and `wire prototype` adds them as one clickable HTML
-  item: links are inferred from intents, archetypes and reading order, never
-  stored; a hotspot with no kept target is drawn dashed and says which screen
-  it needs; rebuilt, the prototype gains a version. `wire links` prints the
-  flow, `wire link` overrides one hotspot. On the canvas the kept screens
-  are joined by orthogonal arrows, one per hotspot, leaving from the button
+  an agent) answers — with variations under each. Pick the screens the
+  prototype plays (📐 *Use in prototype*, ⇧K, `wire use`) and `wire
+  prototype` adds them as one clickable HTML item: links are inferred from
+  intents, archetypes and reading order, never stored; a hotspot whose
+  target is not in the prototype is drawn dashed and says which screen it
+  needs; rebuilt, the prototype gains a version. `wire links` prints the
+  flow, `wire link` overrides one hotspot. On the canvas the screens in the
+  prototype are joined by orthogonal arrows, one per hotspot, leaving from the button
   they belong to; click an arrow to play the prototype from there, go to its
   target, or change where it goes (drag its head onto another screen) —
   `/wire links` is the same as a table, `wire play` the same from a

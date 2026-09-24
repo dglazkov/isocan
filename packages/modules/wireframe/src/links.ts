@@ -258,7 +258,7 @@ export function inferLinks(kept: readonly WireScreen[], opts: { withNone?: boole
         }
         out.push(ids.has(override)
           ? { ...base, to: override, transition: "push", rule: "override" }
-          : { ...base, to: null, needs: `a screen that is not kept (${override})`, transition: "push", rule: "override" });
+          : { ...base, to: null, needs: `a screen not in the prototype (${override})`, transition: "push", rule: "override" });
         continue;
       }
       if (d === "inert" || d === null) continue;

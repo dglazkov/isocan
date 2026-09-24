@@ -9,7 +9,7 @@ import {
 } from "./core.ts";
 import { wireframeCore } from "./command.ts";
 import { answer, questions, registerCompose } from "./compose-cli.ts";
-import { registerVary } from "./vary-cli.ts";
+import { markScreens, registerVary } from "./vary-cli.ts";
 import { registerLinks } from "./links-cli.ts";
 import { registerStyle } from "./style-cli.ts";
 import { registerFlesh } from "./flesh-cli.ts";
@@ -54,6 +54,19 @@ function register(host: CliHost): void {
   registerStyle(host, wire);
   registerFlesh(host, wire);
   registerPlay(host, wire);
+
+  // The keep mark in the words the web says it in (24 Sep 2026): `use` is `keep`, `unuse` is `unkeep`.
+  wire
+    .command("use <screens...>")
+    .description("Use screens in the prototype (📐) — the same act as `wire keep`, in the words the item menu says")
+    .option("--canvas <canvas>")
+    .action(markScreens(host, true));
+
+  wire
+    .command("unuse <screens...>")
+    .description("Remove screens from the prototype (📐) — the same act as `wire unkeep`")
+    .option("--canvas <canvas>")
+    .action(markScreens(host, false));
 
   wire
     .command("questions")

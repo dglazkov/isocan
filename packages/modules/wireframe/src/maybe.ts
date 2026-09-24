@@ -1,5 +1,5 @@
 import type { CanvasContents, Item } from "@isocan/core";
-import { KEEP_PROP, MAYBE_PROP } from "./record.ts";
+import { KEEP_PROP } from "./keep.ts";
 
 /**
  * **A maybe, until it is kept** (round 1's cut, `MAYBE_FLOOR`).
@@ -14,7 +14,15 @@ import { KEEP_PROP, MAYBE_PROP } from "./record.ts";
  * (a dashed outline round the item and a tag above its top edge —
  * `maybe-marks.tsx`), so it never covers the screen's content.
  */
-export { MAYBE_PROP };
+/**
+ * `wireMaybe` — spelled out here as well as in `record.ts` (which the entry
+ * chunk's activation predicate reads): importing it from there would make
+ * first paint export it to this lazy half. A test holds the two equal.
+ */
+export const MAYBE_PROP = "wireMaybe";
+
+/** What the maybe tag says under a pointer: the mark asks one question, and ⇧K answers it. */
+export const MAYBE_TOOLTIP = "Not in the prototype yet — ⇧K to use it";
 
 /** Whether the canvas marks this item as a maybe: round 1 was unsure, and nobody has kept it yet. */
 export function maybeMarked(item: Pick<Item, "properties">): boolean {

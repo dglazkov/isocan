@@ -213,7 +213,7 @@ export async function ask(answerer: Answerer, round: 1 | 2 | 3, calls: RoundCall
 const pct = (p: number | undefined) => (p === undefined ? "—" : p.toFixed(2));
 
 /** What a maybe screen's line says: round 1 was unsure, and the keep decides. */
-export const MAYBE_WORDS = "maybe — round 1 was unsure it is needed; keep it (📐) or leave it";
+export const MAYBE_WORDS = "maybe — round 1 was unsure it is needed; use it in the prototype (📐) or leave it";
 
 /** A flow's screens by title, a maybe marked — the Chat record's and the CLI's list. */
 export function screenTitles(screens: readonly Pick<Screen, "spec">[]): string {
@@ -269,7 +269,7 @@ export async function applyRound(
     for (const s of out) {
       // A maybe waits for its keep before it is varied: over-including is cheap only while each maybe is one screen.
       if (s.spec.maybe) {
-        say(screenLine(s, "maybe — no variations until it is kept (`wire vary` draws them)"));
+        say(screenLine(s, "maybe — no variations until it is in the prototype (`wire vary` draws them)"));
         continue;
       }
       const made = await addVariations(canvas, s, [], DEFAULT_VARIATIONS);

@@ -16,8 +16,8 @@ describe("markShortcuts", () => {
   it("lists a loaded module's mark key, in the words the help panel uses, and nothing when none is loaded", () => {
     expect(markShortcuts().some((s) => s.keys.includes("⇧J"))).toBe(false);
     registerModule({ name: ACME, marks: [{ property: "acmeStar", emoji: "★", title: "Starred", on: "Star", off: "Unstar", key: "J" }] });
-    expect(markShortcuts()).toContainEqual({ keys: ["⇧J"], does: "★ Star or unstar the selection", group: "Items", note: "A property on the item, so anybody can take it off" });
-    expect(shortcutsAsText()).toMatch(/Items\n[\s\S]*⇧J\s+★ Star or unstar the selection/);
+    expect(markShortcuts()).toContainEqual({ keys: ["⇧J"], does: "★ Star, or unstar — on the selection", group: "Items", note: "A property on the item, so anybody can take it off" });
+    expect(shortcutsAsText()).toMatch(/Items\n[\s\S]*⇧J\s+★ Star, or unstar — on the selection/);
   });
 
   it("leaves out a mark with no key", () => {

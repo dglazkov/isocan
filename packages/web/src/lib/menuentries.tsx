@@ -379,7 +379,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
     // any mark a loaded module declares, and the same `item.update` its CLI sends.
     ...moduleMarks().filter((mark) => items.every((item) => markOffered(mark, item))).map((mark): MenuEntry => {
       const { on, changing } = moduleMarkIntent(items, mark.property);
-      const n = changing.length > 1 ? ` ${changing.length}` : "";
+      const n = changing.length > 1 ? ` (${changing.length})` : "";
       return {
         label: `${mark.emoji} ${on ? mark.on : mark.off}${n}`,
         writes: true,
@@ -474,7 +474,8 @@ export function toggleModuleMark(mark: ModuleMark, items: readonly Item[], canva
     void sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: moduleMarkPatch(mark.property, on) }, group);
   }
   const what = changing.length === 1 ? `"${changing[0]!.title}"` : `${changing.length} items`;
-  flashNotice(`${mark.emoji} ${what} — ${on ? mark.on.toLowerCase() : mark.off.toLowerCase()}`);
+  // What the item now IS, in the mark's own words: "in the prototype", "not in the prototype".
+  flashNotice(`${mark.emoji} ${what} — ${on ? "" : "not "}${mark.title.toLowerCase()}`);
 }
 
 /** ⇧ and a mark's letter on the selection (`CanvasPage`'s keys), by `KeyboardEvent.code`. */

@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { FIDELITY_PROP, type CanvasContents, type Item } from "@isocan/core";
+import { KEEP_EMOJI as RECORD_KEEP_EMOJI, KEEP_PROP as RECORD_KEEP_PROP, MAYBE_PROP as RECORD_MAYBE_PROP } from "../src/record.ts";
 import {
-  KEEP_MARK, LEAVE_OUT, VARIATION_FLOOR, applyPropsRound, applyStructure, decideFlow, decisions, flipWords, flowRequest, flowScreen,
+  KEEP_EMOJI, KEEP_MARK, KEEP_PROP, LEAVE_OUT, MAYBE_PROP, VARIATION_FLOOR, applyPropsRound, applyStructure, decideFlow, decisions, flipWords, flowRequest, flowScreen,
   honestFlips, isKept, keepPatch, keepable, kept, oneWay, propsRequests, readResponse, renderWire, structureRequest,
   validateWire, variations, vary, wireTitle, type JevResponse, type WireSpec,
 } from "../src/core.ts";
@@ -157,6 +158,13 @@ describe("the keep mark", () => {
 
   it("is offered by the property core's design gate reads (spelled out in the record to keep it out of first paint)", () => {
     expect(KEEP_MARK.offeredOn).toEqual({ [FIDELITY_PROP]: "wireframe" });
+  });
+
+  it("the lazy half's property names are the record's — read off it, or spelled out and held equal here", () => {
+    // `MAYBE_PROP` is written twice so the entry chunk exports nothing new to the lazy half.
+    expect(MAYBE_PROP).toBe(RECORD_MAYBE_PROP);
+    expect(KEEP_PROP).toBe(RECORD_KEEP_PROP);
+    expect(KEEP_EMOJI).toBe(RECORD_KEEP_EMOJI);
   });
 
   it("is offered on wireframe screens, and on anything already wearing it so it can come off", () => {

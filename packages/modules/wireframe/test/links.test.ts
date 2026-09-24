@@ -261,7 +261,7 @@ describe("the prototype", () => {
   });
 
   it("refuses to assemble nothing", () => {
-    expect(() => assemblePrototype([], [])).toThrow(/nothing is kept/);
+    expect(() => assemblePrototype([], [])).toThrow(/no screen is in the prototype/);
   });
 
   it("draws the edges between two kept screens once per pair, never back or to itself", () => {

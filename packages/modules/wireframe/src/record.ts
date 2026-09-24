@@ -1,6 +1,12 @@
 import type { CoreModule } from "@isocan/core";
 
-/** The keep mark (design §6): a property, as a slide is — anybody can take it off. */
+/**
+ * The keep mark (design §6): a property, as a slide is — anybody can take it
+ * off. Its words say what it does, "Use in prototype" (24 Sep 2026: "Keep"
+ * read as "don't delete", which every screen already is); the property, ⇧K
+ * and `wire keep` keep their names, because stored data and muscle memory
+ * outlive a label.
+ */
 export const KEEP_PROP = "wireKeep";
 export const KEEP_EMOJI = "📐";
 /** A screen round 1 was unsure of (its P(yes), as text), set by the `item.add` that draws it; the canvas marks it while it is not kept. */
@@ -11,10 +17,10 @@ export const MAYBE_PROP = "wireMaybe";
  *
  * A screen is an ordinary HTML item, so the module adds no kind and no mime:
  * the canvas already knows how to draw everything it makes. What it adds is
- * one mark, as data — the shell draws 📐, offers Keep / Unkeep in the item
- * menu and answers ⇧K without importing anything from here — and one slash
- * command, `/wire`, whose menu row the Chat must offer before the module's
- * web half has loaded: on the web it opens the `wire` dialog (`web.tsx`,
+ * one mark, as data — the shell draws 📐, offers Use in prototype / Remove
+ * from prototype in the item menu and answers ⇧K without importing anything
+ * from here — and one slash command, `/wire`, whose menu row the Chat must
+ * offer before the module's web half has loaded: on the web it opens the `wire` dialog (`web.tsx`,
  * lazy), on the terminal its body is the skill (`command.ts`, which both
  * loaded halves register in place of this `body: ""`). The record lives
  * apart from `core.ts` so the web half can register it without importing the
@@ -30,6 +36,6 @@ export const wireframeModule: CoreModule = {
   name: "@isocan/wireframe",
   // A prototype is lit on the hovered minimap (phase 8): the one item on a busy canvas you can play.
   spotlights: ["wirePrototype"],
-  marks: [{ property: KEEP_PROP, emoji: KEEP_EMOJI, title: "Kept", on: "Keep", off: "Unkeep", key: "K", offeredOn: { fidelity: "wireframe" } }],
+  marks: [{ property: KEEP_PROP, emoji: KEEP_EMOJI, title: "In the prototype", on: "Use in prototype", off: "Remove from prototype", key: "K", offeredOn: { fidelity: "wireframe" } }],
   commands: [{ name: "wire", description: "Wireframes from a request", usage: "[basic] <request>|prototype|style|links", source: "module", opens: "wire", body: "" }],
 };

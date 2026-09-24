@@ -10,17 +10,19 @@ import { wireTitle } from "./spec.ts";
 import { DEFAULT_VARIATIONS, decisions, flipWords, honestFlips, VARIATION_FLOOR } from "./vary.ts";
 
 /**
- * **`wire vary`, `wire keep|unkeep`, `wire kept`** — phase 2's verbs.
+ * **`wire vary`, `wire keep|unkeep` (`wire use|unuse`), `wire kept`** —
+ * phase 2's verbs.
  *
  * `vary` adds a screen's variations on demand, from the distribution its
  * answerer already gave (nothing is asked again), placed under the screen in
- * an op group of their own. `keep` and `unkeep` are one `item.update` each —
+ * an op group of their own. `keep` and `unkeep` — "use in prototype" and
+ * "remove from prototype", as the web says them — are one `item.update` each —
  * the same property patch the web app's menu entry and ⇧K send — under one
  * group, so one undo takes a gesture back.
  */
 
 export function registerVary(host: CliHost, wire: Command): void {
-  const { run, ctxOf, resolveCanvas, resolveItem, sendOp, printJson } = host;
+  const { run, ctxOf, resolveCanvas, resolveItem, printJson } = host;
 
   wire
     .command("vary <screen>")
@@ -73,48 +75,23 @@ export function registerVary(host: CliHost, wire: Command): void {
       }),
     );
 
-  const mark = (on: boolean) =>
-    run(async (refs: string[], _local: unknown, cmd: Command) => {
-      const ctx = await ctxOf(cmd);
-      const p = await resolveCanvas(ctx);
-      const snapshot = await ctx.client.snapshot(p.id);
-      const items = refs.map((ref) => resolveItem(snapshot, ref));
-      // A prototype wears a wireframe's fidelity (so the design gate passes it) but plays screens; it is not one.
-      const refused = items.filter((item) => !keepable(item) || item.properties?.[PROTOTYPE_PROP] !== undefined);
-      if (refused.length) {
-        throw new Error(`not a wireframe screen: ${refused.map((i) => `"${i.title}"`).join(", ")} — the keep mark is for screens \`isocan wire\` drew`);
-      }
-      const group = newGroupId();
-      const changed: string[] = [];
-      for (const item of items) {
-        if (isKept(item) === on || changed.includes(item.id)) continue;
-        await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: keepPatch(on) }, group);
-        changed.push(item.id);
-      }
-      if (ctx.json) return printJson({ [on ? "kept" : "unkept"]: changed, unchanged: items.filter((i) => !changed.includes(i.id)).map((i) => i.id) });
-      for (const item of items) {
-        const moved = changed.includes(item.id);
-        console.log(`${item.id}  ${on ? KEEP_EMOJI : "  "} "${item.title}" ${on ? (moved ? "kept" : "was already kept") : moved ? "unkept" : "was not kept"}`);
-      }
-    });
-
   wire
     .command("keep <items...>")
-    .description(`Mark screens as keepers (${KEEP_EMOJI}) — a property on the item, as a slide is, so anyone can take it off`)
+    .description(`Use screens in the prototype (${KEEP_EMOJI}) — a property on the item, as a slide is, so anyone can take it off. \`wire use\` says the same`)
     .option("--canvas <canvas>")
-    .action(mark(true));
+    .action(markScreens(host, true));
 
   wire
     .command("unkeep <items...>")
-    .description(`Take the keep mark (${KEEP_EMOJI}) off screens — anyone's mark, not only your own`)
+    .description(`Take screens out of the prototype (${KEEP_EMOJI}) — anyone's mark, not only your own. \`wire unuse\` says the same`)
     .option("--canvas <canvas>")
-    .action(mark(false));
+    .action(markScreens(host, false));
 
   wire
     .command("kept")
-    .description(`List the kept screens (${KEEP_EMOJI}) in reading order — rows top to bottom, each left to right`)
+    .description(`List the screens in the prototype (${KEEP_EMOJI}) in reading order — rows top to bottom, each left to right`)
     .option("--canvas <canvas>")
-    .option("--prototype <item>", "only the screens this prototype plays, in its order — its flow's kept screens and any guest from another flow (what selecting it lights on the canvas)")
+    .option("--prototype <item>", "only the screens this prototype plays, in its order — its flow's screens in the prototype and any guest from another flow (what selecting it lights on the canvas)")
     .action(
       run(async (opts: { prototype?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
@@ -128,16 +105,50 @@ export function registerVary(host: CliHost, wire: Command): void {
           const port = cliPort(host, ctx, p.id);
           list = prototypeScreens(canvas, proto, await wiresOn(port, canvas));
           if (!ctx.json && list.length === 0) {
-            console.log(`nothing prototype ${proto.id} plays is kept any more — keep its screens (${KEEP_EMOJI}) and \`isocan wire prototype\` rebuilds it`);
+            console.log(`nothing prototype ${proto.id} plays is marked for it any more — \`isocan wire use <screens...>\` (${KEEP_EMOJI}) and \`isocan wire prototype\` rebuilds it`);
             return;
           }
         }
         if (ctx.json) return printJson(list.map((i, n) => ({ n: n + 1, itemId: i.id, title: i.title })));
         if (list.length === 0) {
-          console.log(`nothing is kept — \`isocan wire keep <items...>\` marks screens ${KEEP_EMOJI}`);
+          console.log(`no screen is in the prototype — \`isocan wire use <screens...>\` marks them ${KEEP_EMOJI}`);
           return;
         }
         list.forEach((i, n) => console.log(`${String(n + 1).padStart(2)}. ${KEEP_EMOJI} ${i.id}  ${i.title}`));
       }),
     );
+}
+
+/**
+ * **`wire keep|unkeep`, and `wire use|unuse`** — one act under two names: the
+ * verbs the mark was born with, and the words the web says it in ("Use in
+ * prototype", 24 Sep 2026). `cli.ts` registers the second pair.
+ */
+export function markScreens(host: CliHost, on: boolean) {
+  const { run, ctxOf, resolveCanvas, resolveItem, sendOp, printJson } = host;
+  return run(async (refs: string[], _local: unknown, cmd: Command) => {
+    const ctx = await ctxOf(cmd);
+    const p = await resolveCanvas(ctx);
+    const snapshot = await ctx.client.snapshot(p.id);
+    const items = refs.map((ref) => resolveItem(snapshot, ref));
+    // A prototype wears a wireframe's fidelity (so the design gate passes it) but plays screens; it is not one.
+    const refused = items.filter((item) => !keepable(item) || item.properties?.[PROTOTYPE_PROP] !== undefined);
+    if (refused.length) {
+      throw new Error(`not a wireframe screen: ${refused.map((i) => `"${i.title}"`).join(", ")} — a prototype plays screens \`isocan wire\` drew`);
+    }
+    const group = newGroupId();
+    const changed: string[] = [];
+    for (const item of items) {
+      if (isKept(item) === on || changed.includes(item.id)) continue;
+      await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: keepPatch(on) }, group);
+      changed.push(item.id);
+    }
+    if (ctx.json) return printJson({ [on ? "kept" : "unkept"]: changed, unchanged: items.filter((i) => !changed.includes(i.id)).map((i) => i.id) });
+    for (const item of items) {
+      const moved = changed.includes(item.id);
+      console.log(`${item.id}  ${on ? KEEP_EMOJI : "  "} "${item.title}" ${on ? (moved ? "in the prototype" : "was already in the prototype") : moved ? "removed from the prototype" : "was not in the prototype"}`);
+    }
+    const now = kept((await ctx.client.snapshot(p.id)).canvas as CanvasContents).length;
+    console.log(`${now} screen${now === 1 ? "" : "s"} in the prototype${changed.length ? " — `isocan wire prototype` rebuilds it" : ""}`);
+  });
 }

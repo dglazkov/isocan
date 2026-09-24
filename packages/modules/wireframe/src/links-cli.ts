@@ -38,9 +38,9 @@ export function registerLinks(host: CliHost, wire: Command): void {
 
   wire
     .command("links [screen]")
-    .description("Print where every hotspot on the kept screens goes — inferred from intents, archetypes and reading order, and any override set with `wire link`")
+    .description("Print where every hotspot on the screens in the prototype goes — inferred from intents, archetypes and reading order, and any override set with `wire link`")
     .option("--canvas <canvas>")
-    .option("--flow <flow>", "which flow's kept screens (default: the only one)")
+    .option("--flow <flow>", "which flow's prototype (default: the only one)")
     .action(
       run(async (ref: string | undefined, _local: unknown, cmd: Command) => {
         const opts = cmd.optsWithGlobals() as { flow?: string };
@@ -50,7 +50,7 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const flows = await keptFlows(cliPort(host, ctx, p.id));
         const only = ref ? resolveItem(snapshot, ref) : null;
         const flow = only ? flows.find((f) => f.screens.some((s) => s.id === only.id) && !f.guests.includes(only.id)) : pickKeptFlow(flows, opts.flow);
-        if (!flow) throw new Error(`"${only!.title}" is not a kept screen — links run between kept screens (\`isocan wire keep ${only!.id}\`)`);
+        if (!flow) throw new Error(`"${only!.title}" is not in the prototype — links run between the screens in it (\`isocan wire use ${only!.id}\`)`);
         const links = inferLinks(flow.screens, { withNone: true });
         // A guest (a screen kept in another flow that this one links to) is listed with its own flow.
         const shown = links.filter((l) => (only ? l.from === only.id : !flow.guests.includes(l.from)));
@@ -111,15 +111,15 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const keptNow = to ? isKept(to) : true;
         if (ctx.json) return printJson({ itemId: item.id, key, to: value, overrides });
         const said = value === null ? "back to the rules" : value === LINK_NONE ? "switched off" : value === LINK_BACK ? "goes back" : `goes to "${to!.title}"`;
-        console.log(`${item.id}  "${item.title}" ${key} ${said}${keptNow ? "" : ` — "${to!.title}" is not kept, so the prototype draws it dashed until it is`} · \`isocan undo\` takes it back`);
+        console.log(`${item.id}  "${item.title}" ${key} ${said}${keptNow ? "" : ` — "${to!.title}" is not in the prototype, so the link draws dashed until it is`} · \`isocan undo\` takes it back`);
       }),
     );
 
   wire
     .command("prototype")
-    .description("Assemble the kept screens as one clickable HTML item beside them — rebuilt, it gains a version rather than being replaced")
+    .description("Assemble the screens in the prototype (📐) as one clickable HTML item above them — rebuilt, it gains a version rather than being replaced")
     .option("--canvas <canvas>")
-    .option("--flow <flow>", "which flow's kept screens (default: the only one)")
+    .option("--flow <flow>", "which flow's prototype (default: the only one)")
     .action(
       run(async (_local: unknown, cmd: Command) => {
         const opts = cmd.optsWithGlobals() as { flow?: string };
@@ -133,7 +133,7 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const versions = after.canvas.items[itemId]?.versions.length ?? 0;
         const dashed = links.filter((l) => l.to === null && l.needs);
         if (ctx.json) return printJson({ itemId, title, flow: flow.flow, screens: flow.screens.length, links: links.length, dashed: dashed.length, versions, [what]: true });
-        console.log(`${itemId}  "${title}" — ${what === "added" ? "added above the kept screens" : what === "versioned" ? `version ${versions}` : what === "moved" ? `moved back above its flow (still version ${versions})` : `unchanged (still version ${versions}) — nothing kept has changed`}`);
+        console.log(`${itemId}  "${title}" — ${what === "added" ? "added above its screens" : what === "versioned" ? `version ${versions}` : what === "moved" ? `moved back above its flow (still version ${versions})` : `unchanged (still version ${versions}) — no screen in it has changed`}`);
         console.log(`  ${flow.screens.length} screens: ${flow.screens.map((s) => s.title).join(" · ")}`);
         console.log(`  ${links.length} links, ${dashed.length} dashed${dashed.length ? ` (needs ${[...new Set(dashed.map((l) => l.needs))].join(", ")})` : ""} · \`isocan open ${itemId}\` plays it${what === "unchanged" ? "" : " · `isocan undo` takes it back"}`);
       }),

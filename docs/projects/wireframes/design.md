@@ -170,6 +170,12 @@ and nobody else could remove it). `isocan wire keep|unkeep <items…>`, the
 item menu, and a keystroke set it. Order of the kept screens is reading
 order, as slides are.
 
+**Its words are the prototype's** (24 Sep 2026, Dion): "Keep" read as "don't
+delete", which every screen already is; what the mark does is put a screen in
+the prototype. So a person sees *Use in prototype* / *Remove from prototype*
+in the menu and *In the prototype* on the 📐, and `isocan wire use|unuse`
+say the same; the property, ⇧K and `wire keep|unkeep|kept` keep their names.
+
 ### 7. Links — computed, never stored
 
 `inferLinks(kept: WireScreen[]): Link[]` — pure, in core. Rules (research

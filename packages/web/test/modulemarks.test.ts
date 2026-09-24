@@ -35,7 +35,7 @@ const { itemMenu, markByKey } = await import("../src/lib/menuentries.tsx");
 
 const acmeMarks: CoreModule = {
   name: "@acme/marks",
-  marks: [{ property: "wireKeep", emoji: "📐", title: "Kept", on: "Keep", off: "Unkeep", key: "K", offeredOn: { [FIDELITY_PROP]: "wireframe" } }],
+  marks: [{ property: "wireKeep", emoji: "📐", title: "In the prototype", on: "Use in prototype", off: "Remove from prototype", key: "K", offeredOn: { [FIDELITY_PROP]: "wireframe" } }],
 };
 
 const actor: Actor = { id: "usr_a", name: "A" };
@@ -56,16 +56,16 @@ beforeEach(() => {
 
 describe("the keep mark in the item menu", () => {
   it("is offered on a wireframe screen and on nothing else", () => {
-    expect(keepEntry(itemMenu([screen("a")], ctx))?.label).toBe("📐 Keep");
+    expect(keepEntry(itemMenu([screen("a")], ctx))?.label).toBe("📐 Use in prototype");
     expect(keepEntry(itemMenu([item("b", {})], ctx))).toBeUndefined();
     // A selection with one non-screen in it is not offered the mark at all.
     expect(keepEntry(itemMenu([screen("a"), item("b", {})], ctx))).toBeUndefined();
   });
 
-  it("says Unkeep on a kept screen, and counts what a selection will move", () => {
-    expect(keepEntry(itemMenu([screen("a", { wireKeep: "yes" })], ctx))?.label).toBe("📐 Unkeep");
+  it("says Remove from prototype on a screen in it, and counts what a selection will move", () => {
+    expect(keepEntry(itemMenu([screen("a", { wireKeep: "yes" })], ctx))?.label).toBe("📐 Remove from prototype");
     // Mixed: everything turns ON, and only the two unkept ones move.
-    expect(keepEntry(itemMenu([screen("a", { wireKeep: "yes" }), screen("b"), screen("c")], ctx))?.label).toBe("📐 Keep 2");
+    expect(keepEntry(itemMenu([screen("a", { wireKeep: "yes" }), screen("b"), screen("c")], ctx))?.label).toBe("📐 Use in prototype (2)");
   });
 
   it("sends the property patch `wire keep` sends — one op per screen that moves, one group per gesture", () => {

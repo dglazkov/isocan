@@ -333,12 +333,31 @@ describe("variations and keep marks from the terminal: wire vary / keep / unkeep
     expect(titles(await h.cli("wire", "kept"))).toEqual([first.title, second.title, v.title]);
     // Keeping twice writes nothing more.
     const n = h.sent.length;
-    expect(await h.cli("wire", "keep", second.id)).toContain("was already kept");
+    expect(await h.cli("wire", "keep", second.id)).toContain("was already in the prototype");
     expect(h.sent.length).toBe(n);
     // Unkeep: the mark is a property on the item, not somebody's reaction — it simply comes off.
     await h.cli("wire", "unkeep", second.id);
     expect(h.sent.at(-1)!.op).toEqual({ type: "item.update", itemId: second.id, patch: { removeProperties: ["wireKeep"] } });
     expect(h.items.get(second.id)!.properties.wireKeep).toBeUndefined();
     expect(titles(await h.cli("wire", "kept"))).toEqual([first.title, v.title]);
+  });
+
+  it("says it in the prototype's words, and `wire use|unuse` are the same act as `keep|unkeep`", async () => {
+    const { h, screens } = await drawn();
+    const [first, second] = [screens.sort((x, y) => x.x - y.x)[0]!, screens[1]!];
+    const used = await h.cli("wire", "use", first.id, second.id);
+    expect(h.errors).toEqual([]);
+    expect(used).toContain(`📐 "${first.title}" in the prototype`);
+    expect(used).toMatch(/^2 screens in the prototype — `isocan wire prototype` rebuilds it$/m);
+    expect(used).not.toMatch(/\bkept\b/);
+    expect(h.items.get(first.id)!.properties.wireKeep).toBe("yes");
+    const n = h.sent.length;
+    await h.cli("wire", "keep", first.id);
+    expect(h.sent.length).toBe(n);
+    const removed = await h.cli("wire", "unuse", second.id);
+    expect(removed).toContain(`"${second.title}" removed from the prototype`);
+    expect(removed).toMatch(/^1 screen in the prototype/m);
+    expect(h.sent.at(-1)!.op).toEqual({ type: "item.update", itemId: second.id, patch: { removeProperties: ["wireKeep"] } });
+    expect(await h.cli("wire", "unkeep", second.id)).toContain("was not in the prototype");
   });
 });

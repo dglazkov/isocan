@@ -162,7 +162,7 @@ describe("isocan wire link", () => {
     // One property per hotspot (phase 8): a second writer on another hotspot cannot drop this one.
     expect(h.sent[0]!.op).toEqual({ type: "item.update", itemId: "it_list", patch: { properties: { "wireLink:main.3#row": "it_settings" } } });
     // Settings is not kept, so the link names it and waits.
-    expect(await h.cli("wire", "links", "it_list")).toMatch(/main\.3#row\s+Row\s+- - needs a screen that is not kept \(it_settings\)\s+override/);
+    expect(await h.cli("wire", "links", "it_list")).toMatch(/main\.3#row\s+Row\s+- - needs a screen not in the prototype \(it_settings\)\s+override/);
     await h.cli("wire", "link", "it_list", "main.3#row", "--none");
     expect(h.items.get("it_list")!.properties["wireLink:main.3#row"]).toBe("none");
     expect(await h.cli("wire", "links", "it_list")).toMatch(/main\.3#row\s+Row\s+off\s+override/);
@@ -192,7 +192,7 @@ describe("isocan wire link", () => {
     expect(h.errors).toEqual([]);
     const printed = await h.cli("wire", "links", "--flow", "flw_acme");
     expect(printed).toMatch(/nav#tab-4\s+Profile\s+→ "Profile"\s+override/);
-    expect(printed).not.toMatch(/not kept/);
+    expect(printed).not.toMatch(/not in the prototype/);
     // The guest is not listed as one of this flow's screens.
     expect(printed).not.toMatch(/^it_profile /m);
     await h.cli("wire", "prototype", "--flow", "flw_acme");
@@ -226,7 +226,7 @@ describe("isocan wire prototype", () => {
     expect(html).toContain(PROTOTYPE_MARKER);
     for (const id of ["it_signin", "it_home", "it_list", "it_detail"]) expect(html).toContain(`data-screen="${id}"`);
     expect(html).not.toContain('data-screen="it_settings"');
-    expect(first).toMatch(/added above the kept screens/);
+    expect(first).toMatch(/added above its screens/);
     expect(first).toMatch(/4 screens: Sign in · Home · Deliveries · Delivery/);
 
     // Nothing changed: nothing written.
@@ -302,6 +302,6 @@ describe("isocan wire prototype", () => {
     const h = harness();
     for (const item of h.items.values()) delete item.properties.wireKeep;
     await h.cli("wire", "prototype");
-    expect(h.errors.at(-1)).toMatch(/nothing is kept/);
+    expect(h.errors.at(-1)).toMatch(/no screen is in a prototype — `isocan wire use/);
   });
 });

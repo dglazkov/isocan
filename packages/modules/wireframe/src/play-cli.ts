@@ -24,7 +24,7 @@ export function registerPlay(host: CliHost, wire: Command): void {
   const { run, ctxOf, resolveCanvas, resolveItem, printJson } = host;
   wire
     .command("play <screen> [element]")
-    .description("Print the address that opens the flow's prototype full screen AT this kept screen — with [element], its hotspot pointed out. What an arrow's Play from here opens")
+    .description("Print the address that opens the flow's prototype full screen AT this screen of it — with [element], its hotspot pointed out. What an arrow's Play from here opens")
     .option("--canvas <canvas>")
     .action(
       run(async (ref: string, element: string | undefined, _local: unknown, cmd: Command) => {
@@ -34,7 +34,7 @@ export function registerPlay(host: CliHost, wire: Command): void {
         const screen = resolveItem(snapshot, ref);
         const flows = keptFlowsOf(snapshot.canvas, await wiresOn(cliPort(host, ctx, p.id), snapshot.canvas));
         const flow = flows.find((f) => f.screens.some((s) => s.id === screen.id));
-        if (!flow) throw new Error(`"${screen.title}" is not a kept screen — a prototype plays kept screens (\`isocan wire keep ${screen.id}\`)`);
+        if (!flow) throw new Error(`"${screen.title}" is not in the prototype — a prototype plays the screens used in it (\`isocan wire use ${screen.id}\`)`);
         const proto = Object.values(snapshot.canvas.items).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
         if (!proto) throw new Error(`this flow has no prototype yet — \`isocan wire prototype${flows.length > 1 ? ` --flow ${flow.flow}` : ""}\` makes one`);
         let key: string | undefined;

@@ -12,8 +12,9 @@ export const wireframeActivation = {
   core: wireframeModule,
   dialogs: [{ id: "wire", title: "Wireframes" }],
   // Arrows run between kept screens, and a maybe is marked until it is kept: a canvas with fewer than two kept and no unkept maybe fetches nothing.
+  // One pass that stops at the first reason to fetch — it is first paint's, so it is also written small.
   underlays: [{ needed: (canvas: CanvasContents) => {
-    const all = Object.values(canvas.items).map((i) => i.properties ?? {});
-    return all.filter((p) => p[KEEP_PROP]).length > 1 || all.some((p) => p[MAYBE_PROP] && !p[KEEP_PROP]);
+    let kept = 0;
+    return Object.values(canvas.items).some(({ properties: p = {} }) => (p[KEEP_PROP] ? ++kept > 1 : Boolean(p[MAYBE_PROP])));
   } }],
 };

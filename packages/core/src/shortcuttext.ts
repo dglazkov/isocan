@@ -21,7 +21,8 @@ import { SHORTCUTS, SHORTCUT_GROUPS, shortcutsIn, type Shortcut } from "./shortc
 export function markShortcuts(): Shortcut[] {
   return moduleMarks().filter((mark) => mark.key).map((mark) => ({
     keys: [`⇧${mark.key}`],
-    does: `${mark.emoji} ${mark.on} or ${mark.off.toLowerCase()} the selection`,
+    // The menu's two phrases as they are — "Use in prototype" / "Remove from prototype" — rather than spliced into a sentence.
+    does: `${mark.emoji} ${mark.on}, or ${mark.off.toLowerCase()} — on the selection`,
     group: "Items" as const,
     note: "A property on the item, so anybody can take it off",
   }));

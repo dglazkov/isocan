@@ -1,5 +1,5 @@
 import { markOffered, moduleMarkPatch, readingOrder, type CanvasContents, type Item, type ModuleMark } from "@isocan/core";
-import { KEEP_EMOJI, KEEP_PROP, wireframeModule } from "./record.ts";
+import { wireframeModule } from "./record.ts";
 
 /**
  * **Marking the keepers** (design §6, journey scene 4) — a property, as a
@@ -9,9 +9,18 @@ import { KEEP_EMOJI, KEEP_PROP, wireframeModule } from "./record.ts";
  * item menu and ⇧K through the record's `marks`; `isocan wire keep|unkeep`
  * sends the same patch. Kept screens read in reading order, as slides do.
  */
-export { KEEP_EMOJI, KEEP_PROP };
-
 export const KEEP_MARK: ModuleMark = wireframeModule.marks![0]!;
+
+/*
+ * Read off the record rather than imported from it: the record rides the
+ * entry chunk, and every constant a lazy chunk imports from there is one more
+ * export first paint carries (`scripts/bundle-ceiling.mjs`). The record is
+ * exported already, so reading through it costs nothing.
+ */
+/** The keep mark's property, `wireKeep`. */
+export const KEEP_PROP = KEEP_MARK.property;
+/** The keep mark's emoji, 📐. */
+export const KEEP_EMOJI = KEEP_MARK.emoji;
 
 export function isKept(item: Item): boolean {
   return Boolean(item.properties?.[KEEP_PROP]);

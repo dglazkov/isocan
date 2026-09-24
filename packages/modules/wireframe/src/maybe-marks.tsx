@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { UnderlayFacts } from "@isocan/core";
-import { MAYBE_PROP, maybeItems, maybeTagNeed } from "./maybe.ts";
+import { MAYBE_PROP, MAYBE_TOOLTIP, maybeItems, maybeTagNeed } from "./maybe.ts";
 
 /**
  * **The maybe marks** (`maybe.ts`): under the items, in world units, OUTSIDE
@@ -8,7 +8,8 @@ import { MAYBE_PROP, maybeItems, maybeTagNeed } from "./maybe.ts";
  * and a *maybe* tag just above its top edge, right-aligned clear of the
  * version badge. Nothing is drawn over the screen, so nothing covers its
  * search field or its header. Keep it and the mark goes, because this reads
- * `wireKeep` on every render; unkeep it and the mark is back.
+ * `wireKeep` on every render; unkeep it and the mark is back. The tag alone
+ * takes the pointer, so hovering it says what to do (`MAYBE_TOOLTIP`).
  *
  * The tag fades out at the zoom where the item's top edge cannot hold the
  * item's own title strip, the tag and the badge side by side (the labels'
@@ -31,7 +32,7 @@ export function WireMaybes({ canvas, drag }: Pick<UnderlayFacts, "canvas" | "dra
               className="wire-maybe-anchor"
               style={{ left: x + item.width, top: y, "--w": item.width, "--need": maybeTagNeed(item.title ?? "") } as CSSProperties}
             >
-              <span className="wire-maybe-tag" data-p={p}>maybe</span>
+              <span className="wire-maybe-tag" data-p={p} title={MAYBE_TOOLTIP}>maybe</span>
             </div>
           </div>
         );

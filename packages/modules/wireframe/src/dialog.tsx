@@ -155,17 +155,17 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
   };
 
   const runPrototype = async (flow?: KeptFlow) => {
-    setStatus("Assembling the kept screens…");
+    setStatus("Assembling the screens in the prototype…");
     const result = await prototypeOnWeb(canvasId, host, flow);
     if (!result.written) {
-      if (result.flows.length === 0) throw new Error("Nothing is kept yet — mark the screens the prototype should play with 📐 (⇧K, or Keep in the item's menu).");
+      if (result.flows.length === 0) throw new Error("No screen is in a prototype yet — pick the screens it should play with 📐 (⇧K, or Use in prototype in the item's menu).");
       setChoices(result.flows);
       setStatus(null);
       return;
     }
     const { itemId, links, what } = result.written;
     const dashed = links.filter((l) => l.to === null && l.needs).length;
-    const said = `Prototype ${what === "added" ? "added above the kept screens" : what === "versioned" ? "rebuilt as a new version" : what === "moved" ? "moved back above its flow" : "unchanged — nothing kept has changed"} · ${links.length} links${dashed ? `, ${dashed} dashed` : ""}`;
+    const said = `Prototype ${what === "added" ? "added above its screens" : what === "versioned" ? "rebuilt as a new version" : what === "moved" ? "moved back above its flow" : "unchanged — no screen in it has changed"} · ${links.length} links${dashed ? `, ${dashed} dashed` : ""}`;
     host.notice(said);
     if (what !== "unchanged") record(host, result.group!, [`${said}. It plays ${result.flow!.screens.length} screens: ${result.flow!.screens.map((s) => s.title).join(" · ")}.`], [itemId]);
     host.close();
@@ -184,7 +184,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       const cost = costLine(composed.tallies, composed.by, composed.screens.length, maybe);
       host.notice(`${cost} — one undo takes the whole flow back`);
       const made = composed.variants.length ? `, and ${composed.variants.length} variation${composed.variants.length === 1 ? "" : "s"}` : "";
-      const unsure = maybe ? ` The ${maybe === 1 ? "screen" : "screens"} marked maybe ${maybe === 1 ? "is" : "are"} ones round 1 was unsure the request needs: keep (📐) what belongs.` : "";
+      const unsure = maybe ? ` The ${maybe === 1 ? "screen" : "screens"} marked maybe ${maybe === 1 ? "is" : "are"} ones round 1 was unsure the request needs: use what belongs in the prototype (📐, ⇧K).` : "";
       record(host, composed.flow, [`composed "${m.request}": ${screenTitles(composed.screens)}${made}.${unsure}`, contentWords(composed.pack), `${cost} — one undo takes the whole flow back, content included.`], composed.screens.map((s) => s.item));
       host.reveal([...composed.screens, ...composed.variants].map((s) => s.item));
     } else if (m.kind === "prototype") {
@@ -266,10 +266,10 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       )}
       {choices && (
         <div className="wire-actions" role="group" aria-label="Which flow">
-          <p className="wire-note">Kept screens come from {choices.length} flows — which one should the prototype play?</p>
+          <p className="wire-note">Screens in a prototype come from {choices.length} flows — which one should it play?</p>
           {choices.map((f) => (
             <button key={f.flow} className="btn" type="button" onClick={() => { setChoices(null); runPrototype(f).catch(fail); }}>
-              {f.request || "hand-drawn screens"} ({f.screens.length} kept)
+              {f.request || "hand-drawn screens"} ({f.screens.length} screens)
             </button>
           ))}
         </div>
@@ -294,10 +294,10 @@ function PrototypeFinder({ host }: { host: DialogHost }) {
     host.reveal(ids);
     host.close();
   };
-  if (found.length === 0) return <p className="wire-note">No prototypes on this canvas yet — keep some screens (📐) and <code>/wire prototype</code> assembles one.</p>;
+  if (found.length === 0) return <p className="wire-note">No prototypes on this canvas yet — use some screens in one (📐) and <code>/wire prototype</code> assembles it.</p>;
   return (
     <div className="wire-dialog">
-      <p className="wire-note">{found.length} prototype{found.length === 1 ? "" : "s"} on this canvas — each plays one flow&rsquo;s kept screens.</p>
+      <p className="wire-note">{found.length} prototype{found.length === 1 ? "" : "s"} on this canvas — each plays one flow&rsquo;s screens marked 📐.</p>
       <ul className="wire-list">
         {found.map((p) => (
           <li key={p.id}>

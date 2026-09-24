@@ -85,7 +85,7 @@ function at(){var q={};(location.hash||"").replace(/^#/,"").split("&").forEach(f
 function flash(key,id){if(!key)return;var sc=by(id);if(!sc)return;[].slice.call(sc.querySelectorAll("[data-hot]")).forEach(function(el){if(el.getAttribute("data-hot")!==key)return;el.classList.add("pflash");setTimeout(function(){el.classList.remove("pflash")},1800)})}
 function jump(){var q=at();if(!q.screen||!by(q.screen))return false;var s=show(q.screen,"none");stack=[q.screen];paint(s);flash(q.hot,q.screen);return true}
 document.addEventListener("click",function(e){var el=e.target.closest&&e.target.closest("[data-hot]");if(!el||!el.closest(".pscreen"))return;e.preventDefault();
-var needs=el.getAttribute("data-needs");if(needs){note.textContent="· needs "+needs+" — not kept yet";return}
+var needs=el.getAttribute("data-needs");if(needs){note.textContent="· needs "+needs+" — not in the prototype yet";return}
 var to=el.getAttribute("data-go");if(to)go(to,el.getAttribute("data-t")||"push")});
 document.getElementById("restart").addEventListener("click",restart);
 [].slice.call(document.querySelectorAll("[data-needs]")).forEach(function(el){el.setAttribute("title","needs: "+el.getAttribute("data-needs"))});
@@ -114,7 +114,7 @@ function json(value: unknown): string {
  * is not a thing to put on a canvas.
  */
 export function assemblePrototype(kept: readonly WireScreen[], links: readonly WireLink[], opts: { title?: string } = {}): string {
-  if (kept.length === 0) throw new Error("nothing is kept — a prototype plays the kept screens");
+  if (kept.length === 0) throw new Error("no screen is in the prototype — it plays the screens marked 📐");
   const start = startScreen(kept)!;
   const { width, height } = stageSize(kept);
   const title = opts.title ?? "Prototype";

@@ -73,14 +73,14 @@ export function prototypeScreens(canvas: CanvasContents, prototype: Item, screen
 
 /** The one kept flow a command means: the named one, or the only one — else a refusal that lists them. */
 export function pickKeptFlow(flows: KeptFlow[], wanted: string | undefined, flag = "--flow"): KeptFlow {
-  if (flows.length === 0) throw new Error("nothing is kept — `isocan wire keep <screens...>` marks the screens a prototype plays");
+  if (flows.length === 0) throw new Error("no screen is in a prototype — `isocan wire use <screens...>` marks the screens a prototype plays");
   if (wanted !== undefined) {
     const found = flows.find((f) => f.flow === wanted);
-    if (!found) throw new Error(`no kept screens in flow "${wanted}" — kept flows: ${flows.map((f) => `${f.flow || "(hand-drawn)"} "${f.request}"`).join(", ")}`);
+    if (!found) throw new Error(`no screen of flow "${wanted}" is in a prototype — flows with screens in one: ${flows.map((f) => `${f.flow || "(hand-drawn)"} "${f.request}"`).join(", ")}`);
     return found;
   }
   if (flows.length > 1) {
-    throw new Error(`kept screens come from ${flows.length} flows — say which with ${flag}:\n  ${flows.map((f) => `${flag} ${f.flow || '""'}  "${f.request}" (${f.screens.length} kept)`).join("\n  ")}`);
+    throw new Error(`the screens in a prototype come from ${flows.length} flows — say which with ${flag}:\n  ${flows.map((f) => `${flag} ${f.flow || '""'}  "${f.request}" (${f.screens.length} in the prototype)`).join("\n  ")}`);
   }
   return flows[0]!;
 }
