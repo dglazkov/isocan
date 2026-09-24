@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { markShortcuts, registerModule, shortcutsAsText, unregisterModule } from "../src/index.ts";
+import { renderKeys } from "../src/shortcut.ts";
 
 /**
  * **A module's mark key is a listed key** (24 Sep 2026): the wireframes' ⇧K
@@ -17,7 +18,11 @@ describe("markShortcuts", () => {
     expect(markShortcuts().some((s) => s.keys.includes("⇧J"))).toBe(false);
     registerModule({ name: ACME, marks: [{ property: "acmeStar", emoji: "★", title: "Starred", on: "Star", off: "Unstar", key: "J" }] });
     expect(markShortcuts()).toContainEqual({ keys: ["⇧J"], does: "★ Star, or unstar — on the selection", group: "Items", note: "A property on the item, so anybody can take it off" });
-    expect(shortcutsAsText()).toMatch(/Items\n[\s\S]*⇧J\s+★ Star, or unstar — on the selection/);
+    // The text list spells keys for the platform it runs on: ⇧J on a Mac,
+    // Shift+J on the Linux runner (lessons #89). Red on CI four runs in a row
+    // while green on every Mac that ran it.
+    const key = renderKeys("⇧J").replace(/[+]/g, "\\+");
+    expect(shortcutsAsText()).toMatch(new RegExp(`Items\\n[\\s\\S]*${key}\\s+★ Star, or unstar — on the selection`));
   });
 
   it("leaves out a mark with no key", () => {
