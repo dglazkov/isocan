@@ -10167,7 +10167,7 @@ var talkCli = {
 };
 
 // packages/modules/wireframe/agent-guide.md
-var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module. The file is **the screen alone** \u2014 no name strip\nabove it and no device outline inside it: the item\'s own title names it and\nthe item\'s own frame is the device. The screen\'s own chrome (status bar, app\nbar, tab bar) stays.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; without a key the default is `--answerer home` \u2014 Jev\n  through the canvas\'s home, with the home\'s key \u2014 and when the home has no\n  key either it says so and the stub answers; `--answerer stub` draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. A person does the same from the Chat with\n  `/wire <request>` (and `/wire prototype`, `/wire style`, `/wire flesh`,\n  `/wire rerender`): the browser runs this same composer against the home\'s\n  judge, as that person, and when it finishes it leaves one **record in the\n  Chat** in the Wire builder\'s words \u2014 what was made and the numbers \u2014 in\n  the act\'s own op group, so the undo that takes the flow back takes its\n  record too. The CLI prints those lines to you instead and posts nothing:\n  post your ONE comment saying what landed. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere.\n- **Round 1 over-includes; the prototype prunes.** An archetype the\n  answerer gives P(yes) \u2265 0.5 is a screen of the flow; one from 0.3 up to\n  0.5 is drawn too, in its running place in the row, but marked **maybe**:\n  the item carries `wireMaybe=<p>` (set by the op that adds it), its spec\n  `"maybe": true`, and its title reads `(maybe)` in the lines and the Chat\n  record. The canvas draws a dashed blue outline round it and a *maybe* tag\n  above its top edge \u2014 outside the screen, never over it \u2014 **while it is\n  not in the prototype** (the tag\'s tooltip: *Not in the prototype yet \u2014 \u21E7K\n  to use it*): using it is the answer, so the mark goes; remove it from the\n  prototype and the mark returns. A maybe gets no variations until someone\n  uses it (`wire vary` draws them).\n  Under 0.3 it is declined. Jev ranks screens well and is overconfident\n  about them (phase 6), so a maybe is often wanted: look at each one and\n  **use what belongs in the prototype (\u{1F4D0})** \u2014 a maybe left out is only a\n  screen on the canvas, never in `wire links`, the arrows or the prototype. Every\n  composed screen\'s spec carries `need`, round 1\'s P(yes) for it, and\n  `by` \u2014 who drew it: `{ actor: {id, name}, answerer: "jev" | "stub" |\n  "agent", via?: "home", model? }` \u2014 so a later reader (or a \u{1F4D0} mark that\n  labels a decision) knows whether Jev chose it or the stub threw dice. A\n  variation carries its screen\'s answerer and the actor who asked for it.\n- **Variations come at the end of every flow**, in the same op group:\n  under each screen, up to two siblings titled `<Screen> \xB7 <what flipped>`\n  (`List \xB7 data table instead of stacked list`, `Detail \xB7 without button\n  group`, `Home \xB7 with stats row`). Each flips ONE decision to its runner-up,\n  where the answerer was least certain \u2014 the decision whose runner-up held\n  the most probability first \u2014 and nothing whose runner-up is under 0.10.\n  Nothing is asked again: the probabilities are the ones the screen already\n  carries. A screen whose answerer was sure everywhere gets no sibling and\n  says **one way to draw this** (the screen\'s tooltip, `data-varied="none"`\n  on its body, and the CLI\'s line). A variation\'s spec has\n  `variantOf` (its screen\'s item id) and `flip` (`{slot, from, to}`; `omit`\n  is a section left out). The header and nav are never varied \u2014 the flow\n  fixed them once for every screen.\n- `isocan wire vary <screen> [--count n]` adds more, the next least certain\n  flips a sibling does not already show, under the lowest sibling, in an op\n  group of their own, inside the screen\'s canvas group when it has one;\n  `--count` is how many variations the screen should\n  have in all (default 2), so running it twice adds nothing. It refuses a\n  variation (vary its screen) and a hand-drawn screen (no distribution).\n- **Use in prototype (\u{1F4D0})**: `isocan wire use <screens...>` puts screens\n  in the prototype \u2014 the property `wireKeep=yes` through `item.update`, as\n  a slide is marked, so anyone can take it off with\n  `isocan wire unuse <screens...>`. Every screen stays on the canvas either\n  way: the mark only says which ones the prototype plays. The mark was born\n  as *keep*, and `wire keep|unkeep` still work \u2014 the same act under its\n  first names; the property keeps its name too. `isocan wire kept` lists\n  the screens in the prototype in reading order (rows top to bottom, each\n  left to right). A variation can be used in place of its screen. People do\n  the same from the item menu (\u{1F4D0} *Use in prototype* / *Remove from\n  prototype*) or \u21E7K; a marked screen\'s \u{1F4D0} says *In the prototype*.\n  `isocan wire kept --prototype <item>` lists only the screens that\n  prototype plays, in its order \u2014 its flow\'s marked screens and any guest\n  marked in another flow; it is what a person sees when they select the\n  prototype on the canvas (its screens pulse, then stay outlined, and\n  everything else dims \u2014 their view only, nothing is written).\n- **Links are computed, never stored.** `isocan wire links [screen]` prints\n  where every hotspot on the screens in the prototype goes, worked out each\n  time from intents, archetypes and reading order: an intent with a target\n  goes to the first screen in the prototype of that archetype (`sign-in` \u2192\n  the first home, list or feed; `next`/`continue`/`save` \u2192 the next screen\n  in it); `back` and an app bar\'s chevron go back; a list, grid, table or\n  feed row opens the first `detail` in it after the row\'s screen; a nav item\n  can say it IS one of the flow\'s screens \u2014 `open-list`, `open-feed`,\n  `open-gallery` go to the first list, feed or gallery in the prototype (and a fleshed one reads in the pack\'s words, "Deliveries") \u2014\n  so when you answer round 3, give the tab that shows the list `open-list`\n  rather than a jump whose screen does not exist; tab *i* whose intent found\n  nothing takes the *i*-th top-level screen (one that draws the nav) no other\n  tab reaches. Anything else that navigates and found nothing is **dashed**\n  and says what it needs (`- - needs Settings`) \u2014 the list of screens still\n  to make. A hotspot\'s key is `<slot>#<element>` (`main.3#row`,\n  `header#leading`, `nav#tab-2`); `--json` has every link with its `rule`.\n- `isocan wire link <screen> <element> <target>` overrides one hotspot \u2014\n  `<element>` is the key or its part after `#` when that is unique \u2014\n  `--none` switches it off, `--back` sends it back, `--clear` gives it back\n  to the rules. Each hotspot\'s override is its own property on the source\n  screen, `wireLink:<slot>#<element>`, through `item.update` \u2014 so two `wire\n  link` calls on one screen at once (or a person retargeting an arrow while\n  you relink) both survive; a screen still carrying the older `wireLinks`\n  JSON is folded into per-hotspot properties by the first write. It reads\n  only the source screen\'s file and exits when the write lands; one `isocan\n  undo` takes it back. A target may be a screen **in another flow\'s prototype**:\n  the link resolves, and that screen joins this flow\'s prototype so the\n  link plays.\n- **The canvas draws one arrow per hotspot**, flow by flow \u2014 so the rows of\n  `wire links` that go to a screen and the arrows correspond one to one (tabs\n  show only while a person points at their screen; back never). A person\n  can click an arrow to change where it goes, remove it or reset it: each is\n  exactly the `wire link` above, and `/wire links` in the dialog is the same\n  table with a picker per hotspot. `isocan wire play <screen> [element]`\n  prints the address that opens the flow\'s prototype full screen AT that\n  screen, the hotspot pointed out \u2014 what an arrow\'s *Play from here* opens;\n  it writes nothing.\n- `isocan wire prototype` assembles a flow\'s screens marked \u{1F4D0} (`--flow\n  <id>` when more than one flow has some) as **one self-contained HTML\n  item** centred **above** them, clear of the arrows\' lanes and of anything\n  already there (higher still if it must be) \u2014 inside the canvas group those\n  screens share, when they share one: every screen, a router with a history\n  stack, the links as click targets, a push / pop / fade / slide-up by link\n  kind, a Restart. Using or removing a screen does not rebuild it: run it\n  again after the marks or a screen change, and the same\n  item **gains a version** (found by its `wirePrototype` property); with\n  nothing changed it writes nothing. A rebuild (this, `wire style`, `wire\n  flesh`, `wire render --all`) also moves it back above its flow, in the\n  same op group \u2014 unless it was moved by hand: `wirePrototypeAt` records\n  where it was placed, and a prototype standing anywhere else stays put.\n  `isocan open <item>` plays it full screen.\n- **Wires draw in the canvas\'s design system.** The look is a theme over\n  the same spec: eleven roles (`ground`, `surface`, `line`, `ink`,\n  `ink-muted`, `bar`, `primary`, `on-primary`, `radius`, `font`, `space`),\n  by default the greys. `isocan wire style` restyles every wire on the\n  canvas in the `DESIGN.md` that governs where it sits (a group\'s own system\n  first, then the canvas\'s \u2014 `isocan design set DESIGN.md [--in <group>]`):\n  Jev maps the system\'s own tokens onto the roles \u2014 one choice per role over\n  the token names, once per system *version* \u2014 and every wire whose theme\n  changed gains a version, in one op group, so one `isocan undo` takes the\n  restyle back. The output names the token chosen for each role with its\n  probability; a role Jev is unsure of (under 0.5) keeps the default and says\n  so, and an on-primary under 4.5:1 against primary becomes the system\'s ink\n  or ground. Nothing is ever a colour the system does not hold. Blueprints\n  stay blue in every system. `--default` restores the greys; `--flow <id>`\n  restyles one flow; `--check` writes nothing and lists wires behind the\n  system that governs them (a new `DESIGN.md` version does not restyle\n  anything by itself \u2014 run `wire style` to bring them forward). Running it\n  again with nothing changed asks nothing and writes nothing \u2014 and a new\n  system version that maps every role to the same values as before writes\n  nothing either (the wire looks the same; its spec keeps naming the version\n  that drew it). Words drawn in the primary\'s voice on the ground \u2014 text\n  links, secondary and tertiary button labels, the current tab \u2014 use the\n  primary only where it reads at 4.5:1 on the ground, else the ink. A flow\'s\n  prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the\n  home\'s judge maps it; when the home has no key either, the stub answers,\n  and its flat distributions keep every asked role at the default. The spec records it as `style` (`{ "source": "design-system",\n  "itemId", "versionId", "roles" }`).\n- `isocan wire "<request>"` starts in the governing system: the mapping is\n  asked while round 1 is, and the screens arrive in it. `--in <group>`\n  composes the flow inside a group \u2014 under everything the group already\n  holds, so a second flow never lands across the first\'s variations \u2014 and in\n  that group\'s own system, when it has one. Moving a `DESIGN.md` into or out\n  of a group changes what it governs, and `isocan mv --in` / `canvas group\n  add|remove` say so in a `note:` line.\n- **Fleshed out: sample content instead of bars.** `isocan wire flesh\n  [screens\u2026|--flow <id>] [--pack <id>]` fills every wire with believable\n  content for *this* app \u2014 list rows with titles, second lines and\n  statuses ("Parcel 4471 \xB7 3 items \xB7 Out for delivery"), stats with values\n  and deltas, table cells under domain column names, first names with\n  initials in avatars, greyscale pictograms in image slots, and a heading\n  from the domain ("Deliveries" instead of "List"). The screen is **named**\n  in the pack\'s words too \u2014 a list "Deliveries", a detail "Delivery", a\n  form "New delivery", a search "Search deliveries" (a home or a sign-in\n  keeps its name) \u2014 and so is its item, in the same op group, unless\n  somebody renamed the item: a name a person or an agent gave is never\n  overwritten. `--bars` names them back. A block\'s lone bare verb says what\n  it acts on ("Edit delivery", "Edit profile"; `actions.<element>` in `wire\n  copy`). The words come from one\n  of 24 synthetic **content packs** (`wire flesh --packs` lists them), never\n  written by a model: Jev chooses the pack per flow from its request \u2014 one\n  choice question, its p printed and recorded on each screen as `content`\n  (`{ "source": "pack", "pack", "p", "by", "title" }`); under 0.4 the\n  generic pack fills and the line says so; `--pack <id>` overrides a wrong\n  guess without asking. Each slot\'s words are stored as `fill` in the spec,\n  seeded by the screen\'s item id and the slot (a variation\'s by its\n  screen\'s), so a re-render, `wire style`, `wire vary` and `wire prototype`\n  all show the same content. One op group, a version per wire whose content\n  changed; running it again asks nothing and writes nothing; `--bars` goes\n  back to bars. Blueprints stay blue and unfilled. A flow\'s prototype\n  is rebuilt in the same group. People do the same with `/wire flesh` in\n  the Chat.\n- **A composed flow arrives fleshed.** `isocan wire "<request>"` (and\n  `/wire <request>`) asks for the pack beside round 1 \u2014 one call more \u2014 so\n  the screens land blue, then grey (round 2), then filled (round 3), all in\n  the flow\'s one op group: one `isocan undo` takes the flow back, content\n  and all. Its variations, and later `wire vary`\'s, take the same pack.\n  `--pack <id>` picks the pack without asking; `isocan wire --basic\n  "<request>"` (`/wire basic <request>` in the Chat) composes plain grey\n  wires with no content, and `wire flesh --bars` takes content off\n  afterwards. A pack that cannot be chosen leaves the flow in bars and says\n  so. The agent path (`--answerer agent`) fills nothing: once your rounds\n  are answered, `isocan wire flesh --flow <id>` does.\n- **A composed flow ends with a prototype you can click.** After round 3\n  (and the flesh), the first choice of every row round 1 was confident of\n  (P(yes) \u2265 0.5) goes in the prototype (\u{1F4D0}) \u2014 never a *maybe*, never a\n  variation \u2014 and the prototype is built above the row (a flow composed\n  under others starts its row lower, leaving the prototype that room), all\n  in the flow\'s op group: one `isocan undo` takes the screens, the picks and the\n  prototype back together. The arrows draw between those screens at once.\n  The lines (and `--json`\'s `prototype`) say which item it is, what it\n  plays and whose first choices they are; in the Chat the record says\n  "Prototype of 6 screens, Jev\'s first choices \u2014 swap in a variation with\n  \u21E7K". To swap: `isocan wire use <variation>`, `isocan wire unuse <its\n  screen>`, then `isocan wire prototype` rebuilds it (a mark alone does\n  not). `--basic` puts nothing in a prototype and builds none; so does the\n  agent path \u2014 you answered, so you choose, then `wire prototype`.\n- **Who put a screen in the prototype** is `wireKeepBy` beside `wireKeep`:\n  `jev` or `stub` when a composed flow picked it (the answerer whose first\n  choice it was), the actor\'s id when a person or an agent used it \u2014 \u21E7K,\n  the menu, `wire use|keep`. Taking the mark off takes `wireKeepBy` with\n  it. A person swapping a variation in for one of Jev\'s picks is the\n  calibration signal, so never re-mark a screen Jev picked just to sign\n  it, and never mark one "as Jev".\n- `isocan wire copy <screen>` prints a fleshed screen\'s words as JSON \u2014\n  per slot, each word by path (`items.0.title`, `stats.1.value`,\n  `labels.2`). Edit the words, then `isocan wire copy <screen> --apply\n  <file>` writes them as one version, with `content.source` `"copy"` and\n  `--by <name>` recorded; a path the slot does not hold is refused, so copy\n  changes words, never the screen\'s shape. `"title"` sets the heading.\n  `wire flesh` leaves a copied screen alone unless `--pack` or `--bars`.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n- `isocan wire render --all [--flow <id>]` **re-renders every wire already\n  on the canvas** from the spec it carries \u2014 how a change to the renderer\n  reaches screens drawn before it (a flesh or a restyle writes only where\n  the spec changed). A version only where the bytes differ, the item resized\n  where the screen\'s size moved, the flows\' prototypes rebuilt, all one op\n  group; it says how many changed, and a rerun writes nothing. `/wire\n  rerender` in the Chat does the same.\n- **Finding prototypes**: a prototype item carries `wirePrototype=<flow>`\n  and is titled `Prototype \xB7 <request>`, so `isocan ls --filter Prototype` finds\n  them (`--json` shows the property). In the web app \u2318K *Find prototypes* (or\n  `/wire prototypes`) lists them and selects them, and while a pointer is on\n  the minimap every prototype is lit and everything else steps back.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n52; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; body copy is grey bars, never lorem ipsum \u2014 until `wire\nflesh` fills it from a content pack. If you want real copy on a screen,\nthat is a separate, honest act \u2014 `wire copy <screen> --apply <file>` \u2014\nnot a label smuggled into an intent.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
+var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module. The file is **the screen alone** \u2014 no name strip\nabove it and no device outline inside it: the item\'s own title names it and\nthe item\'s own frame is the device. The screen\'s own chrome (status bar, app\nbar, tab bar) stays.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; without a key the default is `--answerer home` \u2014 Jev\n  through the canvas\'s home, with the home\'s key \u2014 and when the home has no\n  key either it says so and the stub answers; `--answerer stub` draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. A person does the same from the Chat with\n  `/wire <request>` (and `/wire prototype`, `/wire style`, `/wire flesh`,\n  `/wire rerender`): the browser runs this same composer against the home\'s\n  judge, as that person, and when it finishes it leaves one **record in the\n  Chat** in the Wire builder\'s words \u2014 what was made and the numbers \u2014 in\n  the act\'s own op group, so the undo that takes the flow back takes its\n  record too. The CLI prints those lines to you instead and posts nothing:\n  post your ONE comment saying what landed. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere.\n- **Round 1 over-includes; the prototype prunes.** An archetype the\n  answerer gives P(yes) \u2265 0.5 is a screen of the flow; one from 0.3 up to\n  0.5 is drawn too, in its running place in the row, but marked **maybe**:\n  the item carries `wireMaybe=<p>` (set by the op that adds it), its spec\n  `"maybe": true`, and its title reads `(maybe)` in the lines and the Chat\n  record. The canvas draws a dashed blue outline round it and a *maybe* tag\n  above its top edge \u2014 outside the screen, never over it \u2014 **while it is\n  not in the prototype** (the tag\'s tooltip: *Not in the prototype yet \u2014 \u21E7K\n  to use it*): using it is the answer, so the mark goes; remove it from the\n  prototype and the mark returns. A maybe gets no variations until someone\n  uses it (`wire vary` draws them).\n  Under 0.3 it is declined. Jev ranks screens well and is overconfident\n  about them (phase 6), so a maybe is often wanted: look at each one and\n  **use what belongs in the prototype (\u{1F4D0})** \u2014 a maybe left out is only a\n  screen on the canvas, never in `wire links`, the arrows or the prototype. Every\n  composed screen\'s spec carries `need`, round 1\'s P(yes) for it, and\n  `by` \u2014 who drew it: `{ actor: {id, name}, answerer: "jev" | "stub" |\n  "agent", via?: "home", model? }` \u2014 so a later reader (or a \u{1F4D0} mark that\n  labels a decision) knows whether Jev chose it or the stub threw dice. A\n  variation carries its screen\'s answerer and the actor who asked for it.\n- **Variations come at the end of every flow**, in the same op group:\n  under each screen, up to two siblings titled `<Screen> \xB7 <what flipped>`\n  (`List \xB7 data table instead of stacked list`, `Detail \xB7 without button\n  group`, `Home \xB7 with stats row`). Each flips ONE decision to its runner-up,\n  where the answerer was least certain \u2014 the decision whose runner-up held\n  the most probability first \u2014 and nothing whose runner-up is under 0.10.\n  Nothing is asked again: the probabilities are the ones the screen already\n  carries. A screen whose answerer was sure everywhere gets no sibling and\n  says **one way to draw this** (the screen\'s tooltip, `data-varied="none"`\n  on its body, and the CLI\'s line). A variation\'s spec has\n  `variantOf` (its screen\'s item id) and `flip` (`{slot, from, to}`; `omit`\n  is a section left out). The header and nav are never varied \u2014 the flow\n  fixed them once for every screen.\n- `isocan wire vary <screen> [--count n]` adds more, the next least certain\n  flips a sibling does not already show, under the lowest sibling, in an op\n  group of their own, inside the screen\'s canvas group when it has one;\n  `--count` is how many variations the screen should\n  have in all (default 2), so running it twice adds nothing. It refuses a\n  variation (vary its screen) and a hand-drawn screen (no distribution).\n- **Use in prototype (\u{1F4D0})**: `isocan wire use <screens...>` puts screens\n  in the prototype \u2014 the property `wireKeep=yes` through `item.update`, as\n  a slide is marked, so anyone can take it off with\n  `isocan wire unuse <screens...>`. Every screen stays on the canvas either\n  way: the mark only says which ones the prototype plays. The mark was born\n  as *keep*, and `wire keep|unkeep` still work \u2014 the same act under its\n  first names; the property keeps its name too. `isocan wire kept` lists\n  the screens in the prototype in reading order (rows top to bottom, each\n  left to right). A variation can be used in place of its screen. People do\n  the same from the item menu (\u{1F4D0} *Use in prototype* / *Remove from\n  prototype*) or \u21E7K; a marked screen\'s \u{1F4D0} says *In the prototype*.\n  `isocan wire kept --prototype <item>` lists only the screens that\n  prototype plays, in its order \u2014 its flow\'s marked screens and any guest\n  marked in another flow; it is what a person sees when they select the\n  prototype on the canvas (its screens pulse, then stay outlined, and\n  everything else dims \u2014 their view only, nothing is written).\n- **Links are computed, never stored.** `isocan wire links [screen]` prints\n  where every hotspot on the screens in the prototype goes, worked out each\n  time from intents, archetypes and reading order: an intent with a target\n  goes to the first screen in the prototype of that archetype (`sign-in` \u2192\n  the first home, list or feed; `next`/`continue`/`save` \u2192 the next screen\n  in it); `back` and an app bar\'s chevron go back; a list, grid, table or\n  feed row opens the first `detail` in it after the row\'s screen; a nav item\n  can say it IS one of the flow\'s screens \u2014 `open-list`, `open-feed`,\n  `open-gallery` go to the first list, feed or gallery in the prototype (and a fleshed one reads in the pack\'s words, "Deliveries") \u2014\n  so when you answer round 3, give the tab that shows the list `open-list`\n  rather than a jump whose screen does not exist; tab *i* whose intent found\n  nothing takes the *i*-th top-level screen (one that draws the nav) no other\n  tab reaches. Anything else that navigates and found nothing is **dashed**\n  and says what it needs (`- - needs Settings`) \u2014 the list of screens still\n  to make. A hotspot\'s key is `<slot>#<element>` (`main.3#row`,\n  `header#leading`, `nav#tab-2`); `--json` has every link with its `rule`.\n- `isocan wire link <screen> <element> <target>` overrides one hotspot \u2014\n  `<element>` is the key or its part after `#` when that is unique \u2014\n  `--none` switches it off, `--back` sends it back, `--clear` gives it back\n  to the rules. Each hotspot\'s override is its own property on the source\n  screen, `wireLink:<slot>#<element>`, through `item.update` \u2014 so two `wire\n  link` calls on one screen at once (or a person retargeting an arrow while\n  you relink) both survive; a screen still carrying the older `wireLinks`\n  JSON is folded into per-hotspot properties by the first write. It reads\n  only the source screen\'s file and exits when the write lands; one `isocan\n  undo` takes it back. A target may be a screen **in another flow\'s prototype**:\n  the link resolves, and that screen joins this flow\'s prototype so the\n  link plays.\n- **The canvas draws one arrow per hotspot**, flow by flow \u2014 so the rows of\n  `wire links` that go to a screen and the arrows correspond one to one (tabs\n  show only while a person points at their screen; back never). A person\n  can click an arrow to change where it goes, remove it or reset it: each is\n  exactly the `wire link` above, and `/wire links` in the dialog is the same\n  table with a picker per hotspot. `isocan wire play <screen> [element]`\n  prints the address that opens the flow\'s prototype full screen AT that\n  screen, the hotspot pointed out \u2014 what an arrow\'s *Play from here* opens;\n  it writes nothing.\n- `isocan wire prototype` assembles a flow\'s screens marked \u{1F4D0} (`--flow\n  <id>` when more than one flow has some) as **one self-contained HTML\n  item** centred **above** them, clear of the arrows\' lanes and of anything\n  already there (higher still if it must be) \u2014 inside the canvas group those\n  screens share, when they share one: every screen, a router with a history\n  stack, the links as click targets, a push / pop / fade / slide-up by link\n  kind, a Restart. **It follows its marks**: using a screen in it or\n  removing one \u2014 `wire use|unuse|keep|unkeep`, \u21E7K, the item menu \u2014\n  re-versions a flow\'s prototype in the same op group as the mark, so one\n  `isocan undo` takes back both (the CLI\'s line says `prototype <id>\n  follows`, and `--json` lists it under `prototypes`). Marks never create\n  one: a flow with no prototype stays without until `wire prototype`, and\n  a flow with nothing left marked keeps its prototype as it was. Run `wire\n  prototype` yourself after a screen itself changes, and the same\n  item **gains a version** (found by its `wirePrototype` property); with\n  nothing changed it writes nothing. A rebuild (this, `wire style`, `wire\n  flesh`, `wire render --all`) also moves it back above its flow, in the\n  same op group \u2014 unless it was moved by hand: `wirePrototypeAt` records\n  where it was placed, and a prototype standing anywhere else stays put.\n  `isocan open <item>` plays it full screen.\n- **Wires draw in the canvas\'s design system.** The look is a theme over\n  the same spec: eleven roles (`ground`, `surface`, `line`, `ink`,\n  `ink-muted`, `bar`, `primary`, `on-primary`, `radius`, `font`, `space`),\n  by default the greys. `isocan wire style` restyles every wire on the\n  canvas in the `DESIGN.md` that governs where it sits (a group\'s own system\n  first, then the canvas\'s \u2014 `isocan design set DESIGN.md [--in <group>]`):\n  Jev maps the system\'s own tokens onto the roles \u2014 one choice per role over\n  the token names, once per system *version* \u2014 and every wire whose theme\n  changed gains a version, in one op group, so one `isocan undo` takes the\n  restyle back. The output names the token chosen for each role with its\n  probability; a role Jev is unsure of (under 0.5) keeps the default and says\n  so, and an on-primary under 4.5:1 against primary becomes the system\'s ink\n  or ground. Nothing is ever a colour the system does not hold. Blueprints\n  stay blue in every system. `--default` restores the greys; `--flow <id>`\n  restyles one flow; `--check` writes nothing and lists wires behind the\n  system that governs them (a new `DESIGN.md` version does not restyle\n  anything by itself \u2014 run `wire style` to bring them forward). Running it\n  again with nothing changed asks nothing and writes nothing \u2014 and a new\n  system version that maps every role to the same values as before writes\n  nothing either (the wire looks the same; its spec keeps naming the version\n  that drew it). Words drawn in the primary\'s voice on the ground \u2014 text\n  links, secondary and tertiary button labels, the current tab \u2014 use the\n  primary only where it reads at 4.5:1 on the ground, else the ink. A flow\'s\n  prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the\n  home\'s judge maps it; when the home has no key either, the stub answers,\n  and its flat distributions keep every asked role at the default. The spec records it as `style` (`{ "source": "design-system",\n  "itemId", "versionId", "roles" }`).\n- `isocan wire "<request>"` starts in the governing system: the mapping is\n  asked while round 1 is, and the screens arrive in it. `--in <group>`\n  composes the flow inside a group \u2014 under everything the group already\n  holds, so a second flow never lands across the first\'s variations \u2014 and in\n  that group\'s own system, when it has one. Moving a `DESIGN.md` into or out\n  of a group changes what it governs, and `isocan mv --in` / `canvas group\n  add|remove` say so in a `note:` line.\n- **Fleshed out: sample content instead of bars.** `isocan wire flesh\n  [screens\u2026|--flow <id>] [--pack <id>]` fills every wire with believable\n  content for *this* app \u2014 list rows with titles, second lines and\n  statuses ("Parcel 4471 \xB7 3 items \xB7 Out for delivery"), stats with values\n  and deltas, table cells under domain column names, first names with\n  initials in avatars, greyscale pictograms in image slots, and a heading\n  from the domain ("Deliveries" instead of "List"). The screen is **named**\n  in the pack\'s words too \u2014 a list "Deliveries", a detail "Delivery", a\n  form "New delivery", a search "Search deliveries" (a home or a sign-in\n  keeps its name) \u2014 and so is its item, in the same op group, unless\n  somebody renamed the item: a name a person or an agent gave is never\n  overwritten. `--bars` names them back. A block\'s lone bare verb says what\n  it acts on ("Edit delivery", "Edit profile"; `actions.<element>` in `wire\n  copy`). The words come from one\n  of 24 synthetic **content packs** (`wire flesh --packs` lists them), never\n  written by a model: Jev chooses the pack per flow from its request \u2014 one\n  choice question, its p printed and recorded on each screen as `content`\n  (`{ "source": "pack", "pack", "p", "by", "title" }`); under 0.4 the\n  generic pack fills and the line says so; `--pack <id>` overrides a wrong\n  guess without asking. Each slot\'s words are stored as `fill` in the spec,\n  seeded by the screen\'s item id and the slot (a variation\'s by its\n  screen\'s), so a re-render, `wire style`, `wire vary` and `wire prototype`\n  all show the same content. One op group, a version per wire whose content\n  changed; running it again asks nothing and writes nothing; `--bars` goes\n  back to bars. Blueprints stay blue and unfilled. A flow\'s prototype\n  is rebuilt in the same group. People do the same with `/wire flesh` in\n  the Chat.\n- **A composed flow arrives fleshed.** `isocan wire "<request>"` (and\n  `/wire <request>`) asks for the pack beside round 1 \u2014 one call more \u2014 so\n  the screens land blue, then grey (round 2), then filled (round 3), all in\n  the flow\'s one op group: one `isocan undo` takes the flow back, content\n  and all. Its variations, and later `wire vary`\'s, take the same pack.\n  `--pack <id>` picks the pack without asking; `isocan wire --basic\n  "<request>"` (`/wire basic <request>` in the Chat) composes plain grey\n  wires with no content, and `wire flesh --bars` takes content off\n  afterwards. A pack that cannot be chosen leaves the flow in bars and says\n  so. The agent path (`--answerer agent`) fills nothing: once your rounds\n  are answered, `isocan wire flesh --flow <id>` does.\n- **A composed flow ends with a prototype you can click.** After round 3\n  (and the flesh), the first choice of every row round 1 was confident of\n  (P(yes) \u2265 0.5) goes in the prototype (\u{1F4D0}) \u2014 never a *maybe*, never a\n  variation \u2014 and the prototype is built above the row (a flow composed\n  under others starts its row lower, leaving the prototype that room), all\n  in the flow\'s op group: one `isocan undo` takes the screens, the picks and the\n  prototype back together. The arrows draw between those screens at once.\n  The lines (and `--json`\'s `prototype`) say which item it is, what it\n  plays and whose first choices they are; in the Chat the record says\n  "Prototype of 6 screens, Jev\'s first choices \u2014 swap in a variation with\n  \u21E7K and the prototype follows". To swap: `isocan wire use <variation>`\n  and `isocan wire unuse <its screen>` \u2014 the prototype follows each. `--basic` puts nothing in a prototype and builds none; so does the\n  agent path \u2014 you answered, so you choose, then `wire prototype`.\n- **Who put a screen in the prototype** is `wireKeepBy` beside `wireKeep`:\n  `jev` or `stub` when a composed flow picked it (the answerer whose first\n  choice it was), the actor\'s id when a person or an agent used it \u2014 \u21E7K,\n  the menu, `wire use|keep`. Taking the mark off takes `wireKeepBy` with\n  it. A person swapping a variation in for one of Jev\'s picks is the\n  calibration signal, so never re-mark a screen Jev picked just to sign\n  it, and never mark one "as Jev".\n- `isocan wire copy <screen>` prints a fleshed screen\'s words as JSON \u2014\n  per slot, each word by path (`items.0.title`, `stats.1.value`,\n  `labels.2`). Edit the words, then `isocan wire copy <screen> --apply\n  <file>` writes them as one version, with `content.source` `"copy"` and\n  `--by <name>` recorded; a path the slot does not hold is refused, so copy\n  changes words, never the screen\'s shape. `"title"` sets the heading.\n  `wire flesh` leaves a copied screen alone unless `--pack` or `--bars`.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n- `isocan wire render --all [--flow <id>]` **re-renders every wire already\n  on the canvas** from the spec it carries \u2014 how a change to the renderer\n  reaches screens drawn before it (a flesh or a restyle writes only where\n  the spec changed). A version only where the bytes differ, the item resized\n  where the screen\'s size moved, the flows\' prototypes rebuilt, all one op\n  group; it says how many changed, and a rerun writes nothing. `/wire\n  rerender` in the Chat does the same.\n- **Finding prototypes**: a prototype item carries `wirePrototype=<flow>`\n  and is titled `Prototype \xB7 <request>`, so `isocan ls --filter Prototype` finds\n  them (`--json` shows the property). In the web app \u2318K *Find prototypes* (or\n  `/wire prototypes`) lists them and selects them, and while a pointer is on\n  the minimap every prototype is lit and everything else steps back.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n52; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; body copy is grey bars, never lorem ipsum \u2014 until `wire\nflesh` fills it from a content pack. If you want real copy on a screen,\nthat is a separate, honest act \u2014 `wire copy <screen> --apply <file>` \u2014\nnot a label smuggled into an intent.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
 
 // packages/modules/wireframe/src/cli.ts
 import { readFile as readFile3 } from "node:fs/promises";
@@ -12486,47 +12486,10 @@ function kept(canvas2) {
   return readingOrder(Object.values(canvas2.items).filter(isKept));
 }
 
-// packages/modules/wireframe/src/maybe.ts
-var MAYBE_PROP = "wireMaybe";
-function maybeProperties(spec) {
-  return spec.maybe ? { [MAYBE_PROP]: (spec.need ?? 0).toFixed(2) } : {};
+// packages/modules/wireframe/src/port.ts
+function currentVersionOf(item) {
+  return item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[item.versions.length - 1];
 }
-
-// packages/modules/wireframe/src/command.ts
-var WIRE_COMMAND = {
-  ...wireframeModule.commands[0],
-  body: `Wireframes on this canvas, with the \`isocan wire\` verbs \u2014 never draw a
-screen by hand, and never write its copy yourself unless asked.
-
-- \`/wire <what the screens are for>\` \u2192 \`isocan wire "<request>"\`. Blueprints
-  land first, then fill in place, arrive fleshed with sample content, and end
-  with a prototype of the answerer's first choices (\u{1F4D0}) above the row; one
-  \`isocan undo\` takes the whole flow back, content and prototype and all.
-  With no TYPESAFE_API_KEY here the canvas's home answers (the CLI says which).
-- \`/wire basic <what the screens are for>\` \u2192 \`isocan wire --basic "<request>"\`
-  (plain grey wires, no sample content, nothing in a prototype).
-- \`/wire prototype\` \u2192 \`isocan wire prototype\` (the screens marked \u{1F4D0} \u2014 use
-  some in it first with \`isocan wire use <screens\u2026>\` if none is).
-- \`/wire style\` \u2192 \`isocan wire style\`; \`/wire style --default\` \u2192
-  \`isocan wire style --default\`.
-- \`/wire flesh\` \u2192 \`isocan wire flesh\` (sample content instead of grey bars
-  on wires that have none;
-  \`/wire flesh --pack <id>\` and \`/wire flesh --bars\` pass through). Exact
-  words for a screen are \`isocan wire copy <screen>\`, edited, then
-  \`isocan wire copy <screen> --apply <file>\` \u2014 only when asked for copy.
-- \`/wire rerender\` \u2192 \`isocan wire render --all\` (every wire drawn again from
-  its own spec; a version only where the bytes change).
-- \`/wire prototypes\` \u2192 \`isocan ls --filter Prototype\` (the prototypes carry
-  \`wirePrototype\`); say which ones there are and where.
-
-Post ONE comment saying what landed: how many screens, which answered, and
-that one undo takes it back.`
-};
-var wireframeCore = {
-  ...wireframeModule,
-  propertyKeys: [KEEP_PROP2, "wireKeepBy", MAYBE_PROP, "wireLinks", "wireLink:*", "wirePrototype", "wirePrototypeAt"],
-  commands: [WIRE_COMMAND]
-};
 
 // packages/modules/wireframe/src/links.ts
 var LINK_BACK = "back";
@@ -13147,6 +13110,46 @@ function readWire(html) {
   }
 }
 
+// packages/modules/wireframe/src/link-override.ts
+var LINK_PREFIX = "wireLink:";
+function linkProp(key) {
+  return `${LINK_PREFIX}${key}`;
+}
+function overridesOf(properties) {
+  const out = readOverrides(properties?.[LINKS_PROP]);
+  for (const [prop2, value] of Object.entries(properties ?? {})) {
+    if (prop2.startsWith(LINK_PREFIX) && value) out[prop2.slice(LINK_PREFIX.length)] = value;
+  }
+  return out;
+}
+function linkPatch(item, key, value) {
+  const properties = {};
+  const removeProperties = [];
+  const legacy = item.properties?.[LINKS_PROP];
+  if (legacy !== void 0) {
+    for (const [k, v] of Object.entries(readOverrides(legacy))) {
+      if (k !== key && item.properties?.[linkProp(k)] === void 0) properties[linkProp(k)] = v;
+    }
+    removeProperties.push(LINKS_PROP);
+  }
+  if (value === null) removeProperties.push(linkProp(key));
+  else properties[linkProp(key)] = value;
+  return { ...Object.keys(properties).length ? { properties } : {}, ...removeProperties.length ? { removeProperties } : {} };
+}
+function linkChanges(item, key, value) {
+  if (item.properties?.[LINKS_PROP] !== void 0) return true;
+  return value === null ? item.properties?.[linkProp(key)] !== void 0 : item.properties?.[linkProp(key)] !== value;
+}
+async function setLinkOverride(port, item, key, value, group) {
+  const patch = linkPatch(item, key, value);
+  const after = { ...item.properties ?? {}, ...patch.properties ?? {} };
+  for (const prop2 of patch.removeProperties ?? []) delete after[prop2];
+  const overrides = overridesOf(after);
+  if (!linkChanges(item, key, value)) return { overrides, wrote: false };
+  await port.send({ type: "item.update", itemId: item.id, patch }, group);
+  return { overrides, wrote: true };
+}
+
 // packages/modules/wireframe/src/prototype.ts
 var PROTOTYPE_MARKER = "<!-- isocan:wireframe-prototype -->";
 var PROTOTYPE_PROP = "wirePrototype";
@@ -13264,6 +13267,308 @@ ${sections.join("\n")}
 }
 function playAnchor(screen, hot) {
   return `screen=${encodeURIComponent(screen)}${hot ? `&hot=${encodeURIComponent(hot)}` : ""}`;
+}
+
+// packages/modules/wireframe/src/route.ts
+var LANE0 = 96;
+var LANE2 = 26;
+var MAX_LANES = 4;
+var LABEL_H = 16;
+
+// packages/modules/wireframe/src/kept-flows.ts
+function keptFlowsOf(canvas2, screens) {
+  const wires = new Map(screens.map((w) => [w.item, w]));
+  const flows = /* @__PURE__ */ new Map();
+  for (const item of kept(canvas2)) {
+    const wire = wires.get(item.id);
+    if (!wire) continue;
+    const flow = wire.spec.flow;
+    const entry = flows.get(flow) ?? { flow, request: wire.spec.request, screens: [], items: [], guests: [] };
+    entry.screens.push({ id: item.id, title: item.title, spec: wire.spec, overrides: overridesOf(item.properties) });
+    entry.items.push(item);
+    flows.set(flow, entry);
+  }
+  const all = [...flows.values()];
+  const home = new Map(all.flatMap((f) => f.screens.map((s, i) => [s.id, { screen: s, item: f.items[i] }])));
+  for (const f of all) {
+    const own = new Set(f.screens.map((s) => s.id));
+    for (const target2 of f.screens.flatMap((s) => Object.values(s.overrides ?? {}))) {
+      const guest = home.get(target2);
+      if (!guest || own.has(target2)) continue;
+      own.add(target2);
+      f.screens.push(guest.screen);
+      f.items.push(guest.item);
+      f.guests.push(target2);
+    }
+  }
+  return all;
+}
+function prototypeScreens(canvas2, prototype, screens) {
+  const flow = prototype.properties?.[PROTOTYPE_PROP];
+  if (flow === void 0) return [];
+  return keptFlowsOf(canvas2, screens).find((f) => f.flow === flow)?.items ?? [];
+}
+function pickKeptFlow(flows, wanted, flag2 = "--flow") {
+  if (flows.length === 0) throw new Error("no screen is in a prototype \u2014 `isocan wire use <screens...>` marks the screens a prototype plays");
+  if (wanted !== void 0) {
+    const found = flows.find((f) => f.flow === wanted);
+    if (!found) throw new Error(`no screen of flow "${wanted}" is in a prototype \u2014 flows with screens in one: ${flows.map((f) => `${f.flow || "(hand-drawn)"} "${f.request}"`).join(", ")}`);
+    return found;
+  }
+  if (flows.length > 1) {
+    throw new Error(`the screens in a prototype come from ${flows.length} flows \u2014 say which with ${flag2}:
+  ${flows.map((f) => `${flag2} ${f.flow || '""'}  "${f.request}" (${f.screens.length} in the prototype)`).join("\n  ")}`);
+  }
+  return flows[0];
+}
+function prototypeTitle(flow) {
+  return `Prototype \xB7 ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}\u2026` : flow.request || "hand-drawn screens"}`;
+}
+function sharedGroup(items) {
+  const first = items[0]?.containerId;
+  return first && items.every((i) => i.containerId === first) ? { containerId: first, groupPlacement: "exact" } : void 0;
+}
+var PROTOTYPE_AT_PROP = "wirePrototypeAt";
+var PROTOTYPE_CLEAR = LANE0 + (MAX_LANES + 1) * LANE2 + LABEL_H + 24;
+var meets = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+function prototypeSpot(canvas2, flow, size, self) {
+  const own = flow.items.filter((i) => !flow.guests.includes(i.id));
+  const left = Math.min(...own.map((i) => i.x));
+  const right = Math.max(...own.map((i) => i.x + i.width));
+  const top = Math.min(...own.map((i) => i.y));
+  const x = Math.round((left + right) / 2 - size.width / 2);
+  let y = Math.round(top - PROTOTYPE_CLEAR - size.height);
+  const others = Object.values(canvas2.items ?? {}).filter((i) => i.id !== self && i.properties?.kind !== "group");
+  for (let i = 0; i < 50; i++) {
+    const want = { x: x - 20, y: y - 60, width: size.width + 40, height: size.height + 80 };
+    const hit = others.filter((o) => meets(want, { x: o.x, y: o.y, width: o.width, height: o.height }));
+    if (hit.length === 0) break;
+    y = Math.round(Math.min(...hit.map((o) => o.y)) - 80 - size.height);
+  }
+  return { x, y };
+}
+var atOf = (p) => `${Math.round(p.x)},${Math.round(p.y)}`;
+function placedByComposer(item) {
+  const at2 = item.properties?.[PROTOTYPE_AT_PROP];
+  return typeof at2 !== "string" || at2 === atOf(item);
+}
+async function writePrototype(port, canvas2, flow, group) {
+  const links = inferLinks(flow.screens);
+  const title = prototypeTitle(flow);
+  const html = assemblePrototype(flow.screens, links, { title });
+  const { width, height } = prototypeSize(flow.screens);
+  const filename = "prototype.html";
+  const upload = await port.put(html, "text/html", filename);
+  const version4 = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
+  const existing2 = Object.values(canvas2.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
+  const own = flow.items.filter((i) => !flow.guests.includes(i.id));
+  if (existing2) {
+    const same2 = currentVersionOf(existing2)?.blobHash === upload.blobHash;
+    if (!same2) await port.send({ type: "item.addVersion", itemId: existing2.id, version: version4 }, group);
+    if (existing2.width !== width || existing2.height !== height) await port.send({ type: "item.resize", itemId: existing2.id, width, height }, group);
+    if (existing2.title !== title) await port.send({ type: "item.update", itemId: existing2.id, patch: { title } }, group);
+    const moved = placedByComposer(existing2) ? await place(port, canvas2, flow, existing2.id, { width, height }, existing2, group) : false;
+    return { itemId: existing2.id, title, links, what: !same2 ? "versioned" : moved ? "moved" : "unchanged" };
+  }
+  const itemId = newItemId();
+  const spot = prototypeSpot(canvas2, flow, { width, height });
+  const landed = await port.send({
+    type: "item.add",
+    itemId,
+    version: version4,
+    width,
+    height,
+    placement: { ...spot, chosen: true },
+    title,
+    // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
+    properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow, [PROTOTYPE_AT_PROP]: atOf(spot) },
+    // In the group its screens live in, when they share one (Porchlight #6).
+    ...sharedGroup(own) ?? {}
+  }, group);
+  if (landed && atOf(landed) !== atOf(spot)) await port.send({ type: "item.update", itemId, patch: { properties: { [PROTOTYPE_AT_PROP]: atOf(landed) } } }, group);
+  return { itemId, title, links, what: "added" };
+}
+async function place(port, canvas2, flow, itemId, size, item, group) {
+  const spot = prototypeSpot(canvas2, flow, size, itemId);
+  const recorded = item.properties?.[PROTOTYPE_AT_PROP];
+  if (atOf(item) === atOf(spot) && recorded === atOf(spot)) return false;
+  if (atOf(item) !== atOf(spot)) await port.send({ type: "item.move", itemId, x: spot.x, y: spot.y }, group);
+  const now = (await port.canvas()).items[itemId];
+  await port.send({ type: "item.update", itemId, patch: { properties: { [PROTOTYPE_AT_PROP]: atOf(now ?? spot) } } }, group);
+  return true;
+}
+async function rebuildPrototypes(port, canvas2, all, changed, group) {
+  const out = [];
+  const touched = new Set(changed.map((s) => s.spec.flow));
+  const now = all.map((s) => changed.find((c) => c.item === s.item) ?? s);
+  for (const flow of keptFlowsOf(canvas2, now)) {
+    if (!touched.has(flow.flow)) continue;
+    if (!Object.values(canvas2.items).some((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow)) continue;
+    const written = await writePrototype(port, canvas2, flow, group);
+    out.push({ itemId: written.itemId, what: written.what });
+  }
+  return out;
+}
+
+// packages/modules/wireframe/src/rerender.ts
+async function writeWire(port, item, spec, group, was) {
+  const current = currentVersionOf(item);
+  const filename = current?.filename ?? "wireframe.html";
+  const upload = await port.put(renderWire(spec), "text/html", filename);
+  const { width, height } = wireSize(spec);
+  const resize = item.width !== width || item.height !== height;
+  const retitle = was !== void 0 && item.title === wireTitle(was) && wireTitle(spec) !== wireTitle(was);
+  if (current?.blobHash === upload.blobHash && !resize && !retitle) return false;
+  if (current?.blobHash !== upload.blobHash) {
+    await port.send({ type: "item.addVersion", itemId: item.id, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
+  }
+  if (resize) await port.send({ type: "item.resize", itemId: item.id, width, height }, group);
+  if (retitle) await port.send({ type: "item.update", itemId: item.id, patch: { title: wireTitle(spec) } }, group);
+  return true;
+}
+async function rerender(port, canvas2, all, screens, opts = {}) {
+  const group = opts.group ?? newGroupId();
+  const changed = [];
+  let resized = 0;
+  for (const s of screens) {
+    const item = canvas2.items[s.item];
+    if (!item) continue;
+    const { width, height } = wireSize(s.spec);
+    if (await writeWire(port, item, s.spec, group)) {
+      changed.push(s);
+      if (item.width !== width || item.height !== height) resized += 1;
+    }
+  }
+  const prototypes = await rebuildPrototypes(port, canvas2, all, screens, group);
+  return { group, screens, changed, resized, prototypes };
+}
+function rerenderSummary(r) {
+  const protos = r.prototypes.filter((p) => p.what !== "unchanged").length;
+  const n = r.screens.length;
+  const head = `${r.changed.length} of ${n} wire${n === 1 ? "" : "s"} re-rendered \xB7 ${n - r.changed.length} unchanged`;
+  const resized = r.resized ? ` \xB7 ${r.resized} resized to the screen alone` : "";
+  const proto = r.prototypes.length ? ` \xB7 ${protos} of ${r.prototypes.length} prototype${r.prototypes.length === 1 ? "" : "s"} rebuilt` : "";
+  const tail = r.changed.length || protos ? " \u2014 one op group: one undo takes it back" : " \u2014 nothing written";
+  return `${head}${resized}${proto}${tail}`;
+}
+function rerenderLines(r) {
+  return r.changed.map((s) => `${s.item}  ${wireTitle(s.spec)} \u2014 re-rendered`);
+}
+
+// packages/modules/wireframe/src/restyle.ts
+function governingSystem(canvas2, item) {
+  const selected = selectDesignSystem(canvas2, { at: item });
+  return selected.status === "selected" ? selected.item : null;
+}
+var StyleResolver = class {
+  constructor(port, answerer, loadKnown, onAsked) {
+    this.port = port;
+    this.answerer = answerer;
+    this.loadKnown = loadKnown;
+    this.onAsked = onAsked;
+  }
+  port;
+  answerer;
+  loadKnown;
+  onAsked;
+  mappings = /* @__PURE__ */ new Map();
+  calls = 0;
+  inputTokens = 0;
+  by = "";
+  known = null;
+  async styleFor(system) {
+    if (!system) return DEFAULT_STYLE;
+    const m = await this.mapping(system);
+    return { source: "design-system", itemId: system.id, versionId: m.versionId, name: m.name, ...m.by ? { by: m.by } : {}, roles: m.roles };
+  }
+  /** A mapping on the canvas may be lent to this run: anything Jev (or nobody) answered; a stub's only to the stub. */
+  lendable(style2, system, versionId) {
+    if (style2?.source !== "design-system" || style2.itemId !== system.id || style2.versionId !== versionId) return false;
+    return !style2.by?.startsWith("stub") || this.answerer.name === "stub";
+  }
+  async mapping(system) {
+    const current = currentVersionOf(system);
+    if (!current) throw new Error(`the design system "${system.title}" has no version to read`);
+    const key = `${system.id}@${current.id}`;
+    const cached = this.mappings.get(key);
+    if (cached) return cached;
+    const base = {
+      system,
+      versionId: current.id,
+      version: system.versions.findIndex((v) => v.id === current.id) + 1,
+      versions: system.versions.length
+    };
+    this.known ??= [...await this.loadKnown()];
+    const lent = this.known.find((s) => this.lendable(s.style, system, current.id));
+    const doc2 = parseDesign(await this.port.readText(current.blobHash));
+    const name = doc2.tokens.name ?? system.title;
+    if (lent?.style?.source === "design-system") {
+      const m2 = { ...base, name, roles: lent.style.roles, how: "reused", ...lent.style.by ? { by: lent.style.by } : {} };
+      this.mappings.set(key, m2);
+      return m2;
+    }
+    const candidates = candidatesOf(doc2);
+    const request = mappingRequest(doc2, candidates);
+    let response = { answers: {} };
+    let ms;
+    let by;
+    const asking = Object.keys(request.questions).length > 0;
+    if (asking) {
+      const answered = await this.answerer.answer(request);
+      response = answered.response;
+      ms = answered.ms;
+      by = answered.by;
+      this.by = answered.by;
+      this.calls += 1;
+      this.inputTokens += response.usage?.input_tokens ?? 0;
+      await this.onAsked?.(system, current.id, request, response);
+    }
+    const m = { ...base, name, roles: applyMapping(request, response, candidates), how: asking ? "asked" : "nothing to ask", request, response, ...ms !== void 0 ? { ms } : {}, ...by ? { by } : {} };
+    this.mappings.set(key, m);
+    return m;
+  }
+  /** Who answers — the versioned model once one has, else the answerer's name. */
+  get who() {
+    return this.by || this.answerer.name;
+  }
+  cost() {
+    return this.inputTokens * JEV_INPUT_PRICE;
+  }
+};
+function mappingLines(m, by) {
+  const how = m.how === "asked" ? `mapped by ${m.by ?? by}${m.ms !== void 0 ? ` in ${m.ms} ms` : ""}` : m.how === "reused" ? `mapping (by ${m.by ?? "nobody \u2014 nothing to ask"}) reused from a wire already in this version \u2014 nothing asked` : "every role had one candidate or none \u2014 nothing asked";
+  return [
+    `"${m.name}" \u2014 ${m.system.id}, version ${m.version} of ${m.versions} \xB7 ${how}`,
+    ...ROLES.map((role) => `  ${roleLine(role, m.roles[role])}`)
+  ];
+}
+function alreadyLooks(was, now) {
+  const system = (s) => s?.source === "design-system" ? s.itemId : null;
+  return system(was) === system(now) && sameLook(was, now);
+}
+async function restyle(port, canvas2, all, screens, resolver, opts = {}) {
+  const targets = [];
+  for (const s of screens) {
+    const item = canvas2.items[s.item];
+    const system = opts.toDefault ? null : governingSystem(canvas2, item);
+    targets.push({ screen: s, item, system, style: await resolver.styleFor(system) });
+  }
+  const group = newGroupId();
+  const changed = [];
+  for (const t of targets) {
+    if (sameStyle(t.screen.spec.style, t.style) || alreadyLooks(t.screen.spec.style, t.style)) continue;
+    const spec = { ...t.screen.spec, style: t.style };
+    if (!await writeWire(port, t.item, spec, group)) continue;
+    t.screen = { ...t.screen, spec };
+    changed.push(t);
+  }
+  const prototypes = await rebuildPrototypes(port, canvas2, all, changed.map((t) => t.screen), group);
+  return { group, targets, changed, prototypes, resolver };
+}
+function restyleSummary(r) {
+  const { targets, changed, resolver } = r;
+  const tail = changed.length ? " \u2014 one op group: one undo takes the restyle back" : " \u2014 nothing written";
+  return `${changed.length} of ${targets.length} wires restyled \xB7 ${targets.length - changed.length} unchanged \xB7 ${resolver.calls === 0 ? "nothing asked" : `${resolver.calls} ${resolver.calls === 1 ? "call" : "calls"} to ${resolver.who} \xB7 ${resolver.inputTokens.toLocaleString("en-US")} input tokens \xB7 $${resolver.cost().toFixed(6)}`}${tail}`;
 }
 
 // packages/modules/wireframe/src/content/pack.ts
@@ -14524,353 +14829,6 @@ function variations(spec, variantOf, count2 = DEFAULT_VARIATIONS, made = []) {
   return honestFlips(spec, made).slice(0, room).map((d) => vary(spec, d, variantOf));
 }
 
-// packages/modules/wireframe/src/port.ts
-function currentVersionOf(item) {
-  return item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[item.versions.length - 1];
-}
-
-// packages/modules/wireframe/src/link-override.ts
-var LINK_PREFIX = "wireLink:";
-function linkProp(key) {
-  return `${LINK_PREFIX}${key}`;
-}
-function overridesOf(properties) {
-  const out = readOverrides(properties?.[LINKS_PROP]);
-  for (const [prop2, value] of Object.entries(properties ?? {})) {
-    if (prop2.startsWith(LINK_PREFIX) && value) out[prop2.slice(LINK_PREFIX.length)] = value;
-  }
-  return out;
-}
-function linkPatch(item, key, value) {
-  const properties = {};
-  const removeProperties = [];
-  const legacy = item.properties?.[LINKS_PROP];
-  if (legacy !== void 0) {
-    for (const [k, v] of Object.entries(readOverrides(legacy))) {
-      if (k !== key && item.properties?.[linkProp(k)] === void 0) properties[linkProp(k)] = v;
-    }
-    removeProperties.push(LINKS_PROP);
-  }
-  if (value === null) removeProperties.push(linkProp(key));
-  else properties[linkProp(key)] = value;
-  return { ...Object.keys(properties).length ? { properties } : {}, ...removeProperties.length ? { removeProperties } : {} };
-}
-function linkChanges(item, key, value) {
-  if (item.properties?.[LINKS_PROP] !== void 0) return true;
-  return value === null ? item.properties?.[linkProp(key)] !== void 0 : item.properties?.[linkProp(key)] !== value;
-}
-async function setLinkOverride(port, item, key, value, group) {
-  const patch = linkPatch(item, key, value);
-  const after = { ...item.properties ?? {}, ...patch.properties ?? {} };
-  for (const prop2 of patch.removeProperties ?? []) delete after[prop2];
-  const overrides = overridesOf(after);
-  if (!linkChanges(item, key, value)) return { overrides, wrote: false };
-  await port.send({ type: "item.update", itemId: item.id, patch }, group);
-  return { overrides, wrote: true };
-}
-
-// packages/modules/wireframe/src/route.ts
-var LANE0 = 96;
-var LANE2 = 26;
-var MAX_LANES = 4;
-var LABEL_H = 16;
-
-// packages/modules/wireframe/src/kept-flows.ts
-function keptFlowsOf(canvas2, screens) {
-  const wires = new Map(screens.map((w) => [w.item, w]));
-  const flows = /* @__PURE__ */ new Map();
-  for (const item of kept(canvas2)) {
-    const wire = wires.get(item.id);
-    if (!wire) continue;
-    const flow = wire.spec.flow;
-    const entry = flows.get(flow) ?? { flow, request: wire.spec.request, screens: [], items: [], guests: [] };
-    entry.screens.push({ id: item.id, title: item.title, spec: wire.spec, overrides: overridesOf(item.properties) });
-    entry.items.push(item);
-    flows.set(flow, entry);
-  }
-  const all = [...flows.values()];
-  const home = new Map(all.flatMap((f) => f.screens.map((s, i) => [s.id, { screen: s, item: f.items[i] }])));
-  for (const f of all) {
-    const own = new Set(f.screens.map((s) => s.id));
-    for (const target2 of f.screens.flatMap((s) => Object.values(s.overrides ?? {}))) {
-      const guest = home.get(target2);
-      if (!guest || own.has(target2)) continue;
-      own.add(target2);
-      f.screens.push(guest.screen);
-      f.items.push(guest.item);
-      f.guests.push(target2);
-    }
-  }
-  return all;
-}
-function prototypeScreens(canvas2, prototype, screens) {
-  const flow = prototype.properties?.[PROTOTYPE_PROP];
-  if (flow === void 0) return [];
-  return keptFlowsOf(canvas2, screens).find((f) => f.flow === flow)?.items ?? [];
-}
-function pickKeptFlow(flows, wanted, flag2 = "--flow") {
-  if (flows.length === 0) throw new Error("no screen is in a prototype \u2014 `isocan wire use <screens...>` marks the screens a prototype plays");
-  if (wanted !== void 0) {
-    const found = flows.find((f) => f.flow === wanted);
-    if (!found) throw new Error(`no screen of flow "${wanted}" is in a prototype \u2014 flows with screens in one: ${flows.map((f) => `${f.flow || "(hand-drawn)"} "${f.request}"`).join(", ")}`);
-    return found;
-  }
-  if (flows.length > 1) {
-    throw new Error(`the screens in a prototype come from ${flows.length} flows \u2014 say which with ${flag2}:
-  ${flows.map((f) => `${flag2} ${f.flow || '""'}  "${f.request}" (${f.screens.length} in the prototype)`).join("\n  ")}`);
-  }
-  return flows[0];
-}
-function prototypeTitle(flow) {
-  return `Prototype \xB7 ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}\u2026` : flow.request || "hand-drawn screens"}`;
-}
-function sharedGroup(items) {
-  const first = items[0]?.containerId;
-  return first && items.every((i) => i.containerId === first) ? { containerId: first, groupPlacement: "exact" } : void 0;
-}
-var PROTOTYPE_AT_PROP = "wirePrototypeAt";
-var PROTOTYPE_CLEAR = LANE0 + (MAX_LANES + 1) * LANE2 + LABEL_H + 24;
-var meets = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
-function prototypeSpot(canvas2, flow, size, self) {
-  const own = flow.items.filter((i) => !flow.guests.includes(i.id));
-  const left = Math.min(...own.map((i) => i.x));
-  const right = Math.max(...own.map((i) => i.x + i.width));
-  const top = Math.min(...own.map((i) => i.y));
-  const x = Math.round((left + right) / 2 - size.width / 2);
-  let y = Math.round(top - PROTOTYPE_CLEAR - size.height);
-  const others = Object.values(canvas2.items ?? {}).filter((i) => i.id !== self && i.properties?.kind !== "group");
-  for (let i = 0; i < 50; i++) {
-    const want = { x: x - 20, y: y - 60, width: size.width + 40, height: size.height + 80 };
-    const hit = others.filter((o) => meets(want, { x: o.x, y: o.y, width: o.width, height: o.height }));
-    if (hit.length === 0) break;
-    y = Math.round(Math.min(...hit.map((o) => o.y)) - 80 - size.height);
-  }
-  return { x, y };
-}
-var atOf = (p) => `${Math.round(p.x)},${Math.round(p.y)}`;
-function placedByComposer(item) {
-  const at2 = item.properties?.[PROTOTYPE_AT_PROP];
-  return typeof at2 !== "string" || at2 === atOf(item);
-}
-async function writePrototype(port, canvas2, flow, group) {
-  const links = inferLinks(flow.screens);
-  const title = prototypeTitle(flow);
-  const html = assemblePrototype(flow.screens, links, { title });
-  const { width, height } = prototypeSize(flow.screens);
-  const filename = "prototype.html";
-  const upload = await port.put(html, "text/html", filename);
-  const version4 = { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size };
-  const existing2 = Object.values(canvas2.items ?? {}).find((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow);
-  const own = flow.items.filter((i) => !flow.guests.includes(i.id));
-  if (existing2) {
-    const same2 = currentVersionOf(existing2)?.blobHash === upload.blobHash;
-    if (!same2) await port.send({ type: "item.addVersion", itemId: existing2.id, version: version4 }, group);
-    if (existing2.width !== width || existing2.height !== height) await port.send({ type: "item.resize", itemId: existing2.id, width, height }, group);
-    if (existing2.title !== title) await port.send({ type: "item.update", itemId: existing2.id, patch: { title } }, group);
-    const moved = placedByComposer(existing2) ? await place(port, canvas2, flow, existing2.id, { width, height }, existing2, group) : false;
-    return { itemId: existing2.id, title, links, what: !same2 ? "versioned" : moved ? "moved" : "unchanged" };
-  }
-  const itemId = newItemId();
-  const spot = prototypeSpot(canvas2, flow, { width, height });
-  const landed = await port.send({
-    type: "item.add",
-    itemId,
-    version: version4,
-    width,
-    height,
-    placement: { ...spot, chosen: true },
-    title,
-    // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
-    properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow, [PROTOTYPE_AT_PROP]: atOf(spot) },
-    // In the group its screens live in, when they share one (Porchlight #6).
-    ...sharedGroup(own) ?? {}
-  }, group);
-  if (landed && atOf(landed) !== atOf(spot)) await port.send({ type: "item.update", itemId, patch: { properties: { [PROTOTYPE_AT_PROP]: atOf(landed) } } }, group);
-  return { itemId, title, links, what: "added" };
-}
-async function place(port, canvas2, flow, itemId, size, item, group) {
-  const spot = prototypeSpot(canvas2, flow, size, itemId);
-  const recorded = item.properties?.[PROTOTYPE_AT_PROP];
-  if (atOf(item) === atOf(spot) && recorded === atOf(spot)) return false;
-  if (atOf(item) !== atOf(spot)) await port.send({ type: "item.move", itemId, x: spot.x, y: spot.y }, group);
-  const now = (await port.canvas()).items[itemId];
-  await port.send({ type: "item.update", itemId, patch: { properties: { [PROTOTYPE_AT_PROP]: atOf(now ?? spot) } } }, group);
-  return true;
-}
-async function rebuildPrototypes(port, canvas2, all, changed, group) {
-  const out = [];
-  const touched = new Set(changed.map((s) => s.spec.flow));
-  const now = all.map((s) => changed.find((c) => c.item === s.item) ?? s);
-  for (const flow of keptFlowsOf(canvas2, now)) {
-    if (!touched.has(flow.flow)) continue;
-    if (!Object.values(canvas2.items).some((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow)) continue;
-    const written = await writePrototype(port, canvas2, flow, group);
-    out.push({ itemId: written.itemId, what: written.what });
-  }
-  return out;
-}
-
-// packages/modules/wireframe/src/rerender.ts
-async function writeWire(port, item, spec, group, was) {
-  const current = currentVersionOf(item);
-  const filename = current?.filename ?? "wireframe.html";
-  const upload = await port.put(renderWire(spec), "text/html", filename);
-  const { width, height } = wireSize(spec);
-  const resize = item.width !== width || item.height !== height;
-  const retitle = was !== void 0 && item.title === wireTitle(was) && wireTitle(spec) !== wireTitle(was);
-  if (current?.blobHash === upload.blobHash && !resize && !retitle) return false;
-  if (current?.blobHash !== upload.blobHash) {
-    await port.send({ type: "item.addVersion", itemId: item.id, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
-  }
-  if (resize) await port.send({ type: "item.resize", itemId: item.id, width, height }, group);
-  if (retitle) await port.send({ type: "item.update", itemId: item.id, patch: { title: wireTitle(spec) } }, group);
-  return true;
-}
-async function rerender(port, canvas2, all, screens, opts = {}) {
-  const group = opts.group ?? newGroupId();
-  const changed = [];
-  let resized = 0;
-  for (const s of screens) {
-    const item = canvas2.items[s.item];
-    if (!item) continue;
-    const { width, height } = wireSize(s.spec);
-    if (await writeWire(port, item, s.spec, group)) {
-      changed.push(s);
-      if (item.width !== width || item.height !== height) resized += 1;
-    }
-  }
-  const prototypes = await rebuildPrototypes(port, canvas2, all, screens, group);
-  return { group, screens, changed, resized, prototypes };
-}
-function rerenderSummary(r) {
-  const protos = r.prototypes.filter((p) => p.what !== "unchanged").length;
-  const n = r.screens.length;
-  const head = `${r.changed.length} of ${n} wire${n === 1 ? "" : "s"} re-rendered \xB7 ${n - r.changed.length} unchanged`;
-  const resized = r.resized ? ` \xB7 ${r.resized} resized to the screen alone` : "";
-  const proto = r.prototypes.length ? ` \xB7 ${protos} of ${r.prototypes.length} prototype${r.prototypes.length === 1 ? "" : "s"} rebuilt` : "";
-  const tail = r.changed.length || protos ? " \u2014 one op group: one undo takes it back" : " \u2014 nothing written";
-  return `${head}${resized}${proto}${tail}`;
-}
-function rerenderLines(r) {
-  return r.changed.map((s) => `${s.item}  ${wireTitle(s.spec)} \u2014 re-rendered`);
-}
-
-// packages/modules/wireframe/src/restyle.ts
-function governingSystem(canvas2, item) {
-  const selected = selectDesignSystem(canvas2, { at: item });
-  return selected.status === "selected" ? selected.item : null;
-}
-var StyleResolver = class {
-  constructor(port, answerer, loadKnown, onAsked) {
-    this.port = port;
-    this.answerer = answerer;
-    this.loadKnown = loadKnown;
-    this.onAsked = onAsked;
-  }
-  port;
-  answerer;
-  loadKnown;
-  onAsked;
-  mappings = /* @__PURE__ */ new Map();
-  calls = 0;
-  inputTokens = 0;
-  by = "";
-  known = null;
-  async styleFor(system) {
-    if (!system) return DEFAULT_STYLE;
-    const m = await this.mapping(system);
-    return { source: "design-system", itemId: system.id, versionId: m.versionId, name: m.name, ...m.by ? { by: m.by } : {}, roles: m.roles };
-  }
-  /** A mapping on the canvas may be lent to this run: anything Jev (or nobody) answered; a stub's only to the stub. */
-  lendable(style2, system, versionId) {
-    if (style2?.source !== "design-system" || style2.itemId !== system.id || style2.versionId !== versionId) return false;
-    return !style2.by?.startsWith("stub") || this.answerer.name === "stub";
-  }
-  async mapping(system) {
-    const current = currentVersionOf(system);
-    if (!current) throw new Error(`the design system "${system.title}" has no version to read`);
-    const key = `${system.id}@${current.id}`;
-    const cached = this.mappings.get(key);
-    if (cached) return cached;
-    const base = {
-      system,
-      versionId: current.id,
-      version: system.versions.findIndex((v) => v.id === current.id) + 1,
-      versions: system.versions.length
-    };
-    this.known ??= [...await this.loadKnown()];
-    const lent = this.known.find((s) => this.lendable(s.style, system, current.id));
-    const doc2 = parseDesign(await this.port.readText(current.blobHash));
-    const name = doc2.tokens.name ?? system.title;
-    if (lent?.style?.source === "design-system") {
-      const m2 = { ...base, name, roles: lent.style.roles, how: "reused", ...lent.style.by ? { by: lent.style.by } : {} };
-      this.mappings.set(key, m2);
-      return m2;
-    }
-    const candidates = candidatesOf(doc2);
-    const request = mappingRequest(doc2, candidates);
-    let response = { answers: {} };
-    let ms;
-    let by;
-    const asking = Object.keys(request.questions).length > 0;
-    if (asking) {
-      const answered = await this.answerer.answer(request);
-      response = answered.response;
-      ms = answered.ms;
-      by = answered.by;
-      this.by = answered.by;
-      this.calls += 1;
-      this.inputTokens += response.usage?.input_tokens ?? 0;
-      await this.onAsked?.(system, current.id, request, response);
-    }
-    const m = { ...base, name, roles: applyMapping(request, response, candidates), how: asking ? "asked" : "nothing to ask", request, response, ...ms !== void 0 ? { ms } : {}, ...by ? { by } : {} };
-    this.mappings.set(key, m);
-    return m;
-  }
-  /** Who answers — the versioned model once one has, else the answerer's name. */
-  get who() {
-    return this.by || this.answerer.name;
-  }
-  cost() {
-    return this.inputTokens * JEV_INPUT_PRICE;
-  }
-};
-function mappingLines(m, by) {
-  const how = m.how === "asked" ? `mapped by ${m.by ?? by}${m.ms !== void 0 ? ` in ${m.ms} ms` : ""}` : m.how === "reused" ? `mapping (by ${m.by ?? "nobody \u2014 nothing to ask"}) reused from a wire already in this version \u2014 nothing asked` : "every role had one candidate or none \u2014 nothing asked";
-  return [
-    `"${m.name}" \u2014 ${m.system.id}, version ${m.version} of ${m.versions} \xB7 ${how}`,
-    ...ROLES.map((role) => `  ${roleLine(role, m.roles[role])}`)
-  ];
-}
-function alreadyLooks(was, now) {
-  const system = (s) => s?.source === "design-system" ? s.itemId : null;
-  return system(was) === system(now) && sameLook(was, now);
-}
-async function restyle(port, canvas2, all, screens, resolver, opts = {}) {
-  const targets = [];
-  for (const s of screens) {
-    const item = canvas2.items[s.item];
-    const system = opts.toDefault ? null : governingSystem(canvas2, item);
-    targets.push({ screen: s, item, system, style: await resolver.styleFor(system) });
-  }
-  const group = newGroupId();
-  const changed = [];
-  for (const t of targets) {
-    if (sameStyle(t.screen.spec.style, t.style) || alreadyLooks(t.screen.spec.style, t.style)) continue;
-    const spec = { ...t.screen.spec, style: t.style };
-    if (!await writeWire(port, t.item, spec, group)) continue;
-    t.screen = { ...t.screen, spec };
-    changed.push(t);
-  }
-  const prototypes = await rebuildPrototypes(port, canvas2, all, changed.map((t) => t.screen), group);
-  return { group, targets, changed, prototypes, resolver };
-}
-function restyleSummary(r) {
-  const { targets, changed, resolver } = r;
-  const tail = changed.length ? " \u2014 one op group: one undo takes the restyle back" : " \u2014 nothing written";
-  return `${changed.length} of ${targets.length} wires restyled \xB7 ${targets.length - changed.length} unchanged \xB7 ${resolver.calls === 0 ? "nothing asked" : `${resolver.calls} ${resolver.calls === 1 ? "call" : "calls"} to ${resolver.who} \xB7 ${resolver.inputTokens.toLocaleString("en-US")} input tokens \xB7 $${resolver.cost().toFixed(6)}`}${tail}`;
-}
-
 // packages/modules/wireframe/src/content/choose.ts
 var PACK_FLOOR = 0.4;
 function packRequest(request) {
@@ -14907,6 +14865,12 @@ function packLine(c, flowWords) {
   const top = Object.entries(c.distribution ?? {}).sort((a, b) => b[1] - a[1]).slice(1, 3).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(", ");
   const under = c.p < PACK_FLOOR ? ` \u2014 under ${PACK_FLOOR}, so the generic pack fills${c.leaned !== c.pack ? ` (--pack ${c.leaned} to take the lean)` : ""}` : "";
   return `pack: ${c.leaned} p ${c.p.toFixed(2)}${top ? ` (then ${top})` : ""}${under} \xB7 chosen by ${c.by} \xB7 ${flowWords}`;
+}
+
+// packages/modules/wireframe/src/maybe.ts
+var MAYBE_PROP = "wireMaybe";
+function maybeProperties(spec) {
+  return spec.maybe ? { [MAYBE_PROP]: (spec.need ?? 0).toFixed(2) } : {};
 }
 
 // packages/modules/wireframe/src/flow.ts
@@ -15221,6 +15185,91 @@ function costLine(tallies, by, screens, maybe = 0) {
   return `${screens} screens${maybe ? ` (${maybe} maybe)` : ""}, one op group \u2014 answered by ${by} \xB7 ${rounds} \xB7 ${calls} calls \xB7 ${tokens.toLocaleString("en-US")} input tokens \xB7 $${(tokens * JEV_INPUT_PRICE).toFixed(6)}`;
 }
 
+// packages/modules/wireframe/src/web-port.ts
+function webPort(canvasId, host) {
+  return {
+    canvasId,
+    actor: host.viewer ? { id: host.viewer.id, name: host.viewer.name } : void 0,
+    canvas: async () => host.getCanvas(),
+    readText: (blobHash) => host.readText(blobHash),
+    put: (text, mimeType, filename) => host.putBlob(new Blob([text], { type: mimeType }), filename),
+    send: async (op, group) => {
+      await host.send([op], group);
+      if (op.type !== "item.add") return;
+      const landed = host.getCanvas().items[op.itemId];
+      return landed ? { x: landed.x, y: landed.y } : void 0;
+    }
+  };
+}
+
+// packages/modules/wireframe/src/follow.ts
+async function followMarks(port, changed, group) {
+  const canvas2 = await port.canvas();
+  const all = await wiresOn(port, canvas2);
+  const moved = new Set(changed);
+  const flowsOfChanged = new Set(all.filter((w) => moved.has(w.item)).map((w) => w.spec.flow));
+  const kept2 = keptFlowsOf(canvas2, all);
+  const out = [];
+  for (const proto of Object.values(canvas2.items).filter((i) => i.properties?.[PROTOTYPE_PROP] !== void 0)) {
+    const flow = proto.properties[PROTOTYPE_PROP];
+    const current = kept2.find((f) => f.flow === flow);
+    const linksToChanged = Object.values(canvas2.items).some((i) => all.some((w) => w.item === i.id && w.spec.flow === flow) && Object.values(overridesOf(i.properties)).some((to) => moved.has(to)));
+    if (!flowsOfChanged.has(flow) && !linksToChanged) continue;
+    if (!current) {
+      out.push({ flow, itemId: proto.id, what: "left", screens: 0 });
+      continue;
+    }
+    const written = await writePrototype(port, canvas2, current, group);
+    out.push({ flow, itemId: written.itemId, what: written.what === "added" ? "versioned" : written.what, screens: current.screens.length });
+  }
+  return out;
+}
+async function followOnWeb({ canvasId, group, changed, host }) {
+  await followMarks(webPort(canvasId, host), changed.map((i) => i.id), group);
+}
+function followedLine(f) {
+  if (f.what === "left") return `prototype ${f.itemId} left as it was \u2014 nothing of its flow is in it now; \`isocan wire use <screens...>\` puts some back`;
+  if (f.what === "unchanged") return `prototype ${f.itemId} already plays these ${f.screens} screens`;
+  return `prototype ${f.itemId} follows \u2014 it plays ${f.screens} screen${f.screens === 1 ? "" : "s"} now${f.what === "moved" ? ", back above its flow" : ""}`;
+}
+
+// packages/modules/wireframe/src/command.ts
+var WIRE_COMMAND = {
+  ...wireframeModule.commands[0],
+  body: `Wireframes on this canvas, with the \`isocan wire\` verbs \u2014 never draw a
+screen by hand, and never write its copy yourself unless asked.
+
+- \`/wire <what the screens are for>\` \u2192 \`isocan wire "<request>"\`. Blueprints
+  land first, then fill in place, arrive fleshed with sample content, and end
+  with a prototype of the answerer's first choices (\u{1F4D0}) above the row; one
+  \`isocan undo\` takes the whole flow back, content and prototype and all.
+  With no TYPESAFE_API_KEY here the canvas's home answers (the CLI says which).
+- \`/wire basic <what the screens are for>\` \u2192 \`isocan wire --basic "<request>"\`
+  (plain grey wires, no sample content, nothing in a prototype).
+- \`/wire prototype\` \u2192 \`isocan wire prototype\` (the screens marked \u{1F4D0} \u2014 use
+  some in it first with \`isocan wire use <screens\u2026>\` if none is).
+- \`/wire style\` \u2192 \`isocan wire style\`; \`/wire style --default\` \u2192
+  \`isocan wire style --default\`.
+- \`/wire flesh\` \u2192 \`isocan wire flesh\` (sample content instead of grey bars
+  on wires that have none;
+  \`/wire flesh --pack <id>\` and \`/wire flesh --bars\` pass through). Exact
+  words for a screen are \`isocan wire copy <screen>\`, edited, then
+  \`isocan wire copy <screen> --apply <file>\` \u2014 only when asked for copy.
+- \`/wire rerender\` \u2192 \`isocan wire render --all\` (every wire drawn again from
+  its own spec; a version only where the bytes change).
+- \`/wire prototypes\` \u2192 \`isocan ls --filter Prototype\` (the prototypes carry
+  \`wirePrototype\`); say which ones there are and where.
+
+Post ONE comment saying what landed: how many screens, which answered, and
+that one undo takes it back.`
+};
+var wireframeCore = {
+  ...wireframeModule,
+  marks: [{ ...KEEP_MARK, follow: followOnWeb }],
+  propertyKeys: [KEEP_PROP2, "wireKeepBy", MAYBE_PROP, "wireLinks", "wireLink:*", "wirePrototype", "wirePrototypeAt"],
+  commands: [WIRE_COMMAND]
+};
+
 // packages/modules/wireframe/src/flesh.ts
 function packOnCanvas(all, flow) {
   for (const s of all) {
@@ -15418,7 +15467,7 @@ function registerCompose(host, wire) {
       }
       say2(costLine(tallies, composed.by, composed.screens.length, composed.screens.filter((s) => s.spec.maybe).length) + ` \xB7 ${composed.totalMs} ms in all \u2014 \`isocan undo\` takes the whole flow back${composed.prototype ? ", prototype included" : ""}`);
       if (composed.prototype) {
-        say2(`swap in a variation: \`isocan wire use <variation>\` and \`isocan wire unuse <its screen>\`, then \`isocan wire prototype\` rebuilds it \xB7 \`isocan open ${composed.prototype.itemId}\` plays it`);
+        say2(`swap in a variation: \`isocan wire use <variation>\` and \`isocan wire unuse <its screen>\` \u2014 the prototype follows \xB7 \`isocan open ${composed.prototype.itemId}\` plays it`);
       }
     })
   );
@@ -15529,7 +15578,7 @@ function registerVary(host, wire) {
         const port = cliPort(host, ctx, p.id);
         list = prototypeScreens(canvas2, proto, await wiresOn(port, canvas2));
         if (!ctx.json && list.length === 0) {
-          console.log(`nothing prototype ${proto.id} plays is marked for it any more \u2014 \`isocan wire use <screens...>\` (${KEEP_EMOJI2}) and \`isocan wire prototype\` rebuilds it`);
+          console.log(`nothing prototype ${proto.id} plays is marked for it any more \u2014 \`isocan wire use <screens...>\` (${KEEP_EMOJI2}) and it follows`);
           return;
         }
       }
@@ -15555,19 +15604,22 @@ function markScreens(host, on) {
     }
     const group = newGroupId();
     const changed = [];
-    const who = cliPort(host, ctx, p.id).actor?.id;
+    const port = cliPort(host, ctx, p.id);
+    const who = port.actor?.id;
     for (const item of items) {
       if (isKept(item) === on || changed.includes(item.id)) continue;
       await sendOp2(ctx, p.id, { type: "item.update", itemId: item.id, patch: keepPatch(on, who) }, group);
       changed.push(item.id);
     }
-    if (ctx.json) return printJson2({ [on ? "kept" : "unkept"]: changed, unchanged: items.filter((i) => !changed.includes(i.id)).map((i) => i.id) });
+    const followed = changed.length ? await followMarks(port, changed, group) : [];
+    if (ctx.json) return printJson2({ [on ? "kept" : "unkept"]: changed, unchanged: items.filter((i) => !changed.includes(i.id)).map((i) => i.id), prototypes: followed });
     for (const item of items) {
       const moved = changed.includes(item.id);
       console.log(`${item.id}  ${on ? KEEP_EMOJI2 : "  "} "${item.title}" ${on ? moved ? "in the prototype" : "was already in the prototype" : moved ? "removed from the prototype" : "was not in the prototype"}`);
     }
     const now = kept((await ctx.client.snapshot(p.id)).canvas).length;
-    console.log(`${now} screen${now === 1 ? "" : "s"} in the prototype${changed.length ? " \u2014 `isocan wire prototype` rebuilds it" : ""}`);
+    console.log(`${now} screen${now === 1 ? "" : "s"} in the prototype${changed.length && followed.length === 0 ? " \u2014 `isocan wire prototype` builds one for a flow that has none" : ""}`);
+    for (const f of followed) console.log(followedLine(f));
   });
 }
 

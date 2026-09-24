@@ -41,6 +41,9 @@ second week.
   (⇧K, as before): swap a variation in, then `/wire prototype` rebuilds it. One
   undo takes the whole flow back, prototype included; `/wire basic` picks
   nothing.
+- **Prototypes keep up.** Use a screen in a prototype or take one out (⇧K, the
+  menu, `isocan wire use`) and the prototype updates itself; one undo takes
+  back both.
 - **When an agent joins,** a small note by the faces in the top right says so,
   and fades. Nothing is written to the Chat.
 - **`/wire` comes back with content.** Words and small pictures that fit what
