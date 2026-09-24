@@ -84,7 +84,7 @@ Measured: calls, latency per round, input tokens and cost for a real flow.
 - **2026-09-23** — The first live run drew a different tab bar on each screen. Chrome's *props* are now asked once per flow and copied to every screen (only `selected` stays per screen), and no block may carry the same intent twice. Design §4's "fixes the chrome" meant blocks; it now means blocks and their props.
 - **2026-09-23** — The design-system gate exempts wireframes by a core property, `fidelity: "wireframe"` (`isWireframeScreen` in `design-scope.ts`), not by the file's marker, because the gate reads item metadata and never file contents.
 - **2026-09-23** — Watching blue turn grey live was not walked: `canvas shot` takes ~17 s against a 7 s flow. The version history proves the in-place fill; the live watch moves to phase 5's browser walk (the web door), where a person asks from the canvas.
-- **2026-09-23** — Open: screens are titled by archetype (*List*, *Detail*), not by domain (*Deliveries*), and a lone button can draw unlabelled (Profile's edit action). Both need words Jev cannot write — an agent's copy pass, or a decision in phase 2.
+- **2026-09-23** — Answered 24 Sep (`7d677186`: on flesh a screen takes the pack's words — Deliveries, Delivery, New delivery — item title too unless someone renamed it, and a lone bare verb takes its object ("Edit delivery"); `--bars` names them back). Was: screens are titled by archetype (*List*, *Detail*), not by domain (*Deliveries*), and a lone button can draw unlabelled (Profile's edit action). Both need words Jev cannot write — an agent's copy pass, or a decision in phase 2.
 - **2026-09-23** — Answered 24 Sep (`12992559`: 0.3–0.5 is drawn marked *maybe* and keep prunes; the floor from phase 6's answers). Was: round 1's yes ≥ 0.5 admits borderline screens (search 0.50, verify 0.71 for a request that never mentioned verification). Phase 2's variations or phase 6's calibration should set the cut, not a guess.
 
 ## Phase 2 — Variations and keep
@@ -106,7 +106,7 @@ from the CLI.
 - **2026-09-23** — The mark's ~550 bytes of first paint were paid by moving slides' write half and speaker notes out of the entry chunk (`core/slidewrites.ts`): net −22 bytes, 727,757 against 727,800. The web phases have 43 bytes of margin, so phase 5 must be lazy from the start.
 - **2026-09-23** — Include decisions now carry probability (`omit` alternatives, a `declined` list), and most screens have a section near 0.3 — so *one way to draw this* is rare (one or two screens a flow), and variations are plentiful rather than scarce.
 - **2026-09-23** — Open: a variation's flipped block gets default props and intents (round 3 never asked about the runner-up), and flip names come from block ids ("with stacked list"). Phase 4's restyle or phase 5's web door should ask round 3 for the flipped block.
-- **2026-09-23** — Open: ⇧K is in the help panel but not core's `SHORTCUTS` table, so `isocan shortcuts` does not list it.
+- **2026-09-23** — Answered 24 Sep (`4ab4e629`: `isocan shortcuts` lists every loaded module's mark keys through a core helper the help panel shares, outside first paint). Was: ⇧K is in the help panel but not core's `SHORTCUTS` table, so `isocan shortcuts` does not list it.
 
 ## Phase 3 — Links and the prototype
 
@@ -125,7 +125,7 @@ delivery → back → tab — said out loud; the README's feature line.
 
 - **2026-09-23** — The canvas arrows between kept screens moved to phase 5. `CoreModule.edges(canvas)` sees item metadata, and a wire's spec lives in its file, so the edge hook cannot compute links; the smallest lazy underlay measured +235 bytes against 15 of margin. Phase 5 must teach the web to read a screen's spec anyway. Storing links as metadata was refused — stored links drift, which design §7 exists to prevent.
 - **2026-09-23** — Rule 1 covers the research table's forward intents (→ the next kept screen) and overlay intents (→ a kept screen drawing that overlay; an overlay's confirm returns beneath it). Rule 4 gives a tab only a top-level screen no other nav item already reaches, or two tabs land on one screen.
-- **2026-09-23** — Open: Jev labelled a tab "Profile" and the tab rule sent it to *List* — the intent vocabulary cannot say *this tab is the list*. Tab intents need a per-archetype target (`open-list`, …) or a wave-2 vocabulary.
+- **2026-09-23** — Answered 24 Sep (`107dd19e`: `open-list`, `open-feed`, `open-gallery` let a tab name its screen; Jev chose `open-list` unprompted on a live flow). Was: Jev labelled a tab "Profile" and the tab rule sent it to *List* — the intent vocabulary cannot say *this tab is the list*. Tab intents need a per-archetype target (`open-list`, …) or a wave-2 vocabulary.
 - **2026-09-23** — The entry chunk is 727,785 against 727,800: **15 bytes**. Phase 5's web door must arrive lazy, or answer the ceiling with a reason.
 
 ## Phase 4 — Wires in your design system
@@ -318,5 +318,6 @@ AA contrast; moving a DESIGN.md into a group says it changes what it governs.
 - **2026-09-24** — Plain-words archetype options kept on measurement (350 labelled screens, +1–5 points, −17–20% tokens), but they are not the fix: the misses are still shape-siblings (sign-in → welcome, list → settings), and calibration did not move.
 - **2026-09-24** — The prototype sits above its flow and returns there on rebuild unless moved by hand (`wirePrototypeAt`); a selected prototype lights its screens, `wire kept --prototype` answers the same for agents. Underlays gained the viewer's selection.
 - **2026-09-24** — The module's property keys left the first-paint record — the web never read them — which is what paid for the placement property and the selection fact under CEILING.
+- **2026-09-24** — Anything in a first-paint core file that a lazy chunk imports rides the entry chunk: the ⇧K helper beside `SHORTCUTS` cost 324 bytes until it moved to its own file (`shortcuttext.ts`), after which the entry was 204 bytes lighter than before.
 - **2026-09-24** — Answered 24 Sep (the floor half: re-measured with plain words, it stands. The arrow half stays open:). Was: an unkept *maybe* between kept screens turns their neighbour arrows into jumps over it; worth watching on a real flow. The 0.3 floor came from a which-archetype question, not round 1's yes/no — re-measure once plain-words options land.
 - **2026-09-23** — Open: a touch long-press on an arrow may open the canvas menu (the shell's cancel check matches only real buttons and links), and hotspot positions are unverified on an item resized away from its document size.
