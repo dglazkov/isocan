@@ -93,8 +93,17 @@ export function MessageContextPreview({ context }: { context: ReturnType<typeof 
     {context.loading && <p role="status">Loading complete context…</p>}
     {context.error && <p role="alert">{context.error}</p>}
     {context.manifest && <ContextManifestView key={`${context.manifest.revision}:${context.includeExcluded}:${context.manifest.rootIds.join(",")}`} manifest={context.manifest} />}
-    {context.stale && <p>Canvas changed after this preview. Refresh before sending.</p>}
-    <label><input type="checkbox" checked={context.includeExcluded} onChange={(event) => context.setIncludeExcluded(event.target.checked)} />Include excluded items for this message</label>
-    <button type="button" onClick={context.refresh}>Refresh context</button>
+    {/* Each control appears only when it can do something: the override when
+        something is excluded, Refresh when the preview is behind or failed.
+        Both used to render always, as bare browser defaults, and read as noise
+        under every message that carried a selection. */}
+    {(context.stale || context.error) && <p className="message-context-note">
+      {context.stale ? "The canvas changed since this preview." : "The preview did not load."}{" "}
+      <button type="button" className="message-context-action" onClick={context.refresh}>Refresh</button>
+    </p>}
+    {((context.manifest?.counts.excluded ?? 0) > 0 || context.includeExcluded) && <label className="message-context-note">
+      <input type="checkbox" checked={context.includeExcluded} onChange={(event) => context.setIncludeExcluded(event.target.checked)} />
+      Include the {context.manifest?.counts.excluded ?? 0} excluded {(context.manifest?.counts.excluded ?? 0) === 1 ? "item" : "items"} in this message
+    </label>}
   </div>;
 }
