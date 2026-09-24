@@ -50,6 +50,20 @@ goal:
     at most: 25267
     measured by: node scripts/measure.mjs registry-lines
     baseline: 25267, 2026-09-20, ba75c0fb
+  # **What every agent pays before its first act** (#124, 24 Sep 2026). The
+  # guide `isocan --agent-help` printed had grown to ~59k tokens, all of it on
+  # every cold start, because each feature added a paragraph and nothing said
+  # no. It is now a cold start plus topics; this is the bound on the cold
+  # start. The same number is a test (`packages/cli/test/agent-guide.test.ts`),
+  # so a commit that crosses it is red at once — the goal is here so the
+  # nightly reads it beside op-types, which is the same argument about a
+  # different surface: the vocabulary an agent must hold should grow on
+  # purpose. Raise both together, by hand, with a sentence about what moved
+  # into the cold start and why it could not be a topic.
+  - name: tokens an agent reads before its first act
+    at most: 3500
+    measured by: node scripts/measure.mjs agent-help-tokens
+    baseline: 2982, 2026-09-24
   - name: operations a person can send and an agent cannot
     at most: 0
     measured by: node scripts/measure.mjs web-only-ops

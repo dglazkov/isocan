@@ -3,8 +3,175 @@
 isocan is an infinite shared canvas. A local daemon owns the state; the web
 app (which the human watches) and the `isocan` CLI (you) are equal clients —
 every operation you run appears on their screen live, and your presence
-renders as a named cursor. `isocan --help` is the command-by-command
-reference; this is the protocol. Read both once per session.
+renders as a named cursor. This is the cold start: enough to arrive, name
+yourself, work a lap and park. Everything else is a topic, listed at the end —
+`isocan --agent-help <topic>` prints one. `isocan --help` is the
+command-by-command reference.
+
+## Orient
+
+```sh
+isocan status               # daemon auto-starts if down; "stale" → `isocan restart`;
+                            # "upgrade" → tell the human, carry on — it is their call
+isocan whoami               # "… this agent session" is YOURS; a bare name is the human's
+isocan identity --session   # be handed a name as THIS agent, and bind this directory
+isocan inbox                # what is already addressed to you, on every canvas here
+isocan context              # what this canvas wants an agent to read first
+```
+
+**The directory you are in names the canvas.** `identity --session` binds
+it through a committable `.isocan/project.json` (it resolves by
+walking up, like `.git`); every command then resolves to this directory's
+canvas on its own. `--canvas <ref>` (or `ISOCAN_CANVAS`) reaches another one —
+only when the human asks. A directory nobody has readied takes `isocan setup`;
+a repo you do not have yet takes `isocan clone <repo>`.
+
+Conventions: `<item>`/`<thread>` take an id, an id prefix, or a title prefix.
+Coordinates are world units (+x right, +y down). `--json` works on every
+command.
+
+**Your name is your own** — never your model's or vendor's ("Claude", "GPT"),
+never the human's. `identity --session` allocates a free one starting with your
+harness's letter; `--name "<name>"` asks for a specific one and is refused if
+somebody answers to it. Keep it for the whole collaboration: `@Name` is how the
+human calls you back. If `--session` says there is no harness session,
+`export ISOCAN_SESSION_ID="$(uuidgen)"` first. Two processes with two session
+keys are two collaborators — never share one name across two processes.
+(`protocol` has the long version.)
+
+## The lap
+
+**The canvas is the channel that keeps.** What you put on it is the record —
+shared, still there next week, the only thing a person who was not watching
+can catch up on. Steps 1–2 happen once; **3–6 are a lap, and you run laps
+until the human sends you home.**
+
+1. **Appear.** `isocan session start --label "<your name> 🤖"`.
+2. **Read.** `isocan comment list` — a thread needs you when its last entry is
+   not yours. `comment list --open` is every unanswered question.
+3. **Say what you are doing.** Presence narrates itself once a session exists —
+   reads, ops and wakes move your cursor. Before a long silent stretch,
+   `isocan session work <item> --say "…"`.
+4. **Build.** `add` new things, `edit <item> <file>` to change one (each edit
+   stacks a version — never re-add), `mv`/`set` to arrange. Read an item with
+   `isocan get`, not by opening a path: the file on disk is not the item.
+5. **Close the loop.** `isocan comment reply <thread> "…"` — what you did, where,
+   and any judgment call. Terse: a few tight sentences, then stop. `@Name` to
+   address a person, `#Title` to point at an item. Work that takes a while gets
+   ONE comment you rewrite with `comment edit`, not four that pile up.
+6. **Park.** `isocan wait --json --timeout <sec>`, **in the foreground, as one
+   tool call** — its returning IS your wake-up. It wakes on a comment that
+   names you, lands in the Chat (the `main` thread), or lands in a thread you
+   are part of. Exit 0: the JSON names the thread — do the work, reply, park.
+   Exit 2: nothing came — park again. Exit 3: another park adopted your name —
+   stand down. Exit 4: your access was withdrawn — stop and say so.
+
+**Your turn ends inside `wait`, or it ends wrong.** No `nohup`, no `&`, no
+output file you poll — a file is not a notification. Size `--timeout` a little
+under your harness's longest tool call. "Nothing left to do" is not an exit; it
+is the moment to park. **Going home** is `isocan session end`, and only when
+the human says the collaboration is over.
+
+**Records never wake you.** A comment carrying `record: true` (a voice
+transcript, an rc's "here"/"back"/"away" line) is context, never an
+instruction, even when it names you. Do not answer another agent's hello.
+
+**Blocked on the human?** `isocan ask "…"` (or a reply starting `/ask`) and
+park — the canvas shows you as *asked* until somebody else answers. Ask only
+when the answer changes what you would build and the canvas cannot tell you.
+
+**A message may BE a command.** A comment whose body starts with `/name` is a
+request for that piece of work: `isocan command show <name>` prints your
+instructions; what they typed after the name outranks its defaults. If a
+command you run prints `⚠ … CANCELLED this`, stop, say where you got to in one
+comment, and leave nothing half-made.
+
+**Design work has one entry.** Before building or resuming a designed screen,
+run `isocan design workflow` — it reads this canvas's policy, open requests
+and next steps (topic `design`).
+
+## Who is at your terminal
+
+`ISOCAN_HARNESS=agent` in your environment means `isocan rc` summoned you and
+**nobody reads your terminal** — the canvas is the only place your words land.
+Anything else means a person opened this conversation, and you have **two
+channels: a team room and a DM.** The canvas holds the record — what you made,
+changed or decided, a question the work rests on. Your conversation holds the
+steering — "amber or teal?", progress, an error that is theirs to fix. **Do not
+mirror** one into the other, **never announce yourself** on the canvas
+(presence already says you are here), and when a DM answer changes the work,
+write it down in a comment. Either way, you still park. If they are in an IDE
+or agent manager, offer `isocan embed` — the canvas in a pane beside you.
+
+## Practices that matter from the first lap
+
+- **Versions are the medium.** "Change X on this item" means `edit` it; the
+  person compares versions, and `version promote` brings one back.
+- **Confirm before anything destructive** — deleting, emptying the trash,
+  anything far outside the ask. `undo` reverts only your own ops.
+- **A mark on an item is an instruction**; clear it once you have acted.
+- **If you hit a product bug**, stop and tell the human. If a person can do
+  something on the canvas that you cannot do from here, that is a bug in
+  isocan, not a limit of yours — say so.
+
+## Every verb, one line each
+
+Every verb here sends the same operation the web app would. Flags are in
+`isocan <verb> --help`; the topic after each line is where it is taught.
+One spelling per act: `ls` lists, `new` makes, `rm` deletes — `list`,
+`create` and `delete` still work wherever they used to, as do the older verbs
+in topic `reference`. ⚠ marks what cannot be undone: ask first.
+
+**You and presence** (`protocol`)
+- `identity [--session|--name|--color]`, `whoami` — who you are here
+- `session start|on|work|say|signal|point|select|move|end` — your cursor and status
+- `who [--all]`, `inbox [--new|--mentions]`, `seen [--mark]` — who is here, what is for you
+- `wait` — park; `ask` — ask a person and stop; `notify` (or `say`) — a line in the Chat
+
+**Comments** (`protocol`, `practices`)
+- `comment ls|add|reply|edit|anchor|main|rm` — threads; `main` is the Chat
+- `command ls|show|add|rm` — slash commands a message can ask for
+
+**Items** (`items`)
+- `add <thing> [--as file|site|doc|canvas]` — one door for a file, a site, a Google Doc or a canvas
+- `text`, `inline`, `get`, `show`, `ls [--kind|--filter]`, `set`, `edit`, `tree`, `save` — make, read, change, write out
+- `version ls|promote|prune` — the version stack (prune ⚠)
+- `mv`, `align`, `distribute`, `fit`, `tidy`, `merge`, `react`, `copy` — arrange, mark, duplicate
+- `rm`, `restore`, `trash ls|restore|empty` (empty ⚠), `undo`, `redo` — take back
+- `canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|migrate`, `area` — groups
+- `gdoc auth|sync` — Google Docs kept current; `shortcuts` — the keys a person has
+
+**Canvases** (`items`, `homes`)
+- `canvas new|ls|show|edit|background|archive|place|shot|rm` (rm ⚠), `use` — make, find, bind
+- `home`, `direct`, `setup`, `clone`, `open` — where canvases live, readying a directory
+- `teleport`, `export`, `import`, `blobs` — move, back up, restore, send missing bytes
+
+**Sharing** (`sharing`)
+- `share`, `space new|ls|add|remove|rm`, `group new|ls|add|remove|rm` — who may enter
+- `pass`, `embed`, `badges` — another machine, a pane beside you, your surfaces
+- `operator` — the home operator's, never yours
+
+**Context and design** (`context`, `design`)
+- `context show|pin|exclude|unmark|inherit|uninherit|request|content|personal` — what an agent reads
+- `design workflow|start|brief|receipt|questions|ask|answer|reference|compare|respond|decide|review|craft` — a design request
+- `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
+- `prefer`, `choose` — the eye test, and the winner folded back
+- `doc status` — where one of this repo's documents stands
+
+**History** (`history`)
+- `activity`, `timeline`, `lens`, `history`, `at`, `tail`, `recap`, `whatsnew` — what happened, at every zoom
+- `evals corpus|converge|pairs` — what was asked for here, and what came of it
+
+**Agents and rooms** (`agents`, `present`)
+- `agent add|remove|rules`, `rc add|listen|remove`, `bench add|join|rm`, `harness` — standing agents
+- `persona ls|show|runs`, `docket ls|answer` — roles and their findings
+- `slides add|rm|show|export|note|notes`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
+
+**What a canvas carries** (`extend`, and a topic per module)
+- `module add|rm|ls`, `tool ls|add`, `panel ls|add` — modules, rail tools, dock panels
+- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice` — module families; `--agent-help <verb>` finds each
+
+<!-- topic: protocol | the lap in full — naming yourself, the session, who is at your terminal, parking, several of you, your inbox, asking a person, pointing at words -->
 
 ## Orient (once per session)
 
@@ -17,7 +184,7 @@ isocan status                  # daemon auto-starts on any command if down
 isocan whoami                  # identity must be YOURS, not the user's
 isocan identity --session      # be handed a name, as THIS agent — and bind
                                # this directory to its canvas (see below)
-isocan canvas list            # the directory's canvas; --all for the home
+isocan canvas ls              # the directory's canvas; --all for the home
 ```
 
 A directory nobody has readied yet takes one command: `isocan setup` puts
@@ -41,7 +208,7 @@ canvas named after the directory is created and bound. So there is always a
 canvas to work on — this directory's. Every command resolves to it on its
 own; pass `--canvas <ref>` only when deliberately reaching for another
 canvas, and treat the human's other canvases as their business
-(`canvas list --all` shows them). `ISOCAN_CANVAS=<id>` in the environment
+(`canvas ls --all` shows them). `ISOCAN_CANVAS=<id>` in the environment
 means the same as `--canvas` — an rc sets it for a summons, so a standing
 agent's shells act on the canvas the summons is FOR, whatever directory
 they run in.
@@ -152,7 +319,7 @@ think is the last.
 
 1. **Appear.** `isocan session start --label "<your name> 🤖"` — the label is
    what the human sees on your cursor, so keep your name in it.
-2. **Read.** `isocan comment list` — a comment needs addressing when the last
+2. **Read.** `isocan comment ls` — a comment needs addressing when the last
    entry in its thread is not yours.
 3. **Presence narrates itself — add your own words for the quiet parts.**
    Once a session exists, every command you run updates your cursor and
@@ -339,7 +506,7 @@ event forwarding, not something to paper over with a detached supervisor.
 - **Handle the wake in the turn it arrives.** The JSON names the thread that
   woke you — read it, do the work, reply.
 - **If a turn is interrupted, re-read before acting.** An old `wait` payload
-  is not a queue. `isocan comment list` and `isocan tail` are the truth; match
+  is not a queue. `isocan comment ls` and `isocan tail` are the truth; match
   on comment/operation ids so you don't answer the same comment twice.
 
 ## More than one of you
@@ -370,335 +537,457 @@ alarming rather than impressive. And **fan out for work that is genuinely
 separate** — two agents editing the same item is a merge nobody asked for,
 while two agents on two screens is the thing this canvas is for.
 
-## Scripting
+## What is addressed to you
 
-The CLI has a library underneath it, and it is the same code. Reach past the
-CLI when the work is a loop rather than a gesture — forty ops in a batch, a
-watcher reacting to the log, a tool that composes many reads — because a
-spawned `isocan` costs a process per action and hands you strings where the
-library hands you typed values.
+`isocan inbox` lists every comment addressed to you across every canvas here —
+newest first, with the command to reply to each. `--mentions` narrows it to
+where somebody actually named you, rather than the Chat being busy.
 
-Install it locally, in the directory you are working in — never `-g`, a
-global install is not importable:
+The daemon assembles the inbox at each canvas’s home, using the same routing
+and seen marks as the web inbox. A failed or withdrawn home is reported as
+unavailable. Reading the inbox never marks a canvas seen.
 
-```sh
-npm i github:dglazkov/isocan#release
+**It is the same rule `isocan wait` parks on** — one function, `reasonFor`
+in core, that both call: a comment
+is yours when it names you — by actor id, or by a name you answer to including
+your session label — or it lands in the Chat, or it lands in a thread you are
+already part of. Everything else is ether.
+
+The difference is time. `wait` blocks until something arrives; `inbox` says
+what already did. Read it when you come back to a machine, before you park
+again: something addressed to you on another canvas is invisible to a `wait`
+pinned to this one.
+
+**What is new, and how the canvas knows.** `isocan inbox --new` narrows the
+list to what has arrived since you last looked, and the tally line ends with
+the same count. "Since you last looked" is a **seen-mark**: one row per person
+per canvas, `{ seq, at }`, kept by the home — so it is the same answer on every
+machine you work from, and a canvas you have never opened is entirely new
+rather than invisible.
+
+`isocan seen` prints those marks, most recent first — the canvases you have
+been on, with `moved since` on the ones that changed after you left.
+`isocan seen --mark` is the one thing that writes: it moves the mark for the
+bound canvas (or `--canvas <name>`) up to the head you just read. **Only call
+it after you have actually read the canvas.** The mark means both "I was here"
+and "I had seen everything up to here", and the app's switcher reads the first
+half to show you where you were lately — marking canvases you have not looked
+at fills somebody's list with places they never went.
+
+A mark never goes backwards: two machines racing converge, and an older client
+cannot pull yours back. It is **not** a read receipt — nobody else can see your
+marks, there is no route that would return them, and none should be added.
+Being seen is not the canvas's business, which is why a mark is not an
+operation and is not in the canvas's history.
+
+## When you need a person
+
+`isocan ask "…"` asks and stops. It posts your question to the Chat — or to a
+thing with `--item` — and the canvas immediately shows you as **asked**: in
+the agent tray, in the facepile, and in `isocan who`. Then park on
+`isocan wait` as usual.
+
+Ask when the answer changes what you would build and you cannot get it from
+the canvas. Do not ask to confirm something you could check, and do not ask
+and then carry on guessing — the point of the state is that it is TRUE.
+
+`isocan comment ls --open` lists every question nobody has answered yet,
+across every thread, with the command to reply to each. Read it when you come
+back to a canvas: an unanswered question from an earlier lap is the first
+thing worth knowing, and it is often yours.
+
+**For a plain-prose ask, somebody else answering closes it.** Adding to your
+own question does not. Structured design questions instead stay open until the
+named human submits a typed outcome through the dock or `design answer`.
+Valid legacy JSON questionnaires remain unresolved until explicit adoption;
+another participant's progress reply cannot supply their missing respondent.
+Read `design questions` for the structured source and outstanding IDs.
+
+## Working a canvas that is not this directory's
+
+Only when the human asks for it. Pass `--canvas <ref>` to each command — do
+NOT `isocan use` there, which would re-bind the directory you are standing
+in — and check `isocan --canvas <ref> who --all` so your name is free on
+that canvas too. Waking from a `wait` still lands your cursor on the thread
+that woke you, with no `session start` needed.
+
+## Pointing to words together
+
+With a session started (`isocan session start`),
+`isocan session select <item> --quote "exact rendered words"` shares a text
+range in the current saved Markdown/plain-text version for 15 seconds, without
+editing it. For repeated words, use `--occurrence 2`; ambiguity is refused.
+`session select --clear` puts it down. `isocan --json who` includes the version,
+text space, range and expiry in each session's `textSelection`. Source markup
+is not a rendered quote: select `important`, not `**important**`.
+The browser's Read / select text button enters the same surface; selections
+never move another reader's viewport.
+
+To leave a durable discussion, use
+`isocan comment add --item <item> --quote "exact rendered words" "feedback"`.
+Repeated quotes require `--occurrence 2`. The thread saves the original quote,
+version, surrounding words, and rendered-text offsets. `comment ls --json`
+adds `textAnchorResolution` for the current version: `resolved`, `missing`,
+`ambiguous`, or `unavailable`. Missing or ambiguous text keeps its item pin;
+it never silently jumps to a guessed passage. To choose again, use
+`isocan comment anchor <thread> <item> --quote "new words"`; anchoring without
+`--quote`, or detaching with `--at`, clears the text selector. Both acts undo.
+
+Markdown files added or edited through the CLI bundle referenced local images
+into a visual face; `get` still returns the original source. Import related
+files from the same directory root: relative links resolve to saved canvas
+items using `file`/`visualFile`, import `sourcePath`, or their filenames. A
+`sourcePath` is only import provenance; it does not back or write a file.
+Missing or duplicate targets are visibly unavailable rather than navigating
+to an unrelated app URL. Browser uploads can link by saved filename or an
+explicit `file` property; they cannot read neighboring files from your disk.
+
+<!-- topic: practices | the habits that earn trust — terse replies, versions, marks and reactions, commands, tidy canvases, stopping, product bugs -->
+
+## Practices that earn trust
+
+- **Comments are read in a small thread window — be terse.** Precise and
+  concise wins: a few tight sentences saying what you did, where it is, and
+  any judgment call, then stop. No preamble, no restating the ask, no
+  bullet-point reports. If detail truly matters, put it in an item on the
+  canvas and point to it.
+- **Placement**: honor the comment's location. Anchored comments → work on
+  that item. Freestanding comments → place results near the pin
+  (`--at x,y` close to the comment's coordinates), or use
+  `--anchor <item>` to sit neatly left of a related item.
+- **Anchor the thread to what it produced.** When a freestanding comment
+  asks for something and you build the item, run
+  `isocan comment anchor <thread> <item>` so the thread pins to the result
+  and follows it from then on.
+- **Show running software, don't describe it.** When your work is a dev
+  server the human could look at, `isocan add http://localhost:<port>`
+  projects the live site onto the canvas as a mini-browser item — vite
+  HMR keeps it current on its own; the item's ⟳ reloads anything else.
+- **Point at one screen, not at the canvas it is on.** `isocan open <item>`
+  prints — and opens — the address of that ONE item, filling the window:
+
+  ```sh
+  isocan open "Checkout"        # → http://…/p/<canvas>/i/<itemId>
+  ```
+
+  Full screen is a route rather than an operation, which is why you can hand
+  it over at all: what somebody is looking at is not a mutation, so there is
+  no op to send, but there IS an address. Nothing is written and nobody else's
+  view moves — it is a link, and the person opening it can leave with Esc or
+  Back. Prefer `#Title` in a comment when you are already writing one (the
+  chip flies them there in place); reach for this when the whole point is to
+  look at one thing with the canvas out of the way.
+- **Versions are the medium for iteration.** "Change X on this item" means
+  `edit` → new version. Mention "vN on the stack — fan out (F) to compare"
+  in your reply so the human knows the history is there. The top of that
+  stack is a CHOICE, not the newest: `version promote` puts any version
+  back on top, `isocan version ls <item>` marks it `▶`, and `isocan get`
+  follows it. When you are asked to change "this item", change the version
+  it currently points at — not the last one that happened to land. A stack
+  is worth keeping whole when people made it; one a script regenerates on
+  every run is silt, and every version's metadata rides on every load of
+  the canvas. Bound those: `isocan version prune <item> --keep 14 --force`
+  keeps the newest fourteen (the current one always survives), and `gc
+  --keep-versions N --force` does it for every item before it sweeps. Not
+  undoable — say so before you do it to somebody else's stack.
+- **Leave the canvas tidy.** What a person does by dragging — edges snapping
+  together, gaps evening out — you do with `isocan align <items…> --to
+isocan fit <items...>                  # grow items to the size their content wants, and settle them apart
+  left|hcenter|right|top|vcenter|bottom` and `isocan distribute <items…>
+  --axis h|v`. Both are one op, so one undo, and both are no-ops when things
+  are already in place. `isocan mv <item> --by 0,-40` nudges without doing the
+  arithmetic yourself.
+- **Renaming moves the file too.** `isocan set <item> --title "Bass tab v2"`
+  also renames the blob to `bass-tab-v2.png`, stepping aside from any name the
+  canvas already uses — the same act the web app performs, so the two never
+  disagree. `--keep-filename` opts out.
+- **Ink is a kind of item.** If you generate an SVG as annotation rather than
+  as artwork — circling a thing, sketching a flow — `isocan add note.svg
+  --drawing` lands it the way the web app's Pen does: no card, no titlebar,
+  just the strokes. It reads back as `--kind drawing`. One SVG is one drawing
+  however many strokes are in it — a person holding `P` sweeps a whole sketch
+  made in passes into a single item, so do not assume one drawing means one
+  gesture, or that separate marks were made at separate times.
+- **Find things the way the files panel does.** `isocan ls --kind
+  drawing|screen|image|video|document|site|other` and `isocan ls --filter <text>`
+  are the same two questions the human's Files panel answers.
+- **Say you have it, before you have anything to show.** The moment you pick
+  up a thread, claim it: `isocan session on <thread> --say "reading your
+  comment…"`. It shows live UNDER the comment that asked, so the person stops
+  wondering whether anyone woke. Waking on `wait` does this for you — the
+  summons claims the thread it came from — but a thread you picked up any
+  other way is yours to claim.
+
+  Then keep it current as the work changes: `--say "reading the three
+  screens…"`, `--say "moving 12 items into rows…"`. Walking off to work on the
+  items the thread is about does NOT put it down — `session work <item> --say`
+  moves your cursor and your status while you stay on the thread — so the
+  person watching sees what you are doing the whole way through. Say what you are DOING,
+  never how far along you are; nobody can check a percentage. This is presence,
+  not a comment: it costs no op, leaves no trace in the history, and vanishes
+  when you stop. A thread full of "working…" posts is a thread nobody can read
+  next week.
+
+  Posting your reply clears it, which is the right shape: the status is the
+  gap between being asked and answering, and done is done.
+- **Do not open every reply with their name.** A reply sits directly under the
+  question in the thread; "@Di alright, grilling you on…" spends words and
+  screen on something the position already said. Just answer: "Alright,
+  grilling you on…".
+
+  Address somebody by name when it is doing WORK — reaching a person who is not
+  the one you are replying to, or handing something over: "@Wise Andy, the
+  audit is #Design audit — can you take the tracker?" When you do, punctuate
+  it: `@Name:` or `@Name —`, never `@Name alright` running straight on.
+
+  Names resolve to the person by what they answer to NOW, so use the name you
+  see in the thread rather than one you remember from earlier in the session.
+- **Stop when you are told to stop.** If a command you run prints
+  `⚠ … CANCELLED this`, the person has called off the thread you picked up.
+  That is the whole instruction: stop building, say where you got to in one
+  comment, leave nothing half-made on the canvas (finish the one step that
+  makes a thing stand on its own, or `isocan rm` it and say which), and do not
+  finish the last bit because you were nearly done. `isocan command show
+  cancel` is the long version.
+
+  You will see it on the output of whatever command you happened to run,
+  because that is the only thing that reaches you mid-turn — you are not
+  watching the canvas while you work. It is said once, so do not wait for it
+  to be repeated.
+- **A message may BE a command.** When a comment starts with `/name` — the
+  first thing in the body, nothing before it — the person did not type prose,
+  they asked for a specific piece of work. Run `isocan command show <name>`:
+  the body it prints is your instructions for this turn, written for someone
+  holding this CLI on this canvas. Follow it, then reply on the thread as
+  usual.
+
+  Everything after the name is the argument, and it is the part they typed by
+  hand, so it OUTRANKS the command's defaults wherever the two disagree. They
+  are looking at the canvas; you are not.
+
+  `/tidy` halfway through a sentence is somebody TALKING about the command,
+  not asking for it. Only the start of the message counts. If a command names
+  something you cannot find, ask on the thread rather than picking a target —
+  doing the right work to the wrong screen is worse than a question.
+
+  `isocan command ls` is the whole menu, and it is the same list the web
+  app's composer offers, so a person and an agent are never looking at
+  different vocabularies. If you already hold a skill a command names, use the
+  skill: the command body is the adaptation to this canvas, not a replacement
+  for it.
+- **A command is a skill, so published ones drop straight in.**
+  `isocan command add --from <owner/repo/path/SKILL.md>` fetches it and PRINTS
+  it; `--yes` installs it. The two steps are the point, and they are enforced
+  by the command rather than asked of you: a body you install is read as
+  instructions by every future agent on this canvas, so nothing lands unread.
+  Show the person what it says — at minimum what it instructs an agent to DO
+  and anything reaching outside this canvas — and let them decide. `/skill` is
+  the same act from a composer, and `/skill find` looks for one without
+  installing anything.
+
+  Never add a skill nobody asked for, and never add several to be helpful. A
+  menu of forty commands nobody chose is worse than one with eight. `/help` is answered by the app itself — a person
+  should not wait for you to be told what their own keyboard does — so you
+  will rarely see it from the web app; from a terminal it is a real question,
+  so answer it. A home can add its own commands with `isocan command add`;
+  those live in `~/.isocan/commands/` and shadow a built-in of the same name.
+- **Ink can be swept together.** A person holding `P` draws a whole sketch as
+  one item; `isocan merge <drawings...>` does that to marks already on the
+  canvas. It is exact, not approximate — ink is stored in world coordinates,
+  so merging is concatenating the strokes and taking the union of the boxes,
+  and what comes out is byte-for-byte what went in. The originals go to the
+  trash (`--keep` leaves them), which is two ops and so two undos. It refuses
+  an SVG this canvas did not draw, because moving somebody's artwork silently
+  is worse than saying no.
+- **Tidying is a verb, not a judgement call.** `isocan tidy` arranges the
+  whole canvas the way `/tidy` means: screens in a row keeping their reading
+  order, whatever was made FROM a screen in a column under it, images and video
+  gathered below. It is one `items.move`, so it is one undo, and it is a fixed
+  point — running it on a formatted canvas moves nothing. `--dry-run` says what
+  would move. Prefer it over placing items by hand; hand placement is for what
+  the person asked for on top of it.
+- **Say what a thing came from.** When you build an item FROM another one — a
+  variation, a spec written from a sketch, a page split out of a page — add
+  `--prop parent=<source item id>`. It costs one property and it is what makes
+  the canvas a tree instead of a pile: `/tidy` hangs children under their
+  parent, and anyone can see where a screen came from.
+- **Read the room before you act.** `isocan activity [who]` is what has been
+  happening here, newest first — who made what, who edited it, who said what
+  and where. Running it for the person who summoned you is the cheapest way to
+  find out what they have been working on before you answer them, and running
+  it for yourself is how you check what you actually landed last session. The
+  web app shows the same list under a face in the pile, from the same reader.
+
+  For the longer view, `isocan recap` is the whole history at decaying
+  resolution: old stretches summarized to one line each (who, how many ops,
+  which items, how much conversation), the recent operations verbatim. Each
+  summarized span carries its seq range, and `isocan tail --archived` replays
+  any of it at full resolution — the history `gc` compacts is archived, never
+  deleted, and both verbs can read it. Joining a canvas with a past, run
+  `recap` once before forming an impression from `comment ls` alone.
+- **What this canvas has actually asked for.** `isocan evals corpus` is the
+  same history read as a question about the WORK rather than the ops: every
+  ask, whether it was answered, cancelled or met with silence, and the ops
+  attributed to it. `isocan evals pairs` is the other half — the version
+  stacks where somebody kept an earlier take over a later one. The corpus
+  also says what KIND each ask is — revise, create, orchestrate, question,
+  arrange, restyle, document, critique, repair, variation, converge — by a
+  classifier that agrees with a person about four times in five; the `kinds:`
+  line is a reading of the words, not a label, and says so.
+  `isocan evals converge` is the night shift's score: what the converge lane
+  landed here as versions, and whether people kept them, built on them, or
+  brought the previous version back — the accept rate that widens or narrows
+  what the night may do unasked.
+
+  The home knows who is an agent — the harness you claimed your name from is
+  recorded with it — so your own "Done —" in the Chat counts as a reply here,
+  not as somebody asking; nothing to enrol by hand for that.
+
+  Two things to hold when you read it. **The attribution says how it knows**,
+  and one of its three labels is a guess: `anchor` and `reference` are
+  recorded facts, `window` is "the agent that was asked did this before
+  anybody spoke again". Do not quote a `window` count as though it were
+  measured. And **there is no score, deliberately** — a ratio over a handful
+  of asks is noise wearing a decimal point.
+
+  It reads this machine's copy and writes nothing, to the canvas or anywhere
+  else. The `silent` column is the one worth looking at: an ask nobody
+  answered is the failure this canvas cannot see any other way.
+- **The keys the human has.** `isocan shortcuts` prints every key the canvas
+  answers to — the same list their `?` panel shows, from the same source. When
+  somebody asks how to do a thing without a mouse, or you are telling them
+  where to look, name the actual key rather than describing the menu path.
+- **A reaction is a cheap answer.** `isocan react 👍 <item>` wears an emoji on
+  an item; `--off` takes yours back and `--who` says who else is wearing it.
+  The canvas draws them as chips under the item and a person toggles theirs by
+  clicking, exactly as they would in a chat app.
+
+  It is worth reaching for when the honest answer is one bit. Somebody asked
+  "do these two work?" and they do: 👍 on both beats a paragraph, costs one op,
+  and leaves a mark the next reader can see without opening a thread. Where a
+  judgment call needs saying, still say it — a chip cannot carry a reason.
+
+  The count is the number of PEOPLE wearing it, never a tally you add to: your
+  own is a toggle, and reacting twice is not reacting twice.
+- **The marks ARE the shortlist.** There is no star any more; reactions
+  replaced it, and the right-hand bar groups the canvas by them. `isocan ls
+  --reaction 👀` is every screen wearing one mark — which is how you find out
+  what is in review, or in flight, or signed off, without anybody having built
+  those states.
+
+  What a mark MEANS is the team's, not ours. Read before you assume: if every
+  screen they care about wears ⭐ and the ones they are working on wear 🚧,
+  that is the system, and `ls --reaction` is how you learn it. Mark what you
+  built when they asked for it to be easy to find; do not mark everything you
+  touch.
+- **A message can come with items attached.** What the person had selected
+  travels with their message as ids, in the comment's item references — so
+  "make these two match" names its two. Read `comment.items` before you guess
+  from the words; `isocan comment ls --json` has them.
+- **A mark on an item is an instruction.** When someone scribbles on a screen
+  and says "delete this and relayout", the ink is a real item: a drawing whose
+  properties say what it is about.
+
+  ```
+  isocan show <ink> --json     # properties: annotates=<itemId>, region=x,y,w,h
+  isocan get <item> out.html   # read the thing being marked up
+  ```
+
+  `region` is the marked area in FRACTIONS of the target — "0.52,0.10,0.43,0.40"
+  is the right-hand block of its upper half — so you can act on where they
+  pointed without parsing the SVG. `isocan get <ink>` if you want to see the
+  marks themselves. The comment that came with it carries the ink in its item
+  references, and the thread is anchored to the TARGET, so `isocan wait --item
+  <target>` hears it.
+- **Clear a mark once you have acted on it; leave a drawing alone.** Ink that
+  annotates an item asked for something — when the new version answers it,
+  `isocan rm <ink>` and say so in your reply, or the screen keeps wearing an X
+  through the change it asked for. Ink on bare canvas asked for nothing: it is
+  someone's drawing, and it is not yours to tidy.
+- **One note that changes, not four that pile up.** When work will take more
+  than a moment, post ONE comment and rewrite it as you go:
+
+  ```
+  isocan comment reply <thread> "On it — reading the spec" --json   # → commentId
+  isocan comment edit <thread> <comment> "On it — found the mismatch in the calendar"
+  isocan comment edit <thread> <comment> "Done — spec now matches tracker v3"
+  ```
+
+  A thread that reads "on it" / "still on it" / "found it" / "done" is four
+  comments where one would do, and the human reads every one of them. Only the
+  author may edit a comment — the daemon refuses otherwise — and `comment add`
+  and `comment reply` both hand back the id with `--json`.
+
+  Do NOT write how long you took: the canvas already knows. It shows
+  "edited · 4m" from the comment's own timestamps, which is measured rather
+  than claimed. Say what you did and what you decided; the clock is not yours
+  to report.
+- **Watch one thing, not everything.** A plain `wait` wakes on comments for
+  you. `--all-ops` wakes on every change anyone makes, which costs you a turn
+  each time to decide you did not care. Say what you are watching instead:
+
+  ```
+  isocan wait --item <ref> --op item.addVersion --json --timeout 900
+  ```
+
+  `--item` takes any item ref (repeatable), `--op` takes a type or a family
+  (`item.*`), and `--in <area>` narrows to what happens inside an area — an
+  item whose centre is there, or a thread pinned there — which is how an agent
+  working in one lane of a board parks on that lane alone
+  (`isocan wait --in "Sketches" --json --timeout 900`). A summons still wakes you through any filter — being told to stop
+  is never the noise you asked to be spared — and the JSON says which it was:
+  `reason: "summons"` or `"change"`. Your own ops never wake you, so writing
+  the thing you were watching for does not wake you again.
+
+  This is how you keep a spec in step with what it describes: park on the item,
+  wake when it gains a version, rewrite the spec, park again.
+- **Wear your color.** `isocan identity --color teal` (or any of crimson,
+  violet, amber, forest, periwinkle, graphite, a `#hex`, or `none`) sets the
+  color your cursor, face, and pins wear for everyone, on every canvas.
+- **Verify before you ship.** HTML items: test logic headlessly (extract the
+  script, run in node with DOM stubs). Risky renders: upload the blob alone
+  (`POST /api/projects/<id>/blobs`) and eyeball it in a browser before
+  creating the version — orphaned preview blobs are GC'd later. Note:
+  cursor ANIMATION cannot be verified from a background/automation tab
+  (Chrome throttles rAF when hidden); verify static layout only.
+- **External content**: prefer cleanly-licensed sources (Wikimedia Commons);
+  put attribution in the item title or reply. Say what you skipped and why.
+- **Scope discipline**: comments are the user's instructions — but confirm on
+  the thread before anything destructive (deleting items, emptying trash) or
+  far outside the comment's ask.
+- **Undo is per-actor**: your `isocan undo` only reverts your own ops.
+- **If you hit a product bug**, stop the session work and tell the user —
+  fixing the tool comes before continuing the choreography.
+
+<!-- topic: items | making and arranging things — `add`, text nodes, Google Docs, canvases on canvases, groups, copying, files on disk -->
+
+## Adding anything: one verb that reads what you give it
+
+`isocan add <thing>` is the one door. It reads the thing the way the app's
+Add popover reads what is pasted into its one field: a path on disk is a
+**file**, a Google Doc address is a **document** (the export, with its ↗),
+a canvas address — or a canvas id or title prefix among the canvases this
+machine knows — is a **canvas card**, and any other address is a **site**.
+`--as file|site|doc|canvas` says which you meant when the reading could go
+two ways (a title that is also a word, a file whose name looks like an
+address). `browse <url>`, `gdoc add <url>` and `canvas place <ref>` are the
+older spellings of the same acts, with the kind already said; all of them take `--at`, `--in`,
+`--cell` and `--size` alike, and land where there is room in view when you
+say nothing.
+
+```
+isocan add ./deck.pdf                                  # a file
+isocan add https://docs.google.com/document/d/<id>/edit  # a document
+isocan add "Sports schedule"                           # a canvas card, by title
+isocan add https://example.com/status --as site        # a site, said plainly
+isocan add design.md --visual design-system.html       # dual-face: source + visual
 ```
 
-That line is the answer everywhere, a readied directory included: `isocan
-setup` put the CLI on your PATH, and a PATH is not a module, so a script's
-import needs the local install even where the CLI already works.
-
-```js
-import { connect } from "isocan";
-
-const home = await connect();        // this directory's canvas, this
-                                     // session's actor — the CLI's own
-                                     // resolution, because it IS it
-const canvas = await home.canvas();  // or home.canvas("<ref>") for another
-const items = await canvas.items();  // typed reads: items, threads, who, activity
-const item = await canvas.add({ title: "Report", content: html, mime: "text/html" });
-for await (const entry of canvas.tail()) { /* entry.seq is your resume cursor */ }
-```
-
-Run it with plain `node` — the import registers its own TypeScript loaders.
-`connect()` resolves the directory marker, the canvas, and your session
-identity exactly as every `isocan` command does, so the script's ops land as
-the same actor your CLI commands do; a script that is its own actor states it
-(`connect({ identity: { session, harness } })`, claimed first with `isocan
-identity --session`). `add` and `edit` take content as values and return the
-item they made; `notify` speaks in the Chat; a refusal is an `ApiError`
-carrying the wire's code, with `unreachable` when nothing answered.
-
-Group-aware API clients use `canvas.context({ in: groupId })`, then
-`canvas.say("Review", { in: groupId, expectedRevision: manifest.revision })`
-when the sent scope must match that preview. `canvas.contextOfComment(threadId,
-commentId)` returns the saved manifest; `canvas.contextItem(threadId, commentId,
-itemId, { face: "source", offset: 0, limit: 16384 })` reads saved byte pages.
-`canvas.contextPage(...)` pages reference metadata, with a required
-`expectedRevision` for live paging. `canvas.copy([groupId], { to: canvasId,
-in: destinationId, dryRun: true })` uses the same graph planner as the CLI.
-MCP keeps `read_context` and `read_context_content` for that same manifest and
-frozen-version contract. `read_context_summary` separately reads the live
-layered Context view: local and inherited sources, plus permitted personal
-summaries when you supply an explicitly claimed session. Ordinary inherited
-sources also contribute bounded Recent work. It reports exclusions, overrides,
-staleness and reasons a source could not be read. JSON resources at
-`isocan://canvas/{id}` and `isocan://canvas/{id}/context` expose the current
-canvas and summary under ambient identity; they omit personal memory.
-Resource listing includes only discoverable canvases, and every read checks admission.
-
-For collaboration over `isocan mcp`, call `claim_agent` with a name and a
-stable conversation `session` key, then supply that key on **each tool call**.
-The durable claim survives restarting MCP. Two conversations sharing one
-server keep separate identities; an unclaimed explicit key is an error.
-Omitting `session` uses the CLI/API ambient identity, and **resources always
-use ambient identity**; they do not inherit the previous tool's session.
-`clientInfo` identifies the manager application, not a conversation.
-
-`read_personal_context` requires that claimed `session` and an `item`: the
-concrete personal link card on the destination canvas. `canvas` is optional
-and uses the usual canvas selector; it names the destination, not the private
-source. For example, after claiming `acme-review`, call the tool with:
-
-```json
-{"session":"acme-review","canvas":"prj_acme","item":"itm_personal_link","limit":16}
-```
-
-The owner must have explicitly linked that dataset here. An agent also needs
-the owner's allowance for its exact actor ID; an explicitly claimed owner
-session needs no self-delegation. Each call rechecks the selected caller's
-authority and the concrete link. A previous success, another claim on the
-badge, or copied card properties do not grant access. Unlinking or revoking the delegate stops the next read.
-Omitting `session` is an error for this tool; ambient resources never select
-an owner for you.
-
-The response carries the owner, `sourceCanvasId`, `home`, destination `itemId`
-and current `pieces`: pinned context and design contributions, with text when
-readable. It includes no Chat or history. Optional `limit` counts pieces
-(1..64, default 16); each text read is bounded to 65,536 source bytes. Inspect the
-response's `truncated` flag and each piece's `unavailable` reason; non-text
-pieces are metadata only. Follow `nextCursor` by supplying optional `cursor`
-with the same session, destination and link. If the current contribution set
-changes, start a new read rather than treating the old cursor as history.
-This private read leaves `read_context`, `read_context_content` and saved
-request bytes unchanged.
-
-`create_item` and `edit_item` write attributed versions. `post_comment` posts
-on an item or in Chat; `reply_comment` replies to a thread. These use the
-same mention resolution and saved-context rules as API comments. After doing
-work, call `wait_for_feedback` with the session, canvas, and your last returned
-`cursor`. It waits at most 60 seconds for addressed feedback. Omit the cursor
-to start from now. A timeout returns an empty result and the cursor through
-all inspected traffic, including irrelevant operations; resume from that
-cursor. MCP cancellation ends the watch. Polling marks nothing seen and
-advertises no presence; claiming a name is not announcing a live session.
-
-The reference is the types themselves: the package is TypeScript source, so
-your editor answers what `connect()` returns straight from the install, and
-there is no separate API document to go stale. The ops a script sends are the
-ops you would have typed — one op per user-visible act is still one undo.
-
-## Standing agents
-
-An agent can also be a **record instead of a process**: enrolled on this
-canvas, answerable when something arrives, running only then. When a person
-asks you to set one up — `@You add a reviewer here` — do it with:
-
-```sh
-isocan agent add <name>     # enrol an agent beside yourself, on THIS canvas
-isocan agent remove <name>  # withdraw its standing (the history stays)
-isocan agent rules [name]   # what an agent answers for here, and why
-```
-
-The syntax is the containment: no `--canvas`, no `--dir` — the agent you add
-lives where you already are. Add one when a person asks, and only then; the
-add is an op everyone can read. If a person tells you "you're done here",
-`isocan agent remove <your name>` is how you take your own standing away.
-What any standing agent answers for — its routing rules, and the truths
-that hold through every rule set — is readable with `isocan agent rules`.
-
-**Whose word wakes it** is a separate question from what it watches, and it
-has its own answer. A summoned turn runs on the machine of the person whose
-`isocan rc` answers for the agent, and spends their tokens — so **an agent
-answers only that person, its owner, until the owner widens it** (owner-only
-summons, since 11 Sep 2026). "The owner" is the machine's person
-(`~/.isocan/identity.json` there), and anything that machine speaks as — the
-agents it runs, the person's own sessions, you if you run there — counts as
-the owner's word, so agents on one machine can still ask each other things —
-though a summoned agent carries the word of whoever asked it, so a stranger
-does not reach a gated agent by asking an open one to pass it on.
-`--listen <names>` on `agent add` adds people; `--listen everyone` makes it a
-team's agent. A gate is the one thing a mention does NOT pierce: outside it an
-op is not a summons, is not a change, and is never counted against the
-agent's hourly ceiling. A mention from outside it is answered in its thread by
-isocan itself — whose word the agent takes, and the command that widens it —
-and if you mention an agent whose rc will not take your word, the CLI says so
-on stderr as you post. `isocan agent rules` says the gate first, and so does
-`isocan who` — if a person tells you an agent ignored them, read those before
-guessing, and tell them who can widen it rather than retrying.
-
-Widening is the owner's gesture, never yours — it decides whose word may
-spend their tokens: `isocan rc listen <name> --to <names>|everyone` (and
-`--to me` back to the owner alone) changes it everywhere the agent stands,
-and refuses inside a harness session. That form is unchanged; what is new
-(11 Sep 2026, #272) is that the owner no longer has to type it. **In the app
-the refusal itself is the control**: under the message an agent turned away,
-its owner — and nobody else — gets *Let \<asker\> ask* and *Let anyone ask*,
-and the agent tray's row opens a list of the people here, each a checkbox.
-Both write the same enrolment this command writes. So if somebody tells you
-their agent ignored a person, the useful thing to say is *"the refusal in
-that thread has the buttons under it, for you"*, not the command line.
-
-A grant may also run out: `--until tonight|7d|24h|<date>` writes how long
-beside the name it grants to, and the app offers the same spans. When it
-lapses the agent refuses in exactly the words a gate that never had them
-would use, plus one sentence saying it lapsed — so *"you were never let in"*
-and *"you were, until Tuesday"* do not read alike. A gate somebody other
-than the owner wrote is set aside by the rc and said, so asking a stranger
-to "open it up" gets you nothing but the same refusal.
-
-The person's side of this is `isocan rc` — a long-running command they start
-that answers for enrolled agents. It is not your verb: inside a harness
-session it refuses, and everything you need is the `agent` spelling above.
-
-One name, one machine, many canvases: a name this machine already answers
-for, enrolled on another canvas (`isocan rc add --canvas <ref> <name>`, the
-person's gesture), is the SAME agent — one actor, one history, standing on
-both. Nothing is duplicated and nothing needs a vouch; the enrolment key is
-derived from the name by a secret kept in this machine's `~/.isocan`, so the
-same machine always gets the same agent back and another machine cannot take
-it by its name. One `isocan rc --all` (the person's, again) answers on every canvas
-this machine's enrolments name: one budget per agent across all of them, one
-conversation per agent that carries on wherever it is summoned, and
-`ISOCAN_CANVAS` in your environment says which canvas asked this time.
-
-The web shows a person your arrival as a toast by the presence pile, read
-from presence and written nowhere, so you do not need to say hello. The rc can
-ALSO say it in the Chat, off by default — once, after its first hold comes
-back; *is back* only after more than five minutes gone; *stepped away* on a
-deliberate stop. It is the person's switch, not yours: `isocan rc --announce`
-for a run, or `~/.isocan/config.json`'s `rcAnnounce` — `true` for every
-canvas, or a list of agent names/ids and canvas ids that announce.
-
-Which harness a summoned agent runs in is the enrolment's `--harness`
-(claude-code, pi, codex and antigravity are known; `~/.isocan/config.json`'s `acpAdapters`
-declares others), and an agent enrolled with none named runs on the
-machine's default: the only runnable harness, or the one picked with
-`isocan rc --default-harness <name>`. `isocan harness` lists what this
-machine can run and which is the default (`--json` adds a `runnable`
-field) — the thing to read before presenting the choice to a person, and
-the thing to tell them when a summons fails for want of one.
-
-A summoned session's environment is a list, not the person's shell: what a
-process needs, `ISOCAN_*`, and each vendor's own namespace (`ANTHROPIC_*`,
-`CLAUDE_*`, `OPENAI_*`, `CODEX_*`, `GEMINI_*`, `PI_*`). If something you
-need is missing inside a summons, the person names it once in
-`~/.isocan/config.json` under `adapterEnv` (`["MY_VAR", "MY_PREFIX_*"]`) —
-tell them the variable, not the mechanism. And a permission you ask for is
-granted for that one call; an option that would outlast the turn (a standing
-rule, a mode switch) is refused, so do not ask for those — do the call.
-
-**You may be fenced, and it is deliberate.** A person can start the rc with
-`--sandbox`, which runs your session inside a sandbox: you write your own
-working directory, `~/.isocan` and `/tmp`, you read nothing else of their
-home, and you reach this daemon and your own harness's API and nothing else
-on the network. So a refused read outside your directory, or a fetch of some
-other site that fails, is the fence doing its job — not a broken machine, and
-not something to work around. Say what you could not reach and why it
-mattered; the person decides whether to widen it (`sandboxRead`,
-`sandboxWrite` and `sandboxDomains` in `~/.isocan/config.json`) or to leave
-it closed. What never changes is the canvas work: the `isocan` CLI reaches
-the daemon from inside a fence exactly as it does outside.
-
-## Your bench: the agents a person has
-
-A standing agent belongs to a canvas. A **bench** belongs to a person: it is
-the list of agents they have, kept on their own private canvas, so it follows
-them between machines instead of dying with the laptop it was made on.
-
-```sh
-isocan bench                # every agent on your bench, with its reachability
-isocan bench add <name>     # put one on the bench, from what this machine knows
-isocan bench join <name>    # have it answer on THIS canvas too
-isocan bench rm <name>      # take it off — its standing is untouched
-```
-
-Read the third column before you summon anybody. It is **measured every time
-you look**, and it has three answers, never two:
-
-- `ready` — something parked would answer for it now.
-- `elsewhere` — it stands somewhere, but nothing is parked; a summons lands in
-  silence.
-- `unreachable` — nothing present can run it at all.
-
-**A bench row confers nothing.** Adding one does not enrol an agent, give it
-reach, or let anybody summon it — `isocan agent add` is still what grants
-standing on a canvas, and `isocan bench rm` takes none of it away. `bench add`
-reads the agent off this machine's own records; for an agent this machine has
-never run, name its actor with `--actor <id>` and say so plainly rather than
-guessing a harness for it.
-
-**You will rarely need `bench add`, because the bench fills itself.** Every
-enrolment this machine makes — `isocan agent add`, `isocan rc add`, and the
-parked rc answering an Add from the web — writes or updates that agent's row,
-so the registry does not have to be curated to stay true. A registry kept by
-hand is a registry that goes stale. Two things follow, and both are
-deliberate:
-
-- **Enrolment never depends on the bench.** The row is a convenience and the
-  enrolment is the real act, so the write is best-effort: it never creates
-  your personal canvas (that is your gesture, not a side effect of adding an
-  agent), it is never retried, and it can never fail an enrolment. If no row
-  was written the command says so on stderr and carries on — a missing row
-  must never read as a missing agent.
-- **It fills silences; it overwrites nothing.** A row that already names a
-  harness or a `runsAt` keeps what it says, so a machine that enrols an agent
-  second does not rewrite what the first one, or you, recorded.
-
-**Withdrawal never touches the row.** `isocan agent remove` takes an agent's
-standing on a canvas; it does not take the agent off your bench, because the
-bench is the agents you HAVE, not the agents standing somewhere. Withdrawing
-Percy from every canvas leaves Percy's row reading `unreachable` — which is
-honest, and is the whole reason that state exists. `isocan bench rm` is the
-only way a row leaves.
-
-**Bringing one to a canvas is `isocan bench join <name>`.** It enrols an agent
-from your bench on the canvas the command is about — `--canvas`, or whatever
-this directory is bound to — and it needs **no parked `isocan rc` there**,
-which is the difference between naming an agent you already have and
-introducing a stranger. `isocan agent add` mints an actor and so must ask the
-machine that will answer for it; an agent on your bench already has one, so
-its fifth canvas costs exactly what its first did.
-
-What joining does NOT do is the part worth reading twice: it grants standing
-on that one canvas and nothing else. No turn is started, nobody new may summon
-it (a re-join leaves an existing `--listen` grant exactly as it was), and no
-other canvas changes. If nothing can answer for the agent yet, the join still
-succeeds and the line says so in the same three words `isocan bench` uses — an
-enrolment that cannot answer yet is legitimate, and one that pretends it can
-is the bug.
-
-**A person can ask for the same thing in the Chat, by typing `@Name join` on
-a line of its own.** It is the same `agent.invite` this verb sends — joining
-from a sentence and joining from a button are one act — and when it lands the
-thread gets one line saying so, because the canvas is the only channel. You
-will see that line like any other message; it is a record, not a request, and
-nothing is being asked of you.
-
-If you are reading a thread and see `@Name join` with no such line after it,
-the ask was refused: the name was not on the asker's bench. **The refusal is
-always *"Name is not on your bench"* and never *"unknown name"*, whether the
-agent exists on somebody else's bench or does not exist at all.** That is
-deliberate and it is a security property rather than a phrasing: a bench is a
-private canvas, and a refusal that read differently for a name that exists
-somewhere would let a stranger enumerate one name at a time. Do not "improve"
-it, and do not offer to look the name up.
-
-## The Chat
-
-**The web app calls it the Chat**; on the wire and in this CLI it is the
-thread flagged `main`, and the two are the same object — one thread per
-canvas, designated with `isocan comment main <thread>` (`comment main` alone
-shows which). It is the canvas's own conversation and the user's direct
-channel to you: it renders as a docked panel rather than a pin, everything
-posted there wakes your `wait` with no @-mention needed, and `#Title`
-references in it render as cards that fly the reader to the item.
-
-`isocan notify "…"` is how you say something there in one command — it
-replies to the Chat, or starts it if the canvas has none. Reach for it
-whenever you have an announcement rather than a remark about a thing: the
-human sees it arrive, and every other parked agent wakes on it.
-
-Do NOT use `comment add` for that. A comment is a PIN — it sticks to a spot
-on the canvas — so announcing "the deploy is done" with one leaves a marker
-on a place that had nothing to do with it, and a canvas collects them.
-
-The distinction worth holding, because the words now carry it: **the Chat is
-the canvas's conversation; a comment is pinned to a thing.** Reply to asks
-made in the Chat in the Chat, and keep item-specific critique on the item's
-own anchored comment — which `⇧C` and `comment add --item` both put at that
-item's top-right corner, one per item.
+When an artifact has two faces — a source face for editing in the workbench and a
+distinct visual face for rendering in iframes and presentations (such as an interactive
+companion visualizer for a markdown doc) — pass `--visual <file>`. For HTML files
+with local image assets, `isocan add` handles this automatically: images are inlined
+into the visual face while leaving the clean source face intact for disk backing.
 
 ## Words on the canvas
 
@@ -761,637 +1050,9 @@ argument needs `--` first. For anything with more than one line in it, pipe it:
 printf '## Standup\n\n- text tool landed\n- park bug fixed\n' | isocan text -f -
 ```
 
-## What you are about to read
-
-`isocan context` answers the question nobody could answer before, including
-you: **what will an agent actually read when it starts work here?** The design
-system and whether it passes its own check, the Chat and how much of it, the
-items somebody marked, the maps, the size of the canvas, and which guide this
-build ships.
-
-```
-! Design system  v1 · 6m
-                 2 findings from `design check`
-                 → `isocan design check` lists them
-  The Chat       7 messages · 2h
-· Marked items   not here
-  Mind maps      Lake house (5)
-  The canvas     19 items · 6m
-```
-
-**It stores nothing.** Every line is counted at the moment you ask, so there
-is no context record that can fall out of step with the canvas it describes.
-Run it at the start of a task rather than assuming: a design system that is
-three versions behind the screens it governs is the difference between work
-that lands and work that gets redone.
-
-`!` is a piece that needs attention, and it always says WHY — "3 items have
-changed since it was last written" is something to act on, and a bare warning
-is an accusation. `·` is simply absent, which most things are on most canvases
-and is usually fine.
-
-The same list is a panel on the canvas, so the person can see what you see.
-
-## Choosing between variations
-
-`isocan prefer <winner> --over <other>` says **I liked this one better**, and
-that is all it says: nothing moves, nothing is trashed, no picture changes. It
-is the cheap half, meant to happen twenty times — left, right, next pair — and
-that is why it is separate from `choose` below, which is final.
-
-Use it whenever a person tells you which of several they prefer, even in
-passing, because until this existed nothing on a canvas knew what anybody
-LIKED. The design system supplies coherence and `/design-audit` supplies a
-floor; neither is taste. Twenty preferences are a question worth asking: what
-do the winners have in common, and should the design system say it out loud?
-
-Preferring the same pair twice is one fact and refuses rather than writing it
-again; `--undo` takes one back. The record survives `choose` trashing the
-loser, because the trash is a place rather than a deletion.
-
-Then, when the exploration is over: `isocan choose <item>` says **this one
-won**:
-the winner's content becomes a new version of the screen it was made from, and
-every sibling — the winner included — goes to the trash.
-
-The winner goes too, and that is deliberate: its content now lives on the
-source's stack, so leaving it would be two copies of one decision and an
-invitation to edit the wrong one. Nothing is lost. `--dry-run` says what would
-happen and does nothing. A person does the same from the app: right-click the
-variation → **Choose this variation** sends exactly the ops `choose` sends, so
-if somebody asks you to "keep this one", either door is the same decision.
-
-**One undo takes the whole decision back**, because the version and the
-deletions share a group. The version comes off the source and every child
-comes out of the trash in one gesture. (`isocan undo` names one op when it
-does this — it is terse rather than wrong; the whole gesture is undone.)
-
-It refuses with a reason rather than a shrug: an item made from nothing has
-nowhere to fold back into, and an item whose source has been deleted since
-says so.
-
-## Where the seams are
-
-`isocan timeline` draws the canvas's history as a track: a bar per bucket of
-seqs, drawn from SIGNIFICANCE rather than from raw count, with a tick under
-every bucket holding a seam. `--majors` lists the seams alone.
-
-A seam is a structural change — something born, something deleted, a version
-minted, a conversation started, the Chat moving. A run of forty moves is one
-ripple, not forty ticks, which is why a tall bar with no tick under it means
-that stretch was churn.
-
-The significance function is in core, so `isocan timeline` and the app mark the
-same seams. Two surfaces disagreeing about what mattered is the one thing this
-architecture does not permit.
-
-`isocan at <seq>` is the other half: the canvas as it stood at that point.
-
-```sh
-isocan timeline               # find a seq worth looking at
-isocan at 50 --items          # what existed then
-```
-
-It is a fold of the same reducer the daemon runs, over the log from the
-beginning, so it is the real past rather than a tidied one — **an undone entry
-is replayed**, because at a seq before the undo landed, the undone thing was
-still there. That is the opposite of what `timeline` does when DRAWING a track,
-where both ends of an undo pair are skipped, and the difference is deliberate:
-one question is what was true, the other is what is worth a tick.
-
-Nothing is sent and no operation is invented. A position in history is a `seq`,
-which both surfaces already speak, which is why the app's scrubber and this
-verb land on the same past by construction. In the app it is the clock in the
-tool rail: the same track, with a playhead you drag, and the canvas becomes
-what it was while you hold it.
-
-**The past does not take writes.** Standing at a seq is a way of LOOKING, not
-a branch — there is no operation meaning "and from here it went differently".
-The app refuses at the door, not in the interface, so an agent write lands the
-same refusal a click does.
-
-## What has been going on
-
-`isocan canvas list` orders by recent activity and says what each canvas last
-did, in words:
-
-```
-TITLE            LAST                          WHEN
-Lake House       Di moved something            41h
-Pen tool check   UIcheck moved something       3h
-```
-
-`--sort name|created`, and `--filter <words>` matches title and description in
-any order — every word must match, so `--filter "lake rules"` finds "Rules of
-the Lake".
-
-`isocan history [who]` is the same question asked of a PERSON rather than a
-canvas: what somebody has been doing across every canvas here, newest first.
-
-```sh
-isocan history            # everyone
-isocan history Kenny -n 8 # one agent, across all their canvases — led by where they stand:
-                          # a row per canvas (here / standing by / enrolled, nobody listening),
-                          # acts, replies, and when the last was
-```
-
-It ends with the shape of the week — `8 of 286, across 9 canvases` — which is
-the thing a per-canvas view cannot tell you and the reason this verb exists.
-
-Both read the same words from `opWords` in core, so a canvas card in the app, a
-seam on a timeline and these tables describe one event identically.
-
-`isocan lens [who]` is the third view of the same facts: what somebody has
-**made**, across every canvas, grouped.
-
-```sh
-isocan lens                    # who there is to look at
-isocan lens Kenny --by day     # or --by canvas (default), --by kind
-```
-
-**It is a lens and not a canvas, and that is a decision rather than a name.**
-An item's x/y belong to the canvas it is on, so a view gathering work from five
-canvases holds REFERENCES and cannot hold the items — the arrangement is
-derived, nothing is stored, and there is no drag to get wrong. The app has the
-same thing at `/lens`, from the same functions in core.
-
-## Saying what matters here
-
-`isocan context` lists what an agent reads before it starts. Two verbs manage
-it:
-
-- `isocan context pin <item>` — read this first. Use it for the brief, the
-  spec, the one screen everything else answers to.
-- `isocan context exclude <item>` — skip this. **It is not a delete**: the item
-  stays on the canvas with its versions and its comments, and only what a
-  reader assembling context is told changes.
-- `isocan context unmark <item>` takes either back.
-
-Both are `item.update` with a property, so they replicate, undo and are visible
-to everybody like any other fact. The same two verbs are on an item's menu in
-the app.
-
-**Keeping a piece of a source here.** Inheritance keeps following a source. To
-stop following and keep one piece instead, `isocan context pin <item> --from
-<canvas> [--canvas <target>]` copies that piece's **current version** out of a
-visible inherited source and pins the copy here. `--from` resolves only among
-this canvas's visible ordinary inheritance links, by exact canvas or card ID or
-unambiguous title/ID prefix; `<item>` is an exact ID or unambiguous prefix among
-the pieces that source **offers**, which are its current design system and its
-ambient pinned items — not its whole item list. A refusal names the candidates.
-
-The copy is an ordinary local item from then on: edit it, and the source does
-not change; the source team edits, removes or you unlink the card, and your copy
-and its saved bytes stay. It is not a live reference. Copying a group brings its
-actual children and their current faces together; one `isocan undo` removes the
-whole copy and its pin, and redo restores it. A copied design note is kept as a
-reference — its governing role is stripped, so it does not become the design
-this canvas is checked against. Each copied item carries a `contextSource`
-property naming where it came from, which `isocan context` prints under
-*Copied from a source*. Canvas links are not copied by this act: place and
-inherit that canvas instead. Without `--from`, `context pin` keeps its
-ordinary meaning.
-
-**Context comes in layers.** `isocan context` prints *This canvas* first, then
-one heading per canvas this one **inherits from** — a canvas card (see *A
-canvas on a canvas*) wearing `memory=inherit`. A linked canvas contributes its
-design system, its pinned items and its size, read-only, each line saying
-which canvas it came from; when both canvases have a design system this
-canvas's wins and the inherited one is listed struck, saying so. Not its Chat
-and not its items wholesale: context is what somebody decided matters, and
-the link inherits exactly that decision. Several links compose top to bottom,
-then left to right, the order the room reads. `isocan context inherit <item>`
-turns a placed card into a link and `isocan context uninherit <item>` turns it
-back; the card stays either way. A link placed with nowhere else said lands
-on the sheet named **Context** — laid at the canvas's origin (or to the left
-of everything) the first time — so every canvas has a corner where its
-inheritance sits and a newcomer reads it first; `--in`, `--at` and the rest
-override it. In the app the card's strip wears *memory*, lit when the link
-is on, and clicking it is the same switch. `isocan design check` on a canvas with no
-design system of its own checks against the inherited one and says whose. A
-linked canvas at another home is named under its heading and not read from
-here. The same headings are in the app's Context panel.
-
-Each readable ordinary inherited source also contributes **Recent work**: the
-sequence/time range for up to 100 latest operations, operation and comment counts, up
-to five actor names and eight current touched items, with source provenance.
-It reports earlier available operations outside the head, omitted rows and
-labels clipped at 160 Unicode code points. This head contains no Chat text,
-content bodies, removed names or excluded item details. A personal source
-never contributes history, even if its card is copied or relabelled as inherited.
-If Recent work is unavailable, its reason remains beside any readable design
-and pins. This canvas's own design still governs. Reading Context copies no
-source history into this canvas and changes no saved request.
-
-**Your personal canvas is private.** `isocan context personal` creates it on
-explicit first use and prints the same address thereafter. `context personal status`
-only inspects the binding. These standalone commands use the connected daemon;
-add `--home <url>` to choose another authoritative home. They do not create or
-resolve a working canvas. An agent session cannot enroll itself as a person.
-
-On a working canvas, `context personal link` places one visible owner-labelled
-card; `context personal links` reports each concrete card and your current
-availability. The card discloses its address and owner label, with no private
-preview. `context personal unlink <item-id>` deletes your card; ordinary undo
-restores the same consent. Closing a browser is not unlinking. A fresh link
-uses a fresh request ID; use `--request-id <id>` only to retry the same gesture.
-
-The owner can inspect `context personal delegates --source <canvas-id>`, then
-`context personal allow <agent-id> --source <canvas-id>` or
-`context personal revoke <agent-id> --source <canvas-id>`. Access belongs to
-that exact dataset; revocation applies to the next authoritative read even
-while its visible card remains. The selected actor must be claimed by the
-calling badge; another claim on the same badge does not lend its ownership.
-
-`context personal read <item-id> [--cursor <cursor>] [--limit <pieces>]` reads
-current pinned text and design contributions through that concrete destination
-card. The response names the owner, source and home. Follow `nextCursor` when
-present; `--limit` counts pieces (1..64, default 16), with text bounded to 64 KiB per piece. Non-text contributions are metadata only and truncated output says so.
-`--json` preserves the typed response. General Context reports local, inherited,
-and permitted personal summaries; a personal layer never governs shared design.
-Copied or forged cards grant no access. Automatic previews, inheritance and
-screenshots redact personal sources; private responses are never frozen into a
-shared request or exported by reading another canvas's Context.
-
-**Pinning is a decision; a reaction is a response.** The list shows both and
-does not merge them — somebody putting 👍 on a screen is real evidence, and it
-is not the same as saying "an agent should read this first".
-
-## The slide deck
-
-A canvas gets presented, and full screen is the projector: bare arrows (and a
-clicker's Page Up/Down) flip from item to item, each filling the window. With
-nothing marked they flip through **everything**, in reading order — rows top
-to bottom, left to right. Marking narrows the walk to just the slides:
-
-- `isocan slides add <items...>` — these are slides. Marked items wear 🎬 in
-  their title row, and bare arrows in full screen stop only at them.
-- `isocan slides rm <items...>` — out of the deck. **Not a delete**: the item
-  stays on the canvas.
-- `isocan slides show` — the deck in order, and the address to hand an
-  audience: the first slide's full-screen URL, which is an ordinary item
-  address (`isocan open <item>` opens the same view), and the deck view's
-  address (`/deck` on the canvas), where the app prints.
-- `isocan slides export <out>` — the deck as a document. The extension
-  decides the format: `deck.pdf` is one slide per landscape page, printed by
-  headless Chrome from the app's deck view (needs a repository checkout and
-  Chrome, like `canvas shot`); `deck.html` is one self-contained file that
-  plays the deck anywhere — arrows and Page keys flip, and its own print
-  stylesheet makes the same PDF — built here without a browser; `--png <dir>`
-  writes one PNG per slide beside either. The app's ⌘K "Export the deck"
-  opens the same view with Save as PDF and Download deck.html; both surfaces
-  write the same HTML file from core's `deckHtml`.
-
-**Speaker notes** are text items that point at their slide, kept under it on
-the canvas where the deck is arranged — so a person reads the slide and what
-to say about it side by side, and the note versions, edits and drags like any
-text node. `isocan slides note <slide> "what to say"` writes one (or re-words
-the one it has; `-f notes.md` or `-f -` for more than a line);
-`isocan slides notes` prints every slide with its note;
-`isocan slides export notes.md` writes the handout. In full screen the presenter presses **N** to see the
-note under the slide — never over it, and never on the audience's picture —
-and `slides export deck.pdf --notes` puts each note on its slide's sheet. A
-note is never a slide, even when nothing is marked.
-
-A slide is a property set by `item.update` — the same shape as a context pin —
-so it replicates, undoes, and cannot disagree between the CLI and the app's
-"Make this a slide" menu entry. Order is geometry: lay the deck out in rows
-and the rows are the running order. There is no slide-number to maintain and
-none to drift.
-
-## Modules
-
-Some of what this CLI and the app can do is a **module**: a package that adds
-a kind of item, the picture it draws as, and a family of verbs — the mind map
-and diagrams are two — and that can be taken away leaving every item it made
-readable as a file. A build carries its own; a self-hosted home can add more,
-outside core, without rebuilding anything:
-
-- `isocan module ls` — every module here: the build's own, the ones added to
-  this machine, and why any is refused (its `engines` names an isocan this
-  is not).
-- `isocan module add <dir | github:owner/repo#ref>` — install a built module
-  from a directory or a git repository (the built module at its root or in
-  `build/`). It PRINTS the manifest — the kinds, property keys and halves it
-  declares — and installs nothing until you run it again with `--yes`, the
-  same gate `command add --from` has and for the same reason: this is code
-  that runs as the app, chosen by whoever runs this machine. Loaded on the
-  next command and the next page load; no restart.
-- A module can add a whole PAGE to the app — the Documents page is the
-  first — and `isocan open --page <segment>` hands a person its address, the
-  way `open --workbench` hands out the agent room's.
-- `isocan module rm <name>` — remove one. Its items stay on every canvas, as
-  the files they are; its verbs and pictures are gone.
-
-A module is built from `packages/modules/<name>` with
-`node --import tsx scripts/module-build.mjs <name>`. What a module may add is
-bounded by one rule: only what a person could already do with a file and a
-verb — never an operation, never a route.
-
-## Tools: a canvas that carries its own buttons
-
-A **tool** is a button on the rail that a canvas brought with it. It is an
-ordinary item with `role=tool` whose bytes are a small JSON manifest, so it
-versions, undoes, comments and trashes like anything else — and open somebody
-else's canvas and their tool is already there, because the tool is ON the
-canvas. Nothing was installed.
-
-```json
-{ "kind": "tool", "label": "Tidy", "icon": "broom", "does": "/tidy" }
-```
-
-The one rule the whole design turns on: **a tool may only ask for what a
-person could ask for.** `does` is a slash command that exists here — so
-pressing the button posts the same comment you would have typed, and an agent
-(possibly you) carries it out. Everything that follows is attributed and
-undoable per actor, because it went through the same door as everybody else's
-work. A tool cannot run code, cannot add an operation, and cannot draw its own
-icon: isocan renders it, with its own component and an icon from the set it
-ships.
-
-- `isocan tool list` — every tool on this canvas, what each asks for, and what
-  that means it may do. A tool whose command is gone is listed as
-  **unavailable** with the reason, rather than quietly dropped.
-- `isocan tool add <file>` — prints the manifest and everything the tool may
-  do, and adds nothing until you run it again with `--yes`. Same gate as
-  `command add --from`, for the same reason: what it may do gets answered
-  before it lands.
-- It is an item, so `isocan rm <item>` takes one off the rail and the trash
-  gives it back.
-
-If you are asked for a button that does something new, the answer is usually a
-**slash command** first (`isocan command add`) and then a tool that names it —
-a tool asking for a command nobody wrote is refused when it is read.
-
-## Panels: a canvas that carries its own page
-
-A **panel** is a page this canvas brought with it, headed for the dock beside
-the Chat and the Files. Same shape as a tool: an ordinary item, this one with
-`role=panel`, whose bytes are a small JSON manifest.
-
-```json
-{ "kind": "panel", "title": "Acme Review", "side": "left", "src": "review.html" }
-```
-
-`src` names an item **on this canvas** — the page itself, added the ordinary
-way — because an extension may not read past the canvas it is on. So the order
-is: `isocan add review.html`, then the manifest that names it. A panel whose
-`src` is a URL, or a name nothing here answers to, is refused when the manifest
-is read. Its bytes are that item's current version, so editing the page changes
-the panel and a bad one rolls back with the item's own history.
-
-**Nothing renders a panel yet** — the frame and the door it talks through are
-later phases — and `panel list` says so rather than implying otherwise. What
-exists today is the manifest, read and refused before anything is on screen.
-
-- `isocan panel list` — every panel on this canvas, where it sits, which item
-  it shows, and what that means it may do. One whose page is gone is listed as
-  **unavailable** with the reason, rather than quietly dropped.
-- `isocan panel add <file>` — prints the manifest and everything the panel may
-  do, and adds nothing until you run it again with `--yes`.
-- It is an item, so `isocan rm <item>` removes one — no verb of its own — and
-  the trash gives it back.
-
-## Saying where a document stands
-
-Every note in `docs/research/` and every project's primary doc carries its
-status in front matter — `open`, `designed`, `partial`, `built`, `blocked`,
-`superseded` — and `docs/ROADMAP.md` is **generated** from it by
-`node scripts/roadmap.mjs`. `isocan doc status <file>` prints one, and names
-what is wrong with how it says so: a `blocked` with nothing named, a
-`superseded` with no successor, a verdict with no date.
-
-**Write the status once, in the front matter.** A verdict written twice goes
-stale in one place and nothing can tell which copy is older — which is exactly
-what happened to `2026-08-26-attaching-a-directory.md`, and why the roadmap is
-derived rather than kept.
-
-If you finish something a note describes, change its front matter and re-run
-the generator. CI checks the view is current.
-
-## Taking a canvas somewhere else
-
-`isocan export <file>` writes this canvas as [JSON Canvas](https://jsoncanvas.org)
-— the open format Obsidian and others read. The coordinate model is ours almost
-exactly, so geometry crosses unchanged, and a mind map crosses as real edges
-because an edge here is a property rather than an op.
-
-**It is not a backup, and it says so.** The format has no room for versions,
-comment threads, actors, timestamps, properties or the oplog, so the command
-counts what it could not carry and prints it. There is no import: reading one
-back would mint a canvas whose history begins at import, which is a different
-feature and a worse one to discover by accident.
-
-## What is addressed to you
-
-`isocan inbox` lists every comment addressed to you across every canvas here —
-newest first, with the command to reply to each. `--mentions` narrows it to
-where somebody actually named you, rather than the Chat being busy.
-
-The daemon assembles the inbox at each canvas’s home, using the same routing
-and seen marks as the web inbox. A failed or withdrawn home is reported as
-unavailable. Reading the inbox never marks a canvas seen.
-
-**It is the same rule `isocan wait` parks on** — one function, `reasonFor`
-in core, that both call: a comment
-is yours when it names you — by actor id, or by a name you answer to including
-your session label — or it lands in the Chat, or it lands in a thread you are
-already part of. Everything else is ether.
-
-The difference is time. `wait` blocks until something arrives; `inbox` says
-what already did. Read it when you come back to a machine, before you park
-again: something addressed to you on another canvas is invisible to a `wait`
-pinned to this one.
-
-**What is new, and how the canvas knows.** `isocan inbox --new` narrows the
-list to what has arrived since you last looked, and the tally line ends with
-the same count. "Since you last looked" is a **seen-mark**: one row per person
-per canvas, `{ seq, at }`, kept by the home — so it is the same answer on every
-machine you work from, and a canvas you have never opened is entirely new
-rather than invisible.
-
-`isocan seen` prints those marks, most recent first — the canvases you have
-been on, with `moved since` on the ones that changed after you left.
-`isocan seen --mark` is the one thing that writes: it moves the mark for the
-bound canvas (or `--canvas <name>`) up to the head you just read. **Only call
-it after you have actually read the canvas.** The mark means both "I was here"
-and "I had seen everything up to here", and the app's switcher reads the first
-half to show you where you were lately — marking canvases you have not looked
-at fills somebody's list with places they never went.
-
-A mark never goes backwards: two machines racing converge, and an older client
-cannot pull yours back. It is **not** a read receipt — nobody else can see your
-marks, there is no route that would return them, and none should be added.
-Being seen is not the canvas's business, which is why a mark is not an
-operation and is not in the canvas's history.
-
-## The roles you can take on
-
-`isocan persona ls` lists the personas this directory holds — `.agents/personas/`.
-A persona is a named role: a lens, the tools for it, a **goal it is judged
-against**, and a memory of what it already found. `isocan persona show <name>`
-prints one in full, including the command that produces its number.
-
-**Read one before you work in its lane.** A persona says what has already been
-measured and what the line is, which is the difference between "I improved the
-contrast" and "contrast failures went 2 → 0, measured by the command the goal
-names". The second is a claim somebody can check.
-
-`isocan persona runs <name>` shows what its runs found and what was decided
-about each — `accepted`, `rejected`, or `unanswered`. Nothing computes a score
-from those yet, deliberately: an accept rate over five findings is noise.
-
-**Some personas are small, and hand off.** One that declares a `budget` (show
-prints it) runs a cheap model on a night its number misses, within that cost,
-and proposes fixes on its page without applying them. What it cannot settle it
-escalates to the persona its `escalate:` names, and `isocan persona runs
-<that one>` lists those pages under **handed to**. If you are wearing the
-persona something was handed to, those are yours to decide.
-
-**The docket is where an unanswered finding gets its answer.** On a repo whose
-board runs `scripts/docket.mjs`, each open question is an item carrying
-`docket=<slug>`, and it is answered by a mark: ✅ accepts, ❌ rejects. The
-script writes the verdict into `docs/reviews/` and commits it with the name of
-whoever answered. `isocan docket` lists the questions and what the marks on
-each say (open, accepted or rejected by whom, contested, and who has taken it
-with ✋). `isocan docket answer <finding> accepted|rejected` answers one —
-`<finding>` is the slug the list prints, or the item — and it sends exactly
-the ops a click on the chip sends, taking your other verdict off first if you
-wore it; one undo takes the answer back. `--because <words>` says why, as a
-comment on the item. A verdict is a person's call about a finding: answer one
-when you were asked to, or when you did the work that settles it, and say so.
-
-A goal is `(number, bound, the command that produces it)` — never an
-aspiration. If you add one, run its command against something broken first and
-watch the number move. A measurement that cannot fail reports success forever,
-which is worse than no measurement because it is believed.
-
-## When you need a person
-
-`isocan ask "…"` asks and stops. It posts your question to the Chat — or to a
-thing with `--item` — and the canvas immediately shows you as **asked**: in
-the agent tray, in the facepile, and in `isocan who`. Then park on
-`isocan wait` as usual.
-
-Ask when the answer changes what you would build and you cannot get it from
-the canvas. Do not ask to confirm something you could check, and do not ask
-and then carry on guessing — the point of the state is that it is TRUE.
-
-`isocan comment list --open` lists every question nobody has answered yet,
-across every thread, with the command to reply to each. Read it when you come
-back to a canvas: an unanswered question from an earlier lap is the first
-thing worth knowing, and it is often yours.
-
-**For a plain-prose ask, somebody else answering closes it.** Adding to your
-own question does not. Structured design questions instead stay open until the
-named human submits a typed outcome through the dock or `design answer`.
-Valid legacy JSON questionnaires remain unresolved until explicit adoption;
-another participant's progress reply cannot supply their missing respondent.
-Read `design questions` for the structured source and outstanding IDs.
-
-## Running a sprint
-
-A design sprint is a script a facilitator runs over verbs you already have,
-and `/sprint` in the Chat is how somebody asks you to run one. The full
-procedure is that command's body (`isocan command show sprint`); the state is
-here.
-
-`isocan sprint` says which phase the Chat says is running, how long is left,
-what was handed in, and — for a vote — who wore the mark. **Nothing is
-stored**: the phase is the newest `/sprint <phase> [duration] [note]` line in
-the Chat, timed from that comment's daemon stamp, so this verb and the app's
-clock chip cannot disagree. `--json` carries `remainingSeconds`, which is the
-bell:
-
-```sh
-isocan sprint board                       # lay the board: one sheet per stretch of the week
-isocan sprint brief --goal "…" --decider Maya --question "…"   # the brief, as one card with a history
-isocan sprint desk Theo                   # a private canvas for one sketcher: link off, one pass in
-isocan sprint phase crazy8s 8m            # call a phase — posts /sprint to the Chat
-isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
-isocan copy <items...> --to <sprint> --in Sketches --handin   # a desk's bell: onto the sheet, stamped
-isocan sprint handin <items...>           # these were made for the current phase
-isocan react 🔴 <sketch> --at 0.4,0.6      # a heat-map dot on that PART of the sketch (fractions of its box)
-isocan sprint tally                       # human dots and agent dots, apart
-isocan sprint end                         # over — no phase, no clock
-```
-
-**The board is the walkthrough.** `isocan sprint board` lays eleven areas
-(below) to the right of the work — Brief · Map · Experts & HMW · Target ·
-Demos · Sketches · Vote · Storyboard · Prototype · Test · Wrap — each with a
-card that says what happens there. Lay it BEFORE you ask the setup
-questions, so the room sees the week; then `isocan sprint brief` writes the
-answers onto the Brief sheet, a new version each time, never a second card.
-Every phase knows its sheet (`isocan sprint` names it, `--json` carries its
-box): calling a phase walks everyone's camera there and puts the phase's one
-action on the clock chip — *New note* on the phase's paper in the sheet,
-*Hand in* which lands the selection on the sheet. You never say where to go
-or what to click; call the phase and the board does that.
-
-**Desks are where the silence happens.** `isocan sprint desk <name>` births a
-private canvas for one sketcher — the link grant off, one single-use pass
-minted — and prints an address to hand to that person and nobody else. The
-desk knows its sprint (`sprintOf` on the canvas record), so its clock chip
-shows the sprint's phase and clock and offers *Hand in*, which copies the
-selection onto the sprint's sheet for the running phase, stamped. The
-terminal's twin is `isocan copy <items> --to <sprint> --in <sheet> --handin`.
-The original stays on the desk: a hand-in is a copy.
-
-`phase` refuses a word that is not a phase (`map experts hmw target demos
-notes ideas crazy8s sketch museum heatmap critique poll supervote storyboard
-prototype test wrap`), so a typo cannot start a clock. A phase with no clock —
-the museum, the supervote — runs until the next one is called.
-
-**The curtain is a lens, on the wall only.** While a vote phase's clock runs,
-the app hides reaction counts and item bylines on the WALL — the Vote
-sheet's contents when a board is laid, else the last silent phase's
-hand-ins — not knowing who drew what while you vote is the method — but the
-record is untouched, and `sprint tally` reads it, because the facilitator is
-the referee and not a voter. A mark placed with `--at` (or a click while the
-chip says *Placing*) is a dot on that part of the sketch; each person sees
-their own under the curtain and everyone's at the bell. A hand-in is a
-property (`sprint=<phase>`) on the item: `item.update`, one undo, visible to
-everybody, the same shape as a slide.
-
-Three rules that are yours whichever chair you sit in. **You never decide**:
-the supervote 🏆 is a person's. **Silent phases are silent in the Chat**:
-every parked agent wakes on it, so narrate with `session say` and keep the
-questions on item threads. **One sketch per sketcher**: an agent that could
-make forty makes one, and hands it in at the bell with `copy --to` and
-`sprint handin`.
-
-## Adding anything: one verb that reads what you give it
-
-`isocan add <thing>` is the one door. It reads the thing the way the app's
-Add popover reads what is pasted into its one field: a path on disk is a
-**file**, a Google Doc address is a **document** (the export, with its ↗),
-a canvas address — or a canvas id or title prefix among the canvases this
-machine knows — is a **canvas card**, and any other address is a **site**.
-`--as file|site|doc|canvas` says which you meant when the reading could go
-two ways (a title that is also a word, a file whose name looks like an
-address). `browse <url>`, `gdoc add <url>` and `canvas place <ref>` are the
-same acts with the kind already said; all of them take `--at`, `--in`,
-`--cell` and `--size` alike, and land where there is room in view when you
-say nothing.
-
-```
-isocan add ./deck.pdf                                  # a file
-isocan add https://docs.google.com/document/d/<id>/edit  # a document
-isocan add "Sports schedule"                           # a canvas card, by title
-isocan add https://example.com/status --as site        # a site, said plainly
-isocan add design.md --visual design-system.html       # dual-face: source + visual
-```
-
-When an artifact has two faces — a source face for editing in the workbench and a
-distinct visual face for rendering in iframes and presentations (such as an interactive
-companion visualizer for a markdown doc) — pass `--visual <file>`. For HTML files
-with local image assets, `isocan add` handles this automatically: images are inlined
-into the visual face while leaving the clean source face intact for disk backing.
-
-
 ## A Google Doc on the canvas
 
-`isocan gdoc add <url>` puts a Google Doc here as a **document**: its markdown
+`isocan add <url>` with a Google Doc's address puts it here as a **document**: its markdown
 export is the item's content — readable, searchable, thumbed in the lens,
 versioned, context an agent reads — and the doc's address is its `source`,
 the ↗ on its strip. In the app the strip also has *Live*: the doc as Google
@@ -1402,7 +1063,7 @@ lands a new version only where the document changed. A doc shared by link
 needs nothing; for one that is not, `isocan gdoc auth --token <token>` saves
 a Drive access token on this machine (mode 600, never on a canvas; Google's
 last about an hour — `gcloud auth print-access-token | isocan gdoc auth
---stdin` refreshes it), and `gdoc add`, `gdoc sync` and the app's Add
+--stdin` refreshes it), and `add`, `gdoc sync` and the app's Add
 popover through this daemon use it only where the anonymous export refused.
 With a token, `sync` asks Drive when each doc last moved and leaves the
 unchanged ones unread. The words are on the canvas once added — everyone
@@ -1477,51 +1138,106 @@ purges trash or discards history to make rollback pass. Queued writes retain
 their originating mode and a cutover refusal remains visible for reconciliation.
 Full native export/import preserves mode, boundary and history.
 
-`canvas create <title>` uses the writer's group default. `--legacy` is for
+`canvas new <title>` uses the writer's group default. `--legacy` is for
 intentional compatibility fixtures; it does not opt out of migration rules.
-`canvas create <title> --space <name-or-id>` is born in that space with no link
+`canvas new <title> --space <name-or-id>` is born in that space with no link
 grant; access comes from the space. The acting person must own the space.
-Omitting `--space` keeps the usual canvas birth. `space list` shows the names
+Omitting `--space` keeps the usual canvas birth. `space ls` shows the names
 and ids, and an ambiguous name must be given by id.
 Top-level `group` continues to manage people and sharing; an undo-group label
 continues to join log entries for undo. Neither establishes canvas membership.
 
-## What changed
+## Groups: every verb and flag
 
-`isocan whatsnew` lists what a PERSON got, newest first — one entry per day,
-in the words somebody using the canvas would use. It is not the changelog:
-`docs/changelog/` is written for whoever maintains this and names functions
-and arguments, which is the right document and the wrong one to quote at
-somebody asking what is new. Days with nothing a user would notice do not
-appear at all, on purpose.
+**Canvas membership (new canvases use groups):** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
+`canvas group wrap <items...> --title <title> [--note text]`,
+`canvas group ls`, `canvas group show <group> [--recursive]`,
+`canvas group add <group> <items...> [--place] [--cell r,c]`,
+`canvas group remove <items...> [--to-root]`, and
+`canvas group ungroup <groups...>`, `canvas group resize <group> WxH [--anchor nw|ne|sw|se]`,
+`canvas group frame <groups...> --fit` (or one group with `--size WxH`/`--at x,y`),
+`canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy]`,
+`canvas group grid <group> [RxC] [--rows names] [--cols names] [--tidy] [--clear]`,
+and `canvas group migrate [--dry-run] [--revision n]`.
+`area new <title>`, `area ls` and `area grid <group> [RxC] [--clear]` are compatibility aliases; `area ls` can also read legacy areas.
+Grid labels are comma-separated; cells count from 1. Every mutation accepts `--dry-run`:
+it validates through the shared resolver and reports affected roots, parent
+changes, final boxes and frame adjustments without uploading note bytes or
+writing an operation. Every command supports `--json`. IDs are exact; title
+and ID prefixes must be unique, and ambiguities list candidates.
 
-The notes come from the home you are talking to, so what it lists is what that
-home is running.
+Wrapping preserves the arrangement and keeps nested groups intact. Add
+preserves positions and fits the destination frame; `--place` finds room
+below its current members. `mv <item> --in <group> [--cell r,c] [--dry-run]` uses that same
+atomic add-and-place operation. Remove promotes each item to its group's
+parent, or directly to the canvas with `--to-root`; it preserves geometry.
+Ungroup trashes the frames and preserves their children. These are single
+undoable acts, including required ancestor frame changes. An overlapping
+item is not a member. `show --recursive --json` lists every descendant;
+ordinary `show` lists direct members and reports direct/total counts, parent,
+outer/content boxes and layout settings.
 
-## Bringing in somebody else's theme
+On group canvases, `mv` and `set --size` transform descendants and attached ink once.
+The resize anchor names the fixed corner; `nw` is the default. **Fit frame**
+changes the group's border around the arrangement without scaling members.
+`fit`, `align`, `distribute` and `tidy` share the same placement-unit semantics
+and accept `--dry-run`; group-plus-child selections do not move a child twice.
+`tidy --in <group>` arranges direct members inside the saved label reservations.
+`ls --in <group>` reads direct membership; add `--recursive` for descendants.
 
-`isocan design import <file>` takes a stylesheet of custom properties — a
-shadcn theme, a `:root` block out of devtools — or a W3C token JSON, and lands
-it as this canvas's design system. `--dry-run` reads it and prints what it
-would write without touching the canvas, which is how to check a theme before
-committing to it.
+`add`, `text`, `canvas place`, `map new` and `sticker drop`
+accept `--in <group>` and `--cell r,c`. A named cell either holds the whole
+placement unit or the request refuses. `--at` with `--in` retains the explicit
+parent and requests exact world placement. The writer creates the item and
+repairs containing frames in one operation; CLI output reports its final box.
+New annotated drawings inherit their target's group automatically. New sandbox
+transcripts inherit the program's group; later versions retain the transcript's
+own parent, even after it has been moved elsewhere.
 
-It reads **every** block, not just `:root`, because a shadcn theme keeps its
-dark palette in `.dark` and taking half a theme silently is the worst thing an
-importer can do. It wraps a bare HSL triplet — `222.2 47.4% 11.2%`, which is
-what shadcn actually ships — into a real colour, because a contrast checker
-cannot do anything with three numbers.
+Attached ink follows its target's membership. To remove the ink independently,
+first use `set <ink> --rm-prop annotates --rm-prop region` to detach its
+annotation relationship in one undoable operation, then remove it from the
+group. In the browser, use **Detach from annotated item**, then **Remove from
+group**. Enter a group to edit its direct children; Escape returns to its
+parent. **Group selection** is ⌘/Ctrl+G, **Ungroup** is ⌘/Ctrl+Shift+G, and
+Shift+F10 or the Menu key opens the selection menu.
 
-**Whatever it cannot place, it names** on stderr rather than dropping. A
-`--duration-fast: 150ms` has no home in a design system yet, and you should
-know that rather than find out weeks later.
+New canvases use groups. Legacy canvases offer `canvas group migrate --dry-run`
+before any group creation; `area ls` still reads the old geometry. Grid cells
+and migration are available through the commands above. Top-level `group new|ls|add|remove|rm`
+still manages people and access. `session select` still shares quoted text.
 
-Importing over an existing system writes a NEW VERSION, never a replacement:
-an import is exactly the moment somebody discovers they wanted the old one
-back. Run `isocan design check` afterwards — what it flags is usually not an
-import error but the part of a design system that lives in a house's head
-rather than in its stylesheet, and those are the first things worth writing
-down.
+## Copying things, and taking them to another canvas
+
+`isocan copy <items...>` puts a copy beside the originals; `--to <canvas>`
+puts it on a different one. The human does the same with ⌘C/⌘V, and both
+write the same ops.
+
+Two things it does that a loop over `add` would not. **The arrangement of a
+selection is kept** — four screens in a row copy as four screens in a row,
+because the group is placed as one box rather than each item being placed on
+its own. And **a copy records what it was made from** (`parent`), so
+`isocan lineage` shows it hanging off its original — except across canvases,
+where that id would point at nothing.
+
+On group destinations, one copy is one operation and one undo: a
+group carries its full subtree and attached ink, selected group+child roots
+are deduplicated, and deliberate internal overlaps survive. Only current
+versions are copied, including distinct visual bytes. Every required face is
+checked before the write; a missing member or failed upload refuses the whole
+copy. `--dry-run` validates without uploading or writing. `--in` names an
+explicit destination group; omission puts copied roots on the canvas. Copying
+only a child does not copy its old container. Internal module relationships
+are remapped; external references are dropped across canvases.
+
+`export --item <group>` backs up the complete subtree, all saved versions and
+both faces into the existing item-backup directories. Item backups are not an
+import format. Use a full native `export` and `import` to restore a canvas and
+its frozen request provenance. JSON Canvas remains export-only.
+
+A copy does NOT inherit the original's `file`. Two items claiming one path
+would overwrite each other on `save`, and the copy is not that file — bind it
+yourself if it should be one.
 
 ## Screens that become files
 
@@ -1559,7 +1275,7 @@ through a symlink — and a file that does not match the item's current version.
 somebody edited the file outside the canvas — their work is under your write,
 and `--force` would eat it, so ask first — or the CANVAS moved and the disk is
 simply behind, which is what `version promote` does every time. Check which
-before you reach for `--force`: `isocan versions <item>` shows the stack with
+before you reach for `--force`: `isocan version ls <item>` shows the stack with
 `▶` on the current one, and if that mark is not on the newest version, the
 file in the tree is stale rather than precious. Saying "your file changed" to
 somebody who only promoted a version is a confusing thing to be told.
@@ -1581,636 +1297,14 @@ then stacks a new version on top of it and buries the choice. If you do need
 the path (an editor, a build, a test run), write it out first with `isocan
 save <item>` so the two agree before you start.
 
-## When a canvas's home is somewhere else
+<!-- topic: design | design work — requests and questions, the design system, images, variations, compare, review and repair -->
 
-**The home is a property of the canvas, not of this machine.** One daemon can
-be the home of the canvas in one directory and a replica for the canvas in the
-next; `isocan status`'s role line says which, and on a mixed machine it says
-all of it at once:
+## Design requests, questions and the design system
 
-```
-role: home of 2 canvases; replica of https://dev.isocan.io (3); new canvases → https://dev.isocan.io
-```
+The practices that belong to design work in particular — how a request is
+entered, how its questions are asked, and what reading the design system
+before a screen means.
 
-`isocan home` lists it per canvas — which of your canvases live here, which
-live at a home, and whether that home is answering. When a canvas's home is
-elsewhere, that home is the single writer of everything on it. Four things
-change for you on that canvas, and nothing else does:
-
-- **Every write travels.** Adding an item, posting a comment, `undo` — each
-  goes to the home and comes back, so a write can now fail for a reason that
-  has nothing to do with what you asked. `home-unreachable` (HTTP 503) means
-  the home could not be reached and **your write did not happen**. Nothing is
-  queued and nothing will retry it for you: say so, and try again when the
-  network is back. Do not paper over it by working around the canvas.
-- **The page is at that canvas's home, not here.** `isocan open` prints the
-  right address for the canvas you are on; `http://127.0.0.1:4441` serves you
-  ops and answers a browser with a 404 naming that canvas's home. A canvas
-  whose home IS this machine opens right here. Either way, the address to give
-  a person is the one `isocan open` printed — never one you assembled.
-- **Reads are local and instant.** Everything you look at — `ls`, `show`,
-  `comment list`, `wait` — is answered from this machine's copy, and the
-  copy is kept current by a live connection. `isocan who` shows everyone on
-  the canvas, including people connected to the home from elsewhere.
-- **This machine holds the canvases it was let into, not the home's.** A
-  replica does not mirror everything at its home — it carries what somebody
-  handed it: a canvas redeemed with a pass (`isocan setup <address>#<pass>`),
-  a canvas born in a directory here, and a canvas named by a
-  `.isocan/project.json` marker that came with a clone. So `isocan list` on
-  a replica is a short list on purpose, and a canvas at the home that is not
-  in it is not missing — nobody gave it to this machine. If you need one
-  here, ask the person for a pass; do not go looking for a way to enumerate
-  the home.
-
-`.isocan/project.json` records the canvas's home beside its id, and **the
-marker decides**. A directory whose marker names a home this machine has never
-been to is not refused — it is JOINED: the daemon opens a link to that address,
-the far door decides whether this machine may have the canvas, and nothing else
-here moves. What IS refused, loudly and by every command, is a marker that
-disagrees with what this machine has already recorded about that canvas —
-because moving a canvas between homes is a deliberate act (re-homing), not
-something a command should do because you ran it in the wrong directory. Report
-that rather than editing the marker.
-
-**`isocan home`** is where a canvas born here is born, and where each canvas
-already here lives:
-
-```sh
-isocan home                    # the birth default, plus every canvas and its
-                               # home — and whether that home is answering
-isocan home https://isocan.io  # canvases born here go there from now on:
-                               # writes the setting, restarts the daemon
-isocan home --clear            # canvases born here stay here from now on
-```
-
-It is **configuration, not a per-command flag**: there is no way to point one
-command at one home and the next at another, and there should not be. What
-travels with a birth is the directory's committed marker, never a flag. Setting
-it checks the address answers before committing to it, because a canvas that
-lives at an unreachable home refuses every write — `--force` sets it anyway if
-that is genuinely what was meant.
-
-**Do not run it on your own initiative.** Where a person's canvases are born is
-their decision about their machine. It **moves nothing that already exists** —
-setting or clearing it changes only where the NEXT canvas goes, and every
-canvas already at a home still answers to that home — but it is still theirs to
-decide. Run it when they ask, and say on the thread that you did. Reading it —
-plain `isocan home` — is free and often the answer to "why was my write
-refused".
-
-**`isocan direct`** is the other half of the same subject: whether this machine
-runs a daemon at all.
-
-```sh
-isocan direct                  # which way this machine works, and why
-isocan direct https://isocan.io  # no daemon here; commands speak to the home
-isocan direct --clear          # run a daemon here again, with its own replica
-```
-
-Ordinarily a machine runs a local daemon holding a replica of every canvas it
-has been let onto, and your commands talk to that. **Direct** is the other
-arrangement: no daemon, no local copy, and every command speaks to the home
-itself. It is what a disposable workspace wants — a CI runner, a cloud sandbox
-that will be torn down — because there is nothing there worth replicating into
-and nothing to lose when it disappears.
-
-You will normally be *in* one or the other rather than choosing: `isocan setup`
-decides once and writes it down, and `ISOCAN_DIRECT=1` (or
-`ISOCAN_DIRECT=https://isocan.io`) is how a workflow file or a harness prompt
-says so without editing anything. What matters for you is what changes:
-
-- **`serve`, `restart` and `stop` refuse** on a direct machine, because there
-  is no daemon for them to be about. That refusal is correct — do not work
-  around it by starting one.
-- **Nothing is cached locally.** Reads cross the network, and if the home is
-  unreachable, every command fails rather than falling back — there is no
-  replica to fall back to. Say so on the thread rather than retrying forever.
-- **`isocan home` refuses too**, since a canvas made here is born at the home;
-  there is no separate birth default to set.
-
-Same as `isocan home`: **do not switch a machine on your own initiative.** Read
-it freely — plain `isocan direct` — and say what you found.
-
-## Copying things, and taking them to another canvas
-
-`isocan copy <items...>` puts a copy beside the originals; `--to <canvas>`
-puts it on a different one. The human does the same with ⌘C/⌘V, and both
-write the same ops.
-
-Two things it does that a loop over `add` would not. **The arrangement of a
-selection is kept** — four screens in a row copy as four screens in a row,
-because the group is placed as one box rather than each item being placed on
-its own. And **a copy records what it was made from** (`parent`), so
-`isocan lineage` shows it hanging off its original — except across canvases,
-where that id would point at nothing.
-
-On group destinations, one copy is one operation and one undo: a
-group carries its full subtree and attached ink, selected group+child roots
-are deduplicated, and deliberate internal overlaps survive. Only current
-versions are copied, including distinct visual bytes. Every required face is
-checked before the write; a missing member or failed upload refuses the whole
-copy. `--dry-run` validates without uploading or writing. `--in` names an
-explicit destination group; omission puts copied roots on the canvas. Copying
-only a child does not copy its old container. Internal module relationships
-are remapped; external references are dropped across canvases.
-
-`export --item <group>` backs up the complete subtree, all saved versions and
-both faces into the existing item-backup directories. Item backups are not an
-import format. Use a full native `export` and `import` to restore a canvas and
-its frozen request provenance. JSON Canvas remains export-only.
-
-A copy does NOT inherit the original's `file`. Two items claiming one path
-would overwrite each other on `save`, and the copy is not that file — bind it
-yourself if it should be one.
-
-## Moving a canvas to another home
-
-A canvas lives at the home it was born at, and `isocan home` says which one.
-To move it — a local canvas that should be hosted, a canvas at the wrong
-home — `isocan teleport <canvas> --to <home>` sends it:
-
-```sh
-isocan teleport <canvas> --to https://isocan.io --dry-run   # what would move
-isocan teleport <canvas> --to https://isocan.io             # move it
-```
-
-The whole history goes, verbatim: the same operations, the same order, the
-same timestamps, and the bytes after them. Afterwards this daemon forwards to
-the new home, so every address that worked still works. If the new home
-refuses a blob on the way, the move still completes and the report counts
-what is behind — `isocan blobs --push` sends it, and this daemon's own blob
-check would anyway.
-
-**Two things do not travel, and the command says so both times.** Who may
-enter — invite them again at the new home and set its link, because who may
-be somewhere is a decision about a PLACE. And names, colours and face marks,
-which belong to the old home's registry: people arrive under whatever name
-was stamped on their ops.
-
-Only a canvas's own home can send it, and it can only land somewhere that
-does not already have it. Moving a canvas onto a home that has it would be a
-merge, and two orders of the same canvas is not a thing this system has an
-answer for.
-
-## Backing a canvas up
-
-`isocan export` writes a canvas to a directory: its whole history verbatim,
-every blob the history names, the folded snapshot, and a manifest saying
-where it came from. The log IS the canvas, so that directory is one — with
-no daemon involved.
-
-```sh
-isocan export --to ./isocan-backup                      # this directory's canvas
-isocan export <canvas> --to ./isocan-backup --dry-run    # what would be written
-isocan export https://isocan.io/p/<id> --to ./backup     # a canvas at any home you may see
-isocan export https://isocan.io/p/<id>/i/<item> --to ./backup   # one item: its versions, ops, threads
-isocan export https://isocan.io --to ./backup            # every canvas you may see there
-isocan export --all --to ./backup                        # every canvas at this daemon
-isocan export --to ./backup --git <owner/repo>           # commit the export and push it
-```
-
-`--commit` commits into the repository at `--to` (making one if there is
-none); `--git <remote>` does that and pushes. Only what the export wrote is
-staged, so `--to .` inside a project never sweeps other work into a backup
-commit. Pushing an export can disclose its contents independently of the
-canvas's sharing settings — use a
-PRIVATE repository, and never one whose address a pass or a share link is
-also posted in.
-
-`isocan import <dir>` hands a backup to a home again — the same seqs, the
-same timestamps, through the route teleport arrives by. `--to <home>` restores
-somewhere other than this daemon. It creates and never merges: a canvas the
-home already has is refused, per canvas, and the rest still restore. Who may
-enter does not come back with it — `isocan share` at the restored canvas.
-
-The manifest lists blobs the home no longer had (`missing`). An export that
-says so is a backup; one that did not would only look like one.
-
-## When a teammate sees the item but not the picture
-
-An item replicates; the BYTES it names do not follow on their own. They are
-pushed to the home when the item is made, and if anything stops that push —
-a home that was down for a second, a daemon restarted mid-upload — the op
-still travels and the bytes do not. The symptom belongs to somebody else:
-they open the canvas, see the item with its title and version, and get
-`blob not found` where the screen should be. Your side looks perfect,
-because your side reads its own copy.
-
-So do not diagnose it by asking whether it looks right to you. Ask:
-
-```sh
-isocan blobs           # are this canvas's bytes at its home?
-isocan blobs --push    # send the ones that are not
-isocan blobs           # confirm — a repair you did not re-check is a guess
-```
-
-`unknown` is not `missing`: it means the home could not be reached, so
-nothing was established and nothing was pushed. Run it again when the home
-is answering.
-
-Worth running whenever you have uploaded a lot to a canvas whose home is
-elsewhere, and any time somebody says a screen will not open.
-
-## Sharing a canvas
-
-`isocan share` is who may enter, and it is the same endpoint the Share button
-in the web app drives:
-
-- `isocan share` — prints the canvas's **address** and whether the link is on.
-  The address is the whole invitation: hand it to a person and they land on
-  the canvas in a browser with nothing installed. Do not attach setup
-  instructions to it; the canvas offers those itself to whoever wants them.
-- `isocan share --public on` — explicitly list the canvas's title on its home.
-  First choose an existing `--link read` or `--link view` in a separate command.
-  Publication is an owner's act and never changes access. `--public` cannot
-  combine with spaces, invitations or any other sharing mutation.
-- `isocan share --public off` — unlist it while keeping the known link working.
-  Turning the link off, replacing it or moving it to Editor clears publication;
-  restoring a viewing link does not republish. `share` reports publication
-  separately from access, including a `public` boolean in JSON.
-- `isocan canvas list --public [--home https://home.example]` — browse one home's
-  separate public catalogue: only id, title, home and read/view access. Without
-  `--home`, it asks this daemon's own catalogue, including on a replica. It
-  ignores directory bindings and never adds entries to your working list,
-  Inbox or parked agents. It cannot combine with ordinary list scope, sort or
-  filter flags. Browsing does not admit you; opening an address uses the normal
-  door. Public catalogue and entry pages ask crawlers not to index them; that
-  instruction is not a confidentiality boundary or a crawler guarantee.
-- `isocan share --link off` — new arrivals are turned away **and the people
-  who got in on that link are expelled**. It prints how many. Anyone another
-  grant still covers stays, which is why the line can say "3 expelled, 1 kept
-  by another grant" — turning the link off is not supposed to throw out the
-  people who were invited by name.
-- `isocan share --link on` — grant it again. (That writes a NEW grant row; the
-  old one stays as a record of when it was switched off. It does not bring
-  anybody back: they are re-admitted the next time they ask.)
-- `isocan share --link read` — anyone with the address can **see the canvas,
-  and change nothing**: the whole canvas, pan and zoom, the panels and the
-  history, with no toolbar and nothing that moves under their hand. Every
-  write is refused by the home (`view-only` — the code kept its old name).
-  They appear in the facepile and in `isocan who`, marked *reading*.
-- `isocan share --link view` — anyone with the address can **look at the
-  deck, and change nothing**: they land on the canvas's slides full screen,
-  flip with arrows, and every write is refused by the home (`view-only`).
-  This is how you share a presentation (see `isocan slides`) without letting
-  the audience rearrange the canvas. `--link edit` is `--link on` by its
-  ladder name. The people already in on the link are moved to the new rung
-  rather than expelled, in every direction.
-- `isocan share <email>` — **invite one person by name.** They get in by
-  proving they read that address, whether or not the link is on. Nothing is
-  emailed from here: the invitation is still the address, and the grant is
-  what lets them through the door when they arrive. A home that has borrowed
-  nowhere to verify an address refuses and says so; share the link instead.
-- `isocan share <email> --as read` — invite them at a **rung**: `own`, `edit`
-  (the default), `read` or `view`. A named invitation is never less than what
-  the link gives: a person's rung is the highest of every grant that admits
-  them. Inviting somebody who is already invited at another rung REPLACES
-  their row — one command, and if they are on the canvas their app redraws
-  at the new rung without a reload. The table `isocan share` prints has a
-  `rung` column, and its first line is the creator's: **owner, made this**.
-  `--as own` makes an owner: they may then invite, revoke and set the link
-  like the creator, and cannot remove the creator.
-- `isocan share --revoke <email>` — un-invite them, which **expels them**
-  unless another grant still covers them. It takes the address, not the grant
-  id. If the link is on they can come straight back in as a stranger would,
-  and the verb says so: *they can still enter by the link; `--bar` to keep
-  them out*. Withdrawing an invitation and barring a person are different
-  acts; read the line before deciding which one was asked for.
-- `isocan share --revoke <email> --bar` — un-invite **and keep them out**, in
-  one request: a bar is a row that says no, and it beats the link and every
-  invitation until an owner lifts it. `isocan share --bar <email>` writes one
-  directly, for somebody who was never invited and enters by the link.
-  Neither the link nor the creator can be barred; the home refuses both with
-  the reason. The table `isocan share` prints shows a bar as **kept out**,
-  with who wrote it and when.
-- `isocan share --unbar <email>` — let them back in: the bar is revoked, and
-  the link or an invitation then decides whether they may enter.
-
-Three things to know before you use it:
-
-- **Sharing is not a canvas op.** It changes who may knock, not what is on the
-  canvas, so it never appears in the oplog and `undo` will not take it back.
-  Turning the link off is undone by turning it on, and by nothing else.
-- **Owners share; everybody else asks.** Every change to who may enter —
-  inviting at any rung, un-inviting, the link on, off or at a rung — is an
-  owner's: the creator, or anybody invited `--as own`. The home refuses
-  everyone else with `not-owner` and names the owner to ask. You hold what
-  the person who enrolled you holds, so an owner's agent can share and an
-  editor's cannot. That is a reason to be careful, not a licence: change who
-  may enter a canvas when the person asked you to, and say on the thread
-  that you did.
-- **Turning the link off now removes people.** It used to be harmless. It is
-  not any more, so it is a gesture to ask about rather than to try.
-
-## Spaces: a set of canvases, shared once
-
-A **space** is a named set of canvases that access is set on once. A
-canvas is in at most one space, and a person's rung on a canvas is the
-highest from any row on the canvas or on its space — the space's rows are a
-floor its canvases can only add to, never a ceiling.
-
-- `isocan space new <name>` — make one. You own it; it holds nothing yet.
-  A space is private until it is shared.
-- `isocan space list` — the spaces you may see: the ones you made, and the
-  ones a row admits you to. `isocan canvas list` groups by space when the
-  home has any, **No space** last.
-- `isocan space add <name> <canvas>…` / `isocan space remove <name>
-  <canvas>…` — put canvases in, take them out (by id or title). Adding needs
-  you to own the canvas AND the space; removing, the space. A canvas moved in
-  keeps its own rows and the space's apply to it from then on; one moved out
-  keeps its own rows and the space's stop reaching it.
-- `isocan share --space <name>` — the space's share: invitation and link flags
-  apply to every canvas in it. `--link off|edit|read|view` is **every
-  canvas in this space**: each canvas's own link row is set in one gesture
-  and the verb prints how many canvases it reached; each canvas's own link
-  can be set again afterwards (`isocan share --link view` on one canvas
-  opens that one wider). `<email> --as <rung>`, `--revoke`, `--bar`,
-  `--unbar` write the space's rows, and each write sweeps every canvas in
-  it. `--as own` on a space makes an owner of the space and of every canvas
-  in it.
-- `isocan share` on a canvas in a space prints the space's rows marked *from
-  space* — read here, changed with `--space`. A canvas row below what the
-  space gives says so; it takes effect if the canvas leaves the space.
-- `isocan space delete <name>` — every canvas stays, with its own sharing.
-- Names are unique among the spaces you own, not across the home. A name
-  you can see twice is refused with both ids; use the id.
-
-## Groups: a set of people, shared with once
-
-A **group** is a named set of addresses that access is given to once. A
-row on a canvas or a space can name a group instead of an address, and the
-door reads who is in the group at the moment somebody asks — membership is
-never copied onto a row, so taking somebody out of a group is one write that
-reaches every canvas the group is shared with.
-
-- `isocan group new <name>` — make one. You own it and you are the only one
-  who sees its members; a canvas owner you share it with sees its name and
-  size.
-- `isocan group list` — the groups you made, with who is in each.
-- `isocan group add <name> <address>…` / `isocan group remove <name>
-  <address>…` — put people in, take them out. Removing EXPELS them from
-  every canvas the group's rows reach (their agents with them), unless
-  another row or the link still covers them; adding raises somebody already
-  inside on a lower row without a reload.
-- `isocan share group:<name> [--as <rung>]`, and `isocan share --space
-  <space> group:<name>` — share a canvas, or a space, with the group. The
-  share table prints the row as `group <name> (<size>)`. A group cannot be
-  kept out (`--bar`): un-invite it instead (`--revoke group:<name>`).
-- `isocan group delete <name>` — its rows stop admitting anybody.
-- A home that can verify no address refuses a group row with `no-attester`,
-  because a group's members get in by proving an address.
-
-## Your own surfaces
-
-`isocan badges` lists every surface that carries your identity — this machine,
-the person's browser tabs, other machines enrolled by a pass — and can end one:
-
-```sh
-isocan badges                    # what carries this identity, what it has proved, when it was last seen
-isocan badges --kill <badgeId>   # end that surface's recognition
-```
-
-The `proved` column is what that surface has **attested**: an address somebody
-signed in with, which is how an `email:` grant admits them. You cannot prove
-one — an agent has no inbox and no browser, so signing in is a person's
-gesture — but reading which of these surfaces has proved what is often the
-answer to "why does that machine get into this canvas".
-
-The row marked `(this one)` is the surface you are typing at; ending it signs
-this machine out of the home. On a machine with a home configured the list is
-the HOME's, which is the one that matters — a laptop that was lost is stopped
-by ending its badge at the home, not on the laptop.
-
-**This is a person's decision, always.** Ending a surface is how somebody
-recovers from a stolen machine; it is not routine maintenance, and it is not
-something to do because a badge looks old. Read the list freely, and end
-something only when asked to, then say on the thread that you did.
-
-## Passes: a credential, not an invitation
-
-A **pass** is a short-lived, single-use string that puts *another machine* on
-this canvas. It is not the address, and the difference is the whole point:
-
-- `isocan share` prints an **address**. You hand that to a *person*. They open
-  it in a browser, the door decides whether to let them in, and nothing is
-  installed. It is safe on a thread — it is the invitation.
-- `isocan pass` prints a **command carrying a credential**. You hand that to a
-  *machine* — by pasting it into a terminal on that machine. Whatever redeems
-  it is admitted **whether or not the link grant is on**, and by default
-  arrives speaking as the actor this CLI speaks as.
-
-- `isocan pass --agent <name>` prints an **address carrying a credential for an
-  agent** this machine's `isocan rc` answers for — its badge holds the claim.
-  Whoever redeems it (a hosted rc, say) arrives as that agent,
-  not as the person, and this machine's rc stands down for it. An agent this
-  badge does not hold is refused with `not-your-actor`. Handing an agent over
-  is the person's decision, like every pass.
-
-- `isocan embed` prints an **address carrying the same credential**. You hand
-  that to a *window* — an agent manager's pane, an IDE panel, a tab beside the
-  conversation you are having. Not a terminal: a `npx` line pasted into an
-  address bar does nothing, and an address pasted into a terminal does worse.
-
-```sh
-isocan pass               # the whole command to paste on the other machine
-isocan pass --admit-only  # admit it, but hand over no identity
-isocan pass --agent Percy # an address that arrives as Percy, for his new host
-isocan embed              # the address to paste into a pane or an IDE panel
-isocan embed --admit-only # let the window in, but hand it no identity
-```
-
-### When somebody asks you to put the canvas beside them
-
-If the person you are working with is in an agent manager or an IDE — you are
-in one, so they may well be — they can watch this canvas in a pane next to
-your conversation rather than in a window of its own. `isocan embed` is the
-address for that, and it is worth offering unprompted the first time you make
-something worth looking at.
-
-Two things to say when you hand it over, because both will otherwise look like
-bugs. **It admits the window once**, within the pass's few minutes; after it
-opens, the pane holds its own badge and the plain `isocan share` address is
-the one to keep. And **the pane's badge is its own** — a window inside
-somebody else's page cannot share this browser's, so a canvas open in a pane
-and in a tab is two surfaces, not one. That is deliberate: a credential handed
-to a window somebody else owns should not be the one your own tab is holding.
-
-On a **local daemon over plain HTTP** the isolation cannot be arranged at all,
-so an embedded local canvas is admitted for the visit it was given and starts
-over on a reload. Hand out a hosted address for a pane where you have one.
-
-**A pass is a credential. Treat it like one.**
-
-- **Never post one on a thread, in a comment, or anywhere a person will read
-  it later.** It is a bearer token: whoever has the string gets in, link grant
-  or not. If you have already put one somewhere it should not be, say so
-  immediately and mint nothing further — it expires in fifteen minutes and is
-  spent by the first machine to use it, which is exactly why saying so quickly
-  is enough.
-- **Never commit one.** Not in a marker, not in a config file, not in a
-  scratch note. Nothing in `.isocan/` holds one, and nothing you write should.
-- It is spent the first time it is redeemed. "That pass was already used"
-  usually means the machine you were setting up is already enrolled.
-
-**When it is your business to mint one:** when the person asks you to set up
-another of *their* machines, or a sandbox they are launching for themselves,
-and you are handing the line straight to that machine. Say on the thread that
-you minted one — not the string, the fact.
-
-**When it is not:** to get somebody *else* onto the canvas (that is
-`isocan share`, and the address); to work around a `not-admitted` refusal (see
-below — stop and ask); or on your own initiative because it seemed helpful. A
-pass hands over an identity by default, and handing over the identity you speak
-as is not a thing to do unprompted.
-
-**Joining from a pass** is the other end of the same gesture — this is the
-command a person pastes on the new machine, and it does the whole enrolment in
-one line:
-
-```sh
-npx github:dglazkov/isocan#release setup https://<home>/p/<canvas>#<pass>
-isocan setup https://<home>/p/<canvas>          # no pass: arrive under the link grant
-```
-
-It joins that canvas from that home, redeems the pass so this machine is
-admitted and knows whose it is, writes `.isocan/project.json` with the canvas
-id and the home's address, and waits for the canvas to actually replicate
-before telling you it did. On a machine that has no birth default yet it also
-makes that home the place new canvases are born, and says so; a machine that
-already has one keeps it, and joining moves nothing else. `isocan setup
-<directory>` still means what it always did.
-
-**`isocan open` already does this for the browser**, and you do not have to
-think about it: it hands the browser it spawns a pass so the tab arrives as
-this machine's person, and prints the **clean, pass-less address** on stdout.
-The line it prints is the one to copy onto a thread. Do not go looking for the
-one it gave the browser.
-
-## When a canvas refuses you
-
-A **403 with `not-admitted`** is not a broken credential — it means your badge
-is fine and *this canvas will not have you*. Usually its link was switched off
-after you were told about it, or you were handed an address on a home you have
-never been admitted to.
-
-What to do: **stop, and ask the person who shared the canvas to let you in.**
-Do not retry it, do not go back to the door for a fresh badge (a new badge is
-refused identically — that is why the refusal is a 403 and not a 401), and do
-not work around it by finding another canvas. Say plainly which canvas refused
-you and what you were trying to do.
-
-`404` is the different answer, and worth telling apart: there is no canvas at
-that id here at all — a typo, or a canvas that lives at another home.
-
-## When the DOOR refuses you
-
-A **429 with `too-many-badges`** is not about a canvas at all — it is the home
-metering the door. Badges are free to mint, and free does not mean unmetered:
-a home will hand out only so many new badges a minute to one caller.
-
-You should essentially never see it, and that is the useful part. A badge is
-good for a year and lives in `~/.isocan/identity.json`, so a machine mints one
-and reuses it for everything afterwards. Being metered means something is
-throwing that file away between commands — most often an ephemeral working
-directory with no persisted home. So: wait the seconds the message names, and
-then fix the cause rather than the symptom. Do not loop on the door, and do
-not delete your identity file to "start clean" — that is the one action that
-makes this refusal certain.
-
-## Working a canvas that is not this directory's
-
-Only when the human asks for it. Pass `--canvas <ref>` to each command — do
-NOT `isocan use` there, which would re-bind the directory you are standing
-in — and check `isocan --canvas <ref> who --all` so your name is free on
-that canvas too. Waking from a `wait` still lands your cursor on the thread
-that woke you, with no `session start` needed.
-
-## Practices that earn trust
-
-- **Comments are read in a small thread window — be terse.** Precise and
-  concise wins: a few tight sentences saying what you did, where it is, and
-  any judgment call, then stop. No preamble, no restating the ask, no
-  bullet-point reports. If detail truly matters, put it in an item on the
-  canvas and point to it.
-- **Placement**: honor the comment's location. Anchored comments → work on
-  that item. Freestanding comments → place results near the pin
-  (`--at x,y` close to the comment's coordinates), or use
-  `--anchor <item>` to sit neatly left of a related item.
-- **Anchor the thread to what it produced.** When a freestanding comment
-  asks for something and you build the item, run
-  `isocan comment anchor <thread> <item>` so the thread pins to the result
-  and follows it from then on.
-- **Show running software, don't describe it.** When your work is a dev
-  server the human could look at, `isocan browse http://localhost:<port>`
-  projects the live site onto the canvas as a mini-browser item — vite
-  HMR keeps it current on its own; the item's ⟳ reloads anything else.
-- **Point at one screen, not at the canvas it is on.** `isocan open <item>`
-  prints — and opens — the address of that ONE item, filling the window:
-
-  ```sh
-  isocan open "Checkout"        # → http://…/p/<canvas>/i/<itemId>
-  ```
-
-  Full screen is a route rather than an operation, which is why you can hand
-  it over at all: what somebody is looking at is not a mutation, so there is
-  no op to send, but there IS an address. Nothing is written and nobody else's
-  view moves — it is a link, and the person opening it can leave with Esc or
-  Back. Prefer `#Title` in a comment when you are already writing one (the
-  chip flies them there in place); reach for this when the whole point is to
-  look at one thing with the canvas out of the way.
-- **Versions are the medium for iteration.** "Change X on this item" means
-  `edit` → new version. Mention "vN on the stack — fan out (F) to compare"
-  in your reply so the human knows the history is there. The top of that
-  stack is a CHOICE, not the newest: `version promote` puts any version
-  back on top, `isocan versions <item>` marks it `▶`, and `isocan get`
-  follows it. When you are asked to change "this item", change the version
-  it currently points at — not the last one that happened to land. A stack
-  is worth keeping whole when people made it; one a script regenerates on
-  every run is silt, and every version's metadata rides on every load of
-  the canvas. Bound those: `isocan version prune <item> --keep 14 --force`
-  keeps the newest fourteen (the current one always survives), and `gc
-  --keep-versions N --force` does it for every item before it sweeps. Not
-  undoable — say so before you do it to somebody else's stack.
-- **Leave the canvas tidy.** What a person does by dragging — edges snapping
-  together, gaps evening out — you do with `isocan align <items…> --to
-isocan fit <items...>                  # grow items to the size their content wants, and settle them apart
-  left|hcenter|right|top|vcenter|bottom` and `isocan distribute <items…>
-  --axis h|v`. Both are one op, so one undo, and both are no-ops when things
-  are already in place. `isocan mv <item> --by 0,-40` nudges without doing the
-  arithmetic yourself.
-- **Renaming moves the file too.** `isocan set <item> --title "Bass tab v2"`
-  also renames the blob to `bass-tab-v2.png`, stepping aside from any name the
-  canvas already uses — the same act the web app performs, so the two never
-  disagree. `--keep-filename` opts out.
-- **Ink is a kind of item.** If you generate an SVG as annotation rather than
-  as artwork — circling a thing, sketching a flow — `isocan add note.svg
-  --drawing` lands it the way the web app's Pen does: no card, no titlebar,
-  just the strokes. It reads back as `--kind drawing`. One SVG is one drawing
-  however many strokes are in it — a person holding `P` sweeps a whole sketch
-  made in passes into a single item, so do not assume one drawing means one
-  gesture, or that separate marks were made at separate times.
-- **Find things the way the files panel does.** `isocan ls --kind
-  drawing|screen|image|video|document|site|other` and `isocan ls --filter <text>`
-  are the same two questions the human's Files panel answers.
-- **Say you have it, before you have anything to show.** The moment you pick
-  up a thread, claim it: `isocan session on <thread> --say "reading your
-  comment…"`. It shows live UNDER the comment that asked, so the person stops
-  wondering whether anyone woke. Waking on `wait` does this for you — the
-  summons claims the thread it came from — but a thread you picked up any
-  other way is yours to claim.
-
-  Then keep it current as the work changes: `--say "reading the three
-  screens…"`, `--say "moving 12 items into rows…"`. Walking off to work on the
-  items the thread is about does NOT put it down — `session work <item> --say`
-  moves your cursor and your status while you stay on the thread — so the
-  person watching sees what you are doing the whole way through. Say what you are DOING,
-  never how far along you are; nobody can check a percentage. This is presence,
-  not a comment: it costs no op, leaves no trace in the history, and vanishes
-  when you stop. A thread full of "working…" posts is a thread nobody can read
-  next week.
-
-  Posting your reply clears it, which is the right shape: the status is the
-  gap between being asked and answering, and done is done.
 - **One design request, through either entrance.** Read `isocan design
   workflow` for the procedure and canvas-owned automatic enrollment policy.
   `isocan design brief [request] --json` returns canonical briefs, exact
@@ -2524,7 +1618,6 @@ isocan fit <items...>                  # grow items to the size their content wa
   retaining the original budget and invocation count with one claimed successor.
   The evaluation plan specifies this narrow continuation's eligibility.
 
-
   **Past six screens with no design system, `isocan add` refuses an HTML file.**
   Two screens gets you a note, because the second screen is where a choice
   becomes a convention. Six is where a note that has been ignored stops being
@@ -2552,234 +1645,69 @@ isocan fit <items...>                  # grow items to the size their content wa
   It is a floor, not taste: clearing it makes a screen unembarrassing, not
   good. Good comes from the design system being specific and from the person
   rejecting drafts.
-- **Do not open every reply with their name.** A reply sits directly under the
-  question in the thread; "@Di alright, grilling you on…" spends words and
-  screen on something the position already said. Just answer: "Alright,
-  grilling you on…".
 
-  Address somebody by name when it is doing WORK — reaching a person who is not
-  the one you are replying to, or handing something over: "@Wise Andy, the
-  audit is #Design audit — can you take the tracker?" When you do, punctuate
-  it: `@Name:` or `@Name —`, never `@Name alright` running straight on.
+## Choosing between variations
 
-  Names resolve to the person by what they answer to NOW, so use the name you
-  see in the thread rather than one you remember from earlier in the session.
-- **Stop when you are told to stop.** If a command you run prints
-  `⚠ … CANCELLED this`, the person has called off the thread you picked up.
-  That is the whole instruction: stop building, say where you got to in one
-  comment, leave nothing half-made on the canvas (finish the one step that
-  makes a thing stand on its own, or `isocan rm` it and say which), and do not
-  finish the last bit because you were nearly done. `isocan command show
-  cancel` is the long version.
+`isocan prefer <winner> --over <other>` says **I liked this one better**, and
+that is all it says: nothing moves, nothing is trashed, no picture changes. It
+is the cheap half, meant to happen twenty times — left, right, next pair — and
+that is why it is separate from `choose` below, which is final.
 
-  You will see it on the output of whatever command you happened to run,
-  because that is the only thing that reaches you mid-turn — you are not
-  watching the canvas while you work. It is said once, so do not wait for it
-  to be repeated.
-- **A message may BE a command.** When a comment starts with `/name` — the
-  first thing in the body, nothing before it — the person did not type prose,
-  they asked for a specific piece of work. Run `isocan command show <name>`:
-  the body it prints is your instructions for this turn, written for someone
-  holding this CLI on this canvas. Follow it, then reply on the thread as
-  usual.
+Use it whenever a person tells you which of several they prefer, even in
+passing, because until this existed nothing on a canvas knew what anybody
+LIKED. The design system supplies coherence and `/design-audit` supplies a
+floor; neither is taste. Twenty preferences are a question worth asking: what
+do the winners have in common, and should the design system say it out loud?
 
-  Everything after the name is the argument, and it is the part they typed by
-  hand, so it OUTRANKS the command's defaults wherever the two disagree. They
-  are looking at the canvas; you are not.
+Preferring the same pair twice is one fact and refuses rather than writing it
+again; `--undo` takes one back. The record survives `choose` trashing the
+loser, because the trash is a place rather than a deletion.
 
-  `/tidy` halfway through a sentence is somebody TALKING about the command,
-  not asking for it. Only the start of the message counts. If a command names
-  something you cannot find, ask on the thread rather than picking a target —
-  doing the right work to the wrong screen is worse than a question.
+Then, when the exploration is over: `isocan choose <item>` says **this one
+won**:
+the winner's content becomes a new version of the screen it was made from, and
+every sibling — the winner included — goes to the trash.
 
-  `isocan command list` is the whole menu, and it is the same list the web
-  app's composer offers, so a person and an agent are never looking at
-  different vocabularies. If you already hold a skill a command names, use the
-  skill: the command body is the adaptation to this canvas, not a replacement
-  for it.
-- **A command is a skill, so published ones drop straight in.**
-  `isocan command add --from <owner/repo/path/SKILL.md>` fetches it and PRINTS
-  it; `--yes` installs it. The two steps are the point, and they are enforced
-  by the command rather than asked of you: a body you install is read as
-  instructions by every future agent on this canvas, so nothing lands unread.
-  Show the person what it says — at minimum what it instructs an agent to DO
-  and anything reaching outside this canvas — and let them decide. `/skill` is
-  the same act from a composer, and `/skill find` looks for one without
-  installing anything.
+The winner goes too, and that is deliberate: its content now lives on the
+source's stack, so leaving it would be two copies of one decision and an
+invitation to edit the wrong one. Nothing is lost. `--dry-run` says what would
+happen and does nothing. A person does the same from the app: right-click the
+variation → **Choose this variation** sends exactly the ops `choose` sends, so
+if somebody asks you to "keep this one", either door is the same decision.
 
-  Never add a skill nobody asked for, and never add several to be helpful. A
-  menu of forty commands nobody chose is worse than one with eight. `/help` is answered by the app itself — a person
-  should not wait for you to be told what their own keyboard does — so you
-  will rarely see it from the web app; from a terminal it is a real question,
-  so answer it. A home can add its own commands with `isocan command add`;
-  those live in `~/.isocan/commands/` and shadow a built-in of the same name.
-- **Ink can be swept together.** A person holding `P` draws a whole sketch as
-  one item; `isocan merge <drawings...>` does that to marks already on the
-  canvas. It is exact, not approximate — ink is stored in world coordinates,
-  so merging is concatenating the strokes and taking the union of the boxes,
-  and what comes out is byte-for-byte what went in. The originals go to the
-  trash (`--keep` leaves them), which is two ops and so two undos. It refuses
-  an SVG this canvas did not draw, because moving somebody's artwork silently
-  is worse than saying no.
-- **Tidying is a verb, not a judgement call.** `isocan tidy` arranges the
-  whole canvas the way `/tidy` means: screens in a row keeping their reading
-  order, whatever was made FROM a screen in a column under it, images and video
-  gathered below. It is one `items.move`, so it is one undo, and it is a fixed
-  point — running it on a formatted canvas moves nothing. `--dry-run` says what
-  would move. Prefer it over placing items by hand; hand placement is for what
-  the person asked for on top of it.
-- **Say what a thing came from.** When you build an item FROM another one — a
-  variation, a spec written from a sketch, a page split out of a page — add
-  `--prop parent=<source item id>`. It costs one property and it is what makes
-  the canvas a tree instead of a pile: `/tidy` hangs children under their
-  parent, and anyone can see where a screen came from.
-- **Read the room before you act.** `isocan activity [who]` is what has been
-  happening here, newest first — who made what, who edited it, who said what
-  and where. Running it for the person who summoned you is the cheapest way to
-  find out what they have been working on before you answer them, and running
-  it for yourself is how you check what you actually landed last session. The
-  web app shows the same list under a face in the pile, from the same reader.
+**One undo takes the whole decision back**, because the version and the
+deletions share a group. The version comes off the source and every child
+comes out of the trash in one gesture. (`isocan undo` names one op when it
+does this — it is terse rather than wrong; the whole gesture is undone.)
 
-  For the longer view, `isocan recap` is the whole history at decaying
-  resolution: old stretches summarized to one line each (who, how many ops,
-  which items, how much conversation), the recent operations verbatim. Each
-  summarized span carries its seq range, and `isocan tail --archived` replays
-  any of it at full resolution — the history `gc` compacts is archived, never
-  deleted, and both verbs can read it. Joining a canvas with a past, run
-  `recap` once before forming an impression from `comment list` alone.
-- **What this canvas has actually asked for.** `isocan evals corpus` is the
-  same history read as a question about the WORK rather than the ops: every
-  ask, whether it was answered, cancelled or met with silence, and the ops
-  attributed to it. `isocan evals pairs` is the other half — the version
-  stacks where somebody kept an earlier take over a later one. The corpus
-  also says what KIND each ask is — revise, create, orchestrate, question,
-  arrange, restyle, document, critique, repair, variation, converge — by a
-  classifier that agrees with a person about four times in five; the `kinds:`
-  line is a reading of the words, not a label, and says so.
-  `isocan evals converge` is the night shift's score: what the converge lane
-  landed here as versions, and whether people kept them, built on them, or
-  brought the previous version back — the accept rate that widens or narrows
-  what the night may do unasked.
+It refuses with a reason rather than a shrug: an item made from nothing has
+nowhere to fold back into, and an item whose source has been deleted since
+says so.
 
-  The home knows who is an agent — the harness you claimed your name from is
-  recorded with it — so your own "Done —" in the Chat counts as a reply here,
-  not as somebody asking; nothing to enrol by hand for that.
+## Bringing in somebody else's theme
 
-  Two things to hold when you read it. **The attribution says how it knows**,
-  and one of its three labels is a guess: `anchor` and `reference` are
-  recorded facts, `window` is "the agent that was asked did this before
-  anybody spoke again". Do not quote a `window` count as though it were
-  measured. And **there is no score, deliberately** — a ratio over a handful
-  of asks is noise wearing a decimal point.
+`isocan design import <file>` takes a stylesheet of custom properties — a
+shadcn theme, a `:root` block out of devtools — or a W3C token JSON, and lands
+it as this canvas's design system. `--dry-run` reads it and prints what it
+would write without touching the canvas, which is how to check a theme before
+committing to it.
 
-  It reads this machine's copy and writes nothing, to the canvas or anywhere
-  else. The `silent` column is the one worth looking at: an ask nobody
-  answered is the failure this canvas cannot see any other way.
-- **The keys the human has.** `isocan shortcuts` prints every key the canvas
-  answers to — the same list their `?` panel shows, from the same source. When
-  somebody asks how to do a thing without a mouse, or you are telling them
-  where to look, name the actual key rather than describing the menu path.
-- **A reaction is a cheap answer.** `isocan react 👍 <item>` wears an emoji on
-  an item; `--off` takes yours back and `--who` says who else is wearing it.
-  The canvas draws them as chips under the item and a person toggles theirs by
-  clicking, exactly as they would in a chat app.
+It reads **every** block, not just `:root`, because a shadcn theme keeps its
+dark palette in `.dark` and taking half a theme silently is the worst thing an
+importer can do. It wraps a bare HSL triplet — `222.2 47.4% 11.2%`, which is
+what shadcn actually ships — into a real colour, because a contrast checker
+cannot do anything with three numbers.
 
-  It is worth reaching for when the honest answer is one bit. Somebody asked
-  "do these two work?" and they do: 👍 on both beats a paragraph, costs one op,
-  and leaves a mark the next reader can see without opening a thread. Where a
-  judgment call needs saying, still say it — a chip cannot carry a reason.
+**Whatever it cannot place, it names** on stderr rather than dropping. A
+`--duration-fast: 150ms` has no home in a design system yet, and you should
+know that rather than find out weeks later.
 
-  The count is the number of PEOPLE wearing it, never a tally you add to: your
-  own is a toggle, and reacting twice is not reacting twice.
-- **The marks ARE the shortlist.** There is no star any more; reactions
-  replaced it, and the right-hand bar groups the canvas by them. `isocan ls
-  --reaction 👀` is every screen wearing one mark — which is how you find out
-  what is in review, or in flight, or signed off, without anybody having built
-  those states.
-
-  What a mark MEANS is the team's, not ours. Read before you assume: if every
-  screen they care about wears ⭐ and the ones they are working on wear 🚧,
-  that is the system, and `ls --reaction` is how you learn it. Mark what you
-  built when they asked for it to be easy to find; do not mark everything you
-  touch.
-- **A message can come with items attached.** What the person had selected
-  travels with their message as ids, in the comment's item references — so
-  "make these two match" names its two. Read `comment.items` before you guess
-  from the words; `isocan comment list --json` has them.
-- **A mark on an item is an instruction.** When someone scribbles on a screen
-  and says "delete this and relayout", the ink is a real item: a drawing whose
-  properties say what it is about.
-
-  ```
-  isocan show <ink> --json     # properties: annotates=<itemId>, region=x,y,w,h
-  isocan get <item> out.html   # read the thing being marked up
-  ```
-
-  `region` is the marked area in FRACTIONS of the target — "0.52,0.10,0.43,0.40"
-  is the right-hand block of its upper half — so you can act on where they
-  pointed without parsing the SVG. `isocan get <ink>` if you want to see the
-  marks themselves. The comment that came with it carries the ink in its item
-  references, and the thread is anchored to the TARGET, so `isocan wait --item
-  <target>` hears it.
-- **Clear a mark once you have acted on it; leave a drawing alone.** Ink that
-  annotates an item asked for something — when the new version answers it,
-  `isocan rm <ink>` and say so in your reply, or the screen keeps wearing an X
-  through the change it asked for. Ink on bare canvas asked for nothing: it is
-  someone's drawing, and it is not yours to tidy.
-- **One note that changes, not four that pile up.** When work will take more
-  than a moment, post ONE comment and rewrite it as you go:
-
-  ```
-  isocan comment reply <thread> "On it — reading the spec" --json   # → commentId
-  isocan comment edit <thread> <comment> "On it — found the mismatch in the calendar"
-  isocan comment edit <thread> <comment> "Done — spec now matches tracker v3"
-  ```
-
-  A thread that reads "on it" / "still on it" / "found it" / "done" is four
-  comments where one would do, and the human reads every one of them. Only the
-  author may edit a comment — the daemon refuses otherwise — and `comment add`
-  and `comment reply` both hand back the id with `--json`.
-
-  Do NOT write how long you took: the canvas already knows. It shows
-  "edited · 4m" from the comment's own timestamps, which is measured rather
-  than claimed. Say what you did and what you decided; the clock is not yours
-  to report.
-- **Watch one thing, not everything.** A plain `wait` wakes on comments for
-  you. `--all-ops` wakes on every change anyone makes, which costs you a turn
-  each time to decide you did not care. Say what you are watching instead:
-
-  ```
-  isocan wait --item <ref> --op item.addVersion --json --timeout 900
-  ```
-
-  `--item` takes any item ref (repeatable), `--op` takes a type or a family
-  (`item.*`), and `--in <area>` narrows to what happens inside an area — an
-  item whose centre is there, or a thread pinned there — which is how an agent
-  working in one lane of a board parks on that lane alone
-  (`isocan wait --in "Sketches" --json --timeout 900`). A summons still wakes you through any filter — being told to stop
-  is never the noise you asked to be spared — and the JSON says which it was:
-  `reason: "summons"` or `"change"`. Your own ops never wake you, so writing
-  the thing you were watching for does not wake you again.
-
-  This is how you keep a spec in step with what it describes: park on the item,
-  wake when it gains a version, rewrite the spec, park again.
-- **Wear your color.** `isocan identity --color teal` (or any of crimson,
-  violet, amber, forest, periwinkle, graphite, a `#hex`, or `none`) sets the
-  color your cursor, face, and pins wear for everyone, on every canvas.
-- **Verify before you ship.** HTML items: test logic headlessly (extract the
-  script, run in node with DOM stubs). Risky renders: upload the blob alone
-  (`POST /api/projects/<id>/blobs`) and eyeball it in a browser before
-  creating the version — orphaned preview blobs are GC'd later. Note:
-  cursor ANIMATION cannot be verified from a background/automation tab
-  (Chrome throttles rAF when hidden); verify static layout only.
-- **External content**: prefer cleanly-licensed sources (Wikimedia Commons);
-  put attribution in the item title or reply. Say what you skipped and why.
-- **Scope discipline**: comments are the user's instructions — but confirm on
-  the thread before anything destructive (deleting items, emptying trash) or
-  far outside the comment's ask.
-- **Undo is per-actor**: your `isocan undo` only reverts your own ops.
-- **If you hit a product bug**, stop the session work and tell the user —
-  fixing the tool comes before continuing the choreography.
+Importing over an existing system writes a NEW VERSION, never a replacement:
+an import is exactly the moment somebody discovers they wanted the old one
+back. Run `isocan design check` afterwards — what it flags is usually not an
+import error but the part of a design system that lives in a house's head
+rather than in its stylesheet, and those are the first things worth writing
+down.
 
 ## Making an image
 
@@ -3065,19 +1993,168 @@ inputs, with no critical defects or source findings. Unsupported static limits
 remain visible in the final receipt. Older manual receipts retain their original
 semantics and are not retrospectively branded a completed shared review.
 
-## Quick reference of the whole surface
+<!-- topic: context | what an agent reads before it starts — the Chat, `context`, pins and exclusions, personal and group context, document status -->
 
-**Canvas membership (new canvases use groups):** `canvas group new <title> [--at x,y] [--size WxH] [--note text]`,
-`canvas group wrap <items...> --title <title> [--note text]`,
-`canvas group ls`, `canvas group show <group> [--recursive]`,
-`canvas group add <group> <items...> [--place] [--cell r,c]`,
-`canvas group remove <items...> [--to-root]`, and
-`canvas group ungroup <groups...>`, `canvas group resize <group> WxH [--anchor nw|ne|sw|se]`,
-`canvas group frame <groups...> --fit` (or one group with `--size WxH`/`--at x,y`),
-`canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy]`,
-`canvas group grid <group> [RxC] [--rows names] [--cols names] [--tidy] [--clear]`,
-and `canvas group migrate [--dry-run] [--revision n]`.
-`area new <title>`, `area ls` and `area grid <group> [RxC] [--clear]` are compatibility aliases; `area ls` can also read legacy areas.
+## The Chat
+
+**The web app calls it the Chat**; on the wire and in this CLI it is the
+thread flagged `main`, and the two are the same object — one thread per
+canvas, designated with `isocan comment main <thread>` (`comment main` alone
+shows which). It is the canvas's own conversation and the user's direct
+channel to you: it renders as a docked panel rather than a pin, everything
+posted there wakes your `wait` with no @-mention needed, and `#Title`
+references in it render as cards that fly the reader to the item.
+
+`isocan notify "…"` is how you say something there in one command — it
+replies to the Chat, or starts it if the canvas has none. Reach for it
+whenever you have an announcement rather than a remark about a thing: the
+human sees it arrive, and every other parked agent wakes on it.
+
+Do NOT use `comment add` for that. A comment is a PIN — it sticks to a spot
+on the canvas — so announcing "the deploy is done" with one leaves a marker
+on a place that had nothing to do with it, and a canvas collects them.
+
+The distinction worth holding, because the words now carry it: **the Chat is
+the canvas's conversation; a comment is pinned to a thing.** Reply to asks
+made in the Chat in the Chat, and keep item-specific critique on the item's
+own anchored comment — which `⇧C` and `comment add --item` both put at that
+item's top-right corner, one per item.
+
+## What you are about to read
+
+`isocan context` answers the question nobody could answer before, including
+you: **what will an agent actually read when it starts work here?** The design
+system and whether it passes its own check, the Chat and how much of it, the
+items somebody marked, the maps, the size of the canvas, and which guide this
+build ships.
+
+```
+! Design system  v1 · 6m
+                 2 findings from `design check`
+                 → `isocan design check` lists them
+  The Chat       7 messages · 2h
+· Marked items   not here
+  Mind maps      Lake house (5)
+  The canvas     19 items · 6m
+```
+
+**It stores nothing.** Every line is counted at the moment you ask, so there
+is no context record that can fall out of step with the canvas it describes.
+Run it at the start of a task rather than assuming: a design system that is
+three versions behind the screens it governs is the difference between work
+that lands and work that gets redone.
+
+`!` is a piece that needs attention, and it always says WHY — "3 items have
+changed since it was last written" is something to act on, and a bare warning
+is an accusation. `·` is simply absent, which most things are on most canvases
+and is usually fine.
+
+The same list is a panel on the canvas, so the person can see what you see.
+
+## Saying what matters here
+
+`isocan context` lists what an agent reads before it starts. Two verbs manage
+it:
+
+- `isocan context pin <item>` — read this first. Use it for the brief, the
+  spec, the one screen everything else answers to.
+- `isocan context exclude <item>` — skip this. **It is not a delete**: the item
+  stays on the canvas with its versions and its comments, and only what a
+  reader assembling context is told changes.
+- `isocan context unmark <item>` takes either back.
+
+Both are `item.update` with a property, so they replicate, undo and are visible
+to everybody like any other fact. The same two verbs are on an item's menu in
+the app.
+
+**Keeping a piece of a source here.** Inheritance keeps following a source. To
+stop following and keep one piece instead, `isocan context pin <item> --from
+<canvas> [--canvas <target>]` copies that piece's **current version** out of a
+visible inherited source and pins the copy here. `--from` resolves only among
+this canvas's visible ordinary inheritance links, by exact canvas or card ID or
+unambiguous title/ID prefix; `<item>` is an exact ID or unambiguous prefix among
+the pieces that source **offers**, which are its current design system and its
+ambient pinned items — not its whole item list. A refusal names the candidates.
+
+The copy is an ordinary local item from then on: edit it, and the source does
+not change; the source team edits, removes or you unlink the card, and your copy
+and its saved bytes stay. It is not a live reference. Copying a group brings its
+actual children and their current faces together; one `isocan undo` removes the
+whole copy and its pin, and redo restores it. A copied design note is kept as a
+reference — its governing role is stripped, so it does not become the design
+this canvas is checked against. Each copied item carries a `contextSource`
+property naming where it came from, which `isocan context` prints under
+*Copied from a source*. Canvas links are not copied by this act: place and
+inherit that canvas instead. Without `--from`, `context pin` keeps its
+ordinary meaning.
+
+**Context comes in layers.** `isocan context` prints *This canvas* first, then
+one heading per canvas this one **inherits from** — a canvas card (see *A
+canvas on a canvas*) wearing `memory=inherit`. A linked canvas contributes its
+design system, its pinned items and its size, read-only, each line saying
+which canvas it came from; when both canvases have a design system this
+canvas's wins and the inherited one is listed struck, saying so. Not its Chat
+and not its items wholesale: context is what somebody decided matters, and
+the link inherits exactly that decision. Several links compose top to bottom,
+then left to right, the order the room reads. `isocan context inherit <item>`
+turns a placed card into a link and `isocan context uninherit <item>` turns it
+back; the card stays either way. A link placed with nowhere else said lands
+on the sheet named **Context** — laid at the canvas's origin (or to the left
+of everything) the first time — so every canvas has a corner where its
+inheritance sits and a newcomer reads it first; `--in`, `--at` and the rest
+override it. In the app the card's strip wears *memory*, lit when the link
+is on, and clicking it is the same switch. `isocan design check` on a canvas with no
+design system of its own checks against the inherited one and says whose. A
+linked canvas at another home is named under its heading and not read from
+here. The same headings are in the app's Context panel.
+
+Each readable ordinary inherited source also contributes **Recent work**: the
+sequence/time range for up to 100 latest operations, operation and comment counts, up
+to five actor names and eight current touched items, with source provenance.
+It reports earlier available operations outside the head, omitted rows and
+labels clipped at 160 Unicode code points. This head contains no Chat text,
+content bodies, removed names or excluded item details. A personal source
+never contributes history, even if its card is copied or relabelled as inherited.
+If Recent work is unavailable, its reason remains beside any readable design
+and pins. This canvas's own design still governs. Reading Context copies no
+source history into this canvas and changes no saved request.
+
+**Your personal canvas is private.** `isocan context personal` creates it on
+explicit first use and prints the same address thereafter. `context personal status`
+only inspects the binding. These standalone commands use the connected daemon;
+add `--home <url>` to choose another authoritative home. They do not create or
+resolve a working canvas. An agent session cannot enroll itself as a person.
+
+On a working canvas, `context personal link` places one visible owner-labelled
+card; `context personal links` reports each concrete card and your current
+availability. The card discloses its address and owner label, with no private
+preview. `context personal unlink <item-id>` deletes your card; ordinary undo
+restores the same consent. Closing a browser is not unlinking. A fresh link
+uses a fresh request ID; use `--request-id <id>` only to retry the same gesture.
+
+The owner can inspect `context personal delegates --source <canvas-id>`, then
+`context personal allow <agent-id> --source <canvas-id>` or
+`context personal revoke <agent-id> --source <canvas-id>`. Access belongs to
+that exact dataset; revocation applies to the next authoritative read even
+while its visible card remains. The selected actor must be claimed by the
+calling badge; another claim on the same badge does not lend its ownership.
+
+`context personal read <item-id> [--cursor <cursor>] [--limit <pieces>]` reads
+current pinned text and design contributions through that concrete destination
+card. The response names the owner, source and home. Follow `nextCursor` when
+present; `--limit` counts pieces (1..64, default 16), with text bounded to 64 KiB per piece. Non-text contributions are metadata only and truncated output says so.
+`--json` preserves the typed response. General Context reports local, inherited,
+and permitted personal summaries; a personal layer never governs shared design.
+Copied or forged cards grant no access. Automatic previews, inheritance and
+screenshots redact personal sources; private responses are never frozen into a
+shared request or exported by reading another canvas's Context.
+
+**Pinning is a decision; a reaction is a response.** The list shows both and
+does not merge them — somebody putting 👍 on a screen is real evidence, and it
+is not the same as saying "an agent should read this first".
+
+## Context in detail: personal, per group, attached to a message
+
 **Personal context:** `context personal`, `context personal status`,
 `context personal link`, `context personal links`, `context personal unlink <item-id>`,
 `context personal delegates --source <canvas-id>`,
@@ -3116,62 +2193,1225 @@ Excluded descendants stay listed and skip content unless explicitly overridden.
 This does not change mention/summon permissions. `session say <text>` remains
 the separate presence/status command; it does not post to Chat.
 
-Grid labels are comma-separated; cells count from 1. Every mutation accepts `--dry-run`:
-it validates through the shared resolver and reports affected roots, parent
-changes, final boxes and frame adjustments without uploading note bytes or
-writing an operation. Every command supports `--json`. IDs are exact; title
-and ID prefixes must be unique, and ambiguities list candidates.
+## Saying where a document stands
 
-Wrapping preserves the arrangement and keeps nested groups intact. Add
-preserves positions and fits the destination frame; `--place` finds room
-below its current members. `mv <item> --in <group> [--cell r,c] [--dry-run]` uses that same
-atomic add-and-place operation. Remove promotes each item to its group's
-parent, or directly to the canvas with `--to-root`; it preserves geometry.
-Ungroup trashes the frames and preserves their children. These are single
-undoable acts, including required ancestor frame changes. An overlapping
-item is not a member. `show --recursive --json` lists every descendant;
-ordinary `show` lists direct members and reports direct/total counts, parent,
-outer/content boxes and layout settings.
+Every note in `docs/research/` and every project's primary doc carries its
+status in front matter — `open`, `designed`, `partial`, `built`, `blocked`,
+`superseded` — and `docs/ROADMAP.md` is **generated** from it by
+`node scripts/roadmap.mjs`. `isocan doc status <file>` prints one, and names
+what is wrong with how it says so: a `blocked` with nothing named, a
+`superseded` with no successor, a verdict with no date.
 
-On group canvases, `mv` and `set --size` transform descendants and attached ink once.
-The resize anchor names the fixed corner; `nw` is the default. **Fit frame**
-changes the group's border around the arrangement without scaling members.
-`fit`, `align`, `distribute` and `tidy` share the same placement-unit semantics
-and accept `--dry-run`; group-plus-child selections do not move a child twice.
-`tidy --in <group>` arranges direct members inside the saved label reservations.
-`ls --in <group>` reads direct membership; add `--recursive` for descendants.
+**Write the status once, in the front matter.** A verdict written twice goes
+stale in one place and nothing can tell which copy is older — which is exactly
+what happened to `2026-08-26-attaching-a-directory.md`, and why the roadmap is
+derived rather than kept.
 
-`add`, `text`, `browse`, `gdoc add`, `canvas place`, `map new` and `sticker drop`
-accept `--in <group>` and `--cell r,c`. A named cell either holds the whole
-placement unit or the request refuses. `--at` with `--in` retains the explicit
-parent and requests exact world placement. The writer creates the item and
-repairs containing frames in one operation; CLI output reports its final box.
-New annotated drawings inherit their target's group automatically. New sandbox
-transcripts inherit the program's group; later versions retain the transcript's
-own parent, even after it has been moved elsewhere.
+If you finish something a note describes, change its front matter and re-run
+the generator. CI checks the view is current.
 
-Attached ink follows its target's membership. To remove the ink independently,
-first use `set <ink> --rm-prop annotates --rm-prop region` to detach its
-annotation relationship in one undoable operation, then remove it from the
-group. In the browser, use **Detach from annotated item**, then **Remove from
-group**. Enter a group to edit its direct children; Escape returns to its
-parent. **Group selection** is ⌘/Ctrl+G, **Ungroup** is ⌘/Ctrl+Shift+G, and
-Shift+F10 or the Menu key opens the selection menu.
+<!-- topic: history | what happened — `timeline`, `activity`, `lens`, `history`, `at`, `recap`, `whatsnew` -->
 
-New canvases use groups. Legacy canvases offer `canvas group migrate --dry-run`
-before any group creation; `area ls` still reads the old geometry. Grid cells
-and migration are available through the commands above. Top-level `group new|list|add|remove|delete`
-still manages people and access. `session select` still shares quoted text.
+## Where the seams are
+
+`isocan timeline` draws the canvas's history as a track: a bar per bucket of
+seqs, drawn from SIGNIFICANCE rather than from raw count, with a tick under
+every bucket holding a seam. `--majors` lists the seams alone.
+
+A seam is a structural change — something born, something deleted, a version
+minted, a conversation started, the Chat moving. A run of forty moves is one
+ripple, not forty ticks, which is why a tall bar with no tick under it means
+that stretch was churn.
+
+The significance function is in core, so `isocan timeline` and the app mark the
+same seams. Two surfaces disagreeing about what mattered is the one thing this
+architecture does not permit.
+
+`isocan at <seq>` is the other half: the canvas as it stood at that point.
+
+```sh
+isocan timeline               # find a seq worth looking at
+isocan at 50 --items          # what existed then
+```
+
+It is a fold of the same reducer the daemon runs, over the log from the
+beginning, so it is the real past rather than a tidied one — **an undone entry
+is replayed**, because at a seq before the undo landed, the undone thing was
+still there. That is the opposite of what `timeline` does when DRAWING a track,
+where both ends of an undo pair are skipped, and the difference is deliberate:
+one question is what was true, the other is what is worth a tick.
+
+Nothing is sent and no operation is invented. A position in history is a `seq`,
+which both surfaces already speak, which is why the app's scrubber and this
+verb land on the same past by construction. In the app it is the clock in the
+tool rail: the same track, with a playhead you drag, and the canvas becomes
+what it was while you hold it.
+
+**The past does not take writes.** Standing at a seq is a way of LOOKING, not
+a branch — there is no operation meaning "and from here it went differently".
+The app refuses at the door, not in the interface, so an agent write lands the
+same refusal a click does.
+
+## What has been going on
+
+`isocan canvas ls` orders by recent activity and says what each canvas last
+did, in words:
+
+```
+TITLE            LAST                          WHEN
+Lake House       Di moved something            41h
+Pen tool check   UIcheck moved something       3h
+```
+
+`--sort name|created`, and `--filter <words>` matches title and description in
+any order — every word must match, so `--filter "lake rules"` finds "Rules of
+the Lake".
+
+`isocan history [who]` is the same question asked of a PERSON rather than a
+canvas: what somebody has been doing across every canvas here, newest first.
+
+```sh
+isocan history            # everyone
+isocan history Kenny -n 8 # one agent, across all their canvases — led by where they stand:
+                          # a row per canvas (here / standing by / enrolled, nobody listening),
+                          # acts, replies, and when the last was
+```
+
+It ends with the shape of the week — `8 of 286, across 9 canvases` — which is
+the thing a per-canvas view cannot tell you and the reason this verb exists.
+
+Both read the same words from `opWords` in core, so a canvas card in the app, a
+seam on a timeline and these tables describe one event identically.
+
+`isocan lens [who]` is the third view of the same facts: what somebody has
+**made**, across every canvas, grouped.
+
+```sh
+isocan lens                    # who there is to look at
+isocan lens Kenny --by day     # or --by canvas (default), --by kind
+```
+
+**It is a lens and not a canvas, and that is a decision rather than a name.**
+An item's x/y belong to the canvas it is on, so a view gathering work from five
+canvases holds REFERENCES and cannot hold the items — the arrangement is
+derived, nothing is stored, and there is no drag to get wrong. The app has the
+same thing at `/lens`, from the same functions in core.
+
+## What changed
+
+`isocan whatsnew` lists what a PERSON got, newest first — one entry per day,
+in the words somebody using the canvas would use. It is not the changelog:
+`docs/changelog/` is written for whoever maintains this and names functions
+and arguments, which is the right document and the wrong one to quote at
+somebody asking what is new. Days with nothing a user would notice do not
+appear at all, on purpose.
+
+The notes come from the home you are talking to, so what it lists is what that
+home is running.
+
+<!-- topic: agents | agents beyond you — standing agents, the bench, personas and the docket, scripting, the Codex sandbox -->
+
+## Standing agents
+
+An agent can also be a **record instead of a process**: enrolled on this
+canvas, answerable when something arrives, running only then. When a person
+asks you to set one up — `@You add a reviewer here` — do it with:
+
+```sh
+isocan agent add <name>     # enrol an agent beside yourself, on THIS canvas
+isocan agent remove <name>  # withdraw its standing (the history stays)
+isocan agent rules [name]   # what an agent answers for here, and why
+```
+
+The syntax is the containment: no `--canvas`, no `--dir` — the agent you add
+lives where you already are. Add one when a person asks, and only then; the
+add is an op everyone can read. If a person tells you "you're done here",
+`isocan agent remove <your name>` is how you take your own standing away.
+What any standing agent answers for — its routing rules, and the truths
+that hold through every rule set — is readable with `isocan agent rules`.
+
+**Whose word wakes it** is a separate question from what it watches, and it
+has its own answer. A summoned turn runs on the machine of the person whose
+`isocan rc` answers for the agent, and spends their tokens — so **an agent
+answers only that person, its owner, until the owner widens it** (owner-only
+summons, since 11 Sep 2026). "The owner" is the machine's person
+(`~/.isocan/identity.json` there), and anything that machine speaks as — the
+agents it runs, the person's own sessions, you if you run there — counts as
+the owner's word, so agents on one machine can still ask each other things —
+though a summoned agent carries the word of whoever asked it, so a stranger
+does not reach a gated agent by asking an open one to pass it on.
+`--listen <names>` on `agent add` adds people; `--listen everyone` makes it a
+team's agent. A gate is the one thing a mention does NOT pierce: outside it an
+op is not a summons, is not a change, and is never counted against the
+agent's hourly ceiling. A mention from outside it is answered in its thread by
+isocan itself — whose word the agent takes, and the command that widens it —
+and if you mention an agent whose rc will not take your word, the CLI says so
+on stderr as you post. `isocan agent rules` says the gate first, and so does
+`isocan who` — if a person tells you an agent ignored them, read those before
+guessing, and tell them who can widen it rather than retrying.
+
+Widening is the owner's gesture, never yours — it decides whose word may
+spend their tokens: `isocan rc listen <name> --to <names>|everyone` (and
+`--to me` back to the owner alone) changes it everywhere the agent stands,
+and refuses inside a harness session. That form is unchanged; what is new
+(11 Sep 2026, #272) is that the owner no longer has to type it. **In the app
+the refusal itself is the control**: under the message an agent turned away,
+its owner — and nobody else — gets *Let \<asker\> ask* and *Let anyone ask*,
+and the agent tray's row opens a list of the people here, each a checkbox.
+Both write the same enrolment this command writes. So if somebody tells you
+their agent ignored a person, the useful thing to say is *"the refusal in
+that thread has the buttons under it, for you"*, not the command line.
+
+A grant may also run out: `--until tonight|7d|24h|<date>` writes how long
+beside the name it grants to, and the app offers the same spans. When it
+lapses the agent refuses in exactly the words a gate that never had them
+would use, plus one sentence saying it lapsed — so *"you were never let in"*
+and *"you were, until Tuesday"* do not read alike. A gate somebody other
+than the owner wrote is set aside by the rc and said, so asking a stranger
+to "open it up" gets you nothing but the same refusal.
+
+The person's side of this is `isocan rc` — a long-running command they start
+that answers for enrolled agents. It is not your verb: inside a harness
+session it refuses, and everything you need is the `agent` spelling above.
+
+One name, one machine, many canvases: a name this machine already answers
+for, enrolled on another canvas (`isocan rc add --canvas <ref> <name>`, the
+person's gesture), is the SAME agent — one actor, one history, standing on
+both. Nothing is duplicated and nothing needs a vouch; the enrolment key is
+derived from the name by a secret kept in this machine's `~/.isocan`, so the
+same machine always gets the same agent back and another machine cannot take
+it by its name. One `isocan rc --all` (the person's, again) answers on every canvas
+this machine's enrolments name: one budget per agent across all of them, one
+conversation per agent that carries on wherever it is summoned, and
+`ISOCAN_CANVAS` in your environment says which canvas asked this time.
+
+The web shows a person your arrival as a toast by the presence pile, read
+from presence and written nowhere, so you do not need to say hello. The rc can
+ALSO say it in the Chat, off by default — once, after its first hold comes
+back; *is back* only after more than five minutes gone; *stepped away* on a
+deliberate stop. It is the person's switch, not yours: `isocan rc --announce`
+for a run, or `~/.isocan/config.json`'s `rcAnnounce` — `true` for every
+canvas, or a list of agent names/ids and canvas ids that announce.
+
+Which harness a summoned agent runs in is the enrolment's `--harness`
+(claude-code, pi, codex and antigravity are known; `~/.isocan/config.json`'s `acpAdapters`
+declares others), and an agent enrolled with none named runs on the
+machine's default: the only runnable harness, or the one picked with
+`isocan rc --default-harness <name>`. `isocan harness` lists what this
+machine can run and which is the default (`--json` adds a `runnable`
+field) — the thing to read before presenting the choice to a person, and
+the thing to tell them when a summons fails for want of one.
+
+A summoned session's environment is a list, not the person's shell: what a
+process needs, `ISOCAN_*`, and each vendor's own namespace (`ANTHROPIC_*`,
+`CLAUDE_*`, `OPENAI_*`, `CODEX_*`, `GEMINI_*`, `PI_*`). If something you
+need is missing inside a summons, the person names it once in
+`~/.isocan/config.json` under `adapterEnv` (`["MY_VAR", "MY_PREFIX_*"]`) —
+tell them the variable, not the mechanism. And a permission you ask for is
+granted for that one call; an option that would outlast the turn (a standing
+rule, a mode switch) is refused, so do not ask for those — do the call.
+
+**You may be fenced, and it is deliberate.** A person can start the rc with
+`--sandbox`, which runs your session inside a sandbox: you write your own
+working directory, `~/.isocan` and `/tmp`, you read nothing else of their
+home, and you reach this daemon and your own harness's API and nothing else
+on the network. So a refused read outside your directory, or a fetch of some
+other site that fails, is the fence doing its job — not a broken machine, and
+not something to work around. Say what you could not reach and why it
+mattered; the person decides whether to widen it (`sandboxRead`,
+`sandboxWrite` and `sandboxDomains` in `~/.isocan/config.json`) or to leave
+it closed. What never changes is the canvas work: the `isocan` CLI reaches
+the daemon from inside a fence exactly as it does outside.
+
+## Your bench: the agents a person has
+
+A standing agent belongs to a canvas. A **bench** belongs to a person: it is
+the list of agents they have, kept on their own private canvas, so it follows
+them between machines instead of dying with the laptop it was made on.
+
+```sh
+isocan bench                # every agent on your bench, with its reachability
+isocan bench add <name>     # put one on the bench, from what this machine knows
+isocan bench join <name>    # have it answer on THIS canvas too
+isocan bench rm <name>      # take it off — its standing is untouched
+```
+
+Read the third column before you summon anybody. It is **measured every time
+you look**, and it has three answers, never two:
+
+- `ready` — something parked would answer for it now.
+- `elsewhere` — it stands somewhere, but nothing is parked; a summons lands in
+  silence.
+- `unreachable` — nothing present can run it at all.
+
+**A bench row confers nothing.** Adding one does not enrol an agent, give it
+reach, or let anybody summon it — `isocan agent add` is still what grants
+standing on a canvas, and `isocan bench rm` takes none of it away. `bench add`
+reads the agent off this machine's own records; for an agent this machine has
+never run, name its actor with `--actor <id>` and say so plainly rather than
+guessing a harness for it.
+
+**You will rarely need `bench add`, because the bench fills itself.** Every
+enrolment this machine makes — `isocan agent add`, `isocan rc add`, and the
+parked rc answering an Add from the web — writes or updates that agent's row,
+so the registry does not have to be curated to stay true. A registry kept by
+hand is a registry that goes stale. Two things follow, and both are
+deliberate:
+
+- **Enrolment never depends on the bench.** The row is a convenience and the
+  enrolment is the real act, so the write is best-effort: it never creates
+  your personal canvas (that is your gesture, not a side effect of adding an
+  agent), it is never retried, and it can never fail an enrolment. If no row
+  was written the command says so on stderr and carries on — a missing row
+  must never read as a missing agent.
+- **It fills silences; it overwrites nothing.** A row that already names a
+  harness or a `runsAt` keeps what it says, so a machine that enrols an agent
+  second does not rewrite what the first one, or you, recorded.
+
+**Withdrawal never touches the row.** `isocan agent remove` takes an agent's
+standing on a canvas; it does not take the agent off your bench, because the
+bench is the agents you HAVE, not the agents standing somewhere. Withdrawing
+Percy from every canvas leaves Percy's row reading `unreachable` — which is
+honest, and is the whole reason that state exists. `isocan bench rm` is the
+only way a row leaves.
+
+**Bringing one to a canvas is `isocan bench join <name>`.** It enrols an agent
+from your bench on the canvas the command is about — `--canvas`, or whatever
+this directory is bound to — and it needs **no parked `isocan rc` there**,
+which is the difference between naming an agent you already have and
+introducing a stranger. `isocan agent add` mints an actor and so must ask the
+machine that will answer for it; an agent on your bench already has one, so
+its fifth canvas costs exactly what its first did.
+
+What joining does NOT do is the part worth reading twice: it grants standing
+on that one canvas and nothing else. No turn is started, nobody new may summon
+it (a re-join leaves an existing `--listen` grant exactly as it was), and no
+other canvas changes. If nothing can answer for the agent yet, the join still
+succeeds and the line says so in the same three words `isocan bench` uses — an
+enrolment that cannot answer yet is legitimate, and one that pretends it can
+is the bug.
+
+**A person can ask for the same thing in the Chat, by typing `@Name join` on
+a line of its own.** It is the same `agent.invite` this verb sends — joining
+from a sentence and joining from a button are one act — and when it lands the
+thread gets one line saying so, because the canvas is the only channel. You
+will see that line like any other message; it is a record, not a request, and
+nothing is being asked of you.
+
+If you are reading a thread and see `@Name join` with no such line after it,
+the ask was refused: the name was not on the asker's bench. **The refusal is
+always *"Name is not on your bench"* and never *"unknown name"*, whether the
+agent exists on somebody else's bench or does not exist at all.** That is
+deliberate and it is a security property rather than a phrasing: a bench is a
+private canvas, and a refusal that read differently for a name that exists
+somewhere would let a stranger enumerate one name at a time. Do not "improve"
+it, and do not offer to look the name up.
+
+## The roles you can take on
+
+`isocan persona ls` lists the personas this directory holds — `.agents/personas/`.
+A persona is a named role: a lens, the tools for it, a **goal it is judged
+against**, and a memory of what it already found. `isocan persona show <name>`
+prints one in full, including the command that produces its number.
+
+**Read one before you work in its lane.** A persona says what has already been
+measured and what the line is, which is the difference between "I improved the
+contrast" and "contrast failures went 2 → 0, measured by the command the goal
+names". The second is a claim somebody can check.
+
+`isocan persona runs <name>` shows what its runs found and what was decided
+about each — `accepted`, `rejected`, or `unanswered`. Nothing computes a score
+from those yet, deliberately: an accept rate over five findings is noise.
+
+**Some personas are small, and hand off.** One that declares a `budget` (show
+prints it) runs a cheap model on a night its number misses, within that cost,
+and proposes fixes on its page without applying them. What it cannot settle it
+escalates to the persona its `escalate:` names, and `isocan persona runs
+<that one>` lists those pages under **handed to**. If you are wearing the
+persona something was handed to, those are yours to decide.
+
+**The docket is where an unanswered finding gets its answer.** On a repo whose
+board runs `scripts/docket.mjs`, each open question is an item carrying
+`docket=<slug>`, and it is answered by a mark: ✅ accepts, ❌ rejects. The
+script writes the verdict into `docs/reviews/` and commits it with the name of
+whoever answered. `isocan docket` lists the questions and what the marks on
+each say (open, accepted or rejected by whom, contested, and who has taken it
+with ✋). `isocan docket answer <finding> accepted|rejected` answers one —
+`<finding>` is the slug the list prints, or the item — and it sends exactly
+the ops a click on the chip sends, taking your other verdict off first if you
+wore it; one undo takes the answer back. `--because <words>` says why, as a
+comment on the item. A verdict is a person's call about a finding: answer one
+when you were asked to, or when you did the work that settles it, and say so.
+
+A goal is `(number, bound, the command that produces it)` — never an
+aspiration. If you add one, run its command against something broken first and
+watch the number move. A measurement that cannot fail reports success forever,
+which is worse than no measurement because it is believed.
+
+## Scripting
+
+The CLI has a library underneath it, and it is the same code. Reach past the
+CLI when the work is a loop rather than a gesture — forty ops in a batch, a
+watcher reacting to the log, a tool that composes many reads — because a
+spawned `isocan` costs a process per action and hands you strings where the
+library hands you typed values.
+
+Install it locally, in the directory you are working in — never `-g`, a
+global install is not importable:
+
+```sh
+npm i github:dglazkov/isocan#release
+```
+
+That line is the answer everywhere, a readied directory included: `isocan
+setup` put the CLI on your PATH, and a PATH is not a module, so a script's
+import needs the local install even where the CLI already works.
+
+```js
+import { connect } from "isocan";
+
+const home = await connect();        // this directory's canvas, this
+                                     // session's actor — the CLI's own
+                                     // resolution, because it IS it
+const canvas = await home.canvas();  // or home.canvas("<ref>") for another
+const items = await canvas.items();  // typed reads: items, threads, who, activity
+const item = await canvas.add({ title: "Report", content: html, mime: "text/html" });
+for await (const entry of canvas.tail()) { /* entry.seq is your resume cursor */ }
+```
+
+Run it with plain `node` — the import registers its own TypeScript loaders.
+`connect()` resolves the directory marker, the canvas, and your session
+identity exactly as every `isocan` command does, so the script's ops land as
+the same actor your CLI commands do; a script that is its own actor states it
+(`connect({ identity: { session, harness } })`, claimed first with `isocan
+identity --session`). `add` and `edit` take content as values and return the
+item they made; `notify` speaks in the Chat; a refusal is an `ApiError`
+carrying the wire's code, with `unreachable` when nothing answered.
+
+Group-aware API clients use `canvas.context({ in: groupId })`, then
+`canvas.say("Review", { in: groupId, expectedRevision: manifest.revision })`
+when the sent scope must match that preview. `canvas.contextOfComment(threadId,
+commentId)` returns the saved manifest; `canvas.contextItem(threadId, commentId,
+itemId, { face: "source", offset: 0, limit: 16384 })` reads saved byte pages.
+`canvas.contextPage(...)` pages reference metadata, with a required
+`expectedRevision` for live paging. `canvas.copy([groupId], { to: canvasId,
+in: destinationId, dryRun: true })` uses the same graph planner as the CLI.
+MCP keeps `read_context` and `read_context_content` for that same manifest and
+frozen-version contract. `read_context_summary` separately reads the live
+layered Context view: local and inherited sources, plus permitted personal
+summaries when you supply an explicitly claimed session. Ordinary inherited
+sources also contribute bounded Recent work. It reports exclusions, overrides,
+staleness and reasons a source could not be read. JSON resources at
+`isocan://canvas/{id}` and `isocan://canvas/{id}/context` expose the current
+canvas and summary under ambient identity; they omit personal memory.
+Resource listing includes only discoverable canvases, and every read checks admission.
+
+For collaboration over `isocan mcp`, call `claim_agent` with a name and a
+stable conversation `session` key, then supply that key on **each tool call**.
+The durable claim survives restarting MCP. Two conversations sharing one
+server keep separate identities; an unclaimed explicit key is an error.
+Omitting `session` uses the CLI/API ambient identity, and **resources always
+use ambient identity**; they do not inherit the previous tool's session.
+`clientInfo` identifies the manager application, not a conversation.
+
+`read_personal_context` requires that claimed `session` and an `item`: the
+concrete personal link card on the destination canvas. `canvas` is optional
+and uses the usual canvas selector; it names the destination, not the private
+source. For example, after claiming `acme-review`, call the tool with:
+
+```json
+{"session":"acme-review","canvas":"prj_acme","item":"itm_personal_link","limit":16}
+```
+
+The owner must have explicitly linked that dataset here. An agent also needs
+the owner's allowance for its exact actor ID; an explicitly claimed owner
+session needs no self-delegation. Each call rechecks the selected caller's
+authority and the concrete link. A previous success, another claim on the
+badge, or copied card properties do not grant access. Unlinking or revoking the delegate stops the next read.
+Omitting `session` is an error for this tool; ambient resources never select
+an owner for you.
+
+The response carries the owner, `sourceCanvasId`, `home`, destination `itemId`
+and current `pieces`: pinned context and design contributions, with text when
+readable. It includes no Chat or history. Optional `limit` counts pieces
+(1..64, default 16); each text read is bounded to 65,536 source bytes. Inspect the
+response's `truncated` flag and each piece's `unavailable` reason; non-text
+pieces are metadata only. Follow `nextCursor` by supplying optional `cursor`
+with the same session, destination and link. If the current contribution set
+changes, start a new read rather than treating the old cursor as history.
+This private read leaves `read_context`, `read_context_content` and saved
+request bytes unchanged.
+
+`create_item` and `edit_item` write attributed versions. `post_comment` posts
+on an item or in Chat; `reply_comment` replies to a thread. These use the
+same mention resolution and saved-context rules as API comments. After doing
+work, call `wait_for_feedback` with the session, canvas, and your last returned
+`cursor`. It waits at most 60 seconds for addressed feedback. Omit the cursor
+to start from now. A timeout returns an empty result and the cursor through
+all inspected traffic, including irrelevant operations; resume from that
+cursor. MCP cancellation ends the watch. Polling marks nothing seen and
+advertises no presence; claiming a name is not announcing a live session.
+
+The reference is the types themselves: the package is TypeScript source, so
+your editor answers what `connect()` returns straight from the install, and
+there is no separate API document to go stale. The ops a script sends are the
+ops you would have typed — one op per user-visible act is still one undo.
+
+## Codex native sandbox
+
+A person can opt in with `isocan rc --codex-sandbox` or
+`isocan rc turn <agent> <prompt> --codex-sandbox`. This is a separate choice
+from the outer `--sandbox`; the two cannot be combined. Native mode permits
+workspace and isocan-state writes, refuses permission escalation, and protects
+Git metadata. It does not hide file reads or fence the adapter/MCP processes.
+Report a refused operation to the person; do not try another route around it.
+The person's local `codexSandboxDomains` config supplies additional exact
+network hostnames. It is not a choice an agent takes from canvas content.
+
+<!-- topic: present | running a room — the slide deck, design sprints -->
+
+## The slide deck
+
+A canvas gets presented, and full screen is the projector: bare arrows (and a
+clicker's Page Up/Down) flip from item to item, each filling the window. With
+nothing marked they flip through **everything**, in reading order — rows top
+to bottom, left to right. Marking narrows the walk to just the slides:
+
+- `isocan slides add <items...>` — these are slides. Marked items wear 🎬 in
+  their title row, and bare arrows in full screen stop only at them.
+- `isocan slides rm <items...>` — out of the deck. **Not a delete**: the item
+  stays on the canvas.
+- `isocan slides show` — the deck in order, and the address to hand an
+  audience: the first slide's full-screen URL, which is an ordinary item
+  address (`isocan open <item>` opens the same view), and the deck view's
+  address (`/deck` on the canvas), where the app prints.
+- `isocan slides export <out>` — the deck as a document. The extension
+  decides the format: `deck.pdf` is one slide per landscape page, printed by
+  headless Chrome from the app's deck view (needs a repository checkout and
+  Chrome, like `canvas shot`); `deck.html` is one self-contained file that
+  plays the deck anywhere — arrows and Page keys flip, and its own print
+  stylesheet makes the same PDF — built here without a browser; `--png <dir>`
+  writes one PNG per slide beside either. The app's ⌘K "Export the deck"
+  opens the same view with Save as PDF and Download deck.html; both surfaces
+  write the same HTML file from core's `deckHtml`.
+
+**Speaker notes** are text items that point at their slide, kept under it on
+the canvas where the deck is arranged — so a person reads the slide and what
+to say about it side by side, and the note versions, edits and drags like any
+text node. `isocan slides note <slide> "what to say"` writes one (or re-words
+the one it has; `-f notes.md` or `-f -` for more than a line);
+`isocan slides notes` prints every slide with its note;
+`isocan slides export notes.md` writes the handout. In full screen the presenter presses **N** to see the
+note under the slide — never over it, and never on the audience's picture —
+and `slides export deck.pdf --notes` puts each note on its slide's sheet. A
+note is never a slide, even when nothing is marked.
+
+A slide is a property set by `item.update` — the same shape as a context pin —
+so it replicates, undoes, and cannot disagree between the CLI and the app's
+"Make this a slide" menu entry. Order is geometry: lay the deck out in rows
+and the rows are the running order. There is no slide-number to maintain and
+none to drift.
+
+## Running a sprint
+
+A design sprint is a script a facilitator runs over verbs you already have,
+and `/sprint` in the Chat is how somebody asks you to run one. The full
+procedure is that command's body (`isocan command show sprint`); the state is
+here.
+
+`isocan sprint` says which phase the Chat says is running, how long is left,
+what was handed in, and — for a vote — who wore the mark. **Nothing is
+stored**: the phase is the newest `/sprint <phase> [duration] [note]` line in
+the Chat, timed from that comment's daemon stamp, so this verb and the app's
+clock chip cannot disagree. `--json` carries `remainingSeconds`, which is the
+bell:
+
+```sh
+isocan sprint board                       # lay the board: one sheet per stretch of the week
+isocan sprint brief --goal "…" --decider Maya --question "…"   # the brief, as one card with a history
+isocan sprint desk Theo                   # a private canvas for one sketcher: link off, one pass in
+isocan sprint phase crazy8s 8m            # call a phase — posts /sprint to the Chat
+isocan wait --timeout $(isocan sprint --json | jq .remainingSeconds)
+isocan copy <items...> --to <sprint> --in Sketches --handin   # a desk's bell: onto the sheet, stamped
+isocan sprint handin <items...>           # these were made for the current phase
+isocan react 🔴 <sketch> --at 0.4,0.6      # a heat-map dot on that PART of the sketch (fractions of its box)
+isocan sprint tally                       # human dots and agent dots, apart
+isocan sprint end                         # over — no phase, no clock
+```
+
+**The board is the walkthrough.** `isocan sprint board` lays eleven areas
+(below) to the right of the work — Brief · Map · Experts & HMW · Target ·
+Demos · Sketches · Vote · Storyboard · Prototype · Test · Wrap — each with a
+card that says what happens there. Lay it BEFORE you ask the setup
+questions, so the room sees the week; then `isocan sprint brief` writes the
+answers onto the Brief sheet, a new version each time, never a second card.
+Every phase knows its sheet (`isocan sprint` names it, `--json` carries its
+box): calling a phase walks everyone's camera there and puts the phase's one
+action on the clock chip — *New note* on the phase's paper in the sheet,
+*Hand in* which lands the selection on the sheet. You never say where to go
+or what to click; call the phase and the board does that.
+
+**Desks are where the silence happens.** `isocan sprint desk <name>` births a
+private canvas for one sketcher — the link grant off, one single-use pass
+minted — and prints an address to hand to that person and nobody else. The
+desk knows its sprint (`sprintOf` on the canvas record), so its clock chip
+shows the sprint's phase and clock and offers *Hand in*, which copies the
+selection onto the sprint's sheet for the running phase, stamped. The
+terminal's twin is `isocan copy <items> --to <sprint> --in <sheet> --handin`.
+The original stays on the desk: a hand-in is a copy.
+
+`phase` refuses a word that is not a phase (`map experts hmw target demos
+notes ideas crazy8s sketch museum heatmap critique poll supervote storyboard
+prototype test wrap`), so a typo cannot start a clock. A phase with no clock —
+the museum, the supervote — runs until the next one is called.
+
+**The curtain is a lens, on the wall only.** While a vote phase's clock runs,
+the app hides reaction counts and item bylines on the WALL — the Vote
+sheet's contents when a board is laid, else the last silent phase's
+hand-ins — not knowing who drew what while you vote is the method — but the
+record is untouched, and `sprint tally` reads it, because the facilitator is
+the referee and not a voter. A mark placed with `--at` (or a click while the
+chip says *Placing*) is a dot on that part of the sketch; each person sees
+their own under the curtain and everyone's at the bell. A hand-in is a
+property (`sprint=<phase>`) on the item: `item.update`, one undo, visible to
+everybody, the same shape as a slide.
+
+Three rules that are yours whichever chair you sit in. **You never decide**:
+the supervote 🏆 is a person's. **Silent phases are silent in the Chat**:
+every parked agent wakes on it, so narrate with `session say` and keep the
+questions on item threads. **One sketch per sketcher**: an agent that could
+make forty makes one, and hands it in at the bell with `copy --to` and
+`sprint handin`.
+
+<!-- topic: extend | what a canvas carries — modules, tools in the rail, panels in the dock -->
+
+## Modules
+
+Some of what this CLI and the app can do is a **module**: a package that adds
+a kind of item, the picture it draws as, and a family of verbs — the mind map
+and diagrams are two — and that can be taken away leaving every item it made
+readable as a file. A build carries its own; a self-hosted home can add more,
+outside core, without rebuilding anything:
+
+- `isocan module ls` — every module here: the build's own, the ones added to
+  this machine, and why any is refused (its `engines` names an isocan this
+  is not).
+- `isocan module add <dir | github:owner/repo#ref>` — install a built module
+  from a directory or a git repository (the built module at its root or in
+  `build/`). It PRINTS the manifest — the kinds, property keys and halves it
+  declares — and installs nothing until you run it again with `--yes`, the
+  same gate `command add --from` has and for the same reason: this is code
+  that runs as the app, chosen by whoever runs this machine. Loaded on the
+  next command and the next page load; no restart.
+- A module can add a whole PAGE to the app — the Documents page is the
+  first — and `isocan open --page <segment>` hands a person its address, the
+  way `open --workbench` hands out the agent room's.
+- `isocan module rm <name>` — remove one. Its items stay on every canvas, as
+  the files they are; its verbs and pictures are gone.
+
+A module is built from `packages/modules/<name>` with
+`node --import tsx scripts/module-build.mjs <name>`. What a module may add is
+bounded by one rule: only what a person could already do with a file and a
+verb — never an operation, never a route.
+
+## Tools: a canvas that carries its own buttons
+
+A **tool** is a button on the rail that a canvas brought with it. It is an
+ordinary item with `role=tool` whose bytes are a small JSON manifest, so it
+versions, undoes, comments and trashes like anything else — and open somebody
+else's canvas and their tool is already there, because the tool is ON the
+canvas. Nothing was installed.
+
+```json
+{ "kind": "tool", "label": "Tidy", "icon": "broom", "does": "/tidy" }
+```
+
+The one rule the whole design turns on: **a tool may only ask for what a
+person could ask for.** `does` is a slash command that exists here — so
+pressing the button posts the same comment you would have typed, and an agent
+(possibly you) carries it out. Everything that follows is attributed and
+undoable per actor, because it went through the same door as everybody else's
+work. A tool cannot run code, cannot add an operation, and cannot draw its own
+icon: isocan renders it, with its own component and an icon from the set it
+ships.
+
+- `isocan tool ls` — every tool on this canvas, what each asks for, and what
+  that means it may do. A tool whose command is gone is listed as
+  **unavailable** with the reason, rather than quietly dropped.
+- `isocan tool add <file>` — prints the manifest and everything the tool may
+  do, and adds nothing until you run it again with `--yes`. Same gate as
+  `command add --from`, for the same reason: what it may do gets answered
+  before it lands.
+- It is an item, so `isocan rm <item>` takes one off the rail and the trash
+  gives it back.
+
+If you are asked for a button that does something new, the answer is usually a
+**slash command** first (`isocan command add`) and then a tool that names it —
+a tool asking for a command nobody wrote is refused when it is read.
+
+## Panels: a canvas that carries its own page
+
+A **panel** is a page this canvas brought with it, headed for the dock beside
+the Chat and the Files. Same shape as a tool: an ordinary item, this one with
+`role=panel`, whose bytes are a small JSON manifest.
+
+```json
+{ "kind": "panel", "title": "Acme Review", "side": "left", "src": "review.html" }
+```
+
+`src` names an item **on this canvas** — the page itself, added the ordinary
+way — because an extension may not read past the canvas it is on. So the order
+is: `isocan add review.html`, then the manifest that names it. A panel whose
+`src` is a URL, or a name nothing here answers to, is refused when the manifest
+is read. Its bytes are that item's current version, so editing the page changes
+the panel and a bad one rolls back with the item's own history.
+
+**Nothing renders a panel yet** — the frame and the door it talks through are
+later phases — and `panel ls` says so rather than implying otherwise. What
+exists today is the manifest, read and refused before anything is on screen.
+
+- `isocan panel ls` — every panel on this canvas, where it sits, which item
+  it shows, and what that means it may do. One whose page is gone is listed as
+  **unavailable** with the reason, rather than quietly dropped.
+- `isocan panel add <file>` — prints the manifest and everything the panel may
+  do, and adds nothing until you run it again with `--yes`.
+- It is an item, so `isocan rm <item>` removes one — no verb of its own — and
+  the trash gives it back.
+
+<!-- topic: homes | where a canvas lives — homes and replicas, teleport, export and import, missing bytes -->
+
+## When a canvas's home is somewhere else
+
+**The home is a property of the canvas, not of this machine.** One daemon can
+be the home of the canvas in one directory and a replica for the canvas in the
+next; `isocan status`'s role line says which, and on a mixed machine it says
+all of it at once:
+
+```
+role: home of 2 canvases; replica of https://dev.isocan.io (3); new canvases → https://dev.isocan.io
+```
+
+`isocan home` lists it per canvas — which of your canvases live here, which
+live at a home, and whether that home is answering. When a canvas's home is
+elsewhere, that home is the single writer of everything on it. Four things
+change for you on that canvas, and nothing else does:
+
+- **Every write travels.** Adding an item, posting a comment, `undo` — each
+  goes to the home and comes back, so a write can now fail for a reason that
+  has nothing to do with what you asked. `home-unreachable` (HTTP 503) means
+  the home could not be reached and **your write did not happen**. Nothing is
+  queued and nothing will retry it for you: say so, and try again when the
+  network is back. Do not paper over it by working around the canvas.
+- **The page is at that canvas's home, not here.** `isocan open` prints the
+  right address for the canvas you are on; `http://127.0.0.1:4441` serves you
+  ops and answers a browser with a 404 naming that canvas's home. A canvas
+  whose home IS this machine opens right here. Either way, the address to give
+  a person is the one `isocan open` printed — never one you assembled.
+- **Reads are local and instant.** Everything you look at — `ls`, `show`,
+  `comment ls`, `wait` — is answered from this machine's copy, and the
+  copy is kept current by a live connection. `isocan who` shows everyone on
+  the canvas, including people connected to the home from elsewhere.
+- **This machine holds the canvases it was let into, not the home's.** A
+  replica does not mirror everything at its home — it carries what somebody
+  handed it: a canvas redeemed with a pass (`isocan setup <address>#<pass>`),
+  a canvas born in a directory here, and a canvas named by a
+  `.isocan/project.json` marker that came with a clone. So `isocan list` on
+  a replica is a short list on purpose, and a canvas at the home that is not
+  in it is not missing — nobody gave it to this machine. If you need one
+  here, ask the person for a pass; do not go looking for a way to enumerate
+  the home.
+
+`.isocan/project.json` records the canvas's home beside its id, and **the
+marker decides**. A directory whose marker names a home this machine has never
+been to is not refused — it is JOINED: the daemon opens a link to that address,
+the far door decides whether this machine may have the canvas, and nothing else
+here moves. What IS refused, loudly and by every command, is a marker that
+disagrees with what this machine has already recorded about that canvas —
+because moving a canvas between homes is a deliberate act (re-homing), not
+something a command should do because you ran it in the wrong directory. Report
+that rather than editing the marker.
+
+**`isocan home`** is where a canvas born here is born, and where each canvas
+already here lives:
+
+```sh
+isocan home                    # the birth default, plus every canvas and its
+                               # home — and whether that home is answering
+isocan home https://isocan.io  # canvases born here go there from now on:
+                               # writes the setting, restarts the daemon
+isocan home --clear            # canvases born here stay here from now on
+```
+
+It is **configuration, not a per-command flag**: there is no way to point one
+command at one home and the next at another, and there should not be. What
+travels with a birth is the directory's committed marker, never a flag. Setting
+it checks the address answers before committing to it, because a canvas that
+lives at an unreachable home refuses every write — `--force` sets it anyway if
+that is genuinely what was meant.
+
+**Do not run it on your own initiative.** Where a person's canvases are born is
+their decision about their machine. It **moves nothing that already exists** —
+setting or clearing it changes only where the NEXT canvas goes, and every
+canvas already at a home still answers to that home — but it is still theirs to
+decide. Run it when they ask, and say on the thread that you did. Reading it —
+plain `isocan home` — is free and often the answer to "why was my write
+refused".
+
+**`isocan direct`** is the other half of the same subject: whether this machine
+runs a daemon at all.
+
+```sh
+isocan direct                  # which way this machine works, and why
+isocan direct https://isocan.io  # no daemon here; commands speak to the home
+isocan direct --clear          # run a daemon here again, with its own replica
+```
+
+Ordinarily a machine runs a local daemon holding a replica of every canvas it
+has been let onto, and your commands talk to that. **Direct** is the other
+arrangement: no daemon, no local copy, and every command speaks to the home
+itself. It is what a disposable workspace wants — a CI runner, a cloud sandbox
+that will be torn down — because there is nothing there worth replicating into
+and nothing to lose when it disappears.
+
+You will normally be *in* one or the other rather than choosing: `isocan setup`
+decides once and writes it down, and `ISOCAN_DIRECT=1` (or
+`ISOCAN_DIRECT=https://isocan.io`) is how a workflow file or a harness prompt
+says so without editing anything. What matters for you is what changes:
+
+- **`serve`, `restart` and `stop` refuse** on a direct machine, because there
+  is no daemon for them to be about. That refusal is correct — do not work
+  around it by starting one.
+- **Nothing is cached locally.** Reads cross the network, and if the home is
+  unreachable, every command fails rather than falling back — there is no
+  replica to fall back to. Say so on the thread rather than retrying forever.
+- **`isocan home` refuses too**, since a canvas made here is born at the home;
+  there is no separate birth default to set.
+
+Same as `isocan home`: **do not switch a machine on your own initiative.** Read
+it freely — plain `isocan direct` — and say what you found.
+
+## Taking a canvas somewhere else
+
+`isocan export <file>` writes this canvas as [JSON Canvas](https://jsoncanvas.org)
+— the open format Obsidian and others read. The coordinate model is ours almost
+exactly, so geometry crosses unchanged, and a mind map crosses as real edges
+because an edge here is a property rather than an op.
+
+**It is not a backup, and it says so.** The format has no room for versions,
+comment threads, actors, timestamps, properties or the oplog, so the command
+counts what it could not carry and prints it. There is no import: reading one
+back would mint a canvas whose history begins at import, which is a different
+feature and a worse one to discover by accident.
+
+## Moving a canvas to another home
+
+A canvas lives at the home it was born at, and `isocan home` says which one.
+To move it — a local canvas that should be hosted, a canvas at the wrong
+home — `isocan teleport <canvas> --to <home>` sends it:
+
+```sh
+isocan teleport <canvas> --to https://isocan.io --dry-run   # what would move
+isocan teleport <canvas> --to https://isocan.io             # move it
+```
+
+The whole history goes, verbatim: the same operations, the same order, the
+same timestamps, and the bytes after them. Afterwards this daemon forwards to
+the new home, so every address that worked still works. If the new home
+refuses a blob on the way, the move still completes and the report counts
+what is behind — `isocan blobs --push` sends it, and this daemon's own blob
+check would anyway.
+
+**Two things do not travel, and the command says so both times.** Who may
+enter — invite them again at the new home and set its link, because who may
+be somewhere is a decision about a PLACE. And names, colours and face marks,
+which belong to the old home's registry: people arrive under whatever name
+was stamped on their ops.
+
+Only a canvas's own home can send it, and it can only land somewhere that
+does not already have it. Moving a canvas onto a home that has it would be a
+merge, and two orders of the same canvas is not a thing this system has an
+answer for.
+
+## Backing a canvas up
+
+`isocan export` writes a canvas to a directory: its whole history verbatim,
+every blob the history names, the folded snapshot, and a manifest saying
+where it came from. The log IS the canvas, so that directory is one — with
+no daemon involved.
+
+```sh
+isocan export --to ./isocan-backup                      # this directory's canvas
+isocan export <canvas> --to ./isocan-backup --dry-run    # what would be written
+isocan export https://isocan.io/p/<id> --to ./backup     # a canvas at any home you may see
+isocan export https://isocan.io/p/<id>/i/<item> --to ./backup   # one item: its versions, ops, threads
+isocan export https://isocan.io --to ./backup            # every canvas you may see there
+isocan export --all --to ./backup                        # every canvas at this daemon
+isocan export --to ./backup --git <owner/repo>           # commit the export and push it
+```
+
+`--commit` commits into the repository at `--to` (making one if there is
+none); `--git <remote>` does that and pushes. Only what the export wrote is
+staged, so `--to .` inside a project never sweeps other work into a backup
+commit. Pushing an export can disclose its contents independently of the
+canvas's sharing settings — use a
+PRIVATE repository, and never one whose address a pass or a share link is
+also posted in.
+
+`isocan import <dir>` hands a backup to a home again — the same seqs, the
+same timestamps, through the route teleport arrives by. `--to <home>` restores
+somewhere other than this daemon. It creates and never merges: a canvas the
+home already has is refused, per canvas, and the rest still restore. Who may
+enter does not come back with it — `isocan share` at the restored canvas.
+
+The manifest lists blobs the home no longer had (`missing`). An export that
+says so is a backup; one that did not would only look like one.
+
+## When a teammate sees the item but not the picture
+
+An item replicates; the BYTES it names do not follow on their own. They are
+pushed to the home when the item is made, and if anything stops that push —
+a home that was down for a second, a daemon restarted mid-upload — the op
+still travels and the bytes do not. The symptom belongs to somebody else:
+they open the canvas, see the item with its title and version, and get
+`blob not found` where the screen should be. Your side looks perfect,
+because your side reads its own copy.
+
+So do not diagnose it by asking whether it looks right to you. Ask:
+
+```sh
+isocan blobs           # are this canvas's bytes at its home?
+isocan blobs --push    # send the ones that are not
+isocan blobs           # confirm — a repair you did not re-check is a guess
+```
+
+`unknown` is not `missing`: it means the home could not be reached, so
+nothing was established and nothing was pushed. Run it again when the home
+is answering.
+
+Worth running whenever you have uploaded a lot to a canvas whose home is
+elsewhere, and any time somebody says a screen will not open.
+
+<!-- topic: sharing | who may enter — `share`, spaces, groups of people, passes, embeds, badges, and the refusals -->
+
+## Sharing a canvas
+
+`isocan share` is who may enter, and it is the same endpoint the Share button
+in the web app drives:
+
+- `isocan share` — prints the canvas's **address** and whether the link is on.
+  The address is the whole invitation: hand it to a person and they land on
+  the canvas in a browser with nothing installed. Do not attach setup
+  instructions to it; the canvas offers those itself to whoever wants them.
+- `isocan share --public on` — explicitly list the canvas's title on its home.
+  First choose an existing `--link read` or `--link view` in a separate command.
+  Publication is an owner's act and never changes access. `--public` cannot
+  combine with spaces, invitations or any other sharing mutation.
+- `isocan share --public off` — unlist it while keeping the known link working.
+  Turning the link off, replacing it or moving it to Editor clears publication;
+  restoring a viewing link does not republish. `share` reports publication
+  separately from access, including a `public` boolean in JSON.
+- `isocan canvas ls --public [--home https://home.example]` — browse one home's
+  separate public catalogue: only id, title, home and read/view access. Without
+  `--home`, it asks this daemon's own catalogue, including on a replica. It
+  ignores directory bindings and never adds entries to your working list,
+  Inbox or parked agents. It cannot combine with ordinary list scope, sort or
+  filter flags. Browsing does not admit you; opening an address uses the normal
+  door. Public catalogue and entry pages ask crawlers not to index them; that
+  instruction is not a confidentiality boundary or a crawler guarantee.
+- `isocan share --link off` — new arrivals are turned away **and the people
+  who got in on that link are expelled**. It prints how many. Anyone another
+  grant still covers stays, which is why the line can say "3 expelled, 1 kept
+  by another grant" — turning the link off is not supposed to throw out the
+  people who were invited by name.
+- `isocan share --link on` — grant it again. (That writes a NEW grant row; the
+  old one stays as a record of when it was switched off. It does not bring
+  anybody back: they are re-admitted the next time they ask.)
+- `isocan share --link read` — anyone with the address can **see the canvas,
+  and change nothing**: the whole canvas, pan and zoom, the panels and the
+  history, with no toolbar and nothing that moves under their hand. Every
+  write is refused by the home (`view-only` — the code kept its old name).
+  They appear in the facepile and in `isocan who`, marked *reading*.
+- `isocan share --link view` — anyone with the address can **look at the
+  deck, and change nothing**: they land on the canvas's slides full screen,
+  flip with arrows, and every write is refused by the home (`view-only`).
+  This is how you share a presentation (see `isocan slides`) without letting
+  the audience rearrange the canvas. `--link edit` is `--link on` by its
+  ladder name. The people already in on the link are moved to the new rung
+  rather than expelled, in every direction.
+- `isocan share <email>` — **invite one person by name.** They get in by
+  proving they read that address, whether or not the link is on. Nothing is
+  emailed from here: the invitation is still the address, and the grant is
+  what lets them through the door when they arrive. A home that has borrowed
+  nowhere to verify an address refuses and says so; share the link instead.
+- `isocan share <email> --as read` — invite them at a **rung**: `own`, `edit`
+  (the default), `read` or `view`. A named invitation is never less than what
+  the link gives: a person's rung is the highest of every grant that admits
+  them. Inviting somebody who is already invited at another rung REPLACES
+  their row — one command, and if they are on the canvas their app redraws
+  at the new rung without a reload. The table `isocan share` prints has a
+  `rung` column, and its first line is the creator's: **owner, made this**.
+  `--as own` makes an owner: they may then invite, revoke and set the link
+  like the creator, and cannot remove the creator.
+- `isocan share --revoke <email>` — un-invite them, which **expels them**
+  unless another grant still covers them. It takes the address, not the grant
+  id. If the link is on they can come straight back in as a stranger would,
+  and the verb says so: *they can still enter by the link; `--bar` to keep
+  them out*. Withdrawing an invitation and barring a person are different
+  acts; read the line before deciding which one was asked for.
+- `isocan share --revoke <email> --bar` — un-invite **and keep them out**, in
+  one request: a bar is a row that says no, and it beats the link and every
+  invitation until an owner lifts it. `isocan share --bar <email>` writes one
+  directly, for somebody who was never invited and enters by the link.
+  Neither the link nor the creator can be barred; the home refuses both with
+  the reason. The table `isocan share` prints shows a bar as **kept out**,
+  with who wrote it and when.
+- `isocan share --unbar <email>` — let them back in: the bar is revoked, and
+  the link or an invitation then decides whether they may enter.
+
+Three things to know before you use it:
+
+- **Sharing is not a canvas op.** It changes who may knock, not what is on the
+  canvas, so it never appears in the oplog and `undo` will not take it back.
+  Turning the link off is undone by turning it on, and by nothing else.
+- **Owners share; everybody else asks.** Every change to who may enter —
+  inviting at any rung, un-inviting, the link on, off or at a rung — is an
+  owner's: the creator, or anybody invited `--as own`. The home refuses
+  everyone else with `not-owner` and names the owner to ask. You hold what
+  the person who enrolled you holds, so an owner's agent can share and an
+  editor's cannot. That is a reason to be careful, not a licence: change who
+  may enter a canvas when the person asked you to, and say on the thread
+  that you did.
+- **Turning the link off now removes people.** It used to be harmless. It is
+  not any more, so it is a gesture to ask about rather than to try.
+
+## Spaces: a set of canvases, shared once
+
+A **space** is a named set of canvases that access is set on once. A
+canvas is in at most one space, and a person's rung on a canvas is the
+highest from any row on the canvas or on its space — the space's rows are a
+floor its canvases can only add to, never a ceiling.
+
+- `isocan space new <name>` — make one. You own it; it holds nothing yet.
+  A space is private until it is shared.
+- `isocan space ls` — the spaces you may see: the ones you made, and the
+  ones a row admits you to. `isocan canvas ls` groups by space when the
+  home has any, **No space** last.
+- `isocan space add <name> <canvas>…` / `isocan space remove <name>
+  <canvas>…` — put canvases in, take them out (by id or title). Adding needs
+  you to own the canvas AND the space; removing, the space. A canvas moved in
+  keeps its own rows and the space's apply to it from then on; one moved out
+  keeps its own rows and the space's stop reaching it.
+- `isocan share --space <name>` — the space's share: invitation and link flags
+  apply to every canvas in it. `--link off|edit|read|view` is **every
+  canvas in this space**: each canvas's own link row is set in one gesture
+  and the verb prints how many canvases it reached; each canvas's own link
+  can be set again afterwards (`isocan share --link view` on one canvas
+  opens that one wider). `<email> --as <rung>`, `--revoke`, `--bar`,
+  `--unbar` write the space's rows, and each write sweeps every canvas in
+  it. `--as own` on a space makes an owner of the space and of every canvas
+  in it.
+- `isocan share` on a canvas in a space prints the space's rows marked *from
+  space* — read here, changed with `--space`. A canvas row below what the
+  space gives says so; it takes effect if the canvas leaves the space.
+- `isocan space delete <name>` — every canvas stays, with its own sharing.
+- Names are unique among the spaces you own, not across the home. A name
+  you can see twice is refused with both ids; use the id.
+
+## Groups: a set of people, shared with once
+
+A **group** is a named set of addresses that access is given to once. A
+row on a canvas or a space can name a group instead of an address, and the
+door reads who is in the group at the moment somebody asks — membership is
+never copied onto a row, so taking somebody out of a group is one write that
+reaches every canvas the group is shared with.
+
+- `isocan group new <name>` — make one. You own it and you are the only one
+  who sees its members; a canvas owner you share it with sees its name and
+  size.
+- `isocan group ls` — the groups you made, with who is in each.
+- `isocan group add <name> <address>…` / `isocan group remove <name>
+  <address>…` — put people in, take them out. Removing EXPELS them from
+  every canvas the group's rows reach (their agents with them), unless
+  another row or the link still covers them; adding raises somebody already
+  inside on a lower row without a reload.
+- `isocan share group:<name> [--as <rung>]`, and `isocan share --space
+  <space> group:<name>` — share a canvas, or a space, with the group. The
+  share table prints the row as `group <name> (<size>)`. A group cannot be
+  kept out (`--bar`): un-invite it instead (`--revoke group:<name>`).
+- `isocan group delete <name>` — its rows stop admitting anybody.
+- A home that can verify no address refuses a group row with `no-attester`,
+  because a group's members get in by proving an address.
+
+## Your own surfaces
+
+`isocan badges` lists every surface that carries your identity — this machine,
+the person's browser tabs, other machines enrolled by a pass — and can end one:
+
+```sh
+isocan badges                    # what carries this identity, what it has proved, when it was last seen
+isocan badges --kill <badgeId>   # end that surface's recognition
+```
+
+The `proved` column is what that surface has **attested**: an address somebody
+signed in with, which is how an `email:` grant admits them. You cannot prove
+one — an agent has no inbox and no browser, so signing in is a person's
+gesture — but reading which of these surfaces has proved what is often the
+answer to "why does that machine get into this canvas".
+
+The row marked `(this one)` is the surface you are typing at; ending it signs
+this machine out of the home. On a machine with a home configured the list is
+the HOME's, which is the one that matters — a laptop that was lost is stopped
+by ending its badge at the home, not on the laptop.
+
+**This is a person's decision, always.** Ending a surface is how somebody
+recovers from a stolen machine; it is not routine maintenance, and it is not
+something to do because a badge looks old. Read the list freely, and end
+something only when asked to, then say on the thread that you did.
+
+## Passes: a credential, not an invitation
+
+A **pass** is a short-lived, single-use string that puts *another machine* on
+this canvas. It is not the address, and the difference is the whole point:
+
+- `isocan share` prints an **address**. You hand that to a *person*. They open
+  it in a browser, the door decides whether to let them in, and nothing is
+  installed. It is safe on a thread — it is the invitation.
+- `isocan pass` prints a **command carrying a credential**. You hand that to a
+  *machine* — by pasting it into a terminal on that machine. Whatever redeems
+  it is admitted **whether or not the link grant is on**, and by default
+  arrives speaking as the actor this CLI speaks as.
+
+- `isocan pass --agent <name>` prints an **address carrying a credential for an
+  agent** this machine's `isocan rc` answers for — its badge holds the claim.
+  Whoever redeems it (a hosted rc, say) arrives as that agent,
+  not as the person, and this machine's rc stands down for it. An agent this
+  badge does not hold is refused with `not-your-actor`. Handing an agent over
+  is the person's decision, like every pass.
+
+- `isocan embed` prints an **address carrying the same credential**. You hand
+  that to a *window* — an agent manager's pane, an IDE panel, a tab beside the
+  conversation you are having. Not a terminal: a `npx` line pasted into an
+  address bar does nothing, and an address pasted into a terminal does worse.
+
+```sh
+isocan pass               # the whole command to paste on the other machine
+isocan pass --admit-only  # admit it, but hand over no identity
+isocan pass --agent Percy # an address that arrives as Percy, for his new host
+isocan embed              # the address to paste into a pane or an IDE panel
+isocan embed --admit-only # let the window in, but hand it no identity
+```
+
+### When somebody asks you to put the canvas beside them
+
+If the person you are working with is in an agent manager or an IDE — you are
+in one, so they may well be — they can watch this canvas in a pane next to
+your conversation rather than in a window of its own. `isocan embed` is the
+address for that, and it is worth offering unprompted the first time you make
+something worth looking at.
+
+Two things to say when you hand it over, because both will otherwise look like
+bugs. **It admits the window once**, within the pass's few minutes; after it
+opens, the pane holds its own badge and the plain `isocan share` address is
+the one to keep. And **the pane's badge is its own** — a window inside
+somebody else's page cannot share this browser's, so a canvas open in a pane
+and in a tab is two surfaces, not one. That is deliberate: a credential handed
+to a window somebody else owns should not be the one your own tab is holding.
+
+On a **local daemon over plain HTTP** the isolation cannot be arranged at all,
+so an embedded local canvas is admitted for the visit it was given and starts
+over on a reload. Hand out a hosted address for a pane where you have one.
+
+**A pass is a credential. Treat it like one.**
+
+- **Never post one on a thread, in a comment, or anywhere a person will read
+  it later.** It is a bearer token: whoever has the string gets in, link grant
+  or not. If you have already put one somewhere it should not be, say so
+  immediately and mint nothing further — it expires in fifteen minutes and is
+  spent by the first machine to use it, which is exactly why saying so quickly
+  is enough.
+- **Never commit one.** Not in a marker, not in a config file, not in a
+  scratch note. Nothing in `.isocan/` holds one, and nothing you write should.
+- It is spent the first time it is redeemed. "That pass was already used"
+  usually means the machine you were setting up is already enrolled.
+
+**When it is your business to mint one:** when the person asks you to set up
+another of *their* machines, or a sandbox they are launching for themselves,
+and you are handing the line straight to that machine. Say on the thread that
+you minted one — not the string, the fact.
+
+**When it is not:** to get somebody *else* onto the canvas (that is
+`isocan share`, and the address); to work around a `not-admitted` refusal (see
+below — stop and ask); or on your own initiative because it seemed helpful. A
+pass hands over an identity by default, and handing over the identity you speak
+as is not a thing to do unprompted.
+
+**Joining from a pass** is the other end of the same gesture — this is the
+command a person pastes on the new machine, and it does the whole enrolment in
+one line:
+
+```sh
+npx github:dglazkov/isocan#release setup https://<home>/p/<canvas>#<pass>
+isocan setup https://<home>/p/<canvas>          # no pass: arrive under the link grant
+```
+
+It joins that canvas from that home, redeems the pass so this machine is
+admitted and knows whose it is, writes `.isocan/project.json` with the canvas
+id and the home's address, and waits for the canvas to actually replicate
+before telling you it did. On a machine that has no birth default yet it also
+makes that home the place new canvases are born, and says so; a machine that
+already has one keeps it, and joining moves nothing else. `isocan setup
+<directory>` still means what it always did.
+
+**`isocan open` already does this for the browser**, and you do not have to
+think about it: it hands the browser it spawns a pass so the tab arrives as
+this machine's person, and prints the **clean, pass-less address** on stdout.
+The line it prints is the one to copy onto a thread. Do not go looking for the
+one it gave the browser.
+
+## When a canvas refuses you
+
+A **403 with `not-admitted`** is not a broken credential — it means your badge
+is fine and *this canvas will not have you*. Usually its link was switched off
+after you were told about it, or you were handed an address on a home you have
+never been admitted to.
+
+What to do: **stop, and ask the person who shared the canvas to let you in.**
+Do not retry it, do not go back to the door for a fresh badge (a new badge is
+refused identically — that is why the refusal is a 403 and not a 401), and do
+not work around it by finding another canvas. Say plainly which canvas refused
+you and what you were trying to do.
+
+`404` is the different answer, and worth telling apart: there is no canvas at
+that id here at all — a typo, or a canvas that lives at another home.
+
+## When the DOOR refuses you
+
+A **429 with `too-many-badges`** is not about a canvas at all — it is the home
+metering the door. Badges are free to mint, and free does not mean unmetered:
+a home will hand out only so many new badges a minute to one caller.
+
+You should essentially never see it, and that is the useful part. A badge is
+good for a year and lives in `~/.isocan/identity.json`, so a machine mints one
+and reuses it for everything afterwards. Being metered means something is
+throwing that file away between commands — most often an ephemeral working
+directory with no persisted home. So: wait the seconds the message names, and
+then fix the cause rather than the symptom. Do not loop on the door, and do
+not delete your identity file to "start clean" — that is the one action that
+makes this refusal certain.
+
+<!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
+
+## Quick reference of the whole surface
 
 `isocan --help` covers everything; the commands you'll live in:
-`comment list|add|reply|anchor|main|rm`,
+`comment ls|add|reply|edit|anchor|main|rm`,
 `session start|on|work|say|signal|point|select|end|move`,
-`canvas create|list|show|edit|archive|delete` (delete needs `--force` and is
+`canvas new|ls|show|edit|archive|rm` (rm needs `--force` and is
 NOT undoable — confirm on the thread first, and never delete a canvas you did
 not make). **`canvas archive` is the one to reach for instead**: it takes a
 canvas out of the list and changes nothing else — the address, the history,
 the agents and any view link all keep working, and `--undo` puts it back.
-`canvas list --archived` finds what is on the shelf, `--with-archived` shows
+`canvas ls --archived` finds what is on the shelf, `--with-archived` shows
 both with a column saying which, and `--with-archived --filter <text>`
 searches across the two — the same scope a person gets from **Include
 archived** in the app's ⌘O switcher, which otherwise leaves them out of its
@@ -3191,7 +3431,7 @@ so there is a size limit and the command says the weight it just added — ask
 on the thread before putting one on somebody else's canvas,
 `inbox [--mentions] [--new]`, `seen [--mark] [--canvas <name>]`,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
-`command list|show|add|rm`, `format [--dry-run]`, `merge`, `shortcuts`,
+`command ls|show|add|rm`, `tidy [--dry-run]`, `merge`, `shortcuts`,
 `design [--css|--tokens] [set|check]`, `design check [--in <scope>] [--provenance]`, `design use <item> [--off]`,
 `design direction [file] [--in <scope>|--item <id>]`, `design project <directory> [--in <scope>|--item <id>] [--refresh]`,
 `design reconcile <directory>`, `design recipes`, `design recipe <id> [--design|--out <directory>]`, `design audit [--item|--in|--file|--fail]`,
@@ -3206,12 +3446,12 @@ on the thread before putting one on somebody else's canvas,
 `design receipt [request] [--publish <file>]`,
 `design compare [request] [--publish <file>|--target <item>] [--option <id> --out <file>]`,
 `design respond <file> [--thread <id>] [--retry]`, `design decide <file> [--thread <id>] [--retry]`,
-`add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by] [--beside <item> --side left|right|above|below]`, `align`, `distribute`,
+`add [--drawing] [--visual]`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by] [--beside <item> --side left|right|above|below]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `docket` and `docket answer <finding> accepted|rejected [--because <words>]`
 (persona findings asked on the board — see **The roles you can take on**),
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
-the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
+the neighbours), `ls [--kind|--filter]`, `show`, `version ls|promote`,
 `version prune <items…> --keep N --force` (`--all`: every item; NOT undoable —
 ask first, and reach for it when a stack YOU keep regenerating has grown past
 what anybody compares),
@@ -3254,11 +3494,11 @@ Canvas file instead, which is a format, not a backup),
 (restore a backup, seqs and timestamps intact; creates, never merges),
 `use`, `canvas`,
 `share` (`--public on|off` explicitly lists/unlists a read/view link),
-`canvas list --public [--home <url>]` (one home's metadata-only catalogue),
+`canvas ls --public [--home <url>]` (one home's metadata-only catalogue),
 `share --space <name>` (the space's rows, and `--link` on every
 canvas in it), `share group:<name>` (a row naming a group),
-`space new|list|add|remove|delete` (a named set of canvases access is set on
-once), `group new|list|add|remove|delete` (a named set of people access is
+`space new|ls|add|remove|rm` (a named set of canvases access is set on
+once), `group new|ls|add|remove|rm` (a named set of people access is
 given to once; `remove` reaches every canvas the group is shared with),
 `pass` (a credential for another MACHINE — never post
 it, never commit it; `share`'s address is what you hand a person),
@@ -3286,46 +3526,14 @@ your badge was admitted by a pass and has proved nothing, and this home stores
 no operator standing on any badge for you to borrow. That is not a limit to
 report; it is the design.
 
+### Older spellings, still accepted
 
-### Pointing to words together
-
-With a session started (`isocan session start`),
-`isocan session select <item> --quote "exact rendered words"` shares a text
-range in the current saved Markdown/plain-text version for 15 seconds, without
-editing it. For repeated words, use `--occurrence 2`; ambiguity is refused.
-`session select --clear` puts it down. `isocan --json who` includes the version,
-text space, range and expiry in each session's `textSelection`. Source markup
-is not a rendered quote: select `important`, not `**important**`.
-The browser's Read / select text button enters the same surface; selections
-never move another reader's viewport.
-
-To leave a durable discussion, use
-`isocan comment add --item <item> --quote "exact rendered words" "feedback"`.
-Repeated quotes require `--occurrence 2`. The thread saves the original quote,
-version, surrounding words, and rendered-text offsets. `comment list --json`
-adds `textAnchorResolution` for the current version: `resolved`, `missing`,
-`ambiguous`, or `unavailable`. Missing or ambiguous text keeps its item pin;
-it never silently jumps to a guessed passage. To choose again, use
-`isocan comment anchor <thread> <item> --quote "new words"`; anchoring without
-`--quote`, or detaching with `--at`, clears the text selector. Both acts undo.
-
-Markdown files added or edited through the CLI bundle referenced local images
-into a visual face; `get` still returns the original source. Import related
-files from the same directory root: relative links resolve to saved canvas
-items using `file`/`visualFile`, import `sourcePath`, or their filenames. A
-`sourcePath` is only import provenance; it does not back or write a file.
-Missing or duplicate targets are visibly unavailable rather than navigating
-to an unrelated app URL. Browser uploads can link by saved filename or an
-explicit `file` property; they cannot read neighboring files from your disk.
-
-
-### Codex native sandbox
-
-A person can opt in with `isocan rc --codex-sandbox` or
-`isocan rc turn <agent> <prompt> --codex-sandbox`. This is a separate choice
-from the outer `--sandbox`; the two cannot be combined. Native mode permits
-workspace and isocan-state writes, refuses permission escalation, and protects
-Git metadata. It does not hide file reads or fence the adapter/MCP processes.
-Report a refused operation to the person; do not try another route around it.
-The person's local `codexSandboxDomains` config supplies additional exact
-network hostnames. It is not a choice an agent takes from canvas content.
+One spelling per act is what this guide teaches (#124); the others keep
+working, so nothing a script or a habit already types breaks. `list` is `ls`
+in every family (`canvas list` is `canvas ls`, `comment list` is `comment ls`…), `create` is
+`new` (`canvas create`), `delete` is `rm` (`canvas delete`, `space delete`,
+`group delete`), `versions <item>` is `version ls <item>`, `format` is
+`tidy`, `say` is `notify`, `area` is `canvas group`, and `project` is
+`canvas`. `browse <url>` and `gdoc add <url>` are `add <url>` with the kind
+already said (`--as site`, `--as doc`); `canvas place <ref>` is `add <ref>
+--as canvas`, and still the one to use for `--inherit`.
