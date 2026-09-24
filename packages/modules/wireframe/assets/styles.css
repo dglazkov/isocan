@@ -272,3 +272,35 @@
   white-space: nowrap;
   color: var(--ink);
 }
+
+/* A selected prototype lights the screens it plays (prototype-light.tsx):
+   above the items, untouchable, one viewer's. The rest steps back under a
+   veil with holes; each member pulses once, then keeps a steady ring. */
+.wire-light {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 4;
+}
+.wire-light-veil {
+  fill: var(--ground, #fff);
+  fill-opacity: 0.62;
+  animation: wire-light-veil 240ms ease-out;
+}
+.wire-light-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: calc(2.5px / var(--scale, 1));
+  animation: wire-light-pulse 900ms ease-out;
+}
+@keyframes wire-light-veil {
+  from { fill-opacity: 0; }
+}
+@keyframes wire-light-pulse {
+  0% { stroke-width: calc(2.5px / var(--scale, 1)); stroke-opacity: 1; }
+  35% { stroke-width: calc(14px / var(--scale, 1)); stroke-opacity: 0.45; }
+  100% { stroke-width: calc(2.5px / var(--scale, 1)); stroke-opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wire-light-veil, .wire-light-ring { animation: none; }
+}

@@ -3,6 +3,9 @@ var SYSTEM_ACTOR = { id: "sys_isocan", name: "isocan" };
 function isSystemActor(actorId) {
   return actorId.startsWith("sys_");
 }
+function mainThread(canvas) {
+  return Object.values(canvas.threads).find((thread) => thread.main) ?? null;
+}
 
 // packages/core/src/errors.ts
 var ApiError = class extends Error {
@@ -1183,6 +1186,8 @@ var nanoid = (size = 21) => {
 function newId(prefix) {
   return `${prefix}_${nanoid(10)}`;
 }
+var newThreadId = () => newId("thr");
+var newCommentId = () => newId("cmt");
 
 // packages/core/src/claims.ts
 var CLAIM_STANDS_MS = 30 * 60 * 1e3;
@@ -1434,6 +1439,7 @@ function turnedAwayMark(agentName) {
 function dispatchReason(op, authorId, agent, canvas) {
   if (sameActor(agent.joined, authorId, agent.actorId)) return null;
   if (isSystemActor(authorId)) return null;
+  if (op.comment?.record) return null;
   const admitted = agent.policy ? admits(agent.policy, authorId, agent) : listensTo(agent.rules, authorId, agent.joined);
   if (!admitted) return null;
   if (op.type === "thread.create" || op.type === "thread.reply") {
@@ -1458,6 +1464,37 @@ function dispatchReason(op, authorId, agent, canvas) {
   if (!opMatchesFilters(op, { items, types: ops }, canvas ?? null)) return null;
   if (areas.length > 0 && !opTouchesAreas(op, areas, canvas ?? null)) return null;
   return "change";
+}
+
+// packages/core/src/roll.ts
+var ROLL_AWAY_MS = 5 * 6e4;
+function rollDue(facts) {
+  const { last, seen, now } = facts;
+  if (last?.kind === "away") return "back";
+  const evidence = Math.max(seen ?? -Infinity, last?.at ?? -Infinity);
+  const gone = now - evidence > ROLL_AWAY_MS;
+  if (!last) return seen === void 0 || gone ? "here" : null;
+  return gone ? "back" : null;
+}
+function lastRoll(canvas, actorId) {
+  const chat = mainThread(canvas);
+  if (!chat) return null;
+  for (let i = chat.comments.length - 1; i >= 0; i--) {
+    const c = chat.comments[i];
+    if (typeof c.record === "string" && c.author.id === actorId) return { kind: c.record, at: Date.parse(c.createdAt) };
+  }
+  return null;
+}
+function rollWords(kind, name, listens) {
+  if (kind === "away") return `${name} stepped away \u2014 not answering here until it is back.`;
+  const verb = kind === "here" ? "is here" : "is back";
+  return `${name} ${verb} \u2014 answering a mention or the Chat; ${listens}.`;
+}
+function rollOp(canvas, kind, body) {
+  const comment = { id: newCommentId(), body, record: kind };
+  const chat = mainThread(canvas);
+  if (chat) return { type: "thread.reply", threadId: chat.id, comment };
+  return { type: "thread.create", threadId: newThreadId(), x: 80, y: 80, anchorItemId: null, main: true, comment };
 }
 
 // packages/core/src/sprint.ts
@@ -2583,30 +2620,46 @@ var keys = {
   turnedAwaySaid: (canvasId, key) => `said:${canvasId}:turned-away:${key}`,
   /** An agent another badge holds: its cursor was refused `not-your-actor`,
    * and that was said. Deleted when a later start parks it. */
-  notHeldSaid: (canvasId, actorId) => `said:${canvasId}:not-held:${actorId}`
+  notHeldSaid: (canvasId, actorId) => `said:${canvasId}:not-held:${actorId}`,
+  /** When this agent was last held on this canvas (ms) — the roll call's
+   * memory across a restart, written at most once a minute. */
+  seen: (canvasId, actorId) => `seen:${canvasId}:${actorId}`
 };
+var SEEN_EVERY_MS = 6e4;
 var NOT_YOUR_ACTOR = "not-your-actor";
 var heldElsewhere = (err) => err instanceof ApiError && err.code === "name-taken" && err.reason === CLAIM_REFUSAL.heldElsewhere;
 function runRoom(deps) {
   const life = new AbortController();
   let announcement = null;
+  let leave = null;
   const stop = async () => {
     life.abort();
     const announced = announcement;
     announcement = null;
+    const leaving = leave;
+    leave = null;
     await Promise.all([
       deps.routes.rcRelease?.({ canvasId: deps.canvas.id }).catch(() => {
       }),
       announced ? deps.routes.endSession(deps.canvas.id, announced.sessionId).catch(() => {
-      }) : void 0
+      }) : void 0,
+      leaving?.().catch(() => {
+      })
     ]);
   };
-  const done = room(deps, life.signal, (made) => {
-    announcement = made;
-  });
+  const done = room(
+    deps,
+    life.signal,
+    (made) => {
+      announcement = made;
+    },
+    (say) => {
+      leave = say;
+    }
+  );
   return { stop, done };
 }
-async function room(deps, life, announce) {
+async function room(deps, life, announce, onLeave) {
   const { routes, rows, state, clock } = deps;
   const p = deps.canvas;
   const narrate = deps.narrate;
@@ -2800,8 +2853,68 @@ async function room(deps, life, announce) {
     const snapshot = await routes.snapshot(p.id).catch(() => null);
     return snapshot !== null && !snapshot.canvas.agents?.[actorId];
   };
-  const holdOnce = () => {
-    const actorIds = [...dispatches.keys()];
+  const rolls = /* @__PURE__ */ new Map();
+  const sayRoll = async (record, kind, canvas) => {
+    const words = policyWords(policyOf(record), (id) => known.get(id) ?? policyState.nameOf(id), void 0, policyState.joined) ?? "listens to everyone";
+    const body = rollWords(kind, record.actor.name, words);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const at = attempt === 0 && canvas ? canvas : (await routes.snapshot(p.id).catch(() => null))?.canvas;
+      if (!at) break;
+      try {
+        await routes.sendOp(p.id, record.actor, rollOp(at, kind, body));
+        narrate(`${record.actor.name} \xB7 said in the Chat \u2014 ${body}`);
+        return true;
+      } catch (err) {
+        if (attempt === 1 || !(err instanceof ApiError && err.code === "main-exists")) {
+          narrate(`${record.actor.name} \xB7 could not say "${kind}" in the Chat \u2014 ${err.message}`);
+          return false;
+        }
+      }
+    }
+    return false;
+  };
+  const rollCall = async (actorIds, began) => {
+    if (!deps.announce) return;
+    const ended = clock.now();
+    let canvas = null;
+    for (const actorId of actorIds) {
+      const record = policyState.roster[actorId];
+      if (!record || !dispatches.has(actorId)) continue;
+      let mine = rolls.get(actorId);
+      if (!mine) {
+        canvas ??= (await routes.snapshot(p.id).catch(() => null))?.canvas ?? null;
+        if (!canvas) continue;
+        const seen = await state.get(keys.seen(p.id, actorId));
+        mine = { last: lastRoll(canvas, actorId), seen: typeof seen === "number" ? seen : void 0, kept: 0 };
+        rolls.set(actorId, mine);
+      }
+      const due = deps.announce(record.actor) ? rollDue({ last: mine.last, seen: mine.seen, now: began }) : null;
+      if (due && await sayRoll(record, due, canvas)) {
+        mine.last = { kind: due, at: ended };
+        canvas = null;
+      }
+      mine.seen = ended;
+      if (ended - mine.kept >= SEEN_EVERY_MS) {
+        mine.kept = ended;
+        await state.set(keys.seen(p.id, actorId), ended);
+      }
+    }
+  };
+  let rolling = Promise.resolve();
+  onLeave(async () => {
+    if (!deps.announce) return;
+    await rolling;
+    const now = clock.now();
+    for (const [actorId, mine] of rolls) {
+      const record = policyState.roster[actorId];
+      if (!record) continue;
+      await state.set(keys.seen(p.id, actorId), now);
+      if (mine.last && mine.last.kind !== "away" && deps.announce(record.actor)) {
+        await sayRoll(record, "away", null);
+      }
+    }
+  });
+  const holdOnce = (actorIds = [...dispatches.keys()]) => {
     const policies = {};
     for (const actorId of actorIds) {
       const record = policyState.roster[actorId];
@@ -2841,14 +2954,18 @@ async function room(deps, life, announce) {
     while (!life.aborted) {
       try {
         let held;
+        const began = clock.now();
+        const holding = [...dispatches.keys()];
         try {
-          held = await holdOnce();
+          held = await holdOnce(holding);
         } catch (err) {
           if (!(err instanceof ApiError && err.code === NOT_YOUR_ACTOR) || life.aborted) throw err;
           held = await holdAfterRefusal();
         }
         if (!held) continue;
         holdRefusedSaid = false;
+        if (!life.aborted) rolling = rolling.then(() => rollCall(holding, began)).catch(() => {
+        });
         for (const ask of held.asks ?? []) {
           if (!ownersWord(keeping, ask.from.id, policyState.joined)) {
             narrate(`${ask.from.name} asked from the canvas to add ${ask.name} \u2014 this rc takes that only from you; nothing enrolled`);
@@ -3129,6 +3246,7 @@ async function room(deps, life, announce) {
         narrate(`${by.name} dismissed ${name} \u2014 no longer answering here`);
         await rows.remove(p.id, op.actorId);
         dispatches.delete(op.actorId);
+        rolls.delete(op.actorId);
         await state.delete(keys.session(op.actorId));
         continue;
       }

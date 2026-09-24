@@ -102,6 +102,7 @@ export * from "./itemthread.js";
 export * from "./claim.js";
 export * from "./persona.js";
 export * from "./inbox.js";
+export * from "./roll.js";
 export * from "./summons.js";
 export * from "./docstatus.js";
 export * from "./jsoncanvas.js";

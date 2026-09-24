@@ -4,7 +4,8 @@
  *
  *   node --env-file=<secrets> --import tsx packages/modules/wireframe/scripts/calibrate.ts \
  *     --hierarchies <dir of <id>.json> --topics <design_topics.csv> --out <dir> \
- *     [--answerer jev|stub] [--options all|enrico] [--limit N] [--concurrency N] [--budget 1.00] [--state-chars 6000]
+ *     [--answerer jev|stub] [--options all|enrico] [--labels ids|words|described] [--sample N]
+ *     [--limit N] [--concurrency N] [--budget 1.00] [--state-chars 6000]
  *
  * Enrico is 1,460 Android screens, each with a view hierarchy and a
  * person's topic label. Each screen becomes one question — *which archetype
@@ -15,8 +16,15 @@
  * summary, and a reliability curve over `probabilities[choice]` — the
  * calibrated quantity (judge phase 0), never `confidence`.
  *
+ * `--labels` is how the options read (24 Sep 2026): `ids` offers the ids
+ * described by their recipes (phase 6's run), `words` offers
+ * `ARCHETYPE_WORDS` as the options themselves and maps the answer back,
+ * `described` keeps the ids and describes each in those words. `--sample N`
+ * asks N screens spread evenly over the sorted set, so two runs of the same
+ * N ask the same screens.
+ *
  * Results are written as they arrive, one line per screen, to
- * `<out>/answers.<answerer>.<options>.jsonl`; a rerun skips every screen already answered, so a
+ * `<out>/answers.<answerer>.<options>[.<labels>].jsonl` (no suffix for `ids`); a rerun skips every screen already answered, so a
  * crash never pays twice. `<out>/report.<answerer>.<options>.md` is rewritten from the whole file
  * at the end. The dataset stays wherever it was downloaded — nothing here
  * copies a screen into the repository.
@@ -28,7 +36,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, write
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
-  ARCHETYPE_IDS, JEV_INPUT_PRICE, JEV_MODEL, RECIPE_BY_ID, describeRecipe, jevAnswerer, stubAnswerer,
+  ARCHETYPE_IDS, ARCHETYPE_WORDS, JEV_INPUT_PRICE, JEV_MODEL, RECIPE_BY_ID, describeRecipe, jevAnswerer, plainOptions, stubAnswerer,
   type Answerer, type JevRequest,
 } from "../src/core.ts";
 
@@ -93,13 +101,24 @@ export const ENRICO_IDS: string[] = ARCHETYPE_IDS.filter((id) => Object.values(T
  * only the ids a topic can be right against, so a screen Enrico has no word
  * for (a home, a detail) cannot be picked and scored wrong for it.
  */
-export function archetypeCriteria(options: "all" | "enrico" = "all"): Record<string, string> {
+export function archetypeCriteria(options: "all" | "enrico" = "all", labels: Labels = "ids"): Record<string, string | null> {
+  const ids = options === "all" ? ARCHETYPE_IDS : ENRICO_IDS;
+  if (labels === "words") return plainOptions(ids).criteria;
   const out: Record<string, string> = {};
-  for (const id of options === "all" ? ARCHETYPE_IDS : ENRICO_IDS) {
+  for (const id of ids) {
     const r = RECIPE_BY_ID.get(id);
-    out[id] = r ? `${r.title}: ${describeRecipe(r)}` : LATER_WAVES[id] ?? id;
+    out[id] = labels === "described" ? ARCHETYPE_WORDS[id as keyof typeof ARCHETYPE_WORDS] : r ? `${r.title}: ${describeRecipe(r)}` : LATER_WAVES[id] ?? id;
   }
   return out;
+}
+
+/** How a question's options read: ids described by recipes, plain words as the options, or ids described in plain words. */
+export type Labels = "ids" | "words" | "described";
+
+/** `n` items spread evenly over `xs` — the same n picks the same items every run. */
+export function spread<T>(xs: readonly T[], n: number): T[] {
+  if (n <= 0 || n >= xs.length) return [...xs];
+  return Array.from({ length: n }, (_, i) => xs[Math.floor((i * xs.length) / n)]!);
 }
 
 // ---------- the flattener
@@ -168,7 +187,7 @@ export function flatten(json: unknown, maxChars = 6000): { text: string; element
 export const INSTRUCTIONS =
   "Which archetype is this mobile app screen? The screen is given as its view hierarchy flattened to text: one line per element, indented by nesting, with the element's type, icon, its text in quotes, and how far down the screen it starts. Choose the one archetype the whole screen is.";
 
-export function screenRequest(screen: string, criteria = archetypeCriteria()): JevRequest {
+export function screenRequest(screen: string, criteria: Record<string, string | null> = archetypeCriteria()): JevRequest {
   return {
     model: JEV_MODEL,
     state: { screen },
@@ -314,6 +333,9 @@ async function main(): Promise<void> {
   const which = flag("--answerer", "jev")!;
   const options = flag("--options", "all") as "all" | "enrico";
   if (options !== "all" && options !== "enrico") throw new Error("--options is all or enrico");
+  const labels = flag("--labels", "ids") as Labels;
+  if (!["ids", "words", "described"].includes(labels)) throw new Error("--labels is ids, words or described");
+  const sample = Number(flag("--sample", "0"));
   const limit = Number(flag("--limit", "0"));
   const concurrency = Number(flag("--concurrency", "12"));
   const budget = Number(flag("--budget", "1.00"));
@@ -324,7 +346,8 @@ async function main(): Promise<void> {
   const removed: Record<string, number> = {};
   const unreadable: string[] = [];
   const todo: Array<{ id: string; topic: string; truth: string; accept: string[]; request: JevRequest; dropped: number }> = [];
-  const criteria = archetypeCriteria(options);
+  const criteria = archetypeCriteria(options, labels);
+  const idOf = labels === "words" ? plainOptions(options === "all" ? ARCHETYPE_IDS : ENRICO_IDS).idOf : (o: string) => o;
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
     const id = f.replace(/\.json$/, "");
     const topic = topics.get(id);
@@ -350,7 +373,9 @@ async function main(): Promise<void> {
   }
 
   mkdirSync(out, { recursive: true });
-  const answersFile = path.join(out, `answers.${which}.${options}.jsonl`);
+  const suffix = `${which}.${options}${labels === "ids" ? "" : `.${labels}`}`;
+  const answersFile = path.join(out, `answers.${suffix}.jsonl`);
+  const asked = sample > 0 ? spread(todo, sample) : todo;
   const done = new Map<string, Row>();
   if (existsSync(answersFile)) {
     for (const line of readFileSync(answersFile, "utf8").split("\n")) if (line.trim()) {
@@ -358,7 +383,7 @@ async function main(): Promise<void> {
       done.set(r.id, r);
     }
   }
-  let pending = todo.filter((t) => !done.has(t.id));
+  let pending = asked.filter((t) => !done.has(t.id));
   if (limit > 0) pending = pending.slice(0, limit);
 
   // The projection: a token is taken as 2.5 characters of the request as sent — measured ~2.4, so it errs high.
@@ -390,9 +415,12 @@ async function main(): Promise<void> {
         const a = await answerer.answer(t.request);
         const ans = a.response.answers.archetype;
         if (!ans || ans.type !== "choice") throw new Error("no choice came back");
-        const top3 = Object.entries(ans.probabilities).sort((x, y) => y[1] - x[1]).slice(0, 3) as Array<[string, number]>;
+        // Read back as ids, whatever the options said.
+        const distribution = Object.fromEntries(Object.entries(ans.probabilities).map(([o, p]) => [idOf(o), p]));
+        const choice = idOf(ans.choice);
+        const top3 = Object.entries(distribution).sort((x, y) => y[1] - x[1]).slice(0, 3) as Array<[string, number]>;
         const tokens = a.response.usage?.input_tokens ?? 0;
-        const row: Row = { id: t.id, topic: t.topic, truth: t.truth, accept: t.accept, choice: ans.choice, p: ans.probabilities[ans.choice] ?? 0, top3, distribution: ans.probabilities, ms: a.ms, tokens, by: a.by, dropped: t.dropped };
+        const row: Row = { id: t.id, topic: t.topic, truth: t.truth, accept: t.accept, choice, p: distribution[choice] ?? 0, top3, distribution, ms: a.ms, tokens, by: a.by, dropped: t.dropped };
         appendFileSync(answersFile, `${JSON.stringify(row)}\n`);
         done.set(t.id, row);
         spent += tokens * JEV_INPUT_PRICE;
@@ -410,9 +438,9 @@ async function main(): Promise<void> {
   await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   const wallMs = Date.now() - t0;
 
-  const rows = todo.map((t) => done.get(t.id)).filter((r): r is Row => !!r);
+  const rows = asked.map((t) => done.get(t.id)).filter((r): r is Row => !!r);
   const md = report(rows, { removed, unreadable, wallMs, answerer: which, options: Object.keys(criteria).length });
-  writeFileSync(path.join(out, `report.${which}.${options}.md`), md);
+  writeFileSync(path.join(out, `report.${suffix}${sample > 0 ? `.n${sample}` : ""}.md`), md);
   console.log(md);
   console.error(`calls this run: ${pending.length - failed} answered, ${failed} failed; wall ${(wallMs / 1000).toFixed(1)}s; total spend $${spent.toFixed(4)}`);
   if (failed > 0) process.exitCode = 1;

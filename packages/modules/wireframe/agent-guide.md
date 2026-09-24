@@ -47,7 +47,11 @@ bar, tab bar) stays.
   about them (phase 6), so a maybe is often wanted: look at each one and
   **keep (📐) what belongs** — an unkept maybe is only a screen on the
   canvas, never in `wire links`, the arrows or the prototype. Every
-  composed screen's spec carries `need`, round 1's P(yes) for it.
+  composed screen's spec carries `need`, round 1's P(yes) for it, and
+  `by` — who drew it: `{ actor: {id, name}, answerer: "jev" | "stub" |
+  "agent", via?: "home", model? }` — so a later reader (or a keep that
+  labels a decision) knows whether Jev chose it or the stub threw dice. A
+  variation carries its screen's answerer and the actor who asked for it.
 - **Variations come at the end of every flow**, in the same op group:
   under each screen, up to two siblings titled `<Screen> · <what flipped>`
   (`List · data table instead of stacked list`, `Detail · without button
@@ -72,7 +76,12 @@ bar, tab bar) stays.
   take it off with `isocan wire unkeep <items...>`; unmarked siblings stay on
   the canvas. `isocan wire kept` lists the kept screens in reading order
   (rows top to bottom, each left to right). A variation can be kept. People
-  do the same from the item menu (📐 Keep / Unkeep) or ⇧K.
+  do the same from the item menu (📐 Keep / Unkeep) or ⇧K. `isocan wire
+  kept --prototype <item>` lists only the screens that prototype plays, in
+  its order — its flow's kept screens and any guest kept in another flow;
+  it is what a person sees when they select the prototype on the canvas
+  (its screens pulse, then stay outlined, and everything else dims — their
+  view only, nothing is written).
 - **Links are computed, never stored.** `isocan wire links [screen]` prints
   where every hotspot on the kept screens goes, worked out each time from
   intents, archetypes and reading order: an intent with a target goes to the
@@ -107,13 +116,18 @@ bar, tab bar) stays.
   screen, the hotspot pointed out — what an arrow's *Play from here* opens;
   it writes nothing.
 - `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`
-  when more than one flow is kept) as **one self-contained HTML item** to the
-  right of them — inside the canvas group the kept screens share, when they
-  share one: every screen, a router with a history stack, the links as
-  click targets, a push / pop / fade / slide-up by link kind, a Restart. Run
-  it again after a kept screen changes and the same item **gains a version**
-  (found by its `wirePrototype` property); with nothing changed it writes
-  nothing. `isocan open <item>` plays it full screen.
+  when more than one flow is kept) as **one self-contained HTML item**
+  centred **above** them, clear of the arrows' lanes and of anything already
+  there (higher still if it must be) — inside the canvas group the kept
+  screens share, when they share one: every screen, a router with a history
+  stack, the links as click targets, a push / pop / fade / slide-up by link
+  kind, a Restart. Run it again after a kept screen changes and the same
+  item **gains a version** (found by its `wirePrototype` property); with
+  nothing changed it writes nothing. A rebuild (this, `wire style`, `wire
+  flesh`, `wire render --all`) also moves it back above its flow, in the
+  same op group — unless it was moved by hand: `wirePrototypeAt` records
+  where it was placed, and a prototype standing anywhere else stays put.
+  `isocan open <item>` plays it full screen.
 - **Wires draw in the canvas's design system.** The look is a theme over
   the same spec: eleven roles (`ground`, `surface`, `line`, `ink`,
   `ink-muted`, `bar`, `primary`, `on-primary`, `radius`, `font`, `space`),
@@ -166,9 +180,19 @@ bar, tab bar) stays.
   all show the same content. One op group, a version per wire whose content
   changed; running it again asks nothing and writes nothing; `--bars` goes
   back to bars. Blueprints stay blue and unfilled. A kept flow's prototype
-  is rebuilt in the same group. `isocan wire "<request>" --flesh [--pack
-  <id>]` composes a flow that arrives fleshed (the pack is asked beside
-  round 1). People do the same with `/wire flesh` in the Chat.
+  is rebuilt in the same group. People do the same with `/wire flesh` in
+  the Chat.
+- **A composed flow arrives fleshed.** `isocan wire "<request>"` (and
+  `/wire <request>`) asks for the pack beside round 1 — one call more — so
+  the screens land blue, then grey (round 2), then filled (round 3), all in
+  the flow's one op group: one `isocan undo` takes the flow back, content
+  and all. Its variations, and later `wire vary`'s, take the same pack.
+  `--pack <id>` picks the pack without asking; `isocan wire --basic
+  "<request>"` (`/wire basic <request>` in the Chat) composes plain grey
+  wires with no content, and `wire flesh --bars` takes content off
+  afterwards. A pack that cannot be chosen leaves the flow in bars and says
+  so. The agent path (`--answerer agent`) fills nothing: once your rounds
+  are answered, `isocan wire flesh --flow <id>` does.
 - `isocan wire copy <screen>` prints a fleshed screen's words as JSON —
   per slot, each word by path (`items.0.title`, `stats.1.value`,
   `labels.2`). Edit the words, then `isocan wire copy <screen> --apply
