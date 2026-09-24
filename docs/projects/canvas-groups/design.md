@@ -381,9 +381,18 @@ metadata. Callers cannot supply authoritative frozen version/blob records.
 An unchanged-context comment edit preserves its previous manifest; an explicit
 new context request replaces it at one writer revision.
 
-The browser sends its preview revision. A changed revision refuses the send
-and refreshes the preview instead of silently sending a different set. CLI
-callers may omit that expectation to resolve at the current writer revision.
+~~The browser sends its preview revision. A changed revision refuses the send
+and refreshes the preview instead of silently sending a different set.~~
+**Reversed 23 Sep 2026 (Dion: "the user should never have to do any of this
+refresh context stuff").** On a canvas where wires fill in and agents work, a
+revision check against any landed operation refused nearly every message, and
+people met "refresh the context before sending". The browser now omits the
+expectation, like the CLI: the preview follows the canvas (it rebuilds shortly
+after the canvas moves), and the writer freezes the context at the revision
+the message lands at — which the sent comment shows, so what an agent reads is
+still exact and visible. The writer's check stays for any caller that passes
+`expectedRevision` explicitly. CLI callers may omit that expectation to
+resolve at the current writer revision.
 Live context reads expose a complete manifest and revision-bound paging;
 saved-message reads and their content pages use the frozen comment record,
 never today's membership. Excluded entries remain visible in the manifest,

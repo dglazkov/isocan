@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MessageContextPreview } from "../src/components/GroupContext.tsx";
+import { messageContextRequest } from "../src/lib/messagecontext.ts";
 
 /**
  * **The message-context controls appear only when they can do something.**
@@ -9,7 +10,8 @@ import { MessageContextPreview } from "../src/components/GroupContext.tsx";
  * The preview above a composer (what a message carries when items are
  * selected) always rendered two controls — "Include excluded items for this
  * message" and "Refresh context" — as bare browser defaults, whether anything
- * was excluded or the preview was behind. Reported 23 Sep 2026 as "bad layout,
+ * was excluded or the preview was behind. The same day Refresh went entirely:
+ * the preview follows the canvas and a message carries no revision. Reported 23 Sep 2026 as "bad layout,
  * and what even is it?". The real component is rendered here; no manifest is
  * given, so only the controls are under test.
  */
@@ -30,14 +32,21 @@ describe("message context controls", () => {
     expect(html).not.toContain("excluded");
   });
 
-  it("offers Refresh only when the preview is behind the canvas, beside the reason", () => {
+  it("asks nothing when the preview is behind the canvas — it rebuilds itself", () => {
     const html = render({ stale: true });
-    expect(html).toContain("The canvas changed since this preview.");
-    expect(html).toMatch(/class="message-context-action"[^>]*>Refresh</);
+    expect(html).not.toContain("Refresh");
+    expect(html).not.toContain("changed since");
   });
 
-  it("offers Refresh when the preview failed to load", () => {
-    expect(render({ error: "home unreachable" })).toContain("The preview did not load.");
+  it("offers Try again only when the preview failed to load", () => {
+    const html = render({ error: "home unreachable" });
+    expect(html).toContain("The preview did not load.");
+    expect(html).toMatch(/class="message-context-action"[^>]*>Try again</);
+  });
+
+  it("sends roots and the override, never a revision the home could refuse over", () => {
+    expect(messageContextRequest(["itm_a", "itm_b"], true)).toEqual({ rootIds: ["itm_a", "itm_b"], includeExcluded: true });
+    expect(messageContextRequest(["itm_a"], false)).not.toHaveProperty("expectedRevision");
   });
 
   it("offers the override only when something is excluded, and says how many", () => {

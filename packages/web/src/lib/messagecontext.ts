@@ -9,7 +9,20 @@ export function messageContextRoots(canvas: CanvasContents | null, body: string,
   return [...new Set([...attached, ...(canvas ? extractItemRefs(body, collectItemRefCandidates(canvas)) : [])])];
 }
 
-/** A preview stays fixed while the canvas changes; refreshing is an explicit review step. */
+/**
+ * **The preview follows the canvas; nobody refreshes it.**
+ *
+ * It used to stay fixed while the canvas changed, and every message carried
+ * the preview's revision as `expectedRevision`, which the home refuses if ANY
+ * operation landed since — on a canvas where wires fill in and agents work,
+ * nearly always. People saw "refresh the context before sending" and lost the
+ * message (Dion, 23 Sep 2026: "the user should never have to do any of this
+ * refresh context stuff"). Now the preview rebuilds itself shortly after the
+ * canvas moves, and a message sends its roots and override only: the home
+ * freezes the context at the moment the message lands, and that frozen
+ * manifest is what the sent comment shows ("Frozen when sent"). The home's
+ * revision check remains for callers that ask for it explicitly.
+ */
 export function useMessageContext(canvasId: string, roots: string[]) {
   const mode = useCanvasStore((state) => state.project?.groupMode);
   const lastSeq = useCanvasStore((state) => state.lastSeq);
@@ -31,8 +44,21 @@ export function useMessageContext(canvasId: string, roots: string[]) {
   }, [key, enabled]);
   const manifest = enabled && loaded?.key === key ? loaded.manifest : null;
   const error = failure?.key === key ? failure.message : null;
-  const request: NewComment["contextRequest"] = manifest ? { rootIds: [...roots], includeExcluded, expectedRevision: manifest.revision } : undefined;
-  return { enabled, manifest, request, includeExcluded, setIncludeExcluded, refresh, error, loading: enabled && !manifest && !error, stale: Boolean(manifest && lastSeq > manifest.revision) };
+  const request = manifest ? messageContextRequest(roots, includeExcluded) : undefined;
+  const stale = Boolean(manifest && lastSeq > manifest.revision);
+  // Rebuild quietly once the canvas has settled for a moment, so a canvas that
+  // writes every second is not asked for a manifest every second.
+  useEffect(() => {
+    if (!stale) return;
+    const timer = setTimeout(refresh, 600);
+    return () => clearTimeout(timer);
+  }, [stale, lastSeq, refresh]);
+  return { enabled, manifest, request, includeExcluded, setIncludeExcluded, refresh, error, loading: enabled && !manifest && !error, stale };
+}
+
+/** What a message asks the home to freeze: its roots and the person's override — never a revision to be refused over. */
+export function messageContextRequest(roots: readonly string[], includeExcluded: boolean): NonNullable<NewComment["contextRequest"]> {
+  return { rootIds: [...roots], includeExcluded };
 }
 
 /** Attach only a request: persisted IDs and versions must be supplied by the writer. */

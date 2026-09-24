@@ -3,6 +3,7 @@ import type { ContextContentPage, ContextManifest } from "@isocan/core";
 import { fetchContextContent, fetchContextManifest } from "../lib/api.ts";
 import { downloadItem } from "../lib/itemactions.ts";
 import type { useMessageContext } from "../lib/messagecontext.ts";
+import { useCanvasStore } from "../stores/canvasStore.ts";
 
 /** Complete identity and version disclosure is paged text, never a tree of content previews. */
 export function ContextManifestView({ manifest, comment, initiallyOpen = false }: { manifest: ContextManifest; comment?: { threadId: string; commentId: string }; initiallyOpen?: boolean }) {
@@ -70,6 +71,14 @@ export function LiveContextInspection({ canvasId, rootIds }: { canvasId: string;
   const [manifest, setManifest] = useState<ContextManifest | null>(null);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  // It follows the canvas, like the composer's preview: re-read once the
+  // canvas has settled for a moment, never on a button a person must find.
+  const lastSeq = useCanvasStore((state) => state.lastSeq);
+  useEffect(() => {
+    if (!manifest || lastSeq <= manifest.revision) return;
+    const timer = setTimeout(() => setRefresh((value) => value + 1), 600);
+    return () => clearTimeout(timer);
+  }, [lastSeq, manifest]);
   const key = JSON.stringify([canvasId, rootIds]);
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +91,6 @@ export function LiveContextInspection({ canvasId, rootIds }: { canvasId: string;
     <h3>{rootIds ? "Group context" : "Pinned context"}</h3>
     {error && <p role="alert">{error}</p>}
     {manifest ? <ContextManifestView key={`${key}:${refresh}`} manifest={manifest} /> : !error && <p>Loading complete context…</p>}
-    <button type="button" onClick={() => setRefresh((value) => value + 1)}>Refresh context</button>
   </section>;
 }
 
@@ -94,12 +102,14 @@ export function MessageContextPreview({ context }: { context: ReturnType<typeof 
     {context.error && <p role="alert">{context.error}</p>}
     {context.manifest && <ContextManifestView key={`${context.manifest.revision}:${context.includeExcluded}:${context.manifest.rootIds.join(",")}`} manifest={context.manifest} />}
     {/* Each control appears only when it can do something: the override when
-        something is excluded, Refresh when the preview is behind or failed.
+        something is excluded, Try again when the preview failed to load.
         Both used to render always, as bare browser defaults, and read as noise
         under every message that carried a selection. */}
-    {(context.stale || context.error) && <p className="message-context-note">
-      {context.stale ? "The canvas changed since this preview." : "The preview did not load."}{" "}
-      <button type="button" className="message-context-action" onClick={context.refresh}>Refresh</button>
+    {/* The preview rebuilds itself when the canvas moves; only a failed load
+        asks anything of the person. */}
+    {context.error && <p className="message-context-note">
+      The preview did not load.{" "}
+      <button type="button" className="message-context-action" onClick={context.refresh}>Try again</button>
     </p>}
     {((context.manifest?.counts.excluded ?? 0) > 0 || context.includeExcluded) && <label className="message-context-note">
       <input type="checkbox" checked={context.includeExcluded} onChange={(event) => context.setIncludeExcluded(event.target.checked)} />
