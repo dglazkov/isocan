@@ -21,6 +21,22 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 24 September 2026
+
+- **Writes to hosted canvases no longer stall.** Every ten minutes this machine
+  checks that a hosted canvas's files are at its home, and that check used to
+  hold every change you made, on every canvas, until it finished — minutes, on
+  a canvas with a lot of pictures. It now runs beside your work instead.
+- **Headings in big text stay big.** A `#` heading in a text item is sized
+  from the item's own text, so at the largest size it is larger than the words
+  under it, and the box grows to hold it.
+- **Choose a design system from the canvas.** Right-click a DESIGN.md → *Use as
+  design system* (or *Use as this group's design system*), and *Stop using* to
+  undo it. `isocan design use` does the same from the terminal.
+- **Wireframes draw the maybes.** A screen Jev isn't sure your app needs is
+  still drawn, with a dashed outline and a *maybe* tag; keep it (⇧K) and the
+  mark goes. Arrow labels no longer sit on top of each other.
+
 ## 23 September 2026
 
 - **Wireframes.** Type `/wire` and what you want in the Chat — *a
