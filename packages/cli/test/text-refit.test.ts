@@ -85,25 +85,24 @@ function holds(got: { width: number; height: number }, body: string, style: Text
 }
 
 describe("restyling a caption by property", () => {
-  it("grows the box to the new step and face, at every size, on a group canvas", async () => {
-    const id = await canvas("Acme restyle");
-    const looks: [TextStyle, TextFace][] = [
-      ["heading", "sans"],
-      ["title", "sans"],
-      ["display", "sans"],
-      ["heading", "serif"],
-      ["title", "hand"],
-    ];
-    let y = 0;
-    for (const [style, face] of looks) {
-      const node = await text(id, `0,${y}`, SENTENCE);
-      const born = await box(id, node);
-      holds(born, SENTENCE, "body");
-      await ok("--canvas", id, "set", node, "--prop", `textStyle=${style}`, ...(face === "sans" ? [] : ["--prop", `textFace=${face}`]));
-      const after = await box(id, node);
-      holds(after, SENTENCE, style, face);
-      y += after.height + 200;
-    }
+  // One case per look, not one loop: each is four CLI spawns, and twenty-one
+  // in a single case ran past 30 s on a loaded CI shard (24 Sep 2026) —
+  // a test that was slow, not a product that was wrong.
+  const looks: [TextStyle, TextFace][] = [
+    ["heading", "sans"],
+    ["title", "sans"],
+    ["display", "sans"],
+    ["heading", "serif"],
+    ["title", "hand"],
+  ];
+  let restyle: Promise<string> | undefined;
+  it.each(looks)("grows the box to %s/%s, on a group canvas", async (style, face) => {
+    const id = await (restyle ??= canvas("Acme restyle"));
+    const node = await text(id, `0,${looks.findIndex(([s, f]) => s === style && f === face) * 800}`, SENTENCE);
+    const born = await box(id, node);
+    holds(born, SENTENCE, "body");
+    await ok("--canvas", id, "set", node, "--prop", `textStyle=${style}`, ...(face === "sans" ? [] : ["--prop", `textFace=${face}`]));
+    holds(await box(id, node), SENTENCE, style, face);
   });
 
   it("grows on a legacy canvas too, and never shrinks when the step comes back down", async () => {
