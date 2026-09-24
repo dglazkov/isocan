@@ -206,9 +206,9 @@ produced for free.
 - **2026-09-23** — Round 1's *leave-out* rule is wrong in kind. Jev's p ranks archetypes (the curve rises monotonically) but is overconfident by ~0.4 everywhere, and no cut reaches 60% accuracy — so p can order screens, not exclude them. Round 1 should over-include (top-k, or a 0.3 floor) and let keep/unkeep prune, which is what phase 2 built them for.
 - **2026-09-23** — The failures are shape-siblings (gallery/list/feed, sign-in/welcome/sign-up, menu/home), and the options Jev sees are component-id recipes. Rewording each archetype in plain words is the cheapest next measurement (~$0.08 a run, the script already exists) and may be most of the fix.
 - **2026-09-23** — A flat stub is perfectly calibrated (ECE 0.001) and useless (3%): ECE is never a gate on its own, only beside accuracy.
-- **2026-09-23** — Open: round 1's cut — change `yes ≥ 0.5` to over-include (top-k or a 0.3 floor), re-measured against this script. Owed to a follow-up phase.
-- **2026-09-23** — Open: keep marks are not yet calibration labels (11 kept, one tied to a single decision). `WireSpec` needs who answered (`by`) and round 1's P(yes) on each screen so every future kept variation labels one decision.
-- **2026-09-23** — Open: re-run the calibration with plain-words archetype options before changing anything else.
+- **2026-09-23** — Answered 24 Sep (`12992559`; the 0.3 floor re-measured with plain words stands: 0.3–0.5 right 28–37%, as often as 0.5–0.7). Was: round 1's cut — change `yes ≥ 0.5` to over-include (top-k or a 0.3 floor), re-measured against this script. Owed to a follow-up phase.
+- **2026-09-23** — Answered 24 Sep (`need` in `12992559`, `by` on the spec in `c6d98510` — every future keep labels a decision with who made it). Was: keep marks are not yet calibration labels (11 kept, one tied to a single decision). `WireSpec` needs who answered (`by`) and round 1's P(yes) on each screen so every future kept variation labels one decision.
+- **2026-09-23** — Answered 24 Sep (350 screens, words beat ids on every accuracy measure by 1–5 points at 17–20% fewer tokens, ECE unchanged ~0.35; kept, and not significant alone). Was: re-run the calibration with plain-words archetype options before changing anything else.
 
 ## Phase 7 — Fleshed out
 
@@ -244,8 +244,8 @@ survives `wire style`, variations and `wire prototype`.
 - **2026-09-23** — Item *k* of a flow is built from the flow id and *k*, so the same "Returns batch 70" is the list's first row, the detail's heading and the prototype's — the detail always agrees with the row that opened it. That consistency, more than the words, is what makes a fleshed flow read as an app.
 - **2026-09-23** — Jev's pack p is 1.00 on 11 of 12 requests; the 0.4 floor catches the stub, not Jev. `--pack` is the real override.
 - **2026-09-23** — The lazy wireframes chunk grew ~92 KB (pack data), first paint unchanged. If it matters, the packs become their own chunk.
-- **2026-09-23** — Open: a flesh or restyle writes only where the spec changed, so a renderer change never reaches screens already on a canvas. A "re-render" verb is owed before renderer changes ship (phase 8's title/frame change needs it).
-- **2026-09-23** — Open: the walk canvas fleshed on isocan.io after a promotion (proof 3).
+- **2026-09-23** — Answered 24 Sep (phase 8: `wire render --all` / `/wire rerender`). Was: a flesh or restyle writes only where the spec changed, so a renderer change never reaches screens already on a canvas. A "re-render" verb is owed before renderer changes ship (phase 8's title/frame change needs it).
+- **2026-09-23** — Answered 24 Sep (phase 7 closed on the isocan.io walk, 23 Sep). Was: the walk canvas fleshed on isocan.io after a promotion (proof 3).
 
 ## Phase 8 — From real use: true arrows, just the screen, and what people tripped on
 
@@ -314,5 +314,9 @@ AA contrast; moving a DESIGN.md into a group says it changes what it governs.
 - **2026-09-23** — Answered 24 Sep (`8549e905`: set, import and use print what now governs). Was: `design set` still prints no "this now governs…" note (it lives in `packages/cli/src/main.ts`); `mv --in` and `canvas group add/remove` do.
 - **2026-09-23** — Answered 24 Sep (`f0493f68`: em headings, and core's estimate measures them; lesson #96). Was: text-item headings are fixed px (18/15/13.5) against a 16–128 px body, so a large text node's heading is smaller than its body; the fix is em sizes together with the heading size `core/textnode.ts` assumes.
 - **2026-09-23** — Answered 24 Sep (`7cdb3890`: `placeLabels` gives each label the zoom it shows from; the longer run keeps its place). Was: on the isocan.io walk two jump labels ("Home", "Row") on adjacent lanes overlapped — label placement checks the run's length, not its neighbours'. Labels want a collision pass.
-- **2026-09-24** — Open: an unkept *maybe* between kept screens turns their neighbour arrows into jumps over it; worth watching on a real flow. The 0.3 floor came from a which-archetype question, not round 1's yes/no — re-measure once plain-words options land.
+- **2026-09-24** — A composed flow arrives fleshed: Dion ran `/wire` on isocan.io expecting content and got grey bars. One more Jev call (the pack, asked beside round 1), inside the flow's op group; `/wire basic` / `--basic` opts out, `--flesh` stays for old scripts.
+- **2026-09-24** — Plain-words archetype options kept on measurement (350 labelled screens, +1–5 points, −17–20% tokens), but they are not the fix: the misses are still shape-siblings (sign-in → welcome, list → settings), and calibration did not move.
+- **2026-09-24** — The prototype sits above its flow and returns there on rebuild unless moved by hand (`wirePrototypeAt`); a selected prototype lights its screens, `wire kept --prototype` answers the same for agents. Underlays gained the viewer's selection.
+- **2026-09-24** — The module's property keys left the first-paint record — the web never read them — which is what paid for the placement property and the selection fact under CEILING.
+- **2026-09-24** — Answered 24 Sep (the floor half: re-measured with plain words, it stands. The arrow half stays open:). Was: an unkept *maybe* between kept screens turns their neighbour arrows into jumps over it; worth watching on a real flow. The 0.3 floor came from a which-archetype question, not round 1's yes/no — re-measure once plain-words options land.
 - **2026-09-23** — Open: a touch long-press on an arrow may open the canvas menu (the shell's cancel check matches only real buttons and links), and hotspot positions are unverified on an item resized away from its document size.
