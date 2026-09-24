@@ -1,4 +1,5 @@
 import { wireframeModule } from "./record.ts";
+import { wireframeCore } from "./command.ts";
 
 /**
  * **Wireframes** (`docs/projects/wireframes/design.md`).
@@ -41,6 +42,6 @@ export { PACKS, PACK_BY_ID, PACK_IDS, GENERIC_PACK } from "./content/packs.ts";
 export { FIRST_NAMES, type Pack, type Metric } from "./content/pack.ts";
 export { PICTOGRAM_IDS, hasPictogram, pictogram } from "./content/pictograms.ts";
 export * from "./flesh.ts";
-export { wireframeModule };
+export { wireframeModule, wireframeCore };
 
-export default wireframeModule;
+export default wireframeCore;

@@ -501,6 +501,12 @@ export interface UnderlayFacts {
   /** The live drag, so a line can ride the gesture before the replica moves. */
   drag: { itemIds: readonly string[]; dx: number; dy: number } | null;
   /**
+   * **This viewer's selection** (wireframes, 24 Sep 2026) — one person's,
+   * never the canvas's, so what an underlay does with it is transient and
+   * writes nothing: a selected prototype lights the screens it plays.
+   */
+  selection?: readonly string[] | undefined;
+  /**
    * **A blob of this canvas, as text** (wireframes phase 5) — for an underlay
    * whose lines are computed from what a file SAYS rather than from item
    * metadata: the wireframe arrows between kept screens read each screen's

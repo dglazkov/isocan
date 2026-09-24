@@ -1,10 +1,11 @@
 import type { Command } from "commander";
-import { newGroupId, type CanvasContents } from "@isocan/core";
+import { newGroupId, type CanvasContents, type Item } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { cliPort } from "./cli-port.ts";
 import { FlowCanvas, addVariations, wiresOn } from "./flow.ts";
 import { KEEP_EMOJI, isKept, keepPatch, keepable, kept } from "./keep.ts";
 import { PROTOTYPE_PROP } from "./prototype.ts";
+import { prototypeScreens } from "./kept-flows.ts";
 import { wireTitle } from "./spec.ts";
 import { DEFAULT_VARIATIONS, decisions, flipWords, honestFlips, VARIATION_FLOOR } from "./vary.ts";
 
@@ -111,12 +112,24 @@ export function registerVary(host: CliHost, wire: Command): void {
     .command("kept")
     .description(`List the kept screens (${KEEP_EMOJI}) in reading order — rows top to bottom, each left to right`)
     .option("--canvas <canvas>")
+    .option("--prototype <item>", "only the screens this prototype plays, in its order — its flow's kept screens and any guest from another flow (what selecting it lights on the canvas)")
     .action(
-      run(async (_opts: unknown, cmd: Command) => {
+      run(async (opts: { prototype?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);
-        const list = kept(snapshot.canvas as CanvasContents);
+        const canvas = snapshot.canvas as CanvasContents;
+        let list = kept(canvas);
+        if (opts.prototype !== undefined) {
+          const proto = resolveItem(snapshot, opts.prototype) as Item;
+          if (proto.properties?.[PROTOTYPE_PROP] === undefined) throw new Error(`${proto.id} is not a prototype — \`isocan ls --filter Prototype\` finds them`);
+          const port = cliPort(host, ctx, p.id);
+          list = prototypeScreens(canvas, proto, await wiresOn(port, canvas));
+          if (!ctx.json && list.length === 0) {
+            console.log(`nothing prototype ${proto.id} plays is kept any more — keep its screens (${KEEP_EMOJI}) and \`isocan wire prototype\` rebuilds it`);
+            return;
+          }
+        }
         if (ctx.json) return printJson(list.map((i, n) => ({ n: n + 1, itemId: i.id, title: i.title })));
         if (list.length === 0) {
           console.log(`nothing is kept — \`isocan wire keep <items...>\` marks screens ${KEEP_EMOJI}`);

@@ -58,6 +58,19 @@ export function keptFlowsOf(canvas: CanvasContents, screens: ReadonlyArray<{ ite
   return all;
 }
 
+/**
+ * **The screens a prototype plays**, in its order: the kept screens of the
+ * flow it names (`wirePrototype`), guests from another flow included — what a
+ * selected prototype lights on the canvas and `wire kept --prototype` lists.
+ * Worked out from what is kept now, as the prototype's next rebuild would be,
+ * so a screen kept since the last build counts. Empty when nothing of its flow is kept.
+ */
+export function prototypeScreens(canvas: CanvasContents, prototype: Item, screens: ReadonlyArray<{ item: string; spec: WireScreen["spec"] }>): Item[] {
+  const flow = prototype.properties?.[PROTOTYPE_PROP];
+  if (flow === undefined) return [];
+  return keptFlowsOf(canvas, screens).find((f) => f.flow === flow)?.items ?? [];
+}
+
 /** The one kept flow a command means: the named one, or the only one — else a refusal that lists them. */
 export function pickKeptFlow(flows: KeptFlow[], wanted: string | undefined, flag = "--flow"): KeptFlow {
   if (flows.length === 0) throw new Error("nothing is kept — `isocan wire keep <screens...>` marks the screens a prototype plays");

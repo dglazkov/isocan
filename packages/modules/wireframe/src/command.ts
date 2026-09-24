@@ -1,5 +1,5 @@
 import type { CoreModule, SlashCommand } from "@isocan/core";
-import { wireframeModule } from "./record.ts";
+import { KEEP_PROP, MAYBE_PROP, wireframeModule } from "./record.ts";
 
 /**
  * **`/wire`** — local on the web (it opens the Wireframes dialog, which runs
@@ -36,5 +36,17 @@ Post ONE comment saying what landed: how many screens, which answered, and
 that one undo takes it back.`,
 };
 
-/** The record with the command's skill — what both loaded halves register. */
-export const wireframeCore: CoreModule = { ...wireframeModule, commands: [WIRE_COMMAND] };
+/**
+ * The record with the command's skill and the property keys it owns — what
+ * both loaded halves register. The keys live here rather than on the record
+ * first paint carries (`record.ts`) because nothing on the web reads them:
+ * they are the CLI's manifest and the daemon's, forever, and namespaced.
+ * `wireLinks` (a person's overrides, links.ts — since phase 8 one
+ * `wireLink:<hotspot>` each, link-override.ts), `wirePrototype`
+ * (prototype.ts) and `wirePrototypeAt` (kept-flows.ts) are spelled out.
+ */
+export const wireframeCore: CoreModule = {
+  ...wireframeModule,
+  propertyKeys: [KEEP_PROP, MAYBE_PROP, "wireLinks", "wireLink:*", "wirePrototype", "wirePrototypeAt"],
+  commands: [WIRE_COMMAND],
+};

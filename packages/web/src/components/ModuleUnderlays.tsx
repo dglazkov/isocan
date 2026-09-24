@@ -32,6 +32,7 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   const past = useCanvasStore((s) => s.past !== null && s.past !== undefined);
   const drag = useUiStore((s) => s.drag);
+  const selection = useUiStore((s) => s.selectedItemIds);
   const canEdit = useCanEdit();
   const host = useMemo(() => lazyHost(canvasId, actor, canEdit), [canvasId, actor, canEdit]);
   const navigate = useNavigate();
@@ -44,6 +45,7 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
     presentation: presentation?.items,
     activateItem,
     drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null,
+    selection,
     readText: (hash: string) => fetchBlobText(canvasId, hash),
     host,
     canEdit: canEdit && !past,

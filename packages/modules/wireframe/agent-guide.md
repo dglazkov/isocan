@@ -72,7 +72,12 @@ bar, tab bar) stays.
   take it off with `isocan wire unkeep <items...>`; unmarked siblings stay on
   the canvas. `isocan wire kept` lists the kept screens in reading order
   (rows top to bottom, each left to right). A variation can be kept. People
-  do the same from the item menu (📐 Keep / Unkeep) or ⇧K.
+  do the same from the item menu (📐 Keep / Unkeep) or ⇧K. `isocan wire
+  kept --prototype <item>` lists only the screens that prototype plays, in
+  its order — its flow's kept screens and any guest kept in another flow;
+  it is what a person sees when they select the prototype on the canvas
+  (its screens pulse, then stay outlined, and everything else dims — their
+  view only, nothing is written).
 - **Links are computed, never stored.** `isocan wire links [screen]` prints
   where every hotspot on the kept screens goes, worked out each time from
   intents, archetypes and reading order: an intent with a target goes to the

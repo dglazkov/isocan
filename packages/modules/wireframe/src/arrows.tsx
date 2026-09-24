@@ -37,6 +37,8 @@ import type { WireSpec } from "./spec.ts";
  */
 
 const specs = new Map<string, WireSpec | null>();
+/** A kept screen's spec by its version's hash, as the arrows have read it — null: not a wire; undefined: not read yet. */
+export const cachedSpec = (hash: string): WireSpec | null | undefined => specs.get(hash);
 /**
  * The name strip files rendered before phase 8 drew above the device frame,
  * in px. Today's renderer draws none (`CAPTION_HEIGHT` is 0), but screens

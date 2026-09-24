@@ -24,10 +24,10 @@ export const MAYBE_PROP = "wireMaybe";
 // `fidelity` is core's FIDELITY_PROP, spelled out: importing the constant pulls
 // all of `design-scope.ts` into the entry chunk (+592 bytes, measured), and a
 // test holds the two equal (`test/vary.test.ts`).
+// The property keys it owns are not here: first paint never reads them, so they ride
+// `wireframeCore` (command.ts), which the CLI and the lazy web half register (24 Sep 2026).
 export const wireframeModule: CoreModule = {
   name: "@isocan/wireframe",
-  // `wireLinks` (a person's overrides, links.ts — since phase 8 one `wireLink:<hotspot>` each, link-override.ts) and `wirePrototype` (prototype.ts) are spelled out too.
-  propertyKeys: [KEEP_PROP, MAYBE_PROP, "wireLinks", "wireLink:*", "wirePrototype", "wirePrototypeAt"],
   // A prototype is lit on the hovered minimap (phase 8): the one item on a busy canvas you can play.
   spotlights: ["wirePrototype"],
   marks: [{ property: KEEP_PROP, emoji: KEEP_EMOJI, title: "Kept", on: "Keep", off: "Unkeep", key: "K", offeredOn: { fidelity: "wireframe" } }],

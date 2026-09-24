@@ -268,6 +268,17 @@ describe("isocan wire prototype", () => {
     expect(proto().y).toBe(3000);
   });
 
+  it("wire kept --prototype lists the screens it plays, in its order, and refuses what is not a prototype", async () => {
+    const h = harness();
+    await h.cli("wire", "prototype");
+    const proto = [...h.items.values()].find((i) => i.properties[PROTOTYPE_PROP])!;
+    const printed = await h.cli("wire", "kept", "--prototype", proto.id);
+    expect(h.errors).toEqual([]);
+    expect(printed.split("\n").map((l) => l.trim().split(/\s+/)[2])).toEqual(["it_signin", "it_home", "it_list", "it_detail"]);
+    await h.cli("wire", "kept", "--prototype", "it_home");
+    expect(h.errors.at(-1)).toMatch(/it_home is not a prototype/);
+  });
+
   it("goes higher when something already stands over the row, and overlaps nothing", async () => {
     const h = harness();
     // A tall note right where the prototype would go.
