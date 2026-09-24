@@ -125,6 +125,45 @@
   transform-origin: 50% 100%;
 }
 
+/* A maybe (maybe-marks.tsx): round 1 was unsure the screen is needed, and
+   nobody has kept it. Drawn OUTSIDE the screen, under the items: a dashed
+   outline 5 screen px beyond the item's edge, and a tag sitting just above
+   its top edge, right-aligned clear of the version badge. The blueprint's
+   blue, because dashed blue is how a wire says optional and undecided. The
+   tag fades out where the top edge cannot hold the item's title strip, the
+   tag and the badge together: --w is the item's width in world units,
+   --need the room in screen px. */
+.wire-maybe {
+  position: absolute;
+  pointer-events: none;
+  border-radius: calc(10px / var(--scale, 1));
+  outline: calc(2px / var(--scale, 1)) dashed #2f6fed;
+  outline-offset: calc(5px / var(--scale, 1));
+}
+.wire-maybe-anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform: scale(calc(1 / var(--scale, 1)));
+  transform-origin: 0 0;
+  opacity: clamp(0, calc(var(--w) * var(--scale, 1) - var(--need)), 1);
+}
+.wire-maybe-tag {
+  position: absolute;
+  right: 40px;
+  bottom: 8px;
+  font: 600 10px/1 system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #2f6fed;
+  background: var(--ground);
+  border: 1px dashed #2f6fed;
+  border-radius: 9px;
+  padding: 3px 8px;
+}
+
 /* The selected arrow's toolbar, counter-scaled above its label. */
 .wire-arrow-bar {
   position: absolute;

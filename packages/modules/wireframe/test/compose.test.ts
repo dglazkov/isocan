@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { FIDELITY_PROP, applyOperation, invertOperation, type CanvasState, type Operation } from "@isocan/core";
 import {
-  HEADER_OPTIONS, JEV_URL, NAV_OPTIONS, RECIPES, applyProps, applyPropsRound, applyStructure, navOwners, propsRequests, blueprint, component, decideFlow, flowRequest, flowScreen,
+  HEADER_OPTIONS, JEV_URL, MAYBE_FLOOR, MAYBE_PROP, assemblePrototype, keepPatch, maybeItems, maybeMarked, maybeProperties, NAV_OPTIONS, NEEDS_YES, RECIPES, applyProps, applyPropsRound, applyStructure, navOwners, propsRequests, blueprint, component, decideFlow, flowRequest, flowScreen,
   jevAnswerer, pendingRound, presentElements, propsRequest, readResponse, recipe, renderWire, requestBlueprint, responseProblems,
   structureRequest, stubAnswerer, validateWire, wireframe,
   type Answerer, type JevRequest, type JevResponse, type WireSpec,
@@ -87,9 +90,15 @@ describe("round 1: the flow", () => {
         if (slot.block !== null) expect(["header", "nav"]).toContain(region);
       }
     }
-    // Yes at 0.5 or more, and only for a recipe that draws on the platform.
-    for (const a of flow.archetypes) expect(a.p).toBeGreaterThanOrEqual(0.5);
-    for (const d of flow.declined) expect(d.why === "platform" || d.p < 0.5).toBe(true);
+    // Yes at 0.5 or more; a maybe from the floor up to it, marked on its spec; only for a recipe that draws on the platform.
+    for (const a of flow.archetypes) {
+      expect(a.p).toBeGreaterThanOrEqual(MAYBE_FLOOR);
+      expect(a.maybe === true).toBe(a.p < NEEDS_YES);
+      const spec = flowScreen(a.id, REQUEST, "grp_acme", flow);
+      expect(spec.need).toBe(a.p);
+      expect(spec.maybe === true).toBe(a.p < NEEDS_YES);
+    }
+    for (const d of flow.declined) expect(d.why === "platform" || d.p < MAYBE_FLOOR).toBe(true);
   });
 
   it("starts from one blueprint titled with the request, drawn before any answer", () => {
@@ -348,3 +357,86 @@ function fakeFlow(needs: Record<string, number>, platform: string, nav: string, 
     },
   } as JevResponse;
 }
+
+describe("round 1 over-includes, and keep prunes (phase 6's reading)", () => {
+  // What Jev answered on 23 Sep for Acme Couriers: confirm 0.36 and welcome 0.42 sat under the old 0.5 cut.
+  const fixture = JSON.parse(readFileSync(fileURLToPath(new URL("./fixtures/jev-acme-couriers.json", import.meta.url)), "utf8")) as { request: string; round1: JevResponse };
+  const req = flowRequest(fixture.request);
+  const flow = decideFlow(req, readResponse(req, fixture.round1));
+  const byId = new Map(flow.archetypes.map((a) => [a.id, a]));
+
+  it("a borderline screen is now drawn, in its running place, and marked maybe", () => {
+    // Scanning the parcel at the door wants a confirm; the old cut left it out.
+    for (const [id, p] of [["confirm", 0.36], ["welcome", 0.42]] as const) {
+      expect(byId.get(id)).toEqual({ id, p, maybe: true });
+      const spec = flowScreen(id, fixture.request, "flw_acme", flow);
+      expect(spec).toMatchObject({ maybe: true, need: p });
+      expect(validateWire(spec)).toEqual([]);
+      // The item says so (the property the canvas marks it by); the screen's own file draws no mark, so nothing covers its content.
+      expect(maybeProperties(spec)).toEqual({ [MAYBE_PROP]: p.toFixed(2) });
+      expect(renderWire(spec)).not.toMatch(/maybe-tag|data-maybe|wire-maybe/);
+    }
+    // Running order: the maybes sit where their archetypes do, not at the end.
+    const order = flow.archetypes.map((a) => RECIPES.findIndex((r) => r.id === a.id));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(flow.archetypes[0]!.id).toBe("welcome");
+  });
+
+  it("a confident screen is unchanged: the same screens at ≥ 0.5 as before, unmarked, and the floor still declines", () => {
+    expect(flow.archetypes.filter((a) => !a.maybe).map((a) => a.id)).toEqual(["sign-in", "verify", "home", "list", "detail", "form", "state"]);
+    const list = flowScreen("list", fixture.request, "flw_acme", flow);
+    expect(list.maybe).toBeUndefined();
+    expect(list.need).toBe(0.92);
+    expect(maybeProperties(list)).toEqual({});
+    // Everything else about the confident screen is what round 1 drew with the maybes left out: `need` is the only new field.
+    const { need: _need, ...rest } = list;
+    const without = { ...flow, archetypes: flow.archetypes.filter((a) => !a.maybe) };
+    const { need: _was, ...was } = flowScreen("list", fixture.request, "flw_acme", without);
+    expect(rest).toEqual(was);
+    // Under 0.3, still declined: sign-up 0.19, onboarding 0.27, search 0.27.
+    for (const id of ["sign-up", "onboarding", "search", "gallery", "legal"]) expect(flow.declined.find((d) => d.id === id)?.why).toBe("no");
+    expect(flow.archetypes.every((a) => a.p >= MAYBE_FLOOR)).toBe(true);
+  });
+
+  it("a kept maybe plays in the prototype as any screen does — the marker is on the canvas, not in the flow", () => {
+    const o = { request: fixture.request, flow: "flw_acme" };
+    const confirm: WireSpec = { ...wireframe("confirm", o), maybe: true, need: 0.36 };
+    const html = assemblePrototype([{ id: "it_list", title: "List", spec: wireframe("list", o) }, { id: "it_confirm", title: "Confirm", spec: confirm }], []);
+    expect(html).not.toMatch(/maybe-tag|data-maybe|wire-maybe/);
+  });
+
+  it("keeping a maybe clears its mark, unkeeping brings it back — keep stays one op, one undo, and the maybe is never written again", () => {
+    const actor = { id: "usr_acme", name: "Acme" };
+    const canvasId = "prj_acme";
+    let seq = 0;
+    const apply = (state: CanvasState | null, op: Operation) => applyOperation(state, { id: `op_${++seq}`, canvasId, actor, ts: "2026-09-24T00:00:00.000Z", op })!;
+    const spec = flowScreen("confirm", fixture.request, "flw_acme", flow);
+    // What the composer's item.add carries for a maybe.
+    let state = apply(null, { type: "project.create", canvasId, title: "Acme" });
+    state = apply(state, {
+      type: "item.add", itemId: "itm_confirm", title: "Confirm", width: 390, height: 844, placement: { x: 0, y: 0, chosen: true },
+      properties: { [FIDELITY_PROP]: "wireframe", ...maybeProperties(spec) },
+      version: { id: "ver_confirm", blobHash: "hash_confirm", mimeType: "text/html", filename: "confirm.html", size: 1 },
+    });
+    const item = () => state.canvas.items.itm_confirm!;
+    expect(maybeMarked(item())).toBe(true);
+    expect(maybeItems(state.canvas).map((i) => i.id)).toEqual(["itm_confirm"]);
+    // Keep: exactly the one item.update `wire keep` and ⇧K send — nothing about the maybe in it.
+    const keep: Operation = { type: "item.update", itemId: "itm_confirm", patch: keepPatch(true) };
+    expect(JSON.stringify(keep)).not.toContain(MAYBE_PROP);
+    const undoKeep = invertOperation(state, keep)!;
+    state = apply(state, keep);
+    expect(maybeMarked(item())).toBe(false);
+    expect(maybeItems(state.canvas)).toEqual([]);
+    // The maybe is still on the item — the mark is derived, not erased.
+    expect(item().properties?.[MAYBE_PROP]).toBe("0.36");
+    // One undo of the keep brings the mark back.
+    state = apply(state, undoKeep);
+    expect(maybeMarked(item())).toBe(true);
+    // And so does unkeep, after a second keep.
+    state = apply(state, keep);
+    expect(maybeMarked(item())).toBe(false);
+    state = apply(state, { type: "item.update", itemId: "itm_confirm", patch: keepPatch(false) });
+    expect(maybeMarked(item())).toBe(true);
+  });
+});

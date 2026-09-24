@@ -33,6 +33,21 @@ bar, tab bar) stays.
   post your ONE comment saying what landed. The last line says who answered, the latency
   per round, calls, input tokens and cost. `--save <dir>` keeps every
   round's request and response; `--at x,y` starts the row somewhere.
+- **Round 1 over-includes; keep prunes.** An archetype the answerer gives
+  P(yes) ≥ 0.5 is a screen of the flow; one from 0.3 up to 0.5 is drawn
+  too, in its running place in the row, but marked **maybe**: the item
+  carries `wireMaybe=<p>` (set by the op that adds it), its spec `"maybe":
+  true`, and its title reads `(maybe)` in the lines and the Chat record.
+  The canvas draws a dashed blue outline round it and a *maybe* tag above
+  its top edge — outside the screen, never over it — **while it is not
+  kept**: keeping it is the answer, so the mark goes; unkeep and it
+  returns. A maybe gets no variations until someone keeps it (`wire vary`
+  draws them).
+  Under 0.3 it is declined. Jev ranks screens well and is overconfident
+  about them (phase 6), so a maybe is often wanted: look at each one and
+  **keep (📐) what belongs** — an unkept maybe is only a screen on the
+  canvas, never in `wire links`, the arrows or the prototype. Every
+  composed screen's spec carries `need`, round 1's P(yes) for it.
 - **Variations come at the end of every flow**, in the same op group:
   under each screen, up to two siblings titled `<Screen> · <what flipped>`
   (`List · data table instead of stacked list`, `Detail · without button

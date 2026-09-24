@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FIDELITY_PROP, type Operation } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import wireframeCli from "../src/cli.ts";
-import { RECIPES, readWire, stubAnswerer, validateWire, type RoundFile, type WireSpec } from "../src/core.ts";
+import { MAYBE_PROP, RECIPES, maybeMarked, readWire, stubAnswerer, validateWire, type RoundFile, type WireSpec } from "../src/core.ts";
 
 /**
  * **`isocan wire "<request>"` against a canvas held in memory.**
@@ -185,7 +185,12 @@ describe('isocan wire "<request>"', () => {
       // A screen either has siblings under it or says it has no honest alternative — never both, never neither.
       const mine = variants.filter((v) => h.specOf(v.id).variantOf === item.id).length;
       expect(mine <= 2).toBe(true);
-      expect(spec.varied === "none").toBe(mine === 0);
+      // A maybe waits for its keep before it is varied.
+      if (spec.maybe) expect(mine).toBe(0);
+      else expect(spec.varied === "none").toBe(mine === 0);
+      // And the item says it is a maybe — set by the composer's own ops, which the canvas marks until it is kept.
+      expect(item.properties[MAYBE_PROP]).toBe(spec.maybe ? spec.need!.toFixed(2) : undefined);
+      expect(maybeMarked(item)).toBe(spec.maybe === true);
     }
     // In a row, in the archetypes' running order.
     const byX = [...screens].sort((a, b) => a.x - b.x).map((i) => RECIPES.findIndex((r) => r.id === h.specOf(i.id).archetype));
@@ -193,7 +198,7 @@ describe('isocan wire "<request>"', () => {
     expect(new Set(screens.map((i) => i.y)).size).toBe(1);
     expect(printed).toContain("before any answer");
     expect(printed).toContain("answering with the stub (seed 4) — no TYPESAFE_API_KEY here");
-    expect(printed).toMatch(/\d+ screens, one op group — answered by stub \(seed 4\) · round 1 \d+ ms · round 2 \d+ ms · round 3 \d+ ms · \d+ calls · 0 input tokens · \$0\.000000/);
+    expect(printed).toMatch(/\d+ screens(?: \(\d+ maybe\))?, one op group — answered by stub \(seed 4\) · round 1 \d+ ms · round 2 \d+ ms · round 3 \d+ ms · \d+ calls · 0 input tokens · \$0\.000000/);
   });
 
   it("says which answerer answered, and refuses Jev without a key rather than drawing random screens under its name", async () => {

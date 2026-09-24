@@ -42,6 +42,18 @@ export interface WireSpec {
    */
   varied?: "none";
   /**
+   * Round 1's P(yes) for this screen's archetype — "does the request need
+   * one?" — on every screen of a composed flow, so a keep or an unkeep labels
+   * the decision it answers (phase 6). Absent on a hand-drawn spec.
+   */
+  need?: number;
+  /**
+   * On a screen round 1 was unsure the request needs (`need` between
+   * `MAYBE_FLOOR` and `NEEDS_YES`): drawn in the row all the same, with a
+   * dashed blue outline and a *maybe* tag, for the person's keep to settle.
+   */
+  maybe?: true;
+  /**
    * Optional sections an answerer declined, with the probability it gave
    * leaving them out and the block that would have filled them. Absent from
    * `slots` still means declined; this is what lets a variation put one back.
@@ -357,6 +369,8 @@ export function validateWire(input: unknown): string[] {
     }
   }
   if (spec.varied !== undefined && spec.varied !== "none") problems.push(`varied must be "none" when present`);
+  if (spec.need !== undefined && !(typeof spec.need === "number" && spec.need >= 0 && spec.need <= 1)) problems.push("need must be 0–1");
+  if (spec.maybe !== undefined && spec.maybe !== true) problems.push("maybe must be true when present");
   if (spec.variantOf !== undefined && typeof spec.variantOf !== "string") problems.push("variantOf must be an item id");
   if (spec.flip !== undefined && (typeof spec.flip !== "object" || !spec.flip || ![spec.flip.slot, spec.flip.from, spec.flip.to].every((v) => typeof v === "string"))) {
     problems.push("flip must be { slot, from, to }");

@@ -4,6 +4,7 @@ import type { DialogFacts, UnderlayFacts, WebModule } from "@isocan/core";
 import { WireArrows } from "./arrows.tsx";
 import { wireframeCore } from "./command.ts";
 import { WireDialog } from "./dialog.tsx";
+import { WireMaybes } from "./maybe-marks.tsx";
 import { PROTOTYPE_PROP } from "./prototype.ts";
 
 /**
@@ -13,9 +14,19 @@ import { PROTOTYPE_PROP } from "./prototype.ts";
  * dialog (the composer, the prototype, the restyle — the CLI's own code over
  * the dialog's host) and the arrows between kept screens.
  */
+/** One underlay slot (its predicate is `activation.ts`'s): the maybe marks, then the arrows between kept screens. */
+function WireUnderlay(facts: UnderlayFacts) {
+  return (
+    <>
+      <WireMaybes canvas={facts.canvas} drag={facts.drag} />
+      <WireArrows {...facts} />
+    </>
+  );
+}
+
 export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never, never, never, ComponentType<DialogFacts>> = {
   core: wireframeCore,
-  underlays: [WireArrows],
+  underlays: [WireUnderlay],
   dialogs: [{ id: "wire", title: "Wireframes", component: WireDialog }],
   // ⌘K: find the prototypes on a busy canvas (phase 8) — a door, not a write: it opens `/wire prototypes`.
   actions: [{

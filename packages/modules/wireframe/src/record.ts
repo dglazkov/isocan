@@ -3,6 +3,8 @@ import type { CoreModule } from "@isocan/core";
 /** The keep mark (design §6): a property, as a slide is — anybody can take it off. */
 export const KEEP_PROP = "wireKeep";
 export const KEEP_EMOJI = "📐";
+/** A screen round 1 was unsure of (its P(yes), as text), set by the `item.add` that draws it; the canvas marks it while it is not kept. */
+export const MAYBE_PROP = "wireMaybe";
 
 /**
  * **The record both surfaces register** — and nothing else, on purpose.
@@ -25,7 +27,7 @@ export const KEEP_EMOJI = "📐";
 export const wireframeModule: CoreModule = {
   name: "@isocan/wireframe",
   // `wireLinks` (a person's overrides, links.ts — since phase 8 one `wireLink:<hotspot>` each, link-override.ts) and `wirePrototype` (prototype.ts) are spelled out too.
-  propertyKeys: [KEEP_PROP, "wireLinks", "wireLink:*", "wirePrototype"],
+  propertyKeys: [KEEP_PROP, MAYBE_PROP, "wireLinks", "wireLink:*", "wirePrototype"],
   // A prototype is lit on the hovered minimap (phase 8): the one item on a busy canvas you can play.
   spotlights: ["wirePrototype"],
   marks: [{ property: KEEP_PROP, emoji: KEEP_EMOJI, title: "Kept", on: "Keep", off: "Unkeep", key: "K", offeredOn: { fidelity: "wireframe" } }],

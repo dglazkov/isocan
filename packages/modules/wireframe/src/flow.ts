@@ -14,6 +14,7 @@ import { DEFAULT_VARIATIONS, honestFlips, variations } from "./vary.ts";
 import { choosePack, flagPack, packLine, type PackChoice } from "./content/choose.ts";
 import { fleshSpec, seedKey } from "./content/flesh-spec.ts";
 import { packOf } from "./content/fill.ts";
+import { maybeProperties } from "./maybe.ts";
 
 /**
  * **A flow, composed in rounds, drawn in place** — the composer both
@@ -109,7 +110,8 @@ export class FlowCanvas {
       height,
       placement: placement as never,
       title: wireTitle(spec),
-      properties: { [FIDELITY_PROP]: "wireframe" },
+      // A maybe says so in the op that draws it; the canvas marks it until it is kept (maybe.ts).
+      properties: { [FIDELITY_PROP]: "wireframe", ...maybeProperties(spec) },
       ...(into ?? {}),
     });
     const landed = at ?? (placement as { x?: number; y?: number });
@@ -120,7 +122,14 @@ export class FlowCanvas {
   async write(screen: Screen, given: WireSpec): Promise<Screen> {
     const spec = this.styled(given, screen.item);
     await this.send({ type: "item.addVersion", itemId: screen.item, version: await this.version(spec) });
-    if (wireTitle(spec) !== wireTitle(screen.spec)) await this.send({ type: "item.update", itemId: screen.item, patch: { title: wireTitle(spec) } });
+    // The request's blueprint becomes round 1's first screen in place: if that screen is a maybe, its
+    // property rides the same update as its new title — still the composer's act, never a second write.
+    const maybe = maybeProperties(spec);
+    const retitled = wireTitle(spec) !== wireTitle(screen.spec);
+    const newlyMaybe = spec.maybe === true && !screen.spec.maybe;
+    if (retitled || newlyMaybe) {
+      await this.send({ type: "item.update", itemId: screen.item, patch: { ...(retitled ? { title: wireTitle(spec) } : {}), ...(newlyMaybe ? { properties: maybe } : {}) } });
+    }
     const { width, height } = wireSize(spec);
     if (width !== screen.width || height !== screen.height) await this.send({ type: "item.resize", itemId: screen.item, width, height });
     return { ...screen, spec, width, height };
@@ -196,8 +205,16 @@ export async function ask(answerer: Answerer, round: 1 | 2 | 3, calls: RoundCall
 
 const pct = (p: number | undefined) => (p === undefined ? "—" : p.toFixed(2));
 
+/** What a maybe screen's line says: round 1 was unsure, and the keep decides. */
+export const MAYBE_WORDS = "maybe — round 1 was unsure it is needed; keep it (📐) or leave it";
+
+/** A flow's screens by title, a maybe marked — the Chat record's and the CLI's list. */
+export function screenTitles(screens: readonly Pick<Screen, "spec">[]): string {
+  return screens.map((s) => `${s.spec.title}${s.spec.maybe ? " (maybe)" : ""}`).join(" · ");
+}
+
 function describeFlow(d: FlowDecision): string {
-  const chosen = d.archetypes.map((a) => `${a.id} ${pct(a.p)}`).join(", ");
+  const chosen = d.archetypes.map((a) => `${a.id} ${pct(a.p)}${a.maybe ? " (maybe)" : ""}`).join(", ");
   const declined = d.declined.map((a) => `${a.id} ${pct(a.p)}${a.why === "platform" ? ` (not on ${d.platform})` : ""}`).join(", ");
   return (
     `flow: ${d.platform} ${pct(d.distributions.platform[d.platform])} · nav ${d.chrome.nav} ${pct(d.distributions.nav[d.chrome.nav])}` +
@@ -230,7 +247,7 @@ export async function applyRound(
       const prev = out[out.length - 1]!;
       out.push(await canvas.add(spec, { x: prev.x + prev.width + GAP, y: prev.y, chosen: true }));
     }
-    out.forEach((s, i) => say(screenLine(s, `p(yes) ${pct(decision.archetypes[i]!.p)}`)));
+    out.forEach((s, i) => say(screenLine(s, `p(yes) ${pct(decision.archetypes[i]!.p)}${s.spec.maybe ? ` · ${MAYBE_WORDS}` : ""}`)));
     return out;
   }
   const specs = round === 2
@@ -243,6 +260,11 @@ export async function applyRound(
   if (round === 3) {
     // Variations close the flow, in its op group: one undo still takes it all back.
     for (const s of out) {
+      // A maybe waits for its keep before it is varied: over-including is cheap only while each maybe is one screen.
+      if (s.spec.maybe) {
+        say(screenLine(s, "maybe — no variations until it is kept (`wire vary` draws them)"));
+        continue;
+      }
       const made = await addVariations(canvas, s, [], DEFAULT_VARIATIONS);
       say(screenLine(s, s.spec.varied === "none" ? "one way to draw this" : `${made.length} variation${made.length === 1 ? "" : "s"}`));
       for (const v of made) say(`  ${screenLine(v, "")}`);
@@ -426,9 +448,9 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
 }
 
 /** The closing line of a flow, for a person. */
-export function costLine(tallies: readonly RoundTally[], by: string, screens: number): string {
+export function costLine(tallies: readonly RoundTally[], by: string, screens: number, maybe = 0): string {
   const tokens = tallies.reduce((s, t) => s + t.inputTokens, 0);
   const calls = tallies.reduce((s, t) => s + t.calls, 0);
   const rounds = tallies.map((t) => `round ${t.round} ${t.ms} ms`).join(" · ");
-  return `${screens} screens, one op group — answered by ${by} · ${rounds} · ${calls} calls · ${tokens.toLocaleString("en-US")} input tokens · $${(tokens * JEV_INPUT_PRICE).toFixed(6)}`;
+  return `${screens} screens${maybe ? ` (${maybe} maybe)` : ""}, one op group — answered by ${by} · ${rounds} · ${calls} calls · ${tokens.toLocaleString("en-US")} input tokens · $${(tokens * JEV_INPUT_PRICE).toFixed(6)}`;
 }

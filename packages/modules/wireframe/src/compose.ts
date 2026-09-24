@@ -93,11 +93,36 @@ export function flowRequest(request: string): JevRequest {
   return { model: JEV_MODEL, state: { request }, questions };
 }
 
+/**
+ * **Round 1's cut: over-include, and let keep prune** (phase 6's reading).
+ *
+ * Jev's P(yes) ranks screens but is overconfident by ~0.4, so it can order
+ * them and cannot exclude them. An archetype at or over `NEEDS_YES` is a
+ * screen the flow needs; one at or over `MAYBE_FLOOR` and under it is still
+ * drawn, in its running place in the row, but marked **maybe** (`maybe` on
+ * the spec: a dashed blue outline and a *maybe* tag) — the person's keep
+ * (📐) decides whether it is in the flow, as it already decides for every
+ * other screen. Under the floor, declined.
+ *
+ * The floor is set from phase 6's recorded answers (Enrico's 1,318 screens,
+ * the 20-option run with whole distributions): an option Jev gave 0.3–0.5
+ * was the screen's true archetype 25–34% of the time (lenient 32–42%), no
+ * worse than one it gave 0.5–0.7 (31%, lenient 38%); under 0.3 the rate
+ * falls off (0.2–0.3: 23%, 0.1–0.2: 17%). Moving the cut from 0.5 to 0.3
+ * admitted the true archetype on 45.5% of screens instead of 36.6%, for
+ * 0.31 more options per screen. That is a choice over archetypes for one
+ * screen, not round 1's yes/no over a request, so the transfer is an
+ * assumption, and the number is the one the data could support rather than
+ * one it measured for this question.
+ */
+export const NEEDS_YES = 0.5;
+export const MAYBE_FLOOR = 0.3;
+
 export interface FlowDecision {
   platform: Platform;
   chrome: WireChrome;
-  /** Chosen archetypes in running order, each with P(yes). */
-  archetypes: Array<{ id: string; p: number }>;
+  /** Chosen archetypes in running order, each with P(yes); `maybe` between `MAYBE_FLOOR` and `NEEDS_YES`. */
+  archetypes: Array<{ id: string; p: number; maybe?: true }>;
   /** Asked and answered no, or answered yes for a platform the recipe cannot draw. */
   declined: Array<{ id: string; p: number; why: "no" | "platform" }>;
   distributions: { platform: Record<string, number>; nav: Record<string, number>; header: Record<string, number> };
@@ -114,15 +139,15 @@ export function decideFlow(req: JevRequest, res: JevResponse): FlowDecision {
   for (const r of RECIPES) {
     const yes = (res.answers[`needs:${r.id}`] as Extract<JevAnswer, { type: "noul" }>).noul;
     if (!best || yes > best.p) best = { id: r.id, p: yes };
-    if (yes < 0.5) declined.push({ id: r.id, p: yes, why: "no" });
+    if (yes < MAYBE_FLOOR) declined.push({ id: r.id, p: yes, why: "no" });
     else if (!platformFor(r, platform.value as Platform)) declined.push({ id: r.id, p: yes, why: "platform" });
-    else archetypes.push({ id: r.id, p: yes });
+    else archetypes.push({ id: r.id, p: yes, ...(yes < NEEDS_YES ? { maybe: true as const } : {}) });
   }
-  // A flow of nothing is not an answer: the most likely archetype stands alone.
+  // A flow of nothing is not an answer: the most likely archetype stands alone — still a maybe, if that is what it is.
   if (archetypes.length === 0 && best) {
     const r = recipe(best.id);
     if (platformFor(r, platform.value as Platform)) {
-      archetypes.push(best);
+      archetypes.push({ ...best, ...(best.p < NEEDS_YES ? { maybe: true as const } : {}) });
       declined.splice(declined.findIndex((d) => d.id === best!.id), 1);
     }
   }
@@ -180,7 +205,13 @@ export function flowScreen(archetype: string, request: string, flow: string, dec
       ...(alternatives.length ? { alternatives } : {}),
     });
   }
-  return { ...spec, slots, round: 1, chrome: decision.chrome };
+  // Round 1's P(yes) rides on every screen (phase 6: a kept screen labels the decision), and a maybe says so.
+  const asked = decision.archetypes.find((a) => a.id === archetype);
+  return {
+    ...spec, slots, round: 1, chrome: decision.chrome,
+    ...(asked ? { need: asked.p } : {}),
+    ...(asked?.maybe ? { maybe: true as const } : {}),
+  };
 }
 
 // ---------- round 2: structure

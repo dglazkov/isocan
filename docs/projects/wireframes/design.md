@@ -48,6 +48,8 @@ interface WireSpec {
   platform: "app" | "web" | "site";
   slots: WireSlot[];        // in recipe order
   variantOf?: string;       // item id of the screen this varies
+  need?: number;            // round 1's P(yes) for this archetype (§4)
+  maybe?: true;             // round 1 was unsure: drawn, marked until kept
 }
 interface WireSlot {
   slot: string;             // "app-bar", "main", "tab-bar", …
@@ -104,7 +106,16 @@ the request and the previous answers, calls within a round in parallel:
 
 1. **Flow** — which archetypes the request needs (one yes/no each), the
    platform, the nav pattern, the header alternative. Fixes the chrome for
-   every screen, so a flow is coherent.
+   every screen, so a flow is coherent. It **over-includes and lets keep
+   prune** (phase 6: Jev's P(yes) orders screens but is overconfident by
+   ~0.4, so it cannot exclude them): P(yes) ≥ 0.5 is a screen of the flow,
+   0.3 up to 0.5 is drawn in its running place marked *maybe* (`maybe` on
+   the spec, `wireMaybe` on the item from the op that adds it; the canvas
+   draws a dashed blue outline and tag outside the screen while it is not
+   kept, so keeping it clears the mark with no second write; no variations
+   until kept), and
+   under 0.3 is declined. Every screen records its P(yes) as `need`, so a
+   keep or an unkeep labels the decision it answers.
 2. **Structure**, per screen — each optional slot (yes/no), each block choice.
 3. **Props and intents**, per screen — each chosen block's enums, flags,
    counts, and each actionable element's intent (filtered to the intents that

@@ -5,7 +5,8 @@ import type { CanvasContents, DialogHost, Item, Operation } from "@isocan/core";
 import wireframeCli from "../src/cli.ts";
 import { keptArrows } from "../src/arrows.tsx";
 import { composeOnWeb, fleshOnWeb, modeOf } from "../src/dialog.tsx";
-import { KEEP_PROP, homeAnswerer, homeOrStub, readWire, renderWire, stubAnswerer, wireframe, type WireSpec } from "../src/core.ts";
+import { WireMaybes } from "../src/maybe-marks.tsx";
+import { KEEP_PROP, MAYBE_PROP, homeAnswerer, homeOrStub, readWire, renderWire, stubAnswerer, wireframe, type WireSpec } from "../src/core.ts";
 import { wireframeActivation } from "../src/activation.ts";
 import wireframeWeb from "../src/web.tsx";
 
@@ -315,6 +316,34 @@ describe("the doors", () => {
     expect(wireframeWeb.core.commands?.[0]?.body).toContain("isocan wire");
     expect(wireframeWeb.dialogs?.map((d) => d.id)).toEqual(wireframeActivation.dialogs.map((d) => d.id));
     expect(wireframeWeb.underlays).toHaveLength(wireframeActivation.underlays.length);
+  });
+});
+
+describe("the maybe marks", () => {
+  const item = (id: string, props: Record<string, string>, x = 0): Item => ({ id, title: "Confirm", x, y: 0, width: 390, height: 844, properties: { fidelity: "wireframe", ...props } }) as unknown as Item;
+  const canvasOf = (...items: Item[]) => ({ items: Object.fromEntries(items.map((i) => [i.id, i])) }) as unknown as CanvasContents;
+
+  it("draw outside an unkept maybe — an outline on its bounds and a tag anchored at its top edge — and nothing once it is kept", async () => {
+    const lib = "react-dom/server";
+    const { renderToStaticMarkup } = (await import(lib)) as { renderToStaticMarkup: (el: unknown) => string };
+    const { createElement } = await import("react");
+    const draw = (canvas: CanvasContents) => renderToStaticMarkup(createElement(WireMaybes, { canvas, drag: null }));
+    const html = draw(canvasOf(item("itm_confirm", { [MAYBE_PROP]: "0.36" }, 470)));
+    expect(html).toContain('data-wire-maybe="itm_confirm"');
+    // The outline sits on the item's own box (the stylesheet offsets it outward); the tag's anchor is the item's top-right corner, and the tag rises above it.
+    expect(html).toMatch(/class="wire-maybe" style="left:470px;top:0;width:390px;height:844px"/);
+    expect(html).toMatch(/class="wire-maybe-anchor" style="left:860px;top:0;/);
+    expect(html).toContain(">maybe</span>");
+    expect(draw(canvasOf(item("itm_confirm", { [MAYBE_PROP]: "0.36", [KEEP_PROP]: "yes" })))).toBe("");
+    expect(draw(canvasOf(item("itm_list", {})))).toBe("");
+  });
+
+  it("the underlay is fetched for an unkept maybe alone, and not for a kept one", () => {
+    const needed = wireframeActivation.underlays[0]!.needed;
+    expect(needed(canvasOf(item("a", { [MAYBE_PROP]: "0.36" })))).toBe(true);
+    expect(needed(canvasOf(item("a", { [MAYBE_PROP]: "0.36", [KEEP_PROP]: "yes" })))).toBe(false);
+    expect(needed(canvasOf(item("a", { [KEEP_PROP]: "yes" }), item("b", { [KEEP_PROP]: "yes" })))).toBe(true);
+    expect(needed(canvasOf(item("a", {})))).toBe(false);
   });
 });
 

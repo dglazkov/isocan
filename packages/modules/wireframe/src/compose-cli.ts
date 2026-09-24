@@ -119,7 +119,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
             answerer: composed.by,
             firstBlueprintMs: composed.firstMs,
             totalMs: composed.totalMs,
-            screens: composed.screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots, ...(s.spec.varied ? { varied: s.spec.varied } : {}) })),
+            screens: composed.screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots, ...(s.spec.varied ? { varied: s.spec.varied } : {}), ...(s.spec.need !== undefined ? { need: s.spec.need } : {}), ...(s.spec.maybe ? { maybe: true } : {}) })),
             variations: composed.variants.map((v) => ({ itemId: v.item, title: wireTitle(v.spec), variantOf: v.spec.variantOf, flip: v.spec.flip })),
             rounds: tallies,
             style: composed.style ?? { source: "default" },
@@ -129,7 +129,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
             cost: (tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens) * JEV_INPUT_PRICE,
           });
         }
-        say(costLine(tallies, composed.by, composed.screens.length) + ` · ${composed.totalMs} ms in all — \`isocan undo\` takes the whole flow back`);
+        say(costLine(tallies, composed.by, composed.screens.length, composed.screens.filter((s) => s.spec.maybe).length) + ` · ${composed.totalMs} ms in all — \`isocan undo\` takes the whole flow back`);
       }),
     );
 }

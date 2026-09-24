@@ -4,7 +4,7 @@ import { chatRecordOp } from "./chat.ts";
 import { PROTOTYPE_PROP } from "./prototype.ts";
 import { rerender, rerenderSummary } from "./rerender.ts";
 import { isNoJudge } from "./answerer.ts";
-import { composeFlow, costLine, wiresOn } from "./flow.ts";
+import { composeFlow, costLine, screenTitles, wiresOn } from "./flow.ts";
 import { keptFlowsOf, writePrototype, type KeptFlow } from "./kept-flows.ts";
 import { StyleResolver, restyle, restyleSummary } from "./restyle.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
@@ -168,10 +168,12 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
         host.reveal([itemId]);
         host.close();
       });
-      const cost = costLine(composed.tallies, composed.by, composed.screens.length);
+      const maybe = composed.screens.filter((s) => s.spec.maybe).length;
+      const cost = costLine(composed.tallies, composed.by, composed.screens.length, maybe);
       host.notice(`${cost} — one undo takes the whole flow back`);
       const made = composed.variants.length ? `, and ${composed.variants.length} variation${composed.variants.length === 1 ? "" : "s"}` : "";
-      record(host, composed.flow, [`composed "${m.request}": ${composed.screens.map((s) => s.spec.title).join(" · ")}${made}.`, `${cost} — one undo takes the whole flow back.`], composed.screens.map((s) => s.item));
+      const unsure = maybe ? ` The ${maybe === 1 ? "screen" : "screens"} marked maybe ${maybe === 1 ? "is" : "are"} ones round 1 was unsure the request needs: keep (📐) what belongs.` : "";
+      record(host, composed.flow, [`composed "${m.request}": ${screenTitles(composed.screens)}${made}.${unsure}`, `${cost} — one undo takes the whole flow back.`], composed.screens.map((s) => s.item));
       host.reveal([...composed.screens, ...composed.variants].map((s) => s.item));
     } else if (m.kind === "prototype") {
       await runPrototype();

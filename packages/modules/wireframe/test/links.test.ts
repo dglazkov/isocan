@@ -257,7 +257,8 @@ describe("on a real Jev flow (the phase-2 fixture, replayed)", () => {
   const fixture = JSON.parse(readFileSync(fileURLToPath(new URL("./fixtures/jev-acme-couriers.json", import.meta.url)), "utf8")) as Fixture;
   const req1 = flowRequest(fixture.request);
   const decision = decideFlow(req1, readResponse(req1, fixture.round1));
-  let specs = decision.archetypes.map((a) => flowScreen(a.id, fixture.request, "flw_acme", decision));
+  // Rounds 2 and 3 were recorded for the screens round 1 admitted at the old 0.5 cut; its maybe screens (welcome 0.42, confirm 0.36) were never asked.
+  let specs = decision.archetypes.filter((a) => !a.maybe).map((a) => flowScreen(a.id, fixture.request, "flw_acme", decision));
   const titles = specs.map((s) => s.title);
   specs = specs.map((spec, i) => {
     const req = structureRequest(spec, titles);
