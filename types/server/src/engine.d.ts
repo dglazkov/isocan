@@ -644,6 +644,20 @@ export declare class Engine {
      * deliberately NOT an Operation: nothing about the canvas changes. It is
      * two copies of the same content-addressed bytes being made to agree, which
      * is why it is safe to run at any time and safe to run twice.
+     *
+     * **Only the listing is taken on the single-writer chain; the asking is
+     * not.** It used to run whole inside `enqueue`, which held every write on
+     * the machine — every canvas, every home — behind one HEAD request per
+     * blob. The blob keeper runs this for every replica canvas every ten
+     * minutes, and one isocan.io canvas of 1,450 blobs at ~171 ms a question
+     * held the chain for ~4 minutes at a time: `isocan set` and `wire link` on an
+     * isocan.io canvas sat waiting for a sweep they had nothing to do with,
+     * and every home link's dial (which waits on `settled()`) logged "a dial
+     * has been unfinished for over 30s" on every canvas at once. Nothing below
+     * the listing writes this daemon's state — the uploads go to the home,
+     * content-addressed and idempotent — so nothing below it needs the chain.
+     * A blob the GC takes between the listing and its upload is garbage by
+     * definition, and is skipped the same way a blob gone locally always was.
      */
     reconcileBlobs(canvasId: string, options: {
         push: boolean;
