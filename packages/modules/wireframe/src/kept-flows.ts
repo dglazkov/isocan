@@ -94,3 +94,28 @@ export async function writePrototype(
   }, group);
   return { itemId, title, links, what: "added" };
 }
+
+/**
+ * **Rebuild the prototypes a change touched** — every kept flow that already
+ * has a prototype and one of whose screens is in `changed`, in the caller's
+ * group, so one undo takes the change and its prototype back together. What
+ * `wire style` and `wire flesh` both do after writing their versions.
+ */
+export async function rebuildPrototypes(
+  port: WirePort,
+  canvas: CanvasContents,
+  all: ReadonlyArray<{ item: string; spec: WireScreen["spec"] }>,
+  changed: ReadonlyArray<{ item: string; spec: WireScreen["spec"] }>,
+  group: string,
+): Promise<Array<{ itemId: string; what: string }>> {
+  const out: Array<{ itemId: string; what: string }> = [];
+  const touched = new Set(changed.map((s) => s.spec.flow));
+  const now = all.map((s) => changed.find((c) => c.item === s.item) ?? s);
+  for (const flow of keptFlowsOf(canvas, now)) {
+    if (!touched.has(flow.flow)) continue;
+    if (!Object.values(canvas.items).some((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow)) continue;
+    const written = await writePrototype(port, canvas, flow, group);
+    out.push({ itemId: written.itemId, what: written.what });
+  }
+  return out;
+}

@@ -19,6 +19,10 @@ screen by hand, and never write its copy yourself unless asked.
   some first with \`isocan wire keep <screens…>\` if nothing is kept).
 - \`/wire style\` → \`isocan wire style\`; \`/wire style --default\` →
   \`isocan wire style --default\`.
+- \`/wire flesh\` → \`isocan wire flesh\` (sample content instead of grey bars;
+  \`/wire flesh --pack <id>\` and \`/wire flesh --bars\` pass through). Exact
+  words for a screen are \`isocan wire copy <screen>\`, edited, then
+  \`isocan wire copy <screen> --apply <file>\` — only when asked for copy.
 
 Post ONE comment saying what landed: how many screens, which answered, and
 that one undo takes it back.`,

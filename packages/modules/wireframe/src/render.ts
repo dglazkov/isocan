@@ -18,7 +18,9 @@ import { themeDecls, type WireStyle } from "./theme.ts";
  * - **Wire**, for a chosen block: drawn from the theme's roles (`theme.ts`) —
  *   by default the greyscale of the design-competition IDEO pack, or the
  *   governing design system's tokens once `wire style` has mapped them; real
- *   labels on actionable elements, from their intents; bars for body copy.
+ *   labels on actionable elements, from their intents; bars for body copy —
+ *   or, on a fleshed screen (design §10), each slot's `fill`: sample words,
+ *   numbers and pictograms, drawn in the same roles.
  *
  * The file is self-contained — no font, script or stylesheet it has to
  * fetch — and carries its own spec, so it outlives the module that drew it.
@@ -290,6 +292,76 @@ body{font:14px/1.4 var(--w-font);color:var(--w-ink);padding:0}
 .dlist>div{padding:8px 0;border-bottom:1px solid var(--w-surface)}
 .dlist.inline>div{display:flex;gap:16px;align-items:center}
 .dlist.inline>div .bar{flex:none}
+.tx{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.35}
+span.tx{display:inline}
+.tx.k{font-weight:650;font-size:15px;color:var(--w-ink)}
+.tx.k.wrap{white-space:normal}
+.tx.meta{font-size:12.5px;color:var(--w-ink-muted)}
+.tx.meta.r{flex:none;margin-left:6px}
+.tx.body{white-space:normal;font-size:14px;line-height:1.45;color:var(--w-ink-muted)}
+.tx.body.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tx.title{white-space:normal;font-weight:700;font-size:20px;line-height:1.25;color:var(--w-ink);margin:4px 0 2px}
+.tx.big{font-weight:750;font-size:24px;color:var(--w-ink);letter-spacing:-.01em}
+.tx.lbl{font-size:12px;font-weight:600;color:var(--w-ink-muted)}
+.tx.sec-t{font-size:13px;font-weight:700;color:var(--w-ink);letter-spacing:.02em}
+.tx.price{font-weight:700;font-size:15px;color:var(--w-ink);margin-top:2px}
+.tx.v{font-size:14px;color:var(--w-ink)}
+.tx.cap-t{margin-top:8px}
+.st{display:inline-block;font-size:11px;font-weight:650;line-height:1.5;padding:1px 8px;border-radius:10px;background:var(--w-surface);color:var(--w-ink);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.img.pic{display:flex;align-items:center;justify-content:center;background:var(--w-surface);border-color:var(--w-surface);color:var(--w-ink-muted)}
+.img.pic .pg{width:34%;height:auto;aspect-ratio:1;max-width:88px;min-width:22px}
+.img.pic.sm .pg,.img.pic.thumb-img .pg{width:52%}
+.img.pic.round{border-radius:50%}
+.img.pic.illustration .pg{width:40%}
+.thumb.pic,.ico.pic,.logo-pic{display:inline-flex;align-items:center;justify-content:center;background:var(--w-surface);border-color:var(--w-surface);color:var(--w-ink-muted)}
+.thumb.pic .pg{width:28px;height:28px}
+.ico.pic .pg{width:16px;height:16px}
+.logo-pic{width:32px;height:32px;border-radius:${R(10)};color:var(--w-ink)}
+.logo-pic .pg{width:20px;height:20px}
+.av.ini{display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:var(--w-ink-muted);background:var(--w-surface);border-color:var(--w-surface);letter-spacing:.02em}
+.av.s.ini{font-size:11px}.av.m.ini{font-size:14px}.av.l.ini{font-size:30px}
+.val{color:var(--w-ink);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lead{color:var(--w-ink-muted);font-size:14px}
+.chip{font-size:13px;font-weight:600;color:var(--w-ink);white-space:nowrap}
+.chip.on{color:var(--w-on-primary)}
+.seg span{font-size:13px;font-weight:600;color:var(--w-ink)}
+.seg span.on{color:var(--w-on-primary)}
+.tabs.worded span{min-width:0;font-size:14px;font-weight:600;color:var(--w-ink-muted);white-space:nowrap}
+.tabs.worded span.on{color:var(--w-ink)}
+.tabs.pill.worded span.on{color:var(--w-on-primary)}
+.step small{font-size:11px;font-weight:600;color:var(--w-ink-muted)}
+.step.on small{color:var(--w-ink)}
+.search .q{color:var(--w-ink);font-size:15px;display:inline-flex;align-items:center}
+.caret{display:inline-block;width:1.5px;height:18px;background:var(--w-ink);margin-left:1px}
+.search .scope .tx{font-size:13px}
+.stat .tx.lbl{margin-bottom:2px}
+.frame.app .stats.c3 .tx.big,.frame.app .stats.c4 .tx.big{font-size:19px}
+.frame.app .stats.c3 .tx.lbl,.frame.app .stats.c4 .tx.lbl{font-size:11px}
+.trend{font-size:12px;font-weight:600}
+.badge.n{display:inline-flex;align-items:center;justify-content:center;width:auto;min-width:22px;padding:0 6px;font-size:11px;font-weight:700;color:var(--w-on-primary)}
+.row-t .tx.meta{margin-top:2px}
+.table .tx{font-size:13px}
+.table .tx.k{font-size:13.5px}
+.table th{font-size:12px;font-weight:650;color:var(--w-ink-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pager .count{margin-right:auto;padding-left:4px}
+.crumbs .cr{font-size:12.5px;color:var(--w-ink-muted)}
+.card .tx.meta{margin-top:1px}
+.card.summary{text-align:left;min-width:240px;margin-top:8px}
+.comment .by{display:flex;gap:8px;align-items:baseline}
+.fpost .tx.body{color:var(--w-ink)}
+.pstats span .tx{text-align:center}
+.pstats span .tx.big{font-size:18px}
+.metas .st{font-size:12px}
+.profile .tx.title{margin-top:6px}
+.state .tx.body{max-width:300px}
+.dlist .tx.lbl{margin-bottom:2px}
+.dlist.inline .tx.lbl{flex:none;width:40%}
+.onb .center .tx.body{max-width:300px;margin:0 auto}
+.ticks{display:flex;justify-content:space-between;padding:4px 6px 0;font-size:11px;color:var(--w-ink-muted)}
+.drawer-head .row-t{flex:1}
+.clock-t{font-size:12px;font-weight:700;color:var(--w-ink)}
+.url-t{margin-left:12px;background:var(--w-ground);border-radius:8px;padding:0 10px;font-size:11px;line-height:18px;color:var(--w-ink-muted);min-width:30%}
 `;
 
 /** The skeleton's sheet — written only when some slot is undecided. Every selector begins `.sk`. */
@@ -350,11 +422,29 @@ function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolea
     intent: intentOf,
     label: (element) => esc(INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
     hot: (element) => ` data-hot="${esc(hotKey(slot.slot, element))}"`,
-    title: esc(spec.title),
+    title: esc(c.id === "app-bar" ? barTitleOf(spec) : headingOf(spec)),
     platform: spec.platform,
     wide: spec.platform !== "app",
+    ...(slot.fill ? { fill: slot.fill } : {}),
   };
   return `<section class="slot w" ${attrs} data-block="${esc(c.id)}" data-state="wire">${c.draw(ctx)}</section>`;
+}
+
+/** The heading inside the frame: a fleshed screen's ("Deliveries"), else the spec's title ("List"). */
+export function headingOf(spec: WireSpec): string {
+  return spec.content?.title ?? spec.title;
+}
+
+/**
+ * The title an app bar carries. Where the body already draws the fleshed
+ * heading (a heading primitive, a detail header) the bar does not repeat
+ * it: it says what kind of screen this is — the pack's noun on a detail
+ * (`content.bar`), else the archetype's title.
+ */
+export function barTitleOf(spec: WireSpec): string {
+  if (!spec.content) return spec.title;
+  if (spec.content.bar !== undefined) return spec.content.bar;
+  return spec.slots.some((s) => s.block === "heading" || (s.block === "detail-header" && s.fill?.heading !== undefined)) ? spec.title : headingOf(spec);
 }
 
 /** The embedded spec, safe inside a script element: no `<` survives to close it early. */

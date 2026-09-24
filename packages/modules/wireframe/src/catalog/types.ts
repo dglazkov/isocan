@@ -1,4 +1,5 @@
 import type { IntentId } from "./intents.ts";
+import type { SlotFill } from "../content/fill.ts";
 
 /**
  * **What a catalog entry is** (design §2; research §1, *Props, and the
@@ -16,7 +17,8 @@ import type { IntentId } from "./intents.ts";
  * | `index`  | `choice` over 1…max     | number     |
  *
  * Text is not a prop. Actionable text is an element's intent; headings come
- * from the archetype; everything else is grey bars.
+ * from the archetype; everything else is grey bars — until a screen is
+ * fleshed, when it is the slot's `fill` (design §10), still not a prop.
  */
 export type PropDef =
   | { kind: "choice"; values: readonly string[]; default: string }
@@ -56,6 +58,11 @@ export interface DrawContext {
   platform: Platform;
   /** True off a phone: `web` and `site`. */
   wide: boolean;
+  /**
+   * The slot's content (design §10), when the screen is fleshed: words,
+   * numbers and pictograms to draw where bars would go. Absent: bars.
+   */
+  fill?: SlotFill;
 }
 
 export interface Component {

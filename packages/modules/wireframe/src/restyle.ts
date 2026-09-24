@@ -1,8 +1,7 @@
 import { newGroupId, newVersionId, parseDesign, selectDesignSystem, type CanvasContents, type Item } from "@isocan/core";
 import { JEV_INPUT_PRICE, type Answerer, type JevRequest, type JevResponse } from "./answerer.ts";
-import { keptFlowsOf, writePrototype } from "./kept-flows.ts";
+import { rebuildPrototypes } from "./kept-flows.ts";
 import { currentVersionOf, type WirePort } from "./port.ts";
-import { PROTOTYPE_PROP } from "./prototype.ts";
 import { renderWire } from "./render.ts";
 import type { WireSpec } from "./spec.ts";
 import {
@@ -190,15 +189,7 @@ export async function restyle(
     t.screen = { ...t.screen, spec };
     changed.push(t);
   }
-  const prototypes: Array<{ itemId: string; what: string }> = [];
-  const touched = new Set(changed.map((t) => t.screen.spec.flow));
-  const now = all.map((s) => targets.find((t) => t.screen.item === s.item)?.screen ?? s);
-  for (const flow of keptFlowsOf(canvas, now)) {
-    if (!touched.has(flow.flow)) continue;
-    if (!Object.values(canvas.items).some((i) => i.properties?.[PROTOTYPE_PROP] === flow.flow)) continue;
-    const written = await writePrototype(port, canvas, flow, group);
-    prototypes.push({ itemId: written.itemId, what: written.what });
-  }
+  const prototypes = await rebuildPrototypes(port, canvas, all, changed.map((t) => t.screen), group);
   return { group, targets, changed, prototypes, resolver };
 }
 

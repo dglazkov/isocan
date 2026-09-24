@@ -98,6 +98,34 @@ home without this module.
   asked while round 1 is, and the screens arrive in it. `--in <group>`
   composes the flow inside a group — and in that group's own system, when it
   has one.
+- **Fleshed out: sample content instead of bars.** `isocan wire flesh
+  [screens…|--flow <id>] [--pack <id>]` fills every wire with believable
+  content for *this* app — list rows with titles, second lines and
+  statuses ("Parcel 4471 · 3 items · Out for delivery"), stats with values
+  and deltas, table cells under domain column names, first names with
+  initials in avatars, greyscale pictograms in image slots, and a heading
+  from the domain ("Deliveries" instead of "List"). The words come from one
+  of 24 synthetic **content packs** (`wire flesh --packs` lists them), never
+  written by a model: Jev chooses the pack per flow from its request — one
+  choice question, its p printed and recorded on each screen as `content`
+  (`{ "source": "pack", "pack", "p", "by", "title" }`); under 0.4 the
+  generic pack fills and the line says so; `--pack <id>` overrides a wrong
+  guess without asking. Each slot's words are stored as `fill` in the spec,
+  seeded by the screen's item id and the slot (a variation's by its
+  screen's), so a re-render, `wire style`, `wire vary` and `wire prototype`
+  all show the same content. One op group, a version per wire whose content
+  changed; running it again asks nothing and writes nothing; `--bars` goes
+  back to bars. Blueprints stay blue and unfilled. A kept flow's prototype
+  is rebuilt in the same group. `isocan wire "<request>" --flesh [--pack
+  <id>]` composes a flow that arrives fleshed (the pack is asked beside
+  round 1). People do the same with `/wire flesh` in the Chat.
+- `isocan wire copy <screen>` prints a fleshed screen's words as JSON —
+  per slot, each word by path (`items.0.title`, `stats.1.value`,
+  `labels.2`). Edit the words, then `isocan wire copy <screen> --apply
+  <file>` writes them as one version, with `content.source` `"copy"` and
+  `--by <name>` recorded; a path the slot does not hold is refused, so copy
+  changes words, never the screen's shape. `"title"` sets the heading.
+  `wire flesh` leaves a copied screen alone unless `--pack` or `--bars`.
 - `isocan wire questions` prints the pending round of a flow (`--flow <id>`,
   default the newest waiting) as a file of calls, each a request in Jev's
   shape (`state` and named questions, of type `noul` — yes/no — `choice` or
@@ -120,9 +148,10 @@ home without this module.
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of
 49; each actionable element names which intents it can take, and `wire
 render` refuses a spec that gives one it cannot. Headings come from the
-spec's `title`; everything else is grey bars, never lorem ipsum. If you want
-real copy on a screen, that is a separate, honest act — write an HTML screen
-yourself — not a label smuggled into a spec.
+spec's `title`; body copy is grey bars, never lorem ipsum — until `wire
+flesh` fills it from a content pack. If you want real copy on a screen,
+that is a separate, honest act — `wire copy <screen> --apply <file>` —
+not a label smuggled into an intent.
 
 To draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,
 change a slot's `block` to another of its options with `"props": {}` and no

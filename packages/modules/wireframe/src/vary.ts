@@ -1,4 +1,5 @@
 import { chromeFor } from "./compose.ts";
+import { refill } from "./content/flesh-spec.ts";
 import { LEAVE_OUT, flipWords, recipe, resolveSlot, type WireFlip, type WireSlot, type WireSpec } from "./spec.ts";
 
 export { blockWords, flipWords } from "./spec.ts";
@@ -121,7 +122,8 @@ export function vary(spec: WireSpec, d: Decision, variantOf: string): WireSpec {
   };
   delete out.varied;
   if (declined.length === 0) delete out.declined;
-  return out;
+  // A fleshed screen's variation is fleshed with the same pack and seed (design §10): only the flipped slot fills anew.
+  return refill(out, variantOf, [d.slot]);
 }
 
 /**

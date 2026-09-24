@@ -11,6 +11,9 @@ import { StyleResolver, governingSystem, mappingLines } from "./restyle.ts";
 import { wireSize, wireTitle, type WireSpec } from "./spec.ts";
 import type { WireStyle } from "./theme.ts";
 import { DEFAULT_VARIATIONS, honestFlips, variations } from "./vary.ts";
+import { choosePack, flagPack, packLine, type PackChoice } from "./content/choose.ts";
+import { fleshSpec, seedKey } from "./content/flesh-spec.ts";
+import { packOf } from "./content/fill.ts";
 
 /**
  * **A flow, composed in rounds, drawn in place** — the composer both
@@ -53,11 +56,18 @@ export class FlowCanvas {
   style: WireStyle | undefined;
   /** Merged into every placement this canvas adds at — a group's membership, for `wire --in <group>`. */
   placeIn: Record<string, unknown> = {};
+  /**
+   * The pack a `wire --flesh` flow fills from (design §10): stamped on every
+   * screen as round 3 draws it, so the flow arrives fleshed — no second pass.
+   */
+  pack: PackChoice | undefined;
 
   constructor(readonly port: WirePort, readonly group: string) {}
 
-  private styled(spec: WireSpec): WireSpec {
-    return this.style && spec.style === undefined ? { ...spec, style: this.style } : spec;
+  private styled(given: WireSpec, itemId: string): WireSpec {
+    const spec = this.style && given.style === undefined ? { ...given, style: this.style } : given;
+    if (!this.pack || spec.round !== 3 || spec.content) return spec;
+    return fleshSpec(spec, seedKey(spec, itemId), packOf(this.pack.pack), { p: this.pack.p, by: this.pack.by });
   }
 
   private async version(spec: WireSpec) {
@@ -71,9 +81,9 @@ export class FlowCanvas {
   }
 
   async add(given: WireSpec, placement: Record<string, unknown>): Promise<Screen> {
-    const spec = this.styled(given);
-    const { width, height } = wireSize(spec);
     const itemId = newItemId();
+    const spec = this.styled(given, itemId);
+    const { width, height } = wireSize(spec);
     const where = { ...placement, ...this.placeIn };
     const at = await this.send({
       type: "item.add",
@@ -91,7 +101,7 @@ export class FlowCanvas {
 
   /** A new version of the same item — the screen fills in place — and its title and size if they moved. */
   async write(screen: Screen, given: WireSpec): Promise<Screen> {
-    const spec = this.styled(given);
+    const spec = this.styled(given, screen.item);
     await this.send({ type: "item.addVersion", itemId: screen.item, version: await this.version(spec) });
     if (wireTitle(spec) !== wireTitle(screen.spec)) await this.send({ type: "item.update", itemId: screen.item, patch: { title: wireTitle(spec) } });
     const { width, height } = wireSize(spec);
@@ -298,6 +308,11 @@ export interface ComposeOptions {
   mappingAnswerer?: Answerer;
   /** Told of the mapping, if one is asked — the CLI's `--save`. */
   onMappingAsked?: ConstructorParameters<typeof StyleResolver>[3];
+  /**
+   * `wire --flesh`: fill the screens with sample content as round 3 draws
+   * them — the pack chosen while round 1 is asked, or `pack` when given.
+   */
+  flesh?: { pack?: string };
 }
 
 export interface Composed {
@@ -311,6 +326,8 @@ export interface Composed {
   totalMs: number;
   style: WireStyle | undefined;
   mapper: StyleResolver;
+  /** The pack a `--flesh` flow was filled from. */
+  pack?: PackChoice;
 }
 
 /** Start a flow: the request's blueprint, alone, before anybody is asked anything. */
@@ -337,6 +354,9 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
   const mapper = new StyleResolver(port, opts.mappingAnswerer ?? answerer, async () => (await wiresOn(port, await port.canvas())).map((s) => s.spec), opts.onMappingAsked);
   const styling = styleAt(port, first.item, mapper);
   styling.catch(() => {});
+  // The pack is one more question, asked beside round 1 — the wait is the longer of the two.
+  const choosing = opts.flesh ? (opts.flesh.pack !== undefined ? Promise.resolve(flagPack(opts.flesh.pack)) : choosePack(answerer, request)) : undefined;
+  choosing?.catch(() => {});
   let screens = [first];
   const tallies: RoundTally[] = [];
   let by = answerer.name as string;
@@ -350,9 +370,18 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
       canvas.style = styled.system ? styled.style : undefined;
       for (const line of styled.lines) say(line);
     }
+    if (round === 3 && choosing) {
+      canvas.pack = await choosing;
+      say(packLine(canvas.pack, "the screens arrive fleshed"));
+      // Its one call was asked beside round 1, so it counts there.
+      if (canvas.pack.how === "asked" && tallies[0]) {
+        tallies[0].calls += 1;
+        tallies[0].inputTokens += canvas.pack.inputTokens ?? 0;
+      }
+    }
     screens = await applyRound(canvas, round, screens, calls, asked.responses, say);
   }
-  return { flow, screens, variants: canvas.variants, tallies, by, firstMs, totalMs: Date.now() - t0, style: canvas.style, mapper };
+  return { flow, screens, variants: canvas.variants, tallies, by, firstMs, totalMs: Date.now() - t0, style: canvas.style, mapper, ...(canvas.pack ? { pack: canvas.pack } : {}) };
 }
 
 /** The closing line of a flow, for a person. */

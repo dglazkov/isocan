@@ -4,6 +4,7 @@ import { isNoJudge } from "./answerer.ts";
 import { composeFlow, costLine, wiresOn } from "./flow.ts";
 import { keptFlowsOf, writePrototype, type KeptFlow } from "./kept-flows.ts";
 import { StyleResolver, restyle, restyleSummary } from "./restyle.ts";
+import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
 import { webAnswerer, webPort } from "./web-port.ts";
 
 /**
@@ -15,11 +16,17 @@ import { webAnswerer, webPort } from "./web-port.ts";
  * watches — the same `composeFlow` the CLI runs, over the dialog's host, with
  * the home's judge answering (the key never reaches the browser). How it
  * went arrives in the notice bar, because the dialog is gone by then.
- * `/wire prototype` and `/wire style [--default]` run the CLI's own
- * `writePrototype` and `restyle`. `/wire` alone asks what to do.
+ * `/wire prototype`, `/wire style [--default]` and `/wire flesh [--pack
+ * <id>|--bars]` run the CLI's own `writePrototype`, `restyle` and `flesh`.
+ * `/wire` alone asks what to do.
  */
 
-type Mode = { kind: "form" } | { kind: "compose"; request: string } | { kind: "prototype" } | { kind: "style"; toDefault: boolean };
+type Mode =
+  | { kind: "form" }
+  | { kind: "compose"; request: string }
+  | { kind: "prototype" }
+  | { kind: "style"; toDefault: boolean }
+  | { kind: "flesh"; pack?: string; bars: boolean };
 
 export function modeOf(args: string): Mode {
   const words = args.trim();
@@ -27,6 +34,11 @@ export function modeOf(args: string): Mode {
   const [first, ...rest] = words.split(/\s+/);
   if (first === "prototype" && rest.length === 0) return { kind: "prototype" };
   if (first === "style" && rest.every((w) => w === "--default" || w === "default")) return { kind: "style", toDefault: rest.length > 0 };
+  if (first === "flesh") {
+    const bars = rest.length === 1 && (rest[0] === "--bars" || rest[0] === "bars");
+    const pack = rest.length === 2 && rest[0] === "--pack" ? rest[1] : rest.length === 1 && !bars && !rest[0]!.startsWith("-") ? rest[0] : undefined;
+    if (rest.length === 0 || bars || pack !== undefined) return { kind: "flesh", bars, ...(pack !== undefined ? { pack } : {}) };
+  }
   return { kind: "compose", request: words };
 }
 
@@ -62,6 +74,15 @@ export async function restyleOnWeb(canvasId: string, host: DialogHost, toDefault
   if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
   const resolver = new StyleResolver(port, webAnswerer(canvasId, host), async () => all.map((s) => s.spec));
   return restyle(port, canvas, all, all, resolver, { toDefault });
+}
+
+/** `/wire flesh` — every wire on the canvas, with the home's judge choosing the pack. */
+export async function fleshOnWeb(canvasId: string, host: DialogHost, opts: { pack?: string; bars: boolean }) {
+  const port = webPort(canvasId, host);
+  const canvas = await port.canvas();
+  const all = await wiresOn(port, canvas);
+  if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+  return flesh(port, canvas, all, all, webAnswerer(canvasId, host), { ...(opts.pack !== undefined ? { pack: opts.pack } : {}), bars: opts.bars });
 }
 
 export function WireDialog({ canvasId, args, canEdit, host }: DialogFacts) {
@@ -118,6 +139,12 @@ export function WireDialog({ canvasId, args, canEdit, host }: DialogFacts) {
       host.notice(restyleSummary(r));
       host.close();
       if (r.changed.length) host.reveal(r.changed.map((t) => t.item.id));
+    } else if (m.kind === "flesh") {
+      setStatus(m.bars ? "Back to bars…" : "Choosing sample content…");
+      const r = await fleshOnWeb(canvasId, host, m);
+      host.notice([...fleshLines(r).slice(0, 1), fleshSummary(r, m.bars)].join(" · "));
+      host.close();
+      if (r.changed.length) host.reveal(r.changed.map((t) => t.screen.item));
     }
   };
 
@@ -160,6 +187,7 @@ export function WireDialog({ canvasId, args, canEdit, host }: DialogFacts) {
             <button className="btn" type="button" onClick={() => go({ kind: "prototype" })}>Make prototype</button>
             <button className="btn" type="button" onClick={() => go({ kind: "style", toDefault: false })}>Restyle wires</button>
             <button className="btn" type="button" onClick={() => go({ kind: "style", toDefault: true })}>Default look</button>
+            <button className="btn" type="button" onClick={() => go({ kind: "flesh", bars: false })}>Flesh out</button>
           </div>
           <p className="wire-note">Blueprints land at once and fill in place; one undo takes a flow back. Also from a terminal: <code>isocan wire</code>.</p>
         </form>

@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–6 are CLOSED (23 Sep 2026); wireframes phase 7 — fleshing wires out with sample content — is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
+**Where we are: phases 0–6 are CLOSED; phase 7 (sample content) is PART-DONE — built and proved locally, the isocan.io walk waits on a promotion (23 Sep 2026).** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
 
 ## Phase 0 — The catalog, drawn
 
@@ -212,7 +212,7 @@ produced for free.
 
 ## Phase 7 — Fleshed out
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 23 September 2026.** 24 synthetic packs, 44 pictograms, `wire flesh` / `/wire flesh` / `--flesh` / `wire copy`; 506 module tests; Jev chose the expected pack for 12 of 12 requests (11 at p 1.00, holiday approvals → generic); a local warehouse flow fleshed, re-run as a no-op, bars and back in one undo, restyled into Rams with the same words — looked at by the conductor. Proof 3, the walk canvas on isocan.io, waits on a promotion.
 
 Added 23 Sep 2026 at Dion's ask, looking at the walk canvas's grey bars: sample
 content as a step in the process ([design.md §10](design.md), journey scene 7).
@@ -238,3 +238,11 @@ survives `wire style`, variations and `wire prototype`.
 3. On the walk canvas (https://isocan.io/p/prj_riZvAhYwSj), after the push is
    promoted: `/wire flesh` fills the warehouse flow; screenshot; one undo
    takes it back.
+
+### Trajectory
+
+- **2026-09-23** — Item *k* of a flow is built from the flow id and *k*, so the same "Returns batch 70" is the list's first row, the detail's heading and the prototype's — the detail always agrees with the row that opened it. That consistency, more than the words, is what makes a fleshed flow read as an app.
+- **2026-09-23** — Jev's pack p is 1.00 on 11 of 12 requests; the 0.4 floor catches the stub, not Jev. `--pack` is the real override.
+- **2026-09-23** — The lazy wireframes chunk grew ~92 KB (pack data), first paint unchanged. If it matters, the packs become their own chunk.
+- **2026-09-23** — Open: a flesh or restyle writes only where the spec changed, so a renderer change never reaches screens already on a canvas. A "re-render" verb is owed before renderer changes ship (phase 8's title/frame change needs it).
+- **2026-09-23** — Open: the walk canvas fleshed on isocan.io after a promotion (proof 3).

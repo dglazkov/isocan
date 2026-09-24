@@ -7,6 +7,7 @@ import { cliAnswerer, cliPort } from "./cli-port.ts";
 import { answeredResponse, pendingRound, requestBlueprint, roundCalls, type RoundCall, type RoundFile } from "./compose.ts";
 import { FlowCanvas, applyRound, composeFlow, costLine, flowsOn, pickFlow, startFlow, styleAt, type OnAsked } from "./flow.ts";
 import { StyleResolver } from "./restyle.ts";
+import { flagPack } from "./content/choose.ts";
 import { wireSize, wireTitle } from "./spec.ts";
 
 /**
@@ -64,8 +65,10 @@ export function registerCompose(host: CliHost, wire: Command): void {
     .option("--canvas <canvas>")
     .option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)")
     .option("--in <group>", "compose the flow inside this group — and in its design system, if it has one")
+    .option("--flesh", "arrive fleshed: sample content from a pack Jev chooses for the request, instead of grey bars")
+    .option("--pack <id>", "the content pack to flesh with, instead of asking (`wire flesh --packs` lists them)")
     .action(
-      run(async (words: string[], opts: { answerer?: string; seed: string; save?: string; at?: string; in?: string }, cmd: Command) => {
+      run(async (words: string[], opts: { answerer?: string; seed: string; save?: string; at?: string; in?: string; flesh?: boolean; pack?: string }, cmd: Command) => {
         const request = words.join(" ").trim();
         if (!request) {
           cmd.help();
@@ -78,7 +81,8 @@ export function registerCompose(host: CliHost, wire: Command): void {
         const p = await resolveCanvas(ctx);
         const port = cliPort(host, ctx, p.id);
         const seed = Number(opts.seed);
-        // Refused before anything is written: `--answerer jev` with no key never leaves a blueprint behind.
+        // Refused before anything is written: an unknown pack, or `--answerer jev` with no key, never leaves a blueprint behind.
+        if (opts.pack !== undefined) flagPack(opts.pack);
         const answerer = opts.answerer === "agent" ? "agent" : cliAnswerer(ctx, p.id, opts.answerer, seed, say);
         const snapshot = await ctx.client.snapshot(p.id);
         const placement = opts.in !== undefined || opts.at
@@ -91,6 +95,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
           const firstMs = Date.now() - t0;
           blueprintLine(first.item, firstMs);
           if (ctx.json) return printJson({ flow, items: [first.item], round: 1, answerer: "agent", firstBlueprintMs: firstMs });
+          if (opts.flesh || opts.pack !== undefined) say("--flesh waits for the rounds: once the flow is drawn, `isocan wire flesh --flow " + flow + (opts.pack !== undefined ? " --pack " + opts.pack : "") + "` fills it");
           say(`flow ${flow} is waiting on round 1 of 3. Answer it yourself:\n  isocan wire questions > round.json    # Jev's request shape, one call per screen\n  (fill each call's "response" in Jev's response shape)\n  isocan wire answer round.json          # repeat until the flow is drawn`);
           return;
         }
@@ -105,6 +110,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
             say(`answering with ${who}`);
           },
           ...(saver(opts.save) ? { onAsked: saver(opts.save)!, onMappingAsked: mappingSaver(opts.save)! } : {}),
+          ...(opts.flesh || opts.pack !== undefined ? { flesh: opts.pack !== undefined ? { pack: opts.pack } : {} } : {}),
         });
         const { mapper, tallies } = composed;
         if (ctx.json) {
@@ -117,6 +123,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
             variations: composed.variants.map((v) => ({ itemId: v.item, title: wireTitle(v.spec), variantOf: v.spec.variantOf, flip: v.spec.flip })),
             rounds: tallies,
             style: composed.style ?? { source: "default" },
+            content: composed.pack ? { source: "pack", pack: composed.pack.pack, leaned: composed.pack.leaned, p: composed.pack.p, how: composed.pack.how } : null,
             styleCalls: mapper.calls,
             inputTokens: tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens,
             cost: (tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens) * JEV_INPUT_PRICE,

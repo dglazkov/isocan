@@ -3,6 +3,8 @@ import {
   type Component, type IntentId, type Platform, type PropDef, type Props, type Recipe, type Section,
 } from "./catalog/index.ts";
 import { styleProblems, type WireStyle } from "./theme.ts";
+import type { SlotFill, WireContent } from "./content/fill.ts";
+import { contentProblems, fillProblems } from "./content/validate.ts";
 
 /**
  * **What a screen is** (design §1).
@@ -63,6 +65,13 @@ export interface WireSpec {
    * draws blue whatever this says.
    */
   style?: WireStyle;
+  /**
+   * What fills it (design §10): absent draws bars where copy goes; `pack` is
+   * sample content from a pack, `copy` exact words an agent or a person
+   * wrote. The words themselves are each slot's `fill`. A blueprint takes
+   * none: blue means still being drawn.
+   */
+  content?: WireContent;
 }
 
 /** In `alternatives`, `from` and `to`: the optional section left off the screen. */
@@ -127,6 +136,8 @@ export interface WireSlot {
    * one of them may be `LEAVE_OUT` — the probability it should not be here.
    */
   alternatives?: Array<{ block: string; p: number }>;
+  /** The words, numbers and pictograms this slot draws instead of bars — plain data, from `content`. */
+  fill?: SlotFill;
 }
 
 export const PLATFORMS: readonly Platform[] = ["app", "web", "site"];
@@ -282,6 +293,7 @@ export function validateWire(input: unknown): string[] {
     problems.push("chrome must be { nav, header }");
   }
   if (spec.style !== undefined) problems.push(...styleProblems(spec.style));
+  if (spec.content !== undefined) problems.push(...contentProblems(spec.content));
   let r: Recipe;
   try {
     r = recipe(String(spec.archetype));
@@ -308,7 +320,9 @@ export function validateWire(input: unknown): string[] {
       problems.push(`${where}: props must be an object`);
       continue;
     }
+    if (slot.fill !== undefined) problems.push(...fillProblems(slot.fill, where));
     if (slot.block === null) {
+      if (slot.fill !== undefined) problems.push(`${where}: an undecided slot has no fill`);
       if (Object.keys(props).length > 0) problems.push(`${where}: an undecided slot has no props`);
       if (slot.intents && Object.keys(slot.intents).length > 0) problems.push(`${where}: an undecided slot has no intents`);
       continue;
