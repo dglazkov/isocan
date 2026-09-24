@@ -20,6 +20,15 @@
 # **Revisit in October**: 24 enters maintenance in the same month 26 leaves
 # Current, so that is a move to make deliberately rather than to drift into.
 #
+# **Pinned to 24.20.0, not the floating `24-slim`, on 23 Sep 2026.** Node
+# 24.21.0 (and 24.15, 24.18) fail to verify every Google Trust Services
+# certificate — isocan.io, isocan.store, google.com — with
+# UNABLE_TO_GET_ISSUER_CERT, while 24.20.0 and 24.5.0 verify them; measured on
+# macOS with `fetch`. A laptop daemon on 24.21 could not reach its home at all.
+# Whether the Linux image is affected was not measured, and a home that calls
+# Google-hosted APIs over HTTPS is the wrong place to find out, so the image
+# follows `.nvmrc` exactly until a newer 24.x is checked the same way.
+#
 # ---- the two things that would have failed on Cloud Run ----
 #
 # 1. `startDaemon` binds 127.0.0.1. A container that binds loopback fails Cloud
@@ -41,7 +50,7 @@
 # either library is missing after the prune.
 
 # ============================ builder ============================
-FROM node:24-slim AS builder
+FROM node:24.20.0-slim AS builder
 WORKDIR /app
 
 # Manifests first, sources second: `npm ci` then re-runs only when a dependency
@@ -123,7 +132,7 @@ RUN node -e " \
  && echo 'kept: packages/web/dist/index.html'
 
 # ============================ runtime ============================
-FROM node:24-slim AS runtime
+FROM node:24.20.0-slim AS runtime
 
 # tini as PID 1. Cloud Run sends SIGTERM to drain, `runDaemon` installs a
 # SIGTERM handler that closes the sockets and flushes the backing's debounced
