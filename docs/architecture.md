@@ -91,7 +91,7 @@ the current Context inspection; shared canvas state and frozen requests do not
 acquire it.
 
 Ordinary inherited Context adds a bounded metadata head from
-`GET /api/projects/:id/context/recap`. The engine's existing writer queue
+`GET /api/projects/:id/context/recap`. The canvas's writer queue
 captures current and archived operations coherently with GC, and core validates
 the required recent range before calculating it. Missing history is unavailable,
 not an empty summary. The backing still materializes its archive; only the
@@ -218,8 +218,8 @@ draws two arrows out of that one box, and the canvases it is itself the
 home of draw none at all — nothing about them leaves the machine.
 
 The process is still one daemon. Everything that makes it correct
-stays in-process exactly as it is today: the engine's single-writer
-promise chain, the presence hub, the WS rooms, undo stacks, GC. Google
+stays in-process exactly as it is today: the engine's writer queues
+(one per canvas — see below), the presence hub, the WS rooms, undo stacks, GC. Google
 Cloud replaces the daemon's *disk*, never its judgment. The shape of a
 deploy is the shape of a crash — which the next two sections make into
 a feature rather than a risk.
@@ -371,11 +371,34 @@ is the shape with two daemons over one store.
 
 ## Single-writer on a platform that wants to scale
 
-Why one instance is correct and not a compromise: the engine chain,
-presence, and rooms are in-memory state that one process keeps
+Why one instance is correct and not a compromise: the engine's writer
+queues, presence, and rooms are in-memory state that one process keeps
 consistent for free. The moment there are two instances, every one of
 those needs a coordination story — so there is one instance, and the
 ceiling is stated in numbers instead of hidden.
+
+**One writer queue per canvas, not one per daemon (24 Sep 2026).** The
+engine serialized every write on the daemon through one promise chain
+until a forwarded write — which holds its turn across the round trip to
+its home — was measured pausing writes to canvases homed on the same
+machine (lessons #95, #98). `packages/server/src/writers.ts` is the
+mechanism and the `Engine` class comment is the policy:
+
+- a canvas's writes — submit, undo/redo, entries and snapshots arriving
+  from its home, delete, blob index writes, GC, teleport and adoption —
+  queue on that canvas alone, so seq order, op groups and undo are
+  exactly what they were;
+- the home-scoped identity state (the actor registry and the desk's
+  claims) is one more queue, `HOME_KEY`, which canvas writes only read;
+- a personal workflow takes its destination canvas plus a personal key,
+  and a personal birth — which cannot name its canvases up front — takes
+  every queue at once (`exclusive`), the old chain for one task.
+
+A task that needs several queues registers on all of them in one
+synchronous step and only ever waits on tasks registered before it, so
+there is no acquisition order to get wrong and no cycle to deadlock on.
+`settled(canvasId)` drains one queue (a home link's dial asks it before
+reading its cursor); `settled()` drains every queue (shutdown).
 
 **The ceiling.** Cloud Run tops out at 1000 concurrent requests per
 instance, and a WebSocket holds one for its lifetime — so the ceiling is
@@ -681,7 +704,7 @@ comes from the object store rather than from the client.
   late reclaims the same bytes. `infra/91-scheduler-gc.sh` creates
   nothing, permanently, and says so. Like presence, this leans on
   exactly-one-instance: one home is one sweeper, and every sweep it
-  runs is queued on the same single-writer chain as the writes it is
+  runs is queued on the same writer queue as the canvas writes it is
   compacting behind.
 
   **The sweep after boot is there because the instance is the clock.**

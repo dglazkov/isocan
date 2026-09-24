@@ -1311,10 +1311,14 @@ export class HomeLink implements HomeConnection {
    * we were in the middle of making — the home dutifully sent a snapshot, and
    * the replica adopted it over the entry it was about to land, losing seq 1
    * from its own log. A cursor has to be a fact.
+   *
+   * THIS canvas's queue, not every queue: the write that makes the window is
+   * a write to the canvas being dialled, and waiting on the whole daemon is
+   * how one canvas's slow home once left every dial on the machine unfinished.
    */
   private async localSeq(canvasId: string): Promise<number> {
     try {
-      await this.engine.settled();
+      await this.engine.settled(canvasId);
       return (await this.engine.getSnapshot(canvasId)).lastSeq;
     } catch {
       return 0;

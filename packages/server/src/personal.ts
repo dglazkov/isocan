@@ -161,7 +161,7 @@ export class PersonalService {
       const receipt = await writer.submit({ canvasId, actor, badgeId, opId: intent.opId, op });
       await this.validateLink(badgeId, request.actorId, canvasId, intent.itemId, home);
       return { receipt, link: { itemId: intent.itemId, owner: actor, sourceCanvasId, home, linked: true, available: true } };
-    });
+    }, canvasId);
   }
 
   async unlink(badgeId: string, canvasId: string, request: PersonalUnlinkRequest): Promise<PersonalUnlinkResponse> {
@@ -172,7 +172,7 @@ export class PersonalService {
       if (!consent || consent.destinationCanvasId !== canvasId || consent.itemId !== request.itemId || resolveActor(await this.engine.actorJoins(), consent.ownerId) !== actor.id) throw new PersonalError("only this link's owner may unlink it here");
       const opId = `op_${createHash("sha256").update(JSON.stringify([canvasId, actor.id, request.requestId, "unlink"])).digest("hex").slice(0, 24)}`;
       return { receipt: await writer.submit({ canvasId, actor, badgeId, opId, op: { type: "group.change", action: { kind: "delete", itemIds: [request.itemId] } } }) };
-    });
+    }, canvasId);
   }
 
   async read(badgeId: string, canvasId: string, request: PersonalReadRequest, home: string, context?: SourceRequestContext): Promise<PersonalReadResponse> {
