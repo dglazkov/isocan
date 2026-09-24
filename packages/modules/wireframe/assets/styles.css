@@ -94,9 +94,11 @@
 .wire-handle:active { cursor: grabbing; }
 
 /* Labels: the hotspot's own words on the straight run, a ground-coloured pill
-   hiding the line behind it. At rest a label shows only where the run holds
-   it: --run is the run in world units, --need the pill plus a head and a
-   margin in screen px, so it fades in exactly when it fits, at any zoom. */
+   hiding the line behind it. At rest a label shows only from the zoom --show
+   up: where its run holds the pill, a head and a margin, and no label placed
+   before it (a longer run's) sits in the way — route.ts, placeLabels. --run is
+   the run in world units, so it fades in over one screen px of run, as it
+   did when --show was only the run's fit. */
 .wire-arrow-label,
 .wire-needs-label {
   position: absolute;
@@ -109,13 +111,13 @@
   border-radius: 4px;
   white-space: nowrap;
   pointer-events: none;
-  opacity: clamp(0, calc(var(--run) * var(--scale, 1) - var(--need)), 1);
+  opacity: clamp(0, calc((var(--scale, 1) - var(--show, 0)) * var(--run)), 1);
 }
 .wire-arrow-label.nav,
 .wire-needs-label { color: var(--ink-soft); }
 .wire-arrow-label.on { opacity: 1; z-index: 4; }
 .wire-arrow-label.lifted { transform: translate(-50%, calc(-50% - 16px)) scale(calc(1 / var(--scale, 1))); transform-origin: 50% 100%; }
-.wire-arrow-label.dim { opacity: min(0.3, clamp(0, calc(var(--run) * var(--scale, 1) - var(--need)), 1)); }
+.wire-arrow-label.dim { opacity: min(0.3, clamp(0, calc((var(--scale, 1) - var(--show, 0)) * var(--run)), 1)); }
 .wire-needs-label {
   z-index: 4;
   opacity: 1;

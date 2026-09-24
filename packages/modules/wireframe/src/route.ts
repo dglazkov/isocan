@@ -63,8 +63,12 @@ export interface FlowArrow {
   shape: "step" | "jump" | "cross";
   /** The orthogonal polyline; the last point is where the head's tip sits. */
   pts: Point[];
-  /** Where the label sits, and the straight run (world units) it has to fit on. */
-  label: { x: number; y: number; run: number };
+  /**
+   * Where the label sits, the straight run (world units) it sits on, and
+   * `show` — the lowest zoom at which it is drawn at rest (`labelShown`).
+   * Infinity: never at rest, only on hover and selection.
+   */
+  label: { x: number; y: number; run: number; show: number };
   /** Drawn only because a screen is pointed at. */
   chrome: boolean;
   lane?: number;
@@ -89,6 +93,103 @@ export const LANE0_BELOW = 44;
 export const MAX_LANES = 4;
 export const CORNER = 18;
 const NUDGE = 16;
+
+/** A label's pill width in screen px — 11 px semibold system-ui, measured in the harness at ~6.4 px a character, plus its padding. */
+export const labelPill = (text: string) => Math.round(text.length * 6.4 + 10);
+/** What a run must hold for its label to show at rest, in screen px: the pill, the head, and a margin. */
+export const labelNeed = (text: string) => labelPill(text) + 9 + 8;
+/** A label pill's height in screen px (11 px × 1.1 line and 2 px padding each side). */
+export const LABEL_H = 16;
+
+/** Whether an arrow's label is drawn at rest at this zoom — what the stylesheet's opacity rule computes from `--show`. */
+export function labelShown(a: Pick<FlowArrow, "label">, scale: number): boolean {
+  return scale >= a.label.show;
+}
+
+/** Screen px kept clear between two pills. */
+const LABEL_CLEAR = 4;
+/** Where along its run a label may try to sit: this many steps each side of the middle. */
+const SLIDE_STEPS = 24;
+
+/**
+ * **Labels that never sit on each other** — the collision pass (the isocan.io
+ * walk, 23 Sep 2026: *Home* and *Row* on adjacent lanes, one pill over the
+ * other at the overview zoom).
+ *
+ * The rule stays zoom-aware with no re-render on zoom, as the research asked
+ * of the fit rule: a pill is a constant size on SCREEN, so two labels whose
+ * centres are `dx`, `dy` apart in the world overlap exactly below the zoom
+ * `min(W / |dx|, H / |dy|)`, and a label fits its own run exactly above
+ * `need / run`. Every label therefore gets one number, `show` — the lowest
+ * zoom it is drawn at rest from — and the stylesheet compares it with
+ * `--scale`.
+ *
+ * Greedy, in priority order: the arrows drawn at rest before the tabs a
+ * pointer adds (so pointing at a screen never moves a label already there),
+ * and within each, **the longer run first — it keeps its label**. Each label
+ * starts at its run's middle; where a label placed before it would raise its
+ * `show`, it slides along its own run to wherever `show` is lowest — the
+ * farther it slides, the less run is left either side, so the fit is
+ * `need / (run − 2·|slide|)`. What still collides waits for a zoom at which
+ * it clears: below that it is dropped, and hover still shows it
+ * (`.wire-arrow-label.on`). A label moves only along its own straight run, so
+ * no route changes and no crossing can appear.
+ *
+ * Conservative in one way, on purpose: a label placed earlier that is itself
+ * hidden over part of the clash range still counts as there, so a single
+ * `show` is enough and the stylesheet needs no second threshold.
+ */
+export function placeLabels(arrows: FlowArrow[]): FlowArrow[] {
+  const order = [...arrows].sort((p, q) => Number(p.chrome) - Number(q.chrome) || q.label.run - p.label.run || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
+  const placed: FlowArrow[] = [];
+  for (const a of order) {
+    const need = labelNeed(a.link.label);
+    const pill = labelPill(a.link.label);
+    const run = a.label.run;
+    // Steps and jumps label a horizontal run, a Z its vertical one; the label sits at the run's middle to start.
+    const along: "x" | "y" = a.shape === "cross" ? "y" : "x";
+    const at = (slide: number) => (along === "x" ? { x: a.label.x + slide, y: a.label.y } : { x: a.label.x, y: a.label.y + slide });
+    const showAt = (slide: number): number => {
+      const room = run - 2 * Math.abs(slide);
+      let show = room > 0 ? need / room : Infinity;
+      const c = at(slide);
+      for (const b of placed) {
+        if (!Number.isFinite(b.label.show)) continue;
+        const dx = Math.abs(c.x - b.label.x);
+        const dy = Math.abs(c.y - b.label.y);
+        const W = (pill + labelPill(b.link.label)) / 2 + LABEL_CLEAR;
+        const H = LABEL_H + LABEL_CLEAR;
+        const clash = Math.min(dx === 0 ? Infinity : W / dx, dy === 0 ? Infinity : H / dy);
+        // Only a neighbour that is itself drawn somewhere in the clash range pushes this one.
+        if (clash > b.label.show) show = Math.max(show, clash);
+      }
+      return show;
+    };
+    let best = 0;
+    let bestShow = showAt(0);
+    if (bestShow > need / run + 1e-9) {
+      for (let k = 1; k <= SLIDE_STEPS; k++) {
+        for (const slide of [(-k * run) / (2 * SLIDE_STEPS + 2), (k * run) / (2 * SLIDE_STEPS + 2)]) {
+          const s = showAt(slide);
+          if (s < bestShow - 1e-9) {
+            best = slide;
+            bestShow = s;
+          }
+        }
+      }
+    }
+    a.label = { ...a.label, ...at(best), show: bestShow };
+    placed.push(a);
+  }
+  return arrows;
+}
+
+/** A label's pill at this zoom, in world units (it is counter-scaled, so it grows in the world as you zoom out). */
+export function labelRect(a: Pick<FlowArrow, "label" | "link">, scale: number): { x: number; y: number; w: number; h: number } {
+  const w = labelPill(a.link.label) / scale;
+  const h = LABEL_H / scale;
+  return { x: a.label.x - w / 2, y: a.label.y - h / 2, w, h };
+}
 
 export interface RouteInput {
   /** The flow's kept screens, where they are now (a drag already applied). */
@@ -152,7 +253,7 @@ interface Work {
   ex?: number;
   lane?: number;
   pts?: Point[];
-  label?: FlowArrow["label"];
+  label?: { x: number; y: number; run: number };
   slot?: { x0: number; x1: number; lane: number };
   /** Riding a lane under the row: it interleaves with a jump above. */
   below?: boolean;
@@ -246,7 +347,7 @@ export function routeFlow(input: RouteInput): { arrows: FlowArrow[]; needs: Need
       kind: d.chrome ? "nav" : d.link.transition === "overlay" ? "overlay" : "screen",
       shape: d.shape,
       pts: d.pts,
-      label: d.label,
+      label: { ...d.label, show: labelNeed(d.link.label) / d.label.run },
       chrome: d.chrome,
       ...(d.lane !== undefined ? { lane: d.lane } : {}),
       ...(d.lane !== undefined && d.lane >= MAX_LANES ? { crowded: true } : {}),
@@ -258,7 +359,7 @@ export function routeFlow(input: RouteInput): { arrows: FlowArrow[]; needs: Need
     const h = input.hot(l.from, l.key);
     if (a && h) marks.push({ id: arrowId(l), link: l, rect: { x: a.x + h.x, y: a.y + h.y, w: h.w, h: h.h } });
   }
-  return { arrows, needs: marks };
+  return { arrows: placeLabels(arrows), needs: marks };
 
   function jumps(list: Work[], occ: typeof lanes, occBelow: typeof lanes) {
     const js = list.filter((d) => d.shape === "jump").sort((p, q) => Math.abs(p.b.x - p.a.x) - Math.abs(q.b.x - q.a.x));

@@ -7,7 +7,7 @@ import { hotspots, inferLinks, screenEdges, type WireLink, type WireScreen } fro
 import { currentVersionOf } from "./port.ts";
 import { PROTOTYPE_PROP, playAnchor } from "./prototype.ts";
 import { readWire, renderWire } from "./render.ts";
-import { arrowId, estimatedHot, roundedPath, routeFlow, type FlowArrow, type HotRect, type NeedsMark, type RouteBox } from "./route.ts";
+import { arrowId, estimatedHot, labelShown, roundedPath, routeFlow, type FlowArrow, type HotRect, type NeedsMark, type RouteBox } from "./route.ts";
 import type { WireSpec } from "./spec.ts";
 
 /**
@@ -146,9 +146,6 @@ function hotOn(item: Item, spec: WireSpec | undefined, key: string): HotRect {
   const navCount = spec ? hotspots(spec).filter((h) => h.tab).length : 0;
   return estimatedHot(key, { w: item.width, h: item.height }, navCount || 4);
 }
-
-/** Label width in screen px — 11 px semibold system-ui pills, measured in the harness at ~6.4 px a character. */
-const labelNeed = (text: string) => Math.round(text.length * 6.4 + 10 + 9 + 8);
 
 interface Drawn {
   flow: FlowLinks;
@@ -470,13 +467,16 @@ export function WireArrows({ canvas, drag, readText, host, canEdit, past, openIt
       {every.map(({ a }) => {
         const on = a.id === focus;
         const dim = focus !== null && !on;
-        const need = labelNeed(a.link.label);
-        const lifted = on && a.label.run * scale < need;
+        // Not drawn at rest at this zoom (a short run, or a neighbour's label in the way): on hover it shows, lifted clear of the line.
+        const lifted = on && !labelShown(a, scale);
+        // `--show` is the zoom it is drawn at rest from (route.ts, `placeLabels`); a label that never fits waits for hover.
+        const show = Number.isFinite(a.label.show) ? Math.round(a.label.show * 1e4) / 1e4 : 1e6;
         return (
           <div
             key={a.id}
             className={`wire-arrow-label ${a.kind}${on ? " on" : ""}${dim ? " dim" : ""}${lifted ? " lifted" : ""}`}
-            style={{ left: a.label.x, top: a.label.y, "--run": a.label.run, "--need": need } as CSSProperties}
+            data-arrow-label={a.id}
+            style={{ left: a.label.x, top: a.label.y, "--run": a.label.run, "--show": show } as CSSProperties}
             aria-hidden
           >
             {a.link.label}

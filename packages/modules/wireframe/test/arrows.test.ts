@@ -9,7 +9,8 @@ import { flowLinks, keptArrows } from "../src/arrows.tsx";
 import { modeOf } from "../src/dialog.tsx";
 import { linkPatch, linkProp, overridesOf, overrideValue, type ArrowWrite } from "../src/link-override.ts";
 import { linkRows, pickedWrite } from "../src/links-panel.tsx";
-import { GAP, crossings, drawnLinks, estimatedHot, roundedPath, routeFlow, type HotRect, type RouteBox } from "../src/route.ts";
+import { GAP, crossings, drawnLinks, estimatedHot, labelNeed, labelRect, labelShown, placeLabels, roundedPath, routeFlow, type FlowArrow, type HotRect, type RouteBox } from "../src/route.ts";
+import type { WireLink } from "../src/links.ts";
 import {
   KEEP_PROP, LINKS_PROP, PROTOTYPE_PROP, playAnchor, LINK_BACK, LINK_NONE, applyPropsRound, applyStructure, assemblePrototype, decideFlow, flowRequest, flowScreen,
   inferLinks, keptFlowsOf, propsRequests, readResponse, readWire, renderWire, structureRequest, wireframe,
@@ -164,6 +165,94 @@ describe("the routes, off the recorded flow", () => {
     expect(blocked.arrows[0]!.shape).toBe("jump");
     // Its lane clears the taller unkept screen too.
     expect(blocked.arrows[0]!.pts[1]![1]).toBeLessThan(-80);
+  });
+});
+
+/** Every pair of labels drawn at rest at this zoom whose pills overlap on screen. */
+function labelClashes(arrows: readonly FlowArrow[], scale: number): string[] {
+  const shown = arrows.filter((a) => labelShown(a, scale));
+  const out: string[] = [];
+  for (let i = 0; i < shown.length; i++) {
+    for (let j = i + 1; j < shown.length; j++) {
+      const p = labelRect(shown[i]!, scale);
+      const q = labelRect(shown[j]!, scale);
+      if (p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h) out.push(`${shown[i]!.link.label}×${shown[j]!.link.label}@${scale}`);
+    }
+  }
+  return out;
+}
+const ZOOMS = [0.1, 0.16, 0.2, 0.26, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 2, 3, 4];
+
+describe("arrow labels never sit on each other (the isocan.io walk: Home over Row)", () => {
+  const box = (id: string, x: number): RouteBox => ({ id, x, y: 0, w: 390, h: 844 });
+  const link = (from: string, to: string, key: string, label: string): WireLink => ({ from, to, key, label, transition: "push", rule: "intent" });
+  // Two jumps whose spans nest, so they ride adjacent lanes 26 units apart, their labels both near the middle screen.
+  const stacked = () => ({
+    screens: ["it_a", "it_b", "it_c", "it_d", "it_e"].map((id, i) => box(id, i * 470)),
+    links: [link("it_b", "it_d", "main.3#row", "Row"), link("it_a", "it_e", "header#action-1", "Home")],
+    hot: (_id: string, key: string) => estimatedHot(key, { w: 390, h: 844 }),
+  });
+
+  it("two stacked jumps: both labels still show at the overview zoom, slid apart along their runs", () => {
+    const { arrows } = routeFlow(stacked());
+    const row = arrows.find((a) => a.link.label === "Row")!;
+    const home = arrows.find((a) => a.link.label === "Home")!;
+    expect([row.shape, home.shape]).toEqual(["jump", "jump"]);
+    expect(Math.abs(row.lane! - home.lane!)).toBe(1);
+    for (const z of ZOOMS) expect(labelClashes(arrows, z)).toEqual([]);
+    // Sliding kept both: at 0.3 each run holds its pill and they clear each other.
+    expect(labelShown(row, 0.3) && labelShown(home, 0.3)).toBe(true);
+    // And a label never leaves its run: it sits on the lane, between the legs, with room for its pill at the zoom it shows from.
+    for (const a of [row, home]) {
+      const [x0, x1] = [Math.min(a.pts[1]![0], a.pts[2]![0]), Math.max(a.pts[1]![0], a.pts[2]![0])];
+      expect(a.label.y).toBe(a.pts[1]![1]);
+      const half = labelNeed(a.link.label) / a.label.show / 2;
+      expect(a.label.x - half).toBeGreaterThanOrEqual(x0 - 1e-6);
+      expect(a.label.x + half).toBeLessThanOrEqual(x1 + 1e-6);
+    }
+  });
+
+  it("the routes are untouched by the labels: still no crossings", () => {
+    expect(crossings(routeFlow(stacked()).arrows)).toBe(0);
+  });
+
+  it("on the recorded Jev flow: no two labels overlap at any zoom, at rest or with any screen pointed at", () => {
+    const f = jev();
+    for (const pointed of [null, ...f.boxes.map((b) => b.id)]) {
+      const { arrows } = routeFlow({ screens: f.boxes, obstacles: f.obstacles, links: f.links, hot: f.hot, pointed });
+      for (const z of ZOOMS) expect(labelClashes(arrows, z), `${pointed}`).toEqual([]);
+    }
+    const { arrows } = routeFlow({ screens: f.boxes, obstacles: f.obstacles, links: f.links, hot: f.hot });
+    // The recorded flow has the walk's shape too: Home's Row jump rides between the two Sign in lanes, 26 units from each.
+    const row = arrows.find((a) => a.link.from === "s2_home" && a.shape === "jump")!;
+    expect(row.link.label).toBe("Row");
+    expect(row.label.show).toBeGreaterThan(labelNeed("Row") / row.label.run);
+    // And at the overview zoom nothing is lost: every label whose run holds it is still drawn.
+    for (const a of arrows) if (0.3 >= labelNeed(a.link.label) / a.label.run) expect(labelShown(a, 0.3), a.id).toBe(true);
+    // Pointing at a screen never moves a label already there: tabs are placed after the flow's own labels.
+    const pointedHome = routeFlow({ screens: f.boxes, obstacles: f.obstacles, links: f.links, hot: f.hot, pointed: "s2_home" }).arrows.filter((a) => !a.chrome);
+    expect(pointedHome.map((a) => a.label)).toEqual(arrows.map((a) => a.label));
+  });
+
+  it("where two cannot both fit, the longer run keeps its label and the other waits (hover still shows it)", () => {
+    const arrow = (id: string, label: string, x: number, y: number, run: number): FlowArrow => ({
+      id,
+      link: { from: id, to: "it_x", key: "main#k", label, transition: "push", rule: "intent" },
+      kind: "screen",
+      shape: "jump",
+      pts: [[x - run / 2, y + 100], [x - run / 2, y], [x + run / 2, y], [x + run / 2, y + 100]],
+      label: { x, y, run, show: 0 },
+      chrome: false,
+    });
+    // Short first in the input: order is by run, not by arrival.
+    const [short, long] = placeLabels([arrow("it_short", "Row", 500, -110, 120), arrow("it_long", "Home", 500, -100, 200)]);
+    expect(long!.label).toMatchObject({ x: 500, y: -100, show: labelNeed("Home") / 200 });
+    expect(labelShown(long!, 0.5)).toBe(true);
+    // 120 units of run cannot slide Row clear of Home at 0.5: it is dropped there, and shown again once zoom separates the lanes.
+    expect(labelShown(short!, 0.5)).toBe(false);
+    expect(short!.label.show).toBeLessThan(3);
+    expect(labelClashes([short!, long!], 0.5)).toEqual([]);
+    expect(labelClashes([short!, long!], short!.label.show)).toEqual([]);
   });
 });
 
