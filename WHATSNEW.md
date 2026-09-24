@@ -38,6 +38,21 @@ second week.
   redraws every wireframe in its colours, type and corners — one undo takes it
   back — and new wireframes arrive in it. `/wire style --default` returns to
   grey.
+- **Sample content.** `/wire flesh` swaps the grey bars for believable words
+  and small pictures that fit what you asked for — a feed of posts, a list of
+  deliveries — and `/wire flesh --bars` takes them back out.
+- **Arrows you can use.** Each button or row that goes somewhere gets its own
+  arrow, starting from that button and ending in an arrowhead, routed so they
+  don't cross. Click one to play the prototype from there, jump to where it
+  goes, or drag its head onto a different screen to change where it goes.
+  `/wire links` lists every link with a picker, if you'd rather use the keyboard.
+- **Just the screen.** A wireframe no longer carries a second title strip and a
+  phone outline inside its frame; the item is the screen. `/wire rerender`
+  brings wireframes drawn before today up to date.
+- **Finding prototypes.** Hover the minimap and the prototypes light up; ⌘K →
+  *Find prototypes* lists them and takes you there.
+- **`/wire` leaves a record in the Chat** of what it made, and undoing the
+  act takes the message back with it.
 - The same things work from the terminal with `isocan wire`.
 
 

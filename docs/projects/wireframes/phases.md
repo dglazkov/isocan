@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–6 are CLOSED; phase 7 (sample content) is PART-DONE — built and proved locally, the isocan.io walk waits on a promotion (23 Sep 2026).** **Next: wireframes phase 8** — true arrows, just the screen, finding prototypes, `/wire` in the Chat, and Porchlight's findings. Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
+**Where we are: phases 0–6 are CLOSED; phases 7 (sample content) and 8 (true arrows, just the screen, finding prototypes, the Chat record, Porchlight's findings) are PART-DONE — built and proved locally, their isocan.io walks wait on the promotion (23 Sep 2026).** **Next: promote, then walk phases 7 and 8 on the walk canvas.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
 
 ## Phase 0 — The catalog, drawn
 
@@ -180,7 +180,7 @@ re-provision keeps it.
 - **2026-09-23** — The home gained one vendor-neutral answerer, `POST /api/judgment`: it forwards a question file with its own `TYPESAFE_API_KEY` behind the same door checks as `/api/ops` plus a per-badge rate limit, and a test holds the key out of every response and log line. Judge phase 2 can adopt it as its hosted seam.
 - **2026-09-23** — The composer's canvas half moved behind a `WirePort`: the web runs the CLI's `composeFlow`, `restyle` and `writePrototype` unchanged, and a test holds both surfaces to identical op shapes. A keyless CLI now answers through its home and says so.
 - **2026-09-23** — The arrows moved from phase 3 landed as a lazy underlay that reads kept screens' files; `UnderlayFacts.readText` and `DialogHost.{readText,getCanvas,judge,notice}` are the shell additions (authoring.md).
-- **2026-09-23** — Open: the entry chunk is **728,367 against CEILING 727,800 — 567 bytes over**, after everything that could be lazy was: the `/wire` command row, the dialog descriptor, and the arrows' "two kept screens?" check must be known at first paint. Under JUMP, so it lands as a performance finding; answering it (raise with this reason, or find 567 bytes elsewhere) is Dion's call.
+- **2026-09-23** — Answered 23 Sep (phase 8's record: CEILING raised to 730,100 at Dion's call). Was: the entry chunk is **728,367 against CEILING 727,800 — 567 bytes over**, after everything that could be lazy was: the `/wire` command row, the dialog descriptor, and the arrows' "two kept screens?" check must be known at first paint. Under JUMP, so it lands as a performance finding; answering it (raise with this reason, or find 567 bytes elsewhere) is Dion's call.
 - **2026-09-23** — Open: modules cannot contribute a row to the Add popover, so `/wire` is the only door there; an Add row wants a module slot.
 
 - **2026-09-23** — The walk moved from dev to isocan.io at Dion's choice; prod was promoted to `green` (`bfb1e65a`) for it.
@@ -249,7 +249,7 @@ survives `wire style`, variations and `wire prototype`.
 
 ## Phase 8 — From real use: true arrows, just the screen, and what people tripped on
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 23 September 2026.** Built by two builders and merged: per-hotspot orthogonal arrows with ordered lanes (0 crossings on the recorded flow, and on the merged walk after a retarget made two jumps interleave), clickable (Play from here, Go to, Change target…/drag, Reset, Remove — each the same `item.update` `wire link` sends, one undo), `/wire links` and `isocan wire play`; wires drawn as just the screen, `wire render --all` / `/wire rerender` (21 of 44 re-rendered, rerun wrote nothing); the minimap's prototype spotlight and ⌘K *Find prototypes*; web `/wire` acts recorded in the Chat inside their own undo group; Porchlight's findings 1, 2, 4, 5, 6, 8, 9, 12 fixed and 3, 7 in part. `npm test` 616 files green, typecheck clean, the deep lane green but for the known git-spec test; both browser walks on local daemons looked at by the conductor. Proof 3, the walk canvas on isocan.io, waits on the promotion Dion asked for.
 
 Everything Dion raised on 23 Sep 2026 looking at the walk canvas and
 Porchlight, plus Porchlight's own `docs/isocan-notes.md`, in one phase with
@@ -303,3 +303,14 @@ AA contrast; moving a DESIGN.md into a group says it changes what it governs.
    the screen-only render; the prototypes highlight and the minimap
    highlight; `/wire` results in the Chat history.
 3. The walk canvas on isocan.io after a promotion.
+
+### Trajectory
+
+- **2026-09-23** — Override storage changed shape: each hotspot's decision is its own property, `wireLink:<slot>#<element>`, because a read-modify-write of one JSON map cannot be made race-safe from outside the reducer; the reducer's per-key merge does it. The old `wireLinks` is read and folded on first write.
+- **2026-09-23** — The research's 44-unit first lane lost to the canvas's own item title strip (21 screen px at every zoom): measured on the merged build, 96 units is the lowest lane that clears it down to 0.26 zoom. Jumps whose ends interleave now route under the row.
+- **2026-09-23** — The full-screen anchor rides `?at=`, not `#`, because a fragment on a canvas address is where a sign-in pass rides (`lib/arrival.ts`).
+- **2026-09-23** — Underlays gained write access and a transient paint layer, through a lazily loaded host (+648 entry bytes instead of +1,969). CEILING raised 727,800 → 730,100 at Dion's call, reason in `scripts/bundle-ceiling.mjs`.
+- **2026-09-23** — Open: Porchlight #3, `wire link` / `isocan set` hanging minutes on isocan.io, did not reproduce locally and touches non-wireframe verbs — a home or replica check on isocan.io.
+- **2026-09-23** — Open: `design set` still prints no "this now governs…" note (it lives in `packages/cli/src/main.ts`); `mv --in` and `canvas group add/remove` do.
+- **2026-09-23** — Open: text-item headings are fixed px (18/15/13.5) against a 16–128 px body, so a large text node's heading is smaller than its body; the fix is em sizes together with the heading size `core/textnode.ts` assumes.
+- **2026-09-23** — Open: a touch long-press on an arrow may open the canvas menu (the shell's cancel check matches only real buttons and links), and hotspot positions are unverified on an item resized away from its document size.

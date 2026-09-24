@@ -433,11 +433,23 @@
  * combined: 727,733. Still 19,200 under the 747,000 the reclaim started from;
  * the margin is 67 bytes, thin on purpose, so the next eager byte is asked
  * about.
+ *
+ * **727,800 → 730,100 on 23 Sep 2026, raised at Dion's call** ("raise the
+ * limit"). The day's features had already taken main from 727,733 to 729,180
+ * — the `/wire` door in the Chat (+582: the composer has to know the verb
+ * before the module's chunk arrives), the voice fast path's shadow chunk
+ * names (+79), and the rest in small change. Wireframes phase 8 added 827:
+ * "just the screen" (+167, the minimap's prototype spotlight and the ⌘K
+ * "show prototypes" action) and the arrows (+648, the lazily loaded host an
+ * underlay reaches write access through — loading it eagerly cost 1,969, so
+ * the lazy host is what kept this to a creep). Measured combined on the
+ * landing tree: 730,007. Still 16,993 under the 747,000 the 22 Sep reclaim
+ * started from; the margin is 93 bytes, thin on purpose, as above.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 727_800;
+export const CEILING = 730_100;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's
