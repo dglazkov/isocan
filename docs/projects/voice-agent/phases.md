@@ -3,6 +3,8 @@
 **11 September 2026.** The implementation walk for [design.md](design.md),
 guided by the acceptance criteria in [journey.md](journey.md).
 
+**Where we are, 23 Sep 2026: phases 1–5 are PART-DONE (the 18 Sep reconciliation below), and voice-agent phase 6 is next** — the fast path of [fast-path.md](fast-path.md), in shadow first.
+
 **Where we are (reconciled 18 Sep 2026): most of this walk is built, and it was
 not built in this order.** The system was re-implemented and landed as
 `packages/voice-agent` while this page sat on an unmerged branch still saying
@@ -24,6 +26,8 @@ verb — `isocan rc` reaches the same file with `--acp`.
 ---
 
 ## Phase 1 — Architecture, Provider Seam & Keyless Simulation Backend
+
+**Status: PART-DONE, 18 September 2026.** Re-implemented as `packages/voice-agent`; the seam is Gemini Live only — see design.md's reconciliation.
 
 The foundation: define the provider-agnostic abstraction and build an in-memory
 simulation engine so the entire operation pipeline can be tested without cloud
@@ -61,6 +65,8 @@ credentials, network egress, or financial spend.
 
 ## Phase 2 — CLI-Started Voice Companion (`isocan voice`)
 
+**Status: PART-DONE, 18 September 2026.** No `isocan voice` verb: one entry point, the standing server or `--acp` under `isocan rc` — see design.md's reconciliation.
+
 Build the CLI entry point that launches the voice agent as a local process.
 
 ### Doors
@@ -88,6 +94,8 @@ Build the CLI entry point that launches the voice agent as a local process.
 ---
 
 ## Phase 3 — Live Cloud Provider Adapters (Gemini Live & OpenAI Realtime)
+
+**Status: PART-DONE, 18 September 2026.** Gemini Live built and verified; the OpenAI Realtime half was designed and not built.
 
 Implement the real-time WebSocket adapters for Google Gemini and OpenAI.
 
@@ -122,6 +130,8 @@ Implement the real-time WebSocket adapters for Google Gemini and OpenAI.
 
 ## Phase 4 — Browser Audio Client & Presence Synchronization
 
+**Status: PART-DONE, 18 September 2026.** Devices, routing and presence built (`packages/modules/talk`); OPFS session store and the browser-capability surface partly built — journey.md's front matter holds the score.
+
 Add browser microphone streaming and audio playback to the web app over local loopback.
 
 ### Doors
@@ -150,6 +160,8 @@ Add browser microphone streaming and audio playback to the web app over local lo
 
 ## Phase 5 — Thread Delegation & Decision Readback Protocol
 
+**Status: PART-DONE, 18 September 2026.** Cross-session recall of what was decided is still owed — journey.md's front matter holds the score.
+
 Connect the voice agent to the rest of the canvas ecosystem.
 
 ### Steps
@@ -165,3 +177,56 @@ Connect the voice agent to the rest of the canvas ecosystem.
 
 ### Acceptance
 - Full multi-agent interaction demonstrated and replayable from the oplog.
+
+## Phase 6 — Jev listens: the fast path in shadow
+
+**Status: NOT STARTED.**
+
+Designed 23 Sep 2026 in [fast-path.md](fast-path.md), at Dion's ask: Jev does
+the simple spoken commands and the model does the rest.
+
+**Outcome:** the resolver — one Jev call per finished user turn through the
+home's `POST /api/judgment`, the questions of fast-path.md (`action`,
+`subject`, `relation`, `target`, `simple`) generated from the voice tools and
+the canvas projection — runs on every command **and never acts**. Each turn
+records the utterance, Jev's answers with their probabilities, what the live
+model actually did that turn (its tool calls), and whether that act was undone
+within a few seconds. A script turns the record into a report: per action,
+agreement between Jev and the model's unreverted act, a reliability curve,
+and the threshold at which agreement reaches 95% on at least 30 commands.
+
+**Proof:**
+
+1. Tests of question generation (options from the tools and the canvas; a
+   canvas over 255 items escalates) and of the record.
+2. **A scripted command set**, since this phase needs no microphone: 120+
+   synthetic commands on a synthetic "Acme" canvas — simple moves, aligns,
+   resizes, deletes, undo, and deliberately complex ones that must escalate
+   ("add a screen that explains returns", "move the red one and then make it
+   bigger") — each with the act a person meant, run through the resolver with
+   the real key. The report: accuracy per action, the escalation rate on the
+   complex set, the reliability curve, measured latency and cost.
+3. A `docs/verify/` walk for a person with a microphone, so the shadow record
+   also fills from real speech.
+
+## Phase 7 — The fast path acts
+
+**Status: NOT STARTED.**
+
+**Outcome:** for each action whose phase-6 threshold exists, a command whose
+answers all clear it is executed at once through the same tool implementation
+the model's call uses (one `Operation`, one undo, the same presence), announced
+("moved Login left of Home — say undo"), and the live session told so the model
+does not do it again; everything else escalates to the model unchanged. The
+thresholds live in data beside the resolver, with the phase-6 numbers that set
+them.
+
+**Proof:**
+
+1. Tests: act vs escalate at the thresholds; one op per fast act; the model's
+   duplicate tool call dropped; "undo" as a fast act.
+2. The scripted set end to end on a local daemon: the canvas after each
+   command equals the intended act, escalations untouched, latency of the fast
+   path against the model path measured.
+3. A `docs/verify/` walk: a person says ten commands out loud and reports
+   which felt instant, which escalated, and whether any acted wrongly.
