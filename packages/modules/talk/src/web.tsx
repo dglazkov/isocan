@@ -12,6 +12,7 @@ import {
   type CanvasContents,
   type ComposerFacts,
   type DialogFacts,
+  type DialogHost,
   type Operation,
   type OverlayFacts,
   type WebHost,
@@ -46,6 +47,21 @@ import { voiceCore } from "./core.ts";
 const KEY_SHELF = "isocan:voice:key";
 const MODEL_SHELF = "isocan:voice:model";
 const VOICE_SHELF = "isocan:voice:voice";
+/**
+ * **The fast path's switch** (voice-agent phase 6): `"shadow"` means Jev
+ * listens to every finished turn and records what it would have done, and
+ * never acts. Off unless a person turns it on — a Jev call per turn is a cost
+ * somebody opts into, not one a page decides to spend.
+ */
+const FASTPATH_SHELF = "isocan:voice:fastpath";
+
+function shadowOn(): boolean {
+  try {
+    return localStorage.getItem(FASTPATH_SHELF) === "shadow";
+  } catch {
+    return false;
+  }
+}
 
 /** How many bars each meter shows; the shared paint divides the level into
  *  this many buckets. */
@@ -652,6 +668,18 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   // The capture's setup is abortable: a stop while the microphone permission
   // is still pending must not hand a live capture to an idle panel.
   const abortRef = useRef<AbortController | null>(null);
+  /**
+   * **The fast path in shadow, when it is switched on** (`shadow.ts`). Fed
+   * from the same socket handler as everything else — which is the whole
+   * reason it can pair a turn's words with the model's calls — and handed no
+   * host, so the only thing it can do is keep a record and say a line.
+   */
+  const shadowRef = useRef<import("./shadow.ts").Shadow | null>(null);
+  /* The canvas moving is how an undo by keyboard is seen: the shadow compares
+     the item the model's act touched with where it was before the act. */
+  useEffect(() => {
+    shadowRef.current?.canvasChanged(snapshotItemsFor(facts.canvas, facts.selection ?? []));
+  }, [facts.canvas, facts.selection]);
 
   /**
    * **Transcription arrives in PIECES, and the pieces are appended.**
@@ -692,6 +720,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   }, []);
 
   const stop = useCallback(() => {
+    void shadowRef.current?.flush();
+    shadowRef.current = null;
     captureRef.current?.stop();
     captureRef.current = null;
     abortRef.current?.abort();
@@ -720,6 +750,20 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     localStorage.setItem(KEY_SHELF, key.trim());
     localStorage.setItem(MODEL_SHELF, model.trim());
     say("system", "opening the live session…");
+    if (shadowOn() && !shadowRef.current) {
+      // Lazily, and only when switched on: a session without it downloads none of it.
+      const shadow = await import("./shadow.ts");
+      const current = factsRef.current;
+      const judge = (current.host as Partial<DialogHost>).judge;
+      shadowRef.current = shadow.createShadow({
+        canvasId: current.canvasId,
+        ask: shadow.homeAsk(current.canvasId, judge ? (q) => judge(q) : undefined),
+        items: () => snapshotItemsFor(factsRef.current.canvas, factsRef.current.selection ?? []),
+        save: (turn) => shadow.saveShadowTurn(turn),
+        note: (text) => say("system", text),
+      });
+      say("system", "fast path in shadow — Jev listens to each turn and never acts");
+    }
     const socket = new WebSocket(liveUrl(key.trim()));
     socketRef.current = socket;
     /**
@@ -747,6 +791,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       socket.send(JSON.stringify(liveSetup(model.trim(), instructions, undefined, voiceRef.current)));
     };
     socket.onclose = (event: CloseEvent) => {
+      void shadowRef.current?.flush();
+      shadowRef.current = null;
       captureRef.current?.stop();
       captureRef.current = null;
       inPaintRef.current(0);
@@ -782,8 +828,10 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         if (gatedFrames > 0) say("system", `${gatedFrames} microphone frame${gatedFrames === 1 ? "" : "s"} dropped before the provider was ready`);
       }      const content = message.serverContent as Record<string, unknown> | undefined;
       if (content) {
-        if (content.inputTranscription && (content.inputTranscription as { text?: string }).text)
+        if (content.inputTranscription && (content.inputTranscription as { text?: string }).text) {
           say("you", (content.inputTranscription as { text: string }).text);
+          shadowRef.current?.heard((content.inputTranscription as { text: string }).text);
+        }
         if (content.outputTranscription && (content.outputTranscription as { text?: string }).text)
           say("model", (content.outputTranscription as { text: string }).text);
         // Barge-in: the person spoke over the model. Queued chunks must not
@@ -792,12 +840,17 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
           playbackRef.current?.stopNow();
           seal();
           say("system", "interrupted");
+          shadowRef.current?.turnDone();
         }
         // The provider's own end-of-turn. `generationComplete` fires when the
         // model stops producing and `turnComplete` when the turn is closed;
         // either one means the next piece of transcription belongs to a new
         // line, and sealing twice is a no-op.
         if (content.turnComplete || content.generationComplete) seal();
+        // The shadow closes a turn on `turnComplete` only: the model's tool
+        // calls can arrive after `generationComplete`, and they belong to this
+        // turn.
+        if (content.turnComplete) shadowRef.current?.turnDone();
         for (const part of (content.modelTurn as { parts?: unknown[] } | undefined)?.parts ?? []) {
           const inline = (part as { inlineData?: { data?: string; mimeType?: string } }).inlineData;
           if (inline?.data) {
@@ -820,6 +873,9 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         const calls = (message.toolCall as { functionCalls: { id: string; name: string; args?: Record<string, unknown> }[] }).functionCalls;
         const responses: { id: string; name: string; response: Record<string, unknown> }[] = [];
         for (const call of calls) {
+          // Told BEFORE it runs, so the shadow's turn still holds the canvas
+          // the sentence was said about.
+          shadowRef.current?.toolCall(call.name, call.args ?? {});
           const response = await runTool(call.name, call.args ?? {}, factsRef.current);
           say("system", `${call.name} → ${response.ok ? "done" : String(response.error)}`);
           /* A non-blocking tool's answer says WHEN it should reach the
@@ -1185,6 +1241,97 @@ function Transcript({
 }
 
 /**
+ * **The fast path's switch, and its record** (voice-agent phase 6).
+ *
+ * Off by default. On, every finished turn asks Jev once — through the home,
+ * never with a key in this browser — what it would have done, and keeps the
+ * answer beside what the model did. The record is this browser's own
+ * (`shadow.ts`: OPFS, `voice/fast-path-shadow.jsonl`), so it is shown here
+ * with the two things a person can do with it: take it away, or throw it
+ * away. Nothing is read until the switch is touched: the count is a lazy
+ * import, like the shadow itself.
+ */
+const SHADOW_CSS = `
+  .talk-shadow { display: grid; gap: 4px; }
+  .talk-shadow-switch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+  .talk-shadow .talk-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
+`;
+
+function ShadowSwitch() {
+  const [on, setOn] = useState(shadowOn);
+  const [count, setCount] = useState<{ n: number; where: string } | null>(null);
+  const refresh = useCallback(() => {
+    void import("./shadow.ts")
+      .then((s) => s.readShadow())
+      .then(({ turns, where }) => setCount({ n: turns.length, where }))
+      .catch(() => setCount(null));
+  }, []);
+  useEffect(() => {
+    if (on) refresh();
+  }, [on, refresh]);
+  return (
+    <div className="talk-shadow">
+      <style>{SHADOW_CSS}</style>
+      <label className="talk-shadow-switch">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => {
+            const next = e.target.checked;
+            try {
+              if (next) localStorage.setItem(FASTPATH_SHELF, "shadow");
+              else localStorage.removeItem(FASTPATH_SHELF);
+            } catch {
+              /* a browser that refuses storage keeps the switch off */
+            }
+            setOn(next);
+          }}
+        />
+        Fast path in shadow
+      </label>
+      <p className="talk-note">
+        Jev hears each command and notes what it would have done beside what the model did. It never acts. One judge call a turn,
+        through this canvas's home. Starts with the next session.
+      </p>
+      {on && count && (
+        <p className="talk-note">
+          {count.n} turn{count.n === 1 ? "" : "s"} recorded {count.where === "opfs" ? "in this browser" : "in this tab only"}
+          {count.n > 0 && (
+            <>
+              {" · "}
+              <button
+                type="button"
+                className="talk-log-act"
+                onClick={() => {
+                  void import("./shadow.ts").then(async (s) => {
+                    const { turns } = await s.readShadow();
+                    const blob = new Blob([turns.map((t) => JSON.stringify(t)).join("\n") + "\n"], { type: "application/x-ndjson" });
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = s.SHADOW_FILE;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+                  });
+                }}
+              >
+                Download
+              </button>
+              <button
+                type="button"
+                className="talk-log-act"
+                onClick={() => void import("./shadow.ts").then((s) => s.clearShadow()).then(refresh)}
+              >
+                Clear
+              </button>
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * **The key panel, in one spelling.** Both doors open it — the floating mic
  * and the composer's — and a second copy would be the one-string-two-spellings
  * bug wearing a dialog. It closes itself by calling back rather than owning
@@ -1217,6 +1364,7 @@ function ConfigPop({
           <input value={session.model} onChange={(e) => session.setModel(e.target.value)} autoComplete="off" />
         </label>
         <p className="talk-note">Saved in this browser only — never on the canvas, never in the daemon.</p>
+        <ShadowSwitch />
         <button
           type="button"
           className="talk-save"
@@ -1278,6 +1426,7 @@ function ConfigDialog(facts: DialogFacts) {
         Model
         <input value={session.model} onChange={(e) => session.setModel(e.target.value)} autoComplete="off" />
       </label>
+      <ShadowSwitch />
       {!facts.canEdit && <p>This canvas is read-only here, so the model can talk but not write.</p>}
       <ul className="talk-lines" aria-live="polite">
         {session.lines.map((line, i) => (

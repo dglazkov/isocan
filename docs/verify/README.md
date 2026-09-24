@@ -48,6 +48,7 @@ it" into either `works` or an issue.
 | [Talking to the canvas itself](2026-09-20-talk-on-canvas.md) | the mic ON the canvas — the surface a stranger meets first | needs a microphone, ears, and a judgement about whether the pause feels like a conversation | `unverified` |
 | [Voice, out loud](2026-09-20-voice.md) | the STANDALONE voice agent on its own port, the one `@mention` can summon | needs a microphone, ears, and a judgement about whether the pause feels like a conversation | `unverified` |
 | [A drawing's colour](2026-09-20-drawing-colour.md) | the Pen recording the ink colour it was drawn in | needs a hand drawing with a pointer, and eyes to agree the stroke is the colour the data now claims | `unverified` |
+| [The fast path in shadow](2026-09-23-voice-fast-path-shadow.md) | Jev resolving REAL speech beside the live model, and the take-back label | needs a microphone, speech that mishears, and a person pressing undo on a wrong act — plus the timing of words against the model's call | `unverified` |
 | [Undo, in both doorways](2026-09-20-undo.md) | the harness retracting through the daemon, and the browser dialog's refusal | the harness branch has never executed against a live daemon; the browser refusal has never rendered | `unverified` |
 
 ## Adding one

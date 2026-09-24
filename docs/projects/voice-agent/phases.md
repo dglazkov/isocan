@@ -3,7 +3,7 @@
 **11 September 2026.** The implementation walk for [design.md](design.md),
 guided by the acceptance criteria in [journey.md](journey.md).
 
-**Where we are, 23 Sep 2026: phases 1–5 are PART-DONE (the 18 Sep reconciliation below), and voice-agent phase 6 is next** — the fast path of [fast-path.md](fast-path.md), in shadow first.
+**Where we are, 23 Sep 2026: phases 1–5 are PART-DONE (the 18 Sep reconciliation below); phase 6 is CLOSED — the fast path runs in shadow and Jev agrees with the meant act ~95% of the time on scripted commands. Next: voice-agent phase 7**, the fast path acting, starting with `move`.
 
 **Where we are (reconciled 18 Sep 2026): most of this walk is built, and it was
 not built in this order.** The system was re-implemented and landed as
@@ -180,7 +180,7 @@ Connect the voice agent to the rest of the canvas ecosystem.
 
 ## Phase 6 — Jev listens: the fast path in shadow
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 23 September 2026.** The resolver runs in shadow behind an off-by-default switch and never acts (tested behaviourally and on its source); on 197 scripted Acme commands with the real key Jev agreed with the meant act **94–95%** (held-out hard set 94–97%), escalated ~90% of the complex set, p50 latency 121–219 ms, $0.017 a run — the conductor reran it independently and matched. The microphone walk is `docs/verify/2026-09-23-voice-fast-path-shadow.md`.
 
 Designed 23 Sep 2026 in [fast-path.md](fast-path.md), at Dion's ask: Jev does
 the simple spoken commands and the model does the rest.
@@ -208,6 +208,14 @@ and the threshold at which agreement reaches 95% on at least 30 commands.
    complex set, the reliability curve, measured latency and cost.
 3. A `docs/verify/` walk for a person with a microphone, so the shadow record
    also fills from real speech.
+
+### Trajectory
+
+- **2026-09-23** — On commands Jev is *under*-confident (ECE ~0.19; right 98–100% above p 0.7) — the opposite of the wireframe archetypes, so calibration is per question, never borrowed. `move` meets 95%-on-30 at p ≥ 0.60 today; `delete`, `shrink`, `select`, `show` are at 100% but short of n = 30.
+- **2026-09-23** — `resize` split into `grow`/`shrink` (Jev chooses, it does not count); numbers and single axes ("300 pixels", "400 by 800") must escalate. Never fast-path: aligns, multi-item acts, "into a group", colour words the canvas does not name, version switches.
+- **2026-09-23** — The Jev client moved to `@isocan/core/jev` (a subpath) for its second caller; the wireframe answerer re-exports it.
+- **2026-09-23** — Open: the entry chunk grew 79 bytes (two lazy-chunk file names in the entry's preload list), to 728,446 — now 646 over CEILING, joining wireframes phase 5's 567 in the one answer owed to Dion.
+- **2026-09-23** — Open: phase 7 must first read, from a real record, whether the transcript finishes before the model's first tool call; if not, it holds the model's calls until Jev answers rather than racing it. The browser `undo` tool is still refused (no web retract) — the fast path's own undo needs that first.
 
 ## Phase 7 — The fast path acts
 
