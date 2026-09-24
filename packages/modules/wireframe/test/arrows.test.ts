@@ -7,7 +7,7 @@ import type { CliHost } from "@isocan/cli/modulehost";
 import wireframeCli from "../src/cli.ts";
 import { flowLinks, keptArrows } from "../src/arrows.tsx";
 import { modeOf } from "../src/dialog.tsx";
-import { linkOverrideOp, overrideValue, type ArrowWrite } from "../src/link-override.ts";
+import { linkPatch, linkProp, overridesOf, overrideValue, type ArrowWrite } from "../src/link-override.ts";
 import { linkRows, pickedWrite } from "../src/links-panel.tsx";
 import { GAP, crossings, drawnLinks, estimatedHot, roundedPath, routeFlow, type HotRect, type RouteBox } from "../src/route.ts";
 import {
@@ -66,6 +66,18 @@ describe("the routes, on the recorded Jev flow", () => {
       const { arrows: withTabs } = routeFlow({ screens: f.boxes, obstacles: f.obstacles, links: f.links, hot: f.hot, pointed: b.id });
       expect(crossings(withTabs.filter((a) => !a.chrome)), b.id).toBe(0);
     }
+  });
+
+  it("cross nothing when a person sends a jump over a screen that has a jump of its own (found on the merged walk)", () => {
+    const f = jev();
+    const done = f.links.find((l) => l.from === "s4_detail" && l.label === "Done")!;
+    // Detail's Done sent past Form, to Status — as `wire link` would record it.
+    const screens = f.screens.map((s) => (s.id === "s4_detail" ? { ...s, overrides: { [done.key]: "s6_state" } } : s));
+    const links = inferLinks(screens);
+    const { arrows } = routeFlow({ screens: f.boxes, obstacles: f.obstacles, links, hot: f.hot });
+    const over = arrows.find((x) => x.link.from === "s4_detail" && x.link.to === "s6_state")!;
+    expect(over.shape).toBe("jump");
+    expect(crossings(arrows)).toBe(0);
   });
 
   it("are one per hotspot, not one per pair of screens: Done and Confirm on the detail are two arrows", () => {
@@ -176,6 +188,16 @@ describe("the canvas draws per kept flow", () => {
     const played = keptFlowsOf(canvas, Object.keys(place).map((id) => ({ item: id, spec: specs[id]! })));
     expect(drawn.map((f) => f.flow)).toEqual(["flw_a"]);
     expect(drawn[0]!.links).toEqual(inferLinks(played.find((f) => f.flow === "flw_a")!.screens));
+    // A per-hotspot override (what `wire link` now writes) is read by the canvas: switch Sign in off and its arrow goes.
+    const key = drawn[0]!.links.find((l) => l.from === "a_signin" && l.to === "a_home")!.key;
+    (items["a_signin"]!.properties as Record<string, string>)[linkProp(key)] = LINK_NONE;
+    expect(keptArrows(canvas, read)).toEqual([]);
+    // A person links B's sign in to A's home on purpose (a guest, Porchlight #5): drawn once, from B, and A's home is not drawn twice.
+    (items["b_signin"]!.properties as Record<string, string>)[linkProp(key)] = "a_home";
+    const withGuest = flowLinks(canvas, read);
+    expect(keptArrows(canvas, read)).toEqual([{ from: "b_signin", to: "a_home" }]);
+    const ids = withGuest.flatMap((f) => f.links.map((l) => `${l.from}|${l.key}`));
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 
@@ -258,19 +280,22 @@ describe("an arrow's menu is `wire link`", () => {
       const before = structuredClone(h.items.get("it_list")!);
       await h.cli("wire", "link", "it_list", "main.3#row", ...c.args);
       const fromCli = h.sent.at(-1)!;
-      expect(linkOverrideOp(before, "main.3#row", overrideValue(c.write)), c.write.kind).toEqual(fromCli);
+      // What the arrow menu sends: `linkPatch` on the screen as it stands — the op the CLI sent.
+      expect({ type: "item.update", itemId: before.id, patch: linkPatch(before, "main.3#row", overrideValue(c.write)) }, c.write.kind).toEqual(fromCli);
     }
     expect(h.sent).toHaveLength(cases.length);
   });
 
-  it("a write keeps a person's other decisions on the same screen", () => {
-    const item = { id: "it_list", properties: { [LINKS_PROP]: JSON.stringify({ "header#leading": LINK_NONE }) } } as unknown as Item;
-    expect(linkOverrideOp(item, "main.3#row", "it_home")).toEqual({
-      type: "item.update", itemId: "it_list", patch: { properties: { [LINKS_PROP]: JSON.stringify({ "header#leading": LINK_NONE, "main.3#row": "it_home" }) } },
-    });
-    expect(linkOverrideOp({ id: "it_list", properties: { [LINKS_PROP]: JSON.stringify({ "main.3#row": "it_home" }) } }, "main.3#row", null)).toEqual({
-      type: "item.update", itemId: "it_list", patch: { removeProperties: [LINKS_PROP] },
-    });
+  it("a write keeps a person's other decisions on the same screen — and the canvas reads what it wrote", () => {
+    // A screen still carrying the older JSON: the first write folds it into per-hotspot keys.
+    const legacy = { id: "it_list", properties: { [LINKS_PROP]: JSON.stringify({ "header#leading": LINK_NONE }) } } as unknown as Item;
+    const patch = linkPatch(legacy, "main.3#row", "it_home");
+    expect(patch).toEqual({ properties: { [linkProp("header#leading")]: LINK_NONE, [linkProp("main.3#row")]: "it_home" }, removeProperties: [LINKS_PROP] });
+    const after = { ...legacy.properties, ...patch.properties } as Record<string, string>;
+    for (const k of patch.removeProperties ?? []) delete after[k];
+    expect(overridesOf(after)).toEqual({ "header#leading": LINK_NONE, "main.3#row": "it_home" });
+    // Reset touches only its own hotspot's key.
+    expect(linkPatch({ properties: after }, "main.3#row", null)).toEqual({ removeProperties: [linkProp("main.3#row")] });
   });
 });
 
@@ -288,7 +313,7 @@ describe("/wire links", () => {
       { id: "it_list", title: "Deliveries", spec: wireframe("list", o), overrides: { "main.3#row": "it_home" } },
       { id: "it_detail", title: "Delivery", spec: wireframe("detail", o) },
     ];
-    const flow = { flow: "flw_acme", request: o.request, screens, items: [] };
+    const flow = { flow: "flw_acme", request: o.request, screens, items: [], guests: [] };
     const rows = linkRows([flow]);
     expect(rows.map((r) => `${r.link.from}|${r.link.key}`)).toEqual(inferLinks(screens, { withNone: true }).map((l) => `${l.from}|${l.key}`));
     const row = rows.find((r) => r.link.from === "it_list" && r.link.key === "main.3#row")!;

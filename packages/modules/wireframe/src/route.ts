@@ -20,7 +20,10 @@ import { LINK_BACK, type WireLink } from "./links.ts";
  *   right on the right — so no lane crosses another leg (the nudging step of
  *   Wybrow, Marriott & Stuckey 2009). On the recorded Jev flow that is 1
  *   crossing without the ordering and 0 with it; `test/arrows.test.ts` holds
- *   the 0.
+ *   the 0. A lane a leg rises through moves up past that leg's lane; and
+ *   when two jumps interleave (each has a leg inside the other's span, so no
+ *   order of lanes on one side can separate them) the longer rides a lane
+ *   44 + 26·k UNDER the row, between the screens' bottom edges.
  * - **Across rows** — a Z through the column gutter: out of the facing side
  *   at the hotspot's height, along the gutter, into the target's side.
  *
@@ -81,6 +84,8 @@ export const GAP = 10;
 /** Clear of the item's counter-scaled title strip above every screen (~24 screen px, 80 world at 0.3): the research's 44 came from a harness with no titlebars, and the walk found the strip over the lowest lane. */
 export const LANE0 = 96;
 export const LANE = 26;
+/** Under the row there is no title strip to clear. */
+export const LANE0_BELOW = 44;
 export const MAX_LANES = 4;
 export const CORNER = 18;
 const NUDGE = 16;
@@ -148,6 +153,9 @@ interface Work {
   lane?: number;
   pts?: Point[];
   label?: FlowArrow["label"];
+  slot?: { x0: number; x1: number; lane: number };
+  /** Riding a lane under the row: it interleaves with a jump above. */
+  below?: boolean;
 }
 
 const overlapsY = (box: RouteBox, top: number, bottom: number) => box.y < bottom && box.y + box.h > top;
@@ -186,8 +194,9 @@ export function routeFlow(input: RouteInput): { arrows: FlowArrow[]; needs: Need
   const lanes: Array<Array<{ x0: number; x1: number; lane: number }>> = rows.map(() => []);
   const restWork = work(rest, false);
   const chromeWork = work(chrome, true);
-  jumps(restWork, lanes);
-  jumps(chromeWork, lanes);
+  const under: typeof lanes = rows.map(() => []);
+  jumps(restWork, lanes, under);
+  jumps(chromeWork, lanes, under);
 
   // Steps: straight, at the hotspot's height, nudged apart where two ports would touch.
   const used = new Map<string, number[]>();
@@ -251,10 +260,10 @@ export function routeFlow(input: RouteInput): { arrows: FlowArrow[]; needs: Need
   }
   return { arrows, needs: marks };
 
-  function jumps(list: Work[], occ: typeof lanes) {
+  function jumps(list: Work[], occ: typeof lanes, occBelow: typeof lanes) {
     const js = list.filter((d) => d.shape === "jump").sort((p, q) => Math.abs(p.b.x - p.a.x) - Math.abs(q.b.x - q.a.x));
     if (js.length === 0) return;
-    // Departures: the hotspot's column on the source's top edge, nudged apart.
+    // Departures: the hotspot's column on the source's edge, nudged apart.
     const tops = new Map<string, Work[]>();
     for (const d of js) tops.set(d.a.id, [...(tops.get(d.a.id) ?? []), d]);
     for (const legs of tops.values()) {
@@ -265,50 +274,133 @@ export function routeFlow(input: RouteInput): { arrows: FlowArrow[]; needs: Need
         last = d.sx;
       }
     }
+    const side = (d: Work) => (d.below ? occBelow : occ)[rowOf.get(d.a.id)!]!;
+    const take = (d: Work, from: number) => {
+      const row = side(d);
+      let lane = from;
+      while (row.some((o) => o !== d.slot && o.lane === lane && !(d.slot!.x1 < o.x0 || d.slot!.x0 > o.x1))) lane++;
+      d.lane = lane;
+      d.slot!.lane = lane;
+    };
     // Lanes, from a provisional arrival at the target's middle: short spans take the low lanes.
     for (const d of js) {
       d.ex = d.b.x + d.b.w / 2;
-      const row = occ[rowOf.get(d.a.id)!]!;
-      const x0 = Math.min(d.sx!, d.ex) - 30;
-      const x1 = Math.max(d.sx!, d.ex) + 30;
-      let lane = 0;
-      while (row.some((o) => o.lane === lane && !(x1 < o.x0 || x0 > o.x1))) lane++;
-      row.push({ x0, x1, lane });
-      d.lane = lane;
+      d.slot = { x0: Math.min(d.sx!, d.ex) - 30, x1: Math.max(d.sx!, d.ex) + 30, lane: 0 };
+      take(d, 0);
+      side(d).push(d.slot);
     }
-    // Order the legs on each top edge so no lane crosses another leg.
-    for (const scr of input.screens) {
-      const legs: Array<{ d: Work; end: "s" | "e"; x: number; fixed: boolean; dir: number; lane: number }> = [];
-      for (const d of js) {
-        if (d.a.id === scr.id) legs.push({ d, end: "s", x: d.sx!, fixed: true, dir: Math.sign(d.ex! - d.sx!), lane: d.lane! });
-        if (d.b.id === scr.id) legs.push({ d, end: "e", x: 0, fixed: false, dir: Math.sign(d.sx! - d.ex!), lane: d.lane! });
-      }
-      if (legs.length === 0) continue;
-      const key = (g: (typeof legs)[number]) => (g.dir < 0 ? g.lane : 1000 - g.lane);
-      legs.sort((p, q) => key(p) - key(q) || (p.fixed ? p.x : 0) - (q.fixed ? q.x : 0));
-      const lo = scr.x + scr.w * 0.12;
-      const hi = scr.x + scr.w * 0.88;
-      let i = 0;
-      while (i < legs.length) {
-        if (legs[i]!.fixed) {
-          i++;
-          continue;
+    place(js);
+    /*
+     * A lane that passes OVER a screen must also ride above every leg standing
+     * on that screen's top edge, or the leg rises through it — ordering the
+     * legs cannot help, because a departure sits at its hotspot's column. The
+     * merged walk found it the day a person sent Detail's Done past Form,
+     * which has a jump of its own. So a lane crossed by another jump's leg
+     * moves up past that jump's lane.
+     *
+     * And when two jumps INTERLEAVE — each has a leg inside the other's span
+     * (Detail → Status over Form, Form → Home over Detail) — no order of lanes
+     * above the row can keep them apart: two arcs on one side of a line whose
+     * ends alternate must cross. So the longer one goes under the row instead,
+     * leaving and landing on the bottom edges. Bounded: a flow settles in a
+     * few rounds.
+     */
+    for (let round = 0; round < 8; round++) {
+      let moved = false;
+      for (const j of js) {
+        for (const k of js) {
+          if (j === k || j.below !== k.below || !legCrosses(k, j)) continue;
+          if (interleaves(j, k)) {
+            const longer = Math.abs(j.ex! - j.sx!) >= Math.abs(k.ex! - k.sx!) ? j : k;
+            if (longer.below) continue;
+            const from = side(longer);
+            from.splice(from.indexOf(longer.slot!), 1);
+            longer.below = true;
+            take(longer, 0);
+            side(longer).push(longer.slot!);
+          } else take(j, k.lane! + 1);
+          moved = true;
         }
-        let j = i;
-        while (j < legs.length && !legs[j]!.fixed) j++;
-        const left = i > 0 ? legs[i - 1]!.x + 24 : lo;
-        const right = j < legs.length ? legs[j]!.x - 24 : hi;
-        for (let k = i; k < j; k++) legs[k]!.x = left + ((right - left) * (k - i + 1)) / (j - i + 1);
-        i = j;
       }
-      for (const g of legs) if (g.end === "e") g.d.ex = g.x;
+      if (!moved) break;
+      place(js);
+    }
+  }
+
+  /** The x of each of a jump's two legs. */
+  function legXs(d: Work): number[] {
+    return [d.sx!, d.ex!];
+  }
+  function within(x: number, d: Work): boolean {
+    return x > Math.min(d.sx!, d.ex!) && x < Math.max(d.sx!, d.ex!);
+  }
+  /** Each has a leg inside the other's span: no lanes on one side can separate them. */
+  function interleaves(j: Work, k: Work): boolean {
+    return legXs(k).filter((x) => within(x, j)).length === 1 && legXs(j).filter((x) => within(x, k)).length === 1;
+  }
+
+  /** Does one of `k`'s legs pass through `j`'s lane? */
+  function legCrosses(k: Work, j: Work): boolean {
+    const jx1 = j.pts![1]![0];
+    const jy = j.pts![1]![1];
+    const jx2 = j.pts![2]![0];
+    const lo = Math.min(jx1, jx2);
+    const hi = Math.max(jx1, jx2);
+    for (const leg of [[k.pts![0]!, k.pts![1]!], [k.pts![2]!, k.pts![3]!]] as const) {
+      const x = leg[0][0];
+      const top = Math.min(leg[0][1], leg[1][1]);
+      const bottom = Math.max(leg[0][1], leg[1][1]);
+      if (x > lo && x < hi && jy > top && jy < bottom) return true;
+    }
+    return false;
+  }
+
+  function place(js: Work[]) {
+    // Order the legs on each edge so no lane crosses another leg — the top edges for lanes above, the bottom for lanes below.
+    for (const below of [false, true]) {
+      const mine = js.filter((d) => Boolean(d.below) === below);
+      for (const scr of input.screens) {
+        const legs: Array<{ d: Work; end: "s" | "e"; x: number; fixed: boolean; dir: number; lane: number }> = [];
+        for (const d of mine) {
+          if (d.a.id === scr.id) legs.push({ d, end: "s", x: d.sx!, fixed: true, dir: Math.sign(d.ex! - d.sx!), lane: d.lane! });
+          if (d.b.id === scr.id) legs.push({ d, end: "e", x: 0, fixed: false, dir: Math.sign(d.sx! - d.ex!), lane: d.lane! });
+        }
+        if (legs.length === 0) continue;
+        const key = (g: (typeof legs)[number]) => (g.dir < 0 ? g.lane : 1000 - g.lane);
+        legs.sort((p, q) => key(p) - key(q) || (p.fixed ? p.x : 0) - (q.fixed ? q.x : 0));
+        const lo = scr.x + scr.w * 0.12;
+        const hi = scr.x + scr.w * 0.88;
+        let i = 0;
+        while (i < legs.length) {
+          if (legs[i]!.fixed) {
+            i++;
+            continue;
+          }
+          let j = i;
+          while (j < legs.length && !legs[j]!.fixed) j++;
+          const left = i > 0 ? legs[i - 1]!.x + 24 : lo;
+          const right = j < legs.length ? legs[j]!.x - 24 : hi;
+          for (let k = i; k < j; k++) legs[k]!.x = left + ((right - left) * (k - i + 1)) / (j - i + 1);
+          i = j;
+        }
+        for (const g of legs) if (g.end === "e") g.d.ex = g.x;
+      }
     }
     for (const d of js) {
       const r = rowOf.get(d.a.id)!;
       const x0 = Math.min(d.sx!, d.ex!);
       const x1 = Math.max(d.sx!, d.ex!);
+      const inSpan = others.filter((o) => overlapsY(o, band[r]!.top, band[r]!.bottom) && o.x < x1 && o.x + o.w > x0);
+      if (d.below) {
+        // Under the row, and under anything taller standing in the lane's span. No title strip below an item.
+        const bottom = Math.max(band[r]!.bottom, ...inSpan.map((o) => o.y + o.h));
+        const ly = bottom + LANE0_BELOW + d.lane! * LANE;
+        d.pts = [[d.sx!, d.a.y + d.a.h], [d.sx!, ly], [d.ex!, ly], [d.ex!, d.b.y + d.b.h + GAP]];
+        d.label = { x: (d.sx! + d.ex!) / 2, y: ly, run: Math.abs(d.ex! - d.sx!) };
+        continue;
+      }
       // Above the row, and above anything taller standing in the lane's span.
-      const top = Math.min(band[r]!.top, ...others.filter((o) => overlapsY(o, band[r]!.top, band[r]!.bottom) && o.x < x1 && o.x + o.w > x0).map((o) => o.y));
+      const top = Math.min(band[r]!.top, ...inSpan.map((o) => o.y));
       const ly = top - LANE0 - d.lane! * LANE;
       d.pts = [[d.sx!, d.a.y], [d.sx!, ly], [d.ex!, ly], [d.ex!, d.b.y - GAP]];
       d.label = { x: (d.sx! + d.ex!) / 2, y: ly, run: Math.abs(d.ex! - d.sx!) };

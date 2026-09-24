@@ -5,11 +5,30 @@ import { AREA_TINT_PROP, GROUP_DEFAULT_SIZE, PAPERS, areaGrid, areasOf, itemsIn,
 import { makeCtx, type Ctx } from "./ctx.ts";
 import { parseXY, printJson, printTable } from "./output.ts";
 import { parseGroupCell } from "./group-placement.ts";
+import { designScopeNotes } from "./design-scope-notes.ts";
 
-export function reportCanvasGroup(ctx: Ctx, result: CanvasGroupResult): void {
+export async function reportCanvasGroup(ctx: Ctx, result: CanvasGroupResult): Promise<void> {
   if (ctx.json) return printJson(result);
   console.log(`${result.dryRun ? "preview" : "applied"} ${result.intent}${result.itemId ? ` ${result.itemId}` : ""}: ${result.changes.length} item${result.changes.length === 1 ? "" : "s"} affected`);
   printTable(result.changes.map((change) => ({ id: change.itemId, parent: change.parentAfter ?? "canvas", position: change.boxAfter ? `${change.boxAfter.x},${change.boxAfter.y}` : "trash", size: change.boxAfter ? `${change.boxAfter.width}x${change.boxAfter.height}` : "—" })));
+  await noteDesignScope(ctx, result);
+}
+
+/**
+ * A membership change that moved a design system says what it now governs
+ * (`designScopeNotes`) — only then is the canvas read again, so every other
+ * move costs nothing. A note that cannot be worked out is left unsaid; the
+ * move itself already landed.
+ */
+async function noteDesignScope(ctx: Ctx, result: CanvasGroupResult): Promise<void> {
+  const moved = result.changes.filter((c) => c.parentBefore !== c.parentAfter && c.state === "live");
+  if (result.dryRun || moved.length === 0) return;
+  try {
+    const canvas = (await ctx.client.snapshot((await resolveCanvas(ctx)).id)).canvas;
+    for (const line of designScopeNotes(canvas, moved)) console.error(`note: ${line}`);
+  } catch {
+    // The note is advice about a move that already happened; never a failure of it.
+  }
 }
 
 function sizeOf(value: string): { width: number; height: number } {
@@ -95,12 +114,12 @@ export function registerCanvasGroups(canvas: Command, context: (cmd: Command) =>
     .option("--place", "place additions below existing members, growing the frame as needed")
     .option("--cell <row,column>", "place in this 1-based grid cell; refuse if the pieces do not fit")
     .option("--dry-run", "report resolved membership and boxes without writing")
-    .action(act(async (handle, ctx, [ref, items, opts]) => report(ctx, await handle.add(ref, items, { ...opts, ...(opts.cell ? { cell: parseGroupCell(opts.cell), place: true } : {}) }))));
+    .action(act(async (handle, ctx, [ref, items, opts]) => await report(ctx, await handle.add(ref, items, { ...opts, ...(opts.cell ? { cell: parseGroupCell(opts.cell), place: true } : {}) }))));
 
   groups.command("remove <items...>").description("Leave each item's group for its parent, preserving world geometry")
     .option("--to-root", "move directly to the canvas root, even from nested groups")
     .option("--dry-run", "report resolved parent changes without writing")
-    .action(act(async (handle, ctx, [items, opts]) => report(ctx, await handle.remove(items, opts))));
+    .action(act(async (handle, ctx, [items, opts]) => await report(ctx, await handle.remove(items, opts))));
 
   groups.command("ungroup <groups...>").description("Dissolve selected frames, preserving their children and nested groups")
     .option("--dry-run", "report promoted members and trashed frames without writing")

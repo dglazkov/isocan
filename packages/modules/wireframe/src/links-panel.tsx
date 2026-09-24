@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { newGroupId, type CanvasContents, type DialogHost } from "@isocan/core";
 import { wiresOn } from "./flow.ts";
 import { keptFlowsOf, type KeptFlow } from "./kept-flows.ts";
-import { linkOverrideOp, overrideValue, type ArrowWrite } from "./link-override.ts";
+import { linkChanges, linkPatch, overrideValue, type ArrowWrite } from "./link-override.ts";
 import { LINK_BACK, LINK_NONE, inferLinks, type WireLink } from "./links.ts";
 import { webPort } from "./web-port.ts";
 
@@ -37,6 +37,8 @@ export function linkRows(flows: readonly KeptFlow[], only: ReadonlySet<string> |
     const where = (l: WireLink | undefined) => (!l ? "nowhere" : l.to === LINK_BACK ? "back" : l.to ? title(l.to) : l.needs ? `needs ${l.needs}` : "nowhere");
     for (const l of inferLinks(flow.screens, { withNone: true })) {
       if (only && !only.has(l.from)) continue;
+      // A guest's hotspots belong to its own flow's table.
+      if (flow.guests.includes(l.from)) continue;
       const override = flow.screens.find((s) => s.id === l.from)?.overrides?.[l.key];
       rows.push({ flow: flow.flow, link: l, value: override ?? "", rules: where(bare.find((b) => b.from === l.from && b.key === l.key)) });
     }
@@ -80,7 +82,8 @@ export function WireLinks({ canvasId, host, selection, canEdit }: { canvasId: st
   const change = async (row: LinkRow, value: string) => {
     const item = host.getCanvas().items[row.link.from];
     if (!item) return;
-    await host.send([linkOverrideOp(item, row.link.key, overrideValue(pickedWrite(value)))], newGroupId());
+    const next = overrideValue(pickedWrite(value));
+    if (linkChanges(item, row.link.key, next)) await host.send([{ type: "item.update", itemId: item.id, patch: linkPatch(item, row.link.key, next) }], newGroupId());
     const screen = item.title;
     const to = value === "" ? `back to the rules (${row.rules})` : value === LINK_BACK ? "goes back" : value === LINK_NONE ? "switched off" : `goes to "${host.getCanvas().items[value]?.title ?? value}"`;
     setSaid(`${row.link.label} on "${screen}" ${to} · undo takes it back`);

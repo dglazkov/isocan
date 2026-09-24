@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { newGroupId, type DialogFacts, type DialogHost } from "@isocan/core";
+import { newGroupId, type CanvasContents, type DialogFacts, type DialogHost, type Item } from "@isocan/core";
+import { chatRecordOp } from "./chat.ts";
+import { PROTOTYPE_PROP } from "./prototype.ts";
+import { rerender, rerenderSummary } from "./rerender.ts";
 import { isNoJudge } from "./answerer.ts";
 import { composeFlow, costLine, wiresOn } from "./flow.ts";
 import { keptFlowsOf, writePrototype, type KeptFlow } from "./kept-flows.ts";
@@ -29,6 +32,8 @@ type Mode =
   | { kind: "prototype" }
   | { kind: "style"; toDefault: boolean }
   | { kind: "flesh"; pack?: string; bars: boolean }
+  | { kind: "rerender" }
+  | { kind: "prototypes" }
   // ── phase 8, builder A: /wire links — every hotspot with a target picker (links-panel.tsx) ──
   | { kind: "links" };
 
@@ -37,6 +42,8 @@ export function modeOf(args: string): Mode {
   if (!words) return { kind: "form" };
   const [first, ...rest] = words.split(/\s+/);
   if (first === "prototype" && rest.length === 0) return { kind: "prototype" };
+  if (first === "prototypes" && rest.length === 0) return { kind: "prototypes" };
+  if (first === "rerender" && rest.length === 0) return { kind: "rerender" };
   // ── phase 8, builder A: /wire links ──
   if (first === "links" && rest.length === 0) return { kind: "links" };
   if (first === "style" && rest.every((w) => w === "--default" || w === "default")) return { kind: "style", toDefault: rest.length > 0 };
@@ -70,7 +77,31 @@ export async function prototypeOnWeb(canvasId: string, host: DialogHost, flow?: 
   const flows = keptFlowsOf(canvas, await wiresOn(port, canvas));
   const chosen = flow ?? (flows.length === 1 ? flows[0]! : null);
   if (!chosen) return { flows };
-  return { flows, written: await writePrototype(port, canvas, chosen, newGroupId()) };
+  const group = newGroupId();
+  return { flows, flow: chosen, group, written: await writePrototype(port, canvas, chosen, group) };
+}
+
+/** `/wire rerender` — every wire drawn again from its spec (phase 8): a renderer change reaching screens already here. */
+export async function rerenderOnWeb(canvasId: string, host: DialogHost) {
+  const port = webPort(canvasId, host);
+  const canvas = await port.canvas();
+  const all = await wiresOn(port, canvas);
+  if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+  return rerender(port, canvas, all, all);
+}
+
+/** The prototypes on the canvas — `/wire prototypes` and ⌘K's "Find prototypes". */
+export function prototypesOn(canvas: CanvasContents): Item[] {
+  return Object.values(canvas.items ?? {}).filter((i) => i.properties?.[PROTOTYPE_PROP] !== undefined);
+}
+
+/**
+ * Say what an act made in the Chat, in the act's own op group (`chat.ts`). A
+ * record that cannot be posted (a dropped connection) is not a failed act:
+ * the act landed, and the notice bar already said so.
+ */
+function record(host: DialogHost, group: string, lines: readonly string[], items: readonly string[] = []): void {
+  host.send([chatRecordOp(host.getCanvas(), lines, items)], group).catch(() => {});
 }
 
 export async function restyleOnWeb(canvasId: string, host: DialogHost, toDefault: boolean) {
@@ -122,7 +153,9 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
     }
     const { itemId, links, what } = result.written;
     const dashed = links.filter((l) => l.to === null && l.needs).length;
-    host.notice(`Prototype ${what === "added" ? "added beside the kept screens" : what === "versioned" ? "rebuilt as a new version" : "unchanged — nothing kept has changed"} · ${links.length} links${dashed ? `, ${dashed} dashed` : ""}`);
+    const said = `Prototype ${what === "added" ? "added beside the kept screens" : what === "versioned" ? "rebuilt as a new version" : "unchanged — nothing kept has changed"} · ${links.length} links${dashed ? `, ${dashed} dashed` : ""}`;
+    host.notice(said);
+    if (what !== "unchanged") record(host, result.group!, [`${said}. It plays ${result.flow!.screens.length} screens: ${result.flow!.screens.map((s) => s.title).join(" · ")}.`], [itemId]);
     host.close();
     host.reveal([itemId]);
   };
@@ -135,7 +168,10 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
         host.reveal([itemId]);
         host.close();
       });
-      host.notice(`${costLine(composed.tallies, composed.by, composed.screens.length)} — one undo takes the whole flow back`);
+      const cost = costLine(composed.tallies, composed.by, composed.screens.length);
+      host.notice(`${cost} — one undo takes the whole flow back`);
+      const made = composed.variants.length ? `, and ${composed.variants.length} variation${composed.variants.length === 1 ? "" : "s"}` : "";
+      record(host, composed.flow, [`composed "${m.request}": ${composed.screens.map((s) => s.spec.title).join(" · ")}${made}.`, `${cost} — one undo takes the whole flow back.`], composed.screens.map((s) => s.item));
       host.reveal([...composed.screens, ...composed.variants].map((s) => s.item));
     } else if (m.kind === "prototype") {
       await runPrototype();
@@ -143,26 +179,36 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       setStatus(m.toDefault ? "Back to the default look…" : "Mapping the design system onto the wires…");
       const r = await restyleOnWeb(canvasId, host, m.toDefault);
       host.notice(restyleSummary(r));
+      if (r.changed.length) record(host, r.group, [`${m.toDefault ? "back to the default look" : "restyled in the design system that governs each wire"}: ${restyleSummary(r)}.`]);
       host.close();
       if (r.changed.length) host.reveal(r.changed.map((t) => t.item.id));
     } else if (m.kind === "flesh") {
       setStatus(m.bars ? "Back to bars…" : "Choosing sample content…");
       const r = await fleshOnWeb(canvasId, host, m);
       host.notice([...fleshLines(r).slice(0, 1), fleshSummary(r, m.bars)].join(" · "));
+      if (r.changed.length) record(host, r.group, [...fleshLines(r), `${fleshSummary(r, m.bars)}.`]);
       host.close();
       if (r.changed.length) host.reveal(r.changed.map((t) => t.screen.item));
+    } else if (m.kind === "rerender") {
+      setStatus("Drawing every wire again from its spec…");
+      const r = await rerenderOnWeb(canvasId, host);
+      host.notice(rerenderSummary(r));
+      if (r.changed.length) record(host, r.group, [`re-rendered from their specs: ${rerenderSummary(r)}.`]);
+      host.close();
     }
   };
 
   useEffect(() => {
     // ── phase 8, builder A: /wire links is a panel, not a run ──
-    if (started.current || !canEdit || mode.kind === "form" || mode.kind === "links") return;
+    if (started.current || !canEdit || mode.kind === "form" || mode.kind === "prototypes" || mode.kind === "links") return;
     started.current = true;
     run(mode).catch(fail);
     // One run per opening: the mode is fixed once it starts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Finding the prototypes writes nothing, so somebody reading the canvas may do it too.
+  if (mode.kind === "prototypes") return <PrototypeFinder host={host} />;
   // ── phase 8, builder A: /wire links — a reader sees the table, its pickers disabled ──
   if (mode.kind === "links") return <WireLinks canvasId={canvasId} host={host} selection={selection} canEdit={canEdit} />;
   if (!canEdit) return <p className="wire-note">You are reading this canvas — wireframes are composed by someone who can edit it.</p>;
@@ -197,6 +243,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
             <button className="btn" type="button" onClick={() => go({ kind: "style", toDefault: false })}>Restyle wires</button>
             <button className="btn" type="button" onClick={() => go({ kind: "style", toDefault: true })}>Default look</button>
             <button className="btn" type="button" onClick={() => go({ kind: "flesh", bars: false })}>Flesh out</button>
+            <button className="btn" type="button" onClick={() => go({ kind: "rerender" })}>Re-render</button>
             {/* ── phase 8, builder A: /wire links ── */}
             <button className="btn" type="button" onClick={() => setMode({ kind: "links" })}>Links…</button>
           </div>
@@ -215,6 +262,41 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       )}
       {status && <p className="wire-status" role="status">{status}</p>}
       {error && <p className="wire-error" role="alert">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * **Finding the prototypes on a busy canvas** (phase 8, part C) — `/wire
+ * prototypes`, and ⌘K's *Find prototypes*. Each by its title; *Show* selects
+ * it and glides to it, *Select all* lights every one at once. A selection is
+ * the canvas's strongest highlight and it is one person's own, so nothing is
+ * written.
+ */
+function PrototypeFinder({ host }: { host: DialogHost }) {
+  const found = prototypesOn(host.getCanvas());
+  const show = (ids: string[]) => {
+    host.select(ids);
+    host.reveal(ids);
+    host.close();
+  };
+  if (found.length === 0) return <p className="wire-note">No prototypes on this canvas yet — keep some screens (📐) and <code>/wire prototype</code> assembles one.</p>;
+  return (
+    <div className="wire-dialog">
+      <p className="wire-note">{found.length} prototype{found.length === 1 ? "" : "s"} on this canvas — each plays one flow&rsquo;s kept screens.</p>
+      <ul className="wire-list">
+        {found.map((p) => (
+          <li key={p.id}>
+            <span>{p.title}</span>
+            <button className="btn" type="button" onClick={() => show([p.id])}>Show</button>
+          </li>
+        ))}
+      </ul>
+      {found.length > 1 && (
+        <div className="wire-actions">
+          <button className="btn primary" type="button" onClick={() => show(found.map((p) => p.id))}>Select all {found.length}</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,11 +1,11 @@
-import { newGroupId, newVersionId, parseDesign, selectDesignSystem, type CanvasContents, type Item } from "@isocan/core";
+import { newGroupId, parseDesign, selectDesignSystem, type CanvasContents, type Item } from "@isocan/core";
 import { JEV_INPUT_PRICE, type Answerer, type JevRequest, type JevResponse } from "./answerer.ts";
 import { rebuildPrototypes } from "./kept-flows.ts";
 import { currentVersionOf, type WirePort } from "./port.ts";
-import { renderWire } from "./render.ts";
+import { writeWire } from "./rerender.ts";
 import type { WireSpec } from "./spec.ts";
 import {
-  DEFAULT_STYLE, ROLES, applyMapping, candidatesOf, mappingRequest, roleLine, sameStyle,
+  DEFAULT_STYLE, ROLES, applyMapping, candidatesOf, mappingRequest, roleLine, sameLook, sameStyle,
   type RoleChoice, type Role, type WireStyle,
 } from "./theme.ts";
 import type { Screen } from "./flow.ts";
@@ -143,6 +143,20 @@ export function mappingLines(m: Mapping, by: string): string[] {
   ];
 }
 
+/**
+ * **A restyle that would change nothing a person can see** (Porchlight #9).
+ * A new version of the governing DESIGN.md that maps every role to the same
+ * value as before — v3 added tint colours and nothing else — used to
+ * re-version every wire only to record the new version id. Same system, same
+ * look: the wire is left alone. Its spec still names the version that drew
+ * it, so `--check` still says which version that was; the next `wire
+ * style` asks again and, while the look holds, writes nothing again.
+ */
+export function alreadyLooks(was: WireStyle | undefined, now: WireStyle): boolean {
+  const system = (s: WireStyle | undefined) => (s?.source === "design-system" ? s.itemId : null);
+  return system(was) === system(now) && sameLook(was, now);
+}
+
 export interface RestyleTarget {
   screen: Screen;
   item: Item;
@@ -181,11 +195,9 @@ export async function restyle(
   const group = newGroupId();
   const changed: RestyleTarget[] = [];
   for (const t of targets) {
-    if (sameStyle(t.screen.spec.style, t.style)) continue;
+    if (sameStyle(t.screen.spec.style, t.style) || alreadyLooks(t.screen.spec.style, t.style)) continue;
     const spec: WireSpec = { ...t.screen.spec, style: t.style };
-    const filename = currentVersionOf(t.item)?.filename ?? "wireframe.html";
-    const upload = await port.put(renderWire(spec), "text/html", filename);
-    await port.send({ type: "item.addVersion", itemId: t.item.id, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
+    if (!(await writeWire(port, t.item, spec, group))) continue;
     t.screen = { ...t.screen, spec };
     changed.push(t);
   }

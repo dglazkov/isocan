@@ -179,14 +179,16 @@ export function withoutCommand(body: string): string {
 /**
  * Is the last word in this thread yours, and unanswered? That is the only
  * moment "sent — somebody is listening" is worth saying: before you have asked
- * it is noise, and after somebody has answered it is wrong.
+ * it is noise, and after somebody has answered it is wrong. A `record` asked
+ * nothing (a `/wire` act's account of what it made summons nobody), so it
+ * waits on nobody either.
  */
 export function awaitingReply(
-  thread: { comments: { author: { id: string } }[] },
+  thread: { comments: { author: { id: string }; record?: true }[] },
   actorId: string,
 ): boolean {
   const last = thread.comments[thread.comments.length - 1];
-  return last !== undefined && last.author.id === actorId;
+  return last !== undefined && last.author.id === actorId && !last.record;
 }
 
 /** catapultToItem, but centered in the canvas area the panel leaves visible. */

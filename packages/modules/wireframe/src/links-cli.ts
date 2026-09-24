@@ -1,11 +1,13 @@
 import type { Command } from "commander";
-import { newGroupId, type Item } from "@isocan/core";
+import { FIDELITY_PROP, newGroupId, type Item } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { cliPort } from "./cli-port.ts";
 import { wiresOn } from "./flow.ts";
 import { isKept } from "./keep.ts";
 import { keptFlowsOf, pickKeptFlow, writePrototype, type KeptFlow } from "./kept-flows.ts";
-import { LINKS_PROP, LINK_BACK, LINK_NONE, hotspots, inferLinks, readOverrides, type WireLink } from "./links.ts";
+import { PROTOTYPE_PROP } from "./prototype.ts";
+import { LINK_BACK, LINK_NONE, hotspots, inferLinks, type WireLink } from "./links.ts";
+import { setLinkOverride } from "./link-override.ts";
 import type { WirePort } from "./port.ts";
 
 /**
@@ -32,7 +34,7 @@ function linkLine(l: WireLink, title: (id: string) => string): string {
 }
 
 export function registerLinks(host: CliHost, wire: Command): void {
-  const { run, ctxOf, resolveCanvas, resolveItem, sendOp, printJson } = host;
+  const { run, ctxOf, resolveCanvas, resolveItem, printJson } = host;
 
   wire
     .command("links [screen]")
@@ -47,14 +49,15 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const snapshot = await ctx.client.snapshot(p.id);
         const flows = await keptFlows(cliPort(host, ctx, p.id));
         const only = ref ? resolveItem(snapshot, ref) : null;
-        const flow = only ? flows.find((f) => f.screens.some((s) => s.id === only.id)) : pickKeptFlow(flows, opts.flow);
+        const flow = only ? flows.find((f) => f.screens.some((s) => s.id === only.id) && !f.guests.includes(only.id)) : pickKeptFlow(flows, opts.flow);
         if (!flow) throw new Error(`"${only!.title}" is not a kept screen — links run between kept screens (\`isocan wire keep ${only!.id}\`)`);
         const links = inferLinks(flow.screens, { withNone: true });
-        const shown = only ? links.filter((l) => l.from === only.id) : links;
+        // A guest (a screen kept in another flow that this one links to) is listed with its own flow.
+        const shown = links.filter((l) => (only ? l.from === only.id : !flow.guests.includes(l.from)));
         if (ctx.json) return printJson({ flow: flow.flow, request: flow.request, screens: flow.screens.map((s) => ({ itemId: s.id, title: s.title })), links: shown });
         const title = (id: string) => flow.screens.find((s) => s.id === id)?.title ?? id;
         for (const s of flow.screens) {
-          if (only && s.id !== only.id) continue;
+          if ((only && s.id !== only.id) || flow.guests.includes(s.id)) continue;
           console.log(`${s.id}  "${s.title}" (${s.spec.archetype})`);
           const mine = shown.filter((l) => l.from === s.id);
           if (mine.length === 0) console.log("  (no hotspot that navigates)");
@@ -82,8 +85,10 @@ export function registerLinks(host: CliHost, wire: Command): void {
         const p = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(p.id);
         const item = resolveItem(snapshot, ref);
-        const wires = await wiresOn(cliPort(host, ctx, p.id), snapshot.canvas);
-        const source = wires.find((w) => w.item === item.id);
+        // Only the source screen's file is read: every other wire on the canvas is none of this verb's business,
+        // and forty-eight downloads to write one property is how a one-line write became a long wait (Porchlight #3).
+        const port = cliPort(host, ctx, p.id);
+        const [source] = await wiresOn(port, { ...snapshot.canvas, items: { [item.id]: item } });
         if (!source) throw new Error(`"${item.title}" is not a wireframe screen — links start on screens \`isocan wire\` drew`);
         const keys = hotspots(source.spec).map((h) => h.key);
         const matches = keys.includes(element) ? [element] : keys.filter((k) => k.endsWith(`#${element}`));
@@ -98,14 +103,11 @@ export function registerLinks(host: CliHost, wire: Command): void {
         else if (opts.back) value = LINK_BACK;
         else {
           to = resolveItem(snapshot, target!);
-          if (!wires.some((w) => w.item === to!.id)) throw new Error(`"${to.title}" is not a wireframe screen — a link goes to a screen`);
+          if (to.properties?.[FIDELITY_PROP] !== "wireframe" || to.properties?.[PROTOTYPE_PROP] !== undefined) throw new Error(`"${to.title}" is not a wireframe screen — a link goes to a screen`);
           value = to.id;
         }
-        const overrides = readOverrides(item.properties?.[LINKS_PROP]);
-        if (value === null) delete overrides[key];
-        else overrides[key] = value;
-        const patch = Object.keys(overrides).length ? { properties: { [LINKS_PROP]: JSON.stringify(overrides) } } : { removeProperties: [LINKS_PROP] };
-        await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch }, newGroupId());
+        // One hotspot, one property: a second `wire link` on the same screen at the same time keeps its own (link-override.ts).
+        const { overrides } = await setLinkOverride(port, item, key, value, newGroupId());
         const keptNow = to ? isKept(to) : true;
         if (ctx.json) return printJson({ itemId: item.id, key, to: value, overrides });
         const said = value === null ? "back to the rules" : value === LINK_NONE ? "switched off" : value === LINK_BACK ? "goes back" : `goes to "${to!.title}"`;

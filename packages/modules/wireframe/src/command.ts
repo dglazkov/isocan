@@ -23,6 +23,10 @@ screen by hand, and never write its copy yourself unless asked.
   \`/wire flesh --pack <id>\` and \`/wire flesh --bars\` pass through). Exact
   words for a screen are \`isocan wire copy <screen>\`, edited, then
   \`isocan wire copy <screen> --apply <file>\` — only when asked for copy.
+- \`/wire rerender\` → \`isocan wire render --all\` (every wire drawn again from
+  its own spec; a version only where the bytes change).
+- \`/wire prototypes\` → \`isocan ls --filter Prototype\` (the prototypes carry
+  \`wirePrototype\`); say which ones there are and where.
 
 Post ONE comment saying what landed: how many screens, which answered, and
 that one undo takes it back.`,

@@ -95,6 +95,13 @@ export interface CoreModule {
   /** Marks on items, each a property — drawn on the item, toggled from its menu and a key. */
   marks?: readonly ModuleMark[];
   /**
+   * **Items worth finding on a busy canvas** (wireframes phase 8): properties
+   * whose presence the minimap lights up strongly while a pointer is on it —
+   * a prototype among forty screens. Data, like `marks`: the shell tests the
+   * property and never meets the module.
+   */
+  spotlights?: readonly string[];
+  /**
    * **Slash commands** (phase 4): instructions an agent carries out, merged
    * under the built-ins and the home's own — a third source, `module`, that
    * is there while the module is and gone when it is not. Text, like every
@@ -319,6 +326,11 @@ export function moduleKinds(): ModuleKind[] {
 /** Every mark every loaded module offers. */
 export function moduleMarks(): ModuleMark[] {
   return modules().flatMap((m) => m.marks ?? []);
+}
+
+/** Does a loaded module want this item found — does it carry one of their `spotlights`? */
+export function spotlit(item: Item): boolean {
+  return modules().some((m) => m.spotlights?.some((p) => item.properties?.[p] !== undefined));
 }
 
 /** The module kind that owns a mime, if a loaded module claims it. */
@@ -556,6 +568,8 @@ export interface ModuleAction {
    * read-only canvas too, and the dialog decides what it can do there.
    */
   opens?: string;
+  /** With `opens`: the words the dialog opens with, as if typed after its command (`/wire prototypes`). */
+  args?: string;
 }
 
 /**

@@ -2,13 +2,13 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as 
 import { newGroupId, type CanvasContents, type Item, type UnderlayFacts } from "@isocan/core";
 import { kept } from "./keep.ts";
 import { keptFlowsOf } from "./kept-flows.ts";
-import { linkOverrideOp, overrideValue, type ArrowWrite } from "./link-override.ts";
+import { linkChanges, linkPatch, overrideValue, type ArrowWrite } from "./link-override.ts";
 import { hotspots, inferLinks, screenEdges, type WireLink, type WireScreen } from "./links.ts";
 import { currentVersionOf } from "./port.ts";
 import { PROTOTYPE_PROP, playAnchor } from "./prototype.ts";
 import { readWire, renderWire } from "./render.ts";
 import { arrowId, estimatedHot, roundedPath, routeFlow, type FlowArrow, type HotRect, type NeedsMark, type RouteBox } from "./route.ts";
-import { CAPTION_HEIGHT, type WireSpec } from "./spec.ts";
+import type { WireSpec } from "./spec.ts";
 
 /**
  * **The arrows between kept screens** (design §7; phase 8, research *Flow
@@ -37,7 +37,14 @@ import { CAPTION_HEIGHT, type WireSpec } from "./spec.ts";
  */
 
 const specs = new Map<string, WireSpec | null>();
-/** Per version: whether its file draws a caption above the frame (older renders do). */
+/**
+ * The name strip files rendered before phase 8 drew above the device frame,
+ * in px. Today's renderer draws none (`CAPTION_HEIGHT` is 0), but screens
+ * already on a canvas keep their file until `wire render --all`, so a
+ * hotspot on one of those still sits this far down its item.
+ */
+const LEGACY_CAPTION = 32;
+/** Per version: whether its file draws that caption (renders before phase 8 do). */
 const capped = new Map<string, boolean>();
 /** Per version: each hotspot's rect, relative to the device frame, as the renderer lays it out. */
 const measured = new Map<string, Record<string, HotRect> | null>();
@@ -70,7 +77,8 @@ export function flowLinks(canvas: CanvasContents, specOf: (hash: string) => Wire
   }
   return keptFlowsOf(canvas, wires)
     .filter((f) => f.screens.length > 1)
-    .map((f) => ({ flow: f.flow, screens: f.screens, items: f.items, links: inferLinks(f.screens) }));
+    // A guest (a screen kept in another flow that a person linked to) is drawn TO here and FROM in its own flow.
+    .map((f) => ({ flow: f.flow, screens: f.screens, items: f.items, links: inferLinks(f.screens).filter((l) => !f.guests.includes(l.from)) }));
 }
 
 /**
@@ -132,7 +140,7 @@ function hotOn(item: Item, spec: WireSpec | undefined, key: string): HotRect {
   const rects = hash ? measured.get(hash) : undefined;
   const r = rects?.[key];
   if (r) {
-    const top = hash && capped.get(hash) ? CAPTION_HEIGHT : 0;
+    const top = hash && capped.get(hash) ? LEGACY_CAPTION : 0;
     return { x: r.x, y: r.y + top, w: r.w, h: r.h };
   }
   const navCount = spec ? hotspots(spec).filter((h) => h.tab).length : 0;
@@ -311,7 +319,9 @@ export function WireArrows({ canvas, drag, readText, host, canEdit, past, openIt
     else setSelected(arrowId({ from: a.link.from, key: a.link.key }));
     const item = canvasRef.current.items[a.link.from];
     if (!host || !item) return;
-    host.send([linkOverrideOp(item, a.link.key, overrideValue(w))], newGroupId()).catch(() => undefined);
+    const value = overrideValue(w);
+    if (!linkChanges(item, a.link.key, value)) return;
+    host.send([{ type: "item.update", itemId: item.id, patch: linkPatch(item, a.link.key, value) }], newGroupId()).catch(() => undefined);
   };
   const choose = (id: string) => {
     setSelected(id);
