@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   COMPONENTS, LINK_BACK, LINK_NONE, RECIPES, ROW_BLOCKS, applyPropsRound, applyStructure, assemblePrototype, decideFlow, flowRequest,
   flowScreen, hotspots, inferLinks, propsRequests, readOverrides, readResponse, renderFrame, renderWire, resolveSlot, screenEdges,
-  startScreen, structureRequest, wireframe,
+  fleshSpec, packOf, startScreen, structureRequest, wireframe,
   type JevResponse, type PropDef, type Props, type WireLink, type WireScreen, type WireSpec,
 } from "../src/core.ts";
 
@@ -155,6 +155,28 @@ describe("rule 4 — tab i goes to the i-th top-level screen", () => {
     const links = inferLinks([signIn, swapped, list, detail]);
     expect(linkOf(links, "it_home", "nav#tab-2")).toMatchObject({ to: "it_home", rule: "intent" });
     expect(linkOf(links, "it_home", "nav#tab-1")).toMatchObject({ to: "it_list", rule: "tab" });
+  });
+
+  it("a tab can say it IS the list (`open-list`): it goes there by intent, and a Profile tab no longer takes the list by position", () => {
+    const { signIn, home, list, detail } = acme();
+    // What phase 3 saw: Jev's second tab was "Profile", and position sent it to Deliveries. Now the list has its own tab.
+    const tabs = { "tab-1": "home", "tab-2": "profile", "tab-3": "open-list", "tab-4": "settings" } as const;
+    const withTabs = (s: WireScreen) => ({ ...s, spec: { ...s.spec, slots: s.spec.slots.map((x) => (x.slot === "nav" ? { ...x, intents: { ...x.intents!, ...tabs } } : x)) } });
+    const links = inferLinks([signIn, withTabs(home), withTabs(list), detail]);
+    expect(linkOf(links, "it_home", "nav#tab-3")).toMatchObject({ to: "it_list", rule: "intent", transition: "none", label: "List" });
+    expect(linkOf(links, "it_home", "nav#tab-2")).toMatchObject({ to: null, needs: "Profile", rule: "missing" });
+    expect(linkOf(links, "it_list", "nav#tab-3")).toMatchObject({ to: "it_list", rule: "intent" });
+  });
+});
+
+describe("tab targets, fleshed", () => {
+  it("an `open-list` tab reads in the pack's words, and draws a glyph of its own", () => {
+    const home = wireframe("home", o);
+    const spec = { ...home, slots: home.slots.map((x) => (x.slot === "nav" ? { ...x, intents: { ...x.intents!, "tab-2": "open-list" as const } } : x)) };
+    const fleshed = fleshSpec(spec, "it_home", packOf("deliveries"));
+    expect(fleshed.slots.find((x) => x.slot === "nav")!.fill?.actions).toEqual({ "tab-2": "Deliveries" });
+    expect(renderWire(fleshed)).toContain("Deliveries");
+    expect(renderWire(spec)).toContain("▤");
   });
 });
 

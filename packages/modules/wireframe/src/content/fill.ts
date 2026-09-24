@@ -475,9 +475,17 @@ function loneAction(
 ): Record<string, string> | undefined {
   const r = recipe(archetype);
   const region = r.sections.find((s) => s.slot === slot.slot)?.region;
-  if (region === "header" || region === "nav") return undefined;
   const c = component(slot.block);
   const present = presentElements(c, { ...Object.fromEntries(Object.entries(c.props).map(([k, d]) => [k, d.default])), ...slot.props });
+  const intentOf = (element: string) => slot.intents?.[element] ?? defaultIntent(r, c, element);
+  // A nav item that IS one of the flow's screens (`open-list`) is named as that screen is: "Deliveries".
+  const named = Object.fromEntries(present.flatMap((element) => {
+    const nav = INTENT_BY_ID.get(intentOf(element))?.nav;
+    const words = intentOf(element).startsWith("open-") && nav?.to === "archetype" ? domainTitle(nav.archetype, pack) : undefined;
+    return words ? [[element, words]] : [];
+  }));
+  if (Object.keys(named).length > 0) return named;
+  if (region === "header" || region === "nav") return undefined;
   if (present.length !== 1) return undefined;
   const element = present[0]!;
   const intent = slot.intents?.[element] ?? defaultIntent(r, c, element);

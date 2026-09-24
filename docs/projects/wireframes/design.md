@@ -76,7 +76,7 @@ In the module's core (`packages/modules/wireframe/src/catalog/`):
   that take an intent, and a draw function over primitives.
 - **Primitives** — the 22 the recipes name directly: button, text-field,
   list-item, image, avatar, tab, … Each draws itself in both modes.
-- **Intents** — the 49-value vocabulary (research §3), each with a label and,
+- **Intents** — the 52-value vocabulary (research §3's 49, and since 24 Sep 2026 three tab targets — `open-list`, `open-feed`, `open-gallery` — so a tab can say it IS one of the flow's screens), each with a label and,
   where it has one, a navigation rule.
 
 Everything a Jev question offers is an id from these tables, so a question's

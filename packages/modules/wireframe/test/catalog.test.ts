@@ -6,7 +6,7 @@ import {
 /**
  * **Phase 0's proof, part 2: the catalog is self-consistent** — and holds the
  * research's numbers. Wave 1 is 18 archetypes, 28 blocks, the 22 primitives
- * the recipes name, and 49 intents; no structural question has more than 4
+ * the recipes name, and 52 intents; no structural question has more than 4
  * options; no question of any kind has more than Jev's 255.
  */
 
@@ -20,11 +20,11 @@ const ENUM_MAX = 8;
 const named = new Set(RECIPES.flatMap((r) => r.sections.flatMap((s) => s.options)));
 
 describe("the wave-1 catalog", () => {
-  it("is 18 archetypes, 28 blocks, 22 primitives and 49 intents", () => {
+  it("is 18 archetypes, 28 blocks, 22 primitives and 52 intents (the research's 49 and three tab targets)", () => {
     expect(RECIPES).toHaveLength(18);
     expect(BLOCKS).toHaveLength(28);
     expect(PRIMITIVES).toHaveLength(22);
-    expect(INTENTS).toHaveLength(49);
+    expect(INTENTS).toHaveLength(52);
   });
 
   it("names every archetype, block and primitive once", () => {
@@ -39,9 +39,9 @@ describe("the wave-1 catalog", () => {
     expect(ARCHETYPE_IDS).toHaveLength(34);
   });
 
-  it("the intents group as the research counts them: 10 · 4 · 4 · 1 · 2 · 7 · 13 · 8", () => {
+  it("the intents group as the research counts them — 10 · 4 · 4 · 1 · 2 · 7 · 13 · 8 — with three tab targets among the jumps", () => {
     const by = (g: string) => INTENTS.filter((i) => i.group === g).length;
-    expect([by("forward"), by("auth"), by("back"), by("detail"), by("form"), by("overlay"), by("jump"), by("in-place")]).toEqual([10, 4, 4, 1, 2, 7, 13, 8]);
+    expect([by("forward"), by("auth"), by("back"), by("detail"), by("form"), by("overlay"), by("jump"), by("in-place")]).toEqual([10, 4, 4, 1, 2, 7, 16, 8]);
   });
 });
 
@@ -109,7 +109,7 @@ describe("the question budget", () => {
   it("no question of any kind has more than 255 options; the largest is the intent vocabulary", () => {
     const every = [...all.flatMap(({ qs }) => qs), ...flowQuestions()];
     for (const q of every) expect(q.options, q.id).toBeLessThanOrEqual(JEV_MAX);
-    expect(Math.max(...every.map((q) => q.options))).toBe(49);
+    expect(Math.max(...every.map((q) => q.options))).toBe(52);
   });
 
   it("no enum prop has more than 8 values", () => {

@@ -1,5 +1,5 @@
 /**
- * **The intent vocabulary — 49 values** (research §3, *The intent vocabulary*).
+ * **The intent vocabulary — 52 values** (research §3's 49, *The intent vocabulary*, and three tab targets).
  *
  * Jev writes no prose, and a prototype's links hang on exactly the words a
  * button carries. So an actionable element carries a typed intent, and its
@@ -80,7 +80,7 @@ export const INTENTS = [
   { id: "more", label: "More", group: "overlay", nav: overlay("dropdown-menu") },
   { id: "menu", label: "Menu", group: "overlay", nav: overlay("drawer") },
   { id: "info", label: "Info", group: "overlay", nav: overlay("popover") },
-  // jump to an archetype (13)
+  // jump to an archetype (16: the research's 13, and three tab targets)
   { id: "search", label: "Search", group: "jump", nav: arch("search") },
   { id: "settings", label: "Settings", group: "jump", nav: arch("settings") },
   { id: "profile", label: "Profile", group: "jump", nav: arch("profile") },
@@ -94,6 +94,12 @@ export const INTENTS = [
   { id: "upgrade", label: "Upgrade", group: "jump", nav: arch("pricing") },
   { id: "help", label: "Help", group: "jump", nav: arch("contact") },
   { id: "messages", label: "Messages", group: "jump", nav: arch("chat") },
+  // A tab that IS one of the flow's screens (24 Sep 2026, wireframes phase 3's Open): Jev labelled a
+  // tab "Profile" and the tab rule sent it to the list, because nothing here could say "this tab is
+  // the list". These three can. A fleshed one reads in the pack's words ("Deliveries").
+  { id: "open-list", label: "List", group: "jump", nav: arch("list", "none") },
+  { id: "open-feed", label: "Feed", group: "jump", nav: arch("feed", "none") },
+  { id: "open-gallery", label: "Gallery", group: "jump", nav: arch("gallery", "none") },
   // in place (8)
   { id: "like", label: "Like", group: "in-place", nav: none },
   { id: "follow", label: "Follow", group: "in-place", nav: none },

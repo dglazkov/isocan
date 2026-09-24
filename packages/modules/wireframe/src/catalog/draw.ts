@@ -44,7 +44,7 @@ const GLYPHS: Record<string, string> = {
   help: "?", contact: "☏", terms: "§", upgrade: "↑", checkout: "✓", buy: "✓", like: "♡", share: "↗",
   more: "⋯", menu: "≡", info: "i", filter: "▽", add: "+", edit: "✎", delete: "✕", close: "✕", back: "‹",
   cancel: "✕", dismiss: "✕", follow: "+", play: "▶", copy: "⧉", upload: "↑", retry: "↻", sort: "⇅",
-  select: "✓", open: "›",
+  select: "✓", open: "›", "open-list": "▤", "open-feed": "◫", "open-gallery": "▦",
 };
 
 export function glyph(intent: string): string {

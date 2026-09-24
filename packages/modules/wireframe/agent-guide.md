@@ -88,7 +88,11 @@ bar, tab bar) stays.
   first kept screen of that archetype (`sign-in` → the first home, list or
   feed; `next`/`continue`/`save` → the next kept screen); `back` and an app
   bar's chevron go back; a list, grid, table or feed row opens the first kept
-  `detail` after it; tab *i* of a tab bar or side nav whose intent found
+  `detail` after it; a nav item can say it IS one of the flow's screens —
+  `open-list`, `open-feed`, `open-gallery` go to the first kept list, feed
+  or gallery (and a fleshed one reads in the pack's words, "Deliveries") —
+  so when you answer round 3, give the tab that shows the list `open-list`
+  rather than a jump whose screen does not exist; tab *i* whose intent found
   nothing takes the *i*-th top-level screen (one that draws the nav) no other
   tab reaches. Anything else that navigates and found nothing is **dashed**
   and says what it needs (`- - needs Settings`) — the list of screens still
@@ -239,7 +243,7 @@ bar, tab bar) stays.
 
 **Words are typed, never free.** A button's label is its **intent**'s label
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of
-49; each actionable element names which intents it can take, and `wire
+52; each actionable element names which intents it can take, and `wire
 render` refuses a spec that gives one it cannot. Headings come from the
 spec's `title`; body copy is grey bars, never lorem ipsum — until `wire
 flesh` fills it from a content pack. If you want real copy on a screen,
