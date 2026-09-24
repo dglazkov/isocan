@@ -258,7 +258,7 @@ describe("a slow home does not stall the writer", () => {
     });
     expect(replica.homes.for(CANVAS), "the canvas must be a replica here").not.toBeNull();
     // Held at the HOME, so the test does not care how the replica asks.
-    const { asked, release } = tapHome(home).holdBlobs();
+    const { asked, release } = tapHome(home).hold();
     const check = replica.engine.reconcileBlobs(CANVAS, { push: false });
     await asked;
 
@@ -290,14 +290,14 @@ describe("a slow home does not stall the writer", () => {
  * asked: `old` renames the batch route to a path no home serves, so the REAL
  * door and not-found handler answer exactly as a home that predates the route
  * does; `sick` answers every blob request 503 before the home sees it; and
- * `holdBlobs` keeps every blob request waiting until released.
+ * `hold` keeps matching requests waiting until released.
  */
 function tapHome(d: Daemon, mode: "current" | "old" | "sick" = "current") {
   const server = d.app.server;
   const inner = server.listeners("request") as Array<(req: IncomingMessage, res: ServerResponse) => void>;
   server.removeAllListeners("request");
   const heard: string[] = [];
-  let hold: { gate: Promise<void>; asked: () => void } | null = null;
+  let hold: { gate: Promise<void>; asked: () => void; match: RegExp } | null = null;
   server.on("request", (req: IncomingMessage, res: ServerResponse) => {
     heard.push(`${req.method} ${req.url}`);
     if (mode === "sick" && req.url?.includes("/blobs")) {
@@ -307,9 +307,9 @@ function tapHome(d: Daemon, mode: "current" | "old" | "sick" = "current") {
     }
     if (mode === "old" && req.url?.endsWith("/blobs/present")) req.url = req.url.replace(/\/blobs\/present$/, "/blobs/predates");
     const pass = () => { for (const listener of inner) listener.call(server, req, res); };
-    if (hold && req.url?.includes("/blobs")) {
-      // Paused so the body waits in the socket, not in a stream nobody reads.
-      req.pause();
+    if (hold && hold.match.test(`${req.method} ${req.url}`)) {
+      // The body, if any, waits unread in the request stream until the home's
+      // own listener attaches to it.
       hold.asked();
       void hold.gate.then(pass);
       return;
@@ -320,12 +320,13 @@ function tapHome(d: Daemon, mode: "current" | "old" | "sick" = "current") {
     /** Requests about this canvas's bytes — HEADs, batch asks, uploads. */
     blobAsks: () => heard.filter((line) => line.includes(`/api/projects/${CANVAS}/blobs`)),
     reset: () => void heard.splice(0),
-    holdBlobs: () => {
+    /** Hold every request whose `METHOD url` matches until released. */
+    hold: (match: RegExp = /\/blobs/) => {
       let release!: () => void;
       let asked!: () => void;
       const gate = new Promise<void>((r) => (release = r));
       const askedOnce = new Promise<void>((r) => (asked = r));
-      hold = { gate, asked };
+      hold = { gate, asked, match };
       return { asked: askedOnce, release: () => { hold = null; release(); } };
     },
   };
@@ -492,5 +493,61 @@ describe("the batch route has the blob HEAD's gate", () => {
     expect(answered.status, "a viewer may ask what it may HEAD").toBe(200);
     expect(await answered.json()).toEqual({ missing: [absent] });
     expect((await ask(viewer.headers, ["not-a-hash"])).status).toBe(400);
+  });
+});
+
+/**
+ * **Nor does an upload, or a question about the canvas's shape.**
+ *
+ * #95 moved the blob check's round trips off the single-writer chain and left
+ * two more behind on it: `Engine.putBlob` sent the bytes to the home and
+ * waited for its confirmation inside `enqueue`, and the group-migration
+ * preview asked the home from inside it too. One large file to a slow home
+ * held every write on the machine for as long as the bytes took to cross.
+ */
+describe("a slow home does not stall the writer during an upload or a preview", () => {
+  const write = (title: string) =>
+    fetch(`${baseOf(replica)}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...repBadge.headers },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: { id: "usr_dion", name: "Dion" },
+        op: { type: "project.update", patch: { title } },
+      }),
+    }).then((res) => res.status);
+  const within = <T,>(p: Promise<T>) =>
+    Promise.race([p, new Promise<"stalled">((r) => setTimeout(() => r("stalled"), 3000))]);
+
+  it("lands a write while the home is holding an added file's upload open", async () => {
+    await untilReplicated();
+    const tap = tapHome(home);
+    const { asked, release } = tap.hold(new RegExp(`^POST /api/projects/${CANVAS}/blobs$`));
+    const upload = fetch(`${baseOf(replica)}/api/projects/${CANVAS}/blobs`, {
+      method: "POST",
+      headers: { "Content-Type": "text/html", "X-Isocan-Filename": "held.html", ...repBadge.headers },
+      body: "<h1>held</h1>",
+    });
+    await asked;
+    const outcome = await within(write("Slides, while uploading"));
+    release();
+    const landed = await upload;
+    expect(outcome, "the write waited on the upload's round trip to the home").toBe(200);
+    // And the upload itself still did both halves, in order.
+    expect(landed.status).toBe(200);
+    const { blobHash } = (await landed.json()) as { blobHash: string };
+    expect(await home.store.blobMeta(CANVAS, blobHash)).not.toBeNull();
+    expect(await replica.store.blobMeta(CANVAS, blobHash)).not.toBeNull();
+  });
+
+  it("lands a write while the home is holding a migration preview open", async () => {
+    await untilReplicated();
+    const { asked, release } = tapHome(home).hold(new RegExp(`^GET /api/projects/${CANVAS}/groups/migration`));
+    const preview = fetch(`${baseOf(replica)}/api/projects/${CANVAS}/groups/migration`, { headers: repBadge.headers });
+    await asked;
+    const outcome = await within(write("Slides, while previewing"));
+    release();
+    expect((await preview).status).toBe(200);
+    expect(outcome, "the write waited on the preview's round trip to the home").toBe(200);
   });
 });

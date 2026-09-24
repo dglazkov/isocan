@@ -1115,15 +1115,22 @@ export class Engine {
     });
   }
 
-  /** A migration preview reads the home's current revision, even through a replica. */
-  groupMigrationPreview(canvasId: string, sourceContext?: SourceRequestContext, badgeId?: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview> {
-    return this.enqueue(async () => {
+  /**
+   * A migration preview reads the home's current revision, even through a
+   * replica — and asks it OFF the single-writer chain (lessons #95): the
+   * home's answer is a read of the home, and nothing here waits on it but
+   * this caller. Asked inside `enqueue`, every write on the machine queued
+   * behind the round trip.
+   */
+  async groupMigrationPreview(canvasId: string, sourceContext?: SourceRequestContext, badgeId?: string): Promise<import("@isocan/core").CanvasGroupMigrationPreview> {
+    const answer = await this.enqueue(async () => {
       if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "read"); }
       const home = this.homes?.for(canvasId);
-      if (home) return home.groupMigrationPreview(canvasId);
+      if (home) return { home };
       const runtime = await this.runtime(canvasId);
-      return canvasGroupMigrationPreview(runtime.state, runtime.lastSeq);
+      return { preview: canvasGroupMigrationPreview(runtime.state, runtime.lastSeq) };
     });
+    return "preview" in answer ? answer.preview : answer.home.groupMigrationPreview(canvasId);
   }
 
   submit(request: SubmitRequest): Promise<LogEntry> {
@@ -1507,62 +1514,72 @@ export class Engine {
    * uploading at once both read the pre-upload index and the second write
    * erases the first's entry: bytes on disk that nothing can name, and a
    * permanent 404 for the item pointing at them.
+   *
+   * **The index write is on the chain; the trip to the home is not**
+   * (lessons #95). On a replica the bytes go to the home first and wait for
+   * its confirmation, and that used to happen inside `enqueue`: one large
+   * file to a slow home held every write on the machine — every canvas,
+   * every home — for as long as the bytes took to cross. The home's half
+   * writes nothing here, and content addressing makes the local half the
+   * same write whenever it lands, so only the local half takes the chain.
    */
-  putBlob(
+  async putBlob(
     canvasId: string,
     data: Buffer,
     meta: { mimeType: string; filename: string },
     sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<{ blobHash: string; size: number; mimeType: string }> {
-    return this.enqueue(async () => {
+    const routed = await this.enqueue(async () => {
       if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
-      // On a replica the bytes go where the ops that name them go — the home
-      // first, because its refusal is the one that matters, and then here.
-      // Both copies, not one: the home is where every browser tab and every
-      // other replica will read this blob from, and the local copy is Scene
-      // 4's "and in Priya's `~/.isocan` by hash", which is how an agent's
-      // hands reach it. Content addressing makes "both" cheap to be right
-      // about — the same bytes hash the same on either side.
-      //
       // THIS canvas's home, since phase 10.3: bytes follow the ops that name
-      // them, and the ops go where the canvas's row says.
+      // them, and the ops go where the canvas's row says. Homed here, there
+      // is nowhere else to send them: one turn of the chain, as it always was.
       const home = this.homes?.for(canvasId) ?? null;
-      if (home) {
-        await home.putBlob(canvasId, data, meta);
-        /**
-         * **And confirm it is actually there.**
-         *
-         * The upload throws on a refusal, so a clean failure was always
-         * loud. What was not covered is a push that ANSWERS well and does
-         * not stick — a home mid-restart accepting bytes it never durably
-         * writes. That is not hypothetical: two slides lost their bytes in
-         * the three minutes before a deploy rolled the home over, with the
-         * `item.addVersion` replicating normally, and the first anybody knew
-         * was "blob not found" under a screen in somebody else's browser.
-         *
-         * Asked here because THIS is the moment the bytes are still in hand.
-         * A minute later the only copy is on one laptop and the only repair
-         * is somebody noticing.
-         *
-         * `false` is the home saying it does not have them, and that is worth
-         * failing the save over — the caller still holds the data and can try
-         * again. `null` is "I could not ask", which is not an answer about the
-         * bytes and must not be treated as one; the periodic reconcile is the
-         * backstop for that, and for everything else this cannot see.
-         */
-        const blobHash = createHash("sha256").update(data).digest("hex");
-        const there = await home.hasBlob(canvasId, blobHash);
-        if (there === false) {
-          throw new Error(
-            `${home.homeUrl} took the bytes for ${meta.filename} and does not have them — ` +
-              "not saved; try again",
-          );
-        }
-        // Confirmed, so the keeper's next sweep need not ask about it again.
-        if (there) this.confirmedAtHome(home.homeUrl, canvasId).set(blobHash, Date.now());
-      }
-      return this.store.putBlob(canvasId, data, meta);
+      if (!home) return { stored: await this.store.putBlob(canvasId, data, meta) };
+      return { home };
     });
+    if ("stored" in routed) return routed.stored;
+    const { home } = routed;
+    // On a replica the bytes go where the ops that name them go — the home
+    // first, because its refusal is the one that matters, and then here.
+    // Both copies, not one: the home is where every browser tab and every
+    // other replica will read this blob from, and the local copy is Scene
+    // 4's "and in Priya's `~/.isocan` by hash", which is how an agent's
+    // hands reach it. Content addressing makes "both" cheap to be right
+    // about — the same bytes hash the same on either side.
+    await home.putBlob(canvasId, data, meta);
+    /**
+     * **And confirm it is actually there.**
+     *
+     * The upload throws on a refusal, so a clean failure was always
+     * loud. What was not covered is a push that ANSWERS well and does
+     * not stick — a home mid-restart accepting bytes it never durably
+     * writes. That is not hypothetical: two slides lost their bytes in
+     * the three minutes before a deploy rolled the home over, with the
+     * `item.addVersion` replicating normally, and the first anybody knew
+     * was "blob not found" under a screen in somebody else's browser.
+     *
+     * Asked here because THIS is the moment the bytes are still in hand.
+     * A minute later the only copy is on one laptop and the only repair
+     * is somebody noticing.
+     *
+     * `false` is the home saying it does not have them, and that is worth
+     * failing the save over — the caller still holds the data and can try
+     * again. `null` is "I could not ask", which is not an answer about the
+     * bytes and must not be treated as one; the periodic reconcile is the
+     * backstop for that, and for everything else this cannot see.
+     */
+    const blobHash = createHash("sha256").update(data).digest("hex");
+    const there = await home.hasBlob(canvasId, blobHash);
+    if (there === false) {
+      throw new Error(
+        `${home.homeUrl} took the bytes for ${meta.filename} and does not have them — ` +
+          "not saved; try again",
+      );
+    }
+    // Confirmed, so the keeper's next sweep need not ask about it again.
+    if (there) this.confirmedAtHome(home.homeUrl, canvasId).set(blobHash, Date.now());
+    return this.enqueue(() => this.store.putBlob(canvasId, data, meta));
   }
 
   /**
