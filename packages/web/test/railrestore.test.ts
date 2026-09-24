@@ -20,12 +20,12 @@ const read = (rel: string) =>
 describe("the rail comes back where it was, without travelling there", () => {
   it("applies a remembered choice without waiting for the canvas", () => {
     // The stored choice is a string in localStorage and needs nothing from
-    // the network. Only "nobody has ever chosen here" has to wait, because
-    // "open if this canvas already has a Chat" is a question about the canvas.
+    // the network. Since 24 Sep "nobody has ever chosen here" needs nothing
+    // either: it opens with the Chat, before paint, like a remembered choice.
     const panel = read("components/MainThreadPanel.tsx");
     const layout = panel.slice(panel.indexOf("useLayoutEffect(()"), panel.indexOf("}, [canvasId]);"));
     expect(layout, "restore before paint, without panning or writing a preference on resize").toMatch(
-      /openPanel\(canvasId, stored, false, false\)/,
+      /openPanel\(canvasId, stored === undefined \? "main" : stored, false, false\)/,
     );
     expect(layout, "and it must not depend on the canvas having loaded").not.toMatch(/!canvas/);
   });

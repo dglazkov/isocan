@@ -213,9 +213,11 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
   const open = useUiStore((s) => s.mainPanelOpen);
   const panelWidth = useUiStore((s) => s.panelWidth);
 
-  // First snapshot decides the default: open when a main thread already
-  // exists (someone designated this channel), closed on a virgin canvas.
-  // A stored preference from an earlier visit wins either way.
+  // A canvas you have never chosen for opens with the Chat: it is where you
+  // talk to everyone here, agents included, and a closed pill on a new canvas
+  // read as "nothing to say" (reported 24 Sep 2026). It used to open only
+  // when a main thread already existed. A stored choice from an earlier visit
+  // wins either way.
   const initedFor = useRef<string | null>(null);
   /**
    * **A remembered rail is restored BEFORE the first paint, not after the
@@ -232,25 +234,20 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
    * localStorage — so it is applied synchronously, in a layout effect, before
    * anything is painted. Only the case where nobody has ever chosen has to
    * wait, because "open if this canvas already has a Chat" is a question about
-   * the canvas.
+   * the canvas. (Since 24 Sep the never-chosen default is simply open, so it
+   * waits on nothing and is applied here too.)
    */
   useLayoutEffect(() => {
     if (initedFor.current === canvasId) return;
     const stored = storedPanel(canvasId);
-    if (stored === undefined) return; // never chosen: needs the canvas, below
     initedFor.current = canvasId;
     // No pan: the viewport being restored was saved WITH this rail open, so
     // it is already correct. Panning here would slide the canvas sideways on
     // every load.
-    openPanel(canvasId, stored, false, false);
+    // Never chosen here (undefined): open with the Chat, not remembered, so
+    // the first real choice is still the person's.
+    openPanel(canvasId, stored === undefined ? "main" : stored, false, false);
   }, [canvasId]);
-
-  useEffect(() => {
-    if (!canvas || initedFor.current === canvasId) return;
-    initedFor.current = canvasId;
-    // Never chosen here: a canvas that already has a main thread opens with it.
-    openPanel(canvasId, mainThread(canvas) ? "main" : null, false, false);
-  }, [canvas, canvasId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the
   // unread badge) is the "Main" button in the top bar's create actions.
