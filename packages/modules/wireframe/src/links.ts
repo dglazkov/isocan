@@ -57,6 +57,15 @@ export interface WireLink {
   needs?: string;
   transition: Transition;
   rule: LinkRule;
+  /**
+   * **The hotspot is a nav item** — a tab, a side-nav or drawer item, a
+   * navbar link (`Hotspot.tab`). Chrome rather than flow: a tab bar is on
+   * every top-level screen and reaches every other one, so the canvas draws
+   * these only while you point at their screen (research: *Flow arrows*,
+   * "every both-ways pair exists only because of a tab bar"). Not the same as
+   * `rule: "tab"` — a nav item placed by its intent is rule 1 and still chrome.
+   */
+  nav?: true;
 }
 
 /** A link's `to` for back: whatever the prototype showed before. */
@@ -236,7 +245,7 @@ export function inferLinks(kept: readonly WireScreen[], opts: { withNone?: boole
 
     for (const { h, d } of decided) {
       const label = h.kind === "row" ? "Row" : h.kind === "leading" ? (INTENT_BY_ID.get(h.intent!)?.label ?? "Back") : (INTENT_BY_ID.get(h.intent!)?.label ?? h.element);
-      const base = { from: screen.id, key: h.key, label, ...(h.intent ? { intent: h.intent } : {}) };
+      const base = { from: screen.id, key: h.key, label, ...(h.intent ? { intent: h.intent } : {}), ...(h.tab ? { nav: true as const } : {}) };
       const override = screen.overrides?.[h.key];
       if (override !== undefined) {
         if (override === LINK_NONE) {

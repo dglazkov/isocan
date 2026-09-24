@@ -65,6 +65,15 @@ home without this module.
   `--none` switches it off, `--back` sends it back, `--clear` gives it back
   to the rules. It is the property `wireLinks` on the source screen, through
   `item.update`, so one `isocan undo` takes it back.
+- **The canvas draws one arrow per hotspot**, flow by flow — so the rows of
+  `wire links` that go to a screen and the arrows correspond one to one (tabs
+  show only while a person points at their screen; back never). A person
+  can click an arrow to change where it goes, remove it or reset it: each is
+  exactly the `wire link` above, and `/wire links` in the dialog is the same
+  table with a picker per hotspot. `isocan wire play <screen> [element]`
+  prints the address that opens the flow's prototype full screen AT that
+  screen, the hotspot pointed out — what an arrow's *Play from here* opens;
+  it writes nothing.
 - `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`
   when more than one flow is kept) as **one self-contained HTML item** to the
   right of them: every screen, a router with a history stack, the links as

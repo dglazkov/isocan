@@ -56,11 +56,11 @@ describe("the map's lines", () => {
       "utf8",
     );
     const world = viewport.slice(viewport.indexOf('className={`world'), viewport.indexOf("{items.map("));
-    expect(viewport.indexOf("<ModuleUnderlays />")).toBeGreaterThan(viewport.indexOf('className={`world'));
+    expect(viewport.indexOf("<ModuleUnderlays ")).toBeGreaterThan(viewport.indexOf('className={`world'));
     expect(world, "and it is inside .world").toBeTruthy();
     // Before the items: a node is chromeless text, and a line over it strikes
     // through the words.
-    expect(viewport.indexOf("<ModuleUnderlays />")).toBeLessThan(viewport.indexOf("{items.map("));
+    expect(viewport.indexOf("<ModuleUnderlays ")).toBeLessThan(viewport.indexOf("{items.map("));
   });
 
   it("rides a drag, so a line does not lag the node it joins", () => {

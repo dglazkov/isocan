@@ -372,10 +372,18 @@ export function moduleKindOf(mime: string): ModuleKind | null {
  * ## Who gets it
  *
  * The slots a person interacts with: overlays, inspectors and pages.
- * Underlays and renderers DRAW, and nothing has needed to write from one yet
- * — so they do not get it, and the day a module needs that it is a review
- * question rather than a private import, which is the rule `CliHost` already
- * carries and the reason this interface exists at all.
+ * Renderers DRAW, and nothing has needed to write from one yet — so they do
+ * not get it, and the day a module needs that it is a review question rather
+ * than a private import, which is the rule `CliHost` already carries and the
+ * reason this interface exists at all.
+ *
+ * **Underlays asked, on 23 Sep 2026, and got it** (wireframes phase 8,
+ * research *Flow arrows*). The arrows between kept screens became something
+ * a person clicks: select one, drag its head onto another screen, remove it.
+ * Every one of those writes is the `item.update` that `isocan wire link`
+ * already sends, so the host adds no authority — it only lets the arrow make
+ * the write the terminal could. `UnderlayFacts.host` is this object, with
+ * `canEdit` beside it so a reader is never offered a write the door refuses.
  */
 export interface WebHost {
   /** Sent as the viewer, through the door the palette already uses. One
@@ -488,7 +496,35 @@ export interface UnderlayFacts {
    * the shell per hash, so asking every render costs one fetch per version.
    */
   readText?: ((blobHash: string) => Promise<string>) | undefined;
+  /**
+   * **Writing from under the work** (wireframes phase 8) — see `WebHost`'s
+   * "Who gets it". Absent where the shell has no viewer to write as.
+   */
+  host?: WebHost | undefined;
+  /** Whether the viewer may write here: a reader can still select, play and go to. */
+  canEdit?: boolean | undefined;
+  /** The scrubber's past is on screen: draw, but offer nothing to click. */
+  past?: boolean | undefined;
+  /**
+   * **Open an item full screen, at an anchor** (wireframes phase 8, *Play
+   * from here*). The anchor becomes the fragment on the item's frame — the
+   * frame is a blob address, so a fragment costs no fetch and no cache — and
+   * the item's own document decides what it means: a prototype opens at the
+   * screen it names. The route carries it as `?at=` (never the route's own
+   * `#`, which is where a pass rides), so the address bar holds the exact view.
+   */
+  openItem?: ((itemId: string, anchor?: string) => void) | undefined;
 }
+
+/*
+ * **What an underlay may paint ABOVE the items** (wireframes phase 8). The
+ * slot promises it draws beneath the work, and it still does — with one
+ * exception, measured against that promise: a transient, `pointer-events:
+ * none` mark around the thing the person is pointing at (the hotspot an
+ * arrow leaves from, a loose end's "needs Settings"), and the one handle and
+ * toolbar of an arrow the person selected. Nothing that stays, nothing a
+ * pointer can hit by accident, nothing drawn at rest.
+ */
 
 /**
  * **A palette action a module adds**, as data over facts: the shell reads

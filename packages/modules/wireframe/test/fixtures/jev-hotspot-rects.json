@@ -1,0 +1,237 @@
+{
+ "note": "Hotspot rects on the recorded Jev flow (jev-acme-couriers.json), measured in Chrome by docs/research/flow-arrows/harness.html on 23 Sep 2026: item-local world units, the caption included. Regenerate with gen.mts, then read `hot` from the harness.",
+ "screens": [
+  {
+   "id": "s0_sign-in",
+   "x": 0,
+   "y": 0,
+   "w": 390,
+   "h": 876,
+   "unkept": false
+  },
+  {
+   "id": "s1_verify",
+   "x": 470,
+   "y": 0,
+   "w": 390,
+   "h": 876,
+   "unkept": false
+  },
+  {
+   "id": "s2_home",
+   "x": 940,
+   "y": 0,
+   "w": 390,
+   "h": 876,
+   "unkept": false
+  },
+  {
+   "id": "s3_list",
+   "x": 1410,
+   "y": 0,
+   "w": 390,
+   "h": 876,
+   "unkept": false
+  },
+  {
+   "id": "s4_detail",
+   "x": 1880,
+   "y": 0,
+   "w": 390,
+   "h": 876,
+   "unkept": false
+  },
+  {
+   "id": "s5_form",
+   "x": 2350,
+   "y": 0,
+   "w": 390,
+   "h": 876,
+   "unkept": false
+  },
+  {
+   "id": "s6_state",
+   "x": 2820,
+   "y": 0,
+   "w": 390,
+   "h": 876,
+   "unkept": false
+  },
+  {
+   "id": "v3",
+   "x": 1410,
+   "y": 956,
+   "w": 390,
+   "h": 876,
+   "unkept": true
+  }
+ ],
+ "hot": {
+  "s0_sign-in": {
+   "main.3#remember": {
+    "x": 17,
+    "y": 307.8,
+    "w": 119.7,
+    "h": 19.6
+   },
+   "main.3#submit": {
+    "x": 17,
+    "y": 341.4,
+    "w": 356,
+    "h": 44
+   }
+  },
+  "s1_verify": {
+   "header#leading": {
+    "x": 9,
+    "y": 42.5,
+    "w": 36,
+    "h": 36
+   },
+   "main#submit": {
+    "x": 149.8,
+    "y": 231,
+    "w": 90.4,
+    "h": 44
+   }
+  },
+  "s2_home": {
+   "main.3#row": {
+    "x": 17,
+    "y": 155,
+    "w": 356,
+    "h": 52
+   },
+   "nav#tab-1": {
+    "x": 1,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   },
+   "nav#tab-2": {
+    "x": 130.3,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   },
+   "nav#tab-3": {
+    "x": 259.7,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   }
+  },
+  "s3_list": {
+   "main.3#row": {
+    "x": 17,
+    "y": 131,
+    "w": 356,
+    "h": 52
+   },
+   "nav#tab-1": {
+    "x": 1,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   },
+   "nav#tab-2": {
+    "x": 130.3,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   },
+   "nav#tab-3": {
+    "x": 259.7,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   }
+  },
+  "s4_detail": {
+   "header#leading": {
+    "x": 9,
+    "y": 42.5,
+    "w": 36,
+    "h": 36
+   },
+   "footer#button-1": {
+    "x": 17,
+    "y": 809,
+    "w": 356,
+    "h": 23
+   },
+   "footer#button-2": {
+    "x": 17,
+    "y": 840,
+    "w": 356,
+    "h": 23
+   }
+  },
+  "s5_form": {
+   "header#leading": {
+    "x": 9,
+    "y": 42.5,
+    "w": 36,
+    "h": 36
+   },
+   "main#cancel": {
+    "x": 200.5,
+    "y": 259,
+    "w": 74.2,
+    "h": 44
+   },
+   "main#submit": {
+    "x": 282.6,
+    "y": 259,
+    "w": 90.4,
+    "h": 44
+   },
+   "footer#button-1": {
+    "x": 17,
+    "y": 809,
+    "w": 356,
+    "h": 23
+   },
+   "footer#button-2": {
+    "x": 17,
+    "y": 840,
+    "w": 356,
+    "h": 23
+   }
+  },
+  "s6_state": {
+   "main#action-1": {
+    "x": 95,
+    "y": 323,
+    "w": 200,
+    "h": 44
+   }
+  },
+  "v3": {
+   "main.3#row": {
+    "x": 17,
+    "y": 131,
+    "w": 356,
+    "h": 52
+   },
+   "nav#tab-1": {
+    "x": 1,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   },
+   "nav#tab-2": {
+    "x": 130.3,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   },
+   "nav#tab-3": {
+    "x": 259.7,
+    "y": 812,
+    "w": 129.3,
+    "h": 63
+   }
+  }
+ }
+}

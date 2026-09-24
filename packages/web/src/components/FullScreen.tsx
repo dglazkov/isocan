@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { FrameAnchor } from "../lib/frameanchor.ts";
 import type { Actor } from "@isocan/core";
 import { sourceOf, canvasPath, deckStep, itemPath, isFramedItem, noteFor, visualFaceOf, isDesignSystem, isTextItem } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -72,6 +73,10 @@ export function FullScreen({
   onIdentity: (actor: Actor | null) => void;
 }) {
   const navigate = useNavigate();
+  // `?at=` on the route is the frame's fragment: `at=screen%3D…` opens a prototype at that screen
+  // (lib/frameanchor.ts). A query, not the route's own `#`: a fragment on a canvas address is a pass
+  // (lib/arrival.ts), and a reload would try to spend this one.
+  const anchor = new URLSearchParams(useLocation().search).get("at") ?? "";
   const phone = usePhone();
   const [phoneNotes, setPhoneNotes] = useState(false);
   const gestures = useTouchNavigation((direction) => {
@@ -298,12 +303,14 @@ export function FullScreen({
       </div>
       </>}
       <div className={`fullscreen-stage${presenterNotes ? " with-notes" : ""}`} {...gestures}>
+        <FrameAnchor.Provider value={anchor}>
         {phone && item ? (() => {
           const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
           if (!current) return <p>This item has no preview.</p>;
           const visual = visualFaceOf(current);
           return <VersionContent canvasOf={item.properties.canvas ?? null} canvasSource={sourceOf(item)} canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} />;
         })() : <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />}
+        </FrameAnchor.Provider>
       </div>
       {/* Under the stage, never over it: the audience's picture keeps its
           frame and the presenter reads below it. A slide with no note says

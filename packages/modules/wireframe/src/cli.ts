@@ -13,6 +13,7 @@ import { registerVary } from "./vary-cli.ts";
 import { registerLinks } from "./links-cli.ts";
 import { registerStyle } from "./style-cli.ts";
 import { registerFlesh } from "./flesh-cli.ts";
+import { registerPlay } from "./play-cli.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
@@ -49,6 +50,7 @@ function register(host: CliHost): void {
   registerLinks(host, wire);
   registerStyle(host, wire);
   registerFlesh(host, wire);
+  registerPlay(host, wire);
 
   wire
     .command("questions")

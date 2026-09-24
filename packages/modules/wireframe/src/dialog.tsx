@@ -6,6 +6,8 @@ import { keptFlowsOf, writePrototype, type KeptFlow } from "./kept-flows.ts";
 import { StyleResolver, restyle, restyleSummary } from "./restyle.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
 import { webAnswerer, webPort } from "./web-port.ts";
+// ── phase 8, builder A: /wire links ──
+import { WireLinks } from "./links-panel.tsx";
 
 /**
  * **The Wireframes dialog** — `/wire` on the web (phase 5, journey scenes
@@ -26,13 +28,17 @@ type Mode =
   | { kind: "compose"; request: string }
   | { kind: "prototype" }
   | { kind: "style"; toDefault: boolean }
-  | { kind: "flesh"; pack?: string; bars: boolean };
+  | { kind: "flesh"; pack?: string; bars: boolean }
+  // ── phase 8, builder A: /wire links — every hotspot with a target picker (links-panel.tsx) ──
+  | { kind: "links" };
 
 export function modeOf(args: string): Mode {
   const words = args.trim();
   if (!words) return { kind: "form" };
   const [first, ...rest] = words.split(/\s+/);
   if (first === "prototype" && rest.length === 0) return { kind: "prototype" };
+  // ── phase 8, builder A: /wire links ──
+  if (first === "links" && rest.length === 0) return { kind: "links" };
   if (first === "style" && rest.every((w) => w === "--default" || w === "default")) return { kind: "style", toDefault: rest.length > 0 };
   if (first === "flesh") {
     const bars = rest.length === 1 && (rest[0] === "--bars" || rest[0] === "bars");
@@ -85,7 +91,7 @@ export async function fleshOnWeb(canvasId: string, host: DialogHost, opts: { pac
   return flesh(port, canvas, all, all, webAnswerer(canvasId, host), { ...(opts.pack !== undefined ? { pack: opts.pack } : {}), bars: opts.bars });
 }
 
-export function WireDialog({ canvasId, args, canEdit, host }: DialogFacts) {
+export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogFacts) {
   const [mode, setMode] = useState<Mode>(() => modeOf(args));
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -149,13 +155,16 @@ export function WireDialog({ canvasId, args, canEdit, host }: DialogFacts) {
   };
 
   useEffect(() => {
-    if (started.current || !canEdit || mode.kind === "form") return;
+    // ── phase 8, builder A: /wire links is a panel, not a run ──
+    if (started.current || !canEdit || mode.kind === "form" || mode.kind === "links") return;
     started.current = true;
     run(mode).catch(fail);
     // One run per opening: the mode is fixed once it starts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── phase 8, builder A: /wire links — a reader sees the table, its pickers disabled ──
+  if (mode.kind === "links") return <WireLinks canvasId={canvasId} host={host} selection={selection} canEdit={canEdit} />;
   if (!canEdit) return <p className="wire-note">You are reading this canvas — wireframes are composed by someone who can edit it.</p>;
 
   const go = (m: Mode) => {
@@ -188,6 +197,8 @@ export function WireDialog({ canvasId, args, canEdit, host }: DialogFacts) {
             <button className="btn" type="button" onClick={() => go({ kind: "style", toDefault: false })}>Restyle wires</button>
             <button className="btn" type="button" onClick={() => go({ kind: "style", toDefault: true })}>Default look</button>
             <button className="btn" type="button" onClick={() => go({ kind: "flesh", bars: false })}>Flesh out</button>
+            {/* ── phase 8, builder A: /wire links ── */}
+            <button className="btn" type="button" onClick={() => setMode({ kind: "links" })}>Links…</button>
           </div>
           <p className="wire-note">Blueprints land at once and fill in place; one undo takes a flow back. Also from a terminal: <code>isocan wire</code>.</p>
         </form>

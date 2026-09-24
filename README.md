@@ -390,7 +390,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   item: links are inferred from intents, archetypes and reading order, never
   stored; a hotspot with no kept target is drawn dashed and says which screen
   it needs; rebuilt, the prototype gains a version. `wire links` prints the
-  flow, `wire link` overrides one hotspot. Wires draw in the default grey
+  flow, `wire link` overrides one hotspot. On the canvas the kept screens
+  are joined by orthogonal arrows, one per hotspot, leaving from the button
+  they belong to; click an arrow to play the prototype from there, go to its
+  target, or change where it goes (drag its head onto another screen) —
+  `/wire links` is the same as a table, `wire play` the same from a
+  terminal. Wires draw in the default grey
   look, or in the canvas's design system: `wire style` has Jev map the
   governing `DESIGN.md`'s own tokens onto the wire's roles and restyles every
   wire as one undo (`--default` goes back; blueprints stay blue). `wire

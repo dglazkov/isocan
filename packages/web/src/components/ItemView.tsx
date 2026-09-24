@@ -49,6 +49,7 @@ import { blobUrl, readBlobText } from "../lib/api.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
+import { FrameAnchor, anchored } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
 import { useUiStore } from "../stores/uiStore.ts";
@@ -1704,10 +1705,12 @@ function HtmlItemView({
   // loaded with. A renewed signature is for the same bytes, and swapping it
   // in would reload the document for nothing — see `frame.ts`.
   const frame = useFrameSrc(origin, canvasId, blobHash);
+  // Full screen's `#…`, for a document that opens somewhere inside itself (lib/frameanchor.ts).
+  const anchor = useContext(FrameAnchor);
   if (!frame) return <div className="html-view" />;
   return (
     <HtmlView
-      src={frame.src}
+      src={anchored(frame.src, anchor)}
       sandbox={frame.sandbox}
       title={filename}
       warm={warm

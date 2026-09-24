@@ -1213,7 +1213,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         {/* Before the items, so a line passes UNDER the nodes it joins — a
             map node is chromeless text, and a line over it strikes through
             the words. */}
-        <ModuleUnderlays />
+        <ModuleUnderlays canvasId={canvasId} actor={actor} />
         {currentNode && canvas?.items[currentNode] && <div className="phone-current-node" aria-label="Current node" style={{ left: canvas.items[currentNode]!.x, top: canvas.items[currentNode]!.y, width: canvas.items[currentNode]!.width, height: canvas.items[currentNode]!.height }} />}
 
         {items.map((item) => (

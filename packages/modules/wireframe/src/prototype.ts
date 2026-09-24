@@ -55,6 +55,9 @@ body.proto{display:flex;flex-direction:column;align-items:center;gap:${PAD}px;pa
 [data-go]{cursor:pointer}
 [data-go]:hover{outline:2px solid color-mix(in srgb, var(--w-ink) 35%, transparent);outline-offset:2px}
 [data-needs]{outline:2px dashed var(--w-ink-muted);outline-offset:2px;cursor:help}
+.pflash{outline:3px solid var(--w-primary,var(--w-ink));outline-offset:3px;animation:pflash .6s ease-in-out 3 alternate}
+@keyframes pflash{to{outline-color:transparent}}
+@media (prefers-reduced-motion: reduce){.pflash{animation:none}}
 `;
 
 /** The router: a history stack, a transition by link kind, and nothing it has to fetch. */
@@ -78,12 +81,16 @@ var id=stack[stack.length-1];document.body.setAttribute("data-at",id);name.textC
 function go(to,kind){if(to==="back"){if(stack.length<2){note.textContent="· nothing to go back to";return}var step=show(stack[stack.length-2],kind==="overlay"?"overlay-out":"pop");stack.pop();paint(step);return}
 if(!by(to))return;var s=show(to,kind);if(kind==="dissolve")stack=[to];else if(kind==="none"&&stack.length)stack[stack.length-1]=to;else stack.push(to);paint(s)}
 function restart(){var s=show(data.start,"none");stack=[data.start];paint(s)}
+function at(){var q={};(location.hash||"").replace(/^#/,"").split("&").forEach(function(p){var i=p.indexOf("=");if(i>0)q[p.slice(0,i)]=decodeURIComponent(p.slice(i+1))});return q}
+function flash(key,id){if(!key)return;var sc=by(id);if(!sc)return;[].slice.call(sc.querySelectorAll("[data-hot]")).forEach(function(el){if(el.getAttribute("data-hot")!==key)return;el.classList.add("pflash");setTimeout(function(){el.classList.remove("pflash")},1800)})}
+function jump(){var q=at();if(!q.screen||!by(q.screen))return false;var s=show(q.screen,"none");stack=[q.screen];paint(s);flash(q.hot,q.screen);return true}
 document.addEventListener("click",function(e){var el=e.target.closest&&e.target.closest("[data-hot]");if(!el||!el.closest(".pscreen"))return;e.preventDefault();
 var needs=el.getAttribute("data-needs");if(needs){note.textContent="· needs "+needs+" — not kept yet";return}
 var to=el.getAttribute("data-go");if(to)go(to,el.getAttribute("data-t")||"push")});
 document.getElementById("restart").addEventListener("click",restart);
 [].slice.call(document.querySelectorAll("[data-needs]")).forEach(function(el){el.setAttribute("title","needs: "+el.getAttribute("data-needs"))});
-restart()})();`;
+window.addEventListener("hashchange",jump);
+if(!jump())restart()})();`;
 
 /** Put each link on its hotspot: every element carrying that key (a list's rows share one). */
 function bind(frame: string, links: readonly WireLink[]): string {
@@ -146,6 +153,15 @@ ${sections.join("\n")}
 </body>
 </html>
 `;
+}
+
+/**
+ * **Where a prototype opens** (phase 8, *Play from here*): the fragment its
+ * router reads — the screen to open at, and the hotspot to point out. The
+ * canvas's arrows and `isocan wire play` both spell it here.
+ */
+export function playAnchor(screen: string, hot?: string): string {
+  return `screen=${encodeURIComponent(screen)}${hot ? `&hot=${encodeURIComponent(hot)}` : ""}`;
 }
 
 /** Is this file a prototype (rather than a screen)? Needs no DOM. */
