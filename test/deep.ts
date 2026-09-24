@@ -140,6 +140,9 @@ export const DEEP: readonly DeepFile[] = [
   // design system" op held equal to `design use` and `design set` over the
   // real binary.
   { file: "packages/web/test/designuse.test.ts", secs: 19.8 },
+  // 24 Sep: two cases, one daemon, ~12 spawns — the chip's ✅/❌ ops held
+  // equal to `docket answer` over the real binary (#206 D7).
+  { file: "packages/web/test/docket.test.ts", secs: 10.3 },
   { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
 ];
 

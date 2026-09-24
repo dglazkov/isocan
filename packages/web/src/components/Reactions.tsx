@@ -1,6 +1,6 @@
 import { lazy, Suspense, useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
-import { agentActorIds, hasReacted, reactionsOf } from "@isocan/core";
+import { agentActorIds, reactOp, reactionsOf } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { rememberEmoji } from "../lib/recentEmoji.ts";
 
@@ -115,14 +115,8 @@ export function Reactions({
 
   function toggle(emoji: string) {
     if (!canEdit) return; // a mark is an op, and the daemon would refuse it
-    // The op says what should be TRUE rather than "flip it", so a double
-    // click and a race both land on the same answer.
-    const op = {
-      type: "item.react",
-      itemId: item.id,
-      emoji,
-      on: !hasReacted(item, emoji, actor.id),
-    } as const;
+    // Core's, so `isocan docket answer` sends exactly these clicks.
+    const op = reactOp(item, emoji, actor.id);
     void sendEchoed(canvasId, actor, op);
     // Only ADDING a mark is a reach worth remembering. Taking yours back is
     // the opposite gesture, and promoting it would put the thing you just

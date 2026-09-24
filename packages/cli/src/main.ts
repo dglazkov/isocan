@@ -299,6 +299,12 @@ import {
   contextPieces,
   contextReport,
   convergePlan,
+  docketAnswer,
+  docketSlug,
+  docketVerdict,
+  DOCKET_CLAIM,
+  DOCKET_MARKS,
+  type DocketVerdict,
   preferPatch,
   unpreferPatch,
   preferredOver,
@@ -8425,6 +8431,136 @@ program
         `"${chosen.title}" is v${parent.versions.length + 1} of "${parent.title}"` +
           (losing > 0 ? `, and ${losing} other${losing === 1 ? "" : "s"} went to the trash` : "") +
           " — one undo takes it all back",
+      );
+    }),
+  );
+
+/**
+ * **The docket, from a terminal** (#206 D7).
+ *
+ * `scripts/docket.mjs` asks each open persona finding as an item carrying
+ * `docket=<slug>`; a person answers by reacting ✅ or ❌, and the script
+ * writes the verdict into the run pages and commits it. Until this verb an
+ * agent could read a finding and not answer it — "a docket only a web app can
+ * read is a dashboard with a second name".
+ *
+ * The answer is the chip clicks, not a new op: core's `docketAnswer` builds
+ * them from the same `reactOp` the chip sends, so a verdict from here and one
+ * from the app are the same bytes in the log and the script cannot tell them
+ * apart (`packages/web/test/docket.test.ts`).
+ */
+function docketLine(item: Item, names: Record<string, string>): {
+  slug: string;
+  itemId: string;
+  title: string;
+  verdict: DocketVerdict | "contested" | null;
+  by: Record<string, string[]>;
+  takenBy: string[];
+} {
+  const who = (emoji: string) => (item.reactions?.[emoji] ?? []).map((id) => names[id] ?? id);
+  return {
+    slug: docketSlug(item)!,
+    itemId: item.id,
+    title: item.title,
+    verdict: docketVerdict(item),
+    by: { accepted: who(DOCKET_MARKS.accepted), rejected: who(DOCKET_MARKS.rejected) },
+    takenBy: who(DOCKET_CLAIM),
+  };
+}
+
+const docket = program
+  .command("docket")
+  .description("Persona findings waiting on a verdict — list them, and answer one ✅ or ❌")
+  .addHelpText(
+    "after",
+    `
+A docket item is a finding the board asks on the canvas (scripts/docket.mjs):
+one item per question, carrying the property docket=<slug>. It is answered by
+a mark — ✅ accepts, ❌ rejects — and the docket script writes the verdict
+into docs/reviews and commits it with your name. ✋ says you are taking it.
+
+  isocan docket                               # the open questions
+  isocan docket answer <finding> accepted     # or rejected; <finding> is the slug or the item
+  isocan docket answer <finding> rejected --because "measured on the wrong build"
+
+Answering sends the same item.react ops a click on the chip does, one undo.`,
+  );
+
+docket
+  .command("list", { isDefault: true })
+  .description("The questions on the docket, and what the marks on each say")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (_opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { snapshot } = await canvasAndSnapshot(ctx);
+      const names = await ctx.client.actorNames();
+      const lines = Object.values(snapshot.canvas.items)
+        .filter((item) => docketSlug(item) !== null)
+        .map((item) => docketLine(item, names))
+        .sort((a, b) => a.slug.localeCompare(b.slug));
+      if (ctx.json) return printJson(lines);
+      if (lines.length === 0) {
+        console.log("nothing on the docket — no item here carries a docket=<slug> property");
+        return;
+      }
+      for (const line of lines) {
+        const state =
+          line.verdict === null
+            ? "open"
+            : line.verdict === "contested"
+              ? `contested — ✅ ${line.by.accepted!.join(", ")}, ❌ ${line.by.rejected!.join(", ")}`
+              : `${DOCKET_MARKS[line.verdict]} ${line.verdict} by ${line.by[line.verdict]!.join(", ")}`;
+        const taken = line.takenBy.length > 0 ? ` · ✋ ${line.takenBy.join(", ")}` : "";
+        console.log(`${line.slug}  ${line.title}\n  ${state}${taken}`);
+      }
+    }),
+  );
+
+docket
+  .command("answer <finding> <verdict>")
+  .description("Answer a question: accepted (✅) or rejected (❌) — the marks a click on the chip leaves")
+  .option("--because <words>", "say why, as a comment on the item")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (ref: string, verdict: string, opts: { because?: string }, cmd: Command) => {
+      if (verdict !== "accepted" && verdict !== "rejected") {
+        throw new Error(`a verdict is accepted or rejected — got: ${verdict}`);
+      }
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      // The slug is the question's own name, and what the list prints first;
+      // an item id or title works too, as it does for every other verb.
+      const item =
+        Object.values(snapshot.canvas.items).find((it) => docketSlug(it) === ref) ??
+        resolveItem(snapshot, ref);
+      if (docketSlug(item) === null) {
+        throw new Error(`"${item.title}" is not on the docket — it carries no docket=<slug> property`);
+      }
+      const ops: Operation[] = docketAnswer(item, verdict, ctx.actor.id);
+      const group = newGroupId();
+      for (const op of ops) await sendOp(ctx, p.id, op, group);
+      let threadId: string | undefined;
+      if (opts.because) {
+        threadId = newThreadId();
+        await sendOp(
+          ctx,
+          p.id,
+          {
+            type: "thread.create",
+            threadId,
+            ...anchorOffset(item),
+            anchorItemId: item.id,
+            comment: await newComment(ctx, p.id, snapshot, `${DOCKET_MARKS[verdict]} ${verdict}: ${opts.because}`),
+          },
+          group,
+        );
+      }
+      if (ctx.json) return printJson({ itemId: item.id, slug: docketSlug(item), verdict, ops: ops.length, ...(threadId ? { threadId } : {}) });
+      console.log(
+        ops.length === 0
+          ? `you already said ${verdict} on "${item.title}"`
+          : `${DOCKET_MARKS[verdict]} ${verdict} — "${item.title}"; the docket script writes it into docs/reviews on its next run`,
       );
     }),
   );

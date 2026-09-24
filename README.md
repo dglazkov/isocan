@@ -502,6 +502,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   having built it. Marks are properties on the item, so they survive a reload,
   reach the other machine, and answer an agent asking what is in play
   (`isocan react 👀 <item>`, `isocan ls --reaction 👀`).
+- **The docket**: a persona finding that wants a person is asked on the repo's
+  board as a card, and answered with a mark — ✅ accepts, ❌ rejects — which the
+  docket script writes into `docs/reviews/` and commits with the answerer's
+  name. An agent answers from a terminal with the same ops the chip sends:
+  `isocan docket` lists the questions, `isocan docket answer <finding>
+  accepted|rejected [--because …]` answers one.
 - **The files panel**: the same dock, showing the canvas as what it is — a
   directory of files. Grouped by kind (drawings, images, documents, sites),
   filterable by name, each row carrying the filename, size, and version count.

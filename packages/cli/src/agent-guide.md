@@ -1220,6 +1220,19 @@ names". The second is a claim somebody can check.
 about each — `accepted`, `rejected`, or `unanswered`. Nothing computes a score
 from those yet, deliberately: an accept rate over five findings is noise.
 
+**The docket is where an unanswered finding gets its answer.** On a repo whose
+board runs `scripts/docket.mjs`, each open question is an item carrying
+`docket=<slug>`, and it is answered by a mark: ✅ accepts, ❌ rejects. The
+script writes the verdict into `docs/reviews/` and commits it with the name of
+whoever answered. `isocan docket` lists the questions and what the marks on
+each say (open, accepted or rejected by whom, contested, and who has taken it
+with ✋). `isocan docket answer <finding> accepted|rejected` answers one —
+`<finding>` is the slug the list prints, or the item — and it sends exactly
+the ops a click on the chip sends, taking your other verdict off first if you
+wore it; one undo takes the answer back. `--because <words>` says why, as a
+comment on the item. A verdict is a person's call about a finding: answer one
+when you were asked to, or when you did the work that settles it, and say so.
+
 A goal is `(number, bound, the command that produces it)` — never an
 aspiration. If you add one, run its command against something broken first and
 watch the number move. A measurement that cannot fail reports success forever,
@@ -3167,6 +3180,8 @@ on the thread before putting one on somebody else's canvas,
 `design respond <file> [--thread <id>] [--retry]`, `design decide <file> [--thread <id>] [--retry]`,
 `add [--drawing] [--visual]`, `browse <url>`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by] [--beside <item> --side left|right|above|below]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
+`docket` and `docket answer <finding> accepted|rejected [--because <words>]`
+(persona findings asked on the board — see **The roles you can take on**),
 `set`, `fit <items...> [--size WxH]` (grow items to their content and settle
 the neighbours), `ls [--kind|--filter]`, `show`, `versions`, `version promote`,
 `version prune <items…> --keep N --force` (`--all`: every item; NOT undoable —

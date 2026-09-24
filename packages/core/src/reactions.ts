@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
+import type { Operation } from "./ops.ts";
 
 /**
  * Reactions on an item: who wears what, and the two questions anybody asks.
@@ -76,6 +77,13 @@ export function hasReacted(item: Item, emoji: string, actorId: string): boolean 
   return (item.reactions?.[emoji] ?? []).includes(actorId);
 }
 
+/** **A chip click**: the op that toggles this actor's mark. It says what
+ * should be TRUE rather than "flip it", so a double click and a race land on
+ * the same answer. The chip sends it, and `isocan docket answer` is built
+ * from it, so a terminal's answer is the clicks a person would make. */
+export function reactOp(item: Item, emoji: string, actorId: string): Extract<Operation, { type: "item.react" }> {
+  return { type: "item.react", itemId: item.id, emoji, on: !hasReacted(item, emoji, actorId) };
+}
 
 /** One emoji's worth of the canvas: the mark, who is wearing it where, and
  * how many items carry it. */

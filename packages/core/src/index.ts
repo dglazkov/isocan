@@ -15,6 +15,7 @@ export * from "./passes.ts";
 export * from "./address.ts";
 export * from "./emoji.ts";
 export * from "./reactions.ts";
+export * from "./docket.ts";
 export * from "./recap.ts";
 export * from "./recap-head.ts";
 export * from "./roster.ts";
