@@ -7361,7 +7361,7 @@ ${canvasId}`;
         changed = true;
       }
       if (!changed) return;
-      runtime.registry = { names: nextNames, colors: nextColors };
+      runtime.registry = { ...runtime.registry, names: nextNames, colors: nextColors };
       await this.store.saveActors(runtime.registry, runtime.lastSeq);
     });
   }
