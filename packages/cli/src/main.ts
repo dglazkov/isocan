@@ -200,6 +200,7 @@ import {
   type ShelfScope,
   formatScope,
   shortcutsAsText,
+  markShortcuts,
   elapsedLabel,
   extractMentions,
   isIdentityColor,
@@ -7670,7 +7671,7 @@ program
       const ctx = await ctxOf(cmd);
       // The list is core's, not the app's: an agent telling somebody which key
       // to press must be reading the same page they are looking at.
-      if (ctx.json) return printJson(SHORTCUTS);
+      if (ctx.json) return printJson([...SHORTCUTS, ...markShortcuts()]);
       console.log(shortcutsAsText());
     }),
   );

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { SHORTCUT_GROUPS, moduleMarks, shortcutsIn, type CommandMetadata } from "@isocan/core";
+import { SHORTCUT_GROUPS, markShortcuts, shortcutsIn, type CommandMetadata } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Modal } from "./Modal.tsx";
 import { useCommands } from "../lib/commands.ts";
@@ -49,7 +49,8 @@ export function HelpPanel() {
             {SHORTCUT_GROUPS.map((group) => (
               <section key={group} className="help-group">
                 <h3>{group}</h3>
-                {shortcutsIn(group).map((shortcut) => (
+                {/* A loaded module's marks answer ⇧ and a letter — core's `markShortcuts`, the rows `isocan shortcuts` prints too. */}
+                {[...shortcutsIn(group), ...markShortcuts().filter((s) => s.group === group)].map((shortcut) => (
                   <div className="help-row" key={`${group}-${shortcut.does}`}>
                     <span className="help-keys">
                       {shortcut.keys.map((key) => (
@@ -62,19 +63,6 @@ export function HelpPanel() {
                     </span>
                   </div>
                 ))}
-                {/* A loaded module's marks answer ⇧ and a letter (`ModuleMark.key`). */}
-                {group === "Items" &&
-                  moduleMarks().filter((mark) => mark.key).map((mark) => (
-                    <div className="help-row" key={mark.property}>
-                      <span className="help-keys">
-                        <kbd>⇧{mark.key}</kbd>
-                      </span>
-                      <span className="help-does">
-                        {mark.emoji} {mark.on} or {mark.off.toLowerCase()} the selection
-                        <i>A property on the item, so anybody can take it off</i>
-                      </span>
-                    </div>
-                  ))}
               </section>
             ))}
           </div>
