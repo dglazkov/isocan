@@ -127,7 +127,7 @@ function registeredCommands(): string[] {
 
 /**
  * **What an agent can reach from the cold start** (#124). `isocan
- * --agent-help` no longer prints everything: it prints `guide/start.md` — one
+ * --agent-help` no longer prints everything: it prints the guide's cold start — one
  * line per verb family — and an index of topics, each one a call away. So a
  * verb counts as findable when the cold start names it, or when a topic the
  * cold start's index names does. The index is read out of the printed cold
@@ -168,7 +168,7 @@ describe("the agent-facing surface", () => {
     const missing = commands.filter((name) => !PLUMBING.has(name) && !documented.has(name));
     expect(
       missing,
-      `add these to the cold start's verb index (packages/cli/src/guide/start.md) or to a topic: ${missing.join(", ")}`,
+      `add these to the cold start's verb index or to a topic (packages/cli/src/agent-guide.md): ${missing.join(", ")}`,
     ).toEqual([]);
   });
 

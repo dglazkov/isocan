@@ -11,10 +11,9 @@ If you are here to **collaborate on a canvas** — address comments, build or
 edit items, park on `isocan wait` — run `isocan --agent-help` first. That is
 the cold start — what isocan is, the lap, and every verb on one line — with a
 list of topics; `isocan --agent-help <topic>` prints one, and `all` prints the
-lot. It lives in [`packages/cli/src/guide/start.md`](packages/cli/src/guide/start.md)
-and [`packages/cli/src/agent-guide.md`](packages/cli/src/agent-guide.md), whose
-sections `agent-guide.ts` gathers into topics: shipped with the CLI so an
-upgrade upgrades the instructions too (#75). Instructions about using the CLI
+lot. It is one file, [`packages/cli/src/agent-guide.md`](packages/cli/src/agent-guide.md):
+the cold start first, then each topic opened by a `<!-- topic: slug | summary -->`
+line. It ships with the CLI so an upgrade upgrades the instructions too (#75). Instructions about using the CLI
 belong there, not in the skill. The cold start has a token budget (#124,
 `packages/cli/test/agent-guide.test.ts`): new prose goes in a topic, and the
 cold start gets one line.
@@ -293,8 +292,8 @@ deliberately did not.
    pinch, hover) does not need a verb, but the INTENT behind it usually does:
    dragging until edges line up became `isocan align`.
 3. **Agent guide** — `isocan --agent-help` is what an agent reads before it
-   acts: the cold start (`packages/cli/src/guide/start.md`) and the topics it
-   indexes (`packages/cli/src/agent-guide.md`). A verb nobody is told about
+   acts: the cold start at the head of `packages/cli/src/agent-guide.md` and
+   the topics it indexes, below it in the same file. A verb nobody is told about
    does not exist. `npm test` fails if a command is in neither the cold start
    nor a topic it points to, and if a top-level verb has no line in the cold
    start's verb index.
@@ -308,5 +307,5 @@ deliberately did not.
 
 The forcing function is `packages/cli/test/surface.test.ts`: it reads the
 commands the CLI actually registers and fails when one is missing from the
-agent guide's quick reference. Adding a verb without telling agents about it
+cold start and from every topic it points to. Adding a verb without telling agents about it
 breaks the build.

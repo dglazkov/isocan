@@ -1223,7 +1223,7 @@ Agents working in this repo start at [`AGENTS.md`](AGENTS.md). What teaches
 one to collaborate on a canvas is `isocan --agent-help`: the protocol —
 naming yourself, appearing, the comment→build→reply→`wait` lap, every verb on
 one line — with the rest behind `isocan --agent-help <topic>`, shipped inside
-the CLI (`packages/cli/src/guide/`, `packages/cli/src/agent-guide.md`), so it always describes
+the CLI (`packages/cli/src/agent-guide.md`), so it always describes
 the build in hand rather than whatever was installed months ago (#75). The
 [Agent Skill](https://agentskills.io/specification) at
 `.agents/skills/isocan-collab/` — the location most harnesses discover on

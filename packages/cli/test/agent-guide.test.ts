@@ -1,13 +1,13 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-  BASE_TOPICS,
+  TOPIC_MARKER,
   agentHelp,
   coldStart,
   estimateTokens,
   guideTopics,
-  splitSections,
+  parseGuide,
   wholeGuide,
 } from "../src/agent-guide.ts";
 import { CLI_MODULES } from "../src/modules.ts";
@@ -19,7 +19,8 @@ import { CLI_MODULES } from "../src/modules.ts";
  * first act. On 11 Sep 2026 that was ~33k tokens; by 24 Sep it was ~59k
  * (237,605 characters, base guide plus nine module sections) — the guide grew
  * the way crowded files do, a paragraph per feature, and nothing said no. The
- * cold start is now `guide/start.md` plus a generated topic index, and this
+ * cold start is now the head of `agent-guide.md`, before its first topic
+ * marker, plus a generated topic index, and this
  * number is what says no.
  *
  * **3,500, measured 2,982 on 24 Sep 2026** (chars/4, with this build's nine
@@ -63,23 +64,23 @@ describe("the cold start", () => {
 });
 
 describe("the topics", () => {
-  const { sections } = splitSections(readFileSync(guideFile, "utf8"));
-  const headings = sections.map((s) => s.heading);
-  const claimed = BASE_TOPICS.flatMap((t) => t.sections);
+  const source = readFileSync(guideFile, "utf8");
+  const { cold, topics } = parseGuide(source);
 
-  it("give every section of the guide exactly one home", () => {
-    // A new `##` with no topic would print only under `all` — invisible to
-    // every agent that did not ask for everything.
-    const homeless = headings.filter((h) => !claimed.includes(h));
-    expect(homeless, `add these sections to a topic in BASE_TOPICS (agent-guide.ts)`).toEqual([]);
-    const twice = claimed.filter((h, i) => claimed.indexOf(h) !== i);
-    expect(twice).toEqual([]);
+  it("open with the cold start, then a dozen topics", () => {
+    expect(cold).toContain("## The lap");
+    expect(cold).toContain("## Every verb, one line each");
+    expect(topics.map((t) => t.slug)).toEqual([
+      "protocol", "practices", "items", "design", "context", "history",
+      "agents", "present", "extend", "homes", "sharing", "reference",
+    ]);
+    for (const t of topics) expect(t.text.length, t.slug).toBeGreaterThan(500);
   });
 
-  it("name only sections that exist", () => {
-    // A renamed heading would otherwise leave its topic quietly empty.
-    const ghosts = claimed.filter((h) => !headings.includes(h));
-    expect(ghosts, "these headings are gone from agent-guide.md — rename them in BASE_TOPICS").toEqual([]);
+  it("are opened by markers that parse — a typo would merge two topics", () => {
+    const lines = source.split("\n").filter((l) => l.startsWith("<!-- topic"));
+    for (const line of lines) expect(line).toMatch(TOPIC_MARKER);
+    expect(lines.length).toBe(topics.length);
   });
 
   it("have one slug each, modules included", () => {
@@ -90,15 +91,10 @@ describe("the topics", () => {
 
   it("carry the whole guide between them — `all` loses nothing", () => {
     const all = wholeGuide(guideTopics(modules));
-    for (const s of sections) expect(all).toContain(s.text.trim());
+    for (const line of source.split("\n")) {
+      if (line.trim() && !TOPIC_MARKER.test(line)) expect(all).toContain(line);
+    }
     for (const m of modules) expect(all).toContain(m.guide.trim());
-  });
-
-  it("ship every file in the guide directory", () => {
-    // `guide/` holds the cold start today; a topic file dropped in beside it
-    // without an import would ship nowhere.
-    const dir = fileURLToPath(new URL("../src/guide/", import.meta.url));
-    expect(readdirSync(dir).filter((f) => f.endsWith(".md"))).toEqual(["start.md"]);
   });
 });
 

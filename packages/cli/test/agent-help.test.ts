@@ -14,7 +14,6 @@ import { describe, expect, it } from "vitest";
 
 const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const guideFile = fileURLToPath(new URL("../src/agent-guide.md", import.meta.url));
-const startFile = fileURLToPath(new URL("../src/guide/start.md", import.meta.url));
 
 async function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
   // A home nothing has ever run in: no identity, no config, no daemon — and
@@ -57,7 +56,9 @@ async function isocan(...args: string[]): Promise<{ code: number; stdout: string
 
 describe("isocan --agent-help", () => {
   it("prints the cold start the CLI ships, and an index of the rest", async () => {
-    const start = await fs.readFile(startFile, "utf8");
+    // The cold start is the guide up to its first topic marker (#124).
+    const guide = await fs.readFile(guideFile, "utf8");
+    const start = guide.slice(0, guide.indexOf("<!-- topic:"));
     const { code, stdout } = await isocan("--agent-help");
     expect(code).toBe(0);
     expect(stdout).toContain(start.trim());
@@ -102,7 +103,7 @@ describe("isocan --agent-help", () => {
     // `version ls`) — taught once, in topic `reference`, not in the cold start.
     const older = new Set(["browse", "versions"]);
     const missing = verbs.filter((v) => !PLUMBING.has(v) && !older.has(v) && !named.has(v));
-    expect(missing, `add a line for these to packages/cli/src/guide/start.md`).toEqual([]);
+    expect(missing, `add a line for these to the cold start's verb index in packages/cli/src/agent-guide.md`).toEqual([]);
   });
 
   it("means the same thing after a subcommand, and runs nothing else", async () => {

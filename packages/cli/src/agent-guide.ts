@@ -1,5 +1,4 @@
 import guideText from "./agent-guide.md";
-import startText from "./guide/start.md";
 
 /**
  * The collaboration guide agents read before they act — the protocol behind
@@ -21,14 +20,22 @@ import startText from "./guide/start.md";
  *
  * **A cold start and topics** (#124). The whole guide had grown to ~59k
  * tokens by 24 Sep 2026 (chars/4), and every agent paid for all of it on every
- * cold start — most of it about kinds of work that agent was not doing. So
- * `isocan --agent-help` prints `guide/start.md` — what isocan is, the lap, and
- * one line per verb family — followed by an index of topics GENERATED from
- * the list below, so a topic nobody is told about cannot exist.
+ * cold start — most of it about kinds of work that agent was not doing. The
+ * file is still one file, in two parts:
+ *
+ * - **the cold start**, everything before the first topic marker — what
+ *   isocan is, the lap, and one line per verb family — which is what
+ *   `isocan --agent-help` prints, followed by an index of topics GENERATED
+ *   from the markers, so a topic nobody is told about cannot exist;
+ * - **the topics**, each opened by a line
+ *   `<!-- topic: <slug> | <summary> -->` and running to the next one. A new
+ *   `##` lands in whichever topic it is written under; there is no list to
+ *   forget to update.
+ *
  * `isocan --agent-help <topic>` prints one topic, `--agent-help <verb>` the
  * topic that teaches that verb, and `--agent-help all` everything, for anyone
- * who wants the old behaviour. The budget on the cold start is held by
- * `packages/cli/test/agent-guide.test.ts`.
+ * who wants the old behaviour. Each loaded module is a topic too. The budget
+ * on the cold start is held by `packages/cli/test/agent-guide.test.ts`.
  *
  * **Why `--agent-help <topic>` and not an `isocan guide` verb.** It is the one
  * door every agent and the skill already know; it is answered before commander
@@ -54,139 +61,27 @@ export interface GuideTopic {
   text: string;
 }
 
-/**
- * The base guide's topics, as the `## ` sections of `agent-guide.md` each one
- * gathers. Order is the index's order: the protocol in full first, the fine
- * print last. `agent-guide.test.ts` holds that every section is in exactly one
- * topic and every section named here exists — so a new `##` in the guide
- * without a home here fails the build rather than vanishing from every
- * printout but `all`.
- */
-export const BASE_TOPICS: readonly { slug: string; summary: string; sections: readonly string[] }[] = [
-  {
-    slug: "protocol",
-    summary: "the lap in full — naming yourself, the session, who is at your terminal, parking, several of you, your inbox, asking a person",
-    sections: [
-      "Orient (once per session)",
-      "Your name",
-      "The session protocol",
-      "Who is at your terminal",
-      "Parking is a foreground call",
-      "More than one of you",
-      "What is addressed to you",
-      "When you need a person",
-      "Working a canvas that is not this directory's",
-    ],
-  },
-  {
-    slug: "practices",
-    summary: "the habits that earn trust — terse replies, versions, marks and reactions, tidy canvases, stopping, product bugs",
-    sections: ["Practices that earn trust"],
-  },
-  {
-    slug: "items",
-    summary: "making and arranging things — `add`, text nodes, Google Docs, canvases on canvases, groups, copying, files on disk",
-    sections: [
-      "Adding anything: one verb that reads what you give it",
-      "Words on the canvas",
-      "A Google Doc on the canvas",
-      "A canvas on a canvas",
-      "Groups: explicit membership, with area aliases",
-      "Copying things, and taking them to another canvas",
-      "Screens that become files",
-    ],
-  },
-  {
-    slug: "design",
-    summary: "design work — the design system, requests and questions, images, variations, compare, review and repair",
-    sections: [
-      "Choosing between variations",
-      "Bringing in somebody else's theme",
-      "Making an image",
-      "One shared review and bounded repair",
-    ],
-  },
-  {
-    slug: "context",
-    summary: "what an agent reads before it starts — the Chat, `context`, pins and exclusions, document status",
-    sections: ["The Chat", "What you are about to read", "Saying what matters here", "Saying where a document stands"],
-  },
-  {
-    slug: "history",
-    summary: "what happened — `timeline`, `activity`, `lens`, `history`, `at`, `recap`, `whatsnew`",
-    sections: ["Where the seams are", "What has been going on", "What changed"],
-  },
-  {
-    slug: "agents",
-    summary: "agents beyond you — standing agents, the bench, personas and the docket, scripting against the library",
-    sections: ["Standing agents", "Your bench: the agents a person has", "The roles you can take on", "Scripting"],
-  },
-  {
-    slug: "present",
-    summary: "running a room — the slide deck, design sprints",
-    sections: ["The slide deck", "Running a sprint"],
-  },
-  {
-    slug: "extend",
-    summary: "what a canvas carries — modules, tools in the rail, panels in the dock",
-    sections: ["Modules", "Tools: a canvas that carries its own buttons", "Panels: a canvas that carries its own page"],
-  },
-  {
-    slug: "homes",
-    summary: "where a canvas lives — homes and replicas, teleport, export and import, missing bytes",
-    sections: [
-      "When a canvas's home is somewhere else",
-      "Taking a canvas somewhere else",
-      "Moving a canvas to another home",
-      "Backing a canvas up",
-      "When a teammate sees the item but not the picture",
-    ],
-  },
-  {
-    slug: "sharing",
-    summary: "who may enter — `share`, spaces, groups of people, passes, embeds, badges, and the refusals",
-    sections: [
-      "Sharing a canvas",
-      "Spaces: a set of canvases, shared once",
-      "Groups: a set of people, shared with once",
-      "Your own surfaces",
-      "Passes: a credential, not an invitation",
-      "When a canvas refuses you",
-      "When the DOOR refuses you",
-    ],
-  },
-  {
-    slug: "reference",
-    summary: "every verb with its flags, the older spellings, and the fine print",
-    sections: ["Quick reference of the whole surface"],
-  },
-];
-
-/** A `## ` section of a guide: its heading's text and everything under it. */
-export interface GuideSection {
-  heading: string;
-  text: string;
-}
+/** `<!-- topic: protocol | the lap in full — … -->`, alone on its line. */
+export const TOPIC_MARKER = /^<!-- topic: ([a-z][a-z-]*) \| (.+?) -->$/;
 
 /**
- * Split markdown at its `## ` headings, ignoring any inside code fences. The
- * text before the first heading is the preamble; `###` stays with its `##`.
+ * Split a guide into its cold start (everything before the first marker) and
+ * its topics (each marker to the next). Markers are not printed.
  */
-export function splitSections(markdown: string): { preamble: string; sections: GuideSection[] } {
-  const sections: GuideSection[] = [];
-  let preamble = "";
-  let current: GuideSection | null = null;
-  let fenced = false;
+export function parseGuide(markdown: string): { cold: string; topics: GuideTopic[] } {
+  let cold = "";
+  const topics: GuideTopic[] = [];
+  let current: GuideTopic | null = null;
   for (const line of markdown.split("\n")) {
-    if (/^\s*```/.test(line)) fenced = !fenced;
-    if (!fenced && line.startsWith("## ")) {
-      current = { heading: line.slice(3).trim(), text: "" };
-      sections.push(current);
-    }
-    if (current) current.text += line + "\n";
-    else preamble += line + "\n";
+    const marker = TOPIC_MARKER.exec(line);
+    if (marker) {
+      current = { slug: marker[1]!, summary: marker[2]!, text: "" };
+      topics.push(current);
+    } else if (current) current.text += line + "\n";
+    else cold += line + "\n";
   }
-  return { preamble, sections };
+  for (const t of topics) t.text = t.text.trim();
+  return { cold: cold.trim(), topics };
 }
 
 /** A module's guide, with the name `--agent-help <slug>` finds it by. */
@@ -200,18 +95,12 @@ export interface ModuleGuide {
 export const moduleSlug = (name: string): string => name.split("/").pop()!.toLowerCase();
 
 /**
- * Every topic this build can print: the base guide's, then one per loaded
- * module — a module's verbs are described only while the module is here to
- * answer them, which is `surface.test.ts`'s rule with its pleasant inverse.
+ * Every topic this build can print: the guide's, then one per loaded module —
+ * a module's verbs are described only while the module is here to answer
+ * them, which is `surface.test.ts`'s rule with its pleasant inverse.
  */
 export function guideTopics(modules: readonly ModuleGuide[] = []): GuideTopic[] {
-  const { preamble, sections } = splitSections(guideText);
-  const byHeading = new Map(sections.map((s) => [s.heading, s.text]));
-  const topics: GuideTopic[] = BASE_TOPICS.map((t, i) => ({
-    slug: t.slug,
-    summary: t.summary,
-    text: ((i === 0 ? preamble : "") + t.sections.map((h) => byHeading.get(h) ?? "").join("")).trim(),
-  }));
+  const topics = parseGuide(guideText).topics;
   for (const m of modules) {
     const text = m.guide.trim();
     const heading = /^##\s+(.+)$/m.exec(text)?.[1]?.trim() ?? m.name;
@@ -248,12 +137,12 @@ export function topicIndex(topics: readonly GuideTopic[]): string {
 
 /** What `isocan --agent-help` prints with no topic: the cold start and the index. */
 export function coldStart(topics: readonly GuideTopic[]): string {
-  return `${startText.trim()}\n\n${topicIndex(topics)}\n`;
+  return `${parseGuide(guideText).cold}\n\n${topicIndex(topics)}\n`;
 }
 
 /** Everything, in index order — the guide as it printed before #124. */
 export function wholeGuide(topics: readonly GuideTopic[]): string {
-  return [coldStart(topics).trim(), ...topics.map((t) => t.text)].join("\n\n") + "\n";
+  return [coldStart(topics).trim(), ...topics.map((t) => `# Topic \`${t.slug}\` — ${t.summary}\n\n${t.text}`)].join("\n\n") + "\n";
 }
 
 /**

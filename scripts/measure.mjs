@@ -486,8 +486,8 @@ const METRICS = {
     },
     breakIt: {
       // A topic's worth of prose folded back into the cold start.
-      file: "packages/cli/src/guide/start.md",
-      apply: (t) => t + "\n" + "Folded back in. ".repeat(500),
+      file: "packages/cli/src/agent-guide.md",
+      apply: (t) => t.replace("<!-- topic:", "Folded back in. ".repeat(500) + "\n\n<!-- topic:"),
     },
   },
 
