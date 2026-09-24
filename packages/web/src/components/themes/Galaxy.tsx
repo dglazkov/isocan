@@ -1,4 +1,4 @@
-import type { ThemeAnchor } from "@isocan/core";
+import { zoomFade, type ThemeAnchor } from "@isocan/core";
 import { useUiStore } from "../../stores/uiStore.ts";
 
 /**
@@ -168,7 +168,7 @@ export function Galaxy({ anchor }: { anchor: ThemeAnchor }) {
    * because it is not in the canvas — so there is no scale at which it turns
    * into a texture, and nothing to protect the reader from.
    */
-  const fade = pinned ? 1 : Math.max(0, Math.min(1, (scale - 0.1) / 0.4));
+  const fade = pinned ? 1 : zoomFade(scale, 0.1, 0.5);
 
   return (
     <div

@@ -31,16 +31,12 @@
  * corner pin is nudged OUTSIDE it, so they share an end of one edge without
  * sharing any pixels. `badgeCorner` is gone rather than merely unused.
  */
+import { holdsAtZoom } from "@isocan/core";
 
 /** Below this an item is a speck: the plies still say there is a stack, the
  * pins still say someone spoke, and a label would be bigger than the thing. */
 const MIN_CHROME_WIDTH = 56;
 const MIN_CHROME_HEIGHT = 40;
-
-/** Keep selectable shells at overview scale without mounting unreadable document trees. */
-export function itemPreviewVisible(width: number, height: number, scale: number, nearWindow: boolean, entered: boolean): boolean {
-  return entered || (nearWindow && hasRoomForChrome(width, height, scale));
-}
 
 /**
  * The transform that holds a piece of item chrome at a constant SCREEN size.
@@ -91,9 +87,11 @@ export function underRow(width: number, scale: number): { transform: string; wid
   return { ...counterScale(scale), width: width * scale };
 }
 
-/** Is the item big enough on screen to wear a label and a badge? */
-export function hasRoomForChrome(width: number, height: number, scale: number): boolean {
-  return width * scale > MIN_CHROME_WIDTH && height * scale > MIN_CHROME_HEIGHT;
+/** Is the item big enough on screen to wear a label and a badge? Core's one
+ *  zoom rule (`holdsAtZoom`), asked of both sides; `was` is the last answer, so
+ *  an item resting on the line keeps its chrome rather than blinking it. */
+export function hasRoomForChrome(width: number, height: number, scale: number, was?: boolean): boolean {
+  return holdsAtZoom(width * scale, MIN_CHROME_WIDTH, was) && holdsAtZoom(height * scale, MIN_CHROME_HEIGHT, was);
 }
 
 /**
@@ -165,8 +163,8 @@ export const MARK_ROOM = 47;
 
 /** Does the row under the item have room to spell the button label out,
  * given how many marks the item is wearing? */
-export function underRowSpellsItOut(width: number, scale: number, marks: number): boolean {
-  return width * scale >= FULL_LABEL_ROOM + marks * MARK_ROOM;
+export function underRowSpellsItOut(width: number, scale: number, marks: number, was?: boolean): boolean {
+  return holdsAtZoom(width * scale, FULL_LABEL_ROOM + marks * MARK_ROOM, was);
 }
 
 

@@ -1,4 +1,5 @@
 import type { Item } from "./model.ts";
+import { holdsAtZoom } from "./zoomrule.ts";
 
 /**
  * **The text node: words typed straight onto the canvas.**
@@ -318,9 +319,11 @@ export const PAPER_SIZE = 220;
  */
 const TEXT_LEGIBLE_PX = 5;
 
-/** Should this node draw its words, or the mark that stands for them? */
-export function textIsLegible(worldSize: number, scale: number): boolean {
-  return worldSize * scale >= TEXT_LEGIBLE_PX;
+/** Should this node draw its words, or the mark that stands for them? `was`
+ *  is the answer last time, for the hysteresis in `holdsAtZoom`: words resting
+ *  at 5px do not blink between letters and a mark. */
+export function textIsLegible(worldSize: number, scale: number, was?: boolean): boolean {
+  return holdsAtZoom(worldSize * scale, TEXT_LEGIBLE_PX, was);
 }
 
 /**

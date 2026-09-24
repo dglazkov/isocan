@@ -56,7 +56,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { counterScale, hasRoomForChrome, itemPreviewVisible, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
+import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 /**
@@ -223,7 +223,11 @@ function ItemViewInner({
   // it should stay the size of a label however far out you zoom, the way the
   // comment pins do. Inside the scaled world that means counter-scaling.
   const chrome = counterScale(scale);
-  const roomy = hasRoomForChrome(width, height, scale);
+  // What each zoom rule answered last render, for core's hysteresis
+  // (`holdsAtZoom`): an item resting on a threshold keeps what it has rather
+  // than blinking it on every sub-pixel wobble. Per item, never global.
+  const held = useRef<{ r?: boolean; t?: boolean; s?: boolean }>({}).current;
+  const roomy = (held.r = hasRoomForChrome(width, height, scale, held.r));
   // Screen pixels available to the name, once the star at the other end and
   // the row's own inset are taken off the top. Constant across selection.
   // The rule lives in lib/chrome.ts so a test can reach it without a browser —
@@ -397,7 +401,7 @@ function ItemViewInner({
   // the control promised. The composer measures with the same number, so the
   // node lands the shape it looked while being typed.
   const textSize = isText ? textDrawSize(item) : 0;
-  const textLegible = !isText || textIsLegible(textSize, scale);
+  const textLegible = !isText || (held.t = textIsLegible(textSize, scale, held.t));
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
   const isMark = isAnnotation(item);
@@ -425,7 +429,7 @@ function ItemViewInner({
   // Does the under-item line have room to spell the button out beside the
   // icon? Marks count against the room — they share the line — so a marked
   // item drops to the icon sooner instead of running the row off its edge.
-  const spellItOut = underRowSpellsItOut(width, scale, Object.keys(item.reactions ?? {}).length);
+  const spellItOut = (held.s = underRowSpellsItOut(width, scale, Object.keys(item.reactions ?? {}).length, held.s));
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -1178,7 +1182,7 @@ function ItemViewInner({
           >
             T
           </span>
-        ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !itemPreviewVisible(width, height, scale, nearWindow, entered) ? (
+        ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !entered && !(nearWindow && roomy) ? (
           /**
            * Far away, or the tab is in the background: the box stays exactly
            * where it is and what it holds stands down.
@@ -1186,7 +1190,10 @@ function ItemViewInner({
            * This includes Markdown: a thousand tiny cards previously mounted
            * a thousand parsers and attention trees. The shell, title, marks
            * and pointer handlers remain; readable nearby content mounts as
-           * the camera approaches. The observer's margin/grace avoids churn.
+           * the camera approaches. The observer's margin/grace avoids churn,
+           * and `roomy` is the chrome's own HELD answer (core's
+           * `holdsAtZoom`), so a preview cannot remount on a zoom wobble the
+           * chrome sat through.
            */
           <span className="item-standby" aria-hidden="true" />
         ) : (() => {

@@ -49,6 +49,8 @@ export * from "./layout.ts";
 export * from "./drawing.ts";
 export * from "./duplicate.ts";
 export * from "./textnode.ts";
+export * from "./zoomrule.ts";
+export * from "./zoomfade.ts";
 export * from "./annotation.ts";
 export * from "./backing.ts";
 export * from "./activity.ts";

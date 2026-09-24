@@ -13,7 +13,6 @@ import {
   ROW_END_ROOM,
   UNDER_ROW_PAD,
   hasRoomForChrome,
-  itemPreviewVisible,
   nameFits,
   nameRoom,
   titleRow,
@@ -767,11 +766,13 @@ describe("the editor's theme", () => {
 
 describe("document previews retain their shell without mounting unreadable contents", () => {
   it("keeps all 1,000 overview cards below the document mounting threshold", () => {
-    expect(Array.from({ length: 1000 }, () => itemPreviewVisible(180, 120, 0.09, true, false)).filter(Boolean)).toHaveLength(0);
+    expect(Array.from({ length: 1000 }, () => hasRoomForChrome(180, 120, 0.09)).filter(Boolean)).toHaveLength(0);
   });
   it("mounts readable nearby content and honors explicit entry", () => {
-    expect(itemPreviewVisible(180, 120, 1, true, false)).toBe(true);
-    expect(itemPreviewVisible(180, 120, 1, false, false)).toBe(false);
-    expect(itemPreviewVisible(180, 120, 0.09, false, true)).toBe(true);
+    // The preview stands down unless entered, or near the window AND roomy —
+    // inline in ItemView since it became a single `&&` on the held answer.
+    const itemView = readFileSync(fileURLToPath(new URL("../src/components/ItemView.tsx", import.meta.url)), "utf8");
+    expect(itemView).toContain("!entered && !(nearWindow && roomy)");
+    expect(hasRoomForChrome(180, 120, 1)).toBe(true);
   });
 });
