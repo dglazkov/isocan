@@ -297,3 +297,42 @@ describe("choosing the pack", () => {
     expect(c.p).toBeCloseTo(1 / PACKS.length);
   });
 });
+
+describe("named in the pack's words (24 Sep 2026)", () => {
+  const o = { request: "Acme couriers", flow: "flw_acme" };
+
+  it("a fleshed list is Deliveries, a detail Delivery, a form New delivery — a home stays Home — and bars name them back", () => {
+    const list = fleshSpec(wireframe("list", o), "it_list", DELIVERIES);
+    expect(list.title).toBe("Deliveries");
+    expect(fleshSpec(wireframe("detail", o), "it_d", DELIVERIES).title).toBe("Delivery");
+    expect(fleshSpec(wireframe("form", o), "it_f", DELIVERIES).title).toBe("New delivery");
+    expect(fleshSpec(wireframe("home", o), "it_h", DELIVERIES).title).toBe("Home");
+    expect(barsSpec(list).title).toBe("List");
+    // A variation of it says so in the same words.
+    const [v] = variations({ ...list, slots: list.slots.map((s) => ({ ...s, p: 0.6, alternatives: s.slot === "main.3" ? [{ block: "card-grid", p: 0.4 }] : [] })) }, "it_list", 1);
+    if (v) expect(v.title).toBe("Deliveries");
+    // Another pack renames what the first one named.
+    const other = PACKS.find((p) => p.id !== "deliveries" && p.id !== "generic")!;
+    expect(fleshSpec(list, "it_list", other).title).toBe(other.noun[1]);
+  });
+
+  it("a title somebody chose stays, fleshed or back to bars", () => {
+    const named = { ...wireframe("list", o), title: "Acme parcels" };
+    expect(fleshSpec(named, "k", DELIVERIES).title).toBe("Acme parcels");
+    expect(barsSpec(fleshSpec(named, "k", DELIVERIES)).title).toBe("Acme parcels");
+  });
+
+  it("a lone bare verb says what it acts on — the pack's thing, or the profile — and copy can change it", () => {
+    const profile = fleshSpec(wireframe("profile", o), "it_p", DELIVERIES);
+    const header = profile.slots.find((s) => s.block === "profile-header")!;
+    expect(header.fill?.actions).toEqual({ "action-1": "Edit profile" });
+    expect(renderWire(profile)).toContain(">Edit profile<");
+    expect(validateWire(profile)).toEqual([]);
+    expect(wordsOf(header.fill)["actions.action-1"]).toBe("Edit profile");
+    const detail = fleshSpec(wireframe("detail", o), "it_d", DELIVERIES);
+    expect(renderWire(detail)).toContain(">Edit delivery<");
+    // Unfleshed, the verb alone; and a verb with no object is left alone.
+    expect(renderWire(wireframe("profile", o))).not.toContain("Edit profile");
+    expect(renderWire(fleshSpec(wireframe("sign-in", o), "it_s", DELIVERIES))).not.toMatch(/Sign in deliver/);
+  });
+});

@@ -186,9 +186,11 @@ describe("isocan wire flesh", () => {
     expect(jev).toHaveLength(1);
     expect(jev[0]!.state).toEqual({ request: REQUEST });
     const ops = h.sent.slice(before);
-    expect(ops.every((o) => o.op.type === "item.addVersion")).toBe(true);
+    // A version per wire, and a rename where the pack names the screen ("Deliveries", not "List") — nothing else.
+    expect(ops.every((o) => o.op.type === "item.addVersion" || (o.op.type === "item.update" && Object.keys(o.op.patch).join() === "title"))).toBe(true);
+    const versions = ops.filter((o) => o.op.type === "item.addVersion");
     expect(new Set(ops.map((o) => o.group)).size).toBe(1);
-    expect(ops.map((o) => (o.op as { itemId: string }).itemId).sort()).toEqual(wires.map((w) => w.id).sort());
+    expect(versions.map((o) => (o.op as { itemId: string }).itemId).sort()).toEqual(wires.map((w) => w.id).sort());
     for (const w of wires) {
       const spec = h.specOf(w.id);
       expect(spec.content).toMatchObject({ source: "pack", pack: "deliveries", p: 0.7, by: "jev-test" });
@@ -319,6 +321,30 @@ describe("isocan wire flesh", () => {
     const named = harness();
     await named.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--pack", "tools");
     for (const w of named.wires()) expect(named.specOf(w.id).content).toMatchObject({ pack: "tools" });
+  });
+});
+
+describe("screens named in the pack's words", () => {
+  it("a flesh renames an item the composer named — in the flesh's group — never one a person renamed, and --bars names it back", async () => {
+    const h = harness();
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
+    const nameable = h.wires().filter((w) => ["list", "detail", "form", "search", "gallery"].includes(h.specOf(w.id).archetype) && !h.specOf(w.id).variantOf);
+    expect(nameable.length).toBeGreaterThanOrEqual(2);
+    const [mine, theirs] = nameable as [typeof nameable[0], typeof nameable[0]];
+    const theirTitle = h.items.get(theirs.id)!.title;
+    h.items.get(mine.id)!.title = "Acme's own name";
+    const before = h.sent.length;
+    await h.cli("wire", "flesh", "--pack", "deliveries");
+    expect(h.errors).toEqual([]);
+    const renames = h.sent.slice(before).filter((o) => o.op.type === "item.update");
+    expect(new Set(h.sent.slice(before).map((o) => o.group)).size).toBe(1);
+    expect(renames.some((o) => (o.op as { itemId: string }).itemId === mine.id)).toBe(false);
+    expect(h.items.get(mine.id)!.title).toBe("Acme's own name");
+    expect(h.items.get(theirs.id)!.title).not.toBe(theirTitle);
+    expect(["Deliveries", "Delivery", "New delivery", "Search deliveries"].some((t) => h.items.get(theirs.id)!.title.startsWith(t))).toBe(true);
+    await h.cli("wire", "flesh", "--bars");
+    expect(h.items.get(theirs.id)!.title).toBe(theirTitle);
+    expect(h.items.get(mine.id)!.title).toBe("Acme's own name");
   });
 });
 

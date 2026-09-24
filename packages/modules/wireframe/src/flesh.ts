@@ -109,7 +109,7 @@ export async function flesh(
   const changed: FleshTarget[] = [];
   for (const t of targets) {
     if (t.skipped || JSON.stringify(t.spec) === JSON.stringify(t.screen.spec)) continue;
-    if (await writeWire(port, canvas.items[t.screen.item]!, t.spec, group)) changed.push(t);
+    if (await writeWire(port, canvas.items[t.screen.item]!, t.spec, group, t.screen.spec)) changed.push(t);
   }
   const prototypes = await rebuildPrototypes(port, canvas, all, changed.map((t) => ({ item: t.screen.item, spec: t.spec })), group);
   return { group, targets, changed, choices, prototypes, calls, inputTokens };

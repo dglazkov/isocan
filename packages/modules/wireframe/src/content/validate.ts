@@ -9,7 +9,7 @@ const MAX_WORDS = 400;
 const WORD_KEYS = ["heading", "sub", "person", "motif"] as const;
 const LIST_KEYS = ["lines", "labels", "values", "groups"] as const;
 const ITEM_KEYS = ["title", "sub", "status", "meta", "person", "text", "motif"] as const;
-const KNOWN = new Set<string>([...WORD_KEYS, ...LIST_KEYS, "items", "stats", "series"]);
+const KNOWN = new Set<string>([...WORD_KEYS, ...LIST_KEYS, "items", "stats", "series", "actions"]);
 
 const isWord = (v: unknown): v is string => typeof v === "string" && v.length <= MAX_WORDS;
 
@@ -64,6 +64,9 @@ export function fillProblems(input: unknown, where: string): string[] {
   }
   if (f.series !== undefined && !(Array.isArray(f.series) && f.series.length <= 8 && f.series.every((s) => Array.isArray(s) && s.length <= 31 && s.every((n) => typeof n === "number" && n >= 0 && n <= 100)))) {
     problems.push(`${where}: fill.series must be lists of numbers 0–100`);
+  }
+  if (f.actions !== undefined && !(typeof f.actions === "object" && f.actions !== null && !Array.isArray(f.actions) && Object.values(f.actions).every(isWord))) {
+    problems.push(`${where}: fill.actions must map elements to words`);
   }
   return problems;
 }

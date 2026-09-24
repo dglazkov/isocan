@@ -1,6 +1,6 @@
 import { component } from "../catalog/index.ts";
 import { INTENT_BY_ID } from "../catalog/intents.ts";
-import { defaultIntent, recipe } from "../spec.ts";
+import { defaultIntent, presentElements, recipe } from "../spec.ts";
 import type { Props } from "../catalog/types.ts";
 import { DAYS, FIRST_NAMES, GENERIC, INITIALS, MONTHS, SETTINGS_ROWS, type Pack } from "./pack.ts";
 import { GENERIC_PACK, PACK_BY_ID } from "./packs.ts";
@@ -62,6 +62,8 @@ export interface SlotFill {
   motif?: string;
   /** Chart series, 0–100 — not words. */
   series?: number[][];
+  /** A lone action's words by element ("action-1" → "Edit delivery") — `objectLabel`; the intent's own label otherwise. */
+  actions?: Record<string, string>;
 }
 
 /**
@@ -432,6 +434,58 @@ export function contentTitle(archetype: string, pack: Pack, flow: string, blocks
   }
 }
 
+/**
+ * **A screen's name in the pack's words** (24 Sep 2026): what the item is
+ * called once it is fleshed — "Deliveries" rather than "List", "Delivery"
+ * rather than "Detail". Only where the archetype names a kind of thing the
+ * pack has a noun for; a home, a sign-in or a status keeps its archetype's
+ * name, which already says what it is. The heading inside the screen is
+ * `contentTitle`'s, and may be more particular ("Box 230").
+ */
+export function domainTitle(archetype: string, pack: Pack): string | undefined {
+  switch (archetype) {
+    case "list": case "gallery": return pack.noun[1];
+    case "detail": return pack.noun[0];
+    case "form": return `New ${lower(pack.noun[0])}`;
+    case "search": return `Search ${lower(pack.noun[1])}`;
+    default: return undefined;
+  }
+}
+
+/**
+ * **A lone action's label in the pack's words**: a bare verb on the only
+ * button of its block ("Edit") says what it acts on ("Edit delivery") once
+ * the screen is fleshed. Only the verbs that take an object; "Done",
+ * "Next" or "Sign in" stay as they are.
+ */
+function objectLabel(intent: string, label: string, noun: string): string | undefined {
+  return OBJECT_VERBS.has(intent) ? `${label} ${lower(noun)}` : undefined;
+}
+
+const OBJECT_VERBS: ReadonlySet<string> = new Set(["edit", "delete", "share", "save", "add", "submit", "upload"]);
+
+/**
+ * The words for a block's ONE actionable element, when it is a bare verb
+ * that takes an object — or nothing. Header and nav bars are left alone
+ * (their actions are icons), and a profile's object is the profile, not
+ * the pack's thing.
+ */
+function loneAction(
+  pack: Pack, archetype: string, slot: { slot: string; block: string; props: Props; intents?: Record<string, string> },
+): Record<string, string> | undefined {
+  const r = recipe(archetype);
+  const region = r.sections.find((s) => s.slot === slot.slot)?.region;
+  if (region === "header" || region === "nav") return undefined;
+  const c = component(slot.block);
+  const present = presentElements(c, { ...Object.fromEntries(Object.entries(c.props).map(([k, d]) => [k, d.default])), ...slot.props });
+  if (present.length !== 1) return undefined;
+  const element = present[0]!;
+  const intent = slot.intents?.[element] ?? defaultIntent(r, c, element);
+  const label = INTENT_BY_ID.get(intent as never)?.label ?? intent;
+  const words = objectLabel(intent, label, c.id === "profile-header" || archetype === "profile" ? "profile" : pack.noun[0]);
+  return words ? { [element]: words } : undefined;
+}
+
 export function packOf(id: string | undefined): Pack {
   return PACK_BY_ID.get(id ?? GENERIC_PACK) ?? PACK_BY_ID.get(GENERIC_PACK)!;
 }
@@ -451,6 +505,16 @@ export function fillSlot(
   slot: { slot: string; block: string | null; props: Props; intents?: Record<string, string> },
 ): SlotFill | undefined {
   if (!slot.block) return undefined;
+  const actions = loneAction(pack, spec.archetype, { ...slot, block: slot.block });
+  const filled = fillWords(pack, spec, key, { ...slot, block: slot.block });
+  if (!actions) return filled;
+  return { ...(filled ?? {}), actions };
+}
+
+function fillWords(
+  pack: Pack, spec: { flow: string; archetype: string }, key: string,
+  slot: { slot: string; block: string; props: Props; intents?: Record<string, string> },
+): SlotFill | undefined {
   const filler = FILLERS[slot.block];
   if (!filler) return undefined;
   const c = component(slot.block);

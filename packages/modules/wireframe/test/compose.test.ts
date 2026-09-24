@@ -510,7 +510,9 @@ describe("a composed flow arrives fleshed", () => {
     for (const s of [...basic.screens, ...basic.variants]) expect(plain.specOf(s.item).content).toBeUndefined();
     const fleshed = reducerPort();
     const full = await composeFlow(fleshed.port, REQUEST, stubAnswerer(3));
-    expect(fleshed.log.length).toBe(plain.log.length);
+    // The same versions; the only ops more are renames where the pack names a screen ("List" → the pack's plural).
+    const versions = (log: typeof plain.log) => log.filter((l) => l.op.type !== "item.update" || !("title" in l.op.patch) || Object.keys(l.op.patch).length > 1).length;
+    expect(versions(fleshed.log)).toBe(versions(plain.log));
     expect(full.tallies[0]!.calls).toBe(basic.tallies[0]!.calls + 1);
   });
 

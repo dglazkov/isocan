@@ -281,6 +281,14 @@ seed of the screen's item id and the slot, and written into the spec
 prototype and a re-render all show the same "Parcel 4471 — 3 items — Out for
 delivery", and nothing flickers.
 
+**The pack names the screens** (24 Sep 2026). A fleshed list is titled
+"Deliveries" rather than "List" — the spec's `title`, and the item's in the
+same op group — from the pack's nouns (`domainTitle`: list, gallery, detail,
+form, search); a title an agent gave the spec, or a name a person gave the
+item, is left alone, and `--bars` names them back. A block's lone bare verb
+takes its object the same way ("Edit delivery", "Edit profile"), as
+`fill.actions` — words from the pack, never a model's.
+
 **Exact copy is the agent's.** `wire copy <screen>` prints, per slot, what
 words it holds and what it wants (the questions/answer seam of §4, with text
 answers); `wire copy <screen> --apply <file>` writes them. An agent parked on

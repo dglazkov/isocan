@@ -168,7 +168,14 @@ bar, tab bar) stays.
   statuses ("Parcel 4471 · 3 items · Out for delivery"), stats with values
   and deltas, table cells under domain column names, first names with
   initials in avatars, greyscale pictograms in image slots, and a heading
-  from the domain ("Deliveries" instead of "List"). The words come from one
+  from the domain ("Deliveries" instead of "List"). The screen is **named**
+  in the pack's words too — a list "Deliveries", a detail "Delivery", a
+  form "New delivery", a search "Search deliveries" (a home or a sign-in
+  keeps its name) — and so is its item, in the same op group, unless
+  somebody renamed the item: a name a person or an agent gave is never
+  overwritten. `--bars` names them back. A block's lone bare verb says what
+  it acts on ("Edit delivery", "Edit profile"; `actions.<element>` in `wire
+  copy`). The words come from one
   of 24 synthetic **content packs** (`wire flesh --packs` lists them), never
   written by a model: Jev chooses the pack per flow from its request — one
   choice question, its p printed and recorded on each screen as `content`

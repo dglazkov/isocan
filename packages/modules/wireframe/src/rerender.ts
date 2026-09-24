@@ -25,18 +25,26 @@ import { wireSize, wireTitle, type WireSpec } from "./spec.ts";
  * Write a spec as a screen's next version, and the item's size if it moved.
  * Nothing is sent when the drawn bytes are the ones it already shows. Returns
  * whether it wrote.
+ *
+ * `was` is the spec the screen carried before: when the screen's name moves
+ * (a flesh names it "Deliveries" rather than "List", `--bars` names it back)
+ * the item is retitled in the same group — but only while its title is
+ * still the one the composer gave it. A person or an agent who renamed the
+ * item keeps their name.
  */
-export async function writeWire(port: WirePort, item: Item, spec: WireSpec, group: string): Promise<boolean> {
+export async function writeWire(port: WirePort, item: Item, spec: WireSpec, group: string, was?: WireSpec): Promise<boolean> {
   const current = currentVersionOf(item);
   const filename = current?.filename ?? "wireframe.html";
   const upload = await port.put(renderWire(spec), "text/html", filename);
   const { width, height } = wireSize(spec);
   const resize = item.width !== width || item.height !== height;
-  if (current?.blobHash === upload.blobHash && !resize) return false;
+  const retitle = was !== undefined && item.title === wireTitle(was) && wireTitle(spec) !== wireTitle(was);
+  if (current?.blobHash === upload.blobHash && !resize && !retitle) return false;
   if (current?.blobHash !== upload.blobHash) {
     await port.send({ type: "item.addVersion", itemId: item.id, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
   }
   if (resize) await port.send({ type: "item.resize", itemId: item.id, width, height }, group);
+  if (retitle) await port.send({ type: "item.update", itemId: item.id, patch: { title: wireTitle(spec) } }, group);
   return true;
 }
 

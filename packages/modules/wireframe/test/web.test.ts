@@ -233,7 +233,7 @@ describe("/wire flesh", () => {
     expect(web.asked.at(-1)).toMatchObject({ canvasId: "canvas-acme", state: { request: REQUEST } });
     const ops = web.c.sent.slice(before);
     expect(new Set(ops.map((o) => o.group)).size).toBe(1);
-    expect(ops.every((o) => o.op.type === "item.addVersion")).toBe(true);
+    expect(ops.every((o) => o.op.type === "item.addVersion" || (o.op.type === "item.update" && Object.keys(o.op.patch).join() === "title"))).toBe(true);
     const shape = (list: WireSpec[]) => list.map((s) => [s.archetype, s.content?.pack, s.content?.title === undefined, s.slots.map((x) => [x.slot, x.block, Boolean(x.fill)])]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
     expect(shape(specs(web.c))).toEqual(shape(specs(cli)));
     expect(specs(web.c).every((s) => s.content?.pack === "generic")).toBe(true);

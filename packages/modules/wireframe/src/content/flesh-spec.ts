@@ -1,5 +1,6 @@
 import type { WireSlot, WireSpec } from "../spec.ts";
-import { contentTitle, fillSlot, packOf, type SlotFill, type WireContent } from "./fill.ts";
+import { contentTitle, domainTitle, fillSlot, packOf, type SlotFill, type WireContent } from "./fill.ts";
+import { RECIPE_BY_ID } from "../catalog/index.ts";
 import type { Pack } from "./pack.ts";
 
 /**
@@ -30,12 +31,32 @@ export function fleshSpec(spec: WireSpec, key: string, pack: Pack, meta: { p?: n
     ...(title !== undefined ? { title } : {}),
     ...(spec.archetype === "detail" ? { bar: pack.noun[0] } : {}),
   };
-  return { ...spec, content, slots: spec.slots.map((slot) => withFill(slot, fillSlot(pack, spec, key, slot))) };
+  return { ...spec, title: fleshedTitle(spec, pack), content, slots: spec.slots.map((slot) => withFill(slot, fillSlot(pack, spec, key, slot))) };
 }
 
-/** Bars again: no content, no fill anywhere. */
+/**
+ * **The screen's name, in the pack's words** (24 Sep 2026): "Deliveries",
+ * not "List". Only a title that is still the archetype's, or the one an
+ * earlier pack gave it, changes — a title an agent or a person chose stays.
+ * The item's own title follows it only where nobody renamed the item
+ * (`writeWire`).
+ */
+function fleshedTitle(spec: WireSpec, pack: Pack): string {
+  const archetype = RECIPE_BY_ID.get(spec.archetype)?.title;
+  const earlier = spec.content?.pack ? domainTitle(spec.archetype, packOf(spec.content.pack)) : undefined;
+  if (spec.title !== archetype && (earlier === undefined || spec.title !== earlier)) return spec.title;
+  return domainTitle(spec.archetype, pack) ?? archetype ?? spec.title;
+}
+
+/** Bars again: no content, no fill anywhere — and the archetype's name back where the pack gave one. */
 export function barsSpec(spec: WireSpec): WireSpec {
-  const out: WireSpec = { ...spec, slots: spec.slots.map((slot) => withFill(slot, undefined)) };
+  const given = spec.content?.pack ? domainTitle(spec.archetype, packOf(spec.content.pack)) : undefined;
+  const archetype = RECIPE_BY_ID.get(spec.archetype)?.title;
+  const out: WireSpec = {
+    ...spec,
+    ...(given !== undefined && spec.title === given && archetype ? { title: archetype } : {}),
+    slots: spec.slots.map((slot) => withFill(slot, undefined)),
+  };
   delete out.content;
   return out;
 }
@@ -75,6 +96,9 @@ export function wordsOf(fill: SlotFill | undefined): Record<string, string> {
     out[`stats.${i}.label`] = s.label;
     out[`stats.${i}.value`] = s.value;
     if (s.delta !== undefined) out[`stats.${i}.delta`] = s.delta;
+  });
+  Object.entries(fill.actions ?? {}).forEach(([element, w]) => {
+    out[`actions.${element}`] = w;
   });
   return out;
 }

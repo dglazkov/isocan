@@ -425,7 +425,8 @@ function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolea
   const ctx: DrawContext = {
     props,
     intent: intentOf,
-    label: (element) => esc(INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
+    // A fleshed lone action says what it acts on ("Edit delivery"); anything else, its intent's own word.
+    label: (element) => esc(slot.fill?.actions?.[element] ?? INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
     hot: (element) => ` data-hot="${esc(hotKey(slot.slot, element))}"`,
     title: esc(c.id === "app-bar" ? barTitleOf(spec) : headingOf(spec)),
     platform: spec.platform,
