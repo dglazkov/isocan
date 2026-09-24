@@ -261,6 +261,22 @@ export function storeConformance(
     );
 
     test(
+      "answers which of many hashes it holds, as blobMeta would one by one",
+      withStore(async ({ store }) => {
+        await seed(store);
+        const held = [];
+        for (let i = 0; i < 3; i++) {
+          held.push((await store.putBlob("prj_1", Buffer.from(`blob ${i}`), { mimeType: "text/plain", filename: `${i}.txt` })).blobHash);
+        }
+        const absent = ["a".repeat(64), "b".repeat(64)];
+        // Asked twice over, in any order: the answer is a set, not a list.
+        const asked = [absent[0]!, ...held, absent[1]!, held[0]!];
+        expect([...(await store.heldBlobs("prj_1", asked))].sort()).toEqual([...held].sort());
+        expect((await store.heldBlobs("prj_1", [])).size).toBe(0);
+      }),
+    );
+
+    test(
       "reads a byte range out of a blob without reading the rest",
       withStore(async ({ store }) => {
         await seed(store);

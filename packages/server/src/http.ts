@@ -298,6 +298,7 @@ import type { ParkCursors } from "./park.ts";
 import { DocRefusal, fetchGoogleDoc, type GoogleToken } from "./google.ts";
 import { RcHolds, rcPoliciesOf } from "./rc-holds.ts";
 import { isContentPath, isContentRequest, registerContentRoutes, type ContentSigning } from "./content.ts";
+import { BLOBS_PRESENT_LIMIT, BLOBS_PRESENT_ROUTE, type BlobsPresentResponse } from "./blobs-present.ts";
 import { signedBlobPath } from "./content-auth.ts";
 import { bindableRoot, markerFile, readMarker, recordDir, writeMarker } from "./binding.ts";
 import { personaRefusal, readPersonas, writePersona } from "./personas.ts";
@@ -504,6 +505,16 @@ function policyPathname(req: FastifyRequest): string {
  * still gates them, and a home with no `ISOCAN_CONTENT_HOST` is byte for byte
  * the home this comment described before the line above it.
  */
+/**
+ * **Canvas routes that are POSTs only because their question does not fit in
+ * a URL** — they read and change nothing, so the capability hook and the
+ * source policy treat them as the GET they would otherwise be. A private read
+ * carries its request in a body; `BLOBS_PRESENT_ROUTE` is the blob HEAD for a
+ * list of hashes, and a view-only member may ask it exactly as it may send
+ * the HEAD.
+ */
+const READ_BY_POST = /\/(?:personal\/read|blobs\/present)$/;
+
 function isOpen(method: string, pathname: string): boolean {
   if ((HEALTH_ROUTES as readonly string[]).includes(pathname)) return true;
   if (!pathname.startsWith("/api/")) return true; // the web app and its assets
@@ -1083,7 +1094,7 @@ export function registerRoutes(
   const sourceCaps = new WeakMap<FastifyRequest, Capability>();
   const localOrigin = (req: FastifyRequest): string => new URL(`${isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted)) ? "https" : "http"}://${req.headers.host}`).origin;
   const sourceIntent = (method: string, pathname: string): "read" | "edit" | "own" => {
-    if (method === "GET" || method === "HEAD" || pathname === "/api/oplog/watch" || pathname.startsWith("/api/park/") || /\/personal\/read$/.test(pathname)) return "read";
+    if (method === "GET" || method === "HEAD" || pathname === "/api/oplog/watch" || pathname.startsWith("/api/park/") || READ_BY_POST.test(pathname)) return "read";
     return /\/(?:grants|passes|space)(?:\/|$)/.test(pathname) || /^\/api\/spaces\/[^/]+\/canvases\/[^/]+$/.test(pathname) ? "own" : "edit";
   };
   const checkSource = async (canvasId: string, badgeId: string, context: SourceRequestContext, intent: "read" | "edit" | "own", actorId?: string, lookup: "entry" | "discovery" = "entry"): Promise<Capability | null> => {
@@ -1282,7 +1293,7 @@ export function registerRoutes(
         if (
           req.method !== "GET" &&
           req.method !== "HEAD" &&
-          !/\/personal\/read$/.test(pathname) &&
+          !READ_BY_POST.test(pathname) &&
           !atLeast(capabilityIn(req.badge, canvasId) ?? "edit", "edit")
         ) {
           throw await viewOnly(canvasId);
@@ -5907,6 +5918,41 @@ export function registerRoutes(
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as { push?: boolean };
     return engine.reconcileBlobs(id, { push: body.push === true }, sourceContexts.get(req), req.badge!.badgeId);
+  });
+
+  /**
+   * **Which of these bytes do you hold?** — the blob HEAD for a list (see
+   * `BLOBS_PRESENT_ROUTE`). The same gate as the HEAD and nothing more: the
+   * door hook's admission test (canvas-scoped path), no capability above
+   * `read` (`READ_BY_POST`), a 404 for a canvas this home does not have. A
+   * canvas this daemon only replicates answers the way its HEAD does — bytes
+   * it lacks are asked of its own home — and "I could not ask" is a 502, not
+   * a list of missing hashes somebody would upload against.
+   */
+  app.post(BLOBS_PRESENT_ROUTE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const hashes = (req.body as { hashes?: unknown } | undefined)?.hashes;
+    if (!Array.isArray(hashes) || !hashes.every((h) => typeof h === "string" && /^[0-9a-f]{64}$/.test(h))) {
+      return reply.status(400).send({ error: "hashes must be a list of sha256 content hashes", code: "bad-op" });
+    }
+    if (hashes.length > BLOBS_PRESENT_LIMIT) {
+      return reply.status(400).send({
+        error: `${hashes.length} hashes is more than this home answers at once — ask for ${BLOBS_PRESENT_LIMIT} or fewer`,
+        code: "bad-op",
+      });
+    }
+    await engine.getSnapshot(id); // 404 for unknown canvases, as the HEAD
+    const held = await store.heldBlobs(id, hashes);
+    let missing = [...new Set(hashes.filter((h) => !held.has(h)))];
+    const blobHome = options.homes?.for(id) ?? null;
+    if (missing.length > 0 && blobHome) {
+      const upstream = await blobHome.hasBlobs(id, missing);
+      if (missing.some((h) => (upstream.get(h) ?? null) === null)) {
+        return reply.status(502).send({ error: `${blobHome.homeUrl} could not be asked`, code: "home-unreachable" });
+      }
+      missing = missing.filter((h) => upstream.get(h) === false);
+    }
+    return { missing } satisfies BlobsPresentResponse;
   });
 
   /**

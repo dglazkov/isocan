@@ -670,6 +670,19 @@ export class CloudStore implements Store {
     return doc.exists ? (doc.data() as BlobMeta) : null;
   }
 
+  /** `getAll` in batches: one RPC per `BATCH_LIMIT` hashes rather than a
+   * document read per round trip, which is what the per-blob HEAD cost. */
+  async heldBlobs(id: string, blobHashes: readonly string[]): Promise<Set<string>> {
+    const held = new Set<string>();
+    if (blobHashes.length === 0) return held;
+    const collection = this.db.collection(blobMetaCollection(id));
+    for (const chunk of chunks([...new Set(blobHashes)], BATCH_LIMIT)) {
+      const docs = await this.db.getAll(...chunk.map((hash) => collection.doc(hash)));
+      for (const doc of docs) if (doc.exists) held.add(doc.id);
+    }
+    return held;
+  }
+
   async openBlob(
     id: string,
     blobHash: string,

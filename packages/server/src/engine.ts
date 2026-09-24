@@ -130,6 +130,15 @@ const FREE_NAME_PROBE = " free-name probe";
  */
 const OWN_CLAIM_FRESH_MS = 60_000;
 
+/**
+ * How long the blob keeper trusts a home's "yes, I hold those bytes" before
+ * asking again (`Engine.confirmedAtHome`). Long against the keeper's
+ * ten-minute clock, because a yes about content-addressed bytes only goes
+ * stale if the home LOSES them; short against a day, because that loss is
+ * what the keeper is for. A person's `isocan blobs` never trusts it.
+ */
+const BLOB_RECONFIRM_MS = 6 * 60 * 60 * 1000;
+
 /** Is this claim recent enough to be an agent that has not reached a canvas
  *  yet, rather than one that is gone? */
 function fresh(boundAt: string, now: string): boolean {
@@ -1542,12 +1551,15 @@ export class Engine {
          * backstop for that, and for everything else this cannot see.
          */
         const blobHash = createHash("sha256").update(data).digest("hex");
-        if ((await home.hasBlob(canvasId, blobHash)) === false) {
+        const there = await home.hasBlob(canvasId, blobHash);
+        if (there === false) {
           throw new Error(
             `${home.homeUrl} took the bytes for ${meta.filename} and does not have them — ` +
               "not saved; try again",
           );
         }
+        // Confirmed, so the keeper's next sweep need not ask about it again.
+        if (there) this.confirmedAtHome(home.homeUrl, canvasId).set(blobHash, Date.now());
       }
       return this.store.putBlob(canvasId, data, meta);
     });
@@ -1589,7 +1601,7 @@ export class Engine {
    */
   async reconcileBlobs(
     canvasId: string,
-    options: { push: boolean },
+    options: { push: boolean; trustConfirmed?: boolean },
     sourceContext?: SourceRequestContext, badgeId?: string,
   ): Promise<{
     home: string | null;
@@ -1612,8 +1624,20 @@ export class Engine {
     // answered by uploading — a home that is down would otherwise have
     // every blob on the canvas pushed at it the moment it came back.
     const unknown: string[] = [];
-    for (const blob of listing) {
-      const there = await home.hasBlob(canvasId, blob.hash);
+    // One question for the whole listing — a handful of requests at a home
+    // with `BLOBS_PRESENT_ROUTE`, where it used to be one HEAD per blob:
+    // ~2,550 a sweep from one laptop, at a door that meters by address. And
+    // on the keeper's clock, not even that: bytes the home confirmed within
+    // `BLOB_RECONFIRM_MS` are not asked about again (see `confirmedAtHome`).
+    const confirmed = this.confirmedAtHome(home.homeUrl, canvasId, listing);
+    const now = Date.now();
+    const asked = options.trustConfirmed
+      ? listing.filter((blob) => !(now - (confirmed.get(blob.hash) ?? -Infinity) < BLOB_RECONFIRM_MS))
+      : listing;
+    const answers = asked.length > 0 ? await home.hasBlobs(canvasId, asked.map((blob) => blob.hash)) : new Map<string, boolean | null>();
+    for (const blob of asked) {
+      const there = answers.get(blob.hash) ?? null;
+      if (there) confirmed.set(blob.hash, now);
       if (there === null) {
         unknown.push(blob.hash);
         continue;
@@ -1638,6 +1662,34 @@ export class Engine {
       pushed.push(blob.hash);
     }
     return { home: home.homeUrl, checked: listing.length, missing, pushed, unknown };
+  }
+
+  /**
+   * **Bytes the home has already said it holds**, per home and canvas: hash →
+   * when it said so. The content is addressed by its hash, so a "yes" cannot
+   * go stale by the bytes changing — only by the home losing them, which is
+   * the thing the keeper exists to catch, so the memory lasts
+   * `BLOB_RECONFIRM_MS` and then every blob is asked about again. In between,
+   * a steady-state sweep asks only about blobs that are new since the last
+   * one — which is what keeps a home that predates the batch route from
+   * being asked one HEAD per blob every ten minutes.
+   *
+   * In memory, deliberately: a restart forgets it and the first sweep asks
+   * about everything, which is the sweep that catches whatever was lost while
+   * this daemon was down. Pruned to the listing each time it is read, so a
+   * collected blob does not stay remembered.
+   */
+  private confirmedBlobs = new Map<string, Map<string, number>>();
+
+  private confirmedAtHome(homeUrl: string, canvasId: string, listing?: readonly { hash: string }[]): Map<string, number> {
+    const key = `${homeUrl}\n${canvasId}`;
+    let known = this.confirmedBlobs.get(key);
+    if (!known) this.confirmedBlobs.set(key, (known = new Map()));
+    if (listing) {
+      const listed = new Set(listing.map((blob) => blob.hash));
+      for (const hash of known.keys()) if (!listed.has(hash)) known.delete(hash);
+    }
+    return known;
   }
 
   /**

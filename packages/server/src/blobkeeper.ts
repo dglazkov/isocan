@@ -63,7 +63,11 @@ export function startBlobKeeper(options: BlobKeeperOptions): BlobKeeper {
         // natural boundary — the same rule the GC sweeper follows.
         if (stopped) return;
         try {
-          const report = await options.engine.reconcileBlobs(canvasId, { push: true });
+          // `trustConfirmed`: bytes the home said it holds within the last
+          // few hours are not asked about again, so a quiet canvas costs its
+          // home nothing — the clock is ten minutes, the loss it guards
+          // against is rare, and the door it knocks on is metered.
+          const report = await options.engine.reconcileBlobs(canvasId, { push: true, trustConfirmed: true });
           if (report.pushed.length > 0) {
             pushed += report.pushed.length;
             behind += 1;

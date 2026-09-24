@@ -511,6 +511,11 @@ export class FileStore implements Store {
     return (await this.readIndex(id))[blobHash] ?? null;
   }
 
+  async heldBlobs(id: string, blobHashes: readonly string[]): Promise<Set<string>> {
+    const index = await this.readIndex(id);
+    return new Set(blobHashes.filter((hash) => Object.hasOwn(index, hash)));
+  }
+
   async openBlob(
     id: string,
     blobHash: string,

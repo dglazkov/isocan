@@ -43,6 +43,8 @@ import type {
   UndoRedoRequest,
 } from "@isocan/core";
 import {
+  UNKNOWN_ROUTE,
+  VIEW_ONLY,
   CURRENT_CLIENT_FEATURES,
   CLIENT_FEATURES_HEADER,
   CLIENT_FEATURES_PARAM,
@@ -89,6 +91,7 @@ import type { Engine } from "./engine.ts";
 import type { PresenceHub } from "./presence.ts";
 import { bearerHeader, knockOnDoor, readBadge, writeBadge, type StoredBadge } from "./badge-store.ts";
 import { plausibleSha, type HomeBuild } from "./build.ts";
+import { BLOBS_PRESENT_LIMIT, blobsPresentRoute, type BlobsPresentRequest, type BlobsPresentResponse } from "./blobs-present.ts";
 import type { RcHolds } from "./rc-holds.ts";
 
 /**
@@ -152,6 +155,12 @@ const BUILD_PROBE_MS = 60 * 60 * 1000;
  * a home that is slow to say which build it is simply has not said yet, and
  * the next probe asks again. */
 const BUILD_PROBE_TIMEOUT_MS = 5000;
+
+/** How long a home that answered "no such route" to `BLOBS_PRESENT_ROUTE` is
+ * asked by HEAD alone before the batch is tried again — the build probe's
+ * hour, for its reason: a deploy is what changes the answer, and one wasted
+ * ask an hour is nothing beside a sweep of HEADs. */
+const BATCH_REPROBE_MS = 60 * 60 * 1000;
 
 /** Presence beats are coalesced before they go up, exactly as `ws.ts`
  * coalesces roster broadcasts and for the same reason: a cursor stream would
@@ -425,6 +434,13 @@ export interface HomeConnection {
    * only one of them means push.
    */
   hasBlob(canvasId: string, blobHash: string): Promise<boolean | null>;
+  /**
+   * `hasBlob` for many hashes, in a handful of requests rather than one each
+   * (`BLOBS_PRESENT_ROUTE`). Every asked hash gets an answer with
+   * `hasBlob`'s meaning — null is "I could not ask". A home older than the
+   * route is asked one HEAD per hash, as before it existed.
+   */
+  hasBlobs(canvasId: string, blobHashes: readonly string[]): Promise<Map<string, boolean | null>>;
   /** Hand this home a canvas whole — its log, verbatim. The receiving half of
    *  a teleport; see `Engine.adopt` for why it is not a replay of ops. */
   adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{ seqs: number }>;
@@ -2289,6 +2305,77 @@ export class HomeLink implements HomeConnection {
       if (res.status === 404) return false;
       if (!res.ok) return null; // a refusal is not an answer about the bytes
       return true;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * When this home last said it has no `BLOBS_PRESENT_ROUTE`. Remembered so
+   * an older home is not asked the batch before every sweep's HEADs, and
+   * forgotten after `BATCH_REPROBE_MS` so the deploy that adds the route is
+   * noticed without a restart.
+   */
+  private batchAbsentAt: number | null = null;
+
+  async hasBlobs(canvasId: string, blobHashes: readonly string[]): Promise<Map<string, boolean | null>> {
+    const answers = new Map<string, boolean | null>();
+    const unique = [...new Set(blobHashes)];
+    if (unique.length === 0) return answers;
+    const batchAbsent = this.batchAbsentAt !== null && Date.now() - this.batchAbsentAt < BATCH_REPROBE_MS;
+    if (!batchAbsent) {
+      for (let at = 0; at < unique.length; at += BLOBS_PRESENT_LIMIT) {
+        const chunk = unique.slice(at, at + BLOBS_PRESENT_LIMIT);
+        const missing = await this.askPresent(canvasId, chunk);
+        if (missing === "no-route") {
+          this.batchAbsentAt = Date.now();
+          break;
+        }
+        if (missing === null) {
+          // "I could not ask" — for this chunk and every one after it. A home
+          // that is down or refusing is not asked again, one hash at a time,
+          // in the same breath: that is the flood this route exists to end.
+          for (const hash of unique) if (!answers.has(hash)) answers.set(hash, null);
+          return answers;
+        }
+        const absent = new Set(missing);
+        for (const hash of chunk) answers.set(hash, !absent.has(hash));
+      }
+      if (answers.size === unique.length) return answers;
+    }
+    // A home older than the route: one HEAD per hash, which is what every
+    // home was asked before it existed.
+    for (const hash of unique) if (!answers.has(hash)) answers.set(hash, await this.hasBlob(canvasId, hash));
+    return answers;
+  }
+
+  /** One ask of `BLOBS_PRESENT_ROUTE`: the missing hashes, `"no-route"` for a
+   * home that predates it, or null for "could not ask". */
+  private async askPresent(canvasId: string, hashes: string[]): Promise<string[] | "no-route" | null> {
+    const badge = await this.ensureBadge();
+    if (!badge) return null;
+    const send = (held: StoredBadge) =>
+      this.fetchHome(blobsPresentRoute(canvasId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...bearerHeader(held) },
+        body: JSON.stringify({ hashes } satisfies BlobsPresentRequest),
+      });
+    try {
+      let res = await send(badge);
+      if (res.status === 401) {
+        const fresh = await this.reBadge();
+        if (fresh) res = await send(fresh);
+      }
+      const json = (await res.json().catch(() => null)) as (Partial<BlobsPresentResponse> & { code?: string }) | null;
+      if (res.ok) {
+        const missing = json?.missing;
+        return Array.isArray(missing) && missing.every((h) => typeof h === "string") ? missing : null;
+      }
+      // An older home: no such route, or — for a badge below `edit` — the
+      // capability hook refusing a POST it has not been told only reads.
+      if ((res.status === 404 && json?.code === UNKNOWN_ROUTE) || res.status === 405) return "no-route";
+      if (res.status === 403 && json?.code === VIEW_ONLY) return "no-route";
+      return null;
     } catch {
       return null;
     }

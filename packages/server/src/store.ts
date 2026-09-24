@@ -260,6 +260,11 @@ export interface Store {
    * all want the metadata and none of them want the bytes. */
   blobMeta(id: string, blobHash: string): Promise<BlobMeta | null>;
 
+  /** Which of these hashes this canvas holds — `blobMeta` for many at once,
+   * behind `BLOBS_PRESENT_ROUTE`. One index read on a disk, batched gets on
+   * Firestore, instead of one read per hash. */
+  heldBlobs(id: string, blobHashes: readonly string[]): Promise<Set<string>>;
+
   /**
    * The bytes, as a stream, optionally a byte range (inclusive on both ends,
    * as HTTP means it). Phase 1 left `getBlob` returning a filesystem path and
