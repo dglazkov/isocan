@@ -5364,6 +5364,19 @@ button.mt-card:hover { border-color: var(--accent); }
      cut once the box is measured to the words (`core/textnode.ts`, textBox). */
   overflow-wrap: anywhere;
 }
+/* **A text node's headings are sized in em, from its own words.**
+   The card renderer's `.md-view h1` is a fixed 18px against a 13px card, and
+   a text node inherited it — against a body that runs 16 to 128. At display
+   a `#` line was a seventh the size of the paragraph under it. In em, a
+   heading is bigger than its words at every step. `core/textnode.ts`'s
+   `TEXT_HEADING_EM` is the box estimate's copy of these numbers, and
+   `test/textheading.test.ts` holds the two equal: an estimate that thinks a
+   heading is smaller than it draws crops it (lessons #94). */
+.item.textnode .md-view :is(h1, h2, h3, h4, h5, h6) { margin: 0.4em 0 0.3em; line-height: 1.25; }
+.item.textnode .md-view h1 { font-size: 1.5em; }
+.item.textnode .md-view h2 { font-size: 1.25em; }
+.item.textnode .md-view h3 { font-size: 1.125em; }
+.item.textnode .md-view :is(h4, h5, h6) { font-size: 1em; }
 .item.textnode .md-view p:first-child { margin-top: 0; }
 .item.textnode .md-view p:last-child { margin-bottom: 0; }
 /* Selected words still need their box shown, since there is no card to

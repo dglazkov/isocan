@@ -13,8 +13,11 @@ import {
   TEXT_STYLES,
   TEXT_STYLE_SIZE,
   TEXT_WIDTH,
+  TEXT_HEADING_EM,
+  TEXT_HEADING_LINE,
   isTextItem,
   textBox,
+  type TextStyle,
   textFaceOf,
   textIsLegible,
   textMarkSize,
@@ -152,10 +155,10 @@ describe("the box it starts in", () => {
     const flowing = textBox("one\ntwo");
     const paragraphs = textBox("one\n\ntwo");
     expect(paragraphs.height).toBeGreaterThan(flowing.height);
-    // The marker takes no width; the heading itself is drawn at the
-    // stylesheet's 18px, so at body size it is a little wider than the word.
-    expect(textBox("# Title").width).toBeGreaterThanOrEqual(textBox("Title").width);
-    expect(textBox("# Title").width).toBeLessThan(textBox("Title").width * 1.3);
+    // The marker takes no width; the heading itself is drawn at 1.5em, so
+    // it is half again as wide as the word — and no wider.
+    expect(textBox("# Title").width).toBeGreaterThan(textBox("Title").width * 1.3);
+    expect(textBox("# Title").width).toBeLessThan(textBox("Title").width * 1.6);
     // A list is indented by the browser's own 40px and keeps its margins,
     // so it is wider and a little taller than the same lines bare.
     expect(textBox("- a\n- b").width).toBeGreaterThan(textBox("a\nb").width + 30);
@@ -165,6 +168,61 @@ describe("the box it starts in", () => {
   it("caps a word longer than the hard limit at the limit — the stylesheet breaks it there", () => {
     const w = textBox("x".repeat(400), "display").width;
     expect(w).toBeLessThanOrEqual(TEXT_COLUMN_MAX.display);
+  });
+});
+
+/**
+ * **A heading is bigger than its words at every step** (24 Sep 2026).
+ *
+ * The stylesheet drew a text node's `#` at the card renderer's fixed 18px —
+ * larger than body's 16, a seventh of display's 128. Now it is 1.5em, and
+ * the estimate has to know it or the box crops the heading (lessons #94).
+ * These numbers are the stylesheet's model of a heading, written out here so
+ * the test does not ask the estimate what the estimate should be:
+ * `.item.textnode .md-view h1 { font-size: 1.5em }`, `line-height: 1.25`,
+ * `margin: 0.4em 0 0.3em`, and the node's 4px padding top and bottom.
+ */
+describe("a heading in a text node, at its em size", () => {
+  const H1 = 1.5;
+  const drawn = (style: TextStyle, lines = 1) => {
+    const h = TEXT_STYLE_SIZE[style] * H1;
+    return lines * h * 1.25 + h * 0.7 + 8;
+  };
+
+  it("gets a box tall enough for the heading at the smallest and largest steps", () => {
+    for (const style of ["body", "display"] as const) {
+      expect(textBox("# Acme", style).height, style).toBeGreaterThanOrEqual(drawn(style));
+    }
+  });
+
+  it("gets a box as wide as the heading draws, not as wide as the words at body size", () => {
+    for (const style of ["body", "display"] as const) {
+      // Minus the padding, the heading's words need 1.5 times the bare words'
+      // (less a unit, for the two boxes each being rounded).
+      const bare = textBox("Acme", style).width - 12;
+      expect(textBox("# Acme", style).width - 12, style).toBeGreaterThanOrEqual(bare * H1 - 1);
+    }
+  });
+
+  it("counts the heading AND the paragraph under it at the largest step", () => {
+    const size = TEXT_STYLE_SIZE.display;
+    expect(textBox("# Acme\n\nGo", "display").height).toBeGreaterThanOrEqual(drawn("display") + size * 1.5);
+  });
+
+  it("gives every level h1's room — erring large, never small", () => {
+    // The stylesheet draws h2 and h3 smaller than h1; the estimate does not
+    // tell them apart, because a box too roomy is invisible on a caption and
+    // one too tight crops it.
+    for (const marks of ["#", "##", "###", "######"]) {
+      expect(textBox(`${marks} Acme`, "title"), marks).toEqual(textBox("# Acme", "title"));
+    }
+    expect(TEXT_HEADING_EM).toBe(H1);
+  });
+
+  it("knows a heading line, in one line or a whole body", () => {
+    expect(TEXT_HEADING_LINE.test("Acme\n## Plan")).toBe(true);
+    expect(TEXT_HEADING_LINE.test("#Roadmap is a reference, not a heading")).toBe(false);
+    expect(TEXT_HEADING_LINE.test("plain words")).toBe(false);
   });
 });
 

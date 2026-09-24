@@ -12,6 +12,8 @@ import {
   TEXT_STYLE_LABEL,
   TEXT_STYLE_SIZE,
   TEXT_WIDTH,
+  TEXT_HEADING_LINE,
+  textRefit,
   type TextFace,
   type TextStyle,
   PAPERS,
@@ -158,7 +160,14 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     // `TEXT_COLUMN_MAX`, not `TEXT_COLUMN`: the box grows to the right as the
     // words need it and only wraps at the hard limit. The column is still
     // what prose settles at, because that is where the mirror wraps.
-    setFit({ width: Math.min(TEXT_COLUMN_MAX[style], width), height: Math.ceil(el.offsetHeight) });
+    const measured = { width: Math.min(TEXT_COLUMN_MAX[style], width), height: Math.ceil(el.offsetHeight) };
+    // The mirror holds the RAW words, so a `#` line is measured at the words'
+    // size and then drawn half again as large (`TEXT_HEADING_EM`): a box from
+    // the raw line crops it the moment it commits, at every step. With a
+    // heading in it, the estimate is asked too and the bigger box kept —
+    // `textRefit` is exactly that, and null when the measurement already
+    // holds the words. Without one, what was measured is what commits.
+    setFit((TEXT_HEADING_LINE.test(body) && textRefit(measured, body, style, face)) || measured);
   }, [body, key, style, face]);
 
   /**

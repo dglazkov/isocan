@@ -730,6 +730,11 @@ box to hold the words at the new look, and `isocan fit <item>` re-fits a
 caption to its words from scratch — the repair for one that was left a line
 short. `--size` still wins when you give it.
 
+A markdown heading inside a node scales with it: `#` is drawn at one and a
+half times the node's step (`##` and `###` a little less, never smaller than
+the words), so a `--style display` node's heading is bigger than the paragraph
+under it, and the box is sized to hold it.
+
 Markdown lines start with `-` and so do options, so a bullet given as an
 argument needs `--` first. For anything with more than one line in it, pipe it:
 

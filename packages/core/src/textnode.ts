@@ -425,12 +425,9 @@ export const TEXT_COLUMN: Record<TextStyle, number> = {
  * A multiple rather than four more hand-set numbers: the ladder above already
  * decided how these steps relate, and a second table would drift from it.
  */
-export const TEXT_COLUMN_MAX: Record<TextStyle, number> = {
-  body: TEXT_COLUMN.body * 2,
-  heading: TEXT_COLUMN.heading * 2,
-  title: TEXT_COLUMN.title * 2,
-  display: TEXT_COLUMN.display * 2,
-};
+export const TEXT_COLUMN_MAX = Object.fromEntries(
+  TEXT_STYLES.map((style) => [style, TEXT_COLUMN[style] * 2]),
+) as Record<TextStyle, number>;
 
 /**
  * **The box must err large, never small.** A text node is chromeless, so a
@@ -461,8 +458,34 @@ const PARAGRAPH_GAP = 0.35;
 const SLACK = 1.1;
 /** The browser's own `ul` padding: 40px, a fixed number in world units. */
 const LIST_INDENT = 40;
-/** `.md-view h1`'s fixed size — the largest a heading is drawn at. */
-const HEADING_PX = 18;
+/**
+ * **The largest a heading is drawn, as a multiple of the node's own words.**
+ *
+ * The stylesheet sets a text node's headings in `em` (`.item.textnode
+ * .md-view h1` at 1.5em, h2 and h3 smaller, never below 1em), so a `#` line
+ * is bigger than the words under it at EVERY step. It used to borrow the card
+ * renderer's fixed 18px, which is larger than body text at 16 and a seventh
+ * the size of it at display's 128 — a heading smaller than its own paragraph.
+ *
+ * The estimate sizes EVERY heading level at this, h1's, because the box must
+ * err large and one number is lighter in the first paint than six: an `##`
+ * gets a little more room than it draws, invisibly, since a caption has no
+ * card. What it must never do is think a heading is smaller than it draws —
+ * that is a box that crops it (lesson #94's shape) — and
+ * `packages/web/test/textheading.test.ts` holds this equal to the
+ * stylesheet's h1 and every other level at or under it.
+ */
+export const TEXT_HEADING_EM = 1.5;
+/**
+ * A markdown heading line — multiline, so the one pattern answers for a line
+ * and for a whole body. `#Roadmap` is an item reference, not a heading.
+ *
+ * The app's composer asks it of a whole body: its mirror measures the RAW
+ * words, where `# Plan` is one line at the node's size, and the canvas then
+ * draws it half again as large — so a composer holding a heading asks
+ * `textRefit` too, and keeps whichever box is bigger.
+ */
+export const TEXT_HEADING_LINE = /^\s{0,3}#{1,6}\s+/m;
 
 /** Advance width of one character, in em, for a UI sans — the classes that
  *  matter, not a font table. `mono` is one width; the app scales `hand`. */
@@ -512,9 +535,8 @@ export function textBox(
   let gaps = 0;
   let wrapped = false;
   let lastBlank = true;
-  // Rows a heading adds beyond a line: the stylesheet sets headings at a
-  // fixed 18px with margins, which at body size is more than a line and at
-  // the big steps is less — counted as a line and a half either way.
+  // Height beyond the rows, in body lines: a list's margins, and a
+  // heading's own margins and taller lines.
   let extra = 0;
   let listed = false;
   for (const raw of body.replace(/\r/g, "").split("\n")) {
@@ -536,12 +558,11 @@ export function textBox(
       listed = true;
       extra += (PARAGRAPH_GAP * 2) / LINE_HEIGHT;
     }
-    // A heading is drawn at the stylesheet's fixed 18px, which at the body
-    // step is LARGER than the words around it — so its width is measured at
-    // that size, or it wraps a word early and the box is a row short.
-    const heading = /^\s{0,3}#{1,6}\s+/.test(raw);
-    if (heading) extra += 0.6;
-    const lineSize = heading ? Math.max(size, HEADING_PX) : size;
+    // A heading is drawn at a multiple of the node's size (`TEXT_HEADING_EM`),
+    // so its width is measured at THAT size, or it wraps a word early and
+    // the box is a row short — and its rows are taller than a body line.
+    const ratio = TEXT_HEADING_LINE.test(raw) ? TEXT_HEADING_EM : 0;
+    const lineSize = size * (ratio || 1);
     const em = (text: string) => [...text].reduce((w, ch) => w + glyphEm(ch, face), 0) * lineSize;
     // Wrap by word at the column, the way the browser will; a word longer
     // than the column widens the box, up to the hard limit, past which the
@@ -560,7 +581,11 @@ export function textBox(
       }
       widest = Math.max(widest, run, indent + w);
     }
-    rows += lineRows;
+    // A heading row is `line-height: 1.25` of ITS em and its margins
+    // (0.4em + 0.3em) 0.7 of it, both counted in body lines (1.5 of the
+    // node's em) so the sum below holds.
+    rows += ratio ? (lineRows * 1.25 * ratio) / LINE_HEIGHT : lineRows;
+    extra += (0.7 * ratio) / LINE_HEIGHT;
   }
   // One row of margin for a gap that is followed by nothing would be paid
   // to no paragraph; a trailing blank line costs nothing.

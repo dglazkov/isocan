@@ -272,7 +272,14 @@ describe("corner radii", () => {
  * chosen.
  */
 describe("type sizes", () => {
-  const TYPE_STEPS = 16;
+  /**
+   * 16 → 20 on 24 Sep 2026, and none of the four is a pixel size: they are a
+   * text node's heading ladder — h1 1.5em, h2 1.25em, h3 1.125em, h4–h6 1em —
+   * relative to a node whose own size runs 16 to 128. A fixed px there was the
+   * bug (a `#` at 18px under a 128px paragraph, lessons.md #96), so the steps
+   * have to be ratios; `textheading.test.ts` holds them to core's estimate.
+   */
+  const TYPE_STEPS = 20;
   const HALF_PIXEL = [9.5, 10.5, 11.5, 12.5, 13.5];
 
   it("invents no new size", () => {
