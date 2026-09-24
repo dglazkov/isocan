@@ -2239,7 +2239,9 @@ export class Engine {
       // mouse move on every canvas: a disk write per cursor beat for data that
       // did not change would put the actors file on the latency path.
       if (!changed) return;
-      runtime.registry = { names: nextNames, colors: nextColors };
+      // Spread, not rebuilt: a roster carries names and colours only, and the
+      // registry has more fields than that (marks, joins, harnesses).
+      runtime.registry = { ...runtime.registry, names: nextNames, colors: nextColors };
       await this.store.saveActors(runtime.registry, runtime.lastSeq);
     });
   }
