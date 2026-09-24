@@ -5,7 +5,7 @@ import {
   packageBin,
   packageRoot,
   paths_exports
-} from "./chunk-BISDSHN7.mjs";
+} from "./chunk-NOG2AKBY.mjs";
 import {
   DaemonRoutes,
   platformFetch
@@ -26066,7 +26066,7 @@ async function readDesignAudit(ctx, canvasId, options = {}, captured) {
   });
 }
 async function repairDesignItem(ctx, request) {
-  const { designReviewPort: designReviewPort2 } = await import("./design-review-node-6PCT5AP4.mjs");
+  const { designReviewPort: designReviewPort2 } = await import("./design-review-node-GZMM6IQ3.mjs");
   return repairDesignScreen(designReviewPort2(ctx), request);
 }
 

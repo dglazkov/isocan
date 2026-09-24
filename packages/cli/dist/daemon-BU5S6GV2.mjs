@@ -21,6 +21,8 @@ import {
   require_validation_error
 } from "./chunk-DV2UMHCA.mjs";
 import {
+  BLOBS_PRESENT_LIMIT,
+  BLOBS_PRESENT_ROUTE,
   CDN_URL_MAP,
   CanvasGroupsClientError,
   CanvasNotFoundError,
@@ -98,7 +100,7 @@ import {
   writeHomes,
   writeMarker,
   writePersona
-} from "./chunk-BISDSHN7.mjs";
+} from "./chunk-NOG2AKBY.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import "./chunk-JNO6CSXZ.mjs";
@@ -31049,6 +31051,7 @@ function policyPathname(req) {
   const params = req.params;
   return matched.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_token, name) => encodeURIComponent(params[name]));
 }
+var READ_BY_POST = /\/(?:personal\/read|blobs\/present)$/;
 function isOpen(method, pathname) {
   if (HEALTH_ROUTES.includes(pathname)) return true;
   if (!pathname.startsWith("/api/")) return true;
@@ -31215,7 +31218,7 @@ function registerRoutes(app, engine, store, desk, presence, options = {}) {
   const sourceCaps = /* @__PURE__ */ new WeakMap();
   const localOrigin = (req) => new URL(`${isSecureRequest(req.headers, Boolean(req.raw.socket.encrypted)) ? "https" : "http"}://${req.headers.host}`).origin;
   const sourceIntent = (method, pathname) => {
-    if (method === "GET" || method === "HEAD" || pathname === "/api/oplog/watch" || pathname.startsWith("/api/park/") || /\/personal\/read$/.test(pathname)) return "read";
+    if (method === "GET" || method === "HEAD" || pathname === "/api/oplog/watch" || pathname.startsWith("/api/park/") || READ_BY_POST.test(pathname)) return "read";
     return /\/(?:grants|passes|space)(?:\/|$)/.test(pathname) || /^\/api\/spaces\/[^/]+\/canvases\/[^/]+$/.test(pathname) ? "own" : "edit";
   };
   const checkSource = async (canvasId, badgeId, context, intent, actorId, lookup = "entry") => {
@@ -31326,7 +31329,7 @@ function registerRoutes(app, engine, store, desk, presence, options = {}) {
           const snapshot = await engine.getSnapshot(canvasId).catch(() => null);
           if (snapshot) requireQuestionnaireClient(req.headers[CLIENT_FEATURES_HEADER], snapshot.canvas);
         }
-        if (req.method !== "GET" && req.method !== "HEAD" && !/\/personal\/read$/.test(pathname) && !atLeast(capabilityIn(req.badge, canvasId) ?? "edit", "edit")) {
+        if (req.method !== "GET" && req.method !== "HEAD" && !READ_BY_POST.test(pathname) && !atLeast(capabilityIn(req.badge, canvasId) ?? "edit", "edit")) {
           throw await viewOnly(canvasId);
         }
       }
@@ -33944,6 +33947,31 @@ function registerRoutes(app, engine, store, desk, presence, options = {}) {
     const body = req.body ?? {};
     return engine.reconcileBlobs(id, { push: body.push === true }, sourceContexts.get(req), req.badge.badgeId);
   });
+  app.post(BLOBS_PRESENT_ROUTE, async (req, reply) => {
+    const { id } = req.params;
+    const hashes = req.body?.hashes;
+    if (!Array.isArray(hashes) || !hashes.every((h) => typeof h === "string" && /^[0-9a-f]{64}$/.test(h))) {
+      return reply.status(400).send({ error: "hashes must be a list of sha256 content hashes", code: "bad-op" });
+    }
+    if (hashes.length > BLOBS_PRESENT_LIMIT) {
+      return reply.status(400).send({
+        error: `${hashes.length} hashes is more than this home answers at once \u2014 ask for ${BLOBS_PRESENT_LIMIT} or fewer`,
+        code: "bad-op"
+      });
+    }
+    await engine.getSnapshot(id);
+    const held = await store.heldBlobs(id, hashes);
+    let missing = [...new Set(hashes.filter((h) => !held.has(h)))];
+    const blobHome = options.homes?.for(id) ?? null;
+    if (missing.length > 0 && blobHome) {
+      const upstream = await blobHome.hasBlobs(id, missing);
+      if (missing.some((h) => (upstream.get(h) ?? null) === null)) {
+        return reply.status(502).send({ error: `${blobHome.homeUrl} could not be asked`, code: "home-unreachable" });
+      }
+      missing = missing.filter((h) => upstream.get(h) === false);
+    }
+    return { missing };
+  });
   app.post("/api/projects/:id/teleport", async (req) => {
     const { id } = req.params;
     const body = req.body ?? {};
@@ -35155,7 +35183,7 @@ function startBlobKeeper(options) {
       for (const canvasId of replicas) {
         if (stopped) return;
         try {
-          const report = await options.engine.reconcileBlobs(canvasId, { push: true });
+          const report = await options.engine.reconcileBlobs(canvasId, { push: true, trustConfirmed: true });
           if (report.pushed.length > 0) {
             pushed += report.pushed.length;
             behind += 1;

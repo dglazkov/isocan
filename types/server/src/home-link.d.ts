@@ -219,6 +219,13 @@ export interface HomeConnection {
      * only one of them means push.
      */
     hasBlob(canvasId: string, blobHash: string): Promise<boolean | null>;
+    /**
+     * `hasBlob` for many hashes, in a handful of requests rather than one each
+     * (`BLOBS_PRESENT_ROUTE`). Every asked hash gets an answer with
+     * `hasBlob`'s meaning — null is "I could not ask". A home older than the
+     * route is asked one HEAD per hash, as before it existed.
+     */
+    hasBlobs(canvasId: string, blobHashes: readonly string[]): Promise<Map<string, boolean | null>>;
     /** Hand this home a canvas whole — its log, verbatim. The receiving half of
      *  a teleport; see `Engine.adopt` for why it is not a replay of ops. */
     adopt(canvasId: string, entries: readonly LogEntry[]): Promise<{
@@ -818,6 +825,17 @@ export declare class HomeLink implements HomeConnection {
         seqs: number;
     }>;
     hasBlob(canvasId: string, blobHash: string): Promise<boolean | null>;
+    /**
+     * When this home last said it has no `BLOBS_PRESENT_ROUTE`. Remembered so
+     * an older home is not asked the batch before every sweep's HEADs, and
+     * forgotten after `BATCH_REPROBE_MS` so the deploy that adds the route is
+     * noticed without a restart.
+     */
+    private batchAbsentAt;
+    hasBlobs(canvasId: string, blobHashes: readonly string[]): Promise<Map<string, boolean | null>>;
+    /** One ask of `BLOBS_PRESENT_ROUTE`: the missing hashes, `"no-route"` for a
+     * home that predates it, or null for "could not ask". */
+    private askPresent;
     /** Bytes this replica has never held, streamed from the home. What makes an
      * item somebody else added on another machine openable here. */
     openBlob(canvasId: string, blobHash: string, range?: {

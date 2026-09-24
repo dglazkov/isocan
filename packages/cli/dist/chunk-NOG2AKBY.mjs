@@ -38,6 +38,7 @@ import {
   SPACES_ROUTE,
   TAKEDOWNS_ROUTE,
   TAKEN_DOWN,
+  UNKNOWN_ROUTE,
   VIEW_ONLY,
   WITHDRAWN,
   WS_BEHIND,
@@ -5699,6 +5700,7 @@ var UndoStacks = class _UndoStacks {
 // packages/server/src/engine.ts
 var FREE_NAME_PROBE = " free-name probe";
 var OWN_CLAIM_FRESH_MS = 6e4;
+var BLOB_RECONFIRM_MS = 6 * 60 * 60 * 1e3;
 function fresh(boundAt, now) {
   return Date.parse(now) - Date.parse(boundAt) < OWN_CLAIM_FRESH_MS;
 }
@@ -6417,18 +6419,25 @@ var Engine = class {
       return { canvasId, home, title: title.text, revision: runtime.lastSeq, head };
     });
   }
-  /** A migration preview reads the home's current revision, even through a replica. */
-  groupMigrationPreview(canvasId, sourceContext, badgeId) {
-    return this.enqueue(async () => {
+  /**
+   * A migration preview reads the home's current revision, even through a
+   * replica — and asks it OFF the single-writer chain (lessons #95): the
+   * home's answer is a read of the home, and nothing here waits on it but
+   * this caller. Asked inside `enqueue`, every write on the machine queued
+   * behind the round trip.
+   */
+  async groupMigrationPreview(canvasId, sourceContext, badgeId) {
+    const answer = await this.enqueue(async () => {
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
         await this.sourceGuard?.(canvasId, badgeId, sourceContext, "read");
       }
       const home = this.homes?.for(canvasId);
-      if (home) return home.groupMigrationPreview(canvasId);
+      if (home) return { home };
       const runtime = await this.runtime(canvasId);
-      return canvasGroupMigrationPreview(runtime.state, runtime.lastSeq);
+      return { preview: canvasGroupMigrationPreview(runtime.state, runtime.lastSeq) };
     });
+    return "preview" in answer ? answer.preview : answer.home.groupMigrationPreview(canvasId);
   }
   submit(request) {
     return this.enqueue(async () => {
@@ -6740,25 +6749,37 @@ var Engine = class {
    * uploading at once both read the pre-upload index and the second write
    * erases the first's entry: bytes on disk that nothing can name, and a
    * permanent 404 for the item pointing at them.
+   *
+   * **The index write is on the chain; the trip to the home is not**
+   * (lessons #95). On a replica the bytes go to the home first and wait for
+   * its confirmation, and that used to happen inside `enqueue`: one large
+   * file to a slow home held every write on the machine — every canvas,
+   * every home — for as long as the bytes took to cross. The home's half
+   * writes nothing here, and content addressing makes the local half the
+   * same write whenever it lands, so only the local half takes the chain.
    */
-  putBlob(canvasId, data, meta, sourceContext, badgeId) {
-    return this.enqueue(async () => {
+  async putBlob(canvasId, data, meta, sourceContext, badgeId) {
+    const routed = await this.enqueue(async () => {
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
         await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit");
       }
-      const home = this.homes?.for(canvasId) ?? null;
-      if (home) {
-        await home.putBlob(canvasId, data, meta);
-        const blobHash = createHash3("sha256").update(data).digest("hex");
-        if (await home.hasBlob(canvasId, blobHash) === false) {
-          throw new Error(
-            `${home.homeUrl} took the bytes for ${meta.filename} and does not have them \u2014 not saved; try again`
-          );
-        }
-      }
-      return this.store.putBlob(canvasId, data, meta);
+      const home2 = this.homes?.for(canvasId) ?? null;
+      if (!home2) return { stored: await this.store.putBlob(canvasId, data, meta) };
+      return { home: home2 };
     });
+    if ("stored" in routed) return routed.stored;
+    const { home } = routed;
+    await home.putBlob(canvasId, data, meta);
+    const blobHash = createHash3("sha256").update(data).digest("hex");
+    const there = await home.hasBlob(canvasId, blobHash);
+    if (there === false) {
+      throw new Error(
+        `${home.homeUrl} took the bytes for ${meta.filename} and does not have them \u2014 not saved; try again`
+      );
+    }
+    if (there) this.confirmedAtHome(home.homeUrl, canvasId).set(blobHash, Date.now());
+    return this.enqueue(() => this.store.putBlob(canvasId, data, meta));
   }
   /**
    * **Are the bytes where the ops that name them went — and if not, send them.**
@@ -6807,8 +6828,13 @@ var Engine = class {
     const missing = [];
     const pushed = [];
     const unknown = [];
-    for (const blob of listing) {
-      const there = await home.hasBlob(canvasId, blob.hash);
+    const confirmed = this.confirmedAtHome(home.homeUrl, canvasId, listing);
+    const now = Date.now();
+    const asked = options.trustConfirmed ? listing.filter((blob) => !(now - (confirmed.get(blob.hash) ?? -Infinity) < BLOB_RECONFIRM_MS)) : listing;
+    const answers = asked.length > 0 ? await home.hasBlobs(canvasId, asked.map((blob) => blob.hash)) : /* @__PURE__ */ new Map();
+    for (const blob of asked) {
+      const there = answers.get(blob.hash) ?? null;
+      if (there) confirmed.set(blob.hash, now);
       if (there === null) {
         unknown.push(blob.hash);
         continue;
@@ -6833,6 +6859,33 @@ var Engine = class {
       pushed.push(blob.hash);
     }
     return { home: home.homeUrl, checked: listing.length, missing, pushed, unknown };
+  }
+  /**
+   * **Bytes the home has already said it holds**, per home and canvas: hash →
+   * when it said so. The content is addressed by its hash, so a "yes" cannot
+   * go stale by the bytes changing — only by the home losing them, which is
+   * the thing the keeper exists to catch, so the memory lasts
+   * `BLOB_RECONFIRM_MS` and then every blob is asked about again. In between,
+   * a steady-state sweep asks only about blobs that are new since the last
+   * one — which is what keeps a home that predates the batch route from
+   * being asked one HEAD per blob every ten minutes.
+   *
+   * In memory, deliberately: a restart forgets it and the first sweep asks
+   * about everything, which is the sweep that catches whatever was lost while
+   * this daemon was down. Pruned to the listing each time it is read, so a
+   * collected blob does not stay remembered.
+   */
+  confirmedBlobs = /* @__PURE__ */ new Map();
+  confirmedAtHome(homeUrl, canvasId, listing) {
+    const key = `${homeUrl}
+${canvasId}`;
+    let known = this.confirmedBlobs.get(key);
+    if (!known) this.confirmedBlobs.set(key, known = /* @__PURE__ */ new Map());
+    if (listing) {
+      const listed = new Set(listing.map((blob) => blob.hash));
+      for (const hash of known.keys()) if (!listed.has(hash)) known.delete(hash);
+    }
+    return known;
   }
   /**
    * Somewhere to put bytes this daemon must not receive, or null when the
@@ -8543,6 +8596,10 @@ var FileStore = class {
   async blobMeta(id, blobHash) {
     return (await this.readIndex(id))[blobHash] ?? null;
   }
+  async heldBlobs(id, blobHashes) {
+    const index = await this.readIndex(id);
+    return new Set(blobHashes.filter((hash) => Object.hasOwn(index, hash)));
+  }
   async openBlob(id, blobHash, range) {
     const meta = await this.blobMeta(id, blobHash);
     if (!meta) return null;
@@ -10009,12 +10066,18 @@ var import_subprotocol = __toESM(require_subprotocol(), 1);
 var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
+// packages/server/src/blobs-present.ts
+var BLOBS_PRESENT_ROUTE = "/api/projects/:id/blobs/present";
+var blobsPresentRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/blobs/present`;
+var BLOBS_PRESENT_LIMIT = 1e3;
+
 // packages/server/src/home-link.ts
 var RECONNECT_MIN_MS = 250;
 var RECONNECT_MAX_MS = 1e4;
 var DEFAULT_POLL_MS = 2e3;
 var BUILD_PROBE_MS = 60 * 60 * 1e3;
 var BUILD_PROBE_TIMEOUT_MS = 5e3;
+var BATCH_REPROBE_MS = 60 * 60 * 1e3;
 var RELAY_COALESCE_MS = 40;
 var COMPLAIN_AFTER_FAILURES = 3;
 var DIAL_STUCK_MS = 3e4;
@@ -11278,6 +11341,66 @@ var HomeLink = class {
       return null;
     }
   }
+  /**
+   * When this home last said it has no `BLOBS_PRESENT_ROUTE`. Remembered so
+   * an older home is not asked the batch before every sweep's HEADs, and
+   * forgotten after `BATCH_REPROBE_MS` so the deploy that adds the route is
+   * noticed without a restart.
+   */
+  batchAbsentAt = null;
+  async hasBlobs(canvasId, blobHashes) {
+    const answers = /* @__PURE__ */ new Map();
+    const unique = [...new Set(blobHashes)];
+    if (unique.length === 0) return answers;
+    const batchAbsent = this.batchAbsentAt !== null && Date.now() - this.batchAbsentAt < BATCH_REPROBE_MS;
+    if (!batchAbsent) {
+      for (let at = 0; at < unique.length; at += BLOBS_PRESENT_LIMIT) {
+        const chunk = unique.slice(at, at + BLOBS_PRESENT_LIMIT);
+        const missing = await this.askPresent(canvasId, chunk);
+        if (missing === "no-route") {
+          this.batchAbsentAt = Date.now();
+          break;
+        }
+        if (missing === null) {
+          for (const hash of unique) if (!answers.has(hash)) answers.set(hash, null);
+          return answers;
+        }
+        const absent = new Set(missing);
+        for (const hash of chunk) answers.set(hash, !absent.has(hash));
+      }
+      if (answers.size === unique.length) return answers;
+    }
+    for (const hash of unique) if (!answers.has(hash)) answers.set(hash, await this.hasBlob(canvasId, hash));
+    return answers;
+  }
+  /** One ask of `BLOBS_PRESENT_ROUTE`: the missing hashes, `"no-route"` for a
+   * home that predates it, or null for "could not ask". */
+  async askPresent(canvasId, hashes) {
+    const badge = await this.ensureBadge();
+    if (!badge) return null;
+    const send = (held) => this.fetchHome(blobsPresentRoute(canvasId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...bearerHeader(held) },
+      body: JSON.stringify({ hashes })
+    });
+    try {
+      let res = await send(badge);
+      if (res.status === 401) {
+        const fresh2 = await this.reBadge();
+        if (fresh2) res = await send(fresh2);
+      }
+      const json = await res.json().catch(() => null);
+      if (res.ok) {
+        const missing = json?.missing;
+        return Array.isArray(missing) && missing.every((h) => typeof h === "string") ? missing : null;
+      }
+      if (res.status === 404 && json?.code === UNKNOWN_ROUTE || res.status === 405) return "no-route";
+      if (res.status === 403 && json?.code === VIEW_ONLY) return "no-route";
+      return null;
+    } catch {
+      return null;
+    }
+  }
   /** Bytes this replica has never held, streamed from the home. What makes an
    * item somebody else added on another machine openable here. */
   async openBlob(canvasId, blobHash, range) {
@@ -12144,6 +12267,8 @@ export {
   plausibleSha,
   describeBuild,
   stalenessOf,
+  BLOBS_PRESENT_ROUTE,
+  BLOBS_PRESENT_LIMIT,
   HomeUnreachableError,
   HomeRefusedError,
   homesRecorded,

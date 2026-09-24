@@ -474,7 +474,13 @@ export declare class Engine {
     /** Read current state and its complete recent history under the same queue
      * as GC/mutations. Archive materialization is not a bounded backing scan. */
     recapHead(canvasId: string, badgeId: string, context: SourceRequestContext, home: string): Promise<import("../../core/src/index.js").RecapHeadResponse | null>;
-    /** A migration preview reads the home's current revision, even through a replica. */
+    /**
+     * A migration preview reads the home's current revision, even through a
+     * replica — and asks it OFF the single-writer chain (lessons #95): the
+     * home's answer is a read of the home, and nothing here waits on it but
+     * this caller. Asked inside `enqueue`, every write on the machine queued
+     * behind the round trip.
+     */
     groupMigrationPreview(canvasId: string, sourceContext?: SourceRequestContext, badgeId?: string): Promise<import("../../core/src/index.js").CanvasGroupMigrationPreview>;
     submit(request: SubmitRequest): Promise<LogEntry>;
     /**
@@ -616,6 +622,14 @@ export declare class Engine {
      * uploading at once both read the pre-upload index and the second write
      * erases the first's entry: bytes on disk that nothing can name, and a
      * permanent 404 for the item pointing at them.
+     *
+     * **The index write is on the chain; the trip to the home is not**
+     * (lessons #95). On a replica the bytes go to the home first and wait for
+     * its confirmation, and that used to happen inside `enqueue`: one large
+     * file to a slow home held every write on the machine — every canvas,
+     * every home — for as long as the bytes took to cross. The home's half
+     * writes nothing here, and content addressing makes the local half the
+     * same write whenever it lands, so only the local half takes the chain.
      */
     putBlob(canvasId: string, data: Buffer, meta: {
         mimeType: string;
@@ -661,6 +675,7 @@ export declare class Engine {
      */
     reconcileBlobs(canvasId: string, options: {
         push: boolean;
+        trustConfirmed?: boolean;
     }, sourceContext?: SourceRequestContext, badgeId?: string): Promise<{
         home: string | null;
         checked: number;
@@ -668,6 +683,23 @@ export declare class Engine {
         pushed: string[];
         unknown: string[];
     }>;
+    /**
+     * **Bytes the home has already said it holds**, per home and canvas: hash →
+     * when it said so. The content is addressed by its hash, so a "yes" cannot
+     * go stale by the bytes changing — only by the home losing them, which is
+     * the thing the keeper exists to catch, so the memory lasts
+     * `BLOB_RECONFIRM_MS` and then every blob is asked about again. In between,
+     * a steady-state sweep asks only about blobs that are new since the last
+     * one — which is what keeps a home that predates the batch route from
+     * being asked one HEAD per blob every ten minutes.
+     *
+     * In memory, deliberately: a restart forgets it and the first sweep asks
+     * about everything, which is the sweep that catches whatever was lost while
+     * this daemon was down. Pruned to the listing each time it is read, so a
+     * collected blob does not stay remembered.
+     */
+    private confirmedBlobs;
+    private confirmedAtHome;
     /**
      * Somewhere to put bytes this daemon must not receive, or null when the
      * backing has no such thing (every file home). Deliberately NOT on the

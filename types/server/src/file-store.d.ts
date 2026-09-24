@@ -122,6 +122,7 @@ export declare class FileStore implements Store {
         mimeType: string;
     }>;
     blobMeta(id: string, blobHash: string): Promise<BlobMeta | null>;
+    heldBlobs(id: string, blobHashes: readonly string[]): Promise<Set<string>>;
     openBlob(id: string, blobHash: string, range?: {
         start: number;
         end: number;
