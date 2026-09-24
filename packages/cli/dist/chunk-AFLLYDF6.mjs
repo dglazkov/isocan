@@ -5118,7 +5118,7 @@ var PersonalService = class {
       const receipt = await writer.submit({ canvasId, actor, badgeId, opId: intent2.opId, op });
       await this.validateLink(badgeId, request.actorId, canvasId, intent2.itemId, home);
       return { receipt, link: { itemId: intent2.itemId, owner: actor, sourceCanvasId, home, linked: true, available: true } };
-    });
+    }, canvasId);
   }
   async unlink(badgeId, canvasId, request) {
     if (typeof request.requestId !== "string" || !request.requestId || request.requestId.length > 256) throw new PersonalError("a bounded unlink requestId is required");
@@ -5128,7 +5128,7 @@ var PersonalService = class {
       if (!consent || consent.destinationCanvasId !== canvasId || consent.itemId !== request.itemId || resolveActor(await this.engine.actorJoins(), consent.ownerId) !== actor.id) throw new PersonalError("only this link's owner may unlink it here");
       const opId = `op_${createHash2("sha256").update(JSON.stringify([canvasId, actor.id, request.requestId, "unlink"])).digest("hex").slice(0, 24)}`;
       return { receipt: await writer.submit({ canvasId, actor, badgeId, opId, op: { type: "group.change", action: { kind: "delete", itemIds: [request.itemId] } } }) };
-    });
+    }, canvasId);
   }
   async read(badgeId, canvasId, request, home, context) {
     if (request.mode !== "summary" && request.mode !== "content") throw new PersonalError("personal read mode must be summary or content");
@@ -5697,6 +5697,49 @@ var UndoStacks = class _UndoStacks {
   }
 };
 
+// packages/server/src/writers.ts
+var WriterChains = class {
+  /** The last task registered on each key; deleted once it settles and nothing followed it. */
+  tails = /* @__PURE__ */ new Map();
+  /** The last `exclusive` task — every later task waits for it. */
+  barrier = Promise.resolve();
+  /** Run `work` once every earlier task on any of `keys` (and any earlier exclusive task) has finished. */
+  run(keys, work) {
+    const sorted = [...new Set(keys)].sort();
+    const prior = Promise.all([this.barrier, ...sorted.map((key) => this.tails.get(key))]);
+    const result = prior.then(() => work());
+    const done = result.then(settle, settle);
+    for (const key of sorted) {
+      this.tails.set(key, done);
+      void done.then(() => {
+        if (this.tails.get(key) === done) this.tails.delete(key);
+      });
+    }
+    return result;
+  }
+  /** Run `work` after EVERYTHING registered so far, holding off everything registered after it. */
+  exclusive(work) {
+    const prior = Promise.all([this.barrier, ...this.tails.values()]);
+    const result = prior.then(() => work());
+    this.barrier = result.then(settle, settle);
+    return result;
+  }
+  /**
+   * Resolves when every task registered so far on these keys has finished —
+   * or, with no keys, every task registered so far on any key. It registers
+   * nothing, so it holds nothing up.
+   */
+  idle(keys) {
+    const waits = keys ? keys.map((key) => this.tails.get(key)) : [...this.tails.values()];
+    return Promise.all([this.barrier, ...waits]).then(settle);
+  }
+};
+var canvasKey = (canvasId) => `canvas:${canvasId}`;
+var HOME_KEY = "home";
+var PERSONAL_KEY = "personal";
+function settle() {
+}
+
 // packages/server/src/engine.ts
 var FREE_NAME_PROBE = " free-name probe";
 var OWN_CLAIM_FRESH_MS = 6e4;
@@ -5726,8 +5769,11 @@ var Engine = class {
   desk;
   options;
   canvases = /* @__PURE__ */ new Map();
+  /** Loads in flight, so two queues asking for one cold canvas share ONE runtime. */
+  loading = /* @__PURE__ */ new Map();
+  /** The actor registry, as a promise so concurrent first readers share one load. */
   actorsRuntime = null;
-  queue = Promise.resolve();
+  writers = new WriterChains();
   listeners = /* @__PURE__ */ new Set();
   colorListeners = /* @__PURE__ */ new Set();
   /** Told when `tipSeq` finds this instance's cache behind the store (#85). */
@@ -5744,12 +5790,13 @@ var Engine = class {
    * nothing changes at all. Both kinds of canvas can sit in one store, which
    * is the whole of the phase.
    *
-   * The single-writer promise chain below is untouched and still does exactly
-   * what it always did — it serializes forwarded writes and arriving entries
-   * against each other instead of serializing writes against writes. There is
-   * still exactly one thing mutating this daemon's state at a time; what
-   * changed is who decides the order, and (now) that the answer to "who"
-   * depends on which canvas.
+   * The canvas's writer queue does exactly what the single chain always did
+   * for it — it serializes forwarded writes and arriving entries against each
+   * other instead of serializing writes against writes. There is still
+   * exactly one thing mutating a canvas's state at a time; what changed is
+   * who decides the order, and that the answer to "who" depends on which
+   * canvas. (And, since the queue became per canvas, that a canvas waiting on
+   * its home holds up only itself.)
    */
   homes = null;
   /**
@@ -5793,29 +5840,38 @@ var Engine = class {
     for (const listener of this.listeners) listener(canvasId, message);
   }
   /**
-   * Resolves when everything currently on the single-writer chain has run.
+   * Resolves when everything already queued has run — on ONE canvas's queue
+   * when given its id, on every queue when not.
    *
    * The replica needed it and the reason is worth keeping: a forwarded write
-   * holds the chain across its HTTP round trip, so between "the home has
-   * created this canvas" and "this daemon has written it down" there is a real
-   * window — and the home connection's dial, which asks the store how far it
-   * has got, was reading that store MID-WRITE. It presented `since=0` for a
+   * holds its canvas's queue across its HTTP round trip, so between "the home
+   * has created this canvas" and "this daemon has written it down" there is a
+   * real window — and the home connection's dial, which asks the store how far
+   * it has got, was reading that store MID-WRITE. It presented `since=0` for a
    * canvas it was in the middle of creating, was correctly answered with a
    * snapshot, and adopted it over the entry that was one line from landing.
-   * Waiting for the chain to drain makes the cursor a fact rather than a
+   * Waiting for the queue to drain makes the cursor a fact rather than a
    * guess, and it is the same discipline every other reader here already has
    * — it just had no name.
+   *
+   * **Per canvas for a dial, all of them for a shutdown.** The window above is
+   * a write to THE canvas being dialled — a birth is queued under the id it
+   * creates — so a dial asks only that canvas's queue. It used to wait on the
+   * one chain, which is how a blob sweep on one canvas left every home link on
+   * the machine logging "a dial has been unfinished for over 30s" (lessons
+   * #95). `close()` asks with no id, because a shutdown must not race ANY
+   * write to the desk or the store.
    */
-  settled() {
-    return this.enqueue(async () => {
-    });
+  settled(canvasId) {
+    return this.writers.idle(canvasId === void 0 ? void 0 : [canvasKey(canvasId)]);
   }
-  /** Serialize all mutations through one chain. */
-  enqueue(work) {
-    const result = this.queue.then(work);
-    this.queue = result.catch(() => {
-    });
-    return result;
+  /** Queue work on one canvas's writer queue. */
+  enqueue(canvasId, work) {
+    return this.writers.run([canvasKey(canvasId)], work);
+  }
+  /** Queue work on the home-scoped identity queue (`HOME_KEY`). */
+  enqueueHome(work) {
+    return this.writers.run([HOME_KEY], work);
   }
   /** HomeLink records classification before adopting any private replica bytes. */
   recordPersonalReplica(canvasId, home) {
@@ -5831,9 +5887,22 @@ var Engine = class {
   setSourceGuard(guard) {
     this.sourceGuard = guard;
   }
-  /** A private workflow enters this queue once; callbacks use only the unqueued writer port. */
-  personalWrite(work) {
-    return this.enqueue(() => work({
+  /**
+   * A private workflow enters the writer once; callbacks use only the
+   * unqueued writer port.
+   *
+   * `canvasId` names the one canvas the workflow writes — a link or unlink
+   * writes its destination and nothing else — and then it takes that canvas's
+   * queue and `PERSONAL_KEY`, so two personal workflows still never interleave
+   * their desk records. With none, the workflow may write a canvas it only
+   * discovers inside (a birth mints or finds its source there), so it cannot
+   * name its keys up front and takes the whole writer: `exclusive`, the old
+   * single chain for exactly one task. The port's `submit` is only safe on the
+   * canvas that was named, or on any canvas when none was.
+   */
+  personalWrite(work, canvasId) {
+    const queued = (task) => canvasId === void 0 ? this.writers.exclusive(task) : this.writers.run([canvasKey(canvasId), PERSONAL_KEY], task);
+    return queued(() => work({
       snapshot: (id) => this.getSnapshot(id),
       submit: async (request) => {
         await this.requireActor(request.badgeId, request.actor.id);
@@ -5982,7 +6051,7 @@ var Engine = class {
    * exists to stop.
    */
   setActorColor(request) {
-    return this.enqueue(async () => {
+    return this.enqueueHome(async () => {
       await this.requireActor(request.badgeId, request.actor.id);
       if (request.op.actorId !== request.actor.id) {
         await this.requireActor(request.badgeId, request.op.actorId);
@@ -6037,7 +6106,7 @@ var Engine = class {
    * a broadcast carrying both facts rather than a second one carrying this.
    */
   setActorMark(request) {
-    return this.enqueue(async () => {
+    return this.enqueueHome(async () => {
       await this.requireActor(request.badgeId, request.actor.id);
       if (request.op.actorId !== request.actor.id) {
         await this.requireActor(request.badgeId, request.op.actorId);
@@ -6091,7 +6160,7 @@ var Engine = class {
    * where the comments now wearing the wrong name are.
    */
   joinActors(request) {
-    return this.enqueue(async () => {
+    return this.enqueueHome(async () => {
       await this.requireActor(request.badgeId, request.actor.id);
       const { from, into } = request.op;
       const claims = await this.desk.claimsOf(request.badgeId);
@@ -6176,8 +6245,15 @@ var Engine = class {
   /**
    * Mechanism 5's membership check, at the one place the claims registry
    * lives. Public because presence beats are checked too and presence does
-   * not live on this chain; the op paths call it INSIDE their queued work, so
-   * a claim and an op racing serialize like everything else.
+   * not live on a writer queue; the op paths call it INSIDE their queued work.
+   *
+   * **A claim and an op racing no longer share a queue** — claims are on the
+   * home queue, ops on their canvas's — and that is safe because this is a
+   * READ, linearized where it happens: an op that passed it is ordered before
+   * any claim that lands after, exactly as if it had landed first. A claim
+   * only ever rewrites the claiming badge's own rows (`setClaims(badgeId)`),
+   * so it can never take away another badge's standing mid-write; revoking a
+   * badge is the desk's, and was never on the engine's chain at all.
    */
   async requireActor(badgeId, actorId) {
     if (claimsActor(await this.desk.claimsOf(badgeId), actorId)) return;
@@ -6267,7 +6343,7 @@ var Engine = class {
    * wrote, which is a real loss and a visible one.
    */
   teleport(canvasId, toHomeUrl, options, sourceContext, badgeId) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       await this.refusePersonalTransfer(canvasId);
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
@@ -6350,7 +6426,7 @@ var Engine = class {
    * argues is a different product.
    */
   adopt(canvasId, entries, sourceContext, badgeId) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       await this.refusePersonalTransfer(canvasId);
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
@@ -6401,7 +6477,7 @@ var Engine = class {
   /** Read current state and its complete recent history under the same queue
    * as GC/mutations. Archive materialization is not a bounded backing scan. */
   recapHead(canvasId, badgeId, context, home) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       const excluded2 = { ...context, policy: { mode: "exclude" } };
       excluded2.signal?.throwIfAborted();
       if (this.homes?.for(canvasId)) throw new PersonalError("Recent work must be read at its authoritative home");
@@ -6427,7 +6503,7 @@ var Engine = class {
    * behind the round trip.
    */
   async groupMigrationPreview(canvasId, sourceContext, badgeId) {
-    const answer = await this.enqueue(async () => {
+    const answer = await this.enqueue(canvasId, async () => {
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
         await this.sourceGuard?.(canvasId, badgeId, sourceContext, "read");
@@ -6440,7 +6516,9 @@ var Engine = class {
     return "preview" in answer ? answer.preview : answer.home.groupMigrationPreview(canvasId);
   }
   submit(request) {
-    return this.enqueue(async () => {
+    const target = request.canvasId ?? (request.op.type === "project.create" ? request.op.canvasId : null);
+    const queued = (work) => target === null ? this.enqueueHome(work) : this.enqueue(target, work);
+    return queued(async () => {
       const targetId = request.canvasId ?? (request.op.type === "project.create" ? request.op.canvasId : void 0);
       if (request.sourceContext && targetId) await this.sourceGuard?.(targetId, request.badgeId, request.sourceContext, request.op.type === "project.create" ? "own" : "edit", request.actor.id);
       if (request.op.type === "project.create" && (await this.desk.personalSource(request.op.canvasId) || await this.desk.personalReplica(request.op.canvasId))) {
@@ -6576,7 +6654,7 @@ var Engine = class {
    * client-side pre-check both of them can pass at once.
    */
   claim(request) {
-    return this.enqueue(async () => {
+    return this.enqueueHome(async () => {
       const entry = await this.applyClaimAndPersist(request);
       for (const home of this.homes?.all() ?? []) void home.announceActor(entry.envelope.actor);
       return entry;
@@ -6612,7 +6690,7 @@ var Engine = class {
    * the authority.
    */
   endowClaim(badgeId, actor, canvasId) {
-    return this.enqueue(async () => {
+    return this.enqueueHome(async () => {
       const ts = (/* @__PURE__ */ new Date()).toISOString();
       await this.desk.setClaims(
         badgeId,
@@ -6759,7 +6837,7 @@ var Engine = class {
    * same write whenever it lands, so only the local half takes the chain.
    */
   async putBlob(canvasId, data, meta, sourceContext, badgeId) {
-    const routed = await this.enqueue(async () => {
+    const routed = await this.enqueue(canvasId, async () => {
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
         await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit");
@@ -6779,7 +6857,7 @@ var Engine = class {
       );
     }
     if (there) this.confirmedAtHome(home.homeUrl, canvasId).set(blobHash, Date.now());
-    return this.enqueue(() => this.store.putBlob(canvasId, data, meta));
+    return this.enqueue(canvasId, () => this.store.putBlob(canvasId, data, meta));
   }
   /**
    * **Are the bytes where the ops that name them went — and if not, send them.**
@@ -6816,7 +6894,7 @@ var Engine = class {
    * definition, and is skipped the same way a blob gone locally always was.
    */
   async reconcileBlobs(canvasId, options, sourceContext, badgeId) {
-    const { home, listing } = await this.enqueue(async () => {
+    const { home, listing } = await this.enqueue(canvasId, async () => {
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
         await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit");
@@ -6908,7 +6986,7 @@ ${canvasId}`;
    * forever.
    */
   registerBlob(canvasId, request, sourceContext, badgeId) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
         await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit");
@@ -6923,7 +7001,7 @@ ${canvasId}`;
    * ops shrink to their surviving members) or skipped entirely.
    */
   undo(canvasId, actor, badgeId, clientId, clientFeatures, sourceContext) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       if (sourceContext) await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit", actor.id);
       await this.requireActor(badgeId, actor.id);
       const home = this.homes?.for(canvasId) ?? null;
@@ -6975,7 +7053,7 @@ ${canvasId}`;
     });
   }
   redo(canvasId, actor, badgeId, clientId, clientFeatures, sourceContext) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       if (sourceContext) await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit", actor.id);
       await this.requireActor(badgeId, actor.id);
       const home = this.homes?.for(canvasId) ?? null;
@@ -7036,7 +7114,7 @@ ${canvasId}`;
    * not become items yet. Maintenance, not an Operation — never undoable.
    */
   gc(canvasId, options = {}, sourceContext, badgeId) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       if (sourceContext) {
         if (!badgeId) throw new Error("source policy requires a badge");
         await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit");
@@ -7120,7 +7198,7 @@ ${canvasId}`;
    * way to be wrong silently.
    */
   applyRemote(canvasId, entry) {
-    return this.enqueue(() => this.applyRemoteEntry(canvasId, entry));
+    return this.enqueue(canvasId, () => this.applyRemoteEntry(canvasId, entry));
   }
   /**
    * The home could not serve a tail, so it sent state instead — take it.
@@ -7136,7 +7214,7 @@ ${canvasId}`;
    * to free anything.
    */
   adoptRemoteSnapshot(canvasId, snapshot) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       const state = { project: snapshot.project, canvas: snapshot.canvas };
       if (state.project.id !== canvasId) throw new OpValidationError("bad-op", "snapshot belongs to another canvas");
       if (state.project.groupMode !== void 0 && state.project.groupMode !== "groups" && state.project.groupMode !== "legacy") {
@@ -7192,7 +7270,7 @@ ${canvasId}`;
    * directory is moved aside rather than removed, so a replica that was told
    * to forget a canvas can still be asked what it used to hold. */
   applyRemoteDelete(canvasId) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       if (!await this.store.canvasExists(canvasId)) return;
       await this.store.softDeleteCanvas(canvasId);
       this.canvases.delete(canvasId);
@@ -7266,7 +7344,7 @@ ${canvasId}`;
    * false.
    */
   mergeRemoteIdentity(colors, names) {
-    return this.enqueue(async () => {
+    return this.enqueueHome(async () => {
       const runtime = await this.actors();
       const nextNames = { ...runtime.registry.names };
       const nextColors = { ...runtime.registry.colors };
@@ -7671,8 +7749,21 @@ ${canvasId}`;
     }
     return holders;
   }
-  async actors() {
-    if (!this.actorsRuntime) this.actorsRuntime = await this.store.loadActors();
+  /**
+   * The actor registry, loaded once. A PROMISE rather than the value, because
+   * canvas queues read it concurrently with the home queue writing it: two
+   * cold readers that each loaded and assigned their own copy would leave the
+   * identity writes landing on one object and the next reader holding the
+   * other — a lost name in memory, and the next registry append fenced.
+   */
+  actors() {
+    if (!this.actorsRuntime) {
+      const loading = this.store.loadActors();
+      this.actorsRuntime = loading;
+      loading.catch(() => {
+        if (this.actorsRuntime === loading) this.actorsRuntime = null;
+      });
+    }
     return this.actorsRuntime;
   }
   /** Eligibility is a protected canvas read; joins affect comparison, never historical authorship. */
@@ -7682,21 +7773,21 @@ ${canvasId}`;
   }
   /** The serialized read binds admitted JSON and canonical discovery history at one local state. */
   async designRequests(canvasId, home) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       const runtime = await this.runtime(canvasId);
       return readDesignRequests(this.store, runtime.state, home, (await this.actors()).registry, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]);
     });
   }
   /** Attributed repair acceptance and Undo/Redo standing use live and archived canonical history. */
   async designRepairs(canvasId, home) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       const runtime = await this.runtime(canvasId);
       return readDesignRepairs(this.store, runtime.state, home, (await this.actors()).registry, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]);
     });
   }
   /** Canonical comparison history is read under the same serialized canvas authority as request state. */
   async designDecisions(canvasId, home) {
-    return this.enqueue(async () => {
+    return this.enqueue(canvasId, async () => {
       const runtime = await this.runtime(canvasId);
       return readDesignDecisions(this.store, runtime.state, home, (await this.actors()).registry, [...runtime.entries, ...await this.store.readArchivedLog(canvasId)]);
     });
@@ -7959,11 +8050,31 @@ ${canvasId}`;
       throw err;
     }
   }
-  async runtime(canvasId) {
+  /**
+   * A canvas's runtime, loaded from the store the first time anyone asks.
+   *
+   * Loads are shared while in flight, and a load that finishes after the
+   * canvas's own queue has already put a runtime in place hands back THAT one
+   * rather than replacing it. Both matter since the queue became per canvas:
+   * a claim on the home queue reads other canvases' names (`heldNames`), and
+   * a cold load of its own racing the canvas's queue must never swap the
+   * runtime that queue is writing for an older copy of it.
+   */
+  runtime(canvasId) {
     const cached3 = this.canvases.get(canvasId);
-    if (cached3) return cached3;
+    if (cached3) return Promise.resolve(cached3);
+    let pending = this.loading.get(canvasId);
+    if (!pending) {
+      pending = this.loadRuntime(canvasId).finally(() => this.loading.delete(canvasId));
+      this.loading.set(canvasId, pending);
+    }
+    return pending;
+  }
+  async loadRuntime(canvasId) {
     const loaded = await this.store.load(canvasId);
     if (!loaded) throw new CanvasNotFoundError(canvasId);
+    const already = this.canvases.get(canvasId);
+    if (already) return already;
     const runtime = {
       state: loaded.state,
       lastSeq: loaded.lastSeq,
@@ -10509,10 +10620,14 @@ var HomeLink = class {
    * we were in the middle of making — the home dutifully sent a snapshot, and
    * the replica adopted it over the entry it was about to land, losing seq 1
    * from its own log. A cursor has to be a fact.
+   *
+   * THIS canvas's queue, not every queue: the write that makes the window is
+   * a write to the canvas being dialled, and waiting on the whole daemon is
+   * how one canvas's slow home once left every dial on the machine unfinished.
    */
   async localSeq(canvasId) {
     try {
-      await this.engine.settled();
+      await this.engine.settled(canvasId);
       return (await this.engine.getSnapshot(canvasId)).lastSeq;
     } catch {
       return 0;

@@ -132,11 +132,31 @@ type IncomingEntry = Omit<LogEntry, "inverse"> & {
 type RemoteApply = "applied" | "skipped" | "gap";
 /**
  * The single op engine. ALL mutations — from the CLI, the web app, and
- * undo/redo — funnel through one promise chain, giving single-writer
- * discipline over both the in-memory state and the files.
+ * undo/redo — funnel through ONE WRITER QUEUE PER CANVAS, giving
+ * single-writer discipline over each canvas's in-memory state and files.
  *
  * Per mutation: validate → invert (from pre-state) → apply → append+fsync
  * oplog → atomically rewrite snapshots → broadcast.
+ *
+ * **The locking rule** (`writers.ts` holds the mechanism, this is the policy):
+ *
+ * - Anything that reads-then-writes one canvas — a submit, undo, redo, an
+ *   entry or snapshot arriving from its home, a delete, a blob named, GC, a
+ *   teleport of it or an adoption of it — takes that canvas's key and nothing
+ *   else. Within a canvas the order is exactly what the single chain gave:
+ *   seq order, op groups and undo stacks are that queue's alone.
+ * - The home-scoped identity state (the actor registry and the desk's claims)
+ *   is its own key, `HOME_KEY`: claims, names, colours, marks and joins
+ *   serialize against each other there, and a canvas write never waits on
+ *   them — it only READS that state, and a read of it is linearized where it
+ *   happens (see `requireActor`).
+ * - A personal workflow that knows its destination takes that canvas and
+ *   `PERSONAL_KEY`; one that does not (a personal birth) is `exclusive`, the
+ *   old single chain for the length of one task.
+ *
+ * So a write to canvas A never waits on canvas B — which is the point: a
+ * forwarded write holds its canvas's turn across the round trip to its home,
+ * and on 24 Sep 2026 one held turn paused every write on the machine.
  */
 export declare class Engine {
     private readonly store;
@@ -145,8 +165,11 @@ export declare class Engine {
     private readonly desk;
     private readonly options;
     private canvases;
+    /** Loads in flight, so two queues asking for one cold canvas share ONE runtime. */
+    private loading;
+    /** The actor registry, as a promise so concurrent first readers share one load. */
     private actorsRuntime;
-    private queue;
+    private writers;
     private listeners;
     private colorListeners;
     /** Told when `tipSeq` finds this instance's cache behind the store (#85). */
@@ -163,12 +186,13 @@ export declare class Engine {
      * nothing changes at all. Both kinds of canvas can sit in one store, which
      * is the whole of the phase.
      *
-     * The single-writer promise chain below is untouched and still does exactly
-     * what it always did — it serializes forwarded writes and arriving entries
-     * against each other instead of serializing writes against writes. There is
-     * still exactly one thing mutating this daemon's state at a time; what
-     * changed is who decides the order, and (now) that the answer to "who"
-     * depends on which canvas.
+     * The canvas's writer queue does exactly what the single chain always did
+     * for it — it serializes forwarded writes and arriving entries against each
+     * other instead of serializing writes against writes. There is still
+     * exactly one thing mutating a canvas's state at a time; what changed is
+     * who decides the order, and that the answer to "who" depends on which
+     * canvas. (And, since the queue became per canvas, that a canvas waiting on
+     * its home holds up only itself.)
      */
     private homes;
     constructor(store: Store, 
@@ -206,34 +230,57 @@ export declare class Engine {
     onBehind(listener: (canvasId: string, cached: number, tip: number) => void): () => void;
     private emit;
     /**
-     * Resolves when everything currently on the single-writer chain has run.
+     * Resolves when everything already queued has run — on ONE canvas's queue
+     * when given its id, on every queue when not.
      *
      * The replica needed it and the reason is worth keeping: a forwarded write
-     * holds the chain across its HTTP round trip, so between "the home has
-     * created this canvas" and "this daemon has written it down" there is a real
-     * window — and the home connection's dial, which asks the store how far it
-     * has got, was reading that store MID-WRITE. It presented `since=0` for a
+     * holds its canvas's queue across its HTTP round trip, so between "the home
+     * has created this canvas" and "this daemon has written it down" there is a
+     * real window — and the home connection's dial, which asks the store how far
+     * it has got, was reading that store MID-WRITE. It presented `since=0` for a
      * canvas it was in the middle of creating, was correctly answered with a
      * snapshot, and adopted it over the entry that was one line from landing.
-     * Waiting for the chain to drain makes the cursor a fact rather than a
+     * Waiting for the queue to drain makes the cursor a fact rather than a
      * guess, and it is the same discipline every other reader here already has
      * — it just had no name.
+     *
+     * **Per canvas for a dial, all of them for a shutdown.** The window above is
+     * a write to THE canvas being dialled — a birth is queued under the id it
+     * creates — so a dial asks only that canvas's queue. It used to wait on the
+     * one chain, which is how a blob sweep on one canvas left every home link on
+     * the machine logging "a dial has been unfinished for over 30s" (lessons
+     * #95). `close()` asks with no id, because a shutdown must not race ANY
+     * write to the desk or the store.
      */
-    settled(): Promise<void>;
-    /** Serialize all mutations through one chain. */
+    settled(canvasId?: string): Promise<void>;
+    /** Queue work on one canvas's writer queue. */
     private enqueue;
+    /** Queue work on the home-scoped identity queue (`HOME_KEY`). */
+    private enqueueHome;
     /** HomeLink records classification before adopting any private replica bytes. */
     recordPersonalReplica(canvasId: string, home: string): Promise<void>;
     private refusePersonalTransfer;
     /** Request policy is rechecked when queued work begins, before any source state is loaded. */
     private sourceGuard?;
     setSourceGuard(guard: NonNullable<Engine["sourceGuard"]>): void;
-    /** A private workflow enters this queue once; callbacks use only the unqueued writer port. */
+    /**
+     * A private workflow enters the writer once; callbacks use only the
+     * unqueued writer port.
+     *
+     * `canvasId` names the one canvas the workflow writes — a link or unlink
+     * writes its destination and nothing else — and then it takes that canvas's
+     * queue and `PERSONAL_KEY`, so two personal workflows still never interleave
+     * their desk records. With none, the workflow may write a canvas it only
+     * discovers inside (a birth mints or finds its source there), so it cannot
+     * name its keys up front and takes the whole writer: `exclusive`, the old
+     * single chain for exactly one task. The port's `submit` is only safe on the
+     * canvas that was named, or on any canvas when none was.
+     */
     personalWrite<T>(work: (port: {
         snapshot: (canvasId: string) => Promise<CanvasSnapshotResponse>;
         submit: (request: SubmitRequest) => Promise<LogEntry>;
         birth: (source: PersonalSourceRecord, actor: Actor, badgeId: string) => Promise<boolean>;
-    }) => Promise<T>): Promise<T>;
+    }) => Promise<T>, canvasId?: string): Promise<T>;
     private birthPersonal;
     listCanvases(): Promise<Canvas[]>;
     getSnapshot(canvasId: string): Promise<CanvasSnapshotResponse>;
@@ -359,8 +406,15 @@ export declare class Engine {
     /**
      * Mechanism 5's membership check, at the one place the claims registry
      * lives. Public because presence beats are checked too and presence does
-     * not live on this chain; the op paths call it INSIDE their queued work, so
-     * a claim and an op racing serialize like everything else.
+     * not live on a writer queue; the op paths call it INSIDE their queued work.
+     *
+     * **A claim and an op racing no longer share a queue** — claims are on the
+     * home queue, ops on their canvas's — and that is safe because this is a
+     * READ, linearized where it happens: an op that passed it is ordered before
+     * any claim that lands after, exactly as if it had landed first. A claim
+     * only ever rewrites the claiming badge's own rows (`setClaims(badgeId)`),
+     * so it can never take away another badge's standing mid-write; revoking a
+     * badge is the desk's, and was never on the engine's chain at all.
      */
     requireActor(badgeId: string, actorId: string): Promise<void>;
     /**
@@ -1009,6 +1063,13 @@ export declare class Engine {
      * of being hard-coded.
      */
     private heldNames;
+    /**
+     * The actor registry, loaded once. A PROMISE rather than the value, because
+     * canvas queues read it concurrently with the home queue writing it: two
+     * cold readers that each loaded and assigned their own copy would leave the
+     * identity writes landing on one object and the next reader holding the
+     * other — a lost name in memory, and the next registry append fenced.
+     */
     private actors;
     /** Eligibility is a protected canvas read; joins affect comparison, never historical authorship. */
     designRespondents(canvasId: string): Promise<{
@@ -1067,6 +1128,17 @@ export declare class Engine {
     /** The registry's fence. Home-scoped, so it drops the registry runtime
      * rather than a canvas's — same remedy, different cache. */
     private appendActorsOrFence;
+    /**
+     * A canvas's runtime, loaded from the store the first time anyone asks.
+     *
+     * Loads are shared while in flight, and a load that finishes after the
+     * canvas's own queue has already put a runtime in place hands back THAT one
+     * rather than replacing it. Both matter since the queue became per canvas:
+     * a claim on the home queue reads other canvases' names (`heldNames`), and
+     * a cold load of its own racing the canvas's queue must never swap the
+     * runtime that queue is writing for an older copy of it.
+     */
     private runtime;
+    private loadRuntime;
 }
 export {};
