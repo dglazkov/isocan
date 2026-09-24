@@ -158,7 +158,7 @@ const TOOLS: ToolDef[] = [
 export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const [more, setMore] = useState(false);
   const navigate = useNavigate();
-  const project = useCanvasStore((s) => s.project);
+  const project = useCanvasStore((s) => s.record);
   const contents = useCanvasStore((s) => s.canvas);
   useUiStore((s) => s.modulesGeneration);
   const projectViews = project && contents ? moduleProjectViews(project, contents) : [];

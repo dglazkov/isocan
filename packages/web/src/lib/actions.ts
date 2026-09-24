@@ -406,7 +406,7 @@ export async function tidyItems(
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return;
   if (groupsEnabled()) {
-    const project = useCanvasStore.getState().project!;
+    const project = useCanvasStore.getState().record!;
     const ids = itemIds.length ? [...itemIds] : groupScopeRoots(canvas, useUiStore.getState().activeGroupId).map((item) => item.id);
     if (ids.length) await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, ids, { kind: "tidy", mode }));
     return;
@@ -436,7 +436,7 @@ export async function alignItems(
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return;
   if (groupsEnabled()) {
-    const project = useCanvasStore.getState().project!;
+    const project = useCanvasStore.getState().record!;
     await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, itemIds, { kind: "align", edge }));
     return;
   }
@@ -451,7 +451,7 @@ export async function alignItems(
 
 /** Equal spacing uses the same annotated placement units as group moves and the CLI. */
 export async function distributeGroupItems(canvasId: string, actor: Actor, itemIds: string[], axis: "h" | "v"): Promise<void> {
-  const { project, canvas } = useCanvasStore.getState();
+  const { record: project, canvas } = useCanvasStore.getState();
   if (!project || !canvas || !groupsEnabled()) return;
   await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, itemIds, { kind: "distribute", axis }));
 }

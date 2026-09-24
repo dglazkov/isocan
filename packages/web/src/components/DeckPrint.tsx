@@ -40,7 +40,7 @@ export function DeckPrint({ canvasId }: { canvasId: string }) {
   const withNotes = params.get("notes") === "1";
   const canvas = useCanvasStore((s) => s.canvas);
   const pages = useMemo(() => (canvas ? deckPages(canvas) : []), [canvas]);
-  const project = useCanvasStore((s) => s.project);
+  const project = useCanvasStore((s) => s.record);
   const title = project?.title ?? "Deck";
   const [saving, setSaving] = useState(false);
   const hasNotes = pages.some((p) => p.note);

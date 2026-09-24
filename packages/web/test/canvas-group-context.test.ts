@@ -34,7 +34,7 @@ let seq: number;
 let posted: Operation[];
 let urls: string[];
 let refuse: boolean;
-function land() { useCanvasStore.setState({ canvasId: state.project.id, project: state.project, canvas: state.canvas, confirmed: state, lastSeq: seq, queue: [], refused: [], past: null, capability: "edit", connection: "live" }); }
+function land() { useCanvasStore.setState({ canvasId: state.project.id, record: state.project, canvas: state.canvas, confirmed: state, lastSeq: seq, queue: [], refused: [], past: null, capability: "edit", connection: "live" }); }
 function apply(op: Operation) {
   const envelope: OpEnvelope = { id: `op_${seq + 1}`, canvasId: state.project.id, actor, ts: stamp.createdAt, op: resolveContextOperation(state, seq, op) };
   envelope.op = resolveCanvasGroupRequest(state, envelope.op, { actor, ts: stamp.createdAt, opId: envelope.id });

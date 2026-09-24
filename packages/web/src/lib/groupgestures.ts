@@ -41,7 +41,7 @@ export function beginGroupGesture(itemIds: string[], onInterrupt?: () => void) {
   const previous = interruptible;
   interruptible = null;
   previous?.finish();
-  const { project, canvas } = useCanvasStore.getState();
+  const { record: project, canvas } = useCanvasStore.getState();
   if (!project || !canvas || project.groupMode !== "groups" || !canEditNow()) return null;
   const start: CanvasState = { project, canvas };
   const roots = groupSelectionRoots(canvas, itemIds);

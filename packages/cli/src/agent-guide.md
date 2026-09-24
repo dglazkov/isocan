@@ -980,8 +980,8 @@ labels clipped at 160 Unicode code points. This head contains no Chat text,
 content bodies, removed names or excluded item details. A personal source
 never contributes history, even if its card is copied or relabelled as inherited.
 If Recent work is unavailable, its reason remains beside any readable design
-and pins. The project's own design still governs. Reading Context copies no
-source history into the project and changes no saved request.
+and pins. This canvas's own design still governs. Reading Context copies no
+source history into this canvas and changes no saved request.
 
 **Your personal canvas is private.** `isocan context personal` creates it on
 explicit first use and prints the same address thereafter. `context personal status`
@@ -1011,7 +1011,7 @@ present; `--limit` counts pieces (1..64, default 16), with text bounded to 64 Ki
 and permitted personal summaries; a personal layer never governs shared design.
 Copied or forged cards grant no access. Automatic previews, inheritance and
 screenshots redact personal sources; private responses are never frozen into a
-shared request or exported by reading another project's Context.
+shared request or exported by reading another canvas's Context.
 
 **Pinning is a decision; a reaction is a response.** The list shows both and
 does not merge them — somebody putting 👍 on a screen is real evidence, and it

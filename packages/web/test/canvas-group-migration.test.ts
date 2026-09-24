@@ -64,7 +64,7 @@ async function settle() { for (let i = 0; i < 12; i++) await Promise.resolve(); 
 beforeEach(() => {
   hooks.slots = []; hooks.effects = []; posted = [];
   initial = applyOperation(null, { id: "op_birth", canvasId: "prj_acme", actor, ts: "2026-09-13T00:00:00Z", op: { type: "project.create", canvasId: "prj_acme", title: "Acme", groupMode: "legacy" } })!;
-  useCanvasStore.setState({ canvasId: "prj_acme", confirmed: initial, project: initial.project, canvas: initial.canvas, lastSeq: 3, past: null, queue: [], refused: [], capability: "edit" });
+  useCanvasStore.setState({ canvasId: "prj_acme", confirmed: initial, record: initial.project, canvas: initial.canvas, lastSeq: 3, past: null, queue: [], refused: [], capability: "edit" });
   useUiStore.setState({ groupDialog: { kind: "migrate", itemIds: [] } });
   preview = { canvasId: "prj_acme", revision: 3, migrationVersion: 1, status: "ready", fromMode: "legacy", toMode: "groups", boundary: null,
     live: [{ ...row("itm_area"), kindBefore: "area", kindAfter: "group" }, row("itm_card", "itm_area")],
@@ -113,7 +113,7 @@ describe("conversion is a reviewed writer request", () => {
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({ originGroupMode: "legacy", op: { type: "group.change", action: { kind: "migrate", expectedRevision: 3 } } });
     expect(useCanvasStore.getState().confirmed).toEqual(initial);
-    expect(useCanvasStore.getState().project?.groupMode).toBe("legacy");
+    expect(useCanvasStore.getState().record?.groupMode).toBe("legacy");
     expect(nodes(render()).some((node) => node.props.role === "alert" && String(node.props.children).includes("Refresh the preview"))).toBe(true);
   });
   it("requires refresh after a newer revision and hides conversion from readers", async () => {
@@ -129,7 +129,7 @@ describe("conversion is a reviewed writer request", () => {
       throw new TypeError("Failed to fetch");
     }));
     (button("Convert canvas to groups")!.props.onClick as () => void)(); await settle();
-    expect(useCanvasStore.getState().project?.groupMode).toBe("legacy");
+    expect(useCanvasStore.getState().record?.groupMode).toBe("legacy");
     expect(useCanvasStore.getState().queue).toHaveLength(1);
     hooks.slots = []; hooks.effects = [];
     render(); await settle();

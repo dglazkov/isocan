@@ -61,7 +61,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
   }, undefined, true);
 
   const canvas = useCanvasStore((s) => s.canvas);
-  const title = useCanvasStore((s) => s.project?.title ?? null);
+  const title = useCanvasStore((s) => s.record?.title ?? null);
   const connection = useCanvasStore((s) => s.connection);
   // The home's own sentence about a canvas it took down (operator phase 2).
   const takenDown = useCanvasStore((s) => s.takenDown);

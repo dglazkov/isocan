@@ -92,6 +92,9 @@ in one command as [`scripts/new-project.sh`](scripts/new-project.sh):
 scripts/new-project.sh acme-widgets --agents claude,codex --launch
 ```
 
+One word each: a **canvas** is the surface people and agents work on, and a
+**project** is the directory that holds it — one canvas today, several later.
+
 Want only the skill, for an agent that will install the rest itself?
 
 ```sh
@@ -131,7 +134,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the focused card expands, neighbors move into compact cards, and distant
   concepts become markers. This temporary view preserves saved canvas positions,
   native selection, anchored discussion and item-focused collaboration. Browser
-  Back retraces exploration; the project shortcut resumes it. Existing concept
+  Back retraces exploration; the right-rail shortcut resumes it. Existing concept
   edits use `anatomy draft` and a conditional save to preserve concurrent changes.
   Broken files have item-scoped diagnostics and version recovery; healthy concepts
   stay readable. `anatomy validate` and `recover` provide the same repair path.
@@ -142,7 +145,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   target, Chat delivery, executor reports, reviewed revision and result; inspect
   them with `anatomy runs` or the workspace. Retries and cancellation preserve
   the original receipt. Attached analyses
-  expose **View Anatomy** in the project menu and right rail. Open **Anatomy** from
+  expose **View Anatomy** in the canvas's More menu and right rail. Open **Anatomy** from
   the command palette, or `isocan open --page anatomy`; the `isocan anatomy`
   command family provides the same reads and edits. This is a removable module
   using the proposed workspace API. [Design and phased plan](docs/projects/anatomy/phases.md).
@@ -166,13 +169,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Agents use `isocan context pin <item> --from <canvas>`.
 - **Personal memory**: **Your canvas** in Context creates one private canvas
   for your identity at this home. Pin a preference there, link it into a
-  project, and explicitly allow the agents who may read it. The project shows
+  canvas, and explicitly allow the agents who may read it. That canvas shows
   your linked card without a source preview; Context reads the permitted pieces
   with your name beside them. Unlink stops the next read, undo restores the
   same link, and revoking an agent stops its access independently. On a phone,
   open **More → Context**. Agents use `isocan context personal` and its
-  `link`, `unlink`, `allow`, `revoke` and `read` subcommands. The project's
-  design still governs, and exporting the project does not copy the private
+  `link`, `unlink`, `allow`, `revoke` and `read` subcommands. The canvas's own
+  design still governs, and exporting the canvas does not copy the private
   source's contents.
 - **Markdown reading**: Read / select text mode, a heading outline, and live
   shared text selections. `isocan session select <item> --quote "words"` points

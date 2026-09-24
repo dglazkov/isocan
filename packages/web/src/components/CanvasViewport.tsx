@@ -105,7 +105,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
   const inPast = useCanvasStore((s) => s.past !== null);
   /* The one comparison the entry chunk pays for: whether to ask for a ground
      at all. Everything that draws one is behind it. */
-  const themed = useCanvasStore((s) => (s.project ? hasGround(s.project) : false));
+  const themed = useCanvasStore((s) => (s.record ? hasGround(s.record) : false));
   /**
    * `themed` here turns the grid off in the STYLESHEET, and only for a ground
    * that travels with the canvas (#195). A pinned ground skips that rule and
@@ -114,7 +114,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
    * 7 Sep 2026, after the comment on `THEME_ANCHOR_PROP` had claimed for a day
    * that the grid came back — read that one before changing this line.
    */
-  const isPlace = useCanvasStore((s) => s.project !== null && groundIsPlace(s.project));
+  const isPlace = useCanvasStore((s) => s.record !== null && groundIsPlace(s.record));
   /* One timer for the whole canvas — see `useSettling`. The set is usually
      empty, and when it is, nothing is scheduled at all. */
   const settling = useSettling();

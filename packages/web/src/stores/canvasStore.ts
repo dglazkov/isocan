@@ -153,12 +153,14 @@ interface CanvasStore {
    * folded over it. Read by every component; written by nothing except the
    * two functions below `render`.
    */
-  project: Canvas | null;
+  /** The canvas RECORD — title, properties, group mode. The wire and the
+   * replica call it `project` (`CanvasState.project`); the store says what it is. */
+  record: Canvas | null;
   canvas: CanvasContents | null;
   /**
    * **The home's own truth, at `lastSeq` and not one op further** (phase 10).
    *
-   * The split that makes offline correct. `project`/`canvas` are a VIEW —
+   * The split that makes offline correct. `record`/`canvas` are a VIEW —
    * confirmed plus the queue — and the tail that arrives on reconnect is
    * applied to this, never to the view. Folding a tail onto an optimistic
    * state would embed this tab's guesses into what it then calls the home's
@@ -264,7 +266,7 @@ interface CanvasStore {
  */
 export const useCanvasStore = create<CanvasStore>(() => ({
   canvasId: null,
-  project: null,
+  record: null,
   canvas: null,
   confirmed: null,
   past: null,
@@ -305,7 +307,7 @@ function confirm(state: CanvasState, lastSeq: number, observed?: OpEnvelope): vo
     confirmed: state,
     lastSeq,
     queue,
-    project: view?.project ?? state.project,
+    record: view?.project ?? state.project,
     canvas: view?.canvas ?? state.canvas,
   });
   persist();
@@ -331,7 +333,7 @@ function render(): void {
   if (!confirmed) return;
   const view = foldQueue(confirmed, queue);
   useCanvasStore.setState({
-    project: view?.project ?? confirmed.project,
+    record: view?.project ?? confirmed.project,
     canvas: view?.canvas ?? confirmed.canvas,
   });
 }
@@ -842,14 +844,14 @@ export async function loadBacking(canvasId: string): Promise<void> {
 }
 
 export function applyLocalEcho(op: Operation, actor: Actor): void {
-  const { project, canvas } = useCanvasStore.getState();
+  const { record: project, canvas } = useCanvasStore.getState();
   if (!project || !canvas) return;
   try {
     const next = applyOperation(
       { project, canvas },
       { id: "op_local", canvasId: project.id, actor, ts: new Date().toISOString(), op },
     );
-    if (next) useCanvasStore.setState({ project: next.project, canvas: next.canvas });
+    if (next) useCanvasStore.setState({ record: next.project, canvas: next.canvas });
   } catch {
     // Validation failed locally (state raced ahead) — let the server decide.
   }
@@ -893,7 +895,7 @@ export function connectToCanvas(canvasId: string, actor: Actor | null): void {
   presenceActor = actor;
   useCanvasStore.setState({
     canvasId,
-    project: null,
+    record: null,
     canvas: null,
     confirmed: null,
     // A past belongs to the canvas it is a past OF. Carrying one across would
@@ -946,7 +948,7 @@ async function restoreThenOpen(canvasId: string): Promise<void> {
       queue,
       refused: (stored.migrationRefusals ?? []).filter((write) => write.code === "migration-boundary" && write.op),
       lastSeq: stored.lastSeq,
-      project: view?.project ?? confirmed.project,
+      record: view?.project ?? confirmed.project,
       canvas: view?.canvas ?? confirmed.canvas,
     });
     syncCanvas(canvasId, view?.canvas ?? confirmed.canvas, presenceActor?.id);
@@ -1017,7 +1019,7 @@ function wsUrl(canvasId: string, since: number): string {
  * still carrying the last canvas's `lastSeq` would ask a DIFFERENT canvas for
  * a tail from a seq that means nothing there — the home would happily serve
  * one, and the tab would apply another canvas's ops to this one's state.
- * `project`/`canvas` must both be present, because a cursor is a claim to hold
+ * `record`/`canvas` must both be present, because a cursor is a claim to hold
  * the state that seq describes; without the state the seq is a number about
  * nothing, and only a snapshot is an answer.
  *
@@ -1310,7 +1312,7 @@ function openSocket(canvasId: string): void {
       schedulePresenceFlush();
     } else if (message.type === "resumed") {
       // The other answer to the same question, and deliberately NOT a place
-      // that touches `project`/`canvas`: the whole point of resuming is that
+      // that touches `record`/`canvas`: the whole point of resuming is that
       // this tab keeps the state it already has and the tail is applied ON
       // TOP of it. Clearing them here — the way a fresh connect does — would
       // unmount the canvas for as long as the tail took to arrive.

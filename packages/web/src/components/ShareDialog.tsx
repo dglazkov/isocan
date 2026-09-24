@@ -111,7 +111,7 @@ export function ShareDialog({
   /** For the space scope, the canvases whose titles it lists. */
   canvases?: readonly Canvas[];
 }) {
-  const record = useCanvasStore((s) => s.project);
+  const record = useCanvasStore((s) => s.record);
   const joins = useCanvasStore((s) => s.actorJoins);
   const canvas = useCanvasStore((s) => s.canvas);
   const sessions = useCanvasStore((s) => s.sessions);

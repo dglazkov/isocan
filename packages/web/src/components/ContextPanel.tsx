@@ -48,7 +48,7 @@ function ContextAtHome(props: { canvasId: string; actor: Actor; canvas: CanvasCo
 
 function ContextInspection({ canvasId, actor, canvas, scope, home, close }: { canvasId: string; actor: Actor; canvas: CanvasContents; scope: string; home: string; close: () => void }) {
   const canEdit = useCanEdit();
-  const groupMode = useCanvasStore((s) => s.project?.groupMode);
+  const groupMode = useCanvasStore((s) => s.record?.groupMode);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const past = useCanvasStore((s) => s.past);
   const [answer, setAnswer] = useState<{ scope: string; layers: ContextLayer[] } | null>(null);

@@ -12,7 +12,7 @@ const PREVIEW_DEADLINE_MS = 15_000;
 /** Conversion is reviewed and committed at the home; this form never predicts a cutover. */
 export function GroupMigration({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const dialog = useUiStore((state) => state.groupDialog);
-  const mode = useCanvasStore((state) => state.project?.groupMode);
+  const mode = useCanvasStore((state) => state.record?.groupMode);
   const lastSeq = useCanvasStore((state) => state.lastSeq);
   const past = useCanvasStore((state) => state.past);
   const pendingMigration = useCanvasStore((state) => state.queue.find((write) => write.op.type === "group.change" && write.op.action.kind === "migrate"));

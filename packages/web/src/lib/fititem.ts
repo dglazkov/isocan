@@ -40,7 +40,7 @@ export async function fitToContent(canvasId: string, actor: Actor, itemIds: stri
   if (useCanvasStore.getState().canvasId !== canvasId) return;
   if (groupsEnabled()) {
     const frames = itemIds.filter((id) => canvas.items[id] && isGroupItem(canvas.items[id]!)).map((itemId) => ({ itemId }));
-    if (frames.length || targets.length) await changeCanvasGroup(canvasId, actor, groupFitAction({ project: state.project!, canvas }, [...frames, ...targets]));
+    if (frames.length || targets.length) await changeCanvasGroup(canvasId, actor, groupFitAction({ project: state.record!, canvas }, [...frames, ...targets]));
     return;
   }
   if (targets.length === 0) return;

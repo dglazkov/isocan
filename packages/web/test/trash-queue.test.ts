@@ -47,7 +47,7 @@ beforeEach(() => {
     { type: "item.delete", itemId: "itm_acme" },
   ] as const;
   for (const op of ops) state = applyOperation(state, { id: `op_${op.type}`, canvasId: "prj_acme", actor, ts: "2026-09-13T00:00:00Z", op });
-  useCanvasStore.setState({ canvasId: "prj_acme", project: state!.project, canvas: state!.canvas, confirmed: state, capability: "edit" });
+  useCanvasStore.setState({ canvasId: "prj_acme", record: state!.project, canvas: state!.canvas, confirmed: state, capability: "edit" });
   useUiStore.setState({ trashOpen: true });
 });
 

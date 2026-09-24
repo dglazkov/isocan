@@ -41,7 +41,7 @@ export function ModuleDialogs({ canvasId, actor }: { canvasId: string; actor: Ac
   // A runtime module's dialog may arrive after the command that names it.
   useUiStore((s) => s.modulesGeneration);
   const canvas = useCanvasStore((s) => s.canvas);
-  const groupMode = useCanvasStore((s) => s.project?.groupMode ?? "legacy");
+  const groupMode = useCanvasStore((s) => s.record?.groupMode ?? "legacy");
   const rcParked = useRcParked(canvasId);
   const base = useWebHost(canvasId, actor);
   /* A dialog that composes reads the canvas it writes to and asks the home's

@@ -31,7 +31,7 @@ import { ARROW } from "./arrow.ts";
  * tokens, the surface renders them.
  */
 export function useCanvasCursor(): string {
-  const name = useCanvasStore((s) => canvasCursorName(s.project ?? {}));
+  const name = useCanvasStore((s) => canvasCursorName(s.record ?? {}));
   const [path, setPath] = useState(ARROW);
 
   useEffect(() => {

@@ -8,7 +8,7 @@ import { zoomToItem } from "./zoomactions.ts";
 import { creationDestination, selectCreatedItems } from "./groupplacement.ts";
 
 /** Existing legacy canvases stay legacy until their explicit conversion. */
-export function groupsEnabled(): boolean { return useCanvasStore.getState().project?.groupMode === "groups"; }
+export function groupsEnabled(): boolean { return useCanvasStore.getState().record?.groupMode === "groups"; }
 /** All editing entry points share the same capability/mode refusal. */
 function requireGroupEditing(): void {
   if (!canEditNow()) throw new Error("This canvas is read-only.");

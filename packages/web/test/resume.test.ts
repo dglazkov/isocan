@@ -194,7 +194,7 @@ describe("reconnecting with a cursor", () => {
     // A fresh connect nulls `project` and `canvas`; a resume must not, or the
     // canvas unmounts for as long as the tail takes to arrive.
     const after = useCanvasStore.getState();
-    expect(after.project).not.toBeNull();
+    expect(after.record).not.toBeNull();
     expect(after.canvas).not.toBeNull();
     expect(after.connection).toBe("live");
   });

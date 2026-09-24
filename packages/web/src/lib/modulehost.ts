@@ -129,7 +129,7 @@ const ENROL_PATIENCE_MS = 25_000;
 /** Refresh mount-time hosts when the snapshot, admission or active scope arrives.
  * An ongoing handler retains its original host and captured destination. */
 export function useWebHost(canvasId: string, actor: Actor): WebHost {
-  const mode = useCanvasStore((state) => state.project?.groupMode ?? "legacy");
+  const mode = useCanvasStore((state) => state.record?.groupMode ?? "legacy");
   const parent = useUiStore((state) => state.activeGroupId);
   const canEdit = useCanEdit();
   return useMemo(() => webHostFor(canvasId, actor, {

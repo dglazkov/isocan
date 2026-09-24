@@ -41,7 +41,7 @@ export interface Clipboard {
 
 /** Every copy entry point captures the same immutable explicit subtree, including its marks. */
 export function captureClipboard(canvasId: string, itemIds: string[]): Clipboard {
-  const { canvas, project } = useCanvasStore.getState();
+  const { canvas, record: project } = useCanvasStore.getState();
   if (!canvas) return { canvasId, items: [] };
   if (project?.groupMode === "groups") return groupCopySource(canvasId, canvas, itemIds);
   return { canvasId, items: itemIds.flatMap((id) => canvas.items[id] ? [structuredClone(canvas.items[id]!)] : []) };
@@ -61,7 +61,7 @@ export async function pasteInto(
 ): Promise<string[]> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return [];
-  if (useCanvasStore.getState().project?.groupMode === "groups") {
+  if (useCanvasStore.getState().record?.groupMode === "groups") {
     try {
       const source = { ...clipboard, rootIds: clipboard.rootIds ?? clipboard.items.map((item) => item.id) };
       const parent = destination.containerId ? canvas.items[destination.containerId] : undefined;

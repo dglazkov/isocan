@@ -58,16 +58,16 @@ describe("the cursor wears the ground", () => {
   it("reads the ground without re-rendering on every op", () => {
     /* Cursors redraw on every pointer move. The store selector must RESOLVE to
        a value — a string — so zustand compares by value and an unrelated op
-       does not re-render every cursor on the canvas. Taking the whole project
+       does not re-render every cursor on the canvas. Taking the whole record
        is the shape of the bug that burned a core for two days on 6 Sep.
 
        It lives in the hook now rather than in each component, which is the
        point of having a hook: one selector to get right instead of two. */
     expect(hook, "the selector must resolve to a value").toMatch(
-      /useCanvasStore\(\(s\) => \w+\(s\.project/,
+      /useCanvasStore\(\(s\) => \w+\(s\.record/,
     );
-    expect(hook, "and never hand back the whole project").not.toMatch(
-      /useCanvasStore\(\(s\) => s\.project\)/,
+    expect(hook, "and never hand back the whole record").not.toMatch(
+      /useCanvasStore\(\(s\) => s\.record\)/,
     );
   });
 });

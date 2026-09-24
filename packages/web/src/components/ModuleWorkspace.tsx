@@ -157,7 +157,7 @@ export function ModuleWorkspaceView({
   const [historyError, setHistoryError] = useState("");
   const [historyBusy, setHistoryBusy] = useState(false);
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
-  const project = useCanvasStore((s) => s.project);
+  const project = useCanvasStore((s) => s.record);
   const selection = useUiStore((s) => s.selectedItemIds);
   const canEdit = useCanEdit();
   const chatOpen = useUiStore((s) => s.mainPanelOpen);
@@ -211,7 +211,7 @@ export function ModuleWorkspaceView({
       readText: (hash) => fetchBlobText(canvasId, hash),
       getCanvas: () => {
         const state = useCanvasStore.getState();
-        if (!state.canvas || state.project?.id !== canvasId)
+        if (!state.canvas || state.record?.id !== canvasId)
           throw new Error("This canvas is no longer open");
         return state.past?.canvas ?? state.canvas;
       },

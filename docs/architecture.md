@@ -17,6 +17,27 @@ storage seam, the GCP map — each screen citing the files it was read from.
 Drive that first if the names here do not yet mean anything; this doc is the
 one that has to stay exact.
 
+## One word each
+
+Three nouns, one meaning apiece (#135,
+[the count behind it](research/2026-09-06-project-and-canvas.md)):
+
+- **Canvas** — the surface: items, threads, a viewport, presence, an oplog.
+  What you are on, what you switch between, what an agent is enrolled on;
+  `--canvas <ref>` on every verb. Its record (title, properties, who touched
+  it last) is core's `Canvas` type, which the web store calls `record`.
+- **Project** — the directory (or repository) that holds canvases: one
+  today, several later. `.isocan/project.json` is its marker.
+- **Space** — an access grouping across canvases: who may enter, never where
+  the files are. A canvas is in exactly one project and any number of spaces.
+
+The rule: "canvas" in every sentence a person or agent reads, unless the
+sentence is about the directory. "Project" survives on the wire because the
+wire is durable and names the container — the `project.*` ops,
+`/api/projects`, `/p/`, the snapshot's `project` field, `defaultProjectId` —
+and none of those is renamed. `test/one-word.test.ts` holds the README, the
+agent guide, the CLI's strings and the web app's strings to the rule.
+
 ## Givens
 
 - **Google Cloud**, one region (`us-west1` — compute, Firestore, and

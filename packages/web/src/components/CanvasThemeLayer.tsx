@@ -40,7 +40,7 @@ const CustomGround = lazy(() =>
 );
 
 export function CanvasThemeLayer() {
-  const project = useCanvasStore((s) => s.project);
+  const project = useCanvasStore((s) => s.record);
   const theme = project ? themeOf(project) : null;
   const anchor = project ? anchorOf(project) : "world";
   /**

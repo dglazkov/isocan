@@ -69,7 +69,7 @@ export function CanvasListPage({
   /** The home's half of the Inbox experiment; `Navigation` owns the reading,
    * and with the experiment off nothing here asks for one. */
   const inboxOn = useUiStore((s) => s.experiments.includes("inbox"));
-  const [canvases, setProjects] = useState<Canvas[] | null>(null);
+  const [canvases, setCanvases] = useState<Canvas[] | null>(null);
   const [title, setTitle] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -94,7 +94,7 @@ export function CanvasListPage({
   /**
    * **A list that could not be read is not an empty list.**
    *
-   * This swallowed the failure into `setProjects([])`, so a daemon that was
+   * This swallowed the failure into `setCanvases([])`, so a daemon that was
    * down, a badge that was refused and a genuinely empty home all rendered the
    * same page: "no canvases yet". That is the most confident possible way to
    * be wrong, and it is the same silence the create below had.
@@ -134,14 +134,14 @@ export function CanvasListPage({
         fetchTakedowns().catch(() => [] as TakedownNotice[]),
       ]).then(
         ([found, seen, down]) => {
-          setProjects(found);
+          setCanvases(found);
           setSpaces(seen);
           setTakenDown(new Map(down.map((row) => [row.canvasId, row])));
           setListError(null);
           return found;
         },
         (err: unknown) => {
-          setProjects([]);
+          setCanvases([]);
           setListError(err instanceof Error ? err.message : "the canvases could not be read");
           return [] as Canvas[];
         },

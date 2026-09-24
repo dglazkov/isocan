@@ -8985,7 +8985,7 @@ program
         console.log(inboxLine(entry));
         console.log(
           `  ${entry.reason} · ${new Date(entry.comment.createdAt).toLocaleString()}` +
-            `\n  reply: isocan --project ${entry.canvasId} comment reply ${entry.threadId} "…"`,
+            `\n  reply: isocan --canvas ${entry.canvasId} comment reply ${entry.threadId} "…"`,
         );
       }
       const tally = inboxTally(wanted);

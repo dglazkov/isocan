@@ -83,8 +83,8 @@ export function StageEditor({
   // edit. Preserve what this editor actually opened, before either can happen.
   const [repairOpening] = useState<CanvasSnapshotResponse | null>(() => {
     const opened = useCanvasStore.getState();
-    if (opened.canvasId !== canvasId || !opened.project || !opened.canvas) return null;
-    return structuredClone({ project: opened.project, canvas: { ...opened.canvas, items: { ...opened.canvas.items, [item.id]: item } }, lastSeq: opened.lastSeq, colors: opened.actorColors, names: opened.actorNames, joined: opened.actorJoins });
+    if (opened.canvasId !== canvasId || !opened.record || !opened.canvas) return null;
+    return structuredClone({ project: opened.record, canvas: { ...opened.canvas, items: { ...opened.canvas.items, [item.id]: item } }, lastSeq: opened.lastSeq, colors: opened.actorColors, names: opened.actorNames, joined: opened.actorJoins });
   });
   const [loaded, setLoaded] = useState(false);
   /**

@@ -27,7 +27,7 @@ const directions: [Direction, string, string][] = [["ArrowLeft", "left", "←"],
 /** One visit's navigation. Nothing here changes another person's camera or a saved layout. */
 export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit | null; canvasId: string; actor: Actor; visit: MutableRefObject<PhoneVisit> }) {
   const canvas = useCanvasStore((s) => s.canvas);
-  const title = useCanvasStore((s) => s.project?.title);
+  const title = useCanvasStore((s) => s.record?.title);
   const sessions = useCanvasStore((s) => s.sessions);
   const answerable = useAnswerable(canvasId);
   const canEdit = useCanEdit();

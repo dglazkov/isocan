@@ -43,7 +43,7 @@ import { useCanEdit } from "../lib/capability.ts";
  * which canvas you are in and who is in it with you.
  */
 export function CanvasTitle({ actor }: { actor: Actor }) {
-  const canvas = useCanvasStore((s) => s.project);
+  const canvas = useCanvasStore((s) => s.record);
   const canEdit = useCanEdit();
   const [editing, setEditing] = useState(false);
   const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
@@ -113,7 +113,7 @@ export function CanvasPresence({
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
-  const canvas = useCanvasStore((s) => s.project);
+  const canvas = useCanvasStore((s) => s.record);
   const connection = useCanvasStore((s) => s.connection);
   const identityOpen = useUiStore((s) => s.identityOpen);
   const identityRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () =>
@@ -154,7 +154,7 @@ export function CanvasPresence({
  * that lives in three places is one button or it is three that drift.
  */
 export function ShareButton({ actor }: { actor: Actor }) {
-  const canvas = useCanvasStore((s) => s.project);
+  const canvas = useCanvasStore((s) => s.record);
   const shareOpen = useUiStore((s) => s.shareOpen);
   const shareRef = useDismissOnOutside<HTMLDivElement>(shareOpen, () =>
     useUiStore.getState().setShareOpen(false),

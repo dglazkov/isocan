@@ -227,7 +227,7 @@ function CanvasSurface({
   /* The token the canvas's own ground paints with, so the wash under the
      top controls is the colour of what it is washing. Null on a canvas with
      no ground, where the stylesheet's `--ground` fallback is right. */
-  const fadeTone = useCanvasStore((s) => groundTone(s.project ?? null));
+  const fadeTone = useCanvasStore((s) => groundTone(s.record ?? null));
   const navigate = useNavigate();
   const panelResizing = useUiStore((s) => s.panelResizing);
   const historyOpen = useUiStore((s) => s.historyOpen);
@@ -243,7 +243,7 @@ function CanvasSurface({
   const groupDialogOpen = useUiStore((s) => s.groupDialog !== null);
   // The canvas's own title, for the tab. Subscribed separately from the
   // contents so a rename repaints the tab and an item move does not.
-  const canvasTitle = useCanvasStore((s) => s.project?.title ?? null);
+  const canvasTitle = useCanvasStore((s) => s.record?.title ?? null);
   /**
    * A canvas with a title is a canvas you were on: the switcher's "lately"
    * list is written here, once per arrival, with the title so the list can

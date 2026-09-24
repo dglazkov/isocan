@@ -7,7 +7,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 
 /** The inspector distinguishes scaling a group, changing its frame, and reserving room for words. */
 export function GroupLayoutControls({ canvasId, actor, item }: { canvasId: string; actor: Actor; item: Item }) {
-  const project = useCanvasStore((state) => state.project);
+  const project = useCanvasStore((state) => state.record);
   const canvas = useCanvasStore((state) => state.canvas);
   const expected = project && canvas ? captureGroupExpectations({ project, canvas }, [item.id]) : [];
   const [width, setWidth] = useState(item.width);

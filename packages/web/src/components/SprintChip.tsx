@@ -65,7 +65,7 @@ export function SprintChip({ lowered, canvasId, actor }: { lowered: boolean; can
   // A desk: no sprint of its own, and a canvas record that names the sprint
   // it belongs to. Its chip reads THAT sprint — pulled, since the store
   // holds one canvas — and offers one thing: Hand in, across canvases.
-  const project = useCanvasStore((s) => s.project);
+  const project = useCanvasStore((s) => s.record);
   const deskOf = state ? null : deskSprintOf(project);
   const remote = useRemoteSprint(deskOf);
 

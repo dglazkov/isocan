@@ -4,7 +4,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 
 /** Parent and request mode belong to the initial gesture, before uploads or module work. */
 export function creationDestination(containerId = useUiStore.getState().activeGroupId): Pick<Extract<Operation, { type: "item.add" }>, "containerId" | "groupPlacement"> & { originGroupMode: "legacy" | "groups" } {
-  const originGroupMode = useCanvasStore.getState().project?.groupMode ?? "legacy";
+  const originGroupMode = useCanvasStore.getState().record?.groupMode ?? "legacy";
   return { originGroupMode, ...(originGroupMode === "groups" ? { containerId, groupPlacement: "auto" as const } : {}) };
 }
 

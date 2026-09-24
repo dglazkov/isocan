@@ -12,7 +12,7 @@ export function TrashPanel({ canvasId, actor }: { canvasId: string; actor: Actor
   // Select the stable reference; deriving `?? []` in the selector would mint
   // a new array per call and loop useSyncExternalStore forever.
   const canvas = useCanvasStore((s) => s.canvas);
-  const project = useCanvasStore((s) => s.project);
+  const project = useCanvasStore((s) => s.record);
   const canEdit = useCanEdit();
   const trash = canvas?.trash ?? [];
   const [confirming, setConfirming] = useState(false);

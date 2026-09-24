@@ -46,7 +46,7 @@ export function ModuleComposerControls({
   onTakeOver: (moduleName: string, active: boolean) => void;
 }) {
   const canvas = useCanvasStore((s) => s.canvas);
-  const project = useCanvasStore((s) => s.project);
+  const project = useCanvasStore((s) => s.record);
   // Re-render when a runtime module arrives and when an experiment is
   // switched on — the same two reasons `modules()` is a function.
   useUiStore((s) => s.modulesGeneration);

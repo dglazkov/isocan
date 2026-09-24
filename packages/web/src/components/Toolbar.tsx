@@ -44,7 +44,7 @@ export function Toolbar({
   actor: Actor;
   onIdentity: (actor: Actor | null) => void;
 }) {
-  const canvas = useCanvasStore((s) => s.project);
+  const canvas = useCanvasStore((s) => s.record);
   const connection = useCanvasStore((s) => s.connection);
   const trashOpen = useUiStore((s) => s.trashOpen);
   const filesOpen = useUiStore((s) => s.filesPanelOpen);

@@ -24,7 +24,7 @@ export function messageContextRoots(canvas: CanvasContents | null, body: string,
  * revision check remains for callers that ask for it explicitly.
  */
 export function useMessageContext(canvasId: string, roots: string[]) {
-  const mode = useCanvasStore((state) => state.project?.groupMode);
+  const mode = useCanvasStore((state) => state.record?.groupMode);
   const lastSeq = useCanvasStore((state) => state.lastSeq);
   const [includeExcluded, setIncludeExcluded] = useState(false);
   const [revision, setRevision] = useState(0);

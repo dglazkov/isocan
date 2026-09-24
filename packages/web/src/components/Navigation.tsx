@@ -22,7 +22,7 @@ export function Navigation({ actor }: { actor: Actor }) {
   // A route alone is not a working canvas: the home gate may still be
   // asking, refused, or showing the viewer. Those surfaces get navigation.
   const canvasId = useCanvasStore((s) =>
-    s.canvasId === addressed && s.project && s.capability !== "view" && !s.refusedHere && !s.takenDown && !s.ended ? addressed : null,
+    s.canvasId === addressed && s.record && s.capability !== "view" && !s.refusedHere && !s.takenDown && !s.ended ? addressed : null,
   );
   // Desktop actions address the canvas and its panels. A phone face or a
   // covering route cannot show those results, so it keeps global navigation.

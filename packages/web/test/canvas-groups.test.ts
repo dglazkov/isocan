@@ -33,7 +33,7 @@ function apply(op: Operation) { state = applyOperation(state, envelope(op))!; }
 function add(id: string, x: number, kind?: string) {
   apply({ type: "item.add", itemId: id, title: id, width: 180, height: 120, placement: { x, y: 160, chosen: true }, properties: kind ? { kind } : {}, version: { id: `ver_${id}`, blobHash: `hash_${id}`, filename: `${id}.md`, mimeType: "text/markdown", size: 1 } });
 }
-function land() { useCanvasStore.setState({ canvasId: state.project.id, project: state.project, canvas: state.canvas, confirmed: state, queue: [], refused: [], lastSeq: seq, capability: "edit" }); }
+function land() { useCanvasStore.setState({ canvasId: state.project.id, record: state.project, canvas: state.canvas, confirmed: state, queue: [], refused: [], lastSeq: seq, capability: "edit" }); }
 const actions = (entries: MenuEntry[]) => entries.filter((entry): entry is MenuAction => !("separator" in entry));
 const action = (entries: MenuEntry[], label: string) => actions(entries).find((entry) => entry.label === label)!;
 beforeEach(() => {
@@ -179,7 +179,7 @@ describe("group gesture production previews and commits", () => {
     vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => { await held; return normalFetch(url, init); });
     const completion = gesture.commit(state.project.id, actor);
     const other = applyOperation(null, envelope({ type: "project.create", canvasId: "prj_other", title: "Acme other" }))!;
-    useCanvasStore.setState({ canvasId: other.project.id, project: other.project, canvas: other.canvas, confirmed: other, queue: [], notice: "Acme current notice" });
+    useCanvasStore.setState({ canvasId: other.project.id, record: other.project, canvas: other.canvas, confirmed: other, queue: [], notice: "Acme current notice" });
     const preview = { id: "op_current_preview", boxes: new Map() };
     useUiStore.getState().setGroupPreview(preview);
     reject = outcome === "refused"; offline = outcome === "queued"; release();
@@ -286,7 +286,7 @@ describe("explicit group insertion and brief production writes", () => {
     const other = applyOperation(null, envelope({ type: "project.create", canvasId: "prj_other", title: "Acme other", groupMode: "groups" }))!;
     const storedOther: StoredReplica = { canvasId: other.project.id, project: other.project, canvas: other.canvas, lastSeq: 0, queue: [], savedAt: "2026-09-12T00:00:00Z" };
     saved.set(other.project.id, structuredClone(storedOther));
-    useCanvasStore.setState({ canvasId: other.project.id, project: other.project, canvas: other.canvas, confirmed: other, queue: [], refused: [], lastSeq: 0, connection: "live", past: { seq: 0, canvas: other.canvas } });
+    useCanvasStore.setState({ canvasId: other.project.id, record: other.project, canvas: other.canvas, confirmed: other, queue: [], refused: [], lastSeq: 0, connection: "live", past: { seq: 0, canvas: other.canvas } });
     useUiStore.setState({ activeGroupId: null, selectedItemIds: ["itm_other_selection"] });
     release();
     if (cannotReachHome) await expect(completion).rejects.toThrow("does not have open");
@@ -312,7 +312,7 @@ describe("explicit group insertion and brief production writes", () => {
     const completion = sendEchoedResult(state.project.id, actor, { type: "item.update", itemId: "itm_a", patch: { title: "Acme updated" } });
     expect(useCanvasStore.getState().queue).toHaveLength(1);
     const other = applyOperation(null, envelope({ type: "project.create", canvasId: "prj_other", title: "Acme other" }))!;
-    useCanvasStore.setState({ canvasId: other.project.id, project: other.project, canvas: other.canvas, confirmed: other, queue: [], refused: [], lastSeq: 0, connection: "live" });
+    useCanvasStore.setState({ canvasId: other.project.id, record: other.project, canvas: other.canvas, confirmed: other, queue: [], refused: [], lastSeq: 0, connection: "live" });
     reject = outcome === "refused"; release();
     expect((await completion).status).toBe(outcome);
     expect(useCanvasStore.getState()).toMatchObject({ canvasId: other.project.id, confirmed: other, canvas: other.canvas, queue: [], refused: [], connection: "live" });
@@ -483,10 +483,10 @@ describe("canvas group membership through the real web write path", () => {
     expect(state.canvas.items.itm_a!.containerId).toBe(id);
   });
   it("legacy and reader mutations refuse before any upload or op", async () => {
-    useCanvasStore.setState({ project: { ...state.project, groupMode: "legacy" } });
+    useCanvasStore.setState({ record: { ...state.project, groupMode: "legacy" } });
     await expect(createCanvasGroup(state.project.id, actor, "Acme", "", [], { x: 0, y: 0 })).rejects.toThrow("Preview and convert");
     expect(useUiStore.getState().groupDialog?.kind).toBe("migrate");
-    useCanvasStore.setState({ project: state.project, capability: "read" });
+    useCanvasStore.setState({ record: state.project, capability: "read" });
     await expect(changeCanvasGroup(state.project.id, actor, { kind: "ungroup", itemIds: ["itm_a"] })).rejects.toThrow("read-only");
     expect(fetch).not.toHaveBeenCalled();
   });
