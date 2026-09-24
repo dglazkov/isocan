@@ -1,5 +1,5 @@
 ---
-status: done
+status: partial
 since: 2026-09-23
 see: wireframes, judge, design-partner, slides, modules
 note: the ideal, as scenes. A person asks for wireframes; a blue-on-white skeleton appears at once and fills as Jev chooses blocks; variations sit beside each screen; the person marks the screens to keep; a clickable prototype is assembled from them with the obvious transitions already wired. Phase 0 closed 23 Sep 2026 — the catalog (18 archetypes, 28 blocks, 22 primitives, 49 intents) draws as blueprint and as wireframe, and `isocan wire render` places a screen; Phase 1 closed the same day — `isocan wire "<request>"` has Jev compose a flow skeleton-first in 7–11 s for about $0.001, one undo per flow. Phase 2 closed the same day — variations sit under each screen where Jev was unsure, and 📐 keeps a screen from the CLI, the menu or ⇧K. Phase 3 closed the same day — `isocan wire prototype` assembles the kept screens into one clickable app with the obvious transitions, missing screens dashed and named. Phase 4 closed the same day — `wire style` restyles every wire into the governing design system (Jev maps its tokens onto the wire's roles), one undo, blueprints staying blue. Phase 5 closed the same day — `/wire` in the Chat does all of it from the canvas through the home's key, walked on isocan.io. Phase 6 measured Jev against 1,318 labelled screens: a third right, overconfident by ~0.4 — so round 1 should over-include and let keep prune.
@@ -129,7 +129,23 @@ is a typed choice (which of *these* colours is the primary action?) — Jev's
 kind of question, never an invented colour; restyling is one op group, and
 each screen gains a version rather than being replaced.
 
-## 7. It is still an ordinary canvas
+## 7. Fleshed out
+
+The walk's screens are honest and a little bare: grey bars where the words go.
+Priya says `/wire flesh`. Every wire fills with believable content for *this*
+app — the deliveries list shows "Parcel 4471 · 3 items · Out for delivery",
+"Parcel 4478 · 1 item · Awaiting scan"; the home stats read "12 today · 3
+late"; image slots show little greyscale pictograms of parcels; the people are
+first names with initials in their avatars. It is still a wireframe — grey,
+or her design system's colours — but it reads like the app. The prototype
+clicks through the same content. An agent can then write the exact words for
+the screens that matter.
+
+**What the scene forces:** sample content is chosen, not invented (a pack Jev
+picks, overridable); it is stable across restyles, variations and the
+prototype; exact copy is an agent's or a person's, never the typed model's.
+
+## 8. It is still an ordinary canvas
 
 Every screen is an HTML item. Comment on it, draw on it, undo it — one undo
 takes back a whole *wire* request. Take the wireframes module away and every
@@ -146,4 +162,6 @@ screen still renders; only the verbs are gone.
    surfaces produce the same prototype.
 5. A theme layer: the default wire look, or the governing design system's
    tokens mapped onto the wire's roles (Jev chooses the mapping).
-6. No new operation.
+6. Sample content from packs Jev chooses, seeded per screen, and exact copy
+   left to an agent.
+7. No new operation.

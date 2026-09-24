@@ -229,11 +229,53 @@ arrives, the wires say they are behind it (the spec names the version) and
 edit is refused for now — it would rewrite forty items behind somebody's
 back.
 
+### 10. Fleshed out — sample content instead of bars
+
+Asked for by Dion on 23 Sep 2026, looking at the walk canvas: *it shows empty
+skeleton lines — flesh it out and put sample data in there, an attempt to make
+it realer even in wireframes: little images, text, etc.* — as a step in the
+process, not a hand edit.
+
+**Three content levels on one spec, like the two looks of §9:** *bars* (today's
+default — grey bars where copy goes), *sample* (a curated content pack fills
+every list, card, table, stat and image), and *copy* (exact words an agent
+wrote for this request). Blueprints never take content: blue means still being
+drawn.
+
+**Sample content comes from packs, because Jev cannot write.** The module's
+core holds ~24 synthetic packs, one per common domain (deliveries and
+logistics, recipes and food, a shop, fitness, travel, events, finance, tasks,
+tools and lending, pets, home services, jobs, news, music, learning, health,
+real estate, social, …, and *generic*). A pack holds believable nouns and item
+titles, people's first names, subtitles, prices and metrics in the domain's
+units, statuses, categories, dates, and a small set of greyscale pictogram
+motifs (a parcel, a pan, a drill …) drawn as inline SVG in image, thumbnail and
+card-cover slots; avatars become initials. No real brands, no real people.
+**Jev chooses the pack**: one `choice` question over the pack ids with the
+request as state — its kind of question — recorded with its probability;
+`--pack <id>` overrides a wrong guess.
+
+**Filling is deterministic.** Each slot's content is drawn from the pack by a
+seed of the screen's item id and the slot, and written into the spec
+(`content` on the spec, `fill` on each slot), so a restyle, a variation, the
+prototype and a re-render all show the same "Parcel 4471 — 3 items — Out for
+delivery", and nothing flickers.
+
+**Exact copy is the agent's.** `wire copy <screen>` prints, per slot, what
+words it holds and what it wants (the questions/answer seam of §4, with text
+answers); `wire copy <screen> --apply <file>` writes them. An agent parked on
+the canvas can do it for a whole flow; the person can edit any screen's text as
+an ordinary new version.
+
+**Doors.** `isocan wire flesh [screens…|--flow <id>] [--pack <id>]` and
+`/wire flesh` from the Chat; `wire "<request>" --flesh` fleshes as it draws.
+One op group, one undo, a version per screen — the same shape as `wire style`.
+
 ## Done means done on both surfaces
 
 1. **Ops** — none new: `item.add`, `item.addVersion`, `item.update`, op groups.
 2. **CLI** — `isocan wire <request>`, `wire vary`, `wire keep|unkeep`,
-   `wire link`, `wire prototype`, `wire style`, `wire questions|answer`, as the module's verbs.
+   `wire link`, `wire prototype`, `wire style`, `wire flesh`, `wire copy`, `wire questions|answer`, as the module's verbs.
 3. **Agent guide** — the module's own `agent-guide.md`.
 4. **Core** — catalog, renderer, link inference and assembler in the module's
    core, so the web and the CLI draw and link identically.

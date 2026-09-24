@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: all seven phases are CLOSED (23 Sep 2026).** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
+**Where we are: phases 0–6 are CLOSED (23 Sep 2026); wireframes phase 7 — fleshing wires out with sample content — is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
 
 ## Phase 0 — The catalog, drawn
 
@@ -209,3 +209,32 @@ produced for free.
 - **2026-09-23** — Open: round 1's cut — change `yes ≥ 0.5` to over-include (top-k or a 0.3 floor), re-measured against this script. Owed to a follow-up phase.
 - **2026-09-23** — Open: keep marks are not yet calibration labels (11 kept, one tied to a single decision). `WireSpec` needs who answered (`by`) and round 1's P(yes) on each screen so every future kept variation labels one decision.
 - **2026-09-23** — Open: re-run the calibration with plain-words archetype options before changing anything else.
+
+## Phase 7 — Fleshed out
+
+**Status: NOT STARTED.**
+
+Added 23 Sep 2026 at Dion's ask, looking at the walk canvas's grey bars: sample
+content as a step in the process ([design.md §10](design.md), journey scene 7).
+
+**Outcome:** ~24 synthetic content packs in the module's core, each with nouns,
+titles, first names, domain metrics and units, statuses, categories, dates and
+greyscale SVG pictogram motifs; Jev chooses the pack for a request (one choice,
+p recorded, `--pack` overrides); every block and primitive draws `fill`
+content when present — lists, cards, tables, stats, charts, feeds, profiles,
+image and avatar slots — and falls back to bars when not; content seeded per
+screen and slot and stored in the spec; `wire flesh` / `/wire flesh` / `wire
+--flesh` as one op group; `wire copy` for an agent's exact words. Content
+survives `wire style`, variations and `wire prototype`.
+
+**Proof:**
+
+1. Tests: every block draws with and without content; a spec with content
+   round-trips; the same seed gives the same content; restyle and prototype
+   keep it; packs hold no real brands (a test over the pack data).
+2. **Local, with the key:** Jev's pack choice for 12 varied synthetic
+   requests, with p (spot-checked, written in the record); one flow fleshed,
+   the same four screens before/after at full size, looked at.
+3. On the walk canvas (https://isocan.io/p/prj_riZvAhYwSj), after the push is
+   promoted: `/wire flesh` fills the warehouse flow; screenshot; one undo
+   takes it back.
