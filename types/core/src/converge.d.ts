@@ -1,4 +1,5 @@
 import type { CanvasContents, ItemVersion } from "./model.js";
+import type { Operation } from "./ops.js";
 /**
  * **This one won.**
  *
@@ -61,4 +62,14 @@ type ConvergeRefusal = {
  */
 export declare function convergePlan(canvas: CanvasContents, chosenId: string): ConvergePlan | ConvergeRefusal;
 export declare function isRefusal(plan: ConvergePlan | ConvergeRefusal): plan is ConvergeRefusal;
+/**
+ * **The ops a choice sends, in order**: the winner onto the parent's stack,
+ * then every child to the trash. The caller sends them under ONE group, so
+ * one ⌘Z takes the version back and brings every child out of the trash.
+ *
+ * Here rather than in either client because there are two: `isocan choose`
+ * and the item menu's "Choose this variation" both send exactly this list
+ * (`packages/web/test/choose.test.ts` holds them equal against a daemon).
+ */
+export declare function convergeOps(plan: ConvergePlan): Operation[];
 export {};

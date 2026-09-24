@@ -15,6 +15,7 @@ export * from "./passes.js";
 export * from "./address.js";
 export * from "./emoji.js";
 export * from "./reactions.js";
+export * from "./docket.js";
 export * from "./recap.js";
 export * from "./recap-head.js";
 export * from "./roster.js";

@@ -310,6 +310,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   once an item is too small to wear a label. It steps up to the top edge only
   when a comment pin is literally on it, because a pin marks a place a person
   chose and the badge is ours to move.
+- **Choosing a variation**: right-click a variation (anything `/variation`
+  made from a screen) → **Choose this variation**, or `isocan choose <item>`:
+  its content becomes the next version of the screen it came from and the
+  whole exploration goes to the trash — the same ops from either surface, and
+  one ⌘Z takes the decision back. `isocan prefer <winner> --over <other>` is
+  the lighter half, a recorded preference that moves nothing.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking
@@ -502,6 +508,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   having built it. Marks are properties on the item, so they survive a reload,
   reach the other machine, and answer an agent asking what is in play
   (`isocan react 👀 <item>`, `isocan ls --reaction 👀`).
+- **The docket**: a persona finding that wants a person is asked on the repo's
+  board as a card, and answered with a mark — ✅ accepts, ❌ rejects — which the
+  docket script writes into `docs/reviews/` and commits with the answerer's
+  name. An agent answers from a terminal with the same ops the chip sends:
+  `isocan docket` lists the questions, `isocan docket answer <finding>
+  accepted|rejected [--because …]` answers one.
 - **The files panel**: the same dock, showing the canvas as what it is — a
   directory of files. Grouped by kind (drawings, images, documents, sites),
   filterable by name, each row carrying the filename, size, and version count.
