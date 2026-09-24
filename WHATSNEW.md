@@ -21,6 +21,26 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 23 September 2026
+
+- **Wireframes.** Type `/wire` and what you want in the Chat — *a
+  stock-receiving app: sign in, see today's deliveries, open one* — and a
+  blue blueprint appears at once, then fills in, screen by screen, as grey
+  wireframes. Where there was more than one good way to draw a screen, the
+  alternatives sit underneath it; where there was only one, it says so.
+- **Keep the screens you want** with ⇧K (or 📐 Keep in the item's menu), and
+  arrows appear between them showing how you'd move from one to the next.
+- **A clickable prototype.** `/wire prototype` turns the kept screens into one
+  app you can click through: sign in goes home, a row opens its detail, the tab
+  bar switches, back goes back. A screen you haven't kept yet shows as a dashed
+  button that says which one it needs.
+- **In your design system.** With a design system on the canvas, `/wire style`
+  redraws every wireframe in its colours, type and corners — one undo takes it
+  back — and new wireframes arrive in it. `/wire style --default` returns to
+  grey.
+- The same things work from the terminal with `isocan wire`.
+
+
 ## 20 September 2026
 
 - **Say where a thing goes by naming its neighbour.** `isocan mv <item>

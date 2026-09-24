@@ -22,7 +22,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–4 are CLOSED; phase 5 is PART-DONE (23 Sep 2026).** Everything a person does from the terminal is built, and the web door is built and walked locally: `/wire <request>` in the Chat composes a flow through the home's `/api/judgment` (the key never reaches the browser), with keep, the canvas arrows between kept screens, `/wire prototype` and `/wire style`. Phase 6 is CLOSED too: Jev reads a screen's archetype right a third of the time and is overconfident by ~0.4, so round 1 should over-include rather than cut at 0.5. **Next: the walk that closes wireframes phase 5**, then the Opens below (round 1's cut, plain-words options, `by` on the spec).
+**Where we are: all seven phases are CLOSED (23 Sep 2026).** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
 
 ## Phase 0 — The catalog, drawn
 
@@ -164,7 +164,7 @@ blue.
 
 ## Phase 5 — The web door
 
-**Status: PART-DONE, 23 September 2026.** Built and walked on a local daemon (headless Chrome: blueprint at 400 ms, grey by 3.5 s, keep, five arrows, prototype click-through, restyle, one undo); 478 route/module/web tests including one holding the web and the CLI to identical ops. The walk on dev.isocan.io is what closes it.
+**Status: CLOSED, 23 September 2026.** Walked on isocan.io (Dion chose prod over dev: the machine births canvases on isocan.io, and `green` was promoted to prod for the walk), after being built and walked on a local daemon (headless Chrome: blueprint at 400 ms, grey by 3.5 s, keep, five arrows, prototype click-through, restyle, one undo); 478 route/module/web tests including one holding the web and the CLI to identical ops. On isocan.io, in real Chrome: `/wire` in the Chat drew a blue blueprint by 1.2 s and eight grey screens plus eight variations by 13 s through prod's own key (scene 1–3); ⇧K kept four and seven arrows appeared from the specs (4); `/wire prototype` added the prototype ("14 links, 3 dashed") and it clicked through sign in → home → tab → list → row → detail → back (5); with the frog pack set, `/wire style` restyled all 16 wires and re-versioned the prototype (6).
 
 **Outcome:** asking for wireframes from the canvas itself — the Chat and the
 Add popover — composed by the home using its own `TYPESAFE_API_KEY` (a
@@ -183,6 +183,10 @@ re-provision keeps it.
 - **2026-09-23** — Open: the entry chunk is **728,367 against CEILING 727,800 — 567 bytes over**, after everything that could be lazy was: the `/wire` command row, the dialog descriptor, and the arrows' "two kept screens?" check must be known at first paint. Under JUMP, so it lands as a performance finding; answering it (raise with this reason, or find 567 bytes elsewhere) is Dion's call.
 - **2026-09-23** — Open: modules cannot contribute a row to the Add popover, so `/wire` is the only door there; an Add row wants a module slot.
 
+- **2026-09-23** — The walk moved from dev to isocan.io at Dion's choice; prod was promoted to `green` (`bfb1e65a`) for it.
+- **2026-09-23** — Open: the web's composer and restyle run in the page, so closing the tab mid-act stops them partway — seen on prod when the walk closed its tab 6 s into `/wire style` (15 of 16 wires, prototype not rebuilt). One op group, so one undo recovers it, and a second `/wire style` finished it; but a long act wants to say "keep this tab open" or move to the home.
+- **2026-09-23** — Open: in the canvas's full-screen item viewer, real mouse clicks on the prototype's bottom bar (tabs, footer buttons) did not route in headless Chrome, while the same clicks worked on the prototype opened directly and as DOM clicks in the viewer. Harness or viewer is unresolved — a person clicking the tab bar in full screen settles it.
+- **2026-09-23** — Open: `design set` has no web door, so choosing a design system for wires is CLI-only; the walk set frog's `DESIGN.md` from the terminal.
 ## Phase 6 — Is Jev any good at this?
 
 **Status: CLOSED, 23 September 2026.** The archetype question put to Jev over Enrico's labelled screens (1,318 usable of 1,460; 142 in topics with no archetype), twice (34 options, 20 options) plus a stub baseline, for $0.148 of the approved $1.00; the conductor recomputed the headline from the raw answers. This phase measures rather than draws, so its canvas-rule artifact is the reading below, not a screen.
