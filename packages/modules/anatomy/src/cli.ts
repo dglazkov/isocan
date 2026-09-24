@@ -152,7 +152,7 @@ function register(host: CliHost): void {
       else console.log(itemId);
     }),
   );
-  command("ls", "List the Anatomy projects on this canvas").action(
+  command("ls", "List the Anatomy projects on this canvas").alias("list").action(
     host.run(async (_opts: unknown, cmd: Command) => {
       const { io, ctx } = await context(cmd);
       const canvas = await io.snapshot();

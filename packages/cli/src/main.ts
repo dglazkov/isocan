@@ -608,7 +608,7 @@ The system:
   Every command here sends the same operation the web app would, so changes
   appear live in any open browser — and vice versa.
 
-  canvas    a canvas; list with \`isocan canvas list\`
+  canvas    a canvas; list with \`isocan canvas ls\`
   item       a file rendered on the canvas (markdown, image, video, HTML) at
              x,y world coordinates (+x right, +y down)
   browser    \`isocan browse <url>\` projects a live site onto the canvas —
@@ -3368,7 +3368,8 @@ spaceCommand
   );
 
 spaceCommand
-  .command("list")
+  .command("ls")
+  .alias("list")
   .description("The spaces you may see — the ones you made, and the ones a row admits you to")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -3427,7 +3428,8 @@ spaceCommand
   );
 
 spaceCommand
-  .command("delete <name>")
+  .command("rm <name>")
+  .alias("delete")
   .description("Delete a space — every canvas stays, with its own sharing; the space's rows stop reaching them")
   .action(
     run(async (name: string, _opts: unknown, cmd: Command) => {
@@ -3526,7 +3528,8 @@ groupCommand
   );
 
 groupCommand
-  .command("list")
+  .command("ls")
+  .alias("list")
   .description("The groups you made, with who is in each")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -3598,7 +3601,8 @@ groupCommand
   );
 
 groupCommand
-  .command("delete <name>")
+  .command("rm <name>")
+  .alias("delete")
   .description("Delete a group — its rows stop admitting anybody; the sweep puts its members out")
   .action(
     run(async (name: string, _opts: unknown, cmd: Command) => {
@@ -5048,7 +5052,7 @@ async function placeCanvasItem(
 
 canvas
   .command("place <canvas>")
-  .description("Put a canvas on this canvas — by id, title prefix, or address; it draws live and opens in a tab")
+  .description("Put a canvas on this canvas — the older spelling of `add <ref> --as canvas`, and the one with --inherit")
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--in <group>", "insert into this group; legacy canvases use the existing area")
@@ -5111,7 +5115,8 @@ canvas
   );
 
 canvas
-  .command("create <title>")
+  .command("new <title>")
+  .alias("create")
   .description("Create a canvas with groups (the writer's default)")
   .option("--space <name-or-id>", "create in this space, inheriting its access with no birth link grant; requires an owner")
   .option("-d, --description <text>")
@@ -5141,7 +5146,8 @@ canvas
   );
 
 canvas
-  .command("list")
+  .command("ls")
+  .alias("list")
   .description("List canvases — in a bound directory, that directory's canvas (--all for every one)")
   .option("--all", "every canvas in the home, not just this directory's")
   .option("--archived", "the ones put away, instead of the ones in the list")
@@ -5466,13 +5472,14 @@ canvas
       console.log(
         opts.undo
           ? `${p.id} is back in the list`
-          : `archived ${p.id} — \`isocan canvas list --archived\` finds it, \`--undo\` brings it back`,
+          : `archived ${p.id} — \`isocan canvas ls --archived\` finds it, \`--undo\` brings it back`,
       );
     }),
   );
 
 canvas
-  .command("delete [ref]")
+  .command("rm [ref]")
+  .alias("delete")
   .description("Delete a canvas (requires --force; not undoable)")
   .option("--force", "confirm deletion")
   .action(
@@ -6563,7 +6570,7 @@ async function addSiteItem(
 program
   .command("browse <url>")
   .description(
-    "Put a live site onto the canvas as a mini-browser item — point it at the localhost dev server you're building",
+    "Put a live site onto the canvas as a mini-browser item — the older spelling of `add <url> --as site`",
   )
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
@@ -7055,7 +7062,7 @@ Add-site dialog can bring a private doc in too.`,
 
 gdocCmd
   .command("add <url>")
-  .description("Put a Google Doc here as a document — its markdown export, with the doc's address as its ↗")
+  .description("Put a Google Doc here as a document — the older spelling of `add <url> --as doc`")
   .option("--at <x,y>", "place at world coordinates")
   .option("--anchor <item>", "place to the left of this item")
   .option("--in <group>", "insert into this group; legacy canvases use the existing area")
@@ -7141,6 +7148,7 @@ registerAreaAliases(program, ctxOf);
 
 program
   .command("ls")
+  .alias("list")
   .description("List items on the canvas")
   .option("--kind <kind>", `only this kind: ${itemKinds().join(", ")}`)
   .option("--filter <text>", "only items whose title or filename contains this")
@@ -8157,33 +8165,36 @@ program
     }),
   );
 
-program
-  .command("versions <item>")
-  .description("List an item's version stack")
-  .action(
-    run(async (ref: string, _opts: unknown, cmd: Command) => {
-      const ctx = await ctxOf(cmd);
-      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const item = resolveItem(snapshot, ref);
-      await narrate(ctx, p.id, {
-        cursor: itemCenter(item),
-        status: `comparing versions of "${truncate(item.title || item.id, 24)}"`,
-      });
-      if (ctx.json) return printJson(item.versions);
-      printTable(
-        item.versions.map((v, index) => ({
-          "": v.id === item.currentVersionId ? "▶" : "",
-          id: v.id,
-          n: String(index + 1),
-          filename: v.filename,
-          size: String(v.size),
-          created: `${v.createdAt} by ${actorNameIn(snapshot.names, v.createdBy)}`,
-        })),
-      );
-    }),
+/**
+ * **An item's version stack, listed** — `version ls <item>`, beside the
+ * family's other verbs (#124). `versions <item>` is the older spelling and
+ * still works: one action, two doors, and the guide teaches the first.
+ */
+const listVersions = run(async (ref: string, _opts: unknown, cmd: Command) => {
+  const ctx = await ctxOf(cmd);
+  const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+  const item = resolveItem(snapshot, ref);
+  await narrate(ctx, p.id, {
+    cursor: itemCenter(item),
+    status: `comparing versions of "${truncate(item.title || item.id, 24)}"`,
+  });
+  if (ctx.json) return printJson(item.versions);
+  printTable(
+    item.versions.map((v, index) => ({
+      "": v.id === item.currentVersionId ? "▶" : "",
+      id: v.id,
+      n: String(index + 1),
+      filename: v.filename,
+      size: String(v.size),
+      created: `${v.createdAt} by ${actorNameIn(snapshot.names, v.createdBy)}`,
+    })),
   );
+});
 
-const version = program.command("version").description("Version operations");
+program.command("versions <item>").description("List an item's version stack — the older spelling of `version ls`").action(listVersions);
+
+const version = program.command("version").description("Version operations — list, promote, prune");
+version.command("ls <item>").alias("list").description("List an item's version stack").action(listVersions);
 version
   .command("promote <item> <versionId>")
   .description("Bring a version to the top of the stack — `get` follows it; the disk does not")
@@ -8483,7 +8494,8 @@ Answering sends the same item.react ops a click on the chip does, one undo.`,
   );
 
 docket
-  .command("list", { isDefault: true })
+  .command("ls", { isDefault: true })
+  .alias("list")
   .description("The questions on the docket, and what the marks on each say")
   .option("--canvas <canvas>")
   .action(
@@ -8621,6 +8633,7 @@ const persona = program
 
 persona
   .command("ls", { isDefault: true })
+  .alias("list")
   .description("Every persona in this directory, and what it is judged on")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -10282,7 +10295,8 @@ inaccessible, and cannot do anything the vocabulary does not permit.`,
   );
 
 tool
-  .command("list", { isDefault: true })
+  .command("ls", { isDefault: true })
+  .alias("list")
   .description("Every tool on this canvas, and what each may do")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -10413,7 +10427,8 @@ function panelLine(read: PanelExtension): string {
 }
 
 panel
-  .command("list", { isDefault: true })
+  .command("ls", { isDefault: true })
+  .alias("list")
   .description("Every panel on this canvas, and what each may do")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -10528,7 +10543,8 @@ Removing your own gives the built-in back.`,
   );
 
 command
-  .command("list", { isDefault: true })
+  .command("ls", { isDefault: true })
+  .alias("list")
   .description("Every command available here")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -10817,6 +10833,7 @@ moduleCmd
 
 moduleCmd
   .command("ls", { isDefault: true })
+  .alias("list")
   .description("The modules on this machine: the build's own, the runtime ones, and why any is refused")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -11110,7 +11127,8 @@ follows the item from now on.`,
   );
 
 comment
-  .command("list")
+  .command("ls")
+  .alias("list")
   .description("List comment threads")
   .option("--item <item>", "only threads anchored to this item")
   .option("--open", "only questions nobody has answered yet")
@@ -14300,7 +14318,8 @@ program
 const trash = program.command("trash").description("List, restore, or permanently empty deleted items");
 
 trash
-  .command("list")
+  .command("ls")
+  .alias("list")
   .description("List trashed items")
   .action(
     run(async (_opts: unknown, cmd: Command) => {

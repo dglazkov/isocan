@@ -97,7 +97,7 @@ export function registerCanvasGroups(canvas: Command, context: (cmd: Command) =>
     .option("--dry-run", "validate and report membership and boxes without writing")
     .action(act(async (handle, ctx, [items, opts]) => report(ctx, await handle.wrap(items, opts.title, opts))));
 
-  groups.command("ls").description("List groups with direct and descendant counts")
+  groups.command("ls").alias("list").description("List groups with direct and descendant counts")
     .action(act(async (handle, ctx) => { const found = await handle.list(); if (ctx.json) printJson(found); else printTable(rows(found)); }));
 
   groups.command("show <group>").description("Inspect a group by ID or unique title prefix")
@@ -196,7 +196,7 @@ export function registerAreaAliases(program: Command, context: (cmd: Command) =>
       if (!parts || Number(parts[1]) < 1 || Number(parts[2]) < 1) throw new Error("grid expects positive RxC, e.g. 2x3");
       report(ctx, await handle.grid(ref, { rows: Number(parts[1]), columns: Number(parts[2]) }, { dryRun: !!opts.dryRun, tidy: !!opts.tidy, ...(opts.rows !== undefined ? { rows: opts.rows.split(",").map((name: string) => name.trim()) } : {}), ...(opts.cols !== undefined ? { columns: opts.cols.split(",").map((name: string) => name.trim()) } : {}) }));
     }));
-  area.command("ls", { isDefault: true }).description("Alias of canvas group ls; labels legacy area reads explicitly")
+  area.command("ls", { isDefault: true }).alias("list").description("Alias of canvas group ls; labels legacy area reads explicitly")
     .action(act(async (handle, ctx) => {
       const snapshot = await ctx.client.snapshot(handle.canvasId);
       if (snapshot.project.groupMode === "groups") {

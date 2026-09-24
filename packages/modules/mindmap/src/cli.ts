@@ -259,6 +259,7 @@ function register(host: CliHost): void {
 
   map
     .command("ls")
+    .alias("list")
     .description("Every map on this canvas")
     .option("--canvas <canvas>")
     .action(

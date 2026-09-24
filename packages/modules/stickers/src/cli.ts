@@ -22,6 +22,7 @@ export const stickersCli: CliModule = {
 
     family
       .command("ls")
+      .alias("list")
       .description("The stickers this build can drop")
       .action(
         host.run(async () => {

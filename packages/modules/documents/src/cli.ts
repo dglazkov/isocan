@@ -15,6 +15,7 @@ function register(host: CliHost): void {
 
   docs
     .command("ls", { isDefault: true })
+    .alias("list")
     .description("Every document on this canvas — words, minutes, headings — newest edit first")
     .option("--canvas <canvas>")
     .action(

@@ -44,6 +44,7 @@ function register(host: CliHost): void {
 
   family
     .command("ls", { isDefault: true })
+    .alias("list")
     .description("Every program on this canvas, the argv it runs, and when it last ran")
     .option("--canvas <canvas>")
     .action(
