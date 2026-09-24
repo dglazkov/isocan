@@ -1,7 +1,8 @@
 import { Command } from "commander";
 import { describe, expect, it, vi } from "vitest";
 import type { CliHost } from "@isocan/cli/modulehost";
-import type { CanvasContents, DialogHost, Item, Operation } from "@isocan/core";
+import { moduleMarkPatch, type CanvasContents, type DialogHost, type Item, type Operation } from "@isocan/core";
+import { wireframeCore } from "../src/command.ts";
 import wireframeCli from "../src/cli.ts";
 import { keptArrows } from "../src/arrows.tsx";
 import { composeOnWeb, fleshOnWeb, modeOf, prototypeRecordWords } from "../src/dialog.tsx";
@@ -56,8 +57,15 @@ function memoryCanvas() {
       const item = items.get(op.itemId)!;
       if (op.patch.title) item.title = op.patch.title;
       if (op.patch.properties) item.properties = { ...item.properties, ...op.patch.properties };
+      if (op.patch.removeProperties) {
+        item.properties = { ...item.properties };
+        for (const key of op.patch.removeProperties) delete item.properties[key];
+      }
     } else if (op.type === "item.resize") {
       Object.assign(items.get(op.itemId)!, { width: op.width, height: op.height });
+    } else if (op.type === "item.move") {
+      // A prototype's rebuild puts it back over its flow when it is taller or wider than before.
+      Object.assign(items.get(op.itemId)!, { x: op.x, y: op.y });
     } else throw new Error(`the composer sent an op it should not: ${op.type}`);
   };
   const contents = () => ({ items: Object.fromEntries(items) }) as unknown as CanvasContents;
@@ -94,11 +102,12 @@ function shapeOf(sent: Array<{ op: Operation; group?: string }>) {
 const REQUEST = "a delivery app for Acme couriers — sign in, see today's deliveries, confirm a drop-off";
 const SEED = 4;
 
-async function viaCli(after: string[][] = [], compose: string[] = []) {
+async function viaCli(after: Array<string[] | ((c: ReturnType<typeof memoryCanvas>) => string[])> = [], compose: string[] = [], actor?: { id: string; name: string }) {
   const c = memoryCanvas();
   const program = new Command().exitOverride().option("--json");
   const ctx = {
     json: false,
+    ...(actor ? { actor } : {}),
     client: {
       snapshot: async () => ({ canvas: c.contents(), project: {} }),
       uploadBlob: async (_canvas: string, bytes: Buffer) => {
@@ -120,6 +129,7 @@ async function viaCli(after: string[][] = [], compose: string[] = []) {
     },
     ctxOf: async () => ctx,
     resolveCanvas: async () => ({ id: "canvas-acme", title: "Acme" }),
+    resolveItem: (snapshot: { canvas: { items: Record<string, FakeItem> } }, ref: string) => snapshot.canvas.items[ref]!,
     sendOp: async (_ctx: unknown, _canvas: string, op: Operation, group?: string) => {
       c.apply(op, group);
       return { envelope: { op } };
@@ -130,7 +140,7 @@ async function viaCli(after: string[][] = [], compose: string[] = []) {
   wireframeCli.register(host);
   const log = vi.spyOn(console, "log").mockImplementation(() => {});
   await program.parseAsync(["node", "isocan", "wire", REQUEST, "--answerer", "stub", "--seed", String(SEED), ...compose]);
-  for (const argv of after) await program.parseAsync(["node", "isocan", ...argv]);
+  for (const argv of after) await program.parseAsync(["node", "isocan", ...(typeof argv === "function" ? argv(c) : argv)]);
   log.mockRestore();
   expect(errors).toEqual([]);
   return c;
@@ -218,7 +228,7 @@ describe("the web composes what the CLI composes", () => {
     expect(proto.answerer).toBe("stub");
     for (const s of proto.screens) expect(web.c.items.get(s.item)!.properties).toMatchObject({ wireKeep: "yes", wireKeepBy: "stub" });
     expect(web.c.items.get(proto.itemId)!.properties).toMatchObject({ wirePrototype: web.composed.flow });
-    expect(prototypeRecordWords(proto)).toBe(`Prototype of ${proto.screens.length} screens, the stub's first choices — swap in a variation with ⇧K, then \`/wire prototype\` rebuilds it.`);
+    expect(prototypeRecordWords(proto)).toBe(`Prototype of ${proto.screens.length} screens, the stub's first choices — swap in a variation with ⇧K and the prototype follows.`);
     expect(prototypeRecordWords({ ...proto, answerer: "jev" })).toMatch(/^Prototype of \d+ screens, Jev's first choices — swap in a variation with ⇧K/);
     expect(prototypeRecordWords(undefined)).toBeNull();
     // The arrows run between the screens in the prototype — drawn the moment the flow lands, no second act.
@@ -234,6 +244,44 @@ describe("the web composes what the CLI composes", () => {
       expect(Object.keys(q as object).sort()).toEqual(["canvasId", "model", "questions", "state"]);
     }
     expect(web.composed.by).toBe("stub via the home");
+  });
+});
+
+describe("the prototype follows its marks, the same on both surfaces", () => {
+  const ACME = { id: "usr_acme", name: "Acme" };
+  // The first variation of a screen in the prototype — the same one on both canvases, which fill in the same order.
+  const swapIn = (c: ReturnType<typeof memoryCanvas>) => {
+    const specOf = (i: FakeItem) => readWire(c.blobs.get(i.versions.find((v) => v.id === i.currentVersionId)!.blobHash)!);
+    return [...c.items.values()].find((i) => {
+      const of = specOf(i)?.variantOf;
+      return of !== undefined && c.items.get(of)?.properties.wireKeep === "yes";
+    })!;
+  };
+
+  it("⇧K on the web (the mark, then its `follow`) sends what `wire use` sends: the mark and the prototype's new version, one group", async () => {
+    let before = 0;
+    const cli = await viaCli([(c) => {
+      before = c.sent.length;
+      return ["wire", "use", swapIn(c).id];
+    }], [], ACME);
+    const cliOps = cli.sent.slice(before);
+
+    const web = await viaWeb();
+    const start = web.c.sent.length;
+    const variation = swapIn(web.c);
+    // What the shell's toggle does (`menuentries.tsx`): the signed mark in a new group, then the registered mark's `follow` in it.
+    const mark = wireframeCore.marks![0]!;
+    const group = "grp_acme_press";
+    await web.host.send([{ type: "item.update", itemId: variation.id, patch: moduleMarkPatch(mark.property, true, ACME.id) }], group);
+    await mark.follow!({ canvasId: "canvas-acme", group, changed: [web.c.items.get(variation.id) as unknown as Item], on: true, host: { ...web.host, viewer: ACME } });
+    const webOps = web.c.sent.slice(start);
+
+    expect(shapeOf(webOps).ops).toEqual(shapeOf(cliOps).ops);
+    expect(new Set(webOps.map((o) => o.group))).toEqual(new Set([group]));
+    expect(webOps[0]!.op.type).toBe("item.update");
+    expect(webOps.some((o) => o.op.type === "item.addVersion")).toBe(true);
+    const proto = [...web.c.items.values()].find((i) => i.properties.wirePrototype !== undefined)!;
+    expect(web.c.blobs.get(proto.versions.at(-1)!.blobHash)).toContain(`data-screen="${variation.id}"`);
   });
 });
 
@@ -317,11 +365,14 @@ describe("the arrows between kept screens", () => {
     expect(after).not.toContainEqual({ from: "it_list", to: "it_detail" });
   });
 
-  it("run only between KEPT screens, and a canvas with fewer than two fetches nothing", () => {
+  it("run only between KEPT screens, and a canvas with none fetches nothing", () => {
     const specs = { it_signin: wireframe("sign-in", o), it_home: wireframe("home", o), it_list: wireframe("list", o) };
+    const none = canvasOf(specs, []);
+    expect(wireframeActivation.underlays[0]!.needed(none.canvas)).toBe(false);
     const one = canvasOf(specs, ["it_home"]);
     expect(keptArrows(one.canvas, read(one.blobs))).toEqual([]);
-    expect(wireframeActivation.underlays[0]!.needed(one.canvas)).toBe(false);
+    // One kept screen draws no arrow, but fetches the half: its ⇧K's `follow` lives there.
+    expect(wireframeActivation.underlays[0]!.needed(one.canvas)).toBe(true);
     const two = canvasOf(specs, ["it_signin", "it_home"]);
     expect(wireframeActivation.underlays[0]!.needed(two.canvas)).toBe(true);
     expect(keptArrows(two.canvas, read(two.blobs))).toEqual([{ from: "it_signin", to: "it_home" }]);
@@ -374,11 +425,12 @@ describe("the maybe marks", () => {
     expect(draw(canvasOf(item("itm_list", {})))).toBe("");
   });
 
-  it("the underlay is fetched for an unkept maybe alone, and not for a kept one", () => {
+  it("the half is fetched wherever a mark or a prototype is — the keep mark's `follow` must be there to re-version it", () => {
     const needed = wireframeActivation.underlays[0]!.needed;
     expect(needed(canvasOf(item("a", { [MAYBE_PROP]: "0.36" })))).toBe(true);
-    expect(needed(canvasOf(item("a", { [MAYBE_PROP]: "0.36", [KEEP_PROP]: "yes" })))).toBe(false);
-    expect(needed(canvasOf(item("a", { [KEEP_PROP]: "yes" }), item("b", { [KEEP_PROP]: "yes" })))).toBe(true);
+    expect(needed(canvasOf(item("a", { [KEEP_PROP]: "yes" })))).toBe(true);
+    // A prototype whose screens were all taken out: using one again must re-version it.
+    expect(needed(canvasOf(item("p", { wirePrototype: "flw_acme" })))).toBe(true);
     expect(needed(canvasOf(item("a", {})))).toBe(false);
   });
 });

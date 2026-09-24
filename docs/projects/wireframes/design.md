@@ -188,6 +188,18 @@ core's `moduleMarkPatch` writes `<property>By` for any mark. A person
 swapping a variation in for one of Jev's picks is then a label, not a
 guess.
 
+**The prototype follows its marks** (24 Sep 2026, Dion): using a screen in
+the prototype or removing it — ⇧K, the item menu, `wire use|unuse|keep|
+unkeep` — re-versions its flow's prototype in the mark's own op group, so
+one undo takes back both. Only a prototype that exists follows; marks never
+make one. The shell's generic mark toggle knows nothing of prototypes: a
+mark may carry `follow` (`ModuleMark.follow`), which the module's LAZY half
+supplies in place of the record's mark, and the shell awaits it once the
+mark's ops are in the replica — so it reads the canvas the mark left, and a
+quick run of ⇧K presses rebuilds once per press. `follow.ts` is the one
+function both surfaces call. `wire prototype` stays the explicit rebuild
+for a screen whose content changed.
+
 ### 7. Links — computed, never stored
 
 `inferLinks(kept: WireScreen[]): Link[]` — pure, in core. Rules (research
@@ -214,7 +226,8 @@ The canvas draws the inferred links between kept screens as module edges
 tiny router, the links as click handlers, a slide/fade transition by link
 kind (push for forward, pop for back, none for tab). It is added as an HTML
 item centred above the flow's kept row — over the arrows' highest lane, and
-higher if something is already there — and gains a version when rebuilt; a
+higher if something is already there — and gains a version when rebuilt — by `wire prototype`, a restyle or a
+flesh, or a screen used in it or removed (§6); a
 rebuild puts it back above the row unless a person has moved it
 (`wirePrototypeAt` records where the composer placed it). It never navigates
 the canvas — screens run in sandboxed frames, and a prototype that routes

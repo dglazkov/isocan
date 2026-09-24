@@ -77,6 +77,26 @@ export interface ModuleMark {
   key?: string;
   /** Offered only on items whose properties carry these values (`{ fidelity: "wireframe" }`); unset, on any item. */
   offeredOn?: Readonly<Record<string, string>>;
+  /**
+   * **What follows a gesture on this mark**, in the gesture's own op group —
+   * so one undo takes back the mark and what it set off (wireframes, 24 Sep
+   * 2026: a screen used in or removed from the prototype re-versions the
+   * prototype). Supplied by a module's LAZY half, never the record first
+   * paint carries: the shell awaits it after the mark's ops have landed in
+   * the replica, so it reads the canvas as the mark left it.
+   */
+  follow?: (facts: MarkFollow) => Promise<void>;
+}
+
+/** What a mark's `follow` is handed: the gesture, its group, and the viewer's hands. */
+interface MarkFollow {
+  canvasId: string;
+  /** The gesture's op group — every write `follow` makes rides it. */
+  group: string;
+  /** The items the gesture moved, and which way. */
+  changed: readonly Item[];
+  on: boolean;
+  host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas" | "viewer">;
 }
 
 /**

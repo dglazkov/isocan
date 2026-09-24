@@ -30,6 +30,9 @@ vi.mock("../src/stores/canvasStore.ts", async (importOriginal) => ({
   useCanvasStore: { getState: () => state },
 }));
 vi.mock("../src/lib/capability.ts", () => ({ canEditNow: () => true, useCanEdit: () => true }));
+vi.mock("../src/lib/modulehost.ts", () => ({
+  webHostFor: (_canvasId: string, actor: Actor) => ({ send: async () => {}, putBlob: async () => ({ blobHash: "h", size: 1 }), viewer: actor }),
+}));
 
 const { itemMenu, markByKey } = await import("../src/lib/menuentries.tsx");
 
@@ -88,12 +91,35 @@ describe("the keep mark in the item menu", () => {
 describe("⇧K is the menu entry's act", () => {
   it("toggles the selected screens by the mark's key, and ignores a selection that is not a screen", () => {
     state.canvas.items = { a: screen("a"), b: item("b", {}) };
-    markByKey("KeyK", ["a", "b"], "prj_acme", actor);
+    void markByKey("KeyK", ["a", "b"], "prj_acme", actor);
     // A person's ⇧K is signed as theirs.
     expect(sent.map((s) => s.op)).toEqual([{ type: "item.update", itemId: "a", patch: { properties: { wireKeep: "yes", wireKeepBy: "usr_a" } } }]);
     sent.length = 0;
-    markByKey("KeyJ", ["a"], "prj_acme", actor);
+    void markByKey("KeyJ", ["a"], "prj_acme", actor);
     expect(sent).toEqual([]);
+  });
+
+  it("awaits the mark's `follow` after the marks are sent, in the same group, handed the canvas they left", async () => {
+    const seen: Array<{ group: string; changed: string[]; on: boolean; sentBefore: number; canvas: unknown; viewer: string }> = [];
+    const following: CoreModule = {
+      name: "@acme/following",
+      marks: [{
+        ...acmeMarks.marks![0]!,
+        key: "J",
+        follow: async ({ group, changed, on, host }) => {
+          seen.push({ group, changed: changed.map((i) => i.id), on, sentBefore: sent.length, canvas: host.getCanvas(), viewer: host.viewer.id });
+        },
+      }],
+    };
+    registerModule(following);
+    try {
+      state.canvas.items = { a: screen("a"), b: screen("b") };
+      await markByKey("KeyJ", ["a", "b"], "prj_acme", actor);
+      expect(sent.length).toBe(2);
+      expect(seen).toEqual([{ group: sent[0]!.group, changed: ["a", "b"], on: true, sentBefore: 2, canvas: state.canvas, viewer: "usr_a" }]);
+    } finally {
+      unregisterModule(following.name);
+    }
   });
 
   it("is answered by the canvas's key handler and listed in the help panel", () => {

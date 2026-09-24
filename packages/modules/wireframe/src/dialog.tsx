@@ -78,7 +78,7 @@ export async function composeOnWeb(canvasId: string, host: DialogHost, request: 
 /** The Chat record's line for a composed flow's prototype: how many screens, whose first choices, and how to swap one. */
 export function prototypeRecordWords(prototype: FlowPrototype | undefined): string | null {
   if (!prototype) return null;
-  return `${prototypeWords(prototype.screens.length, prototype.answerer).replace(/^p/, "P")} — swap in a variation with ⇧K, then \`/wire prototype\` rebuilds it.`;
+  return `${prototypeWords(prototype.screens.length, prototype.answerer).replace(/^p/, "P")} — swap in a variation with ⇧K and the prototype follows.`;
 }
 
 /** The Chat record's line for a composed flow's content: which pack filled it, or that it is plain grey wires. */

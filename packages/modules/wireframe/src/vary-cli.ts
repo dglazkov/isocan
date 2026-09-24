@@ -6,6 +6,7 @@ import { FlowCanvas, addVariations, wiresOn } from "./flow.ts";
 import { KEEP_EMOJI, isKept, keepPatch, keepable, kept } from "./keep.ts";
 import { PROTOTYPE_PROP } from "./prototype.ts";
 import { prototypeScreens } from "./kept-flows.ts";
+import { followMarks, followedLine } from "./follow.ts";
 import { wireTitle } from "./spec.ts";
 import { DEFAULT_VARIATIONS, decisions, flipWords, honestFlips, VARIATION_FLOOR } from "./vary.ts";
 
@@ -105,7 +106,7 @@ export function registerVary(host: CliHost, wire: Command): void {
           const port = cliPort(host, ctx, p.id);
           list = prototypeScreens(canvas, proto, await wiresOn(port, canvas));
           if (!ctx.json && list.length === 0) {
-            console.log(`nothing prototype ${proto.id} plays is marked for it any more — \`isocan wire use <screens...>\` (${KEEP_EMOJI}) and \`isocan wire prototype\` rebuilds it`);
+            console.log(`nothing prototype ${proto.id} plays is marked for it any more — \`isocan wire use <screens...>\` (${KEEP_EMOJI}) and it follows`);
             return;
           }
         }
@@ -138,19 +139,23 @@ export function markScreens(host: CliHost, on: boolean) {
     }
     const group = newGroupId();
     const changed: string[] = [];
+    const port = cliPort(host, ctx, p.id);
     // Signed with who used it (`wireKeepBy`): an agent's pick reads apart from Jev's first choice.
-    const who = cliPort(host, ctx, p.id).actor?.id;
+    const who = port.actor?.id;
     for (const item of items) {
       if (isKept(item) === on || changed.includes(item.id)) continue;
       await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: keepPatch(on, who) }, group);
       changed.push(item.id);
     }
-    if (ctx.json) return printJson({ [on ? "kept" : "unkept"]: changed, unchanged: items.filter((i) => !changed.includes(i.id)).map((i) => i.id) });
+    // A flow that already has a prototype follows, in this gesture's group: one undo takes both back.
+    const followed = changed.length ? await followMarks(port, changed, group) : [];
+    if (ctx.json) return printJson({ [on ? "kept" : "unkept"]: changed, unchanged: items.filter((i) => !changed.includes(i.id)).map((i) => i.id), prototypes: followed });
     for (const item of items) {
       const moved = changed.includes(item.id);
       console.log(`${item.id}  ${on ? KEEP_EMOJI : "  "} "${item.title}" ${on ? (moved ? "in the prototype" : "was already in the prototype") : moved ? "removed from the prototype" : "was not in the prototype"}`);
     }
     const now = kept((await ctx.client.snapshot(p.id)).canvas as CanvasContents).length;
-    console.log(`${now} screen${now === 1 ? "" : "s"} in the prototype${changed.length ? " — `isocan wire prototype` rebuilds it" : ""}`);
+    console.log(`${now} screen${now === 1 ? "" : "s"} in the prototype${changed.length && followed.length === 0 ? " — `isocan wire prototype` builds one for a flow that has none" : ""}`);
+    for (const f of followed) console.log(followedLine(f));
   });
 }

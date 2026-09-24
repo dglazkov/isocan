@@ -32,6 +32,7 @@ export * from "./port.ts";
 export * from "./flow.ts";
 export * from "./restyle.ts";
 export * from "./kept-flows.ts";
+export * from "./follow.ts";
 export * from "./rerender.ts";
 export * from "./link-override.ts";
 export * from "./chat.ts";

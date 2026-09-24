@@ -76,6 +76,8 @@ function harness(actor?: { id: string; name: string }) {
       }
     } else if (op.type === "item.resize") {
       Object.assign(items.get(op.itemId)!, { width: op.width, height: op.height });
+    } else if (op.type === "item.move") {
+      Object.assign(items.get(op.itemId)!, { x: op.x, y: op.y });
     } else throw new Error(`the composer sent an op it should not: ${op.type}`);
   };
   const host = {
@@ -357,7 +359,8 @@ describe("variations and keep marks from the terminal: wire vary / keep / unkeep
     const used = await h.cli("wire", "use", first.id, second.id);
     expect(h.errors).toEqual([]);
     expect(used).toContain(`📐 "${first.title}" in the prototype`);
-    expect(used).toMatch(/^2 screens in the prototype — `isocan wire prototype` rebuilds it$/m);
+    // `--basic` built no prototype, and marks never make one: the line says how to.
+    expect(used).toMatch(/^2 screens in the prototype — `isocan wire prototype` builds one for a flow that has none$/m);
     expect(used).not.toMatch(/\bkept\b/);
     expect(h.items.get(first.id)!.properties.wireKeep).toBe("yes");
     // An agent's pick is signed as the agent's, never as the answerer's.
@@ -472,6 +475,37 @@ describe("a composed flow ends with a prototype of the answerer's first choices"
     }
     expect(screens.length).toBeGreaterThan(1);
     expect(printed).not.toMatch(/first choices/);
+  });
+
+  it("`wire use` and `wire unuse` re-version the prototype in the mark's own group, and say so", async () => {
+    const { h, prototypes, screens, variants } = await composed();
+    const proto = prototypes[0]!;
+    const pick = screens.find((i) => i.properties.wireKeep && variants.some((v) => h.specOf(v.id).variantOf === i.id))!;
+    const variation = variants.find((v) => h.specOf(v.id).variantOf === pick.id)!;
+    const played = screens.filter((i) => i.properties.wireKeep).length;
+
+    let before = h.sent.length;
+    const used = await h.cli("wire", "use", variation.id);
+    expect(h.errors).toEqual([]);
+    let ops = h.sent.slice(before);
+    expect(new Set(ops.map((o) => o.group)).size).toBe(1);
+    expect(ops[0]!.op).toMatchObject({ type: "item.update", itemId: variation.id });
+    expect(ops.some((o) => o.op.type === "item.addVersion" && o.op.itemId === proto.id)).toBe(true);
+    expect(h.htmlOf(proto.id)).toContain(`data-screen="${variation.id}"`);
+    expect(used).toContain(`prototype ${proto.id} follows — it plays ${played + 1} screens now`);
+
+    before = h.sent.length;
+    const removed = await h.cli("wire", "unuse", pick.id);
+    ops = h.sent.slice(before);
+    expect(new Set(ops.map((o) => o.group)).size).toBe(1);
+    expect(ops.some((o) => o.op.type === "item.addVersion" && o.op.itemId === proto.id)).toBe(true);
+    expect(h.htmlOf(proto.id)).not.toContain(`data-screen="${pick.id}"`);
+    expect(removed).toContain(`prototype ${proto.id} follows — it plays ${played} screens now`);
+
+    // Marking what is already marked writes nothing, and rebuilds nothing.
+    before = h.sent.length;
+    await h.cli("wire", "use", variation.id);
+    expect(h.sent.length).toBe(before);
   });
 
   it("a keep by hand afterwards is signed as whoever made it, and swapping a pick out takes Jev's signature with it", async () => {

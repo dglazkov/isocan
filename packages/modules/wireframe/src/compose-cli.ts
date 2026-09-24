@@ -136,7 +136,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
         }
         say(costLine(tallies, composed.by, composed.screens.length, composed.screens.filter((s) => s.spec.maybe).length) + ` · ${composed.totalMs} ms in all — \`isocan undo\` takes the whole flow back${composed.prototype ? ", prototype included" : ""}`);
         if (composed.prototype) {
-          say(`swap in a variation: \`isocan wire use <variation>\` and \`isocan wire unuse <its screen>\`, then \`isocan wire prototype\` rebuilds it · \`isocan open ${composed.prototype.itemId}\` plays it`);
+          say(`swap in a variation: \`isocan wire use <variation>\` and \`isocan wire unuse <its screen>\` — the prototype follows · \`isocan open ${composed.prototype.itemId}\` plays it`);
         }
       }),
     );

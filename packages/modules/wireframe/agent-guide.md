@@ -131,8 +131,14 @@ bar, tab bar) stays.
   already there (higher still if it must be) — inside the canvas group those
   screens share, when they share one: every screen, a router with a history
   stack, the links as click targets, a push / pop / fade / slide-up by link
-  kind, a Restart. Using or removing a screen does not rebuild it: run it
-  again after the marks or a screen change, and the same
+  kind, a Restart. **It follows its marks**: using a screen in it or
+  removing one — `wire use|unuse|keep|unkeep`, ⇧K, the item menu —
+  re-versions a flow's prototype in the same op group as the mark, so one
+  `isocan undo` takes back both (the CLI's line says `prototype <id>
+  follows`, and `--json` lists it under `prototypes`). Marks never create
+  one: a flow with no prototype stays without until `wire prototype`, and
+  a flow with nothing left marked keeps its prototype as it was. Run `wire
+  prototype` yourself after a screen itself changes, and the same
   item **gains a version** (found by its `wirePrototype` property); with
   nothing changed it writes nothing. A rebuild (this, `wire style`, `wire
   flesh`, `wire render --all`) also moves it back above its flow, in the
@@ -221,9 +227,8 @@ bar, tab bar) stays.
   The lines (and `--json`'s `prototype`) say which item it is, what it
   plays and whose first choices they are; in the Chat the record says
   "Prototype of 6 screens, Jev's first choices — swap in a variation with
-  ⇧K". To swap: `isocan wire use <variation>`, `isocan wire unuse <its
-  screen>`, then `isocan wire prototype` rebuilds it (a mark alone does
-  not). `--basic` puts nothing in a prototype and builds none; so does the
+  ⇧K and the prototype follows". To swap: `isocan wire use <variation>`
+  and `isocan wire unuse <its screen>` — the prototype follows each. `--basic` puts nothing in a prototype and builds none; so does the
   agent path — you answered, so you choose, then `wire prototype`.
 - **Who put a screen in the prototype** is `wireKeepBy` beside `wireKeep`:
   `jev` or `stub` when a composed flow picked it (the answerer whose first

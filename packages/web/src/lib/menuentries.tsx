@@ -23,6 +23,7 @@ import { captureClipboard } from "./clipboard.ts";
 import { alignItems, distributeGroupItems, tidyItems } from "./actions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { fetchBlobText } from "./blobtext.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { type Panel, openPanel } from "./panels.ts";
 import { glideToBox, revealItem } from "./zoomactions.ts";
@@ -383,7 +384,7 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       return {
         label: `${mark.emoji} ${on ? mark.on : mark.off}${n}`,
         writes: true,
-        run: () => toggleModuleMark(mark, items, ctx.canvasId, ctx.actor),
+        run: () => void toggleModuleMark(mark, items, ctx.canvasId, ctx.actor),
       };
     }),
     ...(one ? designSystemEntry(one, ctx) : []),
@@ -466,24 +467,31 @@ function slideLabel(items: readonly Item[]): string {
  * the mark's key both land here, so the two doors are one act. One gesture is
  * one op group, so one ⌘Z; the items already right are not written.
  */
-export function toggleModuleMark(mark: ModuleMark, items: readonly Item[], canvasId: string, actor: Actor): void {
+export async function toggleModuleMark(mark: ModuleMark, items: readonly Item[], canvasId: string, actor: Actor): Promise<void> {
   const { on, changing } = moduleMarkIntent(items, mark.property);
   if (changing.length === 0) return;
   const group = newGroupId();
-  for (const item of changing) {
-    // Signed: the mark says who put it on (`<property>By`), so a person's pick reads apart from a machine's.
-    void sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: moduleMarkPatch(mark.property, on, actor.id) }, group);
-  }
+  // Signed: the mark says who put it on (`<property>By`), so a person's pick reads apart from a machine's.
+  const sent = changing.map((item) => sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: moduleMarkPatch(mark.property, on, actor.id) }, group));
   const what = changing.length === 1 ? `"${changing[0]!.title}"` : `${changing.length} items`;
   // What the item now IS, in the mark's own words: "in the prototype", "not in the prototype".
   flashNotice(`${mark.emoji} ${what} — ${on ? "" : "not "}${mark.title.toLowerCase()}`);
+  await Promise.all(sent);
+  if (!mark.follow) return;
+  // What the mark sets off (the wireframes' prototype re-versioning) rides the same group, so one ⌘Z takes
+  // both back — and runs only now, after the marks are in the replica, so it reads the canvas they left.
+  // `modulehost` is lazy and stays so; `fetchBlobText` is first paint's already, so it is imported, not fetched —
+  // a dynamic import of an entry module mints a namespace object in the entry chunk (measured: +129 bytes).
+  const { webHostFor } = await import("./modulehost.ts");
+  const host = { ...webHostFor(canvasId, actor), readText: (hash: string) => fetchBlobText(canvasId, hash), getCanvas: () => useCanvasStore.getState().canvas! };
+  await mark.follow({ canvasId, group, changed: changing, on, host }).catch((error: unknown) => flashNotice(`${mark.emoji} ${(error as Error)?.message ?? String(error)}`));
 }
 
 /** ⇧ and a mark's letter on the selection (`CanvasPage`'s keys), by `KeyboardEvent.code`. */
-export function markByKey(code: string, ids: readonly string[], canvasId: string, actor: Actor): void {
+export async function markByKey(code: string, ids: readonly string[], canvasId: string, actor: Actor): Promise<void> {
   const mark = moduleMarks().find((m) => `Key${m.key}` === code);
   const canvas = useCanvasStore.getState().canvas;
-  if (mark && canvas) toggleModuleMark(mark, ids.flatMap((id) => canvas.items[id] ?? []).filter((item) => markOffered(mark, item)), canvasId, actor);
+  if (mark && canvas) await toggleModuleMark(mark, ids.flatMap((id) => canvas.items[id] ?? []).filter((item) => markOffered(mark, item)), canvasId, actor);
 }
 
 /** The hand-in entry, or nothing when no sprint phase is running. */

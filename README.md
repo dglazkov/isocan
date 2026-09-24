@@ -403,7 +403,8 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   flow, `wire link` overrides one hotspot. A composed flow ends with its
   prototype already built: Jev's first choice for every row it was
   confident of goes in (never a *maybe*, never a variation), signed as
-  Jev's so a person's swap reads apart, and one undo takes it all back.
+  Jev's so a person's swap reads apart, and one undo takes it all back;
+  using a screen in the prototype or removing one re-versions it at once.
   On the canvas the screens in the prototype are joined by orthogonal arrows, one per hotspot, leaving from the button
   they belong to; click an arrow to play the prototype from there, go to its
   target, or change where it goes (drag its head onto another screen) —
