@@ -27,7 +27,8 @@
  * selftest breaks it and checks the number moves.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CEILING } from "./bundle-ceiling.mjs";
@@ -457,6 +458,36 @@ const METRICS = {
     breakIt: {
       file: "docs/reviews/lessons.md",
       apply: (t) => `${t}\n[selftest](./selftest-no-such-page.md)\n`,
+    },
+  },
+
+  /**
+   * **What every agent pays before its first act** (#124): the tokens
+   * `isocan --agent-help` prints with no topic — the cold start and the topic
+   * index — as characters over four, the same ruler as `estimateTokens` in
+   * `packages/cli/src/agent-guide.ts`. It runs the CLI rather than reading the
+   * file, so a module's index line counts, which is what an agent actually
+   * receives. A fresh `ISOCAN_HOME`, so nothing a person installed on this
+   * machine moves the number; `--agent-help` is answered before any daemon is
+   * reached.
+   */
+  "agent-help-tokens": {
+    what: "tokens `isocan --agent-help` prints before an agent's first act — the cold start, chars/4",
+    take() {
+      const home = mkdtempSync(path.join(tmpdir(), "measure-agent-help-"));
+      try {
+        const out = run("node", ["packages/cli/bin/isocan.js", "--agent-help"], {
+          env: { ...process.env, ISOCAN_HOME: home },
+        });
+        return Math.ceil([...out].length / 4);
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    },
+    breakIt: {
+      // A topic's worth of prose folded back into the cold start.
+      file: "packages/cli/src/guide/start.md",
+      apply: (t) => t + "\n" + "Folded back in. ".repeat(500),
     },
   },
 
