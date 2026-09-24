@@ -75,7 +75,7 @@ export class FlowCanvas {
    */
   into: Into | undefined;
   /**
-   * The pack a `wire --flesh` flow fills from (design §10): stamped on every
+   * The pack a composed flow fills from (design §10): stamped on every
    * screen as round 3 draws it, so the flow arrives fleshed — no second pass.
    */
   pack: PackChoice | undefined;
@@ -368,10 +368,14 @@ export interface ComposeOptions {
   /** Told of the mapping, if one is asked — the CLI's `--save`. */
   onMappingAsked?: ConstructorParameters<typeof StyleResolver>[3];
   /**
-   * `wire --flesh`: fill the screens with sample content as round 3 draws
-   * them — the pack chosen while round 1 is asked, or `pack` when given.
+   * Sample content (design §10), **on by default** (24 Sep 2026: a person
+   * composing expects the words, not a second act to ask for them): the
+   * screens land grey in round 2 and arrive fleshed in round 3, from the
+   * pack chosen while round 1 is asked — one call more — or `pack` when
+   * given. `false` is `--basic` (`/wire basic …`): plain grey wires, as
+   * before, for `wire flesh` later.
    */
-  flesh?: { pack?: string };
+  flesh?: { pack?: string } | false;
 }
 
 export interface Composed {
@@ -385,7 +389,7 @@ export interface Composed {
   totalMs: number;
   style: WireStyle | undefined;
   mapper: StyleResolver;
-  /** The pack a `--flesh` flow was filled from. */
+  /** The pack the flow was filled from — absent for `--basic`, or when none could be chosen. */
   pack?: PackChoice;
 }
 
@@ -418,8 +422,11 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
   const styling = styleAt(port, first.item, mapper);
   styling.catch(() => {});
   // The pack is one more question, asked beside round 1 — the wait is the longer of the two.
-  const choosing = opts.flesh ? (opts.flesh.pack !== undefined ? Promise.resolve(flagPack(opts.flesh.pack)) : choosePack(answerer, request)) : undefined;
-  choosing?.catch(() => {});
+  // A pack that cannot be chosen is not a flow that cannot be drawn: it arrives in bars, and says so.
+  const fleshWith = opts.flesh === false ? undefined : (opts.flesh ?? {});
+  const choosing: Promise<PackChoice | Error> | undefined = fleshWith
+    ? (fleshWith.pack !== undefined ? Promise.resolve(flagPack(fleshWith.pack)) : choosePack(answerer, request)).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))))
+    : undefined;
   let screens = [first];
   const tallies: RoundTally[] = [];
   let by = answerer.name as string;
@@ -434,12 +441,17 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
       for (const line of styled.lines) say(line);
     }
     if (round === 3 && choosing) {
-      canvas.pack = await choosing;
-      say(packLine(canvas.pack, "the screens arrive fleshed"));
-      // Its one call was asked beside round 1, so it counts there.
-      if (canvas.pack.how === "asked" && tallies[0]) {
-        tallies[0].calls += 1;
-        tallies[0].inputTokens += canvas.pack.inputTokens ?? 0;
+      const chosen = await choosing;
+      if (chosen instanceof Error) {
+        say(`no pack: ${chosen.message} — the screens stay in grey bars; \`wire flesh\` fills them later`);
+      } else {
+        canvas.pack = chosen;
+        say(packLine(chosen, "the screens arrive fleshed"));
+        // Its one call was asked beside round 1, so it counts there.
+        if (chosen.how === "asked" && tallies[0]) {
+          tallies[0].calls += 1;
+          tallies[0].inputTokens += chosen.inputTokens ?? 0;
+        }
       }
     }
     screens = await applyRound(canvas, round, screens, calls, asked.responses, say);

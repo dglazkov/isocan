@@ -174,7 +174,7 @@ afterEach(() => {
 describe("isocan wire flesh", () => {
   it("asks Jev once per flow, records p, and versions every wire in one op group; a rerun is a no-op", async () => {
     const h = harness();
-    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
     const wires = h.wires();
     expect(wires.length).toBeGreaterThan(3);
     for (const w of wires) expect(h.specOf(w.id).content).toBeUndefined();
@@ -210,7 +210,7 @@ describe("isocan wire flesh", () => {
 
   it("with the stub, the flat answer falls under the floor: the generic pack fills, and the line says so", async () => {
     const h = harness();
-    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
     const printed = await h.cli("wire", "flesh", "--answerer", "stub");
     expect(h.errors).toEqual([]);
     for (const w of h.wires()) expect(h.specOf(w.id).content).toMatchObject({ source: "pack", pack: "generic" });
@@ -219,7 +219,7 @@ describe("isocan wire flesh", () => {
 
   it("--pack overrides without asking; --bars takes it all back off; bad words are refused before anything is written", async () => {
     const h = harness();
-    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
     const bare = Object.fromEntries(h.wires().map((w) => [w.id, h.specOf(w.id)]));
     const jev = fakeJev();
     await h.cli("wire", "flesh", "--pack", "pets");
@@ -235,7 +235,7 @@ describe("isocan wire flesh", () => {
 
   it("content survives wire style, wire vary and wire prototype", async () => {
     const h = harness();
-    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
     await h.cli("wire", "flesh", "--pack", "deliveries");
     const fleshed = Object.fromEntries(h.wires().map((w) => [w.id, h.specOf(w.id)]));
 
@@ -291,20 +291,30 @@ describe("isocan wire flesh", () => {
     expect(h.sent.length).toBe(n);
   });
 
-  it("wire \"<request>\" --flesh: the flow arrives fleshed — no second version, the pack asked beside round 1", async () => {
+  it("wire \"<request>\": the flow arrives fleshed by default — no second version, the pack asked beside round 1; --basic does not", async () => {
     const h = harness();
     const jev = fakeJev("deliveries", 0.66);
-    const printed = await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--flesh");
+    const printed = await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
     expect(h.errors).toEqual([]);
     // The stub answers rounds and the pack alike: generic, said so.
     expect(jev).toHaveLength(0);
     expect(printed).toMatch(/the screens arrive fleshed/);
     const plain = harness();
-    await plain.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
-    // The same number of versions per screen as an unfleshed flow: content rides round 3's version.
+    const plainPrinted = await plain.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
+    expect(plainPrinted).not.toMatch(/pack:/);
+    for (const w of plain.wires()) expect(plain.specOf(w.id).content).toBeUndefined();
+    // The same number of versions per screen as a basic flow: content rides round 3's version.
     const count = (hh: typeof h) => hh.wires().map((w) => w.versions.length).sort().join(",");
     expect(count(h)).toBe(count(plain));
     for (const w of h.wires()) expect(h.specOf(w.id).content).toMatchObject({ source: "pack", pack: "generic" });
+    // --flesh, kept for older scripts, is the default; --basic with --pack is refused before anything is written.
+    const old = harness();
+    await old.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--flesh");
+    expect(count(old)).toBe(count(h));
+    const both = harness();
+    await both.cli("wire", REQUEST, "--answerer", "stub", "--basic", "--pack", "tools");
+    expect(both.errors.at(-1)).toMatch(/--basic arrives unfleshed/);
+    expect(both.wires()).toEqual([]);
     // --pack names it outright.
     const named = harness();
     await named.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--pack", "tools");
@@ -315,7 +325,7 @@ describe("isocan wire flesh", () => {
 describe("isocan wire copy", () => {
   it("prints words by slot and path; --apply writes exact words as one version, source copy; flesh then leaves them alone", async () => {
     const h = harness();
-    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
     const target = h.wires().find((w) => h.specOf(w.id).archetype === "home") ?? h.wires()[0]!;
     await h.cli("wire", "copy", target.id);
     expect(h.errors.at(-1)).toMatch(/draws bars/);

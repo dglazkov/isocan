@@ -65,10 +65,11 @@ export function registerCompose(host: CliHost, wire: Command): void {
     .option("--canvas <canvas>")
     .option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)")
     .option("--in <group>", "compose the flow inside this group — and in its design system, if it has one")
-    .option("--flesh", "arrive fleshed: sample content from a pack Jev chooses for the request, instead of grey bars")
+    .option("--basic", "plain grey wires: no sample content (the default fleshes the screens; `wire flesh` can later)")
+    .option("--flesh", "arrive fleshed — the default now; kept so older scripts still run")
     .option("--pack <id>", "the content pack to flesh with, instead of asking (`wire flesh --packs` lists them)")
     .action(
-      run(async (words: string[], opts: { answerer?: string; seed: string; save?: string; at?: string; in?: string; flesh?: boolean; pack?: string }, cmd: Command) => {
+      run(async (words: string[], opts: { answerer?: string; seed: string; save?: string; at?: string; in?: string; basic?: boolean; flesh?: boolean; pack?: string }, cmd: Command) => {
         const request = words.join(" ").trim();
         if (!request) {
           cmd.help();
@@ -82,6 +83,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
         const port = cliPort(host, ctx, p.id);
         const seed = Number(opts.seed);
         // Refused before anything is written: an unknown pack, or `--answerer jev` with no key, never leaves a blueprint behind.
+        if (opts.basic && (opts.pack !== undefined || opts.flesh)) throw new Error("--basic arrives unfleshed — it cannot take --pack or --flesh too");
         if (opts.pack !== undefined) flagPack(opts.pack);
         const answerer = opts.answerer === "agent" ? "agent" : cliAnswerer(ctx, p.id, opts.answerer, seed, say);
         const snapshot = await ctx.client.snapshot(p.id);
@@ -95,7 +97,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
           const firstMs = Date.now() - t0;
           blueprintLine(first.item, firstMs);
           if (ctx.json) return printJson({ flow, items: [first.item], round: 1, answerer: "agent", firstBlueprintMs: firstMs });
-          if (opts.flesh || opts.pack !== undefined) say("--flesh waits for the rounds: once the flow is drawn, `isocan wire flesh --flow " + flow + (opts.pack !== undefined ? " --pack " + opts.pack : "") + "` fills it");
+          if (!opts.basic) say("sample content waits for the rounds: once the flow is drawn, `isocan wire flesh --flow " + flow + (opts.pack !== undefined ? " --pack " + opts.pack : "") + "` fills it");
           say(`flow ${flow} is waiting on round 1 of 3. Answer it yourself:\n  isocan wire questions > round.json    # Jev's request shape, one call per screen\n  (fill each call's "response" in Jev's response shape)\n  isocan wire answer round.json          # repeat until the flow is drawn`);
           return;
         }
@@ -110,7 +112,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
             say(`answering with ${who}`);
           },
           ...(saver(opts.save) ? { onAsked: saver(opts.save)!, onMappingAsked: mappingSaver(opts.save)! } : {}),
-          ...(opts.flesh || opts.pack !== undefined ? { flesh: opts.pack !== undefined ? { pack: opts.pack } : {} } : {}),
+          flesh: opts.basic ? false : opts.pack !== undefined ? { pack: opts.pack } : {},
         });
         const { mapper, tallies } = composed;
         if (ctx.json) {

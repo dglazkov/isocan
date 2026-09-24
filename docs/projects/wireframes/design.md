@@ -285,8 +285,14 @@ the canvas can do it for a whole flow; the person can edit any screen's text as
 an ordinary new version.
 
 **Doors.** `isocan wire flesh [screens…|--flow <id>] [--pack <id>]` and
-`/wire flesh` from the Chat; `wire "<request>" --flesh` fleshes as it draws.
-One op group, one undo, a version per screen — the same shape as `wire style`.
+`/wire flesh` from the Chat. One op group, one undo, a version per screen —
+the same shape as `wire style`. **A composed flow arrives fleshed** (24 Sep
+2026, Dion: he expected the words as part of composing): `wire "<request>"`
+and `/wire <request>` ask for the pack beside round 1 (one call more), the
+screens land grey in round 2 and fill in round 3, in the flow's own op
+group, so one undo takes the flow back content and all; its variations take
+the same pack. `wire --basic "<request>"` / `/wire basic <request>` compose
+plain grey wires; `wire flesh --bars` takes content off afterwards.
 
 ## Done means done on both surfaces
 

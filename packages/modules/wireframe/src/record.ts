@@ -31,5 +31,5 @@ export const wireframeModule: CoreModule = {
   // A prototype is lit on the hovered minimap (phase 8): the one item on a busy canvas you can play.
   spotlights: ["wirePrototype"],
   marks: [{ property: KEEP_PROP, emoji: KEEP_EMOJI, title: "Kept", on: "Keep", off: "Unkeep", key: "K", offeredOn: { fidelity: "wireframe" } }],
-  commands: [{ name: "wire", description: "Wireframes from a request", usage: "<request>|prototype|style|links", source: "module", opens: "wire", body: "" }],
+  commands: [{ name: "wire", description: "Wireframes from a request", usage: "[basic] <request>|prototype|style|links", source: "module", opens: "wire", body: "" }],
 };

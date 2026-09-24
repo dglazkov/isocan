@@ -13,13 +13,17 @@ export const WIRE_COMMAND: SlashCommand = {
 screen by hand, and never write its copy yourself unless asked.
 
 - \`/wire <what the screens are for>\` → \`isocan wire "<request>"\`. Blueprints
-  land first, then fill in place; one \`isocan undo\` takes the whole flow back.
-  With no TYPESAFE_API_KEY here the canvas's home answers (the CLI says which).
+  land first, then fill in place, and arrive fleshed with sample content; one
+  \`isocan undo\` takes the whole flow back, content and all. With no
+  TYPESAFE_API_KEY here the canvas's home answers (the CLI says which).
+- \`/wire basic <what the screens are for>\` → \`isocan wire --basic "<request>"\`
+  (plain grey wires, no sample content).
 - \`/wire prototype\` → \`isocan wire prototype\` (the kept screens, 📐 — keep
   some first with \`isocan wire keep <screens…>\` if nothing is kept).
 - \`/wire style\` → \`isocan wire style\`; \`/wire style --default\` →
   \`isocan wire style --default\`.
-- \`/wire flesh\` → \`isocan wire flesh\` (sample content instead of grey bars;
+- \`/wire flesh\` → \`isocan wire flesh\` (sample content instead of grey bars
+  on wires that have none;
   \`/wire flesh --pack <id>\` and \`/wire flesh --bars\` pass through). Exact
   words for a screen are \`isocan wire copy <screen>\`, edited, then
   \`isocan wire copy <screen> --apply <file>\` — only when asked for copy.

@@ -9,6 +9,8 @@ import { keptFlowsOf, writePrototype, type KeptFlow } from "./kept-flows.ts";
 import { StyleResolver, restyle, restyleSummary } from "./restyle.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
 import { webAnswerer, webPort } from "./web-port.ts";
+import type { PackChoice } from "./content/choose.ts";
+import { PACK_BY_ID } from "./content/packs.ts";
 // ── phase 8, builder A: /wire links ──
 import { WireLinks } from "./links-panel.tsx";
 
@@ -28,7 +30,7 @@ import { WireLinks } from "./links-panel.tsx";
 
 type Mode =
   | { kind: "form" }
-  | { kind: "compose"; request: string }
+  | { kind: "compose"; request: string; basic?: true }
   | { kind: "prototype" }
   | { kind: "style"; toDefault: boolean }
   | { kind: "flesh"; pack?: string; bars: boolean }
@@ -52,6 +54,8 @@ export function modeOf(args: string): Mode {
     const pack = rest.length === 2 && rest[0] === "--pack" ? rest[1] : rest.length === 1 && !bars && !rest[0]!.startsWith("-") ? rest[0] : undefined;
     if (rest.length === 0 || bars || pack !== undefined) return { kind: "flesh", bars, ...(pack !== undefined ? { pack } : {}) };
   }
+  // A composed flow arrives fleshed; `/wire basic <request>` keeps it in plain grey wires, as `wire --basic` does.
+  if (first === "basic" && rest.length > 0) return { kind: "compose", request: rest.join(" "), basic: true };
   return { kind: "compose", request: words };
 }
 
@@ -66,9 +70,17 @@ export function refusalWords(error: unknown): string {
  * CLI's. Resolves when the flow is drawn; `onBlueprint` fires once the first
  * frame is on the canvas, before any answer.
  */
-export async function composeOnWeb(canvasId: string, host: DialogHost, request: string, onBlueprint: (itemId: string) => void) {
+export async function composeOnWeb(canvasId: string, host: DialogHost, request: string, onBlueprint: (itemId: string) => void, opts: { basic?: boolean } = {}) {
   const port = webPort(canvasId, host);
-  return composeFlow(port, request, webAnswerer(canvasId, host), { onBlueprint: (first) => onBlueprint(first.item) });
+  return composeFlow(port, request, webAnswerer(canvasId, host), { onBlueprint: (first) => onBlueprint(first.item), flesh: opts.basic ? false : {} });
+}
+
+/** The Chat record's line for a composed flow's content: which pack filled it, or that it is plain grey wires. */
+export function contentWords(pack: PackChoice | undefined): string {
+  if (!pack) return "Plain grey wires, no sample content — `/wire flesh` fills them.";
+  const name = PACK_BY_ID.get(pack.pack)?.name ?? pack.pack;
+  const how = pack.how === "flag" ? "chosen with --pack" : `p ${pack.p.toFixed(2)}`;
+  return `Filled with sample content from the ${name} pack (${how}) — \`/wire flesh --bars\` takes it back to bars.`;
 }
 
 export async function prototypeOnWeb(canvasId: string, host: DialogHost, flow?: KeptFlow) {
@@ -167,13 +179,13 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       const composed = await composeOnWeb(canvasId, host, m.request, (itemId) => {
         host.reveal([itemId]);
         host.close();
-      });
+      }, { basic: m.basic === true });
       const maybe = composed.screens.filter((s) => s.spec.maybe).length;
       const cost = costLine(composed.tallies, composed.by, composed.screens.length, maybe);
       host.notice(`${cost} — one undo takes the whole flow back`);
       const made = composed.variants.length ? `, and ${composed.variants.length} variation${composed.variants.length === 1 ? "" : "s"}` : "";
       const unsure = maybe ? ` The ${maybe === 1 ? "screen" : "screens"} marked maybe ${maybe === 1 ? "is" : "are"} ones round 1 was unsure the request needs: keep (📐) what belongs.` : "";
-      record(host, composed.flow, [`composed "${m.request}": ${screenTitles(composed.screens)}${made}.${unsure}`, `${cost} — one undo takes the whole flow back.`], composed.screens.map((s) => s.item));
+      record(host, composed.flow, [`composed "${m.request}": ${screenTitles(composed.screens)}${made}.${unsure}`, contentWords(composed.pack), `${cost} — one undo takes the whole flow back, content included.`], composed.screens.map((s) => s.item));
       host.reveal([...composed.screens, ...composed.variants].map((s) => s.item));
     } else if (m.kind === "prototype") {
       await runPrototype();

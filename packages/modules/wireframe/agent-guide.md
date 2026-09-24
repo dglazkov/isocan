@@ -166,9 +166,19 @@ bar, tab bar) stays.
   all show the same content. One op group, a version per wire whose content
   changed; running it again asks nothing and writes nothing; `--bars` goes
   back to bars. Blueprints stay blue and unfilled. A kept flow's prototype
-  is rebuilt in the same group. `isocan wire "<request>" --flesh [--pack
-  <id>]` composes a flow that arrives fleshed (the pack is asked beside
-  round 1). People do the same with `/wire flesh` in the Chat.
+  is rebuilt in the same group. People do the same with `/wire flesh` in
+  the Chat.
+- **A composed flow arrives fleshed.** `isocan wire "<request>"` (and
+  `/wire <request>`) asks for the pack beside round 1 — one call more — so
+  the screens land blue, then grey (round 2), then filled (round 3), all in
+  the flow's one op group: one `isocan undo` takes the flow back, content
+  and all. Its variations, and later `wire vary`'s, take the same pack.
+  `--pack <id>` picks the pack without asking; `isocan wire --basic
+  "<request>"` (`/wire basic <request>` in the Chat) composes plain grey
+  wires with no content, and `wire flesh --bars` takes content off
+  afterwards. A pack that cannot be chosen leaves the flow in bars and says
+  so. The agent path (`--answerer agent`) fills nothing: once your rounds
+  are answered, `isocan wire flesh --flow <id>` does.
 - `isocan wire copy <screen>` prints a fleshed screen's words as JSON —
   per slot, each word by path (`items.0.title`, `stats.1.value`,
   `labels.2`). Edit the words, then `isocan wire copy <screen> --apply

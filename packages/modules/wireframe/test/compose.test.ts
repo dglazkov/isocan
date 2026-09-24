@@ -5,8 +5,8 @@ import { FIDELITY_PROP, applyOperation, invertOperation, type CanvasState, type 
 import {
   ARCHETYPE_WORDS, HEADER_OPTIONS, JEV_URL, MAYBE_FLOOR, MAYBE_PROP, assemblePrototype, keepPatch, maybeItems, maybeMarked, maybeProperties, NAV_OPTIONS, NEEDS_YES, RECIPES, applyProps, applyPropsRound, applyStructure, navOwners, propsRequests, blueprint, component, decideFlow, flowRequest, flowScreen,
   jevAnswerer, pendingRound, presentElements, propsRequest, readResponse, recipe, renderWire, requestBlueprint, responseProblems,
-  structureRequest, stubAnswerer, validateWire, wireframe,
-  type Answerer, type JevRequest, type JevResponse, type WireSpec,
+  composeFlow, readWire, structureRequest, stubAnswerer, validateWire, wireframe,
+  type Answerer, type JevRequest, type JevResponse, type WirePort, type WireSpec,
 } from "../src/core.ts";
 
 /**
@@ -441,5 +441,87 @@ describe("round 1 over-includes, and keep prunes (phase 6's reading)", () => {
     expect(maybeMarked(item())).toBe(false);
     state = apply(state, { type: "item.update", itemId: "itm_confirm", patch: keepPatch(false) });
     expect(maybeMarked(item())).toBe(true);
+  });
+});
+
+/**
+ * **A composed flow arrives fleshed** (24 Sep 2026) — against the real
+ * reducer, so "one undo" is the inverse of every op in the flow's group,
+ * applied newest first, as the daemon's undo does.
+ */
+describe("a composed flow arrives fleshed", () => {
+  function reducerPort() {
+    const actor = { id: "usr_acme", name: "Acme" };
+    const canvasId = "prj_acme";
+    let seq = 0;
+    const apply = (s: CanvasState | null, op: Operation) => applyOperation(s, { id: `op_${++seq}`, canvasId, actor, ts: "2026-09-24T00:00:00.000Z", op })!;
+    let state = apply(null, { type: "project.create", canvasId, title: "Acme" });
+    const blobs = new Map<string, string>();
+    const log: Array<{ op: Operation; inverse: Operation | null; group: string }> = [];
+    const port: WirePort = {
+      canvasId,
+      canvas: async () => state.canvas,
+      readText: async (hash) => blobs.get(hash)!,
+      put: async (text) => {
+        const blobHash = `hash_${blobs.size + 1}`;
+        blobs.set(blobHash, text);
+        return { blobHash, size: text.length };
+      },
+      send: async (op, group) => {
+        log.push({ op, inverse: invertOperation(state, op), group });
+        state = apply(state, op);
+        if (op.type !== "item.add") return;
+        const it = state.canvas.items[op.itemId]!;
+        return { x: it.x, y: it.y };
+      },
+    };
+    const specOf = (id: string) => {
+      const it = state.canvas.items[id]!;
+      return readWire(blobs.get(it.versions.find((v) => v.id === it.currentVersionId)!.blobHash)!)!;
+    };
+    const undo = (group: string) => {
+      for (const { inverse } of log.filter((l) => l.group === group).reverse()) if (inverse) state = apply(state, inverse);
+    };
+    return { port, log, specOf, undo, items: () => Object.values(state.canvas.items) };
+  }
+
+  it("fills every screen and variation in round 3, grey in round 2 first — and one undo takes it all back", async () => {
+    const h = reducerPort();
+    const composed = await composeFlow(h.port, REQUEST, stubAnswerer(3));
+    const all = [...composed.screens, ...composed.variants];
+    expect(all.length).toBeGreaterThan(1);
+    // The stub's flat pack answer falls under the floor: the generic pack fills, and says it was asked.
+    expect(composed.pack).toMatchObject({ pack: "generic", how: "asked" });
+    for (const s of all) expect(h.specOf(s.item).content).toMatchObject({ source: "pack", pack: "generic" });
+    // Blue, then grey without content (round 2), then fleshed (round 3): the history shows each.
+    const first = composed.screens[0]!.item;
+    const versions = h.log.filter((l) => l.op.type === "item.addVersion" && (l.op as { itemId: string }).itemId === first);
+    expect(versions.length).toBe(3);
+    // Every op is the flow's group.
+    expect(new Set(h.log.map((l) => l.group))).toEqual(new Set([composed.flow]));
+    h.undo(composed.flow);
+    expect(h.items()).toEqual([]);
+  });
+
+  it("`flesh: false` (--basic) composes plain grey wires, with the same versions and one call fewer", async () => {
+    const plain = reducerPort();
+    const basic = await composeFlow(plain.port, REQUEST, stubAnswerer(3), { flesh: false });
+    expect(basic.pack).toBeUndefined();
+    for (const s of [...basic.screens, ...basic.variants]) expect(plain.specOf(s.item).content).toBeUndefined();
+    const fleshed = reducerPort();
+    const full = await composeFlow(fleshed.port, REQUEST, stubAnswerer(3));
+    expect(fleshed.log.length).toBe(plain.log.length);
+    expect(full.tallies[0]!.calls).toBe(basic.tallies[0]!.calls + 1);
+  });
+
+  it("a pack that cannot be chosen leaves the flow in bars and says so — never a flow that fails", async () => {
+    const h = reducerPort();
+    const stub = stubAnswerer(3);
+    const flaky: Answerer = { ...stub, name: stub.name, answer: async (req) => ("pack" in req.questions ? Promise.reject(new Error("the pack question timed out")) : stub.answer(req)) };
+    const lines: string[] = [];
+    const composed = await composeFlow(h.port, REQUEST, flaky, { say: (l) => lines.push(l) });
+    expect(composed.pack).toBeUndefined();
+    expect(lines.some((l) => /no pack: the pack question timed out/.test(l))).toBe(true);
+    for (const s of composed.screens) expect(h.specOf(s.item).content).toBeUndefined();
   });
 });

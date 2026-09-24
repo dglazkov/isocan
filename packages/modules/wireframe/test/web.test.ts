@@ -93,7 +93,7 @@ function shapeOf(sent: Array<{ op: Operation; group?: string }>) {
 const REQUEST = "a delivery app for Acme couriers — sign in, see today's deliveries, confirm a drop-off";
 const SEED = 4;
 
-async function viaCli(after: string[][] = []) {
+async function viaCli(after: string[][] = [], compose: string[] = []) {
   const c = memoryCanvas();
   const program = new Command().exitOverride().option("--json");
   const ctx = {
@@ -128,14 +128,14 @@ async function viaCli(after: string[][] = []) {
   } as unknown as CliHost;
   wireframeCli.register(host);
   const log = vi.spyOn(console, "log").mockImplementation(() => {});
-  await program.parseAsync(["node", "isocan", "wire", REQUEST, "--answerer", "stub", "--seed", String(SEED)]);
+  await program.parseAsync(["node", "isocan", "wire", REQUEST, "--answerer", "stub", "--seed", String(SEED), ...compose]);
   for (const argv of after) await program.parseAsync(["node", "isocan", ...argv]);
   log.mockRestore();
   expect(errors).toEqual([]);
   return c;
 }
 
-async function viaWeb() {
+async function viaWeb(opts: { basic?: boolean } = {}) {
   const c = memoryCanvas();
   const asked: unknown[] = [];
   const stub = stubAnswerer(SEED);
@@ -162,7 +162,7 @@ async function viaWeb() {
   let blueprintAt = -1;
   const composed = await composeOnWeb("canvas-acme", host, REQUEST, () => {
     blueprintAt = c.sent.length;
-  });
+  }, opts);
   return { c, asked, composed, blueprintAt, host };
 }
 
@@ -192,6 +192,21 @@ describe("the web composes what the CLI composes", () => {
     }
     expect(web.c.sent.filter((s) => s.op.type === "item.addVersion").length).toBeGreaterThan(0);
     expect(web.c.items.get(first.itemId)!.versions.length).toBe(4);
+    // Both arrive fleshed, from the same pack, in the same group.
+    const specOf = (c: ReturnType<typeof memoryCanvas>, id: string) => {
+      const it = c.items.get(id)!;
+      return readWire(c.blobs.get(it.versions.find((v) => v.id === it.currentVersionId)!.blobHash)!)!;
+    };
+    expect(web.composed.pack?.pack).toBe("generic");
+    for (const s of [...web.composed.screens, ...web.composed.variants]) expect(specOf(web.c, s.item).content?.pack).toBe("generic");
+  });
+
+  it("`/wire basic` composes what `wire --basic` composes: plain grey wires, no pack asked", async () => {
+    const cli = await viaCli([], ["--basic"]);
+    const web = await viaWeb({ basic: true });
+    expect(shapeOf(web.c.sent)).toEqual(shapeOf(cli.sent));
+    expect(web.composed.pack).toBeUndefined();
+    expect(web.asked.some((q) => "pack" in ((q as { questions: object }).questions))).toBe(false);
   });
 
   it("asks the home's judge for every round, naming the canvas — never the vendor, never with a key", async () => {
@@ -209,8 +224,8 @@ describe("/wire flesh", () => {
   const specs = (c: ReturnType<typeof memoryCanvas>) => [...c.items.values()].map((i) => readWire(c.blobs.get(i.versions.find((v) => v.id === i.currentVersionId)!.blobHash)!)!);
 
   it("fleshes what `wire flesh` fleshes: the home's judge chooses, one op group, the same slots filled from the same pack", async () => {
-    const cli = await viaCli([["wire", "flesh", "--answerer", "stub", "--seed", String(SEED)]]);
-    const web = await viaWeb();
+    const cli = await viaCli([["wire", "flesh", "--answerer", "stub", "--seed", String(SEED)]], ["--basic"]);
+    const web = await viaWeb({ basic: true });
     const before = web.c.sent.length;
     const r = await fleshOnWeb("canvas-acme", web.host, { bars: false });
     expect(r.calls).toBe(1);
@@ -230,7 +245,7 @@ describe("/wire flesh", () => {
   });
 
   it("--pack and --bars pass through", async () => {
-    const web = await viaWeb();
+    const web = await viaWeb({ basic: true });
     await fleshOnWeb("canvas-acme", web.host, { bars: false, pack: "deliveries" });
     expect(specs(web.c).every((s) => s.content?.pack === "deliveries")).toBe(true);
     await fleshOnWeb("canvas-acme", web.host, { bars: true });
@@ -308,6 +323,8 @@ describe("the doors", () => {
     expect(modeOf("flesh --pack pets")).toEqual({ kind: "flesh", bars: false, pack: "pets" });
     expect(modeOf("flesh pets")).toEqual({ kind: "flesh", bars: false, pack: "pets" });
     expect(modeOf("flesh out a pet-sitting app")).toEqual({ kind: "compose", request: "flesh out a pet-sitting app" });
+    expect(modeOf("basic a pet-sitting app")).toEqual({ kind: "compose", request: "a pet-sitting app", basic: true });
+    expect(modeOf("basic")).toEqual({ kind: "compose", request: "basic" });
   });
 
   it("the activation and the loaded half name the same dialog, command and module", () => {
