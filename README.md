@@ -374,8 +374,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   slides show` prints the running order plus the address to hand an audience:
   the first slide's full-screen URL. On a phone, tap the outer thirds or
   swipe horizontally to step through the deck in the viewer or fullscreen.
-  Vertical scrolling and interactive content keep their own input; Notes
-  open as a sheet and Back leaves the presentation.
+  Vertical scrolling and interactive content keep their own input; a pill
+  under the slide says where you are ("2 / 12"); Notes (or N) open as a
+  sheet; where the browser allows it (Android Chrome, not iPhone Safari) one
+  button hands the slide the whole screen; and Back leaves the presentation.
 - **The design sprint**: type `/sprint` in the Chat and an agent facilitates a
   Knapp-style sprint — people and agents sketch as peers, one person decides.
   The facilitator calls phases (`/sprint crazy8s 8m`), and a clock chip shows

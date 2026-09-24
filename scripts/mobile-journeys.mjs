@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { browser, throughTheDoor, until } from "./lib/browser.mjs";
 import { DaemonClient, connect } from "../index.mjs";
-const { startDaemon } = await import("@isocan/server");
+const { startDaemon } = await import("@isocan/server/daemon");
 const { newCanvasId, BADGE_COOKIE, THREAD_QUERY, itemPath, deckPath, noteProperties } = await import("@isocan/core");
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const home = await mkdtemp(path.join(tmpdir(), "isocan-mobile-"));
@@ -166,6 +166,10 @@ try {
     assert.equal(await current(), first.id, `${label} first boundary`);
     await touch("touchStart", [[330, 400]]); await touch("touchEnd", []);
     await until(b, `document.querySelector(".fullscreen")?.dataset.presentedItem === ${JSON.stringify(second.id)}`, `${label} right-third tap`);
+    await until(b, 'document.querySelector(".present-position")?.textContent === "2 / 3"', `${label} deck position follows the tap`);
+    // The bar keeps no slot for an Inbox the slide covers, so the title has room to be read.
+    assert.equal(await b.ev('(() => { const e = document.querySelector(".navigation-inbox"); if (!e) return false; const r = e.getBoundingClientRect(); return !!r.width && e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); })()'), false, `${label} no Inbox reachable over a presentation`);
+    assert(await b.ev('document.querySelector(".mobile-presentation-bar strong").getBoundingClientRect().width') >= 80, `${label} title has room`);
     await touch("touchStart", [[40, 400]]); await touch("touchEnd", []);
     await until(b, `document.querySelector(".fullscreen")?.dataset.presentedItem === ${JSON.stringify(first.id)}`, `${label} left-third tap`);
     await touch("touchStart", [[290, 400]]); await touch("touchMove", [[170, 400]]); await touch("touchMove", [[70, 400]]); await touch("touchEnd", []); await pause(250);
@@ -195,9 +199,22 @@ try {
     await shot(`${label}-notes`);
     await tap('[aria-label="Close speaker notes"]');
     assert.equal(await current(), first.id, `${label} closing notes preserves slide`);
+    // N on an attached keyboard opens the same sheet, and closes it again.
+    for (const open of [true, false]) {
+      await b.send("Input.dispatchKeyEvent", { type: "keyDown", key: "n", code: "KeyN", text: "n", windowsVirtualKeyCode: 78 });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", key: "n", code: "KeyN", windowsVirtualKeyCode: 78 });
+      await until(b, `!!document.querySelector(".presentation-notes-sheet") === ${open}`, `${label} N ${open ? "opens" : "closes"} the notes`);
+    }
+    // The browser's own chrome goes too, where the platform allows it, and
+    // Exit leaves browser full screen on the way out.
+    assert.equal(await b.ev("document.fullscreenEnabled"), true, `${label} headless Chrome offers the Fullscreen API`);
+    await tap('[aria-label="Full screen"]');
+    await until(b, "document.fullscreenElement === document.documentElement", `${label} slide takes the whole screen`);
+    await shot(`${label}-glass`);
     assert.equal(await b.ev('JSON.stringify(Object.fromEntries(Object.entries(localStorage).filter(([k]) => k.includes("presenterNotes") || k.includes("stage"))))'), prefs, `${label} desktop presentation preferences unchanged`);
     await tap('[aria-label="Exit presentation"]');
     await until(b, '!document.querySelector(".fullscreen")', `${label} Back exits`);
+    await until(b, "document.fullscreenElement === null", `${label} Back leaves browser full screen`);
     assert.deepEqual(b.takeErrors(), []);
   }
   await presentation("fullscreen");
@@ -206,7 +223,7 @@ try {
   await client.createGrant(id, "link", "view", h.actor.id);
   await b.close(); b = await browser(); await size(375);
   await presentation("viewer");
-  console.log("PASS mobile: stage 0 touch; stage 1a Chat, node walk, draft, plan, agents, capability and desktop restoration; stage 1c prior-seen digest and conversation links; stage 2 FullScreen/Viewer taps, swipe, boundaries, vertical gesture, iframe, notes, exit and print deck");
+  console.log("PASS mobile: stage 0 touch; stage 1a Chat, node walk, draft, plan, agents, capability and desktop restoration; stage 1c prior-seen digest and conversation links; stage 2 FullScreen/Viewer taps, swipe, deck position, boundaries, vertical gesture, iframe, notes by button and N, browser full screen, exit and print deck");
 } finally {
   await b.close(); await daemon.close();
   await rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

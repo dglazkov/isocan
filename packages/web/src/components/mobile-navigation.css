@@ -1,7 +1,9 @@
-/* The global Inbox has a reserved header slot on every phone canvas face,
-   including a presentation opened directly without first loading Chat. */
+/* The global Inbox has a reserved header slot on the phone canvas face. Not
+   on a presentation: `.fullscreen` sits above every floating control, so the
+   Inbox is under the slide there and a slot kept for it was 112px of the
+   bar's 335 kept for nothing — the title was squeezed to one letter. */
 @media (max-width: 639px) {
-  body:has(.phone-face, .touch-presenting) .navigation-inbox { top: 6px; right: 8px; bottom: auto; width: 96px; height: 44px; min-height: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px; }
-  body:has(.phone-face, .touch-presenting) .navigation-inbox-panel { top: 64px; bottom: 68px; left: 8px; right: 8px; width: auto; max-height: none; }
-  .phone-face .phone-header, .touch-presenting .fs-bar.mobile-presentation-bar { padding-right: 112px; }
+  body:has(.phone-face) .navigation-inbox { top: 6px; right: 8px; bottom: auto; width: 96px; height: 44px; min-height: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px; }
+  body:has(.phone-face) .navigation-inbox-panel { top: 64px; bottom: 68px; left: 8px; right: 8px; width: auto; max-height: none; }
+  .phone-face .phone-header { padding-right: 112px; }
 }

@@ -12,4 +12,6 @@
   .mobile-presentation-bar button { background: var(--card); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); }
   .touch-presenting .fullscreen-stage { padding: 76px 12px 12px; }
   .touch-presenting .fullscreen-stage > iframe { width: 100%; height: 100%; border: 0; }
+  /* Where the presenter is in the deck, under the slide rather than in the bar. */
+  .present-position { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); padding: 4px 10px; border-radius: 999px; background: var(--card); color: var(--ink-soft); border: 1px solid var(--line); font-size: 13px; font-variant-numeric: tabular-nums; pointer-events: none; z-index: 1; }
 }

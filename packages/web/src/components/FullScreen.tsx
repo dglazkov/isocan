@@ -23,7 +23,7 @@ import { usePhone } from "../lib/phone.ts";
 import { useTouchNavigation } from "../lib/touchnavigation.ts";
 import "./presentation.css";
 import "./mobile-navigation.css";
-const PresentationNotes = lazy(() => import("./PresentationNotes.tsx").then((m) => ({ default: m.PresentationNotes })));
+const PhonePresenting = lazy(() => import("./PhonePresenting.tsx").then((m) => ({ default: m.PhonePresenting })));
 
 /** Bare keys that flip the deck (#87). Forward and back each answer to three
  * keys because a presenter's clicker sends Page Up/Down, and because "left/
@@ -78,7 +78,6 @@ export function FullScreen({
   // (lib/arrival.ts), and a reload would try to spend this one.
   const anchor = new URLSearchParams(useLocation().search).get("at") ?? "";
   const phone = usePhone();
-  const [phoneNotes, setPhoneNotes] = useState(false);
   const gestures = useTouchNavigation((direction) => {
     const canvas = useCanvasStore.getState().canvas;
     if (!canvas || !itemId) return;
@@ -134,8 +133,10 @@ export function FullScreen({
         if (isTyping(e.target)) return;
         e.preventDefault();
         e.stopPropagation();
+        // A phone's notes are a sheet its presenting bar owns, and that bar
+        // answers N itself (PhonePresenting).
         const ui = useUiStore.getState();
-        if (phone) setPhoneNotes(!phoneNotes); else ui.setPresenterNotes(!ui.presenterNotes);
+        if (!phone) ui.setPresenterNotes(!ui.presenterNotes);
         return;
       }
       // Bare arrows flip the deck (#87): the items marked as slides, in
@@ -260,11 +261,7 @@ export function FullScreen({
   // not depend on the item existing.
   return (
     <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
-      {phone ? <div className="fs-bar mobile-presentation-bar">
-        <button onClick={() => back()} aria-label="Exit presentation">Back</button>
-        <strong>{item?.title ?? "Presentation"}</strong>
-        <button onClick={() => setPhoneNotes(!phoneNotes)} aria-pressed={phoneNotes}>Notes</button>
-      </div> : <>
+      {phone ? <Suspense><PhonePresenting canvasId={canvasId} itemId={itemId} title={item?.title ?? "Presentation"} onExit={back} /></Suspense> : <>
       <div className="fs-bar">
         {/* The way back, and it says where back IS. An arrow alone would be a
             guess; "Canvas" is the answer to "where am I". */}
@@ -326,7 +323,6 @@ export function FullScreen({
           )}
         </aside>
       )}
-      {phone && phoneNotes && <Suspense><PresentationNotes canvasId={canvasId} itemId={itemId} onClose={() => setPhoneNotes(false)} /></Suspense>}
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { usePhone } from "../lib/phone.ts";
 import { useTouchNavigation } from "../lib/touchnavigation.ts";
 import "./presentation.css";
 import "./mobile-navigation.css";
-const PresentationNotes = lazy(() => import("./PresentationNotes.tsx").then((m) => ({ default: m.PresentationNotes })));
+const PhonePresenting = lazy(() => import("./PhonePresenting.tsx").then((m) => ({ default: m.PhonePresenting })));
 
 /** The deck keys, exactly `FullScreen`'s (#87): a presenter's clicker sends
  * Page Up/Down, and both axes flip because the deck is linear. */
@@ -52,7 +52,6 @@ const REST_AFTER_MS = 2500;
 export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string | null }) {
   const navigate = useNavigate();
   const phone = usePhone();
-  const [phoneNotes, setPhoneNotes] = useState(false);
   const gestures = useTouchNavigation((direction) => {
     const canvas = useCanvasStore.getState().canvas;
     if (!canvas || !itemId) return;
@@ -178,11 +177,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
 
   return (
     <div data-presented-item={itemId ?? undefined} className={`fullscreen${phone ? " touch-presenting" : ""}${resting ? " resting" : ""}`}>
-      {phone ? <div className="fs-bar mobile-presentation-bar">
-        <button onClick={() => navigate("/")} aria-label="Exit presentation">Back</button>
-        <strong>{item?.title ?? "Presentation"}</strong>
-        <button onClick={() => setPhoneNotes(!phoneNotes)} aria-pressed={phoneNotes}>Notes</button>
-      </div> : <>
+      {phone ? <Suspense><PhonePresenting canvasId={canvasId} itemId={itemId} title={item?.title ?? "Presentation"} onExit={() => navigate("/")} /></Suspense> : <>
       <div className="fs-bar">
         <div className="floats fs-cluster">
           {title && <span className="fullscreen-title"><b>{title}</b></span>}
@@ -231,7 +226,6 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
           );
         })()}
       </div>
-      {phone && phoneNotes && <Suspense><PresentationNotes canvasId={canvasId} itemId={itemId} onClose={() => setPhoneNotes(false)} /></Suspense>}
     </div>
   );
 }
