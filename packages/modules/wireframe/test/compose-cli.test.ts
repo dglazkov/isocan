@@ -233,6 +233,8 @@ describe("the agent answers in Jev's place: wire questions / wire answer", () =>
       const spec = h.specOf(item.id);
       expect(validateWire(spec)).toEqual([]);
       expect(spec.round).toBe(3);
+      // Signed by the agent that answered its rounds, not by a model.
+      expect(spec.by).toEqual({ answerer: "agent" });
     }
     expect(new Set(h.sent.map((s) => s.group)).size).toBe(1);
     await h.cli("wire", "questions");
@@ -293,6 +295,9 @@ describe("variations and keep marks from the terminal: wire vary / keep / unkeep
     expect(groups.size).toBe(1);
     expect(groups.has(flow)).toBe(false);
     expect(new Set(after.map((v) => JSON.stringify(h.specOf(v.id).flip))).size).toBe(3);
+    // The decisions are still the screen's answerer's: the variation says so.
+    expect(h.specOf(added.id).by?.answerer).toBe("stub");
+    expect(h.specOf(added.id).by).toEqual(h.specOf(screen.id).by);
     // Asking again adds nothing: --count is how many in all.
     expect(await h.cli("wire", "vary", screen.id, "--count", "3")).toMatch(/already has 3 variations/);
     expect(variantsOf(screen.id).length).toBe(3);

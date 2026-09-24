@@ -84,6 +84,42 @@ export interface WireSpec {
    * none: blue means still being drawn.
    */
   content?: WireContent;
+  /**
+   * Who drew it (phase 6's Open, 24 Sep 2026): the actor the composing ops
+   * went out as, and which answerer made its decisions — so a later reader,
+   * or a keep that labels a decision, knows whether Jev chose it or the stub
+   * threw dice. Written by the composer (`wire`, `/wire`, `wire answer`) and
+   * by `wire vary`; absent on a hand-drawn spec and on the blueprint before
+   * round 1.
+   */
+  by?: WireBy;
+}
+
+/** Who drew a wire: the person or agent, and the answerer whose decisions it carries. */
+export interface WireBy {
+  /** The actor the ops went out as — a person at the Chat, an agent at the CLI. */
+  actor?: { id: string; name: string };
+  /** Jev (direct or through the home), the seeded stub, or an agent answering `wire questions`. */
+  answerer: "jev" | "stub" | "agent";
+  /** Present when the canvas's home asked on the composer's behalf, with the home's key. */
+  via?: "home";
+  /** The answerer's own name for itself: `jev-1.13.0`, `stub (seed 4)`. */
+  model?: string;
+}
+
+/**
+ * A `WireBy` from what an answerer called itself (`Answerer.answer`'s `by`:
+ * `jev-1.13.0`, `stub (seed 4)`, `… via the home`, or `agent`) and the actor.
+ */
+export function wireBy(model: string, actor?: { id: string; name: string }): WireBy {
+  const home = / via the home$/.test(model);
+  const bare = model.replace(/ via the home$/, "");
+  return {
+    ...(actor ? { actor: { id: actor.id, name: actor.name } } : {}),
+    answerer: bare === "agent" ? "agent" : /^stub/.test(bare) ? "stub" : "jev",
+    ...(home ? { via: "home" as const } : {}),
+    ...(bare !== "agent" ? { model: bare } : {}),
+  };
 }
 
 /** In `alternatives`, `from` and `to`: the optional section left off the screen. */
@@ -310,6 +346,9 @@ export function validateWire(input: unknown): string[] {
   }
   if (spec.style !== undefined) problems.push(...styleProblems(spec.style));
   if (spec.content !== undefined) problems.push(...contentProblems(spec.content));
+  if (spec.by !== undefined && (typeof spec.by !== "object" || !["jev", "stub", "agent"].includes(spec.by?.answerer as string))) {
+    problems.push("by must be { answerer: jev | stub | agent, actor?, via?, model? }");
+  }
   let r: Recipe;
   try {
     r = recipe(String(spec.archetype));

@@ -8,7 +8,7 @@ import {
 import { currentVersionOf, type WirePort } from "./port.ts";
 import { readWire, renderWire } from "./render.ts";
 import { StyleResolver, governingSystem, mappingLines } from "./restyle.ts";
-import { wireSize, wireTitle, type WireSpec } from "./spec.ts";
+import { wireBy, wireSize, wireTitle, type WireBy, type WireSpec } from "./spec.ts";
 import type { WireStyle } from "./theme.ts";
 import { DEFAULT_VARIATIONS, honestFlips, variations } from "./vary.ts";
 import { choosePack, flagPack, packLine, type PackChoice } from "./content/choose.ts";
@@ -79,11 +79,18 @@ export class FlowCanvas {
    * screen as round 3 draws it, so the flow arrives fleshed — no second pass.
    */
   pack: PackChoice | undefined;
+  /**
+   * Who is drawing (`WireSpec.by`): stamped on every spec this canvas writes
+   * once an answerer has spoken — the composer sets it when round 1 answers,
+   * `wire answer` for an agent, `wire vary` from the screen it varies.
+   */
+  by: WireBy | undefined;
 
   constructor(readonly port: WirePort, readonly group: string) {}
 
   private styled(given: WireSpec, itemId: string): WireSpec {
-    const spec = this.style && given.style === undefined ? { ...given, style: this.style } : given;
+    const signed = this.by && given.round !== 0 ? { ...given, by: this.by } : given;
+    const spec = this.style && signed.style === undefined ? { ...signed, style: this.style } : signed;
     if (!this.pack || spec.round !== 3 || spec.content) return spec;
     return fleshSpec(spec, seedKey(spec, itemId), packOf(this.pack.pack), { p: this.pack.p, by: this.pack.by });
   }
@@ -435,6 +442,8 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
     const asked = await ask(answerer, round, calls, opts.onAsked);
     tallies.push(asked.tally);
     by = asked.by;
+    // Signed by whoever answered this round — a home that fell back to the stub says so on the screens too.
+    canvas.by = wireBy(by, port.actor);
     if (round === 1) {
       const styled = await styling;
       canvas.style = styled.system ? styled.style : undefined;

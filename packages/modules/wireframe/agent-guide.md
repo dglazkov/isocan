@@ -47,7 +47,11 @@ bar, tab bar) stays.
   about them (phase 6), so a maybe is often wanted: look at each one and
   **keep (📐) what belongs** — an unkept maybe is only a screen on the
   canvas, never in `wire links`, the arrows or the prototype. Every
-  composed screen's spec carries `need`, round 1's P(yes) for it.
+  composed screen's spec carries `need`, round 1's P(yes) for it, and
+  `by` — who drew it: `{ actor: {id, name}, answerer: "jev" | "stub" |
+  "agent", via?: "home", model? }` — so a later reader (or a keep that
+  labels a decision) knows whether Jev chose it or the stub threw dice. A
+  variation carries its screen's answerer and the actor who asked for it.
 - **Variations come at the end of every flow**, in the same op group:
   under each screen, up to two siblings titled `<Screen> · <what flipped>`
   (`List · data table instead of stacked list`, `Detail · without button

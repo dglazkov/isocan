@@ -49,6 +49,8 @@ export function registerVary(host: CliHost, wire: Command): void {
         }
         const siblings = wires.filter((w) => w.spec.variantOf === screen.item);
         const canvas = new FlowCanvas(port, newGroupId());
+        // The decisions are the screen's answerer's; the hands that asked for the variation are this actor's.
+        if (screen.spec.by) canvas.by = { ...screen.spec.by, ...(port.actor ? { actor: port.actor } : {}) };
         const made = await addVariations(canvas, screen, siblings, count);
         const left = honestFlips(screen.spec, [...siblings, ...made].map((v) => v.spec.flip!).filter(Boolean));
         if (ctx.json) {

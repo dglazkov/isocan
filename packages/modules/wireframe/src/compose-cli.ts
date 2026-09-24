@@ -8,7 +8,7 @@ import { answeredResponse, pendingRound, requestBlueprint, roundCalls, type Roun
 import { FlowCanvas, applyRound, composeFlow, costLine, flowsOn, pickFlow, startFlow, styleAt, type OnAsked } from "./flow.ts";
 import { StyleResolver } from "./restyle.ts";
 import { flagPack } from "./content/choose.ts";
-import { wireSize, wireTitle } from "./spec.ts";
+import { wireBy, wireSize, wireTitle } from "./spec.ts";
 
 /**
  * **`isocan wire "<request>"` — a flow, composed in rounds, drawn in place.**
@@ -121,7 +121,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
             answerer: composed.by,
             firstBlueprintMs: composed.firstMs,
             totalMs: composed.totalMs,
-            screens: composed.screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots, ...(s.spec.varied ? { varied: s.spec.varied } : {}), ...(s.spec.need !== undefined ? { need: s.spec.need } : {}), ...(s.spec.maybe ? { maybe: true } : {}) })),
+            screens: composed.screens.map((s) => ({ itemId: s.item, title: s.spec.title, archetype: s.spec.archetype, platform: s.spec.platform, slots: s.spec.slots, ...(s.spec.varied ? { varied: s.spec.varied } : {}), ...(s.spec.need !== undefined ? { need: s.spec.need } : {}), ...(s.spec.maybe ? { maybe: true } : {}), ...(s.spec.by ? { by: s.spec.by } : {}) })),
             variations: composed.variants.map((v) => ({ itemId: v.item, title: wireTitle(v.spec), variantOf: v.spec.variantOf, flip: v.spec.flip })),
             rounds: tallies,
             style: composed.style ?? { source: "default" },
@@ -174,6 +174,8 @@ export async function answer(host: CliHost, file: string, cmd: Command): Promise
     return answeredResponse({ ...call, response: mine.response! }, `${file}'s call for ${call.item}`);
   });
   const canvas = new FlowCanvas(port, flow);
+  // An agent answered this round: its screens say so, under the actor it went out as.
+  canvas.by = wireBy("agent", port.actor);
   // An agent's flow arrives in the governing system too. Round 1 asks for the mapping (Jev with a
   // key, else the home's judge, else the stub, whose flat answers keep the default); later rounds
   // read it off the screens.

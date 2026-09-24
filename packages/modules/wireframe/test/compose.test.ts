@@ -5,7 +5,7 @@ import { FIDELITY_PROP, applyOperation, invertOperation, type CanvasState, type 
 import {
   ARCHETYPE_WORDS, HEADER_OPTIONS, JEV_URL, MAYBE_FLOOR, MAYBE_PROP, assemblePrototype, keepPatch, maybeItems, maybeMarked, maybeProperties, NAV_OPTIONS, NEEDS_YES, RECIPES, applyProps, applyPropsRound, applyStructure, navOwners, propsRequests, blueprint, component, decideFlow, flowRequest, flowScreen,
   jevAnswerer, pendingRound, presentElements, propsRequest, readResponse, recipe, renderWire, requestBlueprint, responseProblems,
-  composeFlow, readWire, structureRequest, stubAnswerer, validateWire, wireframe,
+  composeFlow, readWire, structureRequest, stubAnswerer, validateWire, wireBy, wireframe,
   type Answerer, type JevRequest, type JevResponse, type WirePort, type WireSpec,
 } from "../src/core.ts";
 
@@ -512,6 +512,26 @@ describe("a composed flow arrives fleshed", () => {
     const full = await composeFlow(fleshed.port, REQUEST, stubAnswerer(3));
     expect(fleshed.log.length).toBe(plain.log.length);
     expect(full.tallies[0]!.calls).toBe(basic.tallies[0]!.calls + 1);
+  });
+
+  it("signs every screen and variation with who drew it — the actor and the answerer — and not the blueprint before anyone answered", async () => {
+    const h = reducerPort();
+    const port = { ...h.port, actor: { id: "usr_acme", name: "Acme Walker" } };
+    const firstSpecs: WireSpec[] = [];
+    const composed = await composeFlow(port, REQUEST, stubAnswerer(3), { onBlueprint: (first) => void firstSpecs.push(first.spec) });
+    expect(firstSpecs[0]!.by).toBeUndefined();
+    for (const s of [...composed.screens, ...composed.variants]) {
+      expect(h.specOf(s.item).by).toEqual({ actor: { id: "usr_acme", name: "Acme Walker" }, answerer: "stub", model: "stub (seed 3)" });
+      expect(validateWire(h.specOf(s.item))).toEqual([]);
+    }
+  });
+
+  it("reads an answerer's name as who answered", () => {
+    expect(wireBy("jev-1.13.0")).toEqual({ answerer: "jev", model: "jev-1.13.0" });
+    expect(wireBy("jev-1.13.0 via the home", { id: "usr_a", name: "Acme" })).toEqual({ actor: { id: "usr_a", name: "Acme" }, answerer: "jev", via: "home", model: "jev-1.13.0" });
+    expect(wireBy("stub via the home")).toEqual({ answerer: "stub", via: "home", model: "stub" });
+    expect(wireBy("agent")).toEqual({ answerer: "agent" });
+    expect(validateWire({ ...wireframe("home", { request: "Acme", flow: "f" }), by: { answerer: "model" } })).toContain("by must be { answerer: jev | stub | agent, actor?, via?, model? }");
   });
 
   it("a pack that cannot be chosen leaves the flow in bars and says so — never a flow that fails", async () => {

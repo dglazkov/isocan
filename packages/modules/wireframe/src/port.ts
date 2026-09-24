@@ -25,6 +25,8 @@ export interface WirePort {
    * actually landed (a group's placement may move it); anything else, void.
    */
   send(op: Operation, group: string): Promise<{ x: number; y: number } | void>;
+  /** Who the ops go out as — recorded on what the composer draws (`WireSpec.by`). Absent where the surface cannot say. */
+  readonly actor?: { id: string; name: string } | undefined;
 }
 
 /** The current version of an item — the one it shows. */

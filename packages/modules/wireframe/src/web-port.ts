@@ -10,9 +10,10 @@ import type { WirePort } from "./port.ts";
  * bot's). Where an added item landed is read back off the replica, which the
  * echo has already moved.
  */
-export function webPort(canvasId: string, host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas">): WirePort {
+export function webPort(canvasId: string, host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas"> & Partial<Pick<DialogHost, "viewer">>): WirePort {
   return {
     canvasId,
+    actor: host.viewer ? { id: host.viewer.id, name: host.viewer.name } : undefined,
     canvas: async () => host.getCanvas(),
     readText: (blobHash) => host.readText(blobHash),
     put: (text, mimeType, filename) => host.putBlob(new Blob([text], { type: mimeType }), filename),

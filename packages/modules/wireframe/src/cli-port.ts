@@ -11,6 +11,14 @@ import type { WirePort } from "./port.ts";
 export function cliPort(host: CliHost, ctx: Ctx, canvasId: string): WirePort {
   return {
     canvasId,
+    // Read lazily: the actor is a getter that demands a name, and a read-only verb has no need of one.
+    get actor() {
+      try {
+        return { id: ctx.actor.id, name: ctx.actor.name };
+      } catch {
+        return undefined;
+      }
+    },
     canvas: async () => (await ctx.client.snapshot(canvasId)).canvas,
     readText: async (blobHash) => Buffer.from(await ctx.client.downloadBlob(canvasId, blobHash)).toString("utf8"),
     put: async (text, mimeType, filename) => {
