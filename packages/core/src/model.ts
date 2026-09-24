@@ -257,8 +257,13 @@ export interface Comment {
    * `designDecision` and `design` confer authority, so minting one has to be
    * impossible. This takes authority AWAY. The worst an author can do with it
    * is decline to page people they could simply not have named.
+   *
+   * **A roll-call line says which** (`roll.ts`): `"here"`, `"back"` or
+   * `"away"` in place of `true` — an agent saying it arrived, came back or
+   * stepped away. Still a record everywhere a record is read truthily, and
+   * the one value the next arrival reads to know what this agent last said.
    */
-  record?: true;
+  record?: true | import("./roll.ts").RollKind;
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];

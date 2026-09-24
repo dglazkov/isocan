@@ -883,6 +883,11 @@ export function dispatchReason(
   // "Sian couldn't answer" landing in Sian's own thread would re-summon
   // Sian — the failure message waking the failure, forever (phase 5).
   if (isSystemActor(authorId)) return null;
+  // A record wakes nobody under ANY rule. `reasonFor` already makes it no
+  // summons, but it was still a change, so an `--all-ops` agent took a
+  // transcript as work — and two agents' roll-call hellos ("Percy is here")
+  // as work for each other, which is a loop.
+  if ((op as { comment?: Comment }).comment?.record) return null;
   // The speaker gate, outside the composition and before it. Order is the
   // whole point: a mention pierces every filter below, and the one thing it
   // must not pierce is whose word this agent answers to.

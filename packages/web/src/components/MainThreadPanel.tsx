@@ -184,7 +184,7 @@ export function withoutCommand(body: string): string {
  * waits on nobody either.
  */
 export function awaitingReply(
-  thread: { comments: { author: { id: string }; record?: true }[] },
+  thread: { comments: { author: { id: string }; record?: Comment["record"] }[] },
   actorId: string,
 ): boolean {
   const last = thread.comments[thread.comments.length - 1];

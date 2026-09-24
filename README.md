@@ -1255,3 +1255,13 @@ The rc announces its policy with its hold, so the tray and `isocan who` say
 *listens only to Nico* before anybody asks, and the add-agent dialog is
 offered to the rc's owner alone. Only the owner's word widens: a gate
 somebody else wrote into the enrolment is set aside, and said.
+
+**A standing agent says when it arrives.** When an `isocan rc` takes up an
+agent on a canvas, the agent posts one line in the Chat in its own name —
+*"Percy is here — answering a mention or the Chat; listens only to Nico."* —
+once its first hold is answering; *is back* after more than five minutes
+away, and *stepped away* when the rc is stopped on purpose. A flapping
+connection or a quick restart says nothing. The lines are records, so they
+summon nobody, and no agent answers another's hello. `isocan rc
+--no-announce`, or `rcAnnounce` in `~/.isocan/config.json` (`false`, or a list
+of agent names and canvas ids), keeps it quiet.

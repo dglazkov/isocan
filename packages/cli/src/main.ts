@@ -505,7 +505,7 @@ import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
-import { fileRcRows, readRcAgents, removeRcAgent, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type RcAgentRow } from "./rc.ts";
+import { announceRule, fileRcRows, readRcAgents, removeRcAgent, rollMemory, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type RcAgentRow } from "./rc.ts";
 import { actorNamesOn, itemCenter, mapState, nameResolver, runRoom, threadLocus, type RoomAdapter, type RoomState, type RoomTurn } from "@isocan/rc";
 import { AcpAgentProcess, adapterEnv } from "./acp.ts";
 import { agentSessionOf, keysMovedLines, machineAgentKey, moveToMachineKeys } from "./agent-key.ts";
@@ -13058,6 +13058,9 @@ interface RcShared {
    * a module.
    */
   state: RoomState;
+  /** Whether arrivals are said in the Chat at all this run — false under
+   * `--no-announce`; `config.json`'s `rcAnnounce` narrows it per room. */
+  announce: boolean;
   upgrade: { upgrading: boolean; upgraded: string | null };
   standDowns: (() => Promise<void>)[];
 }
@@ -13089,8 +13092,9 @@ rcCommand
   .option("--sandbox", "fence every adapter: its own directory, ~/.isocan, /tmp, this daemon and its harness's API")
   .option("--codex-sandbox", "opt in to Codex tool sandboxing; exact daemon host and configured domains, no escalation")
   .option("--unsandboxed", "run adapters with your own reach, overriding config.json's sandbox")
+  .option("--no-announce", "say nothing in the Chat when an agent arrives, comes back or steps away (config.json's rcAnnounce: false, always)")
   .action(
-  run(async (opts: { all?: boolean; defaultHarness?: string; sandbox?: boolean; unsandboxed?: boolean; codexSandbox?: boolean }, cmd: Command) => {
+  run(async (opts: { all?: boolean; defaultHarness?: string; sandbox?: boolean; unsandboxed?: boolean; codexSandbox?: boolean; announce?: boolean }, cmd: Command) => {
     const ctx = await ctxOf(cmd);
     /**
      * The user/agent divide, enforced (the naming door's residue, decided
@@ -13137,7 +13141,8 @@ rcCommand
       rooms: rooms.length,
       sandbox: fence,
       codexSandbox: nativeCodex,
-      state: mapState(),
+      state: rollMemory(ctx.home, mapState()),
+      announce: opts.announce !== false,
       upgrade: { upgrading: false, upgraded: null },
       standDowns: [],
     };
@@ -13250,7 +13255,9 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
    * overrides either. */
   const limitsConfig = await readConfigFile<{
     rcLimits?: { turnsPerHour?: number; agentChain?: number };
+    rcAnnounce?: boolean | string[];
   }>(ctx.home);
+  const announce = announceRule(limitsConfig.rcAnnounce, shared.announce, p.id);
   const origin = (await ctx.homeOf(p.id).catch(() => null)) ?? ctx.client.base;
 
   /**
@@ -13347,6 +13354,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
     agentKey: (name) => machineAgentKey(ctx.home, name),
     narrate: print,
     state: shared.state,
+    ...(announce ? { announce } : {}),
     limits: {
       turnsPerHour: limitsConfig.rcLimits?.turnsPerHour ?? 12,
       agentChain: limitsConfig.rcLimits?.agentChain ?? 3,

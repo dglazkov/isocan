@@ -4,6 +4,7 @@ import type {
   ActorClaimOp,
   ActorJoins,
   Canvas,
+  CanvasContents,
   CanvasSnapshotResponse,
   CreateSessionResponse,
   EnrolledAgent,
@@ -19,6 +20,7 @@ import type {
   RcHoldRequest,
   RcHoldResponse,
   RcPolicy,
+  RollKind,
   UpdateSessionRequest,
   WatchLogRequest,
   WatchLogResponse,
@@ -35,10 +37,14 @@ import {
   gateSetAside,
   isSystemActor,
   lapsedFor,
+  lastRoll,
   mayWake,
   newId,
   ownersWord,
   policyWords,
+  rollDue,
+  rollOp,
+  rollWords,
   rulesOf,
   speakersFor,
   turnedAway,
@@ -223,6 +229,15 @@ export interface RoomDeps {
   clock: { now(): number };
   /** Resolves after `ms`, or as soon as `signal` aborts. Never rejects. */
   sleep(ms: number, signal: AbortSignal): Promise<void>;
+  /**
+   * **Whether this agent's arrivals are said in the Chat** — the roll call
+   * (`roll.ts` in core): "Percy is here", "Percy is back", and "Percy
+   * stepped away" when the room stops on purpose. Absent: never, so a host
+   * opts in; the laptop's `isocan rc` does unless `--no-announce` or
+   * `config.json`'s `rcAnnounce` says otherwise. When the host persists
+   * `state`, the `seen:` keys are what make a restart within the window quiet.
+   */
+  announce?: (agent: Actor) => boolean;
 }
 
 export interface Room {
@@ -260,7 +275,14 @@ const keys = {
   /** An agent another badge holds: its cursor was refused `not-your-actor`,
    * and that was said. Deleted when a later start parks it. */
   notHeldSaid: (canvasId: string, actorId: string) => `said:${canvasId}:not-held:${actorId}`,
+  /** When this agent was last held on this canvas (ms) — the roll call's
+   * memory across a restart, written at most once a minute. */
+  seen: (canvasId: string, actorId: string) => `seen:${canvasId}:${actorId}`,
 };
+
+/** How stale the persisted `seen` may run: a minute against a five-minute
+ * window, so one write a minute per agent and canvas is plenty. */
+const SEEN_EVERY_MS = 60_000;
 
 /** The desk's refusal for an actor the presenting badge does not hold. */
 const NOT_YOUR_ACTOR = "not-your-actor";
@@ -279,18 +301,29 @@ const heldElsewhere = (err: unknown): boolean =>
 export function runRoom(deps: RoomDeps): Room {
   const life = new AbortController();
   let announcement: { sessionId: string } | null = null;
+  let leave: (() => Promise<void>) | null = null;
   const stop = async (): Promise<void> => {
     life.abort();
     const announced = announcement;
     announcement = null;
+    const leaving = leave;
+    leave = null;
     await Promise.all([
       deps.routes.rcRelease?.({ canvasId: deps.canvas.id }).catch(() => {}),
       announced ? deps.routes.endSession(deps.canvas.id, announced.sessionId).catch(() => {}) : undefined,
+      leaving?.().catch(() => {}),
     ]);
   };
-  const done = room(deps, life.signal, (made) => {
-    announcement = made;
-  });
+  const done = room(
+    deps,
+    life.signal,
+    (made) => {
+      announcement = made;
+    },
+    (say) => {
+      leave = say;
+    },
+  );
   return { stop, done };
 }
 
@@ -298,6 +331,7 @@ async function room(
   deps: RoomDeps,
   life: AbortSignal,
   announce: (made: { sessionId: string } | null) => void,
+  onLeave: (say: () => Promise<void>) => void,
 ): Promise<void> {
   const { routes, rows, state, clock } = deps;
   const p = deps.canvas;
@@ -633,6 +667,85 @@ async function room(
   };
 
   /**
+   * **The roll call** (`roll.ts` in core): each agent says in the Chat, in
+   * its own name, that it is here — once a hold naming it has come back, so
+   * it is never said of an agent that did not become answerable — and that it
+   * is back after being gone longer than `ROLL_AWAY_MS`, whether the gap was a
+   * restart (the `seen` memory and the Chat's own last line say how long) or
+   * a connection lost inside this room (the last hold that came back does).
+   * A quick reconnect says nothing. On a deliberate stop it says it stepped
+   * away; a dismissal says nothing, because the withdraw op already did.
+   */
+  const rolls = new Map<string, { last: { kind: RollKind; at: number } | null; seen: number | undefined; kept: number }>();
+  const sayRoll = async (record: EnrolledAgent, kind: RollKind, canvas: CanvasContents | null): Promise<boolean> => {
+    const words =
+      policyWords(policyOf(record), (id) => known.get(id) ?? policyState.nameOf(id), undefined, policyState.joined) ??
+      "listens to everyone";
+    const body = rollWords(kind, record.actor.name, words);
+    // Twice at most: the second time over a fresh read, for the race where
+    // somebody else birthed the Chat between the read and the write.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const at = attempt === 0 && canvas ? canvas : (await routes.snapshot(p.id).catch(() => null))?.canvas;
+      if (!at) break;
+      try {
+        await routes.sendOp(p.id, record.actor, rollOp(at, kind, body));
+        narrate(`${record.actor.name} · said in the Chat — ${body}`);
+        return true;
+      } catch (err) {
+        if (attempt === 1 || !(err instanceof ApiError && err.code === "main-exists")) {
+          narrate(`${record.actor.name} · could not say "${kind}" in the Chat — ${(err as Error).message}`);
+          return false;
+        }
+      }
+    }
+    return false;
+  };
+  const rollCall = async (actorIds: readonly string[], began: number): Promise<void> => {
+    if (!deps.announce) return;
+    const ended = clock.now();
+    let canvas: CanvasContents | null = null;
+    for (const actorId of actorIds) {
+      const record = policyState.roster[actorId];
+      if (!record || !dispatches.has(actorId)) continue;
+      let mine = rolls.get(actorId);
+      if (!mine) {
+        // First hold for this agent in this room: what the Chat and the
+        // host remember say whether this is news.
+        canvas ??= (await routes.snapshot(p.id).catch(() => null))?.canvas ?? null;
+        if (!canvas) continue;
+        const seen = await state.get(keys.seen(p.id, actorId));
+        mine = { last: lastRoll(canvas, actorId), seen: typeof seen === "number" ? seen : undefined, kept: 0 };
+        rolls.set(actorId, mine);
+      }
+      const due = deps.announce(record.actor) ? rollDue({ last: mine.last, seen: mine.seen, now: began }) : null;
+      if (due && (await sayRoll(record, due, canvas))) {
+        mine.last = { kind: due, at: ended };
+        canvas = null;
+      }
+      mine.seen = ended;
+      if (ended - mine.kept >= SEEN_EVERY_MS) {
+        mine.kept = ended;
+        await state.set(keys.seen(p.id, actorId), ended);
+      }
+    }
+  };
+  let rolling: Promise<void> = Promise.resolve();
+  onLeave(async () => {
+    if (!deps.announce) return;
+    await rolling;
+    const now = clock.now();
+    for (const [actorId, mine] of rolls) {
+      const record = policyState.roster[actorId];
+      if (!record) continue;
+      await state.set(keys.seen(p.id, actorId), now);
+      // Only an agent that is said to be here is said to have left.
+      if (mine.last && mine.last.kind !== "away" && deps.announce(record.actor)) {
+        await sayRoll(record, "away", null);
+      }
+    }
+  });
+
+  /**
    * **The connection IS the fact** (on-demand phase 6). This hold, re-issued
    * back-to-back until the room stops, is what makes the roster's
    * `answerable` true: the daemon counts these agents answerable exactly while
@@ -641,8 +754,7 @@ async function room(
    * seconds; the gap between holds can only err toward "not answerable", the
    * permitted direction.
    */
-  const holdOnce = (): Promise<RcHoldResponse> => {
-    const actorIds = [...dispatches.keys()];
+  const holdOnce = (actorIds: string[] = [...dispatches.keys()]): Promise<RcHoldResponse> => {
     // The policy rides the hold (owner-only summons): the web and
     // `isocan who` read whose word this rc takes from the same value
     // dispatch applies, so the two cannot differ.
@@ -701,14 +813,19 @@ async function room(
     while (!life.aborted) {
       try {
         let held: RcHoldResponse | null;
+        const began = clock.now();
+        const holding = [...dispatches.keys()];
         try {
-          held = await holdOnce();
+          held = await holdOnce(holding);
         } catch (err) {
           if (!(err instanceof ApiError && err.code === NOT_YOUR_ACTOR) || life.aborted) throw err;
           held = await holdAfterRefusal();
         }
         if (!held) continue;
         holdRefusedSaid = false;
+        // Off the hold's path: the next hold goes out now, and what the roll
+        // call reads and writes happens beside it, one lap at a time.
+        if (!life.aborted) rolling = rolling.then(() => rollCall(holding, began)).catch(() => {});
         /**
          * **The handshake's last hop** (agent-custody mechanism 2): the Web
          * UI's "add an agent" arrives inside the hold, and the host that will
@@ -1132,6 +1249,7 @@ async function room(
         narrate(`${by.name} dismissed ${name} — no longer answering here`);
         await rows.remove(p.id, op.actorId);
         dispatches.delete(op.actorId);
+        rolls.delete(op.actorId);
         await state.delete(keys.session(op.actorId));
         continue;
       }

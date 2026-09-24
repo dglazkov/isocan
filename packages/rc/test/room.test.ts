@@ -101,6 +101,9 @@ class AcmeHome {
   polls: AbortSignal[] = [];
   /** Lap polls to refuse as a lost connection before answering again. */
   dropLaps = 0;
+  /** While true, every hold is refused as a lost connection: the daemon is
+   * gone, or the network between. */
+  holdsDown = false;
   /** What lands just before the room's start tip is read — after its opening
    * roster read, inside the window neither branch of the lap can see. */
   beforeStartTip: (() => void) | null = null;
@@ -153,12 +156,26 @@ class AcmeHome {
   }
 
   append(actor: Actor, op: Operation): void {
+    if (op.type === "thread.create" && op.main && Object.values(this.threads).some((t) => t.main)) {
+      throw new ApiError(400, "canvas already has a main thread", "main-exists");
+    }
     const seq = this.log.length + 1;
     this.log.push({ seq, envelope: { actor, op, ts: new Date(this.clock.now).toISOString() } } as unknown as WatchedLogEntry);
     if (op.type === "thread.create" || op.type === "thread.reply") {
-      const o = op as unknown as { threadId: string; comment: { id: string; body: string } };
-      const thread = (this.threads[o.threadId] ??= { id: o.threadId, createdBy: actor, comments: [] } as unknown as CommentThread);
-      thread.comments.push({ id: o.comment.id, body: o.comment.body, author: actor } as CommentThread["comments"][number]);
+      const o = op as unknown as { threadId: string; main?: true; comment: { id: string; body: string; record?: true | string } };
+      const thread = (this.threads[o.threadId] ??= {
+        id: o.threadId,
+        createdBy: actor,
+        comments: [],
+        ...(o.main ? { main: true } : {}),
+      } as unknown as CommentThread);
+      thread.comments.push({
+        id: o.comment.id,
+        body: o.comment.body,
+        author: actor,
+        createdAt: new Date(this.clock.now).toISOString(),
+        ...(o.comment.record ? { record: o.comment.record } : {}),
+      } as CommentThread["comments"][number]);
     }
     for (const wake of this.waiters.splice(0)) wake();
   }
@@ -230,6 +247,7 @@ class AcmeHome {
         return { seq: home.tip };
       },
       rcHold: async (request: { actorIds: string[] }, signal?: AbortSignal) => {
+        if (home.holdsDown) throw new TypeError("fetch failed");
         try {
           home.refuseUnheld(request.actorIds);
         } catch (err) {
@@ -345,7 +363,13 @@ interface Turn {
 function roomOver(
   home: AcmeHome,
   clock: HandClock,
-  options: { state?: RoomState; limits?: RoomDeps["limits"]; rows?: RcAgentRow[]; agentKey?: RoomDeps["agentKey"] } = {},
+  options: {
+    state?: RoomState;
+    limits?: RoomDeps["limits"];
+    rows?: RcAgentRow[];
+    agentKey?: RoomDeps["agentKey"];
+    announce?: RoomDeps["announce"];
+  } = {},
 ) {
   const lines: string[] = [];
   const turns: Turn[] = [];
@@ -385,6 +409,7 @@ function roomOver(
     limits: options.limits ?? { turnsPerHour: 12, agentChain: 3 },
     clock: { now: () => clock.now },
     sleep: clock.sleep,
+    ...(options.announce ? { announce: options.announce } : {}),
   };
   return { deps, lines, turns, rows };
 }
@@ -1074,5 +1099,184 @@ describe("the room over in-memory deps", () => {
     expect(bodies()).toEqual(["@Percy please check", line, "The empty state now says what to do."]);
     await room.stop();
     await room.done;
+  });
+});
+
+/**
+ * **The roll call** (`roll.ts` in core): an agent says in the Chat, in its own
+ * name, that it is here — once, after its first hold comes back — that it is
+ * back after longer than the window, and that it stepped away when the room
+ * is stopped on purpose. A connection that flaps says nothing.
+ */
+describe("the roll call", () => {
+  const QUILL: Actor = { id: "act_quill", name: "Quill" };
+  const HERE = "Percy is here — answering a mention or the Chat; listens only to Ada.";
+  const BACK = "Percy is back — answering a mention or the Chat; listens only to Ada.";
+  const AWAY = "Percy stepped away — not answering here until it is back.";
+  const chat = (home: AcmeHome) =>
+    (Object.values(home.threads).find((t) => t.main)?.comments ?? []).map((c) => `${c.author.name}: ${c.body}`);
+  const always = () => true;
+
+  it("says it is here once, in its own name and as a record, after its first hold comes back", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const state = jsonState();
+    const { deps, lines } = roomOver(home, clock, { state, announce: always });
+    const room = runRoom(deps);
+    await clock.advance(0);
+    // Not before the hold has come back: "is here" is never said of an agent
+    // that did not become answerable.
+    expect(chat(home)).toEqual([]);
+
+    await clock.advance(10_000);
+    expect(chat(home)).toEqual([`Percy: ${HERE}`]);
+    const said = Object.values(home.threads).find((t) => t.main)!.comments[0]!;
+    expect(said).toMatchObject({ record: "here" });
+    expect(lines).toContain(`Percy · said in the Chat — ${HERE}`);
+    expect(state.data.has(`seen:${CANVAS.id}:${PERCY.id}`)).toBe(true);
+
+    // Holding on, hold after hold, says nothing more.
+    await clock.advance(20 * 60_000);
+    expect(chat(home)).toEqual([`Percy: ${HERE}`]);
+
+    await room.stop();
+    await room.done;
+    expect(chat(home)).toEqual([`Percy: ${HERE}`, `Percy: ${AWAY}`]);
+  });
+
+  it("a connection lost for less than the window says nothing; lost for longer, it says it is back", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const { deps } = roomOver(home, clock, { announce: always });
+    const room = runRoom(deps);
+    await clock.advance(10_000);
+    expect(chat(home)).toEqual([`Percy: ${HERE}`]);
+
+    // A daemon restart, a dropped poll: a minute of refused holds.
+    home.holdsDown = true;
+    await clock.advance(60_000);
+    home.holdsDown = false;
+    await clock.advance(30_000);
+    expect(chat(home)).toEqual([`Percy: ${HERE}`]);
+
+    // Six minutes gone is news.
+    home.holdsDown = true;
+    await clock.advance(6 * 60_000);
+    home.holdsDown = false;
+    await clock.advance(30_000);
+    expect(chat(home)).toEqual([`Percy: ${HERE}`, `Percy: ${BACK}`]);
+    await room.stop();
+    await room.done;
+  });
+
+  it("a restart inside the window is quiet, and one after it says back — the Chat and the host's memory are the rule", async () => {
+    for (const [agoMs, expected] of [
+      [2 * 60_000, [`Percy: ${HERE}`]],
+      [10 * 60_000, [`Percy: ${HERE}`, `Percy: ${BACK}`]],
+    ] as const) {
+      const clock = new HandClock();
+      clock.now = 50 * 60_000;
+      const home = new AcmeHome(clock);
+      home.enrol(PERCY);
+      // What the last run said half an hour ago and remembered since, before
+      // it died without a word.
+      clock.now -= 30 * 60_000;
+      home.append(PERCY, {
+        type: "thread.create",
+        threadId: "thr_chat",
+        x: 0,
+        y: 0,
+        anchorItemId: null,
+        main: true,
+        comment: { id: "cmt_here", body: HERE, record: "here" },
+      } as Operation);
+      clock.now += 30 * 60_000;
+      const state = jsonState();
+      await state.set(`seen:${CANVAS.id}:${PERCY.id}`, clock.now - agoMs);
+      const { deps } = roomOver(home, clock, { state, announce: always });
+      const room = runRoom(deps);
+      await clock.advance(30_000);
+      expect(chat(home)).toEqual(expected);
+      await room.stop();
+      await room.done;
+    }
+  });
+
+  it("a deliberate stop says it stepped away, and the next start says back however soon", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const state = jsonState();
+    const first = runRoom(roomOver(home, clock, { state, announce: always }).deps);
+    await clock.advance(10_000);
+    await first.stop();
+    await first.done;
+    expect(chat(home)).toEqual([`Percy: ${HERE}`, `Percy: ${AWAY}`]);
+
+    await clock.advance(5_000);
+    const second = runRoom(roomOver(home, clock, { state, announce: always }).deps);
+    await clock.advance(10_000);
+    expect(chat(home)).toEqual([`Percy: ${HERE}`, `Percy: ${AWAY}`, `Percy: ${BACK}`]);
+    await second.stop();
+    await second.done;
+  });
+
+  it("two agents arriving together say hello and answer nothing — not each other, not even parked on every op", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY, OWNER, { ops: ["*"], listen: ["*"] });
+    home.enrol(QUILL, OWNER, { ops: ["*"], listen: ["*"] });
+    const rows: RcAgentRow[] = [PERCY, QUILL].map((a) => ({
+      canvasId: CANVAS.id,
+      actorId: a.id,
+      name: a.name,
+      harness: "claude-code",
+      cwd: `/acme/${a.name.toLowerCase()}`,
+      sessionId: null,
+    }));
+    const { deps, turns } = roomOver(home, clock, { rows, announce: always });
+    const room = runRoom(deps);
+    await clock.advance(10_000);
+    await clock.advance(60_000);
+    expect(chat(home)).toEqual([
+      "Percy: Percy is here — answering a mention or the Chat; listens to everyone.",
+      "Quill: Quill is here — answering a mention or the Chat; listens to everyone.",
+    ]);
+    // Nobody was summoned by either hello — the room's own dispatch read both.
+    expect(turns).toEqual([]);
+    await room.stop();
+    await room.done;
+    expect(turns).toEqual([]);
+  });
+
+  it("an agent the host keeps quiet says nothing, and a host that never opted in says nothing at all", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    home.enrol(QUILL);
+    const rows: RcAgentRow[] = [PERCY, QUILL].map((a) => ({
+      canvasId: CANVAS.id,
+      actorId: a.id,
+      name: a.name,
+      harness: "claude-code",
+      cwd: "/acme",
+      sessionId: null,
+    }));
+    const quiet = runRoom(roomOver(home, clock, { rows, announce: (a) => a.id !== QUILL.id }).deps);
+    await clock.advance(10_000);
+    expect(chat(home)).toEqual([`Percy: ${HERE}`]);
+    await quiet.stop();
+    await quiet.done;
+    expect(chat(home)).toEqual([`Percy: ${HERE}`, `Percy: ${AWAY}`]);
+
+    const other = new AcmeHome(clock);
+    other.enrol(PERCY);
+    const silent = runRoom(roomOver(other, clock).deps);
+    await clock.advance(20 * 60_000);
+    await silent.stop();
+    await silent.done;
+    expect(chat(other)).toEqual([]);
   });
 });

@@ -2,7 +2,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { ApiError } from "@isocan/api";
-import type { RcAgentRow, RoomRows } from "@isocan/rc";
+import type { Actor } from "@isocan/core";
+import type { RcAgentRow, RoomRows, RoomState } from "@isocan/rc";
 
 /**
  * **The enrolment record's rc half** (agents-on-demand phase 2).
@@ -175,4 +176,67 @@ export function fileRcRows(home: string): RoomRows {
     remove: (canvasId, actorId) => removeRcAgent(home, canvasId, actorId),
     setSessionId: (canvasId, actorId, sessionId) => setRcSessionId(home, canvasId, actorId, sessionId),
   };
+}
+
+/**
+ * **The roll call's memory across a restart** (`roll.ts` in core). The rooms
+ * share a `Map` as their state, so nothing survives a restart — right for the
+ * guards, wrong for "when was Percy last held here", which is exactly what a
+ * restart asks. So the `seen:` keys, and only those, are also kept in
+ * `~/.isocan/rc-seen.json`: an rc stopped and started again inside five
+ * minutes reads that it was just here and says nothing. Losing the file costs
+ * at most one "is back" per canvas, because the Chat's own last line is the
+ * other half of the rule.
+ */
+export function rollMemory(home: string, inner: RoomState): RoomState {
+  const file = path.join(home, "rc-seen.json");
+  const seen = (key: string) => key.startsWith("seen:");
+  let disk: Promise<Record<string, number>> | null = null;
+  const load = () =>
+    (disk ??= fs
+      .readFile(file, "utf8")
+      .then((text) => JSON.parse(text) as Record<string, number>)
+      .catch(() => ({}) as Record<string, number>));
+  // One write at a time from this process, each a whole replacement.
+  let writing: Promise<void> = Promise.resolve();
+  const save = (all: Record<string, number>) => {
+    writing = writing
+      .then(async () => {
+        await fs.mkdir(home, { recursive: true });
+        const temporary = `${file}.${randomUUID()}.tmp`;
+        await fs.writeFile(temporary, `${JSON.stringify(all, null, 2)}\n`);
+        await fs.rename(temporary, file);
+      })
+      .catch(() => {});
+    return writing;
+  };
+  return {
+    get: async (key) => (seen(key) ? ((await inner.get(key)) ?? (await load())[key]) : inner.get(key)),
+    set: async (key, value) => {
+      await inner.set(key, value);
+      if (!seen(key) || typeof value !== "number") return;
+      const all = await load();
+      all[key] = value;
+      await save(all);
+    },
+    delete: (key) => inner.delete(key),
+  };
+}
+
+/**
+ * **Who stays quiet in the Chat** — `config.json`'s `rcAnnounce`: `false`
+ * turns every arrival line off on this machine, and a list names the agents
+ * (by name or actor id) and canvases (by id) that stay quiet, for a person who
+ * wants Percy announced everywhere but on the board they present from.
+ * `isocan rc --no-announce` is the same `false` for one run.
+ */
+export function announceRule(
+  config: boolean | string[] | undefined,
+  flag: boolean,
+  canvasId: string,
+): ((agent: Actor) => boolean) | undefined {
+  if (!flag || config === false) return undefined;
+  const quiet = new Set(Array.isArray(config) ? config.map((v) => v.toLowerCase()) : []);
+  if (quiet.has(canvasId.toLowerCase())) return undefined;
+  return (agent) => !quiet.has(agent.name.toLowerCase()) && !quiet.has(agent.id.toLowerCase());
 }
