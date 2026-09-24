@@ -7,7 +7,10 @@ card-grid | data-table`). A slot nobody has chosen draws as a **blue
 blueprint box** with its name; a chosen one draws in **grey**. The screen
 lands as an ordinary HTML item with its spec embedded in it, so comments,
 versions, undo and `isocan get` all work on it, and it still renders on a
-home without this module.
+home without this module. The file is **the screen alone** — no name strip
+above it and no device outline inside it: the item's own title names it and
+the item's own frame is the device. The screen's own chrome (status bar, app
+bar, tab bar) stays.
 
 - `isocan wire "<request>"` composes a **flow** from words: a blueprint
   titled with the request lands at once, then an answerer is asked in three
@@ -21,8 +24,13 @@ home without this module.
   key either it says so and the stub answers; `--answerer stub` draws a
   random but valid flow, deterministic under `--seed`; `--answerer agent`
   leaves the rounds to you. A person does the same from the Chat with
-  `/wire <request>` (and `/wire prototype`, `/wire style`): the browser
-  runs this same composer against the home's judge, as that person. The last line says who answered, the latency
+  `/wire <request>` (and `/wire prototype`, `/wire style`, `/wire flesh`,
+  `/wire rerender`): the browser runs this same composer against the home's
+  judge, as that person, and when it finishes it leaves one **record in the
+  Chat** in the Wire builder's words — what was made and the numbers — in
+  the act's own op group, so the undo that takes the flow back takes its
+  record too. The CLI prints those lines to you instead and posts nothing:
+  post your ONE comment saying what landed. The last line says who answered, the latency
   per round, calls, input tokens and cost. `--save <dir>` keeps every
   round's request and response; `--at x,y` starts the row somewhere.
 - **Variations come at the end of every flow**, in the same op group:
@@ -33,13 +41,15 @@ home without this module.
   the most probability first — and nothing whose runner-up is under 0.10.
   Nothing is asked again: the probabilities are the ones the screen already
   carries. A screen whose answerer was sure everywhere gets no sibling and
-  says **one way to draw this** under its title. A variation's spec has
+  says **one way to draw this** (the screen's tooltip, `data-varied="none"`
+  on its body, and the CLI's line). A variation's spec has
   `variantOf` (its screen's item id) and `flip` (`{slot, from, to}`; `omit`
   is a section left out). The header and nav are never varied — the flow
   fixed them once for every screen.
 - `isocan wire vary <screen> [--count n]` adds more, the next least certain
   flips a sibling does not already show, under the lowest sibling, in an op
-  group of their own; `--count` is how many variations the screen should
+  group of their own, inside the screen's canvas group when it has one;
+  `--count` is how many variations the screen should
   have in all (default 2), so running it twice adds nothing. It refuses a
   variation (vary its screen) and a hand-drawn screen (no distribution).
 - **Keepers**: `isocan wire keep <items...>` marks screens 📐 — the property
@@ -63,11 +73,19 @@ home without this module.
 - `isocan wire link <screen> <element> <target>` overrides one hotspot —
   `<element>` is the key or its part after `#` when that is unique —
   `--none` switches it off, `--back` sends it back, `--clear` gives it back
-  to the rules. It is the property `wireLinks` on the source screen, through
-  `item.update`, so one `isocan undo` takes it back.
+  to the rules. Each hotspot's override is its own property on the source
+  screen, `wireLink:<slot>#<element>`, through `item.update` — so two `wire
+  link` calls on one screen at once (or a person retargeting an arrow while
+  you relink) both survive; a screen still carrying the older `wireLinks`
+  JSON is folded into per-hotspot properties by the first write. It reads
+  only the source screen's file and exits when the write lands; one `isocan
+  undo` takes it back. A target may be a screen **kept in another flow**:
+  the link resolves, and that screen joins this flow's prototype so the
+  link plays.
 - `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`
   when more than one flow is kept) as **one self-contained HTML item** to the
-  right of them: every screen, a router with a history stack, the links as
+  right of them — inside the canvas group the kept screens share, when they
+  share one: every screen, a router with a history stack, the links as
   click targets, a push / pop / fade / slide-up by link kind, a Restart. Run
   it again after a kept screen changes and the same item **gains a version**
   (found by its `wirePrototype` property); with nothing changed it writes
@@ -89,15 +107,23 @@ home without this module.
   restyles one flow; `--check` writes nothing and lists wires behind the
   system that governs them (a new `DESIGN.md` version does not restyle
   anything by itself — run `wire style` to bring them forward). Running it
-  again with nothing changed asks nothing and writes nothing. A kept flow's
+  again with nothing changed asks nothing and writes nothing — and a new
+  system version that maps every role to the same values as before writes
+  nothing either (the wire looks the same; its spec keeps naming the version
+  that drew it). Words drawn in the primary's voice on the ground — text
+  links, secondary and tertiary button labels, the current tab — use the
+  primary only where it reads at 4.5:1 on the ground, else the ink. A kept flow's
   prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the
   home's judge maps it; when the home has no key either, the stub answers,
   and its flat distributions keep every asked role at the default. The spec records it as `style` (`{ "source": "design-system",
   "itemId", "versionId", "roles" }`).
 - `isocan wire "<request>"` starts in the governing system: the mapping is
   asked while round 1 is, and the screens arrive in it. `--in <group>`
-  composes the flow inside a group — and in that group's own system, when it
-  has one.
+  composes the flow inside a group — under everything the group already
+  holds, so a second flow never lands across the first's variations — and in
+  that group's own system, when it has one. Moving a `DESIGN.md` into or out
+  of a group changes what it governs, and `isocan mv --in` / `canvas group
+  add|remove` say so in a `note:` line.
 - **Fleshed out: sample content instead of bars.** `isocan wire flesh
   [screens…|--flow <id>] [--pack <id>]` fills every wire with believable
   content for *this* app — list rows with titles, second lines and
@@ -143,6 +169,18 @@ home without this module.
 - `isocan wire render <spec.json>` draws a spec and adds it to the canvas —
   one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,
   `--anchor`, `--in`/`--cell` place it like `isocan add`.
+- `isocan wire render --all [--flow <id>]` **re-renders every wire already
+  on the canvas** from the spec it carries — how a change to the renderer
+  reaches screens drawn before it (a flesh or a restyle writes only where
+  the spec changed). A version only where the bytes differ, the item resized
+  where the screen's size moved, kept flows' prototypes rebuilt, all one op
+  group; it says how many changed, and a rerun writes nothing. `/wire
+  rerender` in the Chat does the same.
+- **Finding prototypes**: a prototype item carries `wirePrototype=<flow>`
+  and is titled `Prototype · <request>`, so `isocan ls --filter Prototype` finds
+  them (`--json` shows the property). In the web app ⌘K *Find prototypes* (or
+  `/wire prototypes`) lists them and selects them, and while a pointer is on
+  the minimap every prototype is lit and everything else steps back.
 
 **Words are typed, never free.** A button's label is its **intent**'s label
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of

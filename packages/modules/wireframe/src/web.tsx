@@ -4,6 +4,7 @@ import type { DialogFacts, UnderlayFacts, WebModule } from "@isocan/core";
 import { WireArrows } from "./arrows.tsx";
 import { wireframeCore } from "./command.ts";
 import { WireDialog } from "./dialog.tsx";
+import { PROTOTYPE_PROP } from "./prototype.ts";
 
 /**
  * **The web half** (phase 5) — fetched, never bundled into first paint: the
@@ -16,6 +17,15 @@ export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never,
   core: wireframeCore,
   underlays: [WireArrows],
   dialogs: [{ id: "wire", title: "Wireframes", component: WireDialog }],
+  // ⌘K: find the prototypes on a busy canvas (phase 8) — a door, not a write: it opens `/wire prototypes`.
+  actions: [{
+    id: "wire-prototypes",
+    name: "Find prototypes",
+    hint: "select the clickable prototypes on this canvas",
+    available: ({ canvas }) => Object.values(canvas.items).some((i) => i.properties?.[PROTOTYPE_PROP] !== undefined),
+    opens: "wire",
+    args: "prototypes",
+  }],
 };
 
 export default wireframeWeb;

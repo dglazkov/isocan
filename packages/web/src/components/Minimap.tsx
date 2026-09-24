@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { itemKind, kindFamily } from "@isocan/core";
+import { itemKind, kindFamily, spotlit } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { ItemPeek } from "./ItemThumb.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -205,7 +205,7 @@ export function Minimap() {
           {Object.values(canvas.items).map((item) => (
         <rect
           key={item.id}
-          className={`minimap-item${peek?.itemId === item.id ? " peeked" : ""}`}
+          className={`minimap-item${peek?.itemId === item.id ? " peeked" : ""}${lit && spotlit(item) ? " spot" : ""}`}
           /* The family, not the kind: core owns the split (`kindFamily`), so
              the stylesheet never holds a second copy of the kind list and a
              module's kind is placed without the sheet having met it. */

@@ -2,7 +2,7 @@ import { INTENT_BY_ID, component, type DrawContext, type Region, type Section } 
 import { esc } from "./catalog/draw.ts";
 import { hotKey } from "./links.ts";
 import {
-  CAPTION_HEIGHT, PLATFORM_SIZE, defaultIntent, propsFor, recipe, validateWire, wireTitle, type WireSlot, type WireSpec,
+  PLATFORM_SIZE, defaultIntent, propsFor, recipe, validateWire, wireTitle, type WireSlot, type WireSpec,
 } from "./spec.ts";
 import { themeDecls, type WireStyle } from "./theme.ts";
 
@@ -21,6 +21,14 @@ import { themeDecls, type WireStyle } from "./theme.ts";
  *   labels on actionable elements, from their intents; bars for body copy —
  *   or, on a fleshed screen (design §10), each slot's `fill`: sample words,
  *   numbers and pictograms, drawn in the same roles.
+ *
+ * **Just the screen** (phase 8). The file is the screen and nothing else: no
+ * name strip above it (the item's own title names it on the canvas) and no
+ * device outline inside the item's frame (the item's frame IS the device —
+ * two sets of corners that disagree is what Dion saw). The app chrome that
+ * belongs to the screen — its status bar, app bar, tab bar — stays. The
+ * prototype sets several frames side by side on a stage (`renderFrame`), and
+ * keeps its outlines there, where no item frame surrounds each one.
  *
  * The file is self-contained — no font, script or stylesheet it has to
  * fetch — and carries its own spec, so it outlives the module that drew it.
@@ -58,12 +66,10 @@ const WIRE_CSS = `
 *{box-sizing:border-box}
 html,body{margin:0;background:${PAGE}}
 body{font:14px/1.4 var(--w-font);color:var(--w-ink);padding:0}
-.cap{height:${CAPTION_HEIGHT}px;display:flex;align-items:center;gap:8px;padding:0 4px;font-size:13px;font-weight:700;color:var(--w-ink)}
-.cap small{font-weight:500;color:var(--w-ink-muted);text-transform:uppercase;letter-spacing:.06em;font-size:10px}
-.cap small{margin-left:8px}.cap.one-way{flex-direction:column;align-items:flex-start;justify-content:center;gap:0;line-height:1.2}.cap.one-way>small{margin:0;text-transform:none;letter-spacing:0;font-style:italic}
 .frame{position:relative;display:flex;flex-direction:column;background:var(--w-ground);border:1.5px solid var(--w-line);border-radius:4px;overflow:hidden}
 .frame.app{border-radius:28px}
 .frame.site{overflow:visible}
+body.screen>.frame{border:0;border-radius:0}
 .frame>.body{flex:1;display:flex;min-height:0}
 .frame>.body>.main{flex:1;display:flex;flex-direction:column;gap:${S(1.5)};padding:${S(2)};min-width:0;overflow:hidden}
 .frame.site>.body>.main{overflow:visible}
@@ -105,15 +111,15 @@ body{font:14px/1.4 var(--w-font);color:var(--w-ink);padding:0}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 18px;border-radius:var(--w-radius);font-weight:700;font-size:15px;border:1.5px solid var(--w-primary);white-space:nowrap}
 .btn.block{flex:1;width:100%}
 .btn.primary{background:var(--w-primary);color:var(--w-on-primary)}
-.btn.secondary{background:var(--w-ground);color:var(--w-primary)}
-.btn.tertiary{background:transparent;border-color:transparent;color:var(--w-primary);text-decoration:underline}
+.btn.secondary{background:var(--w-ground);color:var(--w-link)}
+.btn.tertiary{background:transparent;border-color:transparent;color:var(--w-link);text-decoration:underline}
 .btn.destructive{background:var(--w-ground);color:var(--w-ink);border-color:var(--w-ink);border-width:3px}
 .btn.s{height:32px;padding:0 12px;font-size:13px}
 .btn.l{height:52px}
 .btn.disabled{background:var(--w-surface);border-color:var(--w-line);color:var(--w-ink-muted)}
 .btn.loading::after{content:"…"}
 .ibtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-size:18px;color:var(--w-ink);flex:none}
-.lnk{color:var(--w-primary);font-weight:600;text-decoration:underline;font-size:14px}
+.lnk{color:var(--w-link);font-weight:600;text-decoration:underline;font-size:14px}
 .link-row{display:flex;gap:8px;justify-content:center;align-items:center;padding:6px 0}
 .link-row .bar{width:90px!important}
 .av{display:inline-block;border-radius:50%;background:var(--w-surface);border:1.5px solid var(--w-line);flex:none}
@@ -177,7 +183,7 @@ body{font:14px/1.4 var(--w-font);color:var(--w-ink);padding:0}
 .tabbar{display:flex;height:64px;border-top:1px solid var(--w-surface)}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--w-ink-muted)}
 .tab b{font-size:20px;font-weight:400}.tab small{font-size:11px;font-weight:600}
-.tab.on{color:var(--w-primary)}.tab.on small{text-decoration:underline}
+.tab.on{color:var(--w-link)}.tab.on small{text-decoration:underline}
 .sidenav{display:flex;flex-direction:column;gap:2px;padding:12px 8px;flex:1}
 .sidenav hr{border:0;border-top:1px solid var(--w-surface);width:100%}
 .nav-i{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:${R(12)};font-weight:600;color:var(--w-ink-muted);font-size:14px}
@@ -190,7 +196,7 @@ body{font:14px/1.4 var(--w-font);color:var(--w-ink);padding:0}
 .steps{display:flex;gap:8px;align-items:flex-start}
 .step{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
 .step b{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--w-line);font-size:12px;color:var(--w-ink-muted)}
-.step.on b{border-color:var(--w-primary);color:var(--w-primary)}
+.step.on b{border-color:var(--w-primary);color:var(--w-link)}
 .step.done b{background:${SELECTED};border-color:${SELECTED};color:var(--w-on-primary)}
 .step .bar{width:70%!important}
 .chart{border:1px solid var(--w-surface);border-radius:${R(16)};padding:12px}
@@ -367,7 +373,6 @@ span.tx{display:inline}
 /** The skeleton's sheet — written only when some slot is undecided. Every selector begins `.sk`. */
 const SKELETON_CSS = `
 .sk-frame{border-color:${BLUE}!important;background:#ffffff linear-gradient(${BLUE_GROUND} 1px,transparent 1px) 0 0/100% 24px}
-.sk-cap small{color:${BLUE}}
 .sk{display:flex;flex-direction:column}
 .sk .sk-box{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;border:1px solid ${BLUE};border-radius:3px;background:#ffffff;padding:8px;text-align:center}
 .sk.opt .sk-box{border-style:dashed}
@@ -459,8 +464,7 @@ function specJson(spec: WireSpec): string {
  */
 export function renderWire(spec: WireSpec): string {
   const frame = renderFrame(spec);
-  const undecided = spec.slots.some((s) => s.block === null);
-  const state = spec.slots.every((s) => s.block === null) ? "blueprint" : undecided ? "drawing" : "wireframe";
+  const state = spec.slots.every((s) => s.block === null) ? "blueprint" : spec.slots.some((s) => s.block === null) ? "drawing" : "wireframe";
   const { width } = PLATFORM_SIZE[spec.platform];
   const title = esc(wireTitle(spec));
   return `<!doctype html>
@@ -473,8 +477,7 @@ ${WIRE_MARKER}
 <script type="application/json" id="${WIRE_SCRIPT_ID}">${specJson(spec)}</script>
 <style>${wireCss(spec)}</style>
 </head>
-<body data-archetype="${esc(spec.archetype)}" data-state="${state}">
-<div class="cap${undecided ? " sk-cap" : ""}${spec.varied === "none" ? " one-way" : ""}"><span>${title}<small>${state}</small></span>${spec.varied === "none" ? "<small>one way to draw this</small>" : ""}</div>
+<body class="screen" data-archetype="${esc(spec.archetype)}" data-state="${state}"${spec.varied === "none" ? ` data-varied="none" title="one way to draw this"` : ""}>
 ${frame}
 </body>
 </html>

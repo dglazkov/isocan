@@ -361,7 +361,7 @@ function moduleActions(): Action[] {
           const canvas = useCanvasStore.getState().canvas;
           return onCanvas(ctx) && canvas !== null && (a.available?.({ canvas, selection: ctx.selection }) ?? true);
         },
-        run: () => useUiStore.getState().openModuleDialog(a.opens!),
+        run: () => useUiStore.getState().openModuleDialog(a.opens!, a.args),
       } : ({
         id: a.id,
         name: a.name,

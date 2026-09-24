@@ -1,4 +1,4 @@
-import { FIDELITY_PROP, newGroupId, newItemId, newVersionId, type CanvasContents, type Item, type Operation } from "@isocan/core";
+import { FIDELITY_PROP, groupContentBox, groupDescendants, newGroupId, newItemId, newVersionId, type CanvasContents, type Item, type Operation } from "@isocan/core";
 import { RECIPES } from "./catalog/index.ts";
 import { JEV_INPUT_PRICE, type Answerer, type JevResponse } from "./answerer.ts";
 import {
@@ -38,6 +38,19 @@ export interface Screen {
   y: number;
   width: number;
   height: number;
+  /** The group the screen's item sits in, if any — where its variations and its prototype go too. */
+  containerId?: string;
+}
+
+/** Where an added item goes besides its spot: a group, placed exactly where it was asked (Porchlight #2, #6). */
+export interface Into {
+  containerId: string;
+  groupPlacement: "exact";
+}
+
+/** The group an item sits in, as the fields an `item.add` carries to land in it too. */
+export function intoOf(item: { containerId?: string | undefined } | undefined): Into | undefined {
+  return item?.containerId ? { containerId: item.containerId, groupPlacement: "exact" } : undefined;
 }
 
 function slugOf(title: string): string {
@@ -54,8 +67,12 @@ export class FlowCanvas {
    * system governs arrives in it. Unset: the default look.
    */
   style: WireStyle | undefined;
-  /** Merged into every placement this canvas adds at — a group's membership, for `wire --in <group>`. */
-  placeIn: Record<string, unknown> = {};
+  /**
+   * The group every item this canvas adds lands in — `wire --in <group>`'s,
+   * or the source screen's for a variation. Sent as the op's own
+   * `containerId` (not inside `placement`), which both surfaces' writers read.
+   */
+  into: Into | undefined;
   /**
    * The pack a `wire --flesh` flow fills from (design §10): stamped on every
    * screen as round 3 draws it, so the flow arrives fleshed — no second pass.
@@ -80,23 +97,23 @@ export class FlowCanvas {
     return this.port.send(op, this.group);
   }
 
-  async add(given: WireSpec, placement: Record<string, unknown>): Promise<Screen> {
+  async add(given: WireSpec, placement: Record<string, unknown>, into: Into | undefined = this.into): Promise<Screen> {
     const itemId = newItemId();
     const spec = this.styled(given, itemId);
     const { width, height } = wireSize(spec);
-    const where = { ...placement, ...this.placeIn };
     const at = await this.send({
       type: "item.add",
       itemId,
       version: await this.version(spec),
       width,
       height,
-      placement: where as never,
+      placement: placement as never,
       title: wireTitle(spec),
       properties: { [FIDELITY_PROP]: "wireframe" },
+      ...(into ?? {}),
     });
-    const landed = at ?? (where as { x?: number; y?: number });
-    return { item: itemId, spec, x: landed.x ?? 0, y: landed.y ?? 0, width, height };
+    const landed = at ?? (placement as { x?: number; y?: number });
+    return { item: itemId, spec, x: landed.x ?? 0, y: landed.y ?? 0, width, height, ...(into ? { containerId: into.containerId } : {}) };
   }
 
   /** A new version of the same item — the screen fills in place — and its title and size if they moved. */
@@ -116,6 +133,24 @@ export function rowStart(canvas: CanvasContents): { x: number; y: number; chosen
   if (items.length === 0) return { x: 0, y: 0, chosen: true };
   const left = Math.min(...items.map((i) => i.x));
   const bottom = Math.max(...items.map((i) => i.y + i.height));
+  return { x: Math.round(left), y: Math.round(bottom + 160), chosen: true };
+}
+
+/**
+ * Where a new flow's row starts inside a group: under everything the group
+ * already holds (its descendants, nested groups and all), at their left edge —
+ * or the group's content corner when it is empty.
+ */
+export function rowStartIn(canvas: CanvasContents, groupId: string): { x: number; y: number; chosen: true } {
+  const group = canvas.items[groupId];
+  if (!group) throw new Error(`no group ${groupId} on this canvas`);
+  const inside = groupDescendants(canvas, groupId);
+  if (inside.length === 0) {
+    const box = groupContentBox(group);
+    return { x: Math.round(box.x), y: Math.round(box.y), chosen: true };
+  }
+  const left = Math.min(...inside.map((i) => i.x));
+  const bottom = Math.max(...inside.map((i) => i.y + i.height));
   return { x: Math.round(left), y: Math.round(bottom + 160), chosen: true };
 }
 
@@ -224,8 +259,10 @@ export async function addVariations(canvas: FlowCanvas, screen: Screen, siblings
   const specs = variations(screen.spec, screen.item, count, siblings.map((v) => v.spec.flip!).filter(Boolean));
   const made: Screen[] = [];
   let bottom = Math.max(screen.y + screen.height, ...siblings.map((v) => v.y + v.height));
+  // In the screen's own group, so moving the group takes its variations along (Porchlight #2).
+  const into = canvas.into ?? (screen.containerId ? { containerId: screen.containerId, groupPlacement: "exact" as const } : undefined);
   for (const spec of specs) {
-    const v = await canvas.add(spec, { x: screen.x, y: bottom + GAP, chosen: true });
+    const v = await canvas.add(spec, { x: screen.x, y: bottom + GAP, chosen: true }, into);
     bottom = v.y + v.height;
     made.push(v);
     canvas.variants.push(v);
@@ -242,7 +279,7 @@ export async function wiresOn(port: Pick<WirePort, "readText">, canvas: CanvasCo
     const current = currentVersionOf(item);
     if (!current || current.mimeType !== "text/html") return null;
     const spec = readWire(await port.readText(current.blobHash));
-    return spec ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height } : null;
+    return spec ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height, ...(item.containerId ? { containerId: item.containerId } : {}) } : null;
   }));
   return read.filter((s): s is Screen => s !== null);
 }
@@ -334,11 +371,15 @@ export interface Composed {
 export async function startFlow(port: WirePort, request: string, placement?: Record<string, unknown>): Promise<{ canvas: FlowCanvas; first: Screen; flow: string }> {
   const flow = newGroupId();
   const canvas = new FlowCanvas(port, flow);
-  const where = placement ?? rowStart(await port.canvas());
+  const { containerId, groupPlacement, ...spot } = (placement ?? rowStart(await port.canvas())) as Record<string, unknown> & { containerId?: string; groupPlacement?: string };
+  // The whole flow joins the group, at exactly the spots the row computes.
+  if (typeof containerId === "string") canvas.into = { containerId, groupPlacement: "exact" };
+  // `--in <group>` without `--at`: under everything already in the group, as a
+  // flow at the root goes under everything on the canvas — not in the first gap
+  // the first screen fits, from which the row would run over what is beside it
+  // (Porchlight #1: a second flow laid across the first's variations).
+  const where = typeof containerId === "string" && groupPlacement !== "exact" ? rowStartIn(await port.canvas(), containerId) : spot;
   const first = await canvas.add(requestBlueprint(request, flow), where);
-  // The rest of the flow joins the same group, where the writer puts it.
-  const container = (where as { containerId?: string }).containerId;
-  if (container) canvas.placeIn = { containerId: container, groupPlacement: "exact" };
   return { canvas, first, flow };
 }
 

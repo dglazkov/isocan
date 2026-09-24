@@ -13,6 +13,9 @@ import { registerVary } from "./vary-cli.ts";
 import { registerLinks } from "./links-cli.ts";
 import { registerStyle } from "./style-cli.ts";
 import { registerFlesh } from "./flesh-cli.ts";
+import { cliPort } from "./cli-port.ts";
+import { wiresOn } from "./flow.ts";
+import { rerender, rerenderLines, rerenderSummary } from "./rerender.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
@@ -64,19 +67,26 @@ function register(host: CliHost): void {
     .action(run((file: string, _opts: unknown, cmd: Command) => answer(host, file, cmd)));
 
   wire
-    .command("render <spec>")
-    .description("Draw a wireframe spec (a JSON file) and add it to the canvas as an HTML screen with the spec inside it")
+    .command("render [spec]")
+    .description("Draw a wireframe spec (a JSON file) and add it to the canvas as an HTML screen with the spec inside it — or, with --all, draw every wire on the canvas again from the spec it carries (one op group; a version only where the bytes change)")
     .option("--canvas <canvas>")
+    .option("--all", "re-render every wire already on the canvas from its own spec — how a renderer change reaches screens drawn before it")
+    .option("--flow <flow>", "with --all: only this flow's screens and their variations")
     .option("--title <title>", "the item's title (default: the spec's title)")
     .option("--at <x,y>", "place at world coordinates")
     .option("--anchor <item>", "place to the left of this item")
     .option("--in <group>", "insert into this group")
     .option("--cell <row,col>", "with --in: one cell of the sheet's grid")
     .action(
-      run(async (file: string, _local: unknown, cmd: Command) => {
+      run(async (file: string | undefined, _local: unknown, cmd: Command) => {
         // `--at` is `wire`'s own flag too (it starts a composed row), so read
         // it wherever commander put it.
-        const opts = cmd.optsWithGlobals() as { title?: string; at?: string; anchor?: string; in?: string; cell?: string };
+        const opts = cmd.optsWithGlobals() as { title?: string; at?: string; anchor?: string; in?: string; cell?: string; all?: boolean; flow?: string };
+        if (opts.all || opts.flow !== undefined) {
+          if (file !== undefined) throw new Error("--all draws the wires already on the canvas — give it no spec file");
+          return rerenderAll(host, cmd, opts.flow);
+        }
+        if (file === undefined) throw new Error("which spec? `isocan wire render <spec.json>` adds a screen; `isocan wire render --all` re-renders the ones already here");
         let spec: WireSpec;
         try {
           spec = JSON.parse(await readFile(file, "utf8")) as WireSpec;
@@ -155,6 +165,31 @@ function register(host: CliHost): void {
         console.log(`\n${RECIPES.length} archetypes, ${BLOCKS.length} blocks, ${PRIMITIVES.length} primitives, ${INTENTS.length} intents — \`isocan wire catalog --json\` has every prop and intent.`);
       }),
     );
+}
+
+/** `wire render --all [--flow]`: every wire drawn again from its spec, one op group. */
+async function rerenderAll(host: CliHost, cmd: Command, flow: string | undefined): Promise<void> {
+  const ctx = await host.ctxOf(cmd);
+  const p = await host.resolveCanvas(ctx);
+  const port = cliPort(host, ctx, p.id);
+  const canvas = await port.canvas();
+  const all = await wiresOn(port, canvas);
+  const screens = flow === undefined ? all : all.filter((s) => s.spec.flow === flow);
+  if (screens.length === 0) throw new Error(flow === undefined ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `no wireframe in flow "${flow}" on this canvas`);
+  const r = await rerender(port, canvas, all, screens);
+  if (ctx.json) {
+    return host.printJson({
+      group: r.group,
+      wires: r.screens.length,
+      rerendered: r.changed.map((s) => ({ itemId: s.item, title: wireTitle(s.spec) })),
+      unchanged: r.screens.length - r.changed.length,
+      resized: r.resized,
+      prototypes: r.prototypes,
+    });
+  }
+  for (const line of rerenderLines(r)) console.log(line);
+  for (const pr of r.prototypes) if (pr.what !== "unchanged") console.log(`prototype ${pr.itemId} — rebuilt as a new version`);
+  console.log(rerenderSummary(r).replace("one undo takes", "`isocan undo` takes"));
 }
 
 export const wireframeCli: CliModule = {

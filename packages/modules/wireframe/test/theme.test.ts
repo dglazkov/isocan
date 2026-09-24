@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseDesign } from "@isocan/core";
 import {
-  COMPONENTS, DEFAULT_THEME, RECIPES, ROLES, applyMapping, assemblePrototype, blueprint, candidatesOf, guardContrast,
+  COMPONENTS, DEFAULT_THEME, DERIVED_ROLES, RECIPES, ROLES, applyMapping, linkColor, sameLook, assemblePrototype, blueprint, candidatesOf, guardContrast,
   inferLinks, mappingRequest, readWire, renderFrame, renderWire, sameStyle, stubAnswerer, themeCss, validateWire, wireframe,
   type JevRequest, type JevResponse, type PropDef, type WireSpec, type WireStyle,
 } from "../src/core.ts";
@@ -45,7 +45,8 @@ describe("the wire sheet reads roles and nothing else", () => {
   it("holds no literal colour, and every custom property it reads is a role", () => {
     expect(__WIRE_CSS).not.toMatch(LITERAL);
     const read = new Set([...__WIRE_CSS.matchAll(/var\(--w-([a-z-]+)\)/g)].map((m) => m[1]!));
-    expect([...read].filter((r) => !(ROLES as readonly string[]).includes(r))).toEqual([]);
+    // …or a derived role (`link`), computed from the roles in `themeDecls`, never mapped.
+    expect([...read].filter((r) => !([...ROLES, ...DERIVED_ROLES] as readonly string[]).includes(r))).toEqual([]);
     // Every role is used by the sheet (font through body, radius and space through the controls).
     for (const role of ROLES) expect(read.has(role), role).toBe(true);
   });

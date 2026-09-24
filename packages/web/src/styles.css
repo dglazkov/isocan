@@ -3543,6 +3543,10 @@ button.mt-card:hover { border-color: var(--accent); }
 /* The node under the pointer outranks its family: the peek card names the
    kind in words, so the colour is free to say "this one" instead. */
 .minimap-item.peeked, .minimap.lit .minimap-item.peeked { fill: var(--accent); }
+/* A module's spotlights (`CoreModule.spotlights` — a prototype among forty
+   screens): while the map is lit, they stand out and everything else steps back. */
+.minimap.lit .minimap-item.spot { fill: var(--accent); stroke: var(--ink); stroke-width: 1.5px; }
+.minimap.lit:has(.spot) .minimap-item:not(.spot):not(.peeked) { opacity: 0.35; }
 @media (prefers-reduced-motion: reduce) { .minimap-item { transition: none; } }
 
 .minimap-dock {
@@ -6680,6 +6684,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .item.canvas-group .group-border.east { right: 0; }
 .item.canvas-group .group-border.west { left: 0; }
 .item.canvas-group .group-brief { position: absolute; box-sizing: border-box; white-space: pre-wrap; overflow: hidden; font-size: 16px; line-height: 1.4; padding: 8px 0; pointer-events: auto; }
+/* The brief is Markdown: rendered paragraphs keep single line breaks (`breaks`) and add no margin the band has no room for. */
+.item.canvas-group .group-brief p { white-space: normal; margin: 0; }
+.item.canvas-group .group-brief p + p { margin-top: 0.5em; }
 .group-member-count { flex-shrink: 0; margin-left: auto; padding-left: 16px; font-size: 14px; font-weight: 400; }
 .canvas-group-scope { position: absolute; top: 62px; left: 16px; z-index: var(--z-bar); display: flex; align-items: center; padding: 6px; gap: 5px; max-width: calc(100% - 100px); overflow-x: auto; }
 .canvas-group-scope button { white-space: nowrap; border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 6px 9px; }

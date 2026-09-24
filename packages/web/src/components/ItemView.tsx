@@ -1969,7 +1969,8 @@ function GroupBrief({ canvasId, blobHash }: { canvasId: string; blobHash: string
     fetchBlobText(canvasId, blobHash).then((text) => { if (live) setText(text); }).catch(() => { if (live) setText("Brief unavailable"); });
     return () => { live = false; };
   }, [canvasId, blobHash]);
-  return <>{text}</>;
+  // Markdown, as the CLI's help promises ("the group's Markdown brief") — it drew its asterisks literally until phase 8 of wireframes.
+  return <Markdown breaks>{text}</Markdown>;
 }
 
 /** Saved grid gutters use the same cell boxes as placement; labels never cover cell contents. */

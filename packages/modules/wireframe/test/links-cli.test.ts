@@ -10,7 +10,7 @@ import { LINKS_PROP, PROTOTYPE_MARKER, PROTOTYPE_PROP, renderWire, resolveSlot, 
  *
  * Four kept screens in a row — Acme's sign in, home, deliveries, delivery —
  * and one unkept settings screen. What this holds: `link` is one
- * `item.update` of `wireLinks` on the source screen; `prototype` is one
+ * `item.update` of that hotspot's own `wireLink:<key>` on the source screen; `prototype` is one
  * `item.add` beside the kept screens the first time and an `item.addVersion`
  * on the same item after a kept screen changes, each under one op group; a
  * rebuild with nothing changed writes nothing.
@@ -41,10 +41,11 @@ function harness() {
     blobs.set(hash, html);
     return hash;
   };
-  const put = (id: string, title: string, spec: WireSpec, x: number, kept = true) => {
+  const downloads: string[] = [];
+  const put = (id: string, title: string, spec: WireSpec, x: number, kept = true, y = 0) => {
     const blobHash = store(renderWire(spec));
     items.set(id, {
-      id, title, x, y: 0, width: 390, height: 876,
+      id, title, x, y, width: 390, height: 844,
       properties: { [FIDELITY_PROP]: "wireframe", ...(kept ? { wireKeep: "yes" } : {}) },
       currentVersionId: `v-${id}-1`, versions: [{ id: `v-${id}-1`, blobHash, mimeType: "text/html" }],
     });
@@ -63,7 +64,10 @@ function harness() {
         const html = bytes.toString("utf8");
         return { blobHash: store(html), size: bytes.length };
       },
-      downloadBlob: async (_canvas: string, hash: string) => Buffer.from(blobs.get(hash)!, "utf8"),
+      downloadBlob: async (_canvas: string, hash: string) => {
+        downloads.push(hash);
+        return Buffer.from(blobs.get(hash)!, "utf8");
+      },
       // A home with no key of its own: what every test daemon is.
       judgment: async () => {
         throw Object.assign(new Error("this home has no judge"), { code: "judgment-unavailable" });
@@ -128,7 +132,8 @@ function harness() {
     item.versions.push(version);
     item.currentVersionId = version.id;
   };
-  return { cli, sent, items, blobs, errors, rewrite };
+  const add = (id: string, title: string, spec: WireSpec, x: number, y: number) => put(id, title, spec, x, true, y);
+  return { cli, sent, items, blobs, errors, rewrite, downloads, add };
 }
 
 describe("isocan wire links", () => {
@@ -147,20 +152,50 @@ describe("isocan wire links", () => {
 });
 
 describe("isocan wire link", () => {
-  it("is one item.update of wireLinks on the source screen; --none and --clear follow", async () => {
+  it("is one item.update of that hotspot's own property on the source screen; --none and --clear follow", async () => {
     const h = harness();
     await h.cli("wire", "link", "it_list", "row", "it_settings");
     expect(h.errors).toEqual([]);
     expect(h.sent).toHaveLength(1);
-    expect(h.sent[0]!.op).toMatchObject({ type: "item.update", itemId: "it_list", patch: { properties: { [LINKS_PROP]: JSON.stringify({ "main.3#row": "it_settings" }) } } });
+    // One property per hotspot (phase 8): a second writer on another hotspot cannot drop this one.
+    expect(h.sent[0]!.op).toEqual({ type: "item.update", itemId: "it_list", patch: { properties: { "wireLink:main.3#row": "it_settings" } } });
     // Settings is not kept, so the link names it and waits.
     expect(await h.cli("wire", "links", "it_list")).toMatch(/main\.3#row\s+Row\s+- - needs a screen that is not kept \(it_settings\)\s+override/);
     await h.cli("wire", "link", "it_list", "main.3#row", "--none");
-    expect(JSON.parse(h.items.get("it_list")!.properties[LINKS_PROP]!)).toEqual({ "main.3#row": "none" });
+    expect(h.items.get("it_list")!.properties["wireLink:main.3#row"]).toBe("none");
     expect(await h.cli("wire", "links", "it_list")).toMatch(/main\.3#row\s+Row\s+off\s+override/);
     await h.cli("wire", "link", "it_list", "row", "--clear");
+    expect(h.items.get("it_list")!.properties["wireLink:main.3#row"]).toBeUndefined();
+    expect(h.sent.at(-1)!.op).toMatchObject({ patch: { removeProperties: ["wireLink:main.3#row"] } });
+    // Clearing what is already clear sends nothing.
+    const before = h.sent.length;
+    await h.cli("wire", "link", "it_list", "row", "--clear");
+    expect(h.sent.length).toBe(before);
     expect(h.items.get("it_list")!.properties[LINKS_PROP]).toBeUndefined();
-    expect(h.sent.at(-1)!.op).toMatchObject({ patch: { removeProperties: [LINKS_PROP] } });
+  });
+
+  it("reads only the source screen's file — not every wire on the canvas (Porchlight #3)", async () => {
+    const h = harness();
+    const reads = h.downloads.length;
+    await h.cli("wire", "link", "it_list", "row", "it_detail");
+    expect(h.errors).toEqual([]);
+    expect(h.downloads.slice(reads)).toEqual([h.items.get("it_list")!.versions[0]!.blobHash]);
+  });
+
+  it("links to a screen kept in ANOTHER flow, and the prototype plays it (Porchlight #5)", async () => {
+    const h = harness();
+    // A second flow with its own kept Profile screen.
+    h.add("it_profile", "Profile", wireframe("profile", { request: "Acme lending side", flow: "flw_lend" }), 0, 2000);
+    await h.cli("wire", "link", "it_home", "tab-4", "it_profile");
+    expect(h.errors).toEqual([]);
+    const printed = await h.cli("wire", "links", "--flow", "flw_acme");
+    expect(printed).toMatch(/nav#tab-4\s+Profile\s+→ "Profile"\s+override/);
+    expect(printed).not.toMatch(/not kept/);
+    // The guest is not listed as one of this flow's screens.
+    expect(printed).not.toMatch(/^it_profile /m);
+    await h.cli("wire", "prototype", "--flow", "flw_acme");
+    const add = h.sent.find((s) => s.op.type === "item.add")!.op as Extract<Operation, { type: "item.add" }>;
+    expect(h.blobs.get(add.version.blobHash)!).toContain('data-screen="it_profile"');
   });
 
   it("refuses a hotspot the screen does not have, and a target that is not a screen", async () => {

@@ -1,6 +1,7 @@
 import { FIDELITY_PROP, newItemId, newVersionId, type CanvasContents, type Item } from "@isocan/core";
 import { kept } from "./keep.ts";
-import { LINKS_PROP, inferLinks, readOverrides, type WireLink, type WireScreen } from "./links.ts";
+import { inferLinks, type WireLink, type WireScreen } from "./links.ts";
+import { overridesOf } from "./link-override.ts";
 import { currentVersionOf, type WirePort } from "./port.ts";
 import { PROTOTYPE_PROP, assemblePrototype, prototypeSize } from "./prototype.ts";
 
@@ -17,6 +18,14 @@ export interface KeptFlow {
   request: string;
   screens: WireScreen[];
   items: Item[];
+  /**
+   * Kept screens of OTHER flows that one of this flow's overrides links to
+   * (`wire link <home> tab-3 <a screen kept in the other flow>`), appended
+   * after this flow's own so the link resolves and the prototype plays it
+   * (Porchlight #5). Their own hotspots are inferred here too, so the
+   * prototype does not dead-end on them; the listing and the arrows skip them.
+   */
+  guests: string[];
 }
 
 /** The kept screens, grouped by flow, each group in reading order — from wires already read. */
@@ -27,12 +36,25 @@ export function keptFlowsOf(canvas: CanvasContents, screens: ReadonlyArray<{ ite
     const wire = wires.get(item.id);
     if (!wire) continue;
     const flow = wire.spec.flow;
-    const entry = flows.get(flow) ?? { flow, request: wire.spec.request, screens: [], items: [] };
-    entry.screens.push({ id: item.id, title: item.title, spec: wire.spec, overrides: readOverrides(item.properties?.[LINKS_PROP]) });
+    const entry = flows.get(flow) ?? { flow, request: wire.spec.request, screens: [], items: [], guests: [] };
+    entry.screens.push({ id: item.id, title: item.title, spec: wire.spec, overrides: overridesOf(item.properties) });
     entry.items.push(item);
     flows.set(flow, entry);
   }
-  return [...flows.values()];
+  const all = [...flows.values()];
+  const home = new Map(all.flatMap((f) => f.screens.map((s, i) => [s.id, { screen: s, item: f.items[i]! }] as const)));
+  for (const f of all) {
+    const own = new Set(f.screens.map((s) => s.id));
+    for (const target of f.screens.flatMap((s) => Object.values(s.overrides ?? {}))) {
+      const guest = home.get(target);
+      if (!guest || own.has(target)) continue;
+      own.add(target);
+      f.screens.push(guest.screen);
+      f.items.push(guest.item);
+      f.guests.push(target);
+    }
+  }
+  return all;
 }
 
 /** The one kept flow a command means: the named one, or the only one — else a refusal that lists them. */
@@ -51,6 +73,12 @@ export function pickKeptFlow(flows: KeptFlow[], wanted: string | undefined, flag
 
 export function prototypeTitle(flow: KeptFlow): string {
   return `Prototype · ${flow.request.length > 60 ? `${flow.request.slice(0, 59)}…` : flow.request || "hand-drawn screens"}`;
+}
+
+/** The group every one of these items sits in, as an `item.add`'s fields — or nothing when they do not share one. */
+export function sharedGroup(items: readonly Item[]): { containerId: string; groupPlacement: "exact" } | undefined {
+  const first = items[0]?.containerId;
+  return first && items.every((i) => i.containerId === first) ? { containerId: first, groupPlacement: "exact" } : undefined;
 }
 
 /**
@@ -77,10 +105,12 @@ export async function writePrototype(
   }
   const itemId = newItemId();
   // Right of everything in the kept screens' band — their unkept siblings too — so it covers nothing.
-  const top = Math.min(...flow.items.map((i) => i.y));
+  // The flow's own screens: a guest from another flow sits elsewhere.
+  const own = flow.items.filter((i) => !flow.guests.includes(i.id));
+  const top = Math.min(...own.map((i) => i.y));
   const bottom = top + height;
   const band = Object.values(canvas.items ?? {}).filter((i) => i.y < bottom && i.y + i.height > top);
-  const right = Math.max(...flow.items.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
+  const right = Math.max(...own.map((i) => i.x + i.width), ...band.map((i) => i.x + i.width));
   await port.send({
     type: "item.add",
     itemId,
@@ -91,6 +121,8 @@ export async function writePrototype(
     title,
     // A wireframe's fidelity, so the design-system gate does not count it as an undesigned screen.
     properties: { [FIDELITY_PROP]: "wireframe", [PROTOTYPE_PROP]: flow.flow },
+    // In the group its screens live in, when they share one (Porchlight #6).
+    ...(sharedGroup(own) ?? {}),
   }, group);
   return { itemId, title, links, what: "added" };
 }

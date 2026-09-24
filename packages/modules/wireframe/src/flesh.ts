@@ -1,4 +1,4 @@
-import { newGroupId, newVersionId, type CanvasContents } from "@isocan/core";
+import { newGroupId, type CanvasContents } from "@isocan/core";
 import { JEV_INPUT_PRICE, type Answerer } from "./answerer.ts";
 import { choosePack, flagPack, packLine, type PackChoice } from "./content/choose.ts";
 import { barsSpec, fleshSpec, isBlueprint, seedKey } from "./content/flesh-spec.ts";
@@ -6,8 +6,8 @@ import { packOf } from "./content/fill.ts";
 import { GENERIC_PACK } from "./content/packs.ts";
 import type { Screen } from "./flow.ts";
 import { rebuildPrototypes } from "./kept-flows.ts";
-import { currentVersionOf, type WirePort } from "./port.ts";
-import { renderWire } from "./render.ts";
+import type { WirePort } from "./port.ts";
+import { writeWire } from "./rerender.ts";
 import { wireTitle, type WireSpec } from "./spec.ts";
 
 /**
@@ -109,11 +109,7 @@ export async function flesh(
   const changed: FleshTarget[] = [];
   for (const t of targets) {
     if (t.skipped || JSON.stringify(t.spec) === JSON.stringify(t.screen.spec)) continue;
-    const item = canvas.items[t.screen.item]!;
-    const filename = currentVersionOf(item)?.filename ?? "wireframe.html";
-    const upload = await port.put(renderWire(t.spec), "text/html", filename);
-    await port.send({ type: "item.addVersion", itemId: item.id, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
-    changed.push(t);
+    if (await writeWire(port, canvas.items[t.screen.item]!, t.spec, group)) changed.push(t);
   }
   const prototypes = await rebuildPrototypes(port, canvas, all, changed.map((t) => ({ item: t.screen.item, spec: t.spec })), group);
   return { group, targets, changed, choices, prototypes, calls, inputTokens };

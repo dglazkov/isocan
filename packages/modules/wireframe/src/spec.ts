@@ -148,8 +148,12 @@ export const PLATFORM_SIZE: Record<Platform, { width: number; height: number }> 
   site: { width: 1280, height: 800 },
 };
 
-/** The strip above the frame that carries the screen's name. */
-export const CAPTION_HEIGHT = 32;
+/**
+ * The strip that once sat above the frame carrying the screen's name — gone
+ * since phase 8 (the item's own title names the screen), so zero. Kept for
+ * callers that subtracted it; `wireSize` is the frame and nothing else.
+ */
+export const CAPTION_HEIGHT = 0;
 
 export function recipe(archetype: string): Recipe {
   const found = RECIPE_BY_ID.get(archetype);
@@ -249,7 +253,7 @@ export function wireframe(
 /** The document size an item needs to show this screen whole. */
 export function wireSize(spec: WireSpec): { width: number; height: number } {
   const base = PLATFORM_SIZE[spec.platform];
-  if (spec.platform !== "site") return { width: base.width, height: base.height + CAPTION_HEIGHT };
+  if (spec.platform !== "site") return { width: base.width, height: base.height };
   // A site is as tall as its sections; the hints are the skeleton's heights.
   const r = recipe(spec.archetype);
   const tall = spec.slots.reduce((sum, s) => {
@@ -257,7 +261,7 @@ export function wireSize(spec: WireSpec): { width: number; height: number } {
     const id = s.block ?? section?.options[0];
     return sum + (id ? (COMPONENTS.get(id)?.h ?? 0) + 24 : 0);
   }, 48);
-  return { width: base.width, height: Math.max(base.height, tall) + CAPTION_HEIGHT };
+  return { width: base.width, height: Math.max(base.height, tall) };
 }
 
 function propProblem(def: PropDef, value: unknown): string | null {

@@ -143,10 +143,31 @@ export function themeValues(style: WireStyle | undefined): Record<Role, string> 
   return out;
 }
 
-/** The custom properties a style sets, as declarations: `--w-primary:#d10a72;…`. */
+/**
+ * **Derived roles** — computed from the roles, never mapped. `link` is the
+ * colour of words drawn in the primary's voice straight on the ground (a text
+ * link, a secondary or tertiary button's label, the on-tab): the primary where
+ * it reads on the ground at 4.5:1, else the ink (Porchlight's amber on cream
+ * was 2.05:1, the pair `design check` itself flags). The on-primary guard
+ * covers words ON the primary; this covers words IN it.
+ */
+export const DERIVED_ROLES = ["link"] as const;
+
+/** The colour of primary-voiced words on the ground: the primary if it reads there (≥ 4.5:1), else the ink. */
+export function linkColor(values: Pick<Record<Role, string>, "primary" | "ground" | "ink">): string {
+  const ratio = contrastRatio(values.primary, values.ground);
+  return ratio === null || ratio >= CONTRAST_BODY ? values.primary : values.ink;
+}
+
+/** The custom properties a style sets, as declarations: `--w-primary:#d10a72;…`, then the derived ones. */
 export function themeDecls(style: WireStyle | undefined): string {
   const values = themeValues(style);
-  return ROLES.map((role) => `--w-${role}:${values[role]}`).join(";");
+  return [...ROLES.map((role) => `--w-${role}:${values[role]}`), `--w-link:${linkColor(values)}`].join(";");
+}
+
+/** Two styles draw identically: every role, and so every derived one, resolves to the same value. */
+export function sameLook(a: WireStyle | undefined, b: WireStyle | undefined): boolean {
+  return themeDecls(a) === themeDecls(b);
 }
 
 /** Two styles draw the same and record the same system version. Absent is the default. */

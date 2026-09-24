@@ -46,3 +46,26 @@
   color: var(--ink);
   margin: 8px 0 0;
 }
+
+/* Finding the prototypes (`/wire prototypes`, ⌘K "Find prototypes"): one row each. */
+.wire-list {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wire-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wire-list li > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
