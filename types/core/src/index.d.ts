@@ -49,6 +49,8 @@ export * from "./layout.js";
 export * from "./drawing.js";
 export * from "./duplicate.js";
 export * from "./textnode.js";
+export * from "./zoomrule.js";
+export * from "./zoomfade.js";
 export * from "./annotation.js";
 export * from "./backing.js";
 export * from "./activity.js";

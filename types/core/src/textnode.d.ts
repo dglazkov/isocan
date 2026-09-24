@@ -215,8 +215,10 @@ export declare function paperPatch(paper: Paper | null): {
  * and a drag overrides it, like any other item.
  */
 export declare const PAPER_SIZE = 220;
-/** Should this node draw its words, or the mark that stands for them? */
-export declare function textIsLegible(worldSize: number, scale: number): boolean;
+/** Should this node draw its words, or the mark that stands for them? `was`
+ *  is the answer last time, for the hysteresis in `holdsAtZoom`: words resting
+ *  at 5px do not blink between letters and a mark. */
+export declare function textIsLegible(worldSize: number, scale: number, was?: boolean): boolean;
 /**
  * How big to draw the mark, in SCREEN pixels.
  *
