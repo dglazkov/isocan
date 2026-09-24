@@ -1572,8 +1572,22 @@ export class Engine {
    * deliberately NOT an Operation: nothing about the canvas changes. It is
    * two copies of the same content-addressed bytes being made to agree, which
    * is why it is safe to run at any time and safe to run twice.
+   *
+   * **Only the listing is taken on the single-writer chain; the asking is
+   * not.** It used to run whole inside `enqueue`, which held every write on
+   * the machine — every canvas, every home — behind one HEAD request per
+   * blob. The blob keeper runs this for every replica canvas every ten
+   * minutes, and one isocan.io canvas of 1,450 blobs at ~171 ms a question
+   * held the chain for ~4 minutes at a time: `isocan set` and `wire link` on an
+   * isocan.io canvas sat waiting for a sweep they had nothing to do with,
+   * and every home link's dial (which waits on `settled()`) logged "a dial
+   * has been unfinished for over 30s" on every canvas at once. Nothing below
+   * the listing writes this daemon's state — the uploads go to the home,
+   * content-addressed and idempotent — so nothing below it needs the chain.
+   * A blob the GC takes between the listing and its upload is garbage by
+   * definition, and is skipped the same way a blob gone locally always was.
    */
-  reconcileBlobs(
+  async reconcileBlobs(
     canvasId: string,
     options: { push: boolean },
     sourceContext?: SourceRequestContext, badgeId?: string,
@@ -1584,40 +1598,46 @@ export class Engine {
     pushed: string[];
     unknown: string[];
   }> {
-    return this.enqueue(async () => {
+    const { home, listing } = await this.enqueue(async () => {
       if (sourceContext) { if (!badgeId) throw new Error("source policy requires a badge"); await this.sourceGuard?.(canvasId, badgeId, sourceContext, "edit"); }
       const home = this.homes?.for(canvasId) ?? null;
-      // No home is not a problem to report: this daemon IS where the bytes
-      // live, and there is nothing for them to be behind.
-      if (!home) return { home: null, checked: 0, missing: [], pushed: [], unknown: [] };
-      const listing = await this.store.listBlobs(canvasId);
-      const missing: string[] = [];
-      const pushed: string[] = [];
-      // "I could not ask" is not "it is not there", and must never be
-      // answered by uploading — a home that is down would otherwise have
-      // every blob on the canvas pushed at it the moment it came back.
-      const unknown: string[] = [];
-      for (const blob of listing) {
-        const there = await home.hasBlob(canvasId, blob.hash);
-        if (there === null) {
-          unknown.push(blob.hash);
-          continue;
-        }
-        if (there) continue;
-        missing.push(blob.hash);
-        if (!options.push) continue;
+      return { home, listing: home ? await this.store.listBlobs(canvasId) : [] };
+    });
+    // No home is not a problem to report: this daemon IS where the bytes
+    // live, and there is nothing for them to be behind.
+    if (!home) return { home: null, checked: 0, missing: [], pushed: [], unknown: [] };
+    const missing: string[] = [];
+    const pushed: string[] = [];
+    // "I could not ask" is not "it is not there", and must never be
+    // answered by uploading — a home that is down would otherwise have
+    // every blob on the canvas pushed at it the moment it came back.
+    const unknown: string[] = [];
+    for (const blob of listing) {
+      const there = await home.hasBlob(canvasId, blob.hash);
+      if (there === null) {
+        unknown.push(blob.hash);
+        continue;
+      }
+      if (there) continue;
+      missing.push(blob.hash);
+      if (!options.push) continue;
+      let data: Buffer;
+      try {
         const stream = await this.store.openBlob(canvasId, blob.hash);
         if (!stream) continue; // gone locally too; nothing here to send
         const chunks: Buffer[] = [];
         for await (const chunk of stream) chunks.push(chunk as Buffer);
-        await home.putBlob(canvasId, Buffer.concat(chunks), {
-          mimeType: blob.meta.mimeType,
-          filename: blob.meta.filename,
-        });
-        pushed.push(blob.hash);
+        data = Buffer.concat(chunks);
+      } catch {
+        continue; // collected since the listing: garbage, nothing to send
       }
-      return { home: home.homeUrl, checked: listing.length, missing, pushed, unknown };
-    });
+      await home.putBlob(canvasId, data, {
+        mimeType: blob.meta.mimeType,
+        filename: blob.meta.filename,
+      });
+      pushed.push(blob.hash);
+    }
+    return { home: home.homeUrl, checked: listing.length, missing, pushed, unknown };
   }
 
   /**

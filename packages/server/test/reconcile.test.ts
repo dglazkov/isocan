@@ -234,3 +234,55 @@ describe("the replica checks its own bytes on a clock", () => {
     }
   });
 });
+
+/**
+ * **The check must not hold the machine's writes hostage.**
+ *
+ * `reconcileBlobs` used to run whole on the engine's single-writer chain, so
+ * one HEAD per blob held every write on the daemon — every canvas, every
+ * home. The blob keeper runs it for every replica canvas every ten minutes,
+ * and on a laptop replicating ~2,600 blobs from isocan.io that was minutes of
+ * `isocan set` and `wire link` sitting silent behind a sweep they had nothing
+ * to do with. The home's answer is held open here, which is a slow home made
+ * exact: a write has to land while the question is still unanswered.
+ */
+describe("a slow home does not stall the writer", () => {
+  it("lands a write while the check is still waiting on the home", async () => {
+    await untilReplicated();
+    await replica.store.putBlob(CANVAS, bytes("<h1>slow</h1>"), {
+      mimeType: "text/html",
+      filename: "slow.html",
+    });
+    const link = replica.homes.for(CANVAS);
+    expect(link, "the canvas must be a replica here").not.toBeNull();
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let asked!: () => void;
+    const askedOnce = new Promise<void>((r) => (asked = r));
+    const realHasBlob = link!.hasBlob.bind(link);
+    link!.hasBlob = async (canvasId: string, hash: string) => {
+      asked();
+      await held;
+      return realHasBlob(canvasId, hash);
+    };
+    const check = replica.engine.reconcileBlobs(CANVAS, { push: false });
+    await askedOnce;
+
+    const write = fetch(`${baseOf(replica)}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...repBadge.headers },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: { id: "usr_dion", name: "Dion" },
+        op: { type: "project.update", patch: { title: "Slides, renamed" } },
+      }),
+    }).then((res) => res.status);
+    const outcome = await Promise.race([
+      write,
+      new Promise<"stalled">((r) => setTimeout(() => r("stalled"), 3000)),
+    ]);
+    release();
+    await check;
+    expect(outcome, "the write waited on the blob check's round trip to the home").toBe(200);
+  });
+});
