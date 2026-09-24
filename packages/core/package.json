@@ -18,7 +18,8 @@
     "./design-direction": "./src/design-direction.ts",
     "./design-decision": "./src/design-decision.ts",
     "./design-repair": "./src/design-repair.ts",
-    "./colour": "./src/colour.ts"
+    "./colour": "./src/colour.ts",
+    "./jev": "./src/jev.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

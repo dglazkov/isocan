@@ -192,6 +192,7 @@ import {
   GROUP_DEFAULT_SIZE,
   IDENTITY_COLORS,
   INSTALL_SPEC,
+  JUDGMENT_UNAVAILABLE,
   LENS_REFUSAL,
   LINK,
   LISTEN_ANYONE,
@@ -9997,7 +9998,7 @@ var anatomyCli = {
 };
 
 // packages/modules/talk/agent-guide.md
-var agent_guide_default9 = "## isocan voice\n\n`isocan voice` says where the browser voice lives: open the canvas in the web\napp and choose **Configure voice** (\u2318K, Canvas group) \u2014 that is the settings\ndoor (key and model); the floating mic is the talking. The dialog opens a\nGemini Live session from that browser with that person's own API key \u2014 the\nkey is stored in the browser's storage, never on the canvas and never in the\ndaemon \u2014 and hands the model the canvas's operations as tools, so a spoken\nrequest lands as the same operations a click would send, carrying the\nspeaker's identity and undo.\n\nPrefer the enrolled voice harness (`isocan rc add <name> --harness voice`) for\na standing agent the canvas can summon; the browser dialog is for the person\nwho is already in the app.\n";
+var agent_guide_default9 = "## isocan voice\n\n`isocan voice` says where the browser voice lives: open the canvas in the web\napp and choose **Configure voice** (\u2318K, Canvas group) \u2014 that is the settings\ndoor (key and model); the floating mic is the talking. The dialog opens a\nGemini Live session from that browser with that person's own API key \u2014 the\nkey is stored in the browser's storage, never on the canvas and never in the\ndaemon \u2014 and hands the model the canvas's operations as tools, so a spoken\nrequest lands as the same operations a click would send, carrying the\nspeaker's identity and undo.\n\nPrefer the enrolled voice harness (`isocan rc add <name> --harness voice`) for\na standing agent the canvas can summon; the browser dialog is for the person\nwho is already in the app.\n\nThe voice settings also carry **Fast path in shadow** (off by default): Jev\nresolves each spoken turn into a simple act and records it beside what the\nmodel did, never acting. An agent measures the resolver without a browser:\n`node --import tsx packages/modules/talk/scripts/fast-path-eval.ts` (with\n`TYPESAFE_API_KEY`), or `--record <fast-path-shadow.jsonl>` for a person's\nexported record.\n";
 
 // packages/modules/talk/src/core.ts
 var voiceCore = {
@@ -11091,7 +11092,7 @@ function component(id3) {
   return found;
 }
 
-// packages/modules/wireframe/src/answerer.ts
+// packages/core/src/jev.ts
 var JEV_URL = "https://api.typesafe.ai/v1/systemone";
 var JEV_MODEL = "jev-latest";
 var JEV_INPUT_PRICE = 0.042 / 1e6;
@@ -11246,7 +11247,7 @@ function jevAnswerer(opts) {
     }
   };
 }
-var HOME_HAS_NO_JUDGE = "judgment-unavailable";
+var HOME_HAS_NO_JUDGE = JUDGMENT_UNAVAILABLE;
 function homeAnswerer(post, canvasId, now = () => Date.now()) {
   return {
     name: "home",

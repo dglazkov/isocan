@@ -61,6 +61,28 @@ verbs, agent enrolment and the actor/selection tools. A call to any of those
 is refused in words — the model is told what happened, and the caption shows
 it. Nothing is faked.
 
+## The fast path, in shadow (experiment, off by default)
+
+Voice-agent phase 6 (`docs/projects/voice-agent/fast-path.md`). Tick **Fast
+path in shadow** in the voice settings and every finished turn asks Jev once,
+through the home's `/api/judgment` (the key stays on the home), which simple
+act was meant — move, bigger, smaller, delete, undo, select, show — on which
+item, where. It **never acts**: `src/shadow.ts` is handed no host. It records
+the utterance, Jev's answers with their probabilities, what it would have
+done, the model's tool calls, and whether the model's act was taken back
+within ten seconds, in this browser's OPFS (`voice/fast-path-shadow.jsonl`,
+500 turns at most; Download and Clear are beside the switch).
+
+- `src/fastpath.ts` — the resolver, pure: questions from `LIVE_TOOLS` and the
+  canvas projection, answers to a proposed tool call, and `decide`, which acts
+  only above a threshold measured per action (none yet, so it never does).
+- `src/fastpath-report.ts` — agreement per action, the reliability curve, and
+  the threshold that reaches 95% on 30 commands.
+- `scripts/fast-path-eval.ts` — the scripted command set
+  (`test/fixtures/fast-path-commands.json`) through the resolver with a real
+  key, or `--record <file>` to read a person's exported record. The walk with
+  a microphone is `docs/verify/2026-09-23-voice-fast-path-shadow.md`.
+
 ## The module rule, honoured exactly
 
 A module may never add an operation, a protocol message, a server route, a

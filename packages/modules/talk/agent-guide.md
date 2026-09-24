@@ -12,3 +12,10 @@ speaker's identity and undo.
 Prefer the enrolled voice harness (`isocan rc add <name> --harness voice`) for
 a standing agent the canvas can summon; the browser dialog is for the person
 who is already in the app.
+
+The voice settings also carry **Fast path in shadow** (off by default): Jev
+resolves each spoken turn into a simple act and records it beside what the
+model did, never acting. An agent measures the resolver without a browser:
+`node --import tsx packages/modules/talk/scripts/fast-path-eval.ts` (with
+`TYPESAFE_API_KEY`), or `--record <fast-path-shadow.jsonl>` for a person's
+exported record.
