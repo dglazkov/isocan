@@ -27,8 +27,14 @@ export function moduleMarkIntent(items: readonly Item[], property: string): { on
   return { on, changing: items.filter((item) => has(item) !== on) };
 }
 
-/** The patch that puts a mark on or takes it off — `removeProperties`, because `properties` merges. */
-export function moduleMarkPatch(property: string, on: boolean): { properties: Record<string, string> } | { removeProperties: string[] } {
-  return on ? { properties: { [property]: "yes" } } : { removeProperties: [property] };
+/**
+ * The patch that puts a mark on or takes it off — `removeProperties`, because
+ * `properties` merges. `who` is who put it on (an actor's id), recorded as
+ * `<property>By` beside the mark; taking the mark off takes that too.
+ */
+export function moduleMarkPatch(property: string, on: boolean, who?: string): { properties: Record<string, string> } | { removeProperties: string[] } {
+  const by = `${property}By`;
+  if (!on) return { removeProperties: [property, by] };
+  return { properties: who ? { [property]: "yes", [by]: who } : { [property]: "yes" } };
 }
 

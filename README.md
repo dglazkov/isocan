@@ -400,8 +400,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   intents, archetypes and reading order, never stored; a hotspot whose
   target is not in the prototype is drawn dashed and says which screen it
   needs; rebuilt, the prototype gains a version. `wire links` prints the
-  flow, `wire link` overrides one hotspot. On the canvas the screens in the
-  prototype are joined by orthogonal arrows, one per hotspot, leaving from the button
+  flow, `wire link` overrides one hotspot. A composed flow ends with its
+  prototype already built: Jev's first choice for every row it was
+  confident of goes in (never a *maybe*, never a variation), signed as
+  Jev's so a person's swap reads apart, and one undo takes it all back.
+  On the canvas the screens in the prototype are joined by orthogonal arrows, one per hotspot, leaving from the button
   they belong to; click an arrow to play the prototype from there, go to its
   target, or change where it goes (drag its head onto another screen) —
   `/wire links` is the same as a table, `wire play` the same from a

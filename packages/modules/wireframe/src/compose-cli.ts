@@ -65,7 +65,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
     .option("--canvas <canvas>")
     .option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)")
     .option("--in <group>", "compose the flow inside this group — and in its design system, if it has one")
-    .option("--basic", "plain grey wires: no sample content (the default fleshes the screens; `wire flesh` can later)")
+    .option("--basic", "plain grey wires: no sample content and no prototype (the default fleshes the screens and puts the answerer's first choices in a prototype)")
     .option("--flesh", "arrive fleshed — the default now; kept so older scripts still run")
     .option("--pack <id>", "the content pack to flesh with, instead of asking (`wire flesh --packs` lists them)")
     .action(
@@ -126,12 +126,18 @@ export function registerCompose(host: CliHost, wire: Command): void {
             rounds: tallies,
             style: composed.style ?? { source: "default" },
             content: composed.pack ? { source: "pack", pack: composed.pack.pack, leaned: composed.pack.leaned, p: composed.pack.p, how: composed.pack.how } : null,
+            prototype: composed.prototype
+              ? { itemId: composed.prototype.itemId, title: composed.prototype.title, keptBy: composed.prototype.answerer, screens: composed.prototype.screens.map((s) => ({ itemId: s.item, title: wireTitle(s.spec) })), links: composed.prototype.links.length }
+              : null,
             styleCalls: mapper.calls,
             inputTokens: tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens,
             cost: (tallies.reduce((s, t) => s + t.inputTokens, 0) + mapper.inputTokens) * JEV_INPUT_PRICE,
           });
         }
-        say(costLine(tallies, composed.by, composed.screens.length, composed.screens.filter((s) => s.spec.maybe).length) + ` · ${composed.totalMs} ms in all — \`isocan undo\` takes the whole flow back`);
+        say(costLine(tallies, composed.by, composed.screens.length, composed.screens.filter((s) => s.spec.maybe).length) + ` · ${composed.totalMs} ms in all — \`isocan undo\` takes the whole flow back${composed.prototype ? ", prototype included" : ""}`);
+        if (composed.prototype) {
+          say(`swap in a variation: \`isocan wire use <variation>\` and \`isocan wire unuse <its screen>\`, then \`isocan wire prototype\` rebuilds it · \`isocan open ${composed.prototype.itemId}\` plays it`);
+        }
       }),
     );
 }
@@ -186,5 +192,6 @@ export async function answer(host: CliHost, file: string, cmd: Command): Promise
   const after = await applyRound(canvas, round, screens, calls, responses, say);
   const next = pendingRound(after.map((s) => s.spec));
   if (ctx.json) return printJson({ flow, round, items: after.map((s) => s.item), next });
-  say(next ? `round ${round} applied — round ${next} is next: \`isocan wire questions\`` : `round 3 applied — flow ${flow} is drawn; \`isocan undo\` takes the whole flow back`);
+  // You answered, so you choose: the agent path puts nothing in a prototype by itself.
+  say(next ? `round ${round} applied — round ${next} is next: \`isocan wire questions\`` : `round 3 applied — flow ${flow} is drawn; \`isocan undo\` takes the whole flow back. Put the screens that belong in a prototype with \`isocan wire use <screens...>\`, then \`isocan wire prototype\``);
 }

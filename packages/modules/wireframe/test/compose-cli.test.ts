@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FIDELITY_PROP, type Operation } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import wireframeCli from "../src/cli.ts";
-import { MAYBE_PROP, RECIPES, maybeMarked, readWire, stubAnswerer, validateWire, type RoundFile, type WireSpec } from "../src/core.ts";
+import { MAYBE_PROP, NEEDS_YES, RECIPES, keptBy, maybeMarked, readWire, stubAnswerer, validateWire, type RoundFile, type WireSpec } from "../src/core.ts";
 
 /**
  * **`isocan wire "<request>"` against a canvas held in memory.**
@@ -33,7 +33,8 @@ interface FakeItem {
   versions: Array<{ id: string; blobHash: string; mimeType: string }>;
 }
 
-function harness() {
+/** `actor`: who the CLI goes out as — unset, as on a daemon that never asked for a name. */
+function harness(actor?: { id: string; name: string }) {
   const program = new Command().exitOverride().option("--json");
   const sent: Array<{ op: Operation; group?: string }> = [];
   const blobs = new Map<string, string>();
@@ -42,6 +43,7 @@ function harness() {
   const logs: string[] = [];
   const ctx = {
     json: false,
+    ...(actor ? { actor } : {}),
     client: {
       snapshot: async () => ({ canvas: { items: Object.fromEntries(items) }, project: {} }),
       uploadBlob: async (_canvas: string, bytes: Buffer) => {
@@ -123,7 +125,11 @@ function harness() {
     log.mockRestore();
     return printed;
   };
-  return { cli, sent, items, errors, logs, specOf };
+  const htmlOf = (itemId: string): string => {
+    const item = items.get(itemId)!;
+    return blobs.get(item.versions.find((x) => x.id === item.currentVersionId)!.blobHash)!;
+  };
+  return { cli, sent, items, errors, logs, specOf, htmlOf, ctx };
 }
 
 const REQUEST = "an ordering app for Acme's kitchen — sign in, take orders, see what is waiting";
@@ -160,9 +166,11 @@ describe('isocan wire "<request>"', () => {
     // Every screen was added once and then versioned, never replaced.
     const adds = h.sent.filter((s) => s.op.type === "item.add").map((s) => (s.op as { itemId: string }).itemId);
     expect(h.items.size).toBe(adds.length);
-    // The flow's screens, and the variations placed under them (design §5).
-    const screens = [...h.items.values()].filter((i) => !h.specOf(i.id).variantOf);
-    const variants = [...h.items.values()].filter((i) => h.specOf(i.id).variantOf);
+    // The flow's screens, and the variations placed under them (design §5) — the prototype it ends with aside.
+    const wires = [...h.items.values()].filter((i) => i.properties.wirePrototype === undefined);
+    expect(h.items.size - wires.length).toBe(1);
+    const screens = wires.filter((i) => !h.specOf(i.id).variantOf);
+    const variants = wires.filter((i) => h.specOf(i.id).variantOf);
     for (const v of variants) {
       const spec = h.specOf(v.id);
       const of = h.items.get(spec.variantOf!)!;
@@ -265,9 +273,10 @@ describe("the agent answers in Jev's place: wire questions / wire answer", () =>
 });
 
 describe("variations and keep marks from the terminal: wire vary / keep / unkeep / kept", () => {
-  async function drawn() {
-    const h = harness();
-    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+  // `--basic`: nothing is in a prototype yet, so every mark here is the test's own.
+  async function drawn(actor?: { id: string; name: string }) {
+    const h = harness(actor);
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
     expect(h.errors).toEqual([]);
     const all = [...h.items.values()];
     const screens = all.filter((i) => !h.specOf(i.id).variantOf);
@@ -337,13 +346,13 @@ describe("variations and keep marks from the terminal: wire vary / keep / unkeep
     expect(h.sent.length).toBe(n);
     // Unkeep: the mark is a property on the item, not somebody's reaction — it simply comes off.
     await h.cli("wire", "unkeep", second.id);
-    expect(h.sent.at(-1)!.op).toEqual({ type: "item.update", itemId: second.id, patch: { removeProperties: ["wireKeep"] } });
+    expect(h.sent.at(-1)!.op).toEqual({ type: "item.update", itemId: second.id, patch: { removeProperties: ["wireKeep", "wireKeepBy"] } });
     expect(h.items.get(second.id)!.properties.wireKeep).toBeUndefined();
     expect(titles(await h.cli("wire", "kept"))).toEqual([first.title, v.title]);
   });
 
   it("says it in the prototype's words, and `wire use|unuse` are the same act as `keep|unkeep`", async () => {
-    const { h, screens } = await drawn();
+    const { h, screens } = await drawn({ id: "act_acme_agent", name: "Acme agent" });
     const [first, second] = [screens.sort((x, y) => x.x - y.x)[0]!, screens[1]!];
     const used = await h.cli("wire", "use", first.id, second.id);
     expect(h.errors).toEqual([]);
@@ -351,13 +360,128 @@ describe("variations and keep marks from the terminal: wire vary / keep / unkeep
     expect(used).toMatch(/^2 screens in the prototype — `isocan wire prototype` rebuilds it$/m);
     expect(used).not.toMatch(/\bkept\b/);
     expect(h.items.get(first.id)!.properties.wireKeep).toBe("yes");
+    // An agent's pick is signed as the agent's, never as the answerer's.
+    expect(h.items.get(first.id)!.properties.wireKeepBy).toBe("act_acme_agent");
+    expect(keptBy(h.items.get(first.id)!)).toEqual({ auto: false, actorId: "act_acme_agent" });
     const n = h.sent.length;
     await h.cli("wire", "keep", first.id);
     expect(h.sent.length).toBe(n);
     const removed = await h.cli("wire", "unuse", second.id);
     expect(removed).toContain(`"${second.title}" removed from the prototype`);
     expect(removed).toMatch(/^1 screen in the prototype/m);
-    expect(h.sent.at(-1)!.op).toEqual({ type: "item.update", itemId: second.id, patch: { removeProperties: ["wireKeep"] } });
+    expect(h.sent.at(-1)!.op).toEqual({ type: "item.update", itemId: second.id, patch: { removeProperties: ["wireKeep", "wireKeepBy"] } });
+    expect(h.items.get(second.id)!.properties.wireKeepBy).toBeUndefined();
     expect(await h.cli("wire", "unkeep", second.id)).toContain("was not in the prototype");
+  });
+});
+
+describe("a composed flow ends with a prototype of the answerer's first choices", () => {
+  // Seed 4 draws detail, settings and profile as maybes, so the cut has something to leave out.
+  async function composed(...flags: string[]) {
+    const h = harness({ id: "act_acme_agent", name: "Acme agent" });
+    const printed = await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", ...flags);
+    expect(h.errors).toEqual([]);
+    const all = [...h.items.values()];
+    const prototypes = all.filter((i) => i.properties.wirePrototype !== undefined);
+    const wires = all.filter((i) => i.properties.wirePrototype === undefined);
+    const screens = wires.filter((i) => !h.specOf(i.id).variantOf);
+    const variants = wires.filter((i) => h.specOf(i.id).variantOf);
+    return { h, printed, prototypes, screens, variants };
+  }
+
+  it("puts each confident row's first choice in it, signed as the answerer's — never a maybe, never a variation", async () => {
+    const { h, screens, variants } = await composed();
+    const confident = screens.filter((i) => !h.specOf(i.id).maybe && h.specOf(i.id).need! >= NEEDS_YES);
+    const maybes = screens.filter((i) => h.specOf(i.id).maybe);
+    expect(confident.length).toBeGreaterThan(1);
+    expect(maybes.length).toBeGreaterThan(0);
+    expect(variants.length).toBeGreaterThan(0);
+    for (const item of confident) {
+      expect(item.properties.wireKeep).toBe("yes");
+      // The stub answered, so the stub picked: the mark says so, and reads apart from a person's.
+      expect(item.properties.wireKeepBy).toBe("stub");
+      expect(keptBy(item)).toEqual({ auto: true, answerer: "stub" });
+    }
+    for (const item of [...maybes, ...variants]) {
+      expect(item.properties.wireKeep).toBeUndefined();
+      expect(item.properties.wireKeepBy).toBeUndefined();
+    }
+    // A maybe stays marked: nobody has answered its question.
+    for (const item of maybes) expect(maybeMarked(item)).toBe(true);
+  });
+
+  it("builds the prototype above the flow, playing exactly those screens", async () => {
+    const { h, printed, prototypes, screens } = await composed();
+    expect(prototypes.length).toBe(1);
+    const proto = prototypes[0]!;
+    const flow = h.specOf(screens[0]!.id).flow;
+    expect(proto.properties.wirePrototype).toBe(flow);
+    const played = screens.filter((i) => i.properties.wireKeep);
+    // Above the row: its bottom edge over the screens' top, centred over the ones it plays.
+    expect(proto.y + proto.height).toBeLessThan(Math.min(...screens.map((i) => i.y)));
+    const left = Math.min(...played.map((i) => i.x));
+    const right = Math.max(...played.map((i) => i.x + i.width));
+    expect(Math.abs(proto.x + proto.width / 2 - (left + right) / 2)).toBeLessThanOrEqual(1);
+    const html = h.htmlOf(proto.id);
+    for (const item of screens) expect(html.includes(`data-screen="${item.id}"`)).toBe(Boolean(item.properties.wireKeep));
+    expect(printed).toContain(`${proto.id}  "${proto.title}" — prototype of ${played.length} screens, the stub's first choices`);
+    expect(printed).toMatch(/takes the whole flow back, prototype included/);
+    expect(printed).toContain("isocan wire use <variation>");
+  });
+
+  it("a second flow leaves its prototype room: it lands over its own row, under the first flow, not above everything", async () => {
+    const h = harness();
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    const firstFlow = [...h.items.values()];
+    const firstBottom = Math.max(...firstFlow.map((i) => i.y + i.height));
+    await h.cli("wire", "a recipe app for Acme cooks", "--answerer", "stub", "--seed", "2");
+    expect(h.errors).toEqual([]);
+    const added = [...h.items.values()].filter((i) => !firstFlow.includes(i));
+    const proto = added.find((i) => i.properties.wirePrototype !== undefined)!;
+    const row = added.filter((i) => i.properties.wirePrototype === undefined);
+    expect(proto.y).toBeGreaterThan(firstBottom);
+    expect(proto.y + proto.height).toBeLessThan(Math.min(...row.map((i) => i.y)));
+  });
+
+  it("is one op group with the flow — so one undo takes the screens, the picks and the prototype back together", async () => {
+    const { h, prototypes, screens } = await composed();
+    const flow = h.specOf(screens[0]!.id).flow;
+    expect(new Set(h.sent.map((s) => s.group))).toEqual(new Set([flow]));
+    const picks = h.sent.filter((s) => s.op.type === "item.update" && "properties" in s.op.patch && s.op.patch.properties?.wireKeep);
+    expect(picks.length).toBe(screens.filter((i) => i.properties.wireKeep).length);
+    expect(h.sent.some((s) => s.op.type === "item.add" && s.op.itemId === prototypes[0]!.id)).toBe(true);
+  });
+
+  it("says it in --json: the prototype, who picked, and what it plays", async () => {
+    const h = harness();
+    h.ctx.json = true;
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    expect(h.errors).toEqual([]);
+    const out = JSON.parse(h.logs.at(-1)!) as { prototype: { itemId: string; keptBy: string; screens: Array<{ itemId: string }> } };
+    expect(out.prototype.keptBy).toBe("stub");
+    expect(h.items.get(out.prototype.itemId)!.properties.wirePrototype).toBeDefined();
+    expect(out.prototype.screens.every((s) => h.items.get(s.itemId)!.properties.wireKeep === "yes")).toBe(true);
+  });
+
+  it("--basic puts nothing in a prototype and builds none", async () => {
+    const { h, printed, prototypes, screens } = await composed("--basic");
+    expect(prototypes).toEqual([]);
+    for (const item of h.items.values()) {
+      expect(item.properties.wireKeep).toBeUndefined();
+      expect(item.properties.wireKeepBy).toBeUndefined();
+    }
+    expect(screens.length).toBeGreaterThan(1);
+    expect(printed).not.toMatch(/first choices/);
+  });
+
+  it("a keep by hand afterwards is signed as whoever made it, and swapping a pick out takes Jev's signature with it", async () => {
+    const { h, screens, variants } = await composed();
+    const pick = screens.find((i) => i.properties.wireKeep && variants.some((v) => h.specOf(v.id).variantOf === i.id))!;
+    const variation = variants.find((v) => h.specOf(v.id).variantOf === pick.id)!;
+    await h.cli("wire", "use", variation.id);
+    await h.cli("wire", "unuse", pick.id);
+    expect(h.errors).toEqual([]);
+    expect(keptBy(h.items.get(variation.id)!)).toEqual({ auto: false, actorId: "act_acme_agent" });
+    expect(h.items.get(pick.id)!.properties.wireKeepBy).toBeUndefined();
   });
 });

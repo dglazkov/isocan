@@ -471,7 +471,8 @@ export function toggleModuleMark(mark: ModuleMark, items: readonly Item[], canva
   if (changing.length === 0) return;
   const group = newGroupId();
   for (const item of changing) {
-    void sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: moduleMarkPatch(mark.property, on) }, group);
+    // Signed: the mark says who put it on (`<property>By`), so a person's pick reads apart from a machine's.
+    void sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: moduleMarkPatch(mark.property, on, actor.id) }, group);
   }
   const what = changing.length === 1 ? `"${changing[0]!.title}"` : `${changing.length} items`;
   // What the item now IS, in the mark's own words: "in the prototype", "not in the prototype".

@@ -138,9 +138,11 @@ export function markScreens(host: CliHost, on: boolean) {
     }
     const group = newGroupId();
     const changed: string[] = [];
+    // Signed with who used it (`wireKeepBy`): an agent's pick reads apart from Jev's first choice.
+    const who = cliPort(host, ctx, p.id).actor?.id;
     for (const item of items) {
       if (isKept(item) === on || changed.includes(item.id)) continue;
-      await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: keepPatch(on) }, group);
+      await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: keepPatch(on, who) }, group);
       changed.push(item.id);
     }
     if (ctx.json) return printJson({ [on ? "kept" : "unkept"]: changed, unchanged: items.filter((i) => !changed.includes(i.id)).map((i) => i.id) });

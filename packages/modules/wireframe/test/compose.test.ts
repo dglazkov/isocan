@@ -510,9 +510,17 @@ describe("a composed flow arrives fleshed", () => {
     for (const s of [...basic.screens, ...basic.variants]) expect(plain.specOf(s.item).content).toBeUndefined();
     const fleshed = reducerPort();
     const full = await composeFlow(fleshed.port, REQUEST, stubAnswerer(3));
-    // The same versions; the only ops more are renames where the pack names a screen ("List" → the pack's plural).
-    const versions = (log: typeof plain.log) => log.filter((l) => l.op.type !== "item.update" || !("title" in l.op.patch) || Object.keys(l.op.patch).length > 1).length;
+    // Basic puts nothing in a prototype and builds none.
+    expect(basic.prototype).toBeUndefined();
+    const picks = (log: typeof plain.log) => log.filter((l) => l.op.type === "item.update" && "properties" in l.op.patch && l.op.patch.properties?.wireKeep !== undefined);
+    expect(picks(plain.log)).toEqual([]);
+    expect(full.prototype).toBeDefined();
+    // The same versions; the only ops more are renames where the pack names a screen ("List" → the pack's plural),
+    // and the fleshed flow's first choices going into its prototype, and the prototype itself.
+    const proto = full.prototype!.itemId;
+    const versions = (log: typeof plain.log) => log.filter((l) => (l.op as { itemId?: string }).itemId !== proto && !picks([l]).length && (l.op.type !== "item.update" || !("title" in l.op.patch) || Object.keys(l.op.patch).length > 1)).length;
     expect(versions(fleshed.log)).toBe(versions(plain.log));
+    expect(picks(fleshed.log).length).toBe(full.prototype!.screens.length);
     expect(full.tallies[0]!.calls).toBe(basic.tallies[0]!.calls + 1);
   });
 

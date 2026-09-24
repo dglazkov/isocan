@@ -4,7 +4,7 @@ import type { CliHost } from "@isocan/cli/modulehost";
 import type { CanvasContents, DialogHost, Item, Operation } from "@isocan/core";
 import wireframeCli from "../src/cli.ts";
 import { keptArrows } from "../src/arrows.tsx";
-import { composeOnWeb, fleshOnWeb, modeOf } from "../src/dialog.tsx";
+import { composeOnWeb, fleshOnWeb, modeOf, prototypeRecordWords } from "../src/dialog.tsx";
 import { WireMaybes } from "../src/maybe-marks.tsx";
 import { KEEP_PROP, MAYBE_PROP, homeAnswerer, homeOrStub, readWire, renderWire, stubAnswerer, wireframe, type WireSpec } from "../src/core.ts";
 import { wireframeActivation } from "../src/activation.ts";
@@ -84,7 +84,8 @@ function shapeOf(sent: Array<{ op: Operation; group?: string }>) {
         ...(o.title !== undefined ? { title: o.title } : {}),
         ...(o.width !== undefined ? { size: [o.width, o.height] } : {}),
         ...(o.patch !== undefined ? { patch: o.patch } : {}),
-        ...(o.properties !== undefined ? { properties: o.properties } : {}),
+        // A prototype names its flow, whose id is minted per run: the shape is that it names the one group.
+        ...(o.properties !== undefined ? { properties: { ...(o.properties as Record<string, string>), ...((o.properties as Record<string, string>).wirePrototype === [...groups][0] ? { wirePrototype: "<the flow>" } : {}) } } : {}),
       };
     }),
   };
@@ -207,6 +208,22 @@ describe("the web composes what the CLI composes", () => {
     expect(shapeOf(web.c.sent)).toEqual(shapeOf(cli.sent));
     expect(web.composed.pack).toBeUndefined();
     expect(web.asked.some((q) => "pack" in ((q as { questions: object }).questions))).toBe(false);
+  });
+
+  it("ends with a prototype of the first choices, says so in the Chat's words, and the arrows are there at once", async () => {
+    const web = await viaWeb();
+    const proto = web.composed.prototype!;
+    expect(proto).toBeDefined();
+    // The home answered as the stub, so the stub's first choices — signed so on each screen.
+    expect(proto.answerer).toBe("stub");
+    for (const s of proto.screens) expect(web.c.items.get(s.item)!.properties).toMatchObject({ wireKeep: "yes", wireKeepBy: "stub" });
+    expect(web.c.items.get(proto.itemId)!.properties).toMatchObject({ wirePrototype: web.composed.flow });
+    expect(prototypeRecordWords(proto)).toBe(`Prototype of ${proto.screens.length} screens, the stub's first choices — swap in a variation with ⇧K, then \`/wire prototype\` rebuilds it.`);
+    expect(prototypeRecordWords({ ...proto, answerer: "jev" })).toMatch(/^Prototype of \d+ screens, Jev's first choices — swap in a variation with ⇧K/);
+    expect(prototypeRecordWords(undefined)).toBeNull();
+    // The arrows run between the screens in the prototype — drawn the moment the flow lands, no second act.
+    const specByHash = (hash: string) => readWire(web.c.blobs.get(hash)!);
+    expect(keptArrows(web.c.contents(), specByHash).length).toBeGreaterThan(0);
   });
 
   it("asks the home's judge for every round, naming the canvas — never the vendor, never with a key", async () => {
@@ -351,6 +368,8 @@ describe("the maybe marks", () => {
     expect(html).toMatch(/class="wire-maybe" style="left:470px;top:0;width:390px;height:844px"/);
     expect(html).toMatch(/class="wire-maybe-anchor" style="left:860px;top:0;/);
     expect(html).toContain(">maybe</span>");
+    // Its tooltip says what the mark asks, and which key answers it.
+    expect(html).toContain('title="Not in the prototype yet — ⇧K to use it"');
     expect(draw(canvasOf(item("itm_confirm", { [MAYBE_PROP]: "0.36", [KEEP_PROP]: "yes" })))).toBe("");
     expect(draw(canvasOf(item("itm_list", {})))).toBe("");
   });

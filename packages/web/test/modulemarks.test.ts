@@ -68,19 +68,20 @@ describe("the keep mark in the item menu", () => {
     expect(keepEntry(itemMenu([screen("a", { wireKeep: "yes" }), screen("b"), screen("c")], ctx))?.label).toBe("📐 Use in prototype (2)");
   });
 
-  it("sends the property patch `wire keep` sends — one op per screen that moves, one group per gesture", () => {
+  it("sends the property patch `wire keep` sends — one op per screen that moves, one group per gesture, signed by the person", () => {
     keepEntry(itemMenu([screen("a", { wireKeep: "yes" }), screen("b"), screen("c")], ctx))!.run();
+    // `<property>By` is who put the mark on: this person, not whatever picked the screen before.
     expect(sent.map((s) => s.op)).toEqual([
-      { type: "item.update", itemId: "b", patch: { properties: { wireKeep: "yes" } } },
-      { type: "item.update", itemId: "c", patch: { properties: { wireKeep: "yes" } } },
+      { type: "item.update", itemId: "b", patch: { properties: { wireKeep: "yes", wireKeepBy: "usr_a" } } },
+      { type: "item.update", itemId: "c", patch: { properties: { wireKeep: "yes", wireKeepBy: "usr_a" } } },
     ]);
     expect(new Set(sent.map((s) => s.group)).size).toBe(1);
   });
 
-  it("takes anybody's mark off — a property has no owner", () => {
-    // Kept by someone else: nothing on the item says who, so nothing stops this actor.
-    keepEntry(itemMenu([screen("a", { wireKeep: "yes" })], ctx))!.run();
-    expect(sent.map((s) => s.op)).toEqual([{ type: "item.update", itemId: "a", patch: { removeProperties: ["wireKeep"] } }]);
+  it("takes anybody's mark off — a property has no owner — and who put it on goes with it", () => {
+    // Put on by a machine (a composed flow's first choice): the mark says who, and that stops nobody.
+    keepEntry(itemMenu([screen("a", { wireKeep: "yes", wireKeepBy: "jev" })], ctx))!.run();
+    expect(sent.map((s) => s.op)).toEqual([{ type: "item.update", itemId: "a", patch: { removeProperties: ["wireKeep", "wireKeepBy"] } }]);
   });
 });
 
@@ -88,7 +89,8 @@ describe("⇧K is the menu entry's act", () => {
   it("toggles the selected screens by the mark's key, and ignores a selection that is not a screen", () => {
     state.canvas.items = { a: screen("a"), b: item("b", {}) };
     markByKey("KeyK", ["a", "b"], "prj_acme", actor);
-    expect(sent.map((s) => s.op)).toEqual([{ type: "item.update", itemId: "a", patch: { properties: { wireKeep: "yes" } } }]);
+    // A person's ⇧K is signed as theirs.
+    expect(sent.map((s) => s.op)).toEqual([{ type: "item.update", itemId: "a", patch: { properties: { wireKeep: "yes", wireKeepBy: "usr_a" } } }]);
     sent.length = 0;
     markByKey("KeyJ", ["a"], "prj_acme", actor);
     expect(sent).toEqual([]);

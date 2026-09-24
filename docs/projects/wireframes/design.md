@@ -176,6 +176,18 @@ the prototype. So a person sees *Use in prototype* / *Remove from prototype*
 in the menu and *In the prototype* on the 📐, and `isocan wire use|unuse`
 say the same; the property, ⇧K and `wire keep|unkeep|kept` keep their names.
 
+**A composed flow picks its own first choices** (24 Sep 2026, Dion): after
+round 3 (and the flesh), each row round 1 was confident of (P(yes) ≥ 0.5)
+has its first-choice screen marked — never a *maybe*, never a variation —
+and the prototype is built above the row, in the flow's op group, so `/wire
+<request>` ends with something you can click and one undo takes it all
+back. `basic` picks nothing. **Who marked it** rides beside the mark as
+`wireKeepBy`: the answerer (`jev`, `stub`) for a pick the flow made, the
+actor's id for one a person or an agent made (⇧K, the menu, `wire use`) —
+core's `moduleMarkPatch` writes `<property>By` for any mark. A person
+swapping a variation in for one of Jev's picks is then a label, not a
+guess.
+
 ### 7. Links — computed, never stored
 
 `inferLinks(kept: WireScreen[]): Link[]` — pure, in core. Rules (research

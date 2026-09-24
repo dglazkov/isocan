@@ -211,6 +211,27 @@ bar, tab bar) stays.
   afterwards. A pack that cannot be chosen leaves the flow in bars and says
   so. The agent path (`--answerer agent`) fills nothing: once your rounds
   are answered, `isocan wire flesh --flow <id>` does.
+- **A composed flow ends with a prototype you can click.** After round 3
+  (and the flesh), the first choice of every row round 1 was confident of
+  (P(yes) ≥ 0.5) goes in the prototype (📐) — never a *maybe*, never a
+  variation — and the prototype is built above the row (a flow composed
+  under others starts its row lower, leaving the prototype that room), all
+  in the flow's op group: one `isocan undo` takes the screens, the picks and the
+  prototype back together. The arrows draw between those screens at once.
+  The lines (and `--json`'s `prototype`) say which item it is, what it
+  plays and whose first choices they are; in the Chat the record says
+  "Prototype of 6 screens, Jev's first choices — swap in a variation with
+  ⇧K". To swap: `isocan wire use <variation>`, `isocan wire unuse <its
+  screen>`, then `isocan wire prototype` rebuilds it (a mark alone does
+  not). `--basic` puts nothing in a prototype and builds none; so does the
+  agent path — you answered, so you choose, then `wire prototype`.
+- **Who put a screen in the prototype** is `wireKeepBy` beside `wireKeep`:
+  `jev` or `stub` when a composed flow picked it (the answerer whose first
+  choice it was), the actor's id when a person or an agent used it — ⇧K,
+  the menu, `wire use|keep`. Taking the mark off takes `wireKeepBy` with
+  it. A person swapping a variation in for one of Jev's picks is the
+  calibration signal, so never re-mark a screen Jev picked just to sign
+  it, and never mark one "as Jev".
 - `isocan wire copy <screen>` prints a fleshed screen's words as JSON —
   per slot, each word by path (`items.0.title`, `stats.1.value`,
   `labels.2`). Edit the words, then `isocan wire copy <screen> --apply

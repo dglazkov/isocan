@@ -4,7 +4,7 @@ import { chatRecordOp } from "./chat.ts";
 import { PROTOTYPE_PROP } from "./prototype.ts";
 import { rerender, rerenderSummary } from "./rerender.ts";
 import { isNoJudge } from "./answerer.ts";
-import { composeFlow, costLine, screenTitles, wiresOn } from "./flow.ts";
+import { composeFlow, costLine, prototypeWords, screenTitles, wiresOn, type FlowPrototype } from "./flow.ts";
 import { keptFlowsOf, writePrototype, type KeptFlow } from "./kept-flows.ts";
 import { StyleResolver, restyle, restyleSummary } from "./restyle.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
@@ -73,6 +73,12 @@ export function refusalWords(error: unknown): string {
 export async function composeOnWeb(canvasId: string, host: DialogHost, request: string, onBlueprint: (itemId: string) => void, opts: { basic?: boolean } = {}) {
   const port = webPort(canvasId, host);
   return composeFlow(port, request, webAnswerer(canvasId, host), { onBlueprint: (first) => onBlueprint(first.item), flesh: opts.basic ? false : {} });
+}
+
+/** The Chat record's line for a composed flow's prototype: how many screens, whose first choices, and how to swap one. */
+export function prototypeRecordWords(prototype: FlowPrototype | undefined): string | null {
+  if (!prototype) return null;
+  return `${prototypeWords(prototype.screens.length, prototype.answerer).replace(/^p/, "P")} — swap in a variation with ⇧K, then \`/wire prototype\` rebuilds it.`;
 }
 
 /** The Chat record's line for a composed flow's content: which pack filled it, or that it is plain grey wires. */
@@ -185,8 +191,10 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       host.notice(`${cost} — one undo takes the whole flow back`);
       const made = composed.variants.length ? `, and ${composed.variants.length} variation${composed.variants.length === 1 ? "" : "s"}` : "";
       const unsure = maybe ? ` The ${maybe === 1 ? "screen" : "screens"} marked maybe ${maybe === 1 ? "is" : "are"} ones round 1 was unsure the request needs: use what belongs in the prototype (📐, ⇧K).` : "";
-      record(host, composed.flow, [`composed "${m.request}": ${screenTitles(composed.screens)}${made}.${unsure}`, contentWords(composed.pack), `${cost} — one undo takes the whole flow back, content included.`], composed.screens.map((s) => s.item));
-      host.reveal([...composed.screens, ...composed.variants].map((s) => s.item));
+      const played = prototypeRecordWords(composed.prototype);
+      const proto = composed.prototype ? [composed.prototype.itemId] : [];
+      record(host, composed.flow, [`composed "${m.request}": ${screenTitles(composed.screens)}${made}.${unsure}`, contentWords(composed.pack), ...(played ? [played] : []), `${cost} — one undo takes the whole flow back, content${composed.prototype ? " and prototype" : ""} included.`], [...composed.screens.map((s) => s.item), ...proto]);
+      host.reveal([...composed.screens.map((s) => s.item), ...composed.variants.map((s) => s.item), ...proto]);
     } else if (m.kind === "prototype") {
       await runPrototype();
     } else if (m.kind === "style") {

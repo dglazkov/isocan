@@ -15,6 +15,9 @@ import { choosePack, flagPack, packLine, type PackChoice } from "./content/choos
 import { fleshSpec, seedKey } from "./content/flesh-spec.ts";
 import { packOf } from "./content/fill.ts";
 import { maybeProperties } from "./maybe.ts";
+import { firstChoices, keepPatch } from "./keep.ts";
+import { PROTOTYPE_CLEAR, keptFlowsOf, writePrototype } from "./kept-flows.ts";
+import type { WireLink } from "./links.ts";
 
 /**
  * **A flow, composed in rounds, drawn in place** — the composer both
@@ -28,6 +31,11 @@ import { maybeProperties } from "./maybe.ts";
  * 3 write `item.addVersion` into those same items, so a screen fills rather
  * than being replaced. Every op carries the flow's id as its group, so one
  * undo takes the whole request back.
+ *
+ * Unless it was asked `basic`, a flow then ends with a prototype you can
+ * click (24 Sep 2026): the first choice of every row round 1 was confident
+ * of goes in it (📐, signed `wireKeepBy=<answerer>`), and the prototype is
+ * built above the row — still in the flow's group.
  */
 
 const GAP = 80;
@@ -143,13 +151,23 @@ export class FlowCanvas {
   }
 }
 
-/** Where a new flow's row starts when nothing was asked: under everything on the canvas, at its left edge. */
-export function rowStart(canvas: CanvasContents): { x: number; y: number; chosen: true } {
+/**
+ * The room a flow that will end with a prototype leaves between what is
+ * already on the canvas and its row: the prototype's clearance over the
+ * arrows (`PROTOTYPE_CLEAR`) and a prototype's height with its title strip —
+ * so the prototype lands right over its own row, not above everything else
+ * on the canvas and across another flow's arrows (24 Sep 2026, seen on the
+ * second flow of a canvas once every flow built one).
+ */
+export const PROTOTYPE_ROOM = PROTOTYPE_CLEAR + 1000;
+
+/** Where a new flow's row starts when nothing was asked: under everything on the canvas (and `room` more), at its left edge. */
+export function rowStart(canvas: CanvasContents, room = 0): { x: number; y: number; chosen: true } {
   const items = Object.values(canvas.items ?? {});
   if (items.length === 0) return { x: 0, y: 0, chosen: true };
   const left = Math.min(...items.map((i) => i.x));
   const bottom = Math.max(...items.map((i) => i.y + i.height));
-  return { x: Math.round(left), y: Math.round(bottom + 160), chosen: true };
+  return { x: Math.round(left), y: Math.round(bottom + 160 + room), chosen: true };
 }
 
 /**
@@ -157,7 +175,7 @@ export function rowStart(canvas: CanvasContents): { x: number; y: number; chosen
  * already holds (its descendants, nested groups and all), at their left edge —
  * or the group's content corner when it is empty.
  */
-export function rowStartIn(canvas: CanvasContents, groupId: string): { x: number; y: number; chosen: true } {
+export function rowStartIn(canvas: CanvasContents, groupId: string, room = 0): { x: number; y: number; chosen: true } {
   const group = canvas.items[groupId];
   if (!group) throw new Error(`no group ${groupId} on this canvas`);
   const inside = groupDescendants(canvas, groupId);
@@ -167,7 +185,7 @@ export function rowStartIn(canvas: CanvasContents, groupId: string): { x: number
   }
   const left = Math.min(...inside.map((i) => i.x));
   const bottom = Math.max(...inside.map((i) => i.y + i.height));
-  return { x: Math.round(left), y: Math.round(bottom + 160), chosen: true };
+  return { x: Math.round(left), y: Math.round(bottom + 160 + room), chosen: true };
 }
 
 // ---------- asking
@@ -380,9 +398,20 @@ export interface ComposeOptions {
    * screens land grey in round 2 and arrive fleshed in round 3, from the
    * pack chosen while round 1 is asked — one call more — or `pack` when
    * given. `false` is `--basic` (`/wire basic …`): plain grey wires, as
-   * before, for `wire flesh` later.
+   * before, for `wire flesh` later — and nothing is put in a prototype.
    */
   flesh?: { pack?: string } | false;
+}
+
+/** The prototype a composed flow ends with: the answerer's first choices, played above the row. */
+export interface FlowPrototype {
+  itemId: string;
+  title: string;
+  links: WireLink[];
+  /** The screens in it, in reading order — each signed with `answerer` as `wireKeepBy`. */
+  screens: Screen[];
+  /** Whose first choices they are: `jev` or `stub`. */
+  answerer: string;
 }
 
 export interface Composed {
@@ -398,20 +427,26 @@ export interface Composed {
   mapper: StyleResolver;
   /** The pack the flow was filled from — absent for `--basic`, or when none could be chosen. */
   pack?: PackChoice;
+  /** The prototype it ends with — absent for `--basic`, or when round 1 was confident of no screen. */
+  prototype?: FlowPrototype;
 }
 
-/** Start a flow: the request's blueprint, alone, before anybody is asked anything. */
-export async function startFlow(port: WirePort, request: string, placement?: Record<string, unknown>): Promise<{ canvas: FlowCanvas; first: Screen; flow: string }> {
+/**
+ * Start a flow: the request's blueprint, alone, before anybody is asked
+ * anything. `room` is left above the row when its place is not given — a
+ * flow that will end with a prototype passes `PROTOTYPE_ROOM`.
+ */
+export async function startFlow(port: WirePort, request: string, placement?: Record<string, unknown>, room = 0): Promise<{ canvas: FlowCanvas; first: Screen; flow: string }> {
   const flow = newGroupId();
   const canvas = new FlowCanvas(port, flow);
-  const { containerId, groupPlacement, ...spot } = (placement ?? rowStart(await port.canvas())) as Record<string, unknown> & { containerId?: string; groupPlacement?: string };
+  const { containerId, groupPlacement, ...spot } = (placement ?? rowStart(await port.canvas(), room)) as Record<string, unknown> & { containerId?: string; groupPlacement?: string };
   // The whole flow joins the group, at exactly the spots the row computes.
   if (typeof containerId === "string") canvas.into = { containerId, groupPlacement: "exact" };
   // `--in <group>` without `--at`: under everything already in the group, as a
   // flow at the root goes under everything on the canvas — not in the first gap
   // the first screen fits, from which the row would run over what is beside it
   // (Porchlight #1: a second flow laid across the first's variations).
-  const where = typeof containerId === "string" && groupPlacement !== "exact" ? rowStartIn(await port.canvas(), containerId) : spot;
+  const where = typeof containerId === "string" && groupPlacement !== "exact" ? rowStartIn(await port.canvas(), containerId, room) : spot;
   const first = await canvas.add(requestBlueprint(request, flow), where);
   return { canvas, first, flow };
 }
@@ -420,7 +455,8 @@ export async function startFlow(port: WirePort, request: string, placement?: Rec
 export async function composeFlow(port: WirePort, request: string, answerer: Answerer, opts: ComposeOptions = {}): Promise<Composed> {
   const say = opts.say ?? (() => {});
   const t0 = Date.now();
-  const { canvas, first, flow } = await startFlow(port, request, opts.placement);
+  // A flow that will end with a prototype leaves it room over its own row.
+  const { canvas, first, flow } = await startFlow(port, request, opts.placement, opts.flesh === false ? 0 : PROTOTYPE_ROOM);
   const firstMs = Date.now() - t0;
   await opts.onBlueprint?.(first, firstMs, flow);
   // The governing design system's mapping is asked for while round 1 is (design §9): a flow
@@ -465,7 +501,40 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
     }
     screens = await applyRound(canvas, round, screens, calls, asked.responses, say);
   }
-  return { flow, screens, variants: canvas.variants, tallies, by, firstMs, totalMs: Date.now() - t0, style: canvas.style, mapper, ...(canvas.pack ? { pack: canvas.pack } : {}) };
+  // `basic` is plain grey wires with nothing chosen; anything else ends with a prototype you can click.
+  const prototype = fleshWith ? await prototypeOfFirstChoices(canvas, screens, say) : undefined;
+  return { flow, screens, variants: canvas.variants, tallies, by, firstMs, totalMs: Date.now() - t0, style: canvas.style, mapper, ...(canvas.pack ? { pack: canvas.pack } : {}), ...(prototype ? { prototype } : {}) };
+}
+
+/**
+ * **Jev's first choices, in the prototype** — each confident row's screen
+ * (`firstChoices`: never a maybe, never a variation) marked 📐 and signed
+ * with the answerer (`wireKeepBy`), then the prototype built above the row,
+ * all in the flow's op group: one undo takes the flow, its picks and its
+ * prototype back together. A person swapping a variation in (⇧K) signs that
+ * keep as theirs, which is what makes the swap a label.
+ */
+export async function prototypeOfFirstChoices(canvas: FlowCanvas, screens: readonly Screen[], say: (line: string) => void = () => {}): Promise<FlowPrototype | undefined> {
+  const picked = firstChoices(screens);
+  if (picked.length === 0) {
+    say("no prototype: round 1 was confident of no screen — use the ones that belong (📐), then `wire prototype`");
+    return undefined;
+  }
+  const answerer = canvas.by?.answerer === "stub" ? "stub" : "jev";
+  for (const s of picked) await canvas.port.send({ type: "item.update", itemId: s.item, patch: keepPatch(true, answerer) }, canvas.group);
+  const now = await canvas.port.canvas();
+  const flow = keptFlowsOf(now, [...screens, ...canvas.variants]).find((f) => f.flow === picked[0]!.spec.flow);
+  if (!flow) return undefined;
+  const written = await writePrototype(canvas.port, now, flow, canvas.group);
+  const inIt = flow.items.map((i) => picked.find((s) => s.item === i.id)!).filter(Boolean);
+  const line = prototypeWords(inIt.length, answerer);
+  say(`${written.itemId}  "${written.title}" — ${line}`);
+  return { itemId: written.itemId, title: written.title, links: written.links, screens: inIt, answerer };
+}
+
+/** How a composed flow's prototype is said: how many screens, and whose first choices they are. */
+export function prototypeWords(screens: number, answerer: string): string {
+  return `prototype of ${screens} screen${screens === 1 ? "" : "s"}, ${answerer === "stub" ? "the stub's" : "Jev's"} first choices`;
 }
 
 /** The closing line of a flow, for a person. */

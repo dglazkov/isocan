@@ -128,6 +128,8 @@ function harness() {
     return blobs.get(item.versions.find((x) => x.id === item.currentVersionId)!.blobHash)!;
   };
   const wires = () => [...items.values()].filter((i) => i.properties.fidelity === "wireframe" && !i.properties[PROTOTYPE_PROP]);
+  // A composed flow ends with a prototype of its first choices, which a restyle rebuilds in the same group.
+  const prototypes = () => [...items.values()].filter((i) => i.properties[PROTOTYPE_PROP] !== undefined);
   const cli = async (...args: string[]) => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     await program.parseAsync(["node", "isocan", ...args]);
@@ -135,7 +137,7 @@ function harness() {
     log.mockRestore();
     return printed;
   };
-  return { cli, sent, items, errors, specOf, htmlOf, wires, design, designVersion, group };
+  return { cli, sent, items, errors, specOf, htmlOf, wires, prototypes, design, designVersion, group };
 }
 
 const REQUEST = "an ordering app for Acme's kitchen — sign in, take orders, see what is waiting";
@@ -187,7 +189,8 @@ describe("isocan wire style", () => {
     const ops = h.sent.slice(before);
     expect(ops.every((o) => o.op.type === "item.addVersion")).toBe(true);
     expect(new Set(ops.map((o) => o.group)).size).toBe(1);
-    expect(ops.map((o) => (o.op as { itemId: string }).itemId).sort()).toEqual(wires.map((w) => w.id).sort());
+    expect(h.prototypes()).toHaveLength(1);
+    expect(ops.map((o) => (o.op as { itemId: string }).itemId).sort()).toEqual([...wires, ...h.prototypes()].map((w) => w.id).sort());
     for (const w of wires) {
       const spec = h.specOf(w.id);
       expect(spec.style).toMatchObject({ source: "design-system", itemId: "ds-warm", versionId: "ds-warm-v1", name: "Acme Warm" });
@@ -232,7 +235,8 @@ describe("isocan wire style", () => {
     const before = h.sent.length;
     await h.cli("wire", "style", "--answerer", "jev");
     expect(jev).toHaveLength(calls + 1);
-    expect(h.sent.length - before).toBe(n);
+    // Every wire, and the flow's prototype rebuilt with them.
+    expect(h.sent.length - before).toBe(n + 1);
     for (const w of h.wires()) expect(h.specOf(w.id).style).toMatchObject({ versionId: "ds-warm-v2" });
     expect(h.htmlOf(h.wires()[0]!.id)).toContain("--w-primary:#b0085f");
   });
@@ -246,7 +250,7 @@ describe("isocan wire style", () => {
     const before = h.sent.length;
     const printed = await h.cli("wire", "style", "--default");
     const ops = h.sent.slice(before);
-    expect(ops.length).toBe(h.wires().length);
+    expect(ops.length).toBe(h.wires().length + h.prototypes().length);
     expect(new Set(ops.map((o) => o.group)).size).toBe(1);
     for (const w of h.wires()) {
       expect(h.specOf(w.id).style).toEqual({ source: "default" });
@@ -286,7 +290,9 @@ describe("isocan wire style", () => {
     const before = h.sent.length;
     await h.cli("wire", "style", "--answerer", "jev");
     expect(jev).toHaveLength(3);
-    expect(h.sent.slice(before).map((o) => (o.op as { itemId: string }).itemId).sort()).toEqual([...inside].sort());
+    const insideProto = h.prototypes().filter((i) => i.containerId === "group-back-office").map((i) => i.id);
+    expect(insideProto).toHaveLength(1);
+    expect(h.sent.slice(before).map((o) => (o.op as { itemId: string }).itemId).sort()).toEqual([...inside, ...insideProto].sort());
   });
 
   it("a flow asked for where a system governs arrives in it — blue first, then the system", async () => {

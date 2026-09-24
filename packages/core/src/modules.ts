@@ -60,7 +60,12 @@ export interface ModuleKind {
  * importing the module — take the module away and the property is inert.
  */
 export interface ModuleMark {
-  /** The property whose presence is the mark; set to `"yes"`, removed to unmark. */
+  /**
+   * The property whose presence is the mark; set to `"yes"`, removed to
+   * unmark. Beside it, `<property>By` says who put it on — the actor's id
+   * (`moduleMarkPatch`), taken off with it: a mark somebody chose and one a
+   * machine chose are different evidence (wireframes, 24 Sep 2026).
+   */
   property: string;
   emoji: string;
   /** What the mark says on the item, as its tooltip. */

@@ -152,7 +152,9 @@ describe("the keep mark", () => {
 
   it("is a property: set and removed by patch, readable by anyone", () => {
     expect(keepPatch(true)).toEqual({ properties: { wireKeep: "yes" } });
-    expect(keepPatch(false)).toEqual({ removeProperties: ["wireKeep"] });
+    // Taking it off takes who put it on, too.
+    expect(keepPatch(false)).toEqual({ removeProperties: ["wireKeep", "wireKeepBy"] });
+    expect(keepPatch(true, "usr_acme")).toEqual({ properties: { wireKeep: "yes", wireKeepBy: "usr_acme" } });
     expect(isKept(item("a", 0, 0, { wireKeep: "yes" }))).toBe(true);
   });
 
