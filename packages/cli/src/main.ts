@@ -319,6 +319,7 @@ import {
   parsePersona,
   goalLine,
   personaWarnings,
+  escalatedTo,
   runFindings,
   tallyOutcomes,
   inboxNewestFirst,
@@ -8679,12 +8680,20 @@ persona
       console.log(
         `  trigger   ${
           p.trigger.kind === "schedule"
-            ? p.trigger.cron
+            ? `${p.trigger.cron}${p.trigger.idle ? `, and when the ${p.trigger.idle.scope} has been idle ${p.trigger.idle.minutes}m` : ""}`
             : p.trigger.kind === "push"
               ? `push to ${p.trigger.to}${p.trigger.paths ? ` (${p.trigger.paths.join(", ")})` : ""}`
               : "manual — somebody has to run it"
         }`,
       );
+      if (p.budget) {
+        const parts = [
+          p.budget.usdPerRun !== undefined ? `$${p.budget.usdPerRun} per run` : null,
+          p.budget.turnsPerRun !== undefined ? `${p.budget.turnsPerRun} turns per run` : null,
+        ].filter(Boolean);
+        console.log(`  budget    ${parts.join(", ")}`);
+      }
+      if (p.escalate) console.log(`  hands to  ${p.escalate}`);
       if (p.runs) console.log(`  runs      ${p.runs}`);
       console.log(p.goals.length ? "  judged on" : "  judged on nothing yet");
       for (const goal of p.goals) console.log(`    · ${goalLine(goal)}\n      ${goal.measuredBy}`);
@@ -8714,14 +8723,41 @@ persona
         const page = await fs.readFile(path.join(dir, file), "utf8").catch(() => null);
         if (page !== null) runs.push({ page: file, findings: runFindings(page) });
       }
-      if (ctx.json) return console.log(JSON.stringify(runs, null, 2));
-      if (runs.length === 0) {
+      /**
+       * **What other personas handed to this one** — the expensive tier's
+       * inbox. A small persona that cannot settle what it found writes
+       * "Escalated to `<name>`" on its own page (`persona-run.mjs`), and this
+       * is where `<name>` sees it. Read from every persona's pages, since the
+       * hand-off lives on the page of the one that handed it.
+       */
+      const handed: Array<{ page: string; from: string; findings: RunFinding[] }> = [];
+      for (const other of found) {
+        if (other.persona.name === match.persona.name) continue;
+        const otherDir = path.join(root, other.persona.runs ?? "docs/reviews/");
+        const pages = (await fs.readdir(otherDir).catch(() => [] as string[]))
+          .filter((f) => f.endsWith(`-${other.persona.name}.md`))
+          .sort()
+          .reverse();
+        for (const file of pages) {
+          const page = await fs.readFile(path.join(otherDir, file), "utf8").catch(() => null);
+          if (page !== null && escalatedTo(page) === match.persona.name) {
+            handed.push({ page: file, from: other.persona.name, findings: runFindings(page) });
+          }
+        }
+      }
+      if (ctx.json) return console.log(JSON.stringify([...runs, ...handed], null, 2));
+      if (runs.length === 0 && handed.length === 0) {
         return console.log(`no runs yet — \`node scripts/persona-run.mjs ${match.persona.name}\``);
       }
       for (const r of runs) {
         console.log(r.page);
         for (const f of r.findings) console.log(`  ${f.outcome.padEnd(11)} ${f.finding}`);
         if (r.findings.length === 0) console.log("  nothing found");
+      }
+      if (handed.length) console.log(`\nhanded to ${match.persona.name}`);
+      for (const h of handed) {
+        console.log(`${h.page}  (from ${h.from})`);
+        for (const f of h.findings) console.log(`  ${f.outcome.padEnd(11)} ${f.finding}`);
       }
       /**
        * **The tally, and no ratio.** An accept rate over five findings is

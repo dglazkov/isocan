@@ -1,14 +1,75 @@
 ---
-status: designed
+status: partial
 since: 2026-09-07
 issue: 205
 see: personas, standing-agents, on-demand
-note: the cheap tier #197 claims already exists does not — all nine personas are opus at xhigh. This is what a small persona would need: an idle trigger, a cost that is declared, permission to write where a guard already exists, and a registry of what to explore that is not the findings queue.
+note: phase 1 built 24 Sep — `librarian`, the first small persona (Haiku, $0.05 a run, dead doc links), with phases 2 and 3 in their smallest real form alongside it — a machine-idle door (`persona-run.mjs --idle`) and a declared budget the harness enforces and the page reports — and a hand-off to `reviewer` that is recorded rather than launched. Two corrections from building it — the nightly runs no model at all, and Haiku 4.5 takes no effort dial. Not yet run against a real key. Open — canvas idleness, the write rule (D4), the registry, `isocan persona new`.
 ---
 
 # Small personas: cheap agents, an idle trigger, and a registry of what to explore
 
 **7 September 2026.** Research. Nothing built.
+
+## Built, 24 September 2026 — phase 1, and what the tree said back
+
+**`librarian`** (`.agents/personas/librarian.md`) is the first small persona:
+`model: haiku`, `tools: Read, Glob, Grep`, a budget of $0.05 and 6 turns a run,
+`escalate: reviewer`, and one number — relative links in tracked Markdown that
+point at nothing (`node scripts/measure.mjs dead-doc-links`, 4 on the day, a
+ratchet). `docs/projects/personas/README.md` says how a run goes; the choices
+are pure functions in `scripts/lib/persona-tier.mjs`.
+
+**Not the dependency checker.** Phase 1 below names it, and by 22 Sep that job
+had an owner: Renovate, in four lanes, merging patch/minor itself once the
+suite is green (`AGENTS.md`, "The night shift's pull requests"). A small
+persona re-doing Renovate's lane would be a second owner for one number. The
+mechanical check nobody watched was dead doc links — found, moved-file
+candidates listed by a script, and the part left for a model is picking one
+or saying there is none.
+
+**Three things the tree disagreed with**, recorded where the claims were made:
+
+- **"All nine run on opus at xhigh, nine times a night" — they run on nothing.**
+  `persona-run.mjs` executes each goal's command and writes the page; no
+  workflow hands a persona to a model. `model`/`effort` are read only when a
+  person asks Claude Code for the subagent. So the correction to #197 stands
+  (there was no cheap tier) but for a different reason: there was no *model*
+  tier on a schedule at all, and `librarian` is the first thing machinery
+  ever hands to one.
+- **"Unknown keys are refused" — they are kept.** `parsePersona` stores them in
+  `extra` so an editor round trip cannot delete somebody else's key, and a test
+  holds that. The contract is looser than this note said; `budget` and
+  `escalate` are now known keys.
+- **D1's `effort: low` — Haiku 4.5 has no effort parameter.** `librarian`
+  declares none; its cheapness is the model and the budget.
+
+**Decisions made in building it, which this note left open:**
+
+- **The budget is a hard cap and a reported number.** `budget: usd per run /
+  turns per run` goes to `claude -p` as `--max-budget-usd` / `--max-turns`; the
+  harness's own `total_cost_usd` is written on the page; a run over budget is a
+  finding. **No budget, no model** — which is why nothing changed for the nine.
+- **Idle rides on the cron, as `idle: machine 15m`**, and the scope is
+  mandatory (a bare `idle: 20m` is dropped, D2). Machine idle is the load
+  average over the longest window that fits (1/5/15 min) under a quarter of
+  the cores. `canvas` parses and is refused by the runner by name.
+- **The hand-off is recorded, not launched.** Only what the small pass could
+  not settle goes on (an `ESCALATE`, a skipped offender, or everything with the
+  reason if the pass failed or overspent); the page says *Escalated to
+  `reviewer`*, the finding row names it, and `isocan persona runs reviewer`
+  lists it under *handed to*. Machinery does not start `reviewer`, because
+  `reviewer` declares no budget and D3 is that nothing runs a model without
+  one. Phase 5 of #197 ("trigger the expensive tier from the queue") is
+  therefore half-met: the queue is the trigger, a person or an agent wearing
+  `reviewer` is the one it wakes.
+- **Proposals, not PRs.** D4 permits opening a PR; phase 1 does not yet — fixes
+  go on the page as *proposed, not applied*. Opening them is phase 4.
+
+**Not yet measured:** the cost of a real small pass. The environment this was
+built in had no API key, so the trial stopped at "ready to run": the held path
+($0) ran for real, and the missed path ran end to end against a stub harness.
+The first night the number misses with `ANTHROPIC_API_KEY` set on the
+`personas` workflow is the first measurement.
 
 > "custom mini agent personas that small agents can take on… where you set the
 > time and settings like 'when not active on the canvas'… for smaller

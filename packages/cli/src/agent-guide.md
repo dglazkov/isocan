@@ -1241,6 +1241,13 @@ names". The second is a claim somebody can check.
 about each — `accepted`, `rejected`, or `unanswered`. Nothing computes a score
 from those yet, deliberately: an accept rate over five findings is noise.
 
+**Some personas are small, and hand off.** One that declares a `budget` (show
+prints it) runs a cheap model on a night its number misses, within that cost,
+and proposes fixes on its page without applying them. What it cannot settle it
+escalates to the persona its `escalate:` names, and `isocan persona runs
+<that one>` lists those pages under **handed to**. If you are wearing the
+persona something was handed to, those are yours to decide.
+
 **The docket is where an unanswered finding gets its answer.** On a repo whose
 board runs `scripts/docket.mjs`, each open question is an item carrying
 `docket=<slug>`, and it is answered by a mark: ✅ accepts, ❌ rejects. The

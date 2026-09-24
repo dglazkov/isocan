@@ -34,8 +34,15 @@ describe("a persona run changes nothing", () => {
     // `@isocan/core` is TypeScript and this is a plain script, so the tempting
     // shortcut is a second little front-matter reader — and then one persona
     // says two things depending on who asked.
-    expect(runner).toMatch(/--json persona ls/);
+    expect(runner).toMatch(/--json persona --root \$\{JSON\.stringify\(repo\)\} ls/);
     expect(runner).not.toContain("splitFrontMatter");
+  });
+
+  it("reads THIS checkout's personas, not the one a worktree is bound to", () => {
+    // From a git worktree the binding answers with the MAIN checkout, so the
+    // run took its numbers against somebody else's bounds and could not see a
+    // persona added in the worktree — `scripts/ratchet.mjs` hit the same.
+    expect(runner).toContain("persona --root");
   });
 
   it("never reads a broken instrument as a zero", () => {

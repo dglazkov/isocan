@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
   PERSONA_DIR,
   PERSONA_DOORWAY,
+  escalatedTo,
   goalLine,
   parseBound,
   parsePersona,
@@ -173,6 +174,74 @@ describe("what a persona is warned about", () => {
       "p.md",
     )!;
     expect(p.trigger).toEqual({ kind: "push", to: "main", paths: ["packages/web", "styles.css"] });
+  });
+});
+
+/**
+ * **The cheap tier's three keys** — `docs/research/2026-09-07-small-personas.md`
+ * phase 1: a declared cost (D3), an idle trigger with its scope (D2), and who
+ * a small persona hands off to (#197's "cheap finds, expensive decides").
+ */
+describe("a small persona: what it may spend, when it runs, who decides", () => {
+  const small = (extra: string) =>
+    parsePersona(
+      file(
+        "name: s\ndescription: d\nmodel: haiku\ngoal:\n  - name: x\n    at most: 0\n    measured by: y\n    baseline: 0, 2026-09-24\n" +
+          extra,
+      ),
+      "s.md",
+    )!;
+
+  it("reads a budget in rcLimits' shape — named limits, each a number", () => {
+    const p = small("budget:\n  usd per run: 0.05\n  turns per run: 6\nescalate: reviewer");
+    expect(p.budget).toEqual({ usdPerRun: 0.05, turnsPerRun: 6 });
+    expect(p.escalate).toBe("reviewer");
+    // Known keys, so they are not ALSO kept as unknown ones.
+    expect(p.extra).not.toHaveProperty("budget");
+    expect(p.extra).not.toHaveProperty("escalate");
+  });
+
+  it("reads a typo as NO budget, never as an unlimited one", () => {
+    /**
+     * The runner runs no model for a persona without a budget. A value it
+     * cannot read therefore has to land on that side — "machinery will not
+     * run this" — and not on "no cap", which is the expensive way to be wrong.
+     */
+    expect(small("budget:\n  usd per run: lots").budget).toBeUndefined();
+    expect(small("budget:\n  usd per run: 0").budget).toBeUndefined();
+    expect(small("budget:\n  dollars: 0.05").budget).toBeUndefined();
+    expect(small("budget:\n  usd per run: $0.10").budget).toEqual({ usdPerRun: 0.1 });
+  });
+
+  it("reads idle with its scope, and drops one that does not say which idleness", () => {
+    /**
+     * D2: two idlenesses, named separately from the start. A bare `idle: 20m`
+     * is exactly the conflation that would start a heavy run while somebody
+     * is mid-sprint on an unrelated canvas, so it is not guessed at.
+     */
+    expect(small("trigger:\n  cron: 43 8 * * *\n  idle: machine 15m").trigger).toEqual({
+      kind: "schedule",
+      cron: "43 8 * * *",
+      idle: { scope: "machine", minutes: 15 },
+    });
+    expect(small("trigger:\n  cron: 43 8 * * *\n  idle: canvas 20 minutes").trigger).toMatchObject({
+      idle: { scope: "canvas", minutes: 20 },
+    });
+    expect(small("trigger:\n  cron: 43 8 * * *\n  idle: 20m").trigger).toEqual({ kind: "schedule", cron: "43 8 * * *" });
+  });
+
+  it("warns about a hand-off with nothing to hand off from", () => {
+    expect(personaWarnings(small("escalate: reviewer")).join(" ")).toContain("declares no budget");
+    expect(personaWarnings(small("budget:\n  usd per run: 0.05\nescalate: reviewer"))).toEqual([
+      "no trigger — somebody has to remember to run it",
+    ]);
+  });
+
+  it("reads who a run page handed its finding to, off the page", () => {
+    expect(escalatedTo("# p\n\n## Escalation\n\n**Escalated to `reviewer`** — what the small pass could not settle:\n")).toBe(
+      "reviewer",
+    );
+    expect(escalatedTo("# p\n\nNothing was escalated to `reviewer` here.\n")).toBeNull();
   });
 });
 

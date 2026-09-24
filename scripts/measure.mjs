@@ -432,6 +432,34 @@ const METRICS = {
     },
   },
 
+  /**
+   * **Links in the docs that lead nowhere** — `librarian`'s number, and the
+   * first one chosen because a small model can do the work behind it well.
+   *
+   * The docs here are the reasoning, and they are read by agents that follow
+   * the links: a relative link to a file that was moved or deleted is a claim
+   * the repo makes about itself that is no longer true, and nothing noticed —
+   * 1,500-odd links on 24 Sep 2026, four of them dead, one for three weeks.
+   *
+   * The count is mechanical and so is most of the fix: a file that was moved
+   * is usually still in the tree under the same name, and `--names` prints
+   * those candidates beside each dead link, so what is left for a model is
+   * picking one — or saying there is none, which is a judgement about prose
+   * and is where `librarian` hands off to `reviewer`.
+   */
+  "dead-doc-links": {
+    what: "relative links in tracked Markdown that point at nothing",
+    take: () => deadDocLinks().length,
+    names: () =>
+      deadDocLinks().map(
+        (d) => `${d.file} → ${d.target}${d.candidates.length ? `  · maybe: ${d.candidates.join(", ")}` : "  · no file of that name"}`,
+      ),
+    breakIt: {
+      file: "docs/reviews/lessons.md",
+      apply: (t) => `${t}\n[selftest](./selftest-no-such-page.md)\n`,
+    },
+  },
+
   "lint-violations": {
     what: "eslint errors — rules-of-hooks and exhaustive-deps, both at error",
     take() {
@@ -545,6 +573,70 @@ function scanExports(names = false) {
     });
   }
   return { unused, bare, found, bareFound };
+}
+
+/**
+ * **Every relative Markdown link whose target is not on disk.**
+ *
+ * One walk behind the count and `--names`, so the two cannot disagree
+ * (`docs/reviews/lessons.md` #5). What it leaves out, and why:
+ *
+ * - URLs and in-page anchors — `https:`, `mailto:`, `#section`. Reachability
+ *   on the network is not a property of this tree.
+ * - Code: fenced blocks and inline backticks. A link written inside code is
+ *   an example of a link, not a link.
+ * - `test/fixtures/` — those are COPIES of files from elsewhere, and their
+ *   links are relative to where the original lives.
+ * - Symlinks — `.claude/agents/*.md` are doorways to `.agents/personas/`, and
+ *   a relative link read through one resolves from the wrong directory.
+ */
+function deadDocLinks() {
+  const tracked = execFileSync("git", ["ls-files", "-s", "--", "*.md"], { cwd: repo, encoding: "utf8" })
+    .split("\n")
+    .filter(Boolean)
+    // Mode 120000 is a symlink.
+    .filter((line) => !line.startsWith("120000"))
+    .map((line) => line.split("\t")[1])
+    .filter((f) => !f.startsWith("test/fixtures/"));
+  const everything = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" }).split("\n").filter(Boolean);
+  /**
+   * Where a moved file might be now: the tracked paths sharing the LONGEST
+   * tail with the dead target. `grades/README.md` should find
+   * `docs/grades/README.md` and not every README in the tree, so the tail is
+   * tried whole first and shortened a segment at a time.
+   */
+  const candidatesFor = (target) => {
+    const parts = target.split("/").filter((p) => p && p !== "." && p !== "..");
+    for (let i = 0; i < parts.length; i++) {
+      const tail = parts.slice(i).join("/");
+      const hits = everything.filter((f) => f === tail || f.endsWith(`/${tail}`));
+      if (hits.length) return hits.slice(0, 5);
+    }
+    return [];
+  };
+  const dead = [];
+  for (const file of tracked) {
+    const abs = path.join(repo, file);
+    if (!existsSync(abs)) continue;
+    const text = readFileSync(abs, "utf8")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/`[^`\n]*`/g, "");
+    for (const m of text.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+      const raw = m[1];
+      if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("#") || raw.startsWith("<")) continue;
+      let target = raw.split("#")[0].split("?")[0];
+      try {
+        target = decodeURI(target);
+      } catch {
+        // A malformed escape is still a link somebody wrote; check it as typed.
+      }
+      if (!target) continue;
+      const resolved = target.startsWith("/") ? path.join(repo, target) : path.join(path.dirname(abs), target);
+      if (existsSync(resolved)) continue;
+      dead.push({ file, target: raw, candidates: candidatesFor(target) });
+    }
+  }
+  return dead;
 }
 
 /**

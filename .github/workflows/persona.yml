@@ -35,6 +35,10 @@ jobs:
   personas:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # `secrets` cannot be read from a step's `if`, only from the job's env —
+    # the same arrangement as changelog.yml.
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
@@ -45,13 +49,28 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # The cheap tier's harness (docs/research/2026-09-07-small-personas.md).
+      # A persona that declares a `budget` gets one bounded `claude -p` call on
+      # a night its number misses — `librarian`, on Haiku, capped at $0.05.
+      # Installed only when there is a key: without one the runner SKIPS the
+      # small pass, says so on the page, and the finding waits for a person
+      # like any other, so this workflow stays green before the secret exists.
+      - name: Install the small tier's harness
+        if: env.HAS_KEY == 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
       # A MISSED goal is news and does not fail this step — the page is the
       # report, and a run that goes red every morning trains everybody to stop
       # looking. It fails for one reason: an instrument that would not run,
       # because a number nobody could take must never be filed as a zero.
+      #
+      # The key reaches ONLY personas with a declared budget: the runner never
+      # starts a model for one without (`smallPassWanted`), so the nine opus
+      # personas take their numbers here exactly as before, for $0.
       - name: Take each persona's numbers
         env:
           ONE: ${{ inputs.persona }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node scripts/persona-run.mjs ${ONE:---all}
 
       # A SEPARATE step, deliberately, and not something `persona-run.mjs` does.

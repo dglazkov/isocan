@@ -12,12 +12,13 @@ whose only job is that lens.
 | `copy` | The words: labels, errors, tooltips, empty states | greppable copy tells |
 | `design-auditor` | Tokens, both themes, the tells of a generated interface | grader checks, colour literals |
 | `journeys` | Whether it works when somebody actually uses it | **none at push time, deliberately** — it walks nightly, and a failing journey turns that run red |
+| `librarian` | Whether the docs' links still lead somewhere — the first **small** persona: Haiku, $0.05 a run, hands what it cannot settle to `reviewer` | dead relative links in tracked Markdown — a **ratchet** |
 | `market-researcher` | What else exists and what to take from it | **none, honestly** |
 | `performance` | Whether it still feels fast | the entry chunk, and bytes past the last agreed size |
 | `qa-tester` | Whether the tests mean anything | eslint errors |
 | `reviewer` | Whether the code says true things about itself | unused exports, undocumented exports — both **ratchets** |
 
-**Nine, and the count is the discipline rather than a target.** The design
+**Ten, and the count is the discipline rather than a target.** The design
 says four fit in a head and warns against a persona per concern; the gate it
 sets is stricter and is what these pass: *a persona needs a standing number
 nobody else is watching.* `market-researcher` has none and says so out loud in
@@ -121,7 +122,7 @@ again every week is the treadmill, not the fix.
 | exports nothing outside their own file uses | 0 | **4** | 52 (answered) | 2026-09-03, at 25 |
 | the entry chunk a first visit downloads | 747000 | **3** | 756004 (answered) | 2026-09-20, at 750401 |
 
-**9 personas, fired by `43 8 * * *` (persona.yml) and `17 7 * * *` (journeys.yml).** Every one declares the cadence that actually runs it.
+**10 personas, fired by `43 8 * * *` (persona.yml) and `17 7 * * *` (journeys.yml).** Every one declares the cadence that actually runs it.
 
 | Persona | Says | Last ran | |
 | --- | --- | --- | --- |
@@ -130,6 +131,7 @@ again every week is the treadmill, not the fix.
 | copy | `43 8 * * *` | 2026-09-24 |  |
 | design-auditor | `43 8 * * *` | 2026-09-24 |  |
 | journeys | `17 7 * * *` | 2026-09-24 |  |
+| librarian | `43 8 * * *` | never |  |
 | market-researcher | `43 8 * * *` | 2026-09-24 |  |
 | performance | `43 8 * * *` | 2026-09-24 |  |
 | qa-tester | `43 8 * * *` | 2026-09-24 |  |
