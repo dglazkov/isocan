@@ -15,7 +15,7 @@ import { SHORTCUTS, SHORTCUT_GROUPS, shortcutsAsText, shortcutsIn } from "@isoca
  */
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
-const handlers = read("../src/pages/CanvasPage.tsx") + read("../src/components/CanvasViewport.tsx");
+const handlers = read("../src/pages/CanvasPage.tsx") + read("../src/components/CanvasViewport.tsx") + read("../src/components/FullScreen.tsx");
 
 describe("every documented key exists", () => {
   const letters = SHORTCUTS.flatMap((s) => s.keys).filter((key) => /^[A-Z]$/.test(key));
@@ -41,6 +41,26 @@ describe("every documented key exists", () => {
   it("documents ? itself, which is how anyone finds the rest", () => {
     expect(SHORTCUTS.some((s) => s.keys.includes("?"))).toBe(true);
     expect(handlers).toContain('e.key === "?"');
+  });
+});
+
+/**
+ * **And the other way: every letter the canvas answers is in the list.**
+ * Asked on 24 Sep 2026 — "does the shortcut help have all of the latest
+ * keys?" — and it did not: N (speaker notes) had been answered in full screen
+ * for weeks without a line in `?`. The check above only walked from the list
+ * to the code, so a key added without its line passed forever.
+ */
+describe("every answered key is documented", () => {
+  const answered = [...new Set([...handlers.matchAll(/e\.key(?:\.toLowerCase\(\))? === "([a-zA-Z])"/g)].map((m) => m[1]!.toUpperCase()))];
+  const documented = SHORTCUTS.flatMap((s) => s.keys).join(" ");
+
+  it("finds some answered letters (the test would pass vacuously otherwise)", () => {
+    expect(answered.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it.each(answered)("%s is in the list", (key) => {
+    expect(documented, `${key} is answered by the canvas but not in SHORTCUTS`).toMatch(new RegExp(`(^|[^A-Z])${key}($|[^A-Z])`));
   });
 });
 
