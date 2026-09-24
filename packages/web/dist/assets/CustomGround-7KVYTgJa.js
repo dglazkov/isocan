@@ -1,1 +1,0 @@
-import{j as s,a3 as r,dj as c}from"./index-DEAstozn.js";function n({canvasId:a,hash:e}){return s.jsxs("div",{className:"canvas-theme canvas-theme-custom",children:[s.jsx("div",{className:"canvas-ground-picture",style:{backgroundImage:`url(${r(a,e)})`}}),s.jsx("div",{className:"canvas-ground-scrim",style:{opacity:c}})]})}export{n as CustomGround};

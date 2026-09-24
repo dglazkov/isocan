@@ -393,7 +393,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   flow, `wire link` overrides one hotspot. Wires draw in the default grey
   look, or in the canvas's design system: `wire style` has Jev map the
   governing `DESIGN.md`'s own tokens onto the wire's roles and restyles every
-  wire as one undo (`--default` goes back; blueprints stay blue). See
+  wire as one undo (`--default` goes back; blueprints stay blue). `wire
+  flesh` (or `/wire flesh`, or `wire "<request>" --flesh`) swaps the grey
+  bars for sample content — Jev picks one of 24 synthetic content packs for
+  the request, and every list, table, stat, card and image slot fills with
+  its nouns, numbers, first names and greyscale pictograms, seeded so a
+  restyle, a variation or the prototype shows the same words; `wire copy`
+  lets an agent write the exact ones. See
   [the journey](docs/projects/wireframes/journey.md).
 - **Design competitions**: `/design-competition` or ⌘K opens a lazy picker
   with nine designer-inspired packs. Choose fighters and a brief to create
