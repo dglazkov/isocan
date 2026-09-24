@@ -3,7 +3,7 @@ import { designUnuse, designUse, type DesignUse } from "@isocan/core/design-use"
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 
 /**
- * **"Use as the design system", from the item menu** — the web's door to
+ * **"Use as design system", from the item menu** — the web's door to
  * `isocan design use`, and until it existed the only way to choose which
  * DESIGN.md governs was a terminal. The op comes from core's `designUse`,
  * the same function the CLI verb calls, so the two cannot send different

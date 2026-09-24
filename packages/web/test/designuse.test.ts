@@ -15,7 +15,7 @@ import { useCanvasStore } from "../src/stores/canvasStore.ts";
  * **Choosing which DESIGN.md governs, on both surfaces, is one op.**
  *
  * `isocan design set <file>` was the only way to choose a design system; the
- * web had none. Its item menu now offers "Use as the design system" on a
+ * web had none. Its item menu now offers "Use as design system" on a
  * DESIGN.md, and `isocan design use <item>` is the same act from a terminal.
  * Both go through core's `designUse`, and this holds them to it against a real
  * daemon: the op the web's menu action WOULD send (its sender swapped for a

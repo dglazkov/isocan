@@ -2375,9 +2375,9 @@ isocan fit <items...>                  # grow items to the size their content wa
   words land as a new VERSION of it (the op `design set` sends for the same
   bytes); if not, the item itself becomes the system. `--off` stops one
   governing and leaves the item. One op either way, so `isocan undo` takes it
-  back. People do the same from the item's right-click menu — "Use as the
-  design system for this canvas" (or "for the group …") on a DESIGN.md, and
-  "Stop using as the design system" on one that governs — and both surfaces
+  back. People do the same from the item's right-click menu — "Use as design
+  system" (or "Use as this group's design system" inside a group) on a
+  DESIGN.md, and "Stop using as design system" on one that governs — and both surfaces
   send the same op. `design set`, `import` and `use` then print a `note:` on
   stderr saying what the system governs now, which groups keep their own, and
   which one wins when two sit at one level — the same sentence `mv --in` and

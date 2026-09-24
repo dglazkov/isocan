@@ -240,8 +240,8 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   three runnable receiving, editorial and campaign references with their design
   rationale. Library creation uses groups for explicit scope; legacy canvases
   retain previews, downloads and source editing until migrated. Right-click a
-  DESIGN.md for **Use as the design system** of the canvas or the group it sits
-  in (and **Stop using** on one that governs) — the op `isocan design use`
+  DESIGN.md for **Use as design system** — the canvas's, or **this group's**
+  inside a group — and **Stop using** on one that governs — the op `isocan design use`
   sends; `design set`, `import` and `use` say what the system now governs.
 - **Useful alternatives and durable choices**: agents publish exact working
   wireframes or visual directions with a recommendation and tradeoffs. Try each,

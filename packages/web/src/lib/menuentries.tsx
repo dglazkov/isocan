@@ -412,7 +412,9 @@ function designSystemEntry(item: Item, ctx: MenuContext): MenuEntry[] {
   const canvas = useCanvasStore.getState().canvas;
   const scope = canvas && canvasScopes(canvas, item)[0];
   return [{
-    label: `${on ? "Use as" : "Stop using as"} the design system for ${scope ? `the group “${scope.title}”` : "this canvas"}`,
+    // Short, because a group's title in the label widened the whole menu;
+    // the notice the click raises names the group in full.
+    label: `${on ? "Use as" : "Stop using as"} ${scope ? "this group's " : ""}design system`,
     writes: true,
     run: () => void import("./designuse.ts").then((m) => m.chooseDesignSystem(ctx.canvasId, ctx.actor, item.id, on)),
   }];

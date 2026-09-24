@@ -114,11 +114,13 @@ export const TEXT_STYLE_PROP = "textStyle";
 /** The rung this node sits on; anything absent or unrecognised reads as `body`. */
 export function textStyleOf(item: Item): TextStyle {
   const raw = item.properties[TEXT_STYLE_PROP];
-  return isTextStyle(raw) ? raw : "body";
+  return oneOf(TEXT_STYLES, raw) ? raw : "body";
 }
 
-function isTextStyle(value: unknown): value is TextStyle {
-  return typeof value === "string" && (TEXT_STYLES as readonly string[]).includes(value);
+/** Is a value read off `properties` — a string anybody could have written —
+ *  one of a closed set? The one guard the step, the face and the paper share. */
+function oneOf<T extends string>(set: readonly T[], value: unknown): value is T {
+  return (set as readonly unknown[]).includes(value);
 }
 
 /** World-unit size of a node's words. */
@@ -175,16 +177,12 @@ export type TextFace = (typeof TEXT_FACES)[number];
  * exists rather than a `capitalize()` at the call site.
  */
 export function textFaceLabel(face: TextFace): string {
-  switch (face) {
-    case "sans":
-      return "Sans";
-    case "mono":
-      return "Mono";
-    case "serif":
-      return "Serif";
-    case "hand":
-      return "Handwriting";
-  }
+  return face === "hand" ? "Handwriting" : capitalised(face);
+}
+
+/** The word with its first letter up — every face but `hand`, and every paper. */
+function capitalised(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 /**
@@ -228,12 +226,9 @@ export const TEXT_FACE_PROP = "textFace";
 /** The face this node is set in; anything absent or unrecognised reads as `sans`. */
 export function textFaceOf(item: Item): TextFace {
   const raw = item.properties[TEXT_FACE_PROP];
-  return isTextFace(raw) ? raw : "sans";
+  return oneOf(TEXT_FACES, raw) ? raw : "sans";
 }
 
-function isTextFace(value: unknown): value is TextFace {
-  return typeof value === "string" && (TEXT_FACES as readonly string[]).includes(value);
-}
 
 /**
  * **Paper: the same words, on something you could pick up.**
@@ -266,7 +261,7 @@ export type Paper = (typeof PAPERS)[number];
  *  word, and this exists so a second surface offering these cannot spell them
  *  differently — the fold `themeLabel` and `cursorLabel` already are. */
 export function paperLabel(paper: Paper): string {
-  return paper.charAt(0).toUpperCase() + paper.slice(1);
+  return capitalised(paper);
 }
 
 /** `properties.paper` — the one property that turns a caption into a post-it. */
@@ -280,7 +275,7 @@ export function paperOf(item: Item): Paper | null {
 
 /** Guard for a value read off `properties`, which are strings anybody could have written. */
 export function isPaper(value: unknown): value is Paper {
-  return typeof value === "string" && (PAPERS as readonly string[]).includes(value);
+  return oneOf(PAPERS, value);
 }
 
 /**
@@ -492,14 +487,22 @@ export const TEXT_HEADING_LINE = /^\s{0,3}#{1,6}\s+/m;
 function glyphEm(ch: string, face: TextFace): number {
   if (face === "mono") return 0.6;
   // Georgia sets wider than a UI sans, by about a twentieth.
-  const wide = face === "serif" ? 1.06 : 1;
-  if (ch === " ") return 0.28 * wide;
-  if (/[iljtfI!.,;:'|]/.test(ch)) return 0.3 * wide;
-  if (/[mwMW@%]/.test(ch)) return 0.9 * wide;
-  if (/[A-Z]/.test(ch)) return 0.7 * wide;
-  if (/[0-9]/.test(ch)) return 0.56 * wide;
-  if (/[a-z]/.test(ch)) return 0.55 * wide;
-  return 0.6 * wide;
+  return (
+    (face === "serif" ? 1.06 : 1) *
+    (ch === " "
+      ? 0.28
+      : /[iljtfI!.,;:'|]/.test(ch)
+        ? 0.3
+        : /[mwMW@%]/.test(ch)
+          ? 0.9
+          : /[A-Z]/.test(ch)
+            ? 0.7
+            : /[0-9]/.test(ch)
+              ? 0.56
+              : /[a-z]/.test(ch)
+                ? 0.55
+                : 0.6)
+  );
 }
 
 /** Markdown's furniture takes no width on the canvas: the marker of a
@@ -561,8 +564,8 @@ export function textBox(
     // A heading is drawn at a multiple of the node's size (`TEXT_HEADING_EM`),
     // so its width is measured at THAT size, or it wraps a word early and
     // the box is a row short — and its rows are taller than a body line.
-    const ratio = TEXT_HEADING_LINE.test(raw) ? TEXT_HEADING_EM : 0;
-    const lineSize = size * (ratio || 1);
+    const heading = TEXT_HEADING_LINE.test(raw);
+    const lineSize = heading ? size * TEXT_HEADING_EM : size;
     const em = (text: string) => [...text].reduce((w, ch) => w + glyphEm(ch, face), 0) * lineSize;
     // Wrap by word at the column, the way the browser will; a word longer
     // than the column widens the box, up to the hard limit, past which the
@@ -584,8 +587,8 @@ export function textBox(
     // A heading row is `line-height: 1.25` of ITS em and its margins
     // (0.4em + 0.3em) 0.7 of it, both counted in body lines (1.5 of the
     // node's em) so the sum below holds.
-    rows += ratio ? (lineRows * 1.25 * ratio) / LINE_HEIGHT : lineRows;
-    extra += (0.7 * ratio) / LINE_HEIGHT;
+    rows += heading ? (lineRows * 1.25 * TEXT_HEADING_EM) / LINE_HEIGHT : lineRows;
+    if (heading) extra += (0.7 * TEXT_HEADING_EM) / LINE_HEIGHT;
   }
   // One row of margin for a gap that is followed by nothing would be paid
   // to no paragraph; a trailing blank line costs nothing.
