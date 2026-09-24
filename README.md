@@ -394,13 +394,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   [the journey](docs/projects/sprint/journey.md).
 - **Wireframes**: `isocan wire "<request>"` draws a flow of screens from a
   typed catalog — blue blueprint first, grey wireframe as Jev (or the stub, or
-  an agent) answers — with variations under each. Keep the screens you want
-  (📐, ⇧K, `wire keep`) and `wire prototype` adds them as one clickable HTML
-  item: links are inferred from intents, archetypes and reading order, never
-  stored; a hotspot with no kept target is drawn dashed and says which screen
-  it needs; rebuilt, the prototype gains a version. `wire links` prints the
-  flow, `wire link` overrides one hotspot. On the canvas the kept screens
-  are joined by orthogonal arrows, one per hotspot, leaving from the button
+  an agent) answers — with variations under each. Pick the screens the
+  prototype plays (📐 *Use in prototype*, ⇧K, `wire use`) and `wire
+  prototype` adds them as one clickable HTML item: links are inferred from
+  intents, archetypes and reading order, never stored; a hotspot whose
+  target is not in the prototype is drawn dashed and says which screen it
+  needs; rebuilt, the prototype gains a version. `wire links` prints the
+  flow, `wire link` overrides one hotspot. A composed flow ends with its
+  prototype already built: Jev's first choice for every row it was
+  confident of goes in (never a *maybe*, never a variation), signed as
+  Jev's so a person's swap reads apart, and one undo takes it all back.
+  On the canvas the screens in the prototype are joined by orthogonal arrows, one per hotspot, leaving from the button
   they belong to; click an arrow to play the prototype from there, go to its
   target, or change where it goes (drag its head onto another screen) —
   `/wire links` is the same as a table, `wire play` the same from a
@@ -1256,12 +1260,19 @@ The rc announces its policy with its hold, so the tray and `isocan who` say
 offered to the rc's owner alone. Only the owner's word widens: a gate
 somebody else wrote into the enrolment is set aside, and said.
 
-**A standing agent says when it arrives.** When an `isocan rc` takes up an
-agent on a canvas, the agent posts one line in the Chat in its own name —
-*"Percy is here — answering a mention or the Chat; listens only to Nico."* —
-once its first hold is answering; *is back* after more than five minutes
-away, and *stepped away* when the rc is stopped on purpose. A flapping
-connection or a quick restart says nothing. The lines are records, so they
-summon nobody, and no agent answers another's hello. `isocan rc
---no-announce`, or `rcAnnounce` in `~/.isocan/config.json` (`false`, or a list
-of agent names and canvas ids), keeps it quiet.
+**You see an agent arrive.** When an agent shows up on the canvas you are
+looking at — an `isocan rc` starts answering for it, or its session appears —
+a small note drops in under the presence pile, top right: *"Percy joined ·
+listens only to you (Nico)"*, or *"Percy is back"* after more than five
+minutes away, and fades after a few seconds. It is read from the presence
+the page already has; nothing is written. Agents only, never yourself, and
+never for whoever was already here when you opened the canvas. A flapping
+connection says nothing.
+
+If you want it in the Chat as well, as history, `isocan rc --announce` (or
+`rcAnnounce` in `~/.isocan/config.json`: `true`, or a list of agent names and
+canvas ids) has the agent post one line in its own name — *"Percy is here —
+answering a mention or the Chat; listens only to Nico."*, *is back* after
+five minutes away, *stepped away* on a deliberate stop. Off by default. The
+lines are records, so they summon nobody, and no agent answers another's
+hello.

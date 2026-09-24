@@ -162,6 +162,9 @@
   border: 1px dashed #2f6fed;
   border-radius: 9px;
   padding: 3px 8px;
+  /* The tag alone takes the pointer, for its tooltip; the outline never does. */
+  pointer-events: auto;
+  cursor: help;
 }
 
 /* The selected arrow's toolbar, counter-scaled above its label. */

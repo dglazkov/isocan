@@ -59,6 +59,7 @@ export * from "./commands.js";
 export * from "./command-catalogue.js";
 export * from "./command-bodies.js";
 export * from "./shortcuts.js";
+export * from "./shortcuttext.js";
 export * from "./bytes.js";
 export * from "./format.js";
 export * from "./merge.js";

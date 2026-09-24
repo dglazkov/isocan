@@ -12,8 +12,12 @@ export declare function moduleMarkIntent(items: readonly Item[], property: strin
     on: boolean;
     changing: Item[];
 };
-/** The patch that puts a mark on or takes it off — `removeProperties`, because `properties` merges. */
-export declare function moduleMarkPatch(property: string, on: boolean): {
+/**
+ * The patch that puts a mark on or takes it off — `removeProperties`, because
+ * `properties` merges. `who` is who put it on (an actor's id), recorded as
+ * `<property>By` beside the mark; taking the mark off takes that too.
+ */
+export declare function moduleMarkPatch(property: string, on: boolean, who?: string): {
     properties: Record<string, string>;
 } | {
     removeProperties: string[];

@@ -66,11 +66,32 @@ interface PersonaGoal {
         commit?: string;
     };
 }
+/**
+ * **"When nothing else is happening"** — the idle trigger of
+ * `docs/research/2026-09-07-small-personas.md` (D2), named with its scope
+ * from the start because there are two idlenesses and conflating them would
+ * start a heavy run while somebody is mid-sprint on an unrelated canvas.
+ *
+ * `machine` is what a repo-wide persona wants: this computer has not been
+ * busy for `minutes`. `canvas` is "nobody has touched this canvas", which
+ * presence already answers — parsed here so a file can say it, and refused by
+ * the runner until something runs a persona against a canvas.
+ */
+interface PersonaIdle {
+    scope: "machine" | "canvas";
+    minutes: number;
+}
 /** Time, or an event. `docs/projects/personas/design.md` argues for starting
- *  with time: it is built, and its failure mode is boring. */
+ *  with time: it is built, and its failure mode is boring.
+ *
+ *  `idle` rides on a schedule rather than replacing it: the cron is what the
+ *  nightly fires and `scripts/cadence.mjs` reconciles, and the idle clause is
+ *  the second, cheaper door — `persona-run.mjs --idle` — for a machine that is
+ *  on and not busy. */
 type PersonaTrigger = {
     kind: "schedule";
     cron: string;
+    idle?: PersonaIdle;
 } | {
     kind: "push";
     to: string;
@@ -78,6 +99,22 @@ type PersonaTrigger = {
 } | {
     kind: "manual";
 };
+/**
+ * **What a persona may spend on one run** — D3 of the small-personas note:
+ * "cheap" as a number rather than an adjective.
+ *
+ * The shape is `rcLimits`' — named per-agent limits, each optional, each a
+ * plain number — rather than a second vocabulary for the same idea. The
+ * runner hands both to the harness as hard caps (`--max-budget-usd`,
+ * `--max-turns`), writes what the run actually cost beside them, and turns a
+ * run that went over into a finding. **A persona with no budget is never
+ * handed to a model by machinery at all**, which is what keeps the nine
+ * expensive personas where they were: run by a person, on purpose.
+ */
+interface PersonaBudget {
+    usdPerRun?: number;
+    turnsPerRun?: number;
+}
 export interface Persona {
     /** The filename's stem, and the name every surface calls it by. */
     name: string;
@@ -90,6 +127,15 @@ export interface Persona {
     tools: string[];
     goals: PersonaGoal[];
     trigger: PersonaTrigger;
+    /** What one run may spend. Absent means machinery never runs a model for it. */
+    budget?: PersonaBudget;
+    /**
+     * **Who decides what this persona found** — the persona a small one hands
+     * off to (#197's "cheap finds, expensive decides"). A name, not a model: the
+     * expensive tier is a role with a lens, and naming the role is what lets
+     * `isocan persona runs <that one>` show what was handed to it.
+     */
+    escalate?: string;
     /** Where its runs are filed. */
     runs?: string;
     /** Everything after the front matter — the lens itself, in prose, which is
@@ -143,6 +189,16 @@ export declare function goalLine(goal: PersonaGoal): string;
  * same words rather than each deciding how loudly to worry.
  */
 export declare function personaWarnings(persona: Persona): string[];
+/**
+ * **Who a run page handed its finding to**, read off the page itself — the
+ * same reason `runFindings` reads the page rather than a second file: a
+ * record kept beside the thing it describes cannot drift from it.
+ *
+ * `persona-run.mjs` writes the line; `isocan persona runs <name>` reads it to
+ * show a persona what OTHER personas handed it, which is the expensive tier's
+ * only inbox. Null when the page escalated nothing.
+ */
+export declare function escalatedTo(page: string): string | null;
 /** Newest baseline wins; used when a run records one. */
 export declare function withBaseline(persona: Persona, goalName: string, reading: {
     value: number;

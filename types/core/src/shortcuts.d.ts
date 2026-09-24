@@ -8,7 +8,8 @@
  * here and not in the code is a lie, which is worse. Both are cheap to check
  * against this file, and impossible to check against a screenshot.
  */
-interface Shortcut {
+/** One key (or several for one act), what it does, where the help panel files it. */
+export interface Shortcut {
     /** As a person would say it, e.g. "⌘K" or "Shift-drag". Several when the
      * same act has more than one key. */
     keys: string[];
@@ -19,6 +20,7 @@ interface Shortcut {
      * tap, a rule about when it applies. */
     note?: string;
 }
+/** The help panel's columns. */
 type ShortcutGroup = "Tools" | "Moving around" | "Items" | "Talking" | "Ink";
 export declare const SHORTCUT_GROUPS: ShortcutGroup[];
 export declare const SHORTCUTS: Shortcut[];
@@ -48,7 +50,4 @@ export declare function shortcutsIn(group: ShortcutGroup): Shortcut[];
  * so comparison stays canonical and only the pixels change.
  */
 export declare function keyFor(does: string): string | null;
-/** The whole list as text, for a terminal or a comment: the same answer the
- * overlay gives, in the medium an agent can pass on. */
-export declare function shortcutsAsText(): string;
 export {};

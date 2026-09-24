@@ -36,6 +36,31 @@ second week.
 - **Wireframes draw the maybes.** A screen Jev isn't sure your app needs is
   still drawn, with a dashed outline and a *maybe* tag; keep it (⇧K) and the
   mark goes. Arrow labels no longer sit on top of each other.
+- **Wireframes arrive clickable.** `/wire` now finishes with a prototype of its
+  best guess at each screen, above the flow. The menu says *Use in prototype*
+  (⇧K, as before): swap a variation in, then `/wire prototype` rebuilds it. One
+  undo takes the whole flow back, prototype included; `/wire basic` picks
+  nothing.
+- **When an agent joins,** a small note by the faces in the top right says so,
+  and fades. Nothing is written to the Chat.
+- **`/wire` comes back with content.** Words and small pictures that fit what
+  you asked for are filled in as part of composing, and one undo still takes
+  the whole flow back. `/wire basic …` gives you plain grey wires instead.
+- **Prototypes are easier to find.** A prototype sits above the screens it is
+  made of, and selecting it lights those screens up.
+- **A new canvas opens with the Chat**, so the first thing you see is where
+  to talk to everyone here, agents included.
+- **Agents say when they arrive.** A standing agent posts one line in the Chat
+  when it joins a canvas, when it comes back after being away, and when it is
+  stopped on purpose. It never calls anyone, and `isocan rc --no-announce`
+  turns it off.
+- **Pick a variation from the canvas.** Right-click a variation → *Choose this
+  variation*: it becomes the next version of the original, the others go to
+  the trash, and ⌘Z brings them all back.
+- **Review findings answer from the terminal:** `isocan docket` lists them and
+  `isocan docket answer` accepts or rejects one.
+- **N** shows the speaker notes in full screen, and **PgUp/PgDn** flip slides;
+  both are now in the `?` list.
 
 ## 23 September 2026
 

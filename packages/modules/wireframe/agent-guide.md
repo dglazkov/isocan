@@ -33,23 +33,24 @@ bar, tab bar) stays.
   post your ONE comment saying what landed. The last line says who answered, the latency
   per round, calls, input tokens and cost. `--save <dir>` keeps every
   round's request and response; `--at x,y` starts the row somewhere.
-- **Round 1 over-includes; keep prunes.** An archetype the answerer gives
-  P(yes) ≥ 0.5 is a screen of the flow; one from 0.3 up to 0.5 is drawn
-  too, in its running place in the row, but marked **maybe**: the item
-  carries `wireMaybe=<p>` (set by the op that adds it), its spec `"maybe":
-  true`, and its title reads `(maybe)` in the lines and the Chat record.
-  The canvas draws a dashed blue outline round it and a *maybe* tag above
-  its top edge — outside the screen, never over it — **while it is not
-  kept**: keeping it is the answer, so the mark goes; unkeep and it
-  returns. A maybe gets no variations until someone keeps it (`wire vary`
-  draws them).
+- **Round 1 over-includes; the prototype prunes.** An archetype the
+  answerer gives P(yes) ≥ 0.5 is a screen of the flow; one from 0.3 up to
+  0.5 is drawn too, in its running place in the row, but marked **maybe**:
+  the item carries `wireMaybe=<p>` (set by the op that adds it), its spec
+  `"maybe": true`, and its title reads `(maybe)` in the lines and the Chat
+  record. The canvas draws a dashed blue outline round it and a *maybe* tag
+  above its top edge — outside the screen, never over it — **while it is
+  not in the prototype** (the tag's tooltip: *Not in the prototype yet — ⇧K
+  to use it*): using it is the answer, so the mark goes; remove it from the
+  prototype and the mark returns. A maybe gets no variations until someone
+  uses it (`wire vary` draws them).
   Under 0.3 it is declined. Jev ranks screens well and is overconfident
   about them (phase 6), so a maybe is often wanted: look at each one and
-  **keep (📐) what belongs** — an unkept maybe is only a screen on the
-  canvas, never in `wire links`, the arrows or the prototype. Every
+  **use what belongs in the prototype (📐)** — a maybe left out is only a
+  screen on the canvas, never in `wire links`, the arrows or the prototype. Every
   composed screen's spec carries `need`, round 1's P(yes) for it, and
   `by` — who drew it: `{ actor: {id, name}, answerer: "jev" | "stub" |
-  "agent", via?: "home", model? }` — so a later reader (or a keep that
+  "agent", via?: "home", model? }` — so a later reader (or a 📐 mark that
   labels a decision) knows whether Jev chose it or the stub threw dice. A
   variation carries its screen's answerer and the actor who asked for it.
 - **Variations come at the end of every flow**, in the same op group:
@@ -71,24 +72,33 @@ bar, tab bar) stays.
   `--count` is how many variations the screen should
   have in all (default 2), so running it twice adds nothing. It refuses a
   variation (vary its screen) and a hand-drawn screen (no distribution).
-- **Keepers**: `isocan wire keep <items...>` marks screens 📐 — the property
-  `wireKeep=yes` through `item.update`, as a slide is marked, so anyone can
-  take it off with `isocan wire unkeep <items...>`; unmarked siblings stay on
-  the canvas. `isocan wire kept` lists the kept screens in reading order
-  (rows top to bottom, each left to right). A variation can be kept. People
-  do the same from the item menu (📐 Keep / Unkeep) or ⇧K. `isocan wire
-  kept --prototype <item>` lists only the screens that prototype plays, in
-  its order — its flow's kept screens and any guest kept in another flow;
-  it is what a person sees when they select the prototype on the canvas
-  (its screens pulse, then stay outlined, and everything else dims — their
-  view only, nothing is written).
+- **Use in prototype (📐)**: `isocan wire use <screens...>` puts screens
+  in the prototype — the property `wireKeep=yes` through `item.update`, as
+  a slide is marked, so anyone can take it off with
+  `isocan wire unuse <screens...>`. Every screen stays on the canvas either
+  way: the mark only says which ones the prototype plays. The mark was born
+  as *keep*, and `wire keep|unkeep` still work — the same act under its
+  first names; the property keeps its name too. `isocan wire kept` lists
+  the screens in the prototype in reading order (rows top to bottom, each
+  left to right). A variation can be used in place of its screen. People do
+  the same from the item menu (📐 *Use in prototype* / *Remove from
+  prototype*) or ⇧K; a marked screen's 📐 says *In the prototype*.
+  `isocan wire kept --prototype <item>` lists only the screens that
+  prototype plays, in its order — its flow's marked screens and any guest
+  marked in another flow; it is what a person sees when they select the
+  prototype on the canvas (its screens pulse, then stay outlined, and
+  everything else dims — their view only, nothing is written).
 - **Links are computed, never stored.** `isocan wire links [screen]` prints
-  where every hotspot on the kept screens goes, worked out each time from
-  intents, archetypes and reading order: an intent with a target goes to the
-  first kept screen of that archetype (`sign-in` → the first home, list or
-  feed; `next`/`continue`/`save` → the next kept screen); `back` and an app
-  bar's chevron go back; a list, grid, table or feed row opens the first kept
-  `detail` after it; tab *i* of a tab bar or side nav whose intent found
+  where every hotspot on the screens in the prototype goes, worked out each
+  time from intents, archetypes and reading order: an intent with a target
+  goes to the first screen in the prototype of that archetype (`sign-in` →
+  the first home, list or feed; `next`/`continue`/`save` → the next screen
+  in it); `back` and an app bar's chevron go back; a list, grid, table or
+  feed row opens the first `detail` in it after the row's screen; a nav item
+  can say it IS one of the flow's screens — `open-list`, `open-feed`,
+  `open-gallery` go to the first list, feed or gallery in the prototype (and a fleshed one reads in the pack's words, "Deliveries") —
+  so when you answer round 3, give the tab that shows the list `open-list`
+  rather than a jump whose screen does not exist; tab *i* whose intent found
   nothing takes the *i*-th top-level screen (one that draws the nav) no other
   tab reaches. Anything else that navigates and found nothing is **dashed**
   and says what it needs (`- - needs Settings`) — the list of screens still
@@ -103,7 +113,7 @@ bar, tab bar) stays.
   you relink) both survive; a screen still carrying the older `wireLinks`
   JSON is folded into per-hotspot properties by the first write. It reads
   only the source screen's file and exits when the write lands; one `isocan
-  undo` takes it back. A target may be a screen **kept in another flow**:
+  undo` takes it back. A target may be a screen **in another flow's prototype**:
   the link resolves, and that screen joins this flow's prototype so the
   link plays.
 - **The canvas draws one arrow per hotspot**, flow by flow — so the rows of
@@ -115,13 +125,14 @@ bar, tab bar) stays.
   prints the address that opens the flow's prototype full screen AT that
   screen, the hotspot pointed out — what an arrow's *Play from here* opens;
   it writes nothing.
-- `isocan wire prototype` assembles the kept screens of a flow (`--flow <id>`
-  when more than one flow is kept) as **one self-contained HTML item**
-  centred **above** them, clear of the arrows' lanes and of anything already
-  there (higher still if it must be) — inside the canvas group the kept
+- `isocan wire prototype` assembles a flow's screens marked 📐 (`--flow
+  <id>` when more than one flow has some) as **one self-contained HTML
+  item** centred **above** them, clear of the arrows' lanes and of anything
+  already there (higher still if it must be) — inside the canvas group those
   screens share, when they share one: every screen, a router with a history
   stack, the links as click targets, a push / pop / fade / slide-up by link
-  kind, a Restart. Run it again after a kept screen changes and the same
+  kind, a Restart. Using or removing a screen does not rebuild it: run it
+  again after the marks or a screen change, and the same
   item **gains a version** (found by its `wirePrototype` property); with
   nothing changed it writes nothing. A rebuild (this, `wire style`, `wire
   flesh`, `wire render --all`) also moves it back above its flow, in the
@@ -150,7 +161,7 @@ bar, tab bar) stays.
   nothing either (the wire looks the same; its spec keeps naming the version
   that drew it). Words drawn in the primary's voice on the ground — text
   links, secondary and tertiary button labels, the current tab — use the
-  primary only where it reads at 4.5:1 on the ground, else the ink. A kept flow's
+  primary only where it reads at 4.5:1 on the ground, else the ink. A flow's
   prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the
   home's judge maps it; when the home has no key either, the stub answers,
   and its flat distributions keep every asked role at the default. The spec records it as `style` (`{ "source": "design-system",
@@ -168,7 +179,14 @@ bar, tab bar) stays.
   statuses ("Parcel 4471 · 3 items · Out for delivery"), stats with values
   and deltas, table cells under domain column names, first names with
   initials in avatars, greyscale pictograms in image slots, and a heading
-  from the domain ("Deliveries" instead of "List"). The words come from one
+  from the domain ("Deliveries" instead of "List"). The screen is **named**
+  in the pack's words too — a list "Deliveries", a detail "Delivery", a
+  form "New delivery", a search "Search deliveries" (a home or a sign-in
+  keeps its name) — and so is its item, in the same op group, unless
+  somebody renamed the item: a name a person or an agent gave is never
+  overwritten. `--bars` names them back. A block's lone bare verb says what
+  it acts on ("Edit delivery", "Edit profile"; `actions.<element>` in `wire
+  copy`). The words come from one
   of 24 synthetic **content packs** (`wire flesh --packs` lists them), never
   written by a model: Jev chooses the pack per flow from its request — one
   choice question, its p printed and recorded on each screen as `content`
@@ -179,7 +197,7 @@ bar, tab bar) stays.
   screen's), so a re-render, `wire style`, `wire vary` and `wire prototype`
   all show the same content. One op group, a version per wire whose content
   changed; running it again asks nothing and writes nothing; `--bars` goes
-  back to bars. Blueprints stay blue and unfilled. A kept flow's prototype
+  back to bars. Blueprints stay blue and unfilled. A flow's prototype
   is rebuilt in the same group. People do the same with `/wire flesh` in
   the Chat.
 - **A composed flow arrives fleshed.** `isocan wire "<request>"` (and
@@ -193,6 +211,27 @@ bar, tab bar) stays.
   afterwards. A pack that cannot be chosen leaves the flow in bars and says
   so. The agent path (`--answerer agent`) fills nothing: once your rounds
   are answered, `isocan wire flesh --flow <id>` does.
+- **A composed flow ends with a prototype you can click.** After round 3
+  (and the flesh), the first choice of every row round 1 was confident of
+  (P(yes) ≥ 0.5) goes in the prototype (📐) — never a *maybe*, never a
+  variation — and the prototype is built above the row (a flow composed
+  under others starts its row lower, leaving the prototype that room), all
+  in the flow's op group: one `isocan undo` takes the screens, the picks and the
+  prototype back together. The arrows draw between those screens at once.
+  The lines (and `--json`'s `prototype`) say which item it is, what it
+  plays and whose first choices they are; in the Chat the record says
+  "Prototype of 6 screens, Jev's first choices — swap in a variation with
+  ⇧K". To swap: `isocan wire use <variation>`, `isocan wire unuse <its
+  screen>`, then `isocan wire prototype` rebuilds it (a mark alone does
+  not). `--basic` puts nothing in a prototype and builds none; so does the
+  agent path — you answered, so you choose, then `wire prototype`.
+- **Who put a screen in the prototype** is `wireKeepBy` beside `wireKeep`:
+  `jev` or `stub` when a composed flow picked it (the answerer whose first
+  choice it was), the actor's id when a person or an agent used it — ⇧K,
+  the menu, `wire use|keep`. Taking the mark off takes `wireKeepBy` with
+  it. A person swapping a variation in for one of Jev's picks is the
+  calibration signal, so never re-mark a screen Jev picked just to sign
+  it, and never mark one "as Jev".
 - `isocan wire copy <screen>` prints a fleshed screen's words as JSON —
   per slot, each word by path (`items.0.title`, `stats.1.value`,
   `labels.2`). Edit the words, then `isocan wire copy <screen> --apply
@@ -221,7 +260,7 @@ bar, tab bar) stays.
   on the canvas** from the spec it carries — how a change to the renderer
   reaches screens drawn before it (a flesh or a restyle writes only where
   the spec changed). A version only where the bytes differ, the item resized
-  where the screen's size moved, kept flows' prototypes rebuilt, all one op
+  where the screen's size moved, the flows' prototypes rebuilt, all one op
   group; it says how many changed, and a rerun writes nothing. `/wire
   rerender` in the Chat does the same.
 - **Finding prototypes**: a prototype item carries `wirePrototype=<flow>`
@@ -232,7 +271,7 @@ bar, tab bar) stays.
 
 **Words are typed, never free.** A button's label is its **intent**'s label
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of
-49; each actionable element names which intents it can take, and `wire
+52; each actionable element names which intents it can take, and `wire
 render` refuses a spec that gives one it cannot. Headings come from the
 spec's `title`; body copy is grey bars, never lorem ipsum — until `wire
 flesh` fills it from a content pack. If you want real copy on a screen,
