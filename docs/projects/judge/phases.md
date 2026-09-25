@@ -6,7 +6,11 @@ project's course. A phase that went as planned leaves it empty.
 
 **Where we are: nothing is built. Phase 0 is CLOSED — the reference has been
 read and one classification run by hand, on a local machine with the key.
-Phase 1 is next, and it is also local.** Phase 0 found the `Judgment`/`Judged`
+Phase 1 is next, and it is also local. On 24 Sep 2026 the corpus changed:
+judge calibrates on isocan's own wireframe decisions — the flow's round-1
+judgments against what a person then kept or took out — rather than on a
+personal knowledge base that belongs to a separate project. Phases 1–3 were
+re-cut before any code and phase 4 retired; see each one's Formerly line.** Phase 0 found the `Judgment`/`Judged`
 sketch wrong in three places, all now corrected in [design.md](design.md): a
 Choice returns the **whole probability distribution** rather than one `p`, the
 request is one `state` plus a map of named questions rather than a flat field
@@ -24,7 +28,7 @@ and that is a LEG rather than a phase:
 | | Where | Why there |
 | --- | --- | --- |
 | ~~judge phase 0~~ | local | **done 19 Sep 2026** — reference read, one call made |
-| judge phase 1 | local | the corpus is a personal MCP server no CI holds a credential for |
+| judge phase 1 | local | the labels live on the homes a person uses, read with their own badge |
 | judge phase 2 | local | needs the judge phase 0 measured |
 | [voice](../../research/2026-09-19-move-the-red-one.md) phases 4–5 | local | the resolver needs a working judge |
 
@@ -194,38 +198,78 @@ retry.
 figures table is measured rather than quoted; the three places the shape differs
 from the sketch are named and [design.md](design.md) is corrected.
 
-## Phase 1 — The labels that already exist
+## Phase 1 — The labels wireframes already makes
 
 **Status: NOT STARTED.**
 
-**Outcome:** the calibration corpus, built before any classifier touches it.
-Every card in the ledger is already in a folder a person chose; that is the
-label. This phase exports 3,643 of them into a held-out set with the folder
-tree as the answer's allowed values, and **writes no classifier at all**.
+**Outcome:** the calibration corpus, built before any judge is asked again.
+Every screen the wireframe flow draws is a judgment the flow has already acted
+on, and a person keeping it or taking it out is the label. This phase makes
+those judgments durable and reads them back as labelled pairs, and **writes no
+classifier at all**.
 
 Two things make this the highest-leverage phase and neither involves a model.
 It is what makes phase 2 falsifiable — a judge measured against labels invented
 for the occasion measures nothing. And it survives the vendor: the corpus
 outlives whichever model is behind the seam.
 
-Fixtures are synthetic, per the house rule, and here that is a privacy
-requirement rather than a style one: the committed set carries the *shape* — a
-card's length, its folder, its depth, its sibling count — with titles and
-bodies replaced. The real text stays on the machine that ran the export.
+**Already recorded, by wireframes.** Since 24 Sep 2026 every screen of a
+composed flow carries, in its own spec, round 1's P(yes) as `need` and who
+answered as `by` — wireframes phase 6 added both so that "every future keep
+labels a decision with who made it" (`12992559`, `c6d98510`). So this phase is
+a **reader**, and changes nothing in the wireframe module. A flow drawn before
+then carries neither and is not in the corpus; a screen below the maybe floor
+was never drawn, so it can carry no label either way.
 
-**Proof:** an export script produces a set whose size and folder distribution
-match the live tree as counted on the day, and a test asserts the held-out
-split is disjoint from anything a later phase trains or tunes against. The
-committed fixture contains no card text from the real ledger, asserted by a
-test rather than by inspection. `npm test` and `npm run typecheck` whole.
+**Read, as verdicts.** A reader walks the oplog of the canvases the person
+names, through isocan's own interface and the person's own badge, and folds
+each drawn screen into one pair: its P(yes), and the running person's verdict.
+*Kept*: they put a screen the flow left out into the prototype. *Taken out*:
+they took out, or deleted, one the flow put in. *None*: they never touched it —
+no label, not a yes. A keep by the flow itself (`wireKeepBy` naming the
+answerer) is the judge's own output and never a label, and a collaborator's act
+is not counted (design.md, "Whose decisions count").
+
+**Two outputs, and only one is committed.** The labelled set — requests,
+screen titles, which canvases they came from — stays on the machine that read
+it, outside the repository. The committed fixture carries shape only: P,
+verdict, band, split, with every string synthetic.
+
+**Proof:** the reader takes each screen's P(yes) from `need` in its spec and
+the answerer from `by`, never from a property that only maybes carry. Over a
+synthetic canvas's oplog it folds a maybe then the person's keep into *kept* at
+that P; a flow-kept screen then the person's unkeep into *taken out*; and an
+untouched screen, a keep by the answerer, and a collaborator's keep into no
+label. The held-out split is disjoint from anything a later phase tunes against
+and stable — the same screen lands on the same side on every run. Run against
+the homes the person uses, the reader reports the count on the day, however
+small. The committed fixture contains no request text, screen title or canvas
+name, asserted by a test that checks every string in it against the synthetic
+grammar. `npm test` and `npm run typecheck` whole.
+
+**Formerly** (re-cut 24 Sep 2026, before any code): *The labels that already
+exist* — an export of 3,643 flashcards from a personal knowledge base, each
+card's folder its label. Re-cut because that knowledge base is a separate
+project isocan does not read into, which is the person's decision; its search
+interface could not have enumerated the tree in any case.
 
 ## Phase 2 — Calibration, and the reading that may end this
 
 **Status: NOT STARTED.**
 
 **Outcome:** the `Judgment` interface and the uniform stub land in
-`@isocan/core`, the vendor behind the seam, and a reading is published under
-`docs/calibration/` beside the 4 September one — same discipline, same place.
+`@isocan/core`, the vendor behind the seam — reached through the home's
+judgment route that wireframes phase 5 built for exactly this, adopted rather
+than rebuilt — and a reading is published under `docs/calibration/` beside the
+4 September one — same discipline, same place.
+
+**The reading needs no new calls.** The probabilities were recorded when the
+flow ran (phase 1), so the curve is the recorded P against the person's
+verdict; re-asking would measure a different judgment than the one acted on.
+**And it has a floor**: it concludes only with at least twenty verdicts in
+every bucket it reports, buckets no finer than 0.1 (phase 0's ±0.035). Below
+the floor it publishes what it has, with intervals, and says in its first line
+that it cannot conclude yet.
 
 The headline is **not** accuracy. It is the reliability curve: bucket the
 judgments by the probability they carried and report what fraction of each
@@ -241,36 +285,53 @@ phase 1 remains worth having.
 **Proof:** a reading page in `docs/calibration/` carrying the held-out size,
 accuracy, the reliability curve by bucket, the measured spend and the model id,
 produced by a harness with a dry mode that writes the page either way — the
-shape `scripts/calibrate.mjs` already established. The stub scores at chance
+shape `scripts/calibrate.mjs` and `wireframe/scripts/calibrate.ts` already
+established — the second is the same question's nearest neighbour, and its
+page (wireframes phase 6: ECE 0.39 on Enrico's archetypes) is the prior this
+reading is read against. The stub scores at chance
 through the same harness, so the harness is shown to be able to report a bad
-judge. Cost is read from `spent` rather than estimated. `npm test` and
+judge. The page states N against the floor. Cost is read from `spent` rather
+than estimated. `npm test` and
 `npm run typecheck` whole.
 
-## Phase 3 — The band, on a canvas
+## Phase 3 — The band, drawn from the curve
 
 **Status: NOT STARTED.**
 
-**Outcome:** the first thing anybody can look at. The loose cards of one folder
-— General Knowledge's 235 are the candidate — get a proposed folder and a
-confidence, and land on a canvas with **confidence as position**: a confident
-tail, an uncertain band with a boundary drawn from phase 2's curve rather than
-from taste, and each card carrying the model id and the probability that put it
-there, the way `contextSource` carries provenance.
+**Outcome:** the first thing anybody can look at, and it already exists — only
+its edges are guesses. The wireframe flow's *maybe* band is 0.3 to 0.5 and the
+auto-keep cut is 0.5, both chosen by taste. This phase draws them from phase
+2's reliability curve instead: the confident cut where the curve says the judge
+is right often enough to act alone, the floor where it says a screen is worth
+showing at all. A maybe mark says the probability and model that put it there,
+the way `contextSource` carries provenance.
 
-Accepting the confident tail is **one act**, and one undo takes the whole
-filing back. Nothing is filed by the judge itself: the act is accepted by a
-person, which is the design's may/may-not table made literal.
+Nothing is decided by the judge itself: the flow still only proposes, a person
+still keeps, and one undo still takes a whole flow back — the design's
+may/may-not table, unchanged, with honest edges.
 
-**Proof:** an actual browser walk at 1440px and 390px drives the canvas — the
-band renders with its boundary, a card shows the model and probability that
-placed it, accepting the tail produces exactly one `group.change` in the log,
-and one undo removes every card it filed. Falsified by mutating the product,
-not the test, and watching the walk go red. Cards are synthetic. `npm test`,
-`npm run typecheck`, the bundle budget, and the walk.
+**Waits on phase 2 concluding.** A curve below its floor cannot move a cut; if
+phase 2 publishes "cannot conclude yet", this phase waits for the verdicts to
+accrue rather than drawing the band from noise.
+
+**Proof:** the cuts are read from the published reading, not constants, and a
+test fails if a cut is edited by hand. An actual browser walk at 1440px and
+390px runs `/wire` on a synthetic request and shows the maybes drawn at the new
+cuts, each with its model and probability; falsified by mutating the product,
+not the test, and watching the walk go red. `npm test`, `npm run typecheck`,
+the bundle budget, and the walk.
+
+**Formerly** (re-cut 24 Sep 2026, before any code): *The band, on a canvas* —
+the loose cards of a knowledge-base folder placed on a canvas by confidence.
+Re-cut with the corpus; the band it wanted to draw turned out to exist already,
+in the wireframe flow, with its boundaries still set by taste.
 
 ## Phase 4 — The folder that wants to split
 
-**Status: NOT STARTED.**
+**Status: RETIRED, 24 September 2026.** Its subject was the knowledge base's
+folder tree; with that corpus gone there is no folder to split. Kept below as
+it was written, because the negative-control argument in its Proof is worth
+reusing wherever a judge next proposes structure.
 
 **Outcome:** taxonomy maintenance driven by measured confusion. Run the judge
 over one folder's cards against candidate sub-topics; two tight
@@ -307,6 +368,16 @@ first. `npm test` and `npm run typecheck` whole.
 
 ## Trajectory
 
+- **2026-09-24** — **The corpus changed, before any phase used it.** The
+  person ruled that the personal knowledge base is a separate project isocan
+  does not read into, and chose isocan's own wireframe decisions instead. That
+  re-cut phases 1–3 and retired 4: smaller and slower to grow, but calibrating
+  the judge that already acts in the product.
+- **2026-09-24** — Found while re-cutting phase 1: **wireframes had already
+  done judge's groundwork.** Its phase 6 measured Jev on the public Enrico
+  screens — ECE 0.39, overconfident by ~0.4 in every bin, harness in
+  `wireframe/scripts/calibrate.ts` — and made every screen's spec carry `need`
+  and `by`. Phase 1 is a reader; phase 2 reads that result before its own.
 - **2026-09-19** — Closed by phase 0: every figure about the vendor was
   second-hand. The reference has now been read from a local machine with the
   key, and the research note's table is measured. The price held; the input
@@ -341,6 +412,8 @@ first. `npm test` and `npm run typecheck` whole.
   English names", and the prescribed fix is to name the colour in code before
   asking. So a stroke's computable hex is judgeable only after a code-side
   conversion to a named bucket. Recorded, not acted on.
+- **2026-09-24** — Closed by the corpus change rather than by an export: the
+  entry below is moot, and kept as it was.
 - **2026-09-19** — Open: the calibration corpus lives in a personal MCP server
   a CI workflow cannot hold a credential for, so phase 1 likely exports once
   and commits a synthetic-text fixture. Waits on phase 1 deciding the shape.

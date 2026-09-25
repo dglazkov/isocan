@@ -3,7 +3,7 @@ status: designed
 since: 2026-09-19
 issue: 334
 see: judge, evals, personas, memory, modules
-note: designed 19 Sep 2026 from the System One research note. A typed judge returns a decision and a calibrated probability and cannot cite, so it may triage and may never rule — the evals bar forbids it. The seam is `Judgment` in core, one interface with a declared cost, so the vendor is replaceable and a stub is a first-class implementation. Calibration comes before use: a personal knowledge base of 3,643 human-filed cards is the labelled corpus isocan's own twelve preference pairs cannot be. Phase 0 closed 19 Sep 2026: the reference was read first-hand and one call made, correcting the sketch in three places — the vendor returns the full probability distribution plus a separate confidence, takes one state with many named questions, and bills input tokens only. Phase 1 is next.
+note: designed 19 Sep 2026 from the System One research note. A typed judge returns a decision and a calibrated probability and cannot cite, so it may triage and may never rule — the evals bar forbids it. The seam is `Judgment` in core, one interface with a declared cost, so the vendor is replaceable and a stub is a first-class implementation. Calibration comes before use. The corpus was first a personal knowledge base of 3,643 human-filed cards; on 24 Sep 2026 it became isocan's own — the wireframe flow's round-1 judgments against what a person then kept or took out — because that knowledge base belongs to a separate project isocan does not reach into. Phase 0 closed 19 Sep 2026: the reference was read first-hand and one call made, correcting the sketch in three places — the vendor returns the full probability distribution plus a separate confidence, takes one state with many named questions, and bills input tokens only. Phase 1 is next.
 ---
 
 # Judge: a decision, a probability, and no argument
@@ -129,15 +129,46 @@ The evals plan's method is *measure what is measurable before asking a model's
 opinion about anything*, and this project inherits it literally: **no phase may
 act on a judgment before a phase has reported that judge's calibration.**
 
-Reporting calibration needs labels. isocan's own harvest has twelve preference
-pairs. The personal ledger reachable over MCP has **3,643 cards, each in a
-folder a person chose** — labels nobody has to write, produced over years by
-the only rater whose agreement matters.
+Reporting calibration needs labels — decisions a person made, that nobody
+had to write for the occasion.
 
-So the ledger is this project's **proving ground**, not its subject. What is
-being measured is whether a typed judge is trustworthy enough to triage
-anything; the knowledge base is the only corpus at hand big enough to answer
-that. The answer transfers; the cards do not.
+**Decided 24 Sep 2026: the labels are isocan's own, and they come from the
+first thing that already acts on a judge.** The wireframe flow (wireframes
+phase 5 onward) asks the judge, for every screen round 1 considers, how likely
+the request is to need it, and acts on the answer: a confident screen goes
+into the prototype by itself, an unsure one is drawn marked *maybe*, and the
+rest are never drawn. Then a person disposes. Keeping a maybe (⇧K) is a
+*yes* the judge was unsure of; taking an auto-kept screen out is a *no* it
+was sure of. `wireKeepBy` already tells the two hands apart — "a mark somebody
+chose and one a machine chose are different evidence" — and the oplog keeps
+both acts with their authors.
+
+It is the design's own fourth bullet below, promoted from a side effect to the
+source: *disagreement becomes the next label*.
+
+**What it was, and why it changed.** The first corpus was a personal knowledge
+base of 3,643 cards, each in a folder a person chose, reached over MCP. It is
+a separate project, and isocan does not read into it; the phase that would
+have exported it was re-cut before any code. Two things were lost and one
+gained. Lost: size — the cards existed on day one, and a wireframe corpus
+grows only as fast as people use `/wire` — and the question's shape, a
+131-way Choice rather than a yes/no. Gained: the judge is calibrated on the
+decisions it is already making in isocan, so the curve answers a question the
+product is asking, rather than transferring from somewhere else.
+
+**Not the first reading of this judge.** Wireframes phase 6 had already put
+Jev's archetype question to 1,318 labelled public screens (Enrico): it ranks
+well — the truth is in its top three 62–70% of the time — and its
+probabilities are overconfident by about 0.4 in every bin (ECE 0.39). That is a
+different question from round 1's *does the request need this screen*, so it
+does not settle this project; it is the prior, and a strong hint that the
+curve here will want moving rather than trusting.
+
+**Size is the honest limit.** A reliability curve needs enough verdicts in
+each bucket to mean anything, so phase 2 states a floor and reports below it
+rather than concluding. And the labels are censored at the bottom: a screen
+below the maybe band is never drawn, so nobody can keep it, and the curve is
+measured only where the flow draws.
 
 **Accuracy is the boring half.** The half that decides whether this project
 continues is the reliability curve: when the judge says 0.9, is it right about
@@ -198,10 +229,14 @@ because both surfaces must not be able to disagree about what a judgment is.
 - **Whether a correction writes back.** Overruling a filing is a label. Feeding
   it to a future calibration is obvious; doing it without turning the canvas
   into a training-data collector nobody consented to is not.
-- **Whether the ledger is reachable from CI.** Phase 2 needs the corpus. A
-  personal MCP server is not a thing a workflow can hold a credential for, so
-  the calibration set likely has to be exported once, synthetically renamed and
-  committed — which the repo's fixtures rule requires anyway.
+- ~~**Whether the ledger is reachable from CI.**~~ Moot since 24 Sep 2026:
+  the corpus is isocan's own wireframe decisions, read from homes through
+  isocan's own interface. What survives of the question is where the labelled
+  set lives — on the machine that read it, with a synthetic fixture committed.
+- **Whose decisions count.** A shared canvas holds several people's keeps. Phase
+  1 counts only the verdicts of the person running the export; counting a
+  collaborator's is the consent question the correction bullet above already
+  names, and stays open until someone decides it.
 - ~~**What happens to a tie.**~~ Closed by phase 0, and by the vendor rather
   than by us: a Choice answer carries `probabilities` over *every* option, so
   two folders at 0.45 is directly representable. The sketch above now keeps it.
