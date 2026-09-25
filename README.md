@@ -417,7 +417,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   terminal. Wires draw in the default grey
   look, or in the canvas's design system: `wire style` has Jev map the
   governing `DESIGN.md`'s own tokens onto the wire's roles and restyles every
-  wire as one undo (`--default` goes back; blueprints stay blue). `wire
+  wire as one undo (`--default` goes back; blueprints stay blue). Or pick a
+  named look: `wire style --preset material` (also `shadcn`, `glass`, `ios`,
+  `fluent`, `carbon`, `brutalist`, or a design-competition pack; `house` is
+  the greys), `/wire style <name>`, or right-click a wire → *Style ▸* — the
+  style's DESIGN.md lands beside the flow as its group's design system and
+  the flow restyles, one undo; a DESIGN.md's `surface:` draws raised
+  shadows, frosted glass or bold borders. `wire
   flesh` (or `/wire flesh`) swaps the grey bars for sample content, and a
   composed flow arrives that way unless asked `--basic` — Jev picks one of 24 synthetic content packs for
   the request, and every list, table, stat, card and image slot fills with

@@ -75,8 +75,8 @@ export type { ScreenAudit, AuditDiagnostic, AuditUnexamined, AuditRepair, AuditR
 export * from "./preference.js";
 export * from "./extensions.js";
 export * from "./media.js";
-export { DESIGN_SECTIONS, canonicalSection, parseFrontMatter, parseDesign, referencesIn, unresolvedReferences, resolveToken, serializeDesign } from "./designmd.js";
-export type { DesignTypography, DesignTokens, DesignDoc } from "./designmd.js";
+export { DESIGN_SECTIONS, DESIGN_SURFACES, canonicalSection, designSurface, parseFrontMatter, parseDesign, referencesIn, unresolvedReferences, resolveToken, serializeDesign } from "./designmd.js";
+export type { DesignTypography, DesignTokens, DesignDoc, DesignSurface } from "./designmd.js";
 export * from "./contrast.js";
 export * from "./colour.js";
 export * from "./shortcut.js";
