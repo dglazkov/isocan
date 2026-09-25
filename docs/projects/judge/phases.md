@@ -6,7 +6,10 @@ project's course. A phase that went as planned leaves it empty.
 
 **Where we are: nothing is built. Phase 0 is CLOSED — the reference has been
 read and one classification run by hand, on a local machine with the key.
-Phase 1 is next, and it is also local. On 24 Sep 2026 the corpus changed:
+Phase 1 is PART-DONE — the reader is built and proven on synthetic logs, and
+the count on the day waits on the person running it on their own canvases.
+Phase 2 is next, and must first decide what an untouched row means (phase 1's
+Trajectory). On 24 Sep 2026 the corpus changed:
 judge calibrates on isocan's own wireframe decisions — the flow's round-1
 judgments against what a person then kept or took out — rather than on a
 personal knowledge base that belongs to a separate project. Phases 1–3 were
@@ -200,7 +203,10 @@ from the sketch are named and [design.md](design.md) is corrected.
 
 ## Phase 1 — The labels wireframes already makes
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 24 September 2026.** `isocan judge corpus` folds a
+canvas's log and each screen's spec into labelled rows, and every proof that can
+run here holds; the count on the day needs the person, because the labels are
+the running person's acts and the verb refuses an agent session by design.
 
 **Outcome:** the calibration corpus, built before any judge is asked again.
 Every screen the wireframe flow draws is a judgment the flow has already acted
@@ -252,6 +258,32 @@ exist* — an export of 3,643 flashcards from a personal knowledge base, each
 card's folder its label. Re-cut because that knowledge base is a separate
 project isocan does not read into, which is the person's decision; its search
 interface could not have enumerated the tree in any case.
+
+**Trajectory**
+
+- **2026-09-24** — **The labels record only disagreement, so phase 2 cannot
+  read a bucket's accuracy off them.** A maybe-band row can only be *kept* and a
+  sure-band row only *taken out*: agreeing with the flow leaves no trace.
+  Phase 2 must first decide what an untouched row in a flow the person worked
+  on means; the reader records `engaged` so it can.
+- **2026-09-24** — The unit of label is the **row**, a screen and its
+  variations, not the screen: swapping the judge's pick for its variation is a
+  *yes* to need, and screen by screen it would have read as *taken out*.
+- **2026-09-24** — The flow's own writes go out under the person's actor id, so
+  the reader tells the hands apart by op group (the group is `spec.flow`), not
+  by author; `judge/test/format.test.ts` holds the composer to it, reading the
+  wireframe source as text so neither module imports the other.
+- **2026-09-24** — Open: **the count on the day.** The person runs
+  `node packages/cli/bin/isocan.js judge corpus <prj_… ids> --out ~/judge-corpus`
+  in their own terminal (the installed CLI predates the verb). Waits on the
+  person.
+- **2026-09-24** — Open: unconfirmed on real data, that a replica's log keeps
+  each entry's op group. If it does not, every row reads "not drawn by a flow
+  on that canvas" — the first thing the person's run shows. Waits on that run.
+- **2026-09-24** — Open, for phase 2: an explicit *no* is lost — deleting a
+  maybe agrees with the flow and reads as no label — and flows drawn on
+  24 Sep between `need` and `by` carry P with an `unknown` answerer, while
+  stub-answered rows are labelled `stub` and must be read apart.
 
 ## Phase 2 — Calibration, and the reading that may end this
 

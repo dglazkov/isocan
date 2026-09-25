@@ -1,0 +1,101 @@
+{
+  "v": 1,
+  "pairs": [
+    {
+      "p": 0.31,
+      "verdict": "none",
+      "band": "maybe",
+      "split": "tune",
+      "answerer": "stub",
+      "engaged": false
+    },
+    {
+      "p": 0.33,
+      "verdict": "none",
+      "band": "maybe",
+      "split": "tune",
+      "answerer": "jev",
+      "engaged": true
+    },
+    {
+      "p": 0.35,
+      "verdict": "none",
+      "band": "maybe",
+      "split": "held-out",
+      "answerer": "jev",
+      "engaged": true
+    },
+    {
+      "p": 0.38,
+      "verdict": "none",
+      "band": "maybe",
+      "split": "tune",
+      "answerer": "jev",
+      "engaged": true
+    },
+    {
+      "p": 0.41,
+      "verdict": "kept",
+      "band": "maybe",
+      "split": "tune",
+      "answerer": "jev",
+      "engaged": true
+    },
+    {
+      "p": 0.45,
+      "verdict": "none",
+      "band": "maybe",
+      "split": "tune",
+      "answerer": "jev",
+      "engaged": true
+    },
+    {
+      "p": 0.55,
+      "verdict": "taken-out",
+      "band": "sure",
+      "split": "tune",
+      "answerer": "jev",
+      "engaged": true
+    },
+    {
+      "p": 0.66,
+      "verdict": "none",
+      "band": "sure",
+      "split": "tune",
+      "answerer": "stub",
+      "engaged": false
+    },
+    {
+      "p": 0.7,
+      "verdict": "none",
+      "band": "sure",
+      "split": "tune",
+      "answerer": "jev",
+      "engaged": true
+    },
+    {
+      "p": 0.77,
+      "verdict": "kept",
+      "band": "sure",
+      "split": "tune",
+      "answerer": "unknown",
+      "engaged": true
+    },
+    {
+      "p": 0.82,
+      "verdict": "taken-out",
+      "band": "sure",
+      "split": "tune",
+      "answerer": "jev",
+      "engaged": true
+    },
+    {
+      "p": 0.9,
+      "verdict": "none",
+      "band": "sure",
+      "split": "tune",
+      "answerer": "jev",
+      "engaged": true
+    }
+  ]
+}

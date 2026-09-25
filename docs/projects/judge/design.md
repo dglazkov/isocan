@@ -1,9 +1,9 @@
 ---
-status: designed
+status: partial
 since: 2026-09-19
 issue: 334
 see: judge, evals, personas, memory, modules
-note: designed 19 Sep 2026 from the System One research note. A typed judge returns a decision and a calibrated probability and cannot cite, so it may triage and may never rule — the evals bar forbids it. The seam is `Judgment` in core, one interface with a declared cost, so the vendor is replaceable and a stub is a first-class implementation. Calibration comes before use. The corpus was first a personal knowledge base of 3,643 human-filed cards; on 24 Sep 2026 it became isocan's own — the wireframe flow's round-1 judgments against what a person then kept or took out — because that knowledge base belongs to a separate project isocan does not reach into. Phase 0 closed 19 Sep 2026: the reference was read first-hand and one call made, correcting the sketch in three places — the vendor returns the full probability distribution plus a separate confidence, takes one state with many named questions, and bills input tokens only. Phase 1 is next.
+note: designed 19 Sep 2026 from the System One research note. A typed judge returns a decision and a calibrated probability and cannot cite, so it may triage and may never rule — the evals bar forbids it. The seam is `Judgment` in core, one interface with a declared cost, so the vendor is replaceable and a stub is a first-class implementation. Calibration comes before use. The corpus was first a personal knowledge base of 3,643 human-filed cards; on 24 Sep 2026 it became isocan's own — the wireframe flow's round-1 judgments against what a person then kept or took out — because that knowledge base belongs to a separate project isocan does not reach into. Phase 0 closed 19 Sep 2026: the reference was read first-hand and one call made, correcting the sketch in three places — the vendor returns the full probability distribution plus a separate confidence, takes one state with many named questions, and bills input tokens only. Phase 1 is next. Phase 1 PART-DONE 24 Sep 2026: `isocan judge corpus` reads wireframe decisions into labelled rows; the count on the day waits on the person.
 ---
 
 # Judge: a decision, a probability, and no argument

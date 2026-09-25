@@ -24,6 +24,7 @@ import { mindmapWeb } from "@isocan/mindmap/web";
 import { mermaidWeb } from "@isocan/mermaid/web";
 import { documentsWeb } from "@isocan/documents/web";
 import { sandboxWeb } from "@isocan/sandbox/web";
+import { judgeWeb } from "@isocan/judge/web";
 import { competitionActivation } from "@isocan/design-competition/activation";
 import { wireframeActivation } from "@isocan/wireframe/activation";
 import { useUiStore } from "./stores/uiStore.ts";
@@ -57,7 +58,7 @@ export type ShellModule = WebModule<
   ComponentType<ComposerFacts>
 >;
 
-const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb];
+const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb, judgeWeb];
 
 /**
  * **Modules that are off until a person asks**, by slug (#156, 9 Sep 2026).
