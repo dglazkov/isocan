@@ -23,6 +23,11 @@ second week.
 
 ## 24 September 2026
 
+- **See how your wireframe decisions line up with the judge's.**
+  `isocan judge corpus` reads the wireframe flows on the canvases you name and
+  counts, for every screen, how sure the judge was and what you then did with
+  it — kept, taken out, or left alone. It writes nothing to any canvas; `--out`
+  saves the rows on your machine, never inside a repository.
 - **Writes to hosted canvases no longer stall.** Every ten minutes this machine
   checks that a hosted canvas's files are at its home, and that check used to
   hold every change you made, on every canvas, until it finished — minutes, on

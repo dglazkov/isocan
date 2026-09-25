@@ -436,6 +436,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Chat, and ⌘K *Find prototypes* (or the lit minimap) finds the playable
   ones on a busy canvas. See
   [the journey](docs/projects/wireframes/journey.md).
+- **The judge's corpus**: `isocan judge corpus` reads what wireframe flows
+  already recorded — each row's round-1 P(yes) — against what you then did
+  with it (kept, taken out, or never touched), so the judge can be
+  calibrated before anything acts on it. It writes to no canvas; `--out`
+  puts the pairs on this machine, outside any repository. See
+  [the design](docs/projects/judge/design.md).
 - **Design competitions**: `/design-competition` or ⌘K opens a lazy picker
   with nine designer-inspired packs. Choose fighters and a brief to create
   explicit lanes in one undoable act. `isocan competition` casts them through

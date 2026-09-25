@@ -169,7 +169,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **What a canvas carries** (`extend`, and a topic per module)
 - `module add|rm|ls`, `tool ls|add`, `panel ls|add` — modules, rail tools, dock panels
-- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice` — module families; `--agent-help <verb>` finds each
+- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge` — module families; `--agent-help <verb>` finds each
 
 <!-- topic: protocol | the lap in full — naming yourself, the session, who is at your terminal, parking, several of you, your inbox, asking a person, pointing at words -->
 
