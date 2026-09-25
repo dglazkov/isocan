@@ -8,8 +8,12 @@ project's course. A phase that went as planned leaves it empty.
 read and one classification run by hand, on a local machine with the key.
 Phase 1 is PART-DONE — the reader is built and proven on synthetic logs, and
 the count on the day waits on the person running it on their own canvases.
-Phase 2 is next, and must first decide what an untouched row means (phase 1's
-Trajectory). On 24 Sep 2026 the corpus changed:
+Phase 2 is PART-DONE too — the reading harness writes the page either way, and
+the real page waits on those rows. **Everything left waits on the person**:
+phase 3 moves wireframes' cuts only from a concluding curve, and phase 5 is
+built only after phase 2 concludes, because that reading is allowed to end the
+project. The curve concludes at about 470 labelled rows, which accrue as
+`/wire` is used. On 24 Sep 2026 the corpus changed:
 judge calibrates on isocan's own wireframe decisions — the flow's round-1
 judgments against what a person then kept or took out — rather than on a
 personal knowledge base that belongs to a separate project. Phases 1–3 were
@@ -287,7 +291,11 @@ interface could not have enumerated the tree in any case.
 
 ## Phase 2 — Calibration, and the reading that may end this
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 24 September 2026.** The harness
+(`packages/modules/judge/scripts/calibrate.ts`) writes the page either way and
+holds on synthetic rows and the committed fixture; the real page waits on the
+person's rows, and will say it cannot conclude until about 470 labelled Jev
+rows exist.
 
 **Outcome:** a reading published under `docs/calibration/` beside the
 4 September one — same discipline, same place — produced by a harness that
@@ -312,7 +320,14 @@ be a mechanism no scene forces.
   have looked.
 
 The page reports the explicit and the agreement labels separately beside the
-curve, so the assumption is on the page rather than under it. Rows answered by
+curve, so the assumption is on the page rather than under it.
+
+**Flat is read inside the bands** (proposed by phase 2's builder, confirmed by
+the conductor 24 Sep 2026). Agreement labels copy the flow's own decision, and
+the flow keeps at 0.5, so the pooled curve steps at 0.5 whatever P is worth —
+read off the pooled curve, even a random judge that routed the flow would look
+informative. So the reading decides *flat* by the slope of needed on P within
+each band, and concludes flat when that slope's 95% interval reaches zero. Rows answered by
 the stub, or by an unknown answerer, are counted and read apart from Jev's.
 **And it has a floor**: it concludes only with at least twenty verdicts in
 every bucket it reports, buckets no finer than 0.1 (phase 0's ±0.035). Below
@@ -348,6 +363,25 @@ never a request or a title. `npm test` and `npm run typecheck` whole.
 the uniform stub and the vendor seam landed here too, and the stub scored at
 chance through the harness. Moved to phase 5 because the reading makes no
 calls; the stub's role as the bad judge is taken by a random-P baseline.
+
+**Trajectory**
+
+- **2026-09-24** — **The pooled curve cannot decide flat.** Agreement labels are
+  the flow's own band, so any judge that routed the flow steps at 0.5; a test
+  holds a random judge that routed a flow and still reads flat. The within-band
+  slope decides, and it is noisy: ±0.14 at 2,400 labels.
+- **2026-09-24** — **The floor, in rows: about 470 labelled Jev rows** (140
+  held out) before every drawable bucket holds twenty. The corpus grows only as
+  fast as `/wire` is used, so this, not any code, is now what the project
+  waits on.
+- **2026-09-24** — For phase 3: agreement labels pull the maybe buckets toward
+  0 and the sure buckets toward 1, so ECE and distance from the diagonal are
+  skewed by the assumption. Fit the cuts from the explicit and agreement columns
+  apart, on the tune split.
+- **2026-09-24** — Open: **the real page.** After phase 1's corpus run, the
+  person (or the conductor, on the machine holding the rows) runs
+  `node --import tsx packages/modules/judge/scripts/calibrate.ts --rows ~/judge-corpus`,
+  which writes `docs/calibration/<day>-need.md`. Waits on the person's rows.
 
 ## Phase 3 — The band, drawn from the curve
 

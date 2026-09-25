@@ -5,5 +5,5 @@
     "jsx": "react-jsx",
     "types": ["node"]
   },
-  "include": ["src", "test", "../../../md.d.ts"]
+  "include": ["src", "test", "scripts", "../../../md.d.ts"]
 }

@@ -1,5 +1,5 @@
 {
-  "v": 1,
+  "v": 2,
   "pairs": [
     {
       "p": 0.31,
@@ -7,7 +7,8 @@
       "band": "maybe",
       "split": "tune",
       "answerer": "stub",
-      "engaged": false
+      "engaged": false,
+      "flowPut": false
     },
     {
       "p": 0.33,
@@ -15,7 +16,8 @@
       "band": "maybe",
       "split": "tune",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": false
     },
     {
       "p": 0.35,
@@ -23,7 +25,8 @@
       "band": "maybe",
       "split": "held-out",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": false
     },
     {
       "p": 0.38,
@@ -31,7 +34,8 @@
       "band": "maybe",
       "split": "tune",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": false
     },
     {
       "p": 0.41,
@@ -39,7 +43,8 @@
       "band": "maybe",
       "split": "tune",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": false
     },
     {
       "p": 0.45,
@@ -47,7 +52,8 @@
       "band": "maybe",
       "split": "tune",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": true
     },
     {
       "p": 0.55,
@@ -55,7 +61,8 @@
       "band": "sure",
       "split": "tune",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": true
     },
     {
       "p": 0.66,
@@ -63,7 +70,8 @@
       "band": "sure",
       "split": "tune",
       "answerer": "stub",
-      "engaged": false
+      "engaged": false,
+      "flowPut": true
     },
     {
       "p": 0.7,
@@ -71,7 +79,8 @@
       "band": "sure",
       "split": "tune",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": true
     },
     {
       "p": 0.77,
@@ -79,7 +88,8 @@
       "band": "sure",
       "split": "tune",
       "answerer": "unknown",
-      "engaged": true
+      "engaged": true,
+      "flowPut": false
     },
     {
       "p": 0.82,
@@ -87,7 +97,8 @@
       "band": "sure",
       "split": "tune",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": true
     },
     {
       "p": 0.9,
@@ -95,7 +106,8 @@
       "band": "sure",
       "split": "tune",
       "answerer": "jev",
-      "engaged": true
+      "engaged": true,
+      "flowPut": true
     }
   ]
 }

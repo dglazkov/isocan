@@ -72,7 +72,8 @@ export interface Pair {
   /**
    * Whether the person acted on ANY row of this flow. A row they left alone
    * in a flow they worked through is not the same absence as one in a flow
-   * they never opened — phase 2 decides what, if anything, that is worth.
+   * they never opened. Phase 2 reads the first as agreement with the flow
+   * (`labelOf` in `reading.ts`) and the second as no label at all.
    */
   engaged: boolean;
   split: Split;
@@ -367,22 +368,28 @@ export interface ShapePair {
   split: Split;
   answerer: PairAnswerer;
   engaged: boolean;
+  /**
+   * Whether the flow itself put the row in the prototype — what an untouched
+   * row in an engaged flow is read as agreeing with (judge phase 2). Added
+   * in shape v2; a v1 shape cannot be read for agreement labels.
+   */
+  flowPut: boolean;
 }
 
 export interface Shape {
-  v: 1;
+  v: 2;
   pairs: ShapePair[];
 }
 
 /** The committed half: numbers and closed vocabularies, in a stable order, and nothing anybody typed. */
 export function shapeOf(pairs: readonly Pair[]): Shape {
-  const rows = pairs.map(({ p, verdict, band, split, answerer, engaged }) => ({ p, verdict, band, split, answerer, engaged }));
-  rows.sort((a, b) => a.p - b.p || a.verdict.localeCompare(b.verdict) || a.band.localeCompare(b.band) || a.split.localeCompare(b.split) || a.answerer.localeCompare(b.answerer) || Number(a.engaged) - Number(b.engaged));
-  return { v: 1, pairs: rows };
+  const rows = pairs.map(({ p, verdict, band, split, answerer, engaged, flowPut }) => ({ p, verdict, band, split, answerer, engaged, flowPut }));
+  rows.sort((a, b) => a.p - b.p || a.verdict.localeCompare(b.verdict) || a.band.localeCompare(b.band) || a.split.localeCompare(b.split) || a.answerer.localeCompare(b.answerer) || Number(a.engaged) - Number(b.engaged) || Number(a.flowPut) - Number(b.flowPut));
+  return { v: 2, pairs: rows };
 }
 
 /** The keys a shape may carry — any other key is a field somebody added, and may be carrying a real string. */
-const SHAPE_KEYS = new Set(["v", "pairs", "p", "verdict", "band", "split", "answerer", "engaged"]);
+const SHAPE_KEYS = new Set(["v", "pairs", "p", "verdict", "band", "split", "answerer", "engaged", "flowPut"]);
 /** Every string a shape may hold: the closed vocabularies, and nothing else. */
 const SHAPE_WORDS = new Set<string>([...VERDICTS, ...BANDS, ...SPLITS, ...PAIR_ANSWERERS]);
 

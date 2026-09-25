@@ -9,6 +9,8 @@ import { judgeModule } from "./record.ts";
  * a READER over what the wireframe flow already recorded (round 1's P(yes)
  * as `need`, who answered as `by`) and what the running person then did.
  * `corpus.ts` is the fold, `wire-format.ts` the stored format it reads.
+ * Phase 2 is the reading (`reading.ts`): the reliability curve of the P
+ * those rows recorded, written as a page by `scripts/calibrate.ts`.
  *
  * The record (`record.ts`) owns nothing: the reader writes nothing to any
  * canvas. Delete this directory and its two list entries and the feature
@@ -17,5 +19,6 @@ import { judgeModule } from "./record.ts";
 export { judgeModule };
 export * from "./wire-format.ts";
 export * from "./corpus.ts";
+export * from "./reading.ts";
 
 export default judgeModule;

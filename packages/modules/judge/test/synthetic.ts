@@ -1,5 +1,6 @@
 import type { Actor, LogEntry, Operation } from "@isocan/core";
 import { KEEP_BY_PROP, KEEP_PROP, WIRE_MARKER, WIRE_SCRIPT_ID } from "../src/wire-format.ts";
+import { seeded } from "../src/reading.ts";
 
 /**
  * **A synthetic canvas's oplog, written the way the wireframe flow writes
@@ -194,4 +195,45 @@ export function acmeCanvas(): SyntheticCanvas {
     { itemId: "itm_acme_quieter", archetype: "detail", title: "Acme Quieter", need: 0.31 },
   ], { by: { answerer: "stub", model: "stub (seed 2)" } });
   return c;
+}
+
+// ---------- judged rows, many at once (judge phase 2)
+
+/**
+ * **A made-up judge the flow acted on, and a made-up person reading after
+ * it** — rows in the shape `rowsOf` reads, drawn from a seed, with no strings
+ * at all. P is drawn over the band the flow draws (`MAYBE_FLOOR` 0.3 up), the
+ * flow puts a row in the prototype at 0.5 and over, and the truth is
+ * `truthOf(p)` — `p` itself for a calibrated judge. A person works through
+ * `engaged` of the flows, and where the flow got a row wrong corrects it with
+ * probability `corrects`; an uncorrected wrong row reads as agreement, which
+ * is the assumption's cost and what a partial `corrects` exercises.
+ */
+export function judgedRows(opts: {
+  n: number;
+  seed: number;
+  truthOf?: (p: number, draw: () => number) => boolean;
+  engaged?: number;
+  corrects?: number;
+  answerer?: "jev" | "stub" | "agent" | "unknown";
+  heldOut?: number;
+}): Array<{ p: number; band: "sure" | "maybe"; split: "tune" | "held-out"; answerer: "jev" | "stub" | "agent" | "unknown"; verdict: "kept" | "taken-out" | "none"; engaged: boolean; flowPut: boolean }> {
+  const draw = seeded(opts.seed);
+  const truthOf = opts.truthOf ?? ((p, d) => d() < p);
+  return Array.from({ length: opts.n }, () => {
+    const p = Math.round((0.3 + draw() * 0.7) * 100) / 100;
+    const flowPut = p >= 0.5;
+    const truth = truthOf(p, draw);
+    const engaged = draw() < (opts.engaged ?? 0.8);
+    const corrected = engaged && truth !== flowPut && draw() < (opts.corrects ?? 1);
+    return {
+      p,
+      band: flowPut ? ("sure" as const) : ("maybe" as const),
+      split: draw() < (opts.heldOut ?? 0.3) ? ("held-out" as const) : ("tune" as const),
+      answerer: opts.answerer ?? "jev",
+      verdict: corrected ? (truth ? ("kept" as const) : ("taken-out" as const)) : ("none" as const),
+      engaged,
+      flowPut,
+    };
+  });
 }
