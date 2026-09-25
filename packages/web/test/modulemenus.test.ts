@@ -32,9 +32,9 @@ useUiStore.setState({ openModuleDialog: (id: string, args?: string) => void open
 const asked: ModuleMenuFacts[] = [];
 addModule({
   core: { name: "@acme/menus" },
-  menu: (facts) => {
+  menu: (facts: ModuleMenuFacts) => {
     asked.push(facts);
-    if (!facts.items.every((i) => i.properties?.[FIDELITY_PROP] === "wireframe")) return [];
+    if (!facts.items.every((i: Item) => i.properties?.[FIDELITY_PROP] === "wireframe")) return [];
     return [{
       label: "Style",
       value: "House",

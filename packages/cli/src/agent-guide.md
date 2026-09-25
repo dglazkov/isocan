@@ -1495,6 +1495,12 @@ before a screen means.
   tokens nobody kept, values that are not colours, contrast that fails. Run it
   before you grade a screen against it, and before you hand a system back.
 
+  One token is isocan's addition to the format: `surface: flat | raised |
+  glass | bold` — how the system's surfaces are drawn (elevation shadows,
+  frosted translucent panes, thick-bordered hard shadows). Optional; absent
+  or unknown reads as `flat`, and `design check` warns on a value it does not
+  know. Wireframes draw it (`isocan wire style`).
+
   **A design system can govern one group rather than the canvas.** A DESIGN.md
   that belongs to a group governs its direct and nested members — three lanes
   can hold three philosophies while the canvas keeps its own. Add

@@ -148,7 +148,7 @@ describe("the renderer draws each surface", () => {
       expect(sheet(html)).not.toContain(".s-raised");
     }
     // A blueprint is blue in every system — no theme, so no surface either.
-    expect(renderWire({ ...blueprint("list", { platform: "app" }), style: styled("glass").style })).not.toContain("s-glass");
+    expect(renderWire({ ...blueprint("list", { platform: "app" }), style: styled("glass").style! })).not.toContain("s-glass");
   });
 
   it("each surface's sheet reads roles and nothing else — no literal colour", () => {
@@ -165,7 +165,7 @@ describe("the renderer draws each surface", () => {
 
   it("a prototype carries every surface its screens are drawn on", () => {
     const a = { id: "a", title: "Acme list", spec: styled("glass") };
-    const b = { id: "b", title: "Acme detail", spec: { ...wireframe("detail", { platform: "app" }), style: styled("raised").style } };
+    const b = { id: "b", title: "Acme detail", spec: { ...wireframe("detail", { platform: "app" }), style: styled("raised").style! } };
     const html = assemblePrototype([a, b], []);
     expect(html).toContain(".frame.s-glass{");
     expect(html).toContain(".s-raised :is(");

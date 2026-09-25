@@ -332,7 +332,7 @@ describe("a wire style, from the menu or /wire style <name>", () => {
   it("sends what `wire style --preset` sends: the file, design use's op, a version per wire and the prototype's — one group", async () => {
     const cli = await viaCli([["wire", "style", "--preset", "material"]]);
     const web = await viaWeb();
-    const r = await presetOnWeb("canvas-acme", web.host, "material", [], presetText);
+    const r = await presetOnWeb("canvas-acme", web.host, "material", [], async (p) => presetText(p));
     const a = shapeOf(lastAct(cli));
     const b = shapeOf(lastAct(web.c));
     expect(b).toEqual(a);
@@ -349,10 +349,10 @@ describe("a wire style, from the menu or /wire style <name>", () => {
     ]);
     const web = await viaWeb();
     const first = [...web.c.items.values()].find((i) => i.properties.fidelity === "wireframe" && !i.properties.wirePrototype)!.id;
-    await presetOnWeb("canvas-acme", web.host, "glass", [first], presetText);
+    await presetOnWeb("canvas-acme", web.host, "glass", [first], async (p) => presetText(p));
     const glassWeb = shapeOf(lastAct(web.c));
     // House takes the style's file to the trash, on both surfaces.
-    await presetOnWeb("canvas-acme", web.host, "house", [], presetText);
+    await presetOnWeb("canvas-acme", web.host, "house", [], async (p) => presetText(p));
     expect(shapeOf(lastAct(web.c))).toEqual(shapeOf(lastAct(cli)));
     expect(lastAct(web.c)[0]!.op.type).toBe("item.delete");
     expect(glassWeb.groups).toBe(1);

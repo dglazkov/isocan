@@ -280,6 +280,44 @@ arrives, the wires say they are behind it (the spec names the version) and
 edit is refused for now — it would rewrite forty items behind somebody's
 back.
 
+**Wire styles — a named look** (24 Sep 2026, Dion: *"change the style from
+'house' (default) to 'material' … 'shadcn' maybe with glassmorphism … and
+others most popular"*, and *"right click on a wire and have 'Style'"*). A
+wire style is a DESIGN.md the module ships in `assets/styles/` — `material`,
+`shadcn`, `glass`, `ios`, `fluent`, `carbon`, `brutalist`, original token
+sets inspired by each system, system font stacks only, each `design check`
+clean at AA — or one of the design competition's nine packs by name.
+`house` is the greys. Choosing one (`presets.ts`, `applyPreset`) is three
+acts anybody could do by hand, as ONE op group: place the file beside the
+flow (`wirePreset=<id>`), make it the design system of the flow's group, or
+the canvas when it is in none, with core's `designUse` op; restyle. A scope
+already wearing a wire style re-versions that one item rather than adding a
+second, so the version stack is the history of looks tried. `house` trashes
+it. A scope governed by a DESIGN.md somebody wrote is refused, never
+versioned over: a preset landing as a new version of a person's own system
+is a surprise. The module's own styles name their tokens for the roles
+(`colors.ground` … `colors.on-primary`, `typography.body`, `rounded.base`,
+`spacing.base` — all eight colour roles or it does not apply, because
+Linear's `primary` is its text colour), so the mapping is read, not asked:
+no Jev call. Packs are asked, as any system. Doors: `wire style --preset
+<name> [screens…]`, `--list`; `/wire style <name>`, `/wire style` alone a
+picker (`/wire style system` is the plain restyle it used to be); and a
+wire's right-click **Style ▸**, the shell's submenu with a tick, whose rows
+come from the module's lazy half (`WebModule.menu`) and open the dialog
+with `style <name>` — one code path for all three.
+
+**Surfaces.** Colour, type, corners and spacing are not what tells Material
+from Fluent from glass; depth is. A DESIGN.md may say `surface: flat |
+raised | glass | bold` (core's `designSurface`; absent or unknown is flat,
+and `design check` warns on the unknown). The style records it
+(`style.surface`), the frame wears `s-<surface>`, and `render.ts` adds that
+surface's sheet — roles only, like the wire sheet: `raised` lifts cards,
+bars and sheets on two-layer shadows of the ink; `glass` draws a gradient
+ground from the system's primary and surface and makes every pane a
+half-transparent fill with a `backdrop-filter` blur (verified live inside
+the sandboxed item frame); `bold` draws 3px ink borders and hard offset
+shadows. Flat wires are byte-identical to before.
+
 ### 10. Fleshed out — sample content instead of bars
 
 Asked for by Dion on 23 Sep 2026, looking at the walk canvas: *it shows empty
@@ -340,7 +378,7 @@ plain grey wires; `wire flesh --bars` takes content off afterwards.
 
 1. **Ops** — none new: `item.add`, `item.addVersion`, `item.update`, op groups.
 2. **CLI** — `isocan wire <request>`, `wire vary`, `wire keep|unkeep`,
-   `wire link`, `wire prototype`, `wire style`, `wire flesh`, `wire copy`, `wire questions|answer`, as the module's verbs.
+   `wire link`, `wire prototype`, `wire style [--preset <name>|--list]`, `wire flesh`, `wire copy`, `wire questions|answer`, as the module's verbs.
 3. **Agent guide** — the module's own `agent-guide.md`.
 4. **Core** — catalog, renderer, link inference and assembler in the module's
    core, so the web and the CLI draw and link identically.

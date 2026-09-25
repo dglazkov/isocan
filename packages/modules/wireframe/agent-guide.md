@@ -24,7 +24,7 @@ bar, tab bar) stays.
   key either it says so and the stub answers; `--answerer stub` draws a
   random but valid flow, deterministic under `--seed`; `--answerer agent`
   leaves the rounds to you. A person does the same from the Chat with
-  `/wire <request>` (and `/wire prototype`, `/wire style`, `/wire flesh`,
+  `/wire <request>` (and `/wire prototype`, `/wire style [name]`, `/wire flesh`,
   `/wire rerender`): the browser runs this same composer against the home's
   judge, as that person, and when it finishes it leaves one **record in the
   Chat** in the Wire builder's words — what was made and the numbers — in
@@ -171,7 +171,37 @@ bar, tab bar) stays.
   prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the
   home's judge maps it; when the home has no key either, the stub answers,
   and its flat distributions keep every asked role at the default. The spec records it as `style` (`{ "source": "design-system",
-  "itemId", "versionId", "roles" }`).
+  "itemId", "versionId", "roles", "surface"? }`).
+- **Wire styles — a named look in one act.** `isocan wire style --preset
+  <name> [screens…]` puts a flow in a ready-made look: `material`,
+  `shadcn`, `glass`, `ios`, `fluent`, `carbon`, `brutalist` (the module's
+  own — original token sets inspired by each system, system fonts only), or
+  a design-competition pack by name (`rams`, `linear`, `frog`, …). `house`
+  is the default greys. `--list` names them all. One op group does three
+  things, so one `isocan undo` takes all of it back: the style's DESIGN.md
+  lands beside the flow as an item marked `wirePreset=<name>` (or, where the
+  flow's scope already wears a wire style, that item gains a new version and
+  name — styles never pile up); it becomes the design system of the flow's
+  group, or of the canvas when the flow is in none (the op `design use`
+  sends); and the flow is restyled. `house` moves the style's DESIGN.md to
+  the trash and returns the greys. With screens named, only their flows;
+  with none, every wire. A scope governed by a DESIGN.md somebody wrote is
+  refused, never versioned over — the error says how to stop it governing.
+  The module's own styles name their tokens for the wire's roles, so nothing
+  is asked (the output says "named for the role"); a pack is mapped by the
+  answerer once, like any system. A person does the same by right-clicking a
+  wire → **Style ▸** (ticked on the current one), or `/wire style <name>`;
+  `/wire style` alone lists them, and `/wire style system` is the plain
+  restyle above.
+- **`surface:` in a DESIGN.md** — isocan's one addition to the format: `flat`
+  (the default, and what an absent or unknown value reads as), `raised`
+  (elevation shadows on cards, bars, sheets), `glass` (translucent panes
+  with a backdrop blur over a gradient ground drawn from the system's own
+  primary and surface) or `bold` (thick ink borders, hard offset shadows).
+  `isocan design check` warns on a value it does not know. A DESIGN.md that
+  names all eight colour roles (`colors.ground` … `colors.on-primary`), with
+  `typography.body`, `rounded.base` and `spacing.base`, maps onto the wire
+  directly, with nothing asked.
 - `isocan wire "<request>"` starts in the governing system: the mapping is
   asked while round 1 is, and the screens arrive in it. `--in <group>`
   composes the flow inside a group — under everything the group already
