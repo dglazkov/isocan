@@ -703,7 +703,7 @@ describe("a voice session lands as a record", () => {
  * nobody parked nothing happened.
  */
 describe("commands, from the composer's list and through its door", () => {
-  const hostCommands = (facts.host as unknown as { commands: () => { name: string; usage?: string; description: string }[] }).commands();
+  const hostCommands = (facts.host as unknown as { commands: () => { name: string; usage: string; description: string }[] }).commands();
 
   it("the brief names what the composer offers, module commands included", () => {
     const brief = commandsBrief(hostCommands);
