@@ -238,9 +238,12 @@ change, so the docs never disagree with each other:
 - **The where-we-are paragraph**: which phases stand where, what the
   next thing to do is (`<project> phase N`), what waits on a person and
   what waits on work.
-- **`journey.md` front matter**: `status:` (`designed`, `partial`,
-  `done`, or the project's own word) and the `note:` retold to include
-  this phase.
+- **`journey.md` front matter**: `status:` — one of the words the roadmap
+  reads (`designed`, `partial`, `built`, `blocked`, `open`, `noted`,
+  `superseded`; `docStatus` in core is the list). Any other word, `done`
+  included, files the project under *no verdict recorded*: wireframes did,
+  every phase closed. And the `note:` retold to include this phase — a
+  summary of where it stands, not a log of every phase.
 - **The projects index**, `docs/projects/README.md`: the project's
   "where it stands" cell, which must not be more right than the docs
   it summarizes, and must not be less.

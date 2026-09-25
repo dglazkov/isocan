@@ -9,9 +9,9 @@ what it describes. Run `node scripts/roadmap.mjs` after changing one.
 The same board lives on a canvas, [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),
 open to anyone with the address — it should say what `main` says.
 
-**37 built · 57 still open** — of which 42 partly
+**38 built · 56 still open** — of which 42 partly
 built, 14 designed, 0 blocked, and
-**1 with no verdict recorded at all**, which is the number worth
+**0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
@@ -85,13 +85,7 @@ and the done column should not be flattered by either.
 | **project** | [webmcp-cobrowsing](projects/webmcp-cobrowsing/journey.md) | 2026-09-11 | roadmap defined — the WebMCP surface is designed against the verified API and the existing @isocan/mcp vocabulary; design and phases follow the census-informed design · see iso-api, embed |
 | research | [Wireframes a typed model can choose](research/2026-09-23-wireframe-components.md) | 2026-09-23 | surveyed what seventeen sources — eleven wireframing tools and kits, four pattern references and datasets, two generative-UI catalogs — treat as a component, for a feature where TypeSafe's Jev composes screens by choosing from a fixed catalog. The union, de-duplicated, is 123 entries — 73 primitives, every one named by at least two of ten enumerated sources (29 by five or more), and 50 composite blocks. The finding that shapes the build is that Jev cannot write a tree, so it must choose composites into slots of a fixed recipe, which is what the two catalog-choosing products (Figma First Draft, Relume) already do; once a screen's archetype is chosen, no structural question over 34 recipes has more than 4 options, so the 255-option ceiling never binds. The binding constraint is instead that Jev writes no prose — and a prototype's links hang on labels — so actionable text becomes a typed `intent` (49 values, 40 of them concepts by name in Rico's lexicon of 197 mined button labels) and links are computed from intents, archetypes and canvas order rather than generated. Wave 1 is 18 archetypes and 28 blocks, covering 90.7% of Enrico's 1,460 human-labelled screens; the same labels are a free calibration set for the archetype question. · see judge, design-partner, modules, mindmap · [#350](https://github.com/dglazkov/isocan/issues/350) |
 
-## No verdict recorded <sub>1</sub>
-
-| | What | Since | |
-| --- | --- | --- | --- |
-| **project** | [wireframes](projects/wireframes/journey.md) | 2026-09-23 | the ideal, as scenes. A person asks for wireframes; a blue-on-white skeleton appears at once and fills as Jev chooses blocks; variations sit beside each screen; the person marks the screens to keep; a clickable prototype is assembled from them with the obvious transitions already wired. Phase 0 closed 23 Sep 2026 — the catalog (18 archetypes, 28 blocks, 22 primitives, 49 intents) draws as blueprint and as wireframe, and `isocan wire render` places a screen; Phase 1 closed the same day — `isocan wire "<request>"` has Jev compose a flow skeleton-first in 7–11 s for about $0.001, one undo per flow. Phase 2 closed the same day — variations sit under each screen where Jev was unsure, and 📐 keeps a screen from the CLI, the menu or ⇧K. Phase 3 closed the same day — `isocan wire prototype` assembles the kept screens into one clickable app with the obvious transitions, missing screens dashed and named. Phase 4 closed the same day — `wire style` restyles every wire into the governing design system (Jev maps its tokens onto the wire's roles), one undo, blueprints staying blue. Phase 5 closed the same day — `/wire` in the Chat does all of it from the canvas through the home's key, walked on isocan.io. Phase 6 measured Jev against 1,318 labelled screens: a third right, overconfident by ~0.4 — so round 1 should over-include and let keep prune. Phase 7 fills wires with sample content from a pack Jev picks; phase 8 made the arrows true, clickable arrows, drew each wire as just the screen, lit prototypes on the minimap and put `/wire` acts in the Chat — both walked on isocan.io. · see wireframes, judge, design-partner, slides, modules · [#350](https://github.com/dglazkov/isocan/issues/350) |
-
-## Built <sub>37</sub>
+## Built <sub>38</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -130,6 +124,7 @@ and the done column should not be flattered by either.
 | research | [What a deep version stack costs, measured](research/2026-09-02-version-scaling.md) | 2026-09-02 | pruning is on every surface and the board bounds itself; the hosted path's own latency (cold start, Firestore tail, GCS reads) is still unmeasured · see on-demand |
 | research | [What people ask agents for](research/2026-09-03-what-people-ask-agents-for.md) | 2026-09-03 | Stage 1's deliverable — every ask at one home hand-labelled 3 Sep 2026, the distribution published, a classifier calibrated against it (84%) and shipped in `isocan evals corpus` with that number attached. Found and fixed a cancel bug that had inflated the cancelled count sixteen-fold on one canvas · see evals |
 | research | [Where the canvas is janky](research/2026-08-29-performance.md) | 2026-08-29 |  |
+| **project** | [wireframes](projects/wireframes/journey.md) | 2026-09-23 | the ideal, as scenes. A person asks for wireframes; a blue-on-white skeleton appears at once and fills as Jev chooses blocks, arriving with sample content for this app; screens Jev was unsure of are drawn marked maybe, and variations sit where its answer was split. The flow chooses its own first picks and ends with a clickable prototype above the row, which the person corrects with Use in prototype; true arrows show the flow on the canvas, every wire restyles into the governing design system, and each act leaves a record in the Chat. Phases 0–8 closed 23 Sep 2026 and were walked on isocan.io; the 24 Sep follow-ups — the maybe band, first picks with the prototype at the end, fleshed by default — are in the scenes. Five debts stay open in phases.md. · see wireframes, judge, design-partner, slides, modules · [#350](https://github.com/dglazkov/isocan/issues/350) |
 | **project** | [workbench](projects/workbench/design.md) | 2026-08-29 |  · see workbench |
 | research | [WYSIWYG on the stage](research/2026-08-26-wysiwyg.md) | 2026-08-29 | the text stage built 26–27 Aug (the V0, then the parse5 upgrade — edits name a node by ordinal and splice by source range); element properties built 4 Sep — click an element in the frozen frame, edit its class and inline styles, saved as attribute splices by the same rule · see atlas |
 

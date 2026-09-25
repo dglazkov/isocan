@@ -1,8 +1,8 @@
 ---
-status: designed
+status: built
 since: 2026-09-23
 see: wireframes, judge
-note: the walk. Phase 0 is the catalog and the renderer (skeleton and wire), no model. Phase 1 is Jev composing a flow skeleton-first on a canvas. Phase 2 variations and keep. Phase 3 links and the prototype. Phase 4 wires in your design system. Phase 5 the web door. Phase 6 calibration against Enrico.
+note: the walk. Phase 0 is the catalog and the renderer (skeleton and wire), no model. Phase 1 is Jev composing a flow skeleton-first on a canvas. Phase 2 variations and keep. Phase 3 links and the prototype. Phase 4 wires in your design system. Phase 5 the web door. Phase 6 calibration against Enrico. Phase 7 sample content. Phase 8 what real use asked for — true arrows, just the screen, finding prototypes, the record in the Chat. All nine closed 23 Sep 2026; the Open list is the backlog.
 issue: 350
 ---
 
