@@ -9,6 +9,7 @@ import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { currentCommands } from "../lib/commands.ts";
 import { fetchBlobText } from "../lib/blobtext.ts";
 
 /**
@@ -70,7 +71,9 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
  */
 function lazyHost(canvasId: string, actor: Actor, canEdit: boolean): WebHost {
   type Call = (...args: unknown[]) => unknown;
-  const later = (name: "send" | "putBlob" | "enrol" | "reveal" | "select") => (...args: unknown[]) =>
+  const later = (name: "send" | "putBlob" | "enrol" | "reveal" | "select" | "runCommand") => (...args: unknown[]) =>
     import("../lib/modulehost.ts").then((m) => (m.webHostFor(canvasId, actor, undefined, canEdit)[name] as Call)(...args));
-  return { send: later("send"), putBlob: later("putBlob"), enrol: later("enrol"), reveal: later("reveal"), select: later("select"), viewer: { id: actor.id, name: actor.name } } as unknown as WebHost;
+  // `commands` answers synchronously, so it cannot wait on the chunk; it reads
+  // the same store the real host does, through the same function.
+  return { send: later("send"), putBlob: later("putBlob"), enrol: later("enrol"), reveal: later("reveal"), select: later("select"), runCommand: later("runCommand"), commands: currentCommands, viewer: { id: actor.id, name: actor.name } } as unknown as WebHost;
 }

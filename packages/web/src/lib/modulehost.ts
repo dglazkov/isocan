@@ -6,6 +6,9 @@ import { canEditNow, useCanEdit } from "./capability.ts";
 import { creationDestination, QueuedItemError, sendCreatedItem } from "./groupplacement.ts";
 import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { glideToBox } from "./zoomactions.ts";
+import { currentCommands } from "./commands.ts";
+import { runLocalCommand } from "./localcommands.ts";
+import { postToMain } from "./mainthread.ts";
 
 /**
  * **The web half's host object** (#156, 9 Sep 2026).
@@ -107,6 +110,21 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
     select(itemIds: readonly string[]): void {
       const items = useCanvasStore.getState().canvas?.items ?? {};
       useUiStore.getState().setSelection(itemIds.filter((id) => items[id]));
+    },
+    commands: currentCommands,
+    /**
+     * **The composer's send, not a copy of it** — `MainThreadPanel` answers a
+     * local command first (a module's dialog opens; `/wire` composes in the
+     * browser) and posts everything else with the selection attached, and
+     * this is those two calls in that order. A voice session that posted
+     * `/wire` straight to the Chat would have skipped the first one: no
+     * dialog, and with nobody parked, nothing at all.
+     */
+    async runCommand(text: string): Promise<"local" | "posted"> {
+      if (runLocalCommand(text, currentCommands())) return "local";
+      if (!canEditNow()) throw new Error("You are reading this canvas — nothing can be posted from here.");
+      await postToMain(canvasId, actor, text, [...useUiStore.getState().selectedItemIds]);
+      return "posted";
     },
     reveal(itemIds: readonly string[]): void {
       const items = itemIds

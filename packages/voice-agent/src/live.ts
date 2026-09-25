@@ -25,6 +25,7 @@ import {
   normalizeSiteUrl,
   siteLabel,
   type BesideSide,
+  type CommandMetadata,
   type InkStroke,
 } from "@isocan/core";
 
@@ -53,9 +54,10 @@ export const VOICE_RULES =
   "- Do everything your tools can do directly on the canvas.\n" +
   "- Ask ONE clarifying question only when the task truly cannot proceed without the answer; " +
   "otherwise choose the most reasonable reading, act, and say what you did.\n" +
-  "- When the work needs an agent or a command — generating code, slides, decks, audits, assets — " +
-  "issue the command yourself: post it to the canvas Chat with `say` (for example, say \"/build a calculator app\"). " +
-  "The agents there execute it and report back. Never tell the person to do it themselves.\n" +
+  "- When the work needs a skill or an agent — wireframes, generated code, slides, decks, audits, assets — " +
+  "run the command yourself with `run_command` (for example name \"wire\", args \"a bowling score tracker\"), " +
+  "choosing from the commands listed in your instructions. When the person names a command, run THAT one. " +
+  "Never enrol an agent to use a skill, and never tell the person to do it themselves.\n" +
   "Tool mapping rules:\n" +
   "- 'delete <item>' or 'remove <item>' -> call delete_item\n" +
   "- 'comment on <item> ...' or 'add comment ...' -> call comment_on_item\n" +
@@ -322,6 +324,23 @@ export const LIVE_TOOLS = [
     name: "say",
     description: "Say something in the canvas Chat, where every parked agent hears it.",
     parameters: { type: "OBJECT", properties: { text: { type: "STRING" } }, required: ["text"] },
+  },
+  {
+    name: "run_command",
+    description:
+      "Run one of the canvas's slash commands — its skills — exactly as if the person had typed it in the Chat. " +
+      "Use it whenever they name a command ('use /wire', 'run the design audit') or when the work is a skill's rather than " +
+      "a canvas operation's: wireframes, builds, audits, decks, generated content. The commands available are listed in " +
+      "your instructions; use one of those names and never invent one. The answer says whether it RAN here or was POSTED " +
+      "for an agent — say which, and never claim a posted command is done.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        name: { type: "STRING", description: "The command's name without the slash, e.g. wire." },
+        args: { type: "STRING", description: "Everything after the command name, in the command's own usage — for /wire, what the screens are for." },
+      },
+      required: ["name"],
+    },
   },
   {
     name: "ask",
@@ -981,13 +1000,20 @@ export const SNAPSHOT_ITEM_CAP = 60;
  * A deterministic order is also a testable one.
  */
 /**
- * **The commands the canvas's agents execute, in the one catalogue the
- * app's own list reads** — names WITH their usage, so a planning voice can
- * compose the right command rather than describing one. A command posted as
- * a main-thread message is picked up by the agents there.
+ * **The commands this canvas offers, named WITH their usage** — so a planning
+ * voice can compose the right command rather than describe one, and run it
+ * with `run_command`.
+ *
+ * The list is the CALLER's. The browser dialog hands in the composer's own —
+ * the built-ins, the home's commands and every loaded module's — because the
+ * compiled built-ins alone (the default, and all this used to read) left out
+ * `/wire`: a person asked for it by name and the model, never having heard of
+ * it, tried to enrol an agent instead.
  */
-export function commandsBrief(): string {
-  return DEFAULT_COMMAND_CATALOGUE.map(
+export function commandsBrief(
+  commands: readonly Pick<CommandMetadata, "name" | "usage" | "description">[] = DEFAULT_COMMAND_CATALOGUE,
+): string {
+  return commands.map(
     (c) => `/${c.name}${c.usage ? ` ${c.usage}` : ""} — ${c.description}`,
   ).join("\n");
 }
@@ -1231,6 +1257,15 @@ export function planForCall(name: string, args: Record<string, unknown>): { plan
     }
     case "say":
       return { plans: [{ op: { type: "thread.reply", body: text }, said: `said: ${text}` }] };
+    case "run_command": {
+      // The PORTABLE meaning: the command, posted to the Chat for the agents
+      // there — which is all the standing harness can do. The browser dialog
+      // asks its host first, which runs a module's command in the page
+      // (`/wire` composes on the spot) and posts only what it cannot.
+      const command = String(args.name ?? "").trim().replace(/^\//, "");
+      const line = `/${command}${typeof args.args === "string" && args.args.trim() ? ` ${args.args.trim()}` : ""}`;
+      return { plans: [{ op: { type: "thread.reply", body: line }, said: `posted ${line}` }] };
+    }
     case "ask":
       return { plans: [{ op: { type: "thread.reply", body: `? ${text}` }, said: `asked: ${text}` }] };
     case "comment_on_item":

@@ -37,6 +37,14 @@ thing the earlier session would have shown the WRONG behaviour of**:
 | The wave | A short stub at the left of the bar | Bars across the full width of the row, rising with the glow |
 | A burst of tool calls | Seven `move_item → done` rows filling the panel | One row and `×7` |
 
+**And a sixth, added 24 September: voice can run the canvas's skills.** Say
+*"use /wire to make wireframes for a bowling score tracker"*. The Wireframes
+flow should start in the page — blueprints appear, then fill in — and the
+voice should say it RAN. Before, it answered that it had hit "an issue while
+trying to enroll the wireframing skill" and drew nothing. Then ask for a
+command the page cannot run (`/design-audit`): the voice should say it
+POSTED it for an agent and has not done it, rather than claiming it is done.
+
 There is a fifth, and it is not visible in the panel at all: **the session
 block posted to Chat no longer wakes every agent on the canvas.** To see it,
 park an agent on the canvas, hold a session, stop it, and check the agent did

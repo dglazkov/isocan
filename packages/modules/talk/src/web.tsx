@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   besideBox,
+  findCommand,
   isBesideSide,
+  parseSlashCommand,
   mainThread,
   newCommentId,
   newItemId,
@@ -265,6 +267,43 @@ export async function runTool(
   from: { record?: true } = {},
 ): Promise<Record<string, unknown>> {
   const { plans, what } = planForCall(name, args);
+
+  /**
+   * **A command runs the way the composer runs it.** `run_command` — and a
+   * `say` whose words ARE a command, which is what `VOICE_RULES` taught before
+   * `run_command` existed and a model may still reach for — goes through the
+   * host's door rather than straight to the Chat: a module's command opens in
+   * the page (`/wire <request>` composes here, now), and only what cannot run
+   * here is posted for an agent.
+   *
+   * The answer says which, in words the model repeats: RAN is done, POSTED is
+   * asked-for. A voice that reported a posted command as finished would claim
+   * work nobody did.
+   */
+  const spoken = name === "say" ? String(args.text ?? "").trim() : "";
+  const line = name === "run_command"
+    ? String((plans[0]?.op as { body?: unknown } | undefined)?.body ?? "")
+    : parseSlashCommand(spoken) ? spoken : null;
+  if (line !== null) {
+    const parsed = parseSlashCommand(line);
+    const known = parsed ? findCommand(facts.host.commands(), parsed.name) : null;
+    // An invented name is refused for `run_command` — the model was told to
+    // pick from the list. A `say` of an unknown slash-word is only speech.
+    if (!known && name === "run_command") {
+      const names = facts.host.commands().map((c) => `/${c.name}`).join(", ");
+      return { ok: false, error: `${parsed ? `/${parsed.name}` : "that"} is not a command on this canvas. The commands here are: ${names}` };
+    }
+    if (known) {
+      try {
+        const how = await facts.host.runCommand(line);
+        return how === "local"
+          ? { ok: true, answer: `ran /${known.name} here, in the browser — it is working on the canvas now` }
+          : { ok: true, answer: `posted ${line} to the Chat for an agent to carry out. It has NOT run yet, and runs only if an agent is listening — say so` };
+      } catch (err) {
+        return { ok: false, error: String((err as Error).message ?? err) };
+      }
+    }
+  }
 
   // The four read tools the planner marks, answered locally — the model
   // asked what the canvas holds, and the shell already told the dialog.
@@ -787,7 +826,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
         snapshotItemsFor(factsRef.current.canvas, factsRef.current.selection ?? []),
         Object.values(factsRef.current.canvas.threads ?? {}).map((t) => ({ id: t.id, comments: t.comments })),
       );
-      const instructions = { source: "canvas", text: [commandsBrief(), snapshot].join("\n\n") };
+      // The composer's own list, not the compiled built-ins: see `WebHost.commands`.
+      const instructions = { source: "canvas", text: [commandsBrief(factsRef.current.host.commands()), snapshot].join("\n\n") };
       socket.send(JSON.stringify(liveSetup(model.trim(), instructions, undefined, voiceRef.current)));
     };
     socket.onclose = (event: CloseEvent) => {

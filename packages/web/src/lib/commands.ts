@@ -62,6 +62,23 @@ export function useCommands(): CommandMetadata[] {
     // generation is the only thing that can tell this memo the answer has
     // changed — and `exhaustive-deps` cannot see a link it is not shown.
     void modulesGeneration;
-    return withModuleCommands(loaded ?? mergeCommands(DEFAULT_COMMAND_CATALOGUE, []));
+    return commandsFrom(loaded);
   }, [loaded, modulesGeneration]);
+}
+
+/** The list, from whatever the daemon answered — the built-ins standing in
+ *  until it does — with the loaded modules' commands laid under it. */
+function commandsFrom(loaded: CommandMetadata[] | null): CommandMetadata[] {
+  return withModuleCommands(loaded ?? mergeCommands(DEFAULT_COMMAND_CATALOGUE, []));
+}
+
+/**
+ * **The same list, read outside React** — for the module host's `commands`,
+ * so a voice session is handed exactly what the Chat's menu shows. One
+ * expression behind both, rather than a second derivation that drifts: the
+ * voice had been reading the compiled built-ins alone, and so had never heard
+ * of `/wire`.
+ */
+export function currentCommands(): CommandMetadata[] {
+  return commandsFrom(useCanvasStore.getState().commands);
 }

@@ -41,6 +41,9 @@ const canvas = {
 
 const sent: { ops: unknown[]; group: string }[] = [];
 const blobs: { body: string; filename: string }[] = [];
+/** What the host was asked to run, and how it says it ran it. */
+const ran: string[] = [];
+let ranAs: "local" | "posted" = "local";
 
 const facts = {
   canvasId: "prj_1",
@@ -62,6 +65,16 @@ const facts = {
     viewer: { id: "usr_a", name: "A" },
     reveal: () => undefined,
     enrol: async () => ({ actorId: "usr_x" }),
+    // The composer's list: a built-in, and a MODULE command the compiled
+    // catalogue does not carry — which is the case that failed.
+    commands: () => [
+      { name: "design-audit", description: "Audit the design", source: "built-in" },
+      { name: "wire", description: "Wireframes from a request", usage: "[basic] <request>", source: "module", opens: "wire" },
+    ],
+    runCommand: async (text: string) => {
+      ran.push(text);
+      return ranAs;
+    },
   },
 } as unknown as DialogFacts;
 
@@ -674,5 +687,71 @@ describe("a voice session lands as a record", () => {
   it("the model cannot mint one through its arguments", async () => {
     await runTool("say", { text: "quiet please", record: true }, facts);
     expect("record" in lastComment()).toBe(false);
+  });
+});
+
+/**
+ * **Voice runs the canvas's skills the way the composer does.**
+ *
+ * Asked to build wireframes and then told "you know there's a /wire skill —
+ * use that", the session answered that it had hit "an issue while trying to
+ * enroll the wireframing skill" and drew nothing. Three things were missing,
+ * and each has a case here: the brief never named `/wire` (a MODULE command;
+ * the brief read the compiled built-ins), there was no tool for running a
+ * command at all, and `say "/wire …"` — the old advice — posted straight to
+ * the Chat, skipping the composer's local door, so no dialog opened and with
+ * nobody parked nothing happened.
+ */
+describe("commands, from the composer's list and through its door", () => {
+  const hostCommands = (facts.host as unknown as { commands: () => { name: string; usage?: string; description: string }[] }).commands();
+
+  it("the brief names what the composer offers, module commands included", () => {
+    const brief = commandsBrief(hostCommands);
+    expect(brief).toContain("/wire [basic] <request> — Wireframes from a request");
+    // The compiled default, which is all it used to read, has never heard of it.
+    expect(commandsBrief()).not.toContain("/wire");
+  });
+
+  it("run_command hands the composer's door the whole line, and says it RAN", async () => {
+    ran.length = 0;
+    ranAs = "local";
+    const before = sent.length;
+    const result = await runTool("run_command", { name: "wire", args: "a bowling score tracker" }, facts);
+    expect(ran).toEqual(["/wire a bowling score tracker"]);
+    expect(result).toMatchObject({ ok: true });
+    expect(String(result.answer)).toMatch(/^ran \/wire here/);
+    // Nothing of its own went out: the door did the work.
+    expect(sent.length).toBe(before);
+  });
+
+  it("a posted command is reported as asked-for, never as done", async () => {
+    ran.length = 0;
+    ranAs = "posted";
+    const result = await runTool("run_command", { name: "/design-audit", args: "" }, facts);
+    expect(ran).toEqual(["/design-audit"]);
+    expect(String(result.answer)).toContain("has NOT run yet");
+    ranAs = "local";
+  });
+
+  it("an invented command is refused with the real list, and nothing runs", async () => {
+    ran.length = 0;
+    const result = await runTool("run_command", { name: "wireframes", args: "x" }, facts);
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain("/wire");
+    expect(ran).toEqual([]);
+  });
+
+  it("a say whose words ARE a command goes through the same door", async () => {
+    ran.length = 0;
+    await runTool("say", { text: "/wire a bowling score tracker" }, facts);
+    expect(ran).toEqual(["/wire a bowling score tracker"]);
+  });
+
+  it("ordinary speech is still just speech", async () => {
+    ran.length = 0;
+    const before = sent.length;
+    await runTool("say", { text: "the screens are on the left" }, facts);
+    expect(ran).toEqual([]);
+    expect(sent.length).toBe(before + 1);
   });
 });
