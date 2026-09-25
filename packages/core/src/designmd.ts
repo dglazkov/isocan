@@ -44,6 +44,34 @@ export interface DesignTokens {
   rounded?: Record<string, string>;
   spacing?: Record<string, string | number>;
   components?: Record<string, Record<string, string>>;
+  /**
+   * **How the system's surfaces are drawn** — isocan's addition to the format
+   * (24 Sep 2026, wire styles): `flat`, `raised`, `glass` or `bold`. A colour
+   * token cannot say "cards float on a shadow" or "panes are frosted glass",
+   * and those are the difference between Material and Fluent more than any
+   * hex is. Optional, and read tolerantly: absent or unknown is `flat`
+   * (`designSurface`), and `design check` warns on a value it does not know.
+   */
+  surface?: string;
+}
+
+/**
+ * The surface treatments a DESIGN.md may name, in its `surface:` token.
+ *
+ * - `flat` — borders and grey steps separate things; the default.
+ * - `raised` — elevation: cards, bars, sheets and dialogs sit on soft shadows.
+ * - `glass` — translucent panes, blurred over a gradient ground drawn from
+ *   the system's own colours.
+ * - `bold` — thick ink borders and hard offset shadows.
+ */
+export const DESIGN_SURFACES = ["flat", "raised", "glass", "bold"] as const;
+/** One of `DESIGN_SURFACES`. */
+export type DesignSurface = (typeof DESIGN_SURFACES)[number];
+
+/** The surface a system asks for — `flat` when it names none, or one this canvas does not know. */
+export function designSurface(tokens: DesignTokens): DesignSurface {
+  const named = typeof tokens.surface === "string" ? tokens.surface.trim().toLowerCase() : "";
+  return (DESIGN_SURFACES as readonly string[]).includes(named) ? named as DesignSurface : "flat";
 }
 
 export interface DesignDoc {

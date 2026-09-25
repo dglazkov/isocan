@@ -971,7 +971,29 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
   drops?: readonly ModuleDrop[];
   /** Popups a person opens by a command or a palette entry. */
   dialogs?: readonly ModuleDialog<D>[];
+  /** **Rows in an item's right-click menu** — only once the module's lazy half is loaded (`ModuleMenuFacts`). */
+  menu?: (facts: ModuleMenuFacts) => readonly ModuleMenuRow[];
 }
+
+/**
+ * **What a module's item-menu rows are handed** (wireframes, 24 Sep 2026:
+ * *right-click a wire → Style ▸*). The items the menu is for, the canvas
+ * they are on, and one door: `open`, the module's own dialog with the words
+ * a slash command would have typed after it — the same door ⌘K's `opens` /
+ * `args` use, so a row runs exactly what `/wire style material` runs and
+ * never grows a third code path. The shell asks only a module whose half is
+ * loaded, so the rows cost the entry chunk one call and no data.
+ */
+export interface ModuleMenuFacts {
+  canvas: CanvasContents;
+  items: readonly Item[];
+  open: (dialog: string, args: string) => void;
+}
+
+/** One row a module adds to an item's menu — the shell's own row shape (a submenu, a tick, `writes`), or a labelled separator. */
+export type ModuleMenuRow =
+  | { label: string; value?: string; checked?: boolean; writes?: boolean; disabled?: boolean; run: () => void; submenu?: ModuleMenuRow[] }
+  | { separator: string };
 
 /**
  * **A runtime module's manifest** (phase 3): what `isocan module add` prints

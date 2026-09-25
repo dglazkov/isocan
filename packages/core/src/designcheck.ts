@@ -1,6 +1,6 @@
 import { compileDesignContract } from "./design-contract.ts";
 import { CONTRAST_BODY, CONTRAST_UI, contrastRatio, parseHex } from "./contrast.ts";
-import { DESIGN_SECTIONS, unresolvedReferences, type DesignDoc } from "./designmd.ts";
+import { DESIGN_SECTIONS, DESIGN_SURFACES, unresolvedReferences, type DesignDoc } from "./designmd.ts";
 
 /**
  * Is this design system usable, or just written down?
@@ -108,6 +108,16 @@ export function checkDesign(doc: DesignDoc): DesignFinding[] {
         });
       }
     }
+  }
+
+  // A surface nobody draws is read as flat — said, so a typo is not a silent downgrade.
+  if (tokens.surface !== undefined && !(DESIGN_SURFACES as readonly string[]).includes(String(tokens.surface).trim().toLowerCase())) {
+    findings.push({
+      severity: "warning",
+      where: "surface",
+      what: `"${tokens.surface}" is not a surface this canvas draws — it is read as flat`,
+      fix: DESIGN_SURFACES.join(", "),
+    });
   }
 
   // Typography: a level with no size is a level nothing can be set in.

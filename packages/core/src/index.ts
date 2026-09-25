@@ -75,8 +75,8 @@ export type { ScreenAudit, AuditDiagnostic, AuditUnexamined, AuditRepair, AuditR
 export * from "./preference.ts";
 export * from "./extensions.ts";
 export * from "./media.ts";
-export { DESIGN_SECTIONS, canonicalSection, parseFrontMatter, parseDesign, referencesIn, unresolvedReferences, resolveToken, serializeDesign } from "./designmd.ts";
-export type { DesignTypography, DesignTokens, DesignDoc } from "./designmd.ts";
+export { DESIGN_SECTIONS, DESIGN_SURFACES, canonicalSection, designSurface, parseFrontMatter, parseDesign, referencesIn, unresolvedReferences, resolveToken, serializeDesign } from "./designmd.ts";
+export type { DesignTypography, DesignTokens, DesignDoc, DesignSurface } from "./designmd.ts";
 export * from "./contrast.ts";
 export * from "./colour.ts";
 export * from "./shortcut.ts";

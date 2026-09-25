@@ -30,6 +30,7 @@ import { glideToBox, revealItem } from "./zoomactions.ts";
 import { addSpeakerNote, noteStarter } from "./notes.ts";
 import { handIn, handable } from "./sprint.ts";
 import { canEditNow } from "./capability.ts";
+import { modules as shellModules } from "../modules.ts";
 import { canvasGroupEntries, groupDeleteLabel } from "./canvasgroupmenus.ts";
 import { openGroupCreation, groupTask, groupsEnabled } from "./canvasgroups.ts";
 
@@ -387,6 +388,8 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         run: () => void toggleModuleMark(mark, items, ctx.canvasId, ctx.actor),
       };
     }),
+    // A loaded module's own rows (the wireframes' Style ▸): built by its lazy half; a pick opens its dialog.
+    ...shellModules().flatMap((m) => m.menu?.({ canvas: useCanvasStore.getState().canvas!, items, open: useUiStore.getState().openModuleDialog }) ?? []),
     ...(one ? designSystemEntry(one, ctx) : []),
     ...(one ? chooseEntry(one, ctx) : []),
     { separator: "" },
