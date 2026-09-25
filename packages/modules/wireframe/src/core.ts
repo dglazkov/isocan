@@ -15,6 +15,9 @@ import { wireframeCore } from "./command.ts";
  * Since phase 7 the content packs too (`content/`, design §10): sample
  * words, numbers and pictograms a flesh writes into a spec, and `flesh.ts`,
  * the canvas half of `wire flesh`.
+ * Since 24 Sep 2026 the wire styles (`presets.ts`): named looks — Material,
+ * shadcn, glass, iOS, … — each a DESIGN.md in `assets/styles/`, chosen for a
+ * flow in one op group.
  * No operation is new; nothing here imports React or Node.
  */
 export * from "./catalog/index.ts";
@@ -31,6 +34,7 @@ export * from "./maybe.ts";
 export * from "./port.ts";
 export * from "./flow.ts";
 export * from "./restyle.ts";
+export * from "./presets.ts";
 export * from "./kept-flows.ts";
 export * from "./follow.ts";
 export * from "./rerender.ts";

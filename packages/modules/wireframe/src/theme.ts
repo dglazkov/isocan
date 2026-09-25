@@ -1,4 +1,4 @@
-import { contrastRatio, CONTRAST_BODY, resolveToken, type DesignDoc, type DesignTokens } from "@isocan/core";
+import { contrastRatio, CONTRAST_BODY, resolveToken, type DesignDoc, type DesignSurface, type DesignTokens } from "@isocan/core";
 import { chosenOption, type JevQuestion, type JevRequest, type JevResponse } from "./answerer.ts";
 
 /**
@@ -54,13 +54,14 @@ export interface RoleChoice {
   p?: number;
   /**
    * - `asked`: the answerer chose `token` at `p` ≥ 0.5.
+   * - `named`: the system names its tokens for the wire's roles (`namedRoles`) — taken directly, nothing asked.
    * - `only`: the system holds one candidate, taken directly.
    * - `unsure`: the answerer's pick (`leaned`) was under 0.5 — the default is kept.
    * - `none`: the system holds no candidate for this role — the default is kept.
    * - `contrast`: on-primary was under 4.5:1 against primary; `token` is the
    *   system's ink or ground that reads better, `leaned` what was chosen.
    */
-  why: "asked" | "only" | "unsure" | "none" | "contrast";
+  why: "asked" | "named" | "only" | "unsure" | "none" | "contrast";
   leaned?: string;
 }
 
@@ -81,7 +82,23 @@ export type WireStyle =
        */
       by?: string;
       roles: Partial<Record<Role, RoleChoice>>;
+      /**
+       * The system's `surface:` (core's `designSurface`) when it is not
+       * flat — read off the file, never asked: it is one word the system
+       * wrote, not a choice among its tokens. Absent is flat.
+       */
+      surface?: WireSurface;
     };
+
+/** A surface a wire draws besides flat — the frame's class (`s-raised`, …) and the sheet `render.ts` adds for it. */
+export type WireSurface = Exclude<DesignSurface, "flat">;
+/** Every surface a wire can draw besides flat. */
+export const WIRE_SURFACES: readonly WireSurface[] = ["raised", "glass", "bold"];
+
+/** The surface a style draws — `flat` for the default look, or a system that names none. */
+export function surfaceOf(style: WireStyle | undefined): DesignSurface {
+  return style?.source === "design-system" && style.surface && WIRE_SURFACES.includes(style.surface) ? style.surface : "flat";
+}
 
 export const DEFAULT_STYLE: WireStyle = { source: "default" };
 
@@ -116,6 +133,7 @@ export function styleProblems(input: unknown): string[] {
   if (typeof s.versionId !== "string" || !s.versionId) problems.push("style.versionId must be the DESIGN.md version it was mapped from");
   if (s.name !== undefined && typeof s.name !== "string") problems.push("style.name must be a string");
   if (s.by !== undefined && typeof s.by !== "string") problems.push("style.by must be a string");
+  if (s.surface !== undefined && !WIRE_SURFACES.includes(s.surface as WireSurface)) problems.push(`style.surface must be one of ${WIRE_SURFACES.join(", ")} (absent is flat)`);
   const roles = s.roles as Record<string, unknown> | undefined;
   if (!roles || typeof roles !== "object" || Array.isArray(roles)) return [...problems, "style.roles must be an object"];
   for (const [role, choice] of Object.entries(roles)) {
@@ -165,9 +183,9 @@ export function themeDecls(style: WireStyle | undefined): string {
   return [...ROLES.map((role) => `--w-${role}:${values[role]}`), `--w-link:${linkColor(values)}`].join(";");
 }
 
-/** Two styles draw identically: every role, and so every derived one, resolves to the same value. */
+/** Two styles draw identically: every role, and so every derived one, resolves to the same value, on the same surface. */
 export function sameLook(a: WireStyle | undefined, b: WireStyle | undefined): boolean {
-  return themeDecls(a) === themeDecls(b);
+  return themeDecls(a) === themeDecls(b) && surfaceOf(a) === surfaceOf(b);
 }
 
 /** Two styles draw the same and record the same system version. Absent is the default. */
@@ -187,6 +205,8 @@ export interface Candidate {
   value: string;
   /** Where in the system it lives: `colors`, `typography`, `rounded`, `spacing`. */
   group: string;
+  /** The system named this token for the role (`namedRoles`): the one candidate, and not asked about. */
+  named?: true;
 }
 
 /** Per role, what the system offers — only values a stylesheet can safely hold. */
@@ -225,6 +245,52 @@ export function candidatesOf(doc: DesignDoc): Candidates {
   out.font = fonts;
   out.radius = lengths("rounded", "radius");
   out.space = lengths("spacing", "space");
+  // A system written for wires names its tokens for the roles: each role has exactly its own, and nothing is asked.
+  const named = namedRoles(doc);
+  const body = resolved(t, t.typography?.[NAMED_TOKENS.font.token]?.fontFamily);
+  for (const role of ROLES) {
+    if (named[role] === undefined) continue;
+    // The font's candidates are one per family (the first style to use it), so the named one is read off `body` itself.
+    const found = role === "font"
+      ? typeof body === "string" && safeRoleValue("font", body.trim()) ? { token: named.font!, value: body.trim(), group: "typography" } : undefined
+      : out[role].find((c) => c.group === NAMED_TOKENS[role].group && c.token === named[role]);
+    if (found) out[role] = [{ ...found, named: true }];
+  }
+  return out;
+}
+
+/**
+ * **Where a system written for wires keeps each role** (24 Sep 2026, wire
+ * styles). A colour role is the colour of its own name (`colors.ground`,
+ * `colors.on-primary`); the font is `typography.body`'s family; the radius
+ * and the spacing unit are `rounded.base` and `spacing.base`.
+ */
+export const NAMED_TOKENS: Readonly<Record<Role, { group: "colors" | "typography" | "rounded" | "spacing"; token: string }>> = {
+  ...(Object.fromEntries(COLOR_ROLES.map((role) => [role, { group: "colors", token: role }])) as Record<ColorRole, { group: "colors"; token: string }>),
+  font: { group: "typography", token: "body" },
+  radius: { group: "rounded", token: "base" },
+  space: { group: "spacing", token: "base" },
+};
+
+/**
+ * **The roles a system names directly**, as token names — and only when it
+ * names EVERY colour role, `ground` through `on-primary`. That is the mark of
+ * a file written for wires (the wire styles, `presets.ts`), and it is strict
+ * on purpose: Linear's pack calls its text colour `primary`, so a looser rule
+ * (any colour called `primary` is the primary action) would restyle a system
+ * its author never wrote for wires, and wrongly. Anything short of all eight
+ * is asked, as ever.
+ */
+export function namedRoles(doc: DesignDoc): Partial<Record<Role, string>> {
+  const t = doc.tokens;
+  const has = (group: "colors" | "typography" | "rounded" | "spacing", token: string) =>
+    Object.prototype.hasOwnProperty.call((t[group] ?? {}) as object, token);
+  if (!COLOR_ROLES.every((role) => has("colors", role))) return {};
+  const out: Partial<Record<Role, string>> = {};
+  for (const role of ROLES) {
+    const { group, token } = NAMED_TOKENS[role];
+    if (has(group, token)) out[role] = token;
+  }
   return out;
 }
 
@@ -303,7 +369,7 @@ export function applyMapping(request: JevRequest, response: JevResponse, candida
       continue;
     }
     if (options.length === 1) {
-      roles[role] = { token: options[0]!.token, value: options[0]!.value, why: "only" };
+      roles[role] = { token: options[0]!.token, value: options[0]!.value, why: options[0]!.named ? "named" : "only" };
       continue;
     }
     const q = request.questions[role];
@@ -353,6 +419,7 @@ export function roleLine(role: Role, c: RoleChoice | undefined): string {
   const p = c.p === undefined ? "" : `p ${c.p.toFixed(2)}`;
   const note =
     c.why === "only" ? "the only one" :
+    c.why === "named" ? "named for the role" :
     c.why === "none" ? "the system has none — default kept" :
     c.why === "unsure" ? `unsure (leaned ${c.leaned}) — default kept` :
     c.why === "contrast" ? `raised for contrast (chosen: ${c.leaned ?? "default"})` : "";

@@ -7,6 +7,7 @@ import { wireframeCore } from "./command.ts";
 import { WireDialog } from "./dialog.tsx";
 import { WireMaybes } from "./maybe-marks.tsx";
 import { PROTOTYPE_PROP } from "./prototype.ts";
+import { styleMenu } from "./style-menu.ts";
 
 /**
  * **The web half** (phase 5) — fetched, never bundled into first paint: the
@@ -39,6 +40,8 @@ export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never,
     opens: "wire",
     args: "prototypes",
   }],
+  // Right-click a wire → Style ▸ (style-menu.ts): each pick opens the dialog with `style <name>`.
+  menu: styleMenu,
 };
 
 export default wireframeWeb;

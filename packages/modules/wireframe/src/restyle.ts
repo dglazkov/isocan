@@ -1,4 +1,4 @@
-import { newGroupId, parseDesign, selectDesignSystem, type CanvasContents, type Item } from "@isocan/core";
+import { designSurface, newGroupId, parseDesign, selectDesignSystem, type CanvasContents, type DesignSurface, type Item } from "@isocan/core";
 import { JEV_INPUT_PRICE, type Answerer, type JevRequest, type JevResponse } from "./answerer.ts";
 import { rebuildPrototypes } from "./kept-flows.ts";
 import { currentVersionOf, type WirePort } from "./port.ts";
@@ -34,6 +34,8 @@ export interface Mapping {
   versions: number;
   name: string;
   roles: Partial<Record<Role, RoleChoice>>;
+  /** The system's `surface:` — read off this version's file every time, never lent from a wire. */
+  surface: DesignSurface;
   /** How it was found: asked the answerer, read off a wire already in it, or nothing to ask. */
   how: "asked" | "reused" | "nothing to ask";
   request?: JevRequest;
@@ -73,7 +75,7 @@ export class StyleResolver {
   async styleFor(system: Item | null): Promise<WireStyle> {
     if (!system) return DEFAULT_STYLE;
     const m = await this.mapping(system);
-    return { source: "design-system", itemId: system.id, versionId: m.versionId, name: m.name, ...(m.by ? { by: m.by } : {}), roles: m.roles };
+    return { source: "design-system", itemId: system.id, versionId: m.versionId, name: m.name, ...(m.by ? { by: m.by } : {}), roles: m.roles, ...(m.surface !== "flat" ? { surface: m.surface } : {}) };
   }
 
   /** A mapping on the canvas may be lent to this run: anything Jev (or nobody) answered; a stub's only to the stub. */
@@ -98,8 +100,10 @@ export class StyleResolver {
     const lent = this.known.find((s) => this.lendable(s.style, system, current.id));
     const doc = parseDesign(await this.port.readText(current.blobHash));
     const name = doc.tokens.name ?? system.title;
+    // Read, not lent: a wire drawn before surfaces existed carries the roles of this version and no surface.
+    const surface = designSurface(doc.tokens);
     if (lent?.style?.source === "design-system") {
-      const m: Mapping = { ...base, name, roles: lent.style.roles, how: "reused", ...(lent.style.by ? { by: lent.style.by } : {}) };
+      const m: Mapping = { ...base, name, roles: lent.style.roles, surface, how: "reused", ...(lent.style.by ? { by: lent.style.by } : {}) };
       this.mappings.set(key, m);
       return m;
     }
@@ -119,7 +123,7 @@ export class StyleResolver {
       this.inputTokens += response.usage?.input_tokens ?? 0;
       await this.onAsked?.(system, current.id, request, response);
     }
-    const m: Mapping = { ...base, name, roles: applyMapping(request, response, candidates), how: asking ? "asked" : "nothing to ask", request, response, ...(ms !== undefined ? { ms } : {}), ...(by ? { by } : {}) };
+    const m: Mapping = { ...base, name, roles: applyMapping(request, response, candidates), surface, how: asking ? "asked" : "nothing to ask", request, response, ...(ms !== undefined ? { ms } : {}), ...(by ? { by } : {}) };
     this.mappings.set(key, m);
     return m;
   }
@@ -136,10 +140,12 @@ export class StyleResolver {
 
 /** A mapping, for a person: which system, how it was found, one line per role. */
 export function mappingLines(m: Mapping, by: string): string[] {
-  const how = m.how === "asked" ? `mapped by ${m.by ?? by}${m.ms !== undefined ? ` in ${m.ms} ms` : ""}` : m.how === "reused" ? `mapping (by ${m.by ?? "nobody — nothing to ask"}) reused from a wire already in this version — nothing asked` : "every role had one candidate or none — nothing asked";
+  const named = ROLES.some((role) => m.roles[role]?.why === "named");
+  const how = m.how === "asked" ? `mapped by ${m.by ?? by}${m.ms !== undefined ? ` in ${m.ms} ms` : ""}` : m.how === "reused" ? `mapping (by ${m.by ?? "nobody — nothing to ask"}) reused from a wire already in this version — nothing asked` : named ? "its tokens are named for the wire's roles — nothing asked" : "every role had one candidate or none — nothing asked";
   return [
     `"${m.name}" — ${m.system.id}, version ${m.version} of ${m.versions} · ${how}`,
     ...ROLES.map((role) => `  ${roleLine(role, m.roles[role])}`),
+    ...(m.surface !== "flat" ? [`  ${"surface".padEnd(11)} ${m.surface}`] : []),
   ];
 }
 
@@ -184,7 +190,8 @@ export async function restyle(
   all: readonly Screen[],
   screens: readonly Screen[],
   resolver: StyleResolver,
-  opts: { toDefault?: boolean } = {},
+  /** `group`: write into an act's group already open — a wire style's, which chose the system first (`presets.ts`). */
+  opts: { toDefault?: boolean; group?: string } = {},
 ): Promise<Restyled> {
   const targets: RestyleTarget[] = [];
   for (const s of screens) {
@@ -192,7 +199,7 @@ export async function restyle(
     const system = opts.toDefault ? null : governingSystem(canvas, item);
     targets.push({ screen: s, item, system, style: await resolver.styleFor(system) });
   }
-  const group = newGroupId();
+  const group = opts.group ?? newGroupId();
   const changed: RestyleTarget[] = [];
   for (const t of targets) {
     if (sameStyle(t.screen.spec.style, t.style) || alreadyLooks(t.screen.spec.style, t.style)) continue;

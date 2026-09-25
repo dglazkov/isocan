@@ -5,7 +5,8 @@ import { moduleMarkPatch, type CanvasContents, type DialogHost, type Item, type 
 import { wireframeCore } from "../src/command.ts";
 import wireframeCli from "../src/cli.ts";
 import { keptArrows } from "../src/arrows.tsx";
-import { composeOnWeb, fleshOnWeb, modeOf, prototypeRecordWords } from "../src/dialog.tsx";
+import { composeOnWeb, fleshOnWeb, modeOf, presetOnWeb, prototypeRecordWords } from "../src/dialog.tsx";
+import { presetText } from "../src/style-cli.ts";
 import { WireMaybes } from "../src/maybe-marks.tsx";
 import { KEEP_PROP, MAYBE_PROP, homeAnswerer, homeOrStub, readWire, renderWire, stubAnswerer, wireframe, type WireSpec } from "../src/core.ts";
 import { wireframeActivation } from "../src/activation.ts";
@@ -66,6 +67,9 @@ function memoryCanvas() {
     } else if (op.type === "item.move") {
       // A prototype's rebuild puts it back over its flow when it is taller or wider than before.
       Object.assign(items.get(op.itemId)!, { x: op.x, y: op.y });
+    } else if (op.type === "item.delete") {
+      // `house` takes a wire style's DESIGN.md to the trash.
+      items.delete(op.itemId);
     } else throw new Error(`the composer sent an op it should not: ${op.type}`);
   };
   const contents = () => ({ items: Object.fromEntries(items) }) as unknown as CanvasContents;
@@ -318,6 +322,43 @@ describe("/wire flesh", () => {
   });
 });
 
+describe("a wire style, from the menu or /wire style <name>", () => {
+  /** The ops of the last group sent — one act's. */
+  const lastAct = (c: ReturnType<typeof memoryCanvas>) => {
+    const group = c.sent[c.sent.length - 1]!.group;
+    return c.sent.filter((s) => s.group === group);
+  };
+
+  it("sends what `wire style --preset` sends: the file, design use's op, a version per wire and the prototype's — one group", async () => {
+    const cli = await viaCli([["wire", "style", "--preset", "material"]]);
+    const web = await viaWeb();
+    const r = await presetOnWeb("canvas-acme", web.host, "material", [], presetText);
+    const a = shapeOf(lastAct(cli));
+    const b = shapeOf(lastAct(web.c));
+    expect(b).toEqual(a);
+    expect(b.groups).toBe(1);
+    expect(b.ops[0]).toMatchObject({ type: "item.add", title: "Material — DESIGN.md", properties: { wirePreset: "material" } });
+    expect(b.ops[1]).toMatchObject({ type: "item.update", patch: { properties: { role: "design-system" } } });
+    expect(r.restyled.changed.length).toBeGreaterThan(0);
+  });
+
+  it("a wire's menu pick (the selection's flow) is the CLI naming that screen — and house the same way back", async () => {
+    const cli = await viaCli([
+      (c) => ["wire", "style", "--preset", "glass", [...c.items.values()].find((i) => i.properties.fidelity === "wireframe" && !i.properties.wirePrototype)!.id],
+      ["wire", "style", "--preset", "house"],
+    ]);
+    const web = await viaWeb();
+    const first = [...web.c.items.values()].find((i) => i.properties.fidelity === "wireframe" && !i.properties.wirePrototype)!.id;
+    await presetOnWeb("canvas-acme", web.host, "glass", [first], presetText);
+    const glassWeb = shapeOf(lastAct(web.c));
+    // House takes the style's file to the trash, on both surfaces.
+    await presetOnWeb("canvas-acme", web.host, "house", [], presetText);
+    expect(shapeOf(lastAct(web.c))).toEqual(shapeOf(lastAct(cli)));
+    expect(lastAct(web.c)[0]!.op.type).toBe("item.delete");
+    expect(glassWeb.groups).toBe(1);
+  });
+});
+
 describe("the arrows between kept screens", () => {
   const o = { request: "Acme couriers", flow: "flw_acme" };
   function canvasOf(specs: Record<string, WireSpec>, keep: string[]) {
@@ -365,10 +406,13 @@ describe("the arrows between kept screens", () => {
     expect(after).not.toContainEqual({ from: "it_list", to: "it_detail" });
   });
 
-  it("run only between KEPT screens, and a canvas with none fetches nothing", () => {
+  it("run only between KEPT screens, and a canvas with no wire fetches nothing", () => {
     const specs = { it_signin: wireframe("sign-in", o), it_home: wireframe("home", o), it_list: wireframe("list", o) };
+    expect(wireframeActivation.underlays[0]!.needed({ items: {} } as unknown as CanvasContents)).toBe(false);
     const none = canvasOf(specs, []);
-    expect(wireframeActivation.underlays[0]!.needed(none.canvas)).toBe(false);
+    expect(keptArrows(none.canvas, read(none.blobs))).toEqual([]);
+    // Wires with none kept draw no arrow, but fetch the half: a wire's Style ▸ menu lives there (24 Sep 2026).
+    expect(wireframeActivation.underlays[0]!.needed(none.canvas)).toBe(true);
     const one = canvasOf(specs, ["it_home"]);
     expect(keptArrows(one.canvas, read(one.blobs))).toEqual([]);
     // One kept screen draws no arrow, but fetches the half: its ⇧K's `follow` lives there.
@@ -383,8 +427,13 @@ describe("the doors", () => {
   it("/wire reads its words: a request, prototype, style, style --default, or nothing", () => {
     expect(modeOf("")).toEqual({ kind: "form" });
     expect(modeOf("prototype")).toEqual({ kind: "prototype" });
-    expect(modeOf("style")).toEqual({ kind: "style", toDefault: false });
+    // `style` alone lists the wire styles; `style system` is what it did before them; one more word is a style.
+    expect(modeOf("style")).toEqual({ kind: "styles" });
+    expect(modeOf("style system")).toEqual({ kind: "style", toDefault: false });
     expect(modeOf("style --default")).toEqual({ kind: "style", toDefault: true });
+    expect(modeOf("style Material")).toEqual({ kind: "preset", name: "material" });
+    expect(modeOf("style house")).toEqual({ kind: "preset", name: "house" });
+    expect(modeOf("style guide for Acme's kiosk")).toEqual({ kind: "compose", request: "style guide for Acme's kiosk" });
     expect(modeOf("a prototype for Acme")).toEqual({ kind: "compose", request: "a prototype for Acme" });
     expect(modeOf("flesh")).toEqual({ kind: "flesh", bars: false });
     expect(modeOf("flesh --bars")).toEqual({ kind: "flesh", bars: true });
@@ -425,13 +474,16 @@ describe("the maybe marks", () => {
     expect(draw(canvasOf(item("itm_list", {})))).toBe("");
   });
 
-  it("the half is fetched wherever a mark or a prototype is — the keep mark's `follow` must be there to re-version it", () => {
+  it("the half is fetched wherever a wire is — a mark's `follow`, the arrows and a wire's Style ▸ menu all live there", () => {
     const needed = wireframeActivation.underlays[0]!.needed;
     expect(needed(canvasOf(item("a", { [MAYBE_PROP]: "0.36" })))).toBe(true);
     expect(needed(canvasOf(item("a", { [KEEP_PROP]: "yes" })))).toBe(true);
     // A prototype whose screens were all taken out: using one again must re-version it.
     expect(needed(canvasOf(item("p", { wirePrototype: "flw_acme" })))).toBe(true);
-    expect(needed(canvasOf(item("a", {})))).toBe(false);
+    expect(needed(canvasOf(item("a", {})))).toBe(true);
+    // Nothing on the canvas is a wire: nothing is fetched.
+    const note = { id: "n", title: "Acme notes", x: 0, y: 0, width: 200, height: 100, properties: { kind: "text" } } as unknown as Item;
+    expect(needed(canvasOf(note))).toBe(false);
   });
 });
 

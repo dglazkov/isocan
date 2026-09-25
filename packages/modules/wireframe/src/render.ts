@@ -4,7 +4,7 @@ import { hotKey } from "./links.ts";
 import {
   PLATFORM_SIZE, defaultIntent, propsFor, recipe, validateWire, wireTitle, type WireSlot, type WireSpec,
 } from "./spec.ts";
-import { themeDecls, type WireStyle } from "./theme.ts";
+import { surfaceOf, themeDecls, type WireStyle, type WireSurface } from "./theme.ts";
 
 /**
  * **The renderer — skeleton, then wire** (design §3).
@@ -370,6 +370,64 @@ span.tx{display:inline}
 .url-t{margin-left:12px;background:var(--w-ground);border-radius:8px;padding:0 10px;font-size:11px;line-height:18px;color:var(--w-ink-muted);min-width:30%}
 `;
 
+/** A shadow's colour: the ink, or the primary, at `n`% over whatever is behind it. */
+const INK_AT = (n: number) => `color-mix(in srgb,var(--w-ink) ${n}%,transparent)`;
+const PRIMARY_AT = (n: number) => `color-mix(in srgb,var(--w-primary) ${n}%,transparent)`;
+/** Glass: the ground, half gone — what a frosted pane is filled with. */
+const PANE = "color-mix(in srgb,var(--w-ground) 58%,transparent)";
+const BLUR = "blur(20px) saturate(1.8)";
+
+/**
+ * **The surfaces** (24 Sep 2026, wire styles) — what a DESIGN.md's
+ * `surface:` draws, as one sheet each, written only on a screen whose style
+ * names it. A frame on one wears its class (`s-raised`, `s-glass`,
+ * `s-bold`), so every rule is scoped under it and a prototype of screens
+ * drawn on two surfaces plays each on its own. Roles only, like the wire
+ * sheet: a shadow is the ink (or the primary) mixed toward transparent, and
+ * glass's gradient ground is the system's primary and surface over its
+ * ground — never a colour of the renderer's.
+ *
+ * - **raised** — elevation: cards, stats, inset lists and tables lose their
+ *   outline for a two-layer shadow; bars cast one; sheets and dialogs float.
+ * - **glass** — a gradient ground, and every pane (cards, bars, fields,
+ *   sheets) a half-transparent fill with a `backdrop-filter` blur over it,
+ *   edged with the system's `line`.
+ * - **bold** — 3px ink borders and a hard 4px offset shadow, square corners
+ *   on the few shapes the radius role does not reach.
+ */
+const SURFACE_CSS: Readonly<Record<WireSurface, string>> = {
+  raised: `
+.s-raised :is(.card,.stat,.list.inset,.table,.chart,.linkcard,.sheet-actions){border-color:transparent;box-shadow:0 1px 2px ${INK_AT(16)},0 3px 10px ${INK_AT(9)}}
+.s-raised :is(.appbar,.navbar,.pagehead){position:relative;z-index:1;border-bottom-color:transparent;box-shadow:0 1px 3px ${INK_AT(14)},0 4px 12px ${INK_AT(6)}}
+.s-raised .tabbar{position:relative;z-index:1;border-top-color:transparent;box-shadow:0 -1px 3px ${INK_AT(10)},0 -4px 12px ${INK_AT(5)}}
+.s-raised :is(.sheet,.dialog,.drawer){border-color:transparent;box-shadow:0 10px 32px ${INK_AT(24)},0 2px 8px ${INK_AT(12)}}
+.s-raised :is(.fab,.btn.primary){box-shadow:0 2px 4px ${INK_AT(14)},0 4px 12px ${PRIMARY_AT(28)}}
+`,
+  glass: `
+.frame.s-glass{background:radial-gradient(90% 55% at 0% 0%,color-mix(in srgb,var(--w-primary) 45%,var(--w-ground)),transparent 70%),radial-gradient(80% 50% at 100% 38%,color-mix(in srgb,var(--w-surface) 70%,var(--w-primary)),transparent 72%),radial-gradient(110% 60% at 15% 100%,color-mix(in srgb,var(--w-primary) 32%,var(--w-surface)),transparent 75%),linear-gradient(160deg,var(--w-ground),var(--w-surface))}
+.s-glass :is(.card,.stat,.list.inset,.table,.chart,.linkcard,.sheet-actions,.appbar,.tabbar,.navbar,.pagehead,.sheet,.dialog,.drawer,.fld .box,.composer .box,.search,.seg,.chip,.btn.secondary,.btn.destructive){background:${PANE};-webkit-backdrop-filter:${BLUR};backdrop-filter:${BLUR};border-color:var(--w-line)}
+.s-glass :is(.card,.stat,.list.inset,.table,.chart,.linkcard,.sheet,.dialog,.fld .box,.search){box-shadow:0 8px 28px ${PRIMARY_AT(22)},inset 0 1px 0 var(--w-line)}
+.s-glass :is(.appbar,.navbar,.pagehead){border-bottom-color:var(--w-line)}
+.s-glass .tabbar{border-top-color:var(--w-line)}
+.s-glass :is(.chrome,.table th){background:transparent}
+.s-glass :is(.img,.thumb,.av,.ico){background-color:color-mix(in srgb,var(--w-surface) 55%,transparent);border-color:var(--w-line)}
+.s-glass :is(.fab,.btn.primary){box-shadow:0 6px 18px ${PRIMARY_AT(34)}}
+.s-glass .layer{background:${INK_AT(16)};-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+`,
+  bold: `
+.s-bold :is(.card,.stat,.list.inset,.table,.chart,.linkcard,.sheet-actions,.fld .box,.composer .box,.search,.seg,.chip,.btn:not(.tertiary),.img,.av,.thumb,.ico,.tg,.cb,.code span,.dialog,.sheet,.fab){border:3px solid var(--w-ink)}
+.s-bold :is(.card,.stat,.list.inset,.table,.linkcard,.fld .box,.search,.btn:not(.tertiary),.dialog,.fab){box-shadow:4px 4px 0 var(--w-ink)}
+.s-bold :is(.appbar,.navbar,.pagehead){border-bottom:3px solid var(--w-ink)}
+.s-bold .tabbar{border-top:3px solid var(--w-ink)}
+.s-bold :is(.search,.chip,.seg,.tabs.pill span,.badge,.st){border-radius:0}
+`,
+};
+
+/** The sheets for these surfaces — nothing for flat, and each surface once. */
+export function surfaceCss(surfaces: Iterable<string>): string {
+  return [...new Set(surfaces)].map((s) => SURFACE_CSS[s as WireSurface] ?? "").join("");
+}
+
 /** The skeleton's sheet — written only when some slot is undecided. Every selector begins `.sk`. */
 const SKELETON_CSS = `
 .sk-frame{border-color:${BLUE}!important;background:#ffffff linear-gradient(${BLUE_GROUND} 1px,transparent 1px) 0 0/100% 24px}
@@ -499,9 +557,9 @@ export function themeCss(style: WireStyle | undefined): string {
   return `:root{${themeDecls(style)}}`;
 }
 
-/** The stylesheet a screen needs: its theme, the wire sheet, and the skeleton's only while a slot is undecided. */
+/** The stylesheet a screen needs: its theme, the wire sheet, its surface's, and the skeleton's only while a slot is undecided. */
 export function wireCss(spec: WireSpec): string {
-  return `${themeCss(styleOf(spec))}${WIRE_CSS}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
+  return `${themeCss(styleOf(spec))}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
 }
 
 /**
@@ -539,8 +597,10 @@ export function renderFrame(spec: WireSpec): string {
 
   const { width, height } = PLATFORM_SIZE[spec.platform];
   const size = spec.platform === "site" ? `width:${width}px;min-height:${SITE_MIN}px` : `width:${width}px;height:${height}px`;
+  // A surface is the style's (render's `SURFACE_CSS`); a blueprint has none, as it has no theme.
+  const surface = surfaceOf(styleOf(spec));
   return [
-    `<div class="frame ${spec.platform}${undecided ? " sk-frame" : ""}" style="${size}">`,
+    `<div class="frame ${spec.platform}${undecided ? " sk-frame" : ""}${surface === "flat" ? "" : ` s-${surface}`}" style="${size}">`,
     ...regions.shell,
     ...regions.header,
     `<div class="body">`,
@@ -570,4 +630,6 @@ export function readWire(html: string): WireSpec | null {
 
 /** For the tests: the greyscale sheet, which must hold no skeleton colour. */
 export const __WIRE_CSS = WIRE_CSS;
+/** For the tests: every surface's sheet, which must read roles and nothing else. */
+export const __SURFACE_CSS = SURFACE_CSS;
 export const __SKELETON_CSS = SKELETON_CSS;

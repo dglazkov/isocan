@@ -3,6 +3,7 @@ import { wireframeModule } from "./record.ts";
 import { KEEP_MARK, KEEP_PROP } from "./keep.ts";
 import { followOnWeb } from "./follow.ts";
 import { MAYBE_PROP } from "./maybe.ts";
+import { PRESET_PROP } from "./presets.ts";
 
 /**
  * **`/wire`** — local on the web (it opens the Wireframes dialog, which runs
@@ -24,8 +25,14 @@ screen by hand, and never write its copy yourself unless asked.
   (plain grey wires, no sample content, nothing in a prototype).
 - \`/wire prototype\` → \`isocan wire prototype\` (the screens marked 📐 — use
   some in it first with \`isocan wire use <screens…>\` if none is).
-- \`/wire style\` → \`isocan wire style\`; \`/wire style --default\` →
-  \`isocan wire style --default\`.
+- \`/wire style <name>\` → \`isocan wire style --preset <name>\` (a named look —
+  material, shadcn, glass, ios, fluent, carbon, brutalist, a design-competition
+  pack, or house for the greys — placed beside the flow as its DESIGN.md and
+  made its design system; one undo takes it back). \`/wire style\` alone →
+  \`isocan wire style --list\`: say which styles there are and ask which.
+- \`/wire style system\` → \`isocan wire style\` (every wire in the design
+  system that governs it); \`/wire style --default\` → \`isocan wire style
+  --default\`.
 - \`/wire flesh\` → \`isocan wire flesh\` (sample content instead of grey bars
   on wires that have none;
   \`/wire flesh --pack <id>\` and \`/wire flesh --bars\` pass through). Exact
@@ -58,6 +65,6 @@ that one undo takes it back.`,
 export const wireframeCore: CoreModule = {
   ...wireframeModule,
   marks: [{ ...KEEP_MARK, follow: followOnWeb }],
-  propertyKeys: [KEEP_PROP, "wireKeepBy", MAYBE_PROP, "wireLinks", "wireLink:*", "wirePrototype", "wirePrototypeAt"],
+  propertyKeys: [KEEP_PROP, "wireKeepBy", MAYBE_PROP, "wireLinks", "wireLink:*", "wirePrototype", "wirePrototypeAt", PRESET_PROP],
   commands: [WIRE_COMMAND],
 };

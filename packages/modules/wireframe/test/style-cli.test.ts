@@ -70,8 +70,12 @@ function harness() {
       const item = items.get(op.itemId)!;
       if (op.patch.title) item.title = op.patch.title;
       if (op.patch.properties) item.properties = { ...item.properties, ...op.patch.properties };
+      item.updatedAt = stamp();
     } else if (op.type === "item.resize") {
       Object.assign(items.get(op.itemId)!, { width: op.width, height: op.height });
+    } else if (op.type === "item.delete") {
+      // To the trash: off the canvas, as far as anything reading it can tell.
+      items.delete(op.itemId);
     } else throw new Error(`sent an op it should not: ${op.type}`);
   };
   const host = {
@@ -333,5 +337,129 @@ describe("isocan wire style", () => {
     expect(ops.some((o) => o.op.type === "item.addVersion" && o.op.itemId === proto.id)).toBe(true);
     expect(h.htmlOf(proto.id)).toContain("--w-primary:#d10a72");
     expect(printed).toContain(`prototype ${proto.id} — rebuilt as a new version`);
+  });
+});
+
+describe("isocan wire style --preset (the wire styles)", () => {
+  /** The wire-style DESIGN.md items on the canvas. */
+  const presets = (h: ReturnType<typeof harness>) => [...h.items.values()].filter((i) => i.properties.wirePreset !== undefined);
+
+  it("places the style's DESIGN.md beside the flow, makes it the canvas's system, and restyles — one group, nothing asked", async () => {
+    const h = harness();
+    const jev = fakeJev();
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    const wires = h.wires();
+    const before = h.sent.length;
+    const printed = await h.cli("wire", "style", "--preset", "material");
+    expect(h.errors).toEqual([]);
+    // Material names its tokens for the wire's roles: read, not asked.
+    expect(jev).toHaveLength(0);
+    const ops = h.sent.slice(before);
+    expect(new Set(ops.map((o) => o.group)).size).toBe(1);
+    const [file] = presets(h);
+    expect(file).toMatchObject({ title: "Material — DESIGN.md", properties: { wirePreset: "material", role: "design-system" } });
+    // Beside the flow: right of its rightmost screen, level with its top.
+    expect(file!.x).toBeGreaterThan(Math.max(...wires.map((w) => w.x + w.width)));
+    expect(file!.y).toBe(Math.min(...wires.map((w) => w.y)));
+    // The add, then design use's own op (`item.update` with the role), then a version per wire and the prototype's.
+    expect(ops[0]!.op).toMatchObject({ type: "item.add", title: "Material — DESIGN.md" });
+    expect(ops[1]!.op).toEqual({ type: "item.update", itemId: file!.id, patch: { properties: { role: "design-system" } } });
+    expect(ops.slice(2).every((o) => o.op.type === "item.addVersion")).toBe(true);
+    expect(ops.length).toBe(2 + wires.length + h.prototypes().length);
+    for (const w of wires) {
+      const style = h.specOf(w.id).style;
+      expect(style).toMatchObject({ source: "design-system", itemId: file!.id, name: "Material — a wire style", surface: "raised" });
+      if (style?.source !== "design-system") throw new Error("unreachable");
+      expect(style.roles.primary).toEqual({ token: "primary", value: "#6750a4", why: "named" });
+      expect(style.by).toBeUndefined();
+      expect(h.htmlOf(w.id)).toContain("--w-primary:#6750a4");
+      expect(h.htmlOf(w.id)).toMatch(/class="frame \w+ s-raised"/);
+    }
+    expect(printed).toMatch(/its tokens are named for the wire's roles — nothing asked/);
+    expect(printed).toMatch(/surface\s+raised/);
+    expect(printed).toContain(`Material: its DESIGN.md placed beside the flow · ${wires.length} of ${wires.length} wires restyled`);
+
+    // The same style again: nothing to write.
+    const quiet = h.sent.length;
+    expect(await h.cli("wire", "style", "--preset", "material")).toContain("nothing written");
+    expect(h.sent.length).toBe(quiet);
+  });
+
+  it("a second style re-versions the same DESIGN.md — no pile of files — and house lets it go", async () => {
+    const h = harness();
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    await h.cli("wire", "style", "--preset", "material");
+    const [file] = presets(h);
+    await h.cli("wire", "style", "--preset", "glass");
+    expect(h.errors).toEqual([]);
+    expect(presets(h)).toHaveLength(1);
+    expect(h.items.get(file!.id)).toMatchObject({ title: "Glass — DESIGN.md", properties: { wirePreset: "glass" } });
+    expect(h.items.get(file!.id)!.versions).toHaveLength(2);
+    for (const w of h.wires()) {
+      expect(h.specOf(w.id).style).toMatchObject({ itemId: file!.id, versionId: h.items.get(file!.id)!.currentVersionId, surface: "glass" });
+      expect(h.htmlOf(w.id)).toContain("backdrop-filter:blur(");
+    }
+
+    const before = h.sent.length;
+    const printed = await h.cli("wire", "style", "--preset", "house");
+    const ops = h.sent.slice(before);
+    expect(new Set(ops.map((o) => o.group)).size).toBe(1);
+    expect(ops[0]!.op).toEqual({ type: "item.delete", itemId: file!.id });
+    expect(presets(h)).toHaveLength(0);
+    for (const w of h.wires()) {
+      expect(h.specOf(w.id).style).toEqual({ source: "default" });
+      expect(h.htmlOf(w.id)).toContain("--w-primary:#222222");
+      expect(h.htmlOf(w.id)).not.toContain("s-glass");
+    }
+    expect(printed).toContain("house (the default greys): the wire-style DESIGN.md moved to the trash");
+  });
+
+  it("a flow in a group takes the style as the group's system; the canvas's flow is left alone", async () => {
+    const h = harness();
+    h.group("group-back-office");
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    const outside = h.wires().map((w) => w.id);
+    await h.cli("wire", "a stock screen for Acme's back office", "--answerer", "stub", "--seed", "3", "--in", "group-back-office");
+    const inside = h.wires().map((w) => w.id).filter((id) => !outside.includes(id));
+    await h.cli("wire", "style", "--preset", "carbon", inside[0]!);
+    expect(h.errors).toEqual([]);
+    const [file] = presets(h);
+    expect(file!.containerId).toBe("group-back-office");
+    for (const id of inside) expect(h.specOf(id).style).toMatchObject({ itemId: file!.id });
+    for (const id of outside) expect(h.specOf(id).style).toBeUndefined();
+  });
+
+  it("never writes over a DESIGN.md somebody wrote — it says how to stop that one governing", async () => {
+    const h = harness();
+    h.design("ds-warm", ACME_WARM);
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    const before = h.sent.length;
+    await h.cli("wire", "style", "--preset", "material");
+    expect(h.errors).toEqual([expect.stringContaining("“DESIGN.md” is the design system of this canvas")]);
+    expect(h.errors[0]).toContain("isocan design use ds-warm --off");
+    expect(h.sent.length).toBe(before);
+    expect(h.items.get("ds-warm")!.versions).toHaveLength(1);
+  });
+
+  it("a design-competition pack is mapped by the answerer, once, like any system", async () => {
+    const h = harness();
+    const jev = fakeJev();
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    await h.cli("wire", "style", "--preset", "rams", "--answerer", "jev");
+    expect(h.errors).toEqual([]);
+    expect(jev).toHaveLength(1);
+    const [file] = presets(h);
+    expect(file).toMatchObject({ title: "Rams — DESIGN.md", properties: { wirePreset: "rams" } });
+    for (const w of h.wires()) expect(h.specOf(w.id).style).toMatchObject({ itemId: file!.id, by: "jev-test" });
+  });
+
+  it("--list names every style; a name that is not one is refused with the list", async () => {
+    const h = harness();
+    const printed = await h.cli("wire", "style", "--list");
+    for (const name of ["house", "material", "shadcn", "glass", "ios", "fluent", "carbon", "brutalist", "rams", "linear"]) expect(printed).toMatch(new RegExp(`^${name}\\s`, "m"));
+    expect(printed).not.toContain("not readable");
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4");
+    await h.cli("wire", "style", "--preset", "neon");
+    expect(h.errors).toEqual([expect.stringContaining(`"neon" is not a wire style — house, material, shadcn`)]);
   });
 });

@@ -8,6 +8,8 @@ import { composeFlow, costLine, prototypeWords, screenTitles, wiresOn, type Flow
 import { keptFlowsOf, writePrototype, type KeptFlow } from "./kept-flows.ts";
 import { StyleResolver, restyle, restyleSummary } from "./restyle.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
+import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, currentPreset, flowScreens, presetById, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
+import { presetUrlText } from "./preset-urls.ts";
 import { webAnswerer, webPort } from "./web-port.ts";
 import type { PackChoice } from "./content/choose.ts";
 import { PACK_BY_ID } from "./content/packs.ts";
@@ -33,6 +35,9 @@ type Mode =
   | { kind: "compose"; request: string; basic?: true }
   | { kind: "prototype" }
   | { kind: "style"; toDefault: boolean }
+  // Wire styles (presets.ts): `/wire style <name>` chooses one; `/wire style` alone lists them to pick from.
+  | { kind: "preset"; name: string }
+  | { kind: "styles" }
   | { kind: "flesh"; pack?: string; bars: boolean }
   | { kind: "rerender" }
   | { kind: "prototypes" }
@@ -48,7 +53,12 @@ export function modeOf(args: string): Mode {
   if (first === "rerender" && rest.length === 0) return { kind: "rerender" };
   // ── phase 8, builder A: /wire links ──
   if (first === "links" && rest.length === 0) return { kind: "links" };
-  if (first === "style" && rest.every((w) => w === "--default" || w === "default")) return { kind: "style", toDefault: rest.length > 0 };
+  if (first === "style" && rest.length === 0) return { kind: "styles" };
+  if (first === "style" && rest.length === 1 && (rest[0] === "--default" || rest[0] === "default")) return { kind: "style", toDefault: true };
+  // `system`: every wire in the design system that governs it — what `/wire style` alone did before the wire styles.
+  if (first === "style" && rest.length === 1 && rest[0] === "system") return { kind: "style", toDefault: false };
+  // One more word is a style's name — a wrong one is refused with the list (`presetOrSay`), never composed as a request.
+  if (first === "style" && rest.length === 1) return { kind: "preset", name: rest[0]!.toLowerCase() };
   if (first === "flesh") {
     const bars = rest.length === 1 && (rest[0] === "--bars" || rest[0] === "bars");
     const pack = rest.length === 2 && rest[0] === "--pack" ? rest[1] : rest.length === 1 && !bars && !rest[0]!.startsWith("-") ? rest[0] : undefined;
@@ -131,6 +141,24 @@ export async function restyleOnWeb(canvasId: string, host: DialogHost, toDefault
   return restyle(port, canvas, all, all, resolver, { toDefault });
 }
 
+/**
+ * `/wire style <name>` and a wire's Style ▸ — the flows of the selected
+ * wires (every wire, when none is selected) in a named look, with the CLI's
+ * own `applyPreset`. `read` fetches the style's DESIGN.md; a test hands it
+ * the file the terminal reads, so the two surfaces are held to the same ops.
+ */
+export async function presetOnWeb(canvasId: string, host: DialogHost, name: string, selection: readonly string[], read: (preset: WirePreset) => Promise<string> = presetUrlText) {
+  const choice = presetOrSay(name);
+  const port = webPort(canvasId, host);
+  const canvas = await port.canvas();
+  const all = await wiresOn(port, canvas);
+  if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+  const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+  const text = choice === HOUSE ? null : await read(choice);
+  const resolver = new StyleResolver(port, webAnswerer(canvasId, host), async () => all.map((s) => s.spec));
+  return applyPreset(port, all, screens, choice, text, resolver);
+}
+
 /** `/wire flesh` — every wire on the canvas, with the home's judge choosing the pack. */
 export async function fleshOnWeb(canvasId: string, host: DialogHost, opts: { pack?: string; bars: boolean }) {
   const port = webPort(canvasId, host);
@@ -204,6 +232,14 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       if (r.changed.length) record(host, r.group, [`${m.toDefault ? "back to the default look" : "restyled in the design system that governs each wire"}: ${restyleSummary(r)}.`]);
       host.close();
       if (r.changed.length) host.reveal(r.changed.map((t) => t.item.id));
+    } else if (m.kind === "preset") {
+      setStatus(`Styling the wires ${m.name === HOUSE ? "back in the default greys" : `in ${presetById(m.name)?.name ?? m.name}`}…`);
+      const r = await presetOnWeb(canvasId, host, m.name, selection);
+      const said = presetSummary(r);
+      host.notice(said);
+      if (r.restyled.changed.length || r.placed.some((p) => p.what !== "unchanged")) record(host, r.group, [`wire style — ${said}.`], r.placed.filter((p) => p.what !== "removed").map((p) => p.itemId));
+      // No reveal: a style is chosen while looking at the wires, and they change where they are.
+      host.close();
     } else if (m.kind === "flesh") {
       setStatus(m.bars ? "Back to bars…" : "Choosing sample content…");
       const r = await fleshOnWeb(canvasId, host, m);
@@ -222,7 +258,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
 
   useEffect(() => {
     // ── phase 8, builder A: /wire links is a panel, not a run ──
-    if (started.current || !canEdit || mode.kind === "form" || mode.kind === "prototypes" || mode.kind === "links") return;
+    if (started.current || !canEdit || mode.kind === "form" || mode.kind === "prototypes" || mode.kind === "links" || mode.kind === "styles") return;
     started.current = true;
     run(mode).catch(fail);
     // One run per opening: the mode is fixed once it starts.
@@ -262,8 +298,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
           <div className="wire-actions">
             <button className="btn primary" type="submit" disabled={!draft.trim()}>Compose</button>
             <button className="btn" type="button" onClick={() => go({ kind: "prototype" })}>Make prototype</button>
-            <button className="btn" type="button" onClick={() => go({ kind: "style", toDefault: false })}>Restyle wires</button>
-            <button className="btn" type="button" onClick={() => go({ kind: "style", toDefault: true })}>Default look</button>
+            <button className="btn" type="button" onClick={() => setMode({ kind: "styles" })}>Style…</button>
             <button className="btn" type="button" onClick={() => go({ kind: "flesh", bars: false })}>Flesh out</button>
             <button className="btn" type="button" onClick={() => go({ kind: "rerender" })}>Re-render</button>
             {/* ── phase 8, builder A: /wire links ── */}
@@ -272,6 +307,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
           <p className="wire-note">Blueprints land at once and fill in place; one undo takes a flow back. Also from a terminal: <code>isocan wire</code>.</p>
         </form>
       )}
+      {mode.kind === "styles" && !status && <StylePicker canvas={host.getCanvas()} selection={selection} onPick={go} />}
       {choices && (
         <div className="wire-actions" role="group" aria-label="Which flow">
           <p className="wire-note">Screens in a prototype come from {choices.length} flows — which one should it play?</p>
@@ -319,6 +355,37 @@ function PrototypeFinder({ host }: { host: DialogHost }) {
           <button className="btn primary" type="button" onClick={() => show(found.map((p) => p.id))}>Select all {found.length}</button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * **`/wire style` alone: the wire styles, to pick from** — what `isocan wire
+ * style --list` prints, with the one that governs the selected wires (or
+ * every wire) marked current, and the design system that governs each wire
+ * as the last choice: what `/wire style` did before there were styles.
+ */
+function StylePicker({ canvas, selection, onPick }: { canvas: CanvasContents; selection: readonly string[]; onPick: (m: Mode) => void }) {
+  const wires = Object.values(canvas.items ?? {}).filter((i) => i.properties?.fidelity === "wireframe" && i.properties?.[PROTOTYPE_PROP] === undefined);
+  const chosen = wires.filter((i) => selection.includes(i.id));
+  const now = wires.length ? currentPreset(canvas, chosen.length ? chosen : wires) : undefined;
+  const row = (id: string, name: string, about: string) => (
+    <li key={id}>
+      <span title={about}><b>{name}</b> — {about}</span>
+      <button className="btn" type="button" aria-pressed={id === now} onClick={() => onPick({ kind: "preset", name: id })}>{id === now ? "✓ Current" : "Use"}</button>
+    </li>
+  );
+  return (
+    <div className="wire-dialog">
+      <p className="wire-note">A look for {chosen.length ? "the selected wires' flows" : "every wire here"}: its DESIGN.md lands beside the flow as the group&rsquo;s design system, and one undo takes it back.</p>
+      <ul className="wire-list" aria-label="Wire styles">
+        {row(HOUSE, "House", "the default greys")}
+        {OWN_PRESETS.map((p) => row(p.id, p.name, p.about))}
+        {PACK_PRESETS.map((p) => row(p.id, p.name, "a design-competition pack"))}
+      </ul>
+      <div className="wire-actions">
+        <button className="btn" type="button" onClick={() => onPick({ kind: "style", toDefault: false })}>Each wire in the design system that governs it</button>
+      </div>
     </div>
   );
 }
