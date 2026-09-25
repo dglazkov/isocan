@@ -112,8 +112,10 @@ describe("every shared fact is an operation either surface can send", () => {
 
   it("does not mistake writing ABOUT an operation for sending it", () => {
     /* `OnIt.tsx` explains that retracting a request "is `comment.remove`" and
-       never sends it — it is internal, reached only as undo's inverse. A
-       reading that counted prose would report the web as able to send it.
+       never spells the op to send it. Since 24 Sep 2026 both surfaces DO send
+       it — the Chat's clean-up — but through core's `cleanupOps`
+       (`@isocan/core/chatclean`), so the web's own source still only writes
+       about it. A reading that counted prose would credit OnIt with a send.
 
        This guard read `agent.enroll` until 11 Sep 2026, when the web began
        sending it for real: the owner's "Let anyone ask" on their own agent's

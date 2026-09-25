@@ -98,6 +98,11 @@ export const HIDDEN_WRITES: readonly { what: string; file: string; gate: string 
     gate: "{canEdit && <form",
   },
   {
+    what: "cleaning up the Chat — a message's ✕ and the owner's Clean up menu",
+    file: "components/MainThreadPanel.tsx",
+    gate: "{canEdit && <Suspense fallback={null}><ChatTidy",
+  },
+  {
     what: "reactions — adding one, and toggling one already worn",
     file: "components/Reactions.tsx",
     gate: "if (!canEdit) return; // a mark is an op, and the daemon would refuse it",

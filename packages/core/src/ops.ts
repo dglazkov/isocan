@@ -425,7 +425,15 @@ export type Operation =
       context?: import("./canvas-group-context.ts").ContextManifest | null;
     }
   | {
-      // internal: inverse of thread.reply
+      /**
+       * Take one message out of a thread. The inverse of `thread.reply`, and
+       * since 24 Sep 2026 also a public op: the Chat's clean-up and
+       * `isocan comment rm <thread> <comment>` send it. Its author may remove
+       * their own message; the canvas's owner may remove anybody's — the home
+       * checks that at `/api/ops` (`mayRemoveComment` in `chatclean.ts`),
+       * since only the home knows who owns. The words stay in the log: this
+       * hides, and its inverse carries the whole comment back.
+       */
       type: "comment.remove";
       threadId: string;
       commentId: string;
@@ -436,6 +444,13 @@ export type Operation =
       type: "comment.restore";
       threadId: string;
       comment: Comment;
+      /**
+       * Where it stood in the thread when it was removed. A removal from the
+       * MIDDLE of a thread (a clean-up) must come back in place, not at the
+       * end; absent on inverses written before this existed, which append as
+       * they always did. Clamped to the thread's length.
+       */
+      index?: number;
     }
   | {
       // internal: inverse of thread.delete
@@ -521,7 +536,6 @@ export const INTERNAL_OP_TYPES: ReadonlySet<OperationType> = new Set([
   "design.restore",
   "item.removeVersion",
   "item.restoreVersion",
-  "comment.remove",
   "comment.restore",
   "thread.restore",
 ]);

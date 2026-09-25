@@ -10,6 +10,7 @@ import { registerQuestionnaires } from "./questionnaire.ts";
 import { registerDesignSystems } from "./design-system.ts";
 import { designGovernsNotes, designReleasedNotes } from "./design-scope-notes.ts";
 import { designUnuse, designUse, ownDesignSystemAt } from "@isocan/core/design-use";
+import { cleanupNoun, cleanupOps, cleanupSelection, parseBefore, type CommentFilter } from "@isocan/core/chatclean";
 import { registerDesignRequests } from "./design-request.ts";
 import { registerDesignDecisions } from "./design-decision.ts";
 import { registerDesignReviews, runDesignRepair } from "./design-review.ts";
@@ -230,6 +231,7 @@ import {
   copyProperties,
   duplicatePlacements,
   newGroupId,
+  ownsCanvas,
   TEXT_FACES,
   TEXT_FACE_PROP,
   TEXT_FILENAME,
@@ -11198,7 +11200,7 @@ comment
             : `at ${t.x},${t.y}`;
         console.log(`${t.id} (${anchor})`);
         for (const c of t.comments) {
-          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt}`);
+          console.log(`  ${actorNameIn(snapshot.names, c.author)} · ${c.createdAt} · ${c.id}`);
           console.log(`    ${c.body}`);
         }
       }
@@ -11268,15 +11270,117 @@ comment
   );
 
 comment
-  .command("rm <thread>")
-  .description("Delete a thread")
+  .command("rm <thread> [comment]")
+  .description("Delete a thread, or remove one message from it (yours; anybody's if you own the canvas)")
+  .addHelpText(
+    "after",
+    `
+With a comment id (\`comment ls --json\` has them), removes that one message
+and leaves the thread. You may remove your own; the canvas's owner may remove
+anybody's, the ⚙ isocan notices included. Removed from the thread, not from
+history: \`isocan undo\` brings it back, and the log keeps its words.`,
+  )
   .action(
-    run(async (threadRef: string, _opts: unknown, cmd: Command) => {
+    run(async (threadRef: string, commentId: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const thread = resolveThread(snapshot, threadRef);
-      await sendOp(ctx, p.id, { type: "thread.delete", threadId: thread.id });
-      console.log(`deleted thread ${thread.id}`);
+      if (commentId === undefined) {
+        await sendOp(ctx, p.id, { type: "thread.delete", threadId: thread.id });
+        console.log(`deleted thread ${thread.id}`);
+        return;
+      }
+      if (!thread.comments.some((c) => c.id === commentId)) throw new Error(`no comment ${commentId} on ${thread.id}`);
+      // The same planner the clean-up uses: the last message out is the
+      // thread going, because a thread is never empty.
+      const ops = cleanupOps(thread, [commentId]);
+      const group = newGroupId();
+      for (const op of ops) await sendOp(ctx, p.id, op, group);
+      if (ctx.json) return printJson({ threadId: thread.id, removed: [commentId], threadDeleted: ops[0]?.type === "thread.delete" });
+      console.log(ops[0]?.type === "thread.delete"
+        ? `removed ${commentId} — it was the last message, so thread ${thread.id} went with it (isocan undo brings both back)`
+        : `removed ${commentId} from ${thread.id} (isocan undo brings it back)`);
+    }),
+  );
+
+/**
+ * **Who `--from` names**: an actor id, or a name somebody in the thread goes
+ * by now or went by when they wrote — the words a person reading the Chat
+ * would use. Ambiguous names are refused with the ids to pick from.
+ */
+function resolveAuthor(snapshot: CanvasSnapshotResponse, thread: CommentThread, ref: string): { id: string; name: string } {
+  const authors = new Map<string, { id: string; name: string }>();
+  for (const c of thread.comments) authors.set(c.author.id, { id: c.author.id, name: actorNameIn(snapshot.names, c.author) });
+  const exact = authors.get(ref);
+  if (exact) return exact;
+  const want = ref.trim().toLowerCase();
+  const named = [...authors.values()].filter((a) => a.name.toLowerCase() === want || thread.comments.some((c) => c.author.id === a.id && c.author.name.toLowerCase() === want));
+  if (named.length === 1) return named[0]!;
+  if (named.length > 1) throw new Error(`"${ref}" names ${named.length} authors here — pass an id: ${named.map((a) => `${a.id} (${a.name})`).join(", ")}`);
+  return { id: ref, name: ref };
+}
+
+comment
+  .command("clean [thread]")
+  .description("Remove many messages at once from the Chat (or a thread) — one act, one undo")
+  .option("--system", "every ⚙ isocan notice")
+  .option("--from <actor>", "everything one person or agent said (a name or an actor id)")
+  .option("--before <date>", "everything posted before this date (2026-09-16 is that day's local midnight) or ISO time")
+  .option("--all", "every message — the thread itself goes, and the next message starts a fresh one")
+  .option("--dry-run", "say what would be removed, and remove nothing")
+  .addHelpText(
+    "after",
+    `
+Pick exactly one of --system, --from, --before, --all. Without a thread it
+cleans the Chat. It prints how many messages it takes and sends them as ONE
+group, so one \`isocan undo\` puts every one back where it stood.
+
+Only the canvas's owner may remove other people's messages (the home refuses
+anyone else); run by somebody else, it takes only their own. Design records
+stay. Removed from the thread, not from history: the log keeps the words, so
+\`history\`, \`at\` and \`export\` still show them.`,
+  )
+  .action(
+    run(async (threadRef: string | undefined, opts: { system?: boolean; from?: string; before?: string; all?: boolean; dryRun?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const picked = [opts.system, opts.from !== undefined, opts.before !== undefined, opts.all].filter(Boolean).length;
+      if (picked !== 1) throw new Error("say what to clean: exactly one of --system, --from <actor>, --before <date>, --all");
+      const thread = threadRef ? resolveThread(snapshot, threadRef) : mainThread(snapshot.canvas);
+      if (!thread) throw new Error("this canvas has no Chat yet — nothing to clean");
+      let filter: CommentFilter;
+      let label: string | undefined;
+      if (opts.system) filter = { kind: "system" };
+      else if (opts.all) filter = { kind: "all" };
+      else if (opts.from !== undefined) {
+        const who = resolveAuthor(snapshot, thread, opts.from);
+        filter = { kind: "from", actorId: who.id };
+        label = who.name;
+      } else {
+        const before = parseBefore(opts.before!);
+        if (!before) throw new Error(`not a date: "${opts.before}" — try 2026-09-16, or an ISO time`);
+        filter = { kind: "before", before };
+        label = opts.before;
+      }
+      const owner = ownsCanvas(snapshot.project, ctx.actor.id, snapshot.joined) || atLeast(snapshot.capability ?? "edit", "own");
+      const taking = cleanupSelection(thread, filter, ctx.actor.id, owner, snapshot.joined);
+      const ops = cleanupOps(thread, taking.map((c) => c.id));
+      // What an owner's clean-up would have taken that yours cannot — said,
+      // rather than left to look like a filter that missed.
+      const beyond = owner ? 0 : cleanupSelection(thread, filter, ctx.actor.id, true, snapshot.joined).length - taking.length;
+      const where = thread.main ? "the Chat" : `thread ${thread.id}`;
+      const noun = cleanupNoun(filter, taking.length, label);
+      if (!opts.dryRun && ops.length > 0) {
+        const group = newGroupId();
+        for (const op of ops) await sendOp(ctx, p.id, op, group);
+      }
+      if (ctx.json) {
+        return printJson({ threadId: thread.id, dryRun: !!opts.dryRun, removed: taking.map((c) => c.id), threadDeleted: ops[0]?.type === "thread.delete", notYours: beyond });
+      }
+      if (taking.length === 0) console.log(`nothing to remove — no ${cleanupNoun(filter, 0, label).replace(/^0 /, "")} in ${where}`);
+      else if (opts.dryRun) console.log(`would remove ${noun} from ${where} — nothing removed; run it again without --dry-run`);
+      else console.log(`removed ${noun} from ${where} — isocan undo brings ${taking.length === 1 ? "it" : "them all"} back`);
+      if (beyond > 0) console.log(`  ${beyond} more ${beyond === 1 ? "is" : "are"} somebody else's — only the canvas's owner can remove those`);
     }),
   );
 

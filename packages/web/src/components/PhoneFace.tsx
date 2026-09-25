@@ -9,6 +9,7 @@ import { useTouchNavigation } from "../lib/touchnavigation.ts";
 import { useAnswerable } from "../lib/answerable.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { MainThreadBody } from "./MainThreadPanel.tsx";
+import { MessageReferenceCards } from "./MessageReferenceCards.tsx";
 import { AgentRowView } from "./AgentRow.tsx";
 import { ContextPanel } from "./LazyContextPanel.tsx";
 import { VersionContent } from "./ItemView.tsx";
@@ -81,7 +82,7 @@ export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit
     <div className="phone-body">
       {state.tab === "Chat" && <div className="phone-chat">
         <VisitDigest prior={prior} onItem={open} onThread={openThread} />
-        <MainThreadBody canvasId={canvasId} actor={actor} docked={false} onOpenItem={open} />
+        <MainThreadBody canvasId={canvasId} actor={actor} docked={false} onOpenItem={open} refCards={(comment) => <MessageReferenceCards canvasId={canvasId} comment={comment} onOpenItem={open} />} />
       </div>}
       {state.tab === "Agents" && <div className="phone-agents" aria-label="Agents on this canvas">
         {rows.length ? rows.map((row) => <AgentRowView key={row.actorId} canvasId={canvasId} row={row} open={openAgent === row.actorId} focused={null} onToggle={() => setOpenAgent(openAgent === row.actorId ? null : row.actorId)} onOpenItem={open} viewer={actor.id} />) : <p>Nobody is parked here right now. Messages in Chat reach whoever parks next.</p>}

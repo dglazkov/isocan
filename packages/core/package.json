@@ -20,7 +20,8 @@
     "./design-repair": "./src/design-repair.ts",
     "./design-use": "./src/design-use.ts",
     "./colour": "./src/colour.ts",
-    "./jev": "./src/jev.ts"
+    "./jev": "./src/jev.ts",
+    "./chatclean": "./src/chatclean.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

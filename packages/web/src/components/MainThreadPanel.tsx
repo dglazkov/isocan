@@ -1,7 +1,7 @@
 import { useChatDraft } from "../lib/chatdraft.ts";
 import "./command-chip.css";
 import { modules } from "../modules.ts";
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 /**
  * **Loaded only when a module actually offers a control** (proposed:
@@ -14,10 +14,14 @@ const ModuleComposerControls = lazy(() =>
   import("./ModuleComposer.tsx").then((module) => ({ default: module.ModuleComposerControls })),
 );
 
+/** The Chat's clean-up — the remove control on a message and the owner's
+ *  "Clean up…" menu — loaded only for somebody who can write here. */
+const ChatTidy = lazy(() => import("./ChatTidy.tsx"));
+
 const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
 const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
-import { benchJoinAsk, commentReferencedItemIds, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor, shortcut } from "@isocan/core";
+import { benchJoinAsk, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor, shortcut } from "@isocan/core";
 import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -371,25 +375,37 @@ export function MainThreadBody({
   actor,
   docked = true,
   onOpenItem,
+  refCards,
 }: {
   canvasId: string;
   actor: Actor;
   docked?: boolean;
   onOpenItem?: ((id: string) => void) | undefined;
+  refCards?: RefCards | undefined;
 }) {
-  return <Panel key={canvasId} canvasId={canvasId} actor={actor} docked={docked} onOpenItem={onOpenItem} />;
+  return <Panel key={canvasId} canvasId={canvasId} actor={actor} docked={docked} onOpenItem={onOpenItem} refCards={refCards} />;
 }
+
+/**
+ * **What a message links, drawn by the frame that wants it drawn so.** The
+ * phone passes its reference cards (`MessageReferenceCards.tsx`) in; the
+ * docked Chat never drew them, so the cards and the core reader under them
+ * sit in the phone's chunk rather than on every first visit.
+ */
+type RefCards = (comment: Comment) => ReactNode;
 
 function Panel({
   canvasId,
   actor,
   docked = true,
   onOpenItem,
+  refCards,
 }: {
   canvasId: string;
   actor: Actor;
   docked?: boolean;
   onOpenItem?: ((id: string) => void) | undefined;
+  refCards?: RefCards | undefined;
 }) {
   // A subscription, not a read: the chips have to appear and vanish as the
   // selection changes under the pointer.
@@ -590,6 +606,7 @@ function Panel({
         closeLabel="Collapse the Chat"
         onClose={() => openMainPanel(canvasId, false)}
       />}
+      {canEdit && <Suspense fallback={null}><ChatTidy canvasId={canvasId} actor={actor} /></Suspense>}
       <div
         className="main-scroll"
         ref={scrollRef}
@@ -650,7 +667,7 @@ function Panel({
                 </div>
                 {!onOpenItem && canvas && thread && <LaneChips canvas={canvas} thread={thread} comment={comment} />}
                 {comment.context && <ContextManifestView manifest={comment.context} comment={{ threadId: thread.id, commentId: comment.id }} />}
-                {onOpenItem && canvas ? <MessageReferenceCards canvas={canvas} canvasId={canvasId} comment={comment} onOpenItem={onOpenItem} /> : !comment.context && (comment.items ?? [])
+                {refCards ? refCards(comment) : !comment.context && (comment.items ?? [])
                   .filter((id, i, all) => all.indexOf(id) === i)
                   .map((itemId) => (
                     <ItemCard key={itemId} canvasId={canvasId} itemId={itemId} onOpenItem={onOpenItem} />
@@ -783,26 +800,13 @@ function Panel({
   );
 }
 
-/** The phone can enter only recorded references; the frozen disclosure stays separate. */
-function MessageReferenceCards({ canvas, canvasId, comment, onOpenItem }: {
-  canvas: CanvasContents; canvasId: string; comment: Comment; onOpenItem: (id: string) => void;
-}) {
-  const ids = commentReferencedItemIds(canvas, comment);
-  if (!ids.length) return null;
-  const label = comment.context ? "Request context" : "Linked in this message";
-  return <section className="message-reference-cards" aria-label={label}>
-    <small>{label} · current preview</small>
-    {ids.map((id) => <ItemCard key={id} canvasId={canvasId} itemId={id} onOpenItem={onOpenItem} />)}
-  </section>;
-}
-
 /**
  * A #-referenced item rendered as a card (the Claude-Artifact idiom the issue
  * asks for): what it looks like, its name, what it is — clicking flies you to
  * it, and pointing at it opens the same peek the panel and the rim open,
  * beside the panel, while the item itself lights up on the canvas.
  */
-function ItemCard({ canvasId, itemId, onOpenItem }: { canvasId: string; itemId: string; onOpenItem?: ((id: string) => void) | undefined }) {
+export function ItemCard({ canvasId, itemId, onOpenItem }: { canvasId: string; itemId: string; onOpenItem?: ((id: string) => void) | undefined }) {
   const item = useCanvasStore((s) => s.canvas?.items[itemId]);
   const panelWidth = useUiStore((s) => s.panelWidth);
   const [peekTop, setPeekTop] = useState<number | null>(null);

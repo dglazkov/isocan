@@ -231,11 +231,13 @@ export function invertOperation(
     case "comment.remove": {
       const thread = canvas.threads[op.threadId];
       if (!thread) throw new OpValidationError("unknown-thread", `unknown thread: ${op.threadId}`);
-      const comment = thread.comments.find((c) => c.id === op.commentId);
-      if (!comment) {
+      const index = thread.comments.findIndex((c) => c.id === op.commentId);
+      if (index < 0) {
         throw new OpValidationError("unknown-comment", `unknown comment: ${op.commentId}`);
       }
-      return { type: "comment.restore", threadId: op.threadId, comment };
+      // Where it stood: a clean-up takes messages from the middle, and undo
+      // puts each back in its place rather than at the end.
+      return { type: "comment.restore", threadId: op.threadId, comment: thread.comments[index]!, index };
     }
 
     case "comment.restore":

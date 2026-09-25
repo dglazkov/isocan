@@ -126,10 +126,13 @@ describe("daemon HTTP", () => {
     expect(bad.status).toBe(400);
     expect(bad.json.code).toBe("unknown-item");
 
+    // `comment.restore`, not `comment.remove`: removing a message became a
+    // public op on 24 Sep 2026 (the Chat's clean-up); restoring one is still
+    // only ever undo's inverse.
     const internal = await op({
-      type: "comment.remove",
+      type: "comment.restore",
       threadId: "thr_x",
-      commentId: "cmt_x",
+      comment: { id: "cmt_x", author: { id: "usr_acme", name: "Acme" }, body: "x", createdAt: "2026-01-01T00:00:00.000Z" },
     } as Operation);
     expect(internal.status).toBe(400);
     expect(internal.json.code).toBe("internal-op");

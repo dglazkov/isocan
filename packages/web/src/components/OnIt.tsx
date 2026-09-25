@@ -195,9 +195,11 @@ export function OnIt({
  * Take the request back. Before anybody has picked it up, cancelling is not a
  * message to anyone — it is undoing what you just did.
  *
- * And undo is literally how: `comment.remove` is an INTERNAL op, reachable
- * only as the inverse of posting, because this vocabulary deliberately has no
- * "delete a comment" anybody can issue. So a thread that is only this request
+ * And undo is literally how. This was written when `comment.remove` was
+ * reachable only as the inverse of posting; since 24 Sep 2026 an author (and
+ * the canvas's owner) may send it directly — the Chat's clean-up does — but
+ * Cancel still means "take back what I just did", which is undo's sentence,
+ * not a removal's. So a thread that is only this request
  * is deleted outright — a public op, and exact — and anything with history
  * behind it goes through the actor's own undo, which is the same act as ⌘Z.
  *

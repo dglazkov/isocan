@@ -3,6 +3,7 @@ import { supportsDesignRepairs } from "@isocan/core";
 import { DesignDecisionClientError, designDecisionOperation } from "./design-decision-capability.ts";
 import { supportsDesignDecisions } from "@isocan/core";
 import { Readable } from "node:stream";
+import { mayRemoveComment, removableComment } from "@isocan/core/chatclean";
 import { PersonalService, PersonalError } from "./personal.ts";
 import { SOURCE_POLICY_HEADER, parseSourcePolicyHeader, SOURCE_ACCESS_ROUTE, personalRoute, type SourceRequestContext, type SourceAccessRequest, type PersonalLinkRequest, type PersonalUnlinkRequest, type PersonalReadRequest } from "@isocan/core";
 import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type SetPublicListingRequest } from "@isocan/core";
@@ -1914,6 +1915,32 @@ export function registerRoutes(
      * (`forwardSubmit`) and that home decides, because the space is its desk
      * state and this one holds no row to check.
      */
+    /**
+     * **Whose message may leave a thread** (24 Sep 2026): its author's, and
+     * anybody's for the canvas's owner — the Chat's clean-up. Asked here, the
+     * door every op passes, because the reducer cannot know who owns: that is
+     * the badge's claims and the admission's rung, which only this home holds.
+     * A canvas homed elsewhere is asked at its home, where the forward lands
+     * on this same line.
+     */
+    if (body.canvasId && body.op?.type === "comment.remove" && !options.homes?.for(body.canvasId)) {
+      const snapshot = await engine.getSnapshot(body.canvasId);
+      const comment = snapshot.canvas.threads[body.op.threadId]?.comments.find((c) => c.id === (body.op as { commentId: string }).commentId);
+      // A missing thread or comment is the reducer's refusal, with its code.
+      if (comment) {
+        if (!removableComment(comment)) {
+          return reply.status(400).send({ error: "a design record stays in its thread — the design flow that wrote it is what retires it", code: "design-record" });
+        }
+        const joins = await engine.actorJoins();
+        if (!mayRemoveComment(comment, body.actor.id, false, joins) &&
+            !atLeast(await heldRung(desk, snapshot.project, req.badge!, body.actor.id, joins), "own")) {
+          return reply.status(403).send({
+            error: `ask ${await ownerName(snapshot.project)}, who owns this canvas — only an owner can remove a message somebody else wrote`,
+            code: NOT_OWNER,
+          });
+        }
+      }
+    }
     let bornInto: Space | null = null;
     if (body.spaceId !== undefined && body.op?.type === "project.create") {
       const bornAway = options.homes ? body.home !== undefined || options.homes.birth() !== null : false;

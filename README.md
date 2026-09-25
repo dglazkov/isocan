@@ -738,6 +738,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   never a different answer for a name that happens to exist on somebody
   else's bench, because a bench is a private canvas and a refusal that varied
   would be a way to read it one name at a time.
+- **Cleaning up the Chat**: the canvas's owner can take any message out of
+  it — a ✕ on the message — or many at once from the ⋯ in the Chat's header:
+  every ⚙ isocan notice, everything one person or agent said, everything
+  before a day, or the lot. Each asks with the count first, is one act, and
+  offers Undo, which puts every message back where it stood.
+  `isocan comment clean --system | --from <actor> | --before <date> | --all
+  [--dry-run]` is the same act from a terminal, and `isocan comment rm
+  <thread> <comment>` removes one. Anybody may remove their own messages;
+  only the owner may remove somebody else's, and the home refuses the rest.
+  Removed means out of the Chat, not out of history: the log keeps the words,
+  and `history`, `at` and `export` still show them.
 - **Watching one thing**: `isocan wait` is the agent's feedback loop, and it
   can be told what to care about — `--item <ref>` and `--op item.addVersion`
   (or a family, `item.*`) narrow which changes wake it, so a watcher does not

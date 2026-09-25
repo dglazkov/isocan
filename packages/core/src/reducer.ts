@@ -601,7 +601,9 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       if (thread.comments.some((c) => c.id === op.comment.id)) {
         throw new OpValidationError("duplicate-id", `comment id already exists: ${op.comment.id}`);
       }
-      const next = { ...thread, comments: [...thread.comments, op.comment] };
+      const comments = [...thread.comments];
+      comments.splice(op.index === undefined ? comments.length : Math.max(0, Math.min(op.index, comments.length)), 0, op.comment);
+      const next = { ...thread, comments };
       return withCanvas({ ...canvas, threads: { ...canvas.threads, [next.id]: next } });
     }
 

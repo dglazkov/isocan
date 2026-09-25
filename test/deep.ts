@@ -124,6 +124,7 @@ export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/desk.test.ts", secs: 11 },
   { file: "packages/cli/test/documents.test.ts", secs: 11 },
   { file: "packages/cli/test/sprint.test.ts", secs: 10 },
+  { file: "packages/cli/test/chat-clean.test.ts", secs: 13.5 },
   // 15 Sep: it was 7.5s and in the fast lane while the phase 0 proof was the
   // whole file. Phase 1's `bench join` case added 4.2s of its own — three
   // canvases, an enrolment and two joins against the real binary — and 12.9s
