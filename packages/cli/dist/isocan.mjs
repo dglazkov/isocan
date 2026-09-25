@@ -16641,9 +16641,9 @@ function countsOf(pairs) {
   };
 }
 function shapeOf(pairs) {
-  const rows2 = pairs.map(({ p, verdict, band, split, answerer, engaged }) => ({ p, verdict, band, split, answerer, engaged }));
-  rows2.sort((a, b) => a.p - b.p || a.verdict.localeCompare(b.verdict) || a.band.localeCompare(b.band) || a.split.localeCompare(b.split) || a.answerer.localeCompare(b.answerer) || Number(a.engaged) - Number(b.engaged));
-  return { v: 1, pairs: rows2 };
+  const rows2 = pairs.map(({ p, verdict, band, split, answerer, engaged, flowPut }) => ({ p, verdict, band, split, answerer, engaged, flowPut }));
+  rows2.sort((a, b) => a.p - b.p || a.verdict.localeCompare(b.verdict) || a.band.localeCompare(b.band) || a.split.localeCompare(b.split) || a.answerer.localeCompare(b.answerer) || Number(a.engaged) - Number(b.engaged) || Number(a.flowPut) - Number(b.flowPut));
+  return { v: 2, pairs: rows2 };
 }
 var SHAPE_WORDS = /* @__PURE__ */ new Set([...VERDICTS, ...BANDS, ...SPLITS, ...PAIR_ANSWERERS]);
 
