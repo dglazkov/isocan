@@ -41,6 +41,11 @@ second week.
   (⇧K, as before): swap a variation in, then `/wire prototype` rebuilds it. One
   undo takes the whole flow back, prototype included; `/wire basic` picks
   nothing.
+- **Clean up the Chat.** A canvas's owner can remove any message, or many at
+  once from the ⋯ in the Chat's header: every ⚙ isocan notice, one person's
+  messages, everything before a day, or the lot. The count comes first and one
+  Undo after; `isocan comment clean` does it from a terminal. Anybody can
+  remove their own. Removed from the Chat, not from the canvas's history.
 - **Wires in a named look.** Right-click a wire → *Style* ▸ Material, shadcn,
   Glass, iOS, Fluent, Carbon or Brutalist (or one of the design packs), or type
   `/wire style material`. The look's DESIGN.md lands beside the flow as its
