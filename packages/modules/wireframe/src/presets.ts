@@ -58,7 +58,7 @@ export interface WirePreset {
 /** The module's own wire styles — original token sets, inspired by each system, system fonts only. */
 export const OWN_PRESETS: readonly WirePreset[] = [
   { id: "material", name: "Material", about: "Material 3's ideas — tonal violet, 12px corners, elevation", from: "own" },
-  { id: "shadcn", name: "Shadcn", about: "shadcn/ui's look — zinc neutrals, hairline borders, small corners", from: "own" },
+  { id: "shadcn", name: "shadcn", about: "shadcn/ui's look — zinc neutrals, hairline borders, small corners", from: "own" },
   { id: "glass", name: "Glass", about: "glassmorphism — frosted translucent panes over a soft gradient", from: "own" },
   { id: "ios", name: "iOS", about: "Apple's HIG — system face, grouped greys, 10px corners, tint blue", from: "own" },
   { id: "fluent", name: "Fluent", about: "Fluent 2's ideas — neutral greys, communication blue, 4px corners, light shadows", from: "own" },

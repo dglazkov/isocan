@@ -1,6 +1,6 @@
 ---
 version: alpha
-name: Shadcn — a wire style
+name: shadcn — a wire style
 description: Crisp and neutral, after the look of shadcn/ui — white ground, zinc greys, hairline borders, small corners and a near-black primary. An original token set for isocan's wireframes, inspired by shadcn/ui; not its theme, and not affiliated with or endorsed by its authors.
 surface: flat
 colors:

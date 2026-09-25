@@ -41,6 +41,12 @@ second week.
   (⇧K, as before): swap a variation in, then `/wire prototype` rebuilds it. One
   undo takes the whole flow back, prototype included; `/wire basic` picks
   nothing.
+- **Wires in a named look.** Right-click a wire → *Style* ▸ Material, shadcn,
+  Glass, iOS, Fluent, Carbon or Brutalist (or one of the design packs), or type
+  `/wire style material`. The look's DESIGN.md lands beside the flow as its
+  design system, so you can tweak it; one undo takes it back, and *House*
+  returns the greys. Glass and Material draw real depth: frosted panes and
+  lifted cards.
 - **Prototypes keep up.** Use a screen in a prototype or take one out (⇧K, the
   menu, `isocan wire use`) and the prototype updates itself; one undo takes
   back both.
