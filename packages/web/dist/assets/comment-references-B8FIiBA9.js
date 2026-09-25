@@ -1,0 +1,1 @@
+function c(i,r){const n=r.context,o=new Map(n?.entries.map(t=>[t.itemId,t]));return[...new Set(n?n.rootIds:r.items??[])].filter(t=>{if(n){const e=o.get(t);if(!e||e.excluded||e.unavailable||!e.version)return!1}const s=i.items[t];return!!s?.versions.some(e=>e.id===s.currentVersionId)})}export{c};

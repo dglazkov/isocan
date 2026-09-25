@@ -129,7 +129,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `wait` — park; `ask` — ask a person and stop; `notify` (or `say`) — a line in the Chat
 
 **Comments** (`protocol`, `practices`)
-- `comment ls|add|reply|edit|anchor|main|rm` — threads; `main` is the Chat
+- `comment ls|add|reply|edit|anchor|main|rm|clean` — threads; `main` is the Chat, `clean` clears it out (owner)
 - `command ls|show|add|rm` — slash commands a message can ask for
 
 **Items** (`items`)
@@ -811,6 +811,16 @@ isocan fit <items...>                  # grow items to the size their content wa
   `--prop parent=<source item id>`. It costs one property and it is what makes
   the canvas a tree instead of a pile: `/tidy` hangs children under their
   parent, and anyone can see where a screen came from.
+- **Cleaning up the Chat is the owner's call.** `isocan comment clean
+  --system | --from <actor> | --before <date> | --all [--dry-run] [thread]`
+  removes many messages at once — the Chat unless a thread is named — as ONE
+  group, so one `isocan undo` puts them all back in place. `isocan comment rm
+  <thread> <comment>` removes one (ids are in `comment ls`). You may remove
+  your own messages; only the canvas's owner may remove anybody else's,
+  ⚙ isocan notices included, and the home refuses the rest with `not-owner`.
+  Do not clean a Chat unasked — a person reads it, and "tidy" means items.
+  Removed means out of the thread, not out of history: the log keeps the
+  words, and `history`, `at` and `export` still show them.
 - **Read the room before you act.** `isocan activity [who]` is what has been
   happening here, newest first — who made what, who edited it, who said what
   and where. Running it for the person who summoned you is the cheapest way to

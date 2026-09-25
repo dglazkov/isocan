@@ -352,6 +352,32 @@ export interface WebHost {
      * list clears.
      */
     select: (itemIds: readonly string[]) => void;
+    /**
+     * **The commands this canvas's composer offers** (proposed: `host`) — the
+     * built-ins, the home's own, and every loaded module's, in the one list the
+     * Chat's menu shows.
+     *
+     * It exists because the voice session was handed a DIFFERENT list: the
+     * compiled built-ins alone. So `/wire`, a module command the menu offers,
+     * was a word the voice had never heard, and asked for it by name, the model
+     * reached for `agent_enroll` instead — "I encountered an issue while trying
+     * to enroll the wireframing skill". A list a surface re-derives is a list
+     * that drifts; this hands over the composer's own.
+     */
+    commands: () => readonly CommandMetadata[];
+    /**
+     * **Run this line the way the composer's send does** (proposed: `host`) —
+     * not a second implementation of it. A module command that opens a dialog
+     * opens it here, in the browser (`/wire <request>` composes on the spot);
+     * anything else is posted to the Chat as the viewer, with the selection
+     * attached, for an agent to carry out.
+     *
+     * The answer says which, because they are different claims: `"local"` ran,
+     * `"posted"` has only been ASKED for. A voice that said "done" about a
+     * posted command would be claiming work nobody has done — and with no agent
+     * parked, nobody will.
+     */
+    runCommand: (text: string) => Promise<"local" | "posted">;
 }
 /** What a component asks the parked rc to enrol. */
 export interface EnrolAsk {
