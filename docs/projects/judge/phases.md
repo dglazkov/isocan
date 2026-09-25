@@ -289,15 +289,31 @@ interface could not have enumerated the tree in any case.
 
 **Status: NOT STARTED.**
 
-**Outcome:** the `Judgment` interface and the uniform stub land in
-`@isocan/core`, the vendor behind the seam — reached through the home's
-judgment route that wireframes phase 5 built for exactly this, adopted rather
-than rebuilt — and a reading is published under `docs/calibration/` beside the
-4 September one — same discipline, same place.
+**Outcome:** a reading published under `docs/calibration/` beside the
+4 September one — same discipline, same place — produced by a harness that
+reads the labelled rows phase 1's `--out` wrote.
 
-**The reading needs no new calls.** The probabilities were recorded when the
-flow ran (phase 1), so the curve is the recorded P against the person's
-verdict; re-asking would measure a different judgment than the one acted on.
+**The reading needs no new calls, so it needs no seam.** The probabilities were
+recorded when the flow ran (phase 1), so the curve is the recorded P against
+the person's verdict; re-asking would measure a different judgment than the one
+acted on. The `Judgment` interface and the uniform stub in core therefore move
+to phase 5, the first phase that calls a judge live — building them here would
+be a mechanism no scene forces.
+
+**What counts as right** (decided 24 Sep 2026 by the conductor, because phase
+1 found the labels record only disagreement). A row is labelled *needed* or
+*not needed*:
+
+- **explicitly**: *kept* is needed, *taken out* is not;
+- **by agreement**: a row the person left as the flow set it, in a flow they
+  acted on at least once (`engaged`), is needed exactly when the flow put it in
+  the prototype — the person was curating that flow and let it stand;
+- **not at all**: every row of a flow the person never touched — they may never
+  have looked.
+
+The page reports the explicit and the agreement labels separately beside the
+curve, so the assumption is on the page rather than under it. Rows answered by
+the stub, or by an unknown answerer, are counted and read apart from Jev's.
 **And it has a floor**: it concludes only with at least twenty verdicts in
 every bucket it reports, buckets no finer than 0.1 (phase 0's ±0.035). Below
 the floor it publishes what it has, with intervals, and says in its first line
@@ -314,17 +330,24 @@ rather than on the verdict.
 flat, the project stops at a published page saying so, and the corpus from
 phase 1 remains worth having.
 
-**Proof:** a reading page in `docs/calibration/` carrying the held-out size,
-accuracy, the reliability curve by bucket, the measured spend and the model id,
-produced by a harness with a dry mode that writes the page either way — the
+**Proof:** a harness with a dry mode that writes the page either way — the
 shape `scripts/calibrate.mjs` and `wireframe/scripts/calibrate.ts` already
-established — the second is the same question's nearest neighbour, and its
-page (wireframes phase 6: ECE 0.39 on Enrico's archetypes) is the prior this
-reading is read against. The stub scores at chance
-through the same harness, so the harness is shown to be able to report a bad
-judge. The page states N against the floor. Cost is read from `spent` rather
-than estimated. `npm test` and
-`npm run typecheck` whole.
+established; the second is the same question's nearest neighbour, and its page
+(wireframes phase 6: ECE 0.39 on Enrico's archetypes) is the prior this reading
+is read against. The page carries N against the floor, the held-out size,
+accuracy, ECE beside it (never alone — a flat stub is perfectly calibrated and
+useless), the reliability curve by bucket with explicit and agreement labels
+counted apart, and the model ids; its first line says whether it can conclude.
+A seeded random-P baseline runs through the same harness and reads flat, so the
+harness is shown able to report a bad judge. The dry mode runs on the committed
+synthetic fixture in the suite; the real page is written from the person's
+`--out` rows on the machine that holds them, and carries counts and the curve,
+never a request or a title. `npm test` and `npm run typecheck` whole.
+
+**Formerly** (re-cut 24 Sep 2026, before any code): the `Judgment` interface,
+the uniform stub and the vendor seam landed here too, and the stub scored at
+chance through the harness. Moved to phase 5 because the reading makes no
+calls; the stub's role as the bad judge is taken by a random-P baseline.
 
 ## Phase 3 — The band, drawn from the curve
 
@@ -384,7 +407,10 @@ nothing until accepted. `npm test` and `npm run typecheck` whole.
 **Status: NOT STARTED.**
 
 **Outcome:** what [#205](https://github.com/dglazkov/isocan/issues/205) found
-missing. A triage pass over the personas' findings queue that costs cents and
+missing — and, since 24 Sep 2026, where the `Judgment` interface and the
+uniform stub land in `@isocan/core`, with the vendor behind the seam reached
+through the home's judgment route wireframes phase 5 built: this is the first
+phase that calls a judge live, so it is the first that needs the seam. A triage pass over the personas' findings queue that costs cents and
 routes only its uncertainty to the Opus tier, with the spend declared per run
 in the shape `rcLimits` already holds per agent — so "cheap" is a fact read
 from `spent` rather than an adjective in a front-matter line.
