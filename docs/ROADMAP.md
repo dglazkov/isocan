@@ -9,7 +9,7 @@ what it describes. Run `node scripts/roadmap.mjs` after changing one.
 The same board lives on a canvas, [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),
 open to anyone with the address — it should say what `main` says.
 
-**38 built · 57 still open** — of which 42 partly
+**39 built · 57 still open** — of which 42 partly
 built, 15 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -86,7 +86,7 @@ and the done column should not be flattered by either.
 | **project** | [webmcp-cobrowsing](projects/webmcp-cobrowsing/journey.md) | 2026-09-11 | roadmap defined — the WebMCP surface is designed against the verified API and the existing @isocan/mcp vocabulary; design and phases follow the census-informed design · see iso-api, embed |
 | research | [Wireframes a typed model can choose](research/2026-09-23-wireframe-components.md) | 2026-09-23 | surveyed what seventeen sources — eleven wireframing tools and kits, four pattern references and datasets, two generative-UI catalogs — treat as a component, for a feature where TypeSafe's Jev composes screens by choosing from a fixed catalog. The union, de-duplicated, is 123 entries — 73 primitives, every one named by at least two of ten enumerated sources (29 by five or more), and 50 composite blocks. The finding that shapes the build is that Jev cannot write a tree, so it must choose composites into slots of a fixed recipe, which is what the two catalog-choosing products (Figma First Draft, Relume) already do; once a screen's archetype is chosen, no structural question over 34 recipes has more than 4 options, so the 255-option ceiling never binds. The binding constraint is instead that Jev writes no prose — and a prototype's links hang on labels — so actionable text becomes a typed `intent` (49 values, 40 of them concepts by name in Rico's lexicon of 197 mined button labels) and links are computed from intents, archetypes and canvas order rather than generated. Wave 1 is 18 archetypes and 28 blocks, covering 90.7% of Enrico's 1,460 human-labelled screens; the same labels are a free calibration set for the archetype question. · see judge, design-partner, modules, mindmap · [#350](https://github.com/dglazkov/isocan/issues/350) |
 
-## Built <sub>38</sub>
+## Built <sub>39</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -120,6 +120,7 @@ and the done column should not be flattered by either.
 | research | [Teleport: moving a canvas to another home](research/2026-09-01-teleport.md) | 2026-09-01 | the move built 1 Sep as `isocan teleport --to <home> [--dry-run]`; keeping two homes writable is deliberately NOT built, because exactly one place assigns order · see multiuser, on-demand |
 | research | [The ask: what the field built for the moment an agent needs a person](research/2026-08-24-the-ask.md) | 2026-08-29 |  · see context |
 | research | [The bench — my agents, and getting one to join](research/2026-09-14-the-bench.md) | 2026-09-14 | asked 14 Sep 2026 as `paddock`, named `bench` the same day — a registry of MY agents, attached to me rather than to a canvas, and "have @Name join" from anywhere. Taken up as the bench project the same day and built across phases 0–3 + Journey 4 (14–16 Sep 2026). · see standing-agents, on-demand, agent-custody, sheep-harness, room, memory, inbox, harnesses · [#309](https://github.com/dglazkov/isocan/issues/309) |
+| research | [The frame budget, measured again — and the instrument that lied](research/2026-09-26-frame-budget.md) | 2026-09-26 |  · see ui-refresh, evals |
 | research | [The post-it, and which of three things it is](research/2026-09-01-post-it-notes.md) | 2026-09-01 | built 1 Sep — `properties.paper` on a text node, a swatch row on the Text tool and `isocan text --paper`; option A as recommended, no new op and no new kind · see ui-refresh |
 | **project** | [ui-refresh](projects/ui-refresh/phases.md) | 2026-08-29 | phases 1-6, all acceptances closed · see ui-refresh |
 | research | [What a deep version stack costs, measured](research/2026-09-02-version-scaling.md) | 2026-09-02 | pruning is on every surface and the board bounds itself; the hosted path's own latency (cold start, Firestore tail, GCS reads) is still unmeasured · see on-demand |

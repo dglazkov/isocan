@@ -75,6 +75,14 @@ isolation — for the frames a person actually waits on.
 the findings, and it records two hypotheses that were WRONG and how they were
 settled. Then the last performance run.
 
+Then `docs/research/2026-09-26-frame-budget.md`, which measured it again: the
+frame census from August is kept now as `scripts/frames.mjs` (a daemon, 250
+notes, 4x CPU, pan / zoom / a remote collaborator's drag, and it refuses a
+gesture that moved nothing). Run it when you have a built `dist/` — the frame
+budget is the real subject, and it has an instrument. Check an instrument
+against a known answer before believing its first reading: `bundle-what.mjs`
+read the wrong sourcemap field for 18 days (lesson 100).
+
 ## Measure the tail, never the average
 
 An average of 9ms with one frame in seven at 33ms reads as smooth and feels
