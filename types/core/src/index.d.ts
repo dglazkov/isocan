@@ -127,7 +127,7 @@ export * from "./lens.js";
 export * from "./export.js";
 export * from "./text-attention.js";
 export * from "./text-anchor.js";
-export { markdownResource, SOURCE_PATH_PROP } from "./markdown-resources.js";
+export { markdownResource, markdownTargetOffCanvas, SOURCE_PATH_PROP } from "./markdown-resources.js";
 export * from "./inbox-api.js";
 export type { DesignRecipeContract, DesignContractException, EffectiveDesignContract, DesignPolicyProblem, DesignContractPolicy } from "./design-contract.js";
 export type * from "./design-partner.js";
