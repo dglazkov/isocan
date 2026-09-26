@@ -1,8 +1,8 @@
-import { markdownResource, itemPath } from "@isocan/core";
+import { markdownResource, markdownTargetOffCanvas, itemPath } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { blobUrl } from "./api.ts";
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Root, RootContent } from "hast";
 import { TextAttentionView } from "./TextAttentionView.tsx";
 import type { AttentionDocument } from "./TextAttentionView.tsx";
@@ -68,12 +68,40 @@ export default function MarkdownBody({
   breaks?: boolean | undefined;
   rehypePlugins?: PluggableList | undefined;
 }) {
-  const canvas = useCanvasStore(s => attention ? s.canvas : null);
+  /**
+   * **Subscribed to the canvas only once a link here needs it** (26 Sep 2026).
+   *
+   * This subscribed every note to the whole canvas, and react-markdown parses
+   * on every render — so any operation by anybody re-parsed every note on the
+   * screen. Measured on 250 notes at 4x CPU: one collaborator dragging one
+   * item, 15,000 markdown renders for 60 moves and half-second frames.
+   *
+   * A link or image resolves against the canvas only when it is a path to one
+   * of its files; a fragment, an external address or a refused scheme is
+   * settled without it (`markdownTargetOffCanvas`, the same rule
+   * `markdownResource` starts with). So the first render reads the canvas
+   * without subscribing, and a note that met a path subscribes from then on,
+   * so a file it points at being renamed or replaced still reaches it. A note
+   * whose every link is external never subscribes at all.
+   */
+  const [followsCanvas, setFollowsCanvas] = useState(false);
+  const metPath = useRef(false);
+  const subscribed = useCanvasStore(s => attention && followsCanvas ? s.canvas : null);
   const canvasId = useCanvasStore(s => attention ? s.canvasId : null);
   const resolve = (url: string) => {
-    const source = attention && canvas?.items[attention.itemId];
-    return source && canvas && attention ? markdownResource(canvas, source, attention.versionId, url) : null;
+    if (!attention) return null;
+    const offCanvas = markdownTargetOffCanvas(url);
+    if (offCanvas) return offCanvas;
+    metPath.current = true;
+    const canvas = subscribed ?? useCanvasStore.getState().canvas;
+    const source = canvas?.items[attention.itemId];
+    return source && canvas ? markdownResource(canvas, source, attention.versionId, url) : null;
   };
+  // After a render whose links met a path: the first one, or one whose text
+  // changed to include a path. Once following, it stays following.
+  useEffect(() => {
+    if (metPath.current && !followsCanvas) setFollowsCanvas(true);
+  }, [followsCanvas, children]);
   const prefix = useId().replace(/[^a-zA-Z0-9]/g, "");
   const headings = useMemo(() => () => (tree: Root) => {
     const seen = new Map<string, number>();

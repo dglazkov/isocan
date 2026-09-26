@@ -248,8 +248,25 @@ export function refusedContributions(): RefusedContribution[] {
 }
 
 /** Every vote round a loaded module says is running on this canvas. */
+/**
+ * **Every loaded module's rounds, asked once per canvas.**
+ *
+ * `roundsOn` runs inside a store selector for every item on screen, and a
+ * selector runs on every store change — so unmemoised, one remote move on a
+ * canvas of 250 items asked every module for its rounds 250 times. Keyed on
+ * the canvas OBJECT, as `sprintForCanvas` and `wallIdsFor` already are (the
+ * store hands out a new one on every change, so a stale key is exactly a
+ * stale answer), and on the registry's version, because a module that loads
+ * after first paint brings rounds of its own to the same canvas.
+ */
+let registryVersion = 0;
+const roundsMemo = new WeakMap<CanvasContents, { version: number; rounds: VoteRound[] }>();
 function moduleRounds(canvas: CanvasContents): VoteRound[] {
-  return modules().flatMap((m) => [...(m.rounds?.(canvas) ?? [])]);
+  const hit = roundsMemo.get(canvas);
+  if (hit && hit.version === registryVersion) return hit.rounds;
+  const rounds = modules().flatMap((m) => [...(m.rounds?.(canvas) ?? [])]);
+  roundsMemo.set(canvas, { version: registryVersion, rounds });
+  return rounds;
 }
 
 /**
@@ -322,11 +339,13 @@ const REGISTRY = new Map<string, CoreModule>();
 /** Idempotent by name, so a surface that registers twice (HMR, a test) holds one. */
 export function registerModule(record: CoreModule): void {
   REGISTRY.set(record.name, record);
+  registryVersion++;
 }
 
 /** Forget a module by name — the "removed means removed" half of `registerModule`. */
 export function unregisterModule(name: string): void {
   REGISTRY.delete(name);
+  registryVersion++;
 }
 
 /** Every module registered right now, in the order they first registered. A copy. */

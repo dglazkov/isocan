@@ -23,6 +23,7 @@ import { changeGroupItem } from "./canvasgroups.ts";
 import { getSnapshot, readBlob, sendOp, uploadBlob } from "./api.ts";
 import { flashNotice, sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
+import { useShallow } from "zustand/react/shallow";
 import { screenToWorld } from "./viewport.ts";
 import { glideToBox } from "./zoomactions.ts";
 import { everyWhileVisible } from "./whilevisible.ts";
@@ -348,16 +349,28 @@ export function useOnWall(item: Item): boolean {
   return useCanvasStore((s) => state !== null && s.canvas !== null && wallIdsFor(s.canvas, state).has(item.id));
 }
 
+/**
+ * **Answered inside the selector, so an item re-renders when the answer does.**
+ *
+ * This read the whole canvas (`useCanvasStore((s) => s.canvas)`) and worked
+ * the answer out in render — and every `ItemView` calls it, so every
+ * operation anybody made re-rendered every item on the screen. Measured 26 Sep
+ * 2026 on 250 notes at 4x CPU: one collaborator dragging one item cost 15,455
+ * item renders for 60 moves and frames of half a second. The answer is a
+ * boolean; asking for the boolean is the whole fix.
+ */
 export function useVotesHiddenOn(item: Item): boolean {
   const { state, nowMs } = useSprint();
-  const canvas = useCanvasStore((s) => s.canvas);
-  // A module's vote round (proposed: `rounds`, 11 Sep 2026) curtains its own
-  // area by the same lens — the sprint is the curtain's first caller now,
-  // not its only case. Same shared clock, so a round's curtain lifts on the
-  // same tick as every chip.
-  if (canvas && roundsOn(canvas, item).some((round) => roundRunning(round, nowMs))) return true;
-  if (!hidesVotes(state, nowMs) || !state || !canvas) return false;
-  return wallIdsFor(canvas, state).has(item.id);
+  return useCanvasStore((s) => {
+    const canvas = s.canvas;
+    // A module's vote round (proposed: `rounds`, 11 Sep 2026) curtains its own
+    // area by the same lens — the sprint is the curtain's first caller now,
+    // not its only case. Same shared clock, so a round's curtain lifts on the
+    // same tick as every chip.
+    if (canvas && roundsOn(canvas, item).some((round) => roundRunning(round, nowMs))) return true;
+    if (!hidesVotes(state, nowMs) || !state || !canvas) return false;
+    return wallIdsFor(canvas, state).has(item.id);
+  });
 }
 
 /**
@@ -367,10 +380,14 @@ export function useVotesHiddenOn(item: Item): boolean {
  * hidden but your own while the round runs and all of them at the bell.
  */
 export function useRoundMarks(item: Item): readonly string[] {
-  const canvas = useCanvasStore((s) => s.canvas);
-  return useMemo(
-    () => (canvas ? [...new Set(roundsOn(canvas, item).flatMap((round) => round.marks))] : EMPTY_MARKS),
-    [canvas, item],
+  // Compared element by element, so the same marks are the same array: a
+  // fresh array from a selector re-renders on every store change, which is
+  // the canvas-wide re-render `useVotesHiddenOn` above describes.
+  return useCanvasStore(
+    useShallow((s) => {
+      const marks = s.canvas ? [...new Set(roundsOn(s.canvas, item).flatMap((round) => round.marks))] : EMPTY_MARKS;
+      return marks.length ? marks : EMPTY_MARKS;
+    }),
   );
 }
 const EMPTY_MARKS: readonly string[] = [];

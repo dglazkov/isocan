@@ -125,6 +125,9 @@ const ALLOWED = new Map<string, string>([
   ["useRcPolicies", "an object held in the same module state as useAnswerable's Set, replaced only when the poll answers"],
   ["useRcOwners", "an array held in the same module state, replaced only when the poll answers"],
   ["useVotesHiddenOn", "boolean"],
+  // Not useMemo on purpose: a memo keyed on the canvas made a new array on
+  // every operation, and every item re-rendered for it (26 Sep 2026).
+  ["useRoundMarks", "zustand selector through useShallow — the same marks are the same array"],
   ["useContentOrigin", "a string"],
   // A ref holds the built frame across renders on purpose: rebuilding the src
   // would remount the iframe and lose the page inside it, so the identity is
