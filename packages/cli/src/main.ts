@@ -40,6 +40,7 @@ import type {
   Comment,
   CommentThread,
   Item,
+  ItemVersion,
   MentionCandidate,
   NewComment,
   Operation,
@@ -8442,6 +8443,75 @@ program
           (losing > 0 ? `, and ${losing} other${losing === 1 ? "" : "s"} went to the trash` : "") +
           " — one undo takes it all back",
       );
+    }),
+  );
+
+/**
+ * **What changed between two versions** (docs/projects/version-diff/design.md).
+ *
+ * Choosing a variation, or reviewing an agent's edit, without seeing what is
+ * different is guessing. This prints core's diff — the same `diffVersions`
+ * the web's Compare inspector draws, so the sentence here is the sentence
+ * there. Reads only: nothing is sent, and the engine (parse5 with it) loads
+ * on this verb and no other.
+ *
+ * A version is an id, an id prefix, `vN` or `N`; the default pair is the one
+ * before the version showing against the one showing. `--source` compares a
+ * variation with what it was made from — the pair `choose` decides.
+ */
+program
+  .command("diff <item> [from] [to]")
+  .description("What changed between two versions — the previous and the current one by default")
+  .option("--source", "compare a variation with the item it was made from")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (ref: string, fromRef: string | undefined, toRef: string | undefined, opts: { source?: boolean }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      const { defaultVersionPair, diffReport, diffVersions, isTextualMime, sourcePair, versionLabel, versionRef } = await import("@isocan/core/diff");
+
+      let from: ItemVersion;
+      let to: ItemVersion;
+      let heading: string;
+      if (opts.source) {
+        if (fromRef || toRef) throw new Error("--source compares the two current versions — name no versions with it");
+        const pair = sourcePair(snapshot.canvas.items, item);
+        if ("refused" in pair) throw new Error(pair.refused);
+        ({ from, to } = pair);
+        heading = `"${pair.source.title}" ${versionLabel(pair.source, from.id)} → "${item.title}" ${versionLabel(item, to.id)}`;
+      } else {
+        const named = (r: string) => {
+          const v = versionRef(item, r);
+          if (!v) throw new Error(`no version "${r}" on "${item.title || item.id}" — isocan version ls ${item.id}`);
+          return v;
+        };
+        if (fromRef && toRef) {
+          from = named(fromRef);
+          to = named(toRef);
+        } else if (fromRef) {
+          from = named(fromRef);
+          to = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[item.versions.length - 1]!;
+        } else {
+          const pair = defaultVersionPair(item);
+          if ("refused" in pair) throw new Error(pair.refused);
+          ({ from, to } = pair);
+        }
+        heading = `"${item.title || item.id}" ${versionLabel(item, from.id)} → ${versionLabel(item, to.id)}`;
+      }
+
+      await narrate(ctx, p.id, { cursor: itemCenter(item), status: `comparing versions of "${truncate(item.title || item.id, 24)}"` });
+      // The source face: what somebody wrote, which is what changed.
+      const side = async (v: ItemVersion) => {
+        const face = sourceFaceOf(v);
+        const text = isTextualMime(face.mimeType) ? (await ctx.client.downloadBlob(p.id, face.blobHash)).toString("utf8") : undefined;
+        return { mimeType: face.mimeType, filename: face.filename, size: face.size, blobHash: face.blobHash, ...(text !== undefined ? { text } : {}) };
+      };
+      const diff = diffVersions(await side(from), await side(to));
+      if (ctx.json) {
+        return printJson({ itemId: item.id, from: from.id, to: to.id, ...diff });
+      }
+      console.log(diffReport(diff, heading));
     }),
   );
 

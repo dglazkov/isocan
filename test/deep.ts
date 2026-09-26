@@ -144,6 +144,10 @@ export const DEEP: readonly DeepFile[] = [
   // 24 Sep: two cases, one daemon, ~12 spawns — the chip's ✅/❌ ops held
   // equal to `docket answer` over the real binary (#206 D7).
   { file: "packages/web/test/docket.test.ts", secs: 10.3 },
+  // 26 Sep: two cases, one daemon, ~12 spawns — an item seeded with two
+  // versions and a variation, diffed over the real binary, and the log read
+  // before and after to prove a diff writes nothing.
+  { file: "packages/cli/test/diff.test.ts", secs: 17.5 },
   { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
 ];
 
