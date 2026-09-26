@@ -1,3 +1,4 @@
+import { canonicalJson } from "./canonical-json.ts";
 import { parseDesignArtifactRef } from "./design-partner.ts";
 import { parseDesignTarget } from "./design-decision-parse.ts";
 import { parseDesignGoverning } from "./design-request-parse.ts";
@@ -23,6 +24,5 @@ export function parseDesignRepairInput(value: unknown): DesignRepairInput {
 }
 /** Public repair input cannot supply its resolved edit, retained versions or canonical intent digest. */
 export function parseDesignRepairOperation(value: unknown): DesignRepairOperation { const v = object(value, ["type", "repair"]); if (v.type !== "design.repair") bad("Expected design.repair."); return { type: "design.repair", repair: parseDesignRepairInput(v.repair) }; }
-function canonical(value: unknown): string { return Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value !== null && typeof value === "object" ? "{" + Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`).join(",") + "}" : JSON.stringify(value); }
 /** Accepted identity binds full public intent and original authenticated author across joins and archived retries. */
-export async function designRepairIntentHash(op: DesignRepairOperation, actorId: string): Promise<string> { const bytes = new TextEncoder().encode(canonical({ operation: parseDesignRepairOperation({ type: op.type, repair: op.repair }), actorId: text(actorId) })); return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((n) => n.toString(16).padStart(2, "0")).join(""); }
+export async function designRepairIntentHash(op: DesignRepairOperation, actorId: string): Promise<string> { const bytes = new TextEncoder().encode(canonicalJson({ operation: parseDesignRepairOperation({ type: op.type, repair: op.repair }), actorId: text(actorId) })); return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((n) => n.toString(16).padStart(2, "0")).join(""); }

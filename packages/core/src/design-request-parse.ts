@@ -1,3 +1,4 @@
+import { canonicalJson } from "./canonical-json.ts";
 import { object, text, integer, choice, list, unique, ids, nullableText, fidelity, bool, hash, bad } from "./design-partner-values.ts";
 import { parseDesignArtifactRef, parseDesignReference, parseDesignReceipt } from "./design-partner.ts";
 import type { DesignBriefFields, DesignContinuation, DesignDiscovery, DesignGoverningBinding, DesignRequestAction, DesignAcceptedResponse, DesignRecordOperation } from "./design-request.ts";
@@ -84,14 +85,9 @@ export function parseDesignRequestOperation(value: unknown): DesignRecordOperati
   if (v.type !== "design.receipt") bad("Expected a design request or receipt act.");
   return { type: "design.receipt", itemId: text(v.itemId), versionId: text(v.versionId), receipt: parseDesignReceipt(v.receipt), ...position(v) };
 }
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value !== null && typeof value === "object") return "{" + Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(",") + "}";
-  return JSON.stringify(value);
-}
 /** Snapshot recovery hashes validated intent with its immutable authenticated author, after join-aware matching. */
 export async function designIntentHash(operation: DesignRecordOperation, authoredActorId: string): Promise<string> {
   const { effect: _effect, ...publicIntent } = operation;
-  const bytes = new TextEncoder().encode(canonical({ operation: parseDesignRequestOperation(publicIntent), actorId: text(authoredActorId) }));
+  const bytes = new TextEncoder().encode(canonicalJson({ operation: parseDesignRequestOperation(publicIntent), actorId: text(authoredActorId) }));
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((n) => n.toString(16).padStart(2, "0")).join("");
 }

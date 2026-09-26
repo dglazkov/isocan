@@ -2,15 +2,15 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { CanvasHandle, checkDesignCraft, checkDesignCraftDirectory, designDecisionPort, designRequestPort, exportDesignCraft, inspectDesignCraftPackage, parseDesignCraftPacket, publishDesignComparison, readDesignComparisons, readDesignCraft, readDesignRequestReference, submitDesignDecision } from "@isocan/api";
-import { canvasItemOf, designSystemProperties, newCanvasId, SOURCE_POLICY_HEADER, parseSourcePolicyHeader } from "@isocan/core";
-import { craftBytes, craftFile, craftHash, craftSemantic, craftContextFiles } from "../src/design-craft-packet.ts";
+import { canonicalJson, canvasItemOf, designSystemProperties, newCanvasId, SOURCE_POLICY_HEADER, parseSourcePolicyHeader } from "@isocan/core";
+import { craftBytes, craftFile, craftHash, craftContextFiles } from "../src/design-craft-packet.ts";
 import { designReviewFixture } from "./design-review-fixture.ts";
 import { designDecisionFixture } from "./design-decision-fixture.ts";
 import { auditDesign } from "./design-audit-fixture.ts";
 let fixture: { close(): Promise<void> } | undefined;
 afterEach(async () => { await fixture?.close(); fixture = undefined; });
 const text = (packet: Awaited<ReturnType<typeof readDesignCraft>>, name: string) => new TextDecoder().decode(craftBytes(packet.files.find(file => file.path === name)!));
-const rehash = async (packet: Awaited<ReturnType<typeof readDesignCraft>>) => { const { packetId: _, ...body } = packet; return { ...body, packetId: await craftHash(craftSemantic(body)) }; };
+const rehash = async (packet: Awaited<ReturnType<typeof readDesignCraft>>) => { const { packetId: _, ...body } = packet; return { ...body, packetId: await craftHash(canonicalJson(body)) }; };
 
 it("returns identical canonical packets across actual actors, exports original bytes and preserves local proposals", async () => {
   const f = await designReviewFixture(); fixture = f;

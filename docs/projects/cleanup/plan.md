@@ -140,6 +140,16 @@ for N items under a cursor stream.
   the ASCII copies drop letters ("Café" → `caf`). One rule, in core.
 - **DU-4.** Core's mime table has no `pdf`/`csv`: the CLI makes "other" of a
   file the browser makes a "document". **DU-5.** The agent tray's own `ago()`.
+- **DU-6.** *Done 26 Sep 2026*, found by that day's Stitch Loop review rather
+  than the audit. Canonical JSON — sorted keys, then `JSON.stringify` of the
+  leaves — was written seven times: the design request, repair and decision
+  intent hashes, the partner plan's retry check, and the API's craft packet,
+  review and repair readers. Four of those feed SHA-256 ids already on disk,
+  so the copies were one algorithm only as long as nobody "improved" one. Now
+  one `canonicalJson` in core, whose test runs the seven former copies beside
+  it and pins a recorded design intent hash. Two look alike and stay apart on
+  purpose: `canvas-groups.ts` and the wireframe module's `sameStyle` drop
+  `undefined` keys the way JSON does, and the hashed ones never did.
 - **BC-6, BC-4.** `var(--page)` on a full-screen cover, `var(--muted)` ×10 and
   `--radius-lg` — defined nowhere — because every CSS guard reads only
   `styles.css`. Point the guards at every stylesheet.

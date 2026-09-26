@@ -1,3 +1,4 @@
+import { canonicalJson } from "./canonical-json.ts";
 import { isSystemActor, type CanvasContents } from "./model.ts";
 import type { NewVersion, Operation } from "./ops.ts";
 import {
@@ -62,12 +63,6 @@ export function validateDesignResponseAssociation(input: unknown, context: Desig
   return response;
 }
 
-/** Stable serialization allows equal retries regardless of object key order. */
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
-  if (value !== null && typeof value === "object") return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`).join(",")}}`;
-  return JSON.stringify(value);
-}
 /** Describes the single reply effect and required guards; it is deliberately not a sendable wire act. */
 interface DesignAnswerMaterializationPlan {
   kind: "answer-materialization";
@@ -102,7 +97,8 @@ export function planDesignAnswer(input: {
   const previous = (input.previousResponses ?? []).map(parseDesignResponse);
   const retry = previous.find((r) => r.id === response.id);
   if (retry) {
-    if (canonical(retry) !== canonical(response)) refuse("conflict", "The response identity was reused with different content.");
+    // Stable serialization, so an equal retry is equal regardless of key order.
+    if (canonicalJson(retry) !== canonicalJson(response)) refuse("conflict", "The response identity was reused with different content.");
     if (input.context.request.brief.requestId !== response.requestId) refuse("association", "The accepted answer belongs to another request.");
     if (input.actor.actorId !== retry.respondentActorId || isSystemActor(input.actor.actorId)) refuse("actor", "Only the original respondent may retry this answer.");
     return { kind: "already-recorded", responseId: response.id };

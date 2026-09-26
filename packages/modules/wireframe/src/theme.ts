@@ -193,8 +193,9 @@ export function sameStyle(a: WireStyle | undefined, b: WireStyle | undefined): b
   return canonical(a ?? DEFAULT_STYLE) === canonical(b ?? DEFAULT_STYLE);
 }
 
+/** Not core's `canonicalJson`, on purpose: a style with an `undefined` field is the same style as one without it. */
 function canonical(value: unknown): string {
-  return JSON.stringify(value, (_k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v));
+  return JSON.stringify(value,(_k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v));
 }
 
 // ---------- the mapping question

@@ -1,11 +1,11 @@
-import { resolveActor, type Operation, type PostOpResponse } from "@isocan/core";
+import { canonicalJson, resolveActor, type Operation, type PostOpResponse } from "@isocan/core";
 import { parseDesignArtifactRef, type DesignArtifactRef, type DesignReceipt } from "@isocan/core/design-partner";
 import { sameDesignArtifact } from "@isocan/core/design-partner-plan";
 import { readDesignRequests } from "./design-request-reader.ts";
 import type { DesignChangeRequest, DesignPublishRequest } from "./design-request-reader.ts";
 import { captureDesignRepair, prepareDesignRepair, type PreparedDesignRepair, type PreparedDesignRepairPort } from "./design-repair-reader.ts";
 import { designAuditInput, readCanvasDesignAudit, auditDesignSource, readDesignSourceAudit } from "./design-audit-reader.ts";
-import { readDesignReviews, designReviewSemantic, type DesignReviewReadPort, type DesignReviewView } from "./design-review-reader.ts";
+import { readDesignReviews, type DesignReviewReadPort, type DesignReviewView } from "./design-review-reader.ts";
 import { DESIGN_REVIEW_PROPERTY, parseDesignReviewRun, parseDesignVerifierOffer, parseDesignReviewOutput, parseDesignReviewObservations, type DesignReviewRun, type DesignReviewObligation, type DesignReviewObservation, type DesignReviewFinding, type DesignVerifierOffer } from "./design-review-contract.ts";
 import { questionnaireFailureStatus } from "./questionnaire-reader.ts";
 
@@ -26,7 +26,7 @@ export interface DesignReviewRecordInput { outcome: "reviewed" | "invalid" | "no
 export interface DesignReviewStartInput extends DesignReviewWriteIds { canvasId: string; requestId: string; runId: string; itemId: string; passId: string; sessionId: string; output: DesignReceipt["output"]; obligations: DesignReviewObligation[]; mode?: "review" | "audit-only"; preceding?: { run: DesignArtifactRef; reason: string }; signal?: AbortSignal }
 /** Each append binds the exact shared version seen by its caller, preventing competing reservations. */
 export interface DesignReviewStepInput extends DesignReviewWriteIds { canvasId: string; runId: string; base: DesignArtifactRef; action: "record" | "begin-repair" | "finish"; passId?: string; sessionId?: string; record?: DesignReviewRecordInput; signal?: AbortSignal }
-const same = (a: unknown, b: unknown) => designReviewSemantic(a) === designReviewSemantic(b);
+const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 const textError = (error: unknown) => error instanceof Error ? error.message : String(error);
 function ids(value: DesignReviewWriteIds): void { if (!/^op_[A-Za-z0-9_-]{1,32}$/.test(value.opId) || !/^ver_[A-Za-z0-9_-]{1,32}$/.test(value.versionId)) throw new Error("Review writes need valid stable operation and version IDs."); }
 async function documentWrite(io: DesignReviewWritePort, options: { canvasId: string; itemId: string; opId: string; versionId: string; report: DesignReviewRun | DesignVerifierOffer; base?: DesignArtifactRef; signal?: AbortSignal }): Promise<PreparedDesignReviewWrite> {

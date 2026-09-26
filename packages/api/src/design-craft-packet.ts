@@ -1,4 +1,4 @@
-import type { Actor } from "@isocan/core";
+import { canonicalJson, type Actor } from "@isocan/core";
 import { parseDesignArtifactRef, parseDesignBrief, parseDesignQuestionSet, parseDesignResponse, type DesignArtifactRef, type DesignBrief, type DesignQuestionSet, type DesignResponse } from "@isocan/core/design-partner";
 import { parseDesignComparison, parseDesignDecisionInput, type DesignComparison, type DesignDecisionInput } from "@isocan/core/design-decision";
 import { parseDesignProjection, type DesignProjection } from "./design-system-reader.ts";
@@ -25,12 +25,6 @@ export interface DesignCraftPacket {
   limits: string[];
 }
 
-/** Deterministic serialization binds every field, independent of object insertion order. */
-export function craftSemantic(value: unknown): string {
-  if (Array.isArray(value)) return "[" + value.map(craftSemantic).join(",") + "]";
-  if (value && typeof value === "object") return "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + craftSemantic((value as Record<string, unknown>)[key])).join(",") + "}";
-  return JSON.stringify(value);
-}
 /** Exact byte hashes identify packet files and never imply their source was authorized. */
 export async function craftHash(value: string | Uint8Array): Promise<string> {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", typeof value === "string" ? new TextEncoder().encode(value) : new Uint8Array(value)))].map(byte => byte.toString(16).padStart(2, "0")).join("");
@@ -75,7 +69,7 @@ export async function parseDesignCraftPacket(value: unknown): Promise<DesignCraf
   if (p.schemaVersion !== 1 || p.kind !== "craft-packet" || p.mode !== "adapted-guidance" || p.revision !== designCraftRevision || !["new-work", "critique", "finish"].includes(p.stage)) throw new Error("Unsupported craft packet revision or stage.");
   status(p.status); strings(p.reasons); strings(p.limits);
   const pin = { repository: "https://github.com/pbakaus/impeccable", commit: "2149fcce39a90bb409df5f16515f316a76dc6199", skillVersion: "4.3.1", resources: designCraftSources(p.stage) };
-  if (craftSemantic(p.upstream) !== craftSemantic(pin)) throw new Error("Craft source identities disagree with this adaptation.");
+  if (canonicalJson(p.upstream) !== canonicalJson(pin)) throw new Error("Craft source identities disagree with this adaptation.");
   object(p.request, ["ref", "brief", "author"]); parseDesignArtifactRef(p.request.ref); parseDesignBrief(p.request.brief); actor(p.request.author);
   if (!Array.isArray(p.questions) || p.questions.length > 128 || !Array.isArray(p.decisions) || p.decisions.length > 128 || !Array.isArray(p.references) || p.references.length > 64 || !Array.isArray(p.files) || p.files.length > 72) throw new Error("Invalid craft collection bound.");
   for (const q of p.questions) {
@@ -100,7 +94,7 @@ export async function parseDesignCraftPacket(value: unknown): Promise<DesignCraf
   const artifacts = new Set<string>();
   for (const r of p.references) {
     object(r, ["artifact", "roles", "title", "filename", "mimeType", "path", "reason"]); parseDesignArtifactRef(r.artifact); strings(r.roles);
-    const identity = craftSemantic(r.artifact);
+    const identity = canonicalJson(r.artifact);
     if (artifacts.has(identity) || !r.roles.length || new Set(r.roles).size !== r.roles.length || r.roles.some(role => !["context", "reference", "fact", "decision", "alternative", "output"].includes(role))) throw new Error("Invalid or duplicate craft reference role/identity.");
     artifacts.add(identity);
     if (![r.title, r.filename, r.mimeType].every(one => typeof one === "string") || r.path !== null && typeof r.path !== "string" || r.reason !== null && typeof r.reason !== "string" || (r.path === null) === (r.reason === null)) throw new Error("Invalid craft reference availability.");
@@ -109,11 +103,11 @@ export async function parseDesignCraftPacket(value: unknown): Promise<DesignCraf
   const text = (name: string) => new TextDecoder("utf-8", { fatal: true }).decode(craftBytes(p.files.find(file => file.path === name)!));
   if (p.governing.status === "available") {
     expected.add("DESIGN.md"); expected.add("DESIGN.projection.json");
-    if (!paths.has("DESIGN.md") || !paths.has("DESIGN.projection.json") || text("DESIGN.md") !== p.governing.projection.baseText || craftSemantic(await parseDesignProjection(JSON.parse(text("DESIGN.projection.json")))) !== craftSemantic(p.governing.projection)) throw new Error("Governing files disagree with the captured projection.");
+    if (!paths.has("DESIGN.md") || !paths.has("DESIGN.projection.json") || text("DESIGN.md") !== p.governing.projection.baseText || canonicalJson(await parseDesignProjection(JSON.parse(text("DESIGN.projection.json")))) !== canonicalJson(p.governing.projection)) throw new Error("Governing files disagree with the captured projection.");
   }
-  if (craftSemantic([...expected].sort()) !== craftSemantic([...paths].sort())) throw new Error("Craft packet has missing or unexpected files.");
+  if (canonicalJson([...expected].sort()) !== canonicalJson([...paths].sort())) throw new Error("Craft packet has missing or unexpected files.");
   for (const [name, content] of Object.entries(craftContextFiles(p))) if (text(name) !== content) throw new Error(`Generated ${name} disagrees with its captured context.`);
   const { packetId, ...body } = p;
-  if (packetId !== await craftHash(craftSemantic(body))) throw new Error("Craft packet identity disagrees with its contents.");
+  if (packetId !== await craftHash(canonicalJson(body))) throw new Error("Craft packet identity disagrees with its contents.");
   return structuredClone(p);
 }

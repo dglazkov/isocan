@@ -22,6 +22,7 @@ const round = (n: number): number => Math.round(n * 1e6) / 1e6;
 function fail(message: string): never { throw new OpValidationError("bad-op", `canvas group: ${message}`); }
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const equal = (a: unknown, b: unknown): boolean => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+/** Not `canonicalJson`, on purpose: equality here drops `undefined` keys the way JSON does. */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (record(value)) return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));

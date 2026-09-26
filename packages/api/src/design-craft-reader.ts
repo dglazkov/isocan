@@ -1,10 +1,10 @@
-import { normalizeHomeUrl } from "@isocan/core";
+import { canonicalJson, normalizeHomeUrl } from "@isocan/core";
 import { sameDesignArtifact } from "@isocan/core/design-partner-plan";
 import type { DesignArtifactRef } from "@isocan/core/design-partner";
 import { designRequestBasisCurrent } from "@isocan/core/design-request";
 import { readDesignRequests, readDesignRequestReference, type DesignRequestReadPort } from "./design-request-reader.ts";
 import { projectDesignSystem, type DesignSystemTarget } from "./design-system-reader.ts";
-import { craftContextFiles, craftFile, craftHash, craftSemantic, parseDesignCraftPacket, type DesignCraftPacket, type DesignCraftStage } from "./design-craft-packet.ts";
+import { craftContextFiles, craftFile, craftHash, parseDesignCraftPacket, type DesignCraftPacket, type DesignCraftStage } from "./design-craft-packet.ts";
 import { designCraftRevision, designCraftSources } from "./design-craft-guidance.ts";
 export { parseDesignCraftPacket, type DesignCraftPacket, type DesignCraftStage } from "./design-craft-packet.ts";
 
@@ -70,7 +70,7 @@ export async function readDesignCraft(io: DesignRequestReadPort, options: { canv
   if (governing.status === "available") { files.push(await craftFile("DESIGN.md", governing.projection.baseText, "text/markdown")); files.push(await craftFile("DESIGN.projection.json", JSON.stringify(governing.projection, null, 2) + "\n", "application/json")); }
   for (const [path, text] of Object.entries(craftContextFiles(body))) files.push(await craftFile(path, text, "text/markdown"));
   const complete = { ...body, files };
-  return parseDesignCraftPacket({ ...complete, packetId: await craftHash(craftSemantic(complete)) });
+  return parseDesignCraftPacket({ ...complete, packetId: await craftHash(canonicalJson(complete)) });
 }
 
 /** Rechecks the original complete capture through current permissions, without recapturing beneath local drafts. */
@@ -90,7 +90,7 @@ export async function checkDesignCraft(io: DesignRequestReadPort, options: { can
         const snapshot = await io.snapshot(options.canvasId, options.signal);
         const original = snapshot.canvas.items[packet.request.ref.itemId]?.versions.find(version => version.id === packet.request.ref.versionId && version.blobHash === packet.request.ref.blobHash);
         if (!original) return { packetId: packet.packetId, status: "unavailable", reasons: ["Canonical completion is current, but the original packet's version attribution is unavailable. Preserve the packet and working files."] };
-        if (craftSemantic({ id: original.createdBy.id, name: original.createdBy.name }) !== craftSemantic(packet.request.author)) return { packetId: packet.packetId, status: "stale", reasons: ["The packet's captured author disagrees with its canonical original version."] };
+        if (canonicalJson({ id: original.createdBy.id, name: original.createdBy.name }) !== canonicalJson(packet.request.author)) return { packetId: packet.packetId, status: "stale", reasons: ["The packet's captured author disagrees with its canonical original version."] };
       }
       const comparable = (one: DesignCraftPacket) => ({
         brief: { ...one.request.brief, progress: "active" }, author: completion ? packet.request.author : one.request.author,
@@ -98,7 +98,7 @@ export async function checkDesignCraft(io: DesignRequestReadPort, options: { can
         decisions: one.decisions, governing: one.governing, references: one.references, runtimeReports: one.runtimeReports,
         files: one.files.filter(file => file.path.startsWith("references/") || file.path.startsWith("DESIGN.")),
       });
-      if (craftSemantic(comparable(packet)) === craftSemantic(comparable(current))) return { packetId: packet.packetId, status: "current", reasons: [] };
+      if (canonicalJson(comparable(packet)) === canonicalJson(comparable(current))) return { packetId: packet.packetId, status: "current", reasons: [] };
     }
     return { packetId: packet.packetId, status: current.status === "unavailable" ? "unavailable" : "stale", reasons: [...current.reasons, "The canonical request, answers, accepted decisions, governing source or exact context differs from the original packet. Export a new capture to a new folder; preserve authored working files."] };
   } catch (error) { options.signal?.throwIfAborted(); return { packetId: packet.packetId, status: "unavailable", reasons: [error instanceof Error ? error.message : String(error)] }; }

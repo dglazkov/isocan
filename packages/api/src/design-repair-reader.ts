@@ -1,4 +1,4 @@
-import { normalizeHomeUrl, resolveActor, sourceFaceOf, type CanvasSnapshotResponse, type PostOpResponse } from "@isocan/core";
+import { canonicalJson, normalizeHomeUrl, resolveActor, sourceFaceOf, type CanvasSnapshotResponse, type PostOpResponse } from "@isocan/core";
 import { designDecisionScope } from "@isocan/core/design-decision";
 import { parseDesignRepairBasis as parseCoreRepairBasis, parseDesignRepairInput, designRepairIntentHash, type DesignRepairInput, type DesignRepairOperation, type DesignRepairsResponse } from "@isocan/core/design-repair";
 import { sameDesignArtifact } from "@isocan/core/design-partner-plan";
@@ -27,10 +27,7 @@ export interface DesignRepairSubmission {
   audit?: CanvasDesignAudit;
 }
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
-const same = (a: unknown, b: unknown): boolean => {
-  const stable = (v: unknown): string => Array.isArray(v) ? `[${v.map(stable).join(",")}]` : v && typeof v === "object" ? "{" + Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(",") + "}" : JSON.stringify(v);
-  return stable(a) === stable(b);
-};
+const same = (a: unknown, b: unknown): boolean => canonicalJson(a) === canonicalJson(b);
 
 /** Restore the captured editor basis without inventing operation or replacement version identities. */
 export function parseDesignRepairBasis(value: unknown): DesignRepairBasis {

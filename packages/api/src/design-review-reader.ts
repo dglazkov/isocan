@@ -1,4 +1,4 @@
-import { mayWake, normalizeHomeUrl, resolveActor, type Actor, type ItemVersion, type LogEntry, type Operation, type PresenceSession, type RcAnsweringResponse } from "@isocan/core";
+import { canonicalJson, mayWake, normalizeHomeUrl, resolveActor, type Actor, type ItemVersion, type LogEntry, type Operation, type PresenceSession, type RcAnsweringResponse } from "@isocan/core";
 import { parseDesignArtifactRef, type DesignArtifactRef } from "@isocan/core/design-partner";
 import type { DesignRepairsResponse } from "@isocan/core/design-repair";
 import { sameDesignArtifact } from "@isocan/core/design-partner-plan";
@@ -34,9 +34,13 @@ export interface DesignVerifierView { ref: DesignArtifactRef; offer: DesignVerif
 /** Malformed or lost run history stays visible; it cannot silently restart a review budget. */
 export interface DesignReviewReadResult { runs: DesignReviewView[]; offers: DesignVerifierView[]; unavailable: Array<{ itemId: string; reason: string }> }
 
-/** Stable semantic comparison is independent of key order and has no locale-dependent serialization. */
-export function designReviewSemantic(value: unknown): string { return Array.isArray(value) ? `[${value.map(designReviewSemantic).join(",")}]` : value && typeof value === "object" ? "{" + Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${designReviewSemantic((value as Record<string, unknown>)[k])}`).join(",") + "}" : JSON.stringify(value); }
-const same = (a: unknown, b: unknown) => designReviewSemantic(a) === designReviewSemantic(b);
+/**
+ * Stable semantic serialization, independent of key order and with no locale-dependent
+ * serialization. The `isocan` module entry publishes this name, so it stays — as core's
+ * `canonicalJson` itself, byte for byte (cleanup DU-6), not as a copy of it.
+ */
+export const designReviewSemantic: (value: unknown) => string = canonicalJson;
+const same =(a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 const reason = (error: unknown) => error instanceof Error ? error.message : String(error);
 type Version = { itemId: string; version: Pick<ItemVersion, "id" | "blobHash" | "mimeType" | "filename" | "size">; author: Actor; seq: number };
 function created(op: Operation): Array<{ itemId: string; properties: Record<string, string>; version: Version["version"] }> {
@@ -182,7 +186,7 @@ export async function readDesignReviews(io: DesignReviewReadPort, options: { can
     if (governing.status === "unavailable") reasons.push(governing.reason);
     else if (!same({ atItemId: run.basis.governing.atItemId, artifact: governing.artifact, explicitNone: governing.exempt }, run.basis.governing)) reasons.push("The governing design changed.");
     const evidence = pass.record?.observations.flatMap(o => o.evidence) ?? [];
-    for (const artifact of [...new Map(evidence.map(ref => [designReviewSemantic(ref), ref])).values()]) try { await readDesignReviewReference(io, { canvasId, artifact, ...(signal ? { signal } : {}) }); } catch (error) { reasons.push(`Evidence unavailable: ${reason(error)}`); }
+    for (const artifact of [...new Map(evidence.map(ref => [canonicalJson(ref), ref])).values()]) try { await readDesignReviewReference(io, { canvasId, artifact, ...(signal ? { signal } : {}) }); } catch (error) { reasons.push(`Evidence unavailable: ${reason(error)}`); }
     const incompleteHistory = unavailable.some(one => one.itemId === itemId) || reasons.some(r => /contradictory|rewritten|reset to pending|changed its identity|relabeled|Pending pass/.test(r));
     if (incompleteHistory) reasons.push("The consumed repair budget is unavailable; no further reservation is permitted.");
     const readings = designReviewReadings(run), remainingRepairs = incompleteHistory ? null : Math.max(0, 3 - passIds.size);
