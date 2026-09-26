@@ -507,7 +507,7 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
 }
 
 /**
- * **Jev's first choices, in the prototype** — each confident row's screen
+ * **The answerer's first choices, in the prototype** — each confident row's screen
  * (`firstChoices`: never a maybe, never a variation) marked 📐 and signed
  * with the answerer (`wireKeepBy`), then the prototype built above the row,
  * all in the flow's op group: one undo takes the flow, its picks and its
@@ -520,7 +520,8 @@ export async function prototypeOfFirstChoices(canvas: FlowCanvas, screens: reado
     say("no prototype: round 1 was confident of no screen — use the ones that belong (📐), then `wire prototype`");
     return undefined;
   }
-  const answerer = canvas.by?.answerer === "stub" ? "stub" : "jev";
+  // Signed with whoever answered, read off the flow — an agent's picks are not Jev's.
+  const answerer = canvas.by?.answerer ?? "jev";
   for (const s of picked) await canvas.port.send({ type: "item.update", itemId: s.item, patch: keepPatch(true, answerer) }, canvas.group);
   const now = await canvas.port.canvas();
   const flow = keptFlowsOf(now, [...screens, ...canvas.variants]).find((f) => f.flow === picked[0]!.spec.flow);
@@ -534,7 +535,8 @@ export async function prototypeOfFirstChoices(canvas: FlowCanvas, screens: reado
 
 /** How a composed flow's prototype is said: how many screens, and whose first choices they are. */
 export function prototypeWords(screens: number, answerer: string): string {
-  return `prototype of ${screens} screen${screens === 1 ? "" : "s"}, ${answerer === "stub" ? "the stub's" : "Jev's"} first choices`;
+  const whose = answerer === "stub" ? "the stub's" : answerer === "agent" ? "the agent's" : "Jev's";
+  return `prototype of ${screens} screen${screens === 1 ? "" : "s"}, ${whose} first choices`;
 }
 
 /** The closing line of a flow, for a person. */

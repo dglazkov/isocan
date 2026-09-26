@@ -5,7 +5,7 @@ import { FIDELITY_PROP, applyOperation, invertOperation, type CanvasState, type 
 import {
   ARCHETYPE_WORDS, HEADER_OPTIONS, JEV_URL, MAYBE_FLOOR, MAYBE_PROP, assemblePrototype, keepPatch, maybeItems, maybeMarked, maybeProperties, NAV_OPTIONS, NEEDS_YES, RECIPES, applyProps, applyPropsRound, applyStructure, navOwners, propsRequests, blueprint, component, decideFlow, flowRequest, flowScreen,
   jevAnswerer, pendingRound, presentElements, propsRequest, readResponse, recipe, renderWire, requestBlueprint, responseProblems,
-  composeFlow, readWire, structureRequest, stubAnswerer, validateWire, wireBy, wireframe,
+  composeFlow, keptBy, prototypeWords, readWire, structureRequest, stubAnswerer, validateWire, wireBy, wireframe,
   type Answerer, type JevRequest, type JevResponse, type WirePort, type WireSpec,
 } from "../src/core.ts";
 
@@ -534,6 +534,26 @@ describe("a composed flow arrives fleshed", () => {
       expect(h.specOf(s.item).by).toEqual({ actor: { id: "usr_acme", name: "Acme Walker" }, answerer: "stub", model: "stub (seed 3)" });
       expect(validateWire(h.specOf(s.item))).toEqual([]);
     }
+  });
+
+  it("signs the flow's own picks with whoever answered it — an agent's are the agent's, not Jev's", async () => {
+    // An answerer that calls itself "agent" (the name `wire answer` signs with): the flow's
+    // automatic keeps must read apart from Jev's and from a person's hand keep.
+    const h = reducerPort();
+    const port = { ...h.port, actor: { id: "act_acme_agent", name: "Acme Agent" } };
+    const stub = stubAnswerer(3);
+    const agent: Answerer = { ...stub, name: stub.name, answer: async (req) => ({ ...(await stub.answer(req)), by: "agent" }) };
+    const composed = await composeFlow(port, REQUEST, agent);
+    expect(composed.prototype?.answerer).toBe("agent");
+    const picks = h.log.filter((l) => l.op.type === "item.update" && "properties" in l.op.patch && l.op.patch.properties?.wireKeep !== undefined);
+    expect(picks.length).toBe(composed.prototype!.screens.length);
+    expect(picks.length).toBeGreaterThan(0);
+    for (const s of composed.prototype!.screens) {
+      const item = h.items().find((i) => i.id === s.item)!;
+      expect(item.properties?.wireKeepBy).toBe("agent");
+      expect(keptBy(item)).toEqual({ auto: true, answerer: "agent" });
+    }
+    expect(prototypeWords(2, "agent")).toBe("prototype of 2 screens, the agent's first choices");
   });
 
   it("reads an answerer's name as who answered", () => {

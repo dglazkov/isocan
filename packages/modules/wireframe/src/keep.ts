@@ -13,7 +13,7 @@ import { wireframeModule } from "./record.ts";
  *
  * **Who put it on** rides beside it as `wireKeepBy` (24 Sep 2026): the
  * actor's id when a person or an agent used a screen — ⇧K, the menu, the
- * CLI — and the answerer (`jev`, `stub`) when a composed flow put its first
+ * CLI — and the answerer (`jev`, `stub`, `agent`) when a composed flow put its first
  * choices in the prototype itself. A person swapping in a variation, or
  * taking one of Jev's picks out, is the calibration signal, so the two must
  * read apart.
@@ -35,7 +35,7 @@ export const KEEP_EMOJI = KEEP_MARK.emoji;
 export const KEEP_BY_PROP = `${KEEP_PROP}By`;
 
 /** The answerers whose picks a flow makes on its own — a `wireKeepBy` holding one of these is a machine's choice. */
-export const AUTO_KEEPERS: readonly string[] = ["jev", "stub"];
+export const AUTO_KEEPERS: readonly string[] = ["jev", "stub", "agent"];
 
 export function isKept(item: Item): boolean {
   return Boolean(item.properties?.[KEEP_PROP]);
