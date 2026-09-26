@@ -234,7 +234,7 @@ describe("isocan wire style", () => {
     h.designVersion("ds-warm", ACME_WARM.replace("#d10a72", "#b0085f"));
     const check = await h.cli("wire", "style", "--check");
     expect(check).toContain(`${n} of ${n} wires are not in the system that governs them`);
-    expect(check).toMatch(/behind: drawn in "Acme Warm" version 1, governed by "DESIGN.md" version 2 of 2/);
+    expect(check).toMatch(/behind: drawn in "Acme Warm" version 1, governed by "DESIGN.md" version 2 of 2 · Restyle to Acme Warm: `isocan wire style itm_/);
     const calls = jev.length;
     const before = h.sent.length;
     await h.cli("wire", "style", "--answerer", "jev");
@@ -243,6 +243,12 @@ describe("isocan wire style", () => {
     expect(h.sent.length - before).toBe(n + 1);
     for (const w of h.wires()) expect(h.specOf(w.id).style).toMatchObject({ versionId: "ds-warm-v2" });
     expect(h.htmlOf(h.wires()[0]!.id)).toContain("--w-primary:#b0085f");
+
+    // A version that only adds tints moves nothing a wire draws from: not behind (the canvas's mark agrees), and nothing written.
+    h.designVersion("ds-warm", ACME_WARM.replace("#d10a72", "#b0085f").replace('  on-accent: "#ffffff"', '  on-accent: "#ffffff"\n  tint-1: "#fbe3ef"'));
+    const quiet = h.sent.length;
+    expect(await h.cli("wire", "style", "--check")).toContain(`all ${n} wires draw in the system that governs them`);
+    expect(h.sent.length).toBe(quiet);
   });
 
   it("--default restores the greys, as one more op group", async () => {

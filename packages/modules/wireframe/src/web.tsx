@@ -1,7 +1,9 @@
 import "../assets/styles.css";
 import type { ComponentType } from "react";
 import type { DialogFacts, UnderlayFacts, WebModule } from "@isocan/core";
-import { WireArrows, cachedSpec } from "./arrows.tsx";
+import { WireArrows } from "./arrows.tsx";
+import { WireBehind } from "./behind-marks.tsx";
+import { cachedSpec } from "./spec-cache.ts";
 import { PrototypeLight } from "./prototype-light.tsx";
 import { wireframeCore } from "./command.ts";
 import { WireDialog } from "./dialog.tsx";
@@ -16,11 +18,12 @@ import { styleMenu } from "./style-menu.ts";
  * dialog (the composer, the prototype, the restyle — the CLI's own code over
  * the dialog's host) and the arrows between kept screens.
  */
-/** One underlay slot (its predicate is `activation.ts`'s): the maybe marks, the arrows between kept screens, and a selected prototype's screens lit. */
+/** One underlay slot (its predicate is `activation.ts`'s): the maybe marks, the "behind" marks, the arrows between kept screens, and a selected prototype's screens lit. */
 function WireUnderlay(facts: UnderlayFacts) {
   return (
     <>
       <WireMaybes canvas={facts.canvas} drag={facts.drag} />
+      <WireBehind {...facts} />
       <WireArrows {...facts} />
       <PrototypeLight canvas={facts.canvas} selection={facts.selection} drag={facts.drag} specOf={cachedSpec} />
     </>

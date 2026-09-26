@@ -280,6 +280,20 @@ arrives, the wires say they are behind it (the spec names the version) and
 edit is refused for now — it would rewrite forty items behind somebody's
 back.
 
+*Saying so on the canvas* (26 Sep 2026, the Stitch Loop review): a wire
+behind its system shows a small quiet **behind** tag under its bottom-right
+corner, and the DESIGN.md one saying how many wires are behind it — both
+derived on every render from the wire's spec and the system's current file
+(`behind.ts`), never written. Clicking either, or *Restyle to <system>* in
+the item menu, runs `wire style <screens>` for those wires' flows: one op
+group, one undo — the person's click, so the refusal above stands. "Behind"
+is narrower than "drawn from an older version": a wire is behind when a
+token one of its roles took is gone or holds another value, a role that had
+nothing to draw from now has something, or the `surface:` changed. A
+version that only adds tints is not — the restyle would write nothing for it
+(`alreadyLooks`, Porchlight #9), and a mark no click can clear is noise.
+`wire style --check` reads the same function, in the same words.
+
 **Wire styles — a named look** (24 Sep 2026, Dion: *"change the style from
 'house' (default) to 'material' … 'shadcn' maybe with glassmorphism … and
 others most popular"*, and *"right click on a wire and have 'Style'"*). A

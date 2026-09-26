@@ -9,6 +9,7 @@ import { PROTOTYPE_PROP, playAnchor } from "./prototype.ts";
 import { readWire, renderWire } from "./render.ts";
 import { arrowId, estimatedHot, labelShown, roundedPath, routeFlow, type FlowArrow, type HotRect, type NeedsMark, type RouteBox } from "./route.ts";
 import type { WireSpec } from "./spec.ts";
+import { specs } from "./spec-cache.ts";
 
 /**
  * **The arrows between kept screens** (design §7; phase 8, research *Flow
@@ -36,9 +37,6 @@ import type { WireSpec } from "./spec.ts";
  * under the items, in world units, like the mind map's lines.
  */
 
-const specs = new Map<string, WireSpec | null>();
-/** A kept screen's spec by its version's hash, as the arrows have read it — null: not a wire; undefined: not read yet. */
-export const cachedSpec = (hash: string): WireSpec | null | undefined => specs.get(hash);
 /**
  * The name strip files rendered before phase 8 drew above the device frame,
  * in px. Today's renderer draws none (`CAPTION_HEIGHT` is 0), but screens

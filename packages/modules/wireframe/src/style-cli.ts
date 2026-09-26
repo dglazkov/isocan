@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { Command } from "commander";
-import { moduleAsset, type CanvasContents, type Item } from "@isocan/core";
+import { moduleAsset, type CanvasContents, type DesignDoc, type Item } from "@isocan/core";
 import { packagePath } from "@isocan/core/packageroot";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { cliAnswerer, cliPort } from "./cli-port.ts";
@@ -8,7 +8,8 @@ import { mappingSaver } from "./compose-cli.ts";
 import { wiresOn, type Screen } from "./flow.ts";
 import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, flowScreens, presetFile, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
 import { wireframeModule } from "./record.ts";
-import { StyleResolver, governingSystem, mappingLines, restyle, restyleSummary } from "./restyle.ts";
+import { checkWire, checkWords, readSystemDoc, restyleLabel, specKey, systemsToRead, type DocOf } from "./behind.ts";
+import { StyleResolver, mappingLines, restyle, restyleSummary } from "./restyle.ts";
 import { wireTitle, type WireSpec } from "./spec.ts";
 
 /**
@@ -53,16 +54,6 @@ function readable(preset: WirePreset): boolean {
  */
 
 export { StyleResolver, governingSystem, mappingLines, type Mapping } from "./restyle.ts";
-
-type CheckState = "current" | "behind" | "other system" | "not in it yet" | "no system governs";
-
-function checkState(spec: WireSpec, system: Item | null): CheckState {
-  const s = spec.style;
-  if (!system) return s?.source === "design-system" ? "no system governs" : "current";
-  if (s?.source !== "design-system") return "not in it yet";
-  if (s.itemId !== system.id) return "other system";
-  return s.versionId === system.currentVersionId ? "current" : "behind";
-}
 
 export function registerStyle(host: CliHost, wire: Command): void {
   const { run, ctxOf, resolveCanvas, printJson } = host;
@@ -127,7 +118,12 @@ export function registerStyle(host: CliHost, wire: Command): void {
           return;
         }
 
-        if (opts.check) return check(canvas, screens.map((s) => ({ screen: s, item: canvas.items[s.item]! })), ctx.json, printJson, say);
+        if (opts.check) {
+          // Each governing system's current file, read once: behind means something a wire draws from moved (`stillDraws`).
+          const read = new Map<string, DesignDoc | null>();
+          for (const system of systemsToRead(canvas, (hash) => all.find((s) => specKey(canvas.items[s.item]!) === hash)?.spec)) read.set(system.id, await readSystemDoc(system, (h) => port.readText(h)));
+          return check(canvas, screens.map((s) => ({ screen: s, item: canvas.items[s.item]! })), (system) => read.get(system.id), ctx.json, printJson, say);
+        }
 
         // An agent answers rounds, not a mapping: `--answerer agent` maps with whatever this machine has.
         const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? undefined : opts.answerer, Number(opts.seed ?? 1), say);
@@ -178,31 +174,16 @@ function listPresets(json: boolean, printJson: (v: unknown) => void, say: (line:
 function check(
   canvas: CanvasContents,
   wires: Array<{ screen: Screen; item: Item }>,
+  docOf: DocOf,
   json: boolean,
   printJson: (v: unknown) => void,
   say: (line: string) => void,
 ): void {
-  const rows = wires.map(({ screen, item }) => {
-    const system = governingSystem(canvas, item);
-    const state = checkState(screen.spec, system);
-    const drawnBy = screen.spec.style?.source === "design-system" ? screen.spec.style : null;
-    const drawnVersion = drawnBy ? canvas.items[drawnBy.itemId]?.versions.findIndex((v) => v.id === drawnBy.versionId) : undefined;
-    return {
-      itemId: item.id,
-      title: wireTitle(screen.spec),
-      state,
-      governedBy: system ? { itemId: system.id, title: system.title, version: system.versions.findIndex((v) => v.id === system.currentVersionId) + 1, versions: system.versions.length } : null,
-      drawnBy: drawnBy ? { itemId: drawnBy.itemId, version: drawnVersion !== undefined && drawnVersion >= 0 ? drawnVersion + 1 : null, name: drawnBy.name ?? null } : "default",
-    };
-  });
+  // The canvas's "behind" mark and its Restyle to <system> read this same check (`behind.ts`), in the same words.
+  const rows = wires.map(({ screen, item }) => ({ ...checkWire(canvas, item, screen.spec, docOf), title: wireTitle(screen.spec) }));
   if (json) return printJson({ wires: rows, behind: rows.filter((r) => r.state !== "current").length });
   const off = rows.filter((r) => r.state !== "current");
-  for (const r of off) {
-    const d = r.drawnBy;
-    const was = typeof d === "string" ? "the default look" : `"${d.name ?? d.itemId}" version ${d.version ?? "?"}`;
-    const is = r.governedBy ? `"${r.governedBy.title}" version ${r.governedBy.version} of ${r.governedBy.versions}` : "no system";
-    say(`${r.itemId}  ${r.title} — ${r.state}: drawn in ${was}, governed by ${is}`);
-  }
+  for (const r of off) say(`${r.itemId}  ${r.title} — ${checkWords(r)}${r.state === "behind" ? ` · ${restyleLabel(r)}: \`isocan wire style ${r.itemId}\`` : ""}`);
   say(off.length === 0
     ? `all ${rows.length} wires draw in the system that governs them — nothing to bring forward`
     : `${off.length} of ${rows.length} wires are not in the system that governs them — \`isocan wire style\` brings them forward`);

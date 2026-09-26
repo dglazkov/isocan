@@ -1,11 +1,16 @@
 import { Command } from "commander";
 import { describe, expect, it, vi } from "vitest";
 import type { CliHost } from "@isocan/cli/modulehost";
-import { moduleMarkPatch, type CanvasContents, type DialogHost, type Item, type Operation } from "@isocan/core";
+import { moduleMarkPatch, parseDesign, type CanvasContents, type DialogHost, type Item, type Operation, type WebHost } from "@isocan/core";
+import { WireBehind, restyleOnCanvas } from "../src/behind-marks.tsx";
+import { checkWords, restyleLabel, wiresBehind } from "../src/behind.ts";
+import { docs, specs } from "../src/spec-cache.ts";
+import { styleMenu } from "../src/style-menu.ts";
+import { ACME_WARM } from "./fixtures/design-systems.ts";
 import { wireframeCore } from "../src/command.ts";
 import wireframeCli from "../src/cli.ts";
 import { keptArrows } from "../src/arrows.tsx";
-import { composeOnWeb, fleshOnWeb, modeOf, presetOnWeb, prototypeRecordWords } from "../src/dialog.tsx";
+import { composeOnWeb, fleshOnWeb, modeOf, presetOnWeb, prototypeRecordWords, restyleOnWeb } from "../src/dialog.tsx";
 import { presetText } from "../src/style-cli.ts";
 import { WireMaybes } from "../src/maybe-marks.tsx";
 import { KEEP_PROP, MAYBE_PROP, homeAnswerer, homeOrStub, readWire, renderWire, stubAnswerer, wireframe, type WireSpec } from "../src/core.ts";
@@ -510,5 +515,115 @@ describe("the home answerer", () => {
   it("checks the home's answer against the question, as Jev's is", async () => {
     const bad = homeAnswerer(async () => ({ answers: { pick: { type: "choice", choice: "fridge", probabilities: { a: 1 } } } }), "canvas-acme");
     await expect(bad.answer(request)).rejects.toThrow(/choice "fridge" is not one of a, b/);
+  });
+});
+
+describe("a wire behind its design system", () => {
+  /** A DESIGN.md the way `isocan design set` leaves one — added straight to the canvas, the same on both surfaces. */
+  const designOn = (c: ReturnType<typeof memoryCanvas>, text: string) => {
+    const existing = c.items.get("ds-acme");
+    const v = { id: `ds-acme-v${(existing?.versions.length ?? 0) + 1}`, blobHash: c.store(text), mimeType: "text/markdown", filename: "DESIGN.md" };
+    if (existing) {
+      existing.versions.push(v);
+      existing.currentVersionId = v.id;
+    } else c.items.set("ds-acme", { id: "ds-acme", title: "DESIGN.md", properties: { role: "design-system" }, x: -2000, y: 0, width: 400, height: 600, currentVersionId: v.id, versions: [v] });
+  };
+  // A new typeface: the seeded stub is unsure of every colour, and the one face is taken directly ("only").
+  const V2 = ACME_WARM.replaceAll("Archivo", "Inter");
+  const firstWire = (c: ReturnType<typeof memoryCanvas>) => [...c.items.values()].find((i) => i.properties.fidelity === "wireframe" && !i.properties.wirePrototype)!.id;
+  const specOf = (c: ReturnType<typeof memoryCanvas>) => (hash: string) => readWire(c.blobs.get(hash) ?? "");
+  const docOf = (c: ReturnType<typeof memoryCanvas>) => (system: Item) => parseDesign(c.blobs.get(system.versions.find((v) => v.id === system.currentVersionId)!.blobHash)!);
+
+  it("is not behind a new version that moved nothing it draws from (Porchlight #9) — the restyle would write nothing, so the mark says nothing", async () => {
+    const web = await viaWeb();
+    designOn(web.c, ACME_WARM);
+    await restyleOnWeb("canvas-acme", web.host, false);
+    // v2 adds tints and nothing else.
+    designOn(web.c, ACME_WARM.replace('  on-accent: "#ffffff"', '  on-accent: "#ffffff"\n  tint-1: "#fbe3ef"\n  tint-2: "#f5c2dc"'));
+    expect(wiresBehind(web.c.contents(), specOf(web.c), docOf(web.c))).toEqual([]);
+    // Without the file read, an older version is all there is to go on.
+    expect(wiresBehind(web.c.contents(), specOf(web.c), () => null).length).toBeGreaterThan(0);
+  });
+  const lastAct = (c: ReturnType<typeof memoryCanvas>) => {
+    const group = c.sent[c.sent.length - 1]!.group;
+    return c.sent.filter((s) => s.group === group);
+  };
+
+  it("is derived from the spec and the DESIGN.md's current version: behind after a new version, current after the restyle", async () => {
+    const web = await viaWeb();
+    designOn(web.c, ACME_WARM);
+    await restyleOnWeb("canvas-acme", web.host, false);
+    expect(wiresBehind(web.c.contents(), specOf(web.c), docOf(web.c))).toEqual([]);
+
+    designOn(web.c, V2);
+    const behind = wiresBehind(web.c.contents(), specOf(web.c), docOf(web.c));
+    const wires = [...web.c.items.values()].filter((i) => i.properties.fidelity === "wireframe" && !i.properties.wirePrototype);
+    expect(behind.map((c) => c.itemId).sort()).toEqual(wires.map((w) => w.id).sort());
+    // The words `isocan wire style --check` prints for the same wire.
+    expect(checkWords(behind[0]!)).toBe('behind: drawn in "Acme Warm" version 1, governed by "DESIGN.md" version 2 of 2');
+    expect(restyleLabel(behind[0]!)).toBe("Restyle to Acme Warm");
+
+    await restyleOnWeb("canvas-acme", web.host, false, [firstWire(web.c)]);
+    expect(wiresBehind(web.c.contents(), specOf(web.c), docOf(web.c))).toEqual([]);
+  });
+
+  it("Restyle to <system> sends what `isocan wire style <screen>` sends — one op group", async () => {
+    const cli = await viaCli([
+      (c) => (designOn(c, ACME_WARM), ["wire", "style", "--answerer", "stub", "--seed", "4"]),
+      (c) => (designOn(c, V2), ["wire", "style", "--answerer", "stub", "--seed", "4", firstWire(c)]),
+    ]);
+    const web = await viaWeb();
+    designOn(web.c, ACME_WARM);
+    await restyleOnWeb("canvas-acme", web.host, false);
+    designOn(web.c, V2);
+    await restyleOnWeb("canvas-acme", web.host, false, [firstWire(web.c)]);
+    const a = shapeOf(lastAct(cli));
+    const b = shapeOf(lastAct(web.c));
+    expect(b).toEqual(a);
+    expect(b.groups).toBe(1);
+    expect(b.ops.length).toBeGreaterThan(1);
+  });
+
+  it("the menu and the mark offer it, and nothing is written by looking", async () => {
+    const web = await viaWeb();
+    designOn(web.c, ACME_WARM);
+    await restyleOnWeb("canvas-acme", web.host, false);
+    designOn(web.c, V2);
+    const canvas = web.c.contents();
+    const wire = firstWire(web.c);
+    const n = wiresBehind(canvas, specOf(web.c), docOf(web.c)).length;
+    // What the canvas has read, as the mark reads it (spec-cache.ts).
+    for (const item of Object.values(canvas.items)) for (const v of item.versions) if (v.mimeType === "text/html") specs.set(v.blobHash, readWire(web.c.blobs.get(v.blobHash)!));
+    const system = canvas.items["ds-acme"]!;
+    docs.set(system.versions.find((v) => v.id === system.currentVersionId)!.blobHash, docOf(web.c)(system));
+    const sentBefore = web.c.sent.length;
+
+    const opened: string[] = [];
+    const open = (dialog: string, args: string) => opened.push(`${dialog} ${args}`);
+    const onWire = styleMenu({ canvas, items: [canvas.items[wire]!], open });
+    expect(onWire[0]).toMatchObject({ label: "Restyle to Acme Warm", writes: true });
+    (onWire[0] as { run: () => void }).run();
+    expect(opened).toEqual([`wire style system ${wire}`]);
+    expect(modeOf(`style system ${wire}`)).toEqual({ kind: "style", toDefault: false, screens: [wire] });
+    const onSystem = styleMenu({ canvas, items: [canvas.items["ds-acme"]!], open });
+    expect(onSystem).toEqual([expect.objectContaining({ label: "Restyle to Acme Warm", value: `${n} wires behind` })]);
+
+    const lib = "react-dom/server";
+    const { renderToStaticMarkup } = (await import(lib)) as { renderToStaticMarkup: (el: unknown) => string };
+    const { createElement } = await import("react");
+    const ran: string[] = [];
+    const host = {
+      runCommand: async (t: string) => (ran.push(t), "local"),
+      send: async () => {
+        throw new Error("looking wrote something");
+      },
+    } as unknown as WebHost;
+    const html = renderToStaticMarkup(createElement(WireBehind, { canvas, drag: null, host, canEdit: true, past: false }));
+    expect(html).toContain(`data-wire-behind="${wire}"`);
+    expect(html).toContain('title="behind: drawn in &quot;Acme Warm&quot; version 1, governed by &quot;DESIGN.md&quot; version 2 of 2 — Restyle to Acme Warm"');
+    expect(html).toContain(`>${n} wires behind</button>`);
+    expect(web.c.sent.length).toBe(sentBefore);
+    restyleOnCanvas(host, [wire]);
+    expect(ran).toEqual([`/wire style system ${wire}`]);
   });
 });

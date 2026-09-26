@@ -34,7 +34,8 @@ type Mode =
   | { kind: "form" }
   | { kind: "compose"; request: string; basic?: true }
   | { kind: "prototype" }
-  | { kind: "style"; toDefault: boolean }
+  // `screens`: only these wires' flows — the "behind" mark and Restyle to <system> (`behind.ts`), `wire style <screens…>`.
+  | { kind: "style"; toDefault: boolean; screens?: string[] }
   // Wire styles (presets.ts): `/wire style <name>` chooses one; `/wire style` alone lists them to pick from.
   | { kind: "preset"; name: string }
   | { kind: "styles" }
@@ -57,6 +58,8 @@ export function modeOf(args: string): Mode {
   if (first === "style" && rest.length === 1 && (rest[0] === "--default" || rest[0] === "default")) return { kind: "style", toDefault: true };
   // `system`: every wire in the design system that governs it — what `/wire style` alone did before the wire styles.
   if (first === "style" && rest.length === 1 && rest[0] === "system") return { kind: "style", toDefault: false };
+  // `system <ids…>`: those wires' flows only — what the canvas's Restyle to <system> sends.
+  if (first === "style" && rest.length > 1 && rest[0] === "system") return { kind: "style", toDefault: false, screens: rest.slice(1) };
   // One more word is a style's name — a wrong one is refused with the list (`presetOrSay`), never composed as a request.
   if (first === "style" && rest.length === 1) return { kind: "preset", name: rest[0]!.toLowerCase() };
   if (first === "flesh") {
@@ -132,13 +135,20 @@ function record(host: DialogHost, group: string, lines: readonly string[], items
   host.send([chatRecordOp(host.getCanvas(), lines, items)], group).catch(() => {});
 }
 
-export async function restyleOnWeb(canvasId: string, host: DialogHost, toDefault: boolean) {
+/**
+ * `/wire style system` (every wire), `/wire style --default`, and — with
+ * `screens` — the canvas's Restyle to <system>: those wires' flows, exactly
+ * as `isocan wire style <screens…>` picks them (`flowScreens`).
+ */
+export async function restyleOnWeb(canvasId: string, host: DialogHost, toDefault: boolean, screens: readonly string[] = []) {
   const port = webPort(canvasId, host);
   const canvas = await port.canvas();
   const all = await wiresOn(port, canvas);
   if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+  const named = screens.filter((id) => all.some((s) => s.item === id));
+  if (screens.length && !named.length) throw new Error("Those wires are not on this canvas any more — nothing to restyle.");
   const resolver = new StyleResolver(port, webAnswerer(canvasId, host), async () => all.map((s) => s.spec));
-  return restyle(port, canvas, all, all, resolver, { toDefault });
+  return restyle(port, canvas, all, flowScreens(all, named), resolver, { toDefault });
 }
 
 /**
@@ -227,7 +237,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       await runPrototype();
     } else if (m.kind === "style") {
       setStatus(m.toDefault ? "Back to the default look…" : "Mapping the design system onto the wires…");
-      const r = await restyleOnWeb(canvasId, host, m.toDefault);
+      const r = await restyleOnWeb(canvasId, host, m.toDefault, m.screens);
       host.notice(restyleSummary(r));
       if (r.changed.length) record(host, r.group, [`${m.toDefault ? "back to the default look" : "restyled in the design system that governs each wire"}: ${restyleSummary(r)}.`]);
       host.close();
