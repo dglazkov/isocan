@@ -37,7 +37,11 @@ export function activityOpType(op: Operation): OperationType {
  * is what makes them composable into a sentence by callers that resolve names
  * differently — the web through an actor map, the CLI through its own.
  */
-const OP_WORDS: Partial<Record<OperationType, string>> = {
+const OP_WORDS: Record<OperationType, string> = {
+  "actor.claim": "named themselves",
+  "actor.setColor": "changed their colour",
+  "actor.setMark": "changed their mark",
+  "actor.join": "joined two identities",
   "design.repair": "repaired a design",
   "design.compare": "published design alternatives",
   "design.respond": "responded to design alternatives",
@@ -48,6 +52,7 @@ const OP_WORDS: Partial<Record<OperationType, string>> = {
   "group.change": "changed a canvas group",
   "project.create": "made the canvas",
   "project.update": "renamed the canvas",
+  "project.delete": "deleted the canvas",
   "item.add": "added something",
   "item.delete": "deleted something",
   "items.delete": "deleted several things",
@@ -93,8 +98,11 @@ const OP_WORDS: Partial<Record<OperationType, string>> = {
  * something" instead.
  *
  * That is not two surfaces disagreeing. Every op the system HAS is in the
- * table and both read the same words from it; they differ only on an op that
- * does not exist yet, where their audiences genuinely want different things.
+ * table — the table is a full `Record<OperationType, string>`, so a new op
+ * without a phrase is a compile error rather than a silent gap — and both
+ * read the same words from it; they differ only on a type string that is not
+ * an op at all (an old log line, a future op read by an older client), where
+ * their audiences genuinely want different things.
  */
 export function opWords(type: string | undefined): string | undefined {
   if (!type) return undefined;
