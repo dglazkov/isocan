@@ -35,9 +35,16 @@ describe("the zoom thresholds read one rule", () => {
   });
 
   it("ItemView hands each rule its last answer, so the memory is actually used", () => {
-    expect(itemView).toMatch(/held\.r = hasRoomForChrome\([^)]*held\.r\)/);
-    expect(itemView).toMatch(/held\.t = textIsLegible\([^)]*held\.t\)/);
-    expect(itemView).toMatch(/held\.s = underRowSpellsItOut\([\s\S]*?held\.s\)/);
+    // Since 26 Sep the rules run in `zoomDecisions` (lib/chrome.ts), inside the
+    // store selector, so a zoom re-renders an item only when a decision flips.
+    // The memory is still each rule's last answer: the selector hands it in,
+    // and the item writes the answer back from the bits it rendered.
+    expect(chrome).toMatch(/hasRoomForChrome\([^)]*held\.r\)/);
+    expect(chrome).toMatch(/textIsLegible\([\s\S]*?held\.t\)/);
+    expect(chrome).toMatch(/underRowSpellsItOut\([\s\S]*?held\.s\)/);
+    expect(itemView).toContain("held.r = (zoom & Z_ROOMY) !== 0");
+    expect(itemView).toContain("held.t = (zoom & Z_LEGIBLE) !== 0");
+    expect(itemView).toContain("held.s = (zoom & Z_SPELL) !== 0");
     // The preview mounts on the SAME held answer as the chrome, not a fresh one.
     expect(itemView).toContain("!(nearWindow && roomy)");
   });

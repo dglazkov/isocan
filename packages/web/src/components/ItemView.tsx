@@ -19,7 +19,6 @@ import {
   isCanvasItem,
   canvasIdOf,
   automaticCanvasTarget,
-  KIND_MARK_MIN,
   sourceOf,
   areaGrid,
   areaInner,
@@ -35,9 +34,7 @@ import {
   SLIDE_EMOJI,
   textFaceOf,
   textDrawSize,
-  textIsLegible,
   textStyleOf,
-  textMarkSize,
   TEXT_FACE_STACK,
   parseUriList,
   renamedFilename,
@@ -56,7 +53,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { counterScale, hasRoomForChrome, titleRow, underRow, underRowSpellsItOut, underSlotFor } from "../lib/chrome.ts";
+import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 /**
@@ -111,6 +108,8 @@ import { usePresentation, currentPresentation } from "../lib/canvasPresentation.
 import { presentedItem, presentedCanvas, presentedOffset } from "../lib/presentation.ts";
 
 const DesignRecordFace = lazy(() => import("./DesignRecordFace.tsx").then((module) => ({ default: module.DesignRecordFace })));
+
+
 
 function ItemViewInner({
   item,
@@ -179,7 +178,6 @@ function ItemViewInner({
   const entered = useUiStore((s) => s.enteredItemId === item.id);
   const renaming = useUiStore((s) => s.renamingItemId === item.id);
   const peeked = useUiStore((s) => s.peekedItemId === item.id);
-  const scale = useUiStore((s) => s.viewport.scale);
   const commentMode = useUiStore((s) => s.commentMode);
   const canEdit = useCanEdit();
   /**
@@ -222,17 +220,22 @@ function ItemViewInner({
   // An item's chrome — its name and its version count — is UI, not content:
   // it should stay the size of a label however far out you zoom, the way the
   // comment pins do. Inside the scaled world that means counter-scaling.
-  const chrome = counterScale(scale);
+  // Counter-scaled by CSS from the world's `--scale`, so zooming moves it
+  // without a render — see `zoomDecisions`.
+  const chrome = COUNTER_SCALED_CSS;
   // What each zoom rule answered last render, for core's hysteresis
   // (`holdsAtZoom`): an item resting on a threshold keeps what it has rather
   // than blinking it on every sub-pixel wobble. Per item, never global.
-  const held = useRef<{ r?: boolean; t?: boolean; s?: boolean }>({}).current;
-  const roomy = (held.r = hasRoomForChrome(width, height, scale, held.r));
-  // Screen pixels available to the name, once the star at the other end and
-  // the row's own inset are taken off the top. Constant across selection.
-  // The rule lives in lib/chrome.ts so a test can reach it without a browser —
-  // there is no floor, and chrome.test.ts is where that is held.
-  const row = titleRow(width, scale);
+  const held = useRef<ZoomHeld>({}).current;
+  // The zoom, as the decisions it drives here and nothing finer — so this item
+  // re-renders when one of them flips, not on every step of a zoom.
+  const zoom = useUiStore((s) => zoomDecisions(item, width, height, s.viewport.scale, held));
+  const roomy = (held.r = (zoom & Z_ROOMY) !== 0);
+  // Which of the icon and the name the title row keeps. The rule lives in
+  // lib/chrome.ts (`titleRow`) so a test can reach it without a browser — there
+  // is no floor, and chrome.test.ts is where that is held. The ROOM the name
+  // gets is CSS, from `--w` and `--scale` (`nameRoomCss`).
+  const row = { icon: (zoom & Z_ICON) !== 0, name: (zoom & Z_NAME) !== 0 };
 
   /**
    * **A hovered name reaches into the empty space beside it.**
@@ -267,6 +270,8 @@ function ItemViewInner({
    */
   const manySelected = useUiStore((st) => st.selectedItemIds.length > 1);
   const mayReach = !renaming && !manySelected && (hovered || selected);
+  // The one or two items that may reach follow the raw scale; the rest do not.
+  const reachScale = useUiStore((st) => (mayReach ? st.viewport.scale : 1));
   const reach = useCanvasStore((st) => {
     if (!mayReach) return null;
     const all = st.canvas?.items;
@@ -276,7 +281,7 @@ function ItemViewInner({
     // its SCREEN height is fixed (11px type at 1.4 line height) and the world
     // band it covers grows as you zoom out — which is exactly when labels
     // start reaching across neighbours, so the conversion matters.
-    const strip = TITLE_STRIP_PX / scale;
+    const strip = TITLE_STRIP_PX / reachScale;
     const others: Neighbour[] = [];
     for (const other of Object.values(all)) {
       if (other.id === item.id) continue;
@@ -293,7 +298,7 @@ function ItemViewInner({
         titled: chosen.includes(other.id),
       });
     }
-    return titleRoom(item, others, strip, TITLE_GAP_PX / scale);
+    return titleRoom(item, others, strip, TITLE_GAP_PX / reachScale);
   });
   const kind = iconKindFor(item);
   /**
@@ -388,8 +393,7 @@ function ItemViewInner({
    * it the honest thing to draw is nothing — the minimap is the view that
    * answers "what is where" at that scale, and it answers it better.
    */
-  const markPx = textMarkSize(width, height, scale);
-  const kindMark = !roomy && !isText && !picture && !isAreaItem && markPx >= KIND_MARK_MIN;
+  const kindMark = !roomy && !isText && !picture && !isAreaItem && (zoom & Z_MARK) !== 0;
   const tint = isAreaItem ? areaTint(item) : null;
   const grid = isAreaItem ? areaGrid(item) : null;
   const inner = isAreaItem ? areaInner(item) : null!;
@@ -401,7 +405,7 @@ function ItemViewInner({
   // the control promised. The composer measures with the same number, so the
   // node lands the shape it looked while being typed.
   const textSize = isText ? textDrawSize(item) : 0;
-  const textLegible = !isText || (held.t = textIsLegible(textSize, scale, held.t));
+  const textLegible = !isText || (held.t = (zoom & Z_LEGIBLE) !== 0);
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
   const isMark = isAnnotation(item);
@@ -429,7 +433,7 @@ function ItemViewInner({
   // Does the under-item line have room to spell the button out beside the
   // icon? Marks count against the room — they share the line — so a marked
   // item drops to the icon sooner instead of running the row off its edge.
-  const spellItOut = (held.s = underRowSpellsItOut(width, scale, Object.keys(item.reactions ?? {}).length, held.s));
+  const spellItOut = (held.s = (zoom & Z_SPELL) !== 0);
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -855,6 +859,9 @@ function ItemViewInner({
         top: y,
         width,
         height,
+        // The box in world units, for the chrome's CSS to size itself from
+        // against the world's `--scale` (`nameRoomCss`, `UNDER_ROW`).
+        ...({ "--w": width, "--h": height } as React.CSSProperties),
         ...(remoteHolder && !selected
           ? { outline: `2px dashed ${actorColorIn(colors, remoteHolder)}`, outlineOffset: "1px" }
           : {}),
@@ -989,11 +996,11 @@ function ItemViewInner({
                `nameRoom`: hovering must not shrink a label. */
             maxWidth:
               reach === null
-                ? row.nameRoom
+                ? nameRoomCss(row)
                 : /* Nothing in the way: no limit, said as `none` rather than
                      as a very large pixel count. */
                   Number.isFinite(reach)
-                  ? Math.max(row.nameRoom, reach * scale)
+                  ? `max(${nameRoomCss(row)}, calc(${reach}px * var(--scale)))`
                   : "none",
             // The row is here if anything in it is. Which of the icon and the
             // name survive at this size is `titleRow`'s call, and they do NOT
@@ -1178,7 +1185,7 @@ function ItemViewInner({
           <span
             className="text-mark"
             aria-label={item.title}
-            style={{ fontSize: `${textMarkSize(width, height, scale) / scale}px` }}
+            style={{ fontSize: TEXT_MARK_CSS }}
           >
             T
           </span>
@@ -1229,7 +1236,7 @@ function ItemViewInner({
           <span
             className="kind-mark"
             aria-hidden
-            style={{ "--mark": `${markPx / scale}px` } as React.CSSProperties}
+            style={{ "--mark": TEXT_MARK_CSS } as React.CSSProperties}
           >
             <KindIcon kind={kind} />
           </span>
@@ -1258,7 +1265,7 @@ function ItemViewInner({
           are dragging a corner, the live number is the point, and
           "double-click to interact" is something you have already read. */}
       {roomy && !entered && (underSlot !== null || reactionRow) && (
-        <div className="item-under" style={underRow(width, scale)}>
+        <div className="item-under" style={UNDER_ROW_CSS}>
           {/* Persistent, and therefore first: a mark is something the item is
               wearing, where the rest of the row is about your current gesture. */}
           <Reactions

@@ -776,3 +776,78 @@ describe("document previews retain their shell without mounting unreadable conte
     expect(hasRoomForChrome(180, 120, 1)).toBe(true);
   });
 });
+
+/**
+ * **The CSS forms are the JS rules, number for number** (26 Sep 2026).
+ *
+ * Zooming used to re-render every item, because every item read the raw scale
+ * to work out its chrome in JS. The continuous half of that chrome is now CSS
+ * against the world's `--scale` — and CSS nobody can run in a unit test is
+ * exactly where a rule forks quietly. So each form is evaluated here, with
+ * `--w`, `--h` and `--scale` substituted, and held to the function it replaced
+ * across widths, heights and zooms from 5% to 400%.
+ */
+describe("the chrome's CSS forms compute what the functions did", async () => {
+  const chrome = await import("../src/lib/chrome.ts");
+  const core = await import("@isocan/core");
+  /** `calc`, `clamp`, `min`, `max` and `px`, for these forms and nothing more. */
+  const evaluate = (css: string, w: number, h: number, scale: number): number => {
+    const js = css
+      .replace(/var\(--w\)/g, String(w))
+      .replace(/var\(--h\)/g, String(h))
+      .replace(/var\(--scale\)/g, String(scale))
+      .replace(/(\d)px/g, "$1")
+      .replace(/calc\(/g, "(")
+      .replace(/clamp\(/g, "__clamp(")
+      .replace(/\bmin\(/g, "Math.min(")
+      .replace(/\bmax\(/g, "Math.max(");
+    const __clamp = (lo: number, v: number, hi: number) => Math.min(Math.max(lo, v), hi);
+    return new Function("__clamp", `return ${js};`)(__clamp) as number;
+  };
+  const widths = [8, 16, 40, 120, 240, 480, 960, 2400];
+  const zooms = [0.05, 0.1, 0.16, 0.25, 0.4, 0.6, 1, 1.6, 2.5, 4];
+
+  it("counter-scales by one over the zoom", () => {
+    const inner = /^scale\((.*)\)$/.exec(String(chrome.COUNTER_SCALED_CSS.transform))![1]!;
+    for (const scale of zooms) {
+      const js = Number(/scale\(([^)]+)\)/.exec(chrome.counterScale(scale).transform)![1]);
+      expect(evaluate(inner, 0, 0, scale)).toBeCloseTo(js, 9);
+    }
+  });
+
+  it("gives the under row the item's screen width", () => {
+    for (const w of widths) for (const scale of zooms) {
+      expect(evaluate(String(chrome.UNDER_ROW_CSS.width), w, 0, scale)).toBeCloseTo(chrome.underRow(w, scale).width, 9);
+    }
+  });
+
+  it("gives the name the room titleRow gave it, icon or not", () => {
+    for (const w of widths) for (const scale of zooms) {
+      const row = chrome.titleRow(w, scale);
+      expect(evaluate(chrome.nameRoomCss(row), w, 0, scale), `${w} at ${scale}`).toBeCloseTo(row.nameRoom, 9);
+    }
+  });
+
+  it("sizes a text or kind mark as textMarkSize did, in world units", () => {
+    for (const w of widths) for (const h of [10, 60, 300]) for (const scale of zooms) {
+      expect(evaluate(chrome.TEXT_MARK_CSS, w, h, scale)).toBeCloseTo(core.textMarkSize(w, h, scale) / scale, 9);
+    }
+  });
+
+  it("packs the same decisions the rules make, hysteresis included", () => {
+    const note = { id: "itm_acme", properties: {}, reactions: { "👍": ["usr_a"] } } as unknown as Item;
+    for (const w of widths) for (const h of [10, 60, 300]) for (const scale of zooms) {
+      for (const was of [undefined, true, false]) {
+        // No previous answer is an absent field, not an explicit `undefined`.
+        const held = was === undefined ? {} : { r: was, t: was, s: was };
+        const bits = chrome.zoomDecisions(note, w, h, scale, held);
+        const row = chrome.titleRow(w, scale);
+        expect(!!(bits & chrome.Z_ROOMY)).toBe(chrome.hasRoomForChrome(w, h, scale, was));
+        expect(!!(bits & chrome.Z_ICON)).toBe(row.icon);
+        expect(!!(bits & chrome.Z_NAME)).toBe(row.name);
+        expect(!!(bits & chrome.Z_SPELL)).toBe(chrome.underRowSpellsItOut(w, scale, 1, was));
+        expect(!!(bits & chrome.Z_MARK)).toBe(core.textMarkSize(w, h, scale) >= core.KIND_MARK_MIN);
+      }
+    }
+  });
+});

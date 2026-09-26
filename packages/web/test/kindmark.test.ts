@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const item = read("../src/components/ItemView.tsx");
+const chromeSource = read("../src/lib/chrome.ts");
 const fan = read("../src/components/VersionFanOut.tsx");
 const css = read("../src/styles.css");
 
@@ -35,7 +36,10 @@ describe("the kind mark stands in for the chrome that hid", () => {
     // "Forty oversized glyphs are the same smear in a different hat" — the
     // text mark's own comment, and the reason this shares its size rule rather
     // than picking a second one.
-    expect(item).toContain("textMarkSize(width, height, scale) / scale");
+    // Both marks wear the one CSS form of `textMarkSize(...) / scale` from
+    // lib/chrome.ts (held to it in chrome.test.ts), so they cannot drift apart.
+    expect(item).toContain("fontSize: TEXT_MARK_CSS");
+    expect(item).toContain('"--mark": TEXT_MARK_CSS');
   });
 
   it("stops drawing once it would be too small to read", () => {
@@ -51,8 +55,11 @@ describe("the kind mark stands in for the chrome that hid", () => {
      * thing to draw is nothing — the minimap answers "what is where" at that
      * scale, and answers it better.
      */
-    expect(item).toContain("markPx >= KIND_MARK_MIN");
-    expect(item, "sized once, not twice").not.toMatch(/textMarkSize\(width, height, scale\)[\s\S]{0,40}textMarkSize\(/);
+    // The floor is one of the zoom decisions now (`zoomDecisions`, lib/chrome.ts),
+    // and the item reads it as a bit.
+    expect(chromeSource).toContain("textMarkSize(width, height, scale) >= KIND_MARK_MIN");
+    expect(item).toContain("(zoom & Z_MARK) !== 0");
+    expect(item, "sized once, not twice").not.toMatch(/textMarkSize\(/);
   });
 
   it("does not paint state colours, because state is the outline's job", () => {

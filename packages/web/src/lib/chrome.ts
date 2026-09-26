@@ -31,7 +31,8 @@
  * corner pin is nudged OUTSIDE it, so they share an end of one edge without
  * sharing any pixels. `badgeCorner` is gone rather than merely unused.
  */
-import { holdsAtZoom } from "@isocan/core";
+import type { CSSProperties } from "react";
+import { holdsAtZoom, isTextItem, KIND_MARK_MIN, textDrawSize, textIsLegible, textMarkSize, TEXT_MARK_MAX, type Item } from "@isocan/core";
 
 /** Below this an item is a speck: the plies still say there is a stack, the
  * pins still say someone spoke, and a label would be bigger than the thing. */
@@ -292,4 +293,62 @@ export function underSlotFor(state: {
   if (state.entered) return null;
   if (state.resizing || state.soleSelection) return "size";
   return state.interactive ? "hint" : null;
+}
+
+/**
+ * **What the zoom decides for one item, as one number** (26 Sep 2026).
+ *
+ * Every item used to subscribe to the raw `viewport.scale` and work its chrome
+ * out in render, so every step of a zoom re-rendered every item on the canvas:
+ * measured on 250 notes at 4x CPU, a 30-step zoom was 7,500 item renders, p99
+ * frames of 116 ms and one in five over 32 ms. Most of what the scale drives is
+ * CONTINUOUS — the counter-scale on the chrome, how wide the name may run, how
+ * big a text mark is — and that is now CSS, computed from the item's `--w` /
+ * `--h` against the world's `--scale` (`COUNTER_SCALED_CSS`, `UNDER_ROW_CSS`,
+ * `TEXT_MARK_CSS`, `nameRoomCss`, below). What is left are the DECISIONS, each a
+ * threshold with core's hysteresis, and this packs them into bits so the
+ * store's comparison sees a number that changes only when one of them flips.
+ * The rules are the same functions as before; only where they run moved.
+ *
+ * The CSS forms live HERE, beside `counterScale`, `underRow` and `titleRow`,
+ * for the reason those are functions in this file at all: a rule written out
+ * again at each site is the rule that gets missed. `chrome.test.ts` holds each
+ * CSS form to its JS twin, number for number, across widths and zooms.
+ */
+export type ZoomHeld = { r?: boolean; t?: boolean; s?: boolean };
+/** Bit: `hasRoomForChrome` — the title bar and the row under it are drawn. */
+export const Z_ROOMY = 1;
+/** Bit: `titleRow(...).icon` — the kind icon keeps its place in the title row. */
+export const Z_ICON = 2;
+/** Bit: `titleRow(...).name` — the name keeps its place in the title row. */
+export const Z_NAME = 4;
+/** Bit: `textIsLegible` — a text node draws its words, not its one mark. */
+export const Z_LEGIBLE = 8;
+/** Bit: `underRowSpellsItOut` — the row under the item has room to spell its button out. */
+export const Z_SPELL = 16;
+/** Bit: the kind mark would be at least `KIND_MARK_MIN` pixels, so it is worth drawing. */
+export const Z_MARK = 32;
+/** The six decisions above for one item at one zoom, each rule handed its last answer in `held`. */
+export function zoomDecisions(item: Item, width: number, height: number, scale: number, held: ZoomHeld): number {
+  const row = titleRow(width, scale);
+  const legible = !isTextItem(item) || textIsLegible(textDrawSize(item), scale, held.t);
+  return (
+    (hasRoomForChrome(width, height, scale, held.r) ? Z_ROOMY : 0) |
+    (row.icon ? Z_ICON : 0) |
+    (row.name ? Z_NAME : 0) |
+    (legible ? Z_LEGIBLE : 0) |
+    (underRowSpellsItOut(width, scale, Object.keys(item.reactions ?? {}).length, held.s) ? Z_SPELL : 0) |
+    (textMarkSize(width, height, scale) >= KIND_MARK_MIN ? Z_MARK : 0)
+  );
+}
+
+/** `counterScale` (lib/chrome.ts), said in CSS: chrome stays the size of a label at any zoom. */
+export const COUNTER_SCALED_CSS: CSSProperties = { transform: "scale(calc(1 / var(--scale)))" };
+/** `underRow`: counter-scaled, and as wide in screen pixels as the item is. */
+export const UNDER_ROW_CSS: CSSProperties = { ...COUNTER_SCALED_CSS, width: "calc(var(--w) * var(--scale) * 1px)" };
+/** `textMarkSize(w, h, scale) / scale`: the mark's screen size, clamped, in world units. */
+export const TEXT_MARK_CSS = `calc(clamp(1px, min(var(--w), var(--h)) * var(--scale) * 0.8px, ${TEXT_MARK_MAX}px) / var(--scale))`;
+/** `titleRow(...).nameRoom`: the screen width left for the name after the star, the inset and — when both show — the icon. */
+export function nameRoomCss(row: { icon: boolean; name: boolean }): string {
+  return `calc(var(--w) * var(--scale) * 1px - ${ROW_END_ROOM + CHROME_INSET * 2 + (row.icon && row.name ? ICON_ROOM : 0)}px)`;
 }
