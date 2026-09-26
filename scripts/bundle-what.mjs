@@ -74,10 +74,20 @@ function decodeVlq(segment) {
 /**
  * Bytes of generated output per source file.
  *
- * A segment's first field is the generated COLUMN it starts at, and its
- * fourth is a delta into `sources`. So within a line, each segment owns the
- * columns from where it starts to where the next one does — and the last
- * segment on a line owns the rest of that line.
+ * A segment is `[generated column, source index, original line, original
+ * column, name]`, every field a delta: the FIRST is the generated column it
+ * starts at and the SECOND is the move through `sources`. So within a line,
+ * each segment owns the columns from where it starts to where the next one
+ * does — and the last segment on a line owns the rest of that line.
+ *
+ * **It read the fourth field for 17 days** (8–25 Sep 2026) — the ORIGINAL
+ * column — and walked `sources` by column deltas. The output looked like an
+ * answer: core at 51.5%, `ItemView` and the stores under two per cent, 66 KB
+ * "(unknown)" where the walk ran off the end of the list. It was noise with a
+ * plausible shape, and it overturned a correct reading of the chunk in
+ * `docs/research/2026-09-06-architecture-review.md`. `test/bundle-what.test.ts`
+ * now holds the field against a map built by hand, where the two readings
+ * disagree.
  */
 export function bytesBySource(map, generated) {
   const lines = generated.split("\n");
@@ -92,7 +102,7 @@ export function bytesBySource(map, generated) {
       const fields = decodeVlq(segment);
       if (fields.length === 0) continue;
       column += fields[0];
-      if (fields.length >= 4) sourceIndex += fields[3];
+      if (fields.length >= 4) sourceIndex += fields[1];
       segments.push({ column, source: fields.length >= 4 ? sourceIndex : null });
     }
     segments.forEach((seg, i) => {

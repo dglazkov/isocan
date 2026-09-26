@@ -197,6 +197,18 @@ kilobytes was not worth rewriting that guard to stream.
 > on** — which is why this number stayed red for six days while everybody
 > agreed about what was in it.
 
+> **Corrected again, 26 September 2026 — the correction above was the wrong
+> one.** `bundle-what.mjs` walked `sources` by each sourcemap segment's
+> FOURTH field, the original column, instead of its second, the source index,
+> so every per-file figure it printed was noise with a plausible shape. Read
+> with the right field, the entry (729,760 bytes that day) is **43% `@isocan/web`
+> and 29% `@isocan/core`**, and the canvas is its largest part: `ItemView`
+> 27 KB, `CanvasViewport` 18 KB, `CanvasPage` 17.5 KB, `canvasStore` 12 KB,
+> `api.ts` 9.5 KB. **The inference below — "the canvas itself" — was right.**
+> The namespace-import fix above stands: 699,999 → 635,728 is a total, which
+> the broken attribution could not touch. `test/bundle-what.test.ts` now holds
+> the field to a map built by hand.
+
 **Splitting is spent, and the remaining 80KB is not a chunk-boundary
 problem.** Two measurements say so: removing all three build-time module web
 halves saves 8KB, and what is left in the entry is `ItemView`,
