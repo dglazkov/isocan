@@ -7,6 +7,7 @@ import type { CanvasContents, Item } from "@isocan/core";
 import { useCanvasStore } from "../src/stores/canvasStore.ts";
 import { useRoundMarks, useVotesHiddenOn } from "../src/lib/sprint.ts";
 import MarkdownBody from "../src/lib/markdown-body.tsx";
+import { useItemRefRoster } from "../src/lib/itemrefs.ts";
 
 /**
  * **One collaborator moving one item must not re-render every item.**
@@ -109,5 +110,22 @@ describe("an operation somewhere else re-renders nothing here", () => {
     act(() => useCanvasStore.setState((s) => ({ canvas: moveOne(s.canvas!, "itm_1") })));
     // A path is resolved against the canvas, so a change to it must reach the note.
     expect(parses).toBeGreaterThan(settled);
+  });
+  it("the # roster keeps its names while only positions change, and not a moment longer", () => {
+    const items = [item(0), item(1), item(2)];
+    const seen: unknown[] = [];
+    function Roster() {
+      seen.push(useItemRefRoster().candidates);
+      return null;
+    }
+    act(() => useCanvasStore.setState({ canvas: canvasOf(items) }));
+    act(() => root.render(createElement(Roster)));
+    for (let n = 0; n < 5; n++) act(() => useCanvasStore.setState((s) => ({ canvas: moveOne(s.canvas!, "itm_1") })));
+    // Every render handed out the same list, so every chip plugin built on it held.
+    expect(new Set(seen).size).toBe(1);
+    act(() => useCanvasStore.setState((s) => ({ canvas: { ...s.canvas!, items: { ...s.canvas!.items, itm_2: { ...s.canvas!.items.itm_2!, title: "Acme renamed" } } } })));
+    const last = seen[seen.length - 1] as { title: string }[];
+    expect(new Set(seen).size).toBe(2);
+    expect(last.some((c) => c.title === "Acme renamed")).toBe(true);
   });
 });
