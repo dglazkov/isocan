@@ -98,6 +98,31 @@ describe("the topics", () => {
   });
 });
 
+describe("the React recipe (topic `items`)", () => {
+  /**
+   * The example was run for real on 26 Sep 2026 — added to a scratch canvas,
+   * opened in headless Chrome, entered and clicked to 3, then `isocan edit`
+   * reloaded it. This holds the guide to that file byte for byte, and the
+   * file to what the content policy lets a frame load, so a version bump or
+   * a tightened policy cannot quietly turn the recipe into a blank frame.
+   */
+  const fixture = readFileSync(fileURLToPath(new URL("./fixtures/acme-counter.html", import.meta.url)), "utf8");
+  const items = parseGuide(readFileSync(guideFile, "utf8")).topics.find((t) => t.slug === "items")!;
+
+  it("is the fixture that was run, byte for byte", () => {
+    const block = items.text.match(/## A live React component as a canvas item[\s\S]*?```html\n([\s\S]*?)```/)?.[1];
+    expect(block).toBe(fixture);
+  });
+
+  it("loads only pinned versions, from the one CDN the frame's script-src allows", () => {
+    const csp = readFileSync(fileURLToPath(new URL("../../server/src/content.ts", import.meta.url)), "utf8");
+    expect(csp).toMatch(/"script-src 'unsafe-inline'[^"]*https:\/\/cdn\.jsdelivr\.net/);
+    const srcs = [...fixture.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]!);
+    expect(srcs).toHaveLength(3);
+    for (const src of srcs) expect(src).toMatch(/^https:\/\/cdn\.jsdelivr\.net\/npm\/(@[a-z-]+\/)?[a-z-]+@\d+\.\d+\.\d+\//);
+  });
+});
+
 describe("`--agent-help <word>`", () => {
   it("prints a topic by its slug", () => {
     const got = agentHelp("sharing", modules);

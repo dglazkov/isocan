@@ -969,7 +969,7 @@ isocan fit <items...>                  # grow items to the size their content wa
 - **If you hit a product bug**, stop the session work and tell the user —
   fixing the tool comes before continuing the choreography.
 
-<!-- topic: items | making and arranging things — `add`, text nodes, Google Docs, canvases on canvases, groups, copying, files on disk -->
+<!-- topic: items | making and arranging things — `add`, text nodes, Google Docs, canvases on canvases, groups, copying, files on disk, a live React component -->
 
 ## Adding anything: one verb that reads what you give it
 
@@ -1306,6 +1306,53 @@ an agent that reads the file instead answers with the one they set aside,
 then stacks a new version on top of it and buries the choice. If you do need
 the path (an editor, a build, a test run), write it out first with `isocan
 save <item>` so the two agree before you start.
+
+## A live React component as a canvas item
+
+An HTML item runs its own inline scripts, and the frame's content policy
+lets scripts load from `https://cdn.jsdelivr.net` — so one self-contained
+file can load React, ReactDOM and Babel from there and render JSX, with no
+build and no server. Pin exact versions (React 18 is the last with UMD
+builds):
+
+```html
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Acme counter</title>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.4/babel.min.js"></script>
+<style>body { font: 16px system-ui, sans-serif; margin: 24px; }</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+function Counter({ label }) {
+  const [n, setN] = React.useState(0);
+  return (
+    <button onClick={() => setN(n + 1)}>
+      {label}: {n}
+    </button>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Counter label="Acme orders" />);
+</script>
+</body>
+</html>
+```
+
+`isocan add counter.html --title "Acme counter"` puts it on the canvas;
+a person double-clicks it to use it. To iterate, edit the file and run
+`isocan edit <item> counter.html`: that is a new version, the frame reloads
+with it, and the old one stays in the stack.
+
+The limits are the frame's, not React's: nothing but jsdelivr loads (a
+package is reachable only as a UMD or `+esm` build there, and nothing
+fetches at runtime — no API calls); it is one file, so no local imports and
+no bundler; and there is no hot reload — every edit is a fresh version with
+fresh state.
 
 <!-- topic: design | design work — requests and questions, the design system, images, variations, compare, review and repair -->
 
