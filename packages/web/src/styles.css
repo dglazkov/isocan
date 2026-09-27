@@ -1304,6 +1304,15 @@ img { height: auto; }
 .item.away { border-style: dashed; border-color: var(--away); }
 .item.away:hover { box-shadow: var(--shadow-card), 0 0 0 1px var(--away); }
 .item.selected { outline: calc(2px / var(--scale, 1)) solid var(--accent); z-index: 1; }
+/* An item whose render threw (`ItemBoundary`): its own box, drawn as a gap
+   rather than a card, so the layout holds and nobody mistakes it for content.
+   Dashed in the plain line colour — not `--danger`: nothing the person did is
+   wrong, and one red box on a board of forty shouts louder than it should. */
+.item.item-unrenderable {
+  border-style: dashed; background: var(--chip); box-shadow: none;
+  align-items: center; justify-content: center; padding: 12px; overflow: hidden;
+  color: var(--ink-muted); text-align: center; overflow-wrap: anywhere;
+}
 /* STEPPED INSIDE — the item is running. Its scripts are live, its links work,
    and the wheel belongs to it rather than to the canvas. That is a different
    fact from "this one is selected", so it gets a different colour rather than

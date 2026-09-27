@@ -1121,7 +1121,20 @@ export class HomeLink implements HomeConnection {
       this.noteFailure(link.canvasId, why);
       this.reconnect(link);
     };
-    const badge = await this.ensureBadge();
+    /**
+     * Inside a try, like every other await that can fail here (cleanup phase
+     * 1, TS-3). `ensureBadge` rejects when the badge the door just minted
+     * cannot be written down — a leftover identity write lock, a corrupt
+     * `identity.json` — and nobody awaits `dial`, so that rejection used to
+     * end the daemon; on restart it knocked on the door again, and again.
+     * Now it is this attempt's failure, named, and backed off like any other.
+     */
+    let badge: StoredBadge | null;
+    try {
+      badge = await this.ensureBadge();
+    } catch (error) {
+      return gaveUp(`this machine could not keep its badge for the home: ${(error as Error).message}`);
+    }
     if (link.dialSeq !== attempt) return;
     if (!badge) {
       return gaveUp("the door did not answer, so there is no badge to dial with");

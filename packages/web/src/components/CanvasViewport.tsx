@@ -14,7 +14,14 @@ import { creationDestination, selectCreatedItems } from "../lib/groupplacement.t
 import { newGroupId } from "@isocan/core";
 import { type Sample, coastFrame, flickVelocity } from "../lib/inertia.ts";
 import { zoomToBox, zoomToItem } from "../lib/zoomactions.ts";
-import { addFailure, addFiles } from "../lib/upload.ts";
+/* Static, all four. The link and version drops below each said
+   `await import("../lib/upload.ts")`, which split nothing: this file and five
+   others import it statically, so Vite warned "dynamic import will not move
+   module into another chunk" on every build and paid for the gesture anyway
+   — two async wrappers and a frozen namespace object of all ten exports, about
+   470 bytes of the entry chunk (measured 27 Sep 2026, cleanup RP-5, which
+   spent them on the per-item error boundary). */
+import { addBrowserItem, addFailure, addFiles, addVersionFromFile } from "../lib/upload.ts";
 import { placeSketch } from "../lib/sketch.ts";
 import { placeableArea, revealIfOffscreen } from "../lib/spot.ts";
 import { glideToBox } from "../lib/zoomactions.ts";
@@ -1069,7 +1076,6 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         // dragged onto the canvas is not a failure. Past that test, any
         // throw is the upload's own, and is said (#51).
         if (!/^https?:\/\//i.test(link)) return;
-        const { addBrowserItem } = await import("../lib/upload.ts");
         try {
           selectCreatedItems(canvasId, [await addBrowserItem(canvasId, actor, link, world, destination)]);
         } catch (err) {
@@ -1082,7 +1088,6 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     // Dropping a single file onto an existing item = new version of that item.
     const versionTarget = reachableVersionTarget(e.target as HTMLElement);
     if (versionTarget && files.length === 1) {
-      const { addVersionFromFile } = await import("../lib/upload.ts");
       try {
         await addVersionFromFile(canvasId, actor, versionTarget.id, files[0]!, destination.originGroupMode);
       } catch (err) {

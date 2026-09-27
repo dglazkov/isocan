@@ -19,6 +19,7 @@ import {
   WS_NO_CANVAS,
   WS_NOT_ADMITTED,
   WS_STALE_CLIENT,
+  WS_CLOSE_REASON_BYTES,
   WITHDRAWN,
   TAKEN_DOWN,
   ENDED,
@@ -417,6 +418,15 @@ export function attachWebSockets(
 
   // Coalesce roster broadcasts — cursor streams would otherwise flood.
   const pendingRoster = new Map<string, ReturnType<typeof setTimeout>>();
+  /**
+   * **A roster that cannot be read is skipped, and said once** (cleanup phase
+   * 1, TS-2). The reads are the store's, so a store having a bad minute used
+   * to reject out of a timer nothing was waiting on — and Node 24 ends the
+   * process on that. The next presence change asks again; the line goes out
+   * on the first failure and not again until one succeeds, because at cursor
+   * rate a line per failure would bury everything else on stderr.
+   */
+  let rosterFailing = false;
   const scheduleRoster = (canvasId: string) => {
     if (pendingRoster.has(canvasId)) return;
     pendingRoster.set(
@@ -428,15 +438,23 @@ export function attachWebSockets(
           engine.actorNames(),
           engine.actorJoins(),
           engine.resolveSessions(presence.roster(canvasId)),
-        ]).then(([colors, names, joined, sessions]) => {
-          broadcast(canvasId, {
-            type: "presence-roster",
-            sessions,
-            colors,
-            names,
-            joined,
-          });
-        });
+        ]).then(
+          ([colors, names, joined, sessions]) => {
+            rosterFailing = false;
+            broadcast(canvasId, {
+              type: "presence-roster",
+              sessions,
+              colors,
+              names,
+              joined,
+            });
+          },
+          (err: unknown) => {
+            if (rosterFailing) return;
+            rosterFailing = true;
+            console.error(`[isocan] could not build the presence roster for ${canvasId}; skipped until one can be:`, err);
+          },
+        );
       }, 40),
     );
   };
@@ -504,19 +522,42 @@ export function attachWebSockets(
      * cause and the same command as the HTTP body does, from the same place.
      */
     const stale = staleClientRefusal(url.searchParams);
+    /**
+     * **Nothing in here may reject into the void** (cleanup phase 1, TS-2).
+     * Admission reads the desk and the store, either can fail — a Firestore
+     * `UNAVAILABLE`, a desk mid-restart — and this promise is one nobody
+     * awaits, so on Node 24 a rejection here was the whole instance going
+     * down for one connection's bad luck. A failed admission is answered the
+     * way `handleConnection` answers a failed snapshot: upgraded and closed
+     * 4500, with the words, and the words on stderr too.
+     */
     void (async () => {
-      const badge = stale
-        ? { code: WS_STALE_CLIENT, reason: stale.closeReason }
-        : await admitted(request, canvasId);
+      let badge: Awaited<ReturnType<typeof admitted>>;
+      try {
+        badge = stale
+          ? { code: WS_STALE_CLIENT, reason: stale.closeReason }
+          : await admitted(request, canvasId);
+      } catch (err) {
+        console.error(`[isocan] could not admit a socket for ${canvasId ?? "no canvas"}:`, err);
+        badge = { code: 4500, reason: closeReason(String(err)) };
+      }
       wss.handleUpgrade(request, socket, head, (ws) => {
         if ("code" in badge) {
           ws.on("error", () => {});
           ws.close(badge.code, badge.reason);
           return;
         }
-        void handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer, badge.capability, url.searchParams.get(CLIENT_FEATURES_PARAM));
+        handleConnection(ws, canvasId, badge.badgeId, since, badge.bearer, badge.capability, url.searchParams.get(CLIENT_FEATURES_PARAM)).catch((err: unknown) => {
+          console.error(`[isocan] a socket on ${canvasId} failed and was dropped:`, err);
+          ws.terminate();
+        });
       });
-    })();
+    })().catch((err: unknown) => {
+      // The handshake itself threw. There is no socket to close with a code
+      // yet, so the connection is dropped — and said.
+      console.error(`[isocan] a socket upgrade for ${canvasId ?? "no canvas"} failed:`, err);
+      socket.destroy();
+    });
   });
 
   /**
@@ -753,8 +794,17 @@ export function attachWebSockets(
       };
       ws.send(JSON.stringify(roster));
     } catch (err) {
-      if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError || err instanceof DesignRepairClientError) ws.close(WS_STALE_CLIENT, err.message);
-      else ws.close(err instanceof CanvasNotFoundError ? WS_NO_CANVAS : 4500, String(err));
+      // Every reason through `closeReason`: `ws` THROWS on one over 123 bytes,
+      // and a long Firestore `UNAVAILABLE` here took down a Cloud Run
+      // instance (cleanup phase 1, TS-1). The frame carries what fits; stderr
+      // carries the rest of a 4500, which is this home failing, not the
+      // client asking for something it cannot have.
+      if (err instanceof CanvasGroupsClientError || err instanceof QuestionnaireClientError || err instanceof DesignRequestClientError || err instanceof DesignDecisionClientError || err instanceof DesignRepairClientError) ws.close(WS_STALE_CLIENT, closeReason(err.message));
+      else if (err instanceof CanvasNotFoundError) ws.close(WS_NO_CANVAS, closeReason(String(err)));
+      else {
+        console.error(`[isocan] could not open ${canvasId} for a socket:`, err);
+        ws.close(4500, closeReason(String(err)));
+      }
       return;
     }
     // This connection's presence session, created lazily on its first
@@ -1009,6 +1059,30 @@ export function attachWebSockets(
     pendingRoster.clear();
     for (const socket of wss.clients) socket.terminate();
   };
+}
+
+/**
+ * **A close reason the frame can carry** (cleanup phase 1, TS-1).
+ *
+ * The protocol caps a close reason at 123 BYTES and `ws` throws rather than
+ * truncating, so every reason that is not a short constant goes through here.
+ * Cut on a code-point boundary — a split one is not UTF-8, and a reason that
+ * is not UTF-8 is a protocol error of its own — and marked with an ellipsis,
+ * so whoever reads it knows there was more (stderr has it).
+ */
+export function closeReason(text: string): string {
+  if (Buffer.byteLength(text) <= WS_CLOSE_REASON_BYTES) return text;
+  const ellipsis = "…";
+  const room = WS_CLOSE_REASON_BYTES - Buffer.byteLength(ellipsis);
+  let cut = "";
+  let bytes = 0;
+  for (const char of text) {
+    const size = Buffer.byteLength(char);
+    if (bytes + size > room) break;
+    cut += char;
+    bytes += size;
+  }
+  return cut + ellipsis;
 }
 
 /**

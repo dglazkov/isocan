@@ -67,6 +67,7 @@ const CanvasCard = lazy(() => import("./CanvasCard.tsx").then((m) => ({ default:
 import { iconKindFor, kindNoun } from "../lib/kinds.ts";
 import { moduleRendererFor } from "../modules.ts";
 import { fileMarkTip } from "../lib/backing.ts";
+import { ItemBoundary } from "./ItemBoundary.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { Reactions } from "./Reactions.tsx";
 import { actorNameIn, sessionName, useActorNames } from "../lib/names.ts";
@@ -103,6 +104,15 @@ const TITLE_STRIP_PX = 16;
 /** Clear space left before whatever the name stopped for, so a reaching name
  *  does not touch the thing it yielded to. */
 const TITLE_GAP_PX = 8;
+/**
+ * **The canvas ON SCREEN**, which while the scrubber stands in the past is the
+ * past (cleanup RP-5, 27 Sep 2026). A selector describing what an item DRAWS
+ * asks this one, never `s.canvas`: the live replica keeps streaming under the
+ * past, so it disagrees about anything changed since — and for anything
+ * deleted since, core's `groupAncestors` throws `unknown-item`, which is how
+ * scrubbing back past a deletion drew a blank page.
+ */
+const shown = (s: ReturnType<typeof useCanvasStore.getState>) => s.past?.canvas ?? s.canvas;
 
 import { usePresentation, currentPresentation } from "../lib/canvasPresentation.ts";
 import { presentedItem, presentedCanvas, presentedOffset } from "../lib/presentation.ts";
@@ -274,7 +284,8 @@ function ItemViewInner({
   const reachScale = useUiStore((st) => (mayReach ? st.viewport.scale : 1));
   const reach = useCanvasStore((st) => {
     if (!mayReach) return null;
-    const all = st.canvas?.items;
+    // The neighbours DRAWN beside it, which in the past are the past's.
+    const all = shown(st)?.items;
     if (!all) return null;
     const chosen = useUiStore.getState().selectedItemIds;
     // The title row's height in world units. The row is counter-scaled, so
@@ -362,7 +373,7 @@ function ItemViewInner({
   const isText = isTextItem(item);
   // A speaker note names its slide on the canvas (core/slides.ts).
   const noteTargetId = noteTarget(item);
-  const noteSlideTitle = useCanvasStore((s) => (noteTargetId ? (s.canvas?.items[noteTargetId]?.title ?? "a slide") : null));
+  const noteSlideTitle = useCanvasStore((s) => (noteTargetId ? (shown(s)?.items[noteTargetId]?.title ?? "a slide") : null));
   // Paper turns a caption into an object: see `core/textnode.ts`.
   const paper = isText ? paperOf(item) : null;
   // An area is a sheet things are placed ON: drawn behind everything, and
@@ -372,8 +383,10 @@ function ItemViewInner({
   const isAreaItem = isArea(item) || isCanvasGroup;
   const displayedGroup = { ...item, x, y, width, height };
   const groupContent = isCanvasGroup ? groupContentBox(displayedGroup) : null;
-  const memberCount = useCanvasStore((s) => s.canvas && isCanvasGroup ? groupChildren(s.canvas, item.id).length : 0);
-  const groupDepth = useCanvasStore((s) => s.canvas ? groupAncestors(s.canvas, item.id).length : 0);
+  // Both of the canvas on screen — see `shown`. Only a sheet has members or
+  // a depth worth asking for, and nothing else reads them.
+  const memberCount = useCanvasStore((s) => { const c = shown(s); return c && isCanvasGroup ? groupChildren(c, item.id).length : 0; });
+  const groupDepth = useCanvasStore((s) => { const c = shown(s); return isCanvasGroup && c?.items[item.id] ? groupAncestors(c, item.id).length : 0; });
   /** See `picture` above: the mark appears once the chrome has gone, and only
    *  for the kinds whose small form no longer says what they are. A sheet is
    *  excluded because it is a place rather than a thing, and it keeps its own
@@ -1540,7 +1553,7 @@ function VersionFace({
   // Stable per blob, so a module renderer keying an effect on it does not
   // refetch on every shell render (see modules/mermaid/src/diagram.tsx).
   const readText = useCallback(() => readBlobText(canvasId, blobHash), [canvasId, blobHash]);
-  const moduleItem = useCanvasStore((s) => itemId ? (s.past?.canvas ?? s.canvas)?.items[itemId] : undefined);
+  const moduleItem = useCanvasStore((s) => itemId ? shown(s)?.items[itemId] : undefined);
   // A runtime module that arrived after first paint may own this mime now.
   useUiStore((s) => s.modulesGeneration);
   if (designVersion?.designRecord) return <Suspense fallback={<div className="file-view">Reading design record…</div>}><DesignRecordFace key={JSON.stringify([canvasId, designVersion.id, actor?.id])} canvasId={canvasId} version={designVersion} actor={actor} /></Suspense>;
@@ -1962,7 +1975,11 @@ function MarkdownViewInner({
  * Measured, three runs each: pan p90 **33.4ms → 9.9ms**, frames over 32ms
  * **21/143 → 0/201**, script time 2.9s → 1.8s.
  */
-export const ItemView = memo(ItemViewInner);
+export const ItemView = memo(function ItemView(props: Parameters<typeof ItemViewInner>[0]) {
+  // Every item draws inside its own boundary: one that throws is one gap on
+  // the canvas, not a blank page. See `ItemBoundary`.
+  return <ItemBoundary item={props.item}><ItemViewInner {...props} /></ItemBoundary>;
+});
 
 /**
  * **And the body separately**, because the item's CHROME legitimately depends

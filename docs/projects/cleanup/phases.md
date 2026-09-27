@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-25
 issue: 355
 see: evals, canvas-groups, voice-agent, extensions
-note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phase 0 closed 27 Sep (the PR check shards four ways and finishes); phase 1 next.
+note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–1 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page); phase 2 next.
 ---
 
 # Cleanup — the walk
@@ -23,7 +23,7 @@ correctness, **DU** duplication, **DC** dead code, **BC** bundle/CSS, **TR**
 tests/scripts/CI.
 
 **Where we are:** designed 25 Sep 2026; taken up by the conductor 27 Sep.
-Phase 0 closed 27 Sep. Next is cleanup phase 1 — then 2 to 6 in order. The audit ran on `2d3ad79b`, and some of it was
+Phases 0 and 1 closed 27 Sep. Next is cleanup phase 2 — then 3 to 6 in order. The audit ran on `2d3ad79b`, and some of it was
 fixed since by other work — marked *Done* where it stands, so a phase does
 not re-fix it; everything else in a phase is re-checked against `main` in its
 brief before anything is built.
@@ -68,7 +68,10 @@ fails if any workflow running `test:ci` is unsharded.
 
 ## Phase 1 — one bad input does not end the process
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 27 September 2026.** Each crash path has a guard that records
+escaped rejections and was seen red on the unfixed files (eight cases) and
+green on the fix; the scrub was walked in headless Chrome — a blank page with
+`unknown item` before, both notes drawn and no errors after.
 
 Node 24 exits on an unhandled rejection and nothing in the repo handles one, so
 each of these is a whole-process crash, not an error.
@@ -95,6 +98,26 @@ each of these is a whole-process crash, not an error.
 
 **Proof:** a guard per item, each seen to fail against the unfixed code; the
 scrub case walked in a browser and said so.
+
+**Trajectory:**
+
+- **2026-09-27** — RP-5 had siblings: `memberCount`, `noteSlideTitle` and
+  the `reach` scan also read the live canvas under the past (wrong values, not
+  throws). Fixed here through one on-screen helper in `ItemView`, since the
+  class, not the incident, is what the phase is for.
+- **2026-09-27** — The boundary cost 487 entry bytes past `CEILING`; paid back
+  rather than raised, by removing two `await import("upload.ts")` calls that
+  split nothing (the module is static elsewhere) yet emitted wrappers in the
+  entry. BC-1 turned out to save nothing: `AddPopover` was already lazy.
+- **2026-09-27** — TS-3's "crash loop every restart" was overstated: on boot
+  the sweep meets the badge rejection first and swallows it; the dial only
+  receives it when sharing an in-flight knock. Fixed all the same; the guard
+  stubs the private `ensureBadge` because a real lock never reaches the dial.
+- **2026-09-27** — Open: two more escapes of the same shape, found beside the
+  phase and not yet guarded — `ws.ts`'s `presence-relay`/`rc-relay` voided
+  IIFEs (a synchronous throw inside escapes) and `AcpAgentProcess`'s
+  `child.stdin` with no error listener (EPIPE; not reproduced on Node 24.21).
+  Waits on work: phase 6's sweep, or sooner.
 
 ## Phase 2 — one canvas's data stays on that canvas
 

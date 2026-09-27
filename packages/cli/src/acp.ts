@@ -246,6 +246,19 @@ export class AcpAgentProcess {
       const err = new Error(`the adapter exited (code ${code ?? "?"}) mid-conversation`);
       for (const reject of this.died.splice(0)) reject(err);
     });
+    // With no listener, a child that cannot be spawned — a typo in
+    // `acpAdapters`, a bridge not installed — THREW its `'error'`, out of
+    // `isocan rc` and every canvas it holds, and before `'close'` could reject
+    // anything (cleanup phase 1, TS-4). It is this adapter's failure instead:
+    // what is in flight rejects naming the command, and the turn fails with it.
+    child.on("error", (error) => {
+      const err = new Error(
+        child.pid === undefined
+          ? `the adapter \`${child.spawnfile}\` could not be started: ${error.message}`
+          : `the adapter \`${child.spawnfile}\` failed: ${error.message}`,
+      );
+      for (const reject of this.died.splice(0)) reject(err);
+    });
   }
 
   /** Spawn and complete the initialize handshake. `stderr` is passed through

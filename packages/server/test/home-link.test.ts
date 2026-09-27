@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -729,6 +729,51 @@ describe("what a replica will and will not do on its own", () => {
     });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { code: string }).code).toBeTruthy();
+  }, 20_000);
+
+  /**
+   * **A badge it cannot keep costs the dial, not the daemon** (cleanup phase
+   * 1, TS-3). `ensureBadge` rejects when the badge the door just minted cannot
+   * be written down — a leftover identity write lock, a corrupt
+   * `identity.json` — and `dial` awaited it outside the try that `gaveUp`
+   * exists for, from a promise nothing awaits. On Node 24 that ended the
+   * daemon, and the next start knocked on the door again.
+   *
+   * Stood in for with the lock's own sentence rather than a real lock: the
+   * real one takes five seconds to give up, and only reaches `dial` when a
+   * dial shares the sweep's in-flight knock — the sweep itself swallows it.
+   * The dial is real: a row for a canvas, and the poll's repair opens it.
+   */
+  it("a badge that cannot be kept fails the dial, says why, and tries again", async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => void rejections.push(reason);
+    process.on("unhandledRejection", onRejection);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const link = A.daemon.homes.link(H.base)!;
+      let asked = 0;
+      (link as unknown as { ensureBadge(): Promise<unknown> }).ensureBadge = () => {
+        asked += 1;
+        return Promise.reject(
+          new Error(
+            `Identity write is locked at ${path.join(aDir, ".identity-write.lock")}. ` +
+              "Inspect the owner and recover an abandoned lock explicitly; it was not removed.",
+          ),
+        );
+      };
+      await A.daemon.homes.bind("prj_unkept", H.base);
+      const state = await until(
+        async () => link.canvasStates().find((c) => c.canvasId === "prj_unkept") ?? null,
+        (s) => s !== null && s.failures >= 2,
+        "the dial to fail, and fail again after its backoff",
+      ).catch(() => null);
+      expect(rejections.map(String)).toEqual([]);
+      expect(state?.lastFailure).toContain("Identity write is locked");
+      expect(asked).toBeGreaterThanOrEqual(2);
+    } finally {
+      process.off("unhandledRejection", onRejection);
+      vi.restoreAllMocks();
+    }
   }, 20_000);
 });
 
