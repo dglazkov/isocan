@@ -238,6 +238,7 @@ async function rig() {
         k: { windowsVirtualKeyCode: 75, key: "k", code: "KeyK" },
         o: { windowsVirtualKeyCode: 79, key: "o", code: "KeyO" },
         Delete: { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" },
+        Escape: { windowsVirtualKeyCode: 27, key: "Escape", code: "Escape" },
       };
       const k = codes[key];
       if (!k) throw new Error(`journeys cannot press ${key} yet`);
@@ -753,7 +754,8 @@ export const JOURNEYS = [
           4000,
         );
         await sleep(400); // past HOLD_MS (250), so the release reads as a hold
-        await rig.stroke([[460, 380]]);
+        const at = await openSpot(rig);
+        await rig.stroke([[at.x, at.y]]);
         await until(rig.b, `!!document.querySelector(".text-composer textarea")`, "the composer, opened with T held");
       } finally {
         await release();
@@ -798,17 +800,24 @@ export const JOURNEYS = [
        * drives the browser's own input pipeline instead and gets a genuine
        * pointer, genuine capture, and a genuine answer.
        */
+      const before = await rig.b.ev(`document.querySelectorAll(".item").length`);
+      const at = await openSpot(rig, 100, 50);
       await rig.stroke([
-        [300, 300],
-        [336, 318],
-        [372, 336],
-        [400, 350],
+        [at.x, at.y],
+        [at.x + 36, at.y + 18],
+        [at.x + 72, at.y + 36],
+        [at.x + 100, at.y + 50],
       ]);
       await sleep(900);
       const errors = rig.b.takeErrors();
       if (errors.length > 0) throw new Error(`the Pen threw: ${errors[0]}`);
       const alive = await rig.b.ev(`!!document.querySelector(".world") && !!document.querySelector(".tool-rail")`);
       if (!alive) throw new Error("the canvas is gone — the page stopped rendering");
+      /* "Draws" is the promise, so it is asserted: the ink settles into an item
+         after INK_SETTLE_MS (1.5s). Until 26 Sep this journey stopped at "threw
+         nothing", which is how it stayed green for a stroke that landed on
+         the Chat panel and drew nothing at all. */
+      await until(rig.b, `document.querySelectorAll(".item").length > ${before}`, "the stroke to settle into an item on the canvas");
     },
   },
   {
@@ -997,14 +1006,38 @@ export const JOURNEYS = [
     /** The bug: the Personas panel's header collapsed to `display: block` and
      *  its icon sat on its own title, while every test passed. */
     what: "every dock panel opens with a laid-out header",
+    /**
+     * Two things changed under this journey and it failed on both (found 26
+     * Sep 2026). The ··· menu awaits `menuentries.tsx` before it draws, and
+     * `clickText` does not wait, so the rows are waited for first. And the
+     * menu offers only panels that are CLOSED — a never-chosen canvas opens
+     * with the Chat since 24 Sep, so there is no "Chat" row to press. That is
+     * the design, not a gap: a panel that is not offered must be the one
+     * already on screen, and its header is checked exactly like the others.
+     * Neither side is let off — a panel neither offered nor open fails.
+     */
     async run(rig) {
       await makeCanvas(rig, "Panel journey");
+      const menuRows = `.context-menu [role=menuitem]`;
       for (const name of ["Chat", "Files", "Agents", "Context", "Personas"]) {
         await rig.click('button[aria-label="More"]', "the ··· menu");
-        await rig.clickText(".menu-entry,[role=menuitem],.ctx-entry", name, `the ${name} entry`);
-        await sleep(600);
+        await until(rig.b, `document.querySelectorAll(${JSON.stringify(menuRows)}).length > 0`, "the ··· menu's rows");
+        const offered = await rig.b.ev(
+          `[...document.querySelectorAll(${JSON.stringify(menuRows)})].some(e => e.textContent.trim().startsWith(${JSON.stringify(name)}))`,
+        );
+        if (offered) {
+          await rig.clickText(menuRows, name, `the ${name} entry`);
+        } else {
+          await rig.press("Escape");
+          await until(rig.b, `!document.querySelector(".context-menu")`, "Escape to close the ··· menu");
+        }
+        await until(
+          rig.b,
+          `[...document.querySelectorAll(".panel-head b")].some(b => b.textContent.trim() === ${JSON.stringify(name)})`,
+          offered ? `the ${name} panel to open` : `the ${name} panel — not offered, so it must already be open`,
+        );
         const head = await rig.b.ev(`(() => {
-          const h = document.querySelector(".panel-head");
+          const h = [...document.querySelectorAll(".panel-head")].find(h => h.querySelector("b")?.textContent.trim() === ${JSON.stringify(name)});
           if (!h) return null;
           const c = getComputedStyle(h);
           const g = h.querySelector(".panel-glyph"), t = h.querySelector("b");
@@ -1208,11 +1241,51 @@ export const JOURNEYS = [
   },
 ];
 
+/**
+ * **Where the canvas is actually showing, `w` × `h` of it, empty.**
+ *
+ * The journeys used to press at fixed points — (240, 240) for text, (300, 300)
+ * for the Pen — chosen when the canvas was the only thing on screen. Since
+ * 24 Sep 2026 a never-chosen canvas opens with the Chat docked on the left,
+ * and in the runner's window it covers x 20–340, y 74–449: both points landed
+ * in `.main-scroll`. Four journeys then failed with "never became true: the
+ * text composer" — the press was real, it just pressed the Chat — and the Pen
+ * journey kept passing while drawing nothing, because it only asserted that
+ * nothing threw.
+ *
+ * So a journey asks, the way a person looks: a point is canvas when the
+ * browser's own hit test says the top thing there is inside the viewport and
+ * is not an item, a panel, a menu or a control. The whole box is checked, not
+ * just its corner, because a stroke travels. Failing to find one is a failure
+ * in its own words, not a press into whatever was there.
+ */
+async function openSpot(rig, w = 40, h = 40) {
+  const spot = await rig.b.ev(`(() => {
+    const bare = (x, y) => {
+      const el = document.elementFromPoint(x, y);
+      return !!el && !!el.closest(".canvas-viewport") &&
+        !el.closest("[data-item-id], .dock-panel, .floats, aside, [role=menu], button, a, input, textarea, .text-composer");
+    };
+    const r = document.querySelector(".canvas-viewport")?.getBoundingClientRect();
+    if (!r) return null;
+    for (let y = r.top + 60; y + ${h} < r.bottom - 60; y += 20) {
+      for (let x = r.left + 60; x + ${w} < r.right - 60; x += 20) {
+        const box = [[x, y], [x + ${w}, y], [x, y + ${h}], [x + ${w}, y + ${h}], [x + ${w} / 2, y + ${h} / 2]];
+        if (box.every(([px, py]) => bare(px, py))) return { x: Math.round(x), y: Math.round(y) };
+      }
+    }
+    return null;
+  })()`);
+  if (!spot) throw new Error(`no ${w}×${h} of bare canvas is showing — everything is under a panel or an item`);
+  return spot;
+}
+
 /** Put a text node on the open canvas the way a person does. */
 async function addText(rig, words) {
   await rig.clickTool("Text");
   /* A real press on empty canvas — the gesture that opens a composer. */
-  await rig.stroke([[240, 240]]);
+  const at = await openSpot(rig);
+  await rig.stroke([[at.x, at.y]]);
   await until(rig.b, `!!document.querySelector(".text-composer textarea")`, "the text composer");
   /* Typed key by key through the browser, then a real ⌘Enter. Setting
      `.value` would skip whatever the composer does per keystroke, which is
