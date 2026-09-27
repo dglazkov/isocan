@@ -15322,7 +15322,7 @@ async function prototypeOfFirstChoices(canvas2, screens, say2 = () => {
     say2("no prototype: round 1 was confident of no screen \u2014 use the ones that belong (\u{1F4D0}), then `wire prototype`");
     return void 0;
   }
-  const answerer = canvas2.by?.answerer === "stub" ? "stub" : "jev";
+  const answerer = canvas2.by?.answerer ?? "jev";
   for (const s of picked) await canvas2.port.send({ type: "item.update", itemId: s.item, patch: keepPatch(true, answerer) }, canvas2.group);
   const now = await canvas2.port.canvas();
   const flow = keptFlowsOf(now, [...screens, ...canvas2.variants]).find((f) => f.flow === picked[0].spec.flow);
@@ -15334,7 +15334,8 @@ async function prototypeOfFirstChoices(canvas2, screens, say2 = () => {
   return { itemId: written.itemId, title: written.title, links: written.links, screens: inIt, answerer };
 }
 function prototypeWords(screens, answerer) {
-  return `prototype of ${screens} screen${screens === 1 ? "" : "s"}, ${answerer === "stub" ? "the stub's" : "Jev's"} first choices`;
+  const whose = answerer === "stub" ? "the stub's" : answerer === "agent" ? "the agent's" : "Jev's";
+  return `prototype of ${screens} screen${screens === 1 ? "" : "s"}, ${whose} first choices`;
 }
 function costLine(tallies, by, screens, maybe = 0) {
   const tokens = tallies.reduce((s, t) => s + t.inputTokens, 0);
