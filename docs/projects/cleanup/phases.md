@@ -1,9 +1,9 @@
 ---
-status: designed
+status: partial
 since: 2026-09-25
 issue: 355
 see: evals, canvas-groups, voice-agent, extensions
-note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Nothing built yet.
+note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phase 0 closed 27 Sep (the PR check shards four ways and finishes); phase 1 next.
 ---
 
 # Cleanup — the walk
@@ -23,7 +23,7 @@ correctness, **DU** duplication, **DC** dead code, **BC** bundle/CSS, **TR**
 tests/scripts/CI.
 
 **Where we are:** designed 25 Sep 2026; taken up by the conductor 27 Sep.
-Next is cleanup phase 0 — then 1 to 6 in order. The audit ran on `2d3ad79b`, and some of it was
+Phase 0 closed 27 Sep. Next is cleanup phase 1 — then 2 to 6 in order. The audit ran on `2d3ad79b`, and some of it was
 fixed since by other work — marked *Done* where it stands, so a phase does
 not re-fix it; everything else in a phase is re-checked against `main` in its
 brief before anything is built.
@@ -38,7 +38,10 @@ except where a phase says otherwise.
 
 ## Phase 0 — a PR check that can finish
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 27 September 2026.** `pr.yml` runs `test:ci` in four shards
+beside a `checks` job; a human PR's run (#361) was green with its slowest job at
+484 s of a 20-minute limit, and the shard guard reads every workflow that runs
+`test:ci` — red on the old `pr.yml`, green on the new.
 
 Everything after this lands through `pr.yml`, and today it cannot answer.
 
@@ -54,6 +57,14 @@ Everything after this lands through `pr.yml`, and today it cannot answer.
 
 **Proof:** a human PR's `pr.yml` green inside its timeout; the shard guard
 fails if any workflow running `test:ci` is unsharded.
+
+**Trajectory:**
+
+- **2026-09-27** — TR-17 is a recording artifact, not a broken workflow: a
+  `GITHUB_TOKEN` PR gets a zero-job `pr.yml` run, held `action_required`, turned
+  failure within seconds of the PR closing. Fixed in words (AGENTS.md), not
+  YAML; `paths-ignore` would stop it but strip checks from doc-only human PRs,
+  which have reddened `main` before, so it was declined.
 
 ## Phase 1 — one bad input does not end the process
 

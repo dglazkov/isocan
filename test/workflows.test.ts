@@ -68,38 +68,72 @@ describe("every workflow that runs the suite", () => {
  * That is the same shape as every other hole this repo has found: not a
  * failure, an absence reported as a success. So the two numbers are checked
  * against each other.
+ *
+ * **And an unsharded one cannot finish.** Until 27 Sep 2026 these cases read
+ * `release.yml` by name, so when that file split four ways on 13 September
+ * and `pr.yml` did not, nothing here could notice: `pr.yml` went on running
+ * the whole of `test:ci` on one runner under a 20-minute timeout, last passed
+ * at 19m43s, and was cancelled at the timeout after that. So the workflows
+ * are found by reading the directory, the way the checkout case above finds
+ * them, and every one that runs `test:ci` is held to the same shape.
  */
 describe("the sharded gate covers the whole suite", () => {
-  const release = read("release.yml");
+  /** A workflow runs the gate if any of its steps invokes `npm run test:ci`.
+   * Comments are left out, so a file that only talks about the command is not
+   * mistaken for one that runs it. */
+  const runsGate = files.filter((f) =>
+    read(f)
+      .split("\n")
+      .some((line) => !/^\s*#/.test(line) && /npm run test:ci\b/.test(line)),
+  );
 
-  it("is sharded at all — otherwise the cases below say nothing", () => {
-    expect(release).toMatch(/--shard=\$\{\{ matrix\.shard \}\}\/\d+/);
+  it("finds them at all — a search over nothing always passes", () => {
+    // Both are named rather than counted, so the day one of them stops being
+    // found is a failure here and not a quiet shrink of the list below.
+    expect(runsGate).toEqual(expect.arrayContaining(["pr.yml", "release.yml"]));
   });
 
-  it("runs as many shards as the command says there are", () => {
-    const denominator = Number(/--shard=\$\{\{ matrix\.shard \}\}\/(\d+)/.exec(release)?.[1]);
-    const matrix = /shard: \[([^\]]+)\]/.exec(release)?.[1] ?? "";
-    const shards = matrix.split(",").map((one) => Number(one.trim()));
-    expect(shards.length, `the matrix runs ${shards.length} shards of ${denominator}`).toBe(denominator);
-    // And they are 1..M exactly: a duplicate would double-run one piece while
-    // another went missing, which the count alone cannot see.
-    expect([...shards].sort((a, b) => a - b)).toEqual(
-      Array.from({ length: denominator }, (_, index) => index + 1),
-    );
-  });
+  describe.each(runsGate)("%s", (workflow) => {
+    const text = read(workflow);
 
-  it("shards the command that sets the anti-skip switches, not bare vitest", () => {
-    // `npm run test:ci` is what turns a skip into a failure. A shard that
-    // called `vitest` directly would run a quarter of the suite AND let the
-    // emulator, bundle and deep suites skip themselves inside it.
-    expect(release).toMatch(/npm run test:ci -- --shard=/);
+    it("is sharded at all — otherwise the cases below say nothing", () => {
+      expect(
+        text,
+        `${workflow} runs \`npm run test:ci\` whole, on one runner. Shard it the way release.yml does: ` +
+          "a `matrix: { shard: [1, 2, 3, 4] }` and `npm run test:ci -- --shard=${{ matrix.shard }}/4`.",
+      ).toMatch(/--shard=\$\{\{ matrix\.shard \}\}\/\d+/);
+    });
+
+    it("runs as many shards as the command says there are", () => {
+      const denominator = Number(/--shard=\$\{\{ matrix\.shard \}\}\/(\d+)/.exec(text)?.[1]);
+      const matrix = /shard: \[([^\]]+)\]/.exec(text)?.[1] ?? "";
+      const shards = matrix.split(",").map((one) => Number(one.trim()));
+      expect(shards.length, `the matrix runs ${shards.length} shards of ${denominator}`).toBe(denominator);
+      // And they are 1..M exactly: a duplicate would double-run one piece while
+      // another went missing, which the count alone cannot see.
+      expect([...shards].sort((a, b) => a - b)).toEqual(
+        Array.from({ length: denominator }, (_, index) => index + 1),
+      );
+    });
+
+    it("shards the command that sets the anti-skip switches, not bare vitest", () => {
+      // `npm run test:ci` is what turns a skip into a failure. A shard that
+      // called `vitest` directly would run a quarter of the suite AND let the
+      // emulator, bundle and deep suites skip themselves inside it.
+      expect(text).toMatch(/npm run test:ci -- --shard=/);
+    });
+
+    it("lets every shard finish when one fails", () => {
+      // One red shard hiding the other three is a report of one failure where
+      // there may be four.
+      expect(text).toMatch(/fail-fast: false/);
+    });
   });
 
   it("moves the refs only after every shard and every check", () => {
     // `needs` is the whole gate now. Without it the publish job races the
     // suite and `green` means nothing at all.
-    expect(release).toMatch(/needs: \[suite, checks\]/);
-    expect(release).toMatch(/fail-fast: false/);
+    expect(read("release.yml")).toMatch(/needs: \[suite, checks\]/);
   });
 });
 

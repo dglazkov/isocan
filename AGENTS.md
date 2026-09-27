@@ -149,10 +149,13 @@ Three bounds hold all of them:
 - **A workflow touches only its own branches** (`changelog/`, `grades/`, `renovate/`,
   `personas/`) — never another workflow's PRs, never a person's.
 - **A merge is checked, not trusted — and the check has to be run, not
-  awaited.** PRs opened by `GITHUB_TOKEN` fire no `pull_request` workflows, so
-  no machine PR has ever carried a suite check — including the persona PRs
-  that merge themselves. The merge step runs the suite against the branch
-  itself; a red suite leaves the PR for a person.
+  awaited.** A PR opened by `GITHUB_TOKEN` never runs `pr.yml`, so no machine
+  PR has ever carried a suite check — including the persona PRs that merge
+  themselves. GitHub does record a `pr.yml` run against it: zero jobs, held
+  `action_required` while the PR is open, then marked **failure** the moment
+  it is merged or closed. That red is not a verdict on the PR, because nothing
+  ran. The merge step runs the suite against the branch itself; a red suite
+  leaves the PR for a person.
 - **Closing is reversible.** Supersede closes the PR, keeps the branch, and
   the closing comment says how to recover it.
 
