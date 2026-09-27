@@ -134,10 +134,22 @@ the items map (0.38 ms). Linear, and small at the sizes people use today.
   and paint — React rendering every item synchronously the moment all 250 cross
   a threshold together. Zustand's selectors go through `useSyncExternalStore`,
   which React never defers, so the fix is not a transition around the same
-  subscription. The options are a design call, not a measurement: let the
+  subscription. The options were a design call, not a measurement: let the
   discrete chrome decisions lag the camera until a zoom settles (tldraw's
   choice), or make the flip itself cheaper. Real canvases vary item sizes, so
   the all-at-once flip is partly this census's uniform 250 notes.
+
+  **Decided, and deferred** (Dion, 27 Sep 2026): **the items catch up after
+  the zoom.** The camera moves at frame rate; which name, icon, standby or
+  mark an item shows is settled once the zoom pauses, not on every threshold
+  it crosses — so the flip costs one frame at rest instead of several during
+  the gesture. The continuous half is CSS already and stays exact throughout.
+  Not built now; revisit when zoom comes back up, and start here: the
+  decisions read a scale the store updates only when the zoom settles, so
+  `zoomDecisions`' selector stops firing mid-gesture. The proof is
+  `scripts/frames.mjs`'s zoom p99 and its long-frame split (the wheel
+  handler's script should fall away), plus the 1,920-state chrome comparison
+  from 26 Sep, re-run at rest, to show nothing ends up in a different place.
   The cache stayed: it takes the remount parse (after a zoom settles, or
   panning back to where you were) from ~410 ms of the remote gesture's CPU to
   3 ms — real work removed, just not from the frames a person feels.
