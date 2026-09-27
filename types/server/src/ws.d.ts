@@ -115,4 +115,14 @@ export declare class SocketCensus {
     close(canvasId: string, code: number, reason: string): number;
 }
 export declare function attachWebSockets(server: Server, engine: Engine, desk: Desk, presence: PresenceHub, rc?: RcHolds, options?: WebSocketOptions): () => void;
+/**
+ * **A close reason the frame can carry** (cleanup phase 1, TS-1).
+ *
+ * The protocol caps a close reason at 123 BYTES and `ws` throws rather than
+ * truncating, so every reason that is not a short constant goes through here.
+ * Cut on a code-point boundary — a split one is not UTF-8, and a reason that
+ * is not UTF-8 is a protocol error of its own — and marked with an ellipsis,
+ * so whoever reads it knows there was more (stderr has it).
+ */
+export declare function closeReason(text: string): string;
 export {};

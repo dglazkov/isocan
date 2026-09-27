@@ -56,7 +56,7 @@ import {
   waitForResolvedFeedback,
   wholeLog,
   writeIdentity
-} from "./chunk-QWGSX7YM.mjs";
+} from "./chunk-5NICYJHX.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -123,8 +123,8 @@ import {
   resolveCanvasGroupRef,
   resolved,
   shaOfRoot
-} from "./chunk-KMPSCEYH.mjs";
-import "./chunk-RRX5OVV3.mjs";
+} from "./chunk-5PG2DJLH.mjs";
+import "./chunk-RXNWEHMB.mjs";
 import {
   DaemonRoutes,
   OPERATIONS_ROUTE,

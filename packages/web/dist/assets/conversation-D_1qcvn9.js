@@ -1,0 +1,1 @@
+import{E as r,am as i,an as c,U as d,ao as p}from"./index-DUmmoQEb.js";function u(a,s){const e=r.getState();if(e.canvasId!==a)return;const t=e.canvas?.threads[s];if(t?.main)i(a,!0);else if(t&&e.canvas){const o=c(e.canvas,t),n=d.getState();n.setViewport(p(n.viewport,o.x,o.y,window.innerWidth,window.innerHeight)),n.setOpenThread(t.id)}}export{u as openConversation};

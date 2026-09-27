@@ -57,7 +57,7 @@ import {
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity
-} from "./chunk-QWGSX7YM.mjs";
+} from "./chunk-5NICYJHX.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -110,7 +110,7 @@ import {
   resolveCanvasGroupRef,
   resolved,
   shaOfRoot
-} from "./chunk-KMPSCEYH.mjs";
+} from "./chunk-5PG2DJLH.mjs";
 import {
   bindableRoot,
   buildStamp,
@@ -138,7 +138,7 @@ import {
   updateConfigFile,
   writeGoogleToken,
   writeMarker
-} from "./chunk-RRX5OVV3.mjs";
+} from "./chunk-RXNWEHMB.mjs";
 import {
   DaemonRoutes
 } from "./chunk-TB3H5GO7.mjs";
@@ -17037,6 +17037,12 @@ var AcpAgentProcess = class _AcpAgentProcess {
       const err = new Error(`the adapter exited (code ${code ?? "?"}) mid-conversation`);
       for (const reject of this.died.splice(0)) reject(err);
     });
+    child.on("error", (error) => {
+      const err = new Error(
+        child.pid === void 0 ? `the adapter \`${child.spawnfile}\` could not be started: ${error.message}` : `the adapter \`${child.spawnfile}\` failed: ${error.message}`
+      );
+      for (const reject of this.died.splice(0)) reject(err);
+    });
   }
   /** Spawn and complete the initialize handshake. `stderr` is passed through
    * to ours: the adapter's own complaints are part of the narration. */
@@ -19570,7 +19576,7 @@ program2.command("mcp").description(
   "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)"
 ).action(
   run(async () => {
-    const { serveStdio } = await import("./src-LG7TGGNJ.mjs");
+    const { serveStdio } = await import("./src-HRSAUQMM.mjs");
     await serveStdio({ version: buildStamp().version });
     await new Promise(() => {
     });
@@ -19585,14 +19591,14 @@ program2.command("serve").alias("start").description("Run the state daemon (auto
       throw refuseDaemonVerb("serve", declared.at ?? "its home");
     }
     if (opts.foreground) {
-      const { runDaemon } = await import("./daemon-SUPQONHV.mjs");
+      const { runDaemon } = await import("./daemon-4P4TCVPK.mjs");
       await runDaemon({ port, home, ...opts.force ? { takeover: true } : {} });
       return new Promise(() => {
       });
     }
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
     if (opts.force) {
-      const { stopDaemons } = await import("./daemon-SUPQONHV.mjs");
+      const { stopDaemons } = await import("./daemon-4P4TCVPK.mjs");
       const stopped = await stopDaemons(port, home);
       if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
     } else if (await client.health()) {
@@ -19783,7 +19789,7 @@ async function rosterCaveat(ctx, canvasId) {
   return why === null ? null : `this is only who this machine can see \u2014 ${why}`;
 }
 async function restartDaemon(home, port) {
-  const { stopDaemons } = await import("./daemon-SUPQONHV.mjs");
+  const { stopDaemons } = await import("./daemon-4P4TCVPK.mjs");
   const stopped = await stopDaemons(port, home);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
   await client.ensureDaemon();
@@ -20256,7 +20262,7 @@ function say(adoption) {
 }
 program2.command("stop").description("Stop the daemon \u2014 asks the port who it is, so a stale one can't hide").action(
   run(async (_opts, cmd) => {
-    const { stopDaemons } = await import("./daemon-SUPQONHV.mjs");
+    const { stopDaemons } = await import("./daemon-4P4TCVPK.mjs");
     const declared = await resolveDeclared(paths_exports.isocanHome());
     if (declared?.mode === "direct") {
       throw refuseDaemonVerb("stop", declared.at ?? "its home");
@@ -21195,7 +21201,7 @@ program2.command("setup [target]").description(
               }
             }
           } else if (before && stalenessOf(before).stale) {
-            const { stopDaemons } = await import("./daemon-SUPQONHV.mjs");
+            const { stopDaemons } = await import("./daemon-4P4TCVPK.mjs");
             await stopDaemons(port, home);
             await fs16.rm(path17.join(home, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
@@ -21423,7 +21429,7 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     let ownerInput;
     if (access.kind !== "ordinary") {
       if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
-      const { personalCaptureOwner } = await import("./personal-capture-I33QXQD4.mjs");
+      const { personalCaptureOwner } = await import("./personal-capture-CKLAIN7I.mjs");
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }
