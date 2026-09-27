@@ -21,6 +21,20 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 26 September 2026
+
+- **A wire that has fallen behind its design system says so.** A quiet
+  *behind* tag sits under the wire, and "N wires behind" under the DESIGN.md.
+  Click it, or choose *Restyle to <system>* in the item menu, to bring that
+  flow forward in one undo. A new version that only adds tokens the wire
+  doesn't use doesn't count. `isocan wire style --check` says the same.
+- **Activity reads right for every change.** Naming yourself, changing your
+  colour or mark, joining two identities and deleting a canvas now read as
+  words in history, not "did something".
+- **A live React component on the canvas:** `isocan --agent-help items` has
+  the recipe — one HTML file loading pinned React and Babel from jsdelivr,
+  updated with `isocan edit`.
+
 ## 24 September 2026
 
 - **See how your wireframe decisions line up with the judge's.**
