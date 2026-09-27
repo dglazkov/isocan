@@ -47,7 +47,7 @@ declare module "fastify" {
  * holds it to every extension under `packages/web/public/`.
  */
 export declare const STATIC_TYPES: Record<string, string>;
-interface RouteOptions {
+export interface RouteOptions {
     /** The home's judge (`judgment.ts`): its key, rate and transport. Absent,
      * the key is `TYPESAFE_API_KEY` from the environment, read per call. */
     judgment?: JudgmentOptions;
@@ -197,4 +197,3 @@ interface RouteOptions {
     refusals?: Refusals;
 }
 export declare function registerRoutes(app: FastifyInstance, engine: Engine, store: Store, desk: Desk, presence: PresenceHub, options?: RouteOptions): void;
-export {};

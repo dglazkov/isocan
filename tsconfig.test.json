@@ -1,0 +1,10 @@
+{
+  "//": "The root test/ directory, typechecked (cleanup phase 6, TR-12, 27 Sep 2026). Every package's tsconfig already covered its own test/, and this one did not exist, so the suite's guards — the deep lane, the ratchets, the release checks — were the one TypeScript in the repo no compiler read. DOM because copies.test.ts holds a browser module's copy to its owner; a .mjs script a test imports stays untyped behind a @ts-expect-error, the convention these files already had. Fixtures are inputs, not code. Named tsconfig.test.json rather than tsconfig.json so no tool that looks for the nearest tsconfig.json (vite, tsx, an editor on the root) picks it up for files it was not written for.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["test", "vitest.config.ts", "md.d.ts"],
+  "exclude": ["test/fixtures"]
+}

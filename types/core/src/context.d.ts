@@ -76,4 +76,4 @@ export interface ContextExtras {
 /** Items somebody marked — the closest thing the canvas has to "these
  *  matter", and a real signal because a person put it there by hand. */
 export declare function markedItems(canvas: CanvasContents): Item[];
-export declare function contextPieces(canvas: CanvasContents, extras?: ContextExtras, nowMs?: number): ContextPiece[];
+export declare function contextPieces(canvas: CanvasContents, extras?: ContextExtras): ContextPiece[];

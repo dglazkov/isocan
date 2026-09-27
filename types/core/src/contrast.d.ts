@@ -7,7 +7,7 @@
  * and what keeps a palette honest at the moment it is written, rather than
  * after somebody ships it.
  */
-/** WCAG 2.2 minimums. Large is 18.66px bold or 24px regular. */
+/** WCAG 2.2's minimum for body text. */
 export declare const CONTRAST_BODY = 4.5;
 /** Non-text: the boundary of a control, an icon that carries meaning. */
 export declare const CONTRAST_UI = 3;

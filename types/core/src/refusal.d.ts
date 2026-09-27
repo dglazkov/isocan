@@ -41,7 +41,7 @@ export declare const OPERATOR_REFUSE_ROUTE = "/api/operator/refuse/:subject";
 export declare const NET_REFUSAL_DEFAULT_MS: number;
 /** The four kinds of subject. `email` and `repo` are the attested kinds a
  * badge proves; `actor` is a name; `net` is where a knock came from. */
-export type RefusalKind = "email" | "repo" | "actor" | "net";
+type RefusalKind = "email" | "repo" | "actor" | "net";
 /**
  * **The desk's row** — `refusals/{subject}` on Firestore, a line type in the
  * file desk's log. One row per subject, rewritten by a lift rather than

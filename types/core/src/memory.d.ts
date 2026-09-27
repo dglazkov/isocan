@@ -112,7 +112,7 @@ export declare function inheritedPieces(linked: CanvasContents, from: {
  * canvas in reading order. `contextPieces` is unchanged underneath — the
  * first layer is exactly what the view showed before there were layers.
  */
-export declare function contextLayers(canvas: CanvasContents, linked: LinkedCanvas[], extras?: ContextExtras, nowMs?: number): ContextLayer[];
+export declare function contextLayers(canvas: CanvasContents, linked: LinkedCanvas[], extras?: ContextExtras): ContextLayer[];
 /**
  * The design system that governs here: the area's own when `at` names a place
  * in one (scoped design systems, 11 Sep 2026), else this canvas's own, else

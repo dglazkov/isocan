@@ -9,7 +9,7 @@ import {
   cleanupOps,
   cleanupSelection,
   parseBefore
-} from "./chunk-QRXFR4C7.mjs";
+} from "./chunk-N2X7YMNP.mjs";
 import {
   FIGHTERS_POINT,
   fighters,
@@ -17,7 +17,7 @@ import {
   packPath,
   packProblems,
   rosterClashes
-} from "./chunk-MX7PUG4H.mjs";
+} from "./chunk-XVPYIEOC.mjs";
 import {
   CanvasHandle,
   DEFAULT_MODE,
@@ -57,7 +57,7 @@ import {
   resolveIdentity,
   retireStrandedIdentities,
   writeIdentity
-} from "./chunk-DYAT3ADD.mjs";
+} from "./chunk-BBFNIVCH.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -68,8 +68,8 @@ import {
   prepareDesignVerifierOffer,
   submitDesignReviewWrite,
   validatePreparedDesignReviewWrite
-} from "./chunk-3FHQEW67.mjs";
-import "./chunk-DXLNS7XU.mjs";
+} from "./chunk-TQNNWRJO.mjs";
+import "./chunk-ZAIESZ5P.mjs";
 import {
   parseDesignProjection,
   prepareDesignReconciliation,
@@ -78,11 +78,11 @@ import {
   readDesignSystem,
   reconcileDesignProjection,
   writeDesignDirection
-} from "./chunk-TJYFKBFZ.mjs";
+} from "./chunk-ZF77NRFX.mjs";
 import {
   changeDesignRequest,
   publishDesignReceipt
-} from "./chunk-2LZDKGOX.mjs";
+} from "./chunk-OLCNC6KA.mjs";
 import {
   actorNamesOn,
   itemCenter,
@@ -90,13 +90,13 @@ import {
   nameResolver,
   runRoom,
   threadLocus
-} from "./chunk-4IF5AW6X.mjs";
+} from "./chunk-DR5AQ47G.mjs";
 import {
   parseDesignRepairBasis,
   prepareDesignRepair,
   submitDesignRepair,
   validatePreparedDesignRepair
-} from "./chunk-MPAF53BT.mjs";
+} from "./chunk-PS72LIHB.mjs";
 import {
   CanvasGroups,
   DaemonClient,
@@ -110,7 +110,7 @@ import {
   resolveCanvasGroupRef,
   resolved,
   shaOfRoot
-} from "./chunk-XOF2LHN5.mjs";
+} from "./chunk-FL4FXAR3.mjs";
 import {
   bindableRoot,
   buildStamp,
@@ -138,26 +138,26 @@ import {
   updateConfigFile,
   writeGoogleToken,
   writeMarker
-} from "./chunk-N4XILX5G.mjs";
+} from "./chunk-K62QQBM4.mjs";
 import {
   DaemonRoutes
-} from "./chunk-MA4W7Z46.mjs";
+} from "./chunk-T27ZV2JW.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import {
   auditDesignSource,
   designAuditFails,
   readDesignAuditAdvisory,
   readDesignSourceAudit
-} from "./chunk-WNHU2A73.mjs";
+} from "./chunk-27ZBYJU5.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import {
   prepareDesignDecision
-} from "./chunk-VB3BDVQ7.mjs";
+} from "./chunk-GE7A2PKY.mjs";
 import {
   classifyAutomaticSource,
   questionnaireSubmissionIds
-} from "./chunk-ZGDW24KA.mjs";
-import "./chunk-HS26AHJQ.mjs";
+} from "./chunk-RNY7MTDF.mjs";
+import "./chunk-7CKFAZBF.mjs";
 import {
   ALIGN_EDGES,
   AREA_FILENAME,
@@ -541,7 +541,7 @@ import {
   wallFor,
   withModuleCommands,
   workbenchUrl
-} from "./chunk-R27GCOU3.mjs";
+} from "./chunk-P5ZMYC6M.mjs";
 import "./chunk-GUY4UN4O.mjs";
 import {
   CONTRAST_BODY,
@@ -552,7 +552,7 @@ import {
   serializeDesign,
   toCss,
   toDtcg
-} from "./chunk-ZRGI5I2I.mjs";
+} from "./chunk-7OLMWXEB.mjs";
 import {
   __commonJS,
   __require,
@@ -3894,6 +3894,29 @@ function parseXY(value) {
   return { x: Number(match[1]), y: Number(match[2]) };
 }
 
+// packages/cli/src/run.ts
+function run(fn) {
+  return async (...args) => {
+    try {
+      await fn(...args);
+    } catch (err) {
+      console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
+      if (err instanceof ApiError && err.code === BADGE_ENDED) {
+        console.error(
+          "This machine's badge was ended by the operator of that home, so it will not knock for a new one under your name. You can still open the home as a stranger; write to the address above about the rest."
+        );
+      }
+      process.exitCode = 1;
+    }
+  };
+}
+function withContext(contextOf, work) {
+  return run(async (...args) => work(await contextOf(args.at(-1)), args));
+}
+function onCanvas(contextOf, work) {
+  return withContext(contextOf, async (ctx, args) => work(new CanvasHandle(ctx, await resolveCanvas(ctx)), ctx, args));
+}
+
 // packages/cli/src/personal-context.ts
 function statusText(answer2) {
   console.log(`${answer2.owner.name}'s personal canvas at ${answer2.home}`);
@@ -3903,25 +3926,20 @@ function statusText(answer2) {
 }
 function registerPersonalContext(context2, contextOf) {
   const personal = context2.command("personal").description("Open or create your private canvas at a home; inspect links, read and delegate explicitly").option("--home <url>", "use this authoritative home instead of the connected daemon");
-  const act = (work) => async (...args) => {
-    try {
-      const command2 = args.at(-1);
-      const ctx = await contextOf(command2);
-      const actor = ctx.actor;
-      const home = command2.optsWithGlobals().home;
-      if (home !== void 0 && normalizeHomeUrl(home) !== normalizeHomeUrl(ctx.client.base)) {
-        const selected = await resolveIdentity(ctx.client, ctx.home);
-        if (!selected || selected.actor.id !== actor.id) throw new Error("The selected identity changed; retry as the intended actor.");
-        const client = new DaemonClient(normalizeHomeUrl(home), ctx.home);
-        client.reclaimWith(() => reclaimIdentity(client, selected));
-        ctx.client = client;
-      }
-      await work(ctx, args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
+  const act = (work) => run(async (...args) => {
+    const command2 = args.at(-1);
+    const ctx = await contextOf(command2);
+    const actor = ctx.actor;
+    const home = command2.optsWithGlobals().home;
+    if (home !== void 0 && normalizeHomeUrl(home) !== normalizeHomeUrl(ctx.client.base)) {
+      const selected = await resolveIdentity(ctx.client, ctx.home);
+      if (!selected || selected.actor.id !== actor.id) throw new Error("The selected identity changed; retry as the intended actor.");
+      const client = new DaemonClient(normalizeHomeUrl(home), ctx.home);
+      client.reclaimWith(() => reclaimIdentity(client, selected));
+      ctx.client = client;
     }
-  };
+    await work(ctx, args);
+  });
   personal.action(act(async (ctx) => {
     const answer2 = await ctx.client.ensurePersonal(ctx.actor.id);
     if (ctx.json) return printJson(answer2);
@@ -4558,14 +4576,7 @@ need \`bench add\`. Withdrawing one does not take it off \u2014 the bench is the
 agents you HAVE, so a row that stands nowhere stays, reading unreachable.
 \`bench rm\` is the only way one leaves.`
   );
-  const act = (work) => async (...args) => {
-    try {
-      await work(await contextOf(args.at(-1)), args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  const act = (work) => withContext(contextOf, work);
   bench.action(
     act(async (ctx) => {
       const canvasId = await benchCanvasId(ctx);
@@ -4712,8 +4723,8 @@ function groupPlacementFor(snapshot, opts) {
   if (snapshot.project.groupMode !== "groups" || opts.in === void 0) return void 0;
   const parent = resolveCanvasGroupRef(snapshot.canvas, opts.in, true);
   const content = groupContentBox(parent);
-  const at2 = opts.at ? parseXY(opts.at) : content;
-  return { x: at2.x, y: at2.y, chosen: true, containerId: parent.id, groupPlacement: opts.at ? "exact" : "auto", ...opts.cell ? { cell: parseGroupCell(opts.cell) } : {} };
+  const at = opts.at ? parseXY(opts.at) : content;
+  return { x: at.x, y: at.y, chosen: true, containerId: parent.id, groupPlacement: opts.at ? "exact" : "auto", ...opts.cell ? { cell: parseGroupCell(opts.cell) } : {} };
 }
 function insertionOperation(op) {
   if (op.type !== "item.add") return op;
@@ -4803,16 +4814,10 @@ function rows(groups) {
   return groups.map((group) => ({ id: group.id, title: group.title, parent: group.parentId ?? "canvas", direct: String(group.directCount), descendants: String(group.descendantCount) }));
 }
 function actions(context2) {
-  return (work) => async (...args) => {
-    try {
-      const ctx = await context2(args[args.length - 1]);
-      const target2 = await resolveCanvas(ctx);
-      await work(new CanvasGroups(ctx.client, target2.id, () => ctx.actor), ctx, args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  return (work) => withContext(context2, async (ctx, args) => {
+    const target2 = await resolveCanvas(ctx);
+    await work(new CanvasGroups(ctx.client, target2.id, () => ctx.actor), ctx, args);
+  });
 }
 function registerCanvasGroups(canvas2, context2 = makeCtx) {
   const groups = canvas2.command("group").description("Canvas groups: membership, transforms, frame fitting and label-safe layout");
@@ -4916,16 +4921,7 @@ function reportContext(ctx, manifest) {
   }
 }
 function registerContextReads(context2, contextOf) {
-  const act = (work) => async (...args) => {
-    try {
-      const ctx = await contextOf(args.at(-1));
-      const canvas2 = await resolveCanvas(ctx);
-      await work(new CanvasHandle(ctx, canvas2), ctx, args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  const act = (work) => onCanvas(contextOf, work);
   context2.command("request <thread> <comment>").description("Read the complete frozen context saved with a message").action(act(async (handle, ctx, [thread, comment2]) => reportContext(ctx, await handle.contextOfComment(thread, comment2))));
   context2.command("content <thread> <comment> <item>").description("Read a saved source or visual version in bounded byte pages").option("--face <face>", "source | visual", "source").option("--offset <bytes>", "byte offset, starting at zero", "0").option("--limit <bytes>", "bytes to return, at most 262144", "16384").action(act(async (handle, ctx, [thread, comment2, item, options]) => {
     if (!["source", "visual"].includes(options.face)) throw new Error("--face expects source or visual");
@@ -4941,7 +4937,6 @@ function registerContextReads(context2, contextOf) {
 
 // packages/cli/src/questionnaire.ts
 import { promises as fs4 } from "node:fs";
-var errorText = (error) => error instanceof Error ? error.message : String(error);
 async function jsonFile(file) {
   return JSON.parse(await fs4.readFile(file, "utf8"));
 }
@@ -4962,16 +4957,7 @@ ${result2.reason}` : ""}`);
 }
 var collect = (value, previous) => [...previous, value];
 function registerQuestionnaires(design, contextOf) {
-  const act = (work) => async (...args) => {
-    try {
-      const ctx = await contextOf(args.at(-1));
-      const canvas2 = await resolveCanvas(ctx);
-      await work(new CanvasHandle(ctx, canvas2), ctx, args);
-    } catch (error) {
-      console.error(errorText(error));
-      process.exitCode = 1;
-    }
-  };
+  const act = (work) => onCanvas(contextOf, work);
   design.command("questions [payload]").description("Read structured questions, exact sources and answers; unrelated comments never close them").option("--thread <id>", "filter by exact thread ID").option("--request <id>", "filter by design request ID").option("--respondent <id>", "filter by intended respondent ID").option("--respondents", "list writer-resolved human, agent and unknown actor eligibility").action(act(async (handle, ctx, [payload, options]) => {
     if (options.respondents) {
       if (payload || options.thread || options.request || options.respondent) throw new Error("--respondents lists eligibility and cannot be combined with question filters.");
@@ -5089,14 +5075,7 @@ Consistency: ${value.consistency.status}${value.consistency.reasons.length ? ` \
   if (value.status !== "accepted") process.exitCode = value.status === "pending" ? 3 : 1;
 }
 function registerDesignSystems(design, contextOf) {
-  const act = (work) => async (...args) => {
-    try {
-      await work(await contextOf(args.at(-1)), args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  const act = (work) => withContext(contextOf, work);
   const scope = (command2) => command2.option("--in <scope>", "governing system of this exact group or area").option("--item <id>", "governing system of this actual item");
   scope(design.command("direction [file]")).description("Read authored direction and actual author, or apply a captured direction edit").addHelpText("after", "\nWrite file: {projection,direction,opId,versionId,retry?}. projection comes from design project;\ndirection is a version:1 authored rationale, hierarchy, layout, density, typography,\npalettePurpose and named treatments/states, with stage provisional or accepted.\nAn authored accepted stage does not claim an authenticated human preference.\nAfter uncertain delivery, retain projection/direction/opId/versionId unchanged and\nset retry:true to recover the original receipt even after later pruning or deletion.\nCreate a first DESIGN.md with design set; this edits the identified source.\n").action(act(async (ctx, [file, options]) => {
     if (file) {
@@ -5268,15 +5247,7 @@ function filter(request, options) {
   return { ...request ? { requestId: request } : {}, ...options.thread ? { threadId: options.thread } : {}, ...options.comment ? { commentId: options.comment } : {}, ...options.output ? { outputItemId: options.output } : {} };
 }
 function registerDesignRequests(design, contextOf) {
-  const act = (work) => async (...args) => {
-    try {
-      const ctx = await contextOf(args.at(-1));
-      await work(new CanvasHandle(ctx, await resolveCanvas(ctx)), ctx, args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  const act = (work) => onCanvas(contextOf, work);
   const selectors = (command2) => command2.option("--thread <id>", "source conversation thread").option("--comment <id>", "source comment").option("--output <id>", "request owning this output item");
   selectors(design.command("workflow [request]")).description("Read the shared design procedure, canvas rollout policy and current next step").action(act(async (handle, ctx, [request, options]) => {
     const result2 = await handle.designWorkflow(filter(request, options));
@@ -5432,15 +5403,7 @@ Reported reason: ${a.reportedReason ?? "not supplied"}`);
   for (const unavailable of read.unavailable) console.log(`${unavailable.id}: unavailable \xB7 ${unavailable.reason}`);
 }
 function registerDesignDecisions(design, contextOf) {
-  const act = (work) => async (...args) => {
-    try {
-      const ctx = await contextOf(args.at(-1));
-      await work(new CanvasHandle(ctx, await resolveCanvas(ctx)), ctx, args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  const act = (work) => onCanvas(contextOf, work);
   design.command("compare [request]").description("Read exact options and decision history, or publish an immutable comparison").option("--publish <file>", "saved comparison or {threadId,comparison,opId?,commentId?,retry?}").option("--thread <id>", "source thread, or exact thread for a bare publication").option("--comment <id>", "filter by exact comparison comment").option("--target <id>", "read accepted rationale and comparisons for this output").option("--key <id>", "stable brief decision key").option("--option <id>", "read exact retained bytes of one option; requires one unambiguous source").option("--face <face>", "option source or visual face", "source").option("--out <file>", "write complete exact option bytes to a new file").option("--offset <bytes>", "printed byte offset", "0").option("--limit <bytes>", "printed byte limit, at most 262144", "16384").option("--retry", "retry a saved publication after uncertain delivery without changing its payload").addHelpText("after", "\nA comparison names its current admitted brief/epoch, decisionKey, audience, scenario,\nfidelity, 1\u20133 exact alternative versions, recommendation and captured target/governing\nbasis. Use mode:'comparison' for 2\u20133 options; mode:'direct' or 'delegated' for one.\nA reissue is a new comparison with supersedes naming the prior exact source.\nRead --json and retain approvalBases before choosing; the final click must not\nrecapture current target metadata. Trying --option only reads; it never adopts.\n").action(act(async (handle, ctx, [request, options]) => {
     if (options.publish) {
       if (options.comment || options.target || options.key || options.option || options.out) throw new Error("A publication cannot be mixed with read selectors.");
@@ -5677,61 +5640,56 @@ async function finish(ctx, handle, requestId, runId, file) {
   return { results, result: result2 };
 }
 function registerDesignReviews(design, contextOf) {
-  design.command("review <request>").description("Read or progress one shared source/task/craft review with at most two reserved repairs").option("--run <id>", "exact existing run").option("--start <file>", "JSON {runId,itemId?,passId,sessionId,output,obligations,mode?,preceding?}").option("--record <file>", "JSON {base,record:{outcome,note,observations,findings,output?,repositorySource?}} from actual tools").option("--begin-repair <pass>", "reserve the next attempt before generation; requires --run and --session").option("--session <id>", "actual performing harness session").option("--offer-verifier <file>", "fresh actual tool probe with exact run/output/session and expiry within five minutes").option("--handoff <offer>", "request verification from this current authorized offer").option("--thread <id>", "exact existing thread for a verifier handoff").option("--finish", "finish the report, conditionally complete the brief, then publish its exact receipt").option("--retry", "retry this actor's immutable pending intent; never changes IDs or payload").addHelpText("after", "\nBoth entrances use this progression. Start reserves one initial inspection. Run real\nnative browser and craft tools, then record their exact observations/evidence. Source\nanalysis runs in the shared record path. Reserve before each repair attempt; invalid\nand no-op proposals count. Audit-only reserves no repair. An unavailable browser\nleaves task checks unverified. No ordinary edit invokes a model.\nRead --json before working and keep its exact ref as record.base. --retry uses the\nactor/canvas journal saved before sending, including completion and receipt acts.\n").action(async (requestId, options, command2) => {
-    try {
-      const ctx = await contextOf(command2), handle = new CanvasHandle(ctx, await resolveCanvas(ctx)), io = designReviewPort(ctx);
-      const actions2 = [options.start, options.record, options.beginRepair, options.offerVerifier, options.handoff, options.finish, options.retry].filter(Boolean);
-      if (actions2.length > 1) throw new Error("Choose one review progression action.");
-      if (!actions2.length) {
-        const read = await handle.designReview(requestId, options.run);
-        if (ctx.json) printJson(read);
-        else printReviews(read);
-        return;
-      }
-      const file = journalPath(ctx, handle.id, requestId), pending = await existing(file);
-      if (options.retry) {
-        if (!pending) throw new Error("No pending intent exists for this actor and request.");
-        return printSubmission(ctx, await deliver(ctx, file, pending, true));
-      }
-      if (pending) throw new Error(`An immutable ${pending.kind} intent is pending. Use design review ${requestId} --retry; its journal is ${file}.`);
-      if (options.finish) {
-        if (!options.run) throw new Error("--finish needs --run.");
-        const result2 = await finish(ctx, handle, requestId, options.run, file);
-        if (ctx.json) printJson(result2);
-        else printSubmission(ctx, result2.result);
-        if (result2.result.status !== "accepted") process.exitCode = result2.result.status === "pending" ? 3 : 1;
-        return;
-      }
-      let payload;
-      if (options.start) {
-        const value = await fileJson(options.start);
-        payload = await prepareDesignReviewStart(io, { ...value, canvasId: handle.id, requestId, itemId: value.itemId ?? newItemId(), ...identities2() });
-      } else if (options.offerVerifier) {
-        const value = await fileJson(options.offerVerifier);
-        if (value.requestId !== requestId) throw new Error("Verifier offer names a different request.");
-        payload = await prepareDesignVerifierOffer(io, { canvasId: handle.id, itemId: newItemId(), offer: value, ...identities2() });
-      } else {
-        if (!options.run) throw new Error("This step needs --run.");
-        const read = await handle.designReview(requestId, options.run), row = read.runs[0];
-        if (!row) throw new Error("No exact shared review run.");
-        if (options.record) {
-          const value = await fileJson(options.record);
-          if (!value.base) throw new Error("Keep the exact prior read's ref as record.base; do not recapture after inspection.");
-          payload = await prepareDesignReviewStep(io, { canvasId: handle.id, runId: row.run.id, base: value.base, action: "record", record: value.record, ...identities2() });
-        } else if (options.beginRepair) payload = await prepareDesignReviewStep(io, { canvasId: handle.id, runId: row.run.id, base: row.ref, action: "begin-repair", passId: options.beginRepair, sessionId: options.session, ...identities2() });
-        else {
-          const offer = read.offers.find((one) => one.offer.id === options.handoff);
-          if (!offer) throw new Error("No exact verifier offer.");
-          const request = (await handle.designBrief({ requestId })).requests[0];
-          payload = await prepareDesignReviewHandoff(io, { canvasId: handle.id, runId: row.run.id, offer: offer.ref, threadId: options.thread ?? (request.brief.source.entrance === "canvas-chat" ? request.brief.source.threadId : newThreadId()), commentId: newCommentId(), opId: newOpId() });
-        }
-      }
-      printSubmission(ctx, await deliver(ctx, file, { actorId: ctx.actor.id, canvasId: handle.id, requestId, kind: "review", payload }, false));
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
+  design.command("review <request>").description("Read or progress one shared source/task/craft review with at most two reserved repairs").option("--run <id>", "exact existing run").option("--start <file>", "JSON {runId,itemId?,passId,sessionId,output,obligations,mode?,preceding?}").option("--record <file>", "JSON {base,record:{outcome,note,observations,findings,output?,repositorySource?}} from actual tools").option("--begin-repair <pass>", "reserve the next attempt before generation; requires --run and --session").option("--session <id>", "actual performing harness session").option("--offer-verifier <file>", "fresh actual tool probe with exact run/output/session and expiry within five minutes").option("--handoff <offer>", "request verification from this current authorized offer").option("--thread <id>", "exact existing thread for a verifier handoff").option("--finish", "finish the report, conditionally complete the brief, then publish its exact receipt").option("--retry", "retry this actor's immutable pending intent; never changes IDs or payload").addHelpText("after", "\nBoth entrances use this progression. Start reserves one initial inspection. Run real\nnative browser and craft tools, then record their exact observations/evidence. Source\nanalysis runs in the shared record path. Reserve before each repair attempt; invalid\nand no-op proposals count. Audit-only reserves no repair. An unavailable browser\nleaves task checks unverified. No ordinary edit invokes a model.\nRead --json before working and keep its exact ref as record.base. --retry uses the\nactor/canvas journal saved before sending, including completion and receipt acts.\n").action(run(async (requestId, options, command2) => {
+    const ctx = await contextOf(command2), handle = new CanvasHandle(ctx, await resolveCanvas(ctx)), io = designReviewPort(ctx);
+    const actions2 = [options.start, options.record, options.beginRepair, options.offerVerifier, options.handoff, options.finish, options.retry].filter(Boolean);
+    if (actions2.length > 1) throw new Error("Choose one review progression action.");
+    if (!actions2.length) {
+      const read = await handle.designReview(requestId, options.run);
+      if (ctx.json) printJson(read);
+      else printReviews(read);
+      return;
     }
-  });
+    const file = journalPath(ctx, handle.id, requestId), pending = await existing(file);
+    if (options.retry) {
+      if (!pending) throw new Error("No pending intent exists for this actor and request.");
+      return printSubmission(ctx, await deliver(ctx, file, pending, true));
+    }
+    if (pending) throw new Error(`An immutable ${pending.kind} intent is pending. Use design review ${requestId} --retry; its journal is ${file}.`);
+    if (options.finish) {
+      if (!options.run) throw new Error("--finish needs --run.");
+      const result2 = await finish(ctx, handle, requestId, options.run, file);
+      if (ctx.json) printJson(result2);
+      else printSubmission(ctx, result2.result);
+      if (result2.result.status !== "accepted") process.exitCode = result2.result.status === "pending" ? 3 : 1;
+      return;
+    }
+    let payload;
+    if (options.start) {
+      const value = await fileJson(options.start);
+      payload = await prepareDesignReviewStart(io, { ...value, canvasId: handle.id, requestId, itemId: value.itemId ?? newItemId(), ...identities2() });
+    } else if (options.offerVerifier) {
+      const value = await fileJson(options.offerVerifier);
+      if (value.requestId !== requestId) throw new Error("Verifier offer names a different request.");
+      payload = await prepareDesignVerifierOffer(io, { canvasId: handle.id, itemId: newItemId(), offer: value, ...identities2() });
+    } else {
+      if (!options.run) throw new Error("This step needs --run.");
+      const read = await handle.designReview(requestId, options.run), row = read.runs[0];
+      if (!row) throw new Error("No exact shared review run.");
+      if (options.record) {
+        const value = await fileJson(options.record);
+        if (!value.base) throw new Error("Keep the exact prior read's ref as record.base; do not recapture after inspection.");
+        payload = await prepareDesignReviewStep(io, { canvasId: handle.id, runId: row.run.id, base: value.base, action: "record", record: value.record, ...identities2() });
+      } else if (options.beginRepair) payload = await prepareDesignReviewStep(io, { canvasId: handle.id, runId: row.run.id, base: row.ref, action: "begin-repair", passId: options.beginRepair, sessionId: options.session, ...identities2() });
+      else {
+        const offer = read.offers.find((one) => one.offer.id === options.handoff);
+        if (!offer) throw new Error("No exact verifier offer.");
+        const request = (await handle.designBrief({ requestId })).requests[0];
+        payload = await prepareDesignReviewHandoff(io, { canvasId: handle.id, runId: row.run.id, offer: offer.ref, threadId: options.thread ?? (request.brief.source.entrance === "canvas-chat" ? request.brief.source.threadId : newThreadId()), commentId: newCommentId(), opId: newOpId() });
+      }
+    }
+    printSubmission(ctx, await deliver(ctx, file, { actorId: ctx.actor.id, canvasId: handle.id, requestId, kind: "review", payload }, false));
+  }));
 }
 async function runDesignRepair(ctx, handle, itemId, sourceFile, options) {
   const key = options.request ?? `repair:${itemId}`, file = journalPath(ctx, handle.id, key), pending = await existing(file);
@@ -5759,39 +5717,34 @@ async function runDesignRepair(ctx, handle, itemId, sourceFile, options) {
 
 // packages/cli/src/design-craft.ts
 function registerDesignCraft(design, contextOf) {
-  design.command("craft <request>").description("Read optional adapted Impeccable guidance around the saved brief; no native playbook execution").option("--stage <stage>", "explicit new-work, critique or finish guidance").option("--out <new-directory>", "export exact permitted context into a new directory; never overwrite").option("--check <directory>", "check the original packet and canonical sources, preserving working edits").option("--package <skill-directory>", "inspect the fixed pinned Codex skill files; never execute or download").addHelpText("after", "\nRead: design craft req_example --stage critique --json\nExport: design craft req_example --stage finish --out /tmp/acme-craft\nCheck: design craft req_example --check /tmp/acme-craft --json\nUse design reconcile /tmp/acme-craft for a deliberate DESIGN.md edit.\nPRODUCT/surface edits remain proposed notes until an explicit brief correction.\nGuidance shares the existing review's two-repair allowance; opening it is not inspection.\n").action(async (requestId, options, command2) => {
-    try {
-      const ctx = await contextOf(command2), canvasId = (await resolveCanvas(ctx)).id;
-      if (options.check && (options.stage || options.out)) throw new Error("--check uses the saved stage and original files; omit --stage and --out.");
-      if (!options.check && !["new-work", "critique", "finish"].includes(options.stage ?? "")) throw new Error("Choose --stage new-work, critique or finish.");
-      const packageSource = options.package ? await inspectDesignCraftPackage(options.package) : null;
-      if (options.check) {
-        const checked = await checkDesignCraftDirectory(designRequestPort(ctx), { canvasId, requestId, directory: options.check });
-        if (ctx.json) printJson({ ...checked, ...packageSource ? { packageSource } : {} });
-        else console.log(`${checked.status}: ${checked.packetId}
+  design.command("craft <request>").description("Read optional adapted Impeccable guidance around the saved brief; no native playbook execution").option("--stage <stage>", "explicit new-work, critique or finish guidance").option("--out <new-directory>", "export exact permitted context into a new directory; never overwrite").option("--check <directory>", "check the original packet and canonical sources, preserving working edits").option("--package <skill-directory>", "inspect the fixed pinned Codex skill files; never execute or download").addHelpText("after", "\nRead: design craft req_example --stage critique --json\nExport: design craft req_example --stage finish --out /tmp/acme-craft\nCheck: design craft req_example --check /tmp/acme-craft --json\nUse design reconcile /tmp/acme-craft for a deliberate DESIGN.md edit.\nPRODUCT/surface edits remain proposed notes until an explicit brief correction.\nGuidance shares the existing review's two-repair allowance; opening it is not inspection.\n").action(run(async (requestId, options, command2) => {
+    const ctx = await contextOf(command2), canvasId = (await resolveCanvas(ctx)).id;
+    if (options.check && (options.stage || options.out)) throw new Error("--check uses the saved stage and original files; omit --stage and --out.");
+    if (!options.check && !["new-work", "critique", "finish"].includes(options.stage ?? "")) throw new Error("Choose --stage new-work, critique or finish.");
+    const packageSource = options.package ? await inspectDesignCraftPackage(options.package) : null;
+    if (options.check) {
+      const checked = await checkDesignCraftDirectory(designRequestPort(ctx), { canvasId, requestId, directory: options.check });
+      if (ctx.json) printJson({ ...checked, ...packageSource ? { packageSource } : {} });
+      else console.log(`${checked.status}: ${checked.packetId}
 ${checked.reasons.join("\n")}
 ${checked.files.map((file) => `${file.status}: ${file.path}`).join("\n")}
 ${checked.notes}${packageSource ? `
 Package source: ${packageSource.status}; native ${packageSource.native}` : ""}`);
-        if (checked.status !== "current") process.exitCode = 1;
-        return;
-      }
-      const packet = await readDesignCraft(designRequestPort(ctx), { canvasId, requestId, stage: options.stage });
-      const exported = options.out ? await exportDesignCraft(options.out, packet) : null;
-      if (ctx.json) printJson(exported || packageSource ? { packet, ...exported ? { exported } : {}, ...packageSource ? { packageSource } : {} } : packet);
-      else {
-        const guidance = packet.files.find((file) => file.path === "GUIDANCE.md");
-        console.log(`${packet.status}: ${packet.request.brief.requestId} \xB7 ${packet.packetId}
+      if (checked.status !== "current") process.exitCode = 1;
+      return;
+    }
+    const packet = await readDesignCraft(designRequestPort(ctx), { canvasId, requestId, stage: options.stage });
+    const exported = options.out ? await exportDesignCraft(options.out, packet) : null;
+    if (ctx.json) printJson(exported || packageSource ? { packet, ...exported ? { exported } : {}, ...packageSource ? { packageSource } : {} } : packet);
+    else {
+      const guidance = packet.files.find((file) => file.path === "GUIDANCE.md");
+      console.log(`${packet.status}: ${packet.request.brief.requestId} \xB7 ${packet.packetId}
 ${packet.reasons.join("\n")}
 ${Buffer.from(guidance.data, "base64").toString("utf8")}${exported ? `
 Exported: ${exported.directory}` : ""}${packageSource ? `
 Package source: ${packageSource.status}; native ${packageSource.native}` : ""}`);
-      }
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
     }
-  });
+  }));
 }
 
 // packages/cli/src/codex-sandbox.ts
@@ -6228,7 +6181,7 @@ async function addMapNode(host, ctx, canvasId, snapshot, words2, mapId, parent) 
   const upload = await ctx.client.uploadBlob(canvasId, Buffer.from(words2, "utf8"), TEXT_MIME, TEXT_FILENAME);
   const { width, height } = host.sizeFor(void 0, textBox(words2, "body"));
   const itemId = newItemId();
-  const at2 = parent ? mapNodeSpot(snapshot, mapId, parent) : { x: 0, y: 0 };
+  const at = parent ? mapNodeSpot(snapshot, mapId, parent) : { x: 0, y: 0 };
   const result2 = await host.sendOp(ctx, canvasId, {
     type: "item.add",
     itemId,
@@ -6241,7 +6194,7 @@ async function addMapNode(host, ctx, canvasId, snapshot, words2, mapId, parent) 
     },
     width,
     height,
-    placement: at2,
+    placement: at,
     ...snapshot.project.groupMode === "groups" && parent ? { containerId: parent.containerId ?? null, groupPlacement: "auto" } : {},
     title: textTitle(words2),
     properties: {
@@ -7126,9 +7079,9 @@ function arenaPlan(input) {
     const ix = lx + AREA_INSET;
     let iy = top + header;
     const place2 = (size) => {
-      const at2 = { x: ix, y: iy, chosen: true };
+      const at = { x: ix, y: iy, chosen: true };
       iy += size.height + STACK_GAP + (grouped ? 28 : 0);
-      return at2;
+      return at;
     };
     ops.push({
       type: "item.add",
@@ -8218,7 +8171,7 @@ your own rc, each named for its principle \u2014 an homage, never the person.
           throw new Error(`"${f.pack.agentName}" would answer to @${first}, and ${holder.name} already does here`);
         }
       }
-      const at2 = opts.at ? (() => {
+      const at = opts.at ? (() => {
         const [x, y] = opts.at.split(",").map(Number);
         if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error("--at is x,y");
         return { x, y };
@@ -8230,7 +8183,7 @@ your own rc, each named for its principle \u2014 an homage, never the person.
         minutes: minutesOf(opts.time, 20),
         decider: opts.decider ? actorByRef(snapshot, opts.decider).id : ctx.actor.id,
         target: opts.attach ? resolveItem2(snapshot, opts.attach) : null,
-        ...at2 ? { at: at2 } : {}
+        ...at ? { at } : {}
       });
       if (ctx.json) return printJson2({ bout: plan.boutId, lanes: plan.lanes });
       console.log(`arena laid \u2014 bout ${plan.boutId}: ${chosen.map((f) => f.pack.agentName).join(" \xB7 ")}`);
@@ -8543,7 +8496,7 @@ your own rc, each named for its principle \u2014 an homage, never the person.
         quote: null,
         ...opts.self ? { self: true } : {}
       };
-      const problems = (await import("./packs-XMLXMAIP.mjs")).packProblems(pack);
+      const problems = (await import("./packs-BDJDGRHO.mjs")).packProblems(pack);
       if (problems.length) {
         const hint = problems.some((p) => /reference/.test(p)) ? ' \u2014 add one with --ref "Title|https://\u2026|what to learn"' : "";
         throw new Error(`this pack would be refused: ${problems.join("; ")}${hint}`);
@@ -8552,9 +8505,9 @@ your own rc, each named for its principle \u2014 an homage, never the person.
       const assets = path7.join(dir, "assets/packs", id3);
       await fs10.mkdir(assets, { recursive: true });
       await fs10.copyFile(opts.design, path7.join(assets, "DESIGN.md"));
-      const avatar4 = opts.avatar ? await fs10.readFile(opts.avatar, "utf8") : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90"><rect width="120" height="90" fill="#eeeeee"/><circle cx="60" cy="45" r="22" fill="#555555"/></svg>`;
-      if (/<script|href=|<image|<foreignObject/i.test(avatar4)) throw new Error("an avatar is an emblem: no script, no images, no links");
-      await fs10.writeFile(path7.join(assets, "avatar.svg"), avatar4);
+      const avatar2 = opts.avatar ? await fs10.readFile(opts.avatar, "utf8") : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90"><rect width="120" height="90" fill="#eeeeee"/><circle cx="60" cy="45" r="22" fill="#555555"/></svg>`;
+      if (/<script|href=|<image|<foreignObject/i.test(avatar2)) throw new Error("an avatar is an emblem: no script, no images, no links");
+      await fs10.writeFile(path7.join(assets, "avatar.svg"), avatar2);
       await fs10.writeFile(path7.join(assets, "critique.md"), `# ${title} \u2014 critique
 
 ${pack.critique.map((q, i) => `${i + 1}. ${q}`).join("\n")}
@@ -11042,9 +10995,9 @@ var BLOCKS = [
     draw: ({ props, fill }) => {
       const kind = str(props, "row");
       const rows2 = num(props, "rows");
-      const trail = (i, at2) => {
+      const trail = (i, at) => {
         const k = kind === "mixed" ? ["switch", "chevron", "value"][i % 3] : kind;
-        const v = nth(fill?.values, at2);
+        const v = nth(fill?.values, at);
         return k === "switch" ? toggle(i % 2 === 0) : k === "chevron" ? `<span class="chev">\u203A</span>` : v ? tx(v, "meta r", "span") : bar(18, "meta");
       };
       return `<div class="settings">${rowsOf(num(props, "groups"), (g) => `<div class="sec">${fill?.groups?.[g] !== void 0 ? tx(fill.groups[g], "sec-t") : bar(25 + g * 5, "k")}</div><div class="list div inset">${rowsOf(rows2, (i) => `<div class="row">${icon()}<div class="row-t">${word(fill?.labels, g * rows2 + i, bar(40 + (i + g) % 4 * 10))}</div>${trail(i, g * rows2 + i)}</div>`)}</div>`)}</div>`;
@@ -12180,16 +12133,16 @@ function validateWire(input) {
   const seen = /* @__PURE__ */ new Set();
   for (const slot of spec.slots) {
     const where = `slot ${JSON.stringify(slot?.slot)}`;
-    const at2 = r.sections.findIndex((s) => s.slot === slot?.slot);
-    if (at2 < 0) {
+    const at = r.sections.findIndex((s) => s.slot === slot?.slot);
+    if (at < 0) {
       problems.push(`${where}: ${r.id} has no such slot (it has ${r.sections.map((s) => s.slot).join(", ")})`);
       continue;
     }
     if (seen.has(slot.slot)) problems.push(`${where}: appears twice`);
-    if (at2 < last) problems.push(`${where}: out of recipe order`);
+    if (at < last) problems.push(`${where}: out of recipe order`);
     seen.add(slot.slot);
-    last = Math.max(last, at2);
-    const section = r.sections[at2];
+    last = Math.max(last, at);
+    const section = r.sections[at];
     const props = slot.props;
     if (!props || typeof props !== "object" || Array.isArray(props)) {
       problems.push(`${where}: props must be an object`);
@@ -12672,12 +12625,12 @@ function inferLinks(kept2, opts = {}) {
   const topLevel = kept2.filter((s) => isTopLevel(s.spec)).map((s) => s.id);
   const firstOf = (archetypes) => kept2.find((s) => archetypes.includes(s.spec.archetype))?.id ?? null;
   const out = [];
-  kept2.forEach((screen, at2) => {
+  kept2.forEach((screen, at) => {
     const spots = hotspots(screen.spec);
     const overlayScreen = OVERLAY_ARCHETYPES.includes(screen.spec.archetype);
     const decide = (h) => {
       if (h.kind === "row") {
-        const after = kept2.slice(at2 + 1).find((s) => s.spec.archetype === "detail") ?? kept2.slice(0, at2).reverse().find((s) => s.spec.archetype === "detail");
+        const after = kept2.slice(at + 1).find((s) => s.spec.archetype === "detail") ?? kept2.slice(0, at).reverse().find((s) => s.spec.archetype === "detail");
         return after ? { to: after.id, transition: "push", rule: "row" } : { to: null, needs: "Detail", transition: "push", rule: "missing" };
       }
       const intent = INTENT_BY_ID.get(h.intent);
@@ -12689,11 +12642,11 @@ function inferLinks(kept2, opts = {}) {
           return { to: LINK_BACK, transition: overlayScreen ? "overlay" : "pop", rule: "back" };
         case "next": {
           if (overlayScreen) return { to: LINK_BACK, transition: "overlay", rule: "back" };
-          const next2 = kept2[at2 + 1];
+          const next2 = kept2[at + 1];
           return next2 ? { to: next2.id, transition: nav.transition, rule: "intent" } : { to: null, needs: "a next screen", transition: nav.transition, rule: "missing" };
         }
         case "after-run": {
-          let i = at2 + 1;
+          let i = at + 1;
           while (i < kept2.length && ONBOARDING_RUN.includes(kept2[i].spec.archetype)) i++;
           const target2 = kept2[i];
           return target2 ? { to: target2.id, transition: nav.transition, rule: "intent" } : { to: null, needs: "a screen after onboarding", transition: nav.transition, rule: "missing" };
@@ -13506,8 +13459,8 @@ function prototypeSpot(canvas2, flow, size, self) {
 }
 var atOf = (p) => `${Math.round(p.x)},${Math.round(p.y)}`;
 function placedByComposer(item) {
-  const at2 = item.properties?.[PROTOTYPE_AT_PROP];
-  return typeof at2 !== "string" || at2 === atOf(item);
+  const at = item.properties?.[PROTOTYPE_AT_PROP];
+  return typeof at !== "string" || at === atOf(item);
 }
 async function writePrototype(port, canvas2, flow, group) {
   const links = inferLinks(flow.screens);
@@ -14888,9 +14841,9 @@ function withWords(fill, words2, where) {
     if (!(path18 in have)) throw new Error(`${where}: no word at "${path18}" \u2014 it holds ${paths.join(", ")}`);
     if (typeof word2 !== "string") throw new Error(`${where}: "${path18}" must be a string`);
     const parts = path18.split(".");
-    let at2 = out;
-    for (const part of parts.slice(0, -1)) at2 = at2[part];
-    at2[parts[parts.length - 1]] = word2;
+    let at = out;
+    for (const part of parts.slice(0, -1)) at = at[part];
+    at[parts[parts.length - 1]] = word2;
   }
   return out;
 }
@@ -14967,8 +14920,8 @@ function vary(spec, d, variantOf) {
     declined = [...declined, { slot: d.slot, p: d.runnerUp, block: d.from }];
   } else {
     const back = { ...resolveSlot(r.id, d.slot, d.to), p: d.runnerUp, alternatives: [{ block: LEAVE_OUT, p: d.p }] };
-    const at2 = r.sections.findIndex((s) => s.slot === d.slot);
-    const before = slots.filter((slot) => r.sections.findIndex((s) => s.slot === slot.slot) < at2);
+    const at = r.sections.findIndex((s) => s.slot === d.slot);
+    const before = slots.filter((slot) => r.sections.findIndex((s) => s.slot === slot.slot) < at);
     slots = [...before, back, ...slots.slice(before.length)];
     declined = declined.filter((x) => x.slot !== d.slot);
   }
@@ -15088,7 +15041,7 @@ var FlowCanvas = class {
     const itemId = newItemId();
     const spec = this.styled(given, itemId);
     const { width, height } = wireSize(spec);
-    const at2 = await this.send({
+    const at = await this.send({
       type: "item.add",
       itemId,
       version: await this.version(spec),
@@ -15100,7 +15053,7 @@ var FlowCanvas = class {
       properties: { [FIDELITY_PROP]: "wireframe", ...maybeProperties(spec) },
       ...into ?? {}
     });
-    const landed = at2 ?? placement;
+    const landed = at ?? placement;
     return { item: itemId, spec, x: landed.x ?? 0, y: landed.y ?? 0, width, height, ...into ? { containerId: into.containerId } : {} };
   }
   /** A new version of the same item — the screen fills in place — and its title and size if they moved. */
@@ -15732,8 +15685,8 @@ function cliPort(host, ctx, canvasId) {
     send: async (op, group) => {
       const result2 = await host.sendOp(ctx, canvasId, op, group);
       if (op.type !== "item.add") return;
-      const at2 = host.insertionReceiptPlacement(result2.envelope.op, op.itemId);
-      return { x: at2.x ?? 0, y: at2.y ?? 0 };
+      const at = host.insertionReceiptPlacement(result2.envelope.op, op.itemId);
+      return { x: at.x ?? 0, y: at.y ?? 0 };
     }
   };
 }
@@ -16398,10 +16351,10 @@ function register6(host) {
         title,
         properties: { [FIDELITY_PROP]: "wireframe" }
       });
-      const at2 = host.insertionReceiptPlacement(result2.envelope.op, itemId);
+      const at = host.insertionReceiptPlacement(result2.envelope.op, itemId);
       const slots = spec.slots.length;
       const open = spec.slots.filter((s) => s.block === null).length;
-      if (ctx.json) return printJson2({ itemId, title, archetype: spec.archetype, platform: spec.platform, slots, undecided: open, ...at2 });
+      if (ctx.json) return printJson2({ itemId, title, archetype: spec.archetype, platform: spec.platform, slots, undecided: open, ...at });
       console.log(`${itemId}  ${title} \u2014 ${spec.archetype}, ${spec.platform}, ${open === 0 ? "wireframe" : open === slots ? "blueprint" : `${slots - open} of ${slots} slots chosen`}`);
     })
   );
@@ -16589,26 +16542,26 @@ function foldCorpus({ canvasId, entries, facts, me }) {
   const log = ordered(entries);
   const bySeq = new Map(log.map((entry) => [entry.seq, entry]));
   const origin = (entry) => {
-    let at2 = entry;
+    let at = entry;
     const seen = /* @__PURE__ */ new Set();
-    while (at2.cause && !seen.has(at2.seq)) {
-      seen.add(at2.seq);
-      const target2 = bySeq.get(at2.cause.targetSeq);
+    while (at.cause && !seen.has(at.seq)) {
+      seen.add(at.seq);
+      const target2 = bySeq.get(at.cause.targetSeq);
       if (!target2) break;
-      at2 = target2;
+      at = target2;
     }
-    return at2;
+    return at;
   };
   const rootOf = (itemId) => {
-    let at2 = itemId;
+    let at = itemId;
     const seen = /* @__PURE__ */ new Set();
-    while (!seen.has(at2)) {
-      seen.add(at2);
-      const next2 = facts.get(at2)?.variantOf;
+    while (!seen.has(at)) {
+      seen.add(at);
+      const next2 = facts.get(at)?.variantOf;
       if (!next2 || !facts.has(next2)) break;
-      at2 = next2;
+      at = next2;
     }
-    return at2;
+    return at;
   };
   const addedAt = /* @__PURE__ */ new Map();
   for (const entry of log) if (entry.envelope.op.type === "item.add" && !addedAt.has(entry.envelope.op.itemId)) addedAt.set(entry.envelope.op.itemId, entry.seq);
@@ -16708,12 +16661,12 @@ var SHAPE_WORDS = /* @__PURE__ */ new Set([...VERDICTS, ...BANDS, ...SPLITS, ...
 var LABELLED_FILE = "labelled.json";
 var SHAPE_FILE = "shape.json";
 function gitRootOf(dir) {
-  let at2 = path9.resolve(dir);
+  let at = path9.resolve(dir);
   for (; ; ) {
-    if (existsSync3(path9.join(at2, ".git"))) return at2;
-    const up = path9.dirname(at2);
-    if (up === at2) return null;
-    at2 = up;
+    if (existsSync3(path9.join(at, ".git"))) return at;
+    const up = path9.dirname(at);
+    if (up === at) return null;
+    at = up;
   }
 }
 async function logOf(ctx, canvasId) {
@@ -17369,25 +17322,6 @@ function openInBrowser(url) {
 // packages/cli/src/operator.ts
 import { createServer } from "node:http";
 import { randomBytes as randomBytes2 } from "node:crypto";
-
-// packages/cli/src/run.ts
-function run(fn) {
-  return async (...args) => {
-    try {
-      await fn(...args);
-    } catch (err) {
-      console.error(`error: ${err.message}`);
-      if (err instanceof ApiError && err.code === BADGE_ENDED) {
-        console.error(
-          "This machine's badge was ended by the operator of that home, so it will not knock for a new one under your name. You can still open the home as a stranger; write to the address above about the rest."
-        );
-      }
-      process.exitCode = 1;
-    }
-  };
-}
-
-// packages/cli/src/operator.ts
 function summonedRefusal(env = process.env) {
   const session2 = env["ISOCAN_SESSION_ID"]?.trim();
   if (!session2) return null;
@@ -19605,7 +19539,7 @@ program2.command("mcp").description(
   "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)"
 ).action(
   run(async () => {
-    const { serveStdio } = await import("./src-COZXROUI.mjs");
+    const { serveStdio } = await import("./src-63KECGGH.mjs");
     await serveStdio({ version: buildStamp().version });
     await new Promise(() => {
     });
@@ -19620,14 +19554,14 @@ program2.command("serve").alias("start").description("Run the state daemon (auto
       throw refuseDaemonVerb("serve", declared.at ?? "its home");
     }
     if (opts.foreground) {
-      const { runDaemon } = await import("./daemon-KUPL2WY3.mjs");
+      const { runDaemon } = await import("./daemon-65DRW7BV.mjs");
       await runDaemon({ port, home, ...opts.force ? { takeover: true } : {} });
       return new Promise(() => {
       });
     }
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
     if (opts.force) {
-      const { stopDaemons } = await import("./daemon-KUPL2WY3.mjs");
+      const { stopDaemons } = await import("./daemon-65DRW7BV.mjs");
       const stopped = await stopDaemons(port, home);
       if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
     } else if (await client.health()) {
@@ -19818,7 +19752,7 @@ async function rosterCaveat(ctx, canvasId) {
   return why === null ? null : `this is only who this machine can see \u2014 ${why}`;
 }
 async function restartDaemon(home, port) {
-  const { stopDaemons } = await import("./daemon-KUPL2WY3.mjs");
+  const { stopDaemons } = await import("./daemon-65DRW7BV.mjs");
   const stopped = await stopDaemons(port, home);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
   await client.ensureDaemon();
@@ -19868,9 +19802,9 @@ program2.command("home [url]").description("Where new canvases are born, and whe
     }
     const declared = await resolveDeclared(isocanHome);
     if (declared?.mode === "direct") {
-      const at2 = declared.at ?? "its home";
+      const at = declared.at ?? "its home";
       throw new Error(
-        `this machine is direct, so there is no birth default to set: a canvas made here is born at ${at2}, which is the only home in play. \`isocan direct\` shows that address and \`isocan direct --clear\` gives this machine a daemon of its own, which is what would make this verb mean something again.`
+        `this machine is direct, so there is no birth default to set: a canvas made here is born at ${at}, which is the only home in play. \`isocan direct\` shows that address and \`isocan direct --clear\` gives this machine a daemon of its own, which is what would make this verb mean something again.`
       );
     }
     const health = await client.healthz(500);
@@ -19894,10 +19828,10 @@ program2.command("home [url]").description("Where new canvases are born, and whe
           (link) => (link.canvases ?? []).map((state) => [state.canvasId, state])
         )
       );
-      const canvases = Object.entries(record2?.rows ?? {}).map(([id3, at2]) => ({
+      const canvases = Object.entries(record2?.rows ?? {}).map(([id3, at]) => ({
         id: id3,
         title: titles.get(id3) ?? "(not here yet)",
-        home: at2,
+        home: at,
         state: linkStates.get(id3)
       })).sort((a, b) => a.title.localeCompare(b.title));
       if (globals.json) {
@@ -19959,7 +19893,7 @@ note: ${canvas2.id} \u2014 ${why}`);
       live,
       force: opts.force ?? false
     });
-    const already = Object.values(summary.rows).filter((at2) => at2 !== null).length;
+    const already = Object.values(summary.rows).filter((at) => at !== null).length;
     const moved = target2 ? `canvases born here will be born at ${target2} \u2014 nothing already here moved` : `canvases born here stay here from now on` + (already > 0 ? ` \u2014 the ${already} canvas${already === 1 ? "" : "es"} already at a home still answer${already === 1 ? "s" : ""} to it` : "");
     const after = { birth: target2, rows: summary.rows };
     if (!changed) {
@@ -20019,17 +19953,17 @@ program2.command("direct [url]").description("Work without a local daemon, speak
     const written = typeof config.direct === "string" ? config.direct.trim() : "";
     if (url === void 0 && !opts.clear) {
       const declared = await resolveDeclared(isocanHome);
-      const at2 = declared?.mode === "direct" ? declared.at : null;
+      const at = declared?.mode === "direct" ? declared.at : null;
       if (globals.json) {
         return printJson({
           mode: declared?.mode ?? DEFAULT_MODE,
-          direct: at2,
+          direct: at,
           ...override ? { override } : {},
           configured: written || null
         });
       }
       return printKeyValues({
-        mode: declared?.mode === "direct" ? `direct \u2014 no daemon here; commands speak to ${at2 ?? "the address in this directory's marker"}` : "daemon \u2014 this machine runs one, with a replica of its own",
+        mode: declared?.mode === "direct" ? `direct \u2014 no daemon here; commands speak to ${at ?? "the address in this directory's marker"}` : "daemon \u2014 this machine runs one, with a replica of its own",
         ...override ? { [DIRECT_VAR]: `${override} (set in this shell; wins over the file)` } : {},
         ...written ? { configured: `${written} (${paths_exports.configFile(isocanHome)})` } : {}
       });
@@ -20291,7 +20225,7 @@ function say(adoption) {
 }
 program2.command("stop").description("Stop the daemon \u2014 asks the port who it is, so a stale one can't hide").action(
   run(async (_opts, cmd) => {
-    const { stopDaemons } = await import("./daemon-KUPL2WY3.mjs");
+    const { stopDaemons } = await import("./daemon-65DRW7BV.mjs");
     const declared = await resolveDeclared(paths_exports.isocanHome());
     if (declared?.mode === "direct") {
       throw refuseDaemonVerb("stop", declared.at ?? "its home");
@@ -20827,8 +20761,8 @@ groupCommand.command("rm <name>").alias("delete").description("Delete a group \u
     console.log(`deleted the group ${group.name} (${group.id}) \u2014 reached ${reached}; ${sweptLine(answer2.swept ?? { expelled: 0, rerooted: 0 })}`);
   })
 );
-function linkLine2(capability, at2) {
-  const since = `(granted ${at2.slice(0, 10)})`;
+function linkLine2(capability, at) {
+  const since = `(granted ${at.slice(0, 10)})`;
   switch (capability) {
     case "view":
       return `view-only \u2014 anyone with the address can look at the deck, and change nothing ${since}`;
@@ -21230,7 +21164,7 @@ program2.command("setup [target]").description(
               }
             }
           } else if (before && stalenessOf(before).stale) {
-            const { stopDaemons } = await import("./daemon-KUPL2WY3.mjs");
+            const { stopDaemons } = await import("./daemon-65DRW7BV.mjs");
             await stopDaemons(port, home);
             await fs16.rm(path17.join(home, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
@@ -21342,7 +21276,7 @@ program2.command("setup [target]").description(
       }
       const bound = daemonUp ? await findBinding(work, home) : null;
       const record2 = daemonUp && (arrival || bound || birthHome) ? await readHomeRecord(client, birthHome).catch(() => null) : null;
-      if (record2 && (record2.birth || Object.values(record2.rows).some((at2) => at2 !== null))) {
+      if (record2 && (record2.birth || Object.values(record2.rows).some((at) => at !== null))) {
         report2.app = `${client.base} \u2014 ${roleLine2({ birth: record2.birth, rows: record2.rows }, client.base)}`;
       }
       const origin = (bound && record2 ? homeAddressOf(record2, bound.canvasId) : birthHome) ?? client.base;
@@ -21455,7 +21389,7 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     let ownerInput;
     if (access.kind !== "ordinary") {
       if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
-      const { personalCaptureOwner } = await import("./personal-capture-OKBXERKD.mjs");
+      const { personalCaptureOwner } = await import("./personal-capture-JM4RIFKT.mjs");
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }
@@ -22861,14 +22795,14 @@ program2.command("mv <item> [x] [y]").description("Move an item \u2014 to x y, b
         if (x === void 0 || y === void 0) {
           throw new Error("give x and y, or a delta with --by");
         }
-        const at2 = { x: Number(x), y: Number(y) };
-        if (!Number.isFinite(at2.x) || !Number.isFinite(at2.y)) {
-          const bad = [!Number.isFinite(at2.x) ? x : null, !Number.isFinite(at2.y) ? y : null].filter((one) => one !== null).join(" ");
+        const at = { x: Number(x), y: Number(y) };
+        if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) {
+          const bad = [!Number.isFinite(at.x) ? x : null, !Number.isFinite(at.y) ? y : null].filter((one) => one !== null).join(" ");
           throw new Error(
             `x and y are positional numbers, e.g. \`isocan mv <item> 300 200\` \u2014 got: ${bad}`
           );
         }
-        return at2;
+        return at;
       })();
       const dx = target2.x - item.x;
       const dy = target2.y - item.y;
@@ -22922,11 +22856,11 @@ program2.command("react <emoji> <items...>").description(
     const ctx = await ctxOf(cmd);
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
     const items = refs.map((ref) => resolveItem(snapshot, ref));
-    const at2 = opts.at === void 0 ? void 0 : parseXY(opts.at);
-    if (at2 && !(at2.x >= 0 && at2.x <= 1 && at2.y >= 0 && at2.y <= 1)) {
+    const at = opts.at === void 0 ? void 0 : parseXY(opts.at);
+    if (at && !(at.x >= 0 && at.x <= 1 && at.y >= 0 && at.y <= 1)) {
       throw new Error(`--at is a point on the item as fractions of its box, 0..1 each \u2014 got: ${opts.at}`);
     }
-    if (at2 && opts.off) throw new Error("--at places a mark; --off takes one back \u2014 one or the other");
+    if (at && opts.off) throw new Error("--at places a mark; --off takes one back \u2014 one or the other");
     const names = opts.who ? await ctx.client.actorNames() : void 0;
     const lines = [];
     for (const item of items) {
@@ -22935,7 +22869,7 @@ program2.command("react <emoji> <items...>").description(
         itemId: item.id,
         emoji,
         on: !opts.off,
-        ...at2 ? { at: at2 } : {}
+        ...at ? { at } : {}
       });
       const worn = (item.reactions?.[emoji] ?? []).filter((id3) => id3 !== ctx.actor.id);
       const after = opts.off ? worn : [...worn, ctx.actor.id];
@@ -25326,7 +25260,7 @@ async function readCommentDocument(ctx, canvasId, item) {
   const face = visualFaceOf(version4);
   if (!["text/markdown", "text/plain"].includes(face.mimeType)) throw new Error("Text comments need a Markdown or plain-text item");
   const { markdownText } = await import("./markdown-text-ME77MLUY.mjs");
-  const { isTextItem: isTextItem2 } = await import("./src-YI4WIS6D.mjs");
+  const { isTextItem: isTextItem2 } = await import("./src-WDP6L5Z6.mjs");
   const flavor = face.mimeType === "text/plain" ? "plain" : isTextItem2(item) ? "text-node" : "document";
   const text = markdownText((await ctx.client.downloadBlob(canvasId, face.blobHash)).toString("utf8"), flavor);
   return { text, versionId: version4.id, blobHash: face.blobHash, flavor };
@@ -25670,7 +25604,7 @@ session.command("select [item]").description("Point to a quote in saved Markdown
   if (!ref || !opts.quote) throw new Error("pass an item and --quote, or --clear");
   const item = resolveItem(snapshot, ref);
   const doc2 = await readCommentDocument(ctx, p.id, item);
-  const { TEXT_ATTENTION_MS } = await import("./src-YI4WIS6D.mjs");
+  const { TEXT_ATTENTION_MS } = await import("./src-WDP6L5Z6.mjs");
   const range = quoteRange(doc2.text, opts.quote, opts.occurrence === void 0 ? void 0 : Number(opts.occurrence));
   const textSelection = {
     itemId: item.id,
@@ -25736,7 +25670,7 @@ session.command("say [status]").description("Set (or clear) the status line unde
     const ctx = await ctxOf(cmd);
     const p = await resolveCanvas(ctx);
     if (opts.signal) {
-      const { cursorSignal } = await import("./src-YI4WIS6D.mjs");
+      const { cursorSignal } = await import("./src-WDP6L5Z6.mjs");
       await touchSession(ctx, p.id, { signal: status2 ? cursorSignal(status2) : null });
       console.log(status2 ? `signal: ${status2} (20s)` : "signal cleared");
       return;
@@ -25749,7 +25683,7 @@ session.command("signal [text]").description("Temporarily replace your name on y
   run(async (text, _opts, cmd) => {
     const ctx = await ctxOf(cmd);
     const p = await resolveCanvas(ctx);
-    const { cursorSignal } = await import("./src-YI4WIS6D.mjs");
+    const { cursorSignal } = await import("./src-WDP6L5Z6.mjs");
     await touchSession(ctx, p.id, { signal: text ? cursorSignal(text) : null });
     console.log(text ? `signal: ${text} (20s)` : "signal cleared");
   })
@@ -25774,7 +25708,6 @@ program2.command("who").description("Who is on this canvas right now (--all: eve
     const sessions = await ctx.client.listSessions(p.id);
     const snapshot = await ctx.client.snapshot(p.id);
     const { canvas: canvas2 } = snapshot;
-    const nameOf = nameResolver(snapshot);
     const caveat = await rosterCaveat(ctx, p.id);
     if (caveat) console.error(`note: ${caveat}`);
     if (opts.all) {
@@ -27131,10 +27064,10 @@ ${group.label}`);
       wanted.id
     );
     const titleOf = new Map(canvases.map((c) => [c.id, c.title]));
-    const at2 = lensLiveList(live).map((l) => `${l.state === "here" ? "" : "standing by on "}${titleOf.get(l.canvasId) ?? l.canvasId}`).join(", ");
+    const at = lensLiveList(live).map((l) => `${l.state === "here" ? "" : "standing by on "}${titleOf.get(l.canvasId) ?? l.canvasId}`).join(", ");
     console.log(
       `
-${wanted.name} made ${all.length} thing${all.length === 1 ? "" : "s"} across ${spread} canvas${spread === 1 ? "" : "es"}${at2 ? ` \xB7 now on ${at2}` : ""} \u2014 ${LENS_REFUSAL}`
+${wanted.name} made ${all.length} thing${all.length === 1 ? "" : "s"} across ${spread} canvas${spread === 1 ? "" : "es"}${at ? ` \xB7 now on ${at}` : ""} \u2014 ${LENS_REFUSAL}`
     );
   })
 );
