@@ -1308,7 +1308,7 @@ somebody else wrote into the enrolment is set aside, and said.
 looking at — an `isocan rc` starts answering for it, or its session appears —
 a small note drops in under the presence pile, top right: *"Percy joined ·
 listens only to you (Nico)"*, or *"Percy is back"* after more than five
-minutes away, and fades after a few seconds. It is read from the presence
+minutes away, and fades after about twelve seconds — it stays while you point at it. It is read from the presence
 the page already has; nothing is written. Agents only, never yourself, and
 never for whoever was already here when you opened the canvas. A flapping
 connection says nothing.
