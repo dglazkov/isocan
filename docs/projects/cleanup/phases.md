@@ -22,7 +22,11 @@ lanes' own: **TS** types/errors, **RP** React render cost, **RH** hook
 correctness, **DU** duplication, **DC** dead code, **BC** bundle/CSS, **TR**
 tests/scripts/CI.
 
-**Where we are:** designed 25 Sep 2026; no phase started.
+**Where we are:** designed 25 Sep 2026; taken up by the conductor 27 Sep.
+Next is cleanup phase 0 — then 1 to 6 in order. The audit ran on `2d3ad79b`, and some of it was
+fixed since by other work — marked *Done* where it stands, so a phase does
+not re-fix it; everything else in a phase is re-checked against `main` in its
+brief before anything is built.
 
 **How it runs.** Each fix lands with a guard that imports the rule it guards
 (lessons #5) and was seen to fail without the fix. `npm test` and
@@ -33,6 +37,8 @@ except where a phase says otherwise.
 ---
 
 ## Phase 0 — a PR check that can finish
+
+**Status: NOT STARTED.**
 
 Everything after this lands through `pr.yml`, and today it cannot answer.
 
@@ -50,6 +56,8 @@ Everything after this lands through `pr.yml`, and today it cannot answer.
 fails if any workflow running `test:ci` is unsharded.
 
 ## Phase 1 — one bad input does not end the process
+
+**Status: NOT STARTED.**
 
 Node 24 exits on an unhandled rejection and nothing in the repo handles one, so
 each of these is a whole-process crash, not an error.
@@ -79,6 +87,8 @@ scrub case walked in a browser and said so.
 
 ## Phase 2 — one canvas's data stays on that canvas
 
+**Status: NOT STARTED.**
+
 - **RH-1.** [`useCanvasHome`](../../../packages/web/src/lib/homes.ts) resets
   inside an effect, so on an in-app canvas switch `CanvasSurface` runs its
   arrival effects with B's id over A's store: B's durable seen-mark is written
@@ -93,6 +103,8 @@ scrub case walked in a browser and said so.
 
 ## Phase 3 — the canvas does not re-render for nothing
 
+**Status: NOT STARTED.**
+
 - **RP-1.** Every `presence-roster` (≤25/s while any cursor moves, echoed to
   the sender) replaces `actorColors`/`actorNames`/`actorJoins` with fresh
   objects in [`canvasStore.ts`](../../../packages/web/src/stores/canvasStore.ts),
@@ -100,8 +112,9 @@ scrub case walked in a browser and said so.
   person alone. Keep the held map when it is shallow-equal.
 - **RP-8.** The marquee writes a new selection array on every pointermove, and
   each one publishes a presence beat that comes back as RP-1.
-- **RP-3.** `useVotesHiddenOn`/`useRoundMarks` subscribe every item to the
-  whole canvas: every op re-renders all N.
+- **RP-3.** *Done 26 Sep 2026* (`2016c2bc`): `useVotesHiddenOn` and
+  `useRoundMarks` answer inside their selectors, so an op re-renders the items
+  whose answer changed; `packages/web/test/canvaswide-rerender.test.ts` counts it.
 - **RP-6.** `CanvasSurface` subscribes to `canvas` and `actorJoins` only to
   feed two effects, so the whole page chrome re-renders on every op and roster.
 - **RP-9.** `CanvasViewport` re-sorts every item, with `groupAncestors` in the
@@ -109,12 +122,17 @@ scrub case walked in a browser and said so.
 - **RP-4, RP-2, RP-7.** `MarkdownBody` builds its `img`/`a` renderers inline, so
   every re-render remounts every link and image (focus and selection lost as
   often as rosters arrive); chat markdown re-parses on every keystroke; every
-  visible document re-parses on every op.
+  visible document re-parses on every op. *The last is done 26 Sep 2026*
+  (`2016c2bc`: a note subscribes to the canvas only once it links a path on
+  it), and `Markdown` is memoised (`cb9308c1`); RP-4 and RP-2 stand until
+  re-measured.
 
 **Proof:** the existing pan and drag budgets, before and after; a render count
 for N items under a cursor stream.
 
 ## Phase 4 — what ships is what runs
+
+**Status: NOT STARTED.**
 
 - **DC-1 / TR-1.** `#release` keeps `scripts/canvas-shot.mjs`,
   `deck-export.mjs` and `lib/browser.mjs`, whose imports that branch stopped
@@ -129,7 +147,14 @@ for N items under a cursor stream.
   `prepare.mjs`'s nested install, both served git installs from `main`, which
   no longer happen; the second builds the web app twice in three workflows.
 
+**Proof:** the release guard builds the release tree and resolves every import
+of every file it ships, and fails on today's `#release`; `isocan canvas shot`
+and a deck export run from an install of that tree; the home image's build
+context carries no `packages/modules/*/scripts`.
+
 ## Phase 5 — copies agree
+
+**Status: NOT STARTED.**
 
 - **DU-1.** The talk module's `Resampler`, a copy marked "reconcile by hand",
   missed both of `053d2d42`'s fixes: at 44.1 kHz it writes a PCM zero about once
@@ -159,7 +184,15 @@ for N items under a cursor stream.
   own save and ⌘S runs the first render's `save`; five design panels disable
   their forms on every op.
 
+**Proof:** every declared copy pair held by one test that runs both sides on
+the same inputs, or the copy is gone; one filename rule, tested on accented
+and non-Latin titles, which every former copy now calls; every CSS guard
+reads every stylesheet and fails on the undefined variables; `decisions.md`'s
+check runs in the suite; each RH fix with a test seen to fail without it.
+
 ## Phase 6 — the sweeps
+
+**Status: NOT STARTED.**
 
 Each is mechanical and each ends with a ratchet so it stays done:
 `noUnusedLocals` (DC-4, ~25 dead declarations and ~100 unused imports); 48 dead
@@ -168,12 +201,18 @@ tsconfig over `test/` and one CLI-spawn helper (TR-12, TR-13, DU-3); the
 eager-core import in `AddPopover` (BC-1) and the lazy-only CSS split (BC-2);
 the operator and passes sections out of the 5,948-line `registerRoutes` (TS-8).
 
+**Proof:** each sweep's ratchet is in the suite and was seen to fail on a
+reintroduced instance — `noUnusedLocals` in the tsconfig, a dead-rule count
+for `styles.css`, a count of private `run()` wrappers and of CLI-spawn helpers
+that can only go down.
+
 ---
 
 ## Not in this walk
 
-- **The entry bundle is 567 B over `CEILING`** on `main`. That is the ratchet's
-  own conversation — a `bundle-over-ceiling` finding — not a cleanup.
+- **The entry bundle was 567 B over `CEILING`** on `main`. That was the
+  ratchet's own conversation, and it was had: `88c5e47e` took 30 KB off and
+  lowered the ceiling to 701,300 on 26 Sep.
 - **The React Compiler lint rules.** 126 hits, mostly noise against house
   patterns; the real ones are RH-1/3/5/11, fixed above. `exhaustive-deps` stays
   the gate.
