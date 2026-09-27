@@ -10,7 +10,7 @@ import { HistoryGlyph } from "./Glyphs.tsx";
 // Address search and remote-document import are needed only after Add opens.
 const AddPopover = lazy(() => import("./AddPopover.tsx").then((module) => ({ default: module.AddPopover })));
 import { hideMenu, showMenu, useChromeHidden } from "../lib/chromemenu.tsx";
-import { openContextMenu } from "./ContextMenu.tsx";
+import { openContextMenu } from "../lib/contextmenu.ts";
 import { textToolMenu } from "../lib/textmenu.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";

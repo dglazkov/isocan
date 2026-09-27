@@ -1,5 +1,5 @@
 import type React from "react";
-import { openContextMenu } from "../components/ContextMenu.tsx";
+import { openContextMenu } from "./contextmenu.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { HIDEABLE, hideableEntry, hideChrome, showChrome, useChromeHidden } from "./hideable.ts";
 

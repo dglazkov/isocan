@@ -5,7 +5,7 @@ import type { Actor } from "@isocan/core";
 import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, MODULE_PAGE_ROUTE, WORKBENCH_ITEM_ROUTE, WORKBENCH_ROUTE } from "@isocan/core";
 import { ApiError, getSnapshot } from "./lib/api.ts";
 import { CANVAS_GROUPS_REQUIRED } from "@isocan/core";
-import { Viewer } from "./components/Viewer.tsx";
+import { Viewer } from "./components/LazyViewer.tsx";
 import { readIdentity } from "./lib/identity.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
 import type { SignIn, SignInLanding } from "./lib/signin.ts";

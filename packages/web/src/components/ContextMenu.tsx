@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keyFor, renderKeys } from "@isocan/core";
-import { useUiStore } from "../stores/uiStore.ts";
 
 /**
  * **Right-click: the acts you can already do, where your hand already is.**
@@ -326,9 +325,4 @@ function Submenu({
       )}
     </div>
   );
-}
-
-/** Open and close from anywhere, the way the other popovers are driven. */
-export function openContextMenu(at: { x: number; y: number }, entries: MenuEntry[]): void {
-  useUiStore.getState().setContextMenu({ at, entries });
 }

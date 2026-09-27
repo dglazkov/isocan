@@ -445,11 +445,36 @@
  * the lazy host is what kept this to a creep). Measured combined on the
  * landing tree: 730,007. Still 16,993 under the 747,000 the 22 Sep reclaim
  * started from; the margin is 93 bytes, thin on purpose, as above.
+ *
+ * **730,100 → 701,300 on 26 Sep 2026, and it went DOWN** in the answer to that
+ * night's finding (731,446, 1,346 past). Four surfaces that mount behind a
+ * condition were in every first visit, and now arrive when they are asked for:
+ *
+ *   ContextMenu   `openContextMenu` lived beside the component, so the three
+ *                 eager callers that only OPEN a menu pinned the whole menu,
+ *                 submenu and all. It moved to `lib/contextmenu.ts`; the
+ *                 component's import starts beside `menuentries.tsx`'s on the
+ *                 same gesture, so a right-click waits one round trip, not two.
+ *   Viewer        the `view` face, rendered only after the home has answered.
+ *   AgentTray     both panels return null until opened; they mount on first
+ *   FilesPanel    opening and stay mounted, as `LazyTrashPanel` always has.
+ *
+ * An A/B in one worktree read 731,300 → 701,021, **−30,279**, and the menu alone
+ * was 11,549 of it — twice the component's own size, because what the menu
+ * imports came with it. That is the `arrow.ts` lesson from the other side: a
+ * value export sitting beside a component makes the component eager for anyone
+ * who only needs the value.
+ *
+ * The new number is the nightly's 731,446 less the A/B, 701,167, rounded up
+ * to the hundred. It therefore also carries the 1,346 bytes that night found
+ * past 730,100, which nobody has itemised. They are paid for by a reclaim
+ * twenty-two times their size rather than accepted as a raise, and are named
+ * here so that "somebody agreed to them" is not claimed for them.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 730_100;
+export const CEILING = 701_300;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's

@@ -23,7 +23,7 @@ import { longPress } from "../lib/longpress.ts";
 import { isTyping } from "../lib/keys.ts";
 import { TextComposer } from "./TextComposer.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
-import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
+import { openContextMenu } from "../lib/contextmenu.ts";
 /**
  * **The menus arrive when a menu is asked for** (#195's budget, not its
  * feature). `menuentries.tsx` is twenty-four kilobytes of every row the
@@ -34,8 +34,17 @@ import { ContextMenu, openContextMenu } from "./ContextMenu.tsx";
  * The screen point and the world point are read BEFORE the await: the event
  * is gone by the time the module lands, and reading `e.clientX` off a pooled
  * event later is the kind of bug that only shows up under a slow network.
+ *
+ * The menu that draws the rows rides the same gesture: its import starts
+ * beside the rows' rather than after them, so the first right-click waits on
+ * one round trip, not two.
  */
-const menus = () => import("../lib/menuentries.tsx");
+const menuView = () => import("./ContextMenu.tsx");
+const menus = () => {
+  void menuView();
+  return import("../lib/menuentries.tsx");
+};
+const ContextMenu = lazy(() => menuView().then((m) => ({ default: m.ContextMenu })));
 import { ItemView } from "./ItemView.tsx";
 /**
  * **The fan is rare, so it is not in the bytes a first visit downloads.**
@@ -1241,11 +1250,13 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       <SketchBar canvasId={canvasId} actor={actor} />
       {dropping && <div className="drop-overlay">{dropMessage}</div>}
       {menu && (
-        <ContextMenu
-          at={menu.at}
-          entries={menu.entries}
-          onClose={() => useUiStore.getState().setContextMenu(null)}
-        />
+        <Suspense fallback={null}>
+          <ContextMenu
+            at={menu.at}
+            entries={menu.entries}
+            onClose={() => useUiStore.getState().setContextMenu(null)}
+          />
+        </Suspense>
       )}
     </div>
   );

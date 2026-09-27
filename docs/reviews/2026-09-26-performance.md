@@ -11,7 +11,7 @@ Run by `scripts/persona-run.mjs` at `9b385b3`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| bytes past the last size somebody agreed to is 1346, past 0 of 730100 | unanswered |
+| bytes past the last size somebody agreed to is 1346, past 0 of 730100 | accepted — fixed, and CEILING went DOWN 730,100 → 701,300 rather than up: the context menu, the `view` face, and the Agents and Files panels now arrive when they are asked for (`openContextMenu` moved to `lib/contextmenu.ts` so its eager callers stop pinning the component); an A/B in one worktree read 731,300 → 701,021 (−30,279). The 1,346 is carried in the new number, un-itemised, and `scripts/bundle-ceiling.mjs` says so. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report
