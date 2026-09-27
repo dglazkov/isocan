@@ -155,7 +155,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `context show|pin|exclude|unmark|inherit|uninherit|request|content|personal` — what an agent reads
 - `design workflow|start|brief|receipt|questions|ask|answer|reference|compare|respond|decide|review|craft` — a design request
 - `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
-- `prefer`, `choose` — the eye test, and the winner folded back
+- `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -1708,6 +1708,33 @@ before a screen means.
   It is a floor, not taste: clearing it makes a screen unembarrassing, not
   good. Good comes from the design system being specific and from the person
   rejecting drafts.
+
+## Seeing what changed
+
+`isocan diff <item>` says what the last edit did: the version before the one
+showing against the one showing, as one sentence and a numbered list.
+`isocan diff <item> v2 v5` compares any two (`vN`, `N`, an id or an id
+prefix). `isocan diff <variation> --source` compares a variation with the
+screen it was made from, which is the pair `choose` decides. `--json` is the
+structured diff.
+
+It reads the meaning of each kind rather than its bytes:
+
+- **Text and Markdown**: lines, then the words inside a changed line.
+- **HTML**: the parsed DOM, so an inserted card is one added element. It
+  reports attribute, class, inline style and text changes, and stylesheet
+  rules property by property, each with a node path.
+- **Wireframes**: the embedded spec, so it reports "stacked list → data
+  table", props, words, and intents. An intent is a link, since a wire's
+  links are computed from intents.
+- **Images**: metadata only, and it says so.
+
+Use it before you tell a person what you changed, since it is what they will
+see. Use it before you recommend a variation, too: "Pro is gone and the button
+is primary" is a better reason to pick one than "it looks cleaner". A person
+gets the same diff from **Compare versions** in the item menu or the version
+fan. There, the changes are highlighted inside both renders and can be stepped
+through. Diffing only reads the item and never writes to it.
 
 ## Choosing between variations
 

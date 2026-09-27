@@ -23,6 +23,12 @@ second week.
 
 ## 26 September 2026
 
+- **See what changed.** Right-click an item → *Compare versions* (or *Compare*
+  on any card in the version fan) shows before and after side by side, every
+  change marked in both and steppable one at a time, with a sentence saying
+  what changed — for a wireframe, in its own terms ("the list became a card
+  grid"). *Use vN* and *Choose this variation* are right there.
+  `isocan diff <item> [from] [to]` prints the same thing for an agent.
 - **A wire that has fallen behind its design system says so.** A quiet
   *behind* tag sits under the wire, and "N wires behind" under the DESIGN.md.
   Click it, or choose *Restyle to <system>* in the item menu, to bring that

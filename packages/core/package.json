@@ -21,7 +21,8 @@
     "./design-use": "./src/design-use.ts",
     "./colour": "./src/colour.ts",
     "./jev": "./src/jev.ts",
-    "./chatclean": "./src/chatclean.ts"
+    "./chatclean": "./src/chatclean.ts",
+    "./diff": "./src/diff.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
