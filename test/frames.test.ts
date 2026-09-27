@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — a plain .mjs script, imported for its two pure readers.
-import { frameStats, selfTimeBySource } from "../scripts/frames.mjs";
+import { frameStats, longFrames, selfTimeBySource } from "../scripts/frames.mjs";
 
 /**
  * **The frame census reads what it says it reads** — lesson 100's rule, applied
@@ -36,5 +36,23 @@ describe("selfTimeBySource", () => {
     const got = selfTimeBySource(profile, "/nonexistent");
     expect(got.totalMs).toBe(5);
     expect(got.files.map((f: { file: string; ms: number }) => [f.file, f.ms])).toEqual([["((program))", 3], ["((idle))", 2]]);
+  });
+});
+
+describe("longFrames", () => {
+  it("splits each long frame into script and the browser's own work, and names what ran", () => {
+    const got = longFrames([
+      { duration: 60, render: 10, scripts: [{ duration: 45, invoker: "DOMWindow.onwheel" }] },
+      { duration: 170, render: 42, scripts: [{ duration: 20, invoker: "MessagePort.onmessage" }, { duration: 104, invoker: "DOMWindow.onwheel" }] },
+      { duration: 185, render: 1, scripts: [] },
+    ]);
+    expect(got.count).toBe(3);
+    expect(got.scriptMs).toBe(169);
+    expect(got.renderMs).toBe(53);
+    expect(got.worst.map((w: { ms: number; by: string }) => [w.ms, w.by])).toEqual([[185, "no script"], [170, "DOMWindow.onwheel 104 ms"], [60, "DOMWindow.onwheel 45 ms"]]);
+  });
+
+  it("says nothing when no frame was long", () => {
+    expect(longFrames([])).toEqual({ count: 0, scriptMs: 0, renderMs: 0, worst: [] });
   });
 });

@@ -10,6 +10,7 @@ import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import type { PluggableList } from "unified";
+import { cachedParse } from "./markdown-parse.ts";
 
 /**
  * URL transform that permits image data URIs (data:image/...) in src attributes,
@@ -21,6 +22,10 @@ function safeUrlTransform(url: string, key: string): string {
   }
   return defaultUrlTransform(url);
 }
+
+// After remark-parse, which every processor react-markdown builds starts with.
+const PLUGINS: PluggableList = [remarkGfm, cachedParse];
+const BREAKS_PLUGINS: PluggableList = [remarkGfm, remarkBreaks, cachedParse];
 
 /** Route-aware scrolling is only mounted for saved documents. Plain Markdown
  * (including static rendering of comments) does not require a router. */
@@ -118,7 +123,7 @@ export default function MarkdownBody({
   }, [prefix]);
   const content = plain ? <span style={{ whiteSpace: "pre-wrap" }}>{children}</span> : (
     <ReactMarkdown
-      remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}
+      remarkPlugins={breaks ? BREAKS_PLUGINS : PLUGINS}
       urlTransform={safeUrlTransform}
       rehypePlugins={[headings, ...(rehypePlugins ?? [])]}
       components={{

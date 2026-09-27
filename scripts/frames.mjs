@@ -48,6 +48,27 @@ export function frameStats(gaps) {
   return { frames: s.length, p50: q(0.5), p90: q(0.9), p99: q(0.99), worst: s[s.length - 1], over16: s.filter((x) => x > 16.7).length, over32: s.filter((x) => x > 32).length };
 }
 
+/**
+ * **What the long frames were made of** (27 Sep 2026), from Chrome's Long
+ * Animation Frames entries: how much of each was script and how much the
+ * browser's own style, layout and paint, and which handler ran the script.
+ * The sampled profile says where time went over a gesture; this says what the
+ * frames a person FEELS were — and on 27 Sep it overturned the reading that
+ * zoom's worst frames were markdown remounting: they were a wheel handler
+ * rendering every item at once.
+ */
+export function longFrames(entries) {
+  const script = (e) => e.scripts.reduce((sum, x) => sum + x.duration, 0);
+  const sorted = [...entries].sort((a, b) => b.duration - a.duration);
+  const top = (e) => [...e.scripts].sort((a, b) => b.duration - a.duration)[0];
+  return {
+    count: entries.length,
+    scriptMs: entries.reduce((sum, e) => sum + script(e), 0),
+    renderMs: entries.reduce((sum, e) => sum + e.render, 0),
+    worst: sorted.slice(0, 3).map((e) => ({ ms: e.duration, scriptMs: script(e), renderMs: e.render, by: top(e) ? `${top(e).invoker} ${Math.round(top(e).duration)} ms` : "no script" })),
+  };
+}
+
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 function vlq(segment) {
   const out = []; let shift = 0; let value = 0;
@@ -148,8 +169,8 @@ async function main() {
       const rendered = await b.ev(`document.querySelectorAll("[data-item-id]").length`);
       if (rendered < need) throw new Error(`REFUSED: only ${rendered} items rendered`);
       await b.send("Emulation.setCPUThrottlingRate", { rate: throttle });
-      const probe = `(() => { window.__gaps = []; window.__cams = new Set(); let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; window.__cams.add(document.querySelector('.world')?.style.transform ?? ''); if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); return true; })()`;
-      const collect = `(() => { window.__on = false; return { gaps: window.__gaps.slice(1), cams: window.__cams.size }; })()`;
+      const probe = `(() => { window.__gaps = []; window.__cams = new Set(); let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; window.__cams.add(document.querySelector('.world')?.style.transform ?? ''); if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); window.__loaf = []; if (!window.__loafOn) { window.__loafOn = true; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__loaf.push({ duration: e.duration, render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0, scripts: e.scripts.map((x) => ({ duration: x.duration, invoker: x.invoker })) }); }).observe({ type: 'long-animation-frame' }); } catch {} } return true; })()`;
+      const collect = `(() => { window.__on = false; return { gaps: window.__gaps.slice(1), cams: window.__cams.size, loaf: window.__loaf }; })()`;
       const wheel = (dx, dy, modifiers = 0) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: dx, deltaY: dy, modifiers });
       if (profileOut) { await b.send("Profiler.enable"); await b.send("Profiler.setSamplingInterval", { interval: 250 }); }
       const results = {};
@@ -165,11 +186,13 @@ async function main() {
         const profile = profileOut ? (await b.send("Profiler.stop")).profile : null;
         const got = await b.ev(collect);
         if (name !== "remote" && got.cams < 10) throw new Error(`REFUSED: the ${name} gesture moved the camera through only ${got.cams} positions — the wheel is not reaching the canvas`);
-        results[name] = { ...frameStats(got.gaps), cameraPositions: got.cams, ...(profile ? { bySource: selfTimeBySource(profile, assets) } : {}) };
+        results[name] = { ...frameStats(got.gaps), cameraPositions: got.cams, longFrames: longFrames(got.loaf), ...(profile ? { bySource: selfTimeBySource(profile, assets) } : {}) };
       }
       if (profileOut) writeFileSync(profileOut, JSON.stringify({ items, throttle, results }, null, 2));
       for (const [name, r] of Object.entries(results)) {
         console.log(`${name.padEnd(6)} items=${items} throttle=${throttle}x frames=${r.frames} p50=${r.p50.toFixed(1)} p90=${r.p90.toFixed(1)} p99=${r.p99.toFixed(1)} worst=${r.worst.toFixed(1)} >16.7ms=${r.over16} >32ms=${r.over32}`);
+        const lf = r.longFrames;
+        if (lf.count) console.log(`         long frames ${lf.count}: script ${lf.scriptMs.toFixed(0)} ms, style/layout/paint ${lf.renderMs.toFixed(0)} ms; worst ${lf.worst.map((w) => `${w.ms.toFixed(0)} (${w.scriptMs.toFixed(0)} script, ${w.renderMs.toFixed(0)} render, ${w.by})`).join(", ")}`);
         if (r.bySource) for (const f of r.bySource.files.slice(0, 8)) console.log(`         ${f.ms.toFixed(0).padStart(6)} ms ${(100 * f.share).toFixed(1).padStart(5)}%  ${f.file}`);
       }
       const errors = b.takeErrors();

@@ -123,11 +123,27 @@ the items map (0.38 ms). Linear, and small at the sizes people use today.
 
 ## What is still not chased
 
-- **Zoom's p99** (still ~150 ms) is the frames where every item crosses a
-  threshold at once and remounts its content — and react-markdown re-parses on
-  remount. A parse cache keyed on the text, below react-markdown, is the next
-  step; it would also cheapen panning a canvas big enough that items leave the
-  render window.
+- **Zoom's p99** (still ~150 ms). This note first read it as notes remounting
+  and re-parsing their markdown; **that was wrong** (27 Sep). A parse cache
+  below react-markdown was built and measured, three runs against three: zoom
+  p99 150 / 167 / 150 ms before, 150 / 150 / 167 after. The markdown in the zoom
+  gesture is *first* mounts — items that were never near the window at the
+  starting zoom — which no cache can help. What the worst frames are, read from
+  Chrome's Long Animation Frames entries (now printed by `scripts/frames.mjs`):
+  ~100 ms of script inside the **wheel handler**, plus ~40 ms of style, layout
+  and paint — React rendering every item synchronously the moment all 250 cross
+  a threshold together. Zustand's selectors go through `useSyncExternalStore`,
+  which React never defers, so the fix is not a transition around the same
+  subscription. The options are a design call, not a measurement: let the
+  discrete chrome decisions lag the camera until a zoom settles (tldraw's
+  choice), or make the flip itself cheaper. Real canvases vary item sizes, so
+  the all-at-once flip is partly this census's uniform 250 notes.
+  The cache stayed: it takes the remount parse (after a zoom settles, or
+  panning back to where you were) from ~410 ms of the remote gesture's CPU to
+  3 ms — real work removed, just not from the frames a person feels.
+- **The remote gesture's long frames are mostly the browser's**: of 300 ms in
+  long frames, ~200 ms is style, layout and paint, and some runs show a ~185 ms
+  frame with no script at all.
 - **The browser's own work** — style, layout, raster — is now 39% of the
   remote and zoom samples. The moved item and the edge beacons' DOM are most of
   it.
