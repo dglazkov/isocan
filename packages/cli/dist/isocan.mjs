@@ -5840,8 +5840,8 @@ async function codexSandboxSpec(spec, home, daemon, platform = process.platform)
 }
 
 // packages/cli/src/main.ts
-import { existsSync as existsSync5, promises as fs16 } from "node:fs";
-import { spawnSync as spawnSync4 } from "node:child_process";
+import { existsSync as existsSync6, promises as fs16 } from "node:fs";
+import { spawnSync as spawnSync5 } from "node:child_process";
 import os4 from "node:os";
 import path17 from "node:path";
 
@@ -17898,6 +17898,34 @@ stay off, the order is \`isocan operator takedown\`. The record is in the ledger
   );
 }
 
+// packages/cli/src/package-script.ts
+import { spawnSync as spawnSync2 } from "node:child_process";
+import { existsSync as existsSync4 } from "node:fs";
+function runPackageScript(script, args, opts) {
+  if (!existsSync4(script)) {
+    throw new Error(`${opts.what} needs ${script}, which this copy of isocan does not have \u2014 reinstall it: npm i -g ${INSTALL_SPEC}`);
+  }
+  const child = spawnSync2(process.execPath, [script, ...args], {
+    stdio: [opts.input !== void 0 ? "pipe" : "inherit", opts.quiet ? "pipe" : "inherit", "pipe"],
+    input: opts.input,
+    encoding: "utf8",
+    env: { ...process.env, ...opts.env }
+  });
+  const stderr = child.stderr ?? "";
+  if (!opts.quiet && stderr) process.stderr.write(stderr);
+  if (child.error) throw new Error(`${opts.what} could not start: ${child.error.message}`);
+  if (child.status === 0) return;
+  const missing = /ERR_MODULE_NOT_FOUND[\s\S]*?Cannot find (?:package|module) '([^']+)' imported from (\S+)/.exec(stderr) ?? /Cannot find (?:package|module) '([^']+)' imported from (\S+)[\s\S]*?ERR_MODULE_NOT_FOUND/.exec(stderr);
+  if (missing) {
+    throw new Error(
+      `${opts.what} could not start: ${missing[1]} is missing from this copy of isocan (imported by ${missing[2]}). The install is incomplete \u2014 reinstall it: npm i -g ${INSTALL_SPEC}`
+    );
+  }
+  const said = stderr.trim().split("\n").filter(Boolean).at(-1);
+  const how = child.status === null ? `killed by ${child.signal ?? "a signal"}` : `exit ${child.status}`;
+  throw new Error(`${opts.what} did not land (${how})${said ? `: ${said}` : ""}`);
+}
+
 // packages/cli/src/sandbox.ts
 import { spawn as spawn3 } from "node:child_process";
 import { promises as fs12 } from "node:fs";
@@ -18219,7 +18247,7 @@ async function runFenced(home, request, env = process.env, platform = process.pl
 
 // packages/cli/src/upgrade.ts
 import { promises as fs13 } from "node:fs";
-import { spawnSync as spawnSync2 } from "node:child_process";
+import { spawnSync as spawnSync3 } from "node:child_process";
 import path13 from "node:path";
 async function whichInstall(root, home = paths_exports.isocanHome()) {
   const inside = path13.relative(resolved(paths_exports.buildsDir(home)), resolved(root));
@@ -18229,14 +18257,14 @@ async function whichInstall(root, home = paths_exports.isocanHome()) {
   if (await exists(path13.join(root, ".git"))) return { kind: "checkout", root };
   if (root.includes(`${path13.sep}_npx${path13.sep}`)) return { kind: "npx", root };
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-  const globalRoot = spawnSync2(npm, ["root", "-g"], { encoding: "utf8" }).stdout?.trim();
+  const globalRoot = spawnSync3(npm, ["root", "-g"], { encoding: "utf8" }).stdout?.trim();
   if (globalRoot && resolved(root).startsWith(resolved(globalRoot))) {
     return { kind: "global", root };
   }
   return { kind: "local", root };
 }
 function checkoutState(root) {
-  const git2 = (...args) => spawnSync2("git", ["-C", root, ...args], { encoding: "utf8" });
+  const git2 = (...args) => spawnSync3("git", ["-C", root, ...args], { encoding: "utf8" });
   return {
     dirty: (git2("status", "--porcelain").stdout ?? "").trim().length > 0,
     branch: (git2("rev-parse", "--abbrev-ref", "HEAD").stdout ?? "").trim(),
@@ -18292,7 +18320,7 @@ import path15 from "node:path";
 
 // packages/cli/src/onpath.ts
 import { accessSync, constants, realpathSync } from "node:fs";
-import { spawnSync as spawnSync3 } from "node:child_process";
+import { spawnSync as spawnSync4 } from "node:child_process";
 import path14 from "node:path";
 var NPX_CACHE = `${path14.sep}_npx${path14.sep}`;
 var LOCAL_BIN = `${path14.sep}node_modules${path14.sep}.bin`;
@@ -18330,7 +18358,7 @@ function rootOfBin(bin) {
 }
 function globalBinDir() {
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-  const prefix = spawnSync3(npm, ["prefix", "-g"], { encoding: "utf8" }).stdout?.trim();
+  const prefix = spawnSync4(npm, ["prefix", "-g"], { encoding: "utf8" }).stdout?.trim();
   if (!prefix) return null;
   return process.platform === "win32" ? prefix : path14.join(prefix, "bin");
 }
@@ -18910,7 +18938,7 @@ function mimeFor(filename) {
 }
 
 // packages/cli/src/inline.ts
-import { existsSync as existsSync4, promises as fs15 } from "node:fs";
+import { existsSync as existsSync5, promises as fs15 } from "node:fs";
 import path16 from "node:path";
 async function resolveImageToDataUri(rawRef, baseDir) {
   if (!rawRef) return null;
@@ -18932,7 +18960,7 @@ async function resolveImageToDataUri(rawRef, baseDir) {
     candidates.push(path16.resolve(baseDir, unescaped));
   }
   for (const candidate of candidates) {
-    if (existsSync4(candidate)) {
+    if (existsSync5(candidate)) {
       try {
         const stat = await fs15.stat(candidate);
         if (stat.isFile()) {
@@ -18984,7 +19012,7 @@ async function inlineHtmlAssets(filePath, html) {
         const clean = rawHref.split(/[?#]/)[0];
         if (clean) {
           const cssPath = path16.isAbsolute(clean) ? clean : path16.resolve(baseDir, clean);
-          if (existsSync4(cssPath)) {
+          if (existsSync5(cssPath)) {
             try {
               const rawCss = await fs15.readFile(cssPath, "utf8");
               const inlinedCss = await inlineCssUrls(rawCss, path16.dirname(cssPath));
@@ -19014,7 +19042,7 @@ ${inlinedCss}
         const clean = rawSrc.split(/[?#]/)[0];
         if (clean) {
           const jsPath = path16.isAbsolute(clean) ? clean : path16.resolve(baseDir, clean);
-          if (existsSync4(jsPath)) {
+          if (existsSync5(jsPath)) {
             try {
               const rawJs = await fs15.readFile(jsPath, "utf8");
               scriptsToReplace.set(fullTag, `<script>/* inlined: ${rawSrc} */
@@ -20122,7 +20150,7 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
       say(await adoptGlobal(home));
       if (opts.restart !== false) {
         const bin = path17.join(found.root, "packages", "cli", "bin", "isocan.js");
-        spawnSync4(process.execPath, [bin, "--port", String(port), "restart"], {
+        spawnSync5(process.execPath, [bin, "--port", String(port), "restart"], {
           stdio: "inherit"
         });
       }
@@ -20135,7 +20163,7 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
       INSTALL_SPEC
     );
     const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-    const shell = (command2, args, cwd) => spawnSync4(command2, args, { stdio: "inherit", ...cwd ? { cwd } : {} });
+    const shell = (command2, args, cwd) => spawnSync5(command2, args, { stdio: "inherit", ...cwd ? { cwd } : {} });
     if (opts.rollback || plan.action === "swap") {
       const moved = await swapBuild({
         home,
@@ -20158,7 +20186,7 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
         }
       }
       const bin = moved ? path17.join(moved.root, "packages", "cli", "bin", "isocan.js") : path17.join(install.root, "packages", "cli", "bin", "isocan.js");
-      spawnSync4(process.execPath, [bin, "--port", String(port), "restart"], {
+      spawnSync5(process.execPath, [bin, "--port", String(port), "restart"], {
         stdio: "inherit"
       });
       return;
@@ -20167,7 +20195,7 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
       console.log(plan.message);
     } else if (plan.action === "pull") {
       console.error(`isocan: ${plan.message}`);
-      const pulled = spawnSync4("git", ["-C", install.root, "pull", "--ff-only"], {
+      const pulled = spawnSync5("git", ["-C", install.root, "pull", "--ff-only"], {
         encoding: "utf8"
       });
       process.stderr.write(pulled.stdout ?? "");
@@ -20203,7 +20231,7 @@ ${(pulled.stderr ?? "").trim()}`
         return;
       }
     }
-    spawnSync4(
+    spawnSync5(
       process.execPath,
       [packageBin(install.root), "--port", String(port), "restart"],
       { stdio: "inherit" }
@@ -21023,7 +21051,7 @@ program2.command("clone <repo> [dir]").description(
           `${target2} already exists \u2014 \`isocan setup ${dir ?? defaultCloneDir(remote)}\` readies a directory you already have.`
         );
       }
-      const cloned = spawnSync4("git", ["clone", remote, target2], { stdio: "inherit" });
+      const cloned = spawnSync5("git", ["clone", remote, target2], { stdio: "inherit" });
       if (cloned.error) throw cloned.error;
       if (cloned.status !== 0) {
         throw new Error(`git clone failed (exit ${cloned.status}) \u2014 nothing was set up`);
@@ -21163,7 +21191,7 @@ program2.command("setup [target]").description(
       } else {
         console.error(`isocan: installing the CLI (npm i -g ${INSTALL_SPEC})\u2026`);
         const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-        const done = spawnSync4(npm, ["install", "-g", INSTALL_SPEC], { stdio: "inherit" });
+        const done = spawnSync5(npm, ["install", "-g", INSTALL_SPEC], { stdio: "inherit" });
         durableBin = done.status === 0 ? findOnPath("isocan") : null;
         const bin = done.status === 0 && !durableBin ? globalBinDir() : null;
         if (durableBin) {
@@ -21189,7 +21217,7 @@ program2.command("setup [target]").description(
           if (handOff) {
             const owner = rootOfBin(handOff);
             if (!before || path17.resolve(before.root ?? "") !== owner) {
-              const done = spawnSync4(handOff, ["restart", "--port", String(port)], {
+              const done = spawnSync5(handOff, ["restart", "--port", String(port)], {
                 encoding: "utf8",
                 shell: process.platform === "win32",
                 env: { ...process.env, ISOCAN_HOME: home }
@@ -21420,9 +21448,6 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     const ctx = await ctxOf(cmd);
     const target2 = matchRef(await ctx.client.listCanvases(), ref);
     const script = packagePath("scripts/canvas-shot.mjs");
-    if (!existsSync5(script)) {
-      throw new Error("canvas shot needs the repository checkout (scripts/canvas-shot.mjs) and Chrome \u2014 run it from a clone of isocan");
-    }
     const { width, height } = sizeFor(opts.size, { width: 1600, height: 1e3 });
     const origin = await ctx.homeOf(target2.id) ?? ctx.client.base;
     const access = await classifyAutomaticSource(ctx.client, { canvasId: target2.id, home: origin, source: canvasUrl(origin, target2.id) });
@@ -21433,15 +21458,14 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }
-    const args = [script, "--url", canvasUrl(origin, target2.id), "--width", String(width), "--height", String(height)];
+    const args = ["--url", canvasUrl(origin, target2.id), "--width", String(width), "--height", String(height)];
     if (opts.out) args.push("--out", opts.out);
     if (opts.into) {
       const { canvas: p } = await canvasAndSnapshot(ctx);
       args.push("--into", opts.into, "--on", p.id);
     }
     if (ownerInput) args.push("--owner-from-stdin");
-    const child = spawnSync4(process.execPath, args, ownerInput ? { stdio: ["pipe", "inherit", "inherit"], input: ownerInput } : { stdio: "inherit" });
-    if (child.status !== 0) throw new Error(`the screenshot did not land (exit ${child.status ?? "?"})`);
+    runPackageScript(script, args, { what: "the screenshot", input: ownerInput, env: { ISOCAN_PORT: String(daemonPort(cmd)) } });
   })
 );
 canvas.command("new <title>").alias("create").description("Create a canvas with groups (the writer's default)").option("--space <name-or-id>", "create in this space, inheriting its access with no birth link grant; requires an owner").option("-d, --description <text>").option("--legacy", "create a deliberate compatibility canvas; group writes require migration").option("--prop <k=v>", "set a property (repeatable)", collectProp, {}).action(
@@ -21820,7 +21844,7 @@ program2.command("add <thing>").description("Bring something onto the canvas \u2
       if (as !== void 0 && !["file", "site", "doc", "canvas"].includes(as)) {
         throw new Error(`--as expects file, site, doc or canvas \u2014 not ${opts.as}`);
       }
-      const isFile = as === "file" || as === void 0 && existsSync5(file);
+      const isFile = as === "file" || as === void 0 && existsSync6(file);
       if (!isFile) {
         const canvases = await ctx.client.listCanvases();
         const here = await resolveCanvas(ctx).catch(() => null);
@@ -23358,7 +23382,7 @@ program2.command("edit <item> [file]").description("Create a new version \u2014 
       const original = await ctx.client.downloadBlob(p.id, current.blobHash);
       const tmp = path17.join(await fs16.mkdtemp(path17.join(os4.tmpdir(), "isocan-edit-")), current.filename);
       await fs16.writeFile(tmp, original);
-      const status2 = spawnSync4(editor, [tmp], { stdio: "inherit", shell: false });
+      const status2 = spawnSync5(editor, [tmp], { stdio: "inherit", shell: false });
       if (status2.status !== 0) throw new Error(`${editor} exited with ${status2.status}`);
       data = await fs16.readFile(tmp);
       if (data.equals(original) && !opts.visual) {
@@ -24160,17 +24184,12 @@ ${notesMarkdown(snapshot.canvas, (note) => bodies.get(note.id) ?? "")}`);
       throw new Error(`export writes deck.pdf, deck.html or notes.md \u2014 not ${ext || "a file with no extension"}`);
     }
     if (ext === ".pdf" || opts.png) {
-      const script = packagePath("scripts/deck-export.mjs");
-      if (!existsSync5(script)) {
-        throw new Error("PDF and PNG export need the repository checkout (scripts/deck-export.mjs) and Chrome \u2014 run it from a clone of isocan, or export deck.html");
-      }
       const origin = await ctx.homeOf(p.id) ?? ctx.client.base;
-      const args = [script, "--url", deckUrl(origin, p.id)];
+      const args = ["--url", deckUrl(origin, p.id)];
       if (opts.notes) args.push("--notes");
       if (ext === ".pdf") args.push("--pdf", out);
       if (opts.png) args.push("--png", opts.png);
-      const child = spawnSync4(process.execPath, args, { stdio: ctx.json ? "pipe" : "inherit" });
-      if (child.status !== 0) throw new Error(`the export did not land (exit ${child.status ?? "?"})`);
+      runPackageScript(packagePath("scripts/deck-export.mjs"), args, { what: "the export", quiet: ctx.json, env: { ISOCAN_PORT: String(daemonPort(cmd)) } });
       if (ext === ".pdf") written.push(out);
       if (opts.png) written.push(opts.png);
     }
@@ -25143,12 +25162,12 @@ async function fetchModuleSpec(spec) {
   const { url, ref } = gitSpecToClone(spec);
   const tmp = await fs16.mkdtemp(path17.join(os4.tmpdir(), "isocan-module-"));
   const args = ["clone", "--quiet", "--depth", "1", ...ref ? ["--branch", ref] : [], url, tmp];
-  const cloned = spawnSync4("git", args, { encoding: "utf8" });
+  const cloned = spawnSync5("git", args, { encoding: "utf8" });
   if (cloned.status !== 0) {
     await fs16.rm(tmp, { recursive: true, force: true });
     throw new Error(`could not clone ${url}${ref ? `#${ref}` : ""}: ${(cloned.stderr || "").trim().split("\n").pop() ?? "git failed"}`);
   }
-  const dir = existsSync5(path17.join(tmp, "manifest.json")) ? tmp : path17.join(tmp, "build");
+  const dir = existsSync6(path17.join(tmp, "manifest.json")) ? tmp : path17.join(tmp, "build");
   return { dir, cleanup: () => fs16.rm(tmp, { recursive: true, force: true }) };
 }
 moduleCmd.command("add <dir-or-spec>").description("Install a built module from a directory or a git spec (github:owner/repo#ref) \u2014 prints what it declares, installs nothing until --yes").option("--yes", "install it, having read what it declares").option("--proposed", "allow a module that uses parts of the API we intend to change").action(
@@ -25164,7 +25183,7 @@ moduleCmd.command("add <dir-or-spec>").description("Install a built module from 
 );
 async function addModuleFrom(dir, dirArg, opts, globals) {
   const file = path17.join(dir, "manifest.json");
-  if (!existsSync5(file)) throw new Error(`${dir} has no manifest.json \u2014 build the module first (scripts/module-build.mjs)`);
+  if (!existsSync6(file)) throw new Error(`${dir} has no manifest.json \u2014 build the module first (scripts/module-build.mjs)`);
   const manifest = JSON.parse(await fs16.readFile(file, "utf8"));
   if (typeof manifest.name !== "string" || !/^(@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*$/.test(manifest.name)) {
     throw new Error(`${file} names no module \u2014 "name" must be a package name`);
@@ -25183,7 +25202,7 @@ async function addModuleFrom(dir, dirArg, opts, globals) {
     );
   }
   for (const half of [manifest.web, manifest.cli, manifest.guide, ...(manifest.assets ?? []).map((a) => a.path)]) {
-    if (half && !existsSync5(path17.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
+    if (half && !existsSync6(path17.join(dir, half))) throw new Error(`${manifest.name} declares ${half} and the file is not there`);
   }
   const tooBig = assetProblems(manifest.assets);
   if (tooBig.length > 0) throw new Error(`${manifest.name} refused: ${tooBig.join("; ")}`);
@@ -25207,7 +25226,7 @@ moduleCmd.command("rm <name>").description("Remove a module \u2014 its items sta
     const globals = cmd.optsWithGlobals();
     const slug = moduleSlug(name);
     const target2 = path17.join(modulesDir(paths_exports.isocanHome()), slug);
-    if (!existsSync5(target2)) throw new Error(`no module called ${slug} here \u2014 isocan module ls`);
+    if (!existsSync6(target2)) throw new Error(`no module called ${slug} here \u2014 isocan module ls`);
     await fs16.rm(target2, { recursive: true, force: true });
     if (globals.json) return printJson({ removed: slug });
     console.error(`${slug} removed \u2014 its items are files now, wherever they are`);
