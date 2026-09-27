@@ -120,6 +120,7 @@ export * from "./theme.js";
 export * from "./sprint.js";
 export * from "./timeline.js";
 export * from "./opwords.js";
+export * from "./canonical-json.js";
 export * from "./canvassort.js";
 export * from "./canvasswitch.js";
 export * from "./seen.js";

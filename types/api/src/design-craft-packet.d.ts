@@ -1,4 +1,4 @@
-import type { Actor } from "../../core/src/index.js";
+import { type Actor } from "../../core/src/index.js";
 import { type DesignArtifactRef, type DesignBrief, type DesignQuestionSet, type DesignResponse } from "../../core/src/design-partner.js";
 import { type DesignComparison, type DesignDecisionInput } from "../../core/src/design-decision.js";
 import { type DesignProjection } from "./design-system-reader.js";
@@ -82,8 +82,6 @@ export interface DesignCraftPacket {
     files: CraftFile[];
     limits: string[];
 }
-/** Deterministic serialization binds every field, independent of object insertion order. */
-export declare function craftSemantic(value: unknown): string;
 /** Exact byte hashes identify packet files and never imply their source was authorized. */
 export declare function craftHash(value: string | Uint8Array): Promise<string>;
 /** Base64 keeps arbitrary permitted reference bytes serializable in either runtime. */

@@ -19,7 +19,10 @@ export declare function activityOpType(op: Operation): OperationType;
  * something" instead.
  *
  * That is not two surfaces disagreeing. Every op the system HAS is in the
- * table and both read the same words from it; they differ only on an op that
- * does not exist yet, where their audiences genuinely want different things.
+ * table — the table is a full `Record<OperationType, string>`, so a new op
+ * without a phrase is a compile error rather than a silent gap — and both
+ * read the same words from it; they differ only on a type string that is not
+ * an op at all (an old log line, a future op read by an older client), where
+ * their audiences genuinely want different things.
  */
 export declare function opWords(type: string | undefined): string | undefined;

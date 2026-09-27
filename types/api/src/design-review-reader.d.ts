@@ -75,8 +75,12 @@ export interface DesignReviewReadResult {
         reason: string;
     }>;
 }
-/** Stable semantic comparison is independent of key order and has no locale-dependent serialization. */
-export declare function designReviewSemantic(value: unknown): string;
+/**
+ * Stable semantic serialization, independent of key order and with no locale-dependent
+ * serialization. The `isocan` module entry publishes this name, so it stays — as core's
+ * `canonicalJson` itself, byte for byte (cleanup DU-6), not as a copy of it.
+ */
+export declare const designReviewSemantic: (value: unknown) => string;
 /** Assess declared obligations only; a clean audit cannot substitute for actual task or craft evidence. */
 export declare function designReviewReadings(run: DesignReviewRun): DesignReviewReadings;
 /** Resolve a named exact artifact through its source authority; newer bytes never satisfy historical evidence. */
