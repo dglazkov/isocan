@@ -105,7 +105,9 @@
   z-index: 0;
   transform: translate(-50%, -50%) scale(calc(1 / var(--scale, 1)));
   font: 600 11px/1.1 system-ui, -apple-system, sans-serif;
-  color: var(--accent);
+  /* The ink accent (BC-6, 27 Sep 2026): the fill measures 2.5:1 on graphite, and
+     accent.test.ts had never read this sheet. */
+  color: var(--accent-text);
   background: var(--ground);
   padding: 2px 5px;
   border-radius: 4px;

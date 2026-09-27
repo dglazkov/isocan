@@ -216,6 +216,7 @@ import {
   mergeDrawings,
   opMatchesFilters,
   renamedFilename,
+  titleSlug,
   mainThread,
   newCommentId,
   anchorOffset,
@@ -6525,7 +6526,13 @@ async function prepareFromTemplate(
 ): Promise<{ dir: string; harness?: string }> {
   const template = enrolTemplate(id);
   if (!template) throw new Error(`no module on this machine offers the template ${id} — isocan module ls`);
-  const dir = path.join(home, "templates", id, canvasId, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent");
+  // Named by core's one title rule (cleanup DU-2, 27 Sep 2026): "Zoë" is
+  // `zoe`, not `zo`, and "東京" is `東京`, not the `agent` every non-Latin
+  // name used to share. `rc remove` leaves the directory for a re-enrol to
+  // find, so one the old ASCII rule already made is kept rather than moved.
+  const base = path.join(home, "templates", id, canvasId);
+  const before = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); // DU-2: pre-rule names only
+  const dir = path.join(base, before && existsSync(path.join(base, before)) ? before : titleSlug(name) || "agent");
   await fs.mkdir(dir, { recursive: true });
   const out = await template.prepare(args, dir);
   return { dir, ...(out?.harness ? { harness: out.harness } : {}) };

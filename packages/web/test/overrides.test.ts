@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { rules, withoutComments } from "./cssrules.ts";
+import { rules, sheets, withoutComments } from "./cssrules.ts";
 
 /**
  * **A container that flattens its children will flatten the one that declared
@@ -41,7 +41,13 @@ function specificity(selector: string): number {
 }
 
 describe("a container does not flatten a component that paints itself", () => {
-  const sheet = rules(withoutComments()).filter((r) => VARIANT_PAINTS.test(r.body));
+  // Every sheet the page loads, in the order it loads them — `styles.css`
+  // eagerly, then the sheets beside components and modules as those arrive —
+  // not `styles.css` alone (BC-6/BC-4, 27 Sep 2026). A tie is decided by
+  // source order, and a lazy sheet comes later than everything eager.
+  const sheet = sheets
+    .flatMap((s) => rules(withoutComments(s.text)))
+    .filter((r) => VARIANT_PAINTS.test(r.body));
 
   /** Rules of the form `.base.variant` — a component saying what it is. */
   const variants: Painter[] = [];

@@ -32,7 +32,7 @@
 .q-url-reference a { overflow-wrap: anywhere; }
 .q-url-reference span { color: var(--ink-muted); font-size: 11px; }
 .q-url-reference button { align-self: flex-start; }
-.q-error { color: var(--danger, #b73935); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; margin: 4px 8px; }
+.q-error { color: var(--danger); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; margin: 4px 8px; }
 .q-tools { display: flex; flex-wrap: wrap; gap: 8px; padding: 5px 12px 8px; }
 .q-tools button, .q-resume { border: 0; background: transparent; color: var(--ink-muted); text-align: left; font: inherit; font-size: 11px; cursor: pointer; padding: 5px 0; text-decoration: underline; text-underline-offset: 3px; }
 .q-resume { margin: 8px 12px; }

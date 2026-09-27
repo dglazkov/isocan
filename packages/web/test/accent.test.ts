@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { sheets } from "./cssrules.ts";
 
 /**
  * The accent has two jobs, and only one of them is readable.
@@ -27,6 +28,10 @@ import { describe, expect, it } from "vitest";
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
 const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+/** Every sheet the page loads, for the ratchet below — not `styles.css` alone
+ * (BC-6/BC-4, 27 Sep 2026): the sheets beside the components and the modules'
+ * were read by no guard, and two module labels were painting in the fill. */
+const everySheet = sheets.map((s) => s.text.replace(/\/\*[\s\S]*?\*\//g, "")).join("\n");
 
 /** A token's value inside one `:root` block. */
 function token(block: RegExp, name: string): string {
@@ -93,7 +98,7 @@ describe("the accent is a fill, not an ink", () => {
  */
 function paintsAccentText(): string[] {
   const out: string[] = [];
-  for (const rule of rules.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  for (const rule of everySheet.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const body = rule[2] ?? "";
     if (!/(^|[;{\s])color:\s*var\(--accent\)\s*(;|$)/.test(body)) continue;
     if (/(^|[;{\s])background(-color)?:\s*var\(--accent-ink\)/.test(body)) continue;

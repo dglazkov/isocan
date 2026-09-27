@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LevelMeter, METER_FLOOR_DB, METER_GATE_DB, barsFromDb, dbfs } from "../src/voiceAudio.ts";
+import { LevelMeter, METER_FLOOR_DB, METER_GATE_DB, barsFromDb, dbfs } from "@isocan/core/voice-dsp";
 
 /**
  * **The meter Paul said "just clips and maxes out" — driven by signals whose

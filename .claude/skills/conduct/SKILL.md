@@ -346,3 +346,11 @@ thing a credential, money, or a hand? If not, it is yours.
   shipped example. Fixtures are synthetic.
 - The shell's cwd was reset between commands and a relative `cd` chain
   did nothing. Absolute paths in every command you give a subagent.
+- A red check reverted files with `git show HEAD:<f> > <f>` and restored
+  them with `git checkout -- <f>`, which copies from the INDEX; the `git add`
+  before it had failed on one bad path, so the index held HEAD and nine fixed
+  files were overwritten with the unfixed ones. Copy the fixed file aside and
+  restore from the copy, and confirm `git diff --quiet` after.
+- A walk run from inside the repo inherited its committed
+  `.isocan/project.json` and wrote to the repo's own canvas on isocan.io,
+  throwaway home and all. Walks run from an unbound directory.

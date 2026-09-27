@@ -62,19 +62,22 @@ export function DesignComparisonDialog({ canvasId, actor, filter, initialSource,
     finally { if (!controller.signal.aborted) setOpening(false); }
   };
   const currentRow = read?.comparisons.find((one) => sourceKey(one.source) === selected);
+  // A re-read over a reading in hand is not "checking": every op re-reads, and
+  // each one used to lock the actions and flash the status (RH-5, 27 Sep 2026).
+  const settling = checking && !read;
   const priorRow = selected ? seen.current.get(selected) : undefined;
   // A removed source remains a disabled recovery surface for its original pending intent.
   const row = currentRow ?? (priorRow ? { ...priorRow, status: "stale" as const, reasons: ["This selected source is no longer available in the current comparison read. Its saved draft and retry identity remain attached to this source."], allowedActions: { respond: false, authorities: [] } } : null);
   return <Modal label="Design comparison" title="Compare a decision worth making" onClose={preview ? back : onClose} wide><div className="design-comparison" ref={body}>
     {preview && <DesignComparisonPreview key={JSON.stringify(preview.artifact)} canvasId={canvasId} artifact={preview.artifact} version={preview.version} title={preview.title} onBack={back} />}<div hidden={!!preview}>
-      {checking && <p role="status">Checking the comparison and adoption target…</p>}{error && <p role="alert">{error} <button className="btn secondary" onClick={refresh}>Retry comparison read</button></p>}
+      {settling && <p role="status">Checking the comparison and adoption target…</p>}{error && <p role="alert">{error} <button className="btn secondary" onClick={refresh}>Retry comparison read</button></p>}
       {read && (read.comparisons.length > 1 || !currentRow && read.comparisons.length > 0) && <label className="comparison-batches">Comparison history<select value={row ? sourceKey(row.source) : ""} onChange={(event) => setSelected(event.target.value)}>{!currentRow && <option value={selected ?? ""}>{priorRow ? "Selected source is no longer available" : "Choose a saved comparison"}</option>}{read.comparisons.map((one) => <option key={sourceKey(one.source)} value={sourceKey(one.source)}>Revision {one.comparison.revision} · {one.comparison.alternatives.map((option) => option.title).join(" / ")} · {one.status}</option>)}</select></label>}
-      {row && <><ComparisonOptions canvasId={canvasId} row={row} onTry={tryOption} opening={opening} /><DesignComparisonActions key={JSON.stringify([canvasId, actor.id, row.source])} canvasId={canvasId} actor={actor} row={row} decisions={read?.decisions ?? []} checking={checking || !!error} onChanged={refresh} /></>}
+      {row && <><ComparisonOptions canvasId={canvasId} row={row} onTry={tryOption} opening={opening} /><DesignComparisonActions key={JSON.stringify([canvasId, actor.id, row.source])} canvasId={canvasId} actor={actor} row={row} decisions={read?.decisions ?? []} checking={settling || !!error} onChanged={refresh} /></>}
       <DesignComparisonRecovery canvasId={canvasId} actor={actor} requestId={filter.requestId} activeSource={row?.source} onChanged={refresh} />
-      {!checking && !error && !row && <p>This source is no longer an active comparison. Its accepted history is shown below when available.</p>}
+      {!settling && !error && !row && <p>This source is no longer an active comparison. Its accepted history is shown below when available.</p>}
       {previewError && <p role="alert">{previewError}</p>}{opening && <p role="status">Reading the exact option before opening…</p>}
       {read?.unavailable.map((one) => <p role="alert" key={one.id}>Saved design history is unavailable: {one.reason}</p>)}
-      {!!read?.decisions.length && <section className="comparison-history" aria-label="Decision history"><h3>Decision history</h3>{read.decisions.map((one) => <DecisionHistory key={one.decision.input.id} canvasId={canvasId} saved={one} onTry={tryOption} opening={opening} checking={checking || !!error} />)}</section>}
+      {!!read?.decisions.length && <section className="comparison-history" aria-label="Decision history"><h3>Decision history</h3>{read.decisions.map((one) => <DecisionHistory key={one.decision.input.id} canvasId={canvasId} saved={one} onTry={tryOption} opening={opening} checking={settling || !!error} />)}</section>}
     </div>
   </div></Modal>;
 }

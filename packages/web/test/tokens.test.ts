@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { lengthPx, readableInk } from "../src/lib/designview.ts";
+import { sheets } from "./cssrules.ts";
 
 /**
  * Colours come from tokens, so both themes work by construction.
@@ -18,27 +19,59 @@ import { lengthPx, readableInk } from "../src/lib/designview.ts";
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
 
-/** The :root blocks are where literal colour belongs. */
-const outsideTokens = css.replace(/:root[^{]*\{[^}]*\}/gs, "");
-/** Comments discuss colours by name; they do not set them. */
-const declarations = outsideTokens.replace(/\/\*.*?\*\//gs, "");
+/** The :root blocks are where literal colour belongs, and comments discuss
+ * colours by name without setting them. */
+const declarationsOf = (text: string) =>
+  text.replace(/:root[^{]*\{[^}]*\}/gs, "").replace(/\/\*.*?\*\//gs, "");
 
 const ALLOWED = [
   // An alpha mask: black keeps the pixel, transparent drops it.
   /mask-image:[^;]*#000/g,
-  // A real page assumes a white canvas; see the note in the file.
+  // A real page assumes a white canvas; see the note in the file. The two
+  // design frames are the same argument: each is an <iframe> of a page that
+  // was designed on white (BC-6, 27 Sep 2026, when this began reading them).
   /\.(html|browser)-view\s*\{[^}]*#fff/g,
+  /\.(design-comparison-frame|design-recipe-preview)\s*\{[^}]*background: white/g,
 ];
+
+/**
+ * The modules' sheets bring their own look, and some of it is literal — the
+ * anatomy map's category inks, the wireframe's blueprint blue, the talk mic's
+ * pulse. Counted rather
+ * than excused (BC-6, 27 Sep 2026): each number may only go down, and a new
+ * literal in any other sheet fails the case below.
+ */
+const MODULE_LITERALS: Record<string, number> = {
+  "packages/modules/anatomy/src/style.css": 14,
+  "packages/modules/wireframe/assets/styles.css": 7,
+  // The mic's pulse, a blue no theme moves.
+  "packages/modules/talk/src/web.tsx": 3,
+};
+
+function literalsIn(text: string): string[] {
+  let t = declarationsOf(text);
+  for (const allowed of ALLOWED) t = t.replace(allowed, "");
+  return t.match(/#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|:\s*(white|black)\b/g) ?? [];
+}
 
 describe("colours come from tokens", () => {
   it("declares no literal colour outside the token blocks", () => {
-    let text = declarations;
-    for (const allowed of ALLOWED) text = text.replace(allowed, "");
-    const literals = text.match(/#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|:\s*(white|black)\b/g) ?? [];
+    // Every stylesheet the page loads, not `styles.css` alone (BC-6): the
+    // sheets beside the components were read by no guard at all.
+    const found = sheets
+      .flatMap((s) => literalsIn(s.text).map((l) => `${s.file}: ${l}`))
+      .filter((l) => !Object.keys(MODULE_LITERALS).some((f) => l.startsWith(`${f}: `)));
     expect(
-      literals,
+      found,
       "use a token, or add a token — a literal reads on one ground and vanishes on the other",
     ).toEqual([]);
+  });
+
+  it("lets no module sheet grow a literal colour, and keeps its count honest", () => {
+    const counts = Object.fromEntries(
+      Object.keys(MODULE_LITERALS).map((f) => [f, literalsIn(sheets.find((s) => s.file === f)!.text).length]),
+    );
+    expect(counts, "fewer is the point — lower the number; more is a new literal").toEqual(MODULE_LITERALS);
   });
 
   it("gives every token a value in both themes", () => {
@@ -132,15 +165,24 @@ describe("drawing a design system", () => {
  */
 describe("every token used is a token defined", () => {
   /**
-   * The stylesheet with its prose blanked out — what the browser actually
-   * parses. Comments are replaced by their own newlines rather than removed,
-   * so the line number in a failure still points at the real line.
+   * Every stylesheet the app page loads, each with its prose blanked out —
+   * what the browser actually parses. Comments are replaced by their own
+   * newlines rather than removed, so the line number in a failure still
+   * points at the real line.
    *
    * Needed because the rule has to be explainable: the comment on `.fullscreen`
    * names `var(--nope)` to say what an undefined token does, and a check that
    * reads its own rationale as a violation is a check nobody can document.
+   *
+   * EVERY sheet, not `styles.css` (BC-6/BC-4, 27 Sep 2026). This read one file
+   * while twenty more loaded beside it, and those asked for `--page`,
+   * `--muted` and `--radius-lg` — none defined anywhere, each declaration
+   * dropped. Tokens are defined once, in `styles.css`, and read everywhere, so
+   * `defined` is the union and `used` names the file each use is in.
    */
-  const rules = css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+  const blank = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+  const all = sheets.map((s) => ({ file: s.file, rules: blank(s.text) }));
+  const rules = all.map((s) => s.rules).join("\n");
 
   /** Names defined anywhere — `:root`, a theme block, or on an element. */
   function defined(text: string): Set<string> {
@@ -148,12 +190,12 @@ describe("every token used is a token defined", () => {
   }
 
   /** Names USED, with the fallback arm of `var(--a, var(--b))` counted too. */
-  function used(text: string): Array<{ name: string; line: number }> {
-    const out: Array<{ name: string; line: number }> = [];
+  function used(text: string, file = "styles.css"): Array<{ name: string; line: number; file: string }> {
+    const out: Array<{ name: string; line: number; file: string }> = [];
     const lines = text.split("\n");
     lines.forEach((line, i) => {
       for (const m of line.matchAll(/var\(\s*(--[a-zA-Z0-9-]+)/g)) {
-        out.push({ name: m[1]!, line: i + 1 });
+        out.push({ name: m[1]!, line: i + 1, file });
       }
     });
     return out;
@@ -162,6 +204,22 @@ describe("every token used is a token defined", () => {
   it("finds tokens at all — the parser has to work for this to mean anything", () => {
     expect(defined(rules).size).toBeGreaterThan(20);
     expect(used(rules).length).toBeGreaterThan(50);
+  });
+
+  it("reads every sheet the page loads, not only styles.css", () => {
+    // The finding was a guard that read one file of twenty-odd. Named so a
+    // `sheets` that quietly shrinks back to one fails here, not nowhere.
+    const files = all.map((s) => s.file);
+    expect(files[0]).toBe("packages/web/src/styles.css");
+    for (const f of [
+      "packages/web/src/components/phone.css",
+      "packages/web/src/components/yourbench.css",
+      "packages/web/src/components/design-systems.css",
+      "packages/modules/talk/src/web.tsx",
+    ]) {
+      expect(files, f).toContain(f);
+    }
+    expect(files.length).toBeGreaterThan(20);
   });
 
   it("defines every token the stylesheet reads", () => {
@@ -191,11 +249,24 @@ describe("every token used is a token defined", () => {
       // canvas with no ground of its own falls back to the app's page ground
       // and the declaration never drops.
       "--canvas-ground",
+      // The modules' own, set on the element that reads them, from numbers a
+      // stylesheet cannot know: the anatomy workspace's pane sizes as the
+      // person drags them (`workspace.tsx`), and a wireframe arrow label's
+      // run and a margin tag's width and need (`arrows.tsx`,
+      // `behind-marks.tsx`, `maybe-marks.tsx`).
+      "--anatomy-tree-width",
+      "--anatomy-inspector-width",
+      "--anatomy-inspector-height",
+      "--run",
+      "--w",
+      "--need",
     ]);
     const known = defined(rules);
-    const missing = used(rules).filter((u) => !known.has(u.name) && !setInJs.has(u.name));
+    const missing = all
+      .flatMap((s) => used(s.rules, s.file))
+      .filter((u) => !known.has(u.name) && !setInJs.has(u.name));
     expect(
-      missing.map((m) => `${m.name} (line ${m.line})`),
+      missing.map((m) => `${m.name} (${m.file}:${m.line})`),
       "these tokens are read but never defined — var() drops the declaration silently",
     ).toEqual([]);
   });

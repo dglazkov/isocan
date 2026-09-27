@@ -21,7 +21,7 @@
 .comparison-actions label, .comparison-batches { display: grid; gap: 6px; margin-bottom: 16px; }
 .comparison-actions input:not([type=radio]), .comparison-actions textarea, .comparison-actions select, .comparison-batches select { font: inherit; color: var(--ink); border: 1px solid var(--line); background: var(--card); padding: 10px 12px; border-radius: 6px; width: 100%; min-width: 0; box-sizing: border-box; }
 .comparison-choice-list { display: grid; gap: 8px; margin-bottom: 20px; }
-.comparison-choice-list label { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.comparison-choice-list label { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
 .comparison-choice-list label:has(input:checked) { border-color: var(--accent); background: var(--card); }
 .comparison-choice-list input { margin-top: 5px; }
 .comparison-choice-list small { display: block; margin-top: 4px; }

@@ -6,23 +6,13 @@ import { VersionContent } from "./ItemView.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { isTyping } from "../lib/keys.ts";
-import { flipTo } from "../lib/deckflip.ts";
+import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo } from "../lib/deckflip.ts";
 
 import { usePhone } from "../lib/phone.ts";
 import { useTouchNavigation } from "../lib/touchnavigation.ts";
 import "./presentation.css";
 import "./mobile-navigation.css";
 const PhonePresenting = lazy(() => import("./PhonePresenting.tsx").then((m) => ({ default: m.PhonePresenting })));
-
-/** The deck keys, exactly `FullScreen`'s (#87): a presenter's clicker sends
- * Page Up/Down, and both axes flip because the deck is linear. */
-const FLIP_NEXT = new Set<string>(["ArrowRight", "ArrowDown", "PageDown"]);
-const FLIP_PREV = new Set<string>(["ArrowLeft", "ArrowUp", "PageUp"]);
-
-/** FullScreen's resting rhythm, kept in step with it: long enough that
- * reading a slide does not dismiss the chrome by accident, short enough to be
- * gone by the second slide of a talk. */
-const REST_AFTER_MS = 2500;
 
 /**
  * **The viewer face** (#88): what a view-only admission gets instead of the

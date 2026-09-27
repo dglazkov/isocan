@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { readableInk } from "../src/lib/designview.ts";
+import { sheets } from "./cssrules.ts";
 
 /**
  * `opacity` is a second colour decision, taken where nobody is looking.
@@ -27,7 +28,14 @@ import { readableInk } from "../src/lib/designview.ts";
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
 /** Comments out, and `@keyframes` bodies out — a fade-in is not a contrast
  *  decision, and `50% { opacity: .45 }` is not a rule about text. */
-const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
+// Every sheet the page loads, not `styles.css` alone (BC-6/BC-4, 27 Sep
+// 2026): the sheets beside the components and the modules' — the talk
+// module's CSS strings among them — were read by no guard.
+const rules = sheets
+  .map((s) => s.text)
+  .join("\n")
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
 
 function token(block: RegExp, name: string): string {
   const scope = block.exec(css);

@@ -10,7 +10,7 @@
   gap: 2px 8px;
   padding: 6px 8px;
   border: 1px solid var(--line-soft);
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: 12px;
 }
 .ctx-pin-piece input { grid-row: 1; }

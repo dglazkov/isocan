@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-25
 issue: 355
 see: evals, canvas-groups, voice-agent, extensions
-note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–2 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page; a canvas switch no longer writes one canvas's seen-mark or ink onto another; a cursor stream no longer re-renders every item; what #release ships now runs); phase 5 next.
+note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–2 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page; a canvas switch no longer writes one canvas's seen-mark or ink onto another; a cursor stream no longer re-renders every item; what #release ships now runs; copies agree or are gone); phase 6 next.
 ---
 
 # Cleanup — the walk
@@ -23,7 +23,7 @@ correctness, **DU** duplication, **DC** dead code, **BC** bundle/CSS, **TR**
 tests/scripts/CI.
 
 **Where we are:** designed 25 Sep 2026; taken up by the conductor 27 Sep.
-Phases 0–4 closed 27 Sep. Next is cleanup phase 5 — then 6. The audit ran on `2d3ad79b`, and some of it was
+Phases 0–5 closed 27 Sep. Next is cleanup phase 6, the last. The audit ran on `2d3ad79b`, and some of it was
 fixed since by other work — marked *Done* where it stands, so a phase does
 not re-fix it; everything else in a phase is re-checked against `main` in its
 brief before anything is built.
@@ -244,7 +244,11 @@ context carries no `packages/modules/*/scripts`.
 
 ## Phase 5 — copies agree
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 27 September 2026.** Every declared copy is held by
+`test/copies.test.ts` running both sides, or is gone (the resampler and meter
+live in core); one `titleSlug`, which every former copy calls; one mime table and
+one `ago`; every CSS guard reads every stylesheet; the decisions page is checked
+in the suite; each fix's guard seen red on the unfixed code.
 
 - **DU-1.** The talk module's `Resampler`, a copy marked "reconcile by hand",
   missed both of `053d2d42`'s fixes: at 44.1 kHz it writes a PCM zero about once
@@ -279,6 +283,23 @@ the same inputs, or the copy is gone; one filename rule, tested on accented
 and non-Latin titles, which every former copy now calls; every CSS guard
 reads every stylesheet and fails on the undefined variables; `decisions.md`'s
 check runs in the suite; each RH fix with a test seen to fail without it.
+
+**Trajectory:**
+
+- **2026-09-27** — DU-2 was worse than written: the canonical rule also broke
+  non-Latin titles ("データ" → `テ-ータ`) and decks with no Latin letters were
+  all `deck.html`. `titleSlug` strips marks from Latin letters only; no file on
+  disk is renamed, but a wireframe flow's next round renames its new version.
+- **2026-09-27** — Reading every stylesheet found more than the audit named:
+  undefined `--ok` and `--font-ui` beside `--page`, `--muted` and `--radius-lg`,
+  a bare `z-index: 90`, and 16 classes declared twice. Design calls taken:
+  "ready" draws `--good` (it drew the accent), the task card is 8px not 12px.
+- **2026-09-27** — The decisions check made adding a lesson redden `main`
+  through the persona run's self-merge; the run now regenerates the page, and
+  its self-merge scope is `docs/reviews/` plus `docs/decisions.md`, exactly.
+- **2026-09-27** — Open: AGENTS.md says a machine merge runs the suite on the
+  branch first; the persona self-merge checks paths only. Waits on a decision:
+  run the suite there, or correct the sentence.
 
 ## Phase 6 — the sweeps
 

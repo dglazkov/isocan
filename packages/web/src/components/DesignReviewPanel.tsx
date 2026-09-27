@@ -27,14 +27,17 @@ export function DesignReviewPanel({ canvasId, actor, requestId, threadId, canEdi
     return () => controller.abort();
   }, [canvasId, actor, requestId, seq, revision, selected, select]);
   const row = result?.runs.find(one => one.run.id === selected);
+  // A re-read over a reading in hand is not "checking": every op re-reads,
+  // and each one used to take the handoff away and flash the status (RH-5, 27 Sep 2026).
+  const settling = checking && !result;
   return <section className="design-review" aria-label="Design review" data-design-review-request={requestId} aria-busy={checking}>
     <header><div><h4>Review for this task</h4><p>Source, task behavior and craft are separate readings.</p></div><button type="button" className="btn secondary" onClick={refresh} disabled={checking}>Refresh review</button></header>
-    {checking && <p role="status">Checking the saved review and its inputs…</p>}
+    {settling && <p role="status">Checking the saved review and its inputs…</p>}
     {error && <p role="alert">{error} Saved evidence has not been revalidated.</p>}
     {result?.unavailable.map((one, index) => <p role="status" key={`${one.itemId}:${index}`}>Review history unavailable: {one.reason}</p>)}
     {!!result?.runs.length && <label className="design-review-select">Review history<select value={selected ?? ""} onChange={event => select(event.target.value)}>{result.runs.map(one => <option key={one.run.id} value={one.run.id}>{one.author.name} · {one.run.mode === "audit-only" ? "Audit only" : "Review"} · {new Date(one.run.passes[0]!.reservedAt).toLocaleDateString()}</option>)}</select></label>}
-    {row ? <ReviewSummary canvasId={canvasId} row={row} checking={checking || !!error} /> : !checking && <p className="design-review-empty">No readable review is available yet. The designer will use the task’s saved context to inspect its actual result. Opening a preview does not mark it checked.</p>}
-    {actor && <DesignReviewHandoff key={JSON.stringify([canvasId, actor.id, requestId])} canvasId={canvasId} actor={actor} requestId={requestId} threadId={threadId} row={row ?? null} offers={result?.offers ?? []} canEdit={canEdit && !checking && !error} changed={refresh} />}
+    {row ? <ReviewSummary canvasId={canvasId} row={row} checking={settling || !!error} /> : !settling && <p className="design-review-empty">No readable review is available yet. The designer will use the task’s saved context to inspect its actual result. Opening a preview does not mark it checked.</p>}
+    {actor && <DesignReviewHandoff key={JSON.stringify([canvasId, actor.id, requestId])} canvasId={canvasId} actor={actor} requestId={requestId} threadId={threadId} row={row ?? null} offers={result?.offers ?? []} canEdit={canEdit && !settling && !error} changed={refresh} />}
   </section>;
 }
 

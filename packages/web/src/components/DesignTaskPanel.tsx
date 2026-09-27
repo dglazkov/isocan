@@ -31,11 +31,15 @@ export function DesignTaskPanel({ canvasId, actor, filter, startSource, onStarte
     return () => controller.abort();
   }, [canvasId, filterKey, seq, revision, scope]);
   if (presentation !== "chat" && !result?.requests.length && !error) return null;
+  // What locks a card is having nothing to act on — the first read of this
+  // scope, or a failed one — never a re-read over a reading in hand. Every op
+  // anybody made re-reads, and each one used to lock every card (RH-5, 27 Sep 2026).
+  const locked = (loading && !result) || !!error;
   const content = <section className="design-task-panel" aria-label="Design tasks" aria-busy={loading}>
     {startSource && canEdit && <DesignTaskStart key={JSON.stringify([canvasId, actor.id, startSource])} canvasId={canvasId} actor={actor} source={startSource} done={() => { refresh(); onStarted?.(); }} cancel={() => onStarted?.()} />}
     {loading && !result && <p role="status">Reading design tasks…</p>}
     {error && <p role="alert">{error} <button className="btn secondary" onClick={refresh}>Retry task read</button></p>}
-    {result?.requests.map((row) => <DesignTaskCard key={JSON.stringify([canvasId, actor.id, row.brief.requestId])} canvasId={canvasId} actor={actor} row={row} onChanged={refresh} checking={loading || !!error} canEdit={canEdit} />)}
+    {result?.requests.map((row) => <DesignTaskCard key={JSON.stringify([canvasId, actor.id, row.brief.requestId])} canvasId={canvasId} actor={actor} row={row} onChanged={refresh} checking={locked} canEdit={canEdit} />)}
     {result?.unavailable.map((one) => <p role="alert" key={one.itemId}>A saved design record could not be read: {one.reason}</p>)}
     {!loading && !error && !startSource && result?.requests.length === 0 && <p>No design task is associated with this view.</p>}
   </section>;

@@ -1,5 +1,6 @@
 import type { Item } from "./model.ts";
 import { SOURCE_PROP, sourceOf } from "./canvasitem.ts";
+import { titleSlug } from "./filenames.ts";
 
 /**
  * **A Google Doc on the canvas**
@@ -95,14 +96,10 @@ export function docTitleFrom(markdown: string, fallback: string): string {
   return title.length > 80 ? `${title.slice(0, 79)}…` : title;
 }
 
-/** A filename for the item's version: the title as a slug, `.md`. */
+/** A filename for the item's version: the title by core's one filename rule
+ *  (`titleSlug`, cleanup DU-2), `.md`. */
 export function docFilenameFrom(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return `${slug || "document"}.md`;
+  return `${titleSlug(title, { max: 60 }) || "document"}.md`;
 }
 
 /** The properties a doc item wears at placement and after every sync. */

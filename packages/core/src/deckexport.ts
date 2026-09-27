@@ -1,6 +1,7 @@
 import type { CanvasContents, Item } from "./model.ts";
 import { deck } from "./slides.ts";
 import { noteFor } from "./slidewrites.ts";
+import { titleSlug } from "./filenames.ts";
 
 /**
  * **Taking a deck somewhere else** (`docs/research/2026-09-04-deck-export.md`).
@@ -153,8 +154,8 @@ ${slides}
 `;
 }
 
-/** The file's name, from the canvas title: `Season planning` → `season-planning.html`. */
+/** The file's name, from the canvas title: `Season planning` → `season-planning.html`,
+ *  by core's one filename rule (`titleSlug`, cleanup DU-2). */
 export function deckFilename(title: string, ext: string): string {
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "deck";
-  return `${slug}.${ext}`;
+  return `${titleSlug(title) || "deck"}.${ext}`;
 }

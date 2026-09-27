@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Resampler } from "../src/voiceAudio.ts";
+import { Resampler } from "@isocan/core/voice-dsp";
 
 /**
  * **The resampler, driven at the two rates a real browser hands out.**

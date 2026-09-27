@@ -49,14 +49,14 @@ function SystemScope({ canvasId, actor, target }: { canvasId: string; actor: Act
   useEffect(() => { let active = true; void (async () => { try { const raw = localStorage.getItem(storageKey); if (!raw) return; const saved = await readDesignSystemDraft(raw); if (saved.projection.destination.canvasId !== canvasId || JSON.stringify(saved.projection.destination.target) !== JSON.stringify(target)) throw new Error("The saved projection belongs to another scope."); if (active) { draftRef.current = saved; setDraft(saved); } } catch { if (active) setCorrupt(true); } finally { if (active) setRestoring(false); } })(); return () => { active = false; }; }, [storageKey, canvasId, target]);
   useEffect(() => everyWhileVisible(refresh, 10_000), [refresh]);
   useEffect(() => { const controller = new AbortController(); setChecking(true); setReadError(""); void readDesignSystem(io, { canvasId, target, signal: controller.signal }).then((value) => { if (!controller.signal.aborted) setRead(value); }).catch((error) => { if (!controller.signal.aborted) setReadError(error instanceof Error ? error.message : "The design system could not be read."); }).finally(() => { if (!controller.signal.aborted) setChecking(false); }); return () => controller.abort(); }, [io, canvasId, target, seq, revision]);
-  const governing = read?.governing, editable = permitted && !past;
+  const governing = read?.governing, editable = permitted && !past, settling = checking && !read;
   const stale = !!draft && !!governing && (governing.status !== "available" || JSON.stringify(governing.artifact) !== JSON.stringify(draft.projection.source) || JSON.stringify(governing.metadata) !== JSON.stringify(draft.projection.expectedMetadata) || governing.exempt !== draft.projection.exempt);
   const act = async (work: () => Promise<void>) => { if (busyRef.current) return; busyRef.current = true; setBusy(true); setNotice(""); try { await work(); } catch (error) { setNotice(error instanceof Error ? error.message : "The action could not be completed."); } finally { busyRef.current = false; setBusy(false); } };
   const capture = (mode: DesignSystemDraft["mode"]) => act(async () => { keep(newDesignSystemDraft(await projectDesignSystem(io, { canvasId, target }), mode)); });
   const submit = () => act(async () => {
     const current = draftRef.current; if (!current) return;
     if (!editable) throw new Error("This canvas is read-only.");
-    if (!current.pending && (stale || checking || readError)) throw new Error("Read and review the current source before saving this draft.");
+    if (!current.pending && (stale || settling || readError)) throw new Error("Read and review the current source before saving this draft.");
     const prepared = current.pending ? current : { ...current, pending: { opId: newOpId(), versionId: newVersionId(), mode: current.mode, refused: false } };
     const request = await prepareDesignReconciliation({ projection: prepared.projection, opId: prepared.pending!.opId, versionId: prepared.pending!.versionId, retry: !!current.pending, text: designSystemDraftText(prepared) });
     keep(prepared);
@@ -75,9 +75,12 @@ function SystemScope({ canvasId, actor, target }: { canvasId: string; actor: Act
     setNotice("The working draft is preserved in this browser. You can now open the current source or restore it below.");
   });
   const patchDirection = (patch: Partial<DirectionFields>) => { if (draft && !draft.pending) keep({ ...draft, direction: { ...draft.direction, ...patch } }); };
-  const healthy = !checking && !readError;
+  // A re-read over a reading in hand is not "checking": every op re-reads, and
+  // each one used to disable every action here and flash the status. What
+  // stops a save is having no reading, a failed one, or a stale draft (RH-5, 27 Sep 2026).
+  const healthy = !settling && !readError;
   return <>
-    {checking && <p role="status">Checking this scope’s design…</p>}{readError && <p role="alert">{readError} <button className="btn secondary" onClick={refresh}>Retry read</button></p>}
+    {settling && <p role="status">Checking this scope’s design…</p>}{readError && <p role="alert">{readError} <button className="btn secondary" onClick={refresh}>Retry read</button></p>}
     {governing && <section className="design-scope-summary" aria-label="Governing design"><h3>{governing.status === "available" ? governing.title : governing.status === "unavailable" ? "Design context unavailable" : "No governing design document"}</h3><p>{governing.status === "available" ? governing.selection.reason : governing.reason}</p>{governing.exempt && <p>No written system is required on this canvas.{governing.artifact ? " The existing system still governs this scope." : " You can still record an optional direction."}</p>}
       {read?.standing && healthy && <p className="design-standing" data-design-standing={read.standing.standing}>{read.standing.standing === "fine" ? `${read.standing.screenCount} ${read.standing.screenCount === 1 ? "screen" : "screens"} in this scope.` : `${read.standing.uncoveredIds.length} ${read.standing.uncoveredIds.length === 1 ? "screen needs" : "screens need"} a reusable design direction${read.standing.standing === "overdue" ? " before expanding further" : ""}.`}</p>}
       {governing.selection.candidates.length > 1 && <p role="status">Multiple documents share the winning scope. The existing newest-document rule selects the one above.</p>}

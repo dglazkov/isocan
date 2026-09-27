@@ -41,10 +41,13 @@ export function DesignRecordFace({ canvasId, version, actor }: { canvasId: strin
     return () => controller.abort();
   }, [canvasId, version.blobHash, marker, revision, seq]);
   const receipt = current?.receipts.find((saved) => saved.ref.versionId === version.id);
+  // A re-read over a reading in hand is not "checking": every op re-reads, and
+  // each one used to lock the card this face draws (RH-5, 27 Sep 2026).
+  const locked = (checking && !current) || !!error;
   return <div className="design-record-face" data-design-record={marker?.kind}>
     {error && <p role="alert">{error} <button className="btn secondary" onClick={() => setRevision((value) => value + 1)}>Retry record read</button></p>}
-    {current && marker?.kind === "brief" && current.ref.versionId === version.id ? <DesignTaskCard key={JSON.stringify([canvasId, actor?.id, marker.requestId])} canvasId={canvasId} actor={actor ?? null} row={current} canEdit={!!actor && canEdit} checking={checking || !!error} onChanged={() => setRevision((value) => value + 1)} />
-      : receipt && marker?.kind === "receipt" ? <DesignReceiptView canvasId={canvasId} requestId={marker.requestId} saved={receipt} checking={checking || !!error} />
+    {current && marker?.kind === "brief" && current.ref.versionId === version.id ? <DesignTaskCard key={JSON.stringify([canvasId, actor?.id, marker.requestId])} canvasId={canvasId} actor={actor ?? null} row={current} canEdit={!!actor && canEdit} checking={locked} onChanged={() => setRevision((value) => value + 1)} />
+      : receipt && marker?.kind === "receipt" ? <DesignReceiptView canvasId={canvasId} requestId={marker.requestId} saved={receipt} checking={locked} />
       : record ? <article className="design-task-card"><small>{record.kind === "brief" ? "Saved design brief" : "Saved evidence report"} · current standing unavailable</small>{record.kind === "brief" ? <><h3>{record.primaryTask || "Design task"}</h3><p>For {record.audience || "an audience still to clarify"}</p><p>{record.delivery} · {record.progress}</p>{record.facts.map((fact) => <p key={fact.id}><strong>{fact.name}</strong>: {fact.value}{fact.origin === "assumed" ? " (assumption)" : ""}</p>)}</> : <><h3>{record.status === "draft" ? "Unverified draft" : "Reported ready for the agreed scope"}</h3>{record.checks.map((check) => <p key={check.id}>{check.kind} · {check.result}: {check.coverage}</p>)}{record.unresolved.map((limit, index) => <p key={index}>{limit.description}</p>)}</>}</article> : !error && <p role="status">Reading design record…</p>}
     {marker?.kind === "receipt" && <DesignReviewButton canvasId={canvasId} actor={actor ?? null} requestId={marker.requestId} threadId={current?.brief.source.entrance === "canvas-chat" ? current.brief.source.threadId : undefined} canEdit={!!actor && canEdit} />}
     <details><summary>Saved record</summary><a href={blobUrl(canvasId, version.blobHash)} download={version.filename}>Download this exact record</a><p>Version {version.id}</p></details>

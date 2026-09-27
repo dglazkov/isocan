@@ -40,13 +40,13 @@ import {
   capture,
   fromBytes,
   listDevices,
-  rmsOf,
   toBytes,
   type Capture,
   type Input,
   type Output,
   type ScheduleInfo,
 } from "./voiceAudio.ts";
+import { rmsOf } from "@isocan/core/voice-dsp";
 import { wireSettingsHelp } from "./help.ts";
 import { wireThemeChoice } from "./theme.ts";
 

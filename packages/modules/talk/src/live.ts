@@ -1,7 +1,8 @@
 /**
  * COPY of packages/voice-agent/src/live.ts — duplicated deliberately (Paul, 16 Sep 2026) so the
  * talk module carries no dependency on the harness package. The harness
- * file remains the owner; when either changes, reconcile the two by hand.
+ * file remains the owner; when either changes, reconcile the two by hand —
+ * `test/copies.test.ts` fails until the two agree byte for byte.
  */
 /**
  * **The Live API's provider face, browser-safe** — the one spelling of the

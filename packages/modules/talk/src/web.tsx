@@ -22,7 +22,8 @@ import {
   type WebModule,
 } from "@isocan/core";
 import { VoiceBeam } from "voice-glow";
-import { LevelMeter, Playback, capture, fromBytes, type Capture } from "./audio.ts";
+import { LevelMeter } from "@isocan/core/voice-dsp";
+import { Playback, capture, fromBytes, type Capture } from "./audio.ts";
 import { LIVE_MODEL, LIVE_VOICES, canvasSnapshotText, commandsBrief, isLiveVoice, liveSetup, liveUrl, planForCall, toolScheduling, type SnapshotItem } from "./live.ts";
 import { voiceCore } from "./core.ts";
 
@@ -1585,7 +1586,8 @@ const COMPOSER_CSS = `
     padding: 2px 4px; cursor: pointer;
   }
   .talk-voice select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-  .talk-log-dest { flex: 1; font-size: 10px; color: var(--muted); font-style: italic; }
+  /* --ink-muted (BC-6, 27 Sep 2026): --muted is defined nowhere, so the log's quiet text drew in full ink. */
+  .talk-log-dest { flex: 1; font-size: 10px; color: var(--ink-muted); font-style: italic; }
   .talk-log-bar { align-items: center; }
   .talk-bar-stop {
         width: 28px; height: 28px; border-radius: 50%; flex: none;
@@ -1614,7 +1616,7 @@ const COMPOSER_CSS = `
   .talk-log-bar { display: flex; justify-content: flex-end; gap: 4px; }
   .talk-log-act {
     border: none; background: none; cursor: pointer; padding: 2px 6px;
-    border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--muted);
+    border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--ink-muted);
   }
   .talk-log-act:hover { background: var(--chip-hover); color: var(--ink); }
   .talk-log-act:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
@@ -1632,11 +1634,11 @@ const COMPOSER_CSS = `
      which is what makes a run of turns scannable. */
   .talk-log-who {
     flex: none; width: 52px; text-align: right;
-    color: var(--muted); font-weight: 600;
+    color: var(--ink-muted); font-weight: 600;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .talk-log-text { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
-  .talk-log-you .talk-log-text { color: var(--muted); }
+  .talk-log-you .talk-log-text { color: var(--ink-muted); }
   /* **Tool rows cost less room than speech.** They are what the session DID,
      and the sentence that caused them is what a person is reading — so they
      are set tighter and dimmer than a spoken line rather than given the same
@@ -1644,13 +1646,14 @@ const COMPOSER_CSS = `
      even one row per DIFFERENT act adds up, and this is what keeps a burst of
      them from pushing the conversation off the top. */
   .talk-log-note {
-    margin: 0; text-align: center; color: var(--muted);
+    margin: 0; text-align: center; color: var(--ink-muted);
     font-size: 11px; font-style: italic; line-height: 1.3;
-    opacity: 0.8;
+    /* No opacity (BC-6, 27 Sep 2026): --ink-muted clears 4.5:1 only above ~0.93,
+       so 0.8 put the row under it; muted, smaller and italic is the dimming. */
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   /* The count reads as a tally, not as part of the sentence. */
-  .talk-log-times { font-style: normal; font-weight: 600; opacity: 0.75; }
+  .talk-log-times { font-style: normal; font-weight: 600; }
   /* The name is dropped from a repeated speaker's row for the eye, and kept
      for a screen reader, which has no column to see. */
   .talk-log-sr {

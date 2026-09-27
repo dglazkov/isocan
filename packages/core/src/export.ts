@@ -1,6 +1,6 @@
 import type { Actor, Canvas } from "./model.ts";
 import type { LogEntry } from "./ops.ts";
-import { extensionFor } from "./filenames.ts";
+import { extensionFor } from "./media.ts";
 import { parseCanvasAddress, parseItemAddress } from "./address.ts";
 
 /**

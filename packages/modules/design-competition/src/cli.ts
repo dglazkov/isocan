@@ -10,6 +10,7 @@ import {
   moduleAsset,
   newGroupId,
   newVersionId,
+  titleSlug,
   type CanvasSnapshotResponse,
   type Item,
 } from "@isocan/core";
@@ -673,7 +674,9 @@ your own rc, each named for its principle — an homage, never the person.
     .option("--out <dir>", "where to write it", ".")
     .action(
       run(async (title: string, opts: { design: string; credit: string; name: string; agent?: string; tagline: string; avatar?: string; ref: string[]; self?: boolean; out: string }) => {
-        const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 31) || "fighter";
+        // Core's one title rule (cleanup DU-2), kept to ASCII because a pack id's
+        // grammar is (`packs.ts`): "Café" folds to `cafe` rather than losing the é.
+        const id = titleSlug(title, { ascii: true, max: 31 }) || "fighter";
         const pack: FighterPack = {
           id,
           title,

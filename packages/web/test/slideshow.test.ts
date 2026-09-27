@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SHORTCUTS } from "@isocan/core";
 import { crossesCover } from "../src/lib/keys.ts";
+import { FLIP_NEXT, FLIP_PREV } from "../src/lib/deckflip.ts";
 
 /**
  * ⌘-arrows in full screen walk to the next screen, still full screen — a
@@ -84,8 +85,16 @@ describe("bare arrows flip the deck", () => {
   });
 
   it("answers a clicker too — Page Up/Down flip", () => {
-    expect(source).toContain('"PageDown"');
-    expect(source).toContain('"PageUp"');
+    // The keys live in `deckflip.ts` beside the flip itself, so full screen
+    // and the viewer read one set (cleanup DU-1, 27 Sep 2026: the viewer's
+    // was a copy "kept in step" by nothing). Ask the set, and that both read it.
+    expect(FLIP_NEXT.has("PageDown")).toBe(true);
+    expect(FLIP_PREV.has("PageUp")).toBe(true);
+    for (const face of ["FullScreen.tsx", "Viewer.tsx"]) {
+      const text = readFileSync(fileURLToPath(new URL(`../src/components/${face}`, import.meta.url)), "utf8");
+      expect(text, face).toMatch(/import \{[^}]*\bFLIP_NEXT\b[^}]*\} from "\.\.\/lib\/deckflip\.ts"/);
+      expect(text, `${face} spells the keys again`).not.toContain('"PageDown"');
+    }
   });
 
   it("leaves arrows alone while typing — that is the caret's business", () => {

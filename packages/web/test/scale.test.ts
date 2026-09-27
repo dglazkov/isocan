@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { rules } from "./cssrules.ts";
+import { appSheets, rules } from "./cssrules.ts";
 
 /**
  * The measures this stylesheet is written in.
@@ -33,8 +33,16 @@ import { rules } from "./cssrules.ts";
  */
 
 const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
+/**
+ * Every sheet the app's own screens are written in — `styles.css` and the
+ * twenty beside their components — not `styles.css` alone (BC-6/BC-4, 27 Sep
+ * 2026). The split-out sheets had invented steps no count could see. A
+ * module's sheet is not here: a module brings its own look, and `tokens.test.ts`
+ * holds what it borrows from the app.
+ */
+const appCss = appSheets.map((s) => s.text).join("\n");
 /** Comments discuss measurements at length; they do not set them. */
-const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+const bare = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
 /** The `:root` blocks are where a step is DECLARED. Everything else uses one. */
 const outside = bare.replace(/:root[^{]*\{[^}]*\}/gs, "");
 
@@ -104,7 +112,7 @@ function partition(): { app: string; front: string } {
   // `at` is consulted as well as the selector: a door rule inside a media
   // query belongs to the door, and asking the selector alone is the bug above.
   const doorish = (text: string) => /\.front[-\b]|\.terms[-\b]/.test(text);
-  for (const rule of rules()) {
+  for (const rule of appSheets.flatMap((s) => rules(s.text))) {
     (doorish(rule.selector) || rule.at.some(doorish) ? front : app).push(
       `${rule.selector}{${rule.body}}`,
     );
@@ -130,7 +138,8 @@ const frontRadii = lengths(RADIUS, FRONT_CSS);
  */
 const typeIn = (text: string) =>
   [...text.matchAll(FONT_SIZE)]
-    .map((m) => (m[1] ?? "").trim())
+    // `12px !important` is 12px: the priority is not a size.
+    .map((m) => (m[1] ?? "").trim().replace(/\s*!important$/, ""))
     .filter((value) => !/var\(--/.test(value));
 const sizes = typeIn(APP_CSS);
 const frontSizes = typeIn(FRONT_CSS);
@@ -169,8 +178,12 @@ describe("the parser can still see the stylesheet", () => {
  */
 describe("spacing", () => {
   /* 24 → 22 when the ⌘K message bar was removed and took its two private
-     steps with it. Lowering is the record of the fix, as the message says. */
-  const SPACING_STEPS = 22;
+     steps with it. Lowering is the record of the fix, as the message says.
+     22 → 27 on 27 Sep 2026, and not by anything new: this began reading the
+     sheets beside the components (BC-6/BC-4), which had already invented 44,
+     50, 76, 80 and 112 — the phone face, the presenter's sheets and the
+     public catalogue — where no count could see them. Recorded as found; each is a step to fold back. */
+  const SPACING_STEPS = 27;
 
   it("invents no new step", () => {
     expect(
@@ -187,9 +200,11 @@ describe("spacing", () => {
     // being able to see. Generous bounds; this is a trip-wire, not a budget.
     // Raised 900 -> 950 when the questionnaire dock (.q-*) landed, and
     // 950 -> 960 for the arrival toasts (.joined-*): three declarations, all
-    // on existing steps.
+    // on existing steps. 960 -> 1320 on 27 Sep 2026 when the component
+    // sheets were counted too (BC-6/BC-4): 340 declarations that were always
+    // there, measured at 1,291.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(960);
+    expect(spacing.length).toBeLessThan(1320);
   });
 });
 
@@ -203,7 +218,11 @@ describe("spacing", () => {
  * `var(--radius)` and it is a no-op today.
  */
 describe("corner radii", () => {
-  const RADIUS_STEPS = 14;
+  /* 14 → 15 on 27 Sep 2026: the component sheets, read for the first time
+     (BC-6/BC-4), brought an 18px (the phone and presentation sheets) no rule in
+     styles.css uses. Their seven
+     `border-radius: 8px` restatements became `var(--radius)` the same day. */
+  const RADIUS_STEPS = 15;
 
   const RESTATES_THE_TOKEN = [
     ".share-link-row",
@@ -281,7 +300,10 @@ describe("type sizes", () => {
    * bug (a `#` at 18px under a 128px paragraph, lessons.md #96), so the steps
    * have to be ratios; `textheading.test.ts` holds them to core's estimate.
    */
-  const TYPE_STEPS = 20;
+  /* 20 → 23 on 27 Sep 2026 when the component sheets were read too
+     (BC-6/BC-4): 23px, 24px and 26px were already there, in the design
+     comparison and the phone face, where no count looked. */
+  const TYPE_STEPS = 23;
   const HALF_PIXEL = [9.5, 10.5, 11.5, 12.5, 13.5];
 
   it("invents no new size", () => {

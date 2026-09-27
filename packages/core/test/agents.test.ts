@@ -22,6 +22,7 @@ import {
   readsAsTurnedAway,
   spellListen,
   untilWords,
+  ago,
   withListener,
   OpValidationError,
   roster,
@@ -734,6 +735,10 @@ describe("owner-only summons — the rc's reading of the gate", () => {
       expect(() => listenUntil("soonish")).toThrow(/not a length of time/);
       expect(untilWords(new Date(now + 7 * 86_400_000).toISOString(), now)).toBe("for 7d");
       expect(untilWords(before, now)).toBe("lapsed 1h ago");
+      // The past in the one `ago` every card uses (cleanup DU-5): its own
+      // copy rounded 30 hours to "1d" where a card says "30h".
+      const lapsed = new Date(now - 30 * 3_600_000).toISOString();
+      expect(untilWords(lapsed, now)).toBe(`lapsed ${ago(lapsed, now)} ago`);
     });
 
     it("one name granted twice is one grant, and the longer one wins", () => {

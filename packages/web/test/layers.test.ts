@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { rules, selectorsOf } from "./cssrules.ts";
+import { rules, selectorsOf, sheets, withoutComments } from "./cssrules.ts";
 
 /**
  * The layer scale, enforced.
@@ -24,12 +24,22 @@ const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.
 /** Below this, a z-index is a local ordering — plies, a badge, a pin. */
 const LOCAL_MAX = 10;
 
-function declarations(): { value: string; line: number }[] {
-  const out: { value: string; line: number }[] = [];
-  css.split("\n").forEach((text, i) => {
-    const match = text.match(/z-index:\s*([^;]+);/);
-    if (match) out.push({ value: match[1]!.trim(), line: i + 1 });
-  });
+/**
+ * Every z-index in every sheet the page loads, with where it is.
+ *
+ * Not `styles.css` alone (BC-6/BC-4, 27 Sep 2026): the sheets beside the
+ * components and the modules' own meet the same chrome, and a layer claimed in
+ * one of them is claimed against everything here — the anatomy dialog's
+ * backdrop sat at a bare `90` the scale could not see.
+ */
+function declarations(): { value: string; line: number; file: string }[] {
+  const out: { value: string; line: number; file: string }[] = [];
+  for (const sheet of sheets) {
+    withoutComments(sheet.text).split("\n").forEach((text, i) => {
+      const match = text.match(/z-index:\s*([^;]+);/);
+      if (match) out.push({ value: match[1]!.trim(), line: i + 1, file: sheet.file });
+    });
+  }
   return out;
 }
 

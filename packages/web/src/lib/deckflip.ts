@@ -1,6 +1,24 @@
 import { flushSync } from "react-dom";
 import type { NavigateFunction } from "react-router-dom";
 
+/** Bare keys that flip the deck (#87). Forward and back each answer to three
+ * keys because a presenter's clicker sends Page Up/Down, and because "left/
+ * right (and up/down)" is how the ask was written: the deck is LINEAR, in
+ * reading order, so both axes flip rather than up/down meaning something
+ * spatial that would strand a presenter at the end of a row.
+ *
+ * Here rather than in `FullScreen`, because `Viewer` held a copy "kept in
+ * step with it" by nothing (cleanup DU-1, 27 Sep 2026): the two faces of one
+ * deck answer the same keys and rest on the same beat, so they read one. */
+export const FLIP_NEXT: ReadonlySet<string> = new Set(["ArrowRight", "ArrowDown", "PageDown"]);
+/** Back, the same three ways — see `FLIP_NEXT`. */
+export const FLIP_PREV: ReadonlySet<string> = new Set(["ArrowLeft", "ArrowUp", "PageUp"]);
+
+/** Still for this long and the deck's chrome bows out, on both faces. Long
+ *  enough that reading a slide does not dismiss it by accident, short enough
+ *  to be gone by the second slide of a talk. */
+export const REST_AFTER_MS = 2500;
+
 /** A flip this soon after the last one is a cut, not a push. Somebody
  *  hammering → to reach slide 14 wants slide 14, not seven animations; the
  *  next press seconds later, mid-talk, gets the motion back. This one rule is

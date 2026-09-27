@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { withoutComments } from "./source.ts";
@@ -247,5 +248,62 @@ describe("the web app is built once per job", () => {
     expect(building.length, "no workflow builds the app — a search over nothing always passes").toBeGreaterThan(0);
     const twice = building.filter((f) => /npm ci\b(?![^\n]*--ignore-scripts)/.test(read(f)));
     expect(twice, "these build the web app in `prepare` and again in their own step").toEqual([]);
+  });
+});
+
+/**
+ * **A persona run regenerates the page it made stale, and that page merges
+ * with it** (cleanup phase 5, TR-3, 27 Sep 2026).
+ *
+ * `test/decisions.test.ts` holds `docs/decisions.md` to its generator, and
+ * one of the generator's inputs is `docs/reviews/lessons.md` — which is inside
+ * the directory a persona run writes and then merges by itself. A night that
+ * added a lesson would have landed on `main` with the page one lesson behind:
+ * red by morning, from a merge nobody made. So the run rebuilds the page
+ * before it commits, and the self-merge admits exactly `docs/reviews/` and
+ * that one derived page — a page computed from the reviews is no more a
+ * person's judgement than the reviews are.
+ *
+ * The scope is read out of the workflow and RUN through the same `grep` it
+ * uses, rather than restated here: a copy of the pattern would agree with
+ * itself and say nothing about the file.
+ */
+describe("the persona run's self-merge", () => {
+  const workflow = read("persona.yml");
+  const code = workflow.replace(/^\s*#.*$/gm, "");
+
+  it("rebuilds docs/decisions.md after the personas write and before the commit", () => {
+    const took = code.indexOf("scripts/persona-run.mjs");
+    const rebuilt = code.indexOf("node scripts/decisions.mjs");
+    const committed = code.indexOf("git commit");
+    expect(took, "the persona step is gone — this case measures nothing").toBeGreaterThan(-1);
+    expect(rebuilt, "the run never regenerates docs/decisions.md").toBeGreaterThan(took);
+    expect(committed, "the regeneration comes after the commit, or there is no commit").toBeGreaterThan(rebuilt);
+    expect(code, "the regenerated page is not committed with the reviews").toMatch(/git add docs\/reviews docs\/decisions\.md\s*$/m);
+  });
+
+  /** The scope the merge step declares, and whether it admits a diff — run
+   * through bash and `grep -E`, which is what the workflow runs. */
+  const scope = /^\s*SCOPE='([^']+)'\s*$/m.exec(code)?.[1];
+  const admits = (paths: string[]): boolean =>
+    spawnSync("bash", ["-c", 'printf "%s\\n" "$CHANGED" | grep -Eqv "$SCOPE"'], {
+      env: { ...process.env, CHANGED: paths.join("\n"), SCOPE: scope ?? "" },
+    }).status !== 0;
+
+  it("declares its scope once, and the merge decision reads it", () => {
+    expect(scope, "persona.yml declares no SCOPE for the self-merge").toBeTruthy();
+    expect(code).toMatch(/grep -Eqv "\$SCOPE"/);
+  });
+
+  it("admits exactly docs/reviews/ and docs/decisions.md", () => {
+    expect(admits(["docs/reviews/2026-09-27-acme.md"])).toBe(true);
+    expect(admits(["docs/reviews/2026-09-27-acme.md", "docs/reviews/lessons.md", "docs/decisions.md"])).toBe(true);
+    expect(admits(["docs/decisions.md"])).toBe(true);
+    // And nothing that merely looks like them.
+    expect(admits(["docs/reviews/acme.md", "scripts/persona-run.mjs"])).toBe(false);
+    expect(admits(["docs/decisions.md.bak"])).toBe(false);
+    expect(admits(["docs/decisionsXmd"])).toBe(false);
+    expect(admits(["docs/projects/acme/decisions.md"])).toBe(false);
+    expect(admits([".agents/personas/acme.md"])).toBe(false);
   });
 });

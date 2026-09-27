@@ -112,6 +112,17 @@ export function StageEditor({
   const [pendingSave, setPendingSave] = useState<{ text: string; versionId: string; blobHash: string } | null>(null);
   const savedCallback = useRef(saved);
   savedCallback.current = saved;
+  // ⌘S is bound once, when CodeMirror mounts, so it calls through a ref: the
+  // binding that called `save` directly ran the FIRST render's, whose
+  // `current` was the version the editor opened on — after another version
+  // landed, ⌘S saved under that version's filename and carried its visual
+  // forward while the Save button did not (RH-4, 27 Sep 2026).
+  const saveCallback = useRef(save);
+  saveCallback.current = save;
+  // The versions this editor minted. Its own save reaches the item before
+  // its receipt does — for a queued save, for the whole wait — and the note
+  // below is for somebody ELSE's version (RH-3, 27 Sep 2026).
+  const mine = useRef(new Set<string>());
   useEffect(() => {
     if (!pendingSave) return;
     const controller = new AbortController();
@@ -139,7 +150,7 @@ export function StageEditor({
 
   // Somebody else's version landed while the buffer is open. Rendered as a
   // quiet note — the stack keeps both; there is nothing to resolve.
-  const landedUnder = current.id !== baseVersion.current;
+  const landedUnder = current.id !== baseVersion.current && !mine.current.has(current.id);
 
   useEffect(() => {
     let live = true;
@@ -179,7 +190,7 @@ export function StageEditor({
                 key: "Mod-s",
                 preventDefault: true,
                 run: () => {
-                  void save();
+                  void saveCallback.current();
                   return true;
                 },
               },
@@ -246,6 +257,7 @@ export function StageEditor({
         ...(current.visual ? { visual: current.visual } : {}),
       };
       const op = { type: "item.addVersion", itemId: item.id, version } as const;
+      mine.current.add(version.id);
       pending = { text: doc, versionId: version.id, blobHash: version.blobHash };
       submitted = true;
       const receipt = await sendEchoedResult(canvasId, actor, op, undefined, originGroupMode);

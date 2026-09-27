@@ -6,6 +6,7 @@ import type { RcPolicy } from "./protocol.ts";
 import { collectCanvasNames, extractMentions } from "./mentions.ts";
 import { sameActor } from "./identity.ts";
 import { isSystemActor } from "./model.ts";
+import { ago } from "./elapsed.ts";
 import { opMatchesFilters, opTouchesAreas } from "./touches.ts";
 
 /**
@@ -417,12 +418,10 @@ export function listenUntil(spec: string, now: number = Date.now()): string | nu
 export function untilWords(until: string, now: number = Date.now()): string {
   const left = Date.parse(until) - now;
   if (!Number.isFinite(left)) return "";
-  if (left <= 0) {
-    const gone = -left;
-    if (gone < 3_600_000) return `lapsed ${Math.max(1, Math.round(gone / 60_000))}m ago`;
-    if (gone < 86_400_000) return `lapsed ${Math.round(gone / 3_600_000)}h ago`;
-    return `lapsed ${Math.round(gone / 86_400_000)}d ago`;
-  }
+  // The past is core's `ago`, not a fourth copy of it (cleanup DU-5,
+  // 27 Sep 2026) — so a grant that lapsed 30 hours ago says "30h" here as on
+  // every card, where this copy rounded it to "1d".
+  if (left <= 0) return `lapsed ${ago(until, now)} ago`;
   if (left < 3_600_000) return `for ${Math.max(1, Math.round(left / 60_000))}m`;
   const tonight = new Date(now);
   tonight.setHours(24, 0, 0, 0);

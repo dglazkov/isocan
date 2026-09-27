@@ -1,4 +1,4 @@
-import { FIDELITY_PROP, groupContentBox, groupDescendants, newGroupId, newItemId, newVersionId, type CanvasContents, type Item, type Operation } from "@isocan/core";
+import { FIDELITY_PROP, groupContentBox, groupDescendants, newGroupId, newItemId, newVersionId, titleSlug, type CanvasContents, type Item, type Operation } from "@isocan/core";
 import { RECIPES } from "./catalog/index.ts";
 import { JEV_INPUT_PRICE, type Answerer, type JevResponse } from "./answerer.ts";
 import {
@@ -62,8 +62,12 @@ export function intoOf(item: { containerId?: string | undefined } | undefined): 
   return item?.containerId ? { containerId: item.containerId, groupPlacement: "exact" } : undefined;
 }
 
+/** A screen's filename stem: core's one title rule (cleanup DU-2), or "screen".
+ *  Each round mints its version's filename here, so a flow screen titled
+ *  "Café" that was `caf.html` gets `cafe.html` at its next round; the
+ *  versions already written keep their names. */
 function slugOf(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "screen";
+  return titleSlug(title, { max: 60 }) || "screen";
 }
 
 /** The canvas half: every write is one of four existing ops, under the flow's group. */

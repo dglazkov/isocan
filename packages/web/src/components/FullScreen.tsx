@@ -13,7 +13,7 @@ import { KindIcon } from "./KindIcon.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { iconKindFor } from "../lib/kinds.ts";
 import { findNextItem, type Direction } from "../lib/spatialnav.ts";
-import { flipTo } from "../lib/deckflip.ts";
+import { FLIP_NEXT, FLIP_PREV, REST_AFTER_MS, flipTo } from "../lib/deckflip.ts";
 import { revealItem } from "../lib/zoomactions.ts";
 import { isTyping } from "../lib/keys.ts";
 
@@ -24,14 +24,6 @@ import { useTouchNavigation } from "../lib/touchnavigation.ts";
 import "./presentation.css";
 import "./mobile-navigation.css";
 const PhonePresenting = lazy(() => import("./PhonePresenting.tsx").then((m) => ({ default: m.PhonePresenting })));
-
-/** Bare keys that flip the deck (#87). Forward and back each answer to three
- * keys because a presenter's clicker sends Page Up/Down, and because "left/
- * right (and up/down)" is how the ask was written: the deck is LINEAR, in
- * reading order, so both axes flip rather than up/down meaning something
- * spatial that would strand a presenter at the end of a row. */
-const FLIP_NEXT = new Set<string>(["ArrowRight", "ArrowDown", "PageDown"]);
-const FLIP_PREV = new Set<string>(["ArrowLeft", "ArrowUp", "PageUp"]);
 
 /**
  * One item, filling the screen, live.
@@ -56,11 +48,6 @@ const FLIP_PREV = new Set<string>(["ArrowLeft", "ArrowUp", "PageUp"]);
  * work, its scroll is its own, and its scripts run. That is the point of
  * asking for it.
  */
-/** Still for this long and the chrome bows out. Long enough that reading a
- *  slide does not dismiss it by accident, short enough to be gone by the
- *  second slide of a talk. */
-const REST_AFTER_MS = 2500;
-
 export function FullScreen({
   canvasId,
   itemId,

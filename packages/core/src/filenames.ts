@@ -20,34 +20,38 @@ export function extensionOf(filename: string): string {
 }
 
 /**
- * The extension a stored blob is filed under, dot NOT included — "md", "png",
- * "bin". Prefer the real filename's extension; fall back to a small mime map.
+ * **A title as the stem of a filename** — "Crème brûlée" → `creme-brulee`,
+ * "東京 タワー" → `東京-タワー` — or `""` when nothing in it can name a file,
+ * so each caller keeps its own fallback ("document", "deck", the old name).
  *
- * Lives here rather than in a backing because TWO backings now compute a
- * storage filename from a mime type: `<sha256>.<ext>` on a disk and
- * `canvases/{id}/blobs/<sha256>.<ext>` in a bucket, deliberately the same
- * addressing so a home can be copied from one to the other by hand. Two
- * copies of this map would drift, and the drift would be silent — the same
- * bytes filed under two names, and a `.bin` where a `.png` should have been.
+ * The one rule (cleanup DU-2, 27 Sep 2026). There were six: this function's
+ * own, which decomposed accents and never removed the marks, so a mark
+ * mid-word became a hyphen (`cre-me-bru-le-e`, and "データ" became `テ-ータ`);
+ * and five ASCII copies — a placed Google Doc, a deck download, two wireframe
+ * paths, a template agent's directory — that dropped an accented letter
+ * outright (`caf`) and made any non-Latin title the fallback.
+ *
+ * Decompose, take the marks off LATIN letters only, recompose: an accent on
+ * a Latin letter is decoration a filename can lose, but a dakuten or a
+ * Devanagari vowel sign is part of the letter, and dropping it spells a
+ * different word. "Latin" is spelled as everything below U+0250 rather than
+ * `\p{Script=Latin}`, and the mark as `[\p{M}]` rather than `\p{M}`: the web
+ * build lowers either of those to a `new RegExp`, which the entry chunk pays
+ * for. After `NFKD` every accented Latin letter's base is below U+0250, and
+ * nothing else there carries a mark worth keeping. `NFKD` also folds compatibility forms (full-width `Ａ`, the `ﬁ`
+ * ligature, `№`). `ascii` is for a name whose grammar is ASCII — a fighter
+ * pack's id — and folds the same accents before refusing the rest. `max`
+ * counts characters, never splits one, and leaves no trailing hyphen.
  */
-export function extensionFor(filename: string, mimeType: string): string {
-  const fromName = extensionOf(filename).slice(1).toLowerCase();
-  if (/^[a-z0-9]{1,8}$/.test(fromName)) return fromName;
-  const map: Record<string, string> = {
-    "text/markdown": "md",
-    "text/uri-list": "uri",
-    "text/html": "html",
-    "text/plain": "txt",
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/gif": "gif",
-    "image/svg+xml": "svg",
-    "image/webp": "webp",
-    "video/mp4": "mp4",
-    "video/webm": "webm",
-    "video/quicktime": "mov",
-  };
-  return map[mimeType] ?? "bin";
+export function titleSlug(title: string, { max, ascii }: { max?: number; ascii?: boolean } = {}): string {
+  const stem = title
+    .normalize("NFKD")
+    .replace(/([\0-\u024f])[\p{M}]+/gu, "$1")
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(ascii ? /[^a-z0-9]+/g : /[^\p{L}\p{M}\p{N}]+/gu, "-")
+    .replace(/^-+/, "");
+  return [...stem].slice(0, max).join("").replace(/-+$/, "");
 }
 
 /**
@@ -55,16 +59,14 @@ export function extensionFor(filename: string, mimeType: string): string {
  * extension, because renaming a drawing does not make it a different kind of
  * file. A title with nothing usable in it (an emoji, say) keeps the old stem
  * rather than becoming a bare extension.
+ *
+ * Only a rename calls this, so a filename already on the canvas is never
+ * re-derived: the DU-2 rule reaches an item the next time it is renamed.
  */
 export function filenameFromTitle(title: string, previous: string): string {
-  const extension = extensionOf(previous);
-  const stem = title
-    .normalize("NFKD")
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
+  const stem = titleSlug(title);
   if (stem === "") return previous;
-  return `${stem}${extension}`;
+  return `${stem}${extensionOf(previous)}`;
 }
 
 /**

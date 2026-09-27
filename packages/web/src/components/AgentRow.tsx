@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { AgentRow } from "@isocan/core";
 import {
   type ListenEntry,
+  ago as coreAgo,
   answeringExcerpt,
   listenWords,
   mayWake,
@@ -36,25 +37,10 @@ import { useClockSecond } from "../lib/sprint.ts";
  * so both homes show what `isocan who` would print because all three read
  * `roster()`.
  */
-/** How long ago, in the roster's clipped vocabulary. */
-function ago(iso: string): string {
-  const ms = Date.now() - Date.parse(iso);
-  if (!Number.isFinite(ms) || ms < 0) return "";
-  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
-  return `${Math.round(ms / 3_600_000)}h`;
-}
-
-/** The same clipped vocabulary as `ago`, for a moment rather than an ISO
- *  string — what the answerable poll hands back (#197 D1). */
-function agoMs(at: number): string {
-  if (!at) return "";
-  const ms = Date.now() - at;
-  if (!Number.isFinite(ms) || ms < 0) return "";
-  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
-  return `${Math.round(ms / 3_600_000)}h`;
-}
+/** How long ago, in core's words (cleanup DU-5, 27 Sep 2026: this row kept
+ *  two private copies that said "72h" where every other surface says "3d"),
+ *  down to the second because the row re-renders every second. */
+const ago = (iso: string): string => coreAgo(iso, Date.now(), true);
 
 export function AgentRowView({
   canvasId,
@@ -130,7 +116,9 @@ export function AgentRowView({
      slower motion. `useClockSecond` is the one tick and it stops while the
      tab is hidden. */
   useClockSecond();
-  const heardFrom = agoMs(useAnsweredAt(canvasId));
+  const answeredAt = useAnsweredAt(canvasId);
+  // The answerable poll hands back a moment, and 0 is "never" (#197 D1).
+  const heardFrom = answeredAt ? ago(new Date(answeredAt).toISOString()) : "";
   /**
    * **The gate, said where the mention is made** (sheepdog, "whom it listens
    * to"). The design's first failure mode is a silent gate — *"a person

@@ -1,7 +1,7 @@
 import guideText from "../agent-guide.md";
 import { readFile } from "node:fs/promises";
 import type { Command } from "commander";
-import { FIDELITY_PROP, newItemId, newVersionId } from "@isocan/core";
+import { FIDELITY_PROP, newItemId, newVersionId, titleSlug } from "@isocan/core";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
 import {
   BLOCKS, INTENTS, PLATFORMS, PRIMITIVES, RECIPES, blueprint, renderWire, validateWire, wireSize, wireTitle, wireframe,
@@ -34,8 +34,9 @@ import { rerender, rerenderLines, rerenderSummary } from "./rerender.ts";
  * write a valid spec without reading this module's source.
  */
 
+/** A screen's filename stem: core's one title rule (cleanup DU-2), or "screen". */
 function slugOf(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "screen";
+  return titleSlug(title) || "screen";
 }
 
 /** A component as JSON: its draw function and element predicates left out. */
