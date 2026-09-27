@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-25
 issue: 355
 see: evals, canvas-groups, voice-agent, extensions
-note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–2 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page; a canvas switch no longer writes one canvas's seen-mark or ink onto another); phase 3 next.
+note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–2 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page; a canvas switch no longer writes one canvas's seen-mark or ink onto another; a cursor stream no longer re-renders every item); phase 4 next.
 ---
 
 # Cleanup — the walk
@@ -23,7 +23,7 @@ correctness, **DU** duplication, **DC** dead code, **BC** bundle/CSS, **TR**
 tests/scripts/CI.
 
 **Where we are:** designed 25 Sep 2026; taken up by the conductor 27 Sep.
-Phases 0–2 closed 27 Sep. Next is cleanup phase 3 — then 4 to 6 in order. The audit ran on `2d3ad79b`, and some of it was
+Phases 0–3 closed 27 Sep. Next is cleanup phase 4 — then 5 and 6. The audit ran on `2d3ad79b`, and some of it was
 fixed since by other work — marked *Done* where it stands, so a phase does
 not re-fix it; everything else in a phase is re-checked against `main` in its
 brief before anything is built.
@@ -153,7 +153,11 @@ the switcher walked green in a real browser (`scripts/journeys.mjs`, 14/14).
 
 ## Phase 3 — the canvas does not re-render for nothing
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 27 September 2026.** Five render-count guards, each seen red
+on the unfixed code; the census, three runs each way on 250 notes at 4x CPU:
+pan's one long frame per run gone, and a new `cursor` gesture (another person's
+cursor moving) from p50 50 ms with 13–16 long frames to 16.7 ms with none. The
+marquee and a focused link were walked in a real browser.
 
 - **RP-1.** Every `presence-roster` (≤25/s while any cursor moves, echoed to
   the sender) replaces `actorColors`/`actorNames`/`actorJoins` with fresh
@@ -179,6 +183,18 @@ the switcher walked green in a real browser (`scripts/journeys.mjs`, 14/14).
 
 **Proof:** the existing pan and drag budgets, before and after; a render count
 for N items under a cursor stream.
+
+**Trajectory:**
+
+- **2026-09-27** — RP-2 as written was already fixed (typing re-parsed
+  nothing); its sibling was live: the `@` roster was memoised on the whole
+  canvas, so every op and every cursor beat re-parsed each Chat message. Kept
+  by ids and names now, as `#` was on 26 Sep.
+- **2026-09-27** — RP-8's presence beat already merged into the marquee's own
+  cursor beat; the cost was whole-selection readers re-rendering on a fresh
+  array. Fixed at the store, for every caller.
+- **2026-09-27** — The entry chunk ends 10 bytes under `CEILING` (701,290).
+  Every later phase that adds entry bytes pays its own way first.
 
 ## Phase 4 — what ships is what runs
 

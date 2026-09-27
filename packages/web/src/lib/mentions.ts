@@ -132,6 +132,21 @@ export function mentionRoster(
   return { candidates, peers: ordered };
 }
 
+/**
+ * **The same names are the same list** — the `@` half of `stableCandidates`
+ * in `itemrefs.ts` (cleanup RP-2, re-measured 27 Sep 2026).
+ *
+ * The candidates are what the Chat and every open thread build their chip
+ * plugin from, and `Markdown` re-parses whenever that plugin is new. They were
+ * rebuilt as a new array on every operation and every beat of anybody's
+ * cursor — the roster is a function of the canvas and the sessions, and both
+ * are new objects each time — so with one collaborator's cursor moving, every
+ * message in the Chat was parsed again up to 25 times a second. Typing was
+ * already free; this was not. The list is kept while the ids and names in it
+ * are, in order: one pass over the list against a markdown parse per message.
+ */
+let held: MentionCandidate[] = [];
+
 /** `mentionRoster` over the live store. */
 export function useMentionRoster(selfId?: string): MentionRoster {
   const canvas = useCanvasStore((s) => s.canvas);
@@ -156,8 +171,10 @@ export function useMentionRoster(selfId?: string): MentionRoster {
     },
     [policies, selfId, joined],
   );
-  return useMemo(
-    () => mentionRoster(canvas, sessions, selfId, names, joined, gateOf),
-    [canvas, sessions, selfId, names, joined, gateOf],
-  );
+  return useMemo(() => {
+    const roster = mentionRoster(canvas, sessions, selfId, names, joined, gateOf);
+    const next = roster.candidates;
+    if (next.length !== held.length || next.some((one, i) => one.id !== held[i]!.id || one.name !== held[i]!.name)) held = next;
+    return { ...roster, candidates: held };
+  }, [canvas, sessions, selfId, names, joined, gateOf]);
 }

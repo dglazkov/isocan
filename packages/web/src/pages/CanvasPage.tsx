@@ -164,6 +164,46 @@ function moveOp(moves: Array<{ itemId: string; x: number; y: number }>) {
 }
 
 /**
+ * The tab says which canvas, which place, and what is unread.
+ *
+ * It said "isocan" everywhere, which is the least useful thing a tab can
+ * say to somebody holding six of them — and a canvas, its workbench and a
+ * screen full-size are three addresses you keep at once. The rule is in
+ * `lib/title.ts`, where a test can hold it; the unread count that used to
+ * be this effect's whole job is now one part of it.
+ *
+ * A component of its own, drawing nothing, beside the page rather than in
+ * it, so that the canvas and the joins it has to follow re-render this and
+ * not the page (cleanup RP-6, 27 Sep 2026): as an effect of `CanvasSurface`
+ * it made the page subscribe to both, and every op anybody made rendered the
+ * whole chrome again.
+ */
+function TabTitle({ actor }: { actor: Actor }) {
+  // The same reading of the route as `CanvasSurface`'s, below — the match
+  // first, so no short-circuit ever skips the hook.
+  const { itemId, wbItemId } = useParams<{ itemId?: string; wbItemId?: string }>();
+  const onWorkbench = useMatch(WORKBENCH_ROUTE) !== null || wbItemId !== undefined;
+  const staged = itemId ?? wbItemId ?? null;
+  const canvasTitle = useCanvasStore((s) => s.record?.title ?? null);
+  const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
+  const joined = useCanvasStore((s) => s.actorJoins);
+  const seen = useUnreadStore((s) => s.seen);
+  useEffect(() => {
+    const count = canvas ? unreadThreads(canvas, seen, actor.id, joined).length : 0;
+    document.title = pageTitle({
+      canvas: canvasTitle,
+      cover: onWorkbench ? "workbench" : staged ? "item" : null,
+      item: staged ? (canvas?.items[staged]?.title ?? null) : null,
+      unread: count,
+    });
+    return () => {
+      document.title = pageTitle({});
+    };
+  }, [canvas, canvasTitle, seen, actor.id, joined, staged, onWorkbench]);
+  return null;
+}
+
+/**
  * **The per-canvas door, checked before anything is opened** (phase 10.3).
  *
  * A daemon serves the app for the canvases whose home it is and signposts the
@@ -194,7 +234,12 @@ export function CanvasPage(props: {
   if (where.state === "elsewhere") {
     return <ElsewherePage canvasId={canvasId} home={where.home} />;
   }
-  return <CanvasSurface {...props} />;
+  return (
+    <>
+      <TabTitle {...props} />
+      <CanvasSurface {...props} />
+    </>
+  );
 }
 
 function CanvasSurface({
@@ -235,9 +280,7 @@ function CanvasSurface({
      mounted while it is shut — the flag has to be the thing that mounts it. */
   const helpOpen = useUiStore((s) => s.helpOpen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
-  const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   const moduleDialogOpen = useUiStore((s) => s.moduleDialog !== null);
-  useUiStore((s) => s.modulesGeneration);
   useUiStore((s) => s.experiments);
   const moduleOverlaysVisible = modules().some((module) => module.overlays?.length);
   const groupDialogOpen = useUiStore((s) => s.groupDialog !== null);
@@ -300,8 +343,6 @@ function CanvasSurface({
   const refusedHere = useCanvasStore((s) => s.refusedHere);
   const capability = useCanvasStore((s) => s.capability);
   const canEdit = useCanEdit();
-  const joined = useCanvasStore((s) => s.actorJoins);
-  const seen = useUnreadStore((s) => s.seen);
   const followSessionId = useUiStore((s) => s.followSessionId);
   const followedLabel = useCanvasStore((s) => {
     const session = s.sessions.find((x) => x.sessionId === followSessionId);
@@ -360,8 +401,13 @@ function CanvasSurface({
     if (s.selectedItemIds !== prev.selectedItemIds) publishSelection();
   }), []);
 
-  // Zoom-to-fit once, on the first snapshot.
+  // Zoom-to-fit once, on the first snapshot. On arrival rather than on the
+  // canvas: a subscription to the canvas re-rendered this page and all its
+  // chrome on every op (cleanup RP-6, 27 Sep 2026). A record and its contents
+  // land together, so a title is a canvas to fit.
   useEffect(() => {
+    const { past, canvas: live } = useCanvasStore.getState();
+    const canvas = past?.canvas ?? live;
     if (!canvas || didFit.current) return;
     didFit.current = true;
     const box = itemsBounds(canvas);
@@ -370,7 +416,7 @@ function CanvasSurface({
         .getState()
         .setViewport(fitInto(box, stageRect()));
     }
-  }, [canvas]);
+  }, [arrived]);
 
   /**
    * **The item on the stage is what you are pointing at.**
@@ -462,29 +508,6 @@ function CanvasSurface({
       cancelled = true;
     };
   }, [connection]);
-
-  /**
-   * The tab says which canvas, which place, and what is unread.
-   *
-   * It said "isocan" everywhere, which is the least useful thing a tab can
-   * say to somebody holding six of them — and a canvas, its workbench and a
-   * screen full-size are three addresses you keep at once. The rule is in
-   * `lib/title.ts`, where a test can hold it; the unread count that used to
-   * be this effect's whole job is now one part of it.
-   */
-  useEffect(() => {
-    const count = canvas ? unreadThreads(canvas, seen, actor.id, joined).length : 0;
-    const staged = itemId ?? wbItemId ?? null;
-    document.title = pageTitle({
-      canvas: canvasTitle,
-      cover: onWorkbench ? "workbench" : staged ? "item" : null,
-      item: staged ? (canvas?.items[staged]?.title ?? null) : null,
-      unread: count,
-    });
-    return () => {
-      document.title = pageTitle({});
-    };
-  }, [canvas, canvasTitle, seen, actor.id, joined, itemId, wbItemId, onWorkbench]);
 
   // Keyboard shortcuts — typical visual-editor ergonomics.
   useEffect(() => {

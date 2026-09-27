@@ -111,6 +111,28 @@ describe("an operation somewhere else re-renders nothing here", () => {
     // A path is resolved against the canvas, so a change to it must reach the note.
     expect(parses).toBeGreaterThan(settled);
   });
+  it("a note that follows the canvas keeps its links and images through an op, and the focus on them (RP-4)", async () => {
+    const items = [item(0), item(1)];
+    act(() => useCanvasStore.setState({ canvas: canvasOf(items), canvasId: "prj_acme" }));
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(Suspense, { fallback: null }, createElement(MarkdownBody, {
+        attention: { itemId: "itm_0", versionId: "ver_0", blobHash: "a".repeat(64), active: false, flavor: "document" },
+        children: "See [the other note](acme-1.md), [the site](https://example.com) and ![a logo](https://example.com/acme.png).",
+      }))));
+    });
+    // The path makes this note follow the canvas, so every op renders it again.
+    await act(async () => useCanvasStore.setState((s) => ({ canvas: moveOne(s.canvas!, "itm_1") })));
+    const link = [...host.querySelectorAll("a")].find((a) => a.textContent === "the site")!;
+    const image = host.querySelector("img")!;
+    link.focus();
+    expect(document.activeElement).toBe(link);
+    for (let n = 0; n < 5; n++) await act(async () => useCanvasStore.setState((s) => ({ canvas: moveOne(s.canvas!, "itm_1") })));
+    // The same elements, not remounted copies: a renderer made inline is a new component type every render.
+    expect(link.isConnected, "the link was remounted by a re-render").toBe(true);
+    expect(image.isConnected, "the image was remounted by a re-render").toBe(true);
+    expect(document.activeElement).toBe(link);
+  });
+
   it("the # roster keeps its names while only positions change, and not a moment longer", () => {
     const items = [item(0), item(1), item(2)];
     const seen: unknown[] = [];

@@ -2,11 +2,11 @@ import { markdownResource, markdownTargetOffCanvas, itemPath } from "@isocan/cor
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { blobUrl } from "./api.ts";
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ComponentProps } from "react";
 import type { Root, RootContent } from "hast";
 import { TextAttentionView } from "./TextAttentionView.tsx";
 import type { AttentionDocument } from "./TextAttentionView.tsx";
-import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import type { PluggableList } from "unified";
@@ -41,6 +41,54 @@ function FragmentScroll({ active, prefix, source }: { active: boolean; prefix: s
   }, [location.hash, active, source, prefix]);
   return null;
 }
+
+/**
+ * **One link renderer and one image renderer, for every note** (cleanup RP-4,
+ * 27 Sep 2026).
+ *
+ * They were arrow functions in `components={{ … }}`, made inside the render —
+ * so each render handed react-markdown two new component TYPES, and React
+ * unmounted every link and image in the note and mounted fresh ones. A note
+ * that follows the canvas renders on every op, so a link lost its focus and a
+ * selection inside it as often as anybody moved anything. Now they are made
+ * once, here, and read what they resolve against from the note they are in;
+ * a re-render updates them in place.
+ */
+interface Resolver {
+  resolve: (url: string) => ReturnType<typeof markdownResource> | null;
+  canvasId: string | null;
+  prefix: string;
+}
+const ResolveIn = createContext<Resolver>({ resolve: () => null, canvasId: null, prefix: "" });
+
+function MarkdownImage({ node: _node, ...props }: ComponentProps<"img"> & ExtraProps) {
+  const { resolve, canvasId } = useContext(ResolveIn);
+  if (!props.src || props.src.startsWith("data:")) return <img {...props} />;
+  const resource = resolve(props.src);
+  if (!resource || resource.kind === "external") return <img {...props} />;
+  if (resource.kind === "item" && resource.mimeType.startsWith("image/") && canvasId) return <img {...props} src={blobUrl(canvasId, resource.blobHash)} />;
+  return <img alt={props.alt} title={`Image unavailable on this canvas: ${props.src}`} className="markdown-resource-missing" />;
+}
+
+function MarkdownLink({ node: _node, ...props }: ComponentProps<"a"> & ExtraProps) {
+  const { resolve, canvasId, prefix } = useContext(ResolveIn);
+  const resource = props.href ? resolve(props.href) : null;
+  if (resource?.kind === "item" && canvasId) return <Link {...props} to={`${itemPath(canvasId, resource.itemId)}${resource.fragment ? `#${resource.fragment}` : ""}`} />;
+  if (resource && ["missing", "ambiguous", "unsafe"].includes(resource.kind)) return <span className="markdown-resource-missing" title={`${resource.kind === "ambiguous" ? "More than one saved file matches" : "File unavailable on this canvas"}: ${props.href}`}>{props.children}</span>;
+  return <a {...props} onClick={event => {
+    if (!props.href?.startsWith("#")) return;
+    let fragment: string;
+    try { fragment = decodeURIComponent(props.href.slice(1)); } catch { return; }
+    const target = document.getElementById(`${prefix}-${fragment}`);
+    const scroller = event.currentTarget.closest(".md-view");
+    if (!target || !scroller) return;
+    event.preventDefault();
+    const scale = scroller.getBoundingClientRect().height / (scroller as HTMLElement).offsetHeight;
+    scroller.scrollTop += (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / scale - (parseFloat(getComputedStyle(scroller).scrollPaddingTop) || 0);
+  }} />;
+}
+
+const COMPONENTS: Components = { img: MarkdownImage, a: MarkdownLink };
 
 /**
  * **The markdown renderer, and everything it drags with it.**
@@ -122,36 +170,16 @@ export default function MarkdownBody({
     walk(tree);
   }, [prefix]);
   const content = plain ? <span style={{ whiteSpace: "pre-wrap" }}>{children}</span> : (
-    <ReactMarkdown
-      remarkPlugins={breaks ? BREAKS_PLUGINS : PLUGINS}
-      urlTransform={safeUrlTransform}
-      rehypePlugins={[headings, ...(rehypePlugins ?? [])]}
-      components={{
-        img: ({ node: _node, ...props }) => {
-          if (!props.src || props.src.startsWith("data:")) return <img {...props} />;
-          const resource = resolve(props.src);
-          if (!resource || resource.kind === "external") return <img {...props} />;
-          if (resource.kind === "item" && resource.mimeType.startsWith("image/") && canvasId) return <img {...props} src={blobUrl(canvasId, resource.blobHash)} />;
-          return <img alt={props.alt} title={`Image unavailable on this canvas: ${props.src}`} className="markdown-resource-missing" />;
-        },
-        a: ({ node: _node, ...props }) => {
-          const resource = props.href ? resolve(props.href) : null;
-          if (resource?.kind === "item" && canvasId) return <Link {...props} to={`${itemPath(canvasId, resource.itemId)}${resource.fragment ? `#${resource.fragment}` : ""}`} />;
-          if (resource && ["missing", "ambiguous", "unsafe"].includes(resource.kind)) return <span className="markdown-resource-missing" title={`${resource.kind === "ambiguous" ? "More than one saved file matches" : "File unavailable on this canvas"}: ${props.href}`}>{props.children}</span>;
-          return <a {...props} onClick={event => {
-        if (!props.href?.startsWith("#")) return;
-        let fragment: string;
-        try { fragment = decodeURIComponent(props.href.slice(1)); } catch { return; }
-        const target = document.getElementById(`${prefix}-${fragment}`);
-        const scroller = event.currentTarget.closest(".md-view");
-        if (!target || !scroller) return;
-        event.preventDefault();
-        const scale = scroller.getBoundingClientRect().height / (scroller as HTMLElement).offsetHeight;
-        scroller.scrollTop += (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / scale - (parseFloat(getComputedStyle(scroller).scrollPaddingTop) || 0);
-      }} />; } }}
-    >
-      {children}
-    </ReactMarkdown>
+    <ResolveIn.Provider value={{ resolve, canvasId, prefix }}>
+      <ReactMarkdown
+        remarkPlugins={breaks ? BREAKS_PLUGINS : PLUGINS}
+        urlTransform={safeUrlTransform}
+        rehypePlugins={[headings, ...(rehypePlugins ?? [])]}
+        components={COMPONENTS}
+      >
+        {children}
+      </ReactMarkdown>
+    </ResolveIn.Provider>
   );
   return attention ? <><FragmentScroll active={attention.active} prefix={prefix} source={children} /><TextAttentionView document={attention}>{content}</TextAttentionView></> : content;
 }

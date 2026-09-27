@@ -1,5 +1,6 @@
 import type { TextAttention } from "@isocan/core";
 import { create } from "zustand";
+import { shallow } from "zustand/shallow";
 import type {
   Actor,
   ActorColors,
@@ -565,6 +566,34 @@ export function flashNotice(notice: string, ms = 2500): void {
     flashTimer = null;
     if (useCanvasStore.getState().notice === notice) useCanvasStore.setState({ notice: null });
   }, ms);
+}
+
+/**
+ * **What a roster brings, kept where it has not changed** (cleanup RP-1,
+ * 27 Sep 2026).
+ *
+ * The daemon sends a `presence-roster` up to 25 times a second while anybody's
+ * cursor moves, and echoes a person's own beats back to them, so a person alone
+ * gets them too. Every one carries the whole actor registry, and it almost
+ * never changed — but it arrives through `JSON.parse`, so it is always a new
+ * object, and every `ItemView` subscribes to the colours and the names. Taken
+ * as given, it re-rendered every card on the canvas, past its `memo`, for
+ * every roster. The held map stays whenever the new one is equal key for key;
+ * a real recolour, rename or join is a new map as it always was. `sessions`
+ * the same: the empty list a person alone is sent back keeps the empty list
+ * they had.
+ */
+function held<T>(now: T, next: T): T {
+  return shallow(now, next) ? now : next;
+}
+
+function heldRegistry(message: { colors: ActorColors; names: ActorNames; joined?: ActorJoins }): Pick<CanvasStore, "actorColors" | "actorNames" | "actorJoins"> {
+  const now = useCanvasStore.getState();
+  return {
+    actorColors: held(now.actorColors, message.colors),
+    actorNames: held(now.actorNames, message.names),
+    actorJoins: held(now.actorJoins, message.joined ?? {}),
+  };
 }
 
 // ---- presence publishing (throttled, trailing-edge) ----
@@ -1294,9 +1323,7 @@ function openSocket(canvasId: string): void {
       greeted = true;
       useCanvasStore.setState({
         connection: "live",
-        actorColors: message.colors,
-        actorNames: message.names,
-        actorJoins: message.joined ?? {},
+        ...heldRegistry(message),
         capability: message.capability ?? "edit",
       });
       // Through `confirm`, like every other move of the truth: the snapshot IS
@@ -1323,18 +1350,14 @@ function openSocket(canvasId: string): void {
       greeted = true;
       useCanvasStore.setState({
         connection: "live",
-        actorColors: message.colors,
-        actorNames: message.names,
-        actorJoins: message.joined ?? {},
+        ...heldRegistry(message),
         capability: message.capability ?? "edit",
       });
       schedulePresenceFlush();
     } else if (message.type === "presence-roster") {
       useCanvasStore.setState({
-        sessions: message.sessions.filter((session) => session.sessionId !== CLIENT_ID),
-        actorColors: message.colors,
-        actorNames: message.names,
-        actorJoins: message.joined ?? {},
+        sessions: held(useCanvasStore.getState().sessions, message.sessions.filter((session) => session.sessionId !== CLIENT_ID)),
+        ...heldRegistry(message),
       });
     } else if (message.type === "op-applied") {
       // **The tail is applied to the CONFIRMED state, never to the view.**

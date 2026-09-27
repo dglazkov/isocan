@@ -1,5 +1,6 @@
 import type { CursorSignal, GroupBox, TextAnchor } from "@isocan/core";
 import { create } from "zustand";
+import { shallow } from "zustand/shallow";
 import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
 import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
 import type { Clipboard } from "../lib/clipboard.ts";
@@ -618,8 +619,12 @@ export const useUiStore = create<UiStore>((set, get) => {
     narrowOpen: false,
   };
   // Fan-out and entered-HTML only make sense for a single-item selection.
+  // The same ids in the same order keep the held list (cleanup RP-8, 27 Sep
+  // 2026): a marquee writes a fresh array on every pointermove, and each new
+  // identity re-rendered every whole-selection reader and asked for a presence
+  // beat (CanvasPage), which comes back as a roster (RP-1).
   const selectionSideEffects = (s: UiStore, next: string[]) => ({
-    selectedItemIds: next,
+    selectedItemIds: shallow(s.selectedItemIds, next) ? s.selectedItemIds : next,
     fannedItemId: next.length === 1 && s.fannedItemId === next[0] ? s.fannedItemId : null,
     enteredItemId: next.length === 1 && s.enteredItemId === next[0] ? s.enteredItemId : null,
   });

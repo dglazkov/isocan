@@ -22,7 +22,10 @@
  * - **zoom**: sixty ctrl-wheel events, out and back;
  * - **remote**: another client moving one item sixty times while this browser
  *   only watches — the cost of somebody ELSE working, which no local gesture
- *   shows.
+ *   shows;
+ * - **cursor**: another client's cursor crossing the canvas sixty times, and
+ *   nothing else — the cost of somebody merely being here (27 Sep 2026,
+ *   cleanup RP-1: every roster used to re-render every item).
  *
  * Each reports the long-frame TAIL — p90, p99, worst, and how many frames went
  * over 16.7 and 32 ms — never an average (an average of 9 ms with one frame in
@@ -169,15 +172,20 @@ async function main() {
       const rendered = await b.ev(`document.querySelectorAll("[data-item-id]").length`);
       if (rendered < need) throw new Error(`REFUSED: only ${rendered} items rendered`);
       await b.send("Emulation.setCPUThrottlingRate", { rate: throttle });
-      const probe = `(() => { window.__gaps = []; window.__cams = new Set(); let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; window.__cams.add(document.querySelector('.world')?.style.transform ?? ''); if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); window.__loaf = []; if (!window.__loafOn) { window.__loafOn = true; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__loaf.push({ duration: e.duration, render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0, scripts: e.scripts.map((x) => ({ duration: x.duration, invoker: x.invoker })) }); }).observe({ type: 'long-animation-frame' }); } catch {} } return true; })()`;
-      const collect = `(() => { window.__on = false; return { gaps: window.__gaps.slice(1), cams: window.__cams.size, loaf: window.__loaf }; })()`;
+      const probe = `(() => { window.__gaps = []; window.__cams = new Set(); window.__cursors = new Set(); let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; window.__cams.add(document.querySelector('.world')?.style.transform ?? ''); window.__cursors.add(document.querySelector('.remote-cursor')?.style.left ?? ''); if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); window.__loaf = []; if (!window.__loafOn) { window.__loafOn = true; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__loaf.push({ duration: e.duration, render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0, scripts: e.scripts.map((x) => ({ duration: x.duration, invoker: x.invoker })) }); }).observe({ type: 'long-animation-frame' }); } catch {} } return true; })()`;
+      const collect = `(() => { window.__on = false; return { gaps: window.__gaps.slice(1), cams: window.__cams.size, cursors: window.__cursors.size, loaf: window.__loaf }; })()`;
       const wheel = (dx, dy, modifiers = 0) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: dx, deltaY: dy, modifiers });
       if (profileOut) { await b.send("Profiler.enable"); await b.send("Profiler.setSamplingInterval", { interval: 250 }); }
+      // A face of its own for the cursor gesture, made before any gesture is
+      // timed so its arrival on the roster is not one of the frames read.
+      const { client, actor } = canvas.ctx;
+      const { sessionId } = await client.createSession(canvasId, actor, "Acme cursor");
       const results = {};
       for (const [name, gesture] of [
         ["pan", async () => { for (let i = 0; i < 90; i++) { await wheel(i < 45 ? 35 : -35, i % 2 ? 25 : -25); await sleep(16); } }],
         ["zoom", async () => { for (let i = 0; i < 60; i++) { await wheel(0, i < 30 ? 40 : -40, 2); await sleep(16); } }],
         ["remote", async () => { for (let i = 0; i < 60; i++) await canvas.move(ids[ids.length - 1], 7200 + (i % 10) * 12, 4000 + i * 3); }],
+        ["cursor", async () => { for (let i = 0; i < 60; i++) { await client.updateSession(canvasId, sessionId, { actor, cursor: { x: 800 + i * 40, y: 1200 + (i % 2) * 30 } }); await sleep(16); } }],
       ]) {
         await b.ev(probe);
         if (profileOut) await b.send("Profiler.start");
@@ -185,7 +193,8 @@ async function main() {
         await sleep(300);
         const profile = profileOut ? (await b.send("Profiler.stop")).profile : null;
         const got = await b.ev(collect);
-        if (name !== "remote" && got.cams < 10) throw new Error(`REFUSED: the ${name} gesture moved the camera through only ${got.cams} positions — the wheel is not reaching the canvas`);
+        if (name === "cursor" && got.cursors < 10) throw new Error(`REFUSED: the cursor gesture drew the remote cursor at only ${got.cursors} positions — its beats are not reaching this browser`);
+        if ((name === "pan" || name === "zoom") && got.cams < 10) throw new Error(`REFUSED: the ${name} gesture moved the camera through only ${got.cams} positions — the wheel is not reaching the canvas`);
         results[name] = { ...frameStats(got.gaps), cameraPositions: got.cams, longFrames: longFrames(got.loaf), ...(profile ? { bySource: selfTimeBySource(profile, assets) } : {}) };
       }
       if (profileOut) writeFileSync(profileOut, JSON.stringify({ items, throttle, results }, null, 2));

@@ -1,6 +1,6 @@
 import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, isGroupItem } from "@isocan/core";
 import { groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, forwardRef, lazy, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import { groundIsPlace, hasGround, isArea, parseUriList } from "@isocan/core";
@@ -8,7 +8,7 @@ import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
-import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints } from "../lib/viewport.ts";
+import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints, type Viewport } from "../lib/viewport.ts";
 import { moduleDropFor } from "../modules.ts";
 import { creationDestination, selectCreatedItems } from "../lib/groupplacement.ts";
 import { newGroupId } from "@isocan/core";
@@ -134,7 +134,6 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
   /* One timer for the whole canvas — see `useSettling`. The set is usually
      empty, and when it is, nothing is scheduled at all. */
   const settling = useSettling();
-  const viewport = useUiStore((s) => s.viewport);
   const commentMode = useUiStore((s) => s.commentMode);
   const activeTool = useUiStore((s) => s.activeTool);
   const stamp = useUiStore((s) => s.stamp);
@@ -1131,22 +1130,20 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
 
   // Areas first, so everything placed on a sheet paints over it: items are
   // siblings at one z-index, and DOM order is the only order there is. A
-  // stable sort keeps the rest as they were.
-  const items = canvas
+  // stable sort keeps the rest as they were. Once per canvas (cleanup RP-9,
+  // 27 Sep 2026): it ran, `groupAncestors` and all, on every pan frame.
+  const items = useMemo(() => canvas
     ? Object.values(canvas.items).filter((item) => !presentation?.isolate || presentation.items[item.id]).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
-    : [];
+    : [], [canvas, presentation]);
 
   return (
-    <div
+    <Follows
       ref={ref}
+      paint={grid}
       data-current-node={currentNode}
       className={`canvas-viewport${isPlace ? " themed" : ""}${panning ? " panning" : ""}${commentMode ? " comment-mode" : ""}${stamp ? " stamping" : ""}${activeTool === "hand" ? " hand" : ""}${activeTool === "zoom" ? " zoom" : ""}${activeTool === "pen" ? " pen" : ""}${activeTool === "text" ? " text-tool" : ""}${
         activeTool === "select" && !commentMode ? " own-cursor-on" : ""
       }`}
-      style={{
-        backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
-        backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
-      }}
       onPointerDownCapture={(e) => {
         stopGlide(); freezePresentation();
         if (onPlanItem) {
@@ -1211,19 +1208,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         </Suspense>
       )}
       <CursorGlow />
-      <div
-        className={`world${railPanning ? " rail-panning" : ""}${inPast ? " in-past" : ""}`}
-        style={
-          {
-            transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
-            // World-space chrome divides by this so a 2px outline is 2px on
-            // SCREEN at any zoom, the way the counter-scaled titlebar already
-            // is. Everything inside .world is measured in world units, so a
-            // literal `2px` here is 2 world px — 0.3 of a screen pixel at 16%.
-            "--scale": viewport.scale,
-          } as React.CSSProperties
-        }
-      >
+      <Follows paint={world} className={`world${railPanning ? " rail-panning" : ""}${inPast ? " in-past" : ""}`}>
         {/* Before the items, so a line passes UNDER the nodes it joins — a
             map node is chromeless text, and a line over it strikes through
             the words. */}
@@ -1246,7 +1231,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         )}
         <InkLayer />
         {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}
-      </div>
+      </Follows>
       <CommentLayer canvasId={canvasId} actor={actor} />
       {!presentation && <CursorLayer />}
       <MarqueeRect />
@@ -1263,9 +1248,42 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
           />
         </Suspense>
       )}
-    </div>
+    </Follows>
   );
 }
+
+/**
+ * **What follows the camera, and nothing else** (cleanup RP-9, 27 Sep 2026).
+ *
+ * `CanvasViewport` read the viewport for two styles alone — the grid under
+ * everything and the world's transform — so every pan and zoom frame rendered
+ * the whole viewport again: every item re-sorted, every memoised `ItemView`
+ * compared, and every layer that reads no viewport (the ink, the text
+ * composer, the module underlays, the sketch bar) rendered for nothing. This
+ * takes what it wraps as `children`, made by a parent that did not re-render,
+ * so React hands the same elements back and stops at them. The layers that DO
+ * follow the camera (cursors, comments, guides, the radar) subscribe to it
+ * themselves, as they already did.
+ */
+const Follows = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { paint: (viewport: Viewport) => CSSProperties; "data-current-node"?: string | undefined }>(function Follows({ paint, ...rest }, ref) {
+  const viewport = useUiStore((s) => s.viewport);
+  return <div ref={ref} {...rest} style={paint(viewport)} />;
+});
+
+const grid = (viewport: Viewport): CSSProperties => ({
+  backgroundSize: `${22 * viewport.scale}px ${22 * viewport.scale}px`,
+  backgroundPosition: `${viewport.tx}px ${viewport.ty}px`,
+});
+
+const world = (viewport: Viewport) =>
+  ({
+    transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
+    // World-space chrome divides by this so a 2px outline is 2px on
+    // SCREEN at any zoom, the way the counter-scaled titlebar already
+    // is. Everything inside .world is measured in world units, so a
+    // literal `2px` here is 2 world px — 0.3 of a screen pixel at 16%.
+    "--scale": viewport.scale,
+  }) as CSSProperties;
 
 /**
  * Alignment guides: while an item is in your hand, a line for every edge or
