@@ -10,9 +10,12 @@ import { useActorKinds } from "../lib/actorkinds.ts";
 import { useAnsweredAt, useAnswerable, useRcPolicies } from "../lib/answerable.ts";
 import { agentsPresent, arrivalsFor, NO_ARRIVALS } from "../lib/arrivals.ts";
 
-/** Long enough to read a name and a gate; short enough to be gone before it
- * is in the way. */
-const LIFETIME_MS = 5_000;
+/** Long enough to notice it arrived, look over, and read a name and a gate —
+ * five seconds was gone before a person who had just typed "@Scout are you
+ * around?" looked up (26 Sep 2026). Pointing at it holds it (`held`), and
+ * letting go leaves it `AFTER_HOLD_MS` more to finish reading. */
+const LIFETIME_MS = 12_000;
+const AFTER_HOLD_MS = 4_000;
 /** A third arrival pushes the oldest out: a stack is for "a couple just
  * came", not a feed. */
 const MOST = 3;
@@ -48,6 +51,7 @@ export default function ArrivalToasts({ actor }: { actor: Actor }) {
   const colors = useActorColors();
   const memory = useRef(NO_ARRIVALS);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [held, setHeld] = useState(false);
 
   const present = useMemo(
     () => agentsPresent(answerable, sessions, canvas?.agents, kinds, actor.id, joined),
@@ -72,18 +76,30 @@ export default function ArrivalToasts({ actor }: { actor: Actor }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, presentKey, ready]);
 
-  // Each note lives its own five seconds: one timer, for whichever is due first.
+  // Each note lives its own twelve seconds: one timer, for whichever is due
+  // first — and none while the pointer is on the stack.
   useEffect(() => {
-    if (notes.length === 0) return;
+    if (notes.length === 0 || held) return;
     const due = Math.min(...notes.map((n) => n.at)) + LIFETIME_MS - Date.now();
     const timer = setTimeout(() => setNotes((shown) => shown.filter((n) => Date.now() - n.at < LIFETIME_MS)), Math.max(due, 0));
     return () => clearTimeout(timer);
-  }, [notes]);
+  }, [notes, held]);
 
   if (notes.length === 0) return null;
   const nameOf = (id: string) => actorNameIn(names, { id, name: id });
   return (
-    <div className="joined-toasts" role="status" aria-live="polite">
+    <div
+      className="joined-toasts"
+      role="status"
+      aria-live="polite"
+      onPointerEnter={() => setHeld(true)}
+      onPointerLeave={() => {
+        setHeld(false);
+        // Whatever was due while held gets a few seconds more, not an instant exit.
+        const floor = Date.now() - LIFETIME_MS + AFTER_HOLD_MS;
+        setNotes((shown) => shown.map((n) => (n.at < floor ? { ...n, at: floor } : n)));
+      }}
+    >
       {notes.map((note) => {
         const policy = policies[note.agent.id];
         const gate = policy ? policyWords(policy, nameOf, actor.id, joined) ?? "listens to everyone" : null;
