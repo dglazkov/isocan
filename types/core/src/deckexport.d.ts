@@ -54,5 +54,6 @@ export interface DeckPageContent extends DeckPage {
 export declare function deckHtml(title: string, pages: readonly DeckPageContent[], options?: {
     withNotes?: boolean;
 }): string;
-/** The file's name, from the canvas title: `Season planning` → `season-planning.html`. */
+/** The file's name, from the canvas title: `Season planning` → `season-planning.html`,
+ *  by core's one filename rule (`titleSlug`, cleanup DU-2). */
 export declare function deckFilename(title: string, ext: string): string;

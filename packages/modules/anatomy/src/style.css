@@ -171,7 +171,9 @@
      marks, which is what a mark is for. */
   font-size: 18px;
   line-height: 1;
-  color: var(--accent);
+  /* The ink accent (BC-6, 27 Sep 2026): the fill measures 2.5:1 on graphite, and
+     accent.test.ts had never read this sheet. */
+  color: var(--accent-text);
 }
 .anatomy-convergence {
   font-variant-numeric: tabular-nums;
@@ -630,7 +632,9 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  z-index: 90;
+  /* The modal layer by name (BC-4, 27 Sep 2026): it was a bare 90 — the same number,
+     invisible to the scale in layers.test.ts, which read only styles.css. */
+  z-index: var(--z-modal);
 }
 .anatomy-dialog {
   width: min(760px, 100%);
@@ -701,7 +705,9 @@
 .anatomy-card-open {
   display: inline-block;
   pointer-events: auto;
-  font: 13px var(--font-ui, sans-serif);
+  /* No `--font-ui` (BC-6, 27 Sep 2026): no sheet defines it, so the fallback was all
+     that ever drew; written as what draws. */
+  font: 13px sans-serif;
   color: var(--ink);
   text-underline-offset: 3px;
 }

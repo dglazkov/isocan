@@ -1236,6 +1236,17 @@ var ACTOR_KINDS_ROUTE = "/api/kinds";
 var SERVING_ROUTE = "/api/serving";
 var HOME_GC_ROUTE = "/api/gc";
 
+// packages/core/src/elapsed.ts
+function ago(iso, nowMs, seconds) {
+  const ms = nowMs - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  if (seconds && ms < 6e4) return `${Math.max(1, Math.round(ms / 1e3))}s`;
+  const h = ms / 36e5;
+  if (h < 1) return `${Math.max(1, Math.round(ms / 6e4))}m`;
+  if (h < 48) return `${Math.round(h)}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
 // packages/core/src/evals.ts
 var KEPT_AFTER_MS = 12 * 60 * 60 * 1e3;
 
@@ -1322,12 +1333,7 @@ function lapsedFor(policy, actorId, joined, now = Date.now()) {
 function untilWords(until, now = Date.now()) {
   const left = Date.parse(until) - now;
   if (!Number.isFinite(left)) return "";
-  if (left <= 0) {
-    const gone = -left;
-    if (gone < 36e5) return `lapsed ${Math.max(1, Math.round(gone / 6e4))}m ago`;
-    if (gone < 864e5) return `lapsed ${Math.round(gone / 36e5)}h ago`;
-    return `lapsed ${Math.round(gone / 864e5)}d ago`;
-  }
+  if (left <= 0) return `lapsed ${ago(until, now)} ago`;
   if (left < 36e5) return `for ${Math.max(1, Math.round(left / 6e4))}m`;
   const tonight = new Date(now);
   tonight.setHours(24, 0, 0, 0);

@@ -49,7 +49,8 @@ export declare function googleDocPreviewUrl(id: string): string;
 /** A title from the export: the first heading, else the first line that says
  *  anything, else the id. Trimmed to a title's length. */
 export declare function docTitleFrom(markdown: string, fallback: string): string;
-/** A filename for the item's version: the title as a slug, `.md`. */
+/** A filename for the item's version: the title by core's one filename rule
+ *  (`titleSlug`, cleanup DU-2), `.md`. */
 export declare function docFilenameFrom(title: string): string;
 /** The properties a doc item wears at placement and after every sync. */
 export declare function docProperties(source: string, syncedAt: string): Record<string, string>;
