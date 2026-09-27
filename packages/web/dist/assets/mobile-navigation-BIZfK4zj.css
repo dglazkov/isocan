@@ -1,0 +1,1 @@
+@media(max-width:639px){body:has(.phone-face) .navigation-inbox{top:6px;right:8px;bottom:auto;width:96px;height:44px;min-height:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:8px}body:has(.phone-face) .navigation-inbox-panel{inset:64px 8px 68px;width:auto;max-height:none}.phone-face .phone-header{padding-right:112px}}
