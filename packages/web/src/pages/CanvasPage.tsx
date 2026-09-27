@@ -38,7 +38,7 @@ import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.t
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
 import { checkForUpdate } from "../lib/appversion.ts";
-import { placeSketch } from "../lib/sketch.ts";
+import { arriveSketch, placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { pageTitle } from "../lib/title.ts";
 import { groundTone } from "../lib/groundtone.ts";
@@ -441,10 +441,12 @@ function CanvasSurface({
 
   // Ink is never quietly lost: leaving the canvas places whatever the Pen has
   // drawn but not yet settled, so the strokes become an item instead of
-  // evaporating with the page's local state.
+  // evaporating with the page's local state — on THIS canvas, and none of it
+  // carried to the next (cleanup RH-2, `lib/sketch.ts`).
   useEffect(() => {
     if (!canvasId) return;
-    return () => placeSketch(canvasId, actorRef.current);
+    arriveSketch(canvasId);
+    return () => placeSketch(canvasId, actorRef.current, true);
   }, [canvasId]);
 
   // A daemon restart is where an upgrade becomes visible: the socket drops,

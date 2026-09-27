@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-25
 issue: 355
 see: evals, canvas-groups, voice-agent, extensions
-note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–1 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page); phase 2 next.
+note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–2 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page; a canvas switch no longer writes one canvas's seen-mark or ink onto another); phase 3 next.
 ---
 
 # Cleanup — the walk
@@ -23,7 +23,7 @@ correctness, **DU** duplication, **DC** dead code, **BC** bundle/CSS, **TR**
 tests/scripts/CI.
 
 **Where we are:** designed 25 Sep 2026; taken up by the conductor 27 Sep.
-Phases 0 and 1 closed 27 Sep. Next is cleanup phase 2 — then 3 to 6 in order. The audit ran on `2d3ad79b`, and some of it was
+Phases 0–2 closed 27 Sep. Next is cleanup phase 3 — then 4 to 6 in order. The audit ran on `2d3ad79b`, and some of it was
 fixed since by other work — marked *Done* where it stands, so a phase does
 not re-fix it; everything else in a phase is re-checked against `main` in its
 brief before anything is built.
@@ -121,7 +121,9 @@ scrub case walked in a browser and said so.
 
 ## Phase 2 — one canvas's data stays on that canvas
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 27 September 2026.** Each finding has a store-level test that
+flips `canvasId` mid-flight and was seen red on the unfixed code; the Pen and
+the switcher walked green in a real browser (`scripts/journeys.mjs`, 14/14).
 
 - **RH-1.** [`useCanvasHome`](../../../packages/web/src/lib/homes.ts) resets
   inside an effect, so on an in-app canvas switch `CanvasSurface` runs its
@@ -134,6 +136,20 @@ scrub case walked in a browser and said so.
   placed again on the next canvas — which may have a different audience.
 
 **Proof:** a store-level test for each, flipping `canvasId` mid-flight.
+
+**Trajectory:**
+
+- **2026-09-27** — RH-2 had a third path: ink drawn on A while A's upload was
+  in flight was refused by the leave and then placed on B by B's settle timer.
+  Decided: leaving takes all of a canvas's ink to that canvas — commits queue
+  instead of refusing, and a failure off-screen waits for its own canvas.
+- **2026-09-27** — The fix cost 291 entry bytes past `CEILING`; paid back by
+  splitting the placing half of `sketch.ts` into a lazy `sketchplace.ts` (every
+  caller was already asynchronous). Entry 700,723 bytes, 577 under — the
+  leave's capture and clear stay eager, in the caller's own tick.
+- **2026-09-27** — Open: `stranded` ink (a placement that failed after its
+  canvas was left) lives in memory, so it is lost if the tab closes before that
+  canvas is reopened. Waits on a decision to persist wet ink, if ever.
 
 ## Phase 3 — the canvas does not re-render for nothing
 

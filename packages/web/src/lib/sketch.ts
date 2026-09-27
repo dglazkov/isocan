@@ -1,8 +1,5 @@
-import type { Actor, InkStroke } from "@isocan/core";
-import { annotationTargetFor, inkBounds } from "@isocan/core";
-import { useCanvasStore } from "../stores/canvasStore.ts";
+import type { Actor } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
-import { addDrawing } from "./upload.ts";
 
 /**
  * Ink → a canvas item. Strokes are local for the moment it takes to lift the
@@ -13,67 +10,42 @@ import { addDrawing } from "./upload.ts";
  * The strokes are cleared only once the op lands. Until then the ink layer
  * keeps showing them, so a failed upload leaves the drawing on screen instead
  * of swallowing it.
+ *
+ * This file is the eager half: what has to happen in the caller's own tick —
+ * which canvas is showing, and what a leave takes with it. The placing itself
+ * is `sketchplace.ts`, loaded the first time there is ink to place.
  */
-let inFlight = false;
 
-export async function commitSketch(canvasId: string, actor: Actor): Promise<string | null> {
-  const strokes = useUiStore.getState().sketch;
-  // A commit already running owns these strokes — a second one would upload
-  // the same ink again and land a duplicate item. (The idle timer, ⏎, and
-  // leaving the canvas can all fire within a few hundred ms of each other.)
-  if (inFlight || strokes.length === 0) return null;
-  inFlight = true;
-  try {
-    return await place(canvasId, actor, strokes);
-  } finally {
-    inFlight = false;
-  }
-}
+/** The canvas whose ink is on screen — set on arrival, cleared on leaving. */
+let showing: string | null = null;
+export const showingSketch = (): string | null => showing;
 
-async function place(canvasId: string, actor: Actor, strokes: InkStroke[]): Promise<string> {
-  // Ink drawn over something is ABOUT that something: an annotation, which can
-  // be pointed at, acted on, and cleared. Ink on bare canvas is just a drawing.
-  const canvas = useCanvasStore.getState().canvas;
-  const bounds = inkBounds(strokes);
-  const target =
-    canvas && bounds
-      ? annotationTargetFor(
-          { x: bounds.minX, y: bounds.minY, width: bounds.maxX - bounds.minX, height: bounds.maxY - bounds.minY },
-          Object.values(canvas.items),
-        )
-      : null;
-  const itemId = await addDrawing(canvasId, actor, strokes, target);
-  if (useCanvasStore.getState().canvasId !== canvasId) return itemId;
-  // Only drop what we placed: a stroke drawn while the upload was in flight
-  // stays wet and becomes the next drawing.
-  const { sketch, clearSketch, beginStroke, select } = useUiStore.getState();
-  const placed = new Set(strokes);
-  const survivors = sketch.filter((stroke) => !placed.has(stroke));
-  clearSketch();
-  for (const stroke of survivors) beginStroke(stroke);
-  select(itemId);
-  // An annotation is half a sentence until you say what it means, so the
-  // composer opens on the spot — anchored to the TARGET, so an agent parked on
-  // that item hears it, and dismissable with Escape if the ink says enough.
-  if (target && bounds) {
-    useUiStore.getState().setPendingComment({
-      x: (bounds.minX + bounds.maxX) / 2 - target.x,
-      y: bounds.minY - target.y,
-      anchorItemId: target.id,
-      aboutItemId: itemId,
-    });
-  }
-  return itemId;
-}
+let placing: Promise<typeof import("./sketchplace.ts")> | undefined;
+const loadPlacing = () => (placing ??= import("./sketchplace.ts"));
 
 /** Place the ink from a caller with nowhere to await — the settle timer, ⏎,
  * leaving the canvas. A failure leaves the strokes on screen and says so, so
- * ink is never lost to a dropped daemon. */
-export function placeSketch(canvasId: string, actor: Actor): void {
-  void commitSketch(canvasId, actor)
-    .then(() => useUiStore.getState().setSketchError(null))
-    .catch((err: Error) => {
-      console.error("could not place the drawing", err);
-      useUiStore.getState().setSketchError(err.message);
-    });
+ * ink is never lost to a dropped daemon.
+ *
+ * **Leaving takes all of the canvas's ink with it, to that canvas** (cleanup
+ * RH-2, 27 Sep 2026): the sketch is emptied HERE, in the leave's own tick, so
+ * the next canvas starts with none of it whether or not the placing half has
+ * loaded — and a strand of ink still uploading is dropped too, because its own
+ * commit places it where it was drawn. What either one says when it settles
+ * is said only while its canvas is the one showing. */
+export function placeSketch(canvasId: string, actor: Actor, leaving = false): void {
+  const { sketch } = useUiStore.getState();
+  if (leaving) {
+    showing = null;
+    useUiStore.setState({ sketch: [] });
+  }
+  if (sketch.length) void loadPlacing().then((m) => m.placeInk(canvasId, actor, leaving ? sketch : null));
+}
+
+/** A canvas came on screen: its ink is the one being drawn, and whatever
+ * failed to place after it was last left comes back, saying why. Nothing can
+ * have failed before the placing half loaded, so there is nothing to load. */
+export function arriveSketch(canvasId: string): void {
+  showing = canvasId;
+  void placing?.then((m) => m.restoreSketch(canvasId));
 }

@@ -141,7 +141,7 @@ interface UiStore {
   /** Ink drawn with the Pen that has not landed as an item YET. It lives in
    * world coordinates and is local for the moment between lifting the pen and
    * the settle timer firing, when `commitSketch` turns it into an ordinary
-   * item (lib/sketch.ts). */
+   * item (lib/sketchplace.ts). */
   sketch: InkStroke[];
   /** Why the last attempt to place a drawing failed, if it did. The ink stays
    * on screen and the bar offers a retry — a dropped daemon must not eat it. */

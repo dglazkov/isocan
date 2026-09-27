@@ -49,6 +49,8 @@ type CanvasHome =
   | { state: "here" }
   | { state: "elsewhere"; home: string };
 
+const ASKING: CanvasHome = { state: "asking" };
+
 /**
  * Ask once per canvas, and hold the first render until the answer lands.
  *
@@ -73,22 +75,30 @@ type CanvasHome =
  * comes back, and refused by the home's door beyond it.
  */
 export function useCanvasHome(canvasId: string | null): CanvasHome {
-  const [answer, setAnswer] = useState<CanvasHome>({ state: "asking" });
+  // Keyed by the id it answers (cleanup RH-1, 27 Sep 2026). One unkeyed
+  // answer, reset inside the effect, meant the render that first carried a
+  // new id still returned the OLD canvas's settled answer — effects run after
+  // render, so a reset there is always one render late. `CanvasPage` let the
+  // surface through on it, and the surface ran its arrival effects with B's id
+  // over A's store: B's seen-mark written at A's head, B's recents row given
+  // A's title, then an unmount and a second mount when the reset landed.
+  // Compared at render instead, no render can pair one canvas with another's
+  // answer.
+  const [answer, setAnswer] = useState<{ canvasId: string; home: CanvasHome } | null>(null);
   useEffect(() => {
     if (!canvasId) return;
     let live = true;
-    setAnswer({ state: "asking" });
     void fetchHomes().then(
       (homes) => {
         if (!live) return;
         const home = homeOfCanvas(homes, canvasId);
-        setAnswer(home === null ? { state: "here" } : { state: "elsewhere", home });
+        setAnswer({ canvasId, home: home === null ? { state: "here" } : { state: "elsewhere", home } });
       },
-      () => live && setAnswer({ state: "here" }),
+      () => live && setAnswer({ canvasId, home: { state: "here" } }),
     );
     return () => {
       live = false;
     };
   }, [canvasId]);
-  return answer;
+  return answer !== null && answer.canvasId === canvasId ? answer.home : ASKING;
 }
