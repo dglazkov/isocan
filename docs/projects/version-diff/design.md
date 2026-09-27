@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-09-26
 see: atlas, wireframes, workbench
-note: designed 26 Sep 2026 from a verified Stitch Loop insight that Dion called "exciting". The canvas can diverge (`/variation`, `wire vary`) and, since this week, converge (`choose`, "Choose this variation"), but choosing without seeing what changed is guessing, and nothing showed a person what an agent's edit actually did. One pure diff engine in core, `@isocan/core/diff`, read by `isocan diff` and by a lazy side-by-side inspector in the web. Diffing reads and never writes, so there is no new op.
+note: designed 26 Sep 2026 from a verified Stitch Loop insight that Dion called "exciting". The canvas can diverge (`/variation`, `wire vary`) and, since this week, converge (`choose`, "Choose this variation"), but choosing without seeing what changed is guessing, and nothing showed a person what an agent's edit actually did. One pure diff engine in core, `@isocan/core/diff`, read by `isocan diff` and by a lazy side-by-side inspector in the web. Diffing reads and never writes, so there is no new op. Built the same day, except the quick glance: a "changed" chip on an item right after an agent edits it would put code on every card, which is the entry chunk.
 ---
 
 # Version diff: see what changed before you choose
@@ -84,12 +84,23 @@ rendered, not drawn onto the frame:
    the same lone `allow-scripts` every item frame gets. That is the posture
    the stage's draft preview already uses: opaque origin, no cookie, no API.
 4. Stepping through changes is a `postMessage` of a step number into both
-   frames. The injected script scrolls the element into view and pulses its
-   outline. Nothing comes back out, and the frame reaches nothing.
+   frames. The injected script scrolls the element into view and outlines it
+   in blue. The one thing a frame says back is its own document size (the
+   `<meta name="viewport">` width when there is one, as on a wireframe, and
+   the height its content reaches). The card's box on the canvas is not the
+   document's size, and the first screenshot drew a phone screen cut off at
+   the card's height. The frame still reaches nothing.
+5. A stylesheet rule's change has no box to outline, since a `<style>`
+   element draws nothing. So the change carries its selector, and the
+   injected script marks the elements it matches, up to 40 per rule. It skips
+   `html`, `body`, `:root` and `*`, which would paint the whole page.
 
-The stylesheet uses outlines drawn inside the element's box and an inset
-tint, so it does not move a pixel of layout. Added is green, removed is red,
-changed is amber, and the step in focus is thicker. **The live item is never
+Outlines take no layout and sit a pixel outside the box, so they do not cut
+through a line's descenders. A tint goes under them, so not a pixel moves.
+Added is green, removed is red, changed is amber. A change to the whole
+screen (its title, its look) is a dashed outline with no tint, because a wash
+over everything buried the block marks in the first screenshot. The step in
+focus is blue, a colour no kind of change uses. **The live item is never
 touched.** The marks exist only in a string handed to a comparison frame. A
 page whose own script rebuilds its DOM after load loses its marks. The change
 list and the summary still say what changed.
@@ -117,8 +128,16 @@ decisions a person can make after reading.
 ## What was left
 
 - **The quick glance** (a "changed" chip on an item right after an agent
-  edits it) needs code on every card, which is the entry chunk. See the
-  status line for whether it was built.
+  edits it) is not built. It needs code on every card, which is the entry
+  chunk, and the entry chunk has about 20 bytes of headroom on CI. The item
+  menu's "Compare versions" defaults to the same pair (the edit that just
+  landed), so the glance is one right-click further away, not missing.
+- **Reordered wire slots** are reported as `moved`, but `validateWire` holds
+  slots in recipe order, so today no drawable screen can have one. The path
+  is tested with a hand-embedded spec.
+- **A page that rebuilds its own DOM** after load (a React bundle in the
+  item) loses the marks written into its source. The summary and the list
+  still say what changed.
 - **Pixel diffs for images**, and a rendered-Markdown view with highlights.
   The text view shows the Markdown source with word marks, which is exact but
   less pretty.

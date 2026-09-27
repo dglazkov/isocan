@@ -24,7 +24,7 @@ type P5Node = DefaultTreeAdapterMap["childNode"];
 type P5Element = DefaultTreeAdapterMap["element"];
 
 /** What kind of comparison a pair of versions gets, from its MIME type and — for HTML — whether a wireframe spec rides inside. */
-export type DiffKind = "text" | "html" | "wire" | "image" | "binary";
+type DiffKind = "text" | "html" | "wire" | "image" | "binary";
 
 /** What happened to one thing between the two sides. */
 export type ChangeOp = "added" | "removed" | "changed" | "moved";
@@ -35,14 +35,14 @@ export type ChangeOp = "added" | "removed" | "changed" | "moved";
  * highlight attribute can be inserted into that element's start tag, which is
  * how a sandboxed frame gets marks nobody outside it could draw (`markSource`).
  */
-export interface DiffSpot {
+interface DiffSpot {
   path: string;
   at?: number;
   line?: number;
 }
 
 /** One step of a diff: numbered from 1, in reading order, with a sentence and where it sits on each side. */
-export interface DiffChange {
+interface DiffChange {
   step: number;
   op: ChangeOp;
   what: string;
@@ -870,7 +870,7 @@ const WIRE_MARKER = "<!-- isocan:wireframe -->";
 const WIRE_SCRIPT = /<script type="application\/json" id="isocan-wireframe">([\s\S]*?)<\/script>/;
 
 /** The parts of a wireframe spec a diff reads — structurally the module's `WireSpec`. */
-export interface WireSpecLike {
+interface WireSpecLike {
   title?: string;
   archetype?: string;
   platform?: string;
@@ -1052,17 +1052,19 @@ function diffWire(beforeHtml: string, afterHtml: string): Draft[] | null {
 // Highlights, for a frame nothing outside can reach into
 
 /**
- * The stylesheet a comparison render carries. Outlines drawn INSIDE the
- * element's box and an inset tint, so not one pixel of layout moves, and the
- * outline survives a parent with `overflow: hidden`. Green added, red
- * removed, amber changed; the step in focus is thicker and pulses once.
+ * The stylesheet a comparison render carries. Outlines, which take no
+ * layout, drawn a pixel outside the box so they do not cut through a line's
+ * descenders (a whole screen's goes inside, where the edge cannot clip it),
+ * and an inset tint, so not one pixel of layout moves. Green added, red
+ * removed, amber changed, dashed for the whole screen; the step in focus
+ * is a thicker blue, a colour no kind of change uses.
  */
-const HIGHLIGHT_CSS = `[data-isocan-change]{outline:3px solid var(--isocan-diff)!important;outline-offset:-3px!important;box-shadow:inset 0 0 0 100vmax var(--isocan-diff-tint)!important}
+const HIGHLIGHT_CSS = `[data-isocan-change]{outline:3px solid var(--isocan-diff)!important;outline-offset:1px!important;box-shadow:inset 0 0 0 100vmax var(--isocan-diff-tint)!important}
 [data-isocan-change=added]{--isocan-diff:#15803d;--isocan-diff-tint:rgba(22,163,74,.14)}
 [data-isocan-change=removed]{--isocan-diff:#dc2626;--isocan-diff-tint:rgba(220,38,38,.14)}
 [data-isocan-change=changed],[data-isocan-change=moved]{--isocan-diff:#d97706;--isocan-diff-tint:rgba(245,158,11,.10)}
-[data-isocan-focus]{outline-width:6px!important;animation:isocan-diff-pulse .9s ease-out 2}
-@keyframes isocan-diff-pulse{50%{outline-color:#2563eb}}`;
+[data-isocan-whole]{outline-style:dashed!important;outline-offset:-3px!important;box-shadow:none!important}
+[data-isocan-focus]{outline:5px solid #2563eb!important;outline-offset:1px!important}`;
 
 /**
  * The frame's half. First, a stylesheet rule's change marks the elements its
@@ -1070,11 +1072,15 @@ const HIGHLIGHT_CSS = `[data-isocan-change]{outline:3px solid var(--isocan-diff)
  * paint the whole page, and at most forty elements each, so a `div` rule does
  * not drown the picture. Then stepping: the inspector posts
  * `{ isocanDiffStep: n }`, and this scrolls that change into view and marks
- * it in focus. It listens to its parent only and says nothing back — the
- * frame still reaches nothing.
+ * it in focus. It listens to its parent only. The one thing it says back is
+ * its own size (`{ isocanDiffSize: [w, h] }`: a `<meta name="viewport">`
+ * width when the document declares one, as a wireframe does, and the height
+ * its content reaches), so both sides can be drawn whole at one scale — the
+ * card's box on the canvas is not the document's size. The frame still
+ * reaches nothing.
  */
 const frameScript = (selectors: Array<[number, string, ChangeOp]>) =>
-  `(function(){var S=${JSON.stringify(selectors).replace(/</g, "\\u003c")};S.forEach(function(s){var q=s[1].split(",").map(function(p){return p.replace(/::?(before|after|hover|focus|focus-visible|focus-within|active|visited|placeholder|marker|selection|first-line|first-letter)\\b(\\([^)]*\\))?/g,"").trim()}).filter(function(p){return p&&!/^(html|body|:root|\\*)$/.test(p)}).join(",");if(!q)return;try{var els=document.querySelectorAll(q)}catch(e){return}for(var i=0;i<els.length&&i<40;i++){var el=els[i];var had=el.getAttribute("data-isocan-step");el.setAttribute("data-isocan-step",had?had+" "+s[0]:String(s[0]));if(!el.hasAttribute("data-isocan-change"))el.setAttribute("data-isocan-change",s[2])}});addEventListener("message",function(e){if(e.source!==parent)return;var n=e.data&&e.data.isocanDiffStep;if(typeof n!=="number")return;var was=document.querySelectorAll("[data-isocan-focus]");for(var i=0;i<was.length;i++)was[i].removeAttribute("data-isocan-focus");var el=document.querySelector('[data-isocan-step~="'+n+'"]');if(el){el.setAttribute("data-isocan-focus","");el.scrollIntoView({block:"center",inline:"center"})}})})();`;
+  `(function(){var S=${JSON.stringify(selectors).replace(/</g, "\\u003c")};S.forEach(function(s){var q=s[1].split(",").map(function(p){return p.replace(/::?(before|after|hover|focus|focus-visible|focus-within|active|visited|placeholder|marker|selection|first-line|first-letter)\\b(\\([^)]*\\))?/g,"").trim()}).filter(function(p){return p&&!/^(html|body|:root|\\*)$/.test(p)}).join(",");if(!q)return;try{var els=document.querySelectorAll(q)}catch(e){return}for(var i=0;i<els.length&&i<40;i++){var el=els[i];var had=el.getAttribute("data-isocan-step");el.setAttribute("data-isocan-step",had?had+" "+s[0]:String(s[0]));if(!el.hasAttribute("data-isocan-change"))el.setAttribute("data-isocan-change",s[2])}});addEventListener("message",function(e){if(e.source!==parent)return;var n=e.data&&e.data.isocanDiffStep;if(typeof n!=="number")return;var was=document.querySelectorAll("[data-isocan-focus]");for(var i=0;i<was.length;i++)was[i].removeAttribute("data-isocan-focus");var el=document.querySelector('[data-isocan-step~="'+n+'"]');if(el){el.setAttribute("data-isocan-focus","");el.scrollIntoView({block:"center",inline:"center"})}});function size(){var b=document.body;if(!b)return;var m=document.querySelector('meta[name="viewport"]');var w=m&&/width=(\\d+)/.exec(m.getAttribute("content")||"");var h=b.scrollHeight,k=b.children;for(var i=0;i<k.length;i++){var r=k[i].getBoundingClientRect();h=Math.max(h,r.bottom+scrollY)}parent.postMessage({isocanDiffSize:[w?+w[1]:document.documentElement.scrollWidth,Math.ceil(h+(parseFloat(getComputedStyle(b).marginBottom)||0))]},"*")}addEventListener("load",size);if(window.ResizeObserver)new ResizeObserver(size).observe(document.documentElement)})();`;
 
 /**
  * **One side's source, with the diff written into it** — the only way a
@@ -1087,7 +1093,7 @@ const frameScript = (selectors: Array<[number, string, ChangeOp]>) =>
  * blob are never touched.
  */
 export function markSource(html: string, diff: VersionDiff, side: "before" | "after"): string {
-  const marks = new Map<number, { op: ChangeOp; steps: number[] }>();
+  const marks = new Map<number, { op: ChangeOp; steps: number[]; whole: boolean }>();
   const rank: Record<ChangeOp, number> = { changed: 0, moved: 1, removed: 2, added: 2 };
   const selectors: Array<[number, string, ChangeOp]> = [];
   for (const change of diff.changes) {
@@ -1101,7 +1107,11 @@ export function markSource(html: string, diff: VersionDiff, side: "before" | "af
     const spot = change[side];
     if (spot?.at === undefined) continue;
     const mark = marks.get(spot.at);
-    if (!mark) marks.set(spot.at, { op: change.op, steps: [change.step] });
+    // A change to the whole screen or page (its title, its look) outlines
+    // the frame dashed and does not tint it: a wash over everything would
+    // bury the block-level marks inside it.
+    const whole = spot.path === "screen" || /^html(\/body\[1\])?$/.test(spot.path);
+    if (!mark) marks.set(spot.at, { op: change.op, steps: [change.step], whole });
     else {
       mark.steps.push(change.step);
       if (rank[change.op] > rank[mark.op]) mark.op = change.op;
@@ -1111,7 +1121,7 @@ export function markSource(html: string, diff: VersionDiff, side: "before" | "af
   for (const at of [...marks.keys()].sort((x, y) => y - x)) {
     const mark = marks.get(at)!;
     const space = /\s/.test(out[at - 1] ?? "") ? "" : " ";
-    out = `${out.slice(0, at)}${space}data-isocan-change="${mark.op}" data-isocan-step="${mark.steps.join(" ")}"${out.slice(at)}`;
+    out = `${out.slice(0, at)}${space}data-isocan-change="${mark.op}" data-isocan-step="${mark.steps.join(" ")}"${mark.whole ? " data-isocan-whole" : ""}${out.slice(at)}`;
   }
   const extra = `<style data-isocan-diff>${HIGHLIGHT_CSS}</style><script data-isocan-diff>${frameScript(selectors)}</script>`;
   const close = out.toLowerCase().lastIndexOf("</body>");

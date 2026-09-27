@@ -182,6 +182,22 @@ function FanCard({
         <b>v{item.versions.indexOf(version) + 1}</b>
         <span>{actorNameIn(names, version.createdBy)}</span>
         <span>{new Date(version.createdAt).toLocaleDateString()}</span>
+        {/* What this version changed, or how it differs from the one showing
+            — the inspector loads on the click (docs/projects/version-diff). */}
+        {item.versions.length > 1 && (
+          <button
+            className="fan-compare"
+            title={version.id === item.currentVersionId ? "Compare with the version before it" : "Compare with the version showing"}
+            aria-label={`Compare v${item.versions.indexOf(version) + 1}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPicked();
+              void import("./VersionCompare.tsx").then((m) => m.openCompare({ canvasId, actor, itemId: item.id, from: version.id }));
+            }}
+          >
+            Compare
+          </button>
+        )}
       </div>
       <div className="fan-body">
         {onScreen && (

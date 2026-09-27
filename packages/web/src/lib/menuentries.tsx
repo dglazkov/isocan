@@ -212,6 +212,13 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       disabled: !one || one.versions.length < 2,
       run: () => one && useUiStore.getState().setFanned(one.id),
     },
+    {
+      // What changed (docs/projects/version-diff/design.md): the last edit, or
+      // a variation against its source. The inspector loads on the click.
+      label: "Compare versions",
+      disabled: !one || (one.versions.length < 2 && !parentOf(one)),
+      run: () => one && void import("../components/VersionCompare.tsx").then((m) => m.openCompare({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
+    },
     { separator: "" },
     {
       label: "Copy link",

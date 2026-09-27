@@ -319,6 +319,16 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   whole exploration goes to the trash — the same ops from either surface, and
   one ⌘Z takes the decision back. `isocan prefer <winner> --over <other>` is
   the lighter half, a recorded preference that moves nothing.
+- **Seeing what changed**: right-click → **Compare versions**, or **Compare**
+  on any card of the fanned-out stack, opens before and after side by side at
+  one scale, with the changes marked inside both renders and a numbered list
+  to step through (← →). It reads what each kind means: an HTML screen by its
+  DOM (elements, text, classes, styles, stylesheet rules), a wireframe by its
+  spec ("stacked list → data table", a link's intent), text by line and word.
+  Images are compared by metadata only. A variation can be compared with its
+  source and chosen from there. `isocan diff <item> [from] [to]` prints the
+  same summary (`--source` for a variation, `--json` for the structure).
+  Comparing never writes anything.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking
