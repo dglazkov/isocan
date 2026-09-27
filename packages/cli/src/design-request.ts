@@ -1,11 +1,12 @@
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import type { Command } from "commander";
-import { CanvasHandle, resolveCanvas, type DesignRequestFilter, type DesignRequestReadResult, type DesignRequestSubmission } from "@isocan/api";
+import { type CanvasHandle, type DesignRequestFilter, type DesignRequestReadResult, type DesignRequestSubmission } from "@isocan/api";
 import { parseDesignRequestAction, parseDesignRequestOperation } from "@isocan/core/design-request";
 import { parseDesignArtifactRef } from "@isocan/core/design-partner";
 import type { Ctx } from "./ctx.ts";
 import { printJson } from "./output.ts";
+import { onCanvas } from "./run.ts";
 
 // Hash the whole stable version identity; a long shared prefix must not merge separate intents.
 const operationId = (versionId: string) => `op_${createHash("sha256").update(`design-version:${versionId}`).digest("base64url").slice(0, 32)}`;
@@ -50,12 +51,7 @@ function filter(request: string | undefined, options: { thread?: string; comment
 
 /** CLI files carry stable public intents; this layer adds argv and readable output, never private authority. */
 export function registerDesignRequests(design: Command, contextOf: (cmd: Command) => Promise<Ctx>): void {
-  const act = (work: (handle: CanvasHandle, ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
-    try {
-      const ctx = await contextOf(args.at(-1) as Command);
-      await work(new CanvasHandle(ctx, await resolveCanvas(ctx)), ctx, args);
-    } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
-  };
+  const act = (work: (handle: CanvasHandle, ctx: Ctx, args: any[]) => Promise<void>) => onCanvas(contextOf, work);
   const selectors = (command: Command) => command.option("--thread <id>", "source conversation thread").option("--comment <id>", "source comment").option("--output <id>", "request owning this output item");
 
   selectors(design.command("workflow [request]"))

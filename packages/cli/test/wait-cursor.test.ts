@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { PresenceSession } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { spawnCli as startCli, collect, type Run } from "./cli.ts";
 
 /**
  * **The durable cursor** (on-demand phase 1, journey 3's plain-park half):
@@ -27,7 +27,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * what these buy is the walk itself.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 const dimitri = { id: "usr_dimitri", name: "Dimitri" };
 
@@ -74,34 +73,12 @@ function sessions(): Promise<PresenceSession[]> {
   );
 }
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function port(): string {
   return new URL(base).port;
 }
 
 function spawnCli(...args: string[]): ChildProcess {
-  return spawn(process.execPath, [cliBin, ...args], {
-    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: port() },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-}
-
-function collect(child: ChildProcess): Promise<Run> {
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  return startCli(args, { cwd: home, env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: port() } });
 }
 
 function isocan(...args: string[]): Promise<Run> {

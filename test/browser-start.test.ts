@@ -133,6 +133,7 @@ describe("browser() when it cannot start", () => {
 describe("the scripts a CLI verb spawns", () => {
   it("never call process.exit inside a try whose finally closes the browser", async () => {
     const ts = (await import("typescript")).default;
+    // @ts-expect-error — a plain .mjs module with no types.
     const { RELEASE_SCRIPTS } = await import("../scripts/release.mjs");
     const found: string[] = [];
     for (const script of Object.keys(RELEASE_SCRIPTS)) {

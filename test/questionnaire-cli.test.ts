@@ -1,14 +1,13 @@
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, expect, it } from "vitest";
-import { harnessVars, questionnaireSubmissionIds } from "@isocan/api";
+import { questionnaireSubmissionIds } from "@isocan/api";
 import type { DesignQuestionSet, DesignResponse } from "@isocan/core/design-partner";
 import { legacyQuestionSet, parseLegacyQuestionnaire } from "@isocan/core/questionnaire";
 import { questionnaireFixture } from "../packages/api/test/questionnaire-fixture.ts";
+import { cliEnv, collect, spawnCli } from "../packages/cli/test/cli.ts";
 
-const cliBin = fileURLToPath(new URL("../packages/cli/bin/isocan.js", import.meta.url));
 let fixture: Awaited<ReturnType<typeof questionnaireFixture>> | undefined;
 const children = new Set<ChildProcess>();
 afterEach(async () => {
@@ -24,25 +23,20 @@ afterEach(async () => {
 
 async function cli(who: "person" | "agent" | "other", ...args: string[]) {
   const f = fixture!;
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const variable of harnessVars) delete env[variable];
+  const env = cliEnv();
   for (const variable of Object.keys(env)) if (variable.startsWith("ISOCAN_")) delete env[variable];
   env.ISOCAN_HOME = f.home;
   env.ISOCAN_PORT = String(f.port);
   env.ISOCAN_CANVAS = f.canvasId;
   env.ISOCAN_HARNESS = who === "person" ? "cli" : "acme";
   env.ISOCAN_SESSION_ID = who === "person" ? "acme-person" : who === "agent" ? "designer" : "helper";
-  const child = spawn(process.execPath, [cliBin, "--canvas", f.canvasId, "--json", ...args], { cwd: f.work, env, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawnCli(["--canvas", f.canvasId, "--json", ...args], { cwd: f.work, env });
   children.add(child);
-  let stdout = "", stderr = "", timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; stderr += "\nSynthetic CLI invocation exceeded 15 seconds."; child.kill("SIGKILL"); }, 15_000);
-  timer.unref();
-  child.stdout.on("data", (data) => { stdout += data; });
-  child.stderr.on("data", (data) => { stderr += data; });
-  return new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
-    child.once("error", error => { clearTimeout(timer); children.delete(child); reject(error); });
-    child.once("close", code => { clearTimeout(timer); children.delete(child); resolve({ code: timedOut ? 1 : code ?? 1, stdout, stderr }); });
-  });
+  try {
+    return await collect(child, 15_000);
+  } finally {
+    children.delete(child);
+  }
 }
 async function saved(name: string, value: unknown): Promise<string> {
   const file = path.join(fixture!.work, name);

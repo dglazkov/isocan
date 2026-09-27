@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { paths, type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { reservePort } from "../../../test/ports.ts";
-import { harnessVars } from "@isocan/api";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **`isocan home` — the verb phase 7.5 exists for, re-scoped by phase 10.3.**
@@ -38,8 +36,6 @@ import { harnessVars } from "@isocan/api";
  * conductor's call, not a test's.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
-
 let isocanHome: string;
 let upstreamDir: string;
 let work: string;
@@ -67,12 +63,6 @@ afterEach(async () => {
   );
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function isocan(...args: string[]): Promise<Run> {
   return isocanWith({}, ...args);
 }
@@ -84,25 +74,7 @@ function isocanWith(extra: Record<string, string>, ...args: string[]): Promise<R
 }
 
 function isocanIn(cwd: string, extra: Record<string, string>, ...args: string[]): Promise<Run> {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ISOCAN_HOME: isocanHome,
-    ISOCAN_PORT: String(port),
-  };
-  for (const v of harnessVars) delete env[v];
-  Object.assign(env, extra);
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    cwd,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  return runCli(args, { cwd, env: cliEnv({ ISOCAN_HOME: isocanHome, ISOCAN_PORT: String(port), ...extra }) });
 }
 
 const json = async (...args: string[]) => {

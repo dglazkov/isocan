@@ -1,13 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { textBox, type TextFace, type TextStyle } from "@isocan/core";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **A text node changed after birth holds its words at the new look.**
@@ -21,7 +19,6 @@ import { textBox, type TextFace, type TextStyle } from "@isocan/core";
  * what `isocan text` itself would have given a node born at that look.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const acme = { id: "usr_acme", name: "Acme" };
 const SENTENCE = "Acme step 2 · the review side — and status notes too: step 1 waits on step 2 before it can close";
 
@@ -42,19 +39,8 @@ afterAll(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: port },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8").on("data", (c) => (stdout += c));
-  child.stderr!.setEncoding("utf8").on("data", (c) => (stderr += c));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+function isocan(...args: string[]): Promise<Run> {
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port }) });
 }
 
 async function ok(...args: string[]): Promise<string> {

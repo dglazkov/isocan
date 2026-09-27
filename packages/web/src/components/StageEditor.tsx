@@ -14,6 +14,7 @@ import { isocanSyntax } from "../lib/cmtheme.ts";
 import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { getSnapshot, readBlobText, uploadBlob } from "../lib/api.ts";
 import { everyWhileVisible } from "../lib/whilevisible.ts";
+import "./stage-editor.css";
 
 const DesignLintPanel = lazy(() => import("./DesignLintPanel.tsx").then(module => ({ default: module.DesignLintPanel })));
 

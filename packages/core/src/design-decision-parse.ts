@@ -1,7 +1,7 @@
 import { canonicalJson } from "./canonical-json.ts";
 import { parseDesignArtifactRef } from "./design-partner.ts";
 import { parseDesignGoverning } from "./design-request-parse.ts";
-import { base, bad, bool, choice, fidelity, integer, list, nullableText, object, text, unique } from "./design-partner-values.ts";
+import { base, bad, choice, fidelity, integer, list, nullableText, object, text, unique } from "./design-partner-values.ts";
 import type { DesignApprovalBasis, DesignComparison, DesignComparisonResponse, DesignDecisionInput, DesignDecisionOperation } from "./design-decision.ts";
 import type { DesignQuestionSource } from "./design-partner.ts";
 const keys = ["schemaVersion", "kind", "id", "requestId", "epoch"];

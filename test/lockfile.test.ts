@@ -47,7 +47,7 @@ function workspaceDirs(): string[] {
 
 describe("the lock file knows every workspace", () => {
   const dirs = workspaceDirs();
-  const lock = read("package-lock.json") as { packages: Record<string, { name?: string }> };
+  const lock = read("package-lock.json") as { packages: Record<string, { name?: string; resolved?: string }> };
 
   it("finds the workspaces at all — a search over nothing always passes", () => {
     // `syncexec.test.ts`'s lesson, one directory over: a glob that matches

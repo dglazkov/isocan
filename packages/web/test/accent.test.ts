@@ -110,11 +110,14 @@ function paintsAccentText(): string[] {
 /**
  * Fourteen rules, measured at 2.5–2.9:1 in dark. Shrink this list; do not add
  * to it. `var(--accent)` -> `var(--accent-text)` is the whole fix.
+ *
+ * `.main-glyph, .main-pill-glyph` and `.shelf-glyph` left it on 27 Sep 2026
+ * without being fixed: nothing rendered them any more, and BC-3 deleted the
+ * rules (`deadrules.test.ts`).
  */
 const KNOWN_UNREADABLE_IN_DARK = [
   ".item.selected .item-titlebar",
   ".thread-popover .thread-actions button.promote",
-  ".main-glyph, .main-pill-glyph",
   ".mt-glyph",
   ".mention-dot.command-dot",
   ".command-card b",
@@ -123,7 +126,6 @@ const KNOWN_UNREADABLE_IN_DARK = [
   ".files-glyph",
   ".files-row.active .files-kind",
   ".files-size em",
-  ".shelf-glyph",
   ".drop-overlay",
 ];
 

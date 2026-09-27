@@ -10,6 +10,7 @@ import {
   extractTree,
   unresolvedImports,
   worktreeTree,
+// @ts-expect-error — a plain .mjs module with no types.
 } from "../scripts/release.mjs";
 
 /**

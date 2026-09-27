@@ -3,26 +3,19 @@ import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
 import {
   canvasPath,
-  recentActivity,
   roster,
-  answeringExcerpt,
   workbenchItemPath,
   workbenchPath,
   itemKind,
-  type AgentRow,
 } from "@isocan/core";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { WB_AGENTS_MIN_WIDTH, useUiStore } from "../stores/uiStore.ts";
 import { PanelResizer } from "./PanelResizer.tsx";
-import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { quietFor } from "../lib/presence.ts";
 import { ArtifactStage } from "./ArtifactStage.tsx";
-import { ItemThumb } from "./ItemThumb.tsx";
 import { KindIcon } from "./KindIcon.tsx";
 import { MainThreadBody } from "./MainThreadPanel.tsx";
 import { WbFiles } from "./WbFiles.tsx";
-import { goStage } from "../lib/goStage.ts";
 import { AgentRowView } from "./AgentRow.tsx";
 import { SectionResizer, useSectionHeight } from "./SectionResizer.tsx";
 import { iconKindFor } from "../lib/kinds.ts";

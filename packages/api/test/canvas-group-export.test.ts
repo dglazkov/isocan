@@ -1,4 +1,4 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { expect, it, afterEach } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";

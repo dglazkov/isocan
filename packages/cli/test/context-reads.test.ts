@@ -28,6 +28,7 @@ it("parses saved request and byte-page commands against production API and froze
   expect((await run("--json", "context", "request", posted.threadId, posted.commentId)).expandedIds).toEqual([group, card.id]);
   expect(await run("context", "content", posted.threadId, posted.commentId, card.id, "--limit", "8")).toMatchObject({ data: "Original", nextOffset: 8, versionId: card.currentVersionId });
   await run("context", "content", posted.threadId, posted.commentId, card.id, "--face", "wrong");
-  expect(errors).toHaveBeenCalledWith("--face expects source or visual");
+  // `error: ` because the family fails through `run` now, like every verb (cleanup TS-5).
+  expect(errors).toHaveBeenCalledWith("error: --face expects source or visual");
   expect(f.writes).toHaveLength(count);
 });

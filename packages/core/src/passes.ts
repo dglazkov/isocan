@@ -359,11 +359,6 @@ export const PASS_EXPIRED = "pass-expired";
  * counting codes should find the fourth one accounted for rather than missing.
  */
 
-/** Has this pass been redeemed? */
-function passSpent(pass: Pass): boolean {
-  return pass.redeemedAt !== undefined;
-}
-
 /** Is it past its `expiresAt`? The clock is the caller's, as everywhere else
  * in core — this file stays pure. */
 export function passExpired(pass: Pass, now: string): boolean {

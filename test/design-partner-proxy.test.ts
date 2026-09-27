@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
+// @ts-expect-error — a plain .mjs module with no types.
 import { startStudyProxy } from "../scripts/lib/design-partner-proxy.mjs";
 
 it("routes only contained files and the fixed fixture runtime; redirects, generic ops, sibling canvases and tunnels stay blocked", async () => {
@@ -12,7 +13,7 @@ it("routes only contained files and the fixed fixture runtime; redirects, generi
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const base = `http://127.0.0.1:${(server.address() as net.AddressInfo).port}`;
   const daemon = "http://127.0.0.1:2";
-  const denied: any[] = [], proxy = await startStudyProxy({ workspace, base: daemon, canvasId: "prj_acme", repositoryUrl: base }, row => { denied.push(row); });
+  const denied: any[] = [], proxy = await startStudyProxy({ workspace, base: daemon, canvasId: "prj_acme", repositoryUrl: base }, (row: unknown) => { denied.push(row); });
   const request = (url: string, method = "GET") => new Promise<{ status: number; body: string }>((resolve, reject) => {
     const req = http.request(proxy.origin, { method, path: url }, res => { let body = ""; res.on("data", bytes => body += bytes); res.on("end", () => resolve({ status: res.statusCode!, body })); }); req.on("error", reject); req.end();
   });

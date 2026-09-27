@@ -1,10 +1,11 @@
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
 import type { Command } from "commander";
-import { CanvasHandle, prepareDesignDecision, resolveCanvas, type DesignComparisonReadResult, type DesignDecisionSubmission } from "@isocan/api";
+import { prepareDesignDecision, type CanvasHandle, type DesignComparisonReadResult, type DesignDecisionSubmission } from "@isocan/api";
 import { parseDesignComparison, parseDesignComparisonResponse, parseDesignDecisionInput } from "@isocan/core/design-decision";
 import type { Ctx } from "./ctx.ts";
 import { printJson } from "./output.ts";
+import { onCanvas } from "./run.ts";
 
 async function fileObject(file: string): Promise<Record<string, unknown>> {
   const value: unknown = JSON.parse(await fs.readFile(file, "utf8"));
@@ -58,10 +59,7 @@ function describe(read: DesignComparisonReadResult) {
 
 /** Native files retain exact public intent; readable output and argv never supply decision authority. */
 export function registerDesignDecisions(design: Command, contextOf: (cmd: Command) => Promise<Ctx>): void {
-  const act = (work: (handle: CanvasHandle, ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
-    try { const ctx = await contextOf(args.at(-1) as Command); await work(new CanvasHandle(ctx, await resolveCanvas(ctx)), ctx, args); }
-    catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
-  };
+  const act = (work: (handle: CanvasHandle, ctx: Ctx, args: any[]) => Promise<void>) => onCanvas(contextOf, work);
   design.command("compare [request]")
     .description("Read exact options and decision history, or publish an immutable comparison")
     .option("--publish <file>", "saved comparison or {threadId,comparison,opId?,commentId?,retry?}")

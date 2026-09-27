@@ -212,7 +212,7 @@ function builtEntry(): string | null {
   const html = path.join(repo, "packages/web/dist/index.html");
   if (!existsSync(html)) return null;
   const found = /<script[^>]*\ssrc="\/assets\/([^"]+\.js)"/.exec(readFileSync(html, "utf8"));
-  return found ? path.join(repo, "packages/web/dist/assets", found[1]) : null;
+  return found?.[1] ? path.join(repo, "packages/web/dist/assets", found[1]) : null;
 }
 
 /**

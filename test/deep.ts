@@ -210,6 +210,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/agent-help.test.ts", secs: 5.4, why: "six cases, a dozen spawns that touch no daemon — the cold start, a topic, `all`, and every top-level verb read from `--help` (#124); measured 24 September on a loaded machine. The guard that a verb reached the agent guide, and the one this file's header has always held up as the cheap walk" },
   { file: "test/roadmap.test.ts", secs: 1.7, why: "spawns `doc status` three times, not once per document — deliberately, and it says so" },
   { file: "test/deeplist.test.ts", secs: 0.2, why: "the guard itself: it spawns `git ls-files` to enumerate, and its own cases quote the strings it looks for — it caught itself on the first run, which is how sheep's `rings.test.ts` announced itself too" },
+  { file: "test/spawners.test.ts", secs: 0.1, why: "does not walk: the private-spawner ratchet spawns `git ls-files` to enumerate, and imports this file, whose own reading spells out the targets it looks for — deeplist's false positive, one file over" },
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },
   { file: "packages/voice-agent/test/voice-model.test.ts", secs: 9.8, why: "nineteen cases over one daemon, and the closest file to the line: only the model verbs it cannot drive from the page walk the CLI at all" },
   { file: "test/cli-bundle.test.ts", secs: 4.4, why: "one esbuild build shared by both cases, then five spawns of the bundle that touch no daemon and no canvas — measured 18 September" },
@@ -237,15 +238,27 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
  */
 export const withoutProse = withoutComments;
 
-/** The `./` imports of a file — a fixture beside it counts as part of it. */
+/**
+ * The test modules a file imports — a fixture beside it counts as part of it,
+ * and so does a helper in another package's `test/` directory. The second half
+ * is cleanup phase 6's (TR-13, 27 Sep 2026): the one spawn helper lives in
+ * `packages/cli/test/cli.ts`, and the web, module and root files that walk the
+ * binary reach it as `../../cli/test/cli.ts`. Only paths through a `test/`
+ * directory count, so `../src/…` and `../scripts/…` stay out of the reading —
+ * a source file that names `npx` is not a test that runs it.
+ */
 export function siblingsOf(source: string): string[] {
   const found: string[] = [];
-  for (const match of withoutProse(source).matchAll(/from "(\.\/[^"]+)"/g)) {
+  for (const match of withoutProse(source).matchAll(/from "(\.\.?\/[^"]+)"/g)) {
     const rel = match[1] ?? "";
+    if (!rel.startsWith("./") && !/(^|\/)test\//.test(rel)) continue;
     found.push(rel, rel.replace(/\.js$/, ".ts"));
   }
   return found;
 }
+
+/** A call that starts a process — the half of a walk that runs something. */
+const SPAWN_CALL = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\s*\(/;
 
 /**
  * **Does this file walk the CLI?** Read from the source rather than declared,
@@ -273,11 +286,51 @@ export function walksBinary(source: string, siblings: readonly string[] = []): b
   // SDK starts the process (27 Sep 2026 — `recap-summary-transport` walked
   // `isocan mcp` this way for weeks, took up to 30 s in the fast lane, and
   // timed out there while this reading called it no walker at all).
-  const spawns = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\s*\(|new\s+StdioClientTransport\s*\(/.test(code);
+  const spawns = SPAWN_CALL.test(code) || /new\s+StdioClientTransport\s*\(/.test(code);
   // The native study exposes the real CLI through its explicit stdio MCP
   // process. All three facts are needed; generic SDK clients are not CLI walkers.
   const studyMcp = /design-partner-mcp\.mjs/.test(code) && /new\s+StdioClientTransport\s*\(/.test(code) && /callTool\s*\(\s*\{\s*name:\s*["']cli["']/.test(code);
   return target && spawns || studyMcp;
+}
+
+/**
+ * **The one module a test starts the development binary through** (cleanup
+ * phase 6, TR-13 / DU-3, 27 Sep 2026). Seventy-one test sources each carried
+ * their own spawn-and-gather helper, and the copies had drifted: some decoded
+ * the streams and some did not, most read a signal death as exit 0, most never
+ * listened for `error`.
+ */
+export const SHARED_SPAWNER = "packages/cli/test/cli.ts";
+
+/**
+ * **Does this file start the development binary itself** — naming
+ * `bin/isocan.js` (or `cliBin`) in code AND calling a spawn — rather than through
+ * `SHARED_SPAWNER`? The same two halves `walksBinary` reads, narrowed to the
+ * one target a shared helper can stand in for, and without siblings: a file
+ * that reaches the binary through the helper is exactly what this is asking
+ * for. Strings count as code here as they do there, so a guard that QUOTES a
+ * spawn of the binary (`test/deeplist.test.ts`) reads as one; that file is
+ * named in the count and left there, as it is in `FAST_SPAWNERS`.
+ */
+export function startsBinaryItself(source: string): boolean {
+  const code = withoutProse(source);
+  // `cliBin` as well as the path: importing the helper's constant and
+  // spawning it by hand is the same private copy, one import away.
+  return /bin\/isocan\.js|\bcliBin\b/.test(code) && SPAWN_CALL.test(code);
+}
+
+/** The test sources that start the binary themselves, from a list of repo paths. */
+export function privateSpawners(root: string, files: readonly string[]): string[] {
+  return files
+    .filter((file) => /(^|\/)test\//.test(file) && !/\/fixtures\//.test(file) && /\.(ts|tsx|mjs|js)$/.test(file))
+    .filter((file) => file !== SHARED_SPAWNER)
+    .filter((file) => {
+      try {
+        return startsBinaryItself(readFileSync(path.join(root, file), "utf8"));
+      } catch {
+        return false;
+      }
+    });
 }
 
 /** The lane a file is declared to be in, or `undefined` when it is in neither. */
@@ -296,10 +349,21 @@ export function audit(root: string, files: readonly string[]) {
       return "";
     }
   };
+  /**
+   * The siblings of the siblings, too. Since cleanup phase 6 (TR-13, 27 Sep
+   * 2026) the spawn lives in ONE module, `SHARED_SPAWNER`, and a fixture that
+   * starts the binary does it through that — so `rc.test.ts` reaches the
+   * binary two hops away (`rc-fixture.ts`, then `cli.ts`), and a reading that
+   * stopped at the first hop called it no walker at all.
+   */
+  const siblingsOfFile = (file: string, seen: Set<string>): string[] =>
+    siblingsOf(read(file))
+      .map((rel) => path.join(path.dirname(file), rel))
+      .filter((sibling) => !seen.has(sibling) && seen.add(sibling))
+      .flatMap((sibling) => [read(sibling), ...siblingsOfFile(sibling, seen)]);
   return files.map((file) => {
-    const source = read(file);
-    const siblings = siblingsOf(source).map((rel) => read(path.join(path.dirname(file), rel)));
-    return { file, declared: declaredLane(file), walks: walksBinary(source, siblings) };
+    const siblings = siblingsOfFile(file, new Set([file]));
+    return { file, declared: declaredLane(file), walks: walksBinary(read(file), siblings) };
   });
 }
 

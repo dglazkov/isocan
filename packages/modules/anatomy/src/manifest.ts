@@ -13,16 +13,9 @@ export * from "./facts.ts";
 import {
   ANATOMY_COMMAND_METADATA,
   ANATOMY_KINDS,
-  CHECKPOINT_MIME,
-  NODE_MIME,
-  PROJECT_MIME,
   PROP,
-  RUN_MIME,
   NODE_SIZE,
-  currentVersion,
-  hasMime,
   nodesOn,
-  originId,
   projectsOn,
 } from "./facts.ts";
 

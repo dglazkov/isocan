@@ -36,7 +36,6 @@ import {
   createFileBroker,
   createMemoryBroker,
   safeGrantPath,
-  normalizeTags,
   readLegacyMemories,
   retireLegacyMemories,
   runMemoryTool,
@@ -50,6 +49,7 @@ import {
   type Memory,
 } from "../src/voice-harness.ts";
 import type { ListedItem } from "@isocan/api";
+import { cliEnv, runCli, type Run } from "../../cli/test/cli.ts";
 
 /**
  * **The voice harness** (Paul, 11 Sep 2026), pinned at the three joints that
@@ -74,7 +74,6 @@ import type { ListedItem } from "@isocan/api";
  * The harness itself is started through its OWN entry point — the point of the
  * package — so both paths are exercised as a person and an rc would drive
  * them. */
-const cliBin = fileURLToPath(new URL("../../cli/bin/isocan.js", import.meta.url));
 const voiceBin = fileURLToPath(new URL("../bin/voice-agent.js", import.meta.url));
 /**
  * Two actors, deliberately: `seeder` is the test's own badge, holding one
@@ -85,7 +84,6 @@ const voiceBin = fileURLToPath(new URL("../bin/voice-agent.js", import.meta.url)
  */
 const seeder = { id: "usr_seeder", name: "Seeder" };
 const person = { id: "usr_person", name: "Person" };
-const voice = { id: "usr_voice", name: "Voice" };
 
 /**
  * **The session this machine presents for an agent name.**
@@ -397,24 +395,11 @@ async function callTool(
 /** The CLI, with this test's temp home and daemon — the same launcher the acp
  * suite uses, so the machine badge and the identity resolution are the real
  * ones. */
-function isocan(args: string[], extraEnv: Record<string, string> = {}): Promise<{ code: number; stdout: string; stderr: string }> {
-  const env = { ...process.env };
+function isocan(args: string[], extraEnv: Record<string, string> = {}): Promise<Run> {
   // EVERY harness variable, not just isocan's two: this suite runs inside pi,
   // so `PI_SESSION_ID` in the ambient environment made the spawned CLI read
   // itself as a harness session and refuse `rc turn` as an agent's verb.
-  for (const name of harnessVars) delete env[name];
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv }) });
 }
 
 describe("what a sentence means", () => {
@@ -2407,7 +2392,7 @@ describe("the name the enrolment summons", () => {
 
   it("moves every copy of the name: the standing, the roster row and the harness's own record", async () => {
     const live = await enrolledAndRenamed();
-    const { server, row, beforeStanding } = live;
+    const { row, beforeStanding } = live;
     try {
       const renamed = live.renamed;
       expect(renamed.response.ok).toBe(true);

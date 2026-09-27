@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { PresenceSession, Canvas } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * Two parties share a machine: the person who owns it, and the agents working
@@ -17,7 +15,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * the other, and a rename reaches the live face either way.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 /** Whoever set the fixture canvas up — not anybody the CLI speaks as. */
 const seeder = { id: "usr_seed", name: "Seed" };
@@ -75,24 +72,8 @@ afterEach(async () => {
  * cleared before the caller's are set — a bare `isocan({})` is a process no
  * harness launched, which is how the human's scripts run.
  */
-function isocan(session: Record<string, string>, ...args: string[]) {
-  const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) };
-  for (const v of harnessVars) delete env[v];
-  Object.assign(env, session);
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    cwd: work,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+function isocan(session: Record<string, string>, ...args: string[]): Promise<Run> {
+  return runCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), ...session }) });
 }
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });

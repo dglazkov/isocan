@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cmdKey, shortcut } from "@isocan/core";
+import { shortcut } from "@isocan/core";
 import type { Actor } from "@isocan/core";
 import { OfflineError, redo, undo } from "../lib/api.ts";
 import { setNotice } from "../stores/canvasStore.ts";

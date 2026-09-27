@@ -1,6 +1,6 @@
 import { chromeFor } from "./compose.ts";
 import { refill } from "./content/flesh-spec.ts";
-import { LEAVE_OUT, flipWords, recipe, resolveSlot, type WireFlip, type WireSlot, type WireSpec } from "./spec.ts";
+import { LEAVE_OUT, recipe, resolveSlot, type WireFlip, type WireSlot, type WireSpec } from "./spec.ts";
 
 export { blockWords, flipWords } from "./spec.ts";
 

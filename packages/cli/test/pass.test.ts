@@ -415,7 +415,7 @@ describe("isocan setup <address>#<pass> — one command, three steps collapsed",
   }, 60_000);
 
   it("a pass is single-use: the same command on a third machine is refused, and says why", async () => {
-    const canvasId = await acmeCanvas();
+    await acmeCanvas();
     const minted = await atHome("pass", "--json");
     const { address } = JSON.parse(minted.stdout) as { address: string };
     const first = await away("setup", "--no-install", "--no-open", "--json", address);

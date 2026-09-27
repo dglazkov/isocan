@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseDesign } from "@isocan/core";
 import {
-  COMPONENTS, DEFAULT_THEME, DERIVED_ROLES, RECIPES, ROLES, applyMapping, linkColor, sameLook, assemblePrototype, blueprint, candidatesOf, guardContrast,
+  COMPONENTS, DEFAULT_THEME, DERIVED_ROLES, RECIPES, ROLES, applyMapping, assemblePrototype, blueprint, candidatesOf, guardContrast,
   inferLinks, mappingRequest, readWire, renderFrame, renderWire, sameStyle, stubAnswerer, themeCss, validateWire, wireframe,
   type JevRequest, type JevResponse, type PropDef, type WireSpec, type WireStyle,
 } from "../src/core.ts";

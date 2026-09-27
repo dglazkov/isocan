@@ -3,7 +3,7 @@ import { existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BADGE_COOKIE, DOOR_ROUTE, ISOCAN_NAMES } from "@isocan/core";
+import { BADGE_COOKIE, DOOR_ROUTE } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { resolveHomeUrl } from "../src/config.ts";
 import * as p from "../src/paths.ts";

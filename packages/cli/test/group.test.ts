@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import { markerFile } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
 import { mintTestBadge } from "./badge.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **`isocan group` and `isocan share group:<name>`** (roles phase 5) — the
@@ -23,7 +21,6 @@ import { mintTestBadge } from "./badge.ts";
  * Fixtures are synthetic: Priya, Jordan, Sam, Acme.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const priya = { id: "usr_priya", name: "Priya" };
 
 let upstreamDir: string;
@@ -65,28 +62,11 @@ afterEach(async () => {
   );
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function cli(...args: string[]): Promise<Run> {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ISOCAN_HOME: laptopDir,
-    ISOCAN_PORT: String(portOf(laptop)),
-  };
-  for (const v of harnessVars) delete env[v];
-  env.CLAUDE_CODE_SESSION_ID = "s-priya";
-  const child = spawn(process.execPath, [cliBin, ...args], { cwd: work, env, stdio: ["ignore", "pipe", "pipe"] });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  return runCli(args, {
+    cwd: work,
+    env: cliEnv({ ISOCAN_HOME: laptopDir, ISOCAN_PORT: String(portOf(laptop)), CLAUDE_CODE_SESSION_ID: "s-priya" }),
+  });
 }
 
 /** Born through the replica, so born at the home. */

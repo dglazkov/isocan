@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Canvas } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { mintTestBadge } from "./badge.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * Two agents, one directory.
@@ -21,7 +19,6 @@ import { mintTestBadge } from "./badge.ts";
  * be told the other exists (#57).
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 
 let home: string;
@@ -55,22 +52,8 @@ afterEach(async () => {
  * other, so every session variable is cleared before the caller's are set:
  * a test must assert the same thing under Claude Code, codex and a bare shell.
  */
-function asAgent(session: Record<string, string>, ...args: string[]) {
-  const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) };
-  for (const v of harnessVars) delete env[v];
-  Object.assign(env, session);
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    cwd: work,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+function asAgent(session: Record<string, string>, ...args: string[]): Promise<Run> {
+  return runCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), ...session }) });
 }
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });
@@ -236,12 +219,7 @@ describe("a session is a key, not a person", () => {
     const deep = path.join(work, "packages", "thing");
     await fs.mkdir(deep, { recursive: true });
     const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port), ...claude("s-1") };
-    const out = await new Promise<string>((resolve) => {
-      const child = spawn(process.execPath, [cliBin, "whoami"], { cwd: deep, env, stdio: ["ignore", "pipe", "pipe"] });
-      let s = "";
-      child.stdout.on("data", (c) => (s += c));
-      child.on("close", () => resolve(s));
-    });
+    const { stdout: out } = await runCli(["whoami"], { cwd: deep, env });
     expect(out).toContain("Kenny");
   });
 });

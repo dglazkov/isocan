@@ -6,6 +6,7 @@ import { makeCtx, type Ctx } from "./ctx.ts";
 import { parseXY, printJson, printTable } from "./output.ts";
 import { parseGroupCell } from "./group-placement.ts";
 import { designScopeNotes } from "./design-scope-notes.ts";
+import { withContext } from "./run.ts";
 
 export async function reportCanvasGroup(ctx: Ctx, result: CanvasGroupResult): Promise<void> {
   if (ctx.json) return printJson(result);
@@ -43,16 +44,10 @@ function rows(groups: CanvasGroupView[]): Array<Record<string, string>> {
 }
 
 function actions(context: (cmd: Command) => Promise<Ctx>) {
-  return (work: (handle: CanvasGroups, ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
-    try {
-      const ctx = await context(args[args.length - 1] as Command);
-      const target = await resolveCanvas(ctx);
-      await work(new CanvasGroups(ctx.client, target.id, () => ctx.actor), ctx, args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  return (work: (handle: CanvasGroups, ctx: Ctx, args: any[]) => Promise<void>) => withContext(context, async (ctx, args) => {
+    const target = await resolveCanvas(ctx);
+    await work(new CanvasGroups(ctx.client, target.id, () => ctx.actor), ctx, args);
+  });
 }
 
 /** The full three-word family is registered here, independently of the people-group namespace. */

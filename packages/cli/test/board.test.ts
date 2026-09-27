@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { SPRINT_BOARD } from "@isocan/core";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **The board and the brief, over the wire** (sprint phase 1). A laid board
@@ -16,7 +14,6 @@ import { SPRINT_BOARD } from "@isocan/core";
  * lands on the Brief sheet and the second brief is a version of the first.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const kit = { id: "usr_kit", name: "Kit" };
 
 let home: string;
@@ -36,27 +33,8 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function isocan(...args: string[]): Promise<Run> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port }) });
 }
 
 async function json(...args: string[]): Promise<any> {

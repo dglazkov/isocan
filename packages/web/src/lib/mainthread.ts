@@ -1,4 +1,4 @@
-import type { Actor, NewComment, PresenceSession } from "@isocan/core";
+import type { Actor, NewComment } from "@isocan/core";
 import { mainThread, newThreadId } from "@isocan/core";
 
 import { screenToWorld } from "./viewport.ts";
@@ -64,14 +64,4 @@ export async function postToMain(
       });
     }
   return { status: "refused", message: "The main conversation changed. Review the message and send again." };
-}
-
-/**
- * Which agents (CLI sessions) can hear a main-thread post right now — the
- * ones standing on this canvas. Web sessions are humans, so they are left
- * out. Used to tell the user whether their emissary is actually listening
- * before they hit enter.
- */
-function listeningAgents(sessions: PresenceSession[]): PresenceSession[] {
-  return sessions.filter((s) => s.kind === "cli");
 }

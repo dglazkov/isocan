@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+// @ts-expect-error — a plain .mjs module with no types.
 import { auditRepository, MEASURED_TOOLS, normalizeDiagnostic, parseRepositoryArgs, repositoryAuditFails } from "../scripts/design-lint-repo.mjs";
 
 const scratch: string[] = [];
@@ -17,7 +18,11 @@ describe("standalone repository lint preflight", () => {
   it("parses explicit files while preserving project-relative arguments", () => {
     expect(parseRepositoryArgs(["--repo", "/tmp/acme", "--json", "--fail", "--", "src/acme.tsx", "src/second.jsx"])).toEqual({ repo: "/tmp/acme", json: true, fail: true, files: ["src/acme.tsx", "src/second.jsx"] });
   });
-  it.each([[], ["--repo"], ["--repo", "/tmp/acme"], ["--repo", "/tmp/acme", "--fix", "acme.tsx"]])("rejects missing arguments or mutation flags: %j", args => {
+  // Each case wrapped once more: `it.each` spreads an inner array into the
+  // callback's arguments, so an unwrapped `["--repo", "/tmp/acme"]` arrived as
+  // the string "--repo" — found when `test/` was first typechecked
+  // (cleanup phase 6, TR-12, 27 Sep 2026).
+  it.each<[string[]]>([[[]], [["--repo"]], [["--repo", "/tmp/acme"]], [["--repo", "/tmp/acme", "--fix", "acme.tsx"]]])("rejects missing arguments or mutation flags: %j", args => {
     expect(() => parseRepositoryArgs(args)).toThrow();
   });
   it("reports absent real tooling without substituting mock plugins or installing anything", async () => {

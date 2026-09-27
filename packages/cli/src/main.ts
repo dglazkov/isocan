@@ -18,7 +18,7 @@ import { registerDesignCraft } from "./design-craft.ts";
 import { groupPlacementFor, insertionOperation, insertionReceiptPlacement, parseGroupCell } from "./group-placement.ts";
 import { codexSandboxAsked, codexSandboxSpec } from "./codex-sandbox.ts";
 import { existsSync, promises as fs } from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { packageBin, packagePath, packageRoot } from "@isocan/core/packageroot";
@@ -29,7 +29,6 @@ import type {
   RcPolicy,
   Persona,
   RunFinding,
-  InboxEntry,
   Actor,
   BadgeSummary,
   CanvasAddress,
@@ -37,11 +36,9 @@ import type {
   CanvasSnapshotResponse,
   GcReport,
   GrantSubject,
-  Comment,
   CommentThread,
   Item,
   ItemVersion,
-  MentionCandidate,
   NewComment,
   Operation,
   Placement,
@@ -120,7 +117,6 @@ import {
   describeExportedCanvas,
   EXPORT_LAYOUT,
   setupCommand,
-  actorsAnswerTo,
   cancelledSince,
   commandFileText,
   findCommand,
@@ -129,10 +125,6 @@ import {
   collectCanvasActors,
   bySeverity,
   checkDesign,
-  designSystem,
-  scopedDesignSystems,
-  canvasScopes,
-  inCanvasScope,
   designSystemProperties,
   readToolExtension,
   toolCapabilities,
@@ -144,13 +136,8 @@ import {
   panelProperties,
   type PanelExtension,
   type PanelSide,
-  parseDesign,
   toCss,
   toDtcg,
-  recentActivity,
-  collectCanvasNames,
-  collectItemRefCandidates,
-  extractItemRefs,
   ALIGN_EDGES,
   itemKinds,
   designScopeStanding,
@@ -204,7 +191,6 @@ import {
   shortcutsAsText,
   markShortcuts,
   elapsedLabel,
-  extractMentions,
   isIdentityColor,
   isDrawingItem,
   skillNameFrom,
@@ -214,11 +200,9 @@ import {
   skillSource as publishedSkill,
   itemKind,
   mergeDrawings,
-  opMatchesFilters,
   renamedFilename,
   titleSlug,
   mainThread,
-  newCommentId,
   anchorOffset,
   buildCorpus,
   buildRecap,
@@ -228,7 +212,6 @@ import {
   VISUAL_FILE_PROP,
   sourceFaceOf,
   visualFaceOf,
-  visualFileOf,
   type VisualFace,
   copyProperties,
   duplicatePlacements,
@@ -245,19 +228,15 @@ import {
   AREA_MIME,
   AREA_PROPERTIES,
   AREA_TINT_PROP,
-  PLACEMENT_GAP,
-  SPRINT_BOARD,
   BOARD_GAP,
   BOARD_PROP,
   BRIEF_PROP,
   boardLayout,
   boardAreaFor,
-  boardOf,
   briefCard,
   briefItem,
   DESK_OF_PROP,
   deskTitle,
-  areaGrid,
   cellSpot,
   canvasItemOf,
   CANVAS_ITEM_SIZE,
@@ -275,8 +254,6 @@ import {
   sourceOf,
   areaInner,
   findArea,
-  inArea,
-  areaOf,
   freeSpotIn,
   areaEnclosing,
   itemsIn,
@@ -301,7 +278,6 @@ import {
   importDesign,
   importedBody,
   serializeDesign,
-  contextPieces,
   contextReport,
   convergePlan,
   convergeOps,
@@ -364,7 +340,6 @@ import {
   CONTEXT_SHEET_SIZE,
   CONTEXT_SHEET_TITLE,
   MEMORY_PROP,
-  type CanvasContents,
   type MetaPatch,
   canvasIdOf,
   automaticCanvasTarget,
@@ -387,7 +362,6 @@ import {
   majors,
   majorLine,
   track,
-  at,
   past,
   span,
   ago,
@@ -494,7 +468,6 @@ import {
   designAuditFails,
   designAuditPort,
   contextHome,
-  repairDesignItem,
   type DesignAuditEvidence,
   type CanvasDesignAudit,
   type SourceDesignAudit,
@@ -506,7 +479,7 @@ import {
   writeIdentity,
 } from "@isocan/api";
 import { agentHelp, type ModuleGuide } from "./agent-guide.ts";
-import { printDesignAudit, designRepairCapture } from "./design-audit.ts";
+import { printDesignAudit } from "./design-audit.ts";
 import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
@@ -11678,9 +11651,6 @@ program
       // from the same canvas the same way (core/roster.ts, one derivation).
       const snapshot = await ctx.client.snapshot(p.id);
       const { canvas } = snapshot;
-      // The registry's current names, for saying an agent's gate in the same
-      // words the facepile uses.
-      const nameOf = nameResolver(snapshot);
       // Said on stderr, before the answer and in both shapes: it qualifies
       // what follows, and an agent reading `--json` off stdout needs the
       // caveat as much as a person reading the table does.

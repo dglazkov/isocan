@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEEP, FAST_SPAWNERS, audit, filteredRun, runningDeep, skippedLine, walksBinary } from "./deep.ts";
+import { DEEP, FAST_SPAWNERS, audit, filteredRun, runningDeep, siblingsOf, skippedLine, walksBinary } from "./deep.ts";
 
 /**
  * **The lane's own guards, and they run both ways.**
@@ -98,6 +98,13 @@ describe("the deep lane", () => {
     expect(walksBinary('spawnSync("git", ["status"]);')).toBe(false);
     // Through a fixture beside it, which is how `rc.test.ts` reaches it.
     expect(walksBinary('import { run } from "./fixture.ts";', ['execFile("node", ["bin/isocan.js"])'])).toBe(true);
+    // Through the shared spawn helper in another package's test/ directory,
+    // and two hops away — but never through a source or script import
+    // (cleanup phase 6, TR-13).
+    const across = siblingsOf('import { runCli } from "../../cli/test/cli.ts"; import { x } from "../src/x.ts"; import { y } from "../scripts/y.mjs";');
+    expect(across).toContain("../../cli/test/cli.ts");
+    expect(across.filter((rel) => !rel.includes("/test/"))).toEqual([]);
+    expect(audit(repo, ["packages/cli/test/rc.test.ts", "packages/web/test/choose.test.ts"]).map((row) => row.walks)).toEqual([true, true]);
     const mcp = 'new StdioClientTransport({ args: ["design-partner-mcp.mjs"] }); client.callTool({ name: "cli", arguments: { args: ["ls"] } });';
     expect(walksBinary(mcp)).toBe(true);
     expect(walksBinary(mcp.replace('name: "cli"', 'name: "read_file"'))).toBe(false);

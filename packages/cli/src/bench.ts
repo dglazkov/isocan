@@ -20,6 +20,7 @@ import type { Ctx } from "./ctx.ts";
 import { printJson, printTable, truncate } from "./output.ts";
 import { scanHarnesses } from "./harnesses.ts";
 import { readRcAgents } from "./rc.ts";
+import { withContext } from "./run.ts";
 
 /**
  * **`isocan bench` — the agents you have, and whether anything could answer
@@ -303,14 +304,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
 \`bench rm\` is the only way one leaves.`,
     );
 
-  const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
-    try {
-      await work(await contextOf(args.at(-1) as Command), args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => withContext(contextOf, work);
 
   bench.action(
     act(async (ctx) => {

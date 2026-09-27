@@ -1,5 +1,5 @@
 import { groupsEnabled, openGroupCreation } from "../lib/canvasgroups.ts";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   GROUND_MAX_BYTES,
@@ -17,16 +17,12 @@ import {
   modulePagePath,
   type Actor,
 } from "@isocan/core";
-import { sendOp, uploadBlob } from "../lib/api.ts";
-import { useDismissOnOutside } from "../lib/dismiss.ts";
+import { uploadBlob } from "../lib/api.ts";
 import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useUnreadNews } from "./WhatsNew.tsx";
 import { showMenu } from "../lib/chromemenu.tsx";
 import { HomeGlyph } from "./Glyphs.tsx";
-import { Presence } from "./Presence.tsx";
-import { CanvasEditor } from "./CanvasEditor.tsx";
-import { IdentityMenu } from "./IdentityMenu.tsx";
 import { CanvasPresence, CanvasTitle, ShareButton} from "./CanvasCrumb.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { moduleProjectViews } from "../modules.ts";
@@ -45,29 +41,17 @@ export function Toolbar({
   onIdentity: (actor: Actor | null) => void;
 }) {
   const canvas = useCanvasStore((s) => s.record);
-  const connection = useCanvasStore((s) => s.connection);
   const trashOpen = useUiStore((s) => s.trashOpen);
   const filesOpen = useUiStore((s) => s.filesPanelOpen);
   const agentsOpen = useUiStore((s) => s.agentsPanelOpen);
   const mainOpen = useUiStore((s) => s.mainPanelOpen);
   const contextOpen = useUiStore((s) => s.contextPanelOpen);
   const personasOpen = useUiStore((s) => s.personasPanelOpen);
-  const minimapOpen = useUiStore((s) => s.minimapOpen);
   const historyOpen = useUiStore((s) => s.historyOpen);
   const unreadNews = useUnreadNews();
-  const identityOpen = useUiStore((s) => s.identityOpen);
-  const shareOpen = useUiStore((s) => s.shareOpen);
   const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
   const canEdit = useCanEdit();
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(false);
-  const nameRef = useDismissOnOutside<HTMLDivElement>(editing, () => setEditing(false));
-  const identityRef = useDismissOnOutside<HTMLDivElement>(identityOpen, () =>
-    useUiStore.getState().setIdentityOpen(false),
-  );
-  const shareRef = useDismissOnOutside<HTMLDivElement>(shareOpen, () =>
-    useUiStore.getState().setShareOpen(false),
-  );
   /**
    * **The picker for a ground of your own** (#204 phase 2).
    *

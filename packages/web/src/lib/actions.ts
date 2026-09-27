@@ -1,4 +1,4 @@
-import { isGroupItem, keyFor, shortcut } from "@isocan/core";
+import { isGroupItem, keyFor } from "@isocan/core";
 import { changeCanvasGroup, groupsEnabled, enterCanvasGroup, groupTask, openGroupCreation, openGroupMigration, openGroupAddition, selectParentGroup } from "./canvasgroups.ts";
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor, AlignEdge } from "@isocan/core";

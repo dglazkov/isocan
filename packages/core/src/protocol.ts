@@ -944,12 +944,6 @@ export interface UploadTicket {
   expiresAt: string;
 }
 
-/** The daemon's answer to "I have a big blob": either a ticket, or the news
- * that these bytes are already here and no upload is needed. */
-type BeginUploadResponse =
-  | { upload: UploadTicket; blob?: undefined }
-  | { upload?: undefined; blob: BlobUploadResponse };
-
 /**
  * Filenames travel percent-encoded, because a header value is a ByteString
  * and real filenames are not. Every macOS screenshot is named with U+202F
@@ -1085,35 +1079,6 @@ export interface UpgradeVerdict {
   /** The comparison in one sentence of facts, naming both builds. Empty when
    * nothing differs. */
   why: string;
-}
-
-interface HealthResponse {
-  ok: true;
-  pid: number;
-  version: string;
-  startedAt: string;
-  /**
-   * The home this daemon is a REPLICA of, when it is one; absent when the
-   * daemon IS a home (every daemon before phase 6, and every daemon nobody has
-   * configured).
-   *
-   * On the health route because that is the one call every client already
-   * makes before it does anything else, and because the answer changes what a
-   * client may say to a person: a replica serves no pages, so `isocan open`
-   * and `isocan setup` must send them to this address instead of to
-   * `127.0.0.1`, and the marker a new canvas gets must carry it.
-   */
-  home?: string;
-  /**
-   * **This daemon disagrees with its home about which build to be** — or,
-   * when `available` is false, has asked and does not.
-   *
-   * On the health route because that is the one call every client already
-   * makes (`makeCtx` fetches it before every command), so the CLI pays no
-   * round trip for it and an offline machine simply has no field. The daemon
-   * is what asks the home, on a timer of its own — see `HomeLink.askBuild`.
-   */
-  upgrade?: UpgradeVerdict;
 }
 
 /** Loopback, by the two literals a URL can produce plus the whole 127/8

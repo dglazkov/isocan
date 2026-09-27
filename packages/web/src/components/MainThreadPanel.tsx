@@ -22,13 +22,12 @@ const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => 
 const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
 import type { Actor, CanvasContents, Comment, CommentThread, Item } from "@isocan/core";
 import { benchJoinAsk, isSystemActor, laneFor, mainThread, parseSlashCommand, workedFor, shortcut } from "@isocan/core";
-import { sendOp } from "../lib/api.ts";
 import { postToMain } from "../lib/mainthread.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { centerOn } from "../lib/viewport.ts";
 import { railSpan, stageRect } from "../lib/stage.ts";
-import { glideToBox, revealItem } from "../lib/zoomactions.ts";
+import { revealItem } from "../lib/zoomactions.ts";
 import { type FollowState, nextFollow } from "../lib/lanefollow.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { useMentionRoster } from "../lib/mentions.ts";
@@ -215,7 +214,6 @@ export function openMainPanel(canvasId: string, open: boolean): void {
 export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const open = useUiStore((s) => s.mainPanelOpen);
-  const panelWidth = useUiStore((s) => s.panelWidth);
 
   // A canvas you have never chosen for opens with the Chat: it is where you
   // talk to everyone here, agents included, and a closed pill on a new canvas

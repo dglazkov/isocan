@@ -2,7 +2,6 @@ import type { CanvasSnapshotResponse } from "@isocan/core";
 import type { Ctx } from "./ctx.ts";
 import { automaticSourceClient, contextHome } from "./context-summary.ts";
 import { readCanvasDesignAudit, repairDesignScreen, type CanvasDesignAudit, type DesignAuditOptions, type DesignAuditReadPort, type DesignRepairRequest, type DesignRepairResult } from "./design-audit-reader.ts";
-import { ApiError } from "./routes.ts";
 
 /** Node supplies bytes and the same authority-bearing client used for inherited Context. */
 export function designAuditPort(ctx: Ctx): DesignAuditReadPort {

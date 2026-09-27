@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error — a plain .mjs module with no types.
 import { GENERATED } from "../scripts/mergegen.mjs";
 import { withoutComments } from "./source.ts";
 
@@ -57,7 +58,7 @@ describe("generated docs are regenerated at a conflict, not merged", () => {
   });
 
   it("names generators that exist and files that exist", () => {
-    for (const [file, generator] of Object.entries(GENERATED)) {
+    for (const [file, generator] of Object.entries(GENERATED) as [string, string[]][]) {
       expect(existsSync(path.join(repo, file)), `${file} is routed but absent`).toBe(true);
       for (const part of generator) {
         expect(existsSync(path.join(repo, part)), `${file}'s generator ${part} is absent`).toBe(true);
@@ -93,7 +94,7 @@ describe("generated docs are regenerated at a conflict, not merged", () => {
    */
   it("is checked again by the pre-push hook, over the same list", () => {
     const hook = read("scripts/hooks/pre-push");
-    for (const [file, generator] of Object.entries(GENERATED)) {
+    for (const [file, generator] of Object.entries(GENERATED) as [string, string[]][]) {
       expect(hook, `pre-push does not check ${file}`).toContain(`${file}:${generator[0]}`);
     }
     // And it claims nothing the driver does not know how to make.
@@ -131,7 +132,7 @@ describe("generated docs are regenerated at a conflict, not merged", () => {
      * checks that generator's output. A file's own source is enough: a script
      * that writes a path names that path.
      */
-    for (const [file, generator] of Object.entries(GENERATED)) {
+    for (const [file, generator] of Object.entries(GENERATED) as [string, string[]][]) {
       for (const script of generator) {
         const source = withoutComments(readFileSync(path.join(repo, script), "utf8"));
         expect(

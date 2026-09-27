@@ -124,7 +124,7 @@ function surfaces(): Array<{ file: string; lines: string[] }> {
   ];
 }
 
-type Hit = { file: string; line: string; allowedBy?: Allowed };
+type Hit = { file: string; line: string; allowedBy: Allowed | undefined };
 
 function hits(): Hit[] {
   const out: Hit[] = [];

@@ -1,12 +1,10 @@
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, expect, it } from "vitest";
-import { harnessVars } from "@isocan/api";
 import { designReviewFixture } from "../../api/test/design-review-fixture.ts";
+import { cliEnv, collect, spawnCli } from "./cli.ts";
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 let fixture: Awaited<ReturnType<typeof designReviewFixture>> | undefined;
 const children = new Set<ChildProcess>();
 const session = "designer";
@@ -23,21 +21,16 @@ afterEach(async () => {
 
 async function runCli(format: "json" | "text", ...args: string[]) {
   const f = fixture!;
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const variable of harnessVars) delete env[variable];
+  const env = cliEnv();
   for (const variable of Object.keys(env)) if (variable.startsWith("ISOCAN_")) delete env[variable];
   Object.assign(env, { ISOCAN_HOME: f.home, ISOCAN_PORT: String(f.port), ISOCAN_CANVAS: f.canvasId, ISOCAN_HARNESS: "acme", ISOCAN_SESSION_ID: session });
-  const child = spawn(process.execPath, [cliBin, "--canvas", f.canvasId, ...format === "json" ? ["--json"] : [], ...args], { cwd: f.work, env, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawnCli(["--canvas", f.canvasId, ...format === "json" ? ["--json"] : [], ...args], { cwd: f.work, env });
   children.add(child);
-  let stdout = "", stderr = "";
-  child.stdout.on("data", chunk => { stdout += chunk; });
-  child.stderr.on("data", chunk => { stderr += chunk; });
-  const timer = setTimeout(() => child.kill("SIGKILL"), 15_000);
-  timer.unref();
-  return await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
-    child.once("error", reject);
-    child.once("close", code => { clearTimeout(timer); children.delete(child); resolve({ code, stdout, stderr }); });
-  });
+  try {
+    return await collect(child, 15_000);
+  } finally {
+    children.delete(child);
+  }
 }
 const cli = (...args: string[]) => runCli("json", ...args);
 function json(result: Awaited<ReturnType<typeof cli>>) { expect(result.stderr).toBe(""); expect(result.code).toBe(0); return JSON.parse(result.stdout); }

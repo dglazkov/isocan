@@ -1,12 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { stopDaemons } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { reservePort } from "../../../test/ports.ts";
+import { cliEnv, spawnCli } from "./cli.ts";
 
 /**
  * **A park has to survive its daemon.**
@@ -23,13 +21,11 @@ import { reservePort } from "../../../test/ports.ts";
  * wrote its own retry loop to stay reachable.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
-
 let home: string;
 let work: string;
 let port: number;
 
-function cli(args: string[]): ReturnType<typeof spawn> {
+function cli(args: string[]) {
   // A session of this test's own, and none of the ambient ones.
   //
   // `identity --session` needs a session to attach to, which it reads from
@@ -39,13 +35,7 @@ function cli(args: string[]): ReturnType<typeof spawn> {
   // agent harness and fails everywhere else, which is exactly how it went:
   // green here under CLAUDE_CODE_SESSION_ID, red on CI, which exports none
   // of them. So it declares its own and clears the rest.
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  return spawn(process.execPath, [cliBin, ...args], {
-    cwd: work,
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: String(port), ISOCAN_SESSION_ID: "s-park" },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  return spawnCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), ISOCAN_SESSION_ID: "s-park" }) });
 }
 
 async function run(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {

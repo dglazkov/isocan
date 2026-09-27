@@ -1,3 +1,199 @@
+/* ---------- Questionnaire Dock (Context Collector) ----------
+   Loaded with QuestionnairePanel, never on a first visit. The dock's base
+   rules were in `styles.css` until 27 Sep 2026 (BC-2); they open this file
+   so they still come before the panel's overrides below, as they did. */
+.q-dock-container {
+  margin: 8px 10px 4px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px -8px var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: q-dock-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+@keyframes q-dock-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.q-dock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.q-dock-title-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.q-dock-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.q-dock-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.q-dock-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: var(--chip);
+  color: var(--ink-soft);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.q-dock-close:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.q-dock-steps {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  scroll-padding: 5px;
+}
+.q-dock-steps::-webkit-scrollbar { display: none; }
+
+.q-dock-step-pill {
+  flex: none;
+  font-size: 10.5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: var(--chip);
+  color: var(--ink-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.q-dock-step-pill.active {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--ink);
+  font-weight: 600;
+}
+.q-dock-step-pill.answered {
+  color: var(--ink);
+}
+
+.q-dock-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* Choice List */
+.q-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.q-card-base {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.q-card-base:hover {
+  border-color: var(--accent);
+  background: var(--chip);
+}
+.q-card-base.selected {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Visual Cards */
+.q-visual-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 8px;
+}
+
+/* Drag & Drop Upload */
+.q-upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* URL Input */
+.q-url-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.q-text-input, .q-textarea {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+.q-text-input:focus, .q-textarea:focus {
+  outline: 2px solid var(--accent);
+}
+
+/* Footer Controls */
+.q-dock-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.q-btn-ghost {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.q-btn-ghost:hover {
+  color: var(--ink);
+  background: var(--chip);
+}
+
 .questionnaire-panel { flex: 0 1 auto; min-height: 0; max-height: 68dvh; overflow-y: auto; overscroll-behavior: contain; }
 .questionnaire-panel .q-dock-container { margin: 8px; padding: 14px; overflow: visible; }
 .questionnaire-panel .q-dock-title { font-size: 16px; line-height: 1.4; }
@@ -38,7 +234,6 @@
 .q-resume { margin: 8px 12px; }
 .q-using { font-size: 12px; color: var(--ink-muted); }
 .q-using summary { cursor: pointer; }
-.q-dock-steps { scroll-padding: 5px; }
 .q-step-name { display: none; }
 .questionnaire-panel .q-dock-step-pill { min-height: 32px; min-width: 32px; font-size: 12px; }
 .questionnaire-panel .q-dock-foot { flex-wrap: wrap; gap: 8px; margin: 0; padding-top: 10px; border-top: 1px solid var(--line); }

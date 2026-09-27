@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Canvas } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { mintTestBadge } from "./badge.ts";
 import { reservePort } from "../../../test/ports.ts";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * **`isocan canvas archive`, and the list that has to tell them apart** (#194).
@@ -31,8 +30,6 @@ import { reservePort } from "../../../test/ports.ts";
  * have state. Cheap enough to run on every push, which is the point of putting
  * it here rather than in the journeys.
  */
-
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 
 let homeDaemon: Daemon;
 let homeStore: string;
@@ -73,8 +70,8 @@ afterEach(async () => {
   }
 });
 
-function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [cliBin, ...args], {
+function isocan(...args: string[]): Promise<Run> {
+  return runCli(args, {
     cwd: work,
     env: {
       ...process.env,
@@ -84,17 +81,7 @@ function isocan(...args: string[]): Promise<{ code: number; stdout: string; stde
       CLAUDE_CODE_SESSION_ID: "sonia-shelf",
       CI: "",
     },
-    stdio: ["ignore", "pipe", "pipe"],
   });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
 }
 
 /** The three this file made. Working in a fresh directory also mints one

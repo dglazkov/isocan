@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   DOOR_ROUTE,
   formatBadgeToken,
@@ -12,9 +10,9 @@ import {
   type DoorResponse,
   type OperatorEndResponse,
 } from "@isocan/core";
-import { harnessVars } from "@isocan/api";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
+import { cliEnv, runCli } from "./cli.ts";
 
 /**
  * **The CLI does not resume an actor after an end by the operator** —
@@ -38,7 +36,6 @@ import { startDaemon } from "@isocan/server/daemon";
  * Fixtures are synthetic: Acme, Sam, Olu.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const PROJECT = "isocan-io-dev";
 const auth = { project: PROJECT, apiKey: "browser-key-not-a-secret" };
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -94,18 +91,8 @@ describe("a CLI whose badge the operator ended", () => {
   });
 
   /** The real binary, as a PERSON at a terminal: no harness variables. */
-  const cli = (args: string[]) => {
-    const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port };
-    for (const v of harnessVars) delete env[v];
-    const child = spawn(process.execPath, [cliBin, ...args], { cwd: work, env, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (c) => (stdout += c));
-    child.stderr.on("data", (c) => (stderr += c));
-    return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-      child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-    );
-  };
+  const cli = (args: string[]) =>
+    runCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port }) });
 
   const identity = async () =>
     JSON.parse(await fs.readFile(path.join(home, "identity.json"), "utf8")) as {

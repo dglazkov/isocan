@@ -264,14 +264,6 @@ export function bearerHeader(badge: StoredBadge): Record<string, string> {
 
 // ---- refusal ----
 
-/**
- * Why a request was refused, as `ApiError.code`. The distinction is not
- * decoration — it is the recovery branch. `no-badge` means "get one";
- * `bad-badge` means "throw away what you stored and get a new one" (a home
- * that was wiped, and in phase 9 a badge that was killed).
- */
-type BadgeRefusal = "no-badge" | "bad-badge" | "bad-origin";
-
 /** A CLI from before the door, talking to a daemon that has one, gets 401 on
  * everything. That is an accepted break — the two ship as one build — but a
  * break that explains itself is a different thing from a break, so the body
@@ -333,9 +325,6 @@ export interface ActorClaim {
    * at claim time (#60). Informational — which canvas this agent is of. */
   canvasId?: string;
 }
-
-/** badgeId → that badge's claims. */
-type ClaimTable = Record<string, ActorClaim[]>;
 
 // ---- attestations: what a badge has PROVED about its holder (phase 9) ----
 

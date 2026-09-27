@@ -98,7 +98,6 @@ describe("the talk module's copy of the live provider face", () => {
 });
 
 type AudioSide = typeof ownerAudio | typeof talkAudio;
-const SIDES: [string, AudioSide][] = [["voice agent", ownerAudio], ["talk module", talkAudio]];
 
 /**
  * A microphone, a context at `rate`, and the worklet's port — just enough of

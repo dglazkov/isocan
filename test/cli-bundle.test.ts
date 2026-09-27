@@ -11,6 +11,7 @@ import {
   RELEASE_DROPS,
   nodeEntrySource,
   releaseManifest,
+// @ts-expect-error — a plain .mjs module with no types.
 } from "../scripts/release.mjs";
 
 /**
@@ -200,7 +201,7 @@ describe("the release CLI is a bundle", () => {
       ).filter((name) => !name.startsWith("@isocan/")),
     );
     expect(inlined.size).toBeGreaterThan(15);
-    for (const why of Object.values(RELEASE_DEPENDENCIES)) {
+    for (const why of Object.values(RELEASE_DEPENDENCIES) as string[]) {
       expect(why.length, "a survivor with no stated reason is a survivor nobody chose").toBeGreaterThan(20);
     }
 

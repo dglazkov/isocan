@@ -3,8 +3,11 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm, readFile, writeFile, mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
+// @ts-expect-error — a plain .mjs module with no types.
 import { parseEvalArgs } from "../scripts/design-lint-eval.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { buildPrompt, cannedCandidate, CostLedger, inspectProviderOutput, invokeModel, MODEL_SPEC, modelInvocation, modelPreflight, outputCapture, parseCandidate, sanitizeAuthStatus } from "../scripts/lib/design-lint-eval-model.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { applyCandidate, candidateScope, checkInitial, claimContinuation, createEvalHost, inputHash, loadEvalTasks, normalizedRecords, readContinuation, requestCandidate, scheduleRuns, selectCandidateProvider, staleWriteControl } from "../scripts/lib/design-lint-eval-runner.mjs";
 
 const scratch: string[] = [];
@@ -23,7 +26,7 @@ describe("frozen model and correction budgets", () => {
   it("generates reproducible randomized arms and exactly 3 repeats per task/arm", () => {
     const ids = ["a", "b", "c", "d", "e", "f"], runs = scheduleRuns(ids, "Acme");
     expect(runs).toHaveLength(36); expect(scheduleRuns(ids, "Acme")).toEqual(runs); expect(scheduleRuns(ids, "Other")).not.toEqual(runs);
-    for (const id of ids) for (const condition of ["rules-only", "diagnostics"]) expect(runs.filter(run => run.taskId === id && run.condition === condition).map(run => run.repetition).sort()).toEqual([1, 2, 3]);
+    for (const id of ids) for (const condition of ["rules-only", "diagnostics"]) expect(runs.filter((run: any) => run.taskId === id && run.condition === condition).map((run: any) => run.repetition).sort()).toEqual([1, 2, 3]);
   });
   it("only treatment adds actual findings and neither prompt leaks fixture goldens", () => {
     const task = { instruction: "Keep Acme visible", design: "Actual rules", html: "Actual HTML", condition: "rules-only", audit: { diagnostics: [{ code: "actual-finding" }], coverage: { complete: false } }, expected: "SECRET EXPECTED", repairedHtml: "SECRET GOLDEN" };
@@ -76,7 +79,7 @@ describe("frozen model and correction budgets", () => {
     expect(invocation.env.USER).toBe("acme-os-user");
   });
   it("checks authentication under actual isolation flags and OS discovery before declaring model readiness", () => {
-    const calls = [];
+    const calls: any[] = [];
     const run = vi.fn((_command, args, options) => {
       calls.push({ args, options });
       if (args[0] === "--version") return "Acme CLI fixture version";
@@ -94,7 +97,7 @@ describe("frozen model and correction budgets", () => {
   it("keeps failed or malformed authentication preflight unavailable", () => {
     expect(sanitizeAuthStatus('{"loggedIn":false,"authMethod":"none"}', 1)).toMatchObject({ available: true, loggedIn: false });
     expect(sanitizeAuthStatus("not JSON", 1)).toMatchObject({ available: false, loggedIn: null });
-    const run = (_command, args) => args[0] === "--version" ? "Acme" : args[0] === "--help" ? "--safe-mode --tools --strict-mcp-config --max-budget-usd --effort --setting-sources" : '{"loggedIn":false,"authMethod":"none"}';
+    const run = (_command: string, args: string[]) => args[0] === "--version" ? "Acme" : args[0] === "--help" ? "--safe-mode --tools --strict-mcp-config --max-budget-usd --effort --setting-sources" : '{"loggedIn":false,"authMethod":"none"}';
     expect(modelPreflight({ run }).available).toBe(false);
   });
 });
@@ -120,10 +123,10 @@ describe("provider evidence is strict and redacted", () => {
     expect(evidence.apiEquivalentCost).toBeNull(); expect(evidence.stopReason).not.toBeNull();
   });
   it("keeps missing protected-history evidence unknown in incomplete records", () => {
-    const report = { mode: "model", controls: { staleWrite: { passed: true } }, runs: [{ runId: "Acme", attempts: [{}] }] };
+    const report = { mode: "model", controls: { staleWrite: { passed: true } }, runs: [{ runId: "Acme", attempts: [{}] as object[] }] };
     expect(normalizedRecords(report)[0].protectedUnchanged).toBeNull();
-    report.runs[0].attempts = [{ protectedUnchanged: false }]; expect(normalizedRecords(report)[0].protectedUnchanged).toBe(false);
-    report.runs[0].attempts = [{ protectedUnchanged: true }]; expect(normalizedRecords(report)[0].protectedUnchanged).toBe(true);
+    report.runs[0]!.attempts = [{ protectedUnchanged: false }]; expect(normalizedRecords(report)[0].protectedUnchanged).toBe(false);
+    report.runs[0]!.attempts = [{ protectedUnchanged: true }]; expect(normalizedRecords(report)[0].protectedUnchanged).toBe(true);
   });
   it("does not retain account or session identifiers", () => {
     const evidence = inspectProviderOutput({ stdout: JSON.stringify(providerReport({ session_id: "private-session", account: "private-account" })), exitCode: 0, elapsedMs: 10 });
@@ -132,7 +135,7 @@ describe("provider evidence is strict and redacted", () => {
 });
 
 it("real captured repair and unchanged clean candidate preserve policy and version histories", async () => {
-  const tasks = await loadEvalTasks(), task = tasks.find(task => task.id === "clean-control");
+  const tasks = await loadEvalTasks(), task = tasks.find((task: { id: string }) => task.id === "clean-control");
   const host = await createEvalHost(task);
   try {
     const before = await host.readStored(), audit = await host.audit(), protectedBefore = await host.protectedState();
@@ -143,11 +146,11 @@ it("real captured repair and unchanged clean candidate preserve policy and versi
     expect(empty.receipt).toMatchObject({ status: "refused", code: "candidate-rejected" }); expect(empty.stored.item).toEqual(before.item); expect(empty.protectedUnchanged).toBe(true);
   } finally { await host.close(); }
   const output = await mkdtemp(path.join(tmpdir(), "isocan-eval-stale-test-")); scratch.push(output);
-  expect((await staleWriteControl(tasks.find(task => task.id === "card-spacing"), output)).passed).toBe(true);
+  expect((await staleWriteControl(tasks.find((task: { id: string }) => task.id === "card-spacing"), output)).passed).toBe(true);
 }, 30_000);
 
 it("submits a changed eval candidate with its original audit capture and refuses a later metadata change", async () => {
-  const task = (await loadEvalTasks()).find(task => task.id === "card-spacing");
+  const task = (await loadEvalTasks()).find((task: { id: string }) => task.id === "card-spacing");
   const host = await createEvalHost(task);
   try {
     const before = await host.readStored(), audit = await host.audit(), protectedBefore = await host.protectedState();
@@ -168,7 +171,7 @@ it("submits a changed eval candidate with its original audit capture and refuses
 
 
 describe("one bounded continuation after a zero-token login refusal", () => {
-  async function priorFixture(change = (_report, _provider) => {}) {
+  async function priorFixture(change: (report: any, provider: any) => void = () => {}) {
     const directory = await mkdtemp(path.join(tmpdir(), "isocan-eval-continuation-test-")); scratch.push(directory);
     const seed = "Acme continuation", fixtures = ["a", "b", "c", "d", "e", "f"].map(id => ({ id, hashes: { "initial.html": inputHash(id) } }));
     const order = scheduleRuns(fixtures.map(task => task.id), seed), ledger = new CostLedger(10), allowance = ledger.begin();
@@ -192,7 +195,7 @@ describe("one bounded continuation after a zero-token login refusal", () => {
     expect(ledger.snapshot()).toMatchObject({ calls: 72, newInvocations: 71, reportedApiEquivalent: 0 }); expect(() => ledger.begin()).toThrow();
     expect(() => new CostLedger(11, carry)).toThrow();
   });
-  it.each([
+  it.each<[string, (report: any, provider: any) => void]>([
     ["pending", report => { report.accounting.pending = true; }],
     ["missing cost", report => { report.accounting.reportedApiEquivalent = null; }],
     ["nonzero cost", (report, provider) => { report.accounting.reportedApiEquivalent = 0.01; provider.apiEquivalentCost = 0.01; }],

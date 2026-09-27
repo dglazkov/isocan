@@ -3,6 +3,7 @@ import { DaemonClient, resolveCanvas, resolveIdentity, reclaimIdentity } from "@
 import { canvasUrl, newOpId, normalizeHomeUrl, type PersonalStatusResponse } from "@isocan/core";
 import type { Ctx } from "./ctx.ts";
 import { printJson } from "./output.ts";
+import { run } from "./run.ts";
 
 function statusText(answer: PersonalStatusResponse): void {
   console.log(`${answer.owner.name}'s personal canvas at ${answer.home}`);
@@ -16,27 +17,22 @@ export function registerPersonalContext(context: Command, contextOf: (cmd: Comma
   const personal = context.command("personal")
     .description("Open or create your private canvas at a home; inspect links, read and delegate explicitly")
     .option("--home <url>", "use this authoritative home instead of the connected daemon");
-  const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
-    try {
-      const command = args.at(-1) as Command;
-      const ctx = await contextOf(command);
-      const actor = ctx.actor;
-      const home = command.optsWithGlobals().home as string | undefined;
-      if (home !== undefined && normalizeHomeUrl(home) !== normalizeHomeUrl(ctx.client.base)) {
-        // Reuse this command's selected identity and the credential held for the
-        // named home. Looking up another home's session could select another person.
-        const selected = await resolveIdentity(ctx.client, ctx.home);
-        if (!selected || selected.actor.id !== actor.id) throw new Error("The selected identity changed; retry as the intended actor.");
-        const client = new DaemonClient(normalizeHomeUrl(home), ctx.home);
-        client.reclaimWith(() => reclaimIdentity(client, selected));
-        ctx.client = client;
-      }
-      await work(ctx, args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
+  const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => run(async (...args: any[]) => {
+    const command = args.at(-1) as Command;
+    const ctx = await contextOf(command);
+    const actor = ctx.actor;
+    const home = command.optsWithGlobals().home as string | undefined;
+    if (home !== undefined && normalizeHomeUrl(home) !== normalizeHomeUrl(ctx.client.base)) {
+      // Reuse this command's selected identity and the credential held for the
+      // named home. Looking up another home's session could select another person.
+      const selected = await resolveIdentity(ctx.client, ctx.home);
+      if (!selected || selected.actor.id !== actor.id) throw new Error("The selected identity changed; retry as the intended actor.");
+      const client = new DaemonClient(normalizeHomeUrl(home), ctx.home);
+      client.reclaimWith(() => reclaimIdentity(client, selected));
+      ctx.client = client;
     }
-  };
+    await work(ctx, args);
+  });
   personal.action(act(async (ctx) => {
     const answer = await ctx.client.ensurePersonal(ctx.actor.id);
     if (ctx.json) return printJson(answer);

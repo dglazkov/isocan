@@ -1,6 +1,6 @@
 import {
   designSystem, inCanvasScope, itemKind, newVersionId, newOpId, normalizeHomeUrl, parseDesign, sourceFaceOf,
-  type CanvasContents, type CanvasSnapshotResponse, type LinkedCanvas, type Operation, type SourceClassificationRequest,
+  type CanvasContents, type LinkedCanvas, type SourceClassificationRequest,
 } from "@isocan/core";
 import type { ScreenAudit } from "@isocan/core/design-audit";
 import { readInheritedCanvases, type ContextReadPort } from "./context-reader.ts";

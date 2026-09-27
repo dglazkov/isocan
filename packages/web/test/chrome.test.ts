@@ -19,6 +19,7 @@ import {
   underRowSpellsItOut,
   underSlotFor,
 } from "../src/lib/chrome.ts";
+import { sheets } from "./cssrules.ts";
 
 const actor = { id: "usr_a", name: "A" };
 const stamp = { createdAt: "", createdBy: actor, updatedAt: "", updatedBy: actor };
@@ -724,6 +725,8 @@ describe("the Chat and the comments say which they are", () => {
 describe("the editor's theme", () => {
   const cm = readFileSync(new URL("../src/lib/cmtheme.ts", import.meta.url), "utf8");
   const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  /** The chrome itself, which left `styles.css` with the lazy editor (BC-2, 27 Sep 2026). */
+  const chrome = readFileSync(new URL("../src/components/stage-editor.css", import.meta.url), "utf8");
 
   it("colours syntax from tokens, never from literals", () => {
     // A hex here would be a colour that cannot follow the theme, in the one
@@ -757,9 +760,9 @@ describe("the editor's theme", () => {
   it("scopes the chrome to the stage's editor, not to every CodeMirror", () => {
     // A bare `.cm-editor` rule would reach into any other editor this app
     // mounts later.
-    const bare = [...css.matchAll(/^\.cm-[\w-]+/gm)];
+    const bare = sheets.flatMap((s) => [...s.text.matchAll(/^\.cm-[\w-]+/gm)].map((m) => `${s.file}: ${m[0]}`));
     expect(bare, "a .cm- rule outside .stage-editor-cm").toEqual([]);
-    expect(css).toMatch(/\.stage-editor-cm \.cm-editor\s*\{/);
+    expect(chrome).toMatch(/\.stage-editor-cm \.cm-editor\s*\{/);
   });
 });
 

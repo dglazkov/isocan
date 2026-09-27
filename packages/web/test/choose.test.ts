@@ -1,17 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { DaemonClient, harnessVars } from "@isocan/api";
+import { DaemonClient } from "@isocan/api";
 import type { Operation } from "@isocan/core";
 import { chooseVariation } from "../src/lib/choose.ts";
 import { itemMenu } from "../src/lib/menuentries.tsx";
 import { useCanvasStore } from "../src/stores/canvasStore.ts";
 import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
+import { cliEnv, runCli, type Run } from "../../cli/test/cli.ts";
 
 /**
  * **Converging an exploration, on both surfaces, is one list of ops.**
@@ -28,7 +27,6 @@ import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
  * Synthetic throughout: Acme's checkout screens.
  */
 
-const cliBin = fileURLToPath(new URL("../../cli/bin/isocan.js", import.meta.url));
 const acme = { id: "usr_acme", name: "Acme" };
 let home: string;
 let daemon: Daemon;
@@ -49,19 +47,8 @@ afterAll(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: port },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8").on("data", (c) => (stdout += c));
-  child.stderr!.setEncoding("utf8").on("data", (c) => (stderr += c));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+function isocan(...args: string[]): Promise<Run> {
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port }) });
 }
 
 async function ok(...args: string[]): Promise<{ stdout: string; stderr: string }> {

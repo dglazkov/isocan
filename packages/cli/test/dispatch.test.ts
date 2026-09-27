@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PresenceSession } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliBin, cliEnv, collect, spawnCli as startCli } from "./cli.ts";
 
 /**
  * **Dispatch** (agents-on-demand phase 4): a comment addressed to an
@@ -25,7 +25,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * appearing with the turn and fading when it ends.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 const dimitri = { id: "usr_dimitri", name: "Dimitri" };
@@ -83,32 +82,16 @@ function sessions(): Promise<PresenceSession[]> {
 }
 
 function spawnCli(args: string[], extraEnv: Record<string, string> = {}): ChildProcess {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  return spawn(process.execPath, [cliBin, ...args], {
-    env: {
-      ...env,
+  return startCli(args, {
+    cwd: home,
+    env: cliEnv({
       ISOCAN_HOME: home,
       ISOCAN_PORT: new URL(base).port,
       FAKE_ACP_REPLY: "1",
       FAKE_ACP_CLI: cliBin,
       ...extraEnv,
-    },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
+    }),
   });
-}
-
-function collect(child: ChildProcess): Promise<{ code: number; stdout: string; stderr: string }> {
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
 }
 
 const isocan = (...args: string[]) => collect(spawnCli(args));

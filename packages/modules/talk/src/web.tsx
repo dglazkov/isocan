@@ -16,7 +16,6 @@ import {
   type DialogFacts,
   type DialogHost,
   type Operation,
-  type OverlayFacts,
   type WebHost,
   modifierClick,
   type WebModule,
@@ -93,6 +92,16 @@ const METER_CSS = `
   /* Taller and brighter the louder it is — five bars, so a voice reads as a
      shape rather than as on/off. */
   .talk-meter[data-live="1"] span[data-on="1"] { background: var(--accent); height: 20px; }
+`;
+
+/**
+ * A labelled field, worn by the config dialog and by the composer's key panel.
+ * Two `<style>` blocks each wrote this rule out, which is one class declared
+ * twice (`oneblock.test.ts`, 27 Sep 2026); like `METER_CSS`, it is written
+ * once and dropped into both.
+ */
+const FIELD_CSS = `
+  .talk-field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
 `;
 
 /** One line of the conversation, for the caption the person reads. */
@@ -1491,7 +1500,7 @@ function ConfigDialog(facts: DialogFacts) {
           100% { box-shadow: 0 0 0 0 rgba(60, 140, 255, 0); }
         }
         ${METER_CSS}
-        .talk-field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
+        ${FIELD_CSS}
         .talk-lines { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px;
           max-height: 40vh; overflow: auto; font-size: 13px; }
       `}</style>
@@ -1523,7 +1532,7 @@ const COMPOSER_CSS = `
         position: absolute; top: 8px; right: 8px; border: none; background: none;
         color: var(--ink-muted); font-size: 18px; cursor: pointer;
       }
-      .talk-field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
+      ${FIELD_CSS}
       .talk-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
       .talk-save { justify-self: start; }
       /* **28px and round.** The send button beside it measures 28 high and the
@@ -1588,7 +1597,6 @@ const COMPOSER_CSS = `
   .talk-voice select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
   /* --ink-muted (BC-6, 27 Sep 2026): --muted is defined nowhere, so the log's quiet text drew in full ink. */
   .talk-log-dest { flex: 1; font-size: 10px; color: var(--ink-muted); font-style: italic; }
-  .talk-log-bar { align-items: center; }
   .talk-bar-stop {
         width: 28px; height: 28px; border-radius: 50%; flex: none;
         display: grid; place-items: center; border: none;
@@ -1613,7 +1621,7 @@ const COMPOSER_CSS = `
   /* A row of actions above the words rather than beside them: the bar below
      is the LIVE controls (am I heard, stop), and mixing "keep this" in with
      "end this" is how a stop gets pressed by mistake. */
-  .talk-log-bar { display: flex; justify-content: flex-end; gap: 4px; }
+  .talk-log-bar { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
   .talk-log-act {
     border: none; background: none; cursor: pointer; padding: 2px 6px;
     border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--ink-muted);

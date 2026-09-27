@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { startDaemon, type Daemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **The real CLI half of memory phase 6** (`docs/projects/memory/pin-from-source.md`).
@@ -16,7 +14,6 @@ import { harnessVars } from "@isocan/api";
  * refuse. Every name here is synthetic (AGENTS.md).
  */
 
-const cli = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 let scratch: string;
 let clientHome: string;
 let daemon: Daemon;
@@ -32,15 +29,8 @@ beforeEach(async () => {
 });
 afterEach(async () => { if (daemon) await daemon.close(); if (scratch) await fs.rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
 
-function run(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-  const env = { ...process.env };
-  for (const key of harnessVars) delete env[key];
-  delete env.ISOCAN_CANVAS;
-  const child = spawn(process.execPath, [cli, ...args], { cwd: scratch, env: { ...env, ISOCAN_HOME: clientHome, ISOCAN_DIRECT: base }, stdio: ["ignore", "pipe", "pipe"] });
-  let stdout = ""; let stderr = "";
-  child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => { stdout += chunk; }); child.stderr.on("data", (chunk) => { stderr += chunk; });
-  return new Promise((resolve, reject) => { child.on("error", reject); child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr })); });
+function run(args: string[]): Promise<Run> {
+  return runCli(args, { cwd: scratch, env: cliEnv({ ISOCAN_CANVAS: undefined, ISOCAN_HOME: clientHome, ISOCAN_DIRECT: base }) });
 }
 async function json(args: string[]): Promise<any> {
   const result = await run([...args, "--json"]); expect(result.code, result.stderr).toBe(0); return JSON.parse(result.stdout);

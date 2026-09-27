@@ -67,20 +67,20 @@ describe("the roadmap is derived, not written", () => {
     const labels = /const LABEL = \{([^}]*)\}/.exec(script);
     expect(labels, "scripts/roadmap.mjs no longer declares LABEL").not.toBeNull();
     const state: Record<string, string> = {};
-    for (const [, key, label] of labels![1].matchAll(/(\w+): "([^"]*)"/g)) state[label] = key;
+    for (const [, key, label] of labels![1]!.matchAll(/(\w+): "([^"]*)"/g)) state[label!] = key!;
     let section = "";
     let checked = 0;
     for (const line of page.split("\n")) {
       const head = /^## (.+?) <sub>/.exec(line);
       if (head) {
-        section = state[head[1]] ?? "";
+        section = state[head[1]!] ?? "";
         continue;
       }
       const row = /^\| (?:\*\*project\*\*|research) \| \[[^\]]*\]\(([^)]+)\)/.exec(line);
       if (!row || checked >= 2) continue;
       checked += 1;
       const answer = JSON.parse(
-        execFileSync("node", [`${repo}/packages/cli/bin/isocan.js`, "--json", "doc", "status", path.join(repo, "docs", row[1])], {
+        execFileSync("node", [`${repo}/packages/cli/bin/isocan.js`, "--json", "doc", "status", path.join(repo, "docs", row[1]!)], {
           cwd: repo,
           encoding: "utf8",
           timeout: 60_000,

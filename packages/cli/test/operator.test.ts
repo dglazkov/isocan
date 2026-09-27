@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import {
   CANVAS_GROUPS_FEATURE,
@@ -15,10 +13,10 @@ import {
   proveSegmentIn,
   type DoorResponse,
 } from "@isocan/core";
-import { harnessVars } from "@isocan/api";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import { proveInBrowser, summonedRefusal } from "../src/operator.ts";
+import { cliEnv, collect, runCli, spawnCli } from "./cli.ts";
 
 /**
  * **The terminal's half of the operator proof** — operator phase 1.
@@ -41,8 +39,6 @@ import { proveInBrowser, summonedRefusal } from "../src/operator.ts";
  * What is NOT here, and cannot be: a real sign-in. The page, Identity
  * Platform and a person are the ⚑ half of this phase.
  */
-
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 
 describe("refusing inside a summoned session", () => {
   it("says the sentence journey 10 prints, and names where to write", () => {
@@ -84,27 +80,13 @@ describe("the real binary, in a summoned session", () => {
    * the assertion, and "the prove address was never printed" is the other
    * half — that address is the one thing the verb prints before it waits.
    */
-  const run = (args: string[], extra: NodeJS.ProcessEnv = {}) => {
-    const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home };
+  const run = (args: string[], extra: NodeJS.ProcessEnv = {}) =>
     // The ambient harness first, THEN what this test says. `harnessVars`
     // includes `ISOCAN_SESSION_ID` — it is the deliberate one — so clearing
     // after setting it would quietly delete the whole point of the test, and
     // the symptom is a verb that hangs waiting for a browser rather than a
-    // failed assertion.
-    for (const v of harnessVars) delete env[v];
-    Object.assign(env, extra);
-    const child = spawn(process.execPath, [cliBin, ...args], {
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (c) => (stdout += c));
-    child.stderr.on("data", (c) => (stderr += c));
-    return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-      child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-    );
-  };
+    // failed assertion. `cliEnv` clears first and lays `extra` on top.
+    runCli(args, { env: cliEnv({ ISOCAN_HOME: home, ...extra }) });
 
   it("refuses `operator show` before a browser opens, and says what to tell them", async () => {
     const out = await run(["operator", "show", "prj_reported1"], {
@@ -195,27 +177,8 @@ describe("a real home with no operator, asked by the real verb", () => {
    * ran it by hand. The stdout assertion says the same thing in the other
    * direction, and says it legibly.
    */
-  const cli = (args: string[], port: number) => {
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      ISOCAN_HOME: home,
-      ISOCAN_PORT: String(port),
-    };
-    for (const v of harnessVars) delete env[v];
-    env.CLAUDE_CODE_SESSION_ID = "s-olu";
-    const child = spawn(process.execPath, [cliBin, ...args], {
-      cwd: work,
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (c) => (stdout += c));
-    child.stderr.on("data", (c) => (stderr += c));
-    return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-      child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-    );
-  };
+  const cli = (args: string[], port: number) =>
+    runCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), CLAUDE_CODE_SESSION_ID: "s-olu" }) });
 
   it("says why it has no operator, and EXITS — the phase's last acceptance sentence", async () => {
     const port = await boot({ auth: null, operators: [] });
@@ -256,13 +219,9 @@ describe("a real home with no operator, asked by the real verb", () => {
       auth: { project: "isocan-io-dev", apiKey: "browser-key-not-a-secret" },
       operators: ["email:olu@example.test"],
     });
-    const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) };
-    for (const v of harnessVars) delete env[v];
-    env.CLAUDE_CODE_SESSION_ID = "s-olu";
-    const child = spawn(process.execPath, [cliBin, "operator", "log"], {
+    const child = spawnCli(["operator", "log"], {
       cwd: work,
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
+      env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), CLAUDE_CODE_SESSION_ID: "s-olu" }),
     });
     const printed = await new Promise<string>((resolve) => {
       let out = "";
@@ -392,26 +351,17 @@ describe("the real verbs, driven end to end", () => {
    * home will verify, exactly as the browser would have.
    */
   const drive = (args: string[]) => {
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      ISOCAN_HOME: home,
-      ISOCAN_PORT: String(port),
-    };
-    for (const v of harnessVars) delete env[v];
-    env.CLAUDE_CODE_SESSION_ID = "s-olu";
-    const child = spawn(process.execPath, [cliBin, ...args], {
+    const child = spawnCli(args, {
       cwd: work,
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
+      env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), CLAUDE_CODE_SESSION_ID: "s-olu" }),
     });
-    let stdout = "";
-    let stderr = "";
+    let seen = "";
     let handed = false;
     child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
+    child.stdout.on("data", (chunk: string) => {
+      seen += chunk;
       if (handed) return;
-      const found = /http:\/\/127\.0\.0\.1:\d+\/operator\/prove\/\S+/.exec(stdout);
+      const found = /http:\/\/127\.0\.0\.1:\d+\/operator\/prove\/\S+/.exec(seen);
       if (!found) return;
       handed = true;
       const segment = proveSegmentIn(new URL(found[0]).pathname)!;
@@ -422,11 +372,7 @@ describe("the real verbs, driven end to end", () => {
         body: new URLSearchParams({ idToken: idToken(OLU), state: handoff.state }).toString(),
       });
     });
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk) => (stderr += chunk));
-    return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-      child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-    );
+    return collect(child);
   };
 
   it("takes a canvas down, prints the reach as counts, and says what is NOT true of it", async () => {
@@ -572,19 +518,10 @@ describe("the real verbs, driven end to end", () => {
       ["operator", "look", canvasId, "--reason", "x"],
       ["operator", "purge", canvasId, "--force"],
     ]) {
-      const env: NodeJS.ProcessEnv = {
-        ...process.env,
-        ISOCAN_HOME: home,
-        ISOCAN_PORT: String(port),
-      };
-      for (const v of harnessVars) delete env[v];
-      env.ISOCAN_SESSION_ID = "Sonia";
-      const child = spawn(process.execPath, [cliBin, ...args], { cwd: work, env, stdio: ["ignore", "pipe", "pipe"] });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", (c) => (stdout += c));
-      child.stderr.on("data", (c) => (stderr += c));
-      const code = await new Promise<number>((resolve) => child.on("close", (c) => resolve(c ?? 0)));
+      const { code, stdout, stderr } = await runCli(args, {
+        cwd: work,
+        env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), ISOCAN_SESSION_ID: "Sonia" }),
+      });
       expect(code, args.join(" ")).toBe(1);
       expect(stderr).toMatch(/operator acts need the person who runs this home/);
       expect(stdout).not.toContain(PROVE_PATH_PREFIX);

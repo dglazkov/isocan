@@ -6,7 +6,7 @@ import type { Operation } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import wireframeCli from "../src/cli.ts";
 import { PROTOTYPE_PROP, readWire, wordsOf, type JevRequest, type WireSpec } from "../src/core.ts";
-import { ACME_NIGHT, ACME_WARM, PICKS } from "./fixtures/design-systems.ts";
+import { ACME_WARM } from "./fixtures/design-systems.ts";
 
 /**
  * **`isocan wire flesh` and `wire copy` against a canvas held in memory**

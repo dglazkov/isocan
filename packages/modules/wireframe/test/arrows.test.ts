@@ -144,7 +144,7 @@ describe("the routes, on the recorded Jev flow", () => {
 describe("the routes, off the recorded flow", () => {
   const o = { request: "Acme couriers", flow: "flw_acme" };
   const box = (id: string, x: number, y = 0): RouteBox => ({ id, x, y, w: 390, h: 876 });
-  const hotAt = (id: string, key: string) => estimatedHot(key, { w: 390, h: 876 });
+  const hotAt = (_id: string, key: string) => estimatedHot(key, { w: 390, h: 876 });
 
   it("a kept variation below its original is reached by a Z through the gutter", () => {
     const signIn: WireScreen = { id: "it_signin", title: "Sign in", spec: wireframe("sign-in", o) };

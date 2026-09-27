@@ -2,10 +2,15 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
+// @ts-expect-error — a plain .mjs module with no types.
 import { executionIdentity, reserveStudyAttempt, settleStudyAttempt, STUDY_UNCERTAINTY } from "../scripts/lib/design-partner-execution.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { nativeInvocation, nativeStreamAccounting, runNativeProcess, executeNativeStudyRun } from "../scripts/lib/design-partner-native.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { createStudyTools, studyBrowserUrl, studyCliArguments, answerStudyQuestion } from "../scripts/lib/design-partner-tools.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { openStudyRunRuntime, studyTreeIdentity, assertStudyRunRuntime } from "../scripts/lib/design-partner-runtime.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { loadCorpus } from "../scripts/lib/design-partner-eval.mjs";
 const owned: string[] = [];
 afterEach(async () => { await Promise.all(owned.splice(0).map(dir => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))); });

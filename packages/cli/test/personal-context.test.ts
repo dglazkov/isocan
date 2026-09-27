@@ -1,14 +1,11 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
-const cli = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 let scratch: string;
 let clientHome: string;
 let daemon: Daemon;
@@ -23,15 +20,16 @@ beforeEach(async () => {
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
 });
 afterEach(async () => { if (daemon) await daemon.close(); if (scratch) await fs.rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
-function run(args: string[], session?: string): Promise<{ code: number; stdout: string; stderr: string }> {
-  const env = { ...process.env };
-  for (const key of harnessVars) delete env[key];
-  delete env.ISOCAN_CANVAS;
-  const child = spawn(process.execPath, [cli, ...args], { cwd: scratch, env: { ...env, ISOCAN_HOME: clientHome, ISOCAN_DIRECT: base, ...(session ? { ISOCAN_HARNESS: "synthetic", ISOCAN_SESSION_ID: session } : {}) }, stdio: ["ignore", "pipe", "pipe"] });
-  let stdout = ""; let stderr = "";
-  child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => { stdout += chunk; }); child.stderr.on("data", (chunk) => { stderr += chunk; });
-  return new Promise((resolve, reject) => { child.on("error", reject); child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr })); });
+function run(args: string[], session?: string): Promise<Run> {
+  return runCli(args, {
+    cwd: scratch,
+    env: cliEnv({
+      ISOCAN_CANVAS: undefined,
+      ISOCAN_HOME: clientHome,
+      ISOCAN_DIRECT: base,
+      ...(session ? { ISOCAN_HARNESS: "synthetic", ISOCAN_SESSION_ID: session } : {}),
+    }),
+  });
 }
 async function json(args: string[], session?: string): Promise<any> {
   const result = await run([...args, "--json"], session); expect(result.code, result.stderr).toBe(0); return JSON.parse(result.stdout);

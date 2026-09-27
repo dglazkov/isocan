@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { PresenceSession, Canvas } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * A directory IS its canvas (#60).
@@ -21,7 +19,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * list`, `wait`) that keep an agent's attention on the directory it landed in.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 
 let home: string;
@@ -52,30 +49,10 @@ afterEach(async () => {
   await fs.rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 /** The CLI as one process runs it: a cwd, a controlled set of session
  * variables (the suite itself runs inside some harness), and the test home. */
 function cli(cwd: string, session: Record<string, string>, ...args: string[]): Promise<Run> {
-  const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) };
-  for (const v of harnessVars) delete env[v];
-  Object.assign(env, session);
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    cwd,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  return runCli(args, { cwd, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), ...session }) });
 }
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });

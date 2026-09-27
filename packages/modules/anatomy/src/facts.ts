@@ -18,7 +18,6 @@
  * that walks the graph.
  */
 import type { CanvasContents, Item, ModuleKind, SlashCommand } from "@isocan/core";
-import type { AnatomyProject } from "./schema.ts";
 
 export const PROJECT_MIME = "application/vnd.isocan.anatomy-project+json";
 export const NODE_MIME = "application/vnd.isocan.anatomy-node+json";

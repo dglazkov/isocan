@@ -1124,14 +1124,6 @@ export function createSpaceGrant(
   });
 }
 
-function createSpaceBar(spaceId: string, subject: GrantSubject, actorId?: string): Promise<GrantResponse> {
-  return request("POST", spaceGrantsRoute(spaceId), {
-    subject,
-    bars: true,
-    ...(actorId ? { actorId } : {}),
-  });
-}
-
 export function revokeSpaceGrant(
   spaceId: string,
   grantId: string,

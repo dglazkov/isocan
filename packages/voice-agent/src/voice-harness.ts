@@ -12,26 +12,17 @@ import { statSync } from "node:fs";
 import { ApiError, connect, matchRef, type CanvasHandle, type ListedItem } from "@isocan/api";
 import {
   besideBox,
-  BROWSER_MIME,
   CANVAS_GROUPS_REQUIRED,
   canvasUrlWithPass,
-  drawingSvg,
-  drawingViewBox,
-  inkBounds,
   inScope,
   isBesideSide,
   itemKind,
   sortCanvases,
-  DRAWING_MIME,
-  DRAWING_PROPERTIES,
   newCanvasId,
   newCommentId,
   newThreadId,
   newVersionId,
-  normalizeSiteUrl,
   parseCanvasAddress,
-  siteLabel,
-  type InkStroke,
 } from "@isocan/core";
 
 import {
@@ -3107,9 +3098,6 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
       } catch {
         return false;
       }
-    };
-    const guard = (work: () => Promise<void>) => {
-      void work().catch((err) => respond(500, { error: String((err as Error).message ?? err) }));
     };
     void (async () => {
       const url = new URL(req.url ?? "/", `http://127.0.0.1:${options.port || DEFAULT_VOICE_PORT}`);

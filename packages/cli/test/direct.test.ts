@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Canvas } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 import { reservePort } from "../../../test/ports.ts";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * **Direct mode: a machine with no daemon of its own** (phase 11, Scene 6).
@@ -27,8 +26,6 @@ import { reservePort } from "../../../test/ports.ts";
  * worked through a replica, which is the exact failure this mode exists to
  * prevent.
  */
-
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 
 /** The home: a real daemon, at an address that is not this machine's. */
 let homeDaemon: Daemon;
@@ -82,11 +79,8 @@ afterEach(async () => {
   }
 });
 
-function isocan(
-  args: string[],
-  env: Record<string, string> = {},
-): Promise<{ code: number; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [cliBin, ...args], {
+function isocan(args: string[], env: Record<string, string> = {}): Promise<Run> {
+  return runCli(args, {
     cwd: work,
     env: {
       ...process.env,
@@ -101,17 +95,7 @@ function isocan(
       CI: "",
       ...env,
     },
-    stdio: ["ignore", "pipe", "pipe"],
   });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
 }
 
 /** Did anything come up on the direct machine's port? The negative assertion

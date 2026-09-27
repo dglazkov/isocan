@@ -10,7 +10,7 @@ import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, flowScreens, presetFile,
 import { wireframeModule } from "./record.ts";
 import { checkWire, checkWords, readSystemDoc, restyleLabel, specKey, systemsToRead, type DocOf } from "./behind.ts";
 import { StyleResolver, mappingLines, restyle, restyleSummary } from "./restyle.ts";
-import { wireTitle, type WireSpec } from "./spec.ts";
+import { wireTitle } from "./spec.ts";
 
 /**
  * Where this module's files, and the design competition's, sit inside a copy

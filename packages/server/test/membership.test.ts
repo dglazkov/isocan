@@ -384,7 +384,7 @@ describe("two tenants, one home", () => {
     // has been". A holder standing in Priya's room may not import a stranger
     // wearing a name somebody there already answers to — `@Isaac` would
     // reach both of them.
-    const { priya } = await tenants();
+    await tenants();
     const visitor = await mintTestBadge(base);
     expect(
       (await fetch(`${base}/api/projects/prj_priya/canvas`, { headers: visitor.headers })).status,

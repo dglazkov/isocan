@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error — a plain .mjs module with no types.
 import { collisions, nextFree, rows } from "../scripts/lessons.mjs";
 
 /**
@@ -26,7 +27,7 @@ describe("choosing a lesson number", () => {
     // makes every assertion below it vacuously true.
     const real = rows();
     expect(real.length).toBeGreaterThan(50);
-    expect(real.map((row) => row.number)).toContain(1);
+    expect(real.map((row: { number: number }) => row.number)).toContain(1);
   });
 
   it("takes the lowest FREE number, not one past the last row", () => {

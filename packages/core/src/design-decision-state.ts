@@ -1,6 +1,6 @@
-import type { CanvasContents, Comment, Item, CanvasState } from "./model.ts";
-import type { Operation, OpEnvelope } from "./ops.ts";
-import type { DesignApprovalBasis, DesignComparison, DesignComparisonState, DesignDecisionRecord, DesignScopeBasis } from "./design-decision.ts";
+import type { CanvasContents, Comment, Item } from "./model.ts";
+import type { Operation } from "./ops.ts";
+import type { DesignApprovalBasis, DesignComparisonState, DesignDecisionRecord, DesignScopeBasis } from "./design-decision.ts";
 import { parseDesignComparison, parseDesignComparisonResponse, parseDesignDecisionInput } from "./design-decision-parse.ts";
 import { parseDesignArtifactRef } from "./design-partner.ts";
 import { object, text, hash } from "./design-partner-values.ts";

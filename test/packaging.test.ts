@@ -31,6 +31,7 @@ describe("installable straight from git", () => {
      * So a root dependency is here because a root file imports it, because
      * the release manifest declares it, or because it is named below with why.
      */
+    // @ts-expect-error — a plain .mjs module with no types.
     const { RELEASE_DEPENDENCIES } = await import("../scripts/release.mjs");
     const kept: Record<string, string> = {
       "@types/css-tree":
@@ -201,6 +202,7 @@ describe("installable straight from git", () => {
     // the package must be built before use — which is where the empty install
     // comes from. main needs `prepare` and `workspaces`; the branch we hand
     // out must have shed both, and that is scripts/release.mjs's one job.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { releaseManifest, PREPARATION_KEYS } = await import("../scripts/release.mjs");
     const pkg = await readJson("package.json");
     const released: Record<string, any> = releaseManifest(pkg, "abc1234");
@@ -217,6 +219,7 @@ describe("installable straight from git", () => {
     // `buildCliBundle` writes, and this asserts the two halves of that are
     // one: the manifest names the file the builder produces
     // (`docs/projects/first-minute/design.md`).
+    // @ts-expect-error — a plain .mjs module with no types.
     const { CLI_BUNDLE, RELEASE_DEPENDENCIES } = await import("../scripts/release.mjs");
     expect(released.bin).toEqual({ isocan: CLI_BUNDLE });
     expect(pkg.bin.isocan).toBe("packages/cli/bin/isocan.js");
@@ -240,6 +243,7 @@ describe("installable straight from git", () => {
     // the release ships `types/` (release.mjs's emitTypes) and its manifest
     // must aim the editor there. The default stays the loader-registering
     // entry: runtime still runs the sources.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { releaseManifest } = await import("../scripts/release.mjs");
     const pkg = await readJson("package.json");
     const shipped = releaseManifest(pkg).exports["."];
@@ -254,6 +258,7 @@ describe("installable straight from git", () => {
     // so a second export would have shipped a `types` path into `.ts` sources
     // an installed editor cannot read. Every `types` entry maps the same way,
     // and the workspace it names is one emitTypes compiles.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { releaseManifest, RELEASE_TYPE_ROOTS } = await import("../scripts/release.mjs");
     const pkg = await readJson("package.json");
     const shipped = releaseManifest(pkg).exports;
@@ -274,6 +279,7 @@ describe("installable straight from git", () => {
   it("the emitted declarations include isocan/rc, self-contained", async () => {
     // The emit itself, into a scratch directory: about two seconds of tsc,
     // cheap enough that the manifest's claim is checked against real files.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { emitTypes, releaseManifest } = await import("../scripts/release.mjs");
     const out = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-types-"));
     try {
@@ -331,6 +337,7 @@ describe("installable straight from git", () => {
     // writes, and `rc.mjs` (so that a manifest without the `browser`
     // condition fails the way an install did, on `node:module`, rather than on
     // a missing file). No sources, no workspace links, no tsx to fall back on.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { releaseManifest, buildBrowserBundles } = await import("../scripts/release.mjs");
     const { build } = await import("esbuild");
     const rootPkg = await readJson("package.json");

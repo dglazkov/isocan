@@ -1,7 +1,7 @@
 import { intentsIn } from "./intents.ts";
 import type { Component } from "./types.ts";
 import {
-  avatar, avatarOf, bar, bars, btn, check, choice, count, dot, esc, field, flag, glyph, ibtn, icon, img, index, nth, num, pic, rowsOf,
+  avatarOf, bar, bars, btn, check, choice, count, dot, esc, field, flag, glyph, ibtn, icon, img, index, nth, num, pic, rowsOf,
   statusTag, str, thumbPic, toggle, tx, yn,
 } from "./draw.ts";
 import { chartSvg, listRows, sel, stepsRow, upTo, word } from "./primitives.ts";

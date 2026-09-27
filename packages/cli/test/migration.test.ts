@@ -1,12 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * The identity files already in the wild (#59). Deleting the directory slot
@@ -16,7 +14,6 @@ import { harnessVars } from "@isocan/api";
  * what the canvases remember.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 
 let home: string;
@@ -47,22 +44,8 @@ async function boot(): Promise<void> {
   port = typeof address === "object" && address ? address.port : 0;
 }
 
-function isocan(session: Record<string, string>, ...args: string[]) {
-  const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) };
-  for (const v of harnessVars) delete env[v];
-  Object.assign(env, session);
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    cwd: work,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+function isocan(session: Record<string, string>, ...args: string[]): Promise<Run> {
+  return runCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), ...session }) });
 }
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });

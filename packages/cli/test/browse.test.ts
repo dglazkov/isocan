@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { CanvasSnapshotResponse } from "@isocan/core";
 import { BROWSER_MIME } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * `isocan browse` projects a live site as an ordinary item whose blob is a
@@ -17,7 +16,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * and a URL that isn't http(s) never reaches the canvas.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const nico = { id: "usr_nico", name: "Nico" };
 /** Whoever set the fixture canvas up — not anybody the CLI speaks as. */
 const seeder = { id: "usr_seed", name: "Seed" };
@@ -62,23 +60,10 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function isocan(...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
-    // Not the repo root — a directory identity there would outrank the home
-    // identity this test wrote. See wait.test.ts for the failure it caused.
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+function isocan(...args: string[]): Promise<Run> {
+  // Not the repo root — a directory identity there would outrank the home
+  // identity this test wrote. See wait.test.ts for the failure it caused.
+  return runCli(args, { cwd: home, env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) } });
 }
 
 function snapshot(): Promise<CanvasSnapshotResponse> {

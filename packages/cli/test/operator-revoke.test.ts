@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   DOOR_ROUTE,
   formatBadgeToken,
@@ -17,6 +15,7 @@ import {
 import { harnessVars } from "@isocan/api";
 import { markerFile, type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * **`isocan share` reads a grant the operator turned off, and the owner
@@ -37,7 +36,6 @@ import { startDaemon } from "@isocan/server/daemon";
  * Fixtures are synthetic: Acme, Priya, Olu.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const PROJECT = "isocan-io-dev";
 const auth = { project: PROJECT, apiKey: "browser-key-not-a-secret" };
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -63,19 +61,8 @@ function idToken(email: string): string {
   return `${head}.${body}.${signer.sign(privateKey).toString("base64url")}`;
 }
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function spawnCli(args: string[], env: NodeJS.ProcessEnv, cwd?: string): Promise<Run> {
-  const child = spawn(process.execPath, [cliBin, ...args], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd, env });
 }
 
 describe("the owner's terminal, after the operator turned the link off", () => {

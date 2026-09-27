@@ -1,9 +1,9 @@
 ---
-status: partial
+status: built
 since: 2026-09-25
 issue: 355
 see: evals, canvas-groups, voice-agent, extensions
-note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–2 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page; a canvas switch no longer writes one canvas's seen-mark or ink onto another; a cursor stream no longer re-renders every item; what #release ships now runs; copies agree or are gone); phase 6 next.
+note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Every phase closed 27 Sep 2026: the PR check finishes; one bad input costs one socket, turn or item, not the process or the page; a canvas switch keeps its data; a cursor stream re-renders nothing; what #release ships runs; copies agree or are gone; and each sweep ends in a ratchet. What it left is the Open roster.
 ---
 
 # Cleanup — the walk
@@ -22,11 +22,8 @@ lanes' own: **TS** types/errors, **RP** React render cost, **RH** hook
 correctness, **DU** duplication, **DC** dead code, **BC** bundle/CSS, **TR**
 tests/scripts/CI.
 
-**Where we are:** designed 25 Sep 2026; taken up by the conductor 27 Sep.
-Phases 0–5 closed 27 Sep. Next is cleanup phase 6, the last. The audit ran on `2d3ad79b`, and some of it was
-fixed since by other work — marked *Done* where it stands, so a phase does
-not re-fix it; everything else in a phase is re-checked against `main` in its
-brief before anything is built.
+**Where we are:** every phase CLOSED, 27 Sep 2026. The walk is done; what it
+left is the Open roster under the phases — each names what it waits on.
 
 **How it runs.** Each fix lands with a guard that imports the rule it guards
 (lessons #5) and was seen to fail without the fix. `npm test` and
@@ -303,7 +300,12 @@ check runs in the suite; each RH fix with a test seen to fail without it.
 
 ## Phase 6 — the sweeps
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 27 September 2026.** Every sweep ends in a ratchet seen red
+on a reintroduced instance: `noUnusedLocals` and `noUnusedParameters` in the
+base tsconfig (143 errors and 3 parameters to 0); no dead rule in any sheet
+(48 to 0); a lazy-only rule count; `registerRoutes` bounded at 4,690 lines
+(from 6,009); private catch-and-exit wrappers 10 to 0; CLI-spawn helpers 71 to
+7; the root `test/` typechecked (168 errors to 0).
 
 Each is mechanical and each ends with a ratchet so it stays done:
 `noUnusedLocals` (DC-4, ~25 dead declarations and ~100 unused imports); 48 dead
@@ -316,6 +318,22 @@ the operator and passes sections out of the 5,948-line `registerRoutes` (TS-8).
 reintroduced instance — `noUnusedLocals` in the tsconfig, a dead-rule count
 for `styles.css`, a count of private `run()` wrappers and of CLI-spawn helpers
 that can only go down.
+
+**Trajectory:**
+
+- **2026-09-27** — The root `test/` had never been typechecked, and one of its
+  168 errors hid a test that tested nothing: `it.each` spread the argument lists
+  meant for `design-lint-repo`. BC-1 needed nothing: `AddPopover` was lazy.
+- **2026-09-27** — Deleting dead imports corrected the lazy-CSS walk (157 eager
+  files to 146, which is what the build holds), so its ceiling rose once, 658 to
+  713, with no CSS moved. The word-match export checks had counted a dead import
+  as a use; `RefusalKind` was un-exported with it.
+- **2026-09-27** — Open: the spawner ratchet and `walksBinary` both miss an
+  aliased `spawn` import — one reading, one blind spot. Waits on work.
+- **2026-09-27** — Open: 713 lazy-only rules remain in `styles.css`, a queue
+  under a ratchet (most would cost entry JS to move); `KNOWN_TWICE` holds 10.
+  `.anatomy-tree`'s second block overrides the phone layout's `position:
+  absolute` — probably wrong on phones today; waits on a person to look.
 
 ---
 

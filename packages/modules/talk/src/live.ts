@@ -35,7 +35,6 @@ import {
   type InkStroke,
 } from "@isocan/core";
 
-import type { ListedItem } from "@isocan/api";
 
 /* ---- VOICE_RULES ---- */
 /**

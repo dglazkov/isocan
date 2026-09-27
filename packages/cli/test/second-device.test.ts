@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Canvas } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import { markerFile } from "@isocan/server";
-import { harnessVars } from "@isocan/api";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **Scene 0's multi-device beat, played against the door.**
@@ -36,7 +34,6 @@ import { harnessVars } from "@isocan/api";
  * no in-process assertion would show it.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const priya = { id: "usr_priya", name: "Priya" };
 
 let upstreamDir: string;
@@ -86,24 +83,8 @@ afterEach(async () => {
   );
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function cli(cwd: string, home: string, port: number, session: Record<string, string>, ...args: string[]): Promise<Run> {
-  const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) };
-  for (const v of harnessVars) delete env[v];
-  Object.assign(env, session);
-  const child = spawn(process.execPath, [cliBin, ...args], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  return runCli(args, { cwd, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: String(port), ...session }) });
 }
 
 const claude = (id: string) => ({ CLAUDE_CODE_SESSION_ID: id });

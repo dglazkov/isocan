@@ -21,7 +21,6 @@ import {
   checkpointsOn,
   convergence,
   currentVersion,
-  hasMime,
   layoutProject,
   nodesOn,
   projectsOn,

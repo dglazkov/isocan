@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+// @ts-expect-error — a plain .mjs module with no types.
 import { assessAttempt, controlsForTask, summarizeEvaluation, writeBlindReview } from "../scripts/lib/design-lint-eval-score.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { assessStoredHtml } from "../scripts/lib/design-lint-eval-browser.mjs";
 import { auditScreen } from "../packages/core/src/designaudit.ts";
 import { parseDesign } from "../packages/core/src/designmd.ts";
@@ -19,7 +21,7 @@ const fixture = (id = "button-treatment") => {
 // actual receipt, browser and interaction proof belongs to the runnable dry evaluation.
 const scoreInput = (task = fixture()) => {
   const audit = (html: string) => ({ status: "audited", canvasId: "synthetic-canvas", itemId: "synthetic-item", governing: { itemId: "synthetic-policy", versionId: "fixed" }, input: { kind: "stored", sha256: sha(html) }, ...auditScreen(html, task.tokens) });
-  return { task, beforeHtml: task.initialHtml, html: task.repairedHtml, audit: audit(task.repairedHtml), baselineAudit: audit(task.initialHtml), protectedUnchanged: true, receiptStatus: task.expected.unchangedControl ? "unchanged" : "accepted", browserEvidence: { available: true, complete: true, passed: true, inputHash: sha(task.repairedHtml), viewports: task.viewports.map(viewport => ({ viewport, interaction: { passed: true } })) } };
+  return { task, beforeHtml: task.initialHtml, html: task.repairedHtml, audit: audit(task.repairedHtml), baselineAudit: audit(task.initialHtml), protectedUnchanged: true, receiptStatus: task.expected.unchangedControl ? "unchanged" : "accepted", browserEvidence: { available: true, complete: true, passed: true, inputHash: sha(task.repairedHtml), viewports: task.viewports.map((viewport: unknown) => ({ viewport, interaction: { passed: true } })) } };
 };
 
 function reviewCase() {
@@ -30,10 +32,12 @@ function reviewCase() {
   const review = writeBlindReview({ runs, outputDir, seed: "unit-test-seed" });
   const armKey = JSON.parse(readFileSync(review.armKeyPath, "utf8"));
   const ratings = JSON.parse(readFileSync(review.jsonPath, "utf8"));
-  const records = runs.map(run => ({ ...run, complete: true, rounds: 2, apiEquivalentCost: 0.1, interactionFailures: 0, newUnexamined: 0, protectedUnchanged: true, concurrentSafe: true, initialReady: true }));
+  // `any`, because the cases below break these records on purpose — a null
+  // cost, a foreign hash — to see the scorer refuse them.
+  const records: any[] = runs.map(run => ({ ...run, complete: true, rounds: 2, apiEquivalentCost: 0.1, interactionFailures: 0, newUnexamined: 0, protectedUnchanged: true, concurrentSafe: true, initialReady: true }));
   return { outputDir, review, armKey, ratings, records, runs };
 }
-const rateAll = ratings => { for (const pair of ratings.pairs) { pair.A.intent = "preserved"; pair.B.intent = "preserved"; pair.preference = "tie"; } return ratings; };
+const rateAll = (ratings: any) => { for (const pair of ratings.pairs) { pair.A.intent = "preserved"; pair.B.intent = "preserved"; pair.preference = "tie"; } return ratings; };
 
 describe("stored-byte scorer bookkeeping", () => {
   it("accepts legitimate recipe edits even when application source ranges move", () => {
@@ -62,7 +66,7 @@ describe("stored-byte scorer bookkeeping", () => {
     expect(assessAttempt({ ...input, html: `${input.html}\n` }).violations).toContain("unnecessary-clean-edit");
   });
   it("rejects a real newly uncovered script path independently of visible rendering", () => {
-    const input = scoreInput(), control = controlsForTask(input.task).find(row => row.id === "new-uncovered");
+    const input = scoreInput(), control = controlsForTask(input.task).find((row: { id: string }) => row.id === "new-uncovered");
     const audit = { ...input.audit, ...auditScreen(control.html, input.task.tokens), input: { kind: "stored", sha256: sha(control.html) } };
     const result = assessAttempt({ ...input, html: control.html, audit, browserEvidence: { ...input.browserEvidence, inputHash: sha(control.html) } });
     expect(result.complete).toBe(false); expect(result.coverage.newUnexamined).toBeGreaterThan(0); expect(result.render.passed).toBe(true);
@@ -80,7 +84,7 @@ describe("blind review and preregistered aggregation", () => {
     const html = readFileSync(review.htmlPath, "utf8");
     expect(review.pairs).toBe(18); expect(html).not.toContain("rules-only"); expect(html).not.toContain("diagnostics");
     expect(html).toContain("<option>preserved</option>"); expect(html).toContain("Initial reference");
-    expect(ratings.pairs.every(pair => pair.A.intent === null && pair.B.intent === null && pair.preference === null)).toBe(true);
+    expect(ratings.pairs.every((pair: any) => pair.A.intent === null && pair.B.intent === null && pair.preference === null)).toBe(true);
     expect(() => writeBlindReview({ runs, outputDir, seed: "different" })).toThrow(/immutable/);
   });
   it("cannot infer lift from canned differences even with complete synthetic ratings", () => {
@@ -122,7 +126,7 @@ describe("blind review and preregistered aggregation", () => {
     expect(summarizeEvaluation({ ...input, mode: "model" }).verdict).toBe("do-not-proceed");
     for (const row of input.records) if (row.condition === "diagnostics") row.apiEquivalentCost = 0.08;
     expect(summarizeEvaluation({ ...input, mode: "model" }).verdict).toBe("proceed-to-larger-trial");
-    input.records.find(row => row.condition === "diagnostics").newUnexamined = 1;
+    input.records.find(row => row.condition === "diagnostics")!.newUnexamined = 1;
     expect(summarizeEvaluation({ ...input, mode: "model" }).verdict).toBe("do-not-proceed");
   });
   it("counts intent loss against the hidden key and prevents a favorable objective from bypassing it", () => {

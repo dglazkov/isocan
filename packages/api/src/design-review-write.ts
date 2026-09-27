@@ -5,7 +5,7 @@ import { readDesignRequests } from "./design-request-reader.ts";
 import type { DesignChangeRequest, DesignPublishRequest } from "./design-request-reader.ts";
 import { captureDesignRepair, prepareDesignRepair, type PreparedDesignRepair, type PreparedDesignRepairPort } from "./design-repair-reader.ts";
 import { designAuditInput, readCanvasDesignAudit, auditDesignSource, readDesignSourceAudit } from "./design-audit-reader.ts";
-import { readDesignReviews, type DesignReviewReadPort, type DesignReviewView } from "./design-review-reader.ts";
+import { readDesignReviews, type DesignReviewReadPort } from "./design-review-reader.ts";
 import { DESIGN_REVIEW_PROPERTY, parseDesignReviewRun, parseDesignVerifierOffer, parseDesignReviewOutput, parseDesignReviewObservations, type DesignReviewRun, type DesignReviewObligation, type DesignReviewObservation, type DesignReviewFinding, type DesignVerifierOffer } from "./design-review-contract.ts";
 import { questionnaireFailureStatus } from "./questionnaire-reader.ts";
 

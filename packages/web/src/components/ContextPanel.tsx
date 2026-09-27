@@ -14,6 +14,7 @@ import { ContextGlyph } from "./Glyphs.tsx";
 import { PanelHead } from "./PanelHead.tsx";
 import { LiveContextInspection } from "./LazyGroupContext.tsx";
 import { PersonalContext, PersonalRead } from "./PersonalContext.tsx";
+import "./context-panel.css";
 import "./personal-context.css";
 import { sourceRecap } from "../lib/context-recap.ts";
 import "./context-recap.css";

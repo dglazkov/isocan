@@ -160,12 +160,6 @@ export function useAttestOffer(): AttestOffer | null {
   return answer;
 }
 
-/** The actors this badge may become — `AttestOffer.resumable`, kept current.
- * `[]` until the answer is in, and on a home with no attester. */
-function useResumable(): Actor[] {
-  return resumableIn(useAttestOffer());
-}
-
 /**
  * Who the offer says this badge may be. The server answers `resumable` from
  * the badge's attestations whether or not the home still has an attester, so

@@ -3,10 +3,11 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { Command } from "commander";
 import { newItemId, newOpId, newVersionId, newThreadId, newCommentId } from "@isocan/core";
-import { CanvasHandle, resolveCanvas, designReviewPort, readDesignReviews, prepareDesignReviewStart, prepareDesignReviewStep, prepareDesignVerifierOffer, prepareDesignReviewHandoff, prepareDesignReviewRepair, submitDesignReviewWrite, validatePreparedDesignReviewWrite, prepareDesignReviewCompletion, prepareDesignReviewReceipt, changeDesignRequest, publishDesignReceipt, designRequestPort, validatePreparedDesignRepair, submitDesignRepair, prepareDesignRepair, parseDesignRepairBasis, type PreparedDesignReviewWrite, type PreparedDesignRepair, type DesignChangeRequest, type DesignPublishRequest, type DesignReviewReadResult, type DesignReviewSubmission } from "@isocan/api";
+import { CanvasHandle, resolveCanvas, designReviewPort, prepareDesignReviewStart, prepareDesignReviewStep, prepareDesignVerifierOffer, prepareDesignReviewHandoff, prepareDesignReviewRepair, submitDesignReviewWrite, validatePreparedDesignReviewWrite, prepareDesignReviewCompletion, prepareDesignReviewReceipt, changeDesignRequest, publishDesignReceipt, designRequestPort, validatePreparedDesignRepair, submitDesignRepair, prepareDesignRepair, parseDesignRepairBasis, type PreparedDesignReviewWrite, type PreparedDesignRepair, type DesignChangeRequest, type DesignPublishRequest, type DesignReviewReadResult, type DesignReviewSubmission } from "@isocan/api";
 import { parseDesignRequestOperation } from "@isocan/core/design-request";
 import type { Ctx } from "./ctx.ts";
 import { printJson } from "./output.ts";
+import { run } from "./run.ts";
 import { designRepairCapture } from "./design-audit.ts";
 
 type Journal = { actorId: string; canvasId: string; requestId: string; kind: "review"; payload: PreparedDesignReviewWrite } | { actorId: string; canvasId: string; requestId: string; kind: "repair"; payload: PreparedDesignRepair } | { actorId: string; canvasId: string; requestId: string; kind: "complete"; payload: DesignChangeRequest } | { actorId: string; canvasId: string; requestId: string; kind: "receipt"; payload: DesignPublishRequest };
@@ -109,29 +110,27 @@ export function registerDesignReviews(design: Command, contextOf: (command: Comm
     .option("--finish", "finish the report, conditionally complete the brief, then publish its exact receipt")
     .option("--retry", "retry this actor's immutable pending intent; never changes IDs or payload")
     .addHelpText("after", "\nBoth entrances use this progression. Start reserves one initial inspection. Run real\nnative browser and craft tools, then record their exact observations/evidence. Source\nanalysis runs in the shared record path. Reserve before each repair attempt; invalid\nand no-op proposals count. Audit-only reserves no repair. An unavailable browser\nleaves task checks unverified. No ordinary edit invokes a model.\nRead --json before working and keep its exact ref as record.base. --retry uses the\nactor/canvas journal saved before sending, including completion and receipt acts.\n")
-    .action(async (requestId: string, options: any, command: Command) => {
-      try {
-        const ctx = await contextOf(command), handle = new CanvasHandle(ctx, await resolveCanvas(ctx)), io = designReviewPort(ctx);
-        const actions = [options.start, options.record, options.beginRepair, options.offerVerifier, options.handoff, options.finish, options.retry].filter(Boolean);
-        if (actions.length > 1) throw new Error("Choose one review progression action.");
-        if (!actions.length) { const read = await handle.designReview(requestId, options.run); if (ctx.json) printJson(read); else printReviews(read); return; }
-        const file = journalPath(ctx, handle.id, requestId), pending = await existing(file);
-        if (options.retry) { if (!pending) throw new Error("No pending intent exists for this actor and request."); return printSubmission(ctx, await deliver(ctx, file, pending, true)); }
-        if (pending) throw new Error(`An immutable ${pending.kind} intent is pending. Use design review ${requestId} --retry; its journal is ${file}.`);
-        if (options.finish) { if (!options.run) throw new Error("--finish needs --run."); const result = await finish(ctx, handle, requestId, options.run, file); if (ctx.json) printJson(result); else printSubmission(ctx, result.result); if (result.result.status !== "accepted") process.exitCode = result.result.status === "pending" ? 3 : 1; return; }
-        let payload: PreparedDesignReviewWrite;
-        if (options.start) { const value = await fileJson(options.start); payload = await prepareDesignReviewStart(io, { ...value, canvasId: handle.id, requestId, itemId: value.itemId ?? newItemId(), ...identities() }); }
-        else if (options.offerVerifier) { const value = await fileJson(options.offerVerifier); if (value.requestId !== requestId) throw new Error("Verifier offer names a different request."); payload = await prepareDesignVerifierOffer(io, { canvasId: handle.id, itemId: newItemId(), offer: value, ...identities() }); }
-        else {
-          if (!options.run) throw new Error("This step needs --run.");
-          const read = await handle.designReview(requestId, options.run), row = read.runs[0]; if (!row) throw new Error("No exact shared review run.");
-          if (options.record) { const value = await fileJson(options.record); if (!value.base) throw new Error("Keep the exact prior read's ref as record.base; do not recapture after inspection."); payload = await prepareDesignReviewStep(io, { canvasId: handle.id, runId: row.run.id, base: value.base, action: "record", record: value.record, ...identities() }); }
-          else if (options.beginRepair) payload = await prepareDesignReviewStep(io, { canvasId: handle.id, runId: row.run.id, base: row.ref, action: "begin-repair", passId: options.beginRepair, sessionId: options.session, ...identities() });
-          else { const offer = read.offers.find(one => one.offer.id === options.handoff); if (!offer) throw new Error("No exact verifier offer."); const request = (await handle.designBrief({ requestId })).requests[0]!; payload = await prepareDesignReviewHandoff(io, { canvasId: handle.id, runId: row.run.id, offer: offer.ref, threadId: options.thread ?? (request.brief.source.entrance === "canvas-chat" ? request.brief.source.threadId : newThreadId()), commentId: newCommentId(), opId: newOpId() }); }
-        }
-        printSubmission(ctx, await deliver(ctx, file, { actorId: ctx.actor.id, canvasId: handle.id, requestId, kind: "review", payload }, false));
-      } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
-    });
+    .action(run(async (requestId: string, options: any, command: Command) => {
+      const ctx = await contextOf(command), handle = new CanvasHandle(ctx, await resolveCanvas(ctx)), io = designReviewPort(ctx);
+      const actions = [options.start, options.record, options.beginRepair, options.offerVerifier, options.handoff, options.finish, options.retry].filter(Boolean);
+      if (actions.length > 1) throw new Error("Choose one review progression action.");
+      if (!actions.length) { const read = await handle.designReview(requestId, options.run); if (ctx.json) printJson(read); else printReviews(read); return; }
+      const file = journalPath(ctx, handle.id, requestId), pending = await existing(file);
+      if (options.retry) { if (!pending) throw new Error("No pending intent exists for this actor and request."); return printSubmission(ctx, await deliver(ctx, file, pending, true)); }
+      if (pending) throw new Error(`An immutable ${pending.kind} intent is pending. Use design review ${requestId} --retry; its journal is ${file}.`);
+      if (options.finish) { if (!options.run) throw new Error("--finish needs --run."); const result = await finish(ctx, handle, requestId, options.run, file); if (ctx.json) printJson(result); else printSubmission(ctx, result.result); if (result.result.status !== "accepted") process.exitCode = result.result.status === "pending" ? 3 : 1; return; }
+      let payload: PreparedDesignReviewWrite;
+      if (options.start) { const value = await fileJson(options.start); payload = await prepareDesignReviewStart(io, { ...value, canvasId: handle.id, requestId, itemId: value.itemId ?? newItemId(), ...identities() }); }
+      else if (options.offerVerifier) { const value = await fileJson(options.offerVerifier); if (value.requestId !== requestId) throw new Error("Verifier offer names a different request."); payload = await prepareDesignVerifierOffer(io, { canvasId: handle.id, itemId: newItemId(), offer: value, ...identities() }); }
+      else {
+        if (!options.run) throw new Error("This step needs --run.");
+        const read = await handle.designReview(requestId, options.run), row = read.runs[0]; if (!row) throw new Error("No exact shared review run.");
+        if (options.record) { const value = await fileJson(options.record); if (!value.base) throw new Error("Keep the exact prior read's ref as record.base; do not recapture after inspection."); payload = await prepareDesignReviewStep(io, { canvasId: handle.id, runId: row.run.id, base: value.base, action: "record", record: value.record, ...identities() }); }
+        else if (options.beginRepair) payload = await prepareDesignReviewStep(io, { canvasId: handle.id, runId: row.run.id, base: row.ref, action: "begin-repair", passId: options.beginRepair, sessionId: options.session, ...identities() });
+        else { const offer = read.offers.find(one => one.offer.id === options.handoff); if (!offer) throw new Error("No exact verifier offer."); const request = (await handle.designBrief({ requestId })).requests[0]!; payload = await prepareDesignReviewHandoff(io, { canvasId: handle.id, runId: row.run.id, offer: offer.ref, threadId: options.thread ?? (request.brief.source.entrance === "canvas-chat" ? request.brief.source.threadId : newThreadId()), commentId: newCommentId(), opId: newOpId() }); }
+      }
+      printSubmission(ctx, await deliver(ctx, file, { actorId: ctx.actor.id, canvasId: handle.id, requestId, kind: "review", payload }, false));
+    }));
 }
 
 /** Existing explicit repair captures metadata at audit time and keeps one actor-local exact retry journal. */

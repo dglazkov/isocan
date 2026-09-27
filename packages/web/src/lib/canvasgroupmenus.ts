@@ -7,7 +7,6 @@ import { changeCanvasGroup, detachGroupInk, enterCanvasGroup, groupsEnabled, gro
 
 /** The same semantic entries serve item menus and the visible Groups button. */
 export function canvasGroupEntries(items: Item[], ctx: { canvasId: string; actor: Actor; navigate: (path: string) => void }): MenuEntry[] {
-  const canvas = useCanvasStore.getState().canvas;
   const ids = items.map((item) => item.id);
   const one = items.length === 1 ? items[0] : undefined;
   const group = one && isGroupItem(one) ? one : undefined;

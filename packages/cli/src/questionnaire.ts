@@ -1,11 +1,11 @@
 import { promises as fs } from "node:fs";
 import type { Command } from "commander";
-import { CanvasHandle, resolveCanvas, questionnaireSubmissionIds, type QuestionnaireSubmission } from "@isocan/api";
+import { questionnaireSubmissionIds, type CanvasHandle, type QuestionnaireSubmission } from "@isocan/api";
 import { parseDesignQuestionSet, parseDesignReference, parseDesignResponse, type DesignResolution, type DesignResponse } from "@isocan/core/design-partner";
 import type { Ctx } from "./ctx.ts";
 import { printJson } from "./output.ts";
+import { onCanvas } from "./run.ts";
 
-const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 async function jsonFile(file: string): Promise<unknown> { return JSON.parse(await fs.readFile(file, "utf8")); }
 async function referenceFile(file: string) {
   const value = await jsonFile(file);
@@ -25,13 +25,7 @@ const collect = (value: string, previous: string[]) => [...previous, value];
 
 /** argv adds no authority: the API and serialized writer own question semantics. */
 export function registerQuestionnaires(design: Command, contextOf: (cmd: Command) => Promise<Ctx>): void {
-  const act = (work: (handle: CanvasHandle, ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
-    try {
-      const ctx = await contextOf(args.at(-1) as Command);
-      const canvas = await resolveCanvas(ctx);
-      await work(new CanvasHandle(ctx, canvas), ctx, args);
-    } catch (error) { console.error(errorText(error)); process.exitCode = 1; }
-  };
+  const act = (work: (handle: CanvasHandle, ctx: Ctx, args: any[]) => Promise<void>) => onCanvas(contextOf, work);
 
   design.command("questions [payload]")
     .description("Read structured questions, exact sources and answers; unrelated comments never close them")

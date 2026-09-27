@@ -4,10 +4,6 @@ export { parseDesignBrief } from "./design-brief.ts";
 import type { ContextManifest } from "./canvas-group-context.ts";
 import { parseDesignDiscovery, parseDesignGoverning } from "./design-request-parse.ts";
 
-/** Phase-0 data contract. Parsing proves shape, never custody, grants or inspection. */
-const DESIGN_PARTNER_SCHEMA_VERSION = 1;
-/** Workflow default is adaptive; explicit interviews may exceed it within the protocol bound. */
-const DESIGN_PARTNER_INITIAL_QUESTION_BUDGET = 3;
 /** Maximum published batch size; explicit interviews may exceed the initial workflow budget. */
 const DESIGN_PARTNER_MAX_QUESTIONS = 32;
 /** Decision metadata travels with the adopted target's conditional content edit and inverse. */

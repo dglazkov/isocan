@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { runDaemon, stopDaemons } from "@isocan/server/daemon";
 import { reservePort } from "../../../test/ports.ts";
+import { runCli, type Run } from "./cli.ts";
 
 /**
  * The stale daemon: a process that outlives the code it was started from,
@@ -157,20 +158,10 @@ const exited = (child: ChildProcess, ceilingMs = 15_000) =>
     });
   });
 
-function isocan(...args: string[]): Promise<{ code: number; stdout: string }> {
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
-    // Not the repo root — see wait.test.ts: a directory identity outranks
-    // the home identity these tests write.
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => (stdout += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout })),
-  );
+function isocan(...args: string[]): Promise<Run> {
+  // Not the repo root — see wait.test.ts: a directory identity outranks
+  // the home identity these tests write.
+  return runCli(args, { cwd: home, env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) } });
 }
 
 const pidfile = () => path.join(home, "daemon.json");

@@ -1,8 +1,9 @@
 import type { Command } from "commander";
-import { CanvasHandle, resolveCanvas } from "@isocan/api";
+import type { CanvasHandle } from "@isocan/api";
 import type { ContextManifest, PostOpResponse } from "@isocan/core";
 import type { Ctx } from "./ctx.ts";
 import { printJson } from "./output.ts";
+import { onCanvas } from "./run.ts";
 
 /** A successful send reports the writer's frozen scope, even if it changed during upload. */
 export function contextReceipt(receipt: PostOpResponse): { context?: ContextManifest } {
@@ -22,16 +23,7 @@ export function reportContext(ctx: Ctx, manifest: ContextManifest): void {
 
 /** These reads never post an operation or change the caller's selection. */
 export function registerContextReads(context: Command, contextOf: (cmd: Command) => Promise<Ctx>): void {
-  const act = (work: (handle: CanvasHandle, ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
-    try {
-      const ctx = await contextOf(args.at(-1) as Command);
-      const canvas = await resolveCanvas(ctx);
-      await work(new CanvasHandle(ctx, canvas), ctx, args);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
-  };
+  const act = (work: (handle: CanvasHandle, ctx: Ctx, args: any[]) => Promise<void>) => onCanvas(contextOf, work);
   context.command("request <thread> <comment>")
     .description("Read the complete frozen context saved with a message")
     .action(act(async (handle, ctx, [thread, comment]) => reportContext(ctx, await handle.contextOfComment(thread, comment))));

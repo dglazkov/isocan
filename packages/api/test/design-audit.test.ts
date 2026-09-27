@@ -5,7 +5,7 @@ import path from "node:path";
 import { canvasItemOf, designSystemProperties, newCanvasId, SOURCE_POLICY_HEADER, parseSourcePolicyHeader } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { ApiError, CanvasHandle, DaemonClient, designAuditPort, designReviewPort, repairDesignScreen, type Ctx, type DesignRepairPort } from "@isocan/api";
+import { ApiError, CanvasHandle, DaemonClient, designReviewPort, repairDesignScreen, type Ctx, type DesignRepairPort } from "@isocan/api";
 import { auditContractDesign, auditContractHtml, auditDesign, auditHtml } from "./design-audit-fixture.ts";
 
 let daemon: Daemon;

@@ -41,7 +41,7 @@ const ShareDialog = lazy(() =>
 );
 const PublicCatalogue = lazy(() => import("../components/PublicCatalogue.tsx").then((m) => ({ default: m.PublicCatalogue })));
 import { GroupsPanel } from "../components/GroupsPanel.tsx";
-import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { CanvasEditor } from "../components/CanvasEditor.tsx";

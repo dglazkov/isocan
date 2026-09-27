@@ -193,10 +193,9 @@ export function contextLayers(
   canvas: CanvasContents,
   linked: LinkedCanvas[],
   extras: ContextExtras = {},
-  nowMs: number = Date.now(),
 ): ContextLayer[] {
   const layers: ContextLayer[] = [
-    { kind: "local", canvasId: null, heading: "This canvas", pieces: contextPieces(canvas, extras, nowMs) },
+    { kind: "local", canvasId: null, heading: "This canvas", pieces: contextPieces(canvas, extras) },
   ];
   const localHasDesign = designSystem(canvas) !== null;
   for (const link of linked) {

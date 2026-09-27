@@ -1,10 +1,14 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, expect, it } from "vitest";
+// @ts-expect-error — a plain .mjs module with no types.
 import { loadCorpus, loadBaseline, createManifest } from "../scripts/lib/design-partner-eval.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { STUDY_UNCERTAINTY, executionIdentity } from "../scripts/lib/design-partner-execution.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { studyHash } from "../scripts/lib/design-partner-runtime.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { CRAFT_DIMENSIONS, prepareBlindReview, serveBlindReview, partnershipInstruments, briefClusterInterval, summarizeStudyOutcomes, analyzeBlindReview } from "../scripts/lib/design-partner-review.mjs";
 
 const owned: string[] = [];

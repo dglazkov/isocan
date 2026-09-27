@@ -1,13 +1,13 @@
 import { Fragment, useState } from "react";
-import type { Actor, ActivityEntry, PresenceSession, ActorMarks, ActorKinds } from "@isocan/core";
+import type { Actor, ActivityEntry, ActorMarks, ActorKinds } from "@isocan/core";
 import { atLeast, capabilityWord, elapsedLabel, policyWords, recentActivity, sameActor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
-import { actorColorIn, useActorColors } from "../lib/colors.ts";
+import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
-import { describe, facesFor, unreadByAuthor, type Face } from "../lib/facepile.ts";
+import { facesFor, unreadByAuthor, type Face } from "../lib/facepile.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";

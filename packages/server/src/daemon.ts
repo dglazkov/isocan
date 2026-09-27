@@ -50,7 +50,7 @@ export interface DaemonOptions {
    * `ISOCAN_BIND=0.0.0.0` is what the image sets, environment rather than
    * flag, for the same reason `ISOCAN_STORE` is: this is innkeeper
    * configuration, not a per-invocation choice an agent should be able to
-   * reach for. `http.ts`'s `loopbackBound` already reads the bound address to
+   * reach for. `route-helpers.ts`'s `loopbackBound` already reads the bound address to
    * decide whether the localhost clause applies, so binding wide turns that
    * trust off by itself.
    */

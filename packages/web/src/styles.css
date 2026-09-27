@@ -1454,7 +1454,6 @@ img { height: auto; }
    the invariant it protects. */
 .item.reaching .item-titlebar { right: auto; }
 .item.reaching .chrome-left { max-width: none; }
-.chrome-right { display: flex; align-items: center; flex: none; margin-left: auto; }
 .item:hover .item-titlebar,
 .item.selected .item-titlebar,
 .item.renaming .item-titlebar { opacity: 1; }
@@ -2106,13 +2105,6 @@ img { height: auto; }
   background: var(--panel); overflow: hidden;
 }
 
-/* A thin bar, not a chrome header: the item is what you came for, and every
-   pixel this takes is one the thing you are reading does not get. */
-.fullscreen-bar {
-  flex: none; display: flex; align-items: center; gap: 10px;
-  padding: 7px 12px; border-bottom: 1px solid var(--line);
-  background: var(--card);
-}
 .fullscreen-title {
   display: flex; align-items: baseline; gap: 7px; min-width: 0; flex: 1;
 }
@@ -2129,23 +2121,15 @@ img { height: auto; }
   border: 1px solid var(--line); background: var(--chip); color: var(--ink);
 }
 .fullscreen-back:hover { border-color: var(--accent); color: var(--accent-text); }
-/* The canvas's way IN, and the mirror of `← Canvas`. It sits apart from the
-   `Chat | Files` pills on purpose — those toggle a dock and can both be off,
-   this navigates and one view is always true, so wearing their shape would
-   promise their rules. */
-.wb-enter { text-decoration: none; }
-/* The persistent zone, wherever it is: the canvas's own bar spaces its
-   children with the same gap, so these need nothing of their own beyond
-   refusing to be squeezed by the item title beside them. */
-.fullscreen-bar .canvas-name { flex: none; }
-/* The item title takes the slack; the spacer before the presence group is
-   what keeps that group pinned right when there is no item at all. */
-.fullscreen-bar .spacer { flex: 1; }
 /* The item itself, and everything left over is its. `view-transition-name`
    is the deck flip's handle on it — see the block below. */
 .fullscreen-stage {
   flex: 1; min-height: 0; position: relative; overflow: auto;
   view-transition-name: slide;
+  /* A swipe meets the first scroll container, so the stage takes the
+     vertical pan itself (the text inside it: `presentation.css`). Here since
+     27 Sep 2026: it was a second bare block in that sheet (oneblock.test.ts). */
+  touch-action: pan-y;
 }
 .fullscreen-stage > * { width: 100%; height: 100%; }
 
@@ -2559,15 +2543,9 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .props-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .stage-pane-body > * { flex: 1; }
 
-.stage-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.stage-editor-bar {
-  flex: none; display: flex; align-items: center; gap: 8px;
-  padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
-  font-size: 11.5px; color: var(--ink-muted);
-}
-.stage-editor-bar .spacer { flex: 1; }
-.stage-editor-file { font-weight: 600; color: var(--ink); }
-.stage-editor-note { color: var(--accent-text); }
+/* The file editor's own rules are `components/stage-editor.css`, loaded with
+   it (BC-2). These two are shared: the text editor, the stage and the lint
+   panel wear them as well. */
 .stage-editor-dirty {
   font-size: 9.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
   padding: 0 5px; border-radius: 999px; line-height: 1.6;
@@ -2581,13 +2559,6 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 .stage-editor-btn:hover { border-color: var(--accent); }
 .stage-editor-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .stage-editor-btn:disabled { opacity: 0.6; cursor: default; }
-.stage-editor-body { flex: 1; min-height: 0; display: flex; }
-.stage-editor-cm { flex: 1; min-width: 0; overflow: auto; }
-.stage-editor-cm .cm-editor { height: 100%; background: var(--ground); color: var(--ink); }
-.stage-editor-cm .cm-editor.cm-focused { outline: none; }
-.stage-editor-cm .cm-gutters { background: var(--card); color: var(--ink-soft); border-right: 1px solid var(--line-soft); }
-.stage-editor-cm .cm-activeLine { background: var(--chip); }
-.stage-editor-cm .cm-activeLineGutter { background: var(--chip); }
 
 /* ---------- comments ---------- */
 .pin {
@@ -2984,25 +2955,10 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
    header disagree with the button that opened it three inches away. Reported
    three times before it was believed, which is its own lesson: a casing
    difference is not cosmetic when it is the same word twice. */
-.main-glyph, .main-pill-glyph { color: var(--accent); font-size: 13px; line-height: 1; }
-/* The panel's one-line "what is this" — the same name-then-quiet-hint pattern
-   the stage's pane headers use (`.stage-pane-name i`), because it answers the
-   same question in the same place. It carries the distinction that the panel's
-   empty state used to carry alone: this is where everyone is, agents included,
-   as opposed to a comment pinned to one thing. Once there are messages the
-   empty state is gone and this is the only thing still saying it. */
-.main-hint {
-  font-style: normal; font-weight: 400; color: var(--ink-soft); font-size: 11.5px;
-  /* Truncates rather than wraps: the panel is draggable down to a narrow
-     column, and a hint that pushes the header onto two lines costs more than
-     it explains. The full sentence is on its `title`, and the empty state
-     says it in full to anyone who has not started talking yet. */
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.main-detach, .main-close {
+.main-close {
   background: none; border: none; color: var(--ink-soft); font-size: 11px; padding: 2px 4px;
 }
-.main-detach:hover, .main-close:hover { color: var(--ink); }
+.main-close:hover { color: var(--ink); }
 .main-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; display: flex; }
 /* Bottom-anchored like a chat: a short thread sits at the composer, a long
    one scrolls. min-height makes the margin-auto trick and scrolling coexist. */
@@ -3210,15 +3166,6 @@ button.mt-card:hover { border-color: var(--accent); }
    in one dock that each announce themselves differently read as three
    different products sharing a hole in the screen. */
 
-/* The close sits at the far edge, where it does on the other two panels — a
-   ✕ that floats next to the subtitle reads as part of the sentence. The hint
-   takes the slack instead. */
-.agents-glyph { color: var(--accent-text); font-size: 13px; line-height: 1; }
-.agents-hint {
-  font-style: normal; font-size: 11px; color: var(--ink-soft);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-  flex: 0 1 auto;
-}
 .agents-body { flex: 1; overflow: auto; padding: 6px; }
 .agents-quiet { margin: 10px 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
 .agents-quiet code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
@@ -3350,50 +3297,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .home { display: inline-flex; align-items: center; color: var(--ink-muted); }
 .home:hover { color: var(--ink); }
 
-/* ---------- what an agent reads ----------
-   The dock's fourth panel, on the agent tray's rhythm — a name, a quiet hint,
-   a close. Each row is a fact and, where there is one, the reason it needs
-   attention underneath it in the panel's own words. */
-
-.context-glyph { color: var(--accent-text); display: inline-flex; }
-.context-hint {
-  font-style: normal; font-size: 11px; color: var(--ink-soft);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-}
-.context-body { flex: 1; overflow: auto; padding: 6px; }
-.ctx-row {
-  padding: 8px 10px; border-radius: var(--radius);
-  display: flex; flex-direction: column; gap: 3px;
-}
-.ctx-row + .ctx-row { border-top: 1px solid var(--line-soft); border-radius: 0; }
-.ctx-line { display: flex; align-items: baseline; gap: 10px; }
-.ctx-name { font-size: 12.5px; font-weight: 600; }
-.ctx-size {
-  margin-left: auto; font-size: 11.5px; color: var(--ink-soft);
-  font-variant-numeric: tabular-nums; text-align: right;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* Absent is quiet, not alarming: most canvases are missing most of this and
-   that is fine. What is NOT fine gets `stale`, which has a reason. */
-.ctx-row.absent .ctx-name { color: var(--ink-soft); font-weight: 500; }
-.ctx-row.stale .ctx-name { color: var(--warn); }
-.ctx-why { font-size: 11.5px; color: var(--ink-muted); line-height: 1.45; }
-.ctx-fix { font-size: 11.5px; color: var(--accent-text); line-height: 1.45; }
-/* Layers (memory phases 0–1): a heading per source canvas. The first is
-   "This canvas"; the rest are inherited, and every borrowed piece wears a
-   `from` chip so provenance is on the line, not in a tooltip. */
-.ctx-layer + .ctx-layer { margin-top: 10px; }
-.ctx-heading {
-  margin: 0; padding: 6px 10px 4px; display: flex; align-items: baseline; gap: 8px;
-  font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.ctx-heading-note { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink-soft); }
-.ctx-from {
-  font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
-  background: var(--accent-wash, var(--chip)); color: var(--accent-text); white-space: nowrap;
-}
-.ctx-row.overridden .ctx-name, .ctx-row.overridden .ctx-size { text-decoration: line-through; color: var(--ink-soft); }
 .add-inherit {
   display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px;
   font-size: 11.5px; color: var(--ink-muted); line-height: 1.4; cursor: pointer;
@@ -3881,29 +3784,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .files-size { flex: none; color: var(--ink-soft); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .files-size em { font-style: normal; margin-left: 5px; color: var(--accent); }
 
-/* ---------- the Shelf ---------- */
-/* Every verb in one dock at bottom center: create · converse · history ·
-   navigate, separated by hairlines. The toolbar above holds identity only. */
 /* ---------- top-bar create actions ---------- */
-.create-site { position: relative; }
-
-/* Which panel the left dock is showing. One control, two settings: they share
-   a border and sit flush, because they cannot both be on and buttons that
-   merely happen to disagree do not say that. */
-.panel-switch { display: flex; align-items: center; }
-/* **The pair's outer corners follow the arc of the pill they sit in.**
-
-   They were 6px, from the days when this segmented control sat in a
-   square-cornered bar. Inside an 18px capsule a 6px corner reads as a flat
-   edge with a nick out of it — the active half looked pasted on rather than
-   filled in. Round ends, square seam: the two halves still read as one
-   control with two settings, and the lit one now shares the cluster's shape
-   instead of arguing with it. */
-.panel-switch .btn { border-radius: 0; margin-left: -1px; }
-.panel-switch .btn:first-child { border-radius: 999px 0 0 999px; margin-left: 0; }
-.panel-switch .btn:last-child { border-radius: 0 999px 999px 0; }
-/* The active half owns the seam it shares with its neighbour. */
-.panel-switch .btn.active { position: relative; z-index: 1; }
 /* "＋ Site": ask for the address right below the button that asked. */
 /* Opens to the LEFT of its button, because its button now lives on the right
    rail: hanging down-and-left from the top bar put it on screen, and the same
@@ -3963,14 +3844,6 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: 12px; color: var(--danger); white-space: normal;
   overflow-wrap: anywhere;
 }
-.shelf-glyph { color: var(--accent); }
-.btn.active .shelf-glyph { color: var(--accent-ink); }
-.shelf-badge {
-  min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
-  background: var(--accent); color: var(--accent-ink);
-  font-size: 10px; font-weight: 700; line-height: 17px; text-align: center;
-}
-.btn.active .shelf-badge { background: var(--accent-ink); color: var(--accent); }
 
 /* ---------- right tool rail (pointer modes, Figma-style) ---------- */
 /* **Centred, but never off the top.** It was `top: 50%; translateY(-50%)`,
@@ -4691,10 +4564,6 @@ button.mt-card:hover { border-color: var(--accent); }
    list. Wraps rather than shrinks — a home address is long. */
 .notfound-page .row { display: flex; gap: 6px; flex-wrap: wrap; }
 
-
-
-/* ---------- help (?) ---------- */
-.help-btn { font-weight: 700; }
 /* **One modal shell, worn by every full-screen overlay.** `Modal.tsx` is the
    component; these are its clothes. Written once for the shortcut list and
    then wanted verbatim by What's new — two copies of this drift in the small
@@ -5042,81 +4911,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .persona-edit-row { display: flex; align-items: center; gap: 6px; }
 .persona-edit-row .spacer { flex: 1; }
 .persona-edit-row .wb-quiet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* ---------- the editor's chrome ----------
-   CodeMirror shipped stock: its own greys, its own blue, its own gutter — a
-   component sitting IN the app rather than part of it. The chrome is here,
-   beside every other surface and reading the same tokens, so it flips with
-   the theme for free; the syntax colours are `lib/cmtheme.ts`, because a
-   mapping from grammar tags to colour is not something a stylesheet can say.
-
-   Every rule is scoped under `.stage-editor-cm` on purpose: CodeMirror is
-   also mounted elsewhere in this app's future, and a bare `.cm-editor` rule
-   would reach into any of them. */
-.stage-editor-cm .cm-editor {
-  height: 100%;
-  background: var(--card);
-  color: var(--ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px;
-}
-/* The pane already frames itself; a second ring inside it is noise. */
-.stage-editor-cm .cm-editor.cm-focused { outline: none; }
-.stage-editor-cm .cm-scroller {
-  font-family: inherit;
-  line-height: 1.55;
-}
-.stage-editor-cm .cm-content { padding: 8px 0; caret-color: var(--accent-text); }
-/* The gutter is not the page: it recedes to the chip grey the rest of the
-   app uses for "this is a rail, not content", with the same hairline. */
-.stage-editor-cm .cm-gutters {
-  background: var(--chip);
-  color: var(--ink-soft);
-  border-right: 1px solid var(--line);
-}
-.stage-editor-cm .cm-lineNumbers .cm-gutterElement { padding: 0 8px 0 10px; }
-/* Where you are. A wash rather than a fill — the accent at 8% is the same
-   "you are here" this app paints everywhere else. */
-.stage-editor-cm .cm-activeLine { background: var(--accent-wash); }
-.stage-editor-cm .cm-activeLineGutter { background: var(--accent-wash); color: var(--ink-muted); }
-.stage-editor-cm .cm-cursor { border-left-color: var(--accent-text); border-left-width: 2px; }
-/* Selection: CodeMirror draws its own layer when the editor has focus and
-   leaves the native one otherwise, so both are said. */
-.stage-editor-cm .cm-selectionBackground { background: var(--accent-glow); }
-.stage-editor-cm .cm-focused .cm-selectionBackground { background: var(--accent-glow); }
-.stage-editor-cm .cm-content ::selection { background: var(--accent-glow); }
-/* The pair you are inside, and the one that has no partner. */
-.stage-editor-cm .cm-matchingBracket {
-  background: var(--chip-hover);
-  outline: 1px solid var(--line);
-  color: inherit;
-}
-.stage-editor-cm .cm-nonmatchingBracket { color: var(--danger); background: none; }
-/* Search, fold marks and the autocomplete list, all pulled onto the app's
-   surfaces so a panel opening inside the editor is not a different product. */
-.stage-editor-cm .cm-panels {
-  background: var(--card);
-  color: var(--ink);
-  border-top: 1px solid var(--line);
-}
-.stage-editor-cm .cm-searchMatch { background: var(--accent-wash); outline: 1px solid var(--accent-glow); }
-.stage-editor-cm .cm-searchMatch-selected { background: var(--accent-glow); }
-.stage-editor-cm .cm-foldPlaceholder {
-  background: var(--chip);
-  border: 1px solid var(--line);
-  color: var(--ink-muted);
-}
-.stage-editor-cm .cm-tooltip {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-pop);
-  color: var(--ink);
-}
-.stage-editor-cm .cm-tooltip-autocomplete > ul > li[aria-selected] {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
 
 /* The files section names its directory; the hint draws the line the word
    "Files" could not — this pane is a folder on disk, while the canvas's own
@@ -6861,380 +6655,6 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: 13px;
   line-height: 1;
   color: var(--ink-soft);
-}
-
-/* ---------- Questionnaire Dock (Context Collector) ---------- */
-.q-dock-container {
-  margin: 8px 10px 4px;
-  padding: 16px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px -8px var(--shadow-pop);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  animation: q-dock-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
-}
-
-@keyframes q-dock-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.q-dock-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.q-dock-title-group {
-  flex: 1;
-  min-width: 0;
-}
-
-.q-dock-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-}
-
-.q-dock-desc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--ink-muted);
-  line-height: 1.4;
-}
-
-.q-dock-close {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: none;
-  background: var(--chip);
-  color: var(--ink-soft);
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.q-dock-close:hover {
-  background: var(--line);
-  color: var(--ink);
-}
-
-.q-dock-steps {
-  display: flex;
-  gap: 5px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-.q-dock-steps::-webkit-scrollbar { display: none; }
-
-.q-dock-step-pill {
-  flex: none;
-  font-size: 10.5px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line-soft);
-  background: var(--chip);
-  color: var(--ink-muted);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.q-dock-step-pill.active {
-  border-color: var(--accent);
-  background: var(--accent-wash);
-  color: var(--ink);
-  font-weight: 600;
-}
-.q-dock-step-pill.answered {
-  color: var(--ink);
-}
-
-.q-dock-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-}
-
-/* Choice List */
-.q-choice-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-}
-
-.q-card-base {
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  cursor: pointer;
-  transition: all 0.12s ease;
-}
-.q-card-base:hover {
-  border-color: var(--accent);
-  background: var(--chip);
-}
-.q-card-base.selected {
-  border-color: var(--accent);
-  background: var(--accent-wash);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.q-choice-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  text-align: left;
-}
-
-.q-opt-num {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--chip);
-  color: var(--ink-muted);
-  font-size: 11px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-}
-.q-choice-card.selected .q-opt-num {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.q-opt-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  line-height: 1.35;
-}
-
-.q-opt-eyebrow {
-  font-size: 10.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--accent-text);
-}
-
-.q-opt-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.q-opt-body {
-  font-size: 11.5px;
-  color: var(--ink-muted);
-}
-
-.q-opt-checkbox {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  flex: none;
-  color: transparent;
-}
-.q-opt-checkbox.checked {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-  outline: 1px solid var(--accent);
-}
-
-/* Visual Cards */
-.q-visual-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
-  gap: 8px;
-}
-
-.q-visual-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-}
-
-.q-swatch-box {
-  width: 100%;
-  height: 60px;
-  border-radius: var(--radius);
-  overflow: hidden;
-  display: flex;
-  border: 1px solid var(--line);
-}
-
-.q-swatch-primary {
-  flex: 1.4;
-  height: 100%;
-}
-
-.q-swatch-sub-column {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.q-swatch-sub {
-  flex: 1;
-}
-
-.q-visual-card-title {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--ink);
-  text-align: center;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.3;
-}
-
-/* Drag & Drop Upload */
-.q-upload-area {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-.q-dropzone {
-  padding: 24px 16px;
-  border-radius: 12px;
-  border: 1.5px dashed var(--line);
-  background: var(--chip);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-}
-.q-dropzone:hover {
-  border-color: var(--accent);
-}
-
-.q-dropzone-icon {
-  font-size: 22px;
-  margin-bottom: 2px;
-}
-
-.q-dropzone-primary {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink);
-  line-height: 1.35;
-}
-
-.q-dropzone-secondary {
-  font-size: 11.5px;
-  color: var(--ink-soft);
-}
-
-/* URL Input & Chips */
-.q-url-area {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.q-url-input-row {
-  display: flex;
-  gap: 6px;
-}
-
-.q-text-input, .q-textarea {
-  flex: 1;
-  padding: 8px 10px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--ink);
-  font: inherit;
-  font-size: 12.5px;
-}
-.q-text-input:focus, .q-textarea:focus {
-  outline: 2px solid var(--accent);
-}
-
-.q-chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-width: 100%;
-}
-
-.q-file-chip, .q-url-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--chip);
-  border: 1px solid var(--line-soft);
-  font-size: 11px;
-  color: var(--ink);
-}
-
-/* Footer Controls */
-.q-dock-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line-soft);
-}
-
-.q-btn-ghost {
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: var(--ink-muted);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.q-btn-ghost:hover {
-  color: var(--ink);
-  background: var(--chip);
-}
-
-.q-btn-continue {
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 /* The rare question author loads after this explicit action or an actual question arrives. */

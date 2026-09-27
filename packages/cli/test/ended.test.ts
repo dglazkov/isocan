@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   badgeRoute,
   DOOR_ROUTE,
@@ -11,9 +9,10 @@ import {
   type DoorResponse,
   type KillBadgeResponse,
 } from "@isocan/core";
-import { harnessVars, HOME_CLAIM_KEY } from "@isocan/api";
+import { HOME_CLAIM_KEY } from "@isocan/api";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
+import { cliEnv, collect, spawnCli } from "./cli.ts";
 
 /**
  * **`isocan wait` exits when its badge is ended** — operator phase 4's
@@ -34,8 +33,6 @@ import { startDaemon } from "@isocan/server/daemon";
  *
  * Fixtures are synthetic: Acme, Priya.
  */
-
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 
 describe("a park whose badge was ended from another surface", () => {
   let home: string;
@@ -60,27 +57,10 @@ describe("a park whose badge was ended from another surface", () => {
   });
 
   /** The real binary, as a PERSON at a terminal: no harness variables. */
-  const start = (args: string[]): ChildProcess => {
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      ISOCAN_HOME: home,
-      ISOCAN_PORT: new URL(base).port,
-    };
-    for (const v of harnessVars) delete env[v];
-    return spawn(process.execPath, [cliBin, ...args], { cwd: work, env, stdio: ["ignore", "pipe", "pipe"] });
-  };
+  const start = (args: string[]) =>
+    spawnCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port }) });
 
-  const finished = (child: ChildProcess) => {
-    let stdout = "";
-    let stderr = "";
-    child.stdout!.on("data", (c) => (stdout += c));
-    child.stderr!.on("data", (c) => (stderr += c));
-    return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) =>
-      child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-    );
-  };
-
-  const cli = (args: string[]) => finished(start(args));
+  const cli = (args: string[]) => collect(start(args));
 
   /** The phone: a badge of its own, speaking as the machine's person. */
   async function phoneOf(actor: { id: string; name: string }): Promise<Record<string, string>> {
@@ -119,7 +99,7 @@ describe("a park whose badge was ended from another surface", () => {
     const phone = await phoneOf({ id: identity.id, name: identity.name });
 
     const parked = start(["wait", "--timeout", "30"]);
-    const done = finished(parked);
+    const done = collect(parked);
     // Let the verb start, seed, claim its cursor and park.
     await settle(3_000);
 

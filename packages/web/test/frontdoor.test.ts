@@ -10,7 +10,6 @@ import { PUBLIC_PATH, TERMS_PATH, faceFor } from "../src/lib/faces.ts";
 import { browserClipboard, copyLabel, copySaid, copyToClipboard } from "../src/lib/copy.ts";
 import { LEDGER, verbOf } from "../src/lib/ledger.ts";
 import { TERMS } from "../src/lib/terms.ts";
-import { CANVAS_SHOT } from "../src/lib/shot.ts";
 import { CopyCommandView, FrontPage } from "../src/pages/FrontPage.tsx";
 
 /**

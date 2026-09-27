@@ -7,6 +7,8 @@ const panel = read("../src/components/ContextPanel.tsx");
 const popover = read("../src/components/AddPopover.tsx");
 const upload = read("../src/lib/upload.ts");
 const css = read("../src/styles.css");
+/** The panel's rules left `styles.css` with the lazy panel (BC-2, 27 Sep 2026). */
+const panelCss = read("../src/components/context-panel.css");
 const cli = read("../../cli/src/main.ts");
 
 /**
@@ -22,14 +24,14 @@ describe("the Context panel reads in layers", () => {
     expect(panel).toContain("key={contextLayerKey(layer)}");
     expect(panel).toContain('className="ctx-heading"');
     expect(panel).toContain('{piece.from && <span className="ctx-from">from {piece.from.title}</span>}');
-    expect(css).toContain(".ctx-heading {");
-    expect(css).toContain(".ctx-from {");
+    expect(panelCss).toContain(".ctx-heading {");
+    expect(panelCss).toContain(".ctx-from {");
   });
 
   it("shows an overridden design system struck, saying this canvas's wins, rather than hiding it", () => {
     expect(panel).toContain('${piece.overridden ? " overridden" : ""}');
     expect(panel).toContain("{piece.overridden && <div className=\"ctx-why\">{piece.overridden}</div>}");
-    expect(css).toContain(".ctx-row.overridden .ctx-name");
+    expect(panelCss).toContain(".ctx-row.overridden .ctx-name");
   });
 
   it("pulls linked canvases with the card's refusals in words — not admitted, or lives elsewhere", () => {

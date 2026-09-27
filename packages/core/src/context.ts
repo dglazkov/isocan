@@ -87,7 +87,6 @@ export function markedItems(canvas: CanvasContents): Item[] {
 export function contextPieces(
   canvas: CanvasContents,
   extras: ContextExtras = {},
-  nowMs: number = Date.now(),
 ): ContextPiece[] {
   const pieces: ContextPiece[] = [];
   const items = Object.values(canvas.items);

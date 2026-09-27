@@ -109,7 +109,6 @@ describe("what is addressed to you", () => {
   });
 
   it("NEVER a reply in your thread that explicitly addresses someone else", () => {
-    const dolly: Actor = { id: "usr_dolly", name: "Dolly" };
     const canvas = canvasWith({
       t1: {
         id: "t1",

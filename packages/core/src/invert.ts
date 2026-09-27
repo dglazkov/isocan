@@ -1,5 +1,5 @@
 import type { CanvasState } from "./model.ts";
-import type { MetaPatch, NewVersion, Operation } from "./ops.ts";
+import type { MetaPatch, Operation } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
 import { invertGroupChange } from "./canvas-groups.ts";
 import { currentDesignScope } from "./design-decision-state.ts";
@@ -279,15 +279,4 @@ function invertMetaPatch(
   if (Object.keys(restore).length > 0) inverse.properties = restore;
   if (removeAdded.length > 0) inverse.removeProperties = removeAdded;
   return inverse;
-}
-
-/** Strip server-assigned fields from a stored ItemVersion back to the wire shape. */
-function toNewVersion(v: {
-  id: string;
-  blobHash: string;
-  mimeType: string;
-  filename: string;
-  size: number;
-}): NewVersion {
-  return { id: v.id, blobHash: v.blobHash, mimeType: v.mimeType, filename: v.filename, size: v.size };
 }

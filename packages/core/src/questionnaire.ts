@@ -2,7 +2,7 @@ import type { Actor, CanvasContents, Comment, ItemVersion } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import { validateDesignRetainedReferences } from "./design-retention.ts";
 import { OpValidationError } from "./errors.ts";
-import { DesignPartnerContractError, parseDesignArtifactRef, parseDesignQuestionSet, parseDesignResponse, type DesignArtifactRef, type DesignQuestionSet, type DesignQuestionSource, type DesignResolution, type DesignResponse } from "./design-partner.ts";
+import { DesignPartnerContractError, parseDesignQuestionSet, parseDesignResponse, type DesignArtifactRef, type DesignQuestionSet, type DesignQuestionSource, type DesignResolution, type DesignResponse } from "./design-partner.ts";
 import { sameActor, type ActorJoins } from "./identity.ts";
 import { validateDesignDecisionComment } from "./design-decision-state.ts";
 

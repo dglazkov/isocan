@@ -2,9 +2,12 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
+// @ts-expect-error — a plain .mjs module with no types.
 import { collectStudyResult, assessStudyResult, validateStudyResultEvidence, studyAssessmentOutcomes } from "../scripts/lib/design-partner-results.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { studyHash } from "../scripts/lib/design-partner-runtime.mjs";
 import { questionnaireFixture } from "../packages/api/test/questionnaire-fixture.ts";
+// @ts-expect-error — a plain .mjs module with no types.
 import { executionIdentity } from "../scripts/lib/design-partner-execution.mjs";
 const owned: string[] = [];
 afterEach(async () => { for (const directory of owned.splice(0)) await fs.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });

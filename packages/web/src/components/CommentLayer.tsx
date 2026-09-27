@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import { Markdown } from "../lib/markdown.tsx";
 const DesignComment = lazy(() => import("./DesignComment.tsx").then((module) => ({ default: module.DesignComment })));
 const DesignComparisonComment = lazy(() => import("./DesignComparisonComment.tsx").then((module) => ({ default: module.DesignComparisonComment })));
-import type { Actor, CanvasContents, CommentThread, NewComment } from "@isocan/core";
+import type { Actor, CommentThread, NewComment } from "@isocan/core";
 import {
   collectItemRefCandidates,
   extractItemRefs,
@@ -67,7 +67,6 @@ import { presentedOffset } from "../lib/presentation.ts";
 export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   const viewport = useUiStore((s) => s.viewport);
-  const marks = useActorMarks();
   const drag = useUiStore((s) => s.drag);
   const openThreadId = useUiStore((s) => s.openThreadId);
   const pendingComment = useUiStore((s) => s.pendingComment);
@@ -526,7 +525,6 @@ export function ComposePopover({
 }) {
   const viewport = useUiStore((s) => s.viewport);
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
-  const marks = useActorMarks();
   const { candidates, peers } = useMentionRoster(actor.id);
   const itemRoster = useItemRefRoster();
   const [body, setBody] = useState("");

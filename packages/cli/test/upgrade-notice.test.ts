@@ -1,15 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import http from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { buildStamp, type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
 import { reservePort } from "../../../test/ports.ts";
-import { harnessVars } from "@isocan/api";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **Auto-upgrade phase 2, end to end: a CLI that has fallen behind its home
@@ -27,8 +25,6 @@ const MINE = "aaaaaaa";
 const MINE_BUILT_AT = "2026-08-12T09:00:00.000Z";
 process.env.ISOCAN_BUILD_SHA = MINE;
 process.env.ISOCAN_BUILD_DATE = MINE_BUILT_AT;
-
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 
 /**
  * **The home is a stub, not a daemon, and that is the point.**
@@ -115,21 +111,8 @@ afterEach(async () => {
   await Promise.allSettled([isocanHome, work].map((dir) => fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })));
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function isocan(...args: string[]): Promise<Run> {
-  const env: NodeJS.ProcessEnv = { ...process.env, ISOCAN_HOME: isocanHome, ISOCAN_PORT: String(port) };
-  for (const v of harnessVars) delete env[v];
-  const child = spawn(process.execPath, [cliBin, ...args], { cwd: work, env, stdio: ["ignore", "pipe", "pipe"] });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: isocanHome, ISOCAN_PORT: String(port) }) });
 }
 
 /** The daemon's own health body — where the verdict rides. */

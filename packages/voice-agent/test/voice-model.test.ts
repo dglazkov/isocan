@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 import {
   LIVE_MODEL,
@@ -20,6 +17,7 @@ import {
   writeVoiceModel,
   writeVoiceKey,
 } from "../src/voice-harness.ts";
+import { cliEnv, runCli, type Run } from "../../cli/test/cli.ts";
 
 /**
  * **Which Gemini model the voice talks through** (Paul, 13 Sep 2026: “we should
@@ -40,7 +38,6 @@ import {
  *   - the choice is a file, and it survives the process that wrote it.
  */
 
-const cliBin = fileURLToPath(new URL("../../cli/bin/isocan.js", import.meta.url));
 const seeder = { id: "usr_seeder", name: "Seeder" };
 const person = { id: "usr_person", name: "Person" };
 
@@ -68,21 +65,8 @@ beforeEach(async () => {
 });
 
 /** The CLI, in this test's home, the way the harness resolves its identity. */
-function isocan(args: string[], extraEnv: Record<string, string> = {}): Promise<{ code: number; stdout: string; stderr: string }> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+function isocan(args: string[], extraEnv: Record<string, string> = {}): Promise<Run> {
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv }) });
 }
 
 afterEach(async () => {

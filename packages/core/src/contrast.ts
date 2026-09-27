@@ -8,9 +8,8 @@
  * after somebody ships it.
  */
 
-/** WCAG 2.2 minimums. Large is 18.66px bold or 24px regular. */
+/** WCAG 2.2's minimum for body text. */
 export const CONTRAST_BODY = 4.5;
-const CONTRAST_LARGE = 3;
 /** Non-text: the boundary of a control, an icon that carries meaning. */
 export const CONTRAST_UI = 3;
 

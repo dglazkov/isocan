@@ -41,10 +41,19 @@ const every = sheets.map((s) => s.text);
  * in both `styles.css` and `questionnaire.css` is the split that left its
  * original behind). Not fixed here: each is a cascade to read before one block
  * can go. A ratchet like `accent.test.ts`'s — shrink it, never add to it.
+ *
+ * Fourteen became ten on 27 Sep 2026 (cleanup phase 6): `.q-dock-steps` met its
+ * original when the dock's rules moved into `questionnaire.css`,
+ * `.fullscreen-stage` took its `touch-action` home, and the talk module's
+ * `.talk-log-bar` halves merged and `.talk-field` became one shared string.
+ * Eight of the ten left are a list selector plus a block of the class's own
+ * (`.q-tools button, .q-resume` then `.q-resume`) — one block each only by
+ * repeating declarations — and two that are behaviour to decide rather than a
+ * duplicate to fold: `.anatomy-tree`, whose second block overrides the phone
+ * layout's `position: absolute`, and `.design-lint-heading`, whose `flex-wrap`
+ * rides in on `design-review.css` and so applies only once that panel loaded.
  */
 const KNOWN_TWICE = [
-  ".fullscreen-stage",
-  ".q-dock-steps",
   ".design-lint-heading",
   ".design-record-face",
   ".phone-node-bar",
@@ -52,8 +61,6 @@ const KNOWN_TWICE = [
   ".anatomy-file-button",
   ".anatomy-tree",
   ".anatomy-eyebrow",
-  ".talk-field",
-  ".talk-log-bar",
   ".wire-arrows-over",
   ".wire-arrows-handle",
   ".wire-needs-label",

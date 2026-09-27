@@ -48,7 +48,7 @@ export const NET_REFUSAL_DEFAULT_MS = 24 * 60 * 60 * 1000;
 
 /** The four kinds of subject. `email` and `repo` are the attested kinds a
  * badge proves; `actor` is a name; `net` is where a knock came from. */
-export type RefusalKind = "email" | "repo" | "actor" | "net";
+type RefusalKind = "email" | "repo" | "actor" | "net";
 
 /**
  * **The desk's row** — `refusals/{subject}` on Firestore, a line type in the

@@ -3,7 +3,7 @@ import type { Actor, CanvasCursor, CanvasTheme, Item, ModuleMark, ThemeAnchor } 
 import { markOffered, moduleMarkIntent, moduleMarkPatch, moduleMarks } from "@isocan/core";
 import { canvasScopes, isDesignSystem, parentOf } from "@isocan/core";
 import { isDesignFile } from "@isocan/core/design-use";
-import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemKind, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
+import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -14,7 +14,6 @@ import {
   FilesGlyph,
   HistoryGlyph,
   NewsGlyph,
-  MinimapGlyph,
   TrashGlyph,
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
@@ -577,9 +576,6 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
     },
   ]);
 }
-
-/** Only used to keep the import honest when a kind-specific entry is added. */
-const _itemKind = itemKind;
 
 /**
  * **The `···` drawer: one handle instead of a row of buttons.**

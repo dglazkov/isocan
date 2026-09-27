@@ -318,12 +318,6 @@ export async function handInFromDesk(
   return made;
 }
 
-/** Whether votes are hidden right now — the lens half of the curtain. */
-function useVotesHidden(): boolean {
-  const { state, nowMs } = useSprint();
-  return hidesVotes(state, nowMs);
-}
-
 /**
  * **The curtain, on the wall only** (sprint phase 4). With a board laid the
  * wall is the Vote sheet's contents (`wallFor`), so a note on the Brief

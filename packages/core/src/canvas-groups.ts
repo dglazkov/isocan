@@ -1,4 +1,4 @@
-import type { Actor, CanvasContents, CanvasState, Item, TrashEntry } from "./model.ts";
+import type { Actor, CanvasContents, CanvasState, Item } from "./model.ts";
 import type { GroupAction, GroupAnchor, GroupBox, GroupCell, GroupChange, GroupContentFields, GroupExpectation, GroupFacts, GroupFields, GroupLayout, GroupOperation, GroupPlacementPolicy, GroupStamp, GroupWrite } from "./canvas-group-types.ts";
 import { annotationTarget, annotationsOf } from "./annotation.ts";
 import { isDrawingItem } from "./drawing.ts";

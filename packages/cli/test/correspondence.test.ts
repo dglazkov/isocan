@@ -1,15 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
-import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { MintPassResponse, PostOpResponse, Canvas } from "@isocan/core";
 import { PASS_REDEEM_ROUTE, passesRoute } from "@isocan/core";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **Scene 4 — correspondence, across an internet.**
@@ -33,7 +31,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * Fixtures are synthetic: the journey's cast, on an Acme board.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const isaac = { id: "usr_isaac", name: "Isaac" };
 const priya = { id: "usr_priya", name: "Priya" };
 const CANVAS = "prj_acme";
@@ -133,28 +130,9 @@ async function atHome(badge: TestBadge, body: unknown): Promise<PostOpResponse> 
   return (await res.json()) as PostOpResponse;
 }
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 /** The real CLI on the laptop, speaking to the replica. */
 function cli(...args: string[]): Promise<Run> {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ISOCAN_HOME: laptopDir,
-    ISOCAN_PORT: String(portOf(laptop)),
-  };
-  for (const v of harnessVars) delete env[v];
-  const child = spawn(process.execPath, [cliBin, ...args], { cwd: work, env, stdio: ["ignore", "pipe", "pipe"] });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (c) => (stdout += c));
-  child.stderr.on("data", (c) => (stderr += c));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  return runCli(args, { cwd: work, env: cliEnv({ ISOCAN_HOME: laptopDir, ISOCAN_PORT: String(portOf(laptop)) }) });
 }
 
 async function until<T>(fn: () => Promise<T>, ok: (value: T) => boolean, what: string): Promise<T> {

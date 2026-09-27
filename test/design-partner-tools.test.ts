@@ -5,7 +5,9 @@ import { afterEach, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { questionnaireFixture } from "../packages/api/test/questionnaire-fixture.ts";
+// @ts-expect-error — a plain .mjs module with no types.
 import { createStudyTools, studyCliArguments, STUDY_TOOLS } from "../scripts/lib/design-partner-tools.mjs";
+// @ts-expect-error — a plain .mjs module with no types.
 import { nativeStreamAccounting } from "../scripts/lib/design-partner-native.mjs";
 const owned: string[] = [];
 afterEach(async () => { for (const directory of owned.splice(0)) await fs.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
@@ -23,7 +25,7 @@ it("delivers exact image blocks and real CLI/browser actions through an actual s
   const transport = new StdioClientTransport({ command: process.execPath, args: [path.resolve("scripts/lib/design-partner-mcp.mjs"), configFile], env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" }, stderr: "pipe" });
   try {
     await client.connect(transport);
-    expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(STUDY_TOOLS.map(tool => tool.name));
+    expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(STUDY_TOOLS.map((tool: { name: string }) => tool.name));
     const image = await client.callTool({ name: "read_file", arguments: { path: "pixel.png" } });
     const block = (image.content as any[]).find((part: any) => part.type === "image") as any;
     expect(block.mimeType).toBe("image/png"); expect(Buffer.from(block.data, "base64")).toEqual(png);
@@ -55,7 +57,7 @@ it("delivers exact image blocks and real CLI/browser actions through an actual s
     for (const [selector, text] of [["#quantity", "4"], ["#quantity", "2"], ["#name", "Acme"]]) {
       await client.callTool({ name: "browser", arguments: { action: "fill", selector, text } });
       const current = await client.callTool({ name: "browser", arguments: { action: "snapshot" } });
-      expect(JSON.parse(((current.content as any[])[0] as any).text).controls.find((row: any) => row.id === selector.slice(1)).value).toBe(text);
+      expect(JSON.parse(((current.content as any[])[0] as any).text).controls.find((row: any) => row.id === selector!.slice(1)).value).toBe(text);
     }
     const key = async (key: string) => { const result = await client.callTool({ name: "browser", arguments: { action: "key", key } }); expect(result.isError).not.toBe(true); };
     const state = async () => JSON.parse(((await client.callTool({ name: "browser", arguments: { action: "snapshot" } })).content as any[])[0].text);

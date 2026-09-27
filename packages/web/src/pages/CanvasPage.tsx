@@ -32,7 +32,7 @@ import {
 } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { captureClipboard, pasteInto } from "../lib/clipboard.ts";
-import { redo, sendOp, undo } from "../lib/api.ts";
+import { redo, undo } from "../lib/api.ts";
 import { deleteItems, downloadItem } from "../lib/itemactions.ts";
 import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";

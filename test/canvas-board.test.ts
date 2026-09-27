@@ -222,7 +222,7 @@ describe("Recently reads the actual history", () => {
     const known = new Set(git("log", "--since=14 days ago", "--format=%h").split("\n").filter(Boolean));
     if (known.size < 2) return;
     const rendered = [...render("recent").matchAll(/<td class="num muted" style="width:64px">([^<]*)<\/td>/g)].map(
-      (m) => m[1],
+      (m) => m[1] ?? "",
     );
     expect(rendered.length).toBeGreaterThan(1);
     for (const sha of rendered) {
@@ -361,6 +361,7 @@ describe("the board speaks as the board", () => {
     // The env-var surgery (`boardEnv`) went with the last CLI spawn (iso-api
     // phase 3); what remains is the fact it existed to defend — one stable
     // key, so the board is one actor across every run and every script.
+    // @ts-expect-error — a plain .mjs module with no types.
     const { BOARD_IDENTITY, BOARD_SESSION } = await import("../scripts/board-identity.mjs");
     expect(BOARD_IDENTITY.session).toBe(BOARD_SESSION);
     expect(BOARD_IDENTITY.harness).toBe("board");
@@ -480,7 +481,7 @@ describe("the grid fits however many personas there are", () => {
       ];
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
-          const a = boxes[i], b = boxes[j];
+          const a = boxes[i]!, b = boxes[j]!;
           const overlaps =
             a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
           expect(overlaps, `with ${count} personas, panel ${i} and ${j} overlap`).toBe(false);

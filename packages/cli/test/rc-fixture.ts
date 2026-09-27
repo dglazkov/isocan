@@ -1,16 +1,16 @@
 import { afterEach, beforeEach } from "vitest";
 import { CANVAS_GROUPS_FEATURE, CLIENT_FEATURES_HEADER, formatBadgeToken } from "@isocan/core";
 import { promises as fs } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon, stopDaemons } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { machineAgentKey } from "../src/agent-key.ts";
 import { rcAgentsFile, type RcAgentRow } from "../src/rc.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliEnv, collect, spawnCli as startCli, type Run } from "./cli.ts";
 
 /**
  * **One machine, for the files that test `isocan rc`** — a scratch
@@ -31,7 +31,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * in the same shapes, as when this was one file.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 export const nico = { id: "usr_nico", name: "Nico" };
 export const dimitri = { id: "usr_dimitri", name: "Dimitri" };
 
@@ -163,12 +162,6 @@ export async function snapshotAgents(): Promise<Record<string, { actor: { id: st
   return snapshot.canvas.agents ?? {};
 }
 
-export interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 /**
  * **Everything the rc tests have started that is still alive.**
  *
@@ -188,28 +181,12 @@ export const started: ChildProcess[] = [];
 export function spawnCli(args: string[], extraEnv: Record<string, string> = {}): ChildProcess {
   // The runner's own harness variables must not leak in: this suite asserts
   // the same person/agent split under every harness, park.test.ts's rule.
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const child = startCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv }) });
   started.push(child);
   return child;
 }
 
-export function collect(child: ChildProcess): Promise<Run> {
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
-}
+export { collect, type Run };
 
 export function isocan(...args: string[]): Promise<Run> {
   return collect(spawnCli(args));

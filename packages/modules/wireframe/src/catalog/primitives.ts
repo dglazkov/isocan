@@ -2,7 +2,7 @@ import { ALL_INTENTS, intentsIn, type IntentId } from "./intents.ts";
 import type { Component, ElementDef, Props } from "./types.ts";
 import type { FillItem, SlotFill } from "../content/fill.ts";
 import {
-  avatar, avatarOf, bar, bars, btn, chip, choice, count, dot, esc, flag, glyph, heading, ibtn, icon, img, index, nth, num, pic, rowsOf,
+  avatarOf, bar, bars, btn, chip, choice, count, dot, esc, flag, glyph, heading, ibtn, icon, img, index, nth, num, pic, rowsOf,
   str, thumbPic, toggle, tx, yn,
 } from "./draw.ts";
 

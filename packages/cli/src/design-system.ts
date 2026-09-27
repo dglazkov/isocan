@@ -5,6 +5,7 @@ import { designSystemPort, readDesignSystem, projectDesignSystem, parseDesignPro
 import { findArea, newOpId, newVersionId } from "@isocan/core";
 import type { Ctx } from "./ctx.ts";
 import { printJson } from "./output.ts";
+import { withContext } from "./run.ts";
 
 const manifestName = "DESIGN.projection.json", intentName = "DESIGN.intent.json";
 const json = async (file: string) => JSON.parse(await fs.readFile(file, "utf8"));
@@ -25,10 +26,7 @@ function result(ctx: Ctx, value: DesignReconcileResult): void {
 
 /** Native design commands share exact governing reads and prepared edits with the browser. */
 export function registerDesignSystems(design: Command, contextOf: (cmd: Command) => Promise<Ctx>): void {
-  const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => async (...args: any[]) => {
-    try { await work(await contextOf(args.at(-1)), args); }
-    catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
-  };
+  const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => withContext(contextOf, work);
   const scope = (command: Command) => command.option("--in <scope>", "governing system of this exact group or area").option("--item <id>", "governing system of this actual item");
   scope(design.command("direction [file]"))
     .description("Read authored direction and actual author, or apply a captured direction edit")

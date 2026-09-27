@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { promises as fs, readFileSync } from "node:fs";
-import { spawn, type ChildProcess } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,8 +8,8 @@ import { SYSTEM_ACTOR } from "@isocan/core";
 import { cleanupOps, cleanupSelection } from "@isocan/core/chatclean";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
  * **`isocan comment clean` and `comment rm <thread> <comment>`, over the
@@ -24,7 +23,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * `chat-clean.test.ts`; this is the verb. Fixtures are synthetic: Acme.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const nico = { id: "usr_nico", name: "Nico" };
 const guest = { id: "usr_acme_guest", name: "Guest" };
@@ -34,23 +32,8 @@ let daemon: Daemon;
 let base: string;
 let badge: TestBadge;
 
-interface Run { code: number; stdout: string; stderr: string }
-
 function isocan(...args: string[]): Promise<Run> {
-  const env = { ...process.env };
-  for (const name of harnessVars) delete env[name];
-  const child: ChildProcess = spawn(process.execPath, [cliBin, ...args], {
-    env: { ...env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port },
-    cwd: home,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.setEncoding("utf8");
-  child.stdout!.on("data", (chunk) => (stdout += chunk));
-  child.stderr!.setEncoding("utf8");
-  child.stderr!.on("data", (chunk) => (stderr += chunk));
-  return new Promise((resolve) => child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })));
+  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port }) });
 }
 
 async function ok(...args: string[]): Promise<string> {

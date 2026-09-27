@@ -36,6 +36,7 @@ describe("the changelog", () => {
   // here overwrites work with a commit dump.
   it("refuses to overwrite a day somebody wrote", async () => {
     const [first] = await entries();
+    if (!first) throw new Error("docs/changelog/ has no entries to protect");
     const day = first.replace(".md", "");
     const before = await fs.readFile(path.join(dir, first), "utf8");
     const said = execFileSync("node", ["scripts/changelog-day.mjs", day], {

@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// @ts-expect-error — a plain .mjs module with no types.
 import { CI_SWITCHES, SWITCHES, ciEnv, enforcedLines } from "../scripts/switches.mjs";
 
 /**
@@ -62,7 +63,7 @@ describe("the anti-skip switches", () => {
   });
 
   it("account for every ISOCAN_REQUIRE_ variable in the tree", () => {
-    const declared = new Set(SWITCHES.map((s) => s.name));
+    const declared = new Set(SWITCHES.map((s: { name: string }) => s.name));
     const found = new Set<string>();
     const files = tracked().filter((file) => /\.(ts|tsx|mjs|js|yml|yaml)$/.test(file) && !file.startsWith("docs/"));
     for (const file of files) {
@@ -92,7 +93,7 @@ describe("the anti-skip switches", () => {
         return false;
       }
     };
-    const unread = SWITCHES.filter((s) => !sources.some((file) => reads(file, s.name))).map((s) => s.name);
+    const unread = SWITCHES.filter((s: { name: string }) => !sources.some((file) => reads(file, s.name))).map((s: { name: string }) => s.name);
     expect(unread, "declared and read by no suite: either wire it up or take it out").toEqual([]);
   });
 
@@ -105,7 +106,7 @@ describe("the anti-skip switches", () => {
   });
 
   it("turn into the environment test:ci sets, and say so before the suites", () => {
-    expect(ciEnv()).toEqual(Object.fromEntries(CI_SWITCHES.map((s) => [s.name, "1"])));
+    expect(ciEnv()).toEqual(Object.fromEntries(CI_SWITCHES.map((s: { name: string }) => [s.name, "1"])));
     expect(Object.values(ciEnv()).every((v) => v === "1")).toBe(true);
     const said = enforcedLines().join("\n");
     for (const s of CI_SWITCHES) expect(said).toContain(s.name);

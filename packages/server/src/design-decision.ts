@@ -1,8 +1,7 @@
 import { resolveActor, isSystemActor, OpValidationError, type Actor, type ActorRegistry, type CanvasState, type Comment, type LogEntry, type Operation } from "@isocan/core";
 import { DesignPartnerContractError, type DesignArtifactRef } from "@isocan/core/design-partner";
-import { designDecisionIntentHash, parseDesignDecisionOperation, type DesignComparison, type DesignComparisonResponse, type DesignDecisionOperation, type DesignDecisionRecord, type DesignDecisionsResponse, type DesignDecisionState } from "@isocan/core/design-decision";
+import { designDecisionIntentHash, parseDesignDecisionOperation, type DesignComparison, type DesignDecisionOperation, type DesignDecisionRecord, type DesignDecisionsResponse, type DesignDecisionState } from "@isocan/core/design-decision";
 import { designComparisonStates, designInputTransition, designDecisionMarkdown, designTargetMatches, sameDesignValue, validateDesignDecisionComment } from "../../core/src/design-decision-state.ts";
-import { retainedDesignVersion } from "@isocan/core/design-record";
 import { designDecisionRequest, retainReferences, governingReasons } from "./design-request.ts";
 import { questionnaireActorKind } from "./questionnaire.ts";
 import { contextBlobAvailable } from "./canvas-group-context.ts";

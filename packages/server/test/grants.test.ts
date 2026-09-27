@@ -17,7 +17,6 @@ import {
   FREE_NAME_ROUTE,
   grantRoute,
   grantsRoute,
-  ISOCAN_NAMES,
   canvasesRoute,
   WS_NOT_ADMITTED,
 } from "@isocan/core";

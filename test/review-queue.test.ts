@@ -386,7 +386,7 @@ describe("a question asked again and again", () => {
       page("2026-09-04", "CSS rule bodies copied word for word from elsewhere is 60, past 47"),
       page("2026-09-05", "CSS rule bodies copied word for word from elsewhere is 60, past 47"),
     ];
-    expect(askedAgain(pages).map((r) => r.runs)).toEqual([5, 4]);
+    expect(askedAgain(pages).map((r: { runs: number }) => r.runs)).toEqual([5, 4]);
   });
 });
 
