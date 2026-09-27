@@ -161,7 +161,13 @@ bar, tab bar) stays.
   stay blue in every system. `--default` restores the greys; `--flow <id>`
   restyles one flow; `--check` writes nothing and lists wires behind the
   system that governs them (a new `DESIGN.md` version does not restyle
-  anything by itself — run `wire style` to bring them forward). Running it
+  anything by itself — run `wire style` to bring them forward, or
+  `wire style <screen>` for one wire's flow, which is what the canvas's
+  quiet **behind** tag under the wire and its menu's *Restyle to <system>*
+  run; the DESIGN.md's own tag says how many wires are behind it). A wire is
+  behind only when something it draws from moved — a token one of its roles
+  took, a role that now has something to draw from, or the `surface:` — so a
+  version that only adds tints is not. Running it
   again with nothing changed asks nothing and writes nothing — and a new
   system version that maps every role to the same values as before writes
   nothing either (the wire looks the same; its spec keeps naming the version

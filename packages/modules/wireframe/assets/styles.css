@@ -167,6 +167,44 @@
   cursor: help;
 }
 
+/*
+ * A wire behind its design system (behind-marks.tsx): a quiet tag just under
+ * the item's bottom-right corner — muted until pointed at, never over the
+ * screen. It goes where the item is too small on screen to hold it — and
+ * because it is a button, gone means clipped too, not just transparent: an
+ * invisible tag that still took a click would restyle a flow by accident.
+ */
+.wire-behind-anchor {
+  --show: clamp(0, calc(var(--w) * var(--scale, 1) - 96), 1);
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform: scale(calc(1 / var(--scale, 1)));
+  transform-origin: 0 0;
+  opacity: var(--show);
+}
+.wire-behind-tag {
+  position: absolute;
+  right: 0;
+  top: 6px;
+  font: 600 10px/1 system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-muted);
+  background: var(--card);
+  border: 1px dotted var(--line);
+  border-radius: 9px;
+  padding: 3px 8px;
+  pointer-events: auto;
+  cursor: pointer;
+  clip-path: inset(0 calc((1 - var(--show)) * 100%) 0 0);
+}
+.wire-behind-tag:not([aria-disabled="true"]):hover,
+.wire-behind-tag:focus-visible { color: var(--warn); border-color: var(--warn); }
+.wire-behind-tag[aria-disabled="true"] { cursor: help; }
+
 /* The selected arrow's toolbar, counter-scaled above its label. */
 .wire-arrow-bar {
   position: absolute;

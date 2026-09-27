@@ -417,7 +417,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   terminal. Wires draw in the default grey
   look, or in the canvas's design system: `wire style` has Jev map the
   governing `DESIGN.md`'s own tokens onto the wire's roles and restyles every
-  wire as one undo (`--default` goes back; blueprints stay blue). Or pick a
+  wire as one undo (`--default` goes back; blueprints stay blue). When the
+  DESIGN.md changes something a wire draws from, the wire shows a quiet
+  *behind* tag (and the DESIGN.md says how many): click it, or *Restyle to
+  <system>* in its menu, to bring that flow forward — `wire style --check`
+  lists the same wires. Nothing restyles by itself. Or pick a
   named look: `wire style --preset material` (also `shadcn`, `glass`, `ios`,
   `fluent`, `carbon`, `brutalist`, or a design-competition pack; `house` is
   the greys), `/wire style <name>`, or right-click a wire → *Style ▸* — the
