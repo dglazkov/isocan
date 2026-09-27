@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { defineConfig } from "vitest/config";
 import { DEEP, runningDeep } from "./test/deep.ts";
 
@@ -73,6 +74,24 @@ export default defineConfig({
      */
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    /**
+     * **Half the cores when the deep lane runs, not one per core** (27 Sep
+     * 2026). A deep file keeps TWO processes busy — the worker, and the CLI or
+     * board script it spawns per case (plus an in-process daemon) — so
+     * vitest's default of one worker per core put this machine at about twice
+     * its cores exactly while the spawn-heavy files ran. Seven of eight deep
+     * runs that week had a timeout somewhere in them (`prune` five times,
+     * `place`, `canvas-board`'s child budget, `grid`, `rc`, `restart`,
+     * `room`), each passing alone.
+     *
+     * Measured on 14 cores, one run each way: 13 workers took 350–460 s of
+     * wall clock with the per-test times summing to 4,200–5,400 s; 7 workers
+     * took 373 s with them summing to 2,380 s and no failure. Every test ran
+     * about twice as fast and the machine did no less work — oversubscription
+     * bought nothing but the timeouts. This is not a raised limit: nothing
+     * here gets longer to fail, and the tests got faster.
+     */
+    ...(runningDeep() ? { maxWorkers: Math.max(2, Math.floor(availableParallelism() / 2)) } : {}),
     // Runs ONCE, in the main process, before any worker exists — which is the
     // only place a Firestore emulator can be started and have every worker
     // inherit its address. See test/emulator.ts for the three tiers and for

@@ -246,8 +246,8 @@ opinion about anything.
 
 - `npm test` (vitest) and `npm run typecheck` before you call something done —
   and **`npm run test:deep` before you push**. `npm test` is the fast lane: it
-  leaves out the thirty-seven files that spawn the CLI per case, four minutes
-  of the run, and prints at the end exactly what it left out. That is the right
+  leaves out the files that spawn the CLI per case (fifty-three on 27 Sep),
+  about half the run's CPU, and prints at the end exactly what it left out. That is the right
   default for the loop and the wrong thing to push on. Three times in one week
   a green subset hid a real failure here — every time in a file the change did
   not name, every time found by the whole suite after the push. A subset is

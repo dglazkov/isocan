@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { harnessVars } from "@isocan/api";
+import { CanvasHandle, DaemonClient, harnessVars, resolveCanvasRef, type Ctx } from "@isocan/api";
 
 /**
  * **The confirmation on a verb that forgets for good.**
@@ -80,17 +80,24 @@ async function json(...args: string[]): Promise<any> {
   return JSON.parse(run.stdout);
 }
 
-/** An item with `depth` versions on it: the first, then `depth - 1` edits. */
+/**
+ * An item with `depth` versions on it: the first, then `depth - 1` edits.
+ *
+ * **Seeded in-process, not through the binary** (27 Sep 2026). This used to
+ * spawn `isocan add` and then `isocan edit` once per version — fourteen
+ * processes a case, 7 s alone and 16–29 s under the deep lane's load, against a
+ * 30 s limit: it timed out in five of eight deep runs that week. The stack is
+ * the ground this file stands on, not what it tests, and `add` / `edit` have
+ * their own tests; the same two ops go through the same client the CLI uses
+ * (`CanvasHandle`), as the same person, over the badge the first spawn wrote.
+ * Every `version prune` and `gc` below still runs the real binary.
+ */
 async function stack(depth: number): Promise<string> {
-  const file = path.join(home, "note.txt");
-  await fs.writeFile(file, "v1");
-  const added = await json("add", file, "--title", "Generated");
-  for (let n = 2; n <= depth; n++) {
-    await fs.writeFile(file, `v${n}`);
-    const edit = await isocan("edit", added.itemId, file);
-    expect(edit.code, edit.stderr).toBe(0);
-  }
-  return added.itemId;
+  const client = new DaemonClient(base, home);
+  const board = new CanvasHandle({ client, actor: nico } as unknown as Ctx, await resolveCanvasRef(client, "Board"));
+  const added = await board.add({ title: "Generated", content: "v1", mime: "text/plain", filename: "note.txt" });
+  for (let n = 2; n <= depth; n++) await board.edit(added.id, { content: `v${n}` });
+  return added.id;
 }
 
 /** `isocan versions --json` prints the stack itself, so these are real ids. */

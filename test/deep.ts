@@ -149,6 +149,11 @@ export const DEEP: readonly DeepFile[] = [
   // before and after to prove a diff writes nothing.
   { file: "packages/cli/test/diff.test.ts", secs: 17.5 },
   { file: "packages/voice-agent/test/voice-harness.test.ts", secs: 61 },
+  // 27 Sep: starts `isocan mcp` over a stdio transport after ~130 seeded ops,
+  // and took 7–30 s across a week of runs against the 30 s limit — timing out
+  // in the fast lane, where the reading below did not yet count a transport
+  // as a spawn. 19 s is its median in the deep runs that week.
+  { file: "packages/mcp/test/recap-summary-transport.test.ts", secs: 19 },
 ];
 
 /**
@@ -203,6 +208,13 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/harnesses.test.ts", secs: 0.3, why: "does not walk at all: it asserts an adapter's command IS the string \"npx\", and the reading below sees the word" },
   { file: "packages/voice-agent/test/voice-model.test.ts", secs: 9.8, why: "nineteen cases over one daemon, and the closest file to the line: only the model verbs it cannot drive from the page walk the CLI at all" },
   { file: "test/cli-bundle.test.ts", secs: 4.4, why: "one esbuild build shared by both cases, then five spawns of the bundle that touch no daemon and no canvas — measured 18 September" },
+  // The four below start `isocan mcp` through the MCP SDK's stdio transport,
+  // which the reading counts as a spawn from 27 Sep; timed across that week's
+  // runs, loaded and not.
+  { file: "packages/mcp/test/personal-tool-transport.test.ts", secs: 7.8, why: "one `isocan mcp` child over stdio for the personal tools, 5–10 s across a week of loaded runs — the nearest of the four to the line" },
+  { file: "packages/mcp/test/stdio-feedback-setup.test.ts", secs: 2.9, why: "one `isocan mcp` child, asked for its feedback setup and closed" },
+  { file: "packages/mcp/test/stdio-personal.test.ts", secs: 4.8, why: "one `isocan mcp` child against a personal home, a handful of calls" },
+  { file: "packages/mcp/test/stdio-sessions.test.ts", secs: 5.0, why: "`isocan mcp` children per session, a few calls each, no seeded history" },
 ];
 
 /**
@@ -252,7 +264,11 @@ export function walksBinary(source: string, siblings: readonly string[] = []): b
   // the old path would have left `test/cli-bundle.test.ts` invisible
   // to this reading — the silence the lists exist to remove.
   const target = /bin\/isocan\.js|CLI_BUNDLE|dist\/isocan\.mjs|canvas-board\.mjs|\bnpx\b/.test(code);
-  const spawns = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\s*\(/.test(code);
+  // A stdio MCP transport whose command is the binary is a spawn of it: the
+  // SDK starts the process (27 Sep 2026 — `recap-summary-transport` walked
+  // `isocan mcp` this way for weeks, took up to 30 s in the fast lane, and
+  // timed out there while this reading called it no walker at all).
+  const spawns = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\s*\(|new\s+StdioClientTransport\s*\(/.test(code);
   // The native study exposes the real CLI through its explicit stdio MCP
   // process. All three facts are needed; generic SDK clients are not CLI walkers.
   const studyMcp = /design-partner-mcp\.mjs/.test(code) && /new\s+StdioClientTransport\s*\(/.test(code) && /callTool\s*\(\s*\{\s*name:\s*["']cli["']/.test(code);
