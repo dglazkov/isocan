@@ -158,11 +158,12 @@ export async function throughTheDoor(b, origin, name, clientId = "browser") {
 
 export async function browser({ proxyServer = null } = {}) {
   if (proxyServer !== null && !/^http:\/\/127\.0\.0\.1:\d+$/.test(proxyServer)) throw new Error("Browser proxy must be an owned loopback endpoint");
-  const dir = mkdtempSync(path.join(tmpdir(), "isocan-cdp-"));
-  const proc = spawn(chromeOrDie(), ["--headless=new", "--remote-debugging-port=0",
-    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars",
-    ...(proxyServer ? [`--proxy-server=${proxyServer}`, "--proxy-bypass-list=<-loopback>", "--disable-quic", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] : []),
-    "about:blank"], { stdio: "ignore" });
+  // **`ws` before Chrome** (cleanup phase 4, DC-1, 27 Sep 2026). This import
+  // came after the spawn, so on the release tree — which had no `ws` to give
+  // it — every `isocan canvas shot` and PDF export started a headless Chrome,
+  // failed to import, and exited leaving that Chrome running. Nothing can be
+  // left behind by a process that has not been started yet.
+  //
   // Ordinary resolution first, and the explicit path only as the fallback it
   // was meant to be. The hardcoded one alone fails in a git WORKTREE, whose
   // `node_modules` is the main checkout's and not `repo/node_modules` — so the
@@ -171,15 +172,35 @@ export async function browser({ proxyServer = null } = {}) {
   const { default: WebSocket } = await import("ws").catch(() =>
     import(new URL("../../node_modules/ws/index.js", import.meta.url).href),
   );
-  let endpoint;
+  const dir = mkdtempSync(path.join(tmpdir(), "isocan-cdp-"));
+  const proc = spawn(chromeOrDie(), ["--headless=new", "--remote-debugging-port=0",
+    `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars",
+    ...(proxyServer ? [`--proxy-server=${proxyServer}`, "--proxy-bypass-list=<-loopback>", "--disable-quic", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] : []),
+    "about:blank"], { stdio: "ignore" });
+  // **Every failure from here to a working handle takes Chrome with it**
+  // (DC-1). Only the DevTools wait had a cleanup; a socket that would not
+  // open, or a target Chrome would not make, threw past a live browser that
+  // nothing held a handle to any more.
+  const sockets = [];
   try {
-    endpoint = await devtoolsEndpoint(dir, proc);
+    return await drive(proc, dir, WebSocket, sockets);
   } catch (err) {
-    proc.kill(); rmSync(dir, { recursive: true, force: true }); throw err;
+    // A socket still connecting emits `error` when terminated, and with no
+    // listener that would crash the process over the teardown of a failure
+    // already being thrown below — which is the error worth reading.
+    for (const socket of sockets) { socket.on("error", () => {}); socket.terminate(); }
+    proc.kill("SIGKILL");
+    rmSync(dir, { recursive: true, force: true });
+    throw err;
   }
+}
+
+async function drive(proc, dir, WebSocket, sockets) {
+  const endpoint = await devtoolsEndpoint(dir, proc);
   // The browser endpoint, then a page target of our own — created rather than
   // discovered, so nothing depends on which targets happen to exist.
   const browserWs = new WebSocket(endpoint, { maxPayload: 1 << 28 });
+  sockets.push(browserWs);
   await new Promise((r, j) => { browserWs.once("open", r); browserWs.once("error", j); });
   let bid = 0; const bpending = new Map();
   browserWs.on("message", (d) => {
@@ -196,6 +217,7 @@ export async function browser({ proxyServer = null } = {}) {
   if (!mine) throw new Error("chrome would not make a page target");
   const wsUrl = endpoint.replace(/\/devtools\/browser\/.*$/, `/devtools/page/${targetId}`);
   const ws = new WebSocket(wsUrl, { maxPayload: 1 << 28 });
+  sockets.push(ws);
   await new Promise((r, j) => { ws.once("open", r); ws.once("error", j); });
   let id = 0; const pending = new Map(); let errors = [];
   /** Callers waiting on a CDP EVENT rather than a reply — see `once`. */

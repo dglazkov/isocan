@@ -154,6 +154,11 @@ export const DEEP: readonly DeepFile[] = [
   // in the fast lane, where the reading below did not yet count a transport
   // as a spawn. 19 s is its median in the deep runs that week.
   { file: "packages/mcp/test/recap-summary-transport.test.ts", secs: 19 },
+  // 27 Sep (cleanup phase 4, TR-4): builds the release tree the way `npm run
+  // release` does — a vite build, a `tsc` emit, three esbuild runs — then
+  // reads every import in it and spawns its bundled CLI and both scripts.
+  // 12.4 s measured, nearly all of it the build before the first case.
+  { file: "test/release-tree.test.ts", secs: 12.4 },
 ];
 
 /**

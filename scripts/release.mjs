@@ -33,7 +33,7 @@
  * which keeps the branch fast-forwardable (no force pushes) and makes "which
  * commit is this build?" answerable by `git log`.
  */
-import { promises as fs } from "node:fs";
+import { promises as fs, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -59,13 +59,29 @@ export const RELEASE_DEPENDENCIES = {
 };
 
 /**
- * **The scripts an installed copy can still spawn.** `isocan shot` and the
- * deck's `export` run these through `process.execPath`, guarded by an
- * `existsSync` and a sentence; the other forty under `scripts/` import a
- * package's `src` directly and would be broken files on a branch that ships
- * no sources, so they go.
+ * **The scripts an installed copy can still spawn**, keyed by the path the CLI
+ * spawns (`packagePath("scripts/canvas-shot.mjs")` in packages/cli/src/main.ts),
+ * valued by the name of the bundle `buildCliBundle` builds from that file.
+ *
+ * They are BUNDLED, like the CLI, and the path the CLI spawns is a one-line
+ * stub importing the bundle (cleanup phase 4, DC-1, 27 Sep 2026). They used to
+ * ship as their sources, beside `scripts/lib/browser.mjs` — but
+ * `canvas-shot.mjs` imports `@isocan/*` and a `.ts` file through the
+ * checkout's loader, and `browser.mjs` imports `ws`, none of which a release
+ * tree has carried since 18 Sep. So `isocan canvas shot` and every PDF export
+ * died with ERR_MODULE_NOT_FOUND on every install, the CLI's `existsSync`
+ * guard never fired because the files WERE there, and Chrome, spawned before
+ * `ws` was imported, was left running. Bundled, they carry what they import.
+ * The other forty scripts import a package's `src` directly and would be
+ * broken files on a branch that ships no sources, so they go.
  */
-const RELEASE_SCRIPTS = ["scripts/canvas-shot.mjs", "scripts/deck-export.mjs", "scripts/lib/browser.mjs"];
+export const RELEASE_SCRIPTS = {
+  "scripts/canvas-shot.mjs": "canvas-shot",
+  "scripts/deck-export.mjs": "deck-export",
+};
+
+/** Where their bundles land, under CLI_BUNDLE_DIR — a directory of their own, because they are a build of their own (see buildCliBundle). */
+const RELEASE_SCRIPTS_DIR = "scripts";
 
 /**
  * **What the release tree drops**, as git pathspecs — one entry per `git rm
@@ -96,7 +112,14 @@ export const RELEASE_DROPS = [
   // The tsx launcher and the loader it registered: main's way in, and dead on
   // a branch whose `bin` is a bundle.
   ["packages/cli/bin"],
-  ["scripts", ...RELEASE_SCRIPTS.map((file) => `:(exclude)${file}`)],
+  // Every script, the two the CLI spawns included: what stands at their paths
+  // on the release is a generated stub importing their bundle (RELEASE_SCRIPTS).
+  ["scripts"],
+  // The voice agent's launcher registers tsx and imports `../src/cli.ts`,
+  // neither of which the release carries — a broken file nothing on an
+  // install runs (the root `bin` is the CLI's alone). Found by the tree's
+  // import check on its first run (cleanup phase 4, TR-4, 27 Sep 2026).
+  ["packages/voice-agent/bin"],
 ];
 
 /**
@@ -380,22 +403,11 @@ export async function buildCliBundle(out = root) {
   const { resolve: resolveWorkspace } = await import(
     pathToFileURL(path.join(root, "packages/cli/bin/workspace-loader.mjs")).href
   );
-  const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8"));
   const outdir = path.join(out, CLI_BUNDLE_DIR);
   const outfile = path.join(out, CLI_BUNDLE);
   await fs.rm(outdir, { recursive: true, force: true });
-  const result = await build({
+  const common = {
     absWorkingDir: root,
-    // Named, so the entry is `isocan.mjs` and not `main.mjs` — the manifest's
-    // `bin` points at it and a person reading `ps` should see the CLI's name.
-    entryPoints: [
-      { in: path.join(root, "packages/cli/src/main.ts"), out: "isocan" },
-      ...Object.values(RELEASE_NODE_ENTRIES).map(({ entry, out: name }) => ({
-        in: path.join(root, entry),
-        out: name,
-      })),
-    ],
-    outdir,
     outExtension: { ".js": ".mjs" },
     bundle: true,
     splitting: true,
@@ -419,9 +431,47 @@ export async function buildCliBundle(out = root) {
             const { url } = resolveWorkspace(args.path, {}, (u) => ({ url: u }));
             return url.startsWith("file:") ? { path: fileURLToPath(url) } : null;
           });
+          // A script's `import "../index.mjs"` is the checkout's way in: it
+          // registers tsx and the workspace loader so the `@isocan/*` imports
+          // after it resolve. The bundle resolved every one of them above, at
+          // build time, and must not carry tsx to register — so here that
+          // import is empty (DC-1).
+          build.onResolve({ filter: /index\.mjs$/ }, (args) =>
+            path.resolve(args.resolveDir, args.path) === path.join(root, "index.mjs")
+              ? { path: "checkout-loader", namespace: "isocan-empty" }
+              : null,
+          );
+          build.onLoad({ filter: /.*/, namespace: "isocan-empty" }, () => ({ contents: "", loader: "js" }));
         },
       },
     ],
+  };
+  const result = await build({
+    ...common,
+    // Named, so the entry is `isocan.mjs` and not `main.mjs` — the manifest's
+    // `bin` points at it and a person reading `ps` should see the CLI's name.
+    entryPoints: [
+      { in: path.join(root, "packages/cli/src/main.ts"), out: "isocan" },
+      ...Object.values(RELEASE_NODE_ENTRIES).map(({ entry, out: name }) => ({
+        in: path.join(root, entry),
+        out: name,
+      })),
+    ],
+    outdir,
+  });
+  /**
+   * **The scripts a CLI verb spawns, in a build of their own** (DC-1).
+   *
+   * Not beside the CLI's entries, though sharing its chunks would be smaller:
+   * measured 27 Sep, two more entries in that build re-cut the CLI's chunks
+   * along new boundaries and `isocan --version` went from 38 modules to 42,
+   * past the budget `test/cli-bundle.test.ts` holds. A screenshot that is
+   * taken now and then does not get to slow down every command.
+   */
+  await build({
+    ...common,
+    entryPoints: Object.entries(RELEASE_SCRIPTS).map(([file, name]) => ({ in: path.join(root, file), out: name })),
+    outdir: path.join(outdir, RELEASE_SCRIPTS_DIR),
   });
   // The shebang goes on the CLI entry alone; esbuild's `banner` would put one
   // at the top of all forty chunks, where it means nothing.
@@ -442,6 +492,21 @@ export function nodeEntrySource(out) {
     "// GENERATED by scripts/release.mjs. main's entry of this name registers\n" +
     "// tsx and imports the sources, which the release branch no longer ships.\n" +
     `export * from "${CLI_BUNDLE_DIR}/${out}.mjs";\n`
+  );
+}
+
+/**
+ * **What a spawned script's path holds on the release** (DC-1): one line,
+ * importing the bundle `buildCliBundle` built from it. The CLI spawns the same
+ * `scripts/<name>.mjs` in a checkout and in an install; only what is there
+ * differs.
+ */
+export function scriptEntrySource(file, out) {
+  const target = path.posix.relative(path.posix.dirname(file), path.posix.join(path.posix.normalize(CLI_BUNDLE_DIR), RELEASE_SCRIPTS_DIR, `${out}.mjs`));
+  return (
+    `// GENERATED by scripts/release.mjs. main's ${path.posix.basename(file)} imports what a\n` +
+    "// checkout has beside it; the release ships the bundle built from it.\n" +
+    `import "${target}";\n`
   );
 }
 
@@ -573,67 +638,68 @@ const git = (...args) => {
   return (done.stdout || "").trim();
 };
 
-async function main() {
-  const args = process.argv.slice(2);
-  const force = args.includes("--force");
-  const push = !args.includes("--no-push");
-
-  // A release names the commit it was built from, so that commit has to be
-  // real: not your unsaved edits, and not a commit only this laptop has.
-  if (!force) {
-    const dirty = git("status", "--porcelain");
-    if (dirty && !process.env.CI) {
-      throw new Error(
-        `working tree is dirty — commit or stash first (--force to override):\n${dirty}`,
-      );
-    }
-    if (dirty) {
-      // On a runner the tree IS the commit: the dirt is whatever `npm ci`
-      // churned, and none of it can reach the release — everything below
-      // comes from HEAD, except the built app, which is the point.
-      console.error(`release: ignoring a dirty tree on CI:\n${dirty}`);
-    }
-    if (!git("branch", "-r", "--contains", "HEAD")) {
-      throw new Error("HEAD is not on any remote — push it first (--force to override)");
-    }
-  }
-
-  const head = git("rev-parse", "HEAD");
-  const subject = git("log", "-1", "--pretty=%s");
-
-  // The one thing the release branch has that main doesn't.
-  const build = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "build"], {
-    cwd: root,
-    stdio: "inherit",
-  });
-  if (build.status !== 0) throw new Error("npm run build failed");
-  const dist = path.join(root, "packages/web/dist/index.html");
-  await fs.access(dist).catch(() => {
-    throw new Error(`no web app at ${dist} — nothing to release`);
+/**
+ * **Build everything a release has that main does not**, into `out` — a
+ * scratch directory, never the checkout (cleanup phase 4, TR-4, 27 Sep 2026).
+ *
+ * The web app, the API's declarations, the browser bundles and the CLI's. It
+ * used to build them into the repository itself and delete them afterwards,
+ * which is harmless once and a race the moment a test builds a release tree
+ * while another test serves `packages/web/dist`: vite empties its outDir
+ * first. Built aside, the checkout is never touched — which the header above
+ * always claimed and this is what makes true.
+ *
+ * Returns the paths, relative to `out`, that the release tree carries from it.
+ */
+export async function buildReleaseArtifacts(out) {
+  const web = path.join(out, "packages/web/dist");
+  // The one thing the release branch has that main doesn't. The workspace's
+  // own `vite build`, aimed aside; `--emptyOutDir` because vite refuses to
+  // empty a directory outside its project without being told to.
+  const build = spawnSync(
+    process.platform === "win32" ? "npm.cmd" : "npm",
+    ["run", "build", "-w", "@isocan/web", "--", "--outDir", web, "--emptyOutDir"],
+    { cwd: root, stdio: "inherit" },
+  );
+  if (build.status !== 0) throw new Error("the web app's build failed");
+  await fs.access(path.join(web, "index.html")).catch(() => {
+    throw new Error(`no web app at ${web} — nothing to release`);
   });
 
   // The other build only a release has: the API's declarations, compiled so
   // an editor on an installed copy can answer what `connect()` returns.
-  await emitTypes();
+  await emitTypes(path.join(out, "types"));
 
   // And the third: the browser bundles a host with no Node resolves through
   // the manifest's `browser` conditions (room phase 4).
-  const bundles = (await buildBrowserBundles()).map((file) => path.relative(root, file));
+  const bundles = (await buildBrowserBundles(out)).map((file) => path.relative(out, file));
 
   // The fourth, and the one an agent waits on: the CLI itself, bundled, so an
   // installed copy starts without tsx and without 297 source files.
-  await buildCliBundle();
+  await buildCliBundle(out);
 
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-release-"));
+  return ["packages/web/dist", "types", path.normalize(CLI_BUNDLE_DIR), ...bundles];
+}
+
+/**
+ * **The release tree, as a git tree object**: `base` (a commit or a tree),
+ * plus the `artifacts` built into `out`, minus RELEASE_DROPS and `.github`,
+ * plus the generated entries and the release manifest. Nothing is committed
+ * and no ref moves; `main()` does that with the hash this returns, and the
+ * guard in `test/release-tree.test.ts` extracts it and reads what it ships.
+ */
+export async function assembleReleaseTree({ base, out, artifacts, sourceCommit = "", builtAt = "" }) {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-release-index-"));
   try {
-    // A temporary index: HEAD's tree, plus dist (gitignored, hence -f), plus
-    // the compiled types, plus a package.json that only exists on this branch.
+    // A temporary index: the base tree, plus the built artifacts (gitignored,
+    // hence -f, and added from `out` as a work tree of its own), plus a
+    // package.json that only exists on this branch.
     const env = { ...process.env, GIT_INDEX_FILE: path.join(tmp, "index") };
-    git("read-tree", head, { env });
-    git("add", "-f", "packages/web/dist", { env });
-    git("add", "-f", "types", { env });
-    git("add", "-f", CLI_BUNDLE_DIR, { env });
-    for (const bundle of bundles) git("add", "-f", bundle, { env });
+    git("read-tree", base, { env });
+    const gitDir = git("rev-parse", "--absolute-git-dir");
+    for (const artifact of artifacts) {
+      git(`--git-dir=${gitDir}`, `--work-tree=${out}`, "add", "-f", "--", artifact, { env, cwd: out });
+    }
     /**
      * **`.github/` does not ship.**
      *
@@ -662,33 +728,221 @@ async function main() {
      * a daemon serves), `packages/rc/dist` and `packages/cli/dist` (the
      * bundles), `types/` (what an editor resolves), the modules' `assets/`
      * and `agent-guide.md`, `.agents/skills` (which `isocan setup` copies out),
-     * `WHATSNEW.md`, and the three scripts a CLI verb can spawn.
+     * `WHATSNEW.md`, and the scripts a CLI verb can spawn.
      */
     for (const spec of RELEASE_DROPS) {
       git("rm", "-r", "--cached", "--ignore-unmatch", "-q", ...spec, { env });
     }
-    for (const [file, { out: name }] of Object.entries(RELEASE_NODE_ENTRIES)) {
-      const generated = path.join(tmp, path.basename(file));
-      await fs.writeFile(generated, nodeEntrySource(name));
+    const generatedEntries = [
+      ...Object.entries(RELEASE_NODE_ENTRIES).map(([file, { out: name }]) => [file, nodeEntrySource(name)]),
+      ...Object.entries(RELEASE_SCRIPTS).map(([file, name]) => [file, scriptEntrySource(file, name)]),
+    ];
+    for (const [i, [file, source]] of generatedEntries.entries()) {
+      const generated = path.join(tmp, `entry-${i}.mjs`);
+      await fs.writeFile(generated, source);
       const hash = git("hash-object", "-w", "--path", file, generated, { env });
       git("update-index", "--add", "--cacheinfo", `100644,${hash},${file}`, { env });
     }
 
-    // From HEAD, not from disk: a release is of a commit, so nothing an
+    // From the base, not from disk: a release is of a commit, so nothing an
     // install left lying in the working tree can end up in the manifest.
-    const pkg = JSON.parse(git("show", `${head}:package.json`));
+    const pkg = JSON.parse(git("show", `${base}:package.json`));
     const manifest = path.join(tmp, "package.json");
-    await fs.writeFile(
-      manifest,
-      JSON.stringify(
-        releaseManifest(pkg, head.slice(0, 7), git("log", "-1", "--pretty=%cI", head)),
-        null,
-        2,
-      ) + "\n",
-    );
+    await fs.writeFile(manifest, JSON.stringify(releaseManifest(pkg, sourceCommit, builtAt), null, 2) + "\n");
     const blob = git("hash-object", "-w", "--path", "package.json", manifest, { env });
     git("update-index", "--add", "--cacheinfo", `100644,${blob},package.json`, { env });
-    const tree = git("write-tree", { env });
+    return git("write-tree", { env });
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+}
+
+/**
+ * **The working tree as a git tree object** — tracked files as they are on
+ * disk, plus untracked ones `.gitignore` does not hide — so a test can
+ * assemble the release of the change in front of it rather than of the last
+ * commit. Written with a throwaway index; nothing is committed.
+ */
+export async function worktreeTree() {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-worktree-index-"));
+  try {
+    const env = { ...process.env, GIT_INDEX_FILE: path.join(tmp, "index") };
+    git("read-tree", "HEAD", { env });
+    git("add", "-A", { env });
+    return git("write-tree", { env });
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+}
+
+/** Write a tree (or commit) into `dir` as files, the way an install lays it out. */
+export async function extractTree(tree, dir) {
+  const tar = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "isocan-release-tar-")), "tree.tar");
+  try {
+    git("archive", "--format=tar", "-o", tar, tree);
+    await fs.mkdir(dir, { recursive: true });
+    const done = spawnSync("tar", ["-xf", tar, "-C", dir], { encoding: "utf8" });
+    if (done.status !== 0) throw new Error(`tar -xf failed: ${(done.stderr || "").trim()}`);
+  } finally {
+    await fs.rm(path.dirname(tar), { recursive: true, force: true });
+  }
+  return dir;
+}
+
+/**
+ * **Every import in a shipped tree that nothing in that tree can satisfy**
+ * (cleanup phase 4, TR-4, 27 Sep 2026).
+ *
+ * The release used to be checked by its drop LIST — "docs is dropped, test is
+ * dropped" — and never by what the list left behind. So on 18 Sep the
+ * sources went and three files that imported them stayed, and every install
+ * carried an `isocan canvas shot` that died with ERR_MODULE_NOT_FOUND for
+ * nine days. This reads the tree instead: every `.js`/`.mjs` file in `dir`,
+ * every static import and every `import()` of a literal, resolved the way an
+ * install would resolve it.
+ *
+ * - relative paths must name a file in the tree (ESM names its extension);
+ * - `/…` paths, in the web app, name a file under the app's root;
+ * - `node:` and the other builtins, and URLs (`data:`, `https:`), resolve;
+ * - the package's own name resolves through its `exports`;
+ * - a bare name resolves if the manifest declares it (npm installs it) or it
+ *   is CLI_BUNDLE_EXTERNAL — imported by the hosted daemon alone, from an
+ *   image that installs it; everything else is unresolvable.
+ *
+ * `esbuild` does the reading, with every import marked external, so each file
+ * is parsed once and nothing is followed or bundled. `require()` is left out
+ * on purpose: the bundles' CommonJS half carries optional requires inside
+ * `try` (ws's `bufferutil`), which are not imports and would be noise.
+ * An `import()` of a computed string cannot be read, and is not.
+ *
+ * Returns `[{ file, specifier }]`, paths relative to `dir`; empty is the pass.
+ */
+export async function unresolvedImports(dir) {
+  const { build } = await import("esbuild");
+  const { isBuiltin } = await import("node:module");
+  const manifest = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));
+  const files = [];
+  const walk = async (at) => {
+    for (const entry of await fs.readdir(at, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      const full = path.join(at, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (/\.m?js$/.test(entry.name)) files.push(full);
+    }
+  };
+  await walk(dir);
+  if (files.length === 0) return [];
+
+  const seen = [];
+  await build({
+    entryPoints: files,
+    bundle: true,
+    write: false,
+    outdir: path.join(dir, ".unresolved-imports"),
+    format: "esm",
+    platform: "neutral",
+    logLevel: "silent",
+    plugins: [
+      {
+        name: "record-imports",
+        setup(b) {
+          b.onResolve({ filter: /.*/ }, (args) => {
+            if (args.kind === "entry-point") return undefined;
+            if (args.kind === "import-statement" || args.kind === "dynamic-import") {
+              seen.push({ importer: args.importer, specifier: args.path });
+            }
+            return { path: args.path, external: true };
+          });
+        },
+      },
+    ],
+  });
+
+  const isFile = (file) => {
+    try {
+      return statSync(file).isFile();
+    } catch {
+      return false;
+    }
+  };
+  const web = path.join(dir, "packages/web/dist");
+  const selfReference = (subpath) => {
+    const entry = manifest.exports?.[subpath];
+    const target = typeof entry === "string" ? entry : (entry?.import ?? entry?.default);
+    return typeof target === "string" && isFile(path.join(dir, target));
+  };
+  const resolves = ({ importer, specifier }) => {
+    const bare = specifier.split(/[?#]/)[0];
+    if (isBuiltin(bare)) return true;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(bare)) return !bare.startsWith("node:") && !bare.startsWith("file:");
+    if (bare.startsWith("./") || bare.startsWith("../")) return isFile(path.resolve(path.dirname(importer), bare));
+    if (bare.startsWith("/")) return importer.startsWith(web + path.sep) && isFile(path.join(web, bare));
+    const parts = bare.split("/");
+    const name = bare.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
+    const subpath = [".", ...parts.slice(bare.startsWith("@") ? 2 : 1)].join("/");
+    if (name === manifest.name) return selfReference(subpath);
+    if (CLI_BUNDLE_EXTERNAL.includes(name)) return true;
+    return Boolean(manifest.dependencies?.[name]);
+  };
+  const unresolved = new Map();
+  for (const found of seen) {
+    if (resolves(found)) continue;
+    const file = path.relative(dir, found.importer).split(path.sep).join("/");
+    unresolved.set(`${file}\0${found.specifier}`, { file, specifier: found.specifier });
+  }
+  return [...unresolved.values()].sort((a, b) => a.file.localeCompare(b.file) || a.specifier.localeCompare(b.specifier));
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const force = args.includes("--force");
+  const push = !args.includes("--no-push");
+
+  // A release names the commit it was built from, so that commit has to be
+  // real: not your unsaved edits, and not a commit only this laptop has.
+  if (!force) {
+    const dirty = git("status", "--porcelain");
+    if (dirty && !process.env.CI) {
+      throw new Error(
+        `working tree is dirty — commit or stash first (--force to override):\n${dirty}`,
+      );
+    }
+    if (dirty) {
+      // On a runner the tree IS the commit: the dirt is whatever `npm ci`
+      // churned, and none of it can reach the release — everything below
+      // comes from HEAD, except the built app, which is the point.
+      console.error(`release: ignoring a dirty tree on CI:\n${dirty}`);
+    }
+    if (!git("branch", "-r", "--contains", "HEAD")) {
+      throw new Error("HEAD is not on any remote — push it first (--force to override)");
+    }
+  }
+
+  const head = git("rev-parse", "HEAD");
+  const subject = git("log", "-1", "--pretty=%s");
+
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-release-"));
+  try {
+    const artifacts = await buildReleaseArtifacts(out);
+    const tree = await assembleReleaseTree({
+      base: head,
+      out,
+      artifacts,
+      sourceCommit: head.slice(0, 7),
+      builtAt: git("log", "-1", "--pretty=%cI", head),
+    });
+
+    // **Read what is about to ship before shipping it** (TR-4). A file that
+    // imports something the tree does not carry is a broken command on every
+    // install, and the release is the last place that can still refuse it.
+    const shipped = await extractTree(tree, path.join(out, "tree"));
+    const unresolved = await unresolvedImports(shipped);
+    if (unresolved.length > 0) {
+      throw new Error(
+        `the release tree imports what it does not carry — nothing was committed:\n` +
+          unresolved.map(({ file, specifier }) => `  ${file} → ${specifier}`).join("\n"),
+      );
+    }
 
     // First parent: where the branch was. Second: the commit this build is of.
     const previous =
@@ -707,21 +961,8 @@ async function main() {
       console.error("release: not pushed — `git push origin release:release` when ready");
     }
   } finally {
-    await fs.rm(tmp, { recursive: true, force: true });
-    // The emitted declarations were for the release commit, not for main's
-    // working tree — and they cannot be gitignored (see emitTypes), so they
-    // are cleaned up rather than left as untracked noise.
-    await fs.rm(path.join(root, "types"), { recursive: true, force: true });
-    // The bundles are gitignored, so they would be no noise; they go anyway,
-    // because nothing on main resolves them and a stale one could mislead.
-    for (const bundle of Object.values(RELEASE_BROWSER_BUNDLES)) {
-      await fs.rm(path.join(root, bundle), { force: true });
-      await fs.rmdir(path.dirname(path.join(root, bundle))).catch(() => {});
-    }
-    // Same argument for the CLI bundle, and more force behind it: main's `bin`
-    // is the tsx launcher, so a stale `dist/isocan.mjs` left in a checkout is
-    // a copy of the CLI that no longer matches the sources beside it.
-    await fs.rm(path.join(root, CLI_BUNDLE_DIR), { recursive: true, force: true });
+    // Everything built lives in `out`; the checkout was never written to.
+    await fs.rm(out, { recursive: true, force: true });
   }
 }
 

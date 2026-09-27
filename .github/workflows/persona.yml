@@ -46,7 +46,10 @@ jobs:
           node-version-file: .nvmrc
       # The goals point at commands that grade a page in a browser and run
       # eslint; both need the workspace installed and built.
-      - run: npm ci
+      # --ignore-scripts: the root `prepare` would build the web app here, and
+      # the step below builds it again where it can be seen (DC-5, 27 Sep 2026;
+      # the Dockerfile's reason, and test/workflows.test.ts holds it).
+      - run: npm ci --ignore-scripts
       - run: npm run build
 
       # The cheap tier's harness (docs/research/2026-09-07-small-personas.md).

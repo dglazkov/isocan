@@ -39,7 +39,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - run: npm ci
+      # --ignore-scripts: the root `prepare` would build the web app here, and
+      # the step below builds it again where it can be seen (DC-5, 27 Sep 2026;
+      # the Dockerfile's reason, and test/workflows.test.ts holds it).
+      - run: npm ci --ignore-scripts
       # `bundle-bytes` measures a built artifact; without this it would read a
       # stale one or none, and a number nobody rebuilt is a lie rather than a
       # reading.

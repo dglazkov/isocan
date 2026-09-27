@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { withoutComments } from "./source.ts";
 
 const dir = fileURLToPath(new URL("../.github/workflows", import.meta.url));
 const files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f));
@@ -213,5 +214,38 @@ describe("renovate.json keeps its lanes", () => {
   it("merges by itself only what is not a major", () => {
     const auto = config.packageRules.filter((r: { automerge?: boolean }) => r.automerge);
     for (const rule of auto) expect(rule.matchUpdateTypes ?? []).not.toContain("major");
+  });
+});
+
+/**
+ * **The web app is built once per job, not twice** (cleanup phase 4, DC-5,
+ * 27 Sep 2026).
+ *
+ * The root `prepare` (scripts/prepare.mjs) builds `packages/web/dist` on any
+ * install that finds none, which on a fresh runner is every `npm ci`. Three
+ * workflows then ran `npm run build` themselves, where it can be seen — the
+ * right place for it — and so built the app twice a run. A job that builds
+ * the app itself installs with `--ignore-scripts`, as the Dockerfile has
+ * since it was written, and for the reason it gives.
+ */
+describe("the web app is built once per job", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+
+  it("is built by prepare on an ordinary install — the premise of the rule below", () => {
+    expect(withoutComments(readFileSync(`${root}/scripts/prepare.mjs`, "utf8"))).toMatch(/["']run["'],\s*["']build["']/);
+  });
+
+  it("and prepare installs nothing — the install that runs it already did", () => {
+    // It ran `npm install --workspaces` for git installs from `main`, which
+    // resolve the root's dependencies only; those installs stopped (#47), and
+    // in a checkout it was the same install twice (DC-5).
+    expect(withoutComments(readFileSync(`${root}/scripts/prepare.mjs`, "utf8"))).not.toMatch(/["']install["']/);
+  });
+
+  it("a workflow that runs `npm run build` itself installs with --ignore-scripts", () => {
+    const building = files.filter((f) => /^\s*-?\s*run:\s*npm run build\s*$/m.test(read(f)));
+    expect(building.length, "no workflow builds the app — a search over nothing always passes").toBeGreaterThan(0);
+    const twice = building.filter((f) => /npm ci\b(?![^\n]*--ignore-scripts)/.test(read(f)));
+    expect(twice, "these build the web app in `prepare` and again in their own step").toEqual([]);
   });
 });

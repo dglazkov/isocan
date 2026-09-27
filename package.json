@@ -44,25 +44,17 @@
     "board:watch": "node scripts/board-watch.mjs",
     "hooks": "node scripts/install-hooks.mjs"
   },
-  "//": "The runtime deps the CLI needs are declared HERE as well as in packages/cli, so that `npm i -g github:dglazkov/isocan#release` (no publishing) resolves them: a git install installs the root package only. @types/node rides along for the API's consumers \u2014 `connect()`'s surface names Buffer, so an install must carry the type. The workspaces themselves are deliberately NOT dependencies \u2014 bin/workspace-loader.mjs resolves them by path, because link dependencies break every reinstall. `workspaces` and `prepare` are why installs come from the release branch and not from here: npm's git installer empties the install directory for any package it thinks it must build first (#47, scripts/release.mjs).",
+  "//": "Root dependencies are what the root's own files import \u2014 index.mjs and rc.mjs (tsx), scripts/ (ws, the MCP SDK, unified, remark-parse, css-tree, parse5), test/setup.ts (undici) \u2014 plus @types/node, the one dependency the release manifest declares (RELEASE_DEPENDENCIES in scripts/release.mjs), and @types/css-tree, which stays because dropping it makes it dev-only and `npm prune --omit=dev` would take it out of the home image. The copy of the CLI's runtime deps that used to live here served git installs from main, which install an empty directory (#47); installs come from `#release`, whose bundled CLI declares none of them (cleanup phase 4, DC-2; test/packaging.test.ts holds the rule). The workspaces themselves are deliberately NOT dependencies \u2014 bin/workspace-loader.mjs resolves them by path, because link dependencies break every reinstall. `workspaces` and `prepare` are why installs come from the release branch and not from here (#47, scripts/release.mjs).",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^22.13.1",
-    "commander": "^13.1.0",
-    "fastify": "^5.2.1",
-    "nanoid": "^5.0.9",
     "tsx": "^4.19.2",
     "undici": "^7.29.0",
     "ws": "^8.18.0",
-    "zod": "^4.5.1",
     "unified": "^11.0.5",
     "remark-parse": "^11.0.0",
-    "remark-gfm": "^4.0.1",
-    "remark-breaks": "^4.0.0",
-    "remark-rehype": "^11.1.2",
     "css-tree": "^3.2.1",
     "parse5": "^8.0.1",
-    "entities": "^8.1.0",
     "@types/css-tree": "^3.2.0"
   },
   "devDependencies": {

@@ -3,7 +3,7 @@ status: partial
 since: 2026-09-25
 issue: 355
 see: evals, canvas-groups, voice-agent, extensions
-note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–2 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page; a canvas switch no longer writes one canvas's seen-mark or ink onto another; a cursor stream no longer re-renders every item); phase 4 next.
+note: a seven-lane read-only audit on 25 Sep 2026 (React render cost, hook correctness, types and error handling, duplication, dead code, bundle and CSS, tests/scripts/CI) found 91 things, every one verified in code and the load-bearing ones reproduced. This walks them in seven phases ordered by what breaks first — the PR check that cannot finish, four ways the daemon or `isocan rc` exits on one bad input, a history scrub that can blank the app, two ways one canvas's data lands on another, a presence roster that re-renders every item 25 times a second — before the drift and the sweeps. Phases 0–2 closed 27 Sep (the PR check finishes; one bad input costs one socket, one turn or one item, not the process or the page; a canvas switch no longer writes one canvas's seen-mark or ink onto another; a cursor stream no longer re-renders every item; what #release ships now runs); phase 5 next.
 ---
 
 # Cleanup — the walk
@@ -23,7 +23,7 @@ correctness, **DU** duplication, **DC** dead code, **BC** bundle/CSS, **TR**
 tests/scripts/CI.
 
 **Where we are:** designed 25 Sep 2026; taken up by the conductor 27 Sep.
-Phases 0–3 closed 27 Sep. Next is cleanup phase 4 — then 5 and 6. The audit ran on `2d3ad79b`, and some of it was
+Phases 0–4 closed 27 Sep. Next is cleanup phase 5 — then 6. The audit ran on `2d3ad79b`, and some of it was
 fixed since by other work — marked *Done* where it stands, so a phase does
 not re-fix it; everything else in a phase is re-checked against `main` in its
 brief before anything is built.
@@ -198,7 +198,12 @@ for N items under a cursor stream.
 
 ## Phase 4 — what ships is what runs
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 27 September 2026.** The release guard builds the tree and
+resolves every import it ships — 8 unresolved on today's `#release`, none after;
+`isocan canvas shot`, `--into` and a deck export ran from an `npm pack` install
+of a locally built tree and produced a real screenshot, PDF and slides; the
+build context excludes `packages/**/scripts`. No Docker image was built here
+(no daemon on the machine).
 
 - **DC-1 / TR-1.** `#release` keeps `scripts/canvas-shot.mjs`,
   `deck-export.mjs` and `lib/browser.mjs`, whose imports that branch stopped
@@ -217,6 +222,25 @@ for N items under a cursor stream.
 of every file it ships, and fails on today's `#release`; `isocan canvas shot`
 and a deck export run from an install of that tree; the home image's build
 context carries no `packages/modules/*/scripts`.
+
+**Trajectory:**
+
+- **2026-09-27** — DC-1 was worse than written: beside the missing modules,
+  `--into` named a bin no install has and dropped `--port`, and both scripts
+  called `process.exit` past the `finally` that closes Chrome. The install walk
+  found all three; the release now ships the camera and export as bundles.
+- **2026-09-27** — Open: those bundles are built on their own, not beside the
+  CLI (shared chunks put `--version` at 42 modules, past its budget of 40), at
+  ~780 KB compressed per install. The camera imports the whole of
+  `@isocan/api`, core and server; slimming that is the lever. Waits on work.
+- **2026-09-27** — DC-2 stopped at `@types/css-tree`: dropping the root copy
+  makes it dev-only, and the image's `npm prune --omit=dev` would remove it.
+  TR-8's paid-model scripts are wireframe's `calibrate.ts` and talk's
+  `fast-path-eval.ts`, not judge's, which calls no model.
+- **2026-09-27** — The walk's first commands ran inside the repo, whose
+  `.isocan/project.json` binds to its own canvas on isocan.io, and wrote a
+  synthetic item there; removed as the actor that made it, with Dion's OK.
+  Walks run from an unbound directory.
 
 ## Phase 5 — copies agree
 

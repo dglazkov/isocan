@@ -517,6 +517,7 @@ import { agentSessionOf, keysMovedLines, machineAgentKey, moveToMachineKeys } fr
 import { openInBrowser } from "./browser.ts";
 import { registerOperator, sweptLine } from "./operator.ts";
 import { run } from "./run.ts";
+import { runPackageScript } from "./package-script.ts";
 import { adapterFor, defaultLine, noDefaultLine, noNeedLine, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
 import {
   noSandboxLine,
@@ -5076,9 +5077,10 @@ canvas
 
 /**
  * **A real screenshot of a canvas** (inception phase 2), through the headless
- * browser the graders run — `scripts/canvas-shot.mjs`, which needs the
- * repository checkout and Chrome. `--into` lands it as a new version of a
- * canvas item, the picture the card shows when its own live pull is refused.
+ * browser the graders run — `scripts/canvas-shot.mjs`, which needs Chrome; an
+ * install carries it bundled (cleanup phase 4, DC-1). `--into` lands it as a
+ * new version of a canvas item, the picture the card shows when its own live
+ * pull is refused.
  */
 canvas
   .command("shot <ref>")
@@ -5091,9 +5093,6 @@ canvas
       const ctx = await ctxOf(cmd);
       const target = matchRef(await ctx.client.listCanvases(), ref);
       const script = packagePath("scripts/canvas-shot.mjs");
-      if (!existsSync(script)) {
-        throw new Error("canvas shot needs the repository checkout (scripts/canvas-shot.mjs) and Chrome — run it from a clone of isocan");
-      }
       const { width, height } = sizeFor(opts.size, { width: 1600, height: 1000 });
       // The address, whole, built here by `canvasUrl` — so the script never
       // spells the one shape this repo refuses to write twice.
@@ -5106,15 +5105,17 @@ canvas
         await personalCaptureOwner(ctx.home, origin, target.id, ctx.actor);
         ownerInput = JSON.stringify({ actor: ctx.actor });
       }
-      const args = [script, "--url", canvasUrl(origin, target.id), "--width", String(width), "--height", String(height)];
+      const args = ["--url", canvasUrl(origin, target.id), "--width", String(width), "--height", String(height)];
       if (opts.out) args.push("--out", opts.out);
       if (opts.into) {
         const { canvas: p } = await canvasAndSnapshot(ctx);
         args.push("--into", opts.into, "--on", p.id);
       }
       if (ownerInput) args.push("--owner-from-stdin");
-      const child = spawnSync(process.execPath, args, ownerInput ? { stdio: ["pipe", "inherit", "inherit"], input: ownerInput } : { stdio: "inherit" });
-      if (child.status !== 0) throw new Error(`the screenshot did not land (exit ${child.status ?? "?"})`);
+      // `--into` spawns `isocan edit` from inside the script, which cannot see
+      // this command's `--port`: handed down as ISOCAN_PORT, or that edit
+      // knocks on the default port — another daemon (DC-1's install walk).
+      runPackageScript(script, args, { what: "the screenshot", input: ownerInput, env: { ISOCAN_PORT: String(daemonPort(cmd)) } });
     }),
   );
 
@@ -9333,8 +9334,9 @@ slidesCmd
  * pictures, and the only faithful picture of a slide that draws itself is the
  * one a browser makes: `scripts/deck-export.mjs` opens the app's deck view
  * (core's `deckUrl`, the address `slides show` prints) in the headless Chrome
- * the graders and `canvas shot` use, and prints it. That needs the repository
- * checkout, as `canvas shot` does, and says so rather than failing inside.
+ * the graders and `canvas shot` use, and prints it. That needs Chrome, as
+ * `canvas shot` does; an install carries the script bundled (cleanup phase 4,
+ * DC-1), and a copy that cannot start it says why in words.
  */
 slidesCmd
   .command("export <out>")
@@ -9389,17 +9391,12 @@ slidesCmd
         throw new Error(`export writes deck.pdf, deck.html or notes.md — not ${ext || "a file with no extension"}`);
       }
       if (ext === ".pdf" || opts.png) {
-        const script = packagePath("scripts/deck-export.mjs");
-        if (!existsSync(script)) {
-          throw new Error("PDF and PNG export need the repository checkout (scripts/deck-export.mjs) and Chrome — run it from a clone of isocan, or export deck.html");
-        }
         const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
-        const args = [script, "--url", deckUrl(origin, p.id)];
+        const args = ["--url", deckUrl(origin, p.id)];
         if (opts.notes) args.push("--notes");
         if (ext === ".pdf") args.push("--pdf", out);
         if (opts.png) args.push("--png", opts.png);
-        const child = spawnSync(process.execPath, args, { stdio: ctx.json ? "pipe" : "inherit" });
-        if (child.status !== 0) throw new Error(`the export did not land (exit ${child.status ?? "?"})`);
+        runPackageScript(packagePath("scripts/deck-export.mjs"), args, { what: "the export", quiet: ctx.json, env: { ISOCAN_PORT: String(daemonPort(cmd)) } });
         if (ext === ".pdf") written.push(out);
         if (opts.png) written.push(opts.png);
       }

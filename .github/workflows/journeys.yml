@@ -59,7 +59,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - run: npm ci
+      # --ignore-scripts: the root `prepare` would build the web app here, and
+      # the step below builds it again where it can be seen (DC-5, 27 Sep 2026;
+      # the Dockerfile's reason, and test/workflows.test.ts holds it).
+      - run: npm ci --ignore-scripts
       # The journeys drive the BUILT app, which is the only version anybody
       # ever uses. Walking a dev server would be walking something else.
       - run: npm run build

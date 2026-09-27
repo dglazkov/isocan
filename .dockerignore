@@ -63,4 +63,11 @@ vitest.config.ts
 # The ROOT `scripts/` stays: package.json's `prepare` names scripts/prepare.mjs,
 # and a manifest pointing at a file that is not there is a trap for any npm
 # command in the image that decides to run a lifecycle hook.
-packages/*/scripts
+#
+# `**`, not `*` (cleanup phase 4, TR-8, 27 Sep 2026): the modules are packages
+# one level deeper, and `packages/*/scripts` never reached
+# packages/modules/wireframe/scripts/calibrate.ts or talk's fast-path-eval.ts —
+# each a `--budget`-capped run against a paid model — which rode into every
+# home image. `test/dockerignore.test.ts`
+# holds every `scripts/` under packages/ to this line.
+packages/**/scripts

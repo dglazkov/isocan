@@ -32,15 +32,19 @@ const { classifyAutomaticSource } = await import("@isocan/api/context");
 const { paths } = await import("@isocan/server");
 const { BADGE_COOKIE } = await import("@isocan/core");
 const { personalCaptureOwner } = await import("../packages/cli/src/personal-capture.ts");
+const { packageBin } = await import("@isocan/core/packageroot");
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { browser, throughTheDoor, until } from "./lib/browser.mjs";
 
-const repo = fileURLToPath(new URL("..", import.meta.url));
-const cli = path.join(repo, "packages/cli/bin/isocan.js");
+// The CLI this copy declares, read from its manifest: the tsx launcher in a
+// checkout, the bundle in an install. It was `packages/cli/bin/isocan.js`
+// counted from this file, which an install has never had and which, once this
+// file is bundled, is counted from the wrong directory besides (cleanup
+// phase 4, DC-1, 27 Sep 2026).
+const cli = packageBin();
 const argv = process.argv.slice(2);
 const arg = (name) => {
   const i = argv.indexOf(name);
@@ -101,7 +105,10 @@ try {
   if (into) {
     const args = [cli, ...(on ? ["--canvas", on] : []), "edit", into, out];
     const r = spawnSync(process.execPath, args, { stdio: "inherit" });
-    if (r.status !== 0) process.exit(r.status ?? 1);
+    // exitCode, not exit(): `process.exit` skips the `finally` below, which
+    // is what closes Chrome — a failed edit left one running per attempt
+    // (cleanup phase 4, DC-1, 27 Sep 2026).
+    if (r.status !== 0) process.exitCode = r.status ?? 1;
   }
 } finally {
   // Closing the owned browser destroys its exact fresh profile, including

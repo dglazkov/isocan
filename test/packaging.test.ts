@@ -16,24 +16,59 @@ const readJson = async (rel: string) =>
   JSON.parse(await fs.readFile(path.join(repo, rel), "utf8"));
 
 describe("installable straight from git", () => {
-  it("the root package is the CLI: a bin, and the deps a git install must resolve", async () => {
+  it("the root package is the CLI's bin, and declares only what its own files import", async () => {
     const pkg = await readJson("package.json");
     expect(pkg.bin?.isocan).toBe("packages/cli/bin/isocan.js");
-    // A git install resolves the ROOT package's dependencies only, so what
-    // the CLI needs at runtime has to be listed here too.
-    const cli = await readJson("packages/cli/package.json");
-    const server = await readJson("packages/server/package.json");
-    for (const dep of Object.keys({ ...cli.dependencies, ...server.dependencies })) {
-      if (dep.startsWith("@isocan/")) continue; // resolved by path, see below
-      expect(pkg.dependencies, `${dep} is missing from the root package`).toHaveProperty(dep);
-    }
+    /**
+     * **Not a copy of the CLI's dependencies any more** (cleanup phase 4,
+     * DC-2, 27 Sep 2026). That copy existed because a git install of `main`
+     * resolves the root package's dependencies only — and git installs of
+     * `main` stopped: npm installs an empty directory from it (#47), and the
+     * release branch's bundled CLI declares none of them. Kept, the copy was
+     * nine packages nothing at the root imports, each one a second place a
+     * range could drift.
+     *
+     * So a root dependency is here because a root file imports it, because
+     * the release manifest declares it, or because it is named below with why.
+     */
+    const { RELEASE_DEPENDENCIES } = await import("../scripts/release.mjs");
+    const kept: Record<string, string> = {
+      "@types/css-tree":
+        "dropping it makes it dev-only in the lockfile, and the Dockerfile's `npm prune --omit=dev` would take it out of the home image",
+    };
+    const { withoutComments } = await import("./source.ts");
+    // The root's own files: everything outside the workspaces, their builds,
+    // node_modules, and the dot-directories (worktrees live under `.claude`).
+    const rootFiles: string[] = [];
+    const walk = async (dir: string): Promise<void> => {
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name === "dist" || entry.name.startsWith(".")) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (full !== path.join(repo, "packages")) await walk(full);
+        } else if (/\.(m?js|cjs|tsx?)$/.test(entry.name)) rootFiles.push(full);
+      }
+    };
+    await walk(repo);
+    const code = (await Promise.all(rootFiles.map((file) => fs.readFile(file, "utf8"))))
+      .map(withoutComments)
+      .join("\n");
+    const imported = (name: string) =>
+      new RegExp(`(?:from|import\\(|require\\()\\s*["'\`]${name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}(?:["'\`/])`).test(code);
+    const unexplained = Object.keys(pkg.dependencies).filter(
+      (name) => !imported(name) && !(name in RELEASE_DEPENDENCIES) && !(name in kept),
+    );
+    expect(unexplained, "declared at the root, imported by nothing at the root").toEqual([]);
+    // And a name kept on purpose is still a root dependency — a stale
+    // exception is a rule nobody can read.
+    for (const name of Object.keys(kept)) expect(pkg.dependencies).toHaveProperty(name);
   });
 
   it("keeps the cloud backing's 43 MiB out of the CLI install, in both directions", async () => {
     // The two-way guard, and the direction that matters is the SECOND one.
-    // The test above says "what a workspace needs at runtime must be in the
-    // root manifest too", and @google-cloud/firestore and @google-cloud/storage
-    // are the first dependencies that must NOT be — 156 packages and ~43 MiB
+    // The root manifest once carried a copy of what the CLI needs at runtime
+    // (DC-2 removed it), and @google-cloud/firestore and @google-cloud/storage
+    // were the first dependencies that must NOT be — 156 packages and ~43 MiB
     // onto every `npm i -g github:dglazkov/isocan#release`, for a daemon that
     // runs FileStore and never loads a line of it. So they live in a fourth
     // workspace nobody installs, `daemon.ts` reaches it by dynamic import, and

@@ -192,7 +192,14 @@ describe("the release CLI is a bundle", () => {
     // release asks for nothing that is code — and `@types/node` is not code.
     expect(Object.keys(released.dependencies)).toEqual(Object.keys(RELEASE_DEPENDENCIES));
     expect(Object.keys(released.dependencies).length).toBeLessThan(5);
-    expect(Object.keys(pkg.dependencies).length).toBeGreaterThan(15);
+    // What the bundle inlines is what the workspaces it folds in declare —
+    // the root stopped carrying a copy of it (cleanup phase 4, DC-2).
+    const inlined = new Set(
+      ["cli", "server", "core", "api", "mcp", "rc"].flatMap((ws) =>
+        Object.keys(JSON.parse(readFileSync(path.join(repo, "packages", ws, "package.json"), "utf8")).dependencies ?? {}),
+      ).filter((name) => !name.startsWith("@isocan/")),
+    );
+    expect(inlined.size).toBeGreaterThan(15);
     for (const why of Object.values(RELEASE_DEPENDENCIES)) {
       expect(why.length, "a survivor with no stated reason is a survivor nobody chose").toBeGreaterThan(20);
     }
