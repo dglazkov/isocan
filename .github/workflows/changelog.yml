@@ -116,3 +116,20 @@ jobs:
           gh pr create --base main --head "changelog/$DAY" \
             --title "Changelog: $DAY" \
             --body "Written from the day's commits by \`scripts/changelog-day.mjs\`. Read it before merging — the summary is a judgement, and judgements are the part worth checking."
+
+      # **The queue drains itself** (AGENTS.md, "The night shift's pull
+      # requests"). Every night, whether or not the day had commits — so no
+      # `steps.gather` condition here: a quiet night is exactly when an old
+      # draft should still move. A PR whose day somebody wrote by hand on main
+      # is closed (branch kept); one open three days is merged as it stands,
+      # a draft indexed as a draft, after test/changelog.test.ts passes on the
+      # branch. Nothing else is touched. The rules are scripts/changelog-drain.mjs.
+      - name: Drain the queue
+        # Not skipped when opening tonight's PR failed, either.
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "isocan changelog"
+          git config user.email "noreply@github.com"
+          node scripts/changelog-drain.mjs

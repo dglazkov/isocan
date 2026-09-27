@@ -118,7 +118,8 @@ draft*, marker intact and index row saying so — the workflow's founding
 argument is that a draft nobody has written up beats a missing day, and a
 merged draft on `main` stays editable where a closed PR does not. And the one
 supersede-close: when the day's page already exists on `main`, written by a
-person, the run closes its own PR and says so.
+person, the run closes its own PR and says so. Both halves are
+`scripts/changelog-drain.mjs`, the workflow's last step, run every night.
 
 **Dependencies are Renovate's, in four lanes** (22 Sep 2026). `renovate.json`
 is the whole policy; one branch per lane, updated in place, so the rule above
