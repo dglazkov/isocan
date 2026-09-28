@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -34,6 +35,32 @@ describe("the tool rail's tooltips", () => {
     }
     expect(addDoor).toMatch(/data-tip=\{open \? undefined : "Add to the canvas/);
     expect(css).toMatch(/\.tool-btn\[data-tip\]::after\s*\{[^}]*content:\s*attr\(data-tip\)/);
+  });
+
+  /**
+   * **Every rail button, wherever it is written** (28 Sep 2026). The check
+   * above reads CanvasTools.tsx and the Add door, so the design-system door —
+   * a `tool-btn` rendered from its own file, DesignSystemsButton.tsx — kept
+   * the browser's `title` tip for weeks while the rest of the rail was drawn.
+   * Reported by Dion as "an old school popup". So the rule now walks every
+   * component: a button that can wear `tool-btn` speaks through data-tip,
+   * never title, whichever file it lives in.
+   */
+  it("hold for a rail button written in any component, not just the rail's own file", () => {
+    const dir = fileURLToPath(new URL("../src/components/", import.meta.url));
+    const files = readdirSync(dir, { recursive: true }).map(String).filter((f) => f.endsWith(".tsx"));
+    const offenders: string[] = [];
+    let seen = 0;
+    for (const file of files) {
+      const src = readFileSync(join(dir, file), "utf8");
+      for (const b of src.match(/<button[\s\S]*?>/g) ?? []) {
+        if (!/["`]tool-btn/.test(b)) continue;
+        seen++;
+        if (/\btitle=/.test(b) || !/data-tip=/.test(b)) offenders.push(`${file}: ${b.slice(0, 120).replace(/\s+/g, " ")}`);
+      }
+    }
+    expect(seen, "found rail buttons outside the rail's own file too").toBeGreaterThanOrEqual(6);
+    expect(offenders, "a rail button must carry data-tip and never title").toEqual([]);
   });
 
   it("keep the name for screen readers, since a pseudo-element is not read", () => {
