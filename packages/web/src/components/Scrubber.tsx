@@ -1,3 +1,4 @@
+import "./scrubber.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Item, LogEntry, Major, SkippedEntry, TrackBucket } from "@isocan/core";
 import { ago, axisTicks, majors, majorWhat, past, span, track } from "@isocan/core";

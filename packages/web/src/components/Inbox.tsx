@@ -1,3 +1,4 @@
+import "./inbox.css";
 import { useState } from "react";
 import { ago, inboxTally, newSince, threadPath, type Actor, type InboxEntry } from "@isocan/core";
 import { useInboxStore } from "../stores/inboxStore.ts";

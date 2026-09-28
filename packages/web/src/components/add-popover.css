@@ -1,0 +1,72 @@
+/* ---------- Add ----------
+   Loaded with AddPopover, never on a first visit: moved out of `styles.css`
+   on 27 Sep 2026 (the lazy-only queue, cleanup phase 6). Its chunk is
+   reached only from CanvasTools' lazy chunk, so the sheet costs the entry
+   nothing. */
+
+.add-inherit {
+  display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px;
+  font-size: 11.5px; color: var(--ink-muted); line-height: 1.4; cursor: pointer;
+  white-space: normal;
+}
+.add-inherit input { margin: 2px 0 0; }
+/* ---------- top-bar create actions ---------- */
+/* "＋ Site": ask for the address right below the button that asked. */
+/* Opens to the LEFT of its button, because its button now lives on the right
+   rail: hanging down-and-left from the top bar put it on screen, and the same
+   rule on the rail puts it off the edge. Aligned to the button's own row so
+   the field appears beside the thing you pressed. */
+.site-popover {
+  position: absolute; top: 0; right: calc(100% + 8px); z-index: var(--z-popover);
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-pop); white-space: nowrap;
+}
+.site-popover .text-input { width: 220px; }
+/* Place a canvas: the site popover's shape with a list under the field —
+   your canvases, most recent first, narrowed as you type; or the one row an
+   address names. */
+/* The one Add door: the picker's shape, with what Enter would do said under
+   the field and four rows that narrow it. The rows are radios in a group,
+   so a state chosen is a state a reader is told. */
+.add-door { position: relative; }
+/* **Where the Add popover sits.** It hung off the TOP of the + button and grew
+   downward, and the + is the last thing on the rail: on a short window the
+   list of canvases ran off the bottom of the viewport, and the last rows were
+   unreachable. So it is placed against the viewport, not the button — centred
+   beside the rail like the rail itself, never taller than the window, and its
+   list scrolls inside it rather than pushing the Add button out of reach.
+   The right offset is the rail's inset plus its width plus the gutter. */
+.add-door .add-popover {
+  position: fixed; top: 50%; right: calc(var(--edge) + 40px + 20px);
+  transform: translateY(-50%);
+  max-height: calc(100vh - 2 * var(--edge)); overflow: auto;
+}
+.add-popover { width: 340px; }
+/* The field, the pills and the inherit line all size to the panel, so
+   mounting or unmounting any of them cannot move its edge. */
+.add-preview { font-size: 11px; color: var(--ink-muted); white-space: normal; min-height: 1.3em; }
+.add-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
+.add-kind {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 999px; background: none; cursor: pointer;
+  color: var(--ink-muted); font: inherit; font-size: 11.5px;
+}
+.add-kind:hover, .add-kind:focus-visible { color: var(--ink); background: var(--chip); outline: none; }
+.add-kind.active { color: var(--accent-text); border-color: transparent; background: var(--accent-wash); }
+.canvas-picker { flex-direction: column; align-items: stretch; gap: 8px; }
+.canvas-picker .text-input { width: 300px; }
+.canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: min(280px, 36vh); overflow: auto; }
+.canvas-picker-row {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 6px 8px; border: none; border-radius: 6px; background: none; cursor: pointer;
+  color: var(--ink); text-align: left; font: inherit;
+}
+.canvas-picker-row:hover, .canvas-picker-row:focus-visible { background: var(--chip); outline: none; }
+.canvas-picker-title { font-size: 12.5px; font-weight: 600; }
+.canvas-picker-meta { font-size: 10.5px; color: var(--ink-muted); }
+.canvas-picker-note { padding: 6px 8px; font-size: 11px; color: var(--ink-muted); white-space: normal; }
+.site-error {
+  font-size: 12px; color: var(--danger); white-space: normal;
+  overflow-wrap: anywhere;
+}

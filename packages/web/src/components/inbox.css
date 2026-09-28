@@ -1,0 +1,54 @@
+/* ---------- the Inbox ----------
+   Loaded with Inbox, which the home screen and the navigation's panel both
+   render: moved out of `styles.css` on 27 Sep 2026 (the lazy-only queue,
+   cleanup phase 6). Navigation imports Inbox statically, so this sheet
+   arrives with Navigation's lazy chunk on every page — after the first paint,
+   not in its way. The button and the panel's frame are Navigation's and stay
+   in `styles.css`. */
+
+/* The home and the in-app notification read one inbox, with explicit partial
+   failure and ordinary links to conversations at their actual homes. */
+.home-inbox { margin: 24px 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.inbox-heading { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.inbox-heading h2 { margin: 0; font-size: 16px; flex: 1; }
+.inbox-heading label { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+.inbox-tally, .inbox-note { color: var(--ink-soft); font-size: 13px; }
+.inbox-unavailable { font-size: 13px; color: var(--ink); }
+.inbox-entries { max-height: 360px; overflow: auto; }
+/* A row is a face and what was said beside it, like every other place in the
+   app where somebody speaks. The grid keeps the body's left edge under the
+   name rather than under the disc, so two lines of message read as a
+   paragraph and not as a caption on a picture. */
+.inbox-entry {
+  display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start;
+  padding: 10px; border-radius: var(--radius); color: var(--ink); text-decoration: none;
+  border-top: 1px solid var(--line);
+}
+.inbox-entry:first-child { border-top: 0; }
+/* Hover and keyboard focus are the same state: rows are links inside a
+   scroller, and the keyboard had no visible answer at all before. */
+.inbox-entry:hover, .inbox-entry:focus-visible { background: var(--chip); outline: none; }
+.inbox-entry:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.inbox-entry:hover .inbox-body, .inbox-entry:focus-visible .inbox-body { color: var(--ink); }
+/* Unread, said quietly: the accent bar is on the row that is new rather than
+   on every row, so "what arrived since I looked" survives Everything. */
+.inbox-entry.fresh { box-shadow: inset 2px 0 0 var(--accent); }
+.inbox-entry.fresh .inbox-entry-meta strong { font-weight: 700; }
+/* The disc itself is `.face-mark`, which the row already wears — the facepile's
+   own rule, so an inbox face and a canvas face cannot drift apart. */
+.inbox-said { display: grid; gap: 4px; min-width: 0; }
+.inbox-entry-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 12px; color: var(--ink-soft); }
+.inbox-entry-meta strong { color: var(--ink); }
+/* An agent is marked where the name is, because the inbox fills with agents
+   faster than with people and the difference decides whether you open it. */
+.inbox-agent { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; padding: 1px 5px; border-radius: 999px; background: var(--chip); color: var(--ink-soft); }
+.inbox-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.inbox-reason.mentioned { color: var(--accent-text); font-weight: 600; }
+.inbox-when { font-variant-numeric: tabular-nums; }
+/* Two lines, not one: the single ellipsised line cut every real message at
+   about sixty characters. The whole row carries the full text as its title. */
+.inbox-body { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; line-height: 1.4; color: var(--ink-soft); }
+.inbox-earlier { display: block; font-size: 11px; color: var(--ink-soft); }
+.inbox-home { color: var(--ink-soft); font-size: 11px; }
+.inbox-reason, .inbox-refresh { margin-left: auto; }
+.navigation-inbox-panel .home-inbox { margin: 0; border: 0; }

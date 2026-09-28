@@ -328,12 +328,19 @@ that can only go down.
   files to 146, which is what the build holds), so its ceiling rose once, 658 to
   713, with no CSS moved. The word-match export checks had counted a dead import
   as a use; `RefusalKind` was un-exported with it.
-- **2026-09-27** — Open: the spawner ratchet and `walksBinary` both miss an
-  aliased `spawn` import — one reading, one blind spot. Waits on work.
-- **2026-09-27** — Open: 713 lazy-only rules remain in `styles.css`, a queue
-  under a ratchet (most would cost entry JS to move); `KNOWN_TWICE` holds 10.
-  `.anatomy-tree`'s second block overrides the phone layout's `position:
-  absolute` — probably wrong on phones today; waits on a person to look.
+- **2026-09-27** — Answered 27 Sep: one reading, `callsSpawn`, knows a file's
+  own `child_process` bindings, for both. Over the repo it found nothing new —
+  85 walkers, 7 spawners — so the blind spot hid nothing. Was: both missed an
+  aliased `spawn` import.
+- **2026-09-27** — Answered in part, 27 Sep: 394 rules moved into twelve
+  component sheets, 713 to 319, entry CSS 154,900 to 115,808 B, entry JS 47 B
+  under; 37 scenes compared in a browser. Was: 713 lazy-only rules.
+- **2026-09-27** — Open: 319 lazy-only rules; each further sheet costs ~40 B of
+  entry JS, and IdentityMenu shares `.identity-menu` with YourBench.
+  `design-review.css` still styles `.design-lint pre`; `measure.mjs`'s CSS
+  metrics read `styles.css` alone. `KNOWN_TWICE` holds 9.
+- **2026-09-27** — Open: `.anatomy-tree`'s second block overrides the phone
+  layout's `position: absolute` — probably wrong on phones; waits on a person.
 
 ---
 

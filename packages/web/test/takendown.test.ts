@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { rules } from "./cssrules.ts";
+import { loadedWith, rules } from "./cssrules.ts";
 
 /**
  * **What a tab does when its canvas has been taken down** — operator phase 2,
@@ -104,7 +104,7 @@ describe("the canvas list", () => {
   });
 
   it("greys the card and takes the pointer off it", () => {
-    const sheet = rules();
+    const sheet = rules(loadedWith("canvas-list.css"));
     const card = sheet.filter((rule) => rule.selector === ".canvas-card.taken-down");
     expect(card.length, ".canvas-card.taken-down should be styled").toBeGreaterThan(0);
     // A card with no link in it must not go on offering a pointer.

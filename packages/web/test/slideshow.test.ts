@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SHORTCUTS } from "@isocan/core";
 import { crossesCover } from "../src/lib/keys.ts";
 import { FLIP_NEXT, FLIP_PREV } from "../src/lib/deckflip.ts";
+import { loadedWith } from "./cssrules.ts";
 
 /**
  * ⌘-arrows in full screen walk to the next screen, still full screen — a
@@ -159,10 +160,8 @@ describe("marking a selection as slides", () => {
  * One timer, not a second one: `.resting` is already on the ancestor.
  */
 describe("the stage's chrome rests with the bar above it", () => {
-  const css = readFileSync(
-    fileURLToPath(new URL("../src/styles.css", import.meta.url)),
-    "utf8",
-  );
+  // The stage's rules ship with it (`artifact-stage.css`) since 27 Sep 2026.
+  const css = loadedWith("artifact-stage.css");
   const fs = readFileSync(
     fileURLToPath(new URL("../src/components/FullScreen.tsx", import.meta.url)),
     "utf8",

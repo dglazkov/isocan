@@ -5,7 +5,8 @@ import { applyEdits, foldEdit, type AttrEdit, type InPlaceEdit } from "../src/li
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const frame = read("../src/components/TextEditFrame.tsx");
-const css = read("../src/styles.css");
+/** The stage's own sheet, loaded with ArtifactStage since 27 Sep 2026 (cleanup phase 6). */
+const css = read("../src/components/artifact-stage.css");
 
 /**
  * **Element properties on the stage** (WYSIWYG, stage 2). An attribute edit

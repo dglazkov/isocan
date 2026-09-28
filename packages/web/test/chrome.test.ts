@@ -19,7 +19,7 @@ import {
   underRowSpellsItOut,
   underSlotFor,
 } from "../src/lib/chrome.ts";
-import { sheets } from "./cssrules.ts";
+import { loadedWith, sheets } from "./cssrules.ts";
 
 const actor = { id: "usr_a", name: "A" };
 const stamp = { createdAt: "", createdBy: actor, updatedAt: "", updatedBy: actor };
@@ -679,7 +679,8 @@ describe("the Chat and the comments say which they are", () => {
      * included" — is a caption and may be set however it reads best. What may
      * not vary is a name.
      */
-    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+    // The workbench's own names ride in `workbench.css` since 27 Sep 2026.
+    const css = loadedWith("workbench.css");
     const shouts = (selector: string) => {
       const rule = new RegExp(`\\${selector}\\s*\\{[^}]*\\}`).exec(css)?.[0] ?? "";
       expect(rule, `${selector} must have a rule`).not.toBe("");

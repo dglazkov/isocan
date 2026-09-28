@@ -1,3 +1,4 @@
+import "./add-popover.css";
 import { isGroupItem, groupContentBox } from "@isocan/core";
 import { creationDestination, QueuedItemError, selectCreatedItems } from "../lib/groupplacement.ts";
 import { groupsEnabled, openGroupCreation } from "../lib/canvasgroups.ts";

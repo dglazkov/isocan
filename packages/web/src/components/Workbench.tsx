@@ -1,3 +1,4 @@
+import "./workbench.css";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";

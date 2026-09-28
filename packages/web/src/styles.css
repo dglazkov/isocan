@@ -482,151 +482,9 @@ img { height: auto; }
 .canvases-head .head-mark { display: inline-flex; align-items: center; gap: 9px; }
 /* What happened, when what happened was not a new card. Inside the create
    form, because the answer belongs beside the button that asked. */
-.create-note { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.45; }
-.create-note.bad { color: var(--warn); }
-.canvases-error {
-  margin: 0 0 16px; padding: 10px 12px; border-radius: var(--radius);
-  background: var(--chip); color: var(--warn); font-size: 13px;
-}
 .canvases-head .home-mark { display: inline-flex; color: var(--ink-soft); }
 .canvases-head .spacer { flex: 1; }
 .canvases-head .who { position: relative; }
-.canvas-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 14px; align-items: start;
-}
-.canvas-card {
-  position: relative;
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-float);
-  box-shadow: var(--shadow-card);
-  display: flex; flex-direction: column;
-  text-align: left;
-  /* No `overflow: hidden`: the peek is an overlay that must leave the box
-     (below — and the box would clip it). No child paints a background to the
-     corners, so nothing needed the clip; the just-made sheen rounds its own
-     corners with `border-radius: inherit`. */
-  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease,
-    filter 0.14s ease;
-}
-/**
- * **Taken down: still here, and visibly not open** (operator phase 2; journey
- * 4 step 3 — *the canvas is there, greyed, with the same sentence, and it does
- * not open*).
- *
- * Greyed rather than hidden, because a canvas that vanished from its owner's
- * own list is indistinguishable from one she lost. Greyed rather than merely
- * annotated, because the card has no link in it any more and a card that looks
- * clickable and is not is a worse lie than a card that looks disabled.
- *
- * The cursor is the tell that costs nothing: `default`, not `pointer`, on the
- * whole card. The hover lift below still applies — the peek still opens, and
- * what happened here before it came down is exactly what somebody reading this
- * card wants.
- */
-.canvas-card.taken-down {
-  background: var(--chip);
-  cursor: default;
-}
-.canvas-card.taken-down h3 {
-  color: var(--ink-soft);
-}
-/** The home's own sentence, in the place the description would be. Not
- * `danger`-coloured: this is an explanation, not an error, and painting it red
- * would tell the owner she did something wrong. */
-.card-taken-down {
-  margin: 4px 0;
-  color: var(--ink);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-/**
- * **Lifted: nearer, not merely highlighted.**
- *
- * Hover and focus are one state here, because focus is the second way the
- * preview opens and a card that grew for the pointer but not for the keyboard
- * would read as two different controls.
- *
- * The lift is doing real work rather than decorating: an open peek covers most
- * of the card below it and leaves a sliver of that card poking out under its
- * bottom edge, which without a shadow reads as a rendering fault — two
- * surfaces at the same depth, one inexplicably cut off. A shadow says which is
- * in front, and 2.5% of scale says how far.
- */
-.canvas-card:hover,
-.canvas-card:focus-within {
-  border-color: var(--accent);
-  /* Not `box-shadow`: the card and the preview hanging off it are two boxes
-     making one surface, and two box-shadows draw a line across the join —
-     which is why the peek turned shadows off on both halves. `--lift` is
-     drawn by `filter`, so ONE shadow wraps the pair's outline and the join
-     stays invisible. */
-  box-shadow: none;
-  filter: var(--lift);
-  /* A transform is paint, never layout: the neighbours do not move a pixel
-     for it, which is the whole premise of the overlay (peekoverlay.test.ts).
-     The peek is a child, so it comes forward with the card it belongs to. */
-  transform: translateY(-2px) scale(1.025);
-  /* The lifted card — and the preview hanging off it — reads above the cards
-     it overlays. `--z-popover` names exactly this: peek cards. */
-  z-index: var(--z-popover);
-}
-/* The shadow is not motion and stays; the approach is, and goes. */
-@media (prefers-reduced-motion: reduce) {
-  .canvas-card:hover,
-  .canvas-card:focus-within { transform: none; }
-}
-/* The whole card is the way in — the thing you want every time should not be
-   one of three equal buttons, one of which deletes. */
-.card-open {
-  display: flex; flex-direction: column; gap: 5px;
-  padding: 16px 16px 12px; color: inherit; text-decoration: none;
-}
-.canvas-card h3 {
-  margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.015em;
-  display: flex; align-items: center; gap: 8px; min-width: 0;
-}
-.canvas-card .desc {
-  color: var(--ink-muted); font-size: 12.5px; line-height: 1.45;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-/* No "No description" any more: a card saying it has nothing to say is a
-   line of type spent on an absence. When there is a description it shows;
-   when there is not, the card is shorter. */
-.canvas-card .meta {
-  color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums;
-  margin-top: auto; padding-top: 4px;
-}
-/* The two rarer acts, on their own line and quiet — under the card's own
-   hairline so they read as belonging to it rather than floating in it. */
-.card-more {
-  display: flex; gap: 4px; padding: 6px 10px;
-  border-top: 1px solid var(--line-soft);
-}
-.card-act {
-  background: none; border-color: transparent; padding: 4px 8px;
-  font-size: 11.5px; color: var(--ink-soft);
-}
-.card-act:hover { background: var(--chip); color: var(--ink); }
-.card-act.danger:hover { color: var(--danger); }
-/* Making one comes FIRST, and looks like the action it is rather than an
-   empty slot at the end of the list. */
-.canvas-card.create {
-  gap: 8px; padding: 16px; justify-content: center;
-  border-style: dashed; box-shadow: none;
-}
-/* The create card is a form, not a preview: it has no peek to lift and
-   typing in it must not push it toward you. `:focus-within` as well as
-   `:hover`, because the caret lands inside it every time somebody names a
-   canvas. */
-.canvas-card.create:hover,
-.canvas-card.create:focus-within { transform: none; box-shadow: none; filter: none; }
-.canvases-loading { color: var(--ink-muted); font-size: 13px; padding: 8px 2px; }
-.canvas-card .row { display: flex; gap: 6px; }
-.canvas-card.create {
-  border-style: dashed; align-items: stretch; justify-content: center; gap: 8px;
-  background: transparent; box-shadow: none;
-}
 
 /* ---------- who you are ---------- */
 /* The menu behind your own face (and behind your name on the canvas list):
@@ -917,21 +775,6 @@ img { height: auto; }
   color: var(--ink); background: var(--card);
   border-color: var(--chip-line); box-shadow: var(--shadow-card);
 }
-
-/* The canvas list wears the same handle in its header. */
-/* Its own hover chip is the only frame it needs, so the resting state is the
-   page and the pressable state is visible the moment you go near it. The
-   padding grew with the pill's removal — inside a slab it was inset from a
-   border, and on its own it has to make its own edge. */
-.canvases-head .who-btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 12px 6px 8px; border-radius: 999px; font-size: 13px; color: var(--ink);
-  background: none; border: 1px solid transparent;
-}
-.canvases-head .who-btn:hover, .canvases-head .who-btn.active {
-  background: var(--chip); border-color: var(--chip-line);
-}
-.canvases-head .who-btn .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
 
 /* ---------- editing a canvas's name ---------- */
 .canvas-editor { display: flex; flex-direction: column; gap: 8px; }
@@ -1987,123 +1830,13 @@ img { height: auto; }
   display: flex; align-items: center; gap: 8px; min-width: 0;
   padding: 5px 10px;
 }
-/* **The neighbour pad**, in the same language as the pill beside it.
-
-   A row rather than a cross: the glyph is already an arrow, so position was
-   repeating what the shape said — and a 2D grid stood taller than the bar's
-   one line and dropped the arrows below its centreline, which is what it
-   looked like. One pill, the button's own border and radius, segmented.
-
-   Height is not set: the padding matches `.stage-editor-btn`'s, so both sit on
-   the same centreline for the same reason rather than by two numbers that have
-   to be kept equal. */
-.neighbour-pad {
-  display: inline-flex; align-items: center; gap: 1px;
-  padding: 1px 2px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--card);
-}
-.neighbour-arrow {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 18px; padding: 0;
-  background: none; border: none; border-radius: 999px;
-  color: var(--ink-soft); cursor: pointer;
-  transition: color 0.12s ease, background 0.12s ease, transform 0.12s ease;
-}
-/* One glyph, turned. Four separate arrow paths would be four chances for them
-   to stop matching. */
-.neighbour-arrow.up svg { transform: rotate(-90deg); }
-.neighbour-arrow.down svg { transform: rotate(90deg); }
-.neighbour-arrow.left svg { transform: rotate(180deg); }
-.neighbour-arrow:hover { color: var(--ink); background: var(--chip); }
-/* It leans the way it points — the smallest possible "this goes somewhere". */
-.neighbour-arrow.up:hover { transform: translateY(-1px); }
-.neighbour-arrow.down:hover { transform: translateY(1px); }
-.neighbour-arrow.left:hover { transform: translateX(-1px); }
-.neighbour-arrow.right:hover { transform: translateX(1px); }
-.neighbour-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) {
-  .neighbour-arrow { transition: color 0.12s ease, background 0.12s ease; }
-  .neighbour-arrow:hover { transform: none; }
-}
 
 .fullscreen.resting .fs-bar { opacity: 0; pointer-events: none; }
 .fullscreen.resting .fs-bar > * { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .fs-bar { transition: none; } }
 
-/* **The STAGE's chrome rests with the bar above it.**
-
-   `.fs-bar` bowed out and the stage's own furniture stayed: the pane bar
-   ("Saved — v6", the walk arrows, "Edit text") and the folded `EDIT` rail
-   down the side. Half the chrome fading is worse than none — it reads as
-   something failing to load rather than as a slideshow getting out of the
-   way — and on a screen being presented, that strip is the only thing on
-   the glass that is not the slide.
-
-   One timer, not a second one: `.resting` is already on the ancestor, so
-   this is the same few still seconds and the same pointer move that ends
-   them. Opacity, like `.fs-bar`, so the layout does not move under the
-   slide — the strip keeps its place and stops competing, rather than the
-   slide growing 26px the moment somebody stops moving the mouse.
-
-   **Unless the caret is in the editor.** A key press deliberately does not
-   wake the chrome (flipping slides would blink it on every slide), which is
-   right for presenting and wrong for writing: without this, somebody typing
-   would watch the toolbar above their own text fade out. */
-.fullscreen.resting .stage-pane-bar { opacity: 0; pointer-events: none; }
-/* **No rail here at all**, so there is nothing to float and nothing to fade.
-
-   It was made to float first — fading alone left its 26px of the row and the
-   preview pane's border drawing against it, so the word EDIT bowed out and a
-   strip stayed down the side of every slide. Then the better answer: full
-   screen is the PRESENTING surface and the editor is not offered on it
-   (`ArtifactStage`), so the rail is not rendered, and a control that does not
-   exist needs no rules about how it leaves.
-
-   The seam goes with it: the preview pane's left border drew against a
-   column that is no longer there. */
-.fullscreen .stage-preview-pane { border-left: 0; }
-/* The exception — somebody typing must not watch the toolbar above their own
-   text fade — lives in the WAKE, not here. It was a `:has(.stage-editor:
-   focus-within)` rule first, and that selector parses, `Element.matches()`
-   agrees it matches, and the style engine still does not apply it: a nasty
-   way to be wrong, because everything reads correct and the pixels never
-   change. Measured, not assumed. FullScreen wakes on a keystroke that is
-   going into a field, which is the same fact expressed where it works. */
-@media (prefers-reduced-motion: reduce) {
-  .stage-pane-bar, .stage-rail { transition: none; }
-}
 /* The stage is the whole window now that nothing above it takes a slice. */
 .fullscreen > .fullscreen-stage { position: absolute; inset: 0; }
-
-/* **The workbench's bar, in the same language as the canvas's.**
-
-   It shared `.fullscreen-bar` with full screen, and when that view's chrome
-   went floating this one could not follow: full screen has a single stage to
-   float over, and the workbench has COLUMNS. Chrome floating over a column of
-   agent rows covers the rows.
-
-   So it takes its space — the columns start below it — and what changes is
-   that the slab is gone. The bar paints nothing; the clusters on it do, in
-   the `.floats` language every other surface uses. The room and the canvas
-   now look like the same product with two rooms in it. */
-.wb-bar {
-  flex: none; display: flex; align-items: center; gap: 10px;
-  padding: var(--edge) var(--edge) 0;
-  background: none; border: none;
-}
-/* The columns keep the gap the bar started, so the room breathes on the same
-   rhythm as the canvas rather than running its panels into the window. */
-.workbench .wb-body { padding: var(--edge); gap: var(--edge); }
-/* Floating panels, not walls: the divider each column drew against its
-   neighbour was the last of the flush-and-bordered language in here. */
-.workbench .wb-agents {
-  border: 1px solid var(--line); border-radius: var(--r-float);
-  background: var(--panel); box-shadow: var(--shadow-pop); overflow: hidden;
-}
-.workbench .wb-stage {
-  border: 1px solid var(--line); border-radius: var(--r-float);
-  background: var(--panel); overflow: hidden;
-}
 
 .fullscreen-title {
   display: flex; align-items: baseline; gap: 7px; min-width: 0; flex: 1;
@@ -2250,180 +1983,11 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
   background: var(--ground);
   display: flex; flex-direction: column;
 }
-.wb-body {
-  flex: 1; min-height: 0;
-  display: flex;
-}
-/* The agent column: roster above, the one main thread below. A fixed V1
-   grid on purpose — resizers and collapse arrive with the second person who
-   asks, on the panels.ts patterns (design doc, "the frame"). */
-.wb-agents {
-  flex: none; position: relative;
-  min-height: 0; display: flex; flex-direction: column;
-  border-right: 1px solid var(--line); background: var(--card);
-}
-/* Folded: the reopen affordance and nothing else. Never fully removed — the
-   agent view is the reason the room exists. */
-.wb-agents.rail { width: 40px; align-items: center; padding-top: 6px; }
-.wb-fold {
-  flex: none;
-  font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
-  width: 22px; height: 21px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
-}
-.wb-fold:hover { color: var(--ink); border-color: var(--accent); }
-.wb-agents.rail .wb-fold { align-self: center; margin: 0; }
-.wb-roster {
-  /* Height is the inline style — the grab-edge under the section writes it,
-     remembered per browser. `overflow: visible` would kill the scroll, and
-     the resizer needs the RELATIVE box to hang from. */
-  position: relative;
-  flex: none; overflow-y: auto; overscroll-behavior: contain;
-  padding: 10px 12px; border-bottom: 1px solid var(--line);
-}
-/* **A name is written one way, everywhere.**
-
-   These were uppercased: AGENTS, DIRECTORY, and — in the panel below them —
-   CHAT. On the canvas the same words are buttons that say "Chat" and
-   "Agents", so the app was shouting its own nouns in one room and speaking
-   them in another. Reported three times about the canvas before it was
-   believed; the workbench had the identical bug one screen over.
-
-   Uppercase is not banned. A DESCRIPTIVE label — "made by this conversation"
-   — is a caption and may be set however it reads best. What may not vary is a
-   NAME: Chat, Files, Agents are things this product has, and a thing has one
-   spelling. The size and the colour still say "section label"; only the
-   shouting is gone. */
-.wb-roster h3 {
-  margin: 0 0 8px; font-size: 11px; font-weight: 600;
-  letter-spacing: -0.01em; color: var(--ink-soft);
-  display: flex; align-items: center; justify-content: space-between;
-}
 .wb-quiet { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink-muted); }
-/* The bound directory. A slim section between the roster and the thread —
-   scrollable on its own, capped so the thread keeps its room. */
-.wb-files {
-  position: relative;
-  flex: none; overflow-y: auto; overscroll-behavior: contain;
-  padding: 8px 12px; border-bottom: 1px solid var(--line);
-}
-.wb-files h3 {
-  margin: 0 0 6px; font-size: 11px; font-weight: 600;
-  letter-spacing: -0.01em; color: var(--ink-soft);
-}
-.wb-tree { margin: 0; padding: 0; list-style: none; font-size: 11.5px; }
-.wb-tree li { display: flex; align-items: center; min-width: 0; line-height: 1.7; }
-.wb-tree-dir { color: var(--ink-soft); }
-.wb-tree-file {
-  display: inline-flex; align-items: center; gap: 5px; min-width: 0;
-  color: var(--ink-muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-button.wb-tree-file {
-  font: inherit; padding: 0; border: none; background: none; cursor: pointer;
-  text-align: left;
-}
-/* Already shared: the file is an item, and the row is a door to its stage. */
-.wb-tree-file.on-canvas { color: var(--ink); }
-.wb-tree-file.on-canvas:hover { color: var(--accent-text); }
-.wb-tree-add {
-  flex: none; font: inherit; font-size: 11px; line-height: 1.2; cursor: pointer;
-  padding: 0 5px; border-radius: 999px;
-  border: 1px solid var(--line-soft); background: none; color: var(--ink-soft);
-}
-.wb-tree-add:hover { color: var(--ink); border-color: var(--accent); }
-.wb-tree-add:disabled { opacity: 0.5; cursor: default; }
 .wb-quiet code { font-size: 11px; }
-.wb-row { border-radius: var(--radius); position: relative; }
-/* The hover peek: the longer trail, floated beside the row. It stands down
-   for the expanded row, which shows the record properly. */
-.wb-peek {
-  position: fixed; z-index: var(--z-popover);
-  width: 230px; max-height: 220px; overflow: hidden;
-  padding: 8px 10px; border-radius: var(--radius);
-  background: var(--panel); border: 1px solid var(--line);
-  box-shadow: var(--shadow-pop); pointer-events: none;
-}
-.wb-section-resizer {
-  position: absolute; left: 0; right: 0; bottom: -4px; height: 8px;
-  cursor: row-resize; z-index: 1;
-}
-.wb-section-resizer:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-.wb-row.open { background: var(--chip); }
-.wb-row-head {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
-  padding: 6px 8px; border: none; background: none; border-radius: var(--radius);
-  color: var(--ink);
-}
-.wb-row-head:hover { background: var(--chip); }
-.wb-dot { flex: none; width: 8px; height: 8px; border-radius: 999px; }
-/* Away: the ring without the fill — remembered, not present. */
-.wb-dot.hollow { background: none; border: 1.5px solid; }
-/* **Answerable is not enrolled** (#197 D3, 7 Sep 2026). Both were this hollow
-   ring, so "a summons will land" and "nobody is home" — the strongest and the
-   weakest thing an agent row can say — read identically at a glance. A centre
-   fills the ring: something is in there. `currentColor` is the actor's own,
-   set inline beside the border, so the dot still says WHO as well as what. */
-.wb-dot.hollow.ready {
-  box-shadow: inset 0 0 0 2px currentColor;
-}
-.wb-row-head.as-line { cursor: default; }
-/* Derived states, worn as quiet chips beside the name. These exist only
-   because statusSource crosses the wire now — a badge synthesized by
-   string-matching status copy is banned by name in the design doc. */
-.wb-state {
-  font-style: normal; font-size: 9.5px; font-weight: 600;
-  letter-spacing: 0.03em; text-transform: uppercase;
-  padding: 0 5px; border-radius: 999px; line-height: 1.6;
-  background: var(--chip); color: var(--ink-muted); border: 1px solid var(--line-soft);
-}
-.wb-state.blocked { color: var(--accent-text); border-color: var(--accent); }
-.wb-row-name { flex: none; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.wb-row-name b { font-weight: 600; }
-.wb-row-name i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
-/* The agent's own words, verbatim — never a classified badge (the design doc
-   bans string-matching lifecycle copy into semantics until statusSource is
-   on the wire). */
-.wb-row-line {
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; text-align: right;
-  font-size: 11px; color: var(--ink-muted);
-}
-.wb-row-line em { font-style: normal; color: var(--ink-soft); }
-.wb-row-detail { padding: 2px 8px 10px 24px; display: grid; gap: 8px; justify-items: start; }
-.wb-watch {
-  font: inherit; font-size: 11px; cursor: pointer;
-  padding: 1px 9px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
-}
-.wb-watch:hover { color: var(--ink); border-color: var(--accent); }
 /* The watching chip, in the workbench bar rather than floating: the bar is
    where this cover says what state it is in. */
 .follow-banner.wb { position: static; transform: none; margin-left: 8px; }
-.wb-answering {
-  margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted);
-}
-.wb-answering q { quotes: "\201C" "\201D"; }
-.wb-thumb {
-  display: grid; gap: 4px; justify-items: start;
-  font: inherit; font-size: 11px; color: var(--ink-muted);
-  padding: 0; border: none; background: none; cursor: pointer; text-align: left;
-}
-.wb-thumb:hover span { color: var(--ink); }
-.wb-trail { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
-.wb-trail li {
-  display: flex; align-items: baseline; gap: 6px;
-  font-size: 11px; color: var(--ink-muted);
-}
-.wb-trail em { font-style: normal; color: var(--ink-soft); flex: none; }
-.wb-act {
-  font: inherit; padding: 0; border: none; background: none; text-align: left;
-  color: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap;
-}
-button.wb-act { cursor: pointer; }
-button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
 /* The main thread, undocked: the SAME component the canvas docks left, sized
    by this grid instead of by its stored width. Only geometry changes hands
    here — behavior differences live behind the component's own `docked` prop,
@@ -2446,119 +2010,6 @@ button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
   position: static; z-index: auto; width: auto; flex: 1; min-height: 0;
   border-right: none; box-shadow: none;
 }
-.wb-stage { flex: 1; min-width: 0; min-height: 0; display: flex; }
-.wb-stage > * { flex: 1; }
-.wb-empty {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  padding: 24px;
-}
-.wb-empty p {
-  max-width: 40ch; margin: 0; font-size: 12.5px; line-height: 1.6;
-  color: var(--ink-muted); text-align: center;
-}
-.wb-empty code { font-size: 11.5px; }
-
-/* ---------- the stage's modes and editor ---------- */
-.artifact-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.artifact-stage-body { flex: 1; min-height: 0; display: flex; }
-.artifact-stage-body > * { flex: 1; min-width: 0; }
-/* One header per pane, no third bar. The stage grew a strip of toggles above
-   two panes that each already had a header — three layers of chrome before
-   content — and shed it the next day: each pane's own bar carries its
-   controls AND its fold, and a folded pane leaves a rail on its edge whose
-   whole face is the way back. */
-.stage-pane-bar {
-  flex: none; display: flex; align-items: center; gap: 8px;
-  padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
-  font-size: 11.5px; color: var(--ink-muted);
-  /* Rests with the bar above it in full screen — see `.fullscreen.resting`. */
-  transition: opacity 0.35s ease;
-}
-.stage-pane-bar .spacer { flex: 1; }
-.stage-pane-name { font-weight: 600; color: var(--ink); }
-.stage-pane-name i { font-style: normal; font-weight: 400; color: var(--ink-soft); }
-.stage-toggle-group {
-  display: inline-flex; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--card);
-  padding: 1px; gap: 1px;
-}
-.stage-toggle-btn {
-  font: inherit; font-size: 10.5px; cursor: pointer;
-  padding: 1px 7px; border-radius: 999px; border: none;
-  background: transparent; color: var(--ink-muted);
-}
-.stage-toggle-btn:hover { color: var(--ink); }
-.stage-toggle-btn.active {
-  background: var(--chip); color: var(--ink); font-weight: 600;
-}
-.stage-pane-fold {
-  flex: none; font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
-  width: 22px; height: 21px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
-}
-.stage-pane-fold:hover { color: var(--ink); border-color: var(--accent); }
-/* A folded pane, still standing at its edge: the label reads down the strip
-   and the whole strip is the button. */
-.stage-rail {
-  /* Rests with the bar above it in full screen — see `.fullscreen.resting`. */
-  transition: opacity 0.35s ease;
-  flex: none; width: 26px; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: space-between;
-  padding: 10px 0; font: inherit; font-size: 10.5px; font-weight: 600;
-  letter-spacing: 0.04em; text-transform: uppercase;
-  border: none; background: var(--card); color: var(--ink-soft);
-}
-.stage-rail span { writing-mode: vertical-rl; }
-/* The chevron at the very foot of the strip: a second, unmissable "this
-   opens" — the label names the pane, the arrow points the way back in. */
-.stage-rail b { font-weight: 600; font-size: 12px; }
-.stage-rail:hover { color: var(--ink); background: var(--chip); }
-.stage-rail.left { border-right: 1px solid var(--line); }
-.stage-rail.right { border-left: 1px solid var(--line); }
-.stage-preview-pane {
-  flex: 1; min-width: 0; min-height: 0;
-  display: flex; flex-direction: column; border-left: 1px solid var(--line);
-}
-.stage-pane-body { flex: 1; min-height: 0; display: flex; }
-.text-edit-frame { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.text-edit-frame .html-view { flex: 1; }
-.text-edit-refusal { font-size: 11px; color: var(--accent-text); }
-/* Element properties (WYSIWYG stage 2): a strip under the bar for the
-   selected element — its tag, its class, and the handful of inline styles a
-   person reaches for. Fields, not a tree: this is not an inspector. */
-.props-panel {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
-  padding: 6px 10px; border-bottom: 1px solid var(--line-soft); background: var(--chip);
-  font-size: 11.5px;
-}
-.props-tag { font-family: ui-monospace, Menlo, monospace; color: var(--ink-muted); }
-.props-field { display: inline-flex; align-items: center; gap: 5px; }
-.props-field span { color: var(--ink-soft); }
-.props-field input {
-  width: 92px; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--panel); color: var(--ink); font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: 11px;
-}
-.props-field.props-class input { width: 180px; }
-.props-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.stage-pane-body > * { flex: 1; }
-
-/* The file editor's own rules are `components/stage-editor.css`, loaded with
-   it (BC-2). These two are shared: the text editor, the stage and the lint
-   panel wear them as well. */
-.stage-editor-dirty {
-  font-size: 9.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
-  padding: 0 5px; border-radius: 999px; line-height: 1.6;
-  background: var(--chip); border: 1px solid var(--line-soft);
-}
-.stage-editor-btn {
-  font: inherit; font-size: 11px; cursor: pointer;
-  padding: 2px 9px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--card); color: var(--ink);
-}
-.stage-editor-btn:hover { border-color: var(--accent); }
-.stage-editor-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.stage-editor-btn:disabled { opacity: 0.6; cursor: default; }
 
 /* ---------- comments ---------- */
 .pin {
@@ -3184,25 +2635,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .add-agent-note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .add-agent .identity-warning { margin: 8px 0 0; }
 
-/* Dismiss, on the enrolled row: withdrawal is one small deliberate click —
-   quiet until hovered, never a red alarm; the history it leaves is the point. */
-.wb-dismiss {
-  flex: none; border: none; background: none; cursor: pointer;
-  color: var(--ink-soft); font-size: 11px; padding: 2px 4px; border-radius: 4px;
-}
-.wb-dismiss:hover { color: var(--ink); background: var(--chip); }
-
-/* Whose word wakes it, the owner's one control on their own agent's row
-   (owner-only summons): a quiet word, like Dismiss — widening spends the
-   reader's own tokens, so it is offered, never pressed on anybody. */
-.wb-listen {
-  flex: none; border: 1px solid var(--line); background: none; cursor: pointer;
-  color: var(--ink-soft); font: inherit; font-size: 11px; line-height: 1.2;
-  padding: 1px 6px; border-radius: 999px; white-space: nowrap;
-}
-.wb-listen:hover { color: var(--ink); background: var(--chip); }
-.wb-listen.on { color: var(--ink); background: var(--chip); border-color: var(--ink-soft); }
-
 /* **The gate as a list of people** (#272 phase 2), under the row rather than
    in a dialog: the row's one line says what the gate IS, and a modal would
    take the reader away from it at the moment they are changing it. */
@@ -3235,39 +2667,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .gate-grant select { font: inherit; font-size: 11px; background: none; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 4px; }
 .gate-granted { margin: 0; color: var(--ink-muted); }
 
-/* Follow's toggle, in the Chat's own header because that is what it follows.
-   Quiet when off and wearing the accent when on: this moves the canvas on
-   somebody's behalf, so whether it is armed has to be readable at a glance
-   from the thing it acts on. */
-/* **Follow, on the agent it follows.**
-
-   It was a toggle in the Chat's header, which made it mean "follow whatever
-   ANYBODY just made" — the Chat is the canvas-wide channel, so with three
-   agents working it was a camera yanked between unrelated corners. Follow
-   needs a subject you can name.
-
-   Quiet until armed and wearing the accent when it is: this moves the canvas
-   on somebody's behalf, so whether it is on has to be readable at a glance
-   from the row it belongs to. */
-.wb-follow {
-  position: absolute; right: 8px; top: 8px; z-index: 1;
-  flex: none; font: inherit; font-size: 11px; line-height: 1;
-  width: 22px; height: 22px; padding: 0; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 999px; border: 1px solid transparent;
-  background: none; color: var(--ink-soft);
-  opacity: 0; transition: opacity 0.12s ease;
-}
-/* Shown on hover, or whenever it is ON — a mode that is running must never
-   be invisible, however the pointer happens to be resting. */
-.wb-row:hover .wb-follow,
-.wb-follow:focus-visible,
-.wb-follow.on { opacity: 1; }
-.wb-follow:hover { color: var(--ink); border-color: var(--accent); }
-.wb-follow.on {
-  color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
-}
-
 /* A glyph in a menu row: fixed width so the labels line up whether or not a
    row has one, and quieter than the words — it is a reminder of the surface,
    not the point of the row. */
@@ -3296,13 +2695,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .identity-anchor .btn svg { flex: none; }
 .home { display: inline-flex; align-items: center; color: var(--ink-muted); }
 .home:hover { color: var(--ink); }
-
-.add-inherit {
-  display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px;
-  font-size: 11.5px; color: var(--ink-muted); line-height: 1.4; cursor: pointer;
-  white-space: normal;
-}
-.add-inherit input { margin: 2px 0 0; }
 
 /* ---------- mind maps ----------
 
@@ -3784,67 +3176,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .files-size { flex: none; color: var(--ink-soft); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .files-size em { font-style: normal; margin-left: 5px; color: var(--accent); }
 
-/* ---------- top-bar create actions ---------- */
-/* "＋ Site": ask for the address right below the button that asked. */
-/* Opens to the LEFT of its button, because its button now lives on the right
-   rail: hanging down-and-left from the top bar put it on screen, and the same
-   rule on the rail puts it off the edge. Aligned to the button's own row so
-   the field appears beside the thing you pressed. */
-.site-popover {
-  position: absolute; top: 0; right: calc(100% + 8px); z-index: var(--z-popover);
-  display: flex; align-items: center; gap: 6px; padding: 8px 10px;
-  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: var(--shadow-pop); white-space: nowrap;
-}
-.site-popover .text-input { width: 220px; }
-/* Place a canvas: the site popover's shape with a list under the field —
-   your canvases, most recent first, narrowed as you type; or the one row an
-   address names. */
-/* The one Add door: the picker's shape, with what Enter would do said under
-   the field and four rows that narrow it. The rows are radios in a group,
-   so a state chosen is a state a reader is told. */
-.add-door { position: relative; }
-/* **Where the Add popover sits.** It hung off the TOP of the + button and grew
-   downward, and the + is the last thing on the rail: on a short window the
-   list of canvases ran off the bottom of the viewport, and the last rows were
-   unreachable. So it is placed against the viewport, not the button — centred
-   beside the rail like the rail itself, never taller than the window, and its
-   list scrolls inside it rather than pushing the Add button out of reach.
-   The right offset is the rail's inset plus its width plus the gutter. */
-.add-door .add-popover {
-  position: fixed; top: 50%; right: calc(var(--edge) + 40px + 20px);
-  transform: translateY(-50%);
-  max-height: calc(100vh - 2 * var(--edge)); overflow: auto;
-}
-.add-popover { width: 340px; }
-/* The field, the pills and the inherit line all size to the panel, so
-   mounting or unmounting any of them cannot move its edge. */
-.add-preview { font-size: 11px; color: var(--ink-muted); white-space: normal; min-height: 1.3em; }
-.add-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
-.add-kind {
-  display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px;
-  border: 1px solid var(--line); border-radius: 999px; background: none; cursor: pointer;
-  color: var(--ink-muted); font: inherit; font-size: 11.5px;
-}
-.add-kind:hover, .add-kind:focus-visible { color: var(--ink); background: var(--chip); outline: none; }
-.add-kind.active { color: var(--accent-text); border-color: transparent; background: var(--accent-wash); }
-.canvas-picker { flex-direction: column; align-items: stretch; gap: 8px; }
-.canvas-picker .text-input { width: 300px; }
-.canvas-picker-list { display: flex; flex-direction: column; gap: 2px; max-height: min(280px, 36vh); overflow: auto; }
-.canvas-picker-row {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
-  padding: 6px 8px; border: none; border-radius: 6px; background: none; cursor: pointer;
-  color: var(--ink); text-align: left; font: inherit;
-}
-.canvas-picker-row:hover, .canvas-picker-row:focus-visible { background: var(--chip); outline: none; }
-.canvas-picker-title { font-size: 12.5px; font-weight: 600; }
-.canvas-picker-meta { font-size: 10.5px; color: var(--ink-muted); }
-.canvas-picker-note { padding: 6px 8px; font-size: 11px; color: var(--ink-muted); white-space: normal; }
-.site-error {
-  font-size: 12px; color: var(--danger); white-space: normal;
-  overflow-wrap: anywhere;
-}
-
 /* ---------- right tool rail (pointer modes, Figma-style) ---------- */
 /* **Centred, but never off the top.** It was `top: 50%; translateY(-50%)`,
    which centres a rail taller than the window by pushing BOTH ends out of
@@ -3988,18 +3319,6 @@ button.mt-card:hover { border-color: var(--accent); }
 /* The ink well: the Pen's palette, hung off the rail while the Pen is up.
    The chip on the button shows what is in the nib right now. */
 .tool-slot { position: relative; display: flex; }
-.ink-chip {
-  position: absolute; right: 5px; bottom: 5px;
-  width: 7px; height: 7px; border-radius: 999px;
-  border: 1.5px solid var(--card);
-}
-.tool-btn.active .ink-chip { border-color: var(--accent); }
-.ink-well {
-  position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%);
-  display: flex; align-items: center; gap: 5px; padding: 6px 8px;
-  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-  box-shadow: var(--shadow-pop);
-}
 .ink-swatch {
   width: 18px; height: 18px; border-radius: 999px; flex: none;
   border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line);
@@ -4008,7 +3327,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .ink-swatch:hover { transform: scale(1.12); }
 .ink-swatch.active { box-shadow: 0 0 0 2px var(--accent); }
 .ink-swatch.mine { width: 21px; height: 21px; }
-.ink-sep { width: 1px; align-self: stretch; margin: 1px 1px; background: var(--line); }
 /* The same swatches in the identity menu, where the choice is who you are
    rather than what the Pen is dipped in. */
 .identity-colors { display: flex; align-items: center; gap: 8px; padding: 2px 0 4px; }
@@ -4663,81 +3981,6 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 .onit-cancel:hover { border-color: var(--danger); color: var(--danger); }
 
-/* ---------- a design system, drawn as itself ---------- */
-/* Every token rendered as the thing it describes: a colour is a swatch, a type
-   style is set in its own face, a spacing step is a bar that long, a radius is
-   a corner that round. The value sits beside it, because this is a
-   specification and somebody has to copy the number. */
-.ds-view {
-  height: 100%; overflow: auto; padding: 16px 18px 20px;
-  background: var(--card); color: var(--ink); font-size: 13px; line-height: 1.5;
-}
-.ds-masthead { padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
-.ds-title { display: flex; align-items: baseline; gap: 8px; }
-.ds-title h2 { font-size: 17px; letter-spacing: -0.01em; }
-.ds-version {
-  font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px;
-  background: var(--chip); color: var(--ink-muted);
-}
-.ds-masthead p { margin-top: 5px; color: var(--ink-muted); max-width: 62ch; }
-
-.ds-section { margin-top: 18px; }
-.ds-section > h3, .ds-prose h3, .ds-problems h3 {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--ink-soft); margin-bottom: 9px;
-}
-.ds-section > h3 span { font-weight: 400; letter-spacing: 0; text-transform: none; opacity: 0.7; }
-
-.ds-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
-.ds-swatch b { display: block; margin-top: 5px; font-size: 12px; }
-.ds-swatch code { font-size: 10.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.ds-chip {
-  height: 52px; border-radius: 7px; border: 1px solid var(--line);
-  display: flex; align-items: flex-end; justify-content: flex-end; padding: 5px 6px;
-}
-/* The best contrast this colour can carry, said out loud: a palette that
-   cannot hold text is a finding, not a detail. */
-.ds-ratio { font-size: 10px; font-weight: 700; opacity: 0.85; font-variant-numeric: tabular-nums; }
-
-.ds-type { display: flex; flex-direction: column; gap: 12px; }
-.ds-specimen { padding-bottom: 11px; border-bottom: 1px solid var(--line-soft); }
-.ds-specimen:last-child { border-bottom: none; padding-bottom: 0; }
-.ds-specimen-head { display: flex; align-items: baseline; gap: 8px; }
-.ds-specimen-head b { font-size: 12px; }
-.ds-specimen-head code { font-size: 10.5px; color: var(--ink-soft); }
-.ds-specimen p { margin-top: 4px; overflow-wrap: anywhere; }
-.ds-family { display: block; margin-top: 3px; font-size: 10.5px; color: var(--ink-soft); }
-
-.ds-scale { display: flex; flex-direction: column; gap: 5px; }
-.ds-step { display: grid; grid-template-columns: 44px 1fr auto; gap: 9px; align-items: center; }
-.ds-step b { font-size: 11.5px; color: var(--ink-muted); }
-.ds-step code { font-size: 10.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.ds-bar { height: 8px; border-radius: 2px; background: var(--accent); min-width: 2px; }
-
-.ds-radii { display: flex; flex-wrap: wrap; gap: 12px; }
-.ds-radius { text-align: center; }
-.ds-radius span {
-  display: block; width: 54px; height: 40px;
-  background: var(--chip); border: 1px solid var(--line);
-}
-.ds-radius b { display: block; margin-top: 4px; font-size: 11.5px; }
-.ds-radius code { font-size: 10.5px; color: var(--ink-soft); }
-
-.ds-components { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
-.ds-component { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; }
-.ds-component > b { font-size: 12px; }
-/* **The stage the component stands on.**
-
-   Checkerboard rather than a flat panel, and that is the point: a component
-   whose background token is missing, transparent, or the same colour as the
-   card would be invisible against any solid ground, and would read as "there
-   is no preview" instead of "this component has no background". On the board
-   you can see the hole. The same trick every image editor uses, for the same
-   reason.
-
-   The preview never sets its own size: the component's `padding` decides how
-   big it is, which is a value the system declared and worth seeing at its
-   real scale. */
 /* The canvas noticing it has designs and no written style. Quiet: it is a
    prompt, not an error — the canvas is not broken, it has simply not said out
    loud what it already decided. Accent border on the leading edge rather than
@@ -4753,118 +3996,9 @@ button.mt-card:hover { border-color: var(--accent); }
 .files-nudge p { margin: 0; font-size: 11px; line-height: 1.45; color: var(--ink-muted); }
 .files-nudge .btn { font-size: 11px; padding: 4px 10px; }
 
-.ds-preview {
-  margin-top: 8px; padding: 12px; border-radius: 6px;
-  display: flex; align-items: center; justify-content: center; min-height: 56px;
-  background-color: var(--chip);
-  background-image:
-    linear-gradient(45deg, var(--line-soft) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--line-soft) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--line-soft) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--line-soft) 75%);
-  background-size: 10px 10px;
-  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
-  overflow: hidden;
-}
-/* Everything a preview shares. Its own tokens win over all of it — these are
-   only what the system did not say. */
-.ds-pv {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 8px 14px; font-size: 12px; font-weight: 600; line-height: 1.2;
-  max-width: 100%; box-sizing: border-box;
-}
-.ds-pv-chip { padding: 4px 10px; font-size: 11px; border-radius: 999px; }
-.ds-pv-input {
-  justify-content: flex-start; min-width: 120px; padding: 8px 10px;
-  border: 1px solid var(--line);
-}
-.ds-pv-caret { width: 1px; height: 14px; background: currentColor; opacity: 0.6; }
-.ds-pv-card {
-  flex-direction: column; align-items: stretch; gap: 5px;
-  min-width: 132px; padding: 12px;
-}
-.ds-pv-line { height: 5px; border-radius: 2px; background: currentColor; opacity: 0.35; }
-.ds-pv-line.short { width: 55%; }
-.ds-component dl { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
-.ds-component dl > div { display: flex; align-items: baseline; gap: 6px; }
-.ds-component dt { flex: none; min-width: 74px; font-size: 10.5px; color: var(--ink-soft); }
-.ds-component dd { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.ds-component dd code { font-size: 10.5px; overflow-wrap: anywhere; }
-/* The reference kept beside the value it resolved to — the file said
-   {colors.primary} and the reader deserves both. */
-.ds-ref { font-size: 10px; color: var(--ink-soft); opacity: 0.75; }
-.ds-dot { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line); flex: none; }
-
-.ds-problems { margin-top: 16px; padding: 9px 11px; border-radius: 8px; background: var(--chip); }
-.ds-problems ul { margin: 0; padding-left: 16px; color: var(--warn); font-size: 12px; }
-.ds-prose { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
-.ds-prose h3 { margin-top: 14px; }
-
-/* What the system gets wrong about itself, by its own declared pairs — as
-   opposed to the swatches, which show what ink a colour can carry. */
-.ds-findings { margin-top: 18px; }
-.ds-findings ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
-.ds-finding {
-  display: flex; gap: 8px; align-items: baseline;
-  padding: 7px 10px; border-radius: 7px; background: var(--chip); font-size: 12px;
-}
-.ds-finding b { flex: none; min-width: 84px; font-size: 11px; color: var(--ink-muted); }
-.ds-finding.error { color: var(--danger); }
-.ds-finding.warning { color: var(--warn); }
-
-/* Attaching a directory from the pane that noticed there wasn't one. The row
-   is a field and its verb; the line under it is either the explanation or the
-   daemon's refusal, verbatim — never both, because a refusal that shares a
-   line with an explanation reads as decoration. */
-.wb-bind { display: flex; flex-direction: column; gap: 6px; padding: 0 2px 4px; }
-.wb-bind-row { display: flex; gap: 6px; align-items: center; }
-.wb-bind-row .text-input { flex: 1; min-width: 0; font-size: 11.5px; }
-.wb-bind-row .btn { flex: none; }
-.wb-bind code { background: var(--chip); border-radius: 3px; padding: 0 3px; font-size: 0.92em; }
 /* The refusal wears the app's warning ink rather than the quiet grey the
    explanation uses: it is the one line here that is about something you did. */
 .wb-bind-refusal { margin: 0; color: var(--danger, var(--accent-text)); font-size: 11.5px; line-height: 1.5; }
-
-/* The picker: one level of directories, opened under the Attach row. It is a
-   list rather than a tree because the daemon serves one level at a time —
-   enumerating a disk recursively is the thing `pickList` deliberately will
-   not do, and a UI that implied otherwise would be promising it. */
-.wb-pick { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--chip); }
-.wb-pick-at { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ink-muted); }
-/* The path can be long and the panel narrow; the tail is the part that says
-   where you are, so the HEAD is what gets clipped. */
-/* Clipped in JS (`tailOf`), not here: `text-overflow` only eats the tail, and
-   the `direction: rtl` workaround for clipping the head reorders the neutral
-   characters at a string's edges — it rendered "/Users/dalmaer" as
-   "Users/dalmaer/". This just keeps it on one line. */
-.wb-pick-at span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
-/* The shared face, on a class of its own — `.resize-handle`'s pattern, and
-   for its reason: a class that appears in two rules is where a lost scope
-   hides (`oneblock.test.ts`), so the common half gets its own name in the
-   markup rather than a comma. */
-.wb-pick-btn {
-  font: inherit; font-size: 11.5px; cursor: pointer; border-radius: 6px;
-  border: 1px solid transparent; background: none; color: var(--ink); padding: 1px 5px;
-}
-.wb-pick-btn:hover { background: var(--card); border-color: var(--line); }
-.wb-pick-up { flex: none; border-color: var(--line-soft); }
-.wb-pick-list { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow-y: auto; }
-.wb-pick-list li { display: flex; align-items: center; gap: 4px; }
-.wb-pick-in { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wb-pick-take { flex: none; color: var(--accent-text); }
-.wb-pick-take.here { align-self: flex-start; border-color: var(--line-soft); }
-/* Already spoken for: said rather than offered, so nobody picks it and meets
-   a refusal a click later. It carries the NAME of the canvas that has it —
-   the bare word "bound" was a label with nothing to learn from it — so it is
-   clipped rather than allowed to push the row's folder name off the left. */
-.wb-pick-bound {
-  flex: none; font-size: 10px; color: var(--ink-soft);
-  max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* The clone that already knows what it is. Offered, not blocked — taking it
-   writes nothing into the repo — and worded, because "✓" beside a folder you
-   have never bound reads as a fresh binding rather than a recognition. */
-.wb-pick-take.adopt { border-color: var(--line-soft); font-size: 10.5px; }
 
 /* ---------- personas ----------
    A role sitting on a shelf until an agent wears it. The rows are quieter than
@@ -4912,11 +4046,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .persona-edit-row .spacer { flex: 1; }
 .persona-edit-row .wb-quiet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* The files section names its directory; the hint draws the line the word
-   "Files" could not — this pane is a folder on disk, while the canvas's own
-   Files panel lists what is on the canvas. Same pattern as the Chat header. */
-.wb-files-hint { font-style: normal; font-weight: 400; color: var(--ink-soft); font-size: 10.5px; margin-left: 6px; }
-
 /* **This item is a file.** Only backed items wear one — an untracked item is
    the default and the common case (a view run up to answer "let me see"), so
    silence is the right signal for it.
@@ -4950,18 +4079,6 @@ button.mt-card:hover { border-color: var(--accent); }
    without stretching it — the mark reads at a glance and the row's height
    does not change when an item joins the deck. */
 .slide-mark { flex: none; font-size: 10px; line-height: 1; }
-/* The one stage button that is about to overwrite somebody's work. Warn, not
-   danger: the file is not lost, it is about to be replaced by a version the
-   canvas can still show — and `--danger` is reserved for what cannot be
-   undone. */
-.stage-editor-btn.warn { border-color: var(--warn); color: var(--warn); }
-
-/* The editor's slot: the pane plus the seam between it and the preview. It is
-   `relative` so `.panel-resizer` — which hangs off a positioned parent's right
-   edge — lands on the border the preview draws, rather than needing a second
-   kind of resizer for a second kind of edge. */
-.stage-editor-slot { flex: 1; min-width: 0; display: flex; position: relative; }
-.stage-editor-slot > .stage-editor { flex: 1; min-width: 0; }
 
 /* **The chat is a SECTION inside the workbench's column, not a panel.**
    Docked over the canvas it is a floating panel and wears a panel's title —
@@ -5461,29 +4578,6 @@ button.mt-card:hover { border-color: var(--accent); }
  * interface a person has used, and this is the opposite of an error. The sweep
  * runs twice and the ring fades with it.
  */
-.canvas-card.just-made {
-  position: relative;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-  animation: card-settle 2.4s ease-out forwards;
-}
-.canvas-card.just-made::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    100deg,
-    transparent 30%,
-    var(--accent-wash) 48%,
-    var(--accent-glow) 54%,
-    var(--accent-wash) 60%,
-    transparent 78%
-  );
-  background-size: 260% 100%;
-  animation: card-sheen 1.2s ease-out 2;
-}
 @keyframes card-sheen {
   from { background-position: 180% 0; }
   to { background-position: -80% 0; }
@@ -5491,13 +4585,6 @@ button.mt-card:hover { border-color: var(--accent); }
 @keyframes card-settle {
   0%, 70% { box-shadow: 0 0 0 3px var(--accent-glow); border-color: var(--accent); }
   100% { box-shadow: 0 0 0 0 transparent; border-color: var(--line); }
-}
-/* The sweep is the decoration; the ring is the information. Reduced motion
-   keeps the ring and drops the travelling light entirely — the card is still
-   unmistakably the one, without anything moving. */
-@media (prefers-reduced-motion: reduce) {
-  .canvas-card.just-made { animation: none; }
-  .canvas-card.just-made::after { display: none; }
 }
 
 /**
@@ -5536,117 +4623,6 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: 13px;
   padding: 12px;
 }
-.scrub-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-.scrub-head .spacer { flex: 1; }
-/* The seq is a number you compare against other numbers, so it gets figures
-   that line up rather than ones that jitter as the playhead moves. */
-.scrub-where {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  color: var(--ink);
-}
-.scrub-ago { font-weight: 400; color: var(--ink-soft); }
-.scrub-major {
-  color: var(--ink-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 40ch;
-}
-.scrub-note { margin: 0; font-size: 13px; color: var(--ink-soft); }
-.scrub-note.bad { color: var(--danger); }
-.scrub-rail {
-  position: relative;
-  height: 48px;
-  cursor: ew-resize;
-  touch-action: none;
-  border-radius: 6px;
-}
-.scrub-rail:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
-.scrub-bars {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
-  gap: 1px;
-}
-.scrub-bar {
-  flex: 1;
-  min-width: 0;
-  /* 2px, reusing a step the sheet already has rather than inventing a 1px
-     one — `scale.test.ts` is a ratchet, and at this size the difference is
-     invisible anyway. */
-  border-radius: 2px;
-  background: var(--line);
-}
-/* A seam, not a taller bar: significance is already the height, so colour is
-   the second dimension rather than a louder version of the first. */
-.scrub-bar.seam { background: var(--accent); }
-/* The bar under the pointer, so the card and its subject are visibly one
-   thing. Brightness rather than a border: a bar is 3px wide and an outline at
-   that size is the whole bar. */
-.scrub-bar.peeked { filter: brightness(1.35); }
-
-/* **The axis.** Absolutely positioned under the bars — the ticks are placed by
-   seq, so they cannot be a flex row. `translateX(-50%)` centres each label on
-   its moment; the two ends pull back inside the rail instead, because a label
-   centred on 0% or 100% hangs half outside it. */
-.scrub-axis {
-  position: absolute;
-  left: 0; right: 0; top: 100%;
-  height: 16px;
-  pointer-events: none;
-}
-.scrub-tick {
-  position: absolute;
-  top: 2px;
-  transform: translateX(-50%);
-  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  font-size: 9.5px;
-  color: var(--ink-soft);
-  white-space: nowrap;
-}
-.scrub-tick[data-edge="first"] { transform: none; }
-.scrub-tick[data-edge="last"] { transform: translateX(-100%); }
-
-/* **The hover card.** Above the rail, because the rail is at the bottom of the
-   window and a card below it would be off-screen. */
-.scrub-peek {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  transform: translateX(-50%);
-  min-width: 200px;
-  max-width: 320px;
-  padding: 8px 10px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: var(--shadow-pop);
-  pointer-events: none;
-  z-index: 3;
-}
-.scrub-peek-when {
-  display: flex; align-items: baseline; gap: 8px;
-  font-size: 11.5px; font-weight: 600; color: var(--ink);
-  padding-bottom: 5px; margin-bottom: 4px;
-  border-bottom: 1px solid var(--line-soft);
-}
-.scrub-peek-count { font-weight: 400; color: var(--ink-soft); }
-.scrub-peek-row {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 12px; padding: 2px 0; min-width: 0;
-}
-.scrub-peek-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scrub-peek-when-row { color: var(--ink-soft); font-size: 10.5px; flex: none; }
-.scrub-peek-more { font-size: 10.5px; color: var(--ink-soft); padding-top: 3px; }
-/* Said quietly but said: a history missing entries with no explanation is the
-   instrument reporting healthy while blind. */
-.scrub-refused { font-size: 11px; color: var(--warn); cursor: help; }
 
 /* ---------- what's new ---------- */
 /* **The day in the margin, the notes as prose.** In a narrow column every
@@ -5671,26 +4647,6 @@ button.mt-card:hover { border-color: var(--accent); }
 @media (max-width: 620px) {
   .news-day { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .news-day h3 { padding-top: 0; }
-}
-.scrub-head-line {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 2px;
-  margin-left: -1px;
-  background: var(--ink);
-  border-radius: 2px;
-  pointer-events: none;
-}
-.scrub-head-line::before {
-  content: "";
-  position: absolute;
-  top: -3px;
-  left: -4px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--ink);
 }
 /**
  * **The canvas, while you are standing in its past.**
@@ -5739,22 +4695,6 @@ button.mt-card:hover { border-color: var(--accent); }
   50% { opacity: 0.3; }
 }
 
-/**
- * **Browsing a hundred canvases**, which is a different screen from ten.
- *
- * Appears only above `BROWSE_FROM` (`CanvasListPage.tsx`) — a filter above
- * four cards is furniture that makes a small home look like an admin console.
- */
-.canvas-browse {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  /* Room beneath: the filter row sat 4px off the first card and read as part
-     of the grid rather than as the control above it. */
-  margin: 0 0 14px;
-}
-.canvas-filter { flex: 1 1 220px; min-width: 0; max-width: 340px; }
 /* The ordering is a segmented control — its track, and what a chosen segment
    looks like, are the theme switch's rules, shared up where they are written.
    This is only what is its own: how the segments sit in the track, and the
@@ -5799,180 +4739,6 @@ button.mt-card:hover { border-color: var(--accent); }
 }
 
 /**
- * **The lens** — what somebody has made, across every canvas.
- *
- * The first cut was rows of titles, and titles are the one view that tells you
- * least about visual work: "Sketch, Sketch, Sketch" is three names and no
- * information, where three thumbnails are three different drawings. So the
- * work is the interface, and the words are the caption.
- *
- * Still deliberately NOT a canvas (`core/lens.ts`). Tiles in a wrapping grid,
- * each a link to where the thing actually lives — nothing here is positioned,
- * so there is no drag to get wrong and no coordinate to store.
- */
-.lens-note { margin: 0 0 14px; color: var(--ink-muted); font-size: 13.5px; }
-
-/* ---- who there is to look at ---- */
-.lens-subjects {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
-}
-/* Stacked, not side by side. Squeezing a name and four thumbnails onto one
-   line meant one of them lost, and the first attempt truncated the NAME —
-   "Admira…" beside four legible thumbnails is the wrong trade. Two rows gives
-   each the whole width. */
-.lens-subject {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  box-shadow: var(--shadow-card);
-  color: inherit;
-  text-decoration: none;
-}
-.lens-subject:hover { border-color: var(--accent); }
-.lens-face {
-  width: 30px; height: 30px; flex: none;
-  border-radius: 999px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--accent-ink); font-size: 13px; font-weight: 600;
-}
-.lens-face-big { width: 26px; height: 26px; font-size: 12px; }
-.lens-subject-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.lens-subject-who b {
-  font-size: 14px; letter-spacing: -0.012em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* One line, always. "10 things · 1 canvas" wrapping onto two made the cards
-   different heights and the column ragged — and the count is the least of
-   what this card says, so it should be the first thing to give way. */
-.lens-subject-count {
-  color: var(--ink-soft); font-size: 11.5px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* Their four most recent, at a glance, in a slot the same size on every card
-   so the names line up down the column. The strip is the flourish; it gives
-   way before the name does. */
-.lens-subject-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
-/* Their four most recent, full width beneath the name. */
-.lens-strip { display: flex; gap: 4px; overflow: hidden; }
-.lens-strip .item-thumb { border-radius: 5px; flex: none; }
-
-/* ---- one subject's work ---- */
-.lens-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
-.lens-group h2 {
-  margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
-  color: var(--ink-soft);
-  display: flex; align-items: center; gap: 7px;
-}
-.lens-group-name {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  min-width: 0; max-width: 48ch;
-}
-.lens-count {
-  padding: 0 6px; border-radius: 999px; background: var(--chip);
-  color: var(--ink-muted); font-size: 10.5px; line-height: 16px; font-weight: 500;
-}
-.lens-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 12px;
-}
-.lens-tile {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  color: inherit; text-decoration: none;
-  box-shadow: var(--shadow-card);
-}
-.lens-tile:hover { border-color: var(--accent); }
-/* The work itself, cropped to a consistent window so a wall of tiles reads as
-   a wall rather than a ragged edge. The thumbnail keeps its own aspect and is
-   cropped at the bottom, the way a screenshot of a long page is: the top of a
-   thing is the part you recognise it by. */
-.lens-shot {
-  display: block; overflow: hidden;
-  height: 128px;
-  border-radius: 7px;
-  background: var(--chip);
-}
-.lens-name {
-  font-size: 13px; font-weight: 500; letter-spacing: -0.01em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.lens-meta {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  color: var(--ink-soft); font-size: 11px;
-}
-.lens-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12ch; }
-.lens-touched { color: var(--ink-muted); }
-.lens-when { margin-left: auto; font-variant-numeric: tabular-nums; }
-
-/**
- * **The ⌘K launcher.**
- *
- * Near the top rather than centred: a palette pinned to the middle of the
- * screen covers the thing somebody is about to act on, and the list grows
- * downward as they type — so it is anchored where it starts and eats space it
- * is not using.
- */
-.palette-backdrop {
-  position: fixed; inset: 0; z-index: var(--z-modal);
-  background: var(--overlay);
-}
-.palette {
-  position: fixed; z-index: var(--z-modal);
-  top: 12vh; left: 50%; transform: translateX(-50%);
-  width: min(560px, calc(100vw - 32px));
-  display: flex; flex-direction: column;
-  border: 1px solid var(--line); border-radius: 12px;
-  background: var(--card); box-shadow: var(--shadow-pop);
-  overflow: hidden;
-}
-.palette-field {
-  border: none; border-bottom: 1px solid var(--line-soft);
-  padding: 14px 16px; font-size: 15px;
-  background: transparent; color: var(--ink); outline: none;
-}
-.palette-field::placeholder { color: var(--ink-soft); }
-.palette-rows { max-height: 52vh; overflow-y: auto; padding: 6px; }
-.palette-group {
-  padding: 8px 10px 4px; font-size: 10.5px; font-weight: 600;
-  letter-spacing: 0.04em; color: var(--ink-soft);
-}
-.palette-row {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 7px 10px; border: none; border-radius: 7px;
-  background: transparent; color: var(--ink);
-  font-size: 13.5px; text-align: left; cursor: pointer;
-}
-/* Highlight follows the KEYBOARD, and the pointer sets it rather than
-   painting its own — two highlights on one list is a list that cannot say
-   which row Enter will take. */
-.palette-row.at { background: var(--accent-wash); }
-.palette-name { flex: none; font-weight: 500; }
-.palette-hint {
-  color: var(--ink-soft); font-size: 12px; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* Said on every one of them, because the difference between doing a thing and
-   asking for it is the whole reason these are two groups. */
-.palette-posts { margin-left: auto; color: var(--ink-soft); font-size: 11px; flex: none; }
-.palette-keys {
-  margin-left: auto; flex: none;
-  padding: 1px 6px; border-radius: 5px;
-  border: 1px solid var(--line); background: var(--chip);
-  color: var(--ink-muted); font-size: 11px; font-family: inherit;
-}
-.palette-none { margin: 0; padding: 12px 10px; color: var(--ink-soft); font-size: 13px; }
-
-/**
  * **The archive, said out loud** (#194).
  *
  * One chip, wherever a canvas somebody put away can appear beside one they
@@ -5992,48 +4758,6 @@ button.mt-card:hover { border-color: var(--accent); }
   letter-spacing: 0.03em;
 }
 
-/**
- * **The switcher: the launcher's second face.**
- *
- * Same window, same rows — the only new furniture is the lit letters, the
- * age column, and a foot that says how to get back. A title is allowed to
- * shrink here where an action's name was not: an action's name IS the row,
- * and a canvas's title can be forty characters somebody typed.
- */
-.palette-canvas-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.palette-canvas-title mark {
-  background: transparent; color: var(--accent-text); font-weight: 700;
-  text-decoration: underline; text-decoration-color: var(--accent);
-  text-underline-offset: 2px;
-}
-.palette-when { margin-left: auto; flex: none; color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
-/**
- * **The switcher's scope** (#194): one checkbox under the field, only while
- * something is archived. A strip rather than a chip in the field's corner,
- * because the field's width is the query's and a long title typed into it
- * should not run under a control. The kbd is the palette's own, so ⌥A reads
- * as the same kind of thing as every other key it prints.
- */
-.palette-scope {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 16px; border-bottom: 1px solid var(--line-soft);
-  color: var(--ink-muted); font-size: 12px; cursor: pointer;
-}
-.palette-scope input { margin: 0; accent-color: var(--accent); }
-/* The sentence that says what the list scope is hiding, and is the door to
-   it. Quiet, left-aligned like the rows, and a link's colour because it IS
-   one: it changes what the list shows rather than going anywhere. */
-.palette-shelf-hint {
-  margin: 0 6px 6px; padding: 6px 10px;
-  border: none; border-radius: 7px; background: transparent;
-  color: var(--accent-text); font-size: 12px; text-align: left; cursor: pointer;
-}
-.palette-shelf-hint:hover { background: var(--accent-wash); }
-.palette-foot {
-  display: flex; justify-content: space-between; gap: 12px;
-  padding: 7px 14px; border-top: 1px solid var(--line-soft);
-  color: var(--ink-soft); font-size: 11px;
-}
 /* The caret beside the canvas's name: quiet until pointed at, like the name. */
 
 /**
@@ -6059,133 +4783,6 @@ button.mt-card:hover { border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   .canvas-surface.switching-out, .canvas-surface.switching-in { animation: none; }
 }
-
-/**
- * **The card's peek** — what happened here before the last thing.
- *
- * Attached to the card but floating over its neighbours: in flow it pushed
- * the whole grid down on every hover, and the page jumped under the pointer.
- * It appears on pointer AND on focus, because a hover-only affordance does not
- * exist for a keyboard or a touch screen.
- */
-/* Only a rendered preview joins the card: an empty history leaves it alone.
-   Both halves use one opaque ground and perimeter, without shadows crossing
-   the join. Keep the card's border widths so its grid footprint never changes. */
-.canvas-card:has(> .card-peek) {
-  background: linear-gradient(var(--panel), var(--panel)), var(--card);
-  box-shadow: none;
-}
-.canvas-card:has(> .card-peek:not(.up)) {
-  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
-}
-.canvas-card:has(> .card-peek.up) {
-  border-top-left-radius: 0; border-top-right-radius: 0;
-}
-.card-peek {
-  /* Out of flow, over the neighbours. The first version was a plain flex
-     child of the card — "a popover floating outside would need placing, and
-     this is a few short rows that the card has room for" — and every hover
-     grew the card by the peek's height and pushed the whole grid down: the
-     page jumped under the pointer. The card's footprint is fixed now; the
-     preview floats below it, above the rows it covers, placed by the card
-     it belongs to. */
-  position: absolute; top: 100%; left: -1px; right: -1px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 8px 14px 10px;
-  /* The menu's ground (8 Sep 2026): `--panel` over opaque `--card` renders
-     one value no matter which cards this opens over — a translucent peek
-     would read differently per row it covered. */
-  background: linear-gradient(var(--panel), var(--panel)), var(--card);
-  border: 1px solid;
-  border-color: inherit;
-  /* top: 100% overlaps the card's existing 1px border with this ground. */
-  border-top-width: 0;
-  border-radius: 0 0 var(--r-float) var(--r-float);
-  box-shadow: none;
-  /* Bounded: five seams is the most a peek ever shows, but on a short
-     window it scrolls rather than running off the screen. 288px is the cap
-     when the room allows it — five rows with thumbnails measure 282, which
-     240 was 42px short of, slicing the last row on every canvas whose seams
-     named items (`PEEK_CAP` carries the measurement and is asserted equal to
-     this number). The component clamps further to the actual room on the
-     chosen side (peekplace.ts) with an inline max-height. */
-  max-height: 288px;
-  overflow-y: auto;
-  font-size: 11.5px;
-  color: var(--ink-soft);
-}
-/* A card near the bottom edge opens its preview upward instead — the
-   component measures and wears `up` when there is more room above. */
-.card-peek.up {
-  top: auto; bottom: 100%;
-  border-top-width: 1px; border-bottom-width: 0;
-  border-radius: var(--r-float) var(--r-float) 0 0;
-}
-.card-peek-row { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
-/* A row that is a link to its item: the same quiet row, and a hover that
-   says so — the card around it is already the link to the canvas. */
-.card-peek-row.linked { border-radius: 6px; margin: 0 -4px; padding: 2px 4px; }
-.card-peek-row.linked:hover { background: var(--chip); color: var(--ink); }
-/* The thing itself, small — the lens's thumbnail, at the lens's size. */
-.card-peek-thumb { flex: none; display: inline-flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--line-soft); }
-.card-peek-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.card-peek-what {
-  min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* The item's name under the verb, in the ink the card's title uses: the
-   verb is the small print and the name is the point. */
-.card-peek-about { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Figures that line up, because these are read as a column of times. */
-.card-peek-when { flex: none; font-variant-numeric: tabular-nums; }
-.card-peek-quiet { font-style: italic; }
-
-/* The lens's narrowing chips — kinds, windows, and "untouched since". */
-.lens-narrow { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
-
-/* The count earns the click: "screen 41" is a choice, a bare "screen" is a
-   guess. Dimmer than the kind, because the kind is what is being chosen. */
-.lens-tally { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-
-/* An act: what they did, where, and when. Rows because a history is read
-   downward, and because nothing here is a thing you could look at. */
-.lens-act {
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 7px 12px; border-top: 1px solid var(--line-soft);
-  font-size: 13px;
-}
-.lens-act:first-child { border-top: none; }
-.lens-act-what { flex: 1; min-width: 0; }
-.lens-act-where {
-  color: var(--ink-soft); font-size: 11.5px; text-decoration: none;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 18ch;
-}
-.lens-act-where:hover { color: var(--accent-text); }
-
-/* **Here, and standing by, must not read alike.** A facepile showing six
-   faces on a canvas nobody is working on has stopped meaning anything, and
-   the same is true of a dot. Filled is somebody there; a ring is a process
-   that could be woken — present as a possibility, absent as a person. */
-.lens-live-dot {
-  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--good); flex: none;
-}
-.lens-live-dot.standby { background: transparent; box-shadow: inset 0 0 0 1.5px var(--good); }
-/* Where a subject stands — enrolled canvases with what they did there. The
-   same quiet italic as the live line, one step softer, because it is a record
-   rather than a moment. */
-.lens-standing { font-style: normal; font-size: 12px; color: var(--ink-muted); }
-.lens-standing-note { color: var(--ink-soft); }
-.lens-live-said {
-  display: inline-flex; align-items: center; gap: 5px;
-  color: var(--good); font-size: 11.5px; font-style: normal;
-}
-.lens-group h2 .lens-live-dot { margin-right: 6px; }
-.lens-live-at { color: inherit; text-decoration: none; }
-.lens-live-at:hover { text-decoration: underline; }
 
 /* ---- the sprint's clock (core/sprint.ts, components/SprintChip.tsx) ---- */
 .sprint-chip {
@@ -6248,33 +4845,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .react-chip.veiled .react-count { visibility: hidden; }
 .react-chip .react-agents { font-size: 9.5px; color: var(--ink-muted); }
 
-/* ---------- spaces on the canvas list (roles phase 4) ---------- */
-/* A heading per space the badge may see, and **No space** last. The heading
-   is a drop target — dragging a card onto it is **Move to space…** — so the
-   whole section lights when a card is over it, not just the words. */
-.canvas-space { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; border-radius: var(--r-float); }
-.canvas-space.over { outline: 2px dashed var(--accent); outline-offset: 6px; }
-.canvas-space-head { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
-.canvas-space-head h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-.canvas-space-count { color: var(--ink-soft); font-size: 11.5px; font-variant-numeric: tabular-nums; flex: 1; }
-.canvas-space-head .share-popover { right: 0; left: auto; }
-/* **New space**, in the head beside Lens: a field and a button, the same
-   pair the create card has. */
-.canvas-space-new { display: flex; gap: 6px; align-items: center; }
-.canvas-space-new .text-input { width: 180px; font-size: 12.5px; }
-
-/* ---------- groups (roles phase 5) ---------- */
-/* The Groups panel hangs off the head beside New space and wears the Share
-   popover's shell. One group is a row, its members as chips under it, and
-   the add field under those — the same pieces the Share dialog is made of. */
-.groups-group { display: flex; flex-direction: column; gap: 6px; }
-.groups-members { display: flex; flex-wrap: wrap; gap: 6px; }
-.groups-member {
-  display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 12px;
-  background: var(--chip); border: 1px solid var(--chip-line); border-radius: var(--radius);
-}
-.groups-member .btn { padding: 0 4px; font-size: 12px; line-height: 1; }
-
 /* ---------- the space's Share ---------- */
 /* **Every canvas in this space**: the row above the invitations, shaped like
    the link toggle it stands in for — a chip holding a label, the radios and
@@ -6291,49 +4861,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .share-wider { color: var(--accent-text); }
 .share-back { padding: 0 6px; margin-right: 4px; font-size: 14px; line-height: 1; }
 
-/* ---------- the deck, laid out for paper (DeckPrint.tsx) ---------- */
-/* Covers the canvas like full screen does, and for the same reason: `--ground`
-   here is load-bearing, an undefined token would be no colour at all. */
-.deck-print {
-  position: fixed; inset: 0; z-index: var(--z-fullscreen);
-  background: var(--ground); color: var(--ink);
-  overflow-y: auto; overflow-x: hidden;
-}
-.deck-bar {
-  position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px var(--edge);
-  background: var(--ground); border-bottom: 1px solid var(--line);
-}
-.deck-bar button {
-  padding: 6px 12px; border-radius: var(--radius); border: 1px solid var(--line);
-  background: var(--panel); color: var(--ink); cursor: pointer;
-}
-.deck-bar button:disabled { color: var(--ink-muted); cursor: default; }
-.deck-count { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.deck-spacer { flex: 1; }
-.deck-empty { max-width: 48ch; margin: 40px auto; text-align: center; color: var(--ink-soft); }
-.deck-pages {
-  list-style: none; margin: 0; padding: 24px var(--edge) 40px;
-  display: flex; flex-direction: column; align-items: center; gap: 28px;
-}
-/* `--card` rather than white: a slide draws its own ground inside its frame,
-   and the page behind it should sit on this theme's surface like a card. */
-.deck-page {
-  position: relative; width: 100%; aspect-ratio: 16 / 9;
-  background: var(--card); border-radius: var(--radius); overflow: hidden;
-  box-shadow: var(--shadow-card);
-}
-.deck-page iframe { display: block; width: 100%; height: 100%; border: 0; background: var(--card); }
-.deck-page img { display: block; max-width: 100%; max-height: 100%; height: auto; margin: 0 auto; object-fit: contain; }
-.deck-page-other {
-  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; color: var(--ink-soft);
-}
-.deck-page-n {
-  position: absolute; right: 10px; bottom: 8px; font-size: 12px;
-  font-variant-numeric: tabular-nums; color: var(--ink-soft);
-}
 @media print {
   /* A slide is 16:9, so the sheet is: PowerPoint's 13.333 × 7.5 inches, not Letter landscape, which would stretch every slide to 4:3. */
   @page { size: 13.333in 7.5in; margin: 0; }
@@ -6345,27 +4872,7 @@ button.mt-card:hover { border-color: var(--accent); }
      Measured: two slides printed as one page until these were let go. */
   html, body, #root { height: auto; overflow: visible; }
   .canvas-page { position: static; overflow: visible; }
-  .deck-print { position: static; overflow: visible; }
-  .deck-bar { display: none; }
-  .deck-pages { padding: 0; gap: 0; display: block; }
-  .deck-sheet { break-after: page; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
-  .deck-sheet:last-child { break-after: auto; }
-  .deck-page { flex: 1; min-height: 0; width: 100%; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
-  /* With notes, the slide keeps the top of the sheet and the words the rest. */
-  .with-notes .deck-page { flex: 0 0 62%; }
-  .deck-notes { flex: 1; overflow: hidden; padding: 12px 24px; border-top: 1px solid var(--line); }
-  .deck-page-n { display: none; }
 }
-/* The sheet on screen: the page, and its notes beneath when asked for. */
-.deck-sheet { width: min(100%, 1280px); list-style: none; }
-.deck-notes {
-  padding: 12px 16px; color: var(--ink); font-size: 14px; line-height: 1.5;
-  background: var(--card); border: 1px solid var(--line); border-top: 0;
-  border-radius: 0 0 var(--radius) var(--radius);
-}
-.deck-notes em { color: var(--ink-soft); }
-.with-notes .deck-page { border-radius: var(--radius) var(--radius) 0 0; }
-.deck-notes-toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 13px; }
 
 /* ---------- a module's page, as a cover (ModulePage.tsx) ---------- */
 .module-page {
@@ -6393,10 +4900,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .wb-inspector {
   flex: none; width: 280px; min-height: 0; overflow: auto;
   border-left: 1px solid var(--line); background: var(--card); padding: 12px 16px;
-}
-.wb-inspector-section h3 {
-  margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--ink-soft);
 }
 
 /* ---------- documents (modules/documents) ---------- */
@@ -6568,51 +5071,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .group-migration nav { display: flex; align-items: center; gap: 12px; }
 .group-migration > .btn { margin-inline-end: 8px; margin-block: 8px; }
 
-/* The home and the in-app notification read one inbox, with explicit partial
-   failure and ordinary links to conversations at their actual homes. */
-.home-inbox { margin: 24px 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-.inbox-heading { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.inbox-heading h2 { margin: 0; font-size: 16px; flex: 1; }
-.inbox-heading label { display: flex; gap: 6px; align-items: center; font-size: 12px; }
-.inbox-tally, .inbox-note { color: var(--ink-soft); font-size: 13px; }
-.inbox-unavailable { font-size: 13px; color: var(--ink); }
-.inbox-entries { max-height: 360px; overflow: auto; }
-/* A row is a face and what was said beside it, like every other place in the
-   app where somebody speaks. The grid keeps the body's left edge under the
-   name rather than under the disc, so two lines of message read as a
-   paragraph and not as a caption on a picture. */
-.inbox-entry {
-  display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start;
-  padding: 10px; border-radius: var(--radius); color: var(--ink); text-decoration: none;
-  border-top: 1px solid var(--line);
-}
-.inbox-entry:first-child { border-top: 0; }
-/* Hover and keyboard focus are the same state: rows are links inside a
-   scroller, and the keyboard had no visible answer at all before. */
-.inbox-entry:hover, .inbox-entry:focus-visible { background: var(--chip); outline: none; }
-.inbox-entry:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
-.inbox-entry:hover .inbox-body, .inbox-entry:focus-visible .inbox-body { color: var(--ink); }
-/* Unread, said quietly: the accent bar is on the row that is new rather than
-   on every row, so "what arrived since I looked" survives Everything. */
-.inbox-entry.fresh { box-shadow: inset 2px 0 0 var(--accent); }
-.inbox-entry.fresh .inbox-entry-meta strong { font-weight: 700; }
-/* The disc itself is `.face-mark`, which the row already wears — the facepile's
-   own rule, so an inbox face and a canvas face cannot drift apart. */
-.inbox-said { display: grid; gap: 4px; min-width: 0; }
-.inbox-entry-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 12px; color: var(--ink-soft); }
-.inbox-entry-meta strong { color: var(--ink); }
-/* An agent is marked where the name is, because the inbox fills with agents
-   faster than with people and the difference decides whether you open it. */
-.inbox-agent { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; padding: 1px 5px; border-radius: 999px; background: var(--chip); color: var(--ink-soft); }
-.inbox-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
-.inbox-reason.mentioned { color: var(--accent-text); font-weight: 600; }
-.inbox-when { font-variant-numeric: tabular-nums; }
-/* Two lines, not one: the single ellipsised line cut every real message at
-   about sixty characters. The whole row carries the full text as its title. */
-.inbox-body { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; line-height: 1.4; color: var(--ink-soft); }
-.inbox-earlier { display: block; font-size: 11px; color: var(--ink-soft); }
-.inbox-home { color: var(--ink-soft); font-size: 11px; }
-.inbox-reason, .inbox-refresh { margin-left: auto; }
 /* The count rides the label as a chip rather than as more words, so the phone's
    96px box has something it can still show when the sentence would not fit. */
 .inbox-count { display: inline-flex; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -6620,7 +5078,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .inbox-warn { margin-left: 6px; color: var(--warn, var(--ink-soft)); font-weight: 700; }
 .navigation-inbox { position: fixed; right: 16px; bottom: 16px; z-index: var(--z-float); background: var(--card); box-shadow: var(--shadow-card); }
 .navigation-inbox-panel { position: fixed; right: 16px; bottom: 62px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 100px); overflow: auto; z-index: var(--z-popover); background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-pop); }
-.navigation-inbox-panel .home-inbox { margin: 0; border: 0; }
 .inbox-close { display: block; margin: 10px 10px 0 auto; }
 
 /* Clear the existing bottom-right zoom row when the canvas is open. */

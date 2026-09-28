@@ -1,0 +1,134 @@
+/* ---------- History: the scrubber's track ----------
+   Loaded with Scrubber, which opens on a keystroke and never with a first
+   visit: moved out of `styles.css` on 27 Sep 2026 (the lazy-only queue,
+   cleanup phase 6). `.scrubber` itself stays there — eager code names it. */
+
+.scrub-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.scrub-head .spacer { flex: 1; }
+/* The seq is a number you compare against other numbers, so it gets figures
+   that line up rather than ones that jitter as the playhead moves. */
+.scrub-where {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
+}
+.scrub-ago { font-weight: 400; color: var(--ink-soft); }
+.scrub-major {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+}
+.scrub-note { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.scrub-note.bad { color: var(--danger); }
+.scrub-rail {
+  position: relative;
+  height: 48px;
+  cursor: ew-resize;
+  touch-action: none;
+  border-radius: 6px;
+}
+.scrub-rail:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.scrub-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+}
+.scrub-bar {
+  flex: 1;
+  min-width: 0;
+  /* 2px, reusing a step the sheet already has rather than inventing a 1px
+     one — `scale.test.ts` is a ratchet, and at this size the difference is
+     invisible anyway. */
+  border-radius: 2px;
+  background: var(--line);
+}
+/* A seam, not a taller bar: significance is already the height, so colour is
+   the second dimension rather than a louder version of the first. */
+.scrub-bar.seam { background: var(--accent); }
+/* The bar under the pointer, so the card and its subject are visibly one
+   thing. Brightness rather than a border: a bar is 3px wide and an outline at
+   that size is the whole bar. */
+.scrub-bar.peeked { filter: brightness(1.35); }
+/* **The axis.** Absolutely positioned under the bars — the ticks are placed by
+   seq, so they cannot be a flex row. `translateX(-50%)` centres each label on
+   its moment; the two ends pull back inside the rail instead, because a label
+   centred on 0% or 100% hangs half outside it. */
+.scrub-axis {
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  height: 16px;
+  pointer-events: none;
+}
+.scrub-tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  font-size: 9.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.scrub-tick[data-edge="first"] { transform: none; }
+.scrub-tick[data-edge="last"] { transform: translateX(-100%); }
+/* **The hover card.** Above the rail, because the rail is at the bottom of the
+   window and a card below it would be off-screen. */
+.scrub-peek {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  min-width: 200px;
+  max-width: 320px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+  pointer-events: none;
+  z-index: 3;
+}
+.scrub-peek-when {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 11.5px; font-weight: 600; color: var(--ink);
+  padding-bottom: 5px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.scrub-peek-count { font-weight: 400; color: var(--ink-soft); }
+.scrub-peek-row {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; padding: 2px 0; min-width: 0;
+}
+.scrub-peek-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scrub-peek-when-row { color: var(--ink-soft); font-size: 10.5px; flex: none; }
+.scrub-peek-more { font-size: 10.5px; color: var(--ink-soft); padding-top: 3px; }
+/* Said quietly but said: a history missing entries with no explanation is the
+   instrument reporting healthy while blind. */
+.scrub-refused { font-size: 11px; color: var(--warn); cursor: help; }
+.scrub-head-line {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.scrub-head-line::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink);
+}

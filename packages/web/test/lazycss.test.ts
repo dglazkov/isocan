@@ -35,8 +35,23 @@ import { classesOf, eagerWebFiles, namedBy, sources } from "./cssuse.ts";
  * walk now names 146 files, as the built entry does, and the 55 rules that
  * styled that lazy subtree read as the lazy-only rules they always were. The
  * entry CSS stayed 154,900 bytes.
+ *
+ * 713 became 319 the same day (the queue, worked). Twelve sheets left
+ * `styles.css`, and what decided which was the ENTRY JS rather than the CSS:
+ * a lazy chunk's first stylesheet is one more name in the entry's
+ * `__vite__mapDeps`, about forty bytes, against the 399 the bundle ceiling
+ * had left. So every chunk that already carried CSS, or is only ever asked
+ * for by another lazy chunk, went first and free — the ⌘K window, Add, the
+ * ink well, the editor's shared buttons — and nine new sheets bought the most
+ * rules each: the home screen, a design system read, the Lens, the stage, the
+ * workbench, an agent's row, History's track, the printed deck and the Inbox.
+ * Entry JS 700,901 to 701,253; entry CSS 154,900 to 115,808. Each move was
+ * held to a computed-style comparison in headless Chrome, HEAD's build
+ * against the new one, element for element. What is left is mostly small
+ * sections whose chunk has no sheet yet, each worth ~40 bytes of entry JS the
+ * bundle ceiling no longer has to spare.
  */
-const CEILING = 713;
+const CEILING = 319;
 
 const eagerFiles = eagerWebFiles();
 const isLazyWeb = (file: string) => file.startsWith("packages/web/src/") && !eagerFiles.has(file);

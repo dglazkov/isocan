@@ -1,0 +1,314 @@
+/* ---------- the home screen ----------
+   Loaded with CanvasListPage (and the card peek and groups panel that ship in
+   its chunk), never on a canvas: moved out of `styles.css` on 27 Sep 2026
+   (the lazy-only queue, cleanup phase 6). It sits in `components/` rather
+   than beside the page because that is where the stylesheet guards look. */
+
+.create-note { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.45; }
+.create-note.bad { color: var(--warn); }
+.canvases-error {
+  margin: 0 0 16px; padding: 10px 12px; border-radius: var(--radius);
+  background: var(--chip); color: var(--warn); font-size: 13px;
+}
+.canvas-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px; align-items: start;
+}
+.canvas-card {
+  position: relative;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-float);
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column;
+  text-align: left;
+  /* No `overflow: hidden`: the peek is an overlay that must leave the box
+     (below — and the box would clip it). No child paints a background to the
+     corners, so nothing needed the clip; the just-made sheen rounds its own
+     corners with `border-radius: inherit`. */
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease,
+    filter 0.14s ease;
+}
+/**
+ * **Taken down: still here, and visibly not open** (operator phase 2; journey
+ * 4 step 3 — *the canvas is there, greyed, with the same sentence, and it does
+ * not open*).
+ *
+ * Greyed rather than hidden, because a canvas that vanished from its owner's
+ * own list is indistinguishable from one she lost. Greyed rather than merely
+ * annotated, because the card has no link in it any more and a card that looks
+ * clickable and is not is a worse lie than a card that looks disabled.
+ *
+ * The cursor is the tell that costs nothing: `default`, not `pointer`, on the
+ * whole card. The hover lift below still applies — the peek still opens, and
+ * what happened here before it came down is exactly what somebody reading this
+ * card wants.
+ */
+.canvas-card.taken-down {
+  background: var(--chip);
+  cursor: default;
+}
+.canvas-card.taken-down h3 {
+  color: var(--ink-soft);
+}
+/** The home's own sentence, in the place the description would be. Not
+ * `danger`-coloured: this is an explanation, not an error, and painting it red
+ * would tell the owner she did something wrong. */
+.card-taken-down {
+  margin: 4px 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+/**
+ * **Lifted: nearer, not merely highlighted.**
+ *
+ * Hover and focus are one state here, because focus is the second way the
+ * preview opens and a card that grew for the pointer but not for the keyboard
+ * would read as two different controls.
+ *
+ * The lift is doing real work rather than decorating: an open peek covers most
+ * of the card below it and leaves a sliver of that card poking out under its
+ * bottom edge, which without a shadow reads as a rendering fault — two
+ * surfaces at the same depth, one inexplicably cut off. A shadow says which is
+ * in front, and 2.5% of scale says how far.
+ */
+.canvas-card:hover,
+.canvas-card:focus-within {
+  border-color: var(--accent);
+  /* Not `box-shadow`: the card and the preview hanging off it are two boxes
+     making one surface, and two box-shadows draw a line across the join —
+     which is why the peek turned shadows off on both halves. `--lift` is
+     drawn by `filter`, so ONE shadow wraps the pair's outline and the join
+     stays invisible. */
+  box-shadow: none;
+  filter: var(--lift);
+  /* A transform is paint, never layout: the neighbours do not move a pixel
+     for it, which is the whole premise of the overlay (peekoverlay.test.ts).
+     The peek is a child, so it comes forward with the card it belongs to. */
+  transform: translateY(-2px) scale(1.025);
+  /* The lifted card — and the preview hanging off it — reads above the cards
+     it overlays. `--z-popover` names exactly this: peek cards. */
+  z-index: var(--z-popover);
+}
+/* The shadow is not motion and stays; the approach is, and goes. */
+@media (prefers-reduced-motion: reduce) {
+  .canvas-card:hover,
+  .canvas-card:focus-within { transform: none; }
+}
+/* The whole card is the way in — the thing you want every time should not be
+   one of three equal buttons, one of which deletes. */
+.card-open {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 16px 16px 12px; color: inherit; text-decoration: none;
+}
+.canvas-card h3 {
+  margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.015em;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+.canvas-card .desc {
+  color: var(--ink-muted); font-size: 12.5px; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* No "No description" any more: a card saying it has nothing to say is a
+   line of type spent on an absence. When there is a description it shows;
+   when there is not, the card is shorter. */
+.canvas-card .meta {
+  color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums;
+  margin-top: auto; padding-top: 4px;
+}
+/* The two rarer acts, on their own line and quiet — under the card's own
+   hairline so they read as belonging to it rather than floating in it. */
+.card-more {
+  display: flex; gap: 4px; padding: 6px 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.card-act {
+  background: none; border-color: transparent; padding: 4px 8px;
+  font-size: 11.5px; color: var(--ink-soft);
+}
+.card-act:hover { background: var(--chip); color: var(--ink); }
+.card-act.danger:hover { color: var(--danger); }
+/* Making one comes FIRST, and looks like the action it is rather than an
+   empty slot at the end of the list. */
+.canvas-card.create {
+  gap: 8px; padding: 16px; justify-content: center;
+  border-style: dashed; box-shadow: none;
+}
+/* The create card is a form, not a preview: it has no peek to lift and
+   typing in it must not push it toward you. `:focus-within` as well as
+   `:hover`, because the caret lands inside it every time somebody names a
+   canvas. */
+.canvas-card.create:hover,
+.canvas-card.create:focus-within { transform: none; box-shadow: none; filter: none; }
+.canvases-loading { color: var(--ink-muted); font-size: 13px; padding: 8px 2px; }
+.canvas-card .row { display: flex; gap: 6px; }
+.canvas-card.create {
+  border-style: dashed; align-items: stretch; justify-content: center; gap: 8px;
+  background: transparent; box-shadow: none;
+}
+/* The canvas list wears the same handle in its header. */
+/* Its own hover chip is the only frame it needs, so the resting state is the
+   page and the pressable state is visible the moment you go near it. The
+   padding grew with the pill's removal — inside a slab it was inset from a
+   border, and on its own it has to make its own edge. */
+.canvases-head .who-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px 6px 8px; border-radius: 999px; font-size: 13px; color: var(--ink);
+  background: none; border: 1px solid transparent;
+}
+.canvases-head .who-btn:hover, .canvases-head .who-btn.active {
+  background: var(--chip); border-color: var(--chip-line);
+}
+.canvases-head .who-btn .face-mark { width: 22px; height: 22px; font-size: 10px; border-width: 0; }
+.canvas-card.just-made {
+  position: relative;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  animation: card-settle 2.4s ease-out forwards;
+}
+.canvas-card.just-made::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    var(--accent-wash) 48%,
+    var(--accent-glow) 54%,
+    var(--accent-wash) 60%,
+    transparent 78%
+  );
+  background-size: 260% 100%;
+  animation: card-sheen 1.2s ease-out 2;
+}
+/* The sweep is the decoration; the ring is the information. Reduced motion
+   keeps the ring and drops the travelling light entirely — the card is still
+   unmistakably the one, without anything moving. */
+@media (prefers-reduced-motion: reduce) {
+  .canvas-card.just-made { animation: none; }
+  .canvas-card.just-made::after { display: none; }
+}
+/**
+ * **Browsing a hundred canvases**, which is a different screen from ten.
+ *
+ * Appears only above `BROWSE_FROM` (`CanvasListPage.tsx`) — a filter above
+ * four cards is furniture that makes a small home look like an admin console.
+ */
+.canvas-browse {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  /* Room beneath: the filter row sat 4px off the first card and read as part
+     of the grid rather than as the control above it. */
+  margin: 0 0 14px;
+}
+.canvas-filter { flex: 1 1 220px; min-width: 0; max-width: 340px; }
+/**
+ * **The card's peek** — what happened here before the last thing.
+ *
+ * Attached to the card but floating over its neighbours: in flow it pushed
+ * the whole grid down on every hover, and the page jumped under the pointer.
+ * It appears on pointer AND on focus, because a hover-only affordance does not
+ * exist for a keyboard or a touch screen.
+ */
+/* Only a rendered preview joins the card: an empty history leaves it alone.
+   Both halves use one opaque ground and perimeter, without shadows crossing
+   the join. Keep the card's border widths so its grid footprint never changes. */
+.canvas-card:has(> .card-peek) {
+  background: linear-gradient(var(--panel), var(--panel)), var(--card);
+  box-shadow: none;
+}
+.canvas-card:has(> .card-peek:not(.up)) {
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+}
+.canvas-card:has(> .card-peek.up) {
+  border-top-left-radius: 0; border-top-right-radius: 0;
+}
+.card-peek {
+  /* Out of flow, over the neighbours. The first version was a plain flex
+     child of the card — "a popover floating outside would need placing, and
+     this is a few short rows that the card has room for" — and every hover
+     grew the card by the peek's height and pushed the whole grid down: the
+     page jumped under the pointer. The card's footprint is fixed now; the
+     preview floats below it, above the rows it covers, placed by the card
+     it belongs to. */
+  position: absolute; top: 100%; left: -1px; right: -1px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 8px 14px 10px;
+  /* The menu's ground (8 Sep 2026): `--panel` over opaque `--card` renders
+     one value no matter which cards this opens over — a translucent peek
+     would read differently per row it covered. */
+  background: linear-gradient(var(--panel), var(--panel)), var(--card);
+  border: 1px solid;
+  border-color: inherit;
+  /* top: 100% overlaps the card's existing 1px border with this ground. */
+  border-top-width: 0;
+  border-radius: 0 0 var(--r-float) var(--r-float);
+  box-shadow: none;
+  /* Bounded: five seams is the most a peek ever shows, but on a short
+     window it scrolls rather than running off the screen. 288px is the cap
+     when the room allows it — five rows with thumbnails measure 282, which
+     240 was 42px short of, slicing the last row on every canvas whose seams
+     named items (`PEEK_CAP` carries the measurement and is asserted equal to
+     this number). The component clamps further to the actual room on the
+     chosen side (peekplace.ts) with an inline max-height. */
+  max-height: 288px;
+  overflow-y: auto;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+/* A card near the bottom edge opens its preview upward instead — the
+   component measures and wears `up` when there is more room above. */
+.card-peek.up {
+  top: auto; bottom: 100%;
+  border-top-width: 1px; border-bottom-width: 0;
+  border-radius: var(--r-float) var(--r-float) 0 0;
+}
+.card-peek-row { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+/* A row that is a link to its item: the same quiet row, and a hover that
+   says so — the card around it is already the link to the canvas. */
+.card-peek-row.linked { border-radius: 6px; margin: 0 -4px; padding: 2px 4px; }
+.card-peek-row.linked:hover { background: var(--chip); color: var(--ink); }
+/* The thing itself, small — the lens's thumbnail, at the lens's size. */
+.card-peek-thumb { flex: none; display: inline-flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--line-soft); }
+.card-peek-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.card-peek-what {
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The item's name under the verb, in the ink the card's title uses: the
+   verb is the small print and the name is the point. */
+.card-peek-about { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Figures that line up, because these are read as a column of times. */
+.card-peek-when { flex: none; font-variant-numeric: tabular-nums; }
+.card-peek-quiet { font-style: italic; }
+/* ---------- spaces on the canvas list (roles phase 4) ---------- */
+/* A heading per space the badge may see, and **No space** last. The heading
+   is a drop target — dragging a card onto it is **Move to space…** — so the
+   whole section lights when a card is over it, not just the words. */
+.canvas-space { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; border-radius: var(--r-float); }
+.canvas-space.over { outline: 2px dashed var(--accent); outline-offset: 6px; }
+.canvas-space-head { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
+.canvas-space-head h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.canvas-space-count { color: var(--ink-soft); font-size: 11.5px; font-variant-numeric: tabular-nums; flex: 1; }
+.canvas-space-head .share-popover { right: 0; left: auto; }
+/* **New space**, in the head beside Lens: a field and a button, the same
+   pair the create card has. */
+.canvas-space-new { display: flex; gap: 6px; align-items: center; }
+.canvas-space-new .text-input { width: 180px; font-size: 12.5px; }
+/* ---------- groups (roles phase 5) ---------- */
+/* The Groups panel hangs off the head beside New space and wears the Share
+   popover's shell. One group is a row, its members as chips under it, and
+   the add field under those — the same pieces the Share dialog is made of. */
+.groups-group { display: flex; flex-direction: column; gap: 6px; }
+.groups-members { display: flex; flex-wrap: wrap; gap: 6px; }
+.groups-member {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 12px;
+  background: var(--chip); border: 1px solid var(--chip-line); border-radius: var(--radius);
+}
+.groups-member .btn { padding: 0 4px; font-size: 12px; line-height: 1; }

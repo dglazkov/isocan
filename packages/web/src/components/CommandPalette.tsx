@@ -1,3 +1,4 @@
+import "./command-palette.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor, Canvas, CommandMetadata, Space } from "@isocan/core";

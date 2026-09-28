@@ -124,6 +124,28 @@ function templateCss(source: string): string {
   return out + blank(source.slice(last));
 }
 
+/**
+ * **The CSS a page has once these components have loaded**: `styles.css`,
+ * then each named sheet from `components/`, in the order the page gets them.
+ *
+ * Cleanup phase 6, 27 Sep 2026: a dozen sections moved out of `styles.css`
+ * into sheets that ship with their lazy component, and the guards that read
+ * those rules read `styles.css` alone. They read this instead — the eager
+ * sheet still first, so a guard about which rule wins still reads the cascade
+ * the page has. A name that matches no sheet throws, so a renamed sheet fails
+ * the guard loudly rather than leaving it reading nothing.
+ */
+export function loadedWith(...names: string[]): string {
+  return [
+    css,
+    ...names.map((name) => {
+      const sheet = sheets.find((s) => s.file === `packages/web/src/components/${name}`);
+      if (!sheet) throw new Error(`no sheet packages/web/src/components/${name}`);
+      return sheet.text;
+    }),
+  ].join("\n");
+}
+
 /** The web app's own sheets — `styles.css` and the ones beside its components —
  * for a guard about the app's design system rather than any CSS at all. A
  * module brings its own look; the tokens it borrows are held by the guard

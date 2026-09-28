@@ -1,0 +1,23 @@
+/* ---------- the ink well's own chrome ----------
+   Loaded with CanvasTools: moved out of `styles.css` on 27 Sep 2026 (the
+   lazy-only queue, cleanup phase 6). The chunk already carried
+   `touch-controls.css`, so this rides in the same asset at no cost to the
+   entry. The swatches themselves (`.ink-swatch`) stay in `styles.css`,
+   because the identity menu wears them too.
+
+   The ink well: the Pen's palette, hung off the rail while the Pen is up.
+   The chip on the button shows what is in the nib right now. */
+
+.ink-chip {
+  position: absolute; right: 5px; bottom: 5px;
+  width: 7px; height: 7px; border-radius: 999px;
+  border: 1.5px solid var(--card);
+}
+.tool-btn.active .ink-chip { border-color: var(--accent); }
+.ink-well {
+  position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 5px; padding: 6px 8px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: var(--shadow-pop);
+}
+.ink-sep { width: 1px; align-self: stretch; margin: 1px 1px; background: var(--line); }

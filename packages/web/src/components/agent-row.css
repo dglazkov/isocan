@@ -1,0 +1,136 @@
+/* ---------- an agent's row ----------
+   Loaded with AgentRow, which both the canvas's agent tray and the
+   workbench's roster render: moved out of `styles.css` on 27 Sep 2026 (the
+   lazy-only queue, cleanup phase 6). */
+
+.wb-row { border-radius: var(--radius); position: relative; }
+/* The hover peek: the longer trail, floated beside the row. It stands down
+   for the expanded row, which shows the record properly. */
+.wb-peek {
+  position: fixed; z-index: var(--z-popover);
+  width: 230px; max-height: 220px; overflow: hidden;
+  padding: 8px 10px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop); pointer-events: none;
+}
+.wb-row.open { background: var(--chip); }
+.wb-row-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
+  padding: 6px 8px; border: none; background: none; border-radius: var(--radius);
+  color: var(--ink);
+}
+.wb-row-head:hover { background: var(--chip); }
+.wb-dot { flex: none; width: 8px; height: 8px; border-radius: 999px; }
+/* Away: the ring without the fill — remembered, not present. */
+.wb-dot.hollow { background: none; border: 1.5px solid; }
+/* **Answerable is not enrolled** (#197 D3, 7 Sep 2026). Both were this hollow
+   ring, so "a summons will land" and "nobody is home" — the strongest and the
+   weakest thing an agent row can say — read identically at a glance. A centre
+   fills the ring: something is in there. `currentColor` is the actor's own,
+   set inline beside the border, so the dot still says WHO as well as what. */
+.wb-dot.hollow.ready {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+.wb-row-head.as-line { cursor: default; }
+/* Derived states, worn as quiet chips beside the name. These exist only
+   because statusSource crosses the wire now — a badge synthesized by
+   string-matching status copy is banned by name in the design doc. */
+.wb-state {
+  font-style: normal; font-size: 9.5px; font-weight: 600;
+  letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 0 5px; border-radius: 999px; line-height: 1.6;
+  background: var(--chip); color: var(--ink-muted); border: 1px solid var(--line-soft);
+}
+.wb-state.blocked { color: var(--accent-text); border-color: var(--accent); }
+.wb-row-name { flex: none; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.wb-row-name b { font-weight: 600; }
+.wb-row-name i { font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
+/* The agent's own words, verbatim — never a classified badge (the design doc
+   bans string-matching lifecycle copy into semantics until statusSource is
+   on the wire). */
+.wb-row-line {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; text-align: right;
+  font-size: 11px; color: var(--ink-muted);
+}
+.wb-row-line em { font-style: normal; color: var(--ink-soft); }
+.wb-row-detail { padding: 2px 8px 10px 24px; display: grid; gap: 8px; justify-items: start; }
+.wb-watch {
+  font: inherit; font-size: 11px; cursor: pointer;
+  padding: 1px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
+}
+.wb-watch:hover { color: var(--ink); border-color: var(--accent); }
+.wb-answering {
+  margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted);
+}
+.wb-answering q { quotes: "\201C" "\201D"; }
+.wb-thumb {
+  display: grid; gap: 4px; justify-items: start;
+  font: inherit; font-size: 11px; color: var(--ink-muted);
+  padding: 0; border: none; background: none; cursor: pointer; text-align: left;
+}
+.wb-thumb:hover span { color: var(--ink); }
+.wb-trail { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.wb-trail li {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 11px; color: var(--ink-muted);
+}
+.wb-trail em { font-style: normal; color: var(--ink-soft); flex: none; }
+.wb-act {
+  font: inherit; padding: 0; border: none; background: none; text-align: left;
+  color: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.wb-act { cursor: pointer; }
+button.wb-act:hover, .wb-act.here { color: var(--accent-text); }
+/* Dismiss, on the enrolled row: withdrawal is one small deliberate click —
+   quiet until hovered, never a red alarm; the history it leaves is the point. */
+.wb-dismiss {
+  flex: none; border: none; background: none; cursor: pointer;
+  color: var(--ink-soft); font-size: 11px; padding: 2px 4px; border-radius: 4px;
+}
+.wb-dismiss:hover { color: var(--ink); background: var(--chip); }
+/* Whose word wakes it, the owner's one control on their own agent's row
+   (owner-only summons): a quiet word, like Dismiss — widening spends the
+   reader's own tokens, so it is offered, never pressed on anybody. */
+.wb-listen {
+  flex: none; border: 1px solid var(--line); background: none; cursor: pointer;
+  color: var(--ink-soft); font: inherit; font-size: 11px; line-height: 1.2;
+  padding: 1px 6px; border-radius: 999px; white-space: nowrap;
+}
+.wb-listen:hover { color: var(--ink); background: var(--chip); }
+.wb-listen.on { color: var(--ink); background: var(--chip); border-color: var(--ink-soft); }
+/* Follow's toggle, in the Chat's own header because that is what it follows.
+   Quiet when off and wearing the accent when on: this moves the canvas on
+   somebody's behalf, so whether it is armed has to be readable at a glance
+   from the thing it acts on. */
+/* **Follow, on the agent it follows.**
+
+   It was a toggle in the Chat's header, which made it mean "follow whatever
+   ANYBODY just made" — the Chat is the canvas-wide channel, so with three
+   agents working it was a camera yanked between unrelated corners. Follow
+   needs a subject you can name.
+
+   Quiet until armed and wearing the accent when it is: this moves the canvas
+   on somebody's behalf, so whether it is on has to be readable at a glance
+   from the row it belongs to. */
+.wb-follow {
+  position: absolute; right: 8px; top: 8px; z-index: 1;
+  flex: none; font: inherit; font-size: 11px; line-height: 1;
+  width: 22px; height: 22px; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: 1px solid transparent;
+  background: none; color: var(--ink-soft);
+  opacity: 0; transition: opacity 0.12s ease;
+}
+/* Shown on hover, or whenever it is ON — a mode that is running must never
+   be invisible, however the pointer happens to be resting. */
+.wb-row:hover .wb-follow,
+.wb-follow:focus-visible,
+.wb-follow.on { opacity: 1; }
+.wb-follow:hover { color: var(--ink); border-color: var(--accent); }
+.wb-follow.on {
+  color: var(--accent-ink); background: var(--accent); border-color: var(--accent);
+}

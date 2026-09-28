@@ -1,3 +1,4 @@
+import "./artifact-stage.css";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import type { Backing } from "@isocan/core";

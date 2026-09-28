@@ -7,7 +7,8 @@ const popover = read("../src/components/AddPopover.tsx");
 const tools = read("../src/components/CanvasTools.tsx");
 const actions = read("../src/lib/actions.ts");
 const store = read("../src/stores/uiStore.ts");
-const css = read("../src/styles.css");
+/** The popover's own sheet, loaded with it since 27 Sep 2026 (cleanup phase 6). */
+const css = read("../src/components/add-popover.css");
 const cli = read("../../cli/src/main.ts");
 
 /**
@@ -80,7 +81,7 @@ describe("one field reads what you give it", () => {
   it("is styled as a door, and the active row reads as chosen in both themes", () => {
     expect(css).toContain(".add-door");
     expect(css).toContain(".add-kind.active");
-    expect(css).not.toContain(".place-canvas");
+    expect(css + read("../src/styles.css")).not.toContain(".place-canvas");
   });
 });
 

@@ -1,4 +1,5 @@
 import "./touch-controls.css";
+import "./canvas-tools.css";
 import { selectCreatedItems } from "../lib/groupplacement.ts";
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Actor, Placement } from "@isocan/core";

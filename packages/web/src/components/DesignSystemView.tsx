@@ -1,3 +1,4 @@
+import "./design-system-view.css";
 import { memo, useEffect, useMemo, useState } from "react";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, DesignDoc, DesignTypography } from "@isocan/core";

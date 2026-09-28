@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_COMMANDS } from "@isocan/core";
 import { ACTIONS, availableActions } from "../src/lib/actions.ts";
-import { rules, withoutComments } from "./cssrules.ts";
+import { loadedWith, rules } from "./cssrules.ts";
 
 /**
  * **⌘K reaches everything, and the two vocabularies stay apart.**
@@ -114,7 +114,7 @@ describe("the launcher", () => {
        will take, so the pointer sets the keyboard's index rather than
        painting its own. */
     expect(bare).toContain("onPointerEnter");
-    const sheet = rules(withoutComments());
+    const sheet = rules(loadedWith("command-palette.css"));
     expect(sheet.some((r) => r.selector === ".palette-row.at")).toBe(true);
     expect(sheet.some((r) => r.selector.includes(".palette-row:hover"))).toBe(false);
   });

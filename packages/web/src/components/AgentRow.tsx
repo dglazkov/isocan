@@ -1,3 +1,4 @@
+import "./agent-row.css";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AgentRow } from "@isocan/core";

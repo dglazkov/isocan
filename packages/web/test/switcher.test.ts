@@ -7,7 +7,7 @@ import { ACTIONS, availableActions } from "../src/lib/actions.ts";
 import { crossesCover } from "../src/lib/keys.ts";
 import { RECENT_LIMIT, rememberVisit } from "../src/lib/recents.ts";
 import { SWITCH_IN_MS, SWITCH_OUT_MS } from "../src/lib/canvasswitch.ts";
-import { rules, withoutComments } from "./cssrules.ts";
+import { loadedWith, rules, withoutComments } from "./cssrules.ts";
 
 /**
  * **The switcher: the launcher's second face.**
@@ -225,7 +225,7 @@ describe("the list", () => {
 
   it("lights the matched letters", () => {
     expect(palette).toContain("litRuns(");
-    const sheet = rules(withoutComments());
+    const sheet = rules(loadedWith("command-palette.css"));
     expect(sheet.some((r) => r.selector === ".palette-canvas-title mark")).toBe(true);
   });
 });
@@ -280,7 +280,7 @@ describe("the scope toggle", () => {
     // Counted by the same ranking under the shelf's own scope.
     expect(palette).toContain('rankCanvases(canvases, query, [], canvasId, "shelved").length');
     expect(palette).toContain('className="palette-shelf-hint" onClick={toggleArchived}');
-    const sheet = rules(withoutComments());
+    const sheet = rules(loadedWith("command-palette.css"));
     expect(sheet.some((r) => r.selector === ".palette-scope")).toBe(true);
     expect(sheet.some((r) => r.selector === ".palette-shelf-hint")).toBe(true);
   });

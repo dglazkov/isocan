@@ -1,3 +1,4 @@
+import "../components/canvas-list.css";
 import { Inbox } from "../components/Inbox.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";

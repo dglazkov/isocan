@@ -1,5 +1,8 @@
 .design-lint { flex: 0 1 42%; min-height: 100px; max-height: 48%; overflow: auto; border-top: 1px solid var(--line); padding: 10px 12px; background: var(--card); color: var(--ink); font-size: 12px; }
-.design-lint-heading { display: flex; align-items: center; gap: 8px; position: sticky; top: -10px; background: var(--card); padding: 5px 0; z-index: 1; }
+/* `flex-wrap` is the heading's own since 27 Sep 2026: it used to ride in on
+   `design-review.css`, so the heading wrapped only once that panel had loaded
+   and held every control on one line, however narrow the stage, until then. */
+.design-lint-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; position: sticky; top: -10px; background: var(--card); padding: 5px 0; z-index: 1; }
 .design-lint-heading .spacer { flex: 1; }
 .design-lint p { margin: 6px 0; line-height: 1.5; }
 .design-lint-provenance, .design-lint-footnote { color: var(--ink-muted); }

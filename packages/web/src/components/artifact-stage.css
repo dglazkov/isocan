@@ -1,0 +1,204 @@
+/* ---------- the stage ----------
+   Loaded with ArtifactStage, and with it NeighbourPad and TextEditFrame, which
+   only it imports: moved out of `styles.css` on 27 Sep 2026 (the lazy-only
+   queue, cleanup phase 6). The stage comes with full screen and the
+   workbench, never with a first visit. */
+
+/* **The neighbour pad**, in the same language as the pill beside it.
+
+   A row rather than a cross: the glyph is already an arrow, so position was
+   repeating what the shape said — and a 2D grid stood taller than the bar's
+   one line and dropped the arrows below its centreline, which is what it
+   looked like. One pill, the button's own border and radius, segmented.
+
+   Height is not set: the padding matches `.stage-editor-btn`'s, so both sit on
+   the same centreline for the same reason rather than by two numbers that have
+   to be kept equal. */
+.neighbour-pad {
+  display: inline-flex; align-items: center; gap: 1px;
+  padding: 1px 2px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card);
+}
+.neighbour-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 18px; padding: 0;
+  background: none; border: none; border-radius: 999px;
+  color: var(--ink-soft); cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+}
+/* One glyph, turned. Four separate arrow paths would be four chances for them
+   to stop matching. */
+.neighbour-arrow.up svg { transform: rotate(-90deg); }
+.neighbour-arrow.down svg { transform: rotate(90deg); }
+.neighbour-arrow.left svg { transform: rotate(180deg); }
+.neighbour-arrow:hover { color: var(--ink); background: var(--chip); }
+/* It leans the way it points — the smallest possible "this goes somewhere". */
+.neighbour-arrow.up:hover { transform: translateY(-1px); }
+.neighbour-arrow.down:hover { transform: translateY(1px); }
+.neighbour-arrow.left:hover { transform: translateX(-1px); }
+.neighbour-arrow.right:hover { transform: translateX(1px); }
+.neighbour-arrow:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .neighbour-arrow { transition: color 0.12s ease, background 0.12s ease; }
+  .neighbour-arrow:hover { transform: none; }
+}
+/* **The STAGE's chrome rests with the bar above it.**
+
+   `.fs-bar` bowed out and the stage's own furniture stayed: the pane bar
+   ("Saved — v6", the walk arrows, "Edit text") and the folded `EDIT` rail
+   down the side. Half the chrome fading is worse than none — it reads as
+   something failing to load rather than as a slideshow getting out of the
+   way — and on a screen being presented, that strip is the only thing on
+   the glass that is not the slide.
+
+   One timer, not a second one: `.resting` is already on the ancestor, so
+   this is the same few still seconds and the same pointer move that ends
+   them. Opacity, like `.fs-bar`, so the layout does not move under the
+   slide — the strip keeps its place and stops competing, rather than the
+   slide growing 26px the moment somebody stops moving the mouse.
+
+   **Unless the caret is in the editor.** A key press deliberately does not
+   wake the chrome (flipping slides would blink it on every slide), which is
+   right for presenting and wrong for writing: without this, somebody typing
+   would watch the toolbar above their own text fade out. */
+.fullscreen.resting .stage-pane-bar { opacity: 0; pointer-events: none; }
+/* **No rail here at all**, so there is nothing to float and nothing to fade.
+
+   It was made to float first — fading alone left its 26px of the row and the
+   preview pane's border drawing against it, so the word EDIT bowed out and a
+   strip stayed down the side of every slide. Then the better answer: full
+   screen is the PRESENTING surface and the editor is not offered on it
+   (`ArtifactStage`), so the rail is not rendered, and a control that does not
+   exist needs no rules about how it leaves.
+
+   The seam goes with it: the preview pane's left border drew against a
+   column that is no longer there. */
+.fullscreen .stage-preview-pane { border-left: 0; }
+/* The exception — somebody typing must not watch the toolbar above their own
+   text fade — lives in the WAKE, not here. It was a `:has(.stage-editor:
+   focus-within)` rule first, and that selector parses, `Element.matches()`
+   agrees it matches, and the style engine still does not apply it: a nasty
+   way to be wrong, because everything reads correct and the pixels never
+   change. Measured, not assumed. FullScreen wakes on a keystroke that is
+   going into a field, which is the same fact expressed where it works. */
+@media (prefers-reduced-motion: reduce) {
+  .stage-pane-bar, .stage-rail { transition: none; }
+}
+/* ---------- the stage's modes and editor ---------- */
+.artifact-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.artifact-stage-body { flex: 1; min-height: 0; display: flex; }
+.artifact-stage-body > * { flex: 1; min-width: 0; }
+/* One header per pane, no third bar. The stage grew a strip of toggles above
+   two panes that each already had a header — three layers of chrome before
+   content — and shed it the next day: each pane's own bar carries its
+   controls AND its fold, and a folded pane leaves a rail on its edge whose
+   whole face is the way back. */
+.stage-pane-bar {
+  flex: none; display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; border-bottom: 1px solid var(--line-soft);
+  font-size: 11.5px; color: var(--ink-muted);
+  /* Rests with the bar above it in full screen — see `.fullscreen.resting`. */
+  transition: opacity 0.35s ease;
+}
+.stage-pane-bar .spacer { flex: 1; }
+.stage-pane-name { font-weight: 600; color: var(--ink); }
+.stage-pane-name i { font-style: normal; font-weight: 400; color: var(--ink-soft); }
+.stage-toggle-group {
+  display: inline-flex; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card);
+  padding: 1px; gap: 1px;
+}
+.stage-toggle-btn {
+  font: inherit; font-size: 10.5px; cursor: pointer;
+  padding: 1px 7px; border-radius: 999px; border: none;
+  background: transparent; color: var(--ink-muted);
+}
+.stage-toggle-btn:hover { color: var(--ink); }
+.stage-toggle-btn.active {
+  background: var(--chip); color: var(--ink); font-weight: 600;
+}
+/* A folded pane, still standing at its edge: the label reads down the strip
+   and the whole strip is the button. */
+.stage-rail {
+  /* Rests with the bar above it in full screen — see `.fullscreen.resting`. */
+  transition: opacity 0.35s ease;
+  flex: none; width: 26px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: space-between;
+  padding: 10px 0; font: inherit; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  border: none; background: var(--card); color: var(--ink-soft);
+}
+.stage-rail span { writing-mode: vertical-rl; }
+/* The chevron at the very foot of the strip: a second, unmissable "this
+   opens" — the label names the pane, the arrow points the way back in. */
+.stage-rail b { font-weight: 600; font-size: 12px; }
+.stage-rail:hover { color: var(--ink); background: var(--chip); }
+.stage-rail.left { border-right: 1px solid var(--line); }
+.stage-rail.right { border-left: 1px solid var(--line); }
+.stage-preview-pane {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; border-left: 1px solid var(--line);
+}
+.stage-pane-body { flex: 1; min-height: 0; display: flex; }
+.text-edit-frame { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.text-edit-frame .html-view { flex: 1; }
+.text-edit-refusal { font-size: 11px; color: var(--accent-text); }
+/* Element properties (WYSIWYG stage 2): a strip under the bar for the
+   selected element — its tag, its class, and the handful of inline styles a
+   person reaches for. Fields, not a tree: this is not an inspector. */
+.props-panel {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-soft); background: var(--chip);
+  font-size: 11.5px;
+}
+.props-tag { font-family: ui-monospace, Menlo, monospace; color: var(--ink-muted); }
+.props-field { display: inline-flex; align-items: center; gap: 5px; }
+.props-field span { color: var(--ink-soft); }
+.props-field input {
+  width: 92px; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); color: var(--ink); font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+}
+.props-field.props-class input { width: 180px; }
+.props-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.stage-pane-body > * { flex: 1; }
+/* The editor's slot: the pane plus the seam between it and the preview. It is
+   `relative` so `.panel-resizer` — which hangs off a positioned parent's right
+   edge — lands on the border the preview draws, rather than needing a second
+   kind of resizer for a second kind of edge. */
+.stage-editor-slot { flex: 1; min-width: 0; display: flex; position: relative; }
+.stage-editor-slot > .stage-editor { flex: 1; min-width: 0; }
+
+/* ---------- shared with the editor and the lint panel ----------
+   StageEditor is imported only by ArtifactStage, and DesignLintPanel only by
+   StageEditor, so this sheet has always loaded before either renders — and
+   before their own sheets, which is the order these had as the head of
+   `styles.css`. Moved on 27 Sep 2026 with the rest of the stage. */
+
+.stage-pane-fold {
+  flex: none; font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+  width: 22px; height: 21px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
+}
+.stage-pane-fold:hover { color: var(--ink); border-color: var(--accent); }
+/* The file editor's own rules are `components/stage-editor.css`, loaded with
+   it (BC-2). These two are shared: the text editor, the stage and the lint
+   panel wear them as well. */
+.stage-editor-dirty {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 0 5px; border-radius: 999px; line-height: 1.6;
+  background: var(--chip); border: 1px solid var(--line-soft);
+}
+.stage-editor-btn {
+  font: inherit; font-size: 11px; cursor: pointer;
+  padding: 2px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+}
+.stage-editor-btn:hover { border-color: var(--accent); }
+.stage-editor-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.stage-editor-btn:disabled { opacity: 0.6; cursor: default; }
+/* The one stage button that is about to overwrite somebody's work. Warn, not
+   danger: the file is not lost, it is about to be replaced by a version the
+   canvas can still show — and `--danger` is reserved for what cannot be
+   undone. */
+.stage-editor-btn.warn { border-color: var(--warn); color: var(--warn); }

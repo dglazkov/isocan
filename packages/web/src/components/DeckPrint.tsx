@@ -1,3 +1,4 @@
+import "./deck-print.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { automaticCanvasTarget, sourceOf, type Item, canvasPath, deckFilename, deckHtml, deckPages, type DeckPageContent } from "@isocan/core";

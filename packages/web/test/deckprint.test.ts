@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { loadedWith } from "./cssrules.ts";
 
 /**
  * **The deck, laid out for paper** — structural, because the print pipeline is
@@ -13,7 +14,9 @@ const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.ur
 const app = read("../src/App.tsx");
 const page = read("../src/pages/CanvasPage.tsx");
 const view = read("../src/components/DeckPrint.tsx");
-const css = read("../src/styles.css");
+/** The deck's print rules ship with DeckPrint (`deck-print.css`) since 27 Sep
+ *  2026; the shell's own print rules stay in `styles.css`, read first. */
+const css = loadedWith("deck-print.css");
 const actions = read("../src/lib/actions.ts");
 
 describe("the deck view", () => {

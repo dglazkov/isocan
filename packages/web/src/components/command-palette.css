@@ -1,0 +1,105 @@
+/* ---------- the ⌘K window ----------
+   Loaded with CommandPalette, never on a first visit: moved out of
+   `styles.css` on 27 Sep 2026 (the lazy-only queue, cleanup phase 6). Its
+   chunk is reached only from Navigation's lazy chunk, so the sheet costs the
+   entry nothing. */
+
+/**
+ * **The ⌘K launcher.**
+ *
+ * Near the top rather than centred: a palette pinned to the middle of the
+ * screen covers the thing somebody is about to act on, and the list grows
+ * downward as they type — so it is anchored where it starts and eats space it
+ * is not using.
+ */
+.palette-backdrop {
+  position: fixed; inset: 0; z-index: var(--z-modal);
+  background: var(--overlay);
+}
+.palette {
+  position: fixed; z-index: var(--z-modal);
+  top: 12vh; left: 50%; transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+.palette-field {
+  border: none; border-bottom: 1px solid var(--line-soft);
+  padding: 14px 16px; font-size: 15px;
+  background: transparent; color: var(--ink); outline: none;
+}
+.palette-field::placeholder { color: var(--ink-soft); }
+.palette-rows { max-height: 52vh; overflow-y: auto; padding: 6px; }
+.palette-group {
+  padding: 8px 10px 4px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.04em; color: var(--ink-soft);
+}
+.palette-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 10px; border: none; border-radius: 7px;
+  background: transparent; color: var(--ink);
+  font-size: 13.5px; text-align: left; cursor: pointer;
+}
+/* Highlight follows the KEYBOARD, and the pointer sets it rather than
+   painting its own — two highlights on one list is a list that cannot say
+   which row Enter will take. */
+.palette-row.at { background: var(--accent-wash); }
+.palette-name { flex: none; font-weight: 500; }
+.palette-hint {
+  color: var(--ink-soft); font-size: 12px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Said on every one of them, because the difference between doing a thing and
+   asking for it is the whole reason these are two groups. */
+.palette-posts { margin-left: auto; color: var(--ink-soft); font-size: 11px; flex: none; }
+.palette-keys {
+  margin-left: auto; flex: none;
+  padding: 1px 6px; border-radius: 5px;
+  border: 1px solid var(--line); background: var(--chip);
+  color: var(--ink-muted); font-size: 11px; font-family: inherit;
+}
+.palette-none { margin: 0; padding: 12px 10px; color: var(--ink-soft); font-size: 13px; }
+/**
+ * **The switcher: the launcher's second face.**
+ *
+ * Same window, same rows — the only new furniture is the lit letters, the
+ * age column, and a foot that says how to get back. A title is allowed to
+ * shrink here where an action's name was not: an action's name IS the row,
+ * and a canvas's title can be forty characters somebody typed.
+ */
+.palette-canvas-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-canvas-title mark {
+  background: transparent; color: var(--accent-text); font-weight: 700;
+  text-decoration: underline; text-decoration-color: var(--accent);
+  text-underline-offset: 2px;
+}
+.palette-when { margin-left: auto; flex: none; color: var(--ink-soft); font-size: 11px; font-variant-numeric: tabular-nums; }
+/**
+ * **The switcher's scope** (#194): one checkbox under the field, only while
+ * something is archived. A strip rather than a chip in the field's corner,
+ * because the field's width is the query's and a long title typed into it
+ * should not run under a control. The kbd is the palette's own, so ⌥A reads
+ * as the same kind of thing as every other key it prints.
+ */
+.palette-scope {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 16px; border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-muted); font-size: 12px; cursor: pointer;
+}
+.palette-scope input { margin: 0; accent-color: var(--accent); }
+/* The sentence that says what the list scope is hiding, and is the door to
+   it. Quiet, left-aligned like the rows, and a link's colour because it IS
+   one: it changes what the list shows rather than going anywhere. */
+.palette-shelf-hint {
+  margin: 0 6px 6px; padding: 6px 10px;
+  border: none; border-radius: 7px; background: transparent;
+  color: var(--accent-text); font-size: 12px; text-align: left; cursor: pointer;
+}
+.palette-shelf-hint:hover { background: var(--accent-wash); }
+.palette-foot {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 14px; border-top: 1px solid var(--line-soft);
+  color: var(--ink-soft); font-size: 11px;
+}

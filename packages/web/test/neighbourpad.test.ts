@@ -6,7 +6,8 @@ import { findNextItem } from "../src/lib/spatialnav.ts";
 const read = (rel: string) =>
   readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), "utf8");
 const pad = read("components/NeighbourPad.tsx");
-const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+/** The pad's rules ship with the stage (`artifact-stage.css`) since 27 Sep 2026. */
+const css = read("components/artifact-stage.css");
 
 /**
  * ⌘← ⌘→ ⌘↑ ⌘↓ have walked the canvas from a full-screen slide for a while and

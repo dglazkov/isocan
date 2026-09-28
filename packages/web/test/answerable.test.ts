@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const poll = read("../src/lib/answerable.ts");
 const row = read("../src/components/AgentRow.tsx");
-const css = read("../src/styles.css");
+/** The row's own sheet, loaded with AgentRow since 27 Sep 2026 (cleanup phase 6). */
+const css = read("../src/components/agent-row.css");
 
 /**
  * **Evidence with an age, and two states that stop looking alike** (#197

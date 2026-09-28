@@ -52,9 +52,12 @@ const every = sheets.map((s) => s.text);
  * duplicate to fold: `.anatomy-tree`, whose second block overrides the phone
  * layout's `position: absolute`, and `.design-lint-heading`, whose `flex-wrap`
  * rides in on `design-review.css` and so applies only once that panel loaded.
+ *
+ * Ten became nine the same day: `.design-lint-heading` took its `flex-wrap`
+ * into its own rule in `design-lint.css`, so the lint panel's heading wraps
+ * whether or not the review panel has ever been opened.
  */
 const KNOWN_TWICE = [
-  ".design-lint-heading",
   ".design-record-face",
   ".phone-node-bar",
   ".q-resume",

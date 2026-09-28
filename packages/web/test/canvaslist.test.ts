@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { rules, withoutComments } from "./cssrules.ts";
+import { loadedWith, rules } from "./cssrules.ts";
 
 /**
  * **The home screen, at ten canvases and at a hundred.**
@@ -150,7 +150,7 @@ describe("the shelf's control does not depend on the list being long", () => {
 });
 
 describe("the browse controls' stylesheet", () => {
-  const sheet = rules(withoutComments()).filter((r) => /\.canvas-(browse|filter|sorts|none)/.test(r.selector));
+  const sheet = rules(loadedWith("canvas-list.css")).filter((r) => /\.canvas-(browse|filter|sorts|none)/.test(r.selector));
 
   it("exists", () => {
     expect(sheet.length).toBeGreaterThan(0);
