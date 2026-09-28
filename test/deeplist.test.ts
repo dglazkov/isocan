@@ -112,6 +112,33 @@ describe("the deep lane", () => {
     expect(walksBinary(mcp.replace("new StdioClientTransport", "describeTransport"))).toBe(false);
   });
 
+  it("sees a spawn under whatever name the file bound it to", () => {
+    // 27 Sep 2026: the reading was a fixed list of call names, so
+    // `import { spawn as run }` then `run(…)` walked the binary unseen, and so
+    // did any `child_process` method the list never named. The names a file
+    // binds from `child_process` are the ones that start processes in it.
+    const target = 'const cliBin = "../bin/isocan.js";';
+    const walks = (code: string) => walksBinary(`${code}\n${target}`);
+    // An aliased named import — invisible to the fixed list.
+    expect(walks('import { spawn as run } from "node:child_process";\nrun(process.execPath, [cliBin]);')).toBe(true);
+    // A namespace import calling a method the fixed list never named.
+    expect(walks('import * as cp from "node:child_process";\ncp.exec(`node ${cliBin} ls`);')).toBe(true);
+    // A namespace import calling `spawn` was already seen, by accident: `\b`
+    // sits between the dot and the name. Kept so the new reading holds it.
+    expect(walks('import * as cp from "node:child_process";\ncp.spawn(process.execPath, [cliBin]);')).toBe(true);
+    // The default import, `require` (aliased destructuring and whole
+    // module), and the dynamic import `test/setup.ts` uses.
+    expect(walks('import proc from "child_process";\nproc.exec(`node ${cliBin}`);')).toBe(true);
+    expect(walks('const { fork: start } = require("child_process");\nstart(cliBin);')).toBe(true);
+    expect(walks('const cp = require("node:child_process");\ncp.exec(`node ${cliBin}`);')).toBe(true);
+    expect(walks('const { spawn: go } = await import("node:child_process");\ngo(process.execPath, [cliBin]);')).toBe(true);
+    // A `run` that is not bound from child_process runs nothing, a RegExp's
+    // `.exec` is not `exec`, and a type-only import binds no call.
+    expect(walks('import { run } from "./helper.ts";\nrun(cliBin);')).toBe(false);
+    expect(walks('import { exec } from "node:child_process";\n/isocan/.exec(cliBin);')).toBe(false);
+    expect(walks('import type { ChildProcess } from "node:child_process";\nChildProcess(cliBin);')).toBe(false);
+  });
+
   it("is EMPTY of exclusions when CI's anti-skip switch is set", () => {
     // The switch exists so the release run cannot skip. If `runningDeep` ever
     // stopped reading it, the gate would quietly become the fast lane.

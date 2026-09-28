@@ -257,8 +257,104 @@ export function siblingsOf(source: string): string[] {
   return found;
 }
 
-/** A call that starts a process — the half of a walk that runs something. */
-const SPAWN_CALL = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\s*\(/;
+/** What `child_process` exports that starts a process. */
+const STARTERS = ["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"];
+
+/**
+ * The starters read as calls whatever the file imports — every one but
+ * `exec`, whose bare name is also a RegExp's method. This was the whole reading
+ * until 27 Sep 2026, and it stays under the bound names below because this
+ * reading has always taken strings as code: the guards that quote a spawn
+ * (`deeplist.test.ts`) and a fixture handed in as a sibling carry no import
+ * of their own.
+ */
+const UNBOUND = STARTERS.filter((name) => name !== "exec");
+
+/** `"child_process"` or `"node:child_process"`, either quote. */
+const CHILD_PROCESS = String.raw`["'](?:node:)?child_process["']`;
+
+/** A name as JavaScript spells one. */
+const IDENT = /^[A-Za-z_$][\w$]*$/;
+
+/**
+ * The starters a `{ … }` clause binds, under their LOCAL names: `spawn`,
+ * `spawn as run` (an import) and `spawn: run` (a destructuring) all give the
+ * name the file calls. A `type` specifier binds no value, so nothing to call.
+ */
+function boundStarters(list: string): string[] {
+  return list
+    .split(",")
+    .map((spec) => spec.trim())
+    .filter((spec) => spec && !spec.startsWith("type "))
+    .flatMap((spec) => {
+      const [name = "", local = name] = spec.split(/\s+as\s+|\s*:\s*/);
+      return STARTERS.includes(name) && IDENT.test(local) ? [local] : [];
+    });
+}
+
+/**
+ * **The names that start a process in this source, read from its own
+ * bindings** (27 Sep 2026). Until then the reading was a fixed list of call
+ * names, so `import { spawn as run } from "node:child_process"` and then
+ * `run(process.execPath, [cliBin])` walked the binary unseen by both
+ * `walksBinary` and the spawner ratchet — and so did `cp.exec(…)`, a method
+ * the list never named. (`cp.spawn(…)` was seen, by accident: `\b` sits
+ * between the dot and the name.)
+ *
+ * `calls` are the local names a `{ … }` clause binds, aliased or not;
+ * `spaces` are whole-module bindings — `import * as cp`, `import cp`,
+ * `require(…)`, `await import(…)` — whose starters are called as members.
+ *
+ * What it still cannot see, said so the limit is not a surprise: a starter
+ * handed on through another name at runtime (`const run =
+ * promisify(execFile)`, `const go = cp.spawn`), and a process started by a
+ * module that is not `child_process` at all.
+ */
+export function spawnBindings(source: string): { calls: string[]; spaces: string[] } {
+  const calls = new Set<string>();
+  const spaces = new Set<string>();
+  const bindModule = (name: string): void => {
+    if (IDENT.test(name)) spaces.add(name);
+  };
+  // `import X, * as Y, { a as b } from "child_process"`, in any of its shapes.
+  const imports = new RegExp(String.raw`\bimport\s+(?!type\s)([^;]*?)\s+from\s+${CHILD_PROCESS}`, "g");
+  for (const match of source.matchAll(imports)) {
+    const clause = match[1] ?? "";
+    for (const local of boundStarters(/\{([^}]*)\}/.exec(clause)?.[1] ?? "")) calls.add(local);
+    const namespace = /\*\s*as\s+([\w$]+)/.exec(clause)?.[1];
+    if (namespace) bindModule(namespace);
+    const defaultName = /^\s*([\w$]+)\s*(?:,|$)/.exec(clause)?.[1];
+    if (defaultName) bindModule(defaultName);
+  }
+  // `const { a: b } = require("child_process")`, `const cp = await import(…)`.
+  const loaded = String.raw`(?:await\s+)?(?:require|import)\s*\(\s*${CHILD_PROCESS}\s*\)`;
+  const assigns = new RegExp(String.raw`\b(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*${loaded}`, "g");
+  for (const match of source.matchAll(assigns)) {
+    const target = match[1] ?? "";
+    if (target.startsWith("{")) for (const local of boundStarters(target.slice(1, -1))) calls.add(local);
+    else bindModule(target);
+  }
+  return { calls: [...calls], spaces: [...spaces] };
+}
+
+const escapeName = (name: string): string => name.replace(/\$/g, "\\$");
+
+/**
+ * **Does this source call something that starts a process** — the half of a
+ * walk that runs something, and the ONE reading `walksBinary` and
+ * `startsBinaryItself` share. A bound name must not follow a dot, so
+ * `/re/.exec(` is not an imported `exec` and `x.run(` is not an imported
+ * `run`; a namespace's starters are read as members of it.
+ */
+export function callsSpawn(source: string): boolean {
+  const { calls, spaces } = spawnBindings(source);
+  const patterns = [String.raw`\b(?:${UNBOUND.join("|")})\s*\(`];
+  if (calls.length) patterns.push(String.raw`(?<![\w$.])(?:${calls.map(escapeName).join("|")})\s*\(`);
+  if (spaces.length) {
+    patterns.push(String.raw`(?<![\w$.])(?:${spaces.map(escapeName).join("|")})\s*\.\s*(?:${STARTERS.join("|")})\s*\(`);
+  }
+  return new RegExp(patterns.join("|")).test(source);
+}
 
 /**
  * **Does this file walk the CLI?** Read from the source rather than declared,
@@ -275,7 +371,8 @@ const SPAWN_CALL = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\s*\(
  * modules when it was de-flaked, and reaches the binary through one of them.
  */
 export function walksBinary(source: string, siblings: readonly string[] = []): boolean {
-  const code = [withoutProse(source), ...siblings.map(withoutProse)].join("\n");
+  const pieces = [source, ...siblings].map(withoutProse);
+  const code = pieces.join("\n");
   // `CLI_BUNDLE` joins the binary and the board script on 18 Sep: the release
   // CLI is `packages/cli/dist/isocan.mjs` now, so a file that spawns THAT is
   // a walker exactly as much as one spawning `bin/isocan.js`, and naming only
@@ -286,7 +383,9 @@ export function walksBinary(source: string, siblings: readonly string[] = []): b
   // SDK starts the process (27 Sep 2026 — `recap-summary-transport` walked
   // `isocan mcp` this way for weeks, took up to 30 s in the fast lane, and
   // timed out there while this reading called it no walker at all).
-  const spawns = SPAWN_CALL.test(code) || /new\s+StdioClientTransport\s*\(/.test(code);
+  // Each source is read against its own bindings: an alias one module
+  // imports means nothing in the module beside it.
+  const spawns = pieces.some(callsSpawn) || /new\s+StdioClientTransport\s*\(/.test(code);
   // The native study exposes the real CLI through its explicit stdio MCP
   // process. All three facts are needed; generic SDK clients are not CLI walkers.
   const studyMcp = /design-partner-mcp\.mjs/.test(code) && /new\s+StdioClientTransport\s*\(/.test(code) && /callTool\s*\(\s*\{\s*name:\s*["']cli["']/.test(code);
@@ -316,7 +415,7 @@ export function startsBinaryItself(source: string): boolean {
   const code = withoutProse(source);
   // `cliBin` as well as the path: importing the helper's constant and
   // spawning it by hand is the same private copy, one import away.
-  return /bin\/isocan\.js|\bcliBin\b/.test(code) && SPAWN_CALL.test(code);
+  return /bin\/isocan\.js|\bcliBin\b/.test(code) && callsSpawn(code);
 }
 
 /** The test sources that start the binary themselves, from a list of repo paths. */

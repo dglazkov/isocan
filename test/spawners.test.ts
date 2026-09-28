@@ -84,4 +84,15 @@ describe("test files that start the binary themselves", () => {
     // The helper itself is the one place it may live.
     expect(privateSpawners(repo, [SHARED_SPAWNER])).toEqual([]);
   });
+
+  it("reads a private copy under an alias as one — the same reading as the deep lane's", () => {
+    // 27 Sep 2026: renaming the import was a way past this ratchet, because
+    // the call was read by a fixed list of names. Assembled, as above.
+    const bin = ["cli", "Bin"].join("");
+    const from = ["node", "child_process"].join(":");
+    expect(startsBinaryItself(`import { spawn as run } from "${from}";\nrun(process.execPath, [${bin}]);`)).toBe(true);
+    expect(startsBinaryItself(`import * as cp from "${from}";\ncp.exec(\`node \${${bin}}\`);`)).toBe(true);
+    // Bound elsewhere, it is not a spawn — the helper's own `runCli` included.
+    expect(startsBinaryItself(`import { run } from "./x.ts";\nrun(${bin});`)).toBe(false);
+  });
 });
