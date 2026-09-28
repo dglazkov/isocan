@@ -1,1 +1,0 @@
-import{j as s,ct as e,dm as r}from"./index-CpBV_pi9.js";function m({canvasId:a,hash:c}){return s.jsxs("div",{className:"canvas-theme canvas-theme-custom",children:[s.jsx("div",{className:"canvas-ground-picture",style:{backgroundImage:`url(${e(a,c)})`}}),s.jsx("div",{className:"canvas-ground-scrim",style:{opacity:r}})]})}export{m as CustomGround};
