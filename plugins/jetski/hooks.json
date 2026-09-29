@@ -1,0 +1,11 @@
+{
+  "isocan-session-start": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "if command -v node >/dev/null 2>&1; then exec node ./scripts/session-start.mjs; fi",
+        "timeout": 30
+      }
+    ]
+  }
+}

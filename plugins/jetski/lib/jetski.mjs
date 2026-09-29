@@ -1,0 +1,235 @@
+/**
+ * **Jetski's half of the tie** (`docs/projects/jetski/design.md` §9–§12).
+ *
+ * `workspace.mjs` knows the canvas; this file knows the conversations. Three
+ * things live here, all plain ESM for the same reason as its neighbour:
+ *
+ * - **`agentapi`**, the host's own CLI for conversations — the same binary the
+ *   Sidecar SDK shells out to (`ANTIGRAVITY_AGENTAPI_EXE agentapi …`), called
+ *   directly because the SDK drops `--title` on a new conversation and a
+ *   fan-out wants to say which tier each conversation is.
+ * - **The conversations record**, `<isocan home>/jetski-conversations.json`:
+ *   which Jetski conversation became which actor on which canvas. The desk
+ *   keeps that claim as `antigravity:<conversationId>` and never hands it back,
+ *   so the hook writes down what it named and the pane and the relay read it.
+ * - **Every sentence the pane hands a conversation.** Composed here, not in
+ *   the page, so a test can hold them — and so they say the same thing to the
+ *   agent whichever button sent them.
+ */
+import { execFile } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+
+const text = (value) => (typeof value === "string" && value.trim() ? value.trim() : null);
+
+// ---------- agentapi ----------
+
+/** The tiers `agentapi new-conversation --model` takes, cheapest first. */
+export const TIERS = ["flash_lite", "flash", "pro"];
+
+/** How to run `agentapi`: the language server's own executable when the host
+ * names it (the SDK's preference — no PATH shim, no shell), else the shim. */
+export function agentapiCommand(env = process.env) {
+  const exe = text(env.ANTIGRAVITY_AGENTAPI_EXE);
+  return exe ? { command: exe, prefix: ["agentapi"] } : { command: "agentapi", prefix: [] };
+}
+
+/** One `agentapi` call, its JSON answer parsed (`{}` for silence). A failure
+ * throws with the tool's own last words. */
+export function runAgentapi(args, { env = process.env, projectId = null, timeoutMs = 30_000 } = {}) {
+  const { command, prefix } = agentapiCommand(env);
+  const childEnv = { ...env, ...(projectId ? { ANTIGRAVITY_PROJECT_ID: projectId } : {}) };
+  return new Promise((resolve, reject) => {
+    execFile(command, [...prefix, ...args], { env: childEnv, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, encoding: "utf8" }, (err, stdout, stderr) => {
+      if (err) {
+        const said = `${stderr ?? ""}`.trim().split("\n").slice(-2).join(" ").trim();
+        return reject(new Error(`agentapi ${args[0]}: ${err.killed ? "timed out" : said || err.message}`));
+      }
+      try {
+        resolve(stdout.trim() ? JSON.parse(stdout) : {});
+      } catch {
+        resolve({ raw: stdout.trim() });
+      }
+    });
+  });
+}
+
+/** The project a conversation belongs to, read the way the SDK's preload
+ * reads it — both spellings, and "" when the host will not say. */
+export function projectIdOf(metadata) {
+  const event = metadata?.response?.conversationMetadata ?? metadata?.response?.conversation_metadata;
+  const meta = event?.metadata;
+  return text(meta?.projectId) ?? text(meta?.project_id) ?? "";
+}
+
+/** The `new-conversation` arguments for one fan-out conversation. */
+export function newConversationArgs({ message, tier, title }) {
+  if (!TIERS.includes(tier)) throw new Error(`"${tier}" is not a tier agentapi knows (${TIERS.join(", ")})`);
+  return ["new-conversation", `--model=${tier}`, ...(text(title) ? [`--title=${text(title)}`] : []), message];
+}
+
+// ---------- the conversations record ----------
+
+export const CONVERSATIONS_FILE = "jetski-conversations.json";
+
+/** How long a conversation is believed to still be somebody's. Past this the
+ * relay stops parking for it: a conversation from last week is not waiting. */
+export const CONVERSATION_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function readConversations(home) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(home, CONVERSATIONS_FILE), "utf8"));
+    const list = raw?.conversations;
+    if (!list || typeof list !== "object") return {};
+    const out = {};
+    for (const [conversationId, row] of Object.entries(list)) {
+      if (!text(conversationId) || !row || typeof row !== "object") continue;
+      const canvasId = text(row.canvasId);
+      const root = text(row.root);
+      if (!canvasId || !root) continue;
+      out[conversationId] = {
+        canvasId,
+        root,
+        actorId: text(row.actorId),
+        name: text(row.name),
+        title: text(row.title),
+        tier: text(row.tier),
+        at: typeof row.at === "number" ? row.at : 0,
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Write one conversation's row (or drop it, with `row: null`). Rows past the
+ * TTL are swept on every write, so the file cannot grow without bound. The
+ * write is a rename, so a reader never sees half a file. */
+export function recordConversation(home, conversationId, row, now = Date.now()) {
+  const all = readConversations(home);
+  if (row) all[conversationId] = { ...all[conversationId], ...row, at: now };
+  else delete all[conversationId];
+  for (const [id, r] of Object.entries(all)) if (now - r.at > CONVERSATION_TTL_MS) delete all[id];
+  fs.mkdirSync(home, { recursive: true });
+  const file = path.join(home, CONVERSATIONS_FILE);
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify({ conversations: all }, null, 2)}\n`);
+  fs.renameSync(tmp, file);
+  return all;
+}
+
+/** The live conversations on one canvas, newest first. */
+export function conversationsOn(home, canvasId, now = Date.now()) {
+  return Object.entries(readConversations(home))
+    .filter(([, r]) => r.canvasId === canvasId && now - r.at <= CONVERSATION_TTL_MS)
+    .sort(([, a], [, b]) => b.at - a.at)
+    .map(([conversationId, r]) => ({ conversationId, ...r }));
+}
+
+// ---------- what the pane hands a conversation ----------
+
+const canvasName = (canvas) =>
+  canvas?.title ? `"${canvas.title}" (${canvas.canvasId})` : (canvas?.canvasId ?? "this workspace's canvas");
+
+function itemList(items) {
+  return (items ?? [])
+    .filter((i) => text(i?.id))
+    .map((i) => `\`${i.id}\`${text(i.title) ? ` "${text(i.title)}"` : ""}`)
+    .join(", ");
+}
+
+/** The footer every pane message ends with: which canvas, which items, and
+ * the two commands that read them. One spelling, so the agent learns it. */
+function pointedAt(canvas, items) {
+  const list = itemList(items);
+  return list
+    ? `(Selected on the isocan canvas ${canvasName(canvas)}: ${list}. \`isocan show <id>\` describes one; \`isocan get <id>\` prints its file.)`
+    : `(On the isocan canvas ${canvasName(canvas)} — nothing selected. \`isocan ls\` lists what is on it.)`;
+}
+
+/** A plain question about the selection, or about the canvas. */
+export function askMessage({ question, items, canvas }) {
+  const typed = text(question) ?? (itemList(items) ? "Take a look at these and tell me what you think." : "What is on the canvas right now?");
+  return `${typed}\n\n${pointedAt(canvas, items)}`;
+}
+
+/**
+ * A canvas skill, run by this conversation. The same words a comment would
+ * carry — `/name args` first, because on the canvas a message that starts
+ * with `/name` IS the request — and then the one instruction a Jetski agent
+ * would not otherwise know: the skill's body is `isocan command show <name>`.
+ */
+export function skillMessage({ skill, args, items, canvas }) {
+  const name = text(skill)?.replace(/^\//, "");
+  if (!name) throw new Error("which skill?");
+  const typed = text(args);
+  return [
+    `/${name}${typed ? ` ${typed}` : ""}`,
+    "",
+    `This is the isocan canvas skill /${name}. Run \`isocan command show ${name}\` — the body it prints is your instructions for this turn; what I typed after the name outranks its defaults. Do the work on the canvas as yourself, then tell me here what you made and where.`,
+    "",
+    pointedAt(canvas, items),
+  ].join("\n");
+}
+
+/** The comment that hands a skill (or a question) to a standing agent on the
+ * canvas instead: `/name` first when it is a skill, the @mention after it,
+ * so the rc wakes that agent and the request is the record. */
+export function handoffComment({ skill, args, agent, question }) {
+  const who = text(agent);
+  if (!who) throw new Error("hand it to whom?");
+  const name = text(skill)?.replace(/^\//, "");
+  const typed = text(name ? args : question);
+  return name ? `/${name} @${who}${typed ? ` ${typed}` : ""}` : `@${who} ${typed ?? "take a look at this"}`;
+}
+
+/** An open question an agent left on the canvas, handed to this conversation
+ * to answer. */
+export function threadMessage({ thread, canvas }) {
+  const id = text(thread?.threadId);
+  if (!id) throw new Error("which thread?");
+  const asker = text(thread.askerName) ?? "An agent";
+  const body = text(thread.body) ?? "";
+  return [
+    `${asker} is waiting on an answer on the isocan canvas ${canvasName(canvas)}:`,
+    "",
+    body ? `> ${body.replace(/\n/g, "\n> ")}` : "",
+    "",
+    `Help me answer it. It is thread \`${id}\` (\`isocan comment ls --open\` lists the questions waiting on a person); reply on it with \`isocan comment reply ${id} "…"\` once we agree what to say.`,
+  ].filter((line, i, all) => line !== "" || all[i - 1] !== "").join("\n");
+}
+
+/**
+ * The opening message of one fan-out conversation. It arrives on the canvas
+ * under its own name (the SessionStart hook), so the only thing it must be
+ * told that the hook cannot tell it is that it is one of several — and to
+ * say which tier it ran, because the name the hook gives it will not.
+ */
+export function fanoutMessage({ ask, skill, args, items, canvas, tier, of }) {
+  const body = text(skill) ? skillMessage({ skill, args, items, canvas }) : askMessage({ question: ask, items, canvas });
+  return [
+    `You are one of ${of} Jetski conversations given the same ask, each on a different model tier; you are on **${tier}**. ` +
+      "Work on the canvas as yourself and keep your result separate from the others' — put what you make beside the selection, not on top of it — " +
+      `and title it or say in your reply that it is the ${tier} take, so a person can compare them.`,
+    "",
+    body,
+  ].join("\n");
+}
+
+/**
+ * What the relay hands a conversation when the canvas asked for it: the
+ * wake exactly as `isocan wait` printed it — written for an agent already —
+ * with one line in front saying where it came from and one after saying how
+ * to answer, because this conversation did not park and does not know it
+ * was woken.
+ */
+export function relayMessage({ woke, canvas, name }) {
+  return [
+    `The isocan canvas ${canvasName(canvas)} has something for you${text(name) ? ` (${text(name)})` : ""} — somebody there mentioned you or replied in your thread:`,
+    "",
+    text(woke) ?? "(the wake said nothing — `isocan comment ls` shows the threads)",
+    "",
+    "Answer it ON THE CANVAS with `isocan comment reply <thread> \"…\"` — the person who wrote it is reading the canvas, not this chat. If it asks for work, do it, then reply there. You do not need to run `isocan wait`; the Isocan Canvas pane passes the next one on.",
+  ].join("\n");
+}

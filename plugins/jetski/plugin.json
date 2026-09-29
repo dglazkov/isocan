@@ -1,0 +1,12 @@
+{
+  "name": "isocan",
+  "displayName": "Isocan Canvas",
+  "version": "0.1.0",
+  "description": "The isocan canvas bound to your workspace, in a pane beside the chat and without a second chat column. New conversations join the canvas under their own names and hear its mentions; the pane runs canvas skills, fans an ask out across model tiers, and enrols model-pinned standing agents.",
+  "logo": "logo.svg",
+  "suggestedPrompts": [
+    "Open the isocan canvas for this workspace and tell me what is on it",
+    "Put the screen we just built on the canvas so the team can comment on it",
+    "Build the selected canvas screen as real code in this repo"
+  ]
+}

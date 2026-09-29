@@ -1325,9 +1325,9 @@ hello.
 
 [`plugins/jetski/`](plugins/jetski/) is isocan as a Jetski plugin: the canvas
 your workspace is bound to, in a pane beside the Jetski chat. Every part of it
-is an `isocan` command, so the plugin can do nothing the CLI cannot. It runs
-from a clone of the repo (the `#release` install carries the CLI, not the
-plugin): `node scripts/install-jetski-plugin.mjs` links it into
+is an `isocan` command, so the plugin can do nothing the CLI cannot. The
+`#release` install carries it alongside the CLI: `isocan setup --jetski` (or
+`node scripts/install-jetski-plugin.mjs` in a checkout) links it into
 `~/.gemini/config/plugins/isocan`. Restart Jetski after installing: it reads
 a plugin's hooks once, when the plugin loads.
 
@@ -1343,6 +1343,21 @@ a plugin's hooks once, when the plugin loads.
   canvas (by id, link or title) or to a new one. Selected items show as chips,
   and **Ask** hands your question, with the item ids, to the Jetski
   conversation. **Open ↗** opens the same canvas in a tab, with its Chat.
+- **Skills on both sides**: type `/` in the pane's box and the canvas's own
+  skills drop down (`isocan command ls`, built in and added with `/skill
+  add`). Run one in this conversation, which gets `/name args` and is told
+  `isocan command show <name>` holds its instructions, or hand it to a
+  standing agent as a comment (`/design-audit @Orla …`). Starters under the
+  box change with the selection and show what you can do: *Build this in the
+  repo*, *Put what we did here on the canvas*, the design skills, and *Answer
+  N open questions*.
+- **The canvas can reach the conversation**: while the pane runs, a mention
+  of a Jetski conversation on the canvas (or a reply in its thread) is
+  relayed into that conversation, which answers on the canvas.
+  `ISOCAN_JETSKI_RELAY=off` turns this off. **Asks N** in the header lists
+  the questions agents left for you. **Fan out** asks Jetski's `flash`,
+  `pro` or `flash_lite` tiers the same thing in new conversations that join
+  the canvas under their own names. 💬 beside a face opens that conversation.
 - **Arriving**: a SessionStart hook runs when a conversation starts in a
   bound workspace. It names the conversation (`isocan identity --session`,
   keyed to that conversation) and starts its session, so what it writes is
