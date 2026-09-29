@@ -12,7 +12,7 @@ import { agentEnv, findBinding, personEnv, resolveCli, workspacePaths } from "..
 // @ts-expect-error — as above.
 import { claimedName, sessionStart } from "../plugins/jetski/scripts/session-start.mjs";
 // @ts-expect-error — as above.
-import { canvasRef, createPane, createServer, isLoopback, loadPresets, tabAddress } from "../plugins/jetski/sidecars/canvas/main.mjs";
+import { canvasRef, createPane, createServer, hostRoutes, isLoopback, loadPresets, tabAddress } from "../plugins/jetski/sidecars/canvas/main.mjs";
 import { defaultTarget, installJetskiPlugin, uninstallJetskiPlugin } from "../packages/cli/src/jetski-plugin.ts";
 
 /**
@@ -513,7 +513,12 @@ describe("through real processes", () => {
   it("serves the pane over loopback with the SDK's token rule", async () => {
     const acme = mark(dir("acme-app"), { projectId: "prj_acme", title: "Acme" });
     const env = { ...process.env, ISOCAN_CLI: fake, FAKE_ISOCAN_LOG: log, ISOCAN_HOME: dir("isocan-home"), CLAUDE_CODE_SESSION_ID: "leaked" };
-    const server = createServer(createPane({ env }).routes, { token: "tok-acme" });
+    const fakeHost = {
+      sendMessage: (c: string, m: string, o: unknown) => ({ sent: { c, m, o } }),
+      startConversation: (m: string, o: unknown) => ({ started: { m, o } }),
+      getConversationMetadata: (c: string) => ({ meta: c }),
+    };
+    const server = createServer({ ...hostRoutes(fakeHost), ...createPane({ env }).routes }, { token: "tok-acme", preload: "window.sidecar = {};" });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const post = (route: string, body: unknown, headers: Record<string, string> = { "x-sidecar-token": "tok-acme" }) =>
@@ -522,6 +527,10 @@ describe("through real processes", () => {
       const page = await fetch(`${base}/`);
       expect(page.status).toBe(200);
       expect(await page.text()).toContain('<script src="/preload.js"></script>');
+      const preload = await fetch(`${base}/preload.js`);
+      expect(preload.status).toBe(200);
+      expect(await preload.text()).toBe("window.sidecar = {};");
+      expect(await (await post("/_sidecar/send-message", { conversationId: "c1", message: "hi" })).json()).toMatchObject({ sent: { c: "c1", m: "hi" } });
       expect((await fetch(`${base}/elsewhere`)).status).toBe(404);
 
       const body = { workspaceUris: [pathToFileURL(acme).href] };

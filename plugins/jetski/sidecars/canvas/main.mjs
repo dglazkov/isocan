@@ -257,13 +257,30 @@ function readBody(req) {
 }
 
 /**
- * The same route table on a plain loopback server, for anywhere the SDK is
- * not: GET serves the page, everything else is POST and carries the token
- * when one is set — the SDK's own rule, so behaviour does not change with the
- * host. Request data is the query (less `token`) under the JSON body, as the
- * SDK hands it over.
+ * The host's three `/_sidecar/*` routes, delegated to `SidecarApp`'s own
+ * methods so `createServer` — which awaits async route handlers, where
+ * ` sidecar_sdk`'s own `SidecarApp.run()` calls `JSON.stringify(handler(data))`
+ * synchronously and turns a Promise into `{}` — serves both the host's
+ * routes and the pane's.
  */
-export function createServer(routes, { token = process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN } = {}) {
+export function hostRoutes(app) {
+  return {
+    "/_sidecar/send-message": (data) =>
+      app.sendMessage(data.conversationId, data.message, { title: data.title, projectId: data.projectId }),
+    "/_sidecar/new-conversation": (data) =>
+      app.startConversation(data.message, { model: data.model, projectId: data.projectId }),
+    "/_sidecar/get-conversation-metadata": (data) =>
+      app.getConversationMetadata(data.conversationId),
+  };
+}
+
+/**
+ * The same route table on one loopback server, inside Jetski and outside it:
+ * GET serves the page (and `/preload.js` when the host provides it),
+ * everything else is POST, carries the token when one is set, and awaits the
+ * handler before serialising its answer.
+ */
+export function createServer(routes, { token = process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN, preload = "" } = {}) {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const send = (status, body) => {
@@ -271,6 +288,10 @@ export function createServer(routes, { token = process.env.ANTIGRAVITY_SIDECAR_U
       res.end(JSON.stringify(body));
     };
     if (req.method === "GET") {
+      if (url.pathname === "/preload.js" && preload) {
+        res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
+        return res.end(preload);
+      }
       if (url.pathname !== "/") return send(404, { error: "not found" });
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       return res.end(page());
@@ -292,16 +313,16 @@ export function createServer(routes, { token = process.env.ANTIGRAVITY_SIDECAR_U
 
 async function main() {
   const { routes } = createPane();
+  let extra = {};
+  let preload = "";
   if (process.env.ANTIGRAVITY_LS_ADDRESS && process.env.ANTIGRAVITY_SIDECAR_WEB_PORT) {
     const { SidecarApp } = await import("sidecar_sdk");
-    const app = new SidecarApp();
-    app.page("/", page);
-    for (const [route, handler] of Object.entries(routes)) app.api(route, handler, "POST");
-    await app.run();
-    return;
+    extra = hostRoutes(new SidecarApp());
+    preload = fs.readFileSync(new URL("./preload.js", import.meta.resolve("sidecar_sdk")), "utf8");
   }
-  const server = createServer(routes);
-  server.listen(Number(process.env.PORT || 0), "127.0.0.1", () => {
+  const port = Number(process.env.ANTIGRAVITY_SIDECAR_WEB_PORT || process.env.PORT || 0);
+  const server = createServer({ ...extra, ...routes }, { preload });
+  server.listen(port, "127.0.0.1", () => {
     console.log(`isocan pane: http://127.0.0.1:${server.address().port}/?workspace=<folder>`);
   });
 }
