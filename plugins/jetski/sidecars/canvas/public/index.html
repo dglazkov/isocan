@@ -63,11 +63,19 @@
       border-radius: 6px;
       padding: 3px 8px;
     }
-    button { cursor: pointer; transition: background-color 0.12s ease, border-color 0.12s ease; }
-    button:hover:not(:disabled):not(.unavailable):not(.primary):not(.attached):not(.opt) {
+    button { cursor: pointer; transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease; }
+    button:hover:not(:disabled):not(.unavailable):not(.primary):not(.attached):not(.opt):not([aria-expanded="true"]) {
       background: color-mix(in srgb, var(--foreground, var(--fallback-fg)) 8%, var(--secondary, var(--fallback-secondary)));
     }
     button:disabled { opacity: 0.5; cursor: default; }
+    button[aria-expanded="true"] {
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 16%, var(--card, var(--background, var(--fallback-card))));
+      border-color: color-mix(in srgb, var(--primary, var(--fallback-primary)) 55%, var(--border, var(--fallback-border)));
+      color: color-mix(in srgb, var(--primary, var(--fallback-primary)) 80%, var(--foreground, var(--fallback-fg)));
+    }
+    button[aria-expanded="true"]:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 24%, var(--card, var(--background, var(--fallback-card))));
+    }
     button.primary {
       background: var(--primary, var(--fallback-primary));
       color: var(--primary-foreground, var(--fallback-primary-fg));
@@ -530,6 +538,14 @@
     }
 
     let agentsCollapsed = false;
+    function syncAgentsToggle(none = false) {
+      const expanded = !none && !agentsCollapsed;
+      $("agents-toggle").hidden = none;
+      $("agents").hidden = !expanded;
+      $("agents-toggle").setAttribute("aria-expanded", String(expanded));
+      $("agents-toggle").textContent = expanded ? "Agents ▾" : "Agents ▸";
+      $("agents-toggle").title = `${expanded ? "Hide" : "Show"} the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.`;
+    }
 
     function renderPresets() {
       const list = $("presets");
@@ -540,9 +556,7 @@
       const presetNames = new Set(presets.map((p) => (p.name || "").toLowerCase()));
       const extraEnrolled = enrolled.filter((e) => !presetNames.has((e.name || "").toLowerCase()));
       const none = presets.length === 0 && sessions.length === 0 && extraEnrolled.length === 0 && !state?.presetsError;
-      $("agents-toggle").hidden = none;
-      $("agents").hidden = none || agentsCollapsed;
-      $("agents-toggle").setAttribute("aria-expanded", String(!none && !agentsCollapsed));
+      syncAgentsToggle(none);
       if (state?.presetsError) {
         const span = document.createElement("span");
         span.className = "error";
@@ -1003,8 +1017,7 @@
 
     $("agents-toggle").addEventListener("click", () => {
       agentsCollapsed = !agentsCollapsed;
-      $("agents").hidden = agentsCollapsed;
-      $("agents-toggle").setAttribute("aria-expanded", String(!agentsCollapsed));
+      syncAgentsToggle(false);
     });
     $("reload").addEventListener("click", () => {
       framed = { canvasId: null, origin: null, ready: false };
