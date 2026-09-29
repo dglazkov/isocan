@@ -867,10 +867,7 @@
         } else {
           if (!host?.conversationId) throw new Error("This pane is not attached to a conversation");
           await api("/api/send", { ...body, conversationId: host.conversationId });
-          // `agentapi send-message` delivers a system message into the agent's
-          // trajectory rather than creating a "You" chat bubble, so tell the
-          // person clearly where it went and where the reply will appear.
-          sayAsk(`Sent to this chat ✓ — "${preview}"${scope}. Delivered to the agent's inbox (no "You" bubble is added in the chat column; the agent replies there on its next step).`, "ok");
+          sayAsk(`Sent to this chat ✓ — "${preview}"${scope}. Watch the chat column on the left for the reply.`, "ok");
         }
         $("ask").value = "";
         renderStarters();

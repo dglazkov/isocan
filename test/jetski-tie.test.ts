@@ -471,7 +471,7 @@ describe("the page and its server agree", () => {
     expect(page).toContain('id="ask-retry"');
     expect(page).toContain('id="ask-dismiss"');
     expect(page).toContain("friendlyAskError(err, target)");
-    expect(page).toContain('no "You" bubble is added in the chat column');
+    expect(page).toContain("Watch the chat column on the left for the reply.");
   });
 });
 
