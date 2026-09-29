@@ -63,13 +63,13 @@
   <header>
     <span class="where" id="where">Waiting for Jetski to say which workspace this is…</span>
     <span class="spacer"></span>
-    <button id="agents-toggle" type="button" hidden aria-expanded="false">Agents</button>
+    <button id="agents-toggle" type="button" hidden aria-expanded="true">Agents</button>
     <button id="reload" type="button" hidden title="Mint a fresh address and reload the canvas">Reload</button>
     <a id="open" href="#" target="_blank" rel="noopener" hidden title="The same canvas in a browser tab, with its own chat">Open ↗</a>
   </header>
 
   <div class="bar" id="agents" hidden>
-    <span class="muted">Enrol:</span>
+    <span class="muted">Agents:</span>
     <span id="presets" class="row" style="flex-wrap: wrap"></span>
     <span class="muted" id="agents-note">They answer @mentions on the canvas while <code>isocan rc</code> runs on this machine.</span>
   </div>
@@ -219,13 +219,16 @@
       }
     }
 
+    let agentsCollapsed = false;
+
     function renderPresets() {
       const list = $("presets");
       list.replaceChildren();
       const presets = state?.presets ?? [];
       const none = presets.length === 0 && !state?.presetsError;
       $("agents-toggle").hidden = none;
-      if (none) $("agents").hidden = true;
+      $("agents").hidden = none || agentsCollapsed;
+      $("agents-toggle").setAttribute("aria-expanded", String(!none && !agentsCollapsed));
       if (state?.presetsError) {
         const span = document.createElement("span");
         span.className = "error";
@@ -253,7 +256,7 @@
           try {
             const out = await api("/api/model-agent", { presetId: preset.id });
             button.textContent = `✓ ${out.enrolled?.name || preset.name}`;
-            say(`${out.enrolled?.name || preset.name} is enrolled on this canvas. It answers @mentions while \`isocan rc\` runs on this machine.`);
+            say(`${out.enrolled?.name || preset.name} is on this canvas. It answers @mentions while \`isocan rc\` runs on this machine.`);
           } catch (err) {
             button.disabled = false;
             say(err.message, "error");
@@ -318,9 +321,9 @@
     });
 
     $("agents-toggle").addEventListener("click", () => {
-      const open = $("agents").hidden;
-      $("agents").hidden = !open;
-      $("agents-toggle").setAttribute("aria-expanded", String(open));
+      agentsCollapsed = !agentsCollapsed;
+      $("agents").hidden = agentsCollapsed;
+      $("agents-toggle").setAttribute("aria-expanded", String(!agentsCollapsed));
     });
     $("reload").addEventListener("click", () => {
       framed = { canvasId: null, origin: null };
