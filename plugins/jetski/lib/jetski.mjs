@@ -167,9 +167,11 @@ export function askMessage({ question, items, canvas }) {
 }
 
 /** The first line of everything the pane asks: who, from where, and that it
- * wants an answer in this chat even when a task is under way. */
+ * wants an answer in this chat even when a task is under way. Because
+ * `agentapi send-message` arrives as a hidden system event rather than a
+ * visible user turn in the chat column, the agent quotes the prompt first. */
 export const ASKED =
-  "The person asked this from the Isocan Canvas pane beside this chat. Answer it here — if you are in the middle of something, answer it first, then carry on:";
+  "The person asked this from the Isocan Canvas pane beside this chat (their prompt is not shown in the chat transcript, so start your reply by quoting what they asked on a `> ` line). Answer it here — if you are in the middle of something, answer it first, then carry on:";
 
 /**
  * A canvas skill, run by this conversation. The same words a comment would
