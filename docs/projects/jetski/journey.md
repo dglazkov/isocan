@@ -84,3 +84,90 @@ land side by side on the canvas, each labelled with the model it really ran.
 add` and `isocan bench add`; `model` on `RcAgentRow` and `BenchAgent`;
 `adapterFor` reaching a harness only through a door it has, and
 `isocan harness` saying which; and the pane's Agents bar.
+
+---
+
+*Added 29 September 2026, when Dion asked for the tie to be a killer one:
+"how can we teach the Jetski side what the user can do? how can we surface
+how skills work across both?" Scenes 1–4 put the two windows side by side.
+These four make them one place.*
+
+## 5. The pane teaches by offering
+
+Dion opens the pane on a canvas he has never used from Jetski. Before he has
+selected anything, the box under the header says *Ask Jetski about the
+canvas, or / for a skill…*, and under it sit a few starters: *What's on this
+canvas?*, *Answer 1 open question*, *Put what we did here on the canvas*,
+`/tidy`, and `/ 7 skills`. He clicks *Acme sign-in* on the canvas and the
+starters change under him: *Build this in the repo*, `/variation`,
+`/design-audit`, `/accessibility-audit`, *What's wrong with it?*. Nothing is
+sent until he presses the button — a starter only fills the box — so reading
+them costs nothing, and after a week he types them himself.
+
+**What the scene forces:** a composer that is there before a selection is;
+starters that come from the canvas's own state (its skills, what is waiting,
+what is selected) rather than a fixed list; and the two cross-world acts
+named as plainly as the canvas's own — *build this in the repo* and *put
+this on the canvas*.
+
+## 6. One skill, two worlds
+
+Dion types `/` and the canvas's skills drop down — the built-ins and
+`/acme-brand`, which Mara added to the canvas last week with `/skill add`,
+marked with where it came from. He takes `/variation`, adds *n=2 one dark,
+one playful*, and presses **Ask**. The conversation beside him receives
+exactly what a canvas comment would carry — `/variation n=2 …` first — with
+one sentence the canvas never needed: *`isocan command show variation` is
+your instructions*. The Jetski agent runs the canvas's skill as itself, and
+two screens land beside the selection.
+
+Tomorrow he wants the same audit from Orla, the Opus agent on his bench. He
+switches the box's target from *This chat* to *@Orla on the canvas* and
+presses **Hand off**: the pane posts `/design-audit @Orla spacing only` as
+his comment on the selected screen, the frame opens the thread, and Orla
+answers there while `isocan rc` runs. The same skill, run by whoever he
+points at, and the record is on the canvas either way.
+
+**What the scene forces:** the canvas's command catalogue (`isocan command
+ls`) in the pane, without the ones the web app answers itself; a skill sent
+to the conversation in the canvas's own grammar; and a hand-off that is an
+ordinary comment, so nothing about skills is Jetski-only.
+
+## 7. The canvas can reach the conversation
+
+Mara, in a browser tab on the same canvas, writes *"@Kit the header is
+too tall on mobile"* on the sign-in screen. Kit is Dion's Jetski
+conversation; it arrived on the canvas when he opened it (scene 2) and it is
+not parked on `isocan wait`, because Dion talks to it in the chat. Until
+now Mara was writing to a face with no ear. Now, while the pane runs, her
+comment arrives in Dion's conversation — *"The isocan canvas "Acme" has
+something for you"*, her words as `isocan wait` prints them, and *answer it
+on the canvas*. The agent fixes the header and replies on Mara's thread.
+Dion saw it happen; Mara never had to know it was Jetski.
+
+When an agent on the canvas asks Dion something — Test Otter wants to know
+whether the Google button goes above the email field — the header grows an
+**Asks 1** button. He can *Show* it, which opens the thread in the frame, or
+*Answer with Jetski*, which hands the question to his conversation to think
+through together before anybody replies.
+
+**What the scene forces:** a record of which conversation became which
+actor; a relay that parks AS the conversation and hands it the wake
+(`agentapi send-message`), standing back when the conversation parks itself;
+and an inbox of `isocan comment ls --open`.
+
+## 8. Faces are conversations, and tiers are a button
+
+Dion wants to see how Jetski's own tiers read one brief. With two screens
+selected he picks *Fan out: Flash + Pro* and asks *which is closer to the
+brief — and make a third that is?*. Two new Jetski conversations start, each
+titled with its tier and told it is one of two; each arrives on the canvas
+under its own name, and the Agents bar shows them as *● Nell · Chat · flash*
+and *● Rui · Chat · pro*. The takes land side by side. Clicking 💬 beside a
+face opens that conversation in Jetski, so reading *why* the pro take went
+the way it did is one click from the take itself.
+
+**What the scene forces:** `agentapi new-conversation --model=<tier>
+--title=…` from the pane, recorded against the canvas so a face can say its
+tier; `window.sidecar.ui.toggleConversation` from a face; and faces that
+know which of them is *this chat*.

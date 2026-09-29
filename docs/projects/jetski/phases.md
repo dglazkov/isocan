@@ -17,7 +17,9 @@ walked in a real browser. Phases 1–3 are PART-DONE, each waiting on a person
 for one walk no fixture can stand in for: a summoned turn on a pinned model
 (phase 1), and the hook and the pane inside a restarted Jetski (phases 2 and
 3) — [`docs/verify/2026-09-28-jetski-plugin.md`](../../verify/2026-09-28-jetski-plugin.md)
-is that walk, step by step. Nothing waits on work.
+is that walk, step by step. Phase 4 (29 Sep) made the tie two-way — the
+relay, skills in the pane, fan-out, the inbox — and waits on the same kind of
+walk (part three of the verify page).
 
 ---
 
@@ -189,3 +191,55 @@ real reach.
   the frame loads without a Chat, a selection lights the chips, *Ask* lands
   in the conversation, and a preset enrols with `isocan rc` running. Waits on
   the person ([verify](../../verify/2026-09-28-jetski-plugin.md), steps 5–9).
+
+---
+
+## Phase 4 — The tie: skills, the relay, fan-out, the inbox
+
+**Status: PART-DONE.** 2026-09-29 — built and walked in a real browser
+against the real routes with a fake CLI, a fake `agentapi` and a stub canvas
+that speaks the bridge; inside Jetski it waits on a person.
+
+**Outcome:** journey scenes 5–8. `plugins/jetski/lib/jetski.mjs` (the
+conversations record, `agentapi`, every message the pane hands a
+conversation), `lib/relay.mjs` (the relay), the hook writing the record and
+telling the agent about skills and the relay, five routes in `main.mjs`
+(`/api/skills`, `/api/asks`, `/api/send`, `/api/handoff`, `/api/fanout`) and
+`/api/workspace` joining faces to conversations, and the page's composer,
+`/` menu, starters, target menu, inbox and 💬.
+
+**Proof:**
+1. `npx vitest run test/jetski-tie.test.ts` — the record (merge, sweep,
+   malformed), every message, the hook's record and its failure, each route
+   through an injected CLI and `agentapi`, the relay lap by lap (deliver,
+   stand back on 3, drop on 4 and on *not found*, never an unnamed
+   conversation, the newest six), the lock, and the page calling only routes
+   the server has.
+2. The pane in a real browser (29 Sep): `/` listed six skills without
+   `/help` and marked `/acme-brand`'s source; ↓/Enter took `/variation`;
+   *Ask* sent `/variation n=2 …` with both selected ids to `send-message`;
+   *@Orla* posted `/design-audit @Orla spacing only` on the first item and
+   the frame received `isocan:open-thread`; *Fan out* started `flash` and
+   `pro` conversations with tier titles; *Answer with Jetski* sent the ask
+   with its reply command; 💬 called `toggleConversation` for the other
+   conversation and the own face read *this chat*; at 420 px nothing
+   scrolled sideways.
+
+### Trajectory
+
+- **2026-09-29** — A Jetski conversation on the canvas could not be reached
+  from it: told not to park, it had a face and no ear. The relay parks as
+  the conversation from the sidecar, which lives as long as Jetski does —
+  the daemon's wake rule and the conversation's own cursor, so it adds no
+  vocabulary.
+- **2026-09-29** — Phase 3 chose standing agents over agentapi
+  conversations for presets. Fan-out goes the other way on purpose and
+  stays narrow (design §12): Jetski's own tiers, now, without `rc`. If the
+  two ever compete for the same button, the Agents bar wins.
+- **2026-09-29** — No `isocan comment show` exists; the thread message
+  names `comment ls --open`, which lists exactly the questions it hands
+  over.
+- **2026-09-29** — Open: the relay against a real daemon and a real
+  conversation, a fan-out's conversations arriving through the hook, and
+  💬 inside Jetski ([verify](../../verify/2026-09-28-jetski-plugin.md), part
+  three).

@@ -20,6 +20,20 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  TIERS,
+  askMessage,
+  conversationsOn,
+  fanoutMessage,
+  handoffComment,
+  newConversationArgs,
+  projectIdOf,
+  recordConversation,
+  runAgentapi,
+  skillMessage,
+  threadMessage,
+} from "../../lib/jetski.mjs";
+import { startRelay } from "../../lib/relay.mjs";
 import { bindingFor, isocanHome, personEnv, resolveCli, runIsocan, workspacePaths } from "../../lib/workspace.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +41,14 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 /** How long a harness scan is believed. It reads PATH and config.json, which
  * change rarely, and the pane asks on every workspace change. */
 const HARNESS_TTL_MS = 60_000;
+
+/** How long a canvas's skill list is believed. A skill added with `/skill
+ * add` shows within a minute; the pane asks whenever the composer opens. */
+const SKILLS_TTL_MS = 60_000;
+
+/** At most this many conversations per fan-out: each is a real conversation
+ * on a real model, and a person comparing takes are reading every one. */
+const MAX_FANOUT = 3;
 
 const text = (value) => (typeof value === "string" && value.trim() ? value.trim() : null);
 const messageOf = (err) => (err instanceof Error ? err.message : String(err));
@@ -181,9 +203,10 @@ export function canvasAgents(home, canvasId) {
  * data — `workspaceUris` as the host pushed them, plus the route's own
  * fields — and returns JSON, or throws a sentence.
  */
-export function createPane({ env = process.env, run = runIsocan, now = Date.now } = {}) {
+export function createPane({ env = process.env, run = runIsocan, agentapi = runAgentapi, now = Date.now } = {}) {
   const home = isocanHome(env);
   let scanned = null;
+  const skillCache = new Map();
 
   const exec = (args, cwd, timeoutMs = 20_000) => run(args, { cwd, env: personEnv(env, home), timeoutMs });
   const execJson = async (args, cwd, timeoutMs) => JSON.parse((await exec(["--json", ...args], cwd, timeoutMs)).stdout);
@@ -221,7 +244,13 @@ export function createPane({ env = process.env, run = runIsocan, now = Date.now 
         harnessError = messageOf(err);
       }
     }
-    const { sessions, enrolled } = canvasAgents(home, binding?.canvasId);
+    const { sessions: live, enrolled } = canvasAgents(home, binding?.canvasId);
+    // Which faces are Jetski conversations, so a face can open its chat.
+    const conversations = binding ? conversationsOn(home, binding.canvasId, now()) : [];
+    const sessions = live.map((sess) => {
+      const convo = conversations.find((c) => c.actorId && c.actorId === sess.actorId);
+      return convo ? { ...sess, conversationId: convo.conversationId, ...(convo.tier ? { tier: convo.tier } : {}) } : sess;
+    });
     let presets = [];
     let presetsError = null;
     try {
@@ -241,6 +270,8 @@ export function createPane({ env = process.env, run = runIsocan, now = Date.now 
       defaultHarness: scan?.default ?? null,
       sessions,
       enrolled,
+      conversations,
+      tiers: TIERS,
       presets,
       ...(presetsError ? { presetsError } : {}),
     };
@@ -293,12 +324,133 @@ export function createPane({ env = process.env, run = runIsocan, now = Date.now 
     return { enrolled: out.enrolled, canvasId: out.canvasId, harness, model: out.model ?? model };
   }
 
+  /** The canvas's skills — its slash commands, built in and added with
+   * `/skill add` — as the pane's `/` menu offers them. A command answered
+   * where it is typed (`local`, like /help) is the web app's, not an
+   * agent's, and is left out. */
+  async function skills(data) {
+    const binding = bound(data);
+    const cached = skillCache.get(binding.canvasId);
+    if (cached && now() - cached.at < SKILLS_TTL_MS) return { skills: cached.value };
+    const list = await execJson(["command", "ls"], binding.root);
+    const value = (Array.isArray(list) ? list : []).flatMap((c) => {
+      const name = text(c?.name);
+      if (!name || c.local) return [];
+      return [{ name, description: text(c.description) ?? "", usage: text(c.usage) ?? "", source: text(c.source) ?? "" }];
+    });
+    skillCache.set(binding.canvasId, { at: now(), value });
+    return { skills: value };
+  }
+
+  /** Questions agents left on the canvas that nobody has answered — the
+   * pane's inbox. Names come from the local actor cache, as the Agents bar's
+   * do; an unknown asker is its id. */
+  async function asks(data) {
+    const binding = bound(data);
+    const list = await execJson(["comment", "ls", "--open"], binding.root);
+    let names = {};
+    try {
+      names = JSON.parse(fs.readFileSync(path.join(home, "actors.json"), "utf8"))?.names ?? {};
+    } catch { /* no cache yet */ }
+    return {
+      asks: (Array.isArray(list) ? list : []).flatMap((a) => {
+        const threadId = text(a?.threadId);
+        if (!threadId) return [];
+        const askerId = text(a.askerId);
+        return [{ threadId, askerId, askerName: text(names?.[askerId]?.name) ?? askerId, body: text(a.body) ?? "" }];
+      }),
+    };
+  }
+
+  const canvasOf = (binding) => ({ canvasId: binding.canvasId, title: binding.title ?? null });
+
+  /** The project a conversation lives in, so a message lands where the
+   * conversation is — the page says it when it knows, the host is asked when
+   * it does not. */
+  async function projectFor(data, conversationId) {
+    const given = text(data?.projectId);
+    if (given) return given;
+    if (!conversationId) return null;
+    try {
+      return projectIdOf(await agentapi(["get-conversation-metadata", conversationId], { env })) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Hand this conversation something from the canvas: a question about the
+   * selection, a canvas skill to run, or an open question to help answer. */
+  async function send(data) {
+    const binding = bound(data);
+    const conversationId = text(data?.conversationId);
+    if (!conversationId) throw new Error("this pane is not attached to a conversation");
+    const canvas = canvasOf(binding);
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const kind = text(data?.kind) ?? "ask";
+    const message =
+      kind === "skill" ? skillMessage({ skill: data.skill, args: data.args, items, canvas })
+      : kind === "thread" ? threadMessage({ thread: data.thread, canvas })
+      : askMessage({ question: data.question, items, canvas });
+    await agentapi(["send-message", conversationId, message], { env, projectId: await projectFor(data, conversationId) });
+    return { sent: true, message };
+  }
+
+  /** Hand a skill or a question to a standing agent ON the canvas: a comment
+   * on the first selected item that @mentions it, posted as the person. The
+   * request is the record, and whoever runs `isocan rc` gets the wake. */
+  async function handoff(data) {
+    const binding = bound(data);
+    const items = (Array.isArray(data?.items) ? data.items : []).filter((i) => text(i?.id));
+    if (items.length === 0) throw new Error("select an item on the canvas first — the request is pinned to it");
+    const others = items.slice(1).map((i) => `\`${i.id}\``);
+    const body = handoffComment({ skill: data.skill, args: data.args, agent: data.agent, question: data.question });
+    const withOthers = others.length ? `${body}\n\n(also: ${others.join(", ")})` : body;
+    const out = await execJson(["comment", "add", "--item", items[0].id, withOthers], binding.root);
+    return { threadId: out.threadId, body: withOthers };
+  }
+
+  /**
+   * **Fan out:** the same ask in several new Jetski conversations, one per
+   * model tier. Each is a real conversation in this project; the SessionStart
+   * hook names it and puts it on the canvas like any other, so the takes land
+   * side by side under their own names. The record is written ahead of the
+   * hook so the pane can say which face is which tier.
+   */
+  async function fanout(data) {
+    const binding = bound(data);
+    const tiers = [...new Set((Array.isArray(data?.tiers) ? data.tiers : []).filter((t) => TIERS.includes(t)))];
+    if (tiers.length === 0) throw new Error(`pick at least one tier (${TIERS.join(", ")})`);
+    if (tiers.length > MAX_FANOUT) throw new Error(`at most ${MAX_FANOUT} at once`);
+    const canvas = canvasOf(binding);
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const projectId = await projectFor(data, text(data?.conversationId));
+    const what = text(data?.skill) ? `/${text(data.skill).replace(/^\//, "")}` : (text(data?.question) ?? "the canvas").slice(0, 48);
+    const started = [];
+    for (const tier of tiers) {
+      const message = fanoutMessage({ ask: data.question, skill: data.skill, args: data.args, items, canvas, tier, of: tiers.length });
+      const out = await agentapi(newConversationArgs({ message, tier, title: `${what} · ${tier}` }), { env, projectId });
+      const conversationId = text(out?.conversationId) ?? text(out?.conversation_id) ?? text(out?.response?.conversationId) ?? null;
+      if (conversationId) {
+        try {
+          recordConversation(home, conversationId, { canvasId: binding.canvasId, title: binding.title ?? null, root: binding.root, tier }, now());
+        } catch { /* the hook writes it again */ }
+      }
+      started.push({ tier, conversationId });
+    }
+    return { started };
+  }
+
   return {
     routes: {
       "/api/workspace": workspace,
       "/api/embed": embed,
       "/api/bind": bind,
       "/api/model-agent": modelAgent,
+      "/api/skills": skills,
+      "/api/asks": asks,
+      "/api/send": send,
+      "/api/handoff": handoff,
+      "/api/fanout": fanout,
     },
   };
 }
@@ -392,6 +544,10 @@ async function main() {
   }
   const port = Number(process.env.ANTIGRAVITY_SIDECAR_WEB_PORT || process.env.PORT || 0);
   const server = createServer({ ...extra, ...routes }, { preload });
+  // The ear: while Jetski runs this pane, the canvas can reach its
+  // conversations (lib/relay.mjs). Only under the host — a pane opened by
+  // hand has no conversations to hand anything to.
+  if (process.env.ANTIGRAVITY_LS_ADDRESS) startRelay({ home: isocanHome() });
   server.listen(port, "127.0.0.1", () => {
     console.log(`isocan pane: http://127.0.0.1:${server.address().port}/?workspace=<folder>`);
   });

@@ -67,12 +67,37 @@
     .card p { margin: 0; }
     .row { display: flex; gap: 6px; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    select { font: inherit; color: inherit; background: var(--secondary, transparent); border: 1px solid var(--border, #d4d4d8); border-radius: 6px; padding: 2px 4px; max-width: 140px; }
+    .composer .field { position: relative; flex: 1; min-width: 160px; display: flex; }
+    .composer .field input { width: 100%; }
+    .starters { flex-basis: 100%; flex-wrap: wrap; }
+    .starters:empty { display: none; }
+    .starter { border-radius: 999px; padding: 1px 8px; font-size: 11px; background: transparent; }
+    .starter .muted { margin-left: 4px; }
+    .menu {
+      position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 10;
+      max-height: 240px; overflow: auto;
+      background: var(--popover, var(--background, #fff)); color: var(--popover-foreground, inherit);
+      border: 1px solid var(--border, #d4d4d8); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    }
+    .menu .opt { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; padding: 4px 8px; background: transparent; }
+    .menu .opt[aria-selected="true"] { background: var(--accent, rgba(37, 99, 235, 0.12)); }
+    .menu .opt b { font-weight: 600; }
+    .menu .opt .muted { display: block; font-size: 11px; }
+    .panel { border-bottom: 1px solid var(--border, #d4d4d8); max-height: 40%; overflow: auto; flex-shrink: 0; }
+    .panel-head { padding: 4px 8px; }
+    .ask-row { display: flex; gap: 6px; align-items: flex-start; padding: 4px 8px; border-top: 1px solid var(--border, #d4d4d8); }
+    .ask-row .body { flex: 1; min-width: 0; }
+    .ask-row .body p { margin: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+    button.small { padding: 1px 6px; font-size: 11px; }
+    .badge { background: #b45309; color: #fff; border-radius: 999px; padding: 0 5px; font-size: 10px; margin-left: 3px; }
   </style>
 </head>
 <body>
   <header>
     <span class="where" id="where">Waiting for Jetski to say which workspace this is…</span>
     <span class="spacer"></span>
+    <button id="inbox-toggle" type="button" hidden aria-expanded="false" title="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
     <button id="agents-toggle" type="button" hidden aria-expanded="true">Agents</button>
     <button id="reload" type="button" hidden title="Mint a fresh address and reload the canvas">Reload</button>
     <a id="open" href="#" target="_blank" rel="noopener" hidden title="The same canvas in a browser tab, with its own chat">Open ↗</a>
@@ -84,10 +109,27 @@
     <span class="muted" id="agents-note">They answer @mentions on the canvas while <code>isocan rc</code> runs on this machine.</span>
   </div>
 
-  <div class="bar" id="selection" hidden>
+  <div class="panel" id="inbox" hidden>
+    <div class="muted panel-head">Waiting on you — questions agents left on the canvas</div>
+    <div id="inbox-list"></div>
+  </div>
+
+  <!-- The composer: this pane's one way to speak. It is always here while a
+       canvas is framed, because "what can I do?" is asked before anything is
+       selected. Enter sends to this conversation; the target menu fans out
+       to fresh conversations per model tier, or hands the ask to a standing
+       agent on the canvas as a comment. `/` offers the canvas's skills. -->
+  <div class="bar composer" id="selection" hidden>
     <span id="chips" class="row" style="flex-wrap: wrap"></span>
-    <input id="ask" type="text" placeholder="Ask Jetski about this…" aria-label="Ask Jetski about the selection" />
+    <div class="field">
+      <input id="ask" type="text" autocomplete="off" placeholder="Ask Jetski about the canvas, or / for a skill…" aria-label="Ask Jetski, or type / for a canvas skill" aria-autocomplete="list" aria-controls="slash" />
+      <div class="menu" id="slash" role="listbox" hidden></div>
+    </div>
+    <select id="target" aria-label="Who carries it out" title="Who carries it out">
+      <option value="here">This chat</option>
+    </select>
     <button id="ask-send" type="button" class="primary">Ask</button>
+    <div id="starters" class="row starters"></div>
   </div>
 
   <div class="note" id="status" role="status" hidden></div>
@@ -172,7 +214,12 @@
       for (const id of ["frame", "unbound", "nocli", "noworkspace"]) $(id).hidden = id !== which;
       const framing = which === "frame";
       $("reload").hidden = $("open").hidden = !framing;
+      $("selection").hidden = !framing;
       if (!framing) setSelection([]);
+      else {
+        void refreshAsks();
+        void loadSkills();
+      }
     }
 
     function sendBridge(msg) {
@@ -225,6 +272,7 @@
         : `${leaf(state.workspace)} · no canvas`;
       $("where").title = state.bound ? `${state.canvasId} — bound by ${state.root}/.isocan/project.json` : state.workspace || "";
       renderPresets();
+      renderTargets();
       syncBridgeCues(state.sessions);
       if (!state.cli) return show("nocli");
       if (!state.bound) {
@@ -289,11 +337,28 @@
         const kind = sess.harness === "antigravity" ? "Chat" : (sess.harness || "session");
         button.textContent = `● ${sess.name} · ${kind}`;
         button.title = `Connected: ${sess.name} is active on this canvas right now (${sess.harness ? `${sess.harness} session` : "live session"}). Click to follow its cursor.`;
+        if (sess.tier) button.textContent += ` · ${sess.tier}`;
+        if (sess.conversationId && sess.conversationId === host?.conversationId) {
+          button.textContent += " · this chat";
+          button.title = `${sess.name} is this conversation, on the canvas under its own name. Click to follow its cursor.`;
+        }
         button.addEventListener("click", () => {
           followAgent(sess.sessionId, sess.actorId);
           say(`Following ${sess.name} (${sess.harness === "antigravity" ? "Jetski chat" : (sess.harness || "CLI")} session) — the camera tracks its cursor until you pan or zoom.`);
         });
         list.append(button);
+        // A face that is a Jetski conversation opens that conversation: the
+        // canvas and the chats are one place, not two.
+        if (sess.conversationId && host?.ui?.toggleConversation && sess.conversationId !== host.conversationId) {
+          const open = document.createElement("button");
+          open.type = "button";
+          open.className = "small";
+          open.textContent = "💬";
+          open.title = `Open ${sess.name}'s conversation in Jetski`;
+          open.setAttribute("aria-label", open.title);
+          open.addEventListener("click", () => host.ui.toggleConversation(sess.conversationId));
+          list.append(open);
+        }
       }
       for (const agent of extraEnrolled) {
         const button = document.createElement("button");
@@ -359,7 +424,6 @@
 
     function setSelection(items) {
       selection = items;
-      $("selection").hidden = items.length === 0 || standalone;
       const chips = $("chips");
       chips.replaceChildren();
       for (const item of items.slice(0, 4)) {
@@ -377,9 +441,261 @@
         more.textContent = `+${items.length - 4}`;
         chips.append(more);
       }
-      $("ask-send").disabled = !host?.conversationId;
-      $("ask-send").title = host?.conversationId ? "" : "This pane is not attached to a conversation";
+      $("ask").placeholder = items.length
+        ? `Ask Jetski about ${items.length === 1 ? "this" : `these ${items.length}`}, or / for a skill…`
+        : "Ask Jetski about the canvas, or / for a skill…";
+      renderTargets();
+      renderStarters();
     }
+
+    // ---------- the composer ----------
+
+    /** Skills this canvas offers (`isocan command ls`), fetched once per
+     * canvas and again after a minute; the menu opens on `/`. */
+    let skills = [];
+    let skillsFor = null;
+    async function loadSkills() {
+      if (!state?.bound || skillsFor === state.canvasId) return skills;
+      try {
+        skills = (await api("/api/skills")).skills ?? [];
+        skillsFor = state.canvasId;
+      } catch (err) {
+        say(err.message, "error");
+      }
+      renderStarters();
+      return skills;
+    }
+
+    /** What the typed text asks for: a skill when it starts with `/name`
+     * that this canvas has, otherwise a question. */
+    function parseTyped(raw) {
+      const typed = raw.trim();
+      const m = /^\/([a-z][a-z0-9-]*)(?:\s+([\s\S]*))?$/.exec(typed);
+      if (m && skills.some((s) => s.name === m[1])) return { kind: "skill", skill: m[1], args: (m[2] || "").trim() };
+      return { kind: "ask", question: typed };
+    }
+
+    /** Where it goes: this chat (default), a fan-out across model tiers, or
+     * a standing agent on the canvas. The menu only offers what can run. */
+    function renderTargets() {
+      const target = $("target");
+      const was = target.value;
+      target.replaceChildren();
+      const add = (value, label, disabled = false, title = "") => {
+        const o = document.createElement("option");
+        o.value = value;
+        o.textContent = label;
+        o.disabled = disabled;
+        if (title) o.title = title;
+        target.append(o);
+      };
+      add("here", host?.conversationId ? "This chat" : "This chat (not attached)", !host?.conversationId);
+      if (host) {
+        add("fan:flash,pro", "Fan out: Flash + Pro", false, "Two new Jetski conversations, one per model tier — each joins the canvas under its own name");
+        add("fan:flash_lite,flash,pro", "Fan out: all three tiers", false, "Three new Jetski conversations: flash_lite, flash and pro");
+      }
+      const agents = [
+        ...(state?.enrolled ?? []).map((a) => a.name),
+        ...(state?.presets ?? []).filter((p) => p.enrolled).map((p) => p.name),
+      ].filter((n, i, all) => n && all.indexOf(n) === i);
+      for (const name of agents) {
+        add(`agent:${name}`, `@${name} on the canvas`, selection.length === 0,
+          selection.length === 0 ? "Select an item first — the request is pinned to it as a comment" : `A comment on the selection that wakes ${name} while isocan rc runs`);
+      }
+      const keep = [...target.options].find((o) => o.value === was && !o.disabled);
+      target.value = keep ? was : ([...target.options].find((o) => !o.disabled)?.value ?? "here");
+      $("ask-send").disabled = [...target.options].every((o) => o.disabled);
+      $("ask-send").textContent = target.value.startsWith("fan:") ? "Fan out" : target.value.startsWith("agent:") ? "Hand off" : "Ask";
+    }
+
+    /** The starters: what a person can do from here, shown before they
+     * type, so the pane teaches by offering. They change with the selection
+     * and with what is waiting. Each only fills the composer — nothing is
+     * sent until the person presses the button. */
+    const PREFERRED_SKILLS = ["variation", "design-audit", "accessibility-audit", "tidy", "design-system", "grill-me"];
+    function renderStarters() {
+      const list = $("starters");
+      list.replaceChildren();
+      if ($("ask").value.trim()) return;
+      const starter = (label, fill, hint = "") => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "starter";
+        b.textContent = label;
+        if (hint) b.title = hint;
+        b.addEventListener("click", () => {
+          $("ask").value = fill;
+          $("ask").focus();
+          renderStarters();
+          if (fill.startsWith("/")) openSlash();
+        });
+        list.append(b);
+      };
+      const have = new Set(skills.map((s) => s.name));
+      if (selection.length) {
+        starter("Build this in the repo", "Build the selected screen as real code in this workspace — match the repo's framework and conventions, and tell me which files you changed.", "Turns a canvas item into code in the folder this conversation has open");
+        for (const name of ["variation", "design-audit", "accessibility-audit"].filter((n) => have.has(n))) {
+          const s = skills.find((k) => k.name === name);
+          starter(`/${name}`, `/${name} `, s?.description);
+        }
+        starter("What's wrong with it?", "What would you change about this, and why? Be specific.");
+      } else {
+        starter("What's on this canvas?", "What is on this canvas right now, and what is still open on it?");
+        if ((openAsks.length) > 0) starter(`Answer ${openAsks.length} open question${openAsks.length === 1 ? "" : "s"}`, "Go through the questions agents left on the canvas that are waiting on me (`isocan comment ls --open`) and help me answer them one by one.");
+        starter("Put what we did here on the canvas", "Put what we just worked on in this chat on the canvas — the key screen, diagram or decision — as an item I can comment on.", "The other direction: from this conversation onto the canvas");
+        for (const name of PREFERRED_SKILLS.filter((n) => have.has(n) && n !== "variation" && !n.includes("audit")).slice(0, 2)) {
+          const s = skills.find((k) => k.name === name);
+          starter(`/${name}`, `/${name} `, s?.description);
+        }
+      }
+      if (skills.length) {
+        const all = document.createElement("button");
+        all.type = "button";
+        all.className = "starter";
+        all.innerHTML = `/ <span class="muted">${skills.length} skills</span>`;
+        all.title = "Every skill this canvas has — built in, and added with /skill add";
+        all.addEventListener("click", () => { $("ask").value = "/"; $("ask").focus(); openSlash(); });
+        list.append(all);
+      }
+    }
+
+    // The `/` menu: filtered as you type, ↑/↓ to move, Enter or Tab to take.
+    let slashIndex = 0;
+    function slashMatches() {
+      const m = /^\/([a-z0-9-]*)$/.exec($("ask").value.trim());
+      if (!m) return null;
+      return skills.filter((s) => s.name.startsWith(m[1])).concat(skills.filter((s) => !s.name.startsWith(m[1]) && s.name.includes(m[1])));
+    }
+    async function openSlash() {
+      await loadSkills();
+      const menu = $("slash");
+      const matches = slashMatches();
+      if (!matches || matches.length === 0) {
+        menu.hidden = true;
+        return;
+      }
+      slashIndex = Math.min(slashIndex, matches.length - 1);
+      menu.replaceChildren();
+      matches.forEach((s, i) => {
+        const opt = document.createElement("button");
+        opt.type = "button";
+        opt.className = "opt";
+        opt.setAttribute("role", "option");
+        opt.setAttribute("aria-selected", String(i === slashIndex));
+        const head = document.createElement("span");
+        head.innerHTML = `<b></b> <span class="muted" style="display:inline"></span>`;
+        head.querySelector("b").textContent = `/${s.name}`;
+        head.querySelector("span").textContent = s.usage || "";
+        const desc = document.createElement("span");
+        desc.className = "muted";
+        desc.textContent = `${s.description}${s.source && s.source !== "built-in" ? ` · ${s.source}` : ""}`;
+        opt.append(head, desc);
+        opt.addEventListener("mousedown", (e) => { e.preventDefault(); takeSlash(s); });
+        menu.append(opt);
+      });
+      menu.hidden = false;
+    }
+    function takeSlash(s) {
+      $("ask").value = `/${s.name} `;
+      $("slash").hidden = true;
+      $("ask").focus();
+      renderStarters();
+    }
+
+    async function ask() {
+      const raw = $("ask").value;
+      const typed = parseTyped(raw);
+      const target = $("target").value;
+      const items = selection.map((i) => ({ id: i.id, title: i.title }));
+      const body = { items, ...typed };
+      $("ask-send").disabled = true;
+      try {
+        if (target.startsWith("agent:")) {
+          const agent = target.slice(6);
+          const out = await api("/api/handoff", { ...body, agent });
+          if (out.threadId) openThread(out.threadId, true);
+          say(`Handed to @${agent} as a comment on the canvas — it answers there while \`isocan rc\` runs.`);
+        } else if (target.startsWith("fan:")) {
+          const tiers = target.slice(4).split(",");
+          const out = await api("/api/fanout", { ...body, tiers, conversationId: host?.conversationId ?? null });
+          say(`Started ${out.started.length} conversations (${tiers.join(", ")}). Each joins the canvas under its own name — watch the Agents bar, and their takes land beside the selection.`);
+        } else {
+          if (!host?.conversationId) throw new Error("This pane is not attached to a conversation");
+          await api("/api/send", { ...body, conversationId: host.conversationId });
+          say("");
+        }
+        $("ask").value = "";
+        renderStarters();
+      } catch (err) {
+        say(err.message, "error");
+      } finally {
+        renderTargets();
+      }
+    }
+
+    // ---------- the inbox: agents waiting on a person ----------
+
+    let inboxOpen = false;
+    let openAsks = [];
+    let asksAt = 0;
+    async function refreshAsks(force = false) {
+      if (!state?.bound || (!force && Date.now() - asksAt < 10_000)) return;
+      asksAt = Date.now();
+      try {
+        openAsks = (await api("/api/asks")).asks ?? [];
+      } catch {
+        openAsks = [];
+      }
+      renderInbox();
+      if (!$("ask").value.trim()) renderStarters();
+    }
+    function renderInbox() {
+      const asks = openAsks;
+      $("inbox-toggle").hidden = asks.length === 0;
+      $("inbox-count").textContent = String(asks.length);
+      if (asks.length === 0) inboxOpen = false;
+      $("inbox").hidden = !inboxOpen;
+      $("inbox-toggle").setAttribute("aria-expanded", String(inboxOpen));
+      const list = $("inbox-list");
+      list.replaceChildren();
+      for (const a of asks) {
+        const row = document.createElement("div");
+        row.className = "ask-row";
+        const body = document.createElement("div");
+        body.className = "body";
+        const who = document.createElement("b");
+        who.textContent = a.askerName || a.askerId || "An agent";
+        const p = document.createElement("p");
+        p.textContent = a.body;
+        body.append(who, p);
+        const show = document.createElement("button");
+        show.type = "button";
+        show.className = "small";
+        show.textContent = "Show";
+        show.title = "Open the thread on the canvas — reply there yourself";
+        show.addEventListener("click", () => openThread(a.threadId, true));
+        const help = document.createElement("button");
+        help.type = "button";
+        help.className = "small";
+        help.textContent = "Answer with Jetski";
+        help.title = "Hand the question to this chat to work out the answer together";
+        help.disabled = !host?.conversationId;
+        help.addEventListener("click", async () => {
+          try {
+            await api("/api/send", { kind: "thread", thread: a, conversationId: host.conversationId });
+            openThread(a.threadId, true);
+          } catch (err) {
+            say(err.message, "error");
+          }
+        });
+        row.append(body, show, help);
+        list.append(row);
+      }
+    }
+    $("inbox-toggle").addEventListener("click", () => {
+      inboxOpen = !inboxOpen;
+      renderInbox();
+    });
 
     function focusItem(itemId, zoom = false) {
       sendBridge({ type: "isocan:focus-item", itemId, zoom });
@@ -399,19 +715,6 @@
 
     function openThread(threadId, zoom = false) {
       sendBridge({ type: "isocan:open-thread", threadId, zoom });
-    }
-
-    async function ask() {
-      if (!selection.length || !host?.conversationId) return;
-      const typed = $("ask").value.trim() || "Take a look at these and tell me what you think.";
-      const items = selection.map((i) => `\`${i.id}\`${i.title ? ` "${i.title}"` : ""}`).join(", ");
-      const canvas = state?.title ? `"${state.title}" (${state.canvasId})` : state?.canvasId;
-      try {
-        await host.agent.sendMessage(`${typed}\n\n(Selected on the isocan canvas ${canvas}: ${items}. \`isocan show <id>\` describes one; \`isocan get <id>\` prints its file.)`);
-        $("ask").value = "";
-      } catch (err) {
-        say(err.message, "error");
-      }
     }
 
     // The canvas's half of the bridge (packages/web/src/lib/hostbridge.ts):
@@ -442,7 +745,32 @@
       requeue();
     });
     $("ask-send").addEventListener("click", ask);
-    $("ask").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+    $("ask").addEventListener("keydown", (e) => {
+      const menu = $("slash");
+      const matches = menu.hidden ? null : slashMatches();
+      if (matches && matches.length) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          slashIndex = (slashIndex + (e.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
+          return void openSlash();
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          return takeSlash(matches[slashIndex]);
+        }
+        if (e.key === "Escape") return void (menu.hidden = true);
+      }
+      if (e.key === "Enter") ask();
+    });
+    $("ask").addEventListener("input", () => {
+      slashIndex = 0;
+      if ($("ask").value.trimStart().startsWith("/")) void openSlash();
+      else $("slash").hidden = true;
+      renderStarters();
+    });
+    $("ask").addEventListener("focus", () => void loadSkills());
+    $("ask").addEventListener("blur", () => setTimeout(() => ($("slash").hidden = true), 120));
+    $("target").addEventListener("change", renderTargets);
 
     async function bind(body, doing) {
       say(doing);

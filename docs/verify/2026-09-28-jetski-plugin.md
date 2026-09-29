@@ -83,6 +83,47 @@ the AuxPane, and carry *Ask* into the chat. That is this walk.
 
    **You should see:** the preset's model id, not the harness's default.
 
+
+## Part three: the tie (phase 4, added 29 Sep)
+
+Restart Jetski first — the hook's message and the rule changed.
+
+10. Open the pane on the step-2 canvas with nothing selected.
+
+    **You should see:** the box under the header saying *Ask Jetski about the
+    canvas, or / for a skill…*, and starters under it — *What's on this
+    canvas?*, *Put what we did here on the canvas*, a couple of `/skills`, and
+    `/ N skills`. Your own face in the Agents bar says *this chat*.
+
+11. Type `/` in the box, take `/variation` with ↓ and Enter, add *n=2*, select
+    the note from step 6, and press **Ask**.
+
+    **You should see:** the conversation receive `/variation n=2` with a line
+    saying `isocan command show variation` is its instructions, and two
+    variations appear on the canvas, made by the agent.
+
+12. In a **browser tab** on the same canvas (not the pane), comment on the
+    note mentioning the agent by the name from step 3: *"@<name> make it
+    shorter"*. Leave Jetski alone.
+
+    **You should see:** within a few seconds, a message in the Jetski
+    conversation headed *The isocan canvas … has something for you*, with
+    your comment in it — and the agent's reply appearing on your thread in the
+    tab. This is the relay; `~/.isocan/jetski-relay.lock` exists while it runs.
+
+13. Select the note, set the target menu to **Fan out: Flash + Pro**, type
+    *make a friendlier version*, and press **Fan out**.
+
+    **You should see:** two new conversations in Jetski titled *make a
+    friendlier version · flash* and *… · pro*, each arriving on the canvas
+    under its own name with its tier in the Agents bar, and a 💬 beside each
+    that opens it.
+
+14. Ask the agent to `isocan ask "amber or teal?"` on the canvas.
+
+    **You should see:** **Asks 1** in the pane's header; *Answer with Jetski*
+    hands the question back to the conversation.
+
 ---
 
 ## What to do when it is wrong
@@ -95,6 +136,10 @@ the AuxPane, and carry *Ask* into the chat. That is this walk.
   is loopback and the browser is elsewhere (Jetski Web on another machine).
   Otherwise press **Reload** — a pass is single-use, and a local daemon's
   frame cannot keep its badge across reloads.
+- **Step 12 never arrives:** check `~/.isocan/jetski-conversations.json` has
+  the conversation with an `actorId` (the hook writes it), and that
+  `ISOCAN_JETSKI_RELAY` is not `off`. If the agent parked itself on
+  `isocan wait`, its own park wins and the relay stands back five minutes.
 - **A Chat appears in step 5:** that is a bug; `embed-chat.test.ts` names the
   entrances it guards. Note what opened it.
 

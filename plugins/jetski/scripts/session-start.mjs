@@ -24,6 +24,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { recordConversation } from "../lib/jetski.mjs";
 import { agentEnv, bindingFor, isocanHome, runIsocan, workspacePaths } from "../lib/workspace.mjs";
 
 const PILL = "[Isocan Canvas](sidecar://isocan/canvas/)";
@@ -32,15 +33,21 @@ const messageOf = (err) => (err instanceof Error ? err.message : String(err));
 
 /** `isocan identity --session` says `identity saved: NAME (ID) → FILE (HARNESS session)`. */
 export function claimedName(stdout) {
+  return claimedIdentity(stdout)?.name ?? null;
+}
+
+/** …and the actor id beside the name, which the conversations record keeps
+ * so the pane can tell which face on the canvas is which conversation. */
+export function claimedIdentity(stdout) {
   const m = /^identity saved: (.+) \(([^()]+)\) → /m.exec(stdout ?? "");
-  return m ? m[1].trim() : null;
+  return m ? { name: m[1].trim(), actorId: m[2].trim() } : null;
 }
 
 /**
  * The hook's whole decision, given its stdin and environment. Returns the
  * object to print, or null for "say nothing".
  */
-export async function sessionStart(input, { env = process.env, run = runIsocan } = {}) {
+export async function sessionStart(input, { env = process.env, run = runIsocan, now = Date.now } = {}) {
   // SessionStart's input never carries `invocationNum`. A call that does is
   // some other event — a host still holding an older hooks.json that wired
   // this script to PreInvocation, which fires before EVERY model call — and
@@ -67,8 +74,21 @@ export async function sessionStart(input, { env = process.env, run = runIsocan }
     let named = false;
     let name = null;
     try {
-      name = claimedName((await run(["identity", "--session"], { ...opts, timeoutMs: 15_000 })).stdout);
+      const claimed = claimedIdentity((await run(["identity", "--session"], { ...opts, timeoutMs: 15_000 })).stdout);
+      name = claimed?.name ?? null;
       named = true;
+      // Written down so the pane can open this conversation from its face, and
+      // so the relay can carry the canvas's mentions of it back here. A record
+      // that cannot be written costs those two and nothing else.
+      try {
+        recordConversation(home, conversationId, {
+          canvasId: binding.canvasId,
+          title: binding.title ?? null,
+          root: binding.root,
+          actorId: claimed?.actorId ?? null,
+          name,
+        }, now());
+      } catch { /* the record is a convenience, never the arrival */ }
     } catch (err) {
       lines.push(
         `Naming you failed, so you are not on it yet: ${messageOf(err)}. ` +
@@ -90,7 +110,10 @@ export async function sessionStart(input, { env = process.env, run = runIsocan }
   lines.push(
     `The person can open the canvas beside this chat with ${PILL} — offer that link when the canvas is relevant.`,
     "Run `isocan --agent-help` once before acting on the canvas. This chat is where the person steers; the canvas " +
-      "is the record. Do not park on `isocan wait` unless they ask.",
+      "is the record. Do not park on `isocan wait` unless they ask — while the pane runs, what the canvas says to you " +
+      "arrives here as a message headed \"The isocan canvas … has something for you\"; answer those on the canvas.",
+    "From the pane the person can point at items and ask about them, and run a canvas skill: a message that starts " +
+      "with `/name` is one — `isocan command show <name>` is your instructions, and `isocan command ls` lists them all.",
   );
   return { injectSteps: [{ ephemeralMessage: lines.join("\n") }] };
 }
