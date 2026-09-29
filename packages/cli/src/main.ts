@@ -527,6 +527,7 @@ import {
   type Build,
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
+import { installJetskiPlugin } from "./jetski-plugin.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import { inlineHtmlAssets, inlineMarkdownAssets } from "./inline.ts";
 import {
@@ -4291,6 +4292,7 @@ program
   .option("--force", "refresh the skill even if this directory already has one")
   .option("--direct", "run no daemon here — speak to the home itself, keeping no local copy")
   .option("--daemon", "run a daemon here with a replica of its own, whatever this place looks like")
+  .option("--jetski", "link the Jetski plugin into ~/.gemini/config/plugins/isocan")
   .action(
     run(
       async (
@@ -4301,6 +4303,7 @@ program
           force?: boolean;
           direct?: boolean;
           daemon?: boolean;
+          jetski?: boolean;
         },
         cmd: Command,
       ) => {
@@ -4445,6 +4448,14 @@ program
         // are the transient one, the installed copy is handed the daemon.
         const transient = (await whichInstall(path.resolve(myRoot()))).kind === "npx";
         const handOff = transient && !direct ? durableBin : null;
+        if (opts.jetski) {
+          const pluginRoot = transient && durableBin ? rootOfBin(durableBin) : myRoot();
+          const said = installJetskiPlugin({
+            sourceDir: path.join(pluginRoot, "plugins", "jetski"),
+            force: opts.force ?? false,
+          });
+          report.jetski = `${said} — restart Jetski so it loads hooks.json`;
+        }
         /**
          * **The whole daemon paragraph, skipped** — this is what direct mode
          * IS, and every line of it is about a process this machine has decided

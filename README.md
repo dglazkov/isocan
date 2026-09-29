@@ -1325,9 +1325,9 @@ hello.
 
 [`plugins/jetski/`](plugins/jetski/) is isocan as a Jetski plugin: the canvas
 your workspace is bound to, in a pane beside the Jetski chat. Every part of it
-is an `isocan` command, so the plugin can do nothing the CLI cannot. It runs
-from a clone of the repo (the `#release` install carries the CLI, not the
-plugin): `node scripts/install-jetski-plugin.mjs` links it into
+is an `isocan` command, so the plugin can do nothing the CLI cannot. The
+`#release` install carries it alongside the CLI: `isocan setup --jetski` (or
+`node scripts/install-jetski-plugin.mjs` in a checkout) links it into
 `~/.gemini/config/plugins/isocan`. Restart Jetski after installing: it reads
 a plugin's hooks once, when the plugin loads.
 

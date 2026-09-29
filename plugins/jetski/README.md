@@ -24,16 +24,18 @@ command, so the plugin can do nothing the CLI cannot.
 ## Install
 
 It needs the `isocan` CLI (`npm i -g github:dglazkov/isocan#release`) and
-`node` on Jetski's PATH. The release carries the CLI and not the plugin, so
-the plugin runs from a clone of the repo:
+`node` on Jetski's PATH. The `#release` install carries `plugins/jetski/`
+alongside the CLI, so no clone of the repository is needed:
 
 ```sh
-node scripts/install-jetski-plugin.mjs
+isocan setup --jetski
 ```
 
-That links `~/.gemini/config/plugins/isocan` to this directory, so pulling
-the repo updates the plugin. Restart Jetski after installing, and after any
-change to `hooks.json` — Jetski reads it once, when the plugin loads.
+(From a checkout of the repo, `node scripts/install-jetski-plugin.mjs` does the
+same thing, and `--uninstall` removes the link.) That links
+`~/.gemini/config/plugins/isocan` to the installed `plugins/jetski/`
+directory. Restart Jetski after installing, and after any change to
+`hooks.json` — Jetski reads it once, when the plugin loads.
 
 ## Limits
 

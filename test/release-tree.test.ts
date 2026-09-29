@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -70,5 +70,46 @@ describe("the release tree", () => {
     const done = spawnSync(process.execPath, [path.join(tree, CLI_BUNDLE), "--version"], { encoding: "utf8", cwd: scratch });
     expect(done.status, done.stderr).toBe(0);
     expect(done.stdout).toContain("deadbee");
+  }, 60_000);
+
+  it("carries plugins/jetski and links it through isocan setup --jetski", async () => {
+    const pluginInTree = path.join(tree, "plugins/jetski");
+    expect(existsSync(path.join(pluginInTree, "plugin.json"))).toBe(true);
+    expect(existsSync(path.join(pluginInTree, "skills/isocan-collab/SKILL.md"))).toBe(true);
+
+    const { createServer } = await import("node:http");
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end('{"ok":true}');
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const addr = server.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+
+    try {
+      const target = path.join(scratch, "jetski-plugin-link");
+      const work = path.join(scratch, "jetski-setup-work");
+      const home = path.join(scratch, "jetski-setup-home");
+      mkdirSync(work, { recursive: true });
+      const done = spawnSync(
+        process.execPath,
+        [path.join(tree, CLI_BUNDLE), "setup", work, "--jetski", "--no-install", "--no-open", "--json"],
+        {
+          encoding: "utf8",
+          cwd: scratch,
+          env: {
+            ...process.env,
+            ISOCAN_HOME: home,
+            ISOCAN_DIRECT: `http://127.0.0.1:${port}`,
+            ISOCAN_JETSKI_PLUGIN_DIR: target,
+          },
+        },
+      );
+      expect(done.status, done.stderr).toBe(0);
+      expect(lstatSync(target).isSymbolicLink()).toBe(true);
+      expect(realpathSync(target)).toBe(realpathSync(pluginInTree));
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
   }, 60_000);
 });

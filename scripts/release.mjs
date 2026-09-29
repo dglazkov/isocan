@@ -120,12 +120,6 @@ export const RELEASE_DROPS = [
   // install runs (the root `bin` is the CLI's alone). Found by the tree's
   // import check on its first run (cleanup phase 4, TR-4, 27 Sep 2026).
   ["packages/voice-agent/bin"],
-  // The Jetski plugin. Jetski loads it through a link into a clone
-  // (`scripts/install-jetski-plugin.mjs`, which leaves with `scripts`), and
-  // its pane imports `sidecar_sdk`, a module only the Jetski host provides —
-  // so on an install it is a directory nothing loads, importing what the
-  // tree does not carry. Found by the same check (#364, 28 Sep 2026).
-  ["plugins"],
 ];
 
 /**
@@ -734,7 +728,8 @@ export async function assembleReleaseTree({ base, out, artifacts, sourceCommit =
      * a daemon serves), `packages/rc/dist` and `packages/cli/dist` (the
      * bundles), `types/` (what an editor resolves), the modules' `assets/`
      * and `agent-guide.md`, `.agents/skills` (which `isocan setup` copies out),
-     * `WHATSNEW.md`, and the scripts a CLI verb can spawn.
+     * `plugins/jetski` (which `isocan setup --jetski` links out), `WHATSNEW.md`,
+     * and the scripts a CLI verb can spawn.
      */
     for (const spec of RELEASE_DROPS) {
       git("rm", "-r", "--cached", "--ignore-unmatch", "-q", ...spec, { env });
@@ -872,6 +867,7 @@ export async function unresolvedImports(dir) {
     }
   };
   const web = path.join(dir, "packages/web/dist");
+  const jetskiPlugin = path.join(dir, "plugins/jetski");
   const selfReference = (subpath) => {
     const entry = manifest.exports?.[subpath];
     const target = typeof entry === "string" ? entry : (entry?.import ?? entry?.default);
@@ -888,6 +884,10 @@ export async function unresolvedImports(dir) {
     const subpath = [".", ...parts.slice(bare.startsWith("@") ? 2 : 1)].join("/");
     if (name === manifest.name) return selfReference(subpath);
     if (CLI_BUNDLE_EXTERNAL.includes(name)) return true;
+    // The Jetski sidecar runs inside the Jetski host, which puts `sidecar_sdk`
+    // on NODE_PATH when spawning the pane; standalone (`ISOCAN_JETSKI_PORT`)
+    // that branch does not run.
+    if (name === "sidecar_sdk" && importer.startsWith(jetskiPlugin + path.sep)) return true;
     return Boolean(manifest.dependencies?.[name]);
   };
   const unresolved = new Map();

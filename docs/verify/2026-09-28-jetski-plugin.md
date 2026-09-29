@@ -4,9 +4,9 @@
 
 **What you need:** Jetski on a machine with `node` and the `isocan` CLI on its
 PATH (`npm i -g github:dglazkov/isocan#release`, or this repo's own
-`packages/cli/bin/isocan.js` on the PATH), a clone of this repo, and a
-throwaway folder. Fifteen minutes; steps 8–9 also need a harness signed in
-(Claude Code or Codex) and spend a few tokens.
+`packages/cli/bin/isocan.js` on the PATH), and a throwaway folder. Fifteen
+minutes; steps 8–9 also need a harness signed in (Claude Code or Codex) and
+spend a few tokens.
 
 **Why this page exists.** Everything below has automated proof up to the
 host's edge: the hook runs from a symlinked install exactly as `hooks.json`
@@ -20,12 +20,13 @@ the AuxPane, and carry *Ask* into the chat. That is this walk.
 
 ## Part one: install, and a conversation arrives
 
-1. From the repo: `node scripts/install-jetski-plugin.mjs`. **Then quit and
-   reopen Jetski** — it reads a plugin's `hooks.json` and rule once, when the
-   plugin loads, and an old copy keeps running until then.
+1. Run `isocan setup --jetski` (or `node scripts/install-jetski-plugin.mjs`
+   from a checkout). **Then quit and reopen Jetski** — it reads a plugin's
+   `hooks.json` and rule once, when the plugin loads, and an old copy keeps
+   running until then.
 
    **You should see:** `~/.gemini/config/plugins/isocan` is a link to the
-   repo's `plugins/jetski`, and *Isocan Canvas* appears among Jetski's
+   installed `plugins/jetski`, and *Isocan Canvas* appears among Jetski's
    plugins.
 
 2. Make a throwaway folder, bind it, and open it in Jetski:

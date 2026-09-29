@@ -159,19 +159,22 @@ function onPath(bin, env) {
 
 /**
  * How to run the CLI: `ISOCAN_CLI` when set, else `isocan` on the PATH,
- * else this checkout's own `packages/cli/bin/isocan.js` when the plugin is
- * being run from inside the repo. Null when none of those exist. A `.js`
- * file runs under the PATH's `node` — what the `isocan` shim itself would
- * use — and only without one under whatever node is running this, which
- * inside Jetski may be the host's bundled one.
+ * else this copy's own CLI (`packages/cli/bin/isocan.js` in a checkout,
+ * `packages/cli/dist/isocan.mjs` in a `#release` install). Null when none of
+ * those exist. A `.js`/`.mjs` file runs under the PATH's `node` — what the
+ * `isocan` shim itself would use — and only without one under whatever node
+ * is running this, which inside Jetski may be the host's bundled one.
  */
 export function resolveCli(env = process.env) {
   const viaNode = (file) => ({ command: onPath("node", env) ?? process.execPath, prefix: [file] });
   if (env.ISOCAN_CLI) return /\.[cm]?js$/.test(env.ISOCAN_CLI) ? viaNode(env.ISOCAN_CLI) : { command: env.ISOCAN_CLI, prefix: [] };
   const found = onPath("isocan", env);
   if (found) return { command: found, prefix: [] };
-  const repoBin = fileURLToPath(new URL("../../../packages/cli/bin/isocan.js", import.meta.url));
-  return fs.existsSync(repoBin) ? viaNode(repoBin) : null;
+  for (const rel of ["../../../packages/cli/bin/isocan.js", "../../../packages/cli/dist/isocan.mjs"]) {
+    const candidate = fileURLToPath(new URL(rel, import.meta.url));
+    if (fs.existsSync(candidate)) return viaNode(candidate);
+  }
+  return null;
 }
 
 /**

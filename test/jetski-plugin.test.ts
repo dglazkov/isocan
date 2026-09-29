@@ -13,8 +13,7 @@ import { agentEnv, findBinding, personEnv, resolveCli, workspacePaths } from "..
 import { claimedName, sessionStart } from "../plugins/jetski/scripts/session-start.mjs";
 // @ts-expect-error — as above.
 import { canvasRef, createPane, createServer, isLoopback, loadPresets, tabAddress } from "../plugins/jetski/sidecars/canvas/main.mjs";
-// @ts-expect-error — a plain .mjs script, like the plugin it installs.
-import { installJetskiPlugin, uninstallJetskiPlugin } from "../scripts/install-jetski-plugin.mjs";
+import { defaultTarget, installJetskiPlugin, uninstallJetskiPlugin } from "../packages/cli/src/jetski-plugin.ts";
 
 /**
  * **The Jetski plugin** (`docs/projects/jetski/`, phases 2 and 3).
@@ -638,5 +637,6 @@ describe("the installer", () => {
     expect(uninstallJetskiPlugin({ target })).toContain("uninstalled");
     expect(fs.existsSync(target)).toBe(false);
     expect(uninstallJetskiPlugin({ target })).toContain("nothing installed");
+    expect(defaultTarget({ ISOCAN_JETSKI_PLUGIN_DIR: target })).toBe(path.resolve(target));
   });
 });

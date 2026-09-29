@@ -115,10 +115,11 @@ pill is `sidecar://isocan/canvas/`), `mcp_config.json` (`isocan mcp`),
 `hooks.json` (SessionStart only, guarded on `node`), `scripts/session-start.mjs`,
 `rules/AGENTS.md`, the `canvas-builder` and `visual-arena` agents, and
 `skills/isocan-collab` as a relative symlink to the one skill.
-`node scripts/install-jetski-plugin.mjs` links it into
-`~/.gemini/config/plugins/isocan`. It runs from a clone: `#release` drops
-`plugins/` (`RELEASE_DROPS`), because the pane imports `sidecar_sdk`, which
-only the Jetski host provides.
+`isocan setup --jetski` (or `node scripts/install-jetski-plugin.mjs` in a
+checkout) links it into `~/.gemini/config/plugins/isocan`. `#release` carries
+`plugins/jetski/` alongside the bundled CLI and daemon, and
+`unresolvedImports` allows `sidecar_sdk` inside `plugins/jetski/` because the
+Jetski host provides it on `NODE_PATH`.
 
 **Proof:**
 1. `npx vitest run test/jetski-plugin.test.ts` — the marker is found exactly
