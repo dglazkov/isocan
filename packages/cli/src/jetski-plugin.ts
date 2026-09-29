@@ -8,7 +8,7 @@ import { packagePath } from "@isocan/core/packageroot";
  * (`docs/projects/jetski/phases.md`, phase 2).
  *
  * Links `~/.gemini/config/plugins/isocan` to this copy's `plugins/jetski` — in
- * an `npm i -g github:dglazkov/isocan#release` install or in a checkout — so
+ * a `#release` install (`INSTALL_SPEC`) or in a checkout — so
  * upgrading the CLI updates the plugin in place and nobody needs a clone of
  * the repository just to run the plugin.
  *

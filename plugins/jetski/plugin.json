@@ -7,8 +7,6 @@
   "suggestedPrompts": [
     "Open the isocan canvas for this workspace and tell me what is on it",
     "Put the screen we just built on the canvas so the team can comment on it",
-    "Build the selected canvas screen as real code in this repo",
-    "Help me answer the questions agents left for me on the canvas",
-    "Which canvas skills can I run here? (isocan command ls)"
+    "Build the selected canvas screen as real code in this repo"
   ]
 }
