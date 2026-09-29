@@ -8,7 +8,7 @@ decision: declined
 rank: never
 project: extensions
 since: 2026-09-29
-note: "Possible today without a new feature: an HTML item runs inline scripts and the CSP allows jsdelivr, so one file can load React and render JSX. The recipe is in commit 49539211, which is on the release and land-work branches but not yet on main. A first-class hot-reload card is a product bet. Reopen if people ask for hot reload."
+note: "Possible today without a new feature: an HTML item runs inline scripts and the CSP allows jsdelivr, so one file can load React and render JSX. The recipe is in the agent guide, topic items (49539211). A first-class hot-reload card is a product bet. Reopen if people ask for hot reload."
 ---
 
 # Lack of live React web component canvas cards

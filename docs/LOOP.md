@@ -41,7 +41,7 @@ workspace other people read.
 | Ours | Finding | Loop | Where | Why |
 | --- | --- | --- | --- | --- |
 | later | [Lack of multimodal sketch wireframe conversion](loop/lack-of-multimodal-sketch-wireframe-conversion.md) | P2 | [wireframes](projects/wireframes/) | Holds as a feature gap: wire takes a text request only, and a sketch or screenshot is the natural input for a wireframe. Needs a model that reads images. Take it after wireframes phase 8, which comes from real use. |
-| later | [Spatial diffing missing for agent design edits](loop/spatial-diffing-missing-for-agent-design-edits.md) | P2 | [wireframes](projects/wireframes/) | Holds as a feature gap: the version stack has no visual diff or ghost overlay, and feature-readiness lists visual diffs as the checkable half of design taste. Worth doing once wireframes or design-lint want to show what an agent changed. |
+| later | [Spatial diffing missing for agent design edits](loop/spatial-diffing-missing-for-agent-design-edits.md) | P2 | [wireframes](projects/wireframes/) | Partly answered since triage: isocan diff (dce876ed) prints what changed between two versions, or a variation and its source, and VersionCompare shows it in the app. What is still missing is a ghost overlay on the canvas itself. Loop reports it resolved. Keep as later work only if that overlay is wanted. |
 
 ## Declined
 
@@ -49,7 +49,7 @@ Real, and not doing it. Dismissed in Loop, with the reason sent back.
 
 | Ours | Finding | Loop | Where | Why |
 | --- | --- | --- | --- | --- |
-| never | [Lack of live React web component canvas cards](loop/lack-of-live-react-web-component-canvas-cards.md) | P1 | [extensions](projects/extensions/) | Possible today without a new feature: an HTML item runs inline scripts and the CSP allows jsdelivr, so one file can load React and render JSX. The recipe is in commit 49539211, which is on the release and land-work branches but not yet on main. A first-class hot-reload card is a product bet. Reopen if people ask for hot reload. |
+| never | [Lack of live React web component canvas cards](loop/lack-of-live-react-web-component-canvas-cards.md) | P1 | [extensions](projects/extensions/) | Possible today without a new feature: an HTML item runs inline scripts and the CSP allows jsdelivr, so one file can load React and render JSX. The recipe is in the agent guide, topic items (49539211). A first-class hot-reload card is a product bet. Reopen if people ask for hot reload. |
 | never | [State mutations bypassing the daemon reducer](loop/state-mutations-bypassing-the-daemon-reducer.md) | P1 | — | By design: unreadStore is a per-viewer localStorage watermark that is explicitly not an operation, and the daemon.ts writes are the daemon persisting its own project.json. Loop already dismissed it. Reopen with a client mutation that skips the reducer. |
 | never | [Absence of behavioral acceptance test canvas overlays](loop/absence-of-behavioral-acceptance-test-canvas-overlays.md) | P2 | [design-lint](projects/design-lint/) | Premature: no GIVEN/WHEN/THEN runner exists, and design-lint has not met its benefit threshold with human ratings still pending. Reopen if those ratings favour repair. |
 | never | [Absence of live spatial canvas design linting overlays](loop/absence-of-live-spatial-canvas-design-linting-overlays.md) | P2 | [design-lint](projects/design-lint/) | Real gap, unmeasured: audit results live in DesignLintPanel and the CLI, not as badges on cards, and design-lint phases 1-5 chose the panel. Reopen if people ask to lint without leaving the canvas. |

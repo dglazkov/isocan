@@ -8,7 +8,7 @@ decision: accepted
 rank: later
 project: wireframes
 since: 2026-09-29
-note: "Holds as a feature gap: the version stack has no visual diff or ghost overlay, and feature-readiness lists visual diffs as the checkable half of design taste. Worth doing once wireframes or design-lint want to show what an agent changed."
+note: "Partly answered since triage: isocan diff (dce876ed) prints what changed between two versions, or a variation and its source, and VersionCompare shows it in the app. What is still missing is a ghost overlay on the canvas itself. Loop reports it resolved. Keep as later work only if that overlay is wanted."
 ---
 
 # Spatial diffing missing for agent design edits
