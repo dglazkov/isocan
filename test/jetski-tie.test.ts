@@ -479,9 +479,12 @@ describe("the page and its server agree", () => {
     expect(page).toContain("Watch the chat column on the left for the reply.");
   });
 
-  it("shows instant CSS [data-tip] popovers on Open, Reload, Agents, Asks, and the Agents: label", () => {
+  it("turns the header title (#where) into a link with a URL popover when framed, drops the Reload button, and shows instant CSS [data-tip] popovers on Open, Agents, Asks, and the Agents: label", () => {
+    expect(page).not.toContain('id="reload"');
+    expect(page).toMatch(/<a class="where" id="where" target="_blank" rel="noopener"><span class="where-text" id="where-text">/);
+    expect(page).toContain("header .where[data-tip]::after");
+    expect(page).toContain('setWhere(`${leaf(state.workspace)} · ${state.title || state.canvasId}`, tab)');
     expect(page).toMatch(/id="open"[^>]*data-tip="[^"]*external browser/);
-    expect(page).toMatch(/id="reload"[^>]*data-tip="Mint a fresh address and reload the canvas"/);
     expect(page).toMatch(/id="agents-toggle"[^>]*data-tip="Hide the Agents bar/);
     expect(page).toMatch(/id="inbox-toggle"[^>]*data-tip="Questions agents left on the canvas/);
     expect(page).toMatch(/id="agents-note"[^>]*data-tip="They answer @mentions on the canvas while isocan rc runs on this machine\."/);
