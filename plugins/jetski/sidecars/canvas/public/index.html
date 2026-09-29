@@ -764,7 +764,10 @@
         } else {
           if (!host?.conversationId) throw new Error("This pane is not attached to a conversation");
           await api("/api/send", { ...body, conversationId: host.conversationId });
-          say("");
+          // The message lands as a system message, not as your own chat
+          // bubble, so say it went — and that a busy conversation reads it
+          // at its next step rather than at once.
+          say(`Sent to this chat ✓ — "${raw.trim().slice(0, 60)}${raw.trim().length > 60 ? "…" : ""}". It arrives as a message from the pane; if the conversation is mid-task it answers at its next step.`);
         }
         $("ask").value = "";
         renderStarters();
@@ -826,6 +829,7 @@
           try {
             await api("/api/send", { kind: "thread", thread: a, conversationId: host.conversationId });
             openThread(a.threadId, true);
+            say(`Sent ${a.askerName || "the agent"}'s question to this chat ✓ — if the conversation is mid-task it picks it up at its next step.`);
           } catch (err) {
             say(err.message, "error");
           }

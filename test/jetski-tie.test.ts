@@ -168,6 +168,31 @@ describe("what the pane hands a conversation", () => {
     expect(said).toContain("You do not need to run `isocan wait`");
   });
 
+  it("says who is asking and that it wants an answer, so a busy conversation does not fold it away", () => {
+    for (const said of [
+      jetski.askMessage({ question: "How many screens are there?", items: [], canvas: CANVAS }),
+      jetski.threadMessage({ thread: { threadId: "thr_1", body: "?" }, canvas: CANVAS }),
+    ]) expect(said.startsWith(jetski.ASKED)).toBe(true);
+    // A skill keeps `/name` first — that is the canvas's grammar — and says it next.
+    const skill = jetski.skillMessage({ skill: "tidy", items: [], canvas: CANVAS }).split("\n");
+    expect(skill[0]).toBe("/tidy");
+    expect(skill[2]).toBe(jetski.ASKED);
+  });
+
+  it("treats an agentapi answer that says error as a failure, though it exits 0", async () => {
+    const fake = path.join(dir("fake-agentapi"), "agentapi.mjs");
+    fs.writeFileSync(fake, [
+      "#!/usr/bin/env node",
+      "const [, , , verb] = process.argv;",
+      'if (verb === "send-message") process.stdout.write(JSON.stringify({ response: {}, error: "trajectory not found: nope" }));',
+      'else process.stdout.write(JSON.stringify({ response: { ok: true } }));',
+    ].join("\n"));
+    fs.chmodSync(fake, 0o755);
+    const env = { ...process.env, ANTIGRAVITY_AGENTAPI_EXE: fake };
+    await expect(jetski.runAgentapi(["send-message", "nope", "hi"], { env })).rejects.toThrow("trajectory not found: nope");
+    await expect(jetski.runAgentapi(["get-conversation-metadata", "c1"], { env })).resolves.toEqual({ response: { ok: true } });
+  });
+
   it("reads a conversation's project the way the host's own preload does", () => {
     expect(jetski.projectIdOf({ response: { conversationMetadata: { metadata: { projectId: "p1" } } } })).toBe("p1");
     expect(jetski.projectIdOf({ response: { conversation_metadata: { metadata: { project_id: "p2" } } } })).toBe("p2");

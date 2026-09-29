@@ -45,11 +45,15 @@ export function runAgentapi(args, { env = process.env, projectId = null, timeout
         const said = `${stderr ?? ""}`.trim().split("\n").slice(-2).join(" ").trim();
         return reject(new Error(`agentapi ${args[0]}: ${err.killed ? "timed out" : said || err.message}`));
       }
+      let out;
       try {
-        resolve(stdout.trim() ? JSON.parse(stdout) : {});
+        out = stdout.trim() ? JSON.parse(stdout) : {};
       } catch {
-        resolve({ raw: stdout.trim() });
+        return resolve({ raw: stdout.trim() });
       }
+      // agentapi can exit 0 and still say it failed, in the body.
+      if (out && typeof out.error === "string" && out.error) return reject(new Error(`agentapi ${args[0]}: ${out.error}`));
+      resolve(out);
     });
   });
 }
@@ -148,11 +152,24 @@ function pointedAt(canvas, items) {
     : `(On the isocan canvas ${canvasName(canvas)} — nothing selected. \`isocan ls\` lists what is on it.)`;
 }
 
-/** A plain question about the selection, or about the canvas. */
+/**
+ * A plain question about the selection, or about the canvas.
+ *
+ * `agentapi send-message` hands it over as a system message, not as the
+ * person's own chat turn, and a conversation in the middle of a task folds a
+ * bare sentence into what it was doing and never answers it (29 Sep: *How
+ * many screens are there?* disappeared into a busy turn). So it says who is
+ * asking and that it wants an answer here, before anything else.
+ */
 export function askMessage({ question, items, canvas }) {
   const typed = text(question) ?? (itemList(items) ? "Take a look at these and tell me what you think." : "What is on the canvas right now?");
-  return `${typed}\n\n${pointedAt(canvas, items)}`;
+  return `${ASKED}\n\n${typed}\n\n${pointedAt(canvas, items)}`;
 }
+
+/** The first line of everything the pane asks: who, from where, and that it
+ * wants an answer in this chat even when a task is under way. */
+export const ASKED =
+  "The person asked this from the Isocan Canvas pane beside this chat. Answer it here — if you are in the middle of something, answer it first, then carry on:";
 
 /**
  * A canvas skill, run by this conversation. The same words a comment would
@@ -166,6 +183,8 @@ export function skillMessage({ skill, args, items, canvas }) {
   const typed = text(args);
   return [
     `/${name}${typed ? ` ${typed}` : ""}`,
+    "",
+    ASKED,
     "",
     `This is the isocan canvas skill /${name}. Run \`isocan command show ${name}\` — the body it prints is your instructions for this turn; what I typed after the name outranks its defaults. Do the work on the canvas as yourself, then tell me here what you made and where.`,
     "",
@@ -192,6 +211,8 @@ export function threadMessage({ thread, canvas }) {
   const asker = text(thread.askerName) ?? "An agent";
   const body = text(thread.body) ?? "";
   return [
+    ASKED,
+    "",
     `${asker} is waiting on an answer on the isocan canvas ${canvasName(canvas)}:`,
     "",
     body ? `> ${body.replace(/\n/g, "\n> ")}` : "",
