@@ -2321,7 +2321,7 @@ pull, then for each untriaged finding open the files it cites and say whether
 the claim **holds**, is **partly true**, is **stale** (cite what fixed it) or is
 **by design** (cite the doc that decided it). Propose a rank — `now` (a defect
 people would hit), `next`, `later`, `never` (a recommendation to decline) — and
-the project it belongs to. The note is what Loop is told, so give it a verdict,
+the `docs/projects/` directory it belongs to. The note is what Loop is told, so give it a verdict,
 a `file:line`, and what would change the answer.
 
 **Never `decide`, `push` or `mine` unasked.** A decision dismisses the insight

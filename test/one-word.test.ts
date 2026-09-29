@@ -62,6 +62,7 @@ const ALLOWED: Allowed[] = [
   { file: "packages/cli/src/agent-guide.md", phrase: "projects the live site", why: "the verb" },
   { file: "packages/cli/src/agent-guide.md", phrase: "design project", why: "the verb: `design project <directory>`" },
   { file: "packages/cli/src/agent-guide.md", phrase: "|direction|project|reconcile|", why: "the verb `design project`, in the cold start's one-line index of the design family (#124)" },
+  { file: "packages/cli/src/agent-guide.md", phrase: "--project <docs/projects/ name", why: "the loop script's flag: it names a directory under docs/projects/" },
   { file: "packages/cli/src/agent-guide.md", phrase: "and `project` is", why: "the hidden alias of `isocan canvas`, named once among the older spellings so nothing teaches it (#124)" },
   { file: "README.md", phrase: "design project", why: "the verb: `design project <directory>`" },
   { file: "packages/cli/src/main.ts", phrase: "projects a live site", why: "the verb" },

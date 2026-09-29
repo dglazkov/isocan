@@ -1,4 +1,5 @@
 import { frontMatterFields } from "./docstatus.ts";
+import { titleSlug } from "./filenames.ts";
 import { splitFrontMatter } from "./persona.ts";
 
 /**
@@ -63,6 +64,7 @@ export interface LoopInsight {
   files: string[];
 }
 
+/** One insight of Loop's as this repo holds it: its claim, and OUR decision beside it. */
 export interface LoopFinding {
   slug: string;
   title: string;
@@ -108,6 +110,7 @@ const unquote = (v: string) => v.replace(/\\(["\\])/g, "$1");
 const quote = (v: string) => `"${v.replace(/\s+/g, " ").trim().replace(/[\\"]/g, "\\$&")}"`;
 const isDay = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
+/** A finding file read back: front matter through core's one reader, the body as written. */
 export function parseFinding(raw: string, slug: string): LoopFinding {
   const split = splitFrontMatter(raw);
   const kv = split ? frontMatterFields(split.front) : new Map<string, string>();
@@ -141,6 +144,7 @@ export function parseFinding(raw: string, slug: string): LoopFinding {
   };
 }
 
+/** A finding as the file it is: fields in a fixed order, so a diff shows what changed and not what moved. */
 export function serializeFinding(f: LoopFinding): string {
   const lines: string[] = [];
   for (const k of FIELDS) {
@@ -176,14 +180,14 @@ export function findingProblems(f: LoopFinding, projects?: readonly string[]): s
   return out;
 }
 
+/**
+ * A finding's filename stem from its title — core's one title-to-filename rule,
+ * cut at a word boundary so a slug never ends in half a word.
+ */
 export function slugify(title: string): string {
-  const full = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+  const full = titleSlug(title, { ascii: true });
   if (full.length <= 60) return full;
-  // Cut at a word boundary, so a slug never ends in half a word.
-  const cut = full.slice(0, 61);
+  const cut = titleSlug(title, { ascii: true, max: 61 });
   return cut.slice(0, cut.lastIndexOf("-")) || full.slice(0, 60);
 }
 
