@@ -233,15 +233,14 @@
     <span class="where" id="where">Waiting for Jetski to say which workspace this is…</span>
     <span class="spacer"></span>
     <button id="inbox-toggle" type="button" hidden aria-expanded="false" title="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
-    <button id="agents-toggle" type="button" hidden aria-expanded="true">Agents</button>
+    <button id="agents-toggle" type="button" hidden aria-expanded="true" title="They answer @mentions on the canvas while isocan rc runs on this machine.">Agents</button>
     <button id="reload" type="button" hidden title="Mint a fresh address and reload the canvas">Reload</button>
     <a id="open" href="#" target="_blank" rel="noopener" hidden title="The same canvas in a browser tab, with its own chat">Open ↗</a>
   </header>
 
   <div class="bar" id="agents" hidden>
-    <span class="muted">Agents:</span>
+    <span class="muted" id="agents-note" style="cursor: help" title="They answer @mentions on the canvas while isocan rc runs on this machine.">Agents:</span>
     <span id="presets" class="row" style="flex-wrap: wrap"></span>
-    <span class="muted" id="agents-note">They answer @mentions on the canvas while <code>isocan rc</code> runs on this machine.</span>
   </div>
 
   <div class="panel" id="inbox" hidden>
