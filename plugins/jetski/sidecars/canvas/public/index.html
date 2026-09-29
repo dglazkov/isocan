@@ -1063,13 +1063,9 @@
       syncAgentsToggle(false);
     });
     $("reload").addEventListener("click", () => {
-      framed = { canvasId: null, origin: null, ready: false };
-      skillsFor = null;
-      asksAt = 0;
-      pollFailures = 0;
       say("");
       sayAsk("");
-      void requeue();
+      location.reload();
     });
     $("status-dismiss").addEventListener("click", () => say(""));
     $("ask-send").addEventListener("click", ask);
