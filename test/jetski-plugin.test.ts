@@ -654,6 +654,38 @@ describe("the bundle", () => {
     }
   });
 
+  it("styles its pane with Jetski's 17 host theme tokens in both light and dark mode", () => {
+    const page = read("sidecars/canvas/public/index.html");
+    const hostTokens = new Set([
+      "--background",
+      "--content",
+      "--card",
+      "--secondary",
+      "--muted",
+      "--sidebar",
+      "--sidebar-secondary",
+      "--sidebar-muted",
+      "--foreground",
+      "--secondary-foreground",
+      "--muted-foreground",
+      "--primary-foreground",
+      "--placeholder",
+      "--primary",
+      "--accent",
+      "--border",
+      "--card-border",
+    ]);
+    for (const [, token] of page.matchAll(/var\((--[a-z0-9-]+)/g)) {
+      if (token.startsWith("--fallback-")) continue;
+      expect(hostTokens.has(token), `${token} is not a Jetski host theme token`).toBe(true);
+    }
+    expect(page).toContain("@media (prefers-color-scheme: dark)");
+    // `--accent` in Jetski is a solid brand blue, not a translucent tint;
+    // painting a menu option's background with it directly puts dark/muted text
+    // on solid blue.
+    expect(page).not.toMatch(/\.menu\s+\.opt\[aria-selected="true"\]\s*\{\s*background:\s*var\(--accent/);
+  });
+
   it("carries its own rule, and the collaboration skill as a doorway rather than a copy", () => {
     // A symlink here once pulled this repo's whole developer guide into every workspace.
     expect(fs.lstatSync(path.join(plugin, "rules", "AGENTS.md")).isFile()).toBe(true);

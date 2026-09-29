@@ -9,13 +9,35 @@
        and the page says so rather than pretending. -->
   <script src="/preload.js"></script>
   <style>
-    :root { color-scheme: light dark; }
+    :root {
+      color-scheme: light dark;
+      --fallback-bg: #fafafa;
+      --fallback-card: #ffffff;
+      --fallback-secondary: #f4f4f5;
+      --fallback-fg: #18181b;
+      --fallback-muted: #71717a;
+      --fallback-border: #d4d4d8;
+      --fallback-primary: #2563eb;
+      --fallback-primary-fg: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fallback-bg: #18181b;
+        --fallback-card: #202024;
+        --fallback-secondary: #27272a;
+        --fallback-fg: #f4f4f5;
+        --fallback-muted: #a1a1aa;
+        --fallback-border: #3f3f46;
+        --fallback-primary: #3b82f6;
+        --fallback-primary-fg: #ffffff;
+      }
+    }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; overflow: hidden; }
     body {
       font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--background, #fafafa);
-      color: var(--foreground, #222);
+      background: var(--background, var(--fallback-bg));
+      color: var(--foreground, var(--fallback-fg));
       display: flex;
       flex-direction: column;
     }
@@ -24,73 +46,169 @@
       align-items: center;
       gap: 6px;
       padding: 5px 8px;
-      border-bottom: 1px solid var(--border, #d4d4d8);
-      background: var(--card, transparent);
+      border-bottom: 1px solid var(--border, var(--fallback-border));
+      background: var(--card, var(--background, var(--fallback-card)));
+      color: var(--foreground, var(--fallback-fg));
       flex-wrap: wrap;
       flex-shrink: 0;
     }
     .where { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
-    .muted { color: var(--muted-foreground, #71717a); }
+    .muted { color: var(--muted-foreground, var(--fallback-muted)); }
     .spacer { flex: 1; }
     button, input {
       font: inherit;
-      color: inherit;
-      background: var(--secondary, transparent);
-      border: 1px solid var(--border, #d4d4d8);
+      color: var(--foreground, var(--fallback-fg));
+      background: var(--secondary, var(--fallback-secondary));
+      border: 1px solid var(--border, var(--fallback-border));
       border-radius: 6px;
       padding: 3px 8px;
     }
-    button { cursor: pointer; }
+    button { cursor: pointer; transition: background-color 0.12s ease, border-color 0.12s ease; }
+    button:hover:not(:disabled):not(.unavailable):not(.primary):not(.attached):not(.opt) {
+      background: color-mix(in srgb, var(--foreground, var(--fallback-fg)) 8%, var(--secondary, var(--fallback-secondary)));
+    }
     button:disabled { opacity: 0.5; cursor: default; }
-    button.primary { background: var(--primary, #2563eb); color: var(--primary-foreground, #fff); border-color: transparent; }
+    button.primary {
+      background: var(--primary, var(--fallback-primary));
+      color: var(--primary-foreground, var(--fallback-primary-fg));
+      border-color: transparent;
+    }
+    button.primary:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 88%, var(--foreground, #000));
+    }
     button.attached {
-      background: rgba(22, 163, 74, 0.14);
-      border-color: rgba(22, 163, 74, 0.6);
-      color: color-mix(in srgb, #22c55e 75%, var(--foreground, #222));
+      background: color-mix(in srgb, #22c55e 16%, var(--card, var(--background, var(--fallback-card))));
+      border-color: color-mix(in srgb, #22c55e 55%, var(--border, var(--fallback-border)));
+      color: color-mix(in srgb, #22c55e 60%, var(--foreground, var(--fallback-fg)));
+    }
+    button.attached:hover:not(:disabled) {
+      background: color-mix(in srgb, #22c55e 24%, var(--card, var(--background, var(--fallback-card))));
     }
     button.unavailable {
       opacity: 0.45;
       border-style: dashed;
       cursor: not-allowed;
     }
-    a { color: var(--primary, #2563eb); }
-    input { background: var(--background, #fff); min-width: 0; flex: 1; }
-    .chip { border-radius: 999px; padding: 2px 8px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .note { padding: 5px 8px; border-bottom: 1px solid var(--border, #d4d4d8); flex-shrink: 0; }
-    .warn { color: #b45309; }
-    .error { color: #dc2626; }
+    a { color: var(--primary, var(--fallback-primary)); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    input {
+      background: var(--background, var(--fallback-bg));
+      color: var(--foreground, var(--fallback-fg));
+      min-width: 0;
+      flex: 1;
+    }
+    input::placeholder { color: var(--placeholder, var(--muted-foreground, var(--fallback-muted))); }
+    input:focus-visible, select:focus-visible, button:focus-visible {
+      outline: 2px solid var(--primary, var(--fallback-primary));
+      outline-offset: -1px;
+    }
+    .chip {
+      border-radius: 999px;
+      padding: 2px 8px;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 14%, var(--card, var(--background, var(--fallback-card))));
+      border-color: color-mix(in srgb, var(--primary, var(--fallback-primary)) 40%, var(--border, var(--fallback-border)));
+    }
+    .note { padding: 5px 8px; border-bottom: 1px solid var(--border, var(--fallback-border)); flex-shrink: 0; }
+    .warn {
+      color: color-mix(in srgb, #d97706 75%, var(--foreground, var(--fallback-fg)));
+      background: color-mix(in srgb, #f59e0b 12%, var(--card, var(--background, var(--fallback-card))));
+    }
+    .error {
+      color: color-mix(in srgb, #ef4444 75%, var(--foreground, var(--fallback-fg)));
+      background: color-mix(in srgb, #ef4444 12%, var(--card, var(--background, var(--fallback-card))));
+    }
     [hidden] { display: none !important; }
     main { flex: 1; position: relative; min-height: 0; }
     iframe { width: 100%; height: 100%; border: 0; display: block; }
-    .card { max-width: 380px; margin: 48px auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .card {
+      max-width: 380px;
+      margin: 48px auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--card, var(--background, var(--fallback-card)));
+      border: 1px solid var(--card-border, var(--border, var(--fallback-border)));
+      border-radius: 8px;
+    }
     .card h2 { margin: 0; font-size: 14px; }
     .card p { margin: 0; }
     .row { display: flex; gap: 6px; }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-    select { font: inherit; color: inherit; background: var(--secondary, transparent); border: 1px solid var(--border, #d4d4d8); border-radius: 6px; padding: 2px 4px; max-width: 140px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      background: var(--muted, var(--secondary, var(--fallback-secondary)));
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    select {
+      font: inherit;
+      color: var(--foreground, var(--fallback-fg));
+      background: var(--secondary, var(--fallback-secondary));
+      border: 1px solid var(--border, var(--fallback-border));
+      border-radius: 6px;
+      padding: 2px 6px;
+      max-width: 140px;
+    }
+    select option {
+      background: var(--card, var(--background, var(--fallback-card)));
+      color: var(--foreground, var(--fallback-fg));
+    }
     .composer .field { position: relative; flex: 1; min-width: 160px; display: flex; }
     .composer .field input { width: 100%; }
     .starters { flex-basis: 100%; flex-wrap: wrap; }
     .starters:empty { display: none; }
-    .starter { border-radius: 999px; padding: 1px 8px; font-size: 11px; background: transparent; }
+    .starter {
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 11px;
+      background: var(--secondary, var(--fallback-secondary));
+      color: var(--secondary-foreground, var(--foreground, var(--fallback-fg)));
+    }
     .starter .muted { margin-left: 4px; }
     .menu {
       position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 10;
-      max-height: 240px; overflow: auto;
-      background: var(--popover, var(--background, #fff)); color: var(--popover-foreground, inherit);
-      border: 1px solid var(--border, #d4d4d8); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+      max-height: 240px; overflow: auto; padding: 3px;
+      background: var(--card, var(--background, var(--fallback-card)));
+      color: var(--foreground, var(--fallback-fg));
+      border: 1px solid var(--card-border, var(--border, var(--fallback-border)));
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
     }
-    .menu .opt { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; padding: 4px 8px; background: transparent; }
-    .menu .opt[aria-selected="true"] { background: var(--accent, rgba(37, 99, 235, 0.12)); }
-    .menu .opt b { font-weight: 600; }
-    .menu .opt .muted { display: block; font-size: 11px; }
-    .panel { border-bottom: 1px solid var(--border, #d4d4d8); max-height: 40%; overflow: auto; flex-shrink: 0; }
+    .menu .opt {
+      display: block; width: 100%; text-align: left;
+      border: 0; border-radius: 4px; padding: 5px 8px;
+      background: transparent;
+      color: var(--foreground, var(--fallback-fg));
+    }
+    .menu .opt:hover {
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 10%, var(--card, var(--background, var(--fallback-card))));
+    }
+    .menu .opt[aria-selected="true"] {
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 16%, var(--card, var(--background, var(--fallback-card))));
+    }
+    .menu .opt b { font-weight: 600; color: var(--foreground, var(--fallback-fg)); }
+    .menu .opt[aria-selected="true"] b { color: var(--primary, var(--fallback-primary)); }
+    .menu .opt .muted { display: block; font-size: 11px; color: var(--muted-foreground, var(--fallback-muted)); }
+    .panel {
+      border-bottom: 1px solid var(--border, var(--fallback-border));
+      background: var(--card, var(--background, var(--fallback-card)));
+      max-height: 40%; overflow: auto; flex-shrink: 0;
+    }
     .panel-head { padding: 4px 8px; }
-    .ask-row { display: flex; gap: 6px; align-items: flex-start; padding: 4px 8px; border-top: 1px solid var(--border, #d4d4d8); }
+    .ask-row { display: flex; gap: 6px; align-items: flex-start; padding: 4px 8px; border-top: 1px solid var(--border, var(--fallback-border)); }
     .ask-row .body { flex: 1; min-width: 0; }
     .ask-row .body p { margin: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
     button.small { padding: 1px 6px; font-size: 11px; }
-    .badge { background: #b45309; color: #fff; border-radius: 999px; padding: 0 5px; font-size: 10px; margin-left: 3px; }
+    .badge {
+      background: var(--primary, var(--fallback-primary));
+      color: var(--primary-foreground, var(--fallback-primary-fg));
+      border-radius: 999px; padding: 0 5px; font-size: 10px; margin-left: 3px;
+    }
   </style>
 </head>
 <body>
@@ -590,10 +708,15 @@
         desc.className = "muted";
         desc.textContent = `${s.description}${s.source && s.source !== "built-in" ? ` · ${s.source}` : ""}`;
         opt.append(head, desc);
+        opt.addEventListener("mouseenter", () => {
+          slashIndex = i;
+          for (const [idx, el] of [...menu.children].entries()) el.setAttribute("aria-selected", String(idx === i));
+        });
         opt.addEventListener("mousedown", (e) => { e.preventDefault(); takeSlash(s); });
         menu.append(opt);
       });
       menu.hidden = false;
+      menu.children[slashIndex]?.scrollIntoView?.({ block: "nearest" });
     }
     function takeSlash(s) {
       $("ask").value = `/${s.name} `;
