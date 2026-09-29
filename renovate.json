@@ -31,6 +31,13 @@
     "automerge": true,
     "automergeType": "pr"
   },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "groupName": "patch and minor updates",
+    "groupSlug": "patch-minor",
+    "automerge": true,
+    "automergeType": "pr"
+  },
   "packageRules": [
     {
       "description": "The workspace's own packages are source, not dependencies.",

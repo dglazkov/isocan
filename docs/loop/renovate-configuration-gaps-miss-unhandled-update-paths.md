@@ -4,11 +4,11 @@ loop: 171fb064-e617-4664-a784-1d836889d5fd
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "Dependencies healthy"
-decision: accepted
+decision: done
 rank: later
 project: new
 since: 2026-09-29
-note: "Partly true: release.mjs builds with esbuild target node22 (line 404) while engines say >=24, a string Renovate cannot see. A one-line fix to make with the next release.mjs change, not a config redesign."
+note: "Fixed on 29 Sep 2026: scripts/release.mjs now derives buildCliBundle's esbuild target from .nvmrc's major version, guarded by test/workflows.test.ts."
 ---
 
 # Renovate configuration gaps miss unhandled update paths

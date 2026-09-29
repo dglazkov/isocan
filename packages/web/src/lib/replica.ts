@@ -51,6 +51,14 @@ export interface StoredReplica {
   savedAt: string;
 }
 
+/** Small deterministic text content (such as an offline SVG drawing) staged alongside a queued write so its blob uploads before the operation on reconnect. */
+export interface StagedBlob {
+  blobHash: string;
+  mimeType: string;
+  filename: string;
+  text: string;
+}
+
 /** A write this tab made and the home has not confirmed. */
 export interface StoredWrite {
   /** The idempotency key, minted when the gesture happened and kept through
@@ -70,6 +78,8 @@ export interface StoredWrite {
   seq?: number;
   /** Writer-resolved effects are replayed verbatim while their ordered tail is still in flight. */
   accepted?: import("@isocan/core").OpEnvelope;
+  /** Staged text blob to upload before sending `op` when draining the offline queue. */
+  stagedBlob?: StagedBlob;
 }
 
 /**

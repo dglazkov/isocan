@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 8 accepted · 18 declined · 10 stale · 0 done · 0 not yet read.**
+**0 to decide · 5 accepted · 18 declined · 10 stale · 3 done · 0 not yet read.**
 
 ## Accepted, by project
 
@@ -25,16 +25,13 @@ workspace other people read.
 
 | Ours | Finding | Loop | Where | Why |
 | --- | --- | --- | --- | --- |
-| next | [Drawing creation awaits network blob upload](loop/drawing-creation-awaits-network-blob-upload.md) | P2 | [multiuser](projects/multiuser/) | Holds: addDrawing awaits uploadBlob (upload.ts:395) before item.add, so ink stalls offline while the add itself has a queued path. Local-first is a standing priority and this is a defect a person meets. Would close when blob uploads queue like the op, or a local hash stands in. |
 | later | [Remote calls bypass local canvas replicas](loop/remote-calls-bypass-local-canvas-replicas.md) | P2 | [multiuser](projects/multiuser/) | Partly true: the canvas list and homes lookup need the network, though colours and names already fall back to derived values. Small polish that serves the local-first priority; do it with the next offline pass. |
 
 ### new project
 
 | Ours | Finding | Loop | Where | Why |
 | --- | --- | --- | --- | --- |
-| next | [Vulnerable and outdated dependencies in workspace](loop/vulnerable-and-outdated-dependencies-in-workspace.md) | P2 | new project | Holds: npm audit on 28 Sep 2026 reports 7 vulnerabilities (1 high, 6 moderate), including fastify and fast-uri. Dependencies healthy is a standing priority, and most fix with npm audit fix. Also find out why the Renovate patch lane had not taken them. |
 | later | [Lack of agent proposal staging overlays](loop/lack-of-agent-proposal-staging-overlays.md) | P2 | new project | Partly true: an agent edit is one version and one undo, but nothing holds it back for approval first. That is the trust-battery idea in the vision, so keep it as work, and design it as a trust tier that asks before writing rather than an overlay. |
-| later | [Renovate configuration gaps miss unhandled update paths](loop/renovate-configuration-gaps-miss-unhandled-update-paths.md) | P2 | new project | Partly true: release.mjs builds with esbuild target node22 (line 404) while engines say >=24, a string Renovate cannot see. A one-line fix to make with the next release.mjs change, not a config redesign. |
 
 ### [wireframes](projects/wireframes/)
 
@@ -84,4 +81,12 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 | never | [Limited real-time spatial presence during agent co-design](loop/limited-real-time-spatial-presence-during-agent-co-design.md) | P2 | [design-competition](projects/design-competition/) | Stale: presence already broadcasts cursor, selection and item-anchored activity for agents, so live focus is visible today. Loop itself dismissed it. Reopen if a specific missing signal is named. |
 | never | [Missing spatial prompt pins for canvas edits](loop/missing-spatial-prompt-pins-for-canvas-edits.md) | P2 | [design-partner](projects/design-partner/) | Stale: annotations bind ink to a card sub-region, comment pins anchor to points, and request-protocol.md already captures ambient pins. A dedicated prompt pin would duplicate them. Reopen with a case they cannot express. |
 | never | [Canonical opwords mapping omits actor domain operations](loop/canonical-opwords-mapping-omits-actor-domain-operations.md) | P3 | [iso-api](projects/iso-api/) | Stale: actor.claim, setColor, setMark and join are home-scoped and never enter a canvas oplog, so no canvas feed shows them. Already resolved in Loop. Reopen if an actor op reaches canvas history. |
+
+## Done
+
+| Ours | Finding | Loop | Where | Why |
+| --- | --- | --- | --- | --- |
+| next | [Drawing creation awaits network blob upload](loop/drawing-creation-awaits-network-blob-upload.md) | P2 | [multiuser](projects/multiuser/) | Fixed on 29 Sep 2026: when uploadBlob fails offline in addDrawing, the SVG's SHA-256 is computed locally, staged in memory and on the StoredWrite in IndexedDB so the drawing renders immediately via blobUrl/readBlobText, and uploaded before postOp when drainQueue flushes on reconnect. |
+| next | [Vulnerable and outdated dependencies in workspace](loop/vulnerable-and-outdated-dependencies-in-workspace.md) | P2 | new project | Fixed on 29 Sep 2026: npm audit fix + bumped fastify (^5.12.5), undici (^7.30.0), vitest (^4.1.11) and transitive fast-uri; routed vulnerabilityAlerts into Renovate's daily patch-minor lane (note: the Mend Renovate GitHub App still needs to be enabled on dglazkov/isocan for renovate.json to run). |
+| later | [Renovate configuration gaps miss unhandled update paths](loop/renovate-configuration-gaps-miss-unhandled-update-paths.md) | P2 | new project | Fixed on 29 Sep 2026: scripts/release.mjs now derives buildCliBundle's esbuild target from .nvmrc's major version, guarded by test/workflows.test.ts. |
 

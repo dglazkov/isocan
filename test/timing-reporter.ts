@@ -1,4 +1,4 @@
-import type { Reporter } from "vitest/node";
+import type { Reporter, TestModule } from "vitest/node";
 import { filteredRun } from "./deep.ts";
 import { laneOf, record } from "./timings.ts";
 
@@ -25,28 +25,16 @@ export default class TimingReporter implements Reporter {
     this.started = Date.now();
   }
 
-  onFinished(files: { result?: { state?: string }; tasks?: unknown[] }[] = []): void {
+  onTestRunEnd(testModules: ReadonlyArray<TestModule> = []): void {
     try {
-      const tasks = (file: { tasks?: unknown[] }): number => {
-        let count = 0;
-        const walk = (list: unknown[]): void => {
-          for (const one of list) {
-            const task = one as { type?: string; tasks?: unknown[] };
-            if (task.tasks) walk(task.tasks);
-            else count += 1;
-          }
-        };
-        walk(file.tasks ?? []);
-        return count;
-      };
       record({
         at: new Date().toISOString(),
         lane: laneOf(),
         ...(process.env["VITEST_SHARD"] ? { shard: process.env["VITEST_SHARD"] } : {}),
         filtered: filteredRun(),
-        files: files.length,
-        tests: files.reduce((total, file) => total + tasks(file), 0),
-        failed: files.filter((file) => file.result?.state === "fail").length,
+        files: testModules.length,
+        tests: testModules.reduce((total, mod) => total + Array.from(mod.children.allTests()).length, 0),
+        failed: testModules.filter((mod) => !mod.ok()).length,
         ms: Date.now() - this.started,
       });
     } catch {
@@ -54,3 +42,4 @@ export default class TimingReporter implements Reporter {
     }
   }
 }
+

@@ -21,11 +21,17 @@ export class QueuedItemError extends Error {
 }
 
 /** Creation callers must not select a refused or still-queued item as a completed upload. */
-export async function sendCreatedItem(canvasId: string, actor: Actor, creation: Extract<Operation, { type: "item.add" }> & { originGroupMode?: "legacy" | "groups" }, group?: string): Promise<void> {
+export async function sendCreatedItem(
+  canvasId: string,
+  actor: Actor,
+  creation: Extract<Operation, { type: "item.add" }> & { originGroupMode?: "legacy" | "groups" },
+  group?: string,
+  options?: { allowQueued?: boolean; stagedBlob?: import("./replica.ts").StagedBlob },
+): Promise<void> {
   // Transport provenance is carried alongside placement while bytes are
   // prepared, but it is never part of the operation vocabulary or its log.
   const { originGroupMode, ...op } = creation;
-  const result = await sendEchoedResult(canvasId, actor, op, group, originGroupMode);
+  const result = await sendEchoedResult(canvasId, actor, op, group, originGroupMode, options?.stagedBlob);
   if (result.status === "refused") throw new Error(result.message || "This item could not be added.");
-  if (result.status === "queued") throw new QueuedItemError();
+  if (result.status === "queued" && !options?.allowQueued) throw new QueuedItemError();
 }

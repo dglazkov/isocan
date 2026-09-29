@@ -4,11 +4,11 @@ loop: b37633ef-b339-4f9d-ab62-c60294ded964
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "Fast everywhere, local-first"
-decision: accepted
+decision: done
 rank: next
 project: multiuser
 since: 2026-09-29
-note: "Holds: addDrawing awaits uploadBlob (upload.ts:395) before item.add, so ink stalls offline while the add itself has a queued path. Local-first is a standing priority and this is a defect a person meets. Would close when blob uploads queue like the op, or a local hash stands in."
+note: "Fixed on 29 Sep 2026: when uploadBlob fails offline in addDrawing, the SVG's SHA-256 is computed locally, staged in memory and on the StoredWrite in IndexedDB so the drawing renders immediately via blobUrl/readBlobText, and uploaded before postOp when drainQueue flushes on reconnect."
 ---
 
 # Drawing creation awaits network blob upload

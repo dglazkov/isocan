@@ -405,6 +405,7 @@ export async function buildCliBundle(out = root) {
   );
   const outdir = path.join(out, CLI_BUNDLE_DIR);
   const outfile = path.join(out, CLI_BUNDLE);
+  const nodeMajor = (await fs.readFile(path.join(root, ".nvmrc"), "utf8")).trim().split(".")[0];
   await fs.rm(outdir, { recursive: true, force: true });
   const common = {
     absWorkingDir: root,
@@ -413,7 +414,7 @@ export async function buildCliBundle(out = root) {
     splitting: true,
     platform: "node",
     format: "esm",
-    target: "node22",
+    target: `node${nodeMajor}`,
     external: CLI_BUNDLE_EXTERNAL,
     banner: { js: CJS_SHIM },
     loader: { ".md": "text" },

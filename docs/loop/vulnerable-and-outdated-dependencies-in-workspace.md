@@ -4,11 +4,11 @@ loop: 40437536-1c73-4210-80ec-83648e228170
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "Dependencies healthy"
-decision: accepted
+decision: done
 rank: next
 project: new
 since: 2026-09-29
-note: "Holds: npm audit on 28 Sep 2026 reports 7 vulnerabilities (1 high, 6 moderate), including fastify and fast-uri. Dependencies healthy is a standing priority, and most fix with npm audit fix. Also find out why the Renovate patch lane had not taken them."
+note: "Fixed on 29 Sep 2026: npm audit fix + bumped fastify (^5.12.5), undici (^7.30.0), vitest (^4.1.11) and transitive fast-uri; routed vulnerabilityAlerts into Renovate's daily patch-minor lane (note: the Mend Renovate GitHub App still needs to be enabled on dglazkov/isocan for renovate.json to run)."
 ---
 
 # Vulnerable and outdated dependencies in workspace

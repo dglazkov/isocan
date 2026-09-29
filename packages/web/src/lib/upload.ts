@@ -392,40 +392,61 @@ export async function addDrawing(
   const { drawingProperties } = await import("@isocan/core/colour");
   const born = drawingProperties(strokes);
   const blob = new Blob([svg], { type: DRAWING_MIME });
-  const upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);
+  let upload: { blobHash: string; size: number };
+  let stagedBlob: import("./replica.ts").StagedBlob | undefined;
+  try {
+    upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);
+  } catch (err) {
+    if (!(err instanceof Error && (err as { offline?: boolean }).offline === true)) throw err;
+    upload = await sha256OfText(svg);
+    stagedBlob = { blobHash: upload.blobHash, mimeType: DRAWING_MIME, filename: DRAWING_FILENAME, text: svg };
+  }
   const itemId = newItemId();
-  await sendCreatedItem(canvasId, actor, {
-    type: "item.add",
-        ...destination,
-    itemId,
-    version: {
-      id: newVersionId(),
-      blobHash: upload.blobHash,
-      mimeType: DRAWING_MIME,
-      filename: DRAWING_FILENAME,
-      size: upload.size,
-    },
-    width: bounds.maxX - bounds.minX,
-    height: bounds.maxY - bounds.minY,
-    // Not `chosen`: ink is where the pen drew it, meaningful by KIND rather
-    // than by gesture, and `positionIsMeaningful` keeps it there on that
-    // ground alone — including for every stroke logged before the flag.
-    placement: { x: bounds.minX, y: bounds.minY },
-    title: DRAWING_TITLE,
-    properties: target
-      ? {
-          ...born,
-          ...annotationProperties(
-            target.id,
-            regionOf(
-              { x: bounds.minX, y: bounds.minY, width: bounds.maxX - bounds.minX, height: bounds.maxY - bounds.minY },
-              target,
+  await sendCreatedItem(
+    canvasId,
+    actor,
+    {
+      type: "item.add",
+      ...destination,
+      itemId,
+      version: {
+        id: newVersionId(),
+        blobHash: upload.blobHash,
+        mimeType: DRAWING_MIME,
+        filename: DRAWING_FILENAME,
+        size: upload.size,
+      },
+      width: bounds.maxX - bounds.minX,
+      height: bounds.maxY - bounds.minY,
+      // Not `chosen`: ink is where the pen drew it, meaningful by KIND rather
+      // than by gesture, and `positionIsMeaningful` keeps it there on that
+      // ground alone — including for every stroke logged before the flag.
+      placement: { x: bounds.minX, y: bounds.minY },
+      title: DRAWING_TITLE,
+      properties: target
+        ? {
+            ...born,
+            ...annotationProperties(
+              target.id,
+              regionOf(
+                { x: bounds.minX, y: bounds.minY, width: bounds.maxX - bounds.minX, height: bounds.maxY - bounds.minY },
+                target,
+              ),
             ),
-          ),
-        }
-      : born,
-  });
+          }
+        : born,
+    },
+    undefined,
+    { allowQueued: true, ...(stagedBlob ? { stagedBlob } : {}) },
+  );
   return itemId;
+}
+
+async function sha256OfText(text: string): Promise<{ blobHash: string; size: number }> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const blobHash = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return { blobHash, size: bytes.byteLength };
 }
 
 /** Upload a file as a NEW VERSION of an existing item. */

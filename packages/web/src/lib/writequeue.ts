@@ -205,8 +205,17 @@ export function newWrite(
   op: Operation,
   group?: string,
   originGroupMode?: "legacy" | "groups",
+  stagedBlob?: import("./replica.ts").StagedBlob,
 ): QueuedWrite {
-  return { opId, actor, op, at: Date.now(), ...(group !== undefined ? { group } : {}), ...(originGroupMode ? { originGroupMode } : {}) };
+  return {
+    opId,
+    actor,
+    op,
+    at: Date.now(),
+    ...(group !== undefined ? { group } : {}),
+    ...(originGroupMode ? { originGroupMode } : {}),
+    ...(stagedBlob ? { stagedBlob } : {}),
+  };
 }
 
 /**
