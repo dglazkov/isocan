@@ -339,6 +339,11 @@ describe("the pane's routes for the tie", () => {
     expect(faces["usr_a"].conversationId).toBeUndefined();
     expect(faces["usr_b"]).toMatchObject({ conversationId: "conv-b", tier: "pro" });
     expect(state.tiers).toEqual(["flash_lite", "flash", "pro"]);
+
+    // After an in-frame reload where the host does not re-push `workspace-change`,
+    // `/api/workspace` still knows the folder from `conversationId`.
+    const reloaded = await routes["/api/workspace"]({ workspaceUris: [], conversationId: "conv-b" });
+    expect(reloaded).toMatchObject({ bound: true, canvasId: "prj_acme", workspace: acme });
   });
 });
 

@@ -28,6 +28,7 @@ import {
   handoffComment,
   newConversationArgs,
   projectIdOf,
+  readConversations,
   recordConversation,
   runAgentapi,
   skillMessage,
@@ -219,8 +220,19 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
   }
 
   function where(data) {
-    const paths = workspacePaths(data?.workspaceUris);
-    return { paths, binding: bindingFor(paths, home) };
+    let paths = workspacePaths(data?.workspaceUris);
+    const convId = text(data?.conversationId);
+    if (paths.length === 0 && convId) {
+      const known = readConversations(home)[convId];
+      if (known?.root) paths = [known.root];
+    }
+    const binding = bindingFor(paths, home);
+    if (binding && convId && Array.isArray(data?.workspaceUris) && data.workspaceUris.length > 0) {
+      try {
+        recordConversation(home, convId, { canvasId: binding.canvasId, title: binding.title ?? null, root: binding.root }, now());
+      } catch { /* best-effort cache */ }
+    }
+    return { paths, binding };
   }
 
   function bound(data) {
