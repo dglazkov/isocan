@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useCanvasCursor } from "../lib/wearscursor.ts";
-import { CURSOR_SIGNAL_MAX_LENGTH, cursorChipLabel, type Actor } from "@isocan/core";
+import { CURSOR_SIGNAL_MAX_LENGTH, cursorChipLabel, markOf, type Actor } from "@isocan/core";
 import { clearCursorSignal, commitCursorSignal, setCursorSignalText } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { useActorColor } from "../lib/colors.ts";
+import { useActorMarks } from "../lib/marks.ts";
 import { actorName } from "../lib/names.ts";
 import { ownCursorFits } from "../lib/owncursor.ts";
 
@@ -66,6 +67,7 @@ export function OwnCursor({ actor }: { actor: Actor }) {
    * go. Inside a component it is always the wrong one.
    */
   const color = useActorColor(actor.id);
+  const marks = useActorMarks();
   const cursorPath = useCanvasCursor();
   const shown = (tool === "select" && !commentMode) || editing;
 
@@ -149,6 +151,7 @@ export function OwnCursor({ actor }: { actor: Actor }) {
 
   if (!shown) return null;
   const label = cursorChipLabel(signal, actorName(actor));
+  const mark = markOf(marks, actor);
   return (
     <div className="own-cursor" ref={ref} aria-hidden={!editing} style={{ opacity: 0 }}>
       {/* Your own cursor wears the canvas's ground too — otherwise the one
@@ -189,7 +192,10 @@ export function OwnCursor({ actor }: { actor: Actor }) {
             <em>Esc</em>
           </span>
         ) : (
-          label
+          <span>
+            {mark && <b className="cursor-mark">{mark}</b>}
+            {label}
+          </span>
         )}
       </span>
     </div>

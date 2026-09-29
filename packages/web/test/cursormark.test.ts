@@ -35,18 +35,24 @@ describe("the mark somebody chose", () => {
 
 describe("the cursor chip", () => {
   const src = read("../src/components/CursorLayer.tsx");
+  const own = read("../src/components/OwnCursor.tsx");
 
-  it("wears the mark in front of the name", () => {
+  it("wears the mark in front of the name on the same line, on both remote and own cursors", () => {
     // A cursor is where somebody is identified at a glance, and it is the one
     // that moves — a glyph is easier to follow than a word is to read.
+    // `.cursor-chip` is `flex-direction: column` so the status `<em>` stacks
+    // below, which means the mark and name must share an inline `<span>` or
+    // flexbox stacks the emoji on a line above the name.
     expect(src).toContain("markOf(marks, session.actor)");
-    expect(src).toContain('<b className="cursor-mark">');
+    expect(src).toMatch(/<span>\s*\{mark && <b className="cursor-mark">\{mark\}<\/b>\}\s*\{name\}\s*<\/span>/);
+    expect(own).toContain("markOf(marks, actor)");
+    expect(own).toMatch(/<span>\s*\{mark && <b className="cursor-mark">\{mark\}<\/b>\}\s*\{label\}\s*<\/span>/);
   });
 
   it("asks for the raw mark, not the disc's fallback", () => {
     // `faceMark` here would render "D Dion".
     const chip = src.slice(src.indexOf("cursor-chip"));
-    expect(chip.slice(0, chip.indexOf("</span>"))).not.toContain("faceMark");
+    expect(chip).not.toContain("faceMark");
   });
 });
 

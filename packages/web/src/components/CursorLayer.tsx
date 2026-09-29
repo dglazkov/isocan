@@ -222,8 +222,10 @@ export function CursorLayer() {
               <path d={cursorPath} fill={color} strokeWidth="1" />
             </svg>
             <span className="cursor-chip" style={{ background: color }}>
-              {mark && <b className="cursor-mark">{mark}</b>}
-              {name}
+              <span>
+                {mark && <b className="cursor-mark">{mark}</b>}
+                {name}
+              </span>
               {line && <em>{line}</em>}
             </span>
           </div>
