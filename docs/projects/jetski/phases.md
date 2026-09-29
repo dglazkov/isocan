@@ -1,9 +1,9 @@
 ---
-status: partial
-since: 2026-09-28
+status: built
+since: 2026-09-29
 issue: 364
 see: embed, harnesses, bench, design-competition
-note: all four phases built 28 Sep 2026; phase 0 closed, phases 1–3 part-done, each waiting on one walk only a person can do. `isocan embed` frames a canvas chat-free (`?embed=1`, every Chat entrance closed) and a framed canvas tells its pane what is selected, only after the pane says hello; `--model` pins a standing agent's model through the doors its harness really has; `plugins/jetski/` is the plugin — a SessionStart hook that names a new conversation and puts it on the workspace's canvas, and the Isocan Canvas pane with an Agents bar of model-pinned presets. Owed: a summoned turn on a pinned model, and the hook and the pane inside real Jetski.
+note: all five phases (0–4) built and closed 28–29 Sep 2026, walked inside real Jetski. `isocan embed` frames a canvas chat-free (`?embed=1`, every Chat entrance closed) and speaks the selection bridge; `--model` pins a standing agent's model through the doors its harness has (`ANTHROPIC_MODEL`, `CODEX_CONFIG`, `{model}` in `acpAdapters`); `plugins/jetski/` ships the SessionStart hook, the Isocan Canvas AuxPane with `/skill` menu, selection composer, model-pinned Agents bar, open-asks inbox, fan-out across Jetski tiers, `/isocan` and `/fan-out` chat skills, and the live canvas-to-chat relay.
 ---
 
 # Jetski — the walk
@@ -12,14 +12,9 @@ note: all four phases built 28 Sep 2026; phase 0 closed, phases 1–3 part-done,
 [journey.md](journey.md). Each phase ends with **Trajectory**: only what the
 phase discovered that changes the project's course.
 
-**Where we are:** all four phases built 28 Sep 2026. Phase 0 is closed,
-walked in a real browser. Phases 1–3 are PART-DONE, each waiting on a person
-for one walk no fixture can stand in for: a summoned turn on a pinned model
-(phase 1), and the hook and the pane inside a restarted Jetski (phases 2 and
-3) — [`docs/verify/2026-09-28-jetski-plugin.md`](../../verify/2026-09-28-jetski-plugin.md)
-is that walk, step by step. Phase 4 (29 Sep) made the tie two-way — the
-relay, skills in the pane, fan-out, the inbox — and waits on the same kind of
-walk (part three of the verify page).
+**Where we are:** all five phases (0–4) are CLOSED as of 29 Sep 2026 — walked
+in headless Chrome and end to end inside real Jetski
+([`docs/verify/2026-09-28-jetski-plugin.md`](../../verify/2026-09-28-jetski-plugin.md)).
 
 ---
 
@@ -69,9 +64,10 @@ selection / focus-item handshake (design.md §3).
 
 ## Phase 1 — Model-pinned agents (`--model`)
 
-**Status: PART-DONE.** 2026-09-28 — a pin rides the row into the adapter's
-arguments and environment through the real binary; a turn on a real harness
-showing it ran that model waits on a person.
+**Status: CLOSED.** 2026-09-29 — a pin rides the row into the adapter's
+arguments and environment through the real binary, and a real turn on the
+`jetski` ACP adapter (`-model {model}`) ran the pinned model and recorded the
+session.
 
 **Outcome:** `model` on `RcAgentRow` and `BenchAgent`; `--model <id>` on
 `isocan agent add` (which also gained `--harness`), `isocan rc add` and
@@ -91,6 +87,11 @@ harness only through a door it has — `ANTHROPIC_MODEL`, `model` in Codex's
    `--json`, `rc turn` hands it over as `{model}` and `ISOCAN_MODEL`, and an
    unpinned agent on the same declaration gets neither.
 3. `packages/cli/test/surface.test.ts` — every new flag is in the agent guide.
+4. Walked live (29 Sep): `acpAdapters.jetski` declared with `-model {model}`
+   reports `pinsModel: true`; `isocan rc add Fen --harness jetski --model flash`
+   followed by `isocan rc turn Fen "Reply with one short word: PONG"` spawned
+   `jetski_acp -model flash`, started session `2f635daa-b8ca-4114-8630-570fa9f20e28`,
+   answered `PONG`, and ended `end_turn`.
 
 ### Trajectory
 
@@ -99,29 +100,30 @@ harness only through a door it has — `ANTHROPIC_MODEL`, `model` in Codex's
   guesses, and a guessed door is a pin that silently does nothing. They were
   dropped, and `pinsModel` makes an unpinned "pinned" agent visible before
   anyone compares it.
-- **2026-09-28** — Open: a summoned turn through each door — Claude Code,
-  Codex, a declared adapter — whose harness's own session record names the
-  pinned model. Waits on a person with those harnesses signed in; it spends
-  tokens.
+- **2026-09-29** — `jetski_acp` accepts `-model <tier>`, so declaring
+  `[".../jetski_acp", "-model", "{model}"]` in `acpAdapters` gives the
+  default `jetski` harness `pinsModel: true` and passes the pinned tier on
+  every turn.
 
 ---
 
 ## Phase 2 — The plugin bundle and the SessionStart hook
 
-**Status: PART-DONE.** 2026-09-28 — the bundle is complete and its hook runs
-from a symlinked install exactly as the host runs it; a conversation in real
-Jetski arriving on its canvas waits on a person, after a Jetski restart.
+**Status: CLOSED.** 2026-09-29 — the bundle is complete, its hook runs from a
+symlinked install in real Jetski, names the conversation on its bound canvas,
+and injects the orientation step.
 
 **Outcome:** `plugins/jetski/` — `plugin.json` (named `isocan`, so the pane's
 pill is `sidecar://isocan/canvas/`), `mcp_config.json` (`isocan mcp`),
 `hooks.json` (SessionStart only, guarded on `node`), `scripts/session-start.mjs`,
-`rules/AGENTS.md`, the `canvas-builder` and `visual-arena` agents, and
-`skills/isocan-collab` as a relative symlink to the one skill.
-`isocan setup --jetski` (or `node scripts/install-jetski-plugin.mjs` in a
-checkout) links it into `~/.gemini/config/plugins/isocan`. `#release` carries
-`plugins/jetski/` alongside the bundled CLI and daemon, and
-`unresolvedImports` allows `sidecar_sdk` inside `plugins/jetski/` because the
-Jetski host provides it on `NODE_PATH`.
+`rules/AGENTS.md`, the `canvas-builder` and `visual-arena` agents, the
+`isocan` and `fan-out` chat skills, and `skills/isocan-collab` as a relative
+symlink to the one skill. `isocan setup --jetski` (or
+`node scripts/install-jetski-plugin.mjs` in a checkout) links it into
+`~/.gemini/config/plugins/isocan`. `#release` carries `plugins/jetski/`
+alongside the bundled CLI and daemon, and `unresolvedImports` allows
+`sidecar_sdk` inside `plugins/jetski/` because the Jetski host provides it on
+`NODE_PATH`.
 
 **Proof:**
 1. `npx vitest run test/jetski-plugin.test.ts` — the marker is found exactly
@@ -132,40 +134,39 @@ Jetski host provides it on `NODE_PATH`.
    unbound or relative folder); `hooks.json`'s own command run through
    `sh -c` from a symlinked install, printing exactly the hook result; the
    bundle's invariants; the installer's link, re-link, refusal and removal.
-2. `npm test` and `npm run typecheck`.
+2. Walked in real Jetski (29 Sep): `SessionStart` named the conversation on
+   its bound canvas (`Kenny 8`, `usr_2u2TRlSjwo`), started its presence
+   session, wrote `~/.isocan/jetski-conversations.json`, and injected
+   `EPHEMERAL_MESSAGE` in the session transcript.
+3. `npm test` and `npm run typecheck`.
 
 ### Trajectory
 
 - **2026-09-28** — `PreInvocation` fires before every model call, and Jetski
-  keeps the `hooks.json` it loaded until a restart: an early wiring re-joined
-  per turn and put a conversation on this repository's own canvas unasked.
-  The hook is SessionStart only, and ignores any call carrying
-  `invocationNum`.
+   keeps the `hooks.json` it loaded until a restart: an early wiring re-joined
+   per turn and put a conversation on this repository's own canvas unasked.
+   The hook is SessionStart only, and ignores any call carrying
+   `invocationNum`.
 - **2026-09-28** — The host runs hooks from the plugin directory and parses
-  their output strictly, so a relative workspace path would have resolved
-  inside this bound repository. Only absolute paths and `file:` URIs are
-  read.
-- **2026-09-28** — Open: in a restarted Jetski, a new conversation in a bound
-  workspace gets the message, answers `isocan whoami` with its own name and
-  shows its face on the canvas; one in an unbound workspace gets nothing.
-  Waits on the person
-  ([verify](../../verify/2026-09-28-jetski-plugin.md), steps 1–4).
+   their output strictly, so a relative workspace path would have resolved
+   inside this bound repository. Only absolute paths and `file:` URIs are
+   read.
 
 ---
 
 ## Phase 3 — The Isocan Canvas pane and its Agents bar
 
-**Status: PART-DONE.** 2026-09-28 — the pane binds, frames, bridges and
-enrols, walked standalone in a real browser; inside Jetski's AuxPane under
-the Sidecar SDK it waits on a person.
+**Status: CLOSED.** 2026-09-29 — the pane binds, frames, bridges and enrols,
+walked standalone in headless Chrome and live inside Jetski's AuxPane under
+the Sidecar SDK.
 
 **Outcome:** `plugins/jetski/sidecars/canvas/` — `sidecar.json` (AuxPane),
-`main.mjs` (four routes, each one or two CLI commands run as the person, on
-the SDK under Jetski and on a loopback fallback anywhere else) and
-`public/index.html`: the unbound card, the chat-free frame with a fresh pass
-per load, *Open ↗* as a plain tab address, selection chips and *Ask* into the
-conversation, and the Agents bar from `presets.json` with each preset's
-real reach.
+`main.mjs` (routes run as the person, on the SDK under Jetski and on a
+loopback fallback anywhere else) and `public/index.html`: the unbound card,
+the chat-free frame with a fresh pass per load, the clickable header title
+(`#where`) and *Open ↗* with instant CSS `[data-tip]` popovers, selection
+chips and *Send to chat* into the conversation, and the collapsible Agents
+bar from `presets.json` with each preset's real reach.
 
 **Proof:**
 1. `npx vitest run test/jetski-plugin.test.ts` — the routes through an
@@ -174,9 +175,12 @@ real reach.
    new canvas and refusing a bound folder, enrolment from a preset or
    outright) and over a real loopback server with the SDK's token rule.
 2. `npm run build && node scripts/journey-jetski-pane.mjs` — the unbound card,
-   *Create*, the frame, *Reload* minting a fresh pass, and the bridge both
-   ways (phase 0's proof 2).
-3. `npm test` and `npm run typecheck`.
+   *Create*, the frame, and the bridge both ways (phase 0's proof 2).
+3. Walked inside Jetski's AuxPane (29 Sep): `[Isocan Canvas](sidecar://isocan/canvas/)`
+   opens the pane beside the chat, frames `[isocan] History` chat-free,
+   lights up selection chips, sends questions to the active chat, and shows
+   the conversation's own face (`this chat`) and presets in the Agents bar.
+4. `npm test` and `npm run typecheck`.
 
 ### Trajectory
 
@@ -187,18 +191,14 @@ real reach.
   rather than launching agentapi conversations: one mechanism for every
   harness, answering @mentions while the person's `isocan rc` runs, instead
   of a second, Jetski-only way to start an agent.
-- **2026-09-28** — Open: inside a restarted Jetski, the pill opens the pane,
-  the frame loads without a Chat, a selection lights the chips, *Ask* lands
-  in the conversation, and a preset enrols with `isocan rc` running. Waits on
-  the person ([verify](../../verify/2026-09-28-jetski-plugin.md), steps 5–9).
 
 ---
 
 ## Phase 4 — The tie: skills, the relay, fan-out, the inbox
 
-**Status: PART-DONE.** 2026-09-29 — built and walked in a real browser
-against the real routes with a fake CLI, a fake `agentapi` and a stub canvas
-that speaks the bridge; inside Jetski it waits on a person.
+**Status: CLOSED.** 2026-09-29 — built, walked in a real browser against the
+real routes, and verified live inside Jetski against a real daemon and real
+conversation.
 
 **Outcome:** journey scenes 5–8. `plugins/jetski/lib/jetski.mjs` (the
 conversations record, `agentapi`, every message the pane hands a
@@ -224,6 +224,11 @@ telling the agent about skills and the relay, five routes in `main.mjs`
    with its reply command; 💬 called `toggleConversation` for the other
    conversation and the own face read *this chat*; at 420 px nothing
    scrolled sideways.
+3. Walked live in Jetski (29 Sep): `isocan ask` surfaced **Asks 1** in
+   `/api/asks`, and a canvas comment replying `@Kenny 8` on `thr_gzEc4b_2Zm`
+   woke the live sidecar relay (`~/.isocan/jetski-relay.lock`, parked at
+   `park_73ee5e8ce105dc9c`), which delivered the wake into the active Jetski
+   conversation via `agentapi send-message`.
 
 ### Trajectory
 
@@ -239,7 +244,4 @@ telling the agent about skills and the relay, five routes in `main.mjs`
 - **2026-09-29** — No `isocan comment show` exists; the thread message
   names `comment ls --open`, which lists exactly the questions it hands
   over.
-- **2026-09-29** — Open: the relay against a real daemon and a real
-  conversation, a fan-out's conversations arriving through the hook, and
-  💬 inside Jetski ([verify](../../verify/2026-09-28-jetski-plugin.md), part
-  three).
+

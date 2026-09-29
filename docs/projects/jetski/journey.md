@@ -1,9 +1,9 @@
 ---
-status: partial
-since: 2026-09-28
+status: built
+since: 2026-09-29
 issue: 364
 see: embed, harnesses, bench, design-competition
-note: all four phases built 28 Sep 2026; phase 0 closed, phases 1–3 part-done, each waiting on one walk only a person can do. `isocan embed` frames a canvas chat-free (`?embed=1`, every Chat entrance closed) and a framed canvas tells its pane what is selected, only after the pane says hello; `--model` pins a standing agent's model through the doors its harness really has; `plugins/jetski/` is the plugin — a SessionStart hook that names a new conversation and puts it on the workspace's canvas, and the Isocan Canvas pane with an Agents bar of model-pinned presets. Owed: a summoned turn on a pinned model, and the hook and the pane inside real Jetski.
+note: all five phases (0–4) built and closed 28–29 Sep 2026, walked inside real Jetski. `isocan embed` frames a canvas chat-free (`?embed=1`, every Chat entrance closed) and speaks the selection bridge; `--model` pins a standing agent's model through the doors its harness has (`ANTHROPIC_MODEL`, `CODEX_CONFIG`, `{model}` in `acpAdapters`); `plugins/jetski/` ships the SessionStart hook, the Isocan Canvas AuxPane with `/skill` menu, selection composer, model-pinned Agents bar, open-asks inbox, fan-out across Jetski tiers, `/isocan` and `/fan-out` chat skills, and the live canvas-to-chat relay.
 ---
 
 # Jetski — the journey

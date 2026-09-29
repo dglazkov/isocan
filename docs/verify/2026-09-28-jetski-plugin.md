@@ -1,12 +1,12 @@
 # The isocan plugin, inside Jetski
 
-**Status: `unverified`.**
+**Status: `works` (walked 2026-09-29 in Jetski).**
 
 **What you need:** Jetski on a machine with `node` and the `isocan` CLI on its
 PATH (`npm i -g github:dglazkov/isocan#release`, or this repo's own
 `packages/cli/bin/isocan.js` on the PATH), and a throwaway folder. Fifteen
-minutes; steps 8–9 also need a harness signed in (Claude Code or Codex) and
-spend a few tokens.
+minutes; steps 8–9 also need a harness signed in (Claude Code, Codex, or the
+`jetski` ACP adapter) and spend a few tokens.
 
 **Why this page exists.** Everything below has automated proof up to the
 host's edge: the hook runs from a symlinked install exactly as `hooks.json`
@@ -14,7 +14,15 @@ says, the pane's routes run against the real CLI's shapes, and the pane was
 walked in headless Chrome against a real daemon (`scripts/journey-jetski-pane.mjs`).
 What no machine here can do is be Jetski: load the plugin, run the hook at
 the start of a real conversation, serve the pane through its Sidecar SDK in
-the AuxPane, and carry *Ask* into the chat. That is this walk.
+the AuxPane, and carry *Send to chat* into the chat. Walked end to end on
+29 Sep 2026 inside real Jetski: `SessionStart` injected `EPHEMERAL_MESSAGE`
+and named the conversation on its bound canvas, the AuxPane framed the canvas
+chat-free with selection chips and `/skill` menu, `/isocan` and `/fan-out`
+worked from chat, `isocan ask` surfaced **Asks 1** in `/api/asks`, a canvas
+reply mentioning `@<name>` was delivered into the live Jetski conversation by
+the sidecar relay (`~/.isocan/jetski-relay.lock`), and `rc add --model flash`
++ `rc turn` ran a real model-pinned turn through the `jetski` ACP adapter
+(`-model {model}`).
 
 ---
 
