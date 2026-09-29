@@ -135,3 +135,4 @@ export type * from "./design-partner.js";
 export type * from "./questionnaire.js";
 export type * from "./design-request.js";
 export type * from "./design-record.js";
+export * from "./loop.js";

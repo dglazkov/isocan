@@ -2083,7 +2083,7 @@ inputs, with no critical defects or source findings. Unsupported static limits
 remain visible in the final receipt. Older manual receipts retain their original
 semantics and are not retrospectively branded a completed shared review.
 
-<!-- topic: context | what an agent reads before it starts — the Chat, `context`, pins and exclusions, personal and group context, document status -->
+<!-- topic: context | what an agent reads before it starts — the Chat, `context`, pins and exclusions, personal and group context, document status, Loop findings -->
 
 ## The Chat
 
@@ -2299,6 +2299,35 @@ derived rather than kept.
 
 If you finish something a note describes, change its front matter and re-run
 the generator. CI checks the view is current.
+
+## Triaging Loop's findings
+
+Stitch Loop mines this repository for **insights** and files them in a shared
+workspace (pinned by `.stitch.json`). An insight is a claim, not a verdict: it
+is often stale, filed twice, or ranked by the wrong lights. So each one becomes
+a **finding**, a file in `docs/loop/` whose front matter holds the decision, and
+`docs/LOOP.md` plus the Loop counts on `docs/ROADMAP.md` are generated from
+those files. Same rule as the roadmap: the decision is written once, where it
+lives.
+
+    node scripts/loop.mjs pull        # fetch; new insights land as untriaged, nothing of ours is overwritten
+    node scripts/loop.mjs list -d untriaged
+    node scripts/loop.mjs propose <slug> --rank next --project <docs/projects/ name | new> \
+        --note "holds: one line, why" --read "what the code shows, with file:line"
+    node scripts/loop.mjs render --check   # CI: LOOP.md is current, every finding says why
+
+**`propose` is yours, `decide` is a person's.** When asked to look at Loop:
+pull, then for each untriaged finding open the files it cites and say whether
+the claim **holds**, is **partly true**, is **stale** (cite what fixed it) or is
+**by design** (cite the doc that decided it). Propose a rank — `now` (a defect
+people would hit), `next`, `later`, `never` (a recommendation to decline) — and
+the `docs/projects/` directory it belongs to. The note is what Loop is told, so give it a verdict,
+a `file:line`, and what would change the answer.
+
+**Never `decide`, `push` or `mine` unasked.** A decision dismisses the insight
+for everyone in the workspace, and all decisions go up as one context Loop reads
+while mining. `decide` pushes by default; `--no-push` records it locally.
+`push --dry-run` shows what would be sent. Nothing merely proposed is ever sent.
 
 <!-- topic: history | what happened — `timeline`, `activity`, `lens`, `history`, `at`, `recap`, `whatsnew` -->
 

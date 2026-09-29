@@ -44,6 +44,12 @@ interface DocStatus {
     issue?: number;
 }
 /**
+ * The `key: value` lines of a front matter block, quotes stripped. ONE reader:
+ * status, and the Loop findings beside it, both go through this, so two files
+ * that say the same thing in the same way are read the same way.
+ */
+export declare function frontMatterFields(front: string): Map<string, string>;
+/**
  * Read the front matter, or say there is none. A doc without it is not
  * malformed — it is untriaged, which is `open`, and the roadmap counts it.
  */
