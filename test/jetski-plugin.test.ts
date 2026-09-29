@@ -703,6 +703,10 @@ describe("the bundle", () => {
       expect(body).toMatch(/^name: \S+/m);
       expect(body).toMatch(/^description: \S+/m);
     }
+    const fanoutSkill = read(path.join("skills", "fan-out", "SKILL.md"));
+    expect(fanoutSkill.startsWith("---\n")).toBe(true);
+    expect(fanoutSkill).toMatch(/^name:\s*fan-out$/m);
+    expect(fanoutSkill).toContain('routes["/api/fanout"]');
   });
 
   it("names every preset agent as an agent, never after its model or vendor", () => {
