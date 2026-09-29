@@ -233,15 +233,14 @@
     <span class="where" id="where">Waiting for Jetski to say which workspace this is…</span>
     <span class="spacer"></span>
     <button id="inbox-toggle" type="button" hidden aria-expanded="false" title="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
-    <button id="agents-toggle" type="button" hidden aria-expanded="true">Agents</button>
+    <button id="agents-toggle" type="button" hidden aria-expanded="true" title="They answer @mentions on the canvas while isocan rc runs on this machine.">Agents</button>
     <button id="reload" type="button" hidden title="Mint a fresh address and reload the canvas">Reload</button>
     <a id="open" href="#" target="_blank" rel="noopener" hidden title="The same canvas in a browser tab, with its own chat">Open ↗</a>
   </header>
 
   <div class="bar" id="agents" hidden>
-    <span class="muted">Agents:</span>
+    <span class="muted" id="agents-note" style="cursor: help" title="They answer @mentions on the canvas while isocan rc runs on this machine.">Agents:</span>
     <span id="presets" class="row" style="flex-wrap: wrap"></span>
-    <span class="muted" id="agents-note">They answer @mentions on the canvas while <code>isocan rc</code> runs on this machine.</span>
   </div>
 
   <div class="panel" id="inbox" hidden>
@@ -639,9 +638,7 @@
         more.textContent = `+${items.length - 4}`;
         chips.append(more);
       }
-      $("ask").placeholder = items.length
-        ? `Send ${items.length === 1 ? "selection" : `these ${items.length} items`} to chat, run a /skill, or @hand off…`
-        : "Run a /skill, fan out, or send canvas context to chat…";
+      pickedStarter = "";
       renderTargets();
       renderStarters();
     }
@@ -661,6 +658,7 @@
       } catch (err) {
         say(err.message, "error");
       }
+      pickedStarter = "";
       renderStarters();
       return skills;
     }
@@ -722,56 +720,33 @@
       }
     }
 
-    /** The starters: what a person can do from here, shown before they
-     * type, so the pane teaches by offering. They change with the selection
-     * and with what is waiting. Each only fills the composer — nothing is
-     * sent until the person presses the button. */
+    /** Starter suggestions shown one at a time inside the input placeholder
+     * (instead of a second row of pills) to save vertical canvas space. */
     const PREFERRED_SKILLS = ["variation", "design-audit", "accessibility-audit", "tidy", "design-system", "grill-me"];
+    let pickedStarter = "";
     function renderStarters() {
       const list = $("starters");
-      list.replaceChildren();
-      if ($("ask").value.trim()) return;
-      const starter = (label, fill, hint = "") => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "starter";
-        b.textContent = label;
-        if (hint) b.title = hint;
-        b.addEventListener("click", () => {
-          $("ask").value = fill;
-          $("ask").focus();
-          renderTargets();
-          renderStarters();
-          if (fill.startsWith("/")) openSlash();
-        });
-        list.append(b);
-      };
+      if (list) list.replaceChildren();
       const have = new Set(skills.map((s) => s.name));
-      if (selection.length) {
-        starter("Build this in the repo", "Build the selected screen as real code in this workspace — match the repo's framework and conventions, and tell me which files you changed.", "Turns a canvas item into code in the folder this conversation has open");
-        for (const name of ["variation", "design-audit", "accessibility-audit"].filter((n) => have.has(n))) {
-          const s = skills.find((k) => k.name === name);
-          starter(`/${name}`, `/${name} `, s?.description);
-        }
-        starter("What's wrong with it?", "What would you change about this, and why? Be specific.");
-      } else {
-        starter("What's on this canvas?", "What is on this canvas right now, and what is still open on it?");
-        if ((openAsks.length) > 0) starter(`Answer ${openAsks.length} open question${openAsks.length === 1 ? "" : "s"}`, "Go through the questions agents left on the canvas that are waiting on me (`isocan comment ls --open`) and help me answer them one by one.");
-        starter("Put what we did here on the canvas", "Put what we just worked on in this chat on the canvas — the key screen, diagram or decision — as an item I can comment on.", "The other direction: from this conversation onto the canvas");
-        for (const name of PREFERRED_SKILLS.filter((n) => have.has(n) && n !== "variation" && !n.includes("audit")).slice(0, 2)) {
-          const s = skills.find((k) => k.name === name);
-          starter(`/${name}`, `/${name} `, s?.description);
-        }
+      const pool = selection.length
+        ? [
+            "Build this in the repo",
+            ...["variation", "design-audit", "accessibility-audit"].filter((n) => have.has(n)).map((n) => `/${n}`),
+            "What's wrong with it?",
+          ]
+        : [
+            "What's on this canvas?",
+            ...(openAsks.length > 0 ? [`Answer ${openAsks.length} open question${openAsks.length === 1 ? "" : "s"}`] : []),
+            "Put what we did here on the canvas",
+            ...PREFERRED_SKILLS.filter((n) => have.has(n) && n !== "variation" && !n.includes("audit")).slice(0, 2).map((n) => `/${n}`),
+          ];
+      if (!pickedStarter || !pool.includes(pickedStarter)) {
+        pickedStarter = pool[Math.floor(Math.random() * pool.length)] || "What's on this canvas?";
       }
-      if (skills.length) {
-        const all = document.createElement("button");
-        all.type = "button";
-        all.className = "starter";
-        all.innerHTML = `/ <span class="muted">${skills.length} skills</span>`;
-        all.title = "Every skill this canvas has — built in, and added with /skill add";
-        all.addEventListener("click", () => { $("ask").value = "/"; $("ask").focus(); renderTargets(); openSlash(); });
-        list.append(all);
-      }
+      const prefix = selection.length
+        ? `Send ${selection.length === 1 ? "selection" : `these ${selection.length} items`} to chat, /skill, or @hand off…`
+        : "Run a /skill, fan out, or send context to chat…";
+      $("ask").placeholder = `${prefix} e.g. ${pickedStarter}`;
     }
 
     // The `/` menu: filtered as you type, ↑/↓ to move, Enter or Tab to take.
