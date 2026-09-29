@@ -45,11 +45,15 @@ export function runAgentapi(args, { env = process.env, projectId = null, timeout
         const said = `${stderr ?? ""}`.trim().split("\n").slice(-2).join(" ").trim();
         return reject(new Error(`agentapi ${args[0]}: ${err.killed ? "timed out" : said || err.message}`));
       }
+      let out;
       try {
-        resolve(stdout.trim() ? JSON.parse(stdout) : {});
+        out = stdout.trim() ? JSON.parse(stdout) : {};
       } catch {
-        resolve({ raw: stdout.trim() });
+        return resolve({ raw: stdout.trim() });
       }
+      // agentapi can exit 0 and still say it failed, in the body.
+      if (out && typeof out.error === "string" && out.error) return reject(new Error(`agentapi ${args[0]}: ${out.error}`));
+      resolve(out);
     });
   });
 }
@@ -148,11 +152,24 @@ function pointedAt(canvas, items) {
     : `(On the isocan canvas ${canvasName(canvas)} — nothing selected. \`isocan ls\` lists what is on it.)`;
 }
 
-/** A plain question about the selection, or about the canvas. */
+/**
+ * A plain question about the selection, or about the canvas.
+ *
+ * `agentapi send-message` hands it over as a system message, not as the
+ * person's own chat turn, and a conversation in the middle of a task folds a
+ * bare sentence into what it was doing and never answers it (29 Sep: *How
+ * many screens are there?* disappeared into a busy turn). So it says who is
+ * asking and that it wants an answer here, before anything else.
+ */
 export function askMessage({ question, items, canvas }) {
   const typed = text(question) ?? (itemList(items) ? "Take a look at these and tell me what you think." : "What is on the canvas right now?");
-  return `${typed}\n\n${pointedAt(canvas, items)}`;
+  return `${ASKED}\n\n${typed}\n\n${pointedAt(canvas, items)}`;
 }
+
+/** The first line of everything the pane asks: who, from where, and that it
+ * wants an answer in this chat even when a task is under way. */
+export const ASKED =
+  "The person asked this from the Isocan Canvas pane beside this chat. Answer it here — if you are in the middle of something, answer it first, then carry on:";
 
 /**
  * A canvas skill, run by this conversation. The same words a comment would
@@ -166,6 +183,8 @@ export function skillMessage({ skill, args, items, canvas }) {
   const typed = text(args);
   return [
     `/${name}${typed ? ` ${typed}` : ""}`,
+    "",
+    ASKED,
     "",
     `This is the isocan canvas skill /${name}. Run \`isocan command show ${name}\` — the body it prints is your instructions for this turn; what I typed after the name outranks its defaults. Do the work on the canvas as yourself, then tell me here what you made and where.`,
     "",
@@ -192,6 +211,8 @@ export function threadMessage({ thread, canvas }) {
   const asker = text(thread.askerName) ?? "An agent";
   const body = text(thread.body) ?? "";
   return [
+    ASKED,
+    "",
     `${asker} is waiting on an answer on the isocan canvas ${canvasName(canvas)}:`,
     "",
     body ? `> ${body.replace(/\n/g, "\n> ")}` : "",
@@ -233,3 +254,42 @@ export function relayMessage({ woke, canvas, name }) {
     "Answer it ON THE CANVAS with `isocan comment reply <thread> \"…\"` — the person who wrote it is reading the canvas, not this chat. If it asks for work, do it, then reply there. You do not need to run `isocan wait`; the Isocan Canvas pane passes the next one on.",
   ].join("\n");
 }
+
+/**
+ * Turns a raw send/handoff/fanout failure into a sentence a person can act on
+ * from the composer, naming both what went wrong and what recovers it.
+ */
+export function friendlyAskError(err, target = "here") {
+  const raw = (typeof err === "string" ? err : err?.message) ?? "";
+  const msg = raw.trim() || "Something went wrong while sending";
+  const lower = msg.toLowerCase();
+  if (lower.includes("not attached to a conversation")) {
+    return "This pane isn't linked to an active chat yet — send a message in the chat column on the left to attach it, or switch the target menu to Fan out or an @agent.";
+  }
+  if (lower.includes("select an item")) {
+    return "Select an item on the canvas first — handing off to an @agent posts a comment thread pinned to the selected item.";
+  }
+  if (lower.includes("trajectory not found") || lower.includes("conversation not found")) {
+    return "Jetski couldn't find this chat's session — send a message in the chat column on the left to wake it, or use Fan out to start a fresh conversation.";
+  }
+  if (lower.includes("timed out")) {
+    return "Timed out waiting for Jetski to accept the message — the host may be busy. Click Retry to send again.";
+  }
+  if (lower.includes("unauthorized") || lower.includes("answered 401")) {
+    return "This pane's session token expired — click Reload in the top bar.";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("fetch failed")) {
+    return "Couldn't reach the pane server — click Retry, or click Reload in the top bar if the pane restarted.";
+  }
+  if (lower.includes("not bound to a canvas")) {
+    return "This workspace folder isn't bound to a canvas yet — bind or create one first.";
+  }
+  if (target.startsWith("agent:")) {
+    return `Couldn't post handoff comment on the canvas (${msg}). Check that the canvas daemon is reachable and click Retry.`;
+  }
+  if (target.startsWith("fan:")) {
+    return `Couldn't start fan-out conversations (${msg}). Click Retry to try again.`;
+  }
+  return `Couldn't send to this chat (${msg}). Click Retry, or paste your message into the chat column on the left.`;
+}
+
