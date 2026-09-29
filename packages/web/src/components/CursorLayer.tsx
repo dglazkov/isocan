@@ -4,9 +4,10 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { cursorChipLabel, markOf } from "@isocan/core";
+import { cursorChipLabel, markOf, type Actor } from "@isocan/core";
 import { useActorMarks } from "../lib/marks.ts";
-import { quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
+import { sessionName, useActorNames } from "../lib/names.ts";
+import { otherTabSessionIds, quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
 const LERP_HUMAN = 0.22; // real cursors track tightly
 const LERP_AGENT = 0.11; // CLI hops glide slower so they read as deliberate motion
@@ -31,9 +32,11 @@ interface Anim {
  * thinking pauses, and micro-stutter. The daemon only stores the fact of
  * working — every client animates it locally at 60fps with zero traffic.
  */
-export function CursorLayer() {
+export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
   const colors = useActorColors();
   const marks = useActorMarks();
+  const names = useActorNames();
+  const joined = useCanvasStore((s) => s.actorJoins);
   const sessions = useCanvasStore((s) => s.sessions);
   // The ground everybody on this canvas is standing on decides the shape
   // (#195). A selector rather than the whole canvas: this re-renders on every
@@ -46,6 +49,7 @@ export function CursorLayer() {
   const visible = sessions.filter(
     (session) => session.cursor !== null || session.activity !== null,
   );
+  const otherTabs = otherTabSessionIds(visible, actor, names, joined);
 
   useEffect(() => {
     if (visible.length === 0) return;
@@ -188,7 +192,7 @@ export function CursorLayer() {
         const pos = rec ?? fallback!;
         const screen = worldToScreen(viewport, pos.x, pos.y);
         const color = actorColorIn(colors, session.actor.id);
-        const name = cursorChipLabel(session.signal, session.label ?? session.actor.name);
+        const name = cursorChipLabel(session.signal, sessionName(names, session));
         /**
          * **The mark, in front of the name.**
          *
@@ -202,17 +206,22 @@ export function CursorLayer() {
          * the name is right there — "D Dion" would be the letter twice.
          */
         const mark = markOf(marks, session.actor);
-        // Say only what we know: the session's status if it has one, and
-        // for how long it has been quiet once it goes silent — a thinking
-        // agent must not look frozen, but we never invent a verb for it.
+        const otherTab = otherTabs.has(session.sessionId);
+        // Say only what we know: when another cursor shares your name (or a
+        // collaborator has a second tab open), say it is in another tab so it
+        // never reads as a stuck copy of the pointer in this viewport.
         const quiet = quietFor(session);
-        const line = [statusLine(session), quiet && `quiet ${quiet}`]
+        const line = [
+          otherTab && (session.kind === "web" ? "another tab" : "another session"),
+          statusLine(session),
+          quiet && `quiet ${quiet}`,
+        ]
           .filter(Boolean)
           .join(" · ");
         return (
           <div
             key={session.sessionId}
-            className={`remote-cursor${quiet ? " quiet" : ""}`}
+            className={`remote-cursor${quiet ? " quiet" : ""}${otherTab ? " other-tab" : ""}`}
             style={{ left: screen.x, top: screen.y }}
           >
             {/* The ground gives everybody the same shape and takes nobody's

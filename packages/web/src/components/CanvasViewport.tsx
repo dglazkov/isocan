@@ -1233,7 +1233,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}
       </Follows>
       <CommentLayer canvasId={canvasId} actor={actor} />
-      {!presentation && <CursorLayer />}
+      {!presentation && <CursorLayer actor={actor} />}
       <MarqueeRect />
       <GuideLines />
       {!presentation && <EdgeRadar canvasId={canvasId} />}

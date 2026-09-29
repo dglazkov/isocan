@@ -3574,6 +3574,10 @@ button.mt-card:hover { border-color: var(--accent); }
    presence rather than a crash. */
 .remote-cursor.quiet svg,
 .remote-cursor.quiet .cursor-chip { animation: cursor-breathe 2.6s ease-in-out infinite; }
+/* Another tab of the same person: ghosted with a dashed inner ring so a parked
+   cursor from a background browser tab never reads as a stuck local pointer. */
+.remote-cursor.other-tab { opacity: 0.62; }
+.remote-cursor.other-tab .cursor-chip { outline: 1px dashed var(--card); outline-offset: -2px; }
 @keyframes cursor-breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
