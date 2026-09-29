@@ -6,12 +6,21 @@ import { chatHiddenNow, embeddedNow } from "../src/lib/panels.ts";
 import { useCanvasStore } from "../src/stores/canvasStore.ts";
 import { useUiStore } from "../src/stores/uiStore.ts";
 
-// The bridge's reveal glides a camera this suite has no screen for; what is
-// under test is that it is asked for, and for which item.
+// The bridge's camera actions glide a viewport this suite has no screen for;
+// what is under test is that each one is asked for with the right arguments.
 const revealed = vi.hoisted(() => [] as string[]);
+const zoomedItems = vi.hoisted(() => [] as string[]);
+const cameraCalls = vi.hoisted(() => [] as Array<{ fn: string; args: unknown[] }>);
 vi.mock("../src/lib/zoomactions.ts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/lib/zoomactions.ts")>()),
   revealItem: (id: string) => revealed.push(id),
+  zoomToItem: (id: string) => zoomedItems.push(id),
+  zoomToFit: () => cameraCalls.push({ fn: "zoomToFit", args: [] }),
+  zoomTo100: () => cameraCalls.push({ fn: "zoomTo100", args: [] }),
+  zoomToSelection: () => cameraCalls.push({ fn: "zoomToSelection", args: [] }),
+  zoomBy: (factor: number) => cameraCalls.push({ fn: "zoomBy", args: [factor] }),
+  glideToPoint: (x: number, y: number) => cameraCalls.push({ fn: "glideToPoint", args: [x, y] }),
+  glideToBox: (box: unknown) => cameraCalls.push({ fn: "glideToBox", args: [box] }),
 }));
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
@@ -20,7 +29,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.resetModules();
   revealed.length = 0;
-  useUiStore.setState({ selectedItemIds: [] });
+  zoomedItems.length = 0;
+  cameraCalls.length = 0;
+  useUiStore.setState({ selectedItemIds: [], followSessionId: null, followingActorId: null, openThreadId: null });
 });
 
 /**
@@ -176,6 +187,65 @@ describe("the host bridge", () => {
     frame.send({ type: "isocan:focus-item", itemId: "it_card" }, HOST);
     expect(useUiStore.getState().selectedItemIds).toEqual(["it_card"]);
     expect(revealed).toEqual(["it_card"]);
+
+    frame.send({ type: "isocan:focus-item", itemId: "it_hero", zoom: true }, HOST);
+    expect(useUiStore.getState().selectedItemIds).toEqual(["it_hero"]);
+    expect(zoomedItems).toEqual(["it_hero"]);
+    stop();
+  });
+
+  it("drives camera, selection, follow, and threads from the verified host", () => {
+    useCanvasStore.setState({
+      canvas: {
+        ...canvas,
+        threads: {
+          th_card: { id: "th_card", anchorItemId: "it_card" },
+          th_free: { id: "th_free", x: 120, y: 240 },
+        },
+      },
+      sessions: [{ sessionId: "ses_scout", actorId: "usr_scout" }],
+    } as never);
+    const frame = framedWindow();
+    const stop = bridgeToHost("prj_acme", frame.win, true);
+    frame.send({ type: "isocan:hello" }, HOST);
+
+    frame.send({ type: "isocan:camera", action: "fit" }, HOST);
+    frame.send({ type: "isocan:camera", action: "100" }, HOST);
+    frame.send({ type: "isocan:camera", action: "selection" }, HOST);
+    frame.send({ type: "isocan:camera", action: "in", factor: 1.5 }, HOST);
+    frame.send({ type: "isocan:camera", action: "out" }, HOST);
+    frame.send({ type: "isocan:camera", action: "item", itemId: "it_hero" }, HOST);
+    frame.send({ type: "isocan:camera", action: "point", x: 40, y: -80 }, HOST);
+    frame.send({ type: "isocan:camera", action: "box", box: { minX: 0, minY: 0, maxX: 400, maxY: 300 } }, HOST);
+    expect(zoomedItems).toEqual(["it_hero"]);
+    expect(cameraCalls).toEqual([
+      { fn: "zoomToFit", args: [] },
+      { fn: "zoomTo100", args: [] },
+      { fn: "zoomToSelection", args: [] },
+      { fn: "zoomBy", args: [1.5] },
+      { fn: "zoomBy", args: [1 / 1.5] },
+      { fn: "glideToPoint", args: [40, -80] },
+      { fn: "glideToBox", args: [{ minX: 0, minY: 0, maxX: 400, maxY: 300 }] },
+    ]);
+
+    frame.send({ type: "isocan:select", itemIds: ["it_hero", "it_card", "it_missing"], zoom: true }, HOST);
+    expect(useUiStore.getState().selectedItemIds).toEqual(["it_hero", "it_card"]);
+    expect(cameraCalls.at(-1)).toEqual({ fn: "zoomToSelection", args: [] });
+
+    frame.send({ type: "isocan:follow", sessionId: "ses_scout", actorId: "usr_scout" }, HOST);
+    expect(useUiStore.getState().followSessionId).toBe("ses_scout");
+    expect(useUiStore.getState().followingActorId).toBe("usr_scout");
+    frame.send({ type: "isocan:follow", sessionId: null, actorId: null }, HOST);
+    expect(useUiStore.getState().followSessionId).toBeNull();
+    expect(useUiStore.getState().followingActorId).toBeNull();
+
+    frame.send({ type: "isocan:open-thread", threadId: "th_card", zoom: true }, HOST);
+    expect(useUiStore.getState().openThreadId).toBe("th_card");
+    expect(zoomedItems.at(-1)).toBe("it_card");
+
+    frame.send({ type: "isocan:open-thread", threadId: "th_free" }, HOST);
+    expect(useUiStore.getState().openThreadId).toBe("th_free");
+    expect(cameraCalls.at(-1)).toEqual({ fn: "glideToPoint", args: [120, 240] });
     stop();
   });
 

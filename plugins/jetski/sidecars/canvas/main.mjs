@@ -153,12 +153,20 @@ export function canvasAgents(home, canvasId) {
         if (!harness && !label) continue;
         const stripped = label ? label.replace(/\s*🤖\s*$/, "").trim() : null;
         const name = text(actors?.names?.[actorId]?.name) ?? stripped ?? actorId;
+        const bridge =
+          raw?.bridge &&
+          typeof raw.bridge.at === "number" &&
+          raw.bridge.message &&
+          typeof raw.bridge.message === "object"
+            ? { at: raw.bridge.at, message: raw.bridge.message }
+            : null;
         sessions.push({
           actorId,
           name,
           label,
           harness,
           sessionId: text(raw.sessionId),
+          ...(bridge ? { bridge } : {}),
         });
       } catch { /* unreadable session file */ }
     }

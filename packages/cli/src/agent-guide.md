@@ -614,15 +614,23 @@ that woke you, with no `session start` needed.
 
 ## Pointing to words together
 
-With a session started (`isocan session start`),
+With a session started (`isocan session start`), `isocan session point <item>`
+highlights an item under your cursor for 8 seconds; adding `--zoom` also glides
+a framed pane's camera to fill its viewport with that item. Camera-only cues work
+without naming an item: `session point --fit` (fit all), `--100` (100% zoom),
+`--selection` (fit current selection), `--in` / `--out` (step zoom), and
+`--follow` (follow your cursor in a framed pane). `session select <item> --zoom`,
+`session move <x> <y>`, and `session on <thread>` likewise forward their cue to a
+framed pane beside your conversation.
+
 `isocan session select <item> --quote "exact rendered words"` shares a text
 range in the current saved Markdown/plain-text version for 15 seconds, without
 editing it. For repeated words, use `--occurrence 2`; ambiguity is refused.
 `session select --clear` puts it down. `isocan --json who` includes the version,
 text space, range and expiry in each session's `textSelection`. Source markup
 is not a rendered quote: select `important`, not `**important**`.
-The browser's Read / select text button enters the same surface; selections
-never move another reader's viewport.
+The browser's Read / select text button enters the same surface; a standalone
+tab's viewport never moves unless a framed host pane asks it to.
 
 To leave a durable discussion, use
 `isocan comment add --item <item> --quote "exact rendered words" "feedback"`.

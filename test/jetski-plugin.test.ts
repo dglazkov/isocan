@@ -331,7 +331,15 @@ describe("the canvas pane's routes", () => {
       }),
     );
     fs.mkdirSync(path.join(home, "sessions"), { recursive: true });
-    fs.writeFileSync(path.join(home, "sessions", "usr_bot.json"), JSON.stringify({ canvasId: "prj_acme", sessionId: "ses_b1", label: "Acme Bot 🤖" }));
+    fs.writeFileSync(
+      path.join(home, "sessions", "usr_bot.json"),
+      JSON.stringify({
+        canvasId: "prj_acme",
+        sessionId: "ses_b1",
+        label: "Acme Bot 🤖",
+        bridge: { at: 42, message: { type: "isocan:focus-item", itemId: "it_hero", zoom: true } },
+      }),
+    );
     fs.writeFileSync(path.join(home, "sessions", "usr_human.json"), JSON.stringify({ canvasId: "prj_acme", sessionId: "ses_h1" }));
 
     const { run, calls } = fakeRun({ harness: JSON.stringify(SCAN) });
@@ -347,7 +355,16 @@ describe("the canvas pane's routes", () => {
       root: acme,
       cli: true,
       defaultHarness: "acme-agent",
-      sessions: [{ actorId: "usr_bot", name: "Acme Bot", label: "Acme Bot 🤖", harness: "antigravity", sessionId: "ses_b1" }],
+      sessions: [
+        {
+          actorId: "usr_bot",
+          name: "Acme Bot",
+          label: "Acme Bot 🤖",
+          harness: "antigravity",
+          sessionId: "ses_b1",
+          bridge: { at: 42, message: { type: "isocan:focus-item", itemId: "it_hero", zoom: true } },
+        },
+      ],
       enrolled: [
         { actorId: "usr_bram", name: "Bram", harness: "acme-agent", model: "barium" },
         { actorId: "usr_ada", name: "Ada", harness: "acme-agent", model: null },
@@ -622,7 +639,16 @@ describe("the bundle", () => {
   it("speaks the web client's bridge in the web client's words", () => {
     const page = read("sidecars/canvas/public/index.html");
     const bridge = fs.readFileSync(path.join(repo, "packages", "web", "src", "lib", "hostbridge.ts"), "utf8");
-    for (const type of ["isocan:ready", "isocan:hello", "isocan:selection", "isocan:focus-item"]) {
+    for (const type of [
+      "isocan:ready",
+      "isocan:hello",
+      "isocan:selection",
+      "isocan:focus-item",
+      "isocan:camera",
+      "isocan:select",
+      "isocan:follow",
+      "isocan:open-thread",
+    ]) {
       expect(page).toContain(type);
       expect(bridge).toContain(type);
     }

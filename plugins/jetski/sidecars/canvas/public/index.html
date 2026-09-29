@@ -126,7 +126,10 @@
     let uris = [];
     let state = null;
     /** The frame's canvas and the origin its messages must come from. */
-    let framed = { canvasId: null, origin: null };
+    let framed = { canvasId: null, origin: null, ready: false };
+    let pendingBridge = [];
+    const seenBridge = new Map();
+    let bridgeBootstrapped = false;
     let selection = [];
 
     // The host's first push arrives through both doors at the bottom, and a
@@ -172,6 +175,34 @@
       if (!framing) setSelection([]);
     }
 
+    function sendBridge(msg) {
+      if (!msg || typeof msg !== "object") return;
+      if (framed.origin && framed.ready) {
+        $("frame").contentWindow?.postMessage(msg, framed.origin);
+      } else {
+        pendingBridge.push(msg);
+      }
+    }
+
+    function syncBridgeCues(sessions) {
+      const now = Date.now();
+      for (const sess of sessions ?? []) {
+        const cue = sess?.bridge;
+        if (!cue || typeof cue.at !== "number" || !cue.message) continue;
+        const prev = seenBridge.get(sess.actorId) ?? 0;
+        if (!bridgeBootstrapped) {
+          seenBridge.set(sess.actorId, cue.at);
+          if (now - cue.at <= 15_000) sendBridge(cue.message);
+          continue;
+        }
+        if (cue.at > prev) {
+          seenBridge.set(sess.actorId, cue.at);
+          sendBridge(cue.message);
+        }
+      }
+      bridgeBootstrapped = true;
+    }
+
     async function refresh() {
       if (uris.length === 0) {
         state = null;
@@ -194,9 +225,11 @@
         : `${leaf(state.workspace)} · no canvas`;
       $("where").title = state.bound ? `${state.canvasId} — bound by ${state.root}/.isocan/project.json` : state.workspace || "";
       renderPresets();
+      syncBridgeCues(state.sessions);
       if (!state.cli) return show("nocli");
       if (!state.bound) {
-        framed = { canvasId: null, origin: null };
+        framed = { canvasId: null, origin: null, ready: false };
+        pendingBridge = [];
         $("frame").removeAttribute("src");
         $("unbound-folder").textContent = state.workspace;
         return show("unbound");
@@ -211,7 +244,7 @@
       say("Opening the canvas…");
       try {
         const embed = await api("/api/embed");
-        framed = { canvasId: state.canvasId, origin: new URL(embed.address).origin };
+        framed = { canvasId: state.canvasId, origin: new URL(embed.address).origin, ready: false };
         setSelection([]);
         $("frame").src = embed.address;
         $("open").href = embed.tab || embed.canvas;
@@ -255,9 +288,10 @@
         button.className = "attached";
         const kind = sess.harness === "antigravity" ? "Chat" : (sess.harness || "session");
         button.textContent = `● ${sess.name} · ${kind}`;
-        button.title = `Connected: ${sess.name} is active on this canvas right now (${sess.harness ? `${sess.harness} session` : "live session"}).`;
+        button.title = `Connected: ${sess.name} is active on this canvas right now (${sess.harness ? `${sess.harness} session` : "live session"}). Click to follow its cursor.`;
         button.addEventListener("click", () => {
-          say(`${sess.name} is connected to this canvas from your ${sess.harness === "antigravity" ? "Jetski chat" : (sess.harness || "CLI")} session. Click its avatar in the canvas top-right to jump to its cursor.`);
+          followAgent(sess.sessionId, sess.actorId);
+          say(`Following ${sess.name} (${sess.harness === "antigravity" ? "Jetski chat" : (sess.harness || "CLI")} session) — the camera tracks its cursor until you pan or zoom.`);
         });
         list.append(button);
       }
@@ -333,8 +367,8 @@
         chip.type = "button";
         chip.className = "chip";
         chip.textContent = item.title || item.id;
-        chip.title = `${item.id} — show it`;
-        chip.addEventListener("click", () => focusItem(item.id));
+        chip.title = `${item.id} — zoom to it`;
+        chip.addEventListener("click", () => focusItem(item.id, true));
         chips.append(chip);
       }
       if (items.length > 4) {
@@ -347,8 +381,24 @@
       $("ask-send").title = host?.conversationId ? "" : "This pane is not attached to a conversation";
     }
 
-    function focusItem(itemId) {
-      if (framed.origin) $("frame").contentWindow?.postMessage({ type: "isocan:focus-item", itemId }, framed.origin);
+    function focusItem(itemId, zoom = false) {
+      sendBridge({ type: "isocan:focus-item", itemId, zoom });
+    }
+
+    function camera(action, extra = {}) {
+      sendBridge({ type: "isocan:camera", action, ...extra });
+    }
+
+    function selectItems(itemIds, zoom = false) {
+      sendBridge({ type: "isocan:select", itemIds, zoom });
+    }
+
+    function followAgent(sessionId, actorId = null) {
+      sendBridge({ type: "isocan:follow", sessionId, actorId });
+    }
+
+    function openThread(threadId, zoom = false) {
+      sendBridge({ type: "isocan:open-thread", threadId, zoom });
     }
 
     async function ask() {
@@ -373,8 +423,13 @@
       if (!framed.origin || e.source !== frame.contentWindow || e.origin !== framed.origin) return;
       const data = e.data;
       if (!data || typeof data !== "object" || data.canvasId !== framed.canvasId) return;
-      if (data.type === "isocan:ready") frame.contentWindow.postMessage({ type: "isocan:hello" }, framed.origin);
-      else if (data.type === "isocan:selection" && Array.isArray(data.items)) setSelection(data.items);
+      if (data.type === "isocan:ready") {
+        framed.ready = true;
+        frame.contentWindow.postMessage({ type: "isocan:hello" }, framed.origin);
+        for (const msg of pendingBridge.splice(0)) frame.contentWindow.postMessage(msg, framed.origin);
+      } else if (data.type === "isocan:selection" && Array.isArray(data.items)) {
+        setSelection(data.items);
+      }
     });
 
     $("agents-toggle").addEventListener("click", () => {
@@ -383,7 +438,7 @@
       $("agents-toggle").setAttribute("aria-expanded", String(!agentsCollapsed));
     });
     $("reload").addEventListener("click", () => {
-      framed = { canvasId: null, origin: null };
+      framed = { canvasId: null, origin: null, ready: false };
       requeue();
     });
     $("ask-send").addEventListener("click", ask);
@@ -423,6 +478,10 @@
       host.onWorkspaceChange(setUris);
       host.getWorkspaceUris().then(setUris, () => setUris([]));
     }
+
+    setInterval(() => {
+      if (!document.hidden && uris.length > 0 && state?.bound) requeue();
+    }, 2000);
   </script>
 </body>
 </html>

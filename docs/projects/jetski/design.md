@@ -63,8 +63,8 @@ Chat's surfaces is not the same act as closing its entrances.
 ## 3. The host bridge
 
 `packages/web/src/lib/hostbridge.ts`, installed by `CanvasPage` and inert
-unless the page was opened with `?embed=1` and really is framed. Three
-messages, and the order is the security:
+unless the page was opened with `?embed=1` and really is framed. The handshake
+order is the security:
 
 1. The canvas posts `{ type: "isocan:ready", canvasId }` to its parent at `"*"`
    — nothing a framer did not already put in the address.
@@ -72,12 +72,30 @@ messages, and the order is the security:
    from is the only origin the canvas ever posts to. Until one arrives
    nothing is posted, and a parent whose origin is `"null"` is told nothing.
 3. From then on each selection change posts `{ type: "isocan:selection",
-   canvasId, items: [{ id, title, groupId }] }` to that origin, and
-   `{ type: "isocan:focus-item", itemId }` is obeyed only from that parent at
-   that origin, and only for an item on this canvas.
+   canvasId, items: [{ id, title, groupId }] }` to that origin, and inbound
+   commands are obeyed only from that parent at that origin:
+   - `{ type: "isocan:focus-item", itemId, zoom?: boolean }` — selects `itemId`
+     (if on this canvas) and either pans it into view (`revealItem`) or zooms
+     to fit it (`zoomToItem` when `zoom: true`).
+   - `{ type: "isocan:camera", action: "fit" | "100" | "selection" | "in" | "out" | "item" | "point" | "box", itemId?, x?, y?, box?, factor? }` —
+     drives the framed viewport (`zoomToFit`, `zoomTo100`, `zoomToSelection`,
+     `zoomBy`, `zoomToItem`, `panToWorld`, `fitWorldBox`).
+   - `{ type: "isocan:select", itemIds: string[], zoom?: boolean }` — sets the
+     canvas selection (filtering to items on this canvas, or clearing when
+     empty) and optionally zooms to fit the selection.
+   - `{ type: "isocan:follow", sessionId?: string | null, actorId?: string | null }` —
+     follows (or unfollows) a live session's cursor by `sessionId` or `actorId`.
+   - `{ type: "isocan:open-thread", threadId: string | null, zoom?: boolean }` —
+     opens (or closes) a comment thread and reveals or zooms to its anchor.
 
 The pane's half believes a message only when it comes from its own frame's
 window, from the origin the pass was minted at, about the canvas it framed.
+Every CLI `session` gesture (`session point <item> [--zoom|--fit|--100|--in|--out|--selection|--follow]`,
+`session select [item] [--zoom|--clear]`, `session move <x> <y>`,
+`session on <thread>`, and `session work <item>`) also records a
+`bridge: { at, message }` cue on `~/.isocan/sessions/<actorId>.json`, which
+`/api/workspace` surfaces on `state.sessions` and the pane forwards once per
+timestamp over `postMessage` to the framed canvas.
 
 ## 4. Model-pinned agents (`--model`)
 

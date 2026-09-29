@@ -672,6 +672,10 @@ interface SessionFile {
    * fetched has the thread in it. */
   onThread?: string;
   onThreadAt?: string;
+  /** Latest hostbridge command for a framed pane on this machine, stamped
+   * with `at` (ms) so the pane forwards each CLI-driven camera/focus move
+   * once. */
+  bridge?: { at: number; message: Record<string, unknown> };
 }
 
 async function readSessionFile(home: string, actorId: string): Promise<SessionFile | null> {
@@ -699,6 +703,21 @@ async function writeSessionFile(
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, JSON.stringify(session, null, 2));
   }
+}
+
+/** Record a hostbridge command on this actor's session file so a framing host
+ * pane on this machine can forward it to the embedded canvas. */
+async function touchBridge(
+  ctx: Ctx,
+  canvasId: string,
+  message: Record<string, unknown>,
+): Promise<void> {
+  const active = await readSessionFile(ctx.home, ctx.actor.id);
+  if (!active || active.canvasId !== canvasId) return;
+  await writeSessionFile(ctx.home, ctx.actor.id, {
+    ...active,
+    bridge: { at: Date.now(), message },
+  });
 }
 
 /** The active session for this canvas, or an error telling how to start one. */
@@ -11498,28 +11517,85 @@ session
     run(async (x: string, y: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
+      const wx = Number(x);
+      const wy = Number(y);
       await touchSession(ctx, p.id, {
-        cursor: { x: Number(x), y: Number(y) },
+        cursor: { x: wx, y: wy },
         activity: null,
       });
+      await touchBridge(ctx, p.id, { type: "isocan:camera", action: "point", x: wx, y: wy });
       console.log(`cursor at ${x},${y}`);
     }),
   );
 
 session
-  .command("point <item>")
-  .description("Move your cursor to an item")
+  .command("point [item]")
+  .description("Move your cursor to an item (and optionally zoom/fit a framed canvas pane)")
+  .option("-z, --zoom", "zoom a framed canvas pane to fit this item")
+  .option("--fit", "zoom a framed canvas pane to fit the entire canvas")
+  .option("--100", "snap a framed canvas pane to 100% zoom")
+  .option("--in", "zoom in on a framed canvas pane")
+  .option("--out", "zoom out on a framed canvas pane")
+  .option("--selection", "zoom a framed canvas pane to fit the current selection")
+  .option("--follow", "follow this session's cursor in a framed canvas pane")
   .action(
-    run(async (ref: string, _opts: unknown, cmd: Command) => {
-      const ctx = await ctxOf(cmd);
-      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const item = resolveItem(snapshot, ref);
-      await touchSession(ctx, p.id, {
-        cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
-        activity: null,
-      });
-      console.log(`pointing at ${item.id}`);
-    }),
+    run(
+      async (
+        ref: string | undefined,
+        opts: {
+          zoom?: boolean;
+          fit?: boolean;
+          100?: boolean;
+          in?: boolean;
+          out?: boolean;
+          selection?: boolean;
+          follow?: boolean;
+        },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        if (ref) {
+          const item = resolveItem(snapshot, ref);
+          await touchSession(ctx, p.id, {
+            cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
+            selection: [item.id],
+            activity: null,
+          });
+          await touchBridge(ctx, p.id, {
+            type: "isocan:focus-item",
+            itemId: item.id,
+            zoom: Boolean(opts.zoom),
+          });
+          console.log(`pointing at ${item.id}${opts.zoom ? " (zoomed)" : ""}`);
+          return;
+        }
+        const active = await requireSession(ctx, p.id);
+        if (opts.follow) {
+          await touchBridge(ctx, p.id, {
+            type: "isocan:follow",
+            sessionId: active.sessionId,
+            actorId: ctx.actor.id,
+          });
+          console.log(`following session ${active.sessionId}`);
+          return;
+        }
+        const action = opts.fit
+          ? "fit"
+          : opts[100]
+            ? "100"
+            : opts.selection
+              ? "selection"
+              : opts.in
+                ? "in"
+                : opts.out
+                  ? "out"
+                  : null;
+        if (!action) throw new Error("pass an <item> or one of --fit, --100, --in, --out, --selection, --follow");
+        await touchBridge(ctx, p.id, { type: "isocan:camera", action });
+        console.log(`camera: ${action}`);
+      },
+    ),
   );
 
 session
@@ -11527,19 +11603,30 @@ session
   .description("Point to a quote in saved Markdown/plain text for 15 seconds; --clear puts it down")
   .option("--quote <text>", "exact rendered words, not Markdown source syntax")
   .option("--occurrence <number>", "which matching passage, counted from 1")
+  .option("-z, --zoom", "zoom a framed canvas pane to fit the selected item")
   .option("--clear", "clear your shared text selection")
-  .action(run(async (ref: string | undefined, opts: { quote?: string; occurrence?: string; clear?: boolean }, cmd: Command) => {
+  .action(run(async (ref: string | undefined, opts: { quote?: string; occurrence?: string; zoom?: boolean; clear?: boolean }, cmd: Command) => {
     const ctx = await ctxOf(cmd);
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-    if (opts.clear) { await touchSession(ctx, p.id, { textSelection: null }); return console.log("text selection cleared"); }
-    if (!ref || !opts.quote) throw new Error("pass an item and --quote, or --clear");
+    if (opts.clear) {
+      await touchSession(ctx, p.id, { textSelection: null, selection: [] });
+      await touchBridge(ctx, p.id, { type: "isocan:select", itemIds: [] });
+      return console.log("text selection cleared");
+    }
+    if (!ref) throw new Error("pass an item and --quote, or --clear");
     const item = resolveItem(snapshot, ref);
+    if (!opts.quote) {
+      await touchSession(ctx, p.id, { selection: [item.id] });
+      await touchBridge(ctx, p.id, { type: "isocan:select", itemIds: [item.id], zoom: Boolean(opts.zoom) });
+      return console.log(`selected ${item.id}`);
+    }
     const doc = await readCommentDocument(ctx, p.id, item);
     const { TEXT_ATTENTION_MS } = await import("@isocan/core");
     const range = quoteRange(doc.text, opts.quote, opts.occurrence === undefined ? undefined : Number(opts.occurrence));
     const textSelection = { itemId: item.id, versionId: doc.versionId, blobHash: doc.blobHash,
       textSpace: "markdown-hast-v1" as const, flavor: doc.flavor, ...range, expiresAt: Date.now() + TEXT_ATTENTION_MS };
     await touchSession(ctx, p.id, { textSelection, selection: [item.id] });
+    await touchBridge(ctx, p.id, { type: "isocan:select", itemIds: [item.id], zoom: Boolean(opts.zoom) });
     if (ctx.json) return printJson(textSelection);
     console.log(`selecting “${opts.quote}” on ${item.title} for 15 seconds`);
   }));
@@ -11562,6 +11649,7 @@ session
         cursor: threadLocus(snapshot, thread),
         ...(opts.say ? { status: opts.say, statusSource: "explicit" as const } : {}),
       });
+      await touchBridge(ctx, p.id, { type: "isocan:open-thread", threadId: thread.id });
       console.error(
         `on ${thread.id}${opts.say ? ` — "${opts.say}"` : ""} (posting a reply clears it)`,
       );
@@ -11581,22 +11669,26 @@ session
       let activity: import("@isocan/core").PresenceActivity;
       let cursor: { x: number; y: number };
       let where: string;
+      let bridgeMsg: Record<string, unknown>;
       if (ref) {
         const item = resolveItem(snapshot, ref);
         activity = { kind: "working", itemId: item.id };
         cursor = { x: item.x + item.width / 2, y: item.y + item.height / 2 };
         where = item.id;
+        bridgeMsg = { type: "isocan:focus-item", itemId: item.id };
       } else {
         const point = parseXY(opts.at!);
         activity = { kind: "working", ...point };
         cursor = point;
         where = opts.at!;
+        bridgeMsg = { type: "isocan:camera", action: "point", x: point.x, y: point.y };
       }
       await touchSession(ctx, p.id, {
         activity,
         cursor,
         ...(opts.say !== undefined ? { status: opts.say } : {}),
       });
+      await touchBridge(ctx, p.id, bridgeMsg);
       console.log(`working on ${where}${opts.say ? ` — ${opts.say}` : ""}`);
     }),
   );
