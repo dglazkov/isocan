@@ -71,3 +71,8 @@ vitest.config.ts
 # home image. `test/dockerignore.test.ts`
 # holds every `scripts/` under packages/ to this line.
 packages/**/scripts
+
+# The Jetski plugin is loaded by Jetski from a clone of the repo, never by a
+# home. Its hook and its pane's server are dev tools like the scripts above,
+# and a change to them should not rebuild the image.
+plugins

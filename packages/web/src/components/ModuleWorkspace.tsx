@@ -23,7 +23,7 @@ import { fetchBlobText } from "../lib/blobtext.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { stopGlide, shiftCamera, glideToBox } from "../lib/zoomactions.ts";
 import { undo, redo } from "../lib/api.ts";
-import { openPanel } from "../lib/panels.ts";
+import { chatHiddenNow, openPanel } from "../lib/panels.ts";
 import { crossesCover, isTyping } from "../lib/keys.ts";
 import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { CanvasPresentation, activatePresentation } from "../lib/canvasPresentation.ts";
@@ -293,14 +293,17 @@ export function ModuleWorkspaceView({
           <b>{workspace?.label ?? segment}</b>
           <span className="module-page-hint">{workspace?.hint}</span>
           <span className="module-workspace-history">
-            <button
-              aria-pressed={chatOpen}
-              onClick={() =>
-                openPanel(canvasId, chatOpen ? null : "main", false)
-              }
-            >
-              Chat
-            </button>
+            {/* Not inside a pane that hides the Chat (`?embed=1`): nothing to open. */}
+            {!chatHiddenNow() && (
+              <button
+                aria-pressed={chatOpen}
+                onClick={() =>
+                  openPanel(canvasId, chatOpen ? null : "main", false)
+                }
+              >
+                Chat
+              </button>
+            )}
             <button
               aria-pressed={agentsOpen}
               onClick={() =>

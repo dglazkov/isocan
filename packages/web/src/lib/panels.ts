@@ -1,6 +1,37 @@
+import { isEmbedded, isEmbeddedChatHidden } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { RAIL_PAN_MS, panForDockChange } from "./railpan.ts";
 import { dockStateNow } from "./stage.ts";
+
+/**
+ * The query string this window was LOADED with, read on first ask and kept.
+ * Being framed is a fact about how the host opened the window, not about the
+ * route: the app's own navigation (`/i/<item>`, `/w`) drops the query, and
+ * the Chat dock must not come back — nor the host bridge go quiet — the
+ * moment somebody opens an item full screen inside the pane.
+ */
+let loadedSearch: string | undefined;
+function searchAtLoad(): string {
+  loadedSearch ??= typeof window !== "undefined" ? window.location.search : "";
+  return loadedSearch;
+}
+
+/**
+ * Whether a host pane framed this window (`?embed=1`,
+ * `docs/projects/jetski/design.md`) — the gate on the host bridge.
+ */
+export function embeddedNow(search = searchAtLoad()): boolean {
+  return isEmbedded(search);
+}
+
+/**
+ * Whether this window keeps its own Chat dock off because the host pane that
+ * framed it already owns the conversation column (`?embed=1` without
+ * `chat=on`).
+ */
+export function chatHiddenNow(search = searchAtLoad()): boolean {
+  return isEmbeddedChatHidden(search);
+}
 
 /**
  * The left dock holds one panel at a time — the main thread or the files —
@@ -44,22 +75,29 @@ export function setRailWidth(width: number): void {
  * canvas sideways on every single load, and twice as far on the second one.
  * It is a parameter rather than a check inside here because "is this the
  * first render" is not a thing this function can honestly know.
+ *
+ * Inside a pane that hides the Chat (`chatHiddenNow`), asking for `"main"`
+ * closes the dock instead, and is NOT remembered: nobody chose "closed", and
+ * a stored one would outlive the pane — into the person's own tabs, in any
+ * browser that does not partition a frame's storage.
  */
 export function openPanel(canvasId: string, panel: Panel | null, pan = true, remember = true): void {
-  if (remember) for (const which of ["main", "files", "agents", "context", "personas"] as const) {
+  const folded = panel === "main" && chatHiddenNow();
+  const next = folded ? null : panel;
+  if (remember && !folded) for (const which of ["main", "files", "agents", "context", "personas"] as const) {
     try {
-      localStorage.setItem(KEY[which](canvasId), panel === which ? "open" : "closed");
+      localStorage.setItem(KEY[which](canvasId), next === which ? "open" : "closed");
     } catch {
       // Private mode — the panels still work, they just forget.
     }
   }
   const before = dockStateNow();
   const ui = useUiStore.getState();
-  ui.setMainPanelOpen(panel === "main");
-  ui.setFilesPanelOpen(panel === "files");
-  ui.setAgentsPanelOpen(panel === "agents");
-  ui.setContextPanelOpen(panel === "context");
-  ui.setPersonasPanelOpen(panel === "personas");
+  ui.setMainPanelOpen(next === "main");
+  ui.setFilesPanelOpen(next === "files");
+  ui.setAgentsPanelOpen(next === "agents");
+  ui.setContextPanelOpen(next === "context");
+  ui.setPersonasPanelOpen(next === "personas");
   if (pan) panForDockChange(before, RAIL_PAN_MS);
 }
 

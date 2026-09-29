@@ -2514,12 +2514,20 @@ canvas, or a list of agent names/ids and canvas ids that announce.
 
 Which harness a summoned agent runs in is the enrolment's `--harness`
 (claude-code, pi, codex and antigravity are known; `~/.isocan/config.json`'s `acpAdapters`
-declares others), and an agent enrolled with none named runs on the
-machine's default: the only runnable harness, or the one picked with
-`isocan rc --default-harness <name>`. `isocan harness` lists what this
-machine can run and which is the default (`--json` adds a `runnable`
-field) — the thing to read before presenting the choice to a person, and
-the thing to tell them when a summons fails for want of one.
+declares others), and `--model <id>` on `isocan agent add`, `isocan rc add` or
+`isocan bench add` pins its model, spelled the way that harness spells it. The
+id always rides `ISOCAN_MODEL`; it reaches the harness itself only through a
+door it has — Claude Code's `ANTHROPIC_MODEL`, `model` in Codex's
+`CODEX_CONFIG`, or `{model}` in a declared `acpAdapters` entry's arguments
+(left out, with the flag before it, when no model is pinned). Anything else
+runs its own default whatever the row says, so say which specialists are
+really pinned before comparing them. An agent enrolled with no harness
+named runs on the machine's default: the only runnable harness, or the one
+picked with `isocan rc --default-harness <name>`. `isocan harness` lists
+what this machine can run, which is the default, and whether a pin reaches
+each (`--json` adds `runnable` and `pinsModel` fields) — the thing to read
+before presenting the choice to a person, and the thing to tell them when a
+summons fails for want of one.
 
 A summoned session's environment is a list, not the person's shell: what a
 process needs, `ISOCAN_*`, and each vendor's own namespace (`ANTHROPIC_*`,
@@ -3416,7 +3424,8 @@ this canvas. It is not the address, and the difference is the whole point:
 isocan pass               # the whole command to paste on the other machine
 isocan pass --admit-only  # admit it, but hand over no identity
 isocan pass --agent Percy # an address that arrives as Percy, for his new host
-isocan embed              # the address to paste into a pane or an IDE panel
+isocan embed              # the address to paste into a pane or an IDE panel (chat-free by default)
+isocan embed --chat       # keep the canvas's own Chat dock inside the pane
 isocan embed --admit-only # let the window in, but hand it no identity
 ```
 
@@ -3426,7 +3435,9 @@ If the person you are working with is in an agent manager or an IDE — you are
 in one, so they may well be — they can watch this canvas in a pane next to
 your conversation rather than in a window of its own. `isocan embed` is the
 address for that, and it is worth offering unprompted the first time you make
-something worth looking at.
+something worth looking at. The pane opens without the canvas's own Chat,
+because the conversation beside it is where the two of you talk;
+`isocan embed --chat` keeps it, for a pane that is not beside a conversation.
 
 Two things to say when you hand it over, because both will otherwise look like
 bugs. **It admits the window once**, within the pass's few minutes; after it

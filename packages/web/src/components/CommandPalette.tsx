@@ -6,6 +6,7 @@ import { ago, groupSwitchRows, isShelved, keyFor, litRuns, rankCanvases, type Sh
 import { useUiStore, type PaletteMode } from "../stores/uiStore.ts";
 import { useCommands } from "../lib/commands.ts";
 import { availableActions, type Action, type ActionContext } from "../lib/actions.ts";
+import { chatHiddenNow } from "../lib/panels.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { listCanvases, listSpaces } from "../lib/api.ts";
 import { readRecents } from "../lib/recents.ts";
@@ -161,8 +162,10 @@ export function CommandPalette({
     // home screen, so offering to post one would be an entry that cannot work.
     // Nor can a reader post one: a slash command is a comment, and a comment
     // is a write (roles phase 1).
+    // Nor inside a pane that hides the Chat (`?embed=1`): choosing a command
+    // opens the Chat with it typed, and the host's chat is the only one there.
     const asks =
-      canvasId && canEdit ? commands.filter((c) => hits(`/${c.name} ${c.description}`)) : [];
+      canvasId && canEdit && !chatHiddenNow() ? commands.filter((c) => hits(`/${c.name} ${c.description}`)) : [];
     // Only once something is typed: with an empty field the switcher's own
     // face is the place for the list, and it is one row away.
     const jumps =

@@ -24,7 +24,7 @@ import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { fetchBlobText } from "./blobtext.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { type Panel, openPanel } from "./panels.ts";
+import { type Panel, chatHiddenNow, openPanel } from "./panels.ts";
 import { glideToBox, revealItem } from "./zoomactions.ts";
 import { addSpeakerNote, noteStarter } from "./notes.ts";
 import { handIn, handable } from "./sprint.ts";
@@ -684,7 +684,8 @@ export function chromeMenu(ctx: {
   ];
   return [
     ...rail
-      .filter((one) => !one.open)
+      // Inside a pane that hides the Chat (`?embed=1`) its row would open nothing.
+      .filter((one) => !one.open && !(one.panel === "main" && chatHiddenNow()))
       .map((one) => ({
         label: one.label,
         icon: one.icon,

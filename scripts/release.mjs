@@ -120,6 +120,12 @@ export const RELEASE_DROPS = [
   // install runs (the root `bin` is the CLI's alone). Found by the tree's
   // import check on its first run (cleanup phase 4, TR-4, 27 Sep 2026).
   ["packages/voice-agent/bin"],
+  // The Jetski plugin. Jetski loads it through a link into a clone
+  // (`scripts/install-jetski-plugin.mjs`, which leaves with `scripts`), and
+  // its pane imports `sidecar_sdk`, a module only the Jetski host provides —
+  // so on an install it is a directory nothing loads, importing what the
+  // tree does not carry. Found by the same check (#364, 28 Sep 2026).
+  ["plugins"],
 ];
 
 /**

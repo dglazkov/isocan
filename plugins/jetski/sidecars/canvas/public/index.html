@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Isocan Canvas</title>
+  <!-- The host's bridge (window.sidecar): its token-carrying fetch, the
+       workspace pushes, and the chat. Absent when the page is opened by hand,
+       and the page says so rather than pretending. -->
+  <script src="/preload.js"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--background, #fafafa);
+      color: var(--foreground, #222);
+      display: flex;
+      flex-direction: column;
+    }
+    header, .bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--border, #d4d4d8);
+      background: var(--card, transparent);
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .where { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+    .muted { color: var(--muted-foreground, #71717a); }
+    .spacer { flex: 1; }
+    button, input {
+      font: inherit;
+      color: inherit;
+      background: var(--secondary, transparent);
+      border: 1px solid var(--border, #d4d4d8);
+      border-radius: 6px;
+      padding: 3px 8px;
+    }
+    button { cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.primary { background: var(--primary, #2563eb); color: var(--primary-foreground, #fff); border-color: transparent; }
+    a { color: var(--primary, #2563eb); }
+    input { background: var(--background, #fff); min-width: 0; flex: 1; }
+    .chip { border-radius: 999px; padding: 2px 8px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .note { padding: 5px 8px; border-bottom: 1px solid var(--border, #d4d4d8); flex-shrink: 0; }
+    .warn { color: #b45309; }
+    .error { color: #dc2626; }
+    [hidden] { display: none !important; }
+    main { flex: 1; position: relative; min-height: 0; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+    .card { max-width: 380px; margin: 48px auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .card h2 { margin: 0; font-size: 14px; }
+    .card p { margin: 0; }
+    .row { display: flex; gap: 6px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="where" id="where">Waiting for Jetski to say which workspace this is…</span>
+    <span class="spacer"></span>
+    <button id="agents-toggle" type="button" hidden aria-expanded="false">Agents</button>
+    <button id="reload" type="button" hidden title="Mint a fresh address and reload the canvas">Reload</button>
+    <a id="open" href="#" target="_blank" rel="noopener" hidden title="The same canvas in a browser tab, with its own chat">Open ↗</a>
+  </header>
+
+  <div class="bar" id="agents" hidden>
+    <span class="muted">Enrol:</span>
+    <span id="presets" class="row" style="flex-wrap: wrap"></span>
+    <span class="muted" id="agents-note">They answer @mentions on the canvas while <code>isocan rc</code> runs on this machine.</span>
+  </div>
+
+  <div class="bar" id="selection" hidden>
+    <span id="chips" class="row" style="flex-wrap: wrap"></span>
+    <input id="ask" type="text" placeholder="Ask Jetski about this…" aria-label="Ask Jetski about the selection" />
+    <button id="ask-send" type="button" class="primary">Ask</button>
+  </div>
+
+  <div class="note" id="status" role="status" hidden></div>
+
+  <main>
+    <iframe id="frame" title="Isocan canvas" allow="clipboard-read; clipboard-write" hidden></iframe>
+
+    <div class="card" id="unbound" hidden>
+      <h2>This folder has no canvas yet</h2>
+      <p class="muted" id="unbound-folder"></p>
+      <div class="row">
+        <input id="ref" type="text" placeholder="Canvas id, link, or title" aria-label="Canvas id, link, or title" />
+        <button id="use" type="button">Use</button>
+      </div>
+      <button id="create" type="button" class="primary">Create a canvas for it</button>
+      <p class="muted">Either way <code>isocan use</code> writes <code>.isocan/project.json</code> at the folder's top — commit it and everyone who clones the repo lands on the same canvas.</p>
+    </div>
+
+    <div class="card" id="nocli" hidden>
+      <h2>The isocan CLI is not on this machine</h2>
+      <p>Everything this pane does is an <code>isocan</code> command. Install it, then reopen the pane:</p>
+      <p><code>npm i -g github:dglazkov/isocan#release</code></p>
+    </div>
+
+    <div class="card" id="noworkspace" hidden>
+      <h2>No workspace folder</h2>
+      <p class="muted" id="noworkspace-why"></p>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const host = window.sidecar ?? null;
+    const standalone = !host;
+
+    let uris = [];
+    let state = null;
+    /** The frame's canvas and the origin its messages must come from. */
+    let framed = { canvasId: null, origin: null };
+    let selection = [];
+
+    // The host's first push arrives through both doors at the bottom, and a
+    // push can land while a refresh is still minting — so pushes are
+    // deduplicated by value and every refresh waits for the one before it,
+    // and one push never mints two passes.
+    let lastKey = null;
+    let queue = Promise.resolve();
+    function requeue() {
+      queue = queue.then(refresh, refresh);
+      return queue;
+    }
+
+    function say(text, tone = "") {
+      $("status").hidden = !text;
+      $("status").className = `note ${tone}`;
+      $("status").textContent = text || "";
+    }
+
+    // Opened by hand, there is no host fetch to carry the token; a `?token=`
+    // on this page's own address is forwarded the way the SDK would.
+    const handToken = standalone ? new URLSearchParams(location.search).get("token") : null;
+
+    async function api(route, body) {
+      const call = host?.fetch ?? fetch;
+      const res = await call(route, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(handToken ? { "x-sidecar-token": handToken } : {}) },
+        body: JSON.stringify({ workspaceUris: uris, ...body }),
+      });
+      let data = null;
+      try { data = await res.json(); } catch { /* not JSON: said below */ }
+      if (!res.ok || !data || data.error) throw new Error(data?.error || `${route} answered ${res.status}`);
+      return data;
+    }
+
+    const leaf = (p) => (p || "").split(/[\\/]/).filter(Boolean).pop() || p || "";
+
+    function show(which) {
+      for (const id of ["frame", "unbound", "nocli", "noworkspace"]) $(id).hidden = id !== which;
+      const framing = which === "frame";
+      $("reload").hidden = $("open").hidden = !framing;
+      if (!framing) setSelection([]);
+    }
+
+    async function refresh() {
+      if (uris.length === 0) {
+        state = null;
+        renderPresets();
+        $("where").textContent = "No workspace";
+        $("where").title = "";
+        $("noworkspace-why").textContent = standalone
+          ? "Opened outside Jetski: add ?workspace=/path/to/folder to this page's address."
+          : "This conversation has no workspace folder open, so there is no canvas to show.";
+        return show("noworkspace");
+      }
+      try {
+        state = await api("/api/workspace");
+      } catch (err) {
+        say(err.message, "error");
+        return;
+      }
+      $("where").textContent = state.bound
+        ? `${leaf(state.workspace)} · ${state.title || state.canvasId}`
+        : `${leaf(state.workspace)} · no canvas`;
+      $("where").title = state.bound ? `${state.canvasId} — bound by ${state.root}/.isocan/project.json` : state.workspace || "";
+      renderPresets();
+      if (!state.cli) return show("nocli");
+      if (!state.bound) {
+        framed = { canvasId: null, origin: null };
+        $("frame").removeAttribute("src");
+        $("unbound-folder").textContent = state.workspace;
+        return show("unbound");
+      }
+      if (framed.canvasId !== state.canvasId) await load();
+      else show("frame");
+    }
+
+    /** A fresh pass per load: a pass is single-use, and a frame on a local
+     * daemon cannot keep a badge across reloads. */
+    async function load() {
+      say("Opening the canvas…");
+      try {
+        const embed = await api("/api/embed");
+        framed = { canvasId: state.canvasId, origin: new URL(embed.address).origin };
+        setSelection([]);
+        $("frame").src = embed.address;
+        $("open").href = embed.tab || embed.canvas;
+        show("frame");
+        const here = location.hostname;
+        const hereIsLoopback = here === "localhost" || here === "::1" || here === "[::1]" || /^127\./.test(here);
+        say(
+          embed.loopback && !hereIsLoopback
+            ? `This canvas lives on this machine's own daemon (${framed.origin}), which a browser on another machine cannot reach. If the frame stays blank, bind the folder to a canvas on a shared home such as isocan.io.`
+            : "",
+          "warn",
+        );
+      } catch (err) {
+        say(err.message, "error");
+      }
+    }
+
+    function renderPresets() {
+      const list = $("presets");
+      list.replaceChildren();
+      const presets = state?.presets ?? [];
+      const none = presets.length === 0 && !state?.presetsError;
+      $("agents-toggle").hidden = none;
+      if (none) $("agents").hidden = true;
+      if (state?.presetsError) {
+        const span = document.createElement("span");
+        span.className = "error";
+        span.textContent = state.presetsError;
+        list.append(span);
+      }
+      for (const preset of presets) {
+        const button = document.createElement("button");
+        button.type = "button";
+        const unpinned = preset.model && preset.pinsModel !== true;
+        button.textContent = `+ ${preset.name} · ${preset.label}${unpinned ? " ⚠" : ""}`;
+        const runsOn = preset.runsOn || "no harness";
+        const why = !state.bound ? "bind this folder to a canvas first"
+          : !state.cli ? "the isocan CLI is not on this machine"
+          : !preset.runsOn ? "no harness named, and this machine has no default (`isocan harness`)"
+          : !preset.runnable ? `${preset.runsOn} cannot run on this machine (\`isocan harness\`)`
+          : "";
+        button.disabled = Boolean(why);
+        button.title = why || [
+          `${preset.name} on ${runsOn}${preset.model ? `, model ${preset.model}` : ", its own default model"}.`,
+          unpinned ? `${runsOn} has no way to take a model${preset.pinsModel === null ? " that this CLI knows of" : ""}, so ${preset.name} would run ${runsOn}'s default.` : "",
+        ].filter(Boolean).join(" ");
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            const out = await api("/api/model-agent", { presetId: preset.id });
+            button.textContent = `✓ ${out.enrolled?.name || preset.name}`;
+            say(`${out.enrolled?.name || preset.name} is enrolled on this canvas. It answers @mentions while \`isocan rc\` runs on this machine.`);
+          } catch (err) {
+            button.disabled = false;
+            say(err.message, "error");
+          }
+        });
+        list.append(button);
+      }
+    }
+
+    function setSelection(items) {
+      selection = items;
+      $("selection").hidden = items.length === 0 || standalone;
+      const chips = $("chips");
+      chips.replaceChildren();
+      for (const item of items.slice(0, 4)) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "chip";
+        chip.textContent = item.title || item.id;
+        chip.title = `${item.id} — show it`;
+        chip.addEventListener("click", () => focusItem(item.id));
+        chips.append(chip);
+      }
+      if (items.length > 4) {
+        const more = document.createElement("span");
+        more.className = "muted";
+        more.textContent = `+${items.length - 4}`;
+        chips.append(more);
+      }
+      $("ask-send").disabled = !host?.conversationId;
+      $("ask-send").title = host?.conversationId ? "" : "This pane is not attached to a conversation";
+    }
+
+    function focusItem(itemId) {
+      if (framed.origin) $("frame").contentWindow?.postMessage({ type: "isocan:focus-item", itemId }, framed.origin);
+    }
+
+    async function ask() {
+      if (!selection.length || !host?.conversationId) return;
+      const typed = $("ask").value.trim() || "Take a look at these and tell me what you think.";
+      const items = selection.map((i) => `\`${i.id}\`${i.title ? ` "${i.title}"` : ""}`).join(", ");
+      const canvas = state?.title ? `"${state.title}" (${state.canvasId})` : state?.canvasId;
+      try {
+        await host.agent.sendMessage(`${typed}\n\n(Selected on the isocan canvas ${canvas}: ${items}. \`isocan show <id>\` describes one; \`isocan get <id>\` prints its file.)`);
+        $("ask").value = "";
+      } catch (err) {
+        say(err.message, "error");
+      }
+    }
+
+    // The canvas's half of the bridge (packages/web/src/lib/hostbridge.ts):
+    // it says ready to anyone, is answered by name, and from then on talks
+    // only to this page's origin. Its messages are believed only from the
+    // frame, from the origin the pass was minted at.
+    window.addEventListener("message", (e) => {
+      const frame = $("frame");
+      if (!framed.origin || e.source !== frame.contentWindow || e.origin !== framed.origin) return;
+      const data = e.data;
+      if (!data || typeof data !== "object" || data.canvasId !== framed.canvasId) return;
+      if (data.type === "isocan:ready") frame.contentWindow.postMessage({ type: "isocan:hello" }, framed.origin);
+      else if (data.type === "isocan:selection" && Array.isArray(data.items)) setSelection(data.items);
+    });
+
+    $("agents-toggle").addEventListener("click", () => {
+      const open = $("agents").hidden;
+      $("agents").hidden = !open;
+      $("agents-toggle").setAttribute("aria-expanded", String(open));
+    });
+    $("reload").addEventListener("click", () => {
+      framed = { canvasId: null, origin: null };
+      requeue();
+    });
+    $("ask-send").addEventListener("click", ask);
+    $("ask").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+
+    async function bind(body, doing) {
+      say(doing);
+      for (const id of ["use", "create"]) $(id).disabled = true;
+      try {
+        const out = await api("/api/bind", body);
+        say(out.said || "");
+        await requeue();
+      } catch (err) {
+        say(err.message, "error");
+      } finally {
+        for (const id of ["use", "create"]) $(id).disabled = false;
+      }
+    }
+    $("use").addEventListener("click", () => {
+      const ref = $("ref").value.trim();
+      if (ref) bind({ ref }, `Binding this folder to ${ref}…`);
+    });
+    $("create").addEventListener("click", () => bind({}, "Creating a canvas for this folder…"));
+
+    function setUris(next) {
+      const list = Array.isArray(next) ? next.filter((u) => typeof u === "string") : [];
+      const key = list.join("\n");
+      if (key === lastKey) return;
+      lastKey = key;
+      uris = list;
+      requeue();
+    }
+
+    if (standalone) {
+      setUris(new URLSearchParams(location.search).getAll("workspace"));
+    } else {
+      host.onWorkspaceChange(setUris);
+      host.getWorkspaceUris().then(setUris, () => setUris([]));
+    }
+  </script>
+</body>
+</html>

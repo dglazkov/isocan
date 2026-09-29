@@ -1,0 +1,18 @@
+{
+  "command": "node",
+  "args": ["main.mjs"],
+  "restart_policy": "always",
+  "display_name": "Isocan Canvas",
+  "description": "The isocan canvas bound to this workspace, beside the chat: see what agents are doing, point at items and ask about them, and enrol model-pinned agents.",
+  "has_web_ui": true,
+  "ui_config": {
+    "display_name": "Isocan Canvas",
+    "views": [
+      {
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "title": "Isocan Canvas"
+      }
+    ]
+  }
+}

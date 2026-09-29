@@ -7,7 +7,7 @@ import { unreadCount, unreadThreads } from "../stores/unreadStore.ts";
 import { unreadByAuthor } from "../lib/facepile.ts";
 import { facesFor } from "../lib/facepile.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { openPanel } from "../lib/panels.ts";
+import { chatHiddenNow, openPanel } from "../lib/panels.ts";
 import { AgentsGlyph, ChatGlyph } from "./Glyphs.tsx";
 import { useActorMarks } from "../lib/marks.ts";
 
@@ -64,6 +64,7 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
     joined,
   );
   const now = Date.now();
+  const hideChat = chatHiddenNow();
 
   // Agents only. A person's face belongs in the facepile, which is about who
   // is HERE; this strip is about what is being done to the canvas while you
@@ -79,21 +80,23 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
 
   return (
     <div className="rail-strip floats" aria-label="Chat and agents">
-      <button
-        className="strip-chat"
-        title={unread > 0 ? `Open the Chat — ${unread} unread` : "Open the Chat"}
-        aria-label={unread > 0 ? `Open the Chat, ${unread} unread` : "Open the Chat"}
-        onClick={() => openPanel(canvasId, "main")}
-      >
-        <span className="strip-glyph">
-          <ChatGlyph />
-        </span>
-        {unread > 0 && (
-          <span className="strip-unread" aria-hidden>
-            {unread > 99 ? "99+" : unread}
+      {!hideChat && (
+        <button
+          className="strip-chat"
+          title={unread > 0 ? `Open the Chat — ${unread} unread` : "Open the Chat"}
+          aria-label={unread > 0 ? `Open the Chat, ${unread} unread` : "Open the Chat"}
+          onClick={() => openPanel(canvasId, "main")}
+        >
+          <span className="strip-glyph">
+            <ChatGlyph />
           </span>
-        )}
-      </button>
+          {unread > 0 && (
+            <span className="strip-unread" aria-hidden>
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
+        </button>
+      )}
       {/* The tray's standing door (agents-on-demand phase 2.5). The faces
           below only exist while agents are LIVE, which made the tray
           unreachable on exactly the canvas journey 1 starts on — no agents

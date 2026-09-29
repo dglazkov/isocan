@@ -99,7 +99,8 @@ import { TrashPanel } from "../components/LazyTrashPanel.tsx";
 import { DesignComparisonHost } from "../components/DesignComparisonButton.tsx";
 import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
 import { RailStrip } from "../components/RailStrip.tsx";
-import { openPanel } from "../lib/panels.ts";
+import { chatHiddenNow, openPanel } from "../lib/panels.ts";
+import { bridgeToHost } from "../lib/hostbridge.ts";
 import { FilesPanel } from "../components/LazyFilesPanel.tsx";
 import { AgentTray } from "../components/LazyAgentTray.tsx";
 import { ContextPanel } from "../components/LazyContextPanel.tsx";
@@ -400,6 +401,10 @@ function CanvasSurface({
   useEffect(() => useUiStore.subscribe((s, prev) => {
     if (s.selectedItemIds !== prev.selectedItemIds) publishSelection();
   }), []);
+
+  // A pane that framed this canvas (`?embed=1`) hears what is selected, and
+  // may point at an item — `lib/hostbridge.ts` says who is told what.
+  useEffect(() => (canvasId ? bridgeToHost(canvasId) : undefined), [canvasId]);
 
   // Zoom-to-fit once, on the first snapshot. On arrival rather than on the
   // canvas: a subscription to the canvas re-rendered this page and all its
@@ -702,6 +707,9 @@ function CanvasSurface({
        */
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j" && canvasId) {
         e.preventDefault();
+        // Inside a pane that hides the Chat (`?embed=1`) the key has no
+        // target, and must not close whatever else is open on its way there.
+        if (chatHiddenNow()) return;
         const ui = useUiStore.getState();
         // The CHAT, not "whatever is open". From Files it used to close the
         // rail, so the key named for the Chat was the one way you could not

@@ -117,17 +117,28 @@ describe("the bench, read off a personal canvas", () => {
   });
 
   it("writes a row the reader above can read back, and says nothing it was not told", () => {
-    const card = benchItemOf("Percy", { actorId: percy.id, harness: "claude-code" });
-    expect(card.properties).toEqual({ kind: AGENT_KIND, actorId: percy.id, harness: "claude-code" });
+    const card = benchItemOf("Percy", { actorId: percy.id, harness: "claude-code", model: "claude-opus-5-5" });
+    expect(card.properties).toEqual({
+      kind: AGENT_KIND,
+      actorId: percy.id,
+      harness: "claude-code",
+      model: "claude-opus-5-5",
+    });
     // `runsAt` unsaid is absent, not "unknown": an empty property would be a
     // reader's problem forever.
     expect(card.properties.runsAt).toBeUndefined();
     const canvas = emptyCanvas();
     canvas.items.itm_x = agentItem("itm_x", "Percy", card.properties);
-    expect(benchAgentOf(canvas.items.itm_x!)).toMatchObject({ name: "Percy", runsAt: null });
+    expect(benchAgentOf(canvas.items.itm_x!)).toMatchObject({
+      name: "Percy",
+      harness: "claude-code",
+      model: "claude-opus-5-5",
+      runsAt: null,
+    });
     // The blob is the row written out, so the card is readable on the canvas
     // itself rather than being a blank rectangle.
     expect(card.blob).toContain(percy.id);
+    expect(card.blob).toContain("claude-opus-5-5");
     expect(card.blob).toContain("grants no standing");
   });
 

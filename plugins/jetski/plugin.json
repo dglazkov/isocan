@@ -1,0 +1,12 @@
+{
+  "name": "isocan",
+  "displayName": "Isocan Canvas",
+  "version": "0.1.0",
+  "description": "The isocan canvas bound to your workspace, in a pane beside the chat and without a second chat column. New conversations join the canvas under their own names, and the pane enrols model-pinned standing agents.",
+  "logo": "logo.svg",
+  "suggestedPrompts": [
+    "Open the isocan canvas for this workspace and tell me what is on it",
+    "Address the open comments on the canvas",
+    "Run a visual arena on a canvas item with two model-pinned agents"
+  ]
+}

@@ -31,6 +31,14 @@ let failedALoad = false;
 // server reads it. The Antigravity shape, scripted.
 const authMethod = process.env.FAKE_ACP_AUTH ?? null;
 let authenticated = authMethod === null;
+// A model pinned at enrolment (`--model`, docs/projects/jetski/design.md)
+// arrives two ways: `{model}` filled in a declared adapter's arguments, and
+// ISOCAN_MODEL, which every pinned spawn carries. The reply reports both, and
+// nothing at all when neither is there.
+const modelArg = (() => {
+  const at = process.argv.indexOf("--model");
+  return at >= 0 ? (process.argv[at + 1] ?? "") : null;
+})();
 
 // The failure modes journey 5 demands, drivable: a session that never
 // starts, and one that dies mid-turn.
@@ -210,6 +218,7 @@ function handle(msg) {
         `echo:${promptText} ` +
         (probe ? `probe:${probe} ` : "") +
         `env:${process.env.ISOCAN_HARNESS ?? ""}:${process.env.ISOCAN_SESSION_ID ?? ""} ` +
+        (modelArg !== null || process.env.ISOCAN_MODEL ? `model:${modelArg ?? ""}:${process.env.ISOCAN_MODEL ?? ""} ` : "") +
         `resumed:${loaded.has(params.sessionId)} ` +
         `permission:${outcome?.outcome?.optionId ?? "?"}`;
       send({

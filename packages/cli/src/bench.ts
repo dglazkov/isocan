@@ -171,6 +171,7 @@ async function knownAgent(ctx: Ctx, name: string): Promise<BenchAgent | null> {
     name: row.name,
     actorId: row.actorId,
     harness,
+    model: row.model ?? null,
     runsAt: thisMachine(),
   };
 }
@@ -188,8 +189,17 @@ async function writeBenchRow(
   ctx: Ctx,
   canvasId: string,
   name: string,
-  agent: { actorId: string; harness?: string | null; runsAt?: string | null },
-  explicit?: { harness?: boolean; runsAt?: boolean },
+  agent: {
+    actorId: string;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+    runsAt?: string | null | undefined;
+  },
+  explicit?: {
+    harness?: boolean | undefined;
+    model?: boolean | undefined;
+    runsAt?: boolean | undefined;
+  },
 ): Promise<{ itemId: string; wrote: "add" | "fill" | "already" }> {
   const snapshot = await ctx.client.snapshot(canvasId);
   const write = benchWriteFor(snapshot.canvas, agent, explicit);
@@ -250,7 +260,11 @@ async function writeBenchRow(
 export async function noteOnBench(
   ctx: Ctx,
   name: string,
-  agent: { actorId: string; harness?: string | null },
+  agent: {
+    actorId: string;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+  },
   say: (line: string) => void,
 ): Promise<void> {
   let canvasId: string | null;
@@ -273,6 +287,7 @@ export async function noteOnBench(
     await writeBenchRow(ctx, canvasId, name, {
       actorId: agent.actorId,
       harness,
+      model: agent.model ?? null,
       runsAt: thisMachine(),
     });
   } catch (error) {
@@ -319,7 +334,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
       printTable(
         rows.map((row) => ({
           name: truncate(row.name, 20),
-          harness: row.harness ?? "—",
+          harness: row.model ? `${row.harness ?? "—"} (${row.model})` : row.harness ?? "—",
           standing: benchStandingWords(row),
           reach: benchWords(row),
         })),
@@ -332,11 +347,12 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
     .description("Put an agent on your bench, from what this machine already knows")
     .option("--actor <id>", "the actor it speaks as — required for an agent this machine has no rc row for")
     .option("--harness <name>", "which agent it is: claude-code, codex, pi, …")
+    .option("--model <id>", "pin this agent's model, spelled as its harness spells it (e.g. claude-opus-5-5) — see `isocan --agent-help agents`")
     .option("--runs-at <label>", "an opaque label for where it runs (default: this machine)")
     .action(
       act(async (ctx, args) => {
         const name = args[0] as string;
-        const opts = args[1] as { actor?: string; harness?: string; runsAt?: string };
+        const opts = args[1] as { actor?: string; harness?: string; model?: string; runsAt?: string };
         const matched = await knownAgent(ctx, name);
         // What the machine knows is only inherited when it is about the SAME
         // actor. `--actor` naming somebody else means the row is for an agent
@@ -352,6 +368,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
         const agent = {
           actorId,
           harness: opts.harness ?? known?.harness ?? null,
+          model: opts.model ?? known?.model ?? null,
           runsAt: opts.runsAt ?? known?.runsAt ?? null,
         };
         // `bench add` is the ONE bench write that may create the canvas: it is
@@ -363,6 +380,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
         if (!canvasId) throw new Error("your personal canvas is not live here, so there is nowhere to keep a bench");
         const { itemId, wrote } = await writeBenchRow(ctx, canvasId, name, agent, {
           harness: Boolean(opts.harness),
+          model: Boolean(opts.model),
           runsAt: Boolean(opts.runsAt),
         });
         if (wrote !== "add") {

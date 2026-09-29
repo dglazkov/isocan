@@ -51,6 +51,7 @@ it" into either `works` or an issue.
 | [The fast path in shadow](2026-09-23-voice-fast-path-shadow.md) | Jev resolving REAL speech beside the live model, and the take-back label | needs a microphone, speech that mishears, and a person pressing undo on a wrong act — plus the timing of words against the model's call | `unverified` |
 | [A background tab catching up by itself](2026-09-28-background-reload.md) | an outdated tab in the background reloading itself, and the pill staying on the one you are looking at | needs a real deploy landing while a tab is hidden; the dev server never reports an update | `unverified` |
 | [Undo, in both doorways](2026-09-20-undo.md) | the harness retracting through the daemon, and the browser dialog's refusal | the harness branch has never executed against a live daemon; the browser refusal has never rendered | `unverified` |
+| [The isocan plugin, inside Jetski](2026-09-28-jetski-plugin.md) | a real Jetski conversation arriving on its canvas, the pane in the AuxPane under the Sidecar SDK, *Ask* into the chat, and a preset's pinned model | needs Jetski itself — nothing here can be the host that loads the plugin, runs the hook and frames the pane — and a harness signed in, which spends tokens | `unverified` |
 
 ## Adding one
 

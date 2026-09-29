@@ -51,6 +51,10 @@ const AGENT_ACTOR_PROP = "actorId";
 /** `harness=<name>` — `claude-code`, `codex`, `pi`, … so a reader knows
  * WHAT Percy is without being told where it runs. */
 const AGENT_HARNESS_PROP = "harness";
+/** `model=<id>` — `claude-opus-5-5`, … spelled as the agent's harness spells
+ * it, so a bench row records which model an agent is pinned to when one was
+ * chosen. */
+const AGENT_MODEL_PROP = "model";
 /**
  * `runsAt=<label>` — an opaque label for WHERE this agent runs.
  *
@@ -120,6 +124,8 @@ export interface BenchAgent {
   actorId: string;
   /** Which agent this is, or null when the row was written without one. */
   harness: string | null;
+  /** Which model this agent is pinned to, or null when unsaid. */
+  model?: string | null | undefined;
   /** Where it runs, opaquely. Null when nobody said. */
   runsAt: string | null;
 }
@@ -144,6 +150,7 @@ export function benchAgentOf(item: Item): BenchAgent | null {
     name: item.title || actorId,
     actorId,
     harness: item.properties[AGENT_HARNESS_PROP] ?? null,
+    model: item.properties[AGENT_MODEL_PROP] ?? null,
     runsAt: item.properties[AGENT_RUNS_AT_PROP] ?? null,
   };
 }
@@ -164,16 +171,23 @@ export function benchAgents(canvas: CanvasContents): BenchAgent[] {
  */
 export function benchItemOf(
   name: string,
-  agent: { actorId: string; harness?: string | null; runsAt?: string | null },
+  agent: {
+    actorId: string;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+    runsAt?: string | null | undefined;
+  },
 ): { properties: Record<string, string>; blob: string; mimeType: string; filename: string } {
   const properties: Record<string, string> = { kind: AGENT_KIND, [AGENT_ACTOR_PROP]: agent.actorId };
   if (agent.harness) properties[AGENT_HARNESS_PROP] = agent.harness;
+  if (agent.model) properties[AGENT_MODEL_PROP] = agent.model;
   if (agent.runsAt) properties[AGENT_RUNS_AT_PROP] = agent.runsAt;
   const lines = [
     `# ${name}`,
     "",
     `- actor: ${agent.actorId}`,
     `- harness: ${agent.harness ?? "unsaid"}`,
+    ...(agent.model ? [`- model: ${agent.model}`] : []),
     `- runs at: ${agent.runsAt ?? "unsaid"}`,
     "",
     "A bench row is a record. It grants no standing and no reach.",
@@ -212,8 +226,17 @@ export function benchItemOf(
  */
 export function benchWriteFor(
   canvas: CanvasContents,
-  agent: { actorId: string; harness?: string | null; runsAt?: string | null },
-  explicit?: { harness?: boolean; runsAt?: boolean },
+  agent: {
+    actorId: string;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+    runsAt?: string | null | undefined;
+  },
+  explicit?: {
+    harness?: boolean | undefined;
+    model?: boolean | undefined;
+    runsAt?: boolean | undefined;
+  },
 ):
   | { kind: "add"; x: number; y: number }
   | { kind: "fill"; itemId: string; properties: Record<string, string> }
@@ -231,6 +254,9 @@ export function benchWriteFor(
   const properties: Record<string, string> = {};
   if (agent.harness && (!already.harness || (explicit?.harness && agent.harness !== already.harness))) {
     properties[AGENT_HARNESS_PROP] = agent.harness;
+  }
+  if (agent.model && (!already.model || (explicit?.model && agent.model !== already.model))) {
+    properties[AGENT_MODEL_PROP] = agent.model;
   }
   if (agent.runsAt && (!already.runsAt || (explicit?.runsAt && agent.runsAt !== already.runsAt))) {
     properties[AGENT_RUNS_AT_PROP] = agent.runsAt;

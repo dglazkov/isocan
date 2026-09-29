@@ -112,6 +112,8 @@ import {
   urlWithPass,
   workbenchUrl,
   canvasUrlWithPass,
+  embedCanvasUrl,
+  splitPassFragment,
   parseCanvasAddress,
   parseExportTarget,
   describeExportedCanvas,
@@ -3842,8 +3844,12 @@ program
     "--admit-only",
     "let the window in but hand it no identity — whoever opens it names themselves",
   )
+  .option(
+    "--chat",
+    "keep the canvas's own Chat dock in the embedded frame (by default it is hidden so the host pane's chat owns the conversation)",
+  )
   .action(
-    run(async (opts: { admitOnly?: boolean }, cmd: Command) => {
+    run(async (opts: { admitOnly?: boolean; chat?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       // `--canvas` is how every verb here says which one; a positional would
       // be a second spelling of a question already answered.
@@ -3854,7 +3860,7 @@ program
       const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
       const actor = opts.admitOnly ? null : ctx.actor;
       const { pass, token } = await ctx.client.mintPass(canvas.id, actor?.id);
-      const address = canvasUrlWithPass(origin, canvas.id, token);
+      const address = embedCanvasUrl(origin, canvas.id, token, { chat: opts.chat });
       const minutes = Math.round(PASS_TTL_MS / 60_000);
 
       if (ctx.json) {
@@ -3862,7 +3868,7 @@ program
           address,
           // The clean one too: a pane that has already been admitted once
           // should be pointed at this, never at a spent credential.
-          canvas: canvasUrl(origin, canvas.id),
+          canvas: splitPassFragment(address).address,
           expiresAt: pass.expiresAt,
           ...(actor ? { actor } : {}),
         });
@@ -12556,7 +12562,13 @@ async function mintAndEnrol(
   ctx: Ctx,
   canvasId: string,
   name: string,
-  opts: { cwd: string; harness: string | null; rules?: unknown; say?: (line: string) => void },
+  opts: {
+    cwd: string;
+    harness: string | null;
+    model?: string | null | undefined;
+    rules?: unknown;
+    say?: (line: string) => void;
+  },
 ): Promise<Actor> {
   // An actor this badge still holds under the key the name derives moves to
   // the machine key first (agent-key.ts), so re-enrolling it resumes it
@@ -12580,11 +12592,13 @@ async function mintAndEnrol(
     name,
   });
   const agent = claimed.envelope.actor;
+  const trimmedModel = opts.model?.trim() || null;
   const enrolled = await withPreparedRcAgent(ctx.home, {
     canvasId,
     actorId: agent.id,
     name: agent.name,
     harness: opts.harness,
+    ...(trimmedModel ? { model: trimmedModel } : {}),
     cwd: opts.cwd,
     sessionId: null,
   }, () => ctx.client.sendOp(canvasId, ctx.actor, {
@@ -12604,14 +12618,14 @@ async function mintAndEnrol(
   // `noteOnBench` cannot throw, never retries, and never creates the personal
   // canvas it would write to. A person who has never made one enrols exactly
   // as they did before phase 3.
-  await noteOnBench(ctx, agent.name, { actorId: agent.id, harness: opts.harness }, say);
+  await noteOnBench(ctx, agent.name, { actorId: agent.id, harness: opts.harness, model: trimmedModel }, say);
   return agent;
 }
 
 async function enrolAgent(
   cmd: Command,
   name: string,
-  opts: { dir?: string; harness?: string; rules?: string; listen?: string },
+  opts: { dir?: string; harness?: string; model?: string; rules?: string; listen?: string },
   contained: boolean,
 ): Promise<void> {
   const ctx = await ctxOf(cmd);
@@ -12625,6 +12639,7 @@ async function enrolAgent(
   // The rc half's harness: a flag (rc add), else the enrolling caller's own
   // — an agent enrolls an agent like itself — else null, "not yet said".
   const harness = opts.harness ?? ctx.harness ?? null;
+  const model = opts.model?.trim() || null;
   // Re-enrolling an agent that already stands here (for instance to set
   // `--harness` or `--dir` via `rc add <name>`) must preserve its
   // existing routing rules and `listen` grant unless `--rules` or `--listen`
@@ -12642,7 +12657,7 @@ async function enrolAgent(
     listen === undefined
       ? handed
       : { ...(handed && typeof handed === "object" ? handed : {}), listen };
-  const agent = await mintAndEnrol(ctx, p.id, name, { cwd, harness, rules });
+  const agent = await mintAndEnrol(ctx, p.id, name, { cwd, harness, model, rules });
   // Whose word will wake it, said at the moment it is decided: this
   // machine's person is its owner (owner-only summons), and with no
   // `--listen` the owner is the only one it answers.
@@ -12654,9 +12669,17 @@ async function enrolAgent(
   const gate =
     policyWords(policy, (id) => (id === person.id ? person.name : named(id)), ctx.actor.id) ??
     "listens to everyone";
-  if (ctx.json) return printJson({ enrolled: agent, canvasId: p.id, ...(listen ? { listen } : {}), policy });
+  if (ctx.json) {
+    return printJson({
+      enrolled: agent,
+      canvasId: p.id,
+      ...(model ? { model } : {}),
+      ...(listen ? { listen } : {}),
+      policy,
+    });
+  }
   console.log(
-    `enrolled ${agent.name} — answerable on "${p.title}" · ${gate}. ` +
+    `enrolled ${agent.name}${model ? ` (${model})` : ""} — answerable on "${p.title}" · ${gate}. ` +
       "A running `isocan rc` picks this up without a restart; nothing runs until something arrives." +
       (policy.listen.length === 0
         ? ` Nobody else's word wakes it — \`isocan rc listen ${agent.name} --to <names|everyone>\` widens that.`
@@ -12708,10 +12731,12 @@ is an op everyone can read, and a running \`isocan rc\` narrates it.`,
 agentCommand
   .command("add <name>")
   .description("Enrol an agent beside yourself — on this canvas, in this directory")
+  .option("--harness <name>", "how its sessions start: claude-code, pi, codex, antigravity (default: yours, else unsaid)")
+  .option("--model <id>", "pin this agent's model, spelled as its harness spells it (e.g. claude-opus-5-5) — see `isocan --agent-help agents`")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
   .option("--listen <who>", "whose word wakes it besides its owner: names/ids comma-separated, or everyone (default: its owner alone — the person whose rc answers)")
   .action(
-    run(async (name: string, opts: { rules?: string; listen?: string }, cmd: Command) =>
+    run(async (name: string, opts: { harness?: string; model?: string; rules?: string; listen?: string }, cmd: Command) =>
       enrolAgent(cmd, name, opts, true),
     ),
   );
@@ -12787,9 +12812,11 @@ program
 A fact about this machine, read without a daemon: every harness isocan
 knows — builtin, or declared in ~/.isocan/config.json under acpAdapters or
 harnessVars — with whether its executable is on the PATH, where the rc
-would get its ACP bridge, whether it could run here, and which one an
-agent enrolled with no harness named runs on. --json adds a \`runnable\`
-field so an agent presenting the choice need not derive it.`,
+would get its ACP bridge, whether it could run here, whether a model
+pinned with \`--model\` reaches it (a harness with no door for one runs its
+own default), and which one an agent enrolled with no harness named runs
+on. --json adds \`runnable\` and \`pinsModel\` fields so an agent presenting
+the choice need not derive them.`,
   )
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -12814,6 +12841,7 @@ field so an agent presenting the choice need not derive it.`,
           installed: r.installed === null ? "?" : r.installed ? "yes" : "no",
           adapter: r.adapter ?? "none",
           runnable: r.runnable ? "yes" : "no",
+          model: r.pinsModel ? "pins" : "own",
           default: r.default ? "yes" : "",
         })),
       );
@@ -12881,10 +12909,11 @@ rcCommand
   .description("Enrol an agent — the person's point-anywhere form")
   .option("--dir <path>", "the agent's working directory (default: here)")
   .option("--harness <name>", "how its sessions start: claude-code, pi, codex, antigravity (default: yours, else unsaid)")
+  .option("--model <id>", "pin this agent's model, spelled as its harness spells it (e.g. claude-opus-5-5) — see `isocan --agent-help agents`")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
   .option("--listen <who>", "whose word wakes it besides its owner: names/ids comma-separated, or everyone (default: its owner alone — the person whose rc answers)")
   .action(
-    run(async (name: string, opts: { dir?: string; harness?: string; rules?: string; listen?: string }, cmd: Command) =>
+    run(async (name: string, opts: { dir?: string; harness?: string; model?: string; rules?: string; listen?: string }, cmd: Command) =>
       enrolAgent(cmd, name, opts, false),
     ),
   );
@@ -13124,7 +13153,7 @@ try a policy against one agent before starting an rc with it.`,
         };
         await upsertRcAgent(ctx.home, row);
       }
-      const spec = await adapterFor(ctx.home, row.harness);
+      const spec = await adapterFor(ctx.home, row.harness, process.env, row.model);
       if (!spec) {
         throw new Error(
           row.harness === null
@@ -13537,7 +13566,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
     cwd: rcCwd,
     rows: fileRcRows(ctx.home),
     adapterFor: async (row) => {
-      const spec = await adapterFor(ctx.home, row.harness);
+      const spec = await adapterFor(ctx.home, row.harness, process.env, row.model);
       if (!spec) {
         throw new Error(
           row.harness === null
