@@ -527,7 +527,7 @@ export function createServer(routes, { token = process.env.ANTIGRAVITY_SIDECAR_U
         return res.end(preload);
       }
       if (url.pathname !== "/") return send(404, { error: "not found" });
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       return res.end(page());
     }
     if (token && (req.headers["x-sidecar-token"] ?? url.searchParams.get("token")) !== token) {
