@@ -254,3 +254,42 @@ export function relayMessage({ woke, canvas, name }) {
     "Answer it ON THE CANVAS with `isocan comment reply <thread> \"…\"` — the person who wrote it is reading the canvas, not this chat. If it asks for work, do it, then reply there. You do not need to run `isocan wait`; the Isocan Canvas pane passes the next one on.",
   ].join("\n");
 }
+
+/**
+ * Turns a raw send/handoff/fanout failure into a sentence a person can act on
+ * from the composer, naming both what went wrong and what recovers it.
+ */
+export function friendlyAskError(err, target = "here") {
+  const raw = (typeof err === "string" ? err : err?.message) ?? "";
+  const msg = raw.trim() || "Something went wrong while sending";
+  const lower = msg.toLowerCase();
+  if (lower.includes("not attached to a conversation")) {
+    return "This pane isn't linked to an active chat yet — send a message in the chat column on the left to attach it, or switch the target menu to Fan out or an @agent.";
+  }
+  if (lower.includes("select an item")) {
+    return "Select an item on the canvas first — handing off to an @agent posts a comment thread pinned to the selected item.";
+  }
+  if (lower.includes("trajectory not found") || lower.includes("conversation not found")) {
+    return "Jetski couldn't find this chat's session — send a message in the chat column on the left to wake it, or use Fan out to start a fresh conversation.";
+  }
+  if (lower.includes("timed out")) {
+    return "Timed out waiting for Jetski to accept the message — the host may be busy. Click Retry to send again.";
+  }
+  if (lower.includes("unauthorized") || lower.includes("answered 401")) {
+    return "This pane's session token expired — click Reload in the top bar.";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("fetch failed")) {
+    return "Couldn't reach the pane server — click Retry, or click Reload in the top bar if the pane restarted.";
+  }
+  if (lower.includes("not bound to a canvas")) {
+    return "This workspace folder isn't bound to a canvas yet — bind or create one first.";
+  }
+  if (target.startsWith("agent:")) {
+    return `Couldn't post handoff comment on the canvas (${msg}). Check that the canvas daemon is reachable and click Retry.`;
+  }
+  if (target.startsWith("fan:")) {
+    return `Couldn't start fan-out conversations (${msg}). Click Retry to try again.`;
+  }
+  return `Couldn't send to this chat (${msg}). Click Retry, or paste your message into the chat column on the left.`;
+}
+

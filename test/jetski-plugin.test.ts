@@ -676,7 +676,7 @@ describe("the bundle", () => {
       "--card-border",
     ]);
     for (const [, token] of page.matchAll(/var\((--[a-z0-9-]+)/g)) {
-      if (token.startsWith("--fallback-")) continue;
+      if (!token || token.startsWith("--fallback-")) continue;
       expect(hostTokens.has(token), `${token} is not a Jetski host theme token`).toBe(true);
     }
     expect(page).toContain("@media (prefers-color-scheme: dark)");

@@ -113,6 +113,14 @@
       border-color: color-mix(in srgb, var(--primary, var(--fallback-primary)) 40%, var(--border, var(--fallback-border)));
     }
     .note { padding: 5px 8px; border-bottom: 1px solid var(--border, var(--fallback-border)); flex-shrink: 0; }
+    .ok {
+      color: color-mix(in srgb, #22c55e 65%, var(--foreground, var(--fallback-fg)));
+      background: color-mix(in srgb, #22c55e 12%, var(--card, var(--background, var(--fallback-card))));
+    }
+    .pending {
+      color: var(--muted-foreground, var(--fallback-muted));
+      background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 8%, var(--card, var(--background, var(--fallback-card))));
+    }
     .warn {
       color: color-mix(in srgb, #d97706 75%, var(--foreground, var(--fallback-fg)));
       background: color-mix(in srgb, #f59e0b 12%, var(--card, var(--background, var(--fallback-card))));
@@ -121,6 +129,15 @@
       color: color-mix(in srgb, #ef4444 75%, var(--foreground, var(--fallback-fg)));
       background: color-mix(in srgb, #ef4444 12%, var(--card, var(--background, var(--fallback-card))));
     }
+    .ask-notice {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--border, var(--fallback-border));
+      flex-shrink: 0;
+    }
+    .ask-notice-body { flex: 1; min-width: 0; }
     [hidden] { display: none !important; }
     main { flex: 1; position: relative; min-height: 0; }
     iframe { width: 100%; height: 100%; border: 0; display: block; }
@@ -152,7 +169,7 @@
       border: 1px solid var(--border, var(--fallback-border));
       border-radius: 6px;
       padding: 2px 6px;
-      max-width: 140px;
+      max-width: 170px;
     }
     select option {
       background: var(--card, var(--background, var(--fallback-card)));
@@ -240,14 +257,20 @@
   <div class="bar composer" id="selection" hidden>
     <span id="chips" class="row" style="flex-wrap: wrap"></span>
     <div class="field">
-      <input id="ask" type="text" autocomplete="off" placeholder="Ask Jetski about the canvas, or / for a skill…" aria-label="Ask Jetski, or type / for a canvas skill" aria-autocomplete="list" aria-controls="slash" />
+      <input id="ask" type="text" autocomplete="off" placeholder="Run a /skill, or send canvas context to chat…" aria-label="Ask Jetski, or type / for a canvas skill" aria-autocomplete="list" aria-controls="slash" />
       <div class="menu" id="slash" role="listbox" hidden></div>
     </div>
-    <select id="target" aria-label="Who carries it out" title="Who carries it out">
-      <option value="here">This chat</option>
+    <select id="target" aria-label="Who carries it out" title="Where this canvas action is sent">
+      <option value="here">→ This chat</option>
     </select>
-    <button id="ask-send" type="button" class="primary">Ask</button>
+    <button id="ask-send" type="button" class="primary" disabled>Send to chat</button>
     <div id="starters" class="row starters"></div>
+  </div>
+
+  <div class="ask-notice" id="ask-notice" role="status" aria-live="polite" hidden>
+    <span class="ask-notice-body" id="ask-notice-text"></span>
+    <button id="ask-retry" type="button" class="small" hidden>Retry</button>
+    <button id="ask-dismiss" type="button" class="small" aria-label="Dismiss message" title="Dismiss">×</button>
   </div>
 
   <div class="note" id="status" role="status" hidden></div>
@@ -309,6 +332,49 @@
       $("status").textContent = text || "";
     }
 
+    let retryAction = null;
+    function sayAsk(text, tone = "", onRetry = null) {
+      retryAction = typeof onRetry === "function" ? onRetry : null;
+      $("ask-notice").hidden = !text;
+      $("ask-notice").className = `ask-notice ${tone}`;
+      $("ask-notice-text").textContent = text || "";
+      $("ask-retry").hidden = !retryAction;
+    }
+
+    function friendlyAskError(err, target = "here") {
+      const raw = (typeof err === "string" ? err : err?.message) ?? "";
+      const msg = raw.trim() || "Something went wrong while sending";
+      const lower = msg.toLowerCase();
+      if (lower.includes("not attached to a conversation")) {
+        return "This pane isn't linked to an active chat yet — send a message in the chat column on the left to attach it, or switch the target menu to Fan out or an @agent.";
+      }
+      if (lower.includes("select an item")) {
+        return "Select an item on the canvas first — handing off to an @agent posts a comment thread pinned to the selected item.";
+      }
+      if (lower.includes("trajectory not found") || lower.includes("conversation not found")) {
+        return "Jetski couldn't find this chat's session — send a message in the chat column on the left to wake it, or use Fan out to start a fresh conversation.";
+      }
+      if (lower.includes("timed out")) {
+        return "Timed out waiting for Jetski to accept the message — the host may be busy. Click Retry to send again.";
+      }
+      if (lower.includes("unauthorized") || lower.includes("answered 401")) {
+        return "This pane's session token expired — click Reload in the top bar.";
+      }
+      if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("fetch failed")) {
+        return "Couldn't reach the pane server — click Retry, or click Reload in the top bar if the pane restarted.";
+      }
+      if (lower.includes("not bound to a canvas")) {
+        return "This workspace folder isn't bound to a canvas yet — bind or create one first.";
+      }
+      if (target.startsWith("agent:")) {
+        return `Couldn't post handoff comment on the canvas (${msg}). Check that the canvas daemon is reachable and click Retry.`;
+      }
+      if (target.startsWith("fan:")) {
+        return `Couldn't start fan-out conversations (${msg}). Click Retry to try again.`;
+      }
+      return `Couldn't send to this chat (${msg}). Click Retry, or paste your message into the chat column on the left.`;
+    }
+
     // Opened by hand, there is no host fetch to carry the token; a `?token=`
     // on this page's own address is forwarded the way the SDK would.
     const handToken = standalone ? new URLSearchParams(location.search).get("token") : null;
@@ -333,8 +399,10 @@
       const framing = which === "frame";
       $("reload").hidden = $("open").hidden = !framing;
       $("selection").hidden = !framing;
-      if (!framing) setSelection([]);
-      else {
+      if (!framing) {
+        sayAsk("");
+        setSelection([]);
+      } else {
         void refreshAsks();
         void loadSkills();
       }
@@ -560,8 +628,8 @@
         chips.append(more);
       }
       $("ask").placeholder = items.length
-        ? `Ask Jetski about ${items.length === 1 ? "this" : `these ${items.length}`}, or / for a skill…`
-        : "Ask Jetski about the canvas, or / for a skill…";
+        ? `Send ${items.length === 1 ? "selection" : `these ${items.length} items`} to chat, run a /skill, or @hand off…`
+        : "Run a /skill, fan out, or send canvas context to chat…";
       renderTargets();
       renderStarters();
     }
@@ -572,6 +640,7 @@
      * canvas and again after a minute; the menu opens on `/`. */
     let skills = [];
     let skillsFor = null;
+    let asking = false;
     async function loadSkills() {
       if (!state?.bound || skillsFor === state.canvasId) return skills;
       try {
@@ -607,23 +676,38 @@
         if (title) o.title = title;
         target.append(o);
       };
-      add("here", host?.conversationId ? "This chat" : "This chat (not attached)", !host?.conversationId);
+      add(
+        "here",
+        host?.conversationId ? "→ This chat" : "→ This chat (not attached)",
+        !host?.conversationId,
+        host?.conversationId
+          ? "Delivers this canvas selection or /skill into the current chat's inbox (the agent replies in the chat column on the left)"
+          : "This pane is not linked to an active conversation yet",
+      );
       if (host) {
-        add("fan:flash,pro", "Fan out: Flash + Pro", false, "Two new Jetski conversations, one per model tier — each joins the canvas under its own name");
-        add("fan:flash_lite,flash,pro", "Fan out: all three tiers", false, "Three new Jetski conversations: flash_lite, flash and pro");
+        add("fan:flash,pro", "↗ Fan out: Flash + Pro", false, "Spawns two new Jetski conversations, one per model tier — each joins the canvas under its own name");
+        add("fan:flash_lite,flash,pro", "↗ Fan out: all three tiers", false, "Spawns three new Jetski conversations: flash_lite, flash and pro");
       }
       const agents = [
         ...(state?.enrolled ?? []).map((a) => a.name),
         ...(state?.presets ?? []).filter((p) => p.enrolled).map((p) => p.name),
       ].filter((n, i, all) => n && all.indexOf(n) === i);
       for (const name of agents) {
-        add(`agent:${name}`, `@${name} on the canvas`, selection.length === 0,
-          selection.length === 0 ? "Select an item first — the request is pinned to it as a comment" : `A comment on the selection that wakes ${name} while isocan rc runs`);
+        add(`agent:${name}`, `💬 @${name} on canvas`, selection.length === 0,
+          selection.length === 0 ? "Select an item first — the request is pinned to it as a comment" : `Posts a visible comment thread on the selected canvas item that wakes ${name} while isocan rc runs`);
       }
       const keep = [...target.options].find((o) => o.value === was && !o.disabled);
       target.value = keep ? was : ([...target.options].find((o) => !o.disabled)?.value ?? "here");
-      $("ask-send").disabled = [...target.options].every((o) => o.disabled);
-      $("ask-send").textContent = target.value.startsWith("fan:") ? "Fan out" : target.value.startsWith("agent:") ? "Hand off" : "Ask";
+      const hasInput = Boolean($("ask").value.trim());
+      const allDisabled = [...target.options].every((o) => o.disabled);
+      $("ask").readOnly = asking;
+      target.disabled = asking || allDisabled;
+      $("ask-send").disabled = asking || !hasInput || allDisabled;
+      if (asking) {
+        $("ask-send").textContent = target.value.startsWith("fan:") ? "Starting…" : target.value.startsWith("agent:") ? "Handing off…" : "Sending…";
+      } else {
+        $("ask-send").textContent = target.value.startsWith("fan:") ? "Fan out" : target.value.startsWith("agent:") ? "Post on canvas" : "Send to chat";
+      }
     }
 
     /** The starters: what a person can do from here, shown before they
@@ -644,6 +728,7 @@
         b.addEventListener("click", () => {
           $("ask").value = fill;
           $("ask").focus();
+          renderTargets();
           renderStarters();
           if (fill.startsWith("/")) openSlash();
         });
@@ -672,7 +757,7 @@
         all.className = "starter";
         all.innerHTML = `/ <span class="muted">${skills.length} skills</span>`;
         all.title = "Every skill this canvas has — built in, and added with /skill add";
-        all.addEventListener("click", () => { $("ask").value = "/"; $("ask").focus(); openSlash(); });
+        all.addEventListener("click", () => { $("ask").value = "/"; $("ask").focus(); renderTargets(); openSlash(); });
         list.append(all);
       }
     }
@@ -741,39 +826,62 @@
       $("ask").value = `/${s.name} `;
       $("slash").hidden = true;
       $("ask").focus();
+      renderTargets();
       renderStarters();
     }
 
     async function ask() {
+      if (asking) return;
       const raw = $("ask").value;
+      if (!raw.trim()) {
+        sayAsk("Type a question, pick a /skill, or click one of the starter chips above first.", "warn");
+        $("ask").focus();
+        return;
+      }
       const typed = parseTyped(raw);
       const target = $("target").value;
       const items = selection.map((i) => ({ id: i.id, title: i.title }));
       const body = { items, ...typed };
-      $("ask-send").disabled = true;
+      const preview = `${raw.trim().slice(0, 60)}${raw.trim().length > 60 ? "…" : ""}`;
+      const scope = items.length ? ` (${items.length} selected)` : "";
+      asking = true;
+      renderTargets();
+      sayAsk(
+        target.startsWith("agent:")
+          ? `Posting "${preview}"${scope} as a canvas comment for @${target.slice(6)}…`
+          : target.startsWith("fan:")
+            ? `Starting ${target.slice(4).split(",").length} conversations for "${preview}"${scope}…`
+            : `Sending "${preview}"${scope} to this chat…`,
+        "pending",
+      );
       try {
         if (target.startsWith("agent:")) {
           const agent = target.slice(6);
           const out = await api("/api/handoff", { ...body, agent });
           if (out.threadId) openThread(out.threadId, true);
-          say(`Handed to @${agent} as a comment on the canvas — it answers there while \`isocan rc\` runs.`);
+          sayAsk(`Posted on the canvas for @${agent} ✓ — "${preview}"${scope}. Opened the thread on the canvas; @${agent} replies there while \`isocan rc\` runs.`, "ok");
         } else if (target.startsWith("fan:")) {
           const tiers = target.slice(4).split(",");
           const out = await api("/api/fanout", { ...body, tiers, conversationId: host?.conversationId ?? null });
-          say(`Started ${out.started.length} conversations (${tiers.join(", ")}). Each joins the canvas under its own name — watch the Agents bar, and their takes land beside the selection.`);
+          sayAsk(`Started ${out.started.length} conversations (${tiers.join(", ")}) ✓ — each joins the canvas under its own name in the Agents bar.`, "ok");
         } else {
           if (!host?.conversationId) throw new Error("This pane is not attached to a conversation");
           await api("/api/send", { ...body, conversationId: host.conversationId });
-          // The message lands as a system message, not as your own chat
-          // bubble, so say it went — and that a busy conversation reads it
-          // at its next step rather than at once.
-          say(`Sent to this chat ✓ — "${raw.trim().slice(0, 60)}${raw.trim().length > 60 ? "…" : ""}". It arrives as a message from the pane; if the conversation is mid-task it answers at its next step.`);
+          // `agentapi send-message` delivers a system message into the agent's
+          // trajectory rather than creating a "You" chat bubble, so tell the
+          // person clearly where it went and where the reply will appear.
+          sayAsk(`Sent to this chat ✓ — "${preview}"${scope}. Delivered to the agent's inbox (no "You" bubble is added in the chat column; the agent replies there on its next step).`, "ok");
         }
         $("ask").value = "";
         renderStarters();
       } catch (err) {
-        say(err.message, "error");
+        sayAsk(friendlyAskError(err, target), "error", () => {
+          if (!$("ask").value.trim()) $("ask").value = raw;
+          renderTargets();
+          void ask();
+        });
       } finally {
+        asking = false;
         renderTargets();
       }
     }
@@ -825,15 +933,21 @@
         help.textContent = "Answer with Jetski";
         help.title = "Hand the question to this chat to work out the answer together";
         help.disabled = !host?.conversationId;
-        help.addEventListener("click", async () => {
+        const sendThread = async () => {
+          help.disabled = true;
+          help.textContent = "Sending…";
           try {
             await api("/api/send", { kind: "thread", thread: a, conversationId: host.conversationId });
             openThread(a.threadId, true);
-            say(`Sent ${a.askerName || "the agent"}'s question to this chat ✓ — if the conversation is mid-task it picks it up at its next step.`);
+            sayAsk(`Sent ${a.askerName || "the agent"}'s question to this chat ✓ — delivered to the agent's inbox; the agent replies in the chat column on its next step.`, "ok");
           } catch (err) {
-            say(err.message, "error");
+            sayAsk(friendlyAskError(err, "here"), "error", sendThread);
+          } finally {
+            help.disabled = !host?.conversationId;
+            help.textContent = "Answer with Jetski";
           }
-        });
+        };
+        help.addEventListener("click", sendThread);
         row.append(body, show, help);
         list.append(row);
       }
@@ -891,6 +1005,11 @@
       location.reload();
     });
     $("ask-send").addEventListener("click", ask);
+    $("ask-retry").addEventListener("click", () => {
+      const fn = retryAction;
+      if (fn) fn();
+    });
+    $("ask-dismiss").addEventListener("click", () => sayAsk(""));
     $("ask").addEventListener("keydown", (e) => {
       const menu = $("slash");
       const matches = menu.hidden ? null : slashMatches();
@@ -905,12 +1024,16 @@
         }
         if (e.key === "Escape") return void (menu.hidden = true);
       }
-      if (e.key === "Enter") ask();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        ask();
+      }
     });
     $("ask").addEventListener("input", () => {
       slashIndex = 0;
       if ($("ask").value.trimStart().startsWith("/")) void openSlash();
       else $("slash").hidden = true;
+      renderTargets();
       renderStarters();
     });
     $("ask").addEventListener("focus", () => void loadSkills());

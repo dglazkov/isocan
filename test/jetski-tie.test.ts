@@ -455,4 +455,23 @@ describe("the page and its server agree", () => {
     const preferred = /PREFERRED_SKILLS = \[([^\]]+)\]/.exec(page)![1]!.match(/"([a-z-]+)"/g)!.map((s) => s.slice(1, -1));
     for (const name of preferred) expect(shipped).toContain(name);
   });
+
+  it("translates send, handoff and fanout failures into actionable guidance with retry and dismiss controls", () => {
+    expect(jetski.friendlyAskError("This pane is not attached to a conversation", "here")).toContain("send a message in the chat column on the left to attach it");
+    expect(jetski.friendlyAskError(new Error("select an item on the canvas first"), "agent:Orla")).toContain("Select an item on the canvas first");
+    expect(jetski.friendlyAskError(new Error("agentapi send-message: trajectory not found: nope"), "here")).toContain("Jetski couldn't find this chat's session");
+    expect(jetski.friendlyAskError(new Error("agentapi send-message: timed out"), "here")).toContain("Timed out waiting for Jetski");
+    expect(jetski.friendlyAskError(new Error("/api/send answered 401"), "here")).toContain("session token expired");
+    expect(jetski.friendlyAskError(new Error("Failed to fetch"), "here")).toContain("Couldn't reach the pane server");
+    expect(jetski.friendlyAskError(new Error("daemon offline"), "agent:Orla")).toContain("Couldn't post handoff comment on the canvas (daemon offline)");
+    expect(jetski.friendlyAskError(new Error("quota exceeded"), "fan:flash,pro")).toContain("Couldn't start fan-out conversations (quota exceeded)");
+    expect(jetski.friendlyAskError(new Error("unexpected"), "here")).toContain("Couldn't send to this chat (unexpected)");
+
+    expect(page).toContain('id="ask-notice"');
+    expect(page).toContain('id="ask-retry"');
+    expect(page).toContain('id="ask-dismiss"');
+    expect(page).toContain("friendlyAskError(err, target)");
+    expect(page).toContain('no "You" bubble is added in the chat column');
+  });
 });
+
