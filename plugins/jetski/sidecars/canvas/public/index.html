@@ -244,6 +244,8 @@
     }
     [data-tip] {
       position: relative;
+    }
+    span[data-tip] {
       cursor: default;
       text-decoration: underline dotted var(--border, var(--fallback-border));
       text-underline-offset: 2px;
@@ -263,12 +265,18 @@
       border: 1px solid var(--card-border, var(--border, var(--fallback-border)));
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
       font-size: 11px;
+      font-weight: 400;
       line-height: 1.35;
+      text-decoration: none;
       white-space: normal;
       pointer-events: none;
       opacity: 0;
       transform: translateY(-2px);
       transition: opacity 0.1s ease, transform 0.1s ease;
+    }
+    header [data-tip]::after {
+      left: auto;
+      right: 0;
     }
     [data-tip]:hover::after,
     [data-tip]:focus-visible::after {
@@ -281,10 +289,10 @@
   <header>
     <span class="where" id="where">Waiting for Jetski to say which workspace this is…</span>
     <span class="spacer"></span>
-    <button id="inbox-toggle" type="button" hidden aria-expanded="false" title="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
-    <button id="agents-toggle" type="button" hidden aria-expanded="true" title="They answer @mentions on the canvas while isocan rc runs on this machine.">Agents ▾</button>
-    <button id="reload" type="button" hidden title="Mint a fresh address and reload the canvas">Reload</button>
-    <a id="open" href="#" target="_blank" rel="noopener" hidden title="The same canvas in a browser tab, with its own chat">Open ↗</a>
+    <button id="inbox-toggle" type="button" hidden aria-expanded="false" title="Questions agents left on the canvas that nobody has answered" data-tip="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
+    <button id="agents-toggle" type="button" hidden aria-expanded="true" title="Hide the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine." data-tip="Hide the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.">Agents ▾</button>
+    <button id="reload" type="button" hidden title="Mint a fresh address and reload the canvas" data-tip="Mint a fresh address and reload the canvas">Reload</button>
+    <a id="open" href="#" target="_blank" rel="noopener" hidden title="Open this canvas in an external browser tab (with its own chat)" data-tip="Open this canvas in an external browser tab (with its own chat)">Open ↗</a>
   </header>
 
   <div class="bar" id="agents" hidden>
@@ -577,7 +585,9 @@
       $("agents").hidden = !expanded;
       $("agents-toggle").setAttribute("aria-expanded", String(expanded));
       $("agents-toggle").textContent = expanded ? "Agents ▾" : "Agents ▸";
-      $("agents-toggle").title = `${expanded ? "Hide" : "Show"} the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.`;
+      const tip = `${expanded ? "Hide" : "Show"} the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.`;
+      $("agents-toggle").title = tip;
+      $("agents-toggle").setAttribute("data-tip", tip);
     }
 
     function renderPresets() {

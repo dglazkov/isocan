@@ -478,5 +478,15 @@ describe("the page and its server agree", () => {
     expect(page).toContain("friendlyAskError(err, target)");
     expect(page).toContain("Watch the chat column on the left for the reply.");
   });
+
+  it("shows instant CSS [data-tip] popovers on Open, Reload, Agents, Asks, and the Agents: label", () => {
+    expect(page).toMatch(/id="open"[^>]*data-tip="[^"]*external browser/);
+    expect(page).toMatch(/id="reload"[^>]*data-tip="Mint a fresh address and reload the canvas"/);
+    expect(page).toMatch(/id="agents-toggle"[^>]*data-tip="Hide the Agents bar/);
+    expect(page).toMatch(/id="inbox-toggle"[^>]*data-tip="Questions agents left on the canvas/);
+    expect(page).toMatch(/id="agents-note"[^>]*data-tip="They answer @mentions on the canvas while isocan rc runs on this machine\."/);
+    expect(page).toContain('$("agents-toggle").setAttribute("data-tip", tip)');
+    expect(page).toContain("header [data-tip]::after");
+  });
 });
 
