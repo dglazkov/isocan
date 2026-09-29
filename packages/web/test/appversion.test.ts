@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isOutdated, runningBundle, servedBundle } from "../src/lib/appversion.ts";
+import { isOutdated, mayReloadUnseen, runningBundle, servedBundle } from "../src/lib/appversion.ts";
 
 /**
  * A tab notices an upgrade without anything being versioned: Vite hashes the
@@ -29,5 +29,19 @@ describe("noticing that the app moved on", () => {
     // An unknown is never an update: no nagging in dev, or on a failed fetch.
     expect(isOutdated(null, "index-new.js")).toBe(false);
     expect(isOutdated("index-old.js", null)).toBe(false);
+  });
+});
+
+describe("reloading a tab nobody is looking at", () => {
+  const idle = { hidden: true, unsynced: 0, unfinished: false };
+  it("reloads a hidden tab with nothing in hand", () => {
+    expect(mayReloadUnseen(idle)).toBe(true);
+  });
+  it("leaves a visible tab to its pill", () => {
+    expect(mayReloadUnseen({ ...idle, hidden: false })).toBe(false);
+  });
+  it("waits for unconfirmed writes and never drops ink or words", () => {
+    expect(mayReloadUnseen({ ...idle, unsynced: 2 })).toBe(false);
+    expect(mayReloadUnseen({ ...idle, unfinished: true })).toBe(false);
   });
 });

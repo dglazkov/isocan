@@ -34,10 +34,10 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { captureClipboard, pasteInto } from "../lib/clipboard.ts";
 import { redo, undo } from "../lib/api.ts";
 import { deleteItems, downloadItem } from "../lib/itemactions.ts";
-import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.ts";
+import { applyLocalEcho, flashNotice, sendEchoed, unsynced } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
-import { checkForUpdate } from "../lib/appversion.ts";
+import { checkForUpdate, mayReloadUnseen } from "../lib/appversion.ts";
 import { arriveSketch, placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { pageTitle } from "../lib/title.ts";
@@ -508,6 +508,28 @@ function CanvasSurface({
       cancelled = true;
     };
   }, [connection]);
+
+  // An outdated tab in the background reloads itself instead of waiting to be
+  // asked: the pill is for a tab somebody is looking at. Checked when the tab
+  // is hidden and every few seconds while it stays hidden, so a write still in
+  // flight at the moment of hiding only delays the reload.
+  useEffect(() => {
+    if (!outdated) return;
+    const tryReload = () => {
+      const ui = useUiStore.getState();
+      const active = document.activeElement as HTMLElement | null;
+      const typing = Boolean(active?.isContentEditable || active?.matches?.("input, textarea, select"));
+      const unfinished = ui.sketch.length > 0 || ui.pendingText !== null || ui.pendingComment !== null || typing;
+      if (mayReloadUnseen({ hidden: document.hidden, unsynced: unsynced(), unfinished })) location.reload();
+    };
+    tryReload();
+    document.addEventListener("visibilitychange", tryReload);
+    const timer = window.setInterval(tryReload, 10_000);
+    return () => {
+      document.removeEventListener("visibilitychange", tryReload);
+      window.clearInterval(timer);
+    };
+  }, [outdated]);
 
   // Keyboard shortcuts — typical visual-editor ergonomics.
   useEffect(() => {
