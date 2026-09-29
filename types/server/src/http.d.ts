@@ -88,6 +88,18 @@ export interface RouteOptions {
      */
     modulesHome?: string;
     /**
+     * **Whose `dirs.json` the directory routes read and write** — the roster of
+     * which directory is bound to which canvas (`binding.ts`), behind the tree,
+     * the picker, the bind and the backing. `daemon.ts` passes the home it runs
+     * out of; absent, the process's own (`isocanHome()`), read per request.
+     *
+     * It was always the process's, which is the same directory in every real
+     * daemon and a different one in every test: a daemon started on a temp home
+     * recorded its binds in the person's own `~/.isocan/dirs.json`
+     * (`docs/reviews/lessons.md` #104).
+     */
+    rosterHome?: string;
+    /**
      * **Does this daemon serve the world?** What the bind says, stated rather
      * than sniffed: `daemon.ts` derives it from the address it was told to listen
      * on, and absent it the socket is read (`loopbackBound`).

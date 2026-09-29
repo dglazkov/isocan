@@ -98,6 +98,38 @@ export declare function canvasUrlWithPass(origin: string, canvasId: string, toke
  */
 export declare function urlWithPass(url: string, token: string): string;
 /**
+ * The address `isocan embed` hands a host pane (`docs/projects/jetski/design.md`).
+ *
+ * When a canvas is framed inside an agent manager's pane beside an existing
+ * conversation column, opening the 320px left Chat dock by default puts two
+ * chat columns side by side and spends half the pane. `?embed=1` before the
+ * `#<pass>` fragment says "a host framed me": the web client keeps the Chat
+ * dock and its rail button off while leaving the live Agent Presence strip
+ * intact, and answers the host's selection bridge. `{ chat: true }` keeps the
+ * dock (`&chat=on`) without ceasing to be an embed.
+ *
+ * A query parameter rather than more fragment, because the fragment is the
+ * pass's and is stripped the moment it is redeemed; `?embed=1` has to
+ * outlive that. It is not a credential, so being logged costs nothing.
+ */
+export declare function embedCanvasUrl(origin: string, canvasId: string, token: string, opts?: {
+    chat?: boolean | undefined;
+}): string;
+/**
+ * Whether a page was opened by a host pane: `?embed=1`, exactly what
+ * `embedCanvasUrl` writes and nothing else. The web client answers a framing
+ * host's selection bridge only when this holds, so a tab nobody framed never
+ * posts what is selected in it to anybody.
+ */
+export declare function isEmbedded(search: string): boolean;
+/**
+ * Whether an embedded page keeps its own Chat dock off: framed
+ * (`isEmbedded`), and not asked to keep it with `chat=on`. The Agent
+ * Presence strip stays either way — who is on the canvas is not the host's
+ * business to replace.
+ */
+export declare function isEmbeddedChatHidden(search: string): boolean;
+/**
  * Split an address into the address and the pass it carries, if any.
  *
  * Everything after the FIRST `#` is the token — a pass token is

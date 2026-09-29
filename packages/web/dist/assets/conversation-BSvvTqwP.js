@@ -1,0 +1,1 @@
+import{h as r,$ as i,a0 as c,B as d,a1 as p}from"./index-BJVcOnHv.js";function h(a,o){const e=r.getState();if(e.canvasId!==a)return;const t=e.canvas?.threads[o];if(t?.main)i(a,!0);else if(t&&e.canvas){const s=c(e.canvas,t),n=d.getState();n.setViewport(p(n.viewport,s.x,s.y,window.innerWidth,window.innerHeight)),n.setOpenThread(t.id)}}export{h as openConversation};

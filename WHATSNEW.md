@@ -21,6 +21,18 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 28 September 2026
+
+- **A canvas in a pane beside your agent has no Chat of its own.**
+  `isocan embed` now gives an address that opens without the Chat, because
+  the conversation beside it is where you talk. Every way in to the Chat is
+  closed with it. `isocan embed --chat` keeps the Chat.
+- **Pin an agent to a model.** `isocan agent add <name> --model <id>` (and
+  `rc add`, `bench add`) enrols a standing agent on a particular model, spelled
+  the way its harness spells it. `isocan harness` shows which harnesses can
+  really take a model, so you know which agents are pinned before you compare
+  them.
+
 ## 26 September 2026
 
 - **See what changed.** Right-click an item → *Compare versions* (or *Compare*

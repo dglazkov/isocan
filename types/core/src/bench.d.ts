@@ -68,6 +68,8 @@ export interface BenchAgent {
     actorId: string;
     /** Which agent this is, or null when the row was written without one. */
     harness: string | null;
+    /** Which model this agent is pinned to, or null when unsaid. */
+    model?: string | null | undefined;
     /** Where it runs, opaquely. Null when nobody said. */
     runsAt: string | null;
 }
@@ -85,8 +87,9 @@ export declare function benchAgents(canvas: CanvasContents): BenchAgent[];
  */
 export declare function benchItemOf(name: string, agent: {
     actorId: string;
-    harness?: string | null;
-    runsAt?: string | null;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+    runsAt?: string | null | undefined;
 }): {
     properties: Record<string, string>;
     blob: string;
@@ -119,11 +122,13 @@ export declare function benchItemOf(name: string, agent: {
  */
 export declare function benchWriteFor(canvas: CanvasContents, agent: {
     actorId: string;
-    harness?: string | null;
-    runsAt?: string | null;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+    runsAt?: string | null | undefined;
 }, explicit?: {
-    harness?: boolean;
-    runsAt?: boolean;
+    harness?: boolean | undefined;
+    model?: boolean | undefined;
+    runsAt?: boolean | undefined;
 }): {
     kind: "add";
     x: number;

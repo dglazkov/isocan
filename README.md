@@ -900,8 +900,8 @@ isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
 isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
                                    # what each has proved; end one
-isocan bench [add <name> [--actor <id>] [--harness <n>] [--runs-at <label>]]
-             [join <name>] [rm <name>]
+isocan bench [add <name> [--actor <id>] [--harness <n>] [--model <id>]
+                         [--runs-at <label>]] [join <name>] [rm <name>]
                                    # the agents you have, and whether anything
                                    # could answer for one right now: ready /
                                    # elsewhere / unreachable. A row is a
@@ -1320,3 +1320,46 @@ answering a mention or the Chat; listens only to Nico."*, *is back* after
 five minutes away, *stepped away* on a deliberate stop. Off by default. The
 lines are records, so they summon nobody, and no agent answers another's
 hello.
+
+### Jetski plugin and model-pinned agents
+
+[`plugins/jetski/`](plugins/jetski/) is isocan as a Jetski plugin: the canvas
+your workspace is bound to, in a pane beside the Jetski chat. Every part of it
+is an `isocan` command, so the plugin can do nothing the CLI cannot. It runs
+from a clone of the repo (the `#release` install carries the CLI, not the
+plugin): `node scripts/install-jetski-plugin.mjs` links it into
+`~/.gemini/config/plugins/isocan`. Restart Jetski after installing: it reads
+a plugin's hooks once, when the plugin loads.
+
+- **A canvas without its own Chat (`isocan embed`)**: the embed address opens
+  with `?embed=1`, which means no Chat dock and no way in to one (⌘J, the rail,
+  the palette and the menus are all closed). The conversation beside it is
+  where you talk. Presence, comments and the rest of the canvas stay.
+  `isocan embed --chat` keeps the Chat. A framed canvas tells its parent it is
+  ready. Once the parent answers, it tells that one origin what is selected,
+  and that is how the pane sees your selection.
+- **The pane** (`sidecars/canvas/`) opens the canvas that the workspace's
+  `.isocan/project.json` names. An unbound folder can be bound to an existing
+  canvas (by id, link or title) or to a new one. Selected items show as chips,
+  and **Ask** hands your question, with the item ids, to the Jetski
+  conversation. **Open ↗** opens the same canvas in a tab, with its Chat.
+- **Arriving**: a SessionStart hook runs when a conversation starts in a
+  bound workspace. It names the conversation (`isocan identity --session`,
+  keyed to that conversation) and starts its session, so what it writes is
+  attributed to it rather than to you. With `ISOCAN_JETSKI_JOIN=off` the
+  conversation still gets the note, but nothing joins.
+- **Model-pinned agents (`--model <id>`)**: `isocan agent add`,
+  `isocan rc add` and `isocan bench add` take a model id, spelled the way its
+  harness spells it. The id always rides `ISOCAN_MODEL`. It reaches the
+  harness itself only through a door that harness really has:
+  `ANTHROPIC_MODEL` for Claude Code, `model` in Codex's `CODEX_CONFIG`, or
+  `{model}` in an `acpAdapters` declaration. `isocan harness` shows
+  `model: pins` or `model: own` for each harness, so you know which agents
+  are really pinned before you compare them. The pane's **Agents** bar enrols
+  the presets in `sidecars/canvas/presets.json`, with buttons like
+  *+ Orla · Opus 5.5*. Each agent has a name of its own, never its model's.
+  They answer @mentions while your `isocan rc` runs.
+
+A canvas on this machine's own daemon (`http://127.0.0.1:…`) can only be
+framed by a browser on this machine. To use Jetski Web from anywhere else,
+bind the folder to a canvas on a shared home such as isocan.io.
