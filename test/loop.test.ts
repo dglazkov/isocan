@@ -53,4 +53,40 @@ describe("the Loop findings are derived, not written", () => {
       expect(body, "these two commands only read Loop and write files").not.toMatch(/await push\(|upsertContext|stitch\(\[\s*"(dismiss|create|delete|edit)"/);
     }
   });
+
+  it("keeps the installer's address out of the repository — it is a read token, and this repo is public", () => {
+    /* The installer URL carries a token for a bucket that does not allow public
+       reads, so it lives in a secret. This walks what is committed under
+       .github/ and the docs for the host it would be spelled with. */
+    const roots = [".github", "docs", "scripts", "AGENTS.md"];
+    const offenders: string[] = [];
+    const walk = (p: string) => {
+      const full = path.join(repo, p);
+      if (!existsSync(full)) return;
+      if (readdirSyncSafe(full)) for (const n of readdirSyncSafe(full)!) walk(path.join(p, n));
+      else if (/\.(md|ya?ml|mjs|ts|json|sh)$/.test(p) && /firebasestorage\.googleapis\.com[^\s"']*token=/.test(readFileSync(full, "utf8"))) offenders.push(p);
+    };
+    roots.forEach(walk);
+    expect(offenders, "a download token is committed here; move it to a secret and rotate it").toEqual([]);
+  });
+
+  it("the nightly pull reads Loop and files findings, and nothing else", () => {
+    const yml = readFileSync(`${repo}/.github/workflows/loop.yml`, "utf8");
+    expect(yml, "a pull that could decide would dismiss insights for the whole workspace").not.toMatch(
+      /loop\.mjs (decide|push|mine|propose)/,
+    );
+    expect(yml).toContain("scripts/loop.mjs pull");
+    expect(yml, "an unconfigured repository skips; it does not fail").toContain("enabled=false");
+    expect(yml).toContain("secrets.LOOP_API_KEY");
+    expect(yml).toContain("secrets.STITCH_INSTALLER_URL");
+    expect(yml, "the merge is checked on the branch, not trusted").toMatch(/render --check[\s\S]*vitest run/);
+  });
 });
+
+function readdirSyncSafe(p: string): string[] | null {
+  try {
+    return readdirSync(p);
+  } catch {
+    return null;
+  }
+}

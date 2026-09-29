@@ -79,8 +79,8 @@ there — and the workflow finds nothing to do when you have.
 
 ## The night shift's pull requests
 
-Three workflows open a pull request on a schedule — `changelog.yml`,
-`grade.yml`, `persona.yml` — and until this section existed, nothing said what
+Four workflows open a pull request on a schedule — `changelog.yml`,
+`grade.yml`, `persona.yml`, `loop.yml` — and until this section existed, nothing said what
 happens to yesterday's machine PR when today's lands. What that cost: five
 open machine PRs at once on 9 Sep 2026 (three grades, two changelogs), each
 waiting on a person remembering — the same failure as the hand-kept review
@@ -106,6 +106,15 @@ longer does, with a comment naming the run that closed it. Merging is the
 default because the pages are a time series — yesterday's readings are
 yesterday's, not stale — and a conflict can only mean somebody hand-edited a
 generated page, which is what supersede is for.
+
+**Loop pulls merge themselves, and only the findings.** `loop.yml` reads Stitch
+Loop and files what it finds in `docs/loop/`; it never decides, pushes or mines,
+because a decision dismisses an insight for everyone in the workspace. A newer
+run closes an older `loop/` PR as superseded, and the run merges its own only
+when the diff is the findings and their two views *and* the checks pass on the
+branch. It skips with a notice, rather than failing, until the `LOOP_API_KEY` and
+`STITCH_INSTALLER_URL` secrets exist — the second is a secret because it carries
+a read token for a bucket that is not public, and this repository is.
 
 **Changelogs are the exception, and the reason the rule is per-workflow.** The
 entry is a judgement — "read it before merging", says the PR body — and a day
