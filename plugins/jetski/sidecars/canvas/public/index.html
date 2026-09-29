@@ -684,6 +684,28 @@
       if (!m) return null;
       return skills.filter((s) => s.name.startsWith(m[1])).concat(skills.filter((s) => !s.name.startsWith(m[1]) && s.name.includes(m[1])));
     }
+    function setSlashIndex(next, scroll = true) {
+      const menu = $("slash");
+      const items = [...menu.children];
+      if (!items.length) return;
+      slashIndex = ((next % items.length) + items.length) % items.length;
+      for (const [idx, el] of items.entries()) {
+        el.setAttribute("aria-selected", String(idx === slashIndex));
+      }
+      if (scroll) {
+        const active = items[slashIndex];
+        if (active) {
+          if (menu.clientHeight > 0) {
+            const pad = 3;
+            const top = active.offsetTop - pad;
+            const bottom = active.offsetTop + active.offsetHeight + pad;
+            if (top < menu.scrollTop) menu.scrollTop = Math.max(0, top);
+            else if (bottom > menu.scrollTop + menu.clientHeight) menu.scrollTop = bottom - menu.clientHeight;
+          }
+          active.scrollIntoView?.({ block: "nearest" });
+        }
+      }
+    }
     async function openSlash() {
       await loadSkills();
       const menu = $("slash");
@@ -708,15 +730,12 @@
         desc.className = "muted";
         desc.textContent = `${s.description}${s.source && s.source !== "built-in" ? ` · ${s.source}` : ""}`;
         opt.append(head, desc);
-        opt.addEventListener("mouseenter", () => {
-          slashIndex = i;
-          for (const [idx, el] of [...menu.children].entries()) el.setAttribute("aria-selected", String(idx === i));
-        });
+        opt.addEventListener("mouseenter", () => setSlashIndex(i, false));
         opt.addEventListener("mousedown", (e) => { e.preventDefault(); takeSlash(s); });
         menu.append(opt);
       });
       menu.hidden = false;
-      menu.children[slashIndex]?.scrollIntoView?.({ block: "nearest" });
+      setSlashIndex(slashIndex, true);
     }
     function takeSlash(s) {
       $("ask").value = `/${s.name} `;
@@ -865,7 +884,7 @@
     });
     $("reload").addEventListener("click", () => {
       framed = { canvasId: null, origin: null, ready: false };
-      requeue();
+      location.reload();
     });
     $("ask-send").addEventListener("click", ask);
     $("ask").addEventListener("keydown", (e) => {
@@ -874,8 +893,7 @@
       if (matches && matches.length) {
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
           e.preventDefault();
-          slashIndex = (slashIndex + (e.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
-          return void openSlash();
+          return setSlashIndex(slashIndex + (e.key === "ArrowDown" ? 1 : -1), true);
         }
         if (e.key === "Enter" || e.key === "Tab") {
           e.preventDefault();

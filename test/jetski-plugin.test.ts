@@ -684,6 +684,10 @@ describe("the bundle", () => {
     // painting a menu option's background with it directly puts dark/muted text
     // on solid blue.
     expect(page).not.toMatch(/\.menu\s+\.opt\[aria-selected="true"\]\s*\{\s*background:\s*var\(--accent/);
+    // Arrow keys in the `/` menu must update `aria-selected` and scroll in-place
+    // rather than calling `openSlash()` (whose `replaceChildren()` resets `scrollTop`).
+    expect(page).toContain("return setSlashIndex(slashIndex + (e.key === \"ArrowDown\" ? 1 : -1), true);");
+    expect(page).toContain("active.scrollIntoView?.({ block: \"nearest\" });");
   });
 
   it("carries its own rule, and the collaboration skill as a doorway rather than a copy", () => {
