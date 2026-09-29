@@ -139,3 +139,4 @@ export type * from "./design-partner.ts";
 export type * from "./questionnaire.ts";
 export type * from "./design-request.ts";
 export type * from "./design-record.ts";
+export * from "./loop.ts";

@@ -49,7 +49,7 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  */
 register();
 registerLoader("../packages/cli/bin/workspace-loader.mjs", import.meta.url);
-const { docStatus, statusProblems } = await import("@isocan/core");
+const { docStatus, statusProblems, parseFinding, projectCounts, loopSummary } = await import("@isocan/core");
 
 function statusOf(file) {
   const status = docStatus(readFileSync(path.join(repo, file), "utf8"));
@@ -95,6 +95,30 @@ function titleOf(file) {
   return line ? line.slice(2).trim() : path.basename(file);
 }
 
+/**
+ * **Loop's findings, counted against the projects they belong to.** They live in
+ * `docs/loop/`, one file each, and are read through core like every other doc
+ * here. A project row says how many are waiting on a decision and how many are
+ * accepted as its work, so the one page that says where things stand says this
+ * too, and it cannot disagree with `docs/LOOP.md` because both are derived.
+ */
+function loopFindings() {
+  const dir = path.join(repo, "docs/loop");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((n) => n.endsWith(".md") && n !== "README.md")
+    .sort()
+    .map((n) => parseFinding(readFileSync(path.join(dir, n), "utf8"), n.replace(/\.md$/, "")));
+}
+const findings = loopFindings();
+const perProject = projectCounts(findings);
+const loopNote = (d) => {
+  const c = d.kind === "project" ? perProject.get(d.title) : undefined;
+  if (!c) return "";
+  const parts = [c.proposed && `${c.proposed} to decide`, c.accepted && `${c.accepted} accepted`].filter(Boolean);
+  return parts.length ? ` · Loop: [${parts.join(", ")}](LOOP.md)` : "";
+};
+
 const docs = collect();
 const byState = {};
 for (const d of docs) (byState[d.status] ??= []).push(d);
@@ -133,6 +157,14 @@ const lines = [
   `${count("superseded")} superseded. Neither counts as done: reading is not building,`,
   "and the done column should not be flattered by either.",
   "",
+  ...(findings.length
+    ? [
+        `**[Loop findings](LOOP.md): ${loopSummary(findings)}.** Stitch Loop mines the code; a`,
+        "finding is its claim, checked against the code, ranked by us. Each project row",
+        "below counts the findings that name it.",
+        "",
+      ]
+    : []),
 ];
 
 for (const state of ["blocked", "partial", "designed", "open", "built", "noted", "superseded"]) {
@@ -147,7 +179,7 @@ for (const state of ["blocked", "partial", "designed", "open", "built", "noted",
     // roadmap is one click from where the work actually moves.
     const issue = d.issue ? ` · [#${d.issue}](https://github.com/dglazkov/isocan/issues/${d.issue})` : "";
     lines.push(
-      `| ${d.kind === "project" ? "**project**" : "research"} | [${d.title}](${href(d.rel)}) | ${d.since ?? "—"} | ${why}${see}${issue} |`,
+      `| ${d.kind === "project" ? "**project**" : "research"} | [${d.title}](${href(d.rel)}) | ${d.since ?? "—"} | ${why}${see}${issue}${loopNote(d)} |`,
     );
   }
   lines.push("");

@@ -185,6 +185,20 @@ in August measured, and writes its findings back there as a dated page.
 failure modes this codebase has actually produced, each with the guard that
 now catches it. Add to it when a bug turns out to have a shape.
 
+## Loop's findings
+
+isocan is paired with a Stitch Loop workspace (`.stitch.json`). Loop mines the
+code for insights; **the ranking is ours, not Loop's**. Each insight is a finding
+in `docs/loop/` — Loop's claim, our read of it against the code, and the
+decision in front matter — and [`docs/LOOP.md`](docs/LOOP.md) and the Loop
+counts in [`docs/ROADMAP.md`](docs/ROADMAP.md) are generated from those files.
+`node scripts/loop.mjs` is the whole verb set and `isocan --agent-help` has the
+protocol: **an agent proposes, a person decides**, because a decision is sent to
+a workspace other people read. Ledger's `scripts/loop.ts` is where this ran
+first; the two differences are that a finding names a *project* here, and the
+context Loop gets is the repo's own `measure.mjs` numbers, not an oplog digest —
+that would carry what people did on their canvases to a third party.
+
 ## What needs a person
 
 [`docs/verify/`](docs/verify/README.md) is the third lane, and the shortest.
