@@ -112,7 +112,15 @@
       background: color-mix(in srgb, var(--primary, var(--fallback-primary)) 14%, var(--card, var(--background, var(--fallback-card))));
       border-color: color-mix(in srgb, var(--primary, var(--fallback-primary)) 40%, var(--border, var(--fallback-border)));
     }
-    .note { padding: 5px 8px; border-bottom: 1px solid var(--border, var(--fallback-border)); flex-shrink: 0; }
+    .note {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--border, var(--fallback-border));
+      flex-shrink: 0;
+    }
+    .note-body { flex: 1; min-width: 0; }
     .ok {
       color: color-mix(in srgb, #22c55e 65%, var(--foreground, var(--fallback-fg)));
       background: color-mix(in srgb, #22c55e 12%, var(--card, var(--background, var(--fallback-card))));
@@ -272,7 +280,10 @@
     <button id="ask-dismiss" type="button" class="small" aria-label="Dismiss message" title="Dismiss">×</button>
   </div>
 
-  <div class="note" id="status" role="status" hidden></div>
+  <div class="note" id="status" role="status" hidden>
+    <span class="note-body" id="status-text"></span>
+    <button id="status-dismiss" type="button" class="small" aria-label="Dismiss status" title="Dismiss">×</button>
+  </div>
 
   <main>
     <iframe id="frame" title="Isocan canvas" allow="clipboard-read; clipboard-write" hidden></iframe>
@@ -325,10 +336,13 @@
       return queue;
     }
 
-    function say(text, tone = "") {
+    let statusSource = "";
+    let pollFailures = 0;
+    function say(text, tone = "", source = "user") {
+      statusSource = text ? source : "";
       $("status").hidden = !text;
       $("status").className = `note ${tone}`;
-      $("status").textContent = text || "";
+      $("status-text").textContent = text || "";
     }
 
     let retryAction = null;
@@ -448,8 +462,16 @@
       }
       try {
         state = await api("/api/workspace");
+        pollFailures = 0;
+        if (statusSource === "poll") say("");
       } catch (err) {
-        say(err.message, "error");
+        pollFailures += 1;
+        if (!state || pollFailures >= 3) {
+          const msg = /failed to fetch|networkerror|fetch failed/i.test(err?.message || "")
+            ? "Reconnecting to the pane server… (click Reload if the pane restarted)"
+            : err.message;
+          say(msg, state ? "warn" : "error", "poll");
+        }
         return;
       }
       if (uris.length === 0 && state.workspace) {
@@ -655,8 +677,8 @@
       try {
         skills = (await api("/api/skills")).skills ?? [];
         skillsFor = state.canvasId;
-      } catch (err) {
-        say(err.message, "error");
+      } catch {
+        // Retried on the next focus or refresh without sticking an error banner over the canvas.
       }
       pickedStarter = "";
       renderStarters();
@@ -988,9 +1010,12 @@
       framed = { canvasId: null, origin: null, ready: false };
       skillsFor = null;
       asksAt = 0;
+      pollFailures = 0;
+      say("");
       sayAsk("");
       void requeue();
     });
+    $("status-dismiss").addEventListener("click", () => say(""));
     $("ask-send").addEventListener("click", ask);
     $("ask-retry").addEventListener("click", () => {
       const fn = retryAction;
