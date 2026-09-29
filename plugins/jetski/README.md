@@ -18,8 +18,10 @@ command, so the plugin can do nothing the CLI cannot.
   `sidecars/canvas/presets.json` — edit it, or point `ISOCAN_JETSKI_PRESETS`
   at your own. They answer @mentions while `isocan rc` runs on your machine,
   and the pane marks any whose harness cannot take the model.
-- **The rest**: the `isocan-collab` skill, a rule for bound workspaces, the
-  `canvas-builder` and `visual-arena` agents, and the `isocan mcp` server.
+- **The rest**: the `isocan` (`/isocan` opens the pane pill), `fan-out`
+  (`/fan-out` fans a canvas task across model tiers) and `isocan-collab`
+  skills, a rule for bound workspaces, the `canvas-builder` and `visual-arena`
+  agents, and the `isocan mcp` server.
 
 ## Install
 

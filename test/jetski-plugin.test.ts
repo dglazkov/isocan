@@ -707,6 +707,10 @@ describe("the bundle", () => {
     expect(fanoutSkill.startsWith("---\n")).toBe(true);
     expect(fanoutSkill).toMatch(/^name:\s*fan-out$/m);
     expect(fanoutSkill).toContain('routes["/api/fanout"]');
+    const isocanSkill = read(path.join("skills", "isocan", "SKILL.md"));
+    expect(isocanSkill.startsWith("---\n")).toBe(true);
+    expect(isocanSkill).toMatch(/^name:\s*isocan$/m);
+    expect(isocanSkill).toContain(PILL);
   });
 
   it("names every preset agent as an agent, never after its model or vendor", () => {
