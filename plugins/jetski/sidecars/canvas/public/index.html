@@ -43,6 +43,16 @@
     button { cursor: pointer; }
     button:disabled { opacity: 0.5; cursor: default; }
     button.primary { background: var(--primary, #2563eb); color: var(--primary-foreground, #fff); border-color: transparent; }
+    button.attached {
+      background: rgba(22, 163, 74, 0.14);
+      border-color: rgba(22, 163, 74, 0.6);
+      color: color-mix(in srgb, #22c55e 75%, var(--foreground, #222));
+    }
+    button.unavailable {
+      opacity: 0.45;
+      border-style: dashed;
+      cursor: not-allowed;
+    }
     a { color: var(--primary, #2563eb); }
     input { background: var(--background, #fff); min-width: 0; flex: 1; }
     .chip { border-radius: 999px; padding: 2px 8px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -225,7 +235,11 @@
       const list = $("presets");
       list.replaceChildren();
       const presets = state?.presets ?? [];
-      const none = presets.length === 0 && !state?.presetsError;
+      const sessions = state?.sessions ?? [];
+      const enrolled = state?.enrolled ?? [];
+      const presetNames = new Set(presets.map((p) => (p.name || "").toLowerCase()));
+      const extraEnrolled = enrolled.filter((e) => !presetNames.has((e.name || "").toLowerCase()));
+      const none = presets.length === 0 && sessions.length === 0 && extraEnrolled.length === 0 && !state?.presetsError;
       $("agents-toggle").hidden = none;
       $("agents").hidden = none || agentsCollapsed;
       $("agents-toggle").setAttribute("aria-expanded", String(!none && !agentsCollapsed));
@@ -235,33 +249,76 @@
         span.textContent = state.presetsError;
         list.append(span);
       }
+      for (const sess of sessions) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "attached";
+        const kind = sess.harness === "antigravity" ? "Chat" : (sess.harness || "session");
+        button.textContent = `● ${sess.name} · ${kind}`;
+        button.title = `Connected: ${sess.name} is active on this canvas right now (${sess.harness ? `${sess.harness} session` : "live session"}).`;
+        button.addEventListener("click", () => {
+          say(`${sess.name} is connected to this canvas from your ${sess.harness === "antigravity" ? "Jetski chat" : (sess.harness || "CLI")} session. Click its avatar in the canvas top-right to jump to its cursor.`);
+        });
+        list.append(button);
+      }
+      for (const agent of extraEnrolled) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "attached";
+        const detail = agent.model || agent.harness || "enrolled";
+        button.textContent = `✓ ${agent.name} · ${detail}`;
+        button.title = `Attached: ${agent.name} is enrolled on this canvas (${agent.harness ? `runs on ${agent.harness}` : "default harness"}${agent.model ? `, model ${agent.model}` : ""}). Answers @${agent.name} mentions while isocan rc runs.`;
+        button.addEventListener("click", () => {
+          say(`${agent.name} is attached to this canvas. Mention @${agent.name} in a canvas comment to wake it while \`isocan rc\` runs on this machine.`);
+        });
+        list.append(button);
+      }
       for (const preset of presets) {
         const button = document.createElement("button");
         button.type = "button";
-        const unpinned = preset.model && preset.pinsModel !== true;
-        button.textContent = `+ ${preset.name} · ${preset.label}${unpinned ? " ⚠" : ""}`;
         const runsOn = preset.runsOn || "no harness";
+        const unpinned = preset.model && preset.pinsModel !== true;
+        if (preset.enrolled) {
+          button.className = "attached";
+          button.textContent = `✓ ${preset.name} · ${preset.label}`;
+          button.title = `Attached: ${preset.name} is enrolled on this canvas (runs on ${runsOn}${preset.model ? `, model ${preset.model}` : ""}). Answers @${preset.name} mentions while isocan rc runs.`;
+          button.addEventListener("click", () => {
+            say(`${preset.name} is attached to this canvas. Mention @${preset.name} in a canvas comment to wake it while \`isocan rc\` runs on this machine.`);
+          });
+          list.append(button);
+          continue;
+        }
         const why = !state.bound ? "bind this folder to a canvas first"
           : !state.cli ? "the isocan CLI is not on this machine"
           : !preset.runsOn ? "no harness named, and this machine has no default (`isocan harness`)"
-          : !preset.runnable ? `${preset.runsOn} cannot run on this machine (\`isocan harness\`)`
+          : !preset.runnable ? `${preset.runsOn} is not installed on this machine (\`isocan harness\`)`
           : "";
-        button.disabled = Boolean(why);
-        button.title = why || [
-          `${preset.name} on ${runsOn}${preset.model ? `, model ${preset.model}` : ", its own default model"}.`,
-          unpinned ? `${runsOn} has no way to take a model${preset.pinsModel === null ? " that this CLI knows of" : ""}, so ${preset.name} would run ${runsOn}'s default.` : "",
-        ].filter(Boolean).join(" ");
-        button.addEventListener("click", async () => {
-          button.disabled = true;
-          try {
-            const out = await api("/api/model-agent", { presetId: preset.id });
-            button.textContent = `✓ ${out.enrolled?.name || preset.name}`;
-            say(`${out.enrolled?.name || preset.name} is on this canvas. It answers @mentions while \`isocan rc\` runs on this machine.`);
-          } catch (err) {
-            button.disabled = false;
-            say(err.message, "error");
-          }
-        });
+        button.textContent = `+ ${preset.name} · ${preset.label}${!why && unpinned ? " ⚠" : ""}`;
+        if (why) {
+          button.className = "unavailable";
+          button.setAttribute("aria-disabled", "true");
+          button.title = `Can't attach ${preset.name}: ${why}.`;
+          button.addEventListener("click", () => {
+            say(`Can't attach ${preset.name}: ${why}.`, "warn");
+          });
+        } else {
+          button.title = [
+            `Available — click to attach ${preset.name} to this canvas (runs on ${runsOn}${preset.model ? `, model ${preset.model}` : ", its own default model"}).`,
+            unpinned ? `${runsOn} has no way to take a model${preset.pinsModel === null ? " that this CLI knows of" : ""}, so ${preset.name} will run ${runsOn}'s default.` : "",
+          ].filter(Boolean).join(" ");
+          button.addEventListener("click", async () => {
+            button.disabled = true;
+            try {
+              const out = await api("/api/model-agent", { presetId: preset.id });
+              preset.enrolled = true;
+              renderPresets();
+              say(`${out.enrolled?.name || preset.name} is attached to this canvas. It answers @mentions while \`isocan rc\` runs on this machine.`);
+            } catch (err) {
+              button.disabled = false;
+              say(err.message, "error");
+            }
+          });
+        }
         list.append(button);
       }
     }

@@ -95,17 +95,76 @@ export function tabAddress(address) {
 }
 
 /** What a preset will really run on here: its harness or the machine's
- * default, whether that can run, and whether its model reaches it. */
-function reach(preset, scan) {
-  const runsOn = preset.harness ?? scan?.default ?? null;
+ * default, whether that can run, whether its model reaches it, and whether it
+ * is already enrolled on this canvas. */
+function reach(preset, scan, enrolled = []) {
+  const match = enrolled.find((e) => e.name.toLowerCase() === preset.name.toLowerCase()) ?? null;
+  const runsOn = match?.harness ?? preset.harness ?? scan?.default ?? null;
   const row = scan?.harnesses?.find((r) => r.name === runsOn) ?? null;
   return {
     ...preset,
     runsOn,
     runnable: Boolean(row?.runnable),
+    enrolled: Boolean(match),
     // Null when there is nothing to pin, or when the CLI is too old to say.
     pinsModel: preset.model && typeof row?.pinsModel === "boolean" ? row.pinsModel : null,
   };
+}
+
+/** What this machine already has on `canvasId`: live agent sessions in
+ * `~/.isocan/sessions/<actorId>.json` and standing agents enrolled in
+ * `~/.isocan/rc-agents.json`. Read from files so `/api/workspace` stays one
+ * cached harness scan. */
+export function canvasAgents(home, canvasId) {
+  if (!home || !canvasId) return { sessions: [], enrolled: [] };
+  let enrolled = [];
+  try {
+    const rows = JSON.parse(fs.readFileSync(path.join(home, "rc-agents.json"), "utf8"));
+    if (Array.isArray(rows)) {
+      enrolled = rows.flatMap((row) => {
+        const name = text(row?.name);
+        if (row?.canvasId !== canvasId || !name) return [];
+        return [{
+          actorId: text(row.actorId),
+          name,
+          harness: text(row.harness),
+          model: text(row.model),
+        }];
+      });
+    }
+  } catch { /* no rc-agents.json yet */ }
+
+  let actors = null;
+  try {
+    actors = JSON.parse(fs.readFileSync(path.join(home, "actors.json"), "utf8"));
+  } catch { /* no actors.json yet */ }
+
+  const sessions = [];
+  try {
+    const sessDir = path.join(home, "sessions");
+    for (const entry of fs.readdirSync(sessDir)) {
+      if (!entry.endsWith(".json")) continue;
+      const actorId = entry.slice(0, -5);
+      try {
+        const raw = JSON.parse(fs.readFileSync(path.join(sessDir, entry), "utf8"));
+        if (raw?.canvasId !== canvasId) continue;
+        const harness = text(actors?.harnesses?.[actorId]);
+        const label = text(raw?.label);
+        if (!harness && !label) continue;
+        const stripped = label ? label.replace(/\s*🤖\s*$/, "").trim() : null;
+        const name = text(actors?.names?.[actorId]?.name) ?? stripped ?? actorId;
+        sessions.push({
+          actorId,
+          name,
+          label,
+          harness,
+          sessionId: text(raw.sessionId),
+        });
+      } catch { /* unreadable session file */ }
+    }
+  } catch { /* no sessions directory yet */ }
+
+  return { sessions, enrolled };
 }
 
 /**
@@ -154,10 +213,11 @@ export function createPane({ env = process.env, run = runIsocan, now = Date.now 
         harnessError = messageOf(err);
       }
     }
+    const { sessions, enrolled } = canvasAgents(home, binding?.canvasId);
     let presets = [];
     let presetsError = null;
     try {
-      presets = loadPresets(env).map((preset) => reach(preset, scan));
+      presets = loadPresets(env).map((preset) => reach(preset, scan, enrolled));
     } catch (err) {
       presetsError = messageOf(err);
     }
@@ -171,6 +231,8 @@ export function createPane({ env = process.env, run = runIsocan, now = Date.now 
       cli,
       ...(harnessError ? { harnessError } : {}),
       defaultHarness: scan?.default ?? null,
+      sessions,
+      enrolled,
       presets,
       ...(presetsError ? { presetsError } : {}),
     };

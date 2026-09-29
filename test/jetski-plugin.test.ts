@@ -314,16 +314,49 @@ describe("the canvas pane's routes", () => {
   });
 
   it("shows the folder, its canvas, and the Agents bar as it would really run here", async () => {
+    const home = dir("isocan-home-agents");
+    fs.writeFileSync(
+      path.join(home, "rc-agents.json"),
+      JSON.stringify([
+        { canvasId: "prj_acme", actorId: "usr_bram", name: "Bram", harness: "acme-agent", model: "barium" },
+        { canvasId: "prj_acme", actorId: "usr_ada", name: "Ada", harness: "acme-agent", model: null },
+        { canvasId: "prj_other", actorId: "usr_orla", name: "Orla", harness: "claude-code", model: "claude-opus-5-5" },
+      ]),
+    );
+    fs.writeFileSync(
+      path.join(home, "actors.json"),
+      JSON.stringify({
+        names: { usr_bot: { name: "Acme Bot" }, usr_human: { name: "Acme Person" } },
+        harnesses: { usr_bot: "antigravity" },
+      }),
+    );
+    fs.mkdirSync(path.join(home, "sessions"), { recursive: true });
+    fs.writeFileSync(path.join(home, "sessions", "usr_bot.json"), JSON.stringify({ canvasId: "prj_acme", sessionId: "ses_b1", label: "Acme Bot 🤖" }));
+    fs.writeFileSync(path.join(home, "sessions", "usr_human.json"), JSON.stringify({ canvasId: "prj_acme", sessionId: "ses_h1" }));
+
     const { run, calls } = fakeRun({ harness: JSON.stringify(SCAN) });
     let clock = 1_000;
-    const { routes } = createPane({ env: paneEnv(), run, now: () => clock });
+    const { routes } = createPane({ env: paneEnv({ ISOCAN_HOME: home }), run, now: () => clock });
 
     const state = await routes["/api/workspace"](bindings());
-    expect(state).toMatchObject({ workspace: acme, bound: true, canvasId: "prj_acme", title: "Acme", root: acme, cli: true, defaultHarness: "acme-agent" });
+    expect(state).toMatchObject({
+      workspace: acme,
+      bound: true,
+      canvasId: "prj_acme",
+      title: "Acme",
+      root: acme,
+      cli: true,
+      defaultHarness: "acme-agent",
+      sessions: [{ actorId: "usr_bot", name: "Acme Bot", label: "Acme Bot 🤖", harness: "antigravity", sessionId: "ses_b1" }],
+      enrolled: [
+        { actorId: "usr_bram", name: "Bram", harness: "acme-agent", model: "barium" },
+        { actorId: "usr_ada", name: "Ada", harness: "acme-agent", model: null },
+      ],
+    });
     const byId = Object.fromEntries(state.presets.map((p: { id: string }) => [p.id, p]));
-    expect(byId.opus).toMatchObject({ name: "Orla", runsOn: "claude-code", runnable: true, pinsModel: true });
-    expect(byId.barium).toMatchObject({ name: "Bram", harness: null, runsOn: "acme-agent", runnable: true, pinsModel: false });
-    expect(byId.codex).toMatchObject({ name: "Cole", runsOn: "codex", runnable: false, model: null, pinsModel: null });
+    expect(byId.opus).toMatchObject({ name: "Orla", runsOn: "claude-code", runnable: true, enrolled: false, pinsModel: true });
+    expect(byId.barium).toMatchObject({ name: "Bram", harness: null, runsOn: "acme-agent", runnable: true, enrolled: true, pinsModel: false });
+    expect(byId.codex).toMatchObject({ name: "Cole", runsOn: "codex", runnable: false, enrolled: false, model: null, pinsModel: null });
 
     // One scan per minute, however often the pane asks — and as the person.
     await routes["/api/workspace"](bindings());
