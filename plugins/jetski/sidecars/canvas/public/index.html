@@ -52,7 +52,27 @@
       flex-wrap: wrap;
       flex-shrink: 0;
     }
-    .where { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+    .where {
+      font-weight: 600;
+      max-width: 60%;
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      color: var(--foreground, var(--fallback-fg));
+      text-decoration: none;
+    }
+    .where:hover { text-decoration: none; }
+    .where-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    a.where[href] { cursor: pointer; }
+    a.where[href]:hover .where-text,
+    a.where[href]:focus-visible .where-text {
+      color: var(--primary, var(--fallback-primary));
+      text-decoration: underline;
+    }
     .muted { color: var(--muted-foreground, var(--fallback-muted)); }
     .spacer { flex: 1; }
     button, input {
@@ -278,6 +298,12 @@
       left: auto;
       right: 0;
     }
+    header .where[data-tip]::after {
+      left: 0;
+      right: auto;
+      max-width: 320px;
+      word-break: break-all;
+    }
     [data-tip]:hover::after,
     [data-tip]:focus-visible::after {
       opacity: 1;
@@ -287,11 +313,10 @@
 </head>
 <body>
   <header>
-    <span class="where" id="where">Waiting for Jetski to say which workspace this is…</span>
+    <a class="where" id="where" target="_blank" rel="noopener"><span class="where-text" id="where-text">Waiting for Jetski to say which workspace this is…</span></a>
     <span class="spacer"></span>
     <button id="inbox-toggle" type="button" hidden aria-expanded="false" title="Questions agents left on the canvas that nobody has answered" data-tip="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
     <button id="agents-toggle" type="button" hidden aria-expanded="true" title="Hide the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine." data-tip="Hide the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.">Agents ▾</button>
-    <button id="reload" type="button" hidden title="Mint a fresh address and reload the canvas" data-tip="Mint a fresh address and reload the canvas">Reload</button>
     <a id="open" href="#" target="_blank" rel="noopener" hidden title="Open this canvas in an external browser tab (with its own chat)" data-tip="Open this canvas in an external browser tab (with its own chat)">Open ↗</a>
   </header>
 
@@ -368,7 +393,7 @@
     let uris = [];
     let state = null;
     /** The frame's canvas and the origin its messages must come from. */
-    let framed = { canvasId: null, origin: null, ready: false };
+    let framed = { canvasId: null, origin: null, tab: null, ready: false };
     let pendingBridge = [];
     const seenBridge = new Map();
     let bridgeBootstrapped = false;
@@ -420,10 +445,10 @@
         return "Timed out waiting for Jetski to accept the message — the host may be busy. Click Retry to send again.";
       }
       if (lower.includes("unauthorized") || lower.includes("answered 401")) {
-        return "This pane's session token expired — click Reload in the top bar.";
+        return "This pane's session token expired — reopen the Isocan Canvas pane to refresh it.";
       }
       if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("fetch failed")) {
-        return "Couldn't reach the pane server — click Retry, or click Reload in the top bar if the pane restarted.";
+        return "Couldn't reach the pane server — click Retry, or reopen the Isocan Canvas pane if it restarted.";
       }
       if (lower.includes("not bound to a canvas")) {
         return "This workspace folder isn't bound to a canvas yet — bind or create one first.";
@@ -456,10 +481,27 @@
 
     const leaf = (p) => (p || "").split(/[\\/]/).filter(Boolean).pop() || p || "";
 
+    function setWhere(label, url = "", fallbackTip = "") {
+      $("where-text").textContent = label;
+      const tip = url || fallbackTip;
+      if (url) {
+        $("where").href = url;
+      } else {
+        $("where").removeAttribute("href");
+      }
+      if (tip) {
+        $("where").title = tip;
+        $("where").setAttribute("data-tip", tip);
+      } else {
+        $("where").title = "";
+        $("where").removeAttribute("data-tip");
+      }
+    }
+
     function show(which) {
       for (const id of ["frame", "unbound", "nocli", "noworkspace"]) $(id).hidden = id !== which;
       const framing = which === "frame";
-      $("reload").hidden = $("open").hidden = !framing;
+      $("open").hidden = !framing;
       $("selection").hidden = !framing;
       if (!framing) {
         sayAsk("");
@@ -502,8 +544,7 @@
       if (uris.length === 0 && !host?.conversationId) {
         state = null;
         renderPresets();
-        $("where").textContent = "No workspace";
-        $("where").title = "";
+        setWhere("No workspace");
         $("noworkspace-why").textContent = standalone
           ? "Opened outside Jetski: add ?workspace=/path/to/folder to this page's address."
           : "This conversation has no workspace folder open, so there is no canvas to show.";
@@ -517,7 +558,7 @@
         pollFailures += 1;
         if (!state || pollFailures >= 3) {
           const msg = /failed to fetch|networkerror|fetch failed/i.test(err?.message || "")
-            ? "Reconnecting to the pane server… (click Reload if the pane restarted)"
+            ? "Reconnecting to the pane server…"
             : err.message;
           say(msg, state ? "warn" : "error", "poll");
         }
@@ -530,21 +571,24 @@
       if (uris.length === 0 && !state.workspace) {
         state = null;
         renderPresets();
-        $("where").textContent = "No workspace";
-        $("where").title = "";
+        setWhere("No workspace");
         $("noworkspace-why").textContent = "This conversation has no workspace folder open, so there is no canvas to show.";
         return show("noworkspace");
       }
-      $("where").textContent = state.bound
-        ? `${leaf(state.workspace)} · ${state.title || state.canvasId}`
-        : `${leaf(state.workspace)} · no canvas`;
-      $("where").title = state.bound ? `${state.canvasId} — bound by ${state.root}/.isocan/project.json` : state.workspace || "";
+      const tab = state.bound && framed.canvasId === state.canvasId ? (framed.tab || "") : "";
+      setWhere(
+        state.bound
+          ? `${leaf(state.workspace)} · ${state.title || state.canvasId}`
+          : `${leaf(state.workspace)} · no canvas`,
+        tab,
+        state.bound ? `${state.canvasId} — bound by ${state.root}/.isocan/project.json` : state.workspace || "",
+      );
       renderPresets();
       renderTargets();
       syncBridgeCues(state.sessions);
       if (!state.cli) return show("nocli");
       if (!state.bound) {
-        framed = { canvasId: null, origin: null, ready: false };
+        framed = { canvasId: null, origin: null, tab: null, ready: false };
         pendingBridge = [];
         $("frame").removeAttribute("src");
         $("unbound-folder").textContent = state.workspace;
@@ -560,10 +604,12 @@
       say("Opening the canvas…");
       try {
         const embed = await api("/api/embed");
-        framed = { canvasId: state.canvasId, origin: new URL(embed.address).origin, ready: false };
+        const tab = embed.tab || embed.canvas;
+        framed = { canvasId: state.canvasId, origin: new URL(embed.address).origin, tab, ready: false };
         setSelection([]);
         $("frame").src = embed.address;
-        $("open").href = embed.tab || embed.canvas;
+        $("open").href = tab;
+        setWhere(`${leaf(state.workspace)} · ${state.title || state.canvasId}`, tab);
         show("frame");
         const here = location.hostname;
         const hereIsLoopback = here === "localhost" || here === "::1" || here === "[::1]" || /^127\./.test(here);
@@ -1061,11 +1107,6 @@
     $("agents-toggle").addEventListener("click", () => {
       agentsCollapsed = !agentsCollapsed;
       syncAgentsToggle(false);
-    });
-    $("reload").addEventListener("click", () => {
-      say("");
-      sayAsk("");
-      location.reload();
     });
     $("status-dismiss").addEventListener("click", () => say(""));
     $("ask-send").addEventListener("click", ask);

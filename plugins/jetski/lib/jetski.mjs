@@ -278,10 +278,10 @@ export function friendlyAskError(err, target = "here") {
     return "Timed out waiting for Jetski to accept the message — the host may be busy. Click Retry to send again.";
   }
   if (lower.includes("unauthorized") || lower.includes("answered 401")) {
-    return "This pane's session token expired — click Reload in the top bar.";
+    return "This pane's session token expired — reopen the Isocan Canvas pane to refresh it.";
   }
   if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("fetch failed")) {
-    return "Couldn't reach the pane server — click Retry, or click Reload in the top bar if the pane restarted.";
+    return "Couldn't reach the pane server — click Retry, or reopen the Isocan Canvas pane if it restarted.";
   }
   if (lower.includes("not bound to a canvas")) {
     return "This workspace folder isn't bound to a canvas yet — bind or create one first.";
