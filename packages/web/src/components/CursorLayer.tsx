@@ -4,8 +4,9 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { worldToScreen, threadWorldPos } from "../lib/viewport.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { cursorChipLabel, markOf, type Actor } from "@isocan/core";
+import { cursorChipLabel, pointerMark, type Actor } from "@isocan/core";
 import { useActorMarks } from "../lib/marks.ts";
+import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
 import { sessionName, useActorNames } from "../lib/names.ts";
 import { otherTabSessionIds, quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
 
@@ -35,6 +36,7 @@ interface Anim {
 export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
   const colors = useActorColors();
   const marks = useActorMarks();
+  const kinds = useActorKinds();
   const names = useActorNames();
   const joined = useCanvasStore((s) => s.actorJoins);
   const sessions = useCanvasStore((s) => s.sessions);
@@ -194,18 +196,30 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
         const color = actorColorIn(colors, session.actor.id);
         const name = cursorChipLabel(session.signal, sessionName(names, session));
         /**
-         * **The mark, in front of the name.**
+         * **The mark IS the pointer** (agent pointers, 30 Sep 2026: *"instead
+         * of the arrow… a dog emoji for"* an agent).
          *
          * A cursor is where you identify somebody at a glance, and it is the
          * one that MOVES — a glyph is easier to follow across a canvas than a
-         * word is to read. The chip's colour already says who, but colours
-         * run out (there are seven) and two people can share one; a mark is
-         * chosen and distinct, which is the whole reason it exists.
+         * word is to read. Colours run out (there are seven) and two people
+         * can share one; a mark is chosen and distinct. So whoever wears one —
+         * an agent its owner dressed, or a person who chose it for their own
+         * face — moves across the canvas as it, not as an arrow with the
+         * emoji in the chip. One place for the glyph, not two.
          *
-         * The raw mark, not `faceMark`: that falls back to an initial, and
-         * the name is right there — "D Dion" would be the letter twice.
+         * **The hotspot does not move.** The arrow stays, shrunk to its tip
+         * in the actor's colour (the ownership signal, and the ground's shape
+         * still), with its point at this div's origin exactly as before, and
+         * the emoji sits where the arrow's body was. This layer is screen
+         * space, so neither changes size with zoom. `cursorhotspot.test.ts`
+         * holds both.
+         *
+         * The raw mark, not `faceMark`: that falls back to an initial, and an
+         * initial is not a pointer. An agent nobody dressed is 🤖 — decided
+         * by `pointerMark` at render time, never stored (the same "is this an
+         * agent" the facepile asks, `useActorKinds`).
          */
-        const mark = markOf(marks, session.actor);
+        const mark = pointerMark(marks, session.actor, isAgentActor(kinds, session.actor.id));
         const otherTab = otherTabs.has(session.sessionId);
         // Say only what we know: when another cursor shares your name (or a
         // collaborator has a second tab open), say it is in another tab so it
@@ -221,8 +235,8 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
         return (
           <div
             key={session.sessionId}
-            className={`remote-cursor${quiet ? " quiet" : ""}${otherTab ? " other-tab" : ""}`}
-            style={{ left: screen.x, top: screen.y }}
+            className={`remote-cursor${quiet ? " quiet" : ""}${otherTab ? " other-tab" : ""}${mark ? " marked" : ""}`}
+            style={{ left: screen.x, top: screen.y, color }}
           >
             {/* The ground gives everybody the same shape and takes nobody's
                 colour (#195): `fill` is still the actor's, because that is the
@@ -230,11 +244,9 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
             <svg width="18" height="20" viewBox="0 0 18 20">
               <path d={cursorPath} fill={color} strokeWidth="1" />
             </svg>
+            {mark && <b className="cursor-glyph">{mark}</b>}
             <span className="cursor-chip" style={{ background: color }}>
-              <span>
-                {mark && <b className="cursor-mark">{mark}</b>}
-                {name}
-              </span>
+              <span>{name}</span>
               {line && <em>{line}</em>}
             </span>
           </div>

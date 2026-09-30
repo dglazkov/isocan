@@ -1,5 +1,5 @@
 import "./agent-row.css";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AgentRow } from "@isocan/core";
 import {
@@ -38,6 +38,9 @@ import { useClockSecond } from "../lib/sprint.ts";
  * so both homes show what `isocan who` would print because all three read
  * `roster()`.
  */
+/** "Set pointer…", for the owner only — lazy, shared with the facepile's card. */
+const AgentPointer = lazy(() => import("./AgentPointer.tsx"));
+
 /** How long ago, in core's words (cleanup DU-5, 27 Sep 2026: this row kept
  *  two private copies that said "72h" where every other surface says "3d"),
  *  down to the second because the row re-renders every second. */
@@ -230,6 +233,9 @@ export function AgentRowView({
               Who can ask
             </button>
           )}
+          <Suspense>
+            <AgentPointer agent={{ id: row.actorId, name: row.name }} />
+          </Suspense>
           {onDismiss && (
             <button
               className="wb-dismiss"
@@ -372,6 +378,9 @@ export function AgentRowView({
           >
             Watch
           </button>
+          <Suspense>
+            <AgentPointer agent={{ id: row.actorId, name: row.name }} />
+          </Suspense>
           {onDismiss && (
             <button
               className="wb-watch wb-dismiss-live"

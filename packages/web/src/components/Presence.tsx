@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, lazy, Suspense, useState } from "react";
 import type { Actor, ActivityEntry, ActorMarks, ActorKinds } from "@isocan/core";
 import { atLeast, capabilityWord, elapsedLabel, policyWords, recentActivity, sameActor } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -35,6 +35,8 @@ import { useAnswerable, useRcPolicies } from "../lib/answerable.ts";
  */
 
 const MAX_FACES = 5;
+/** "Set pointer…" on an agent's card — lazy, ownership read and picker and all. */
+const AgentPointer = lazy(() => import("./AgentPointer.tsx"));
 
 export function Presence({ actor }: { actor: Actor }) {
   const colors = useActorColors();
@@ -298,6 +300,13 @@ function FaceCard({
           </span>
           {gate && <span className="face-card-gate">{gate}</span>}
         </div>
+      )}
+      {/* The pointer an agent wears, chosen by its owner — drawn only for
+          one (AgentPointer asks the home's rule before it draws anything). */}
+      {isAgentActor(kinds, face.actor.id) && (
+        <Suspense>
+          <AgentPointer agent={face.actor} />
+        </Suspense>
       )}
       {/* The live half: what they say they are doing, right now. */}
       <div className={`face-card-status${face.status ? "" : " idle"}`}>

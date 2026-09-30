@@ -12913,6 +12913,57 @@ agentCommand
     }),
   );
 
+/**
+ * **The pointer an agent wears** (agent pointers, 30 Sep 2026: *"select an
+ * emoji… so I can have a dog emoji for"* an agent).
+ *
+ * Not a new op: an agent's pointer IS its mark — the same `actor.setMark`
+ * `identity --mark` sends for yourself, with the agent's id in it. The home
+ * decides whether you may (`ownsAgent` in core): an actor this machine holds,
+ * or an agent one of your own surfaces holds. The web's "Set pointer…" sends
+ * exactly this op.
+ */
+agentCommand
+  .command("mark <name> <emoji>")
+  .description("Choose the emoji an agent of yours wears — on its face and as its pointer; `none` clears it")
+  .action(
+    run(async (name: string, emoji: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const mark = parseFaceMark(emoji);
+      const p = await resolveCanvas(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const wanted = name.trim();
+      // Standing agents first — the roster a person reads — then anybody the
+      // canvas has a name for, which is where a session agent that was never
+      // enrolled is found. An id always works.
+      const known = [
+        ...Object.values(snapshot.canvas.agents ?? {}).map((a) => a.actor),
+        ...[...actorNamesOn(snapshot)].map(([id, known]) => ({ id, name: known })),
+      ];
+      const agent = known.find((a) => a.id === wanted || a.name.toLowerCase() === wanted.toLowerCase());
+      if (!agent) {
+        throw new Error(
+          `nobody on "${p.title}" answers to "${name}" — \`isocan who --all\` lists them; an actor id also works`,
+        );
+      }
+      try {
+        await ctx.client.sendOp(null, ctx.actor, { type: "actor.setMark", actorId: agent.id, mark });
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.code !== "not-your-actor") throw err;
+        throw new Error(
+          `${agent.name} is not yours to mark — only its owner can: the person whose own machine ` +
+            "enrolled it, or the agent itself (`isocan identity --mark`)",
+        );
+      }
+      if (ctx.json) return printJson({ actor: agent, mark });
+      console.log(
+        mark === null
+          ? `${agent.name} wears its initial again, and its pointer is the robot every agent gets`
+          : `${agent.name} now wears ${mark} — on its face, and as its pointer`,
+      );
+    }),
+  );
+
 program
   .command("harness")
   .description("Which coding harnesses this machine can run agents on, and the default")

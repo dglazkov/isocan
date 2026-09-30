@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { faceMark, markOf } from "@isocan/core";
+import { AGENT_POINTER, faceMark, markOf, pointerMark } from "@isocan/core";
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 
@@ -27,6 +27,15 @@ describe("the mark somebody chose", () => {
     expect(markOf({ usr_ada: "⚓" }, ada)).toBe("⚓");
   });
 
+  it("is a robot on an agent's pointer when nobody chose one — and only there", () => {
+    const rover = { id: "usr_rover" };
+    expect(AGENT_POINTER).toBe("🤖");
+    expect(pointerMark({}, rover, true)).toBe(AGENT_POINTER);
+    expect(pointerMark({ usr_rover: "🐕" }, rover, true)).toBe("🐕");
+    expect(pointerMark({}, ada, false)).toBe(null);
+    expect(pointerMark({ usr_ada: "⚓" }, ada, false)).toBe("⚓");
+  });
+
   it("still falls back to an initial where a disc must not be empty", () => {
     expect(faceMark({}, ada)).toBe("A");
     expect(faceMark({ usr_ada: "⚓" }, ada)).toBe("⚓");
@@ -37,14 +46,17 @@ describe("the cursor chip", () => {
   const src = read("../src/components/CursorLayer.tsx");
   const own = read("../src/components/OwnCursor.tsx");
 
-  it("wears the mark in front of the name on the same line, on both remote and own cursors", () => {
+  it("wears the mark in front of the name on the same line on your own cursor, and AS the pointer on everyone else's", () => {
     // A cursor is where somebody is identified at a glance, and it is the one
     // that moves — a glyph is easier to follow than a word is to read.
     // `.cursor-chip` is `flex-direction: column` so the status `<em>` stacks
     // below, which means the mark and name must share an inline `<span>` or
     // flexbox stacks the emoji on a line above the name.
-    expect(src).toContain("markOf(marks, session.actor)");
-    expect(src).toMatch(/<span>\s*\{mark && <b className="cursor-mark">\{mark\}<\/b>\}\s*\{name\}\s*<\/span>/);
+    expect(src).toContain("pointerMark(marks, session.actor,");
+    // A remote cursor wears the mark as its pointer (agent pointers, 30 Sep
+    // 2026) — the chip is the name alone, so the glyph is said once.
+    expect(src).toContain('{mark && <b className="cursor-glyph">{mark}</b>}');
+    expect(src).not.toContain("cursor-mark");
     expect(own).toContain("markOf(marks, actor)");
     expect(own).toMatch(/<span>\s*\{mark && <b className="cursor-mark">\{mark\}<\/b>\}\s*\{label\}\s*<\/span>/);
   });

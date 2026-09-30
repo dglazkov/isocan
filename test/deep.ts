@@ -199,6 +199,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "test/ratchetroot.test.ts", secs: 1.5, why: "spawns the binary four times over temp directories — no daemon, no canvas, just files on disk" },
   { file: "packages/cli/test/setup.test.ts", secs: 7.8, why: "five cases, and the first thing a new person runs — worth keeping in the ordinary run" },
   { file: "packages/cli/test/rehome.test.ts", secs: 7.3, why: "eight cases, one command each" },
+  { file: "packages/cli/test/agentmark.test.ts", secs: 7.8, why: "three cases, a handful of spawns each: `agent mark` over the real binary, owner and stranger; measured 30 September" },
   { file: "packages/cli/test/runtimemodules.test.ts", secs: 6.0, why: "three cases" },
   { file: "packages/cli/test/heatmap.test.ts", secs: 5.9, why: "a single case" },
   { file: "packages/cli/test/ended.test.ts", secs: 5.3, why: "a single case" },

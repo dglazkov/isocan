@@ -64,6 +64,7 @@ import {
   newOpId,
   notBothActors,
   notYourActor,
+  ownsAgent,
   resolveActor,
   positionIsMeaningful,
   resolvePlacement,
@@ -716,7 +717,8 @@ export class Engine {
    * Choosing the mark you wear instead of an initial. The colour's twin in
    * every respect — home-scoped, lands in the actors log, not undoable, both
    * actors checked because choosing a face for somebody else is exactly the
-   * impersonation mechanism 5 exists to stop — and forwarded to every home
+   * impersonation mechanism 5 exists to stop (the one exception is an agent
+   * the speaker owns, which is the pointer it wears) — and forwarded to every home
    * for the same reason: the actors log never replicates down, so a home not
    * told keeps drawing the old face forever with nothing to correct it.
    *
@@ -735,8 +737,19 @@ export class Engine {
   }): Promise<LogEntry> {
     return this.enqueueHome(async () => {
       await this.requireActor(request.badgeId, request.actor.id);
-      if (request.op.actorId !== request.actor.id) {
-        await this.requireActor(request.badgeId, request.op.actorId);
+      const target = request.op.actorId;
+      if (target !== request.actor.id && !claimsActor(await this.desk.claimsOf(request.badgeId), target)) {
+        /**
+         * **Or it is the speaker's own agent** (agent pointers, 30 Sep
+         * 2026): the browser a person looks at a pointer in does not hold
+         * the agent — the machine that enrolled it does. `ownsAgent` says
+         * who counts, and why the rule stays narrow.
+         */
+        const holders = await Promise.all(
+          (await this.desk.claimants(target)).map((held) => this.desk.claimsOf(held.badgeId)),
+        );
+        const kinds = actorKinds((await this.actors()).registry);
+        if (!ownsAgent(holders, request.actor.id, kinds[target] === "agent")) throw notYourActor(target);
       }
       const homes = this.homes?.all() ?? [];
       if (homes.length > 0) {

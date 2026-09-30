@@ -2156,8 +2156,7 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
   grid-column: 2 / 4; color: var(--ink-muted);
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
 }
-.face-card-foot { font-size: 10.5px; color: var(--ink-soft); }
-/* Faces sit side by side rather than overlapping Figma-style: at this size an
+.face-card-foot { font-size: 10.5px; color: var(--ink-soft); }/* Faces sit side by side rather than overlapping Figma-style: at this size an
    overlap buries the unread badge under the next person's disc. */
 .face {
   position: relative; flex: none; padding: 0;
@@ -3562,6 +3561,20 @@ button.mt-card:hover { border-color: var(--accent); }
    scale ratchet is right that a seventeenth size earns nothing. A hair of
    space so it does not touch the first letter. */
 .cursor-mark { font-weight: 400; margin-right: 3px; }
+/* **A mark is worn AS the pointer** (agent pointers, 30 Sep 2026). The arrow
+   shrinks to its tip — scaled about its own top-left, so the point stays on
+   the hotspot where selection and `session point` land — and keeps the
+   actor's colour, which is how whose it is still reads. The emoji takes the
+   arrow's body, ringed in the same colour (`color` on the cursor is the
+   actor's; the chip sets its own ink). Screen space: one size at every zoom. */
+.remote-cursor.marked svg { width: 9px; height: 10px; }
+.cursor-glyph {
+  position: absolute; left: 5px; top: 5px;
+  font-size: 22px; font-weight: 400; line-height: 1;
+  filter: drop-shadow(0 0 1px currentColor) drop-shadow(0 0 1px currentColor) drop-shadow(0 1px 2px var(--shade));
+}
+.remote-cursor.marked .cursor-chip { margin: 18px 0 0 28px; }
+.remote-cursor.quiet .cursor-glyph { animation: cursor-breathe 2.6s ease-in-out infinite; }
 .cursor-chip-row { display: flex; align-items: center; gap: 8px; }
 .cursor-chip-input {
   border: 0; outline: none; background: transparent; color: inherit; font: inherit;
