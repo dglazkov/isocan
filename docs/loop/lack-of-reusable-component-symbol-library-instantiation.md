@@ -4,11 +4,11 @@ loop: 3a860a15-2233-4032-aeb1-31a26c857bb1
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "What canvas tools teach us"
-decision: proposed
+decision: accepted
 rank: later
 project: new
 since: 2026-09-30
-note: "Partly: wires already are instances (a slot names a catalog component with typed props, and wire render --all redraws every screen from its spec), and DESIGN.md carries component tokens; what is missing is a person-or-agent-defined symbol that designed HTML screens instantiate and that propagates when edited."
+note: "Dion 30 Sep: accepted for later — a person-defined symbol that updates every screen using it is a design question first."
 ---
 
 # Lack of reusable component symbol library instantiation

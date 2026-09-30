@@ -4,7 +4,7 @@ loop: 205dcad2-68cc-46f6-8e42-231b524b5c16
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "What canvas tools teach us"
-decision: proposed
+decision: declined
 rank: never
 project: design-partner
 since: 2026-09-30

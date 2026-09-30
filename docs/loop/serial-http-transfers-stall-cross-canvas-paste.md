@@ -4,7 +4,7 @@ loop: 7b9be7e9-aad9-4b63-a547-a1df2b51fd86
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "Fast everywhere, local-first"
-decision: proposed
+decision: declined
 rank: never
 project: new
 since: 2026-09-30

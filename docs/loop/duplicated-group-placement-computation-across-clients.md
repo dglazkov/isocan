@@ -4,7 +4,7 @@ loop: 648e6a1d-5a50-45d0-84e5-0b16e2ae33db
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "Always isomorphic"
-decision: proposed
+decision: declined
 rank: never
 project: canvas-groups
 since: 2026-09-30

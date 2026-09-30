@@ -4,11 +4,11 @@ loop: df9d4756-90d4-40d9-bc87-dce11a72152b
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "Always isomorphic"
-decision: proposed
+decision: accepted
 rank: next
 project: canvas-groups
 since: 2026-09-30
-note: "Partly: fit and tidy have web buttons, and a cell is a drop target by pointer; but the web cannot clear a grid (never sends clearGrid) and lowering Grid rows/columns below the label count is refused with 'more grid labels than cells'. Cheap: trim labels to counts, add Clear grid."
+note: "Dion 30 Sep: accepted as a bug — the web form lets you make a grid change it then can't save, and can't clear a grid. Building now."
 ---
 
 # Web UI lacks canvas group layout controls
