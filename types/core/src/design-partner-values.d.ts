@@ -1,3 +1,20 @@
+import type { DesignAcceptedResponse, DesignContinuation, DesignDiscovery, DesignGoverningBinding } from "./design-request.js";
+/** A hash alone cannot identify which permitted source supplied an artifact. */
+export interface DesignArtifactRef {
+    home: string;
+    canvasId: string;
+    itemId: string;
+    versionId: string;
+    blobHash: string;
+}
+/** Supplied locations and inspected bytes are distinct states; unavailable sources retain a reason. */
+export interface DesignReference {
+    id: string;
+    state: "supplied" | "fetched" | "inaccessible" | "superseded";
+    url?: string;
+    artifact?: DesignArtifactRef;
+    reason?: string;
+}
 /** Shape or association refusal; authentication remains the writer’s separate responsibility. */
 export declare class DesignPartnerContractError extends Error {
     readonly code: "invalid" | "association" | "actor" | "stale" | "conflict";
@@ -39,3 +56,19 @@ export declare function base(v: Record<string, unknown>): {
     requestId: string;
     epoch: number;
 };
+/** Checks source/version/hash shape without claiming the caller can access or has inspected its bytes. */
+export declare function parseDesignArtifactRef(value: unknown): DesignArtifactRef;
+/** Refuses filename-only uploads and fetched URLs without version identities; availability stays explicit. */
+export declare function parseDesignReference(value: unknown): DesignReference;
+/** Parses the entrance source of a design brief or interview. */
+export declare function parseDesignEntranceSource(value: unknown): import("./design-partner.js").DesignBrief["source"];
+/** Parses a question source reference. */
+export declare function parseDesignQuestionSource(value: unknown): import("./design-partner.js").DesignQuestionSource;
+/** Parses a list of accepted response references. */
+export declare function parseDesignAcceptedResponses(value: unknown): DesignAcceptedResponse[];
+/** Validates writer-stamped continuation facts without elevating native reports into human responses. */
+export declare function parseDesignContinuation(value: unknown): DesignContinuation;
+/** Explicit purpose and fact bindings support a request-wide initial discovery allowance. */
+export declare function parseDesignDiscovery(value: unknown): DesignDiscovery;
+/** The expected governing winner is separate from the list of incidental input references. */
+export declare function parseDesignGoverning(value: unknown): DesignGoverningBinding;

@@ -79,11 +79,6 @@ export interface LoopFinding {
 export declare function parseFinding(raw: string, slug: string): LoopFinding;
 /** A finding as the file it is: fields in a fixed order, so a diff shows what changed and not what moved. */
 export declare function serializeFinding(f: LoopFinding): string;
-/**
- * What is wrong with a finding, in words meant to be read. `projects` is the
- * set of `docs/projects/` directory names; when given, a `project` that names
- * none of them is a finding pointing at nothing.
- */
 export declare function findingProblems(f: LoopFinding, projects?: readonly string[]): string[];
 /**
  * A finding's filename stem from its title — core's one title-to-filename rule,
@@ -146,7 +141,7 @@ export declare function loopContextPayload(findings: LoopFinding[]): {
     guidance: string;
     decisions: {
         title: string;
-        decision: "stale" | "done" | "accepted" | "untriaged" | "proposed" | "declined";
+        decision: "done" | "stale" | "accepted" | "untriaged" | "proposed" | "declined";
         rank: "now" | "never" | "later" | "next" | null;
         project: string | null;
         reason: string | null;
@@ -154,4 +149,17 @@ export declare function loopContextPayload(findings: LoopFinding[]): {
         insights: string[];
     }[];
 };
+/**
+ * The prompt handed to the harness when proving an untriaged Loop finding
+ * against the codebase (`node scripts/loop.mjs pull` / `prove`).
+ *
+ * Pure and in core so the contract — prove every sub-claim against the code,
+ * leave no unverified hedges, record via `loop.mjs propose`, never `decide` or
+ * `push` — is tested without spawning a model.
+ */
+export declare function provePrompt(f: LoopFinding, projects: readonly string[]): string;
+/**
+ * CLI arguments for the bounded `claude -p` proof pass over one untriaged finding.
+ */
+export declare function proveArgs(prompt: string): string[];
 export {};

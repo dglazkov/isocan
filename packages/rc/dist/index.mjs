@@ -31,6 +31,12 @@ var OpValidationError = class extends Error {
   reason;
 };
 
+// packages/core/src/drawing.ts
+var DRAWING_KIND = "drawing";
+function isDrawingItem(item) {
+  return item.properties.kind === DRAWING_KIND;
+}
+
 // packages/core/src/canvas-group-context.ts
 function canvasContextRoute(canvasId) {
   return `/api/projects/${encodeURIComponent(canvasId)}/context`;
@@ -40,6 +46,10 @@ function commentContextRoute(canvasId, threadId, commentId) {
 }
 
 // packages/core/src/textnode.ts
+var TEXT_KIND = "text";
+function isTextItem(item) {
+  return item.properties.kind === TEXT_KIND;
+}
 var TEXT_WIDTH = 320;
 var TEXT_STYLES = ["body", "heading", "title", "display"];
 var TEXT_COLUMN = {
@@ -94,6 +104,9 @@ function actorNameIn(names, actor) {
 
 // packages/core/src/questionnaire.ts
 var questionnaireActorsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/questionnaire/actors`;
+
+// packages/core/src/browseritem.ts
+var BROWSER_MIME = "text/uri-list";
 
 // packages/core/src/address.ts
 var CANVAS_PATH_PREFIX = "/p";
@@ -163,8 +176,41 @@ function normalizeHomeUrl(raw) {
   }
 }
 
+// packages/core/src/canvasitem.ts
+var CANVAS_KIND = "canvas";
+function isCanvasItem(item) {
+  return item.properties.kind === CANVAS_KIND;
+}
+
 // packages/core/src/modules.ts
+var REGISTRY = /* @__PURE__ */ new Map();
+function modules() {
+  return [...REGISTRY.values()];
+}
+function moduleKinds() {
+  return modules().flatMap((m) => m.kinds ?? []);
+}
+function moduleKindOf(mime) {
+  return moduleKinds().find((k) => k.mimes.includes(mime)) ?? null;
+}
 var JUDGMENT_ROUTE = "/api/judgment";
+
+// packages/core/src/kinds.ts
+function itemKind(item) {
+  if (isDrawingItem(item)) return "drawing";
+  if (isTextItem(item)) return "text";
+  if (isCanvasItem(item)) return "canvas";
+  const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
+  const mime = current?.mimeType ?? "";
+  const added = moduleKindOf(mime);
+  if (added) return added.id;
+  if (mime === BROWSER_MIME) return "site";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "text/html") return "screen";
+  if (mime.startsWith("text/") || mime === "application/pdf") return "document";
+  return "other";
+}
 
 // packages/core/src/canvas-groups.ts
 var GROUP_KIND = "group";
@@ -1688,6 +1734,7 @@ var DaemonRoutes = class {
    * the act the door just refused. Carry its status, code and words instead;
    * other recovery failures leave the original answer intact. */
   async reBadge(signal = this.lifetime) {
+    if (this.badgeStore.upstream) return false;
     signal?.throwIfAborted();
     const answer = await askTheDoor(this.base, 1e4, signal);
     signal?.throwIfAborted();
@@ -2591,10 +2638,18 @@ function nameResolver(snapshot) {
   const names = actorNamesOn(snapshot);
   return (actorId) => names.get(actorId);
 }
-var summonsPrompt = (canvasTitle, agentName, payload) => `You are ${agentName}, an agent enrolled on the isocan canvas "${canvasTitle}". This is a summons: activity addressed to you arrived while nothing was running for you. Work from this directory through the \`isocan\` CLI \u2014 \`isocan --agent-help\` is the full protocol if you need orientation, and \`isocan comment reply <threadId> "\u2026"\` answers a comment. For a designed screen, HTML node or connected app, run \`isocan design workflow\` for the shared procedure, canvas policy and existing work; precise edits and archive imports do not start a new interview. Address what the payload below carries, reply on its thread, and then simply finish your turn: do NOT run \`isocan wait\` \u2014 your session rests when you stop, and new activity summons you again.
+var summonsPrompt = (canvasTitle, agentName, payload, context) => {
+  const standing = context?.wokenBy ? `You were woken by ${context.wokenBy.asker}, who is not your owner. ${context.wokenBy.owner}'s machine is running this turn and paying for it, and ${context.wokenBy.asker}'s grant covers replying on this thread. ` : "";
+  const fullPayload = {
+    ...payload,
+    ...context?.item ? { item: context.item } : {},
+    ...context?.thread ? { thread: context.thread } : {}
+  };
+  return `You are ${agentName}, an agent enrolled on the isocan canvas "${canvasTitle}". This is a summons: activity addressed to you arrived while nothing was running for you. ` + standing + `Work from this directory through the \`isocan\` CLI \u2014 \`isocan --agent-help\` is the full protocol if you need orientation, and \`isocan comment reply <threadId> "\u2026"\` answers a comment. For a designed screen, HTML node or connected app, run \`isocan design workflow\` for the shared procedure, canvas policy and existing work; precise edits and archive imports do not start a new interview. Address what the payload below carries, reply on its thread, and then simply finish your turn: do NOT run \`isocan wait\` \u2014 your session rests when you stop, and new activity summons you again.
 
 The payload (the same shape \`isocan wait --json\` returns):
-` + JSON.stringify(payload, null, 2);
+` + JSON.stringify(fullPayload, null, 2);
+};
 
 // packages/rc/src/room.ts
 var RoomHold = class extends Error {
@@ -3012,7 +3067,8 @@ async function room(deps, life, announce, onLeave) {
     const authors = flagged.map((e2) => e2.envelope.actor.id);
     const carried = /* @__PURE__ */ new Map();
     for (const id of new Set(authors)) carried.set(id, await originsOf(id));
-    await state.set(keys.origins(record.actor.id), [...speakersFor(authors, (id) => carried.get(id))]);
+    const speakers = [...speakersFor(authors, (id) => carried.get(id))];
+    await state.set(keys.origins(record.actor.id), speakers);
     const say = (line) => narrate(`${record.actor.name} \xB7 ${line}`);
     try {
       await routes.claimActor({
@@ -3056,11 +3112,13 @@ async function room(deps, life, announce, onLeave) {
     const face = await routes.createSession(p.id, record.actor, void 0, harness.harness).catch(() => null);
     const threadId = firstComment ? firstComment.envelope.op.threadId : null;
     const changedItemId = (flagged[0]?.envelope.op).itemId ?? null;
+    const snapshot = await routes.snapshot(p.id).catch(() => null);
+    const thread = threadId ? snapshot?.canvas.threads[threadId] : void 0;
+    const anchoredItem = thread?.anchorItemId ? snapshot?.canvas.items[thread.anchorItemId] : void 0;
+    const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : void 0;
+    const contextItem = anchoredItem ?? item;
     let working = null;
     if (face) {
-      const snapshot = await routes.snapshot(p.id).catch(() => null);
-      const thread = threadId ? snapshot?.canvas.threads[threadId] : void 0;
-      const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : void 0;
       working = threadId ? { kind: "working", threadId } : item ? { kind: "working", itemId: item.id } : null;
       await routes.updateSession(p.id, face.sessionId, {
         status: threadId ? "reading your comment\u2026" : "looking at what changed\u2026",
@@ -3072,6 +3130,28 @@ async function room(deps, life, announce, onLeave) {
       }).catch(() => {
       });
     }
+    const guestSpeakerId = speakers.find((id) => !ownersWord(keeping, id, policyState.joined));
+    const guestAsker = guestSpeakerId !== void 0 ? flagged.find((e2) => e2.envelope.actor.id === guestSpeakerId)?.envelope.actor.name ?? known.get(guestSpeakerId) ?? policyState.nameOf(guestSpeakerId) ?? from : void 0;
+    const summonsContext = {
+      ...thread ? {
+        thread: {
+          id: thread.id,
+          comments: thread.comments.map((c) => ({
+            id: c.id,
+            author: c.author.name,
+            body: c.body
+          }))
+        }
+      } : {},
+      ...contextItem ? {
+        item: {
+          id: contextItem.id,
+          kind: itemKind({ ...contextItem, properties: contextItem.properties ?? {} }),
+          title: contextItem.title
+        }
+      } : {},
+      ...guestAsker ? { wokenBy: { asker: guestAsker, owner: owner.name } } : {}
+    };
     const beat = (patch) => {
       if (!face) return;
       void routes.updateSession(p.id, face.sessionId, { actor: record.actor, ...patch }).catch(() => {
@@ -3105,7 +3185,7 @@ async function room(deps, life, announce, onLeave) {
       let lastToolBeat = 0;
       const turn = await agent.prompt(
         session.sessionId,
-        summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }),
+        summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }, summonsContext),
         (event) => {
           if (event.kind === "permission") say(`permission ${event.detail}`);
           if (event.kind === "tool" && event.detail && clock.now() - lastToolBeat >= 2e3) {

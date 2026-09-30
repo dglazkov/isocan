@@ -15,9 +15,9 @@ export declare class DaemonClient extends DaemonRoutes {
     constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext);
     /**
      * The Node half's one addition to how a request is MADE, rather than to
-     * what is in it: on this machine, a bounded connect and a bounded retry;
-     * anywhere else, the surface's own default and today's behaviour. See
-     * `boundedFetch` above for why the split is by address.
+     * what is in it: through the configured HTTP(S) proxy when one applies,
+     * else on this machine a bounded connect and a bounded retry, else the
+     * surface's own default.
      */
     protected fetcher: typeof fetch;
     /**

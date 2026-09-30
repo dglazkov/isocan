@@ -27,6 +27,6 @@ export type { BadgeStore, StoredBadge } from "../../core/src/index.js";
 export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "../../core/src/index.js";
 export { gateTurn, type GuardLimits, type GuardState, type GuardVerdict } from "./guards.js";
 export type { RcAgentRow } from "./rows.js";
-export { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.js";
+export { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus, type SummonsContext } from "./helpers.js";
 export { mapState, RoomHold, runRoom, type Room, type RoomAdapter, type RoomDeps, type RoomHarness, type RoomRoutes, type RoomRows, type RoomState, type RoomTurn, type RoomTurnEvent, } from "./room.js";
 export { COLLAB_SKILL } from "./skill.js";

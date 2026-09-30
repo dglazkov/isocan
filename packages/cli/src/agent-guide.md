@@ -2325,13 +2325,18 @@ lives.
         --note "holds: one line, why" --read "what the code shows, with file:line"
     node scripts/loop.mjs render --check   # CI: LOOP.md is current, every finding says why
 
-**`propose` is yours, `decide` is a person's.** When asked to look at Loop:
-pull, then for each untriaged finding open the files it cites and say whether
-the claim **holds**, is **partly true**, is **stale** (cite what fixed it) or is
-**by design** (cite the doc that decided it). Propose a rank — `now` (a defect
-people would hit), `next`, `later`, `never` (a recommendation to decline) — and
-the `docs/projects/` directory it belongs to. The note is what Loop is told, so give it a verdict,
-a `file:line`, and what would change the answer.
+**`propose` is yours, `decide` is a person's.** When asked to look at Loop (or
+in `loop.yml`'s nightly prove pass): pull, then for each untriaged finding
+**prove every sub-claim against the code** — open every cited file and line,
+check surrounding callers and tests, and run non-destructive checks (`vitest`,
+`npm audit`, `npm run build`) when a claim is about runtime or build output.
+Never leave `"I did not check"` or `"Not run"` in `## Our read`; `render
+--check` rejects unverified reads. State whether the claim **holds**, is
+**partly true**, is **stale** (cite what fixed it) or is **by design** (cite
+the doc that decided it). Propose a rank — `now` (a defect people would hit),
+`next`, `later`, `never` (a recommendation to decline) — and the
+`docs/projects/` directory it belongs to. The note is what Loop is told, so
+give it a verdict, a `file:line`, and what would change the answer.
 
 **Never `decide`, `push` or `mine` unasked.** A decision dismisses the insight
 for everyone in the workspace, and all decisions go up as one context Loop reads
@@ -3125,6 +3130,14 @@ says so without editing anything. What matters for you is what changes:
 
 Same as `isocan home`: **do not switch a machine on your own initiative.** Read
 it freely — plain `isocan direct` — and say what you found.
+
+When a sandbox holds no secret of its own and an egress proxy adds
+`Authorization` upstream, the launcher sets `ISOCAN_BADGE_UPSTREAM=1` with
+`ISOCAN_ACTOR_ID` and `ISOCAN_ACTOR_NAME` (beside `ISOCAN_DIRECT`). In that
+mode the CLI reads and writes no `identity.json` and sends no `Authorization`
+of its own (`isocan whoami` prints `— upstream badge`). Standard proxy
+variables (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`) are honoured directly, with
+no `NODE_USE_ENV_PROXY` needed, and a failed connection names the proxy.
 
 ## Taking a canvas somewhere else
 

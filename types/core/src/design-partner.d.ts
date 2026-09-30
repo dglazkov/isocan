@@ -1,3 +1,5 @@
+import { type DesignArtifactRef, type DesignReference } from "./design-partner-values.js";
+export { DesignPartnerContractError, parseDesignArtifactRef, parseDesignReference, type DesignArtifactRef, type DesignReference } from "./design-partner-values.js";
 export { parseDesignBrief } from "./design-brief.js";
 import type { ContextManifest } from "./canvas-group-context.js";
 /** Decision metadata travels with the adopted target's conditional content edit and inverse. */
@@ -8,26 +10,10 @@ type DesignPartnerPolicy = "off" | "adaptive-v1" | "unsupported";
 export type DesignActorKind = "human" | "agent" | "unknown";
 /** Presentation intent, independent of request progress and verification status. */
 type DesignFidelity = "wireframe" | "designed" | "implementation";
-/** A hash alone cannot identify which permitted source supplied an artifact. */
-export interface DesignArtifactRef {
-    home: string;
-    canvasId: string;
-    itemId: string;
-    versionId: string;
-    blobHash: string;
-}
 interface DesignRecordBase {
     schemaVersion: 1;
     requestId: string;
     epoch: number;
-}
-/** Supplied locations and inspected bytes are distinct states; unavailable sources retain a reason. */
-export interface DesignReference {
-    id: string;
-    state: "supplied" | "fetched" | "inaccessible" | "superseded";
-    url?: string;
-    artifact?: DesignArtifactRef;
-    reason?: string;
 }
 /** Versioned request facts owned by the canvas; projections must preserve provenance and assumptions. */
 export interface DesignBrief extends DesignRecordBase {
@@ -211,11 +197,6 @@ export interface DesignReceipt extends DesignRecordBase {
 }
 /** Closed persisted record family; unsupported kinds require a deliberate schema change. */
 type DesignPartnerRecord = DesignBrief | DesignQuestionSet | DesignResponse | DesignDecision | DesignReceipt;
-export { DesignPartnerContractError } from "./design-partner-values.js";
-/** Checks source/version/hash shape without claiming the caller can access or has inspected its bytes. */
-export declare function parseDesignArtifactRef(value: unknown): DesignArtifactRef;
-/** Refuses filename-only uploads and fetched URLs without version identities; availability stays explicit. */
-export declare function parseDesignReference(value: unknown): DesignReference;
 /** Validates immutable questions, unique choices and real visual-preview identities before publication. */
 export declare function parseDesignQuestionSet(value: unknown): DesignQuestionSet;
 /** Validates outcome shape; source freshness, respondent custody and allowed choices need association checks. */

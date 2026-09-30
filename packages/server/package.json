@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@isocan/core": "*",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.5",
     "ws": "^8.18.0"
   },
   "devDependencies": {

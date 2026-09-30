@@ -150,6 +150,9 @@ export interface StoredBadge {
  * host with no disk keeps it wherever it keeps things.
  */
 export interface BadgeStore {
+    /** True when an upstream proxy injects Authorization (ISOCAN_BADGE_UPSTREAM=1):
+     * the client sends no Authorization of its own and never knocks on the door. */
+    readonly upstream?: boolean;
     read(): Promise<StoredBadge | null>;
     keep(badge: StoredBadge): Promise<void>;
 }

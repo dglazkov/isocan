@@ -31,11 +31,37 @@ export declare function threadLocus(snapshot: CanvasSnapshotResponse, thread: Co
  */
 export declare function actorNamesOn(snapshot: CanvasSnapshotResponse): Map<string, string>;
 export declare function nameResolver(snapshot: CanvasSnapshotResponse): (actorId: string) => string | undefined;
+/** Optional thread, item, and non-owner standing context carried in a summons prompt. */
+export interface SummonsContext {
+    /** The full thread the summoning comment is in, including earlier comments. */
+    thread?: {
+        id: string;
+        comments: Array<{
+            id: string;
+            author: string;
+            body: string;
+        }>;
+    };
+    /** The item the thread is anchored on, or the first changed item. */
+    item?: {
+        id: string;
+        kind: string;
+        title: string;
+    };
+    /** Present when the turn was woken by someone other than the machine's owner (#273). */
+    wokenBy?: {
+        asker: string;
+        owner: string;
+    };
+}
 /** The fixed brief around the wait-shaped payload (phase 4's door):
  * identical for fresh and loaded sessions — delivery differs, content
  * never does — with orientation and the guide pointer carrying the
- * cold-arrival weight instead of 15k inlined tokens. */
+ * cold-arrival weight instead of 15k inlined tokens, and the thread,
+ * anchored item (`id`, `kind`, `title`) and non-owner standing (#273)
+ * carried right in the summons so the first command of a turn can be
+ * the edit. */
 export declare const summonsPrompt: (canvasTitle: string, agentName: string, payload: {
     reason: string;
     entries: WatchedLogEntry[];
-}) => string;
+}, context?: SummonsContext) => string;

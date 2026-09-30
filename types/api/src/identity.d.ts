@@ -25,8 +25,8 @@ import type { DaemonClient } from "./client.js";
 export interface ResolvedIdentity {
     actor: Actor;
     /** "session" = this agent, whatever directory it is in. "home" = the
-     * human's. */
-    source: "session" | "home";
+     * human's. "upstream" = a sandbox whose badge is injected upstream. */
+    source: "session" | "home" | "upstream";
     /** Where the slot lives, for saying so. */
     file: string;
     /** The harness that named this session, when `source` is "session". */
@@ -53,6 +53,13 @@ export interface ResolvedIdentity {
  * called "home".
  */
 export declare const HOME_CLAIM_KEY = "home:person";
+/**
+ * **An agent that holds no secret** (first-minute phase 5, `no-secret-identity.md`).
+ *
+ * True when `ISOCAN_BADGE_UPSTREAM` says an upstream egress proxy holds the
+ * badge outside this sandbox and attaches `Authorization` on the way out.
+ */
+export declare function isBadgeUpstream(env?: NodeJS.ProcessEnv): boolean;
 export declare function readIdentity(home: string): Promise<Actor | null>;
 /**
  * Who this process is, when it has said so before. Asks the daemon —
@@ -133,10 +140,10 @@ export declare function noIdentityHere(client: DaemonClient, home: string): Prom
  */
 export declare function retireStrandedIdentities(cwd: string, home: string): Promise<void>;
 /**
- * Who this command speaks as: this agent, else the human. The session slot is
- * path-independent by design, so an agent that named itself keeps its name
- * after it wanders into another directory, and two agents sharing one
- * directory stay two people.
+ * Who this command speaks as: an upstream-badged actor when declared, else
+ * this agent, else the human. The session slot is path-independent by design,
+ * so an agent that named itself keeps its name after it wanders into another
+ * directory, and two agents sharing one directory stay two people.
  */
 export declare function resolveIdentity(client: DaemonClient, home: string): Promise<ResolvedIdentity | null>;
 /** A session named by the caller instead of found in the environment — what

@@ -4,16 +4,12 @@ import {
   CanvasHandle,
   DEFAULT_MODE,
   DIRECT_VAR,
-  HOME_CLAIM_KEY,
   Home,
   activityRows,
-  adoptIdentity,
   baseForCwd,
   buildComment,
-  builtinHarnesses,
   checkDesignCraftDirectory,
   claimSession,
-  claimSessionIdentity,
   connect,
   designDecisionPort,
   designRecipes,
@@ -23,40 +19,28 @@ import {
   exportDesignCraft,
   exportItem,
   exportedCanvasIds,
-  findSessionIdentity,
-  harnessSessions,
-  harnessVars,
-  harnessVarsFor,
   homeAddressOf,
   importExport,
   insertedItemBox,
   inspectDesignCraftPackage,
   matchRef,
-  noIdentityHere,
   pinFromSource,
   questionnairePort,
   readDesignRecipe,
   readHomeRecord,
-  readIdentity,
   readManifest,
   readPinSource,
-  reclaimIdentity,
   refuseDaemonVerb,
-  requireIdentity,
   resolveBase,
   resolveCanvas,
   resolveCanvasRef,
   resolveCtx,
   resolveDeclared,
-  resolveExplicitIdentity,
-  resolveIdentity,
-  retireStrandedIdentities,
   sourceContextForCanvas,
   waitForFeedback,
   waitForResolvedFeedback,
-  wholeLog,
-  writeIdentity
-} from "./chunk-PDQQCEIM.mjs";
+  wholeLog
+} from "./chunk-UJZ6XVG2.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -67,13 +51,13 @@ import {
   prepareDesignVerifierOffer,
   submitDesignReviewWrite,
   validatePreparedDesignReviewWrite
-} from "./chunk-C4I2LTBP.mjs";
+} from "./chunk-PHX2OK5P.mjs";
 import {
   designReviewReadings,
   designReviewSemantic,
   readDesignReviewReference,
   readDesignReviews
-} from "./chunk-6E5V63G7.mjs";
+} from "./chunk-QWTKKHRZ.mjs";
 import {
   checkDesignCraft,
   parseDesignCraftPacket,
@@ -84,7 +68,7 @@ import {
   readDesignSystem,
   reconcileDesignProjection,
   writeDesignDirection
-} from "./chunk-FWG3KIWP.mjs";
+} from "./chunk-4PGNUMIC.mjs";
 import {
   DESIGN_REVIEW_PROPERTY,
   changeDesignRequest,
@@ -98,38 +82,55 @@ import {
   readDesignRequests,
   readDesignWorkflow,
   startDesignRequest
-} from "./chunk-G52VXUHW.mjs";
+} from "./chunk-X2I4LUBJ.mjs";
 import {
   captureDesignRepair,
   parseDesignRepairBasis,
   prepareDesignRepair,
   submitDesignRepair,
   validatePreparedDesignRepair
-} from "./chunk-3FMWBBLB.mjs";
+} from "./chunk-RL3F3MCG.mjs";
 import {
   CanvasGroups,
   DaemonClient,
+  HOME_CLAIM_KEY,
+  adoptIdentity,
   automaticSourceClient,
+  builtinHarnesses,
+  claimSessionIdentity,
   contextHome,
   contextPinPort,
   designAuditPort,
   designRequestPort,
   designReviewPort,
+  findSessionIdentity,
+  harnessSessions,
+  harnessVars,
+  harnessVarsFor,
+  isBadgeUpstream,
   linkedCanvasesOf,
+  noIdentityHere,
   nodeCopyBytes,
   readContextSummary,
   readDesignAudit,
+  readIdentity,
+  reclaimIdentity,
   repairDesignItem,
+  requireIdentity,
   resolveCanvasGroupRef,
+  resolveExplicitIdentity,
+  resolveIdentity,
   resolved,
-  shaOfRoot
-} from "./chunk-HDJHGFM7.mjs";
-import "./chunk-734LWB3U.mjs";
+  retireStrandedIdentities,
+  shaOfRoot,
+  writeIdentity
+} from "./chunk-DKV6JX7Y.mjs";
+import "./chunk-AEV5V7XQ.mjs";
 import {
   DaemonRoutes,
   OPERATIONS_ROUTE,
   platformFetch
-} from "./chunk-7YIZEUBI.mjs";
+} from "./chunk-CGJDSXHD.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import {
   auditDesignSource,
@@ -139,7 +140,7 @@ import {
   readDesignAuditAdvisory,
   readDesignSourceAudit,
   repairDesignScreen
-} from "./chunk-M6IHY2JM.mjs";
+} from "./chunk-ZZDIMY4C.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import {
   prepareDesignDecision,
@@ -148,7 +149,7 @@ import {
   readDesignComparisons,
   respondDesignComparison,
   submitDesignDecision
-} from "./chunk-IXFZEFGW.mjs";
+} from "./chunk-ALHWK5RF.mjs";
 import {
   answerDesignQuestions,
   askDesignQuestions,
@@ -157,14 +158,14 @@ import {
   readDesignQuestions,
   readDesignReference,
   readGoverningDesign
-} from "./chunk-4STECMJP.mjs";
-import "./chunk-CB5CS7DX.mjs";
+} from "./chunk-36B6BRED.mjs";
+import "./chunk-B66QXSQD.mjs";
 import {
   ApiError,
   canvasUrlWithPass,
   isLoopbackBase,
   parseCanvasAddress
-} from "./chunk-P5QBY34C.mjs";
+} from "./chunk-ITXTURCZ.mjs";
 import "./chunk-GUY4UN4O.mjs";
 import "./chunk-7OLMWXEB.mjs";
 import "./chunk-JYOOXWJZ.mjs";
@@ -223,6 +224,7 @@ export {
   importExport,
   insertedItemBox,
   inspectDesignCraftPackage,
+  isBadgeUpstream,
   isLoopbackBase,
   linkedCanvasesOf,
   matchRef,
