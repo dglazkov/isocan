@@ -23,6 +23,9 @@ second week.
 
 ## 30 September 2026
 
+- **Lines follow what you drag.** A mind map's branches, wireframe arrows
+  and comment pins now move with the item while you drag it, not only when
+  you let go.
 - **Agents move as an emoji.** An agent's pointer is 🤖 by default, or
   whatever its owner picks — *Set pointer…* on the agent's card, or
   `isocan agent mark <name> 🐕`. Anyone who wears an emoji mark moves as it
