@@ -8,6 +8,7 @@ import { answeredResponse, pendingRound, requestBlueprint, roundCalls, type Roun
 import { FlowCanvas, applyRound, composeFlow, costLine, flowsOn, pickFlow, startFlow, styleAt, type OnAsked } from "./flow.ts";
 import { StyleResolver } from "./restyle.ts";
 import { flagPack } from "./content/choose.ts";
+import { parsePinFlags } from "./entropy-ask.ts";
 import { wireBy, wireSize, wireTitle } from "./spec.ts";
 
 /**
@@ -68,8 +69,10 @@ export function registerCompose(host: CliHost, wire: Command): void {
     .option("--basic", "plain grey wires: no sample content and no prototype (the default fleshes the screens and puts the answerer's first choices in a prototype)")
     .option("--flesh", "arrive fleshed — the default now; kept so older scripts still run")
     .option("--pack <id>", "the content pack to flesh with, instead of asking (`wire flesh --packs` lists them)")
+    .option("--pin <key=value...>", "pin root flow decisions up front (for example: --pin platform=web --pin density=compact)")
+    .option("--no-ask", "suppress high-entropy root /ask prompts and pick top-1 silently")
     .action(
-      run(async (words: string[], opts: { answerer?: string; seed: string; save?: string; at?: string; in?: string; basic?: boolean; flesh?: boolean; pack?: string }, cmd: Command) => {
+      run(async (words: string[], opts: { answerer?: string; seed: string; save?: string; at?: string; in?: string; basic?: boolean; flesh?: boolean; pack?: string; pin?: string[]; ask?: boolean }, cmd: Command) => {
         const request = words.join(" ").trim();
         if (!request) {
           cmd.help();
@@ -82,8 +85,9 @@ export function registerCompose(host: CliHost, wire: Command): void {
         const p = await resolveCanvas(ctx);
         const port = cliPort(host, ctx, p.id);
         const seed = Number(opts.seed);
-        // Refused before anything is written: an unknown pack, or `--answerer jev` with no key, never leaves a blueprint behind.
+        // Refused before anything is written: an unknown pack, invalid --pin, or `--answerer jev` with no key, never leaves a blueprint behind.
         if (opts.basic && (opts.pack !== undefined || opts.flesh)) throw new Error("--basic arrives unfleshed — it cannot take --pack or --flesh too");
+        const pinned = parsePinFlags(opts.pin);
         if (opts.pack !== undefined) flagPack(opts.pack);
         const answerer = opts.answerer === "agent" ? "agent" : cliAnswerer(ctx, p.id, opts.answerer, seed, say);
         const snapshot = await ctx.client.snapshot(p.id);
@@ -113,6 +117,8 @@ export function registerCompose(host: CliHost, wire: Command): void {
           },
           ...(saver(opts.save) ? { onAsked: saver(opts.save)!, onMappingAsked: mappingSaver(opts.save)! } : {}),
           flesh: opts.basic ? false : opts.pack !== undefined ? { pack: opts.pack } : {},
+          ...(Object.keys(pinned).length > 0 ? { pinned } : {}),
+          ...(opts.ask === false ? { noAsk: true } : {}),
         });
         const { mapper, tallies } = composed;
         if (ctx.json) {

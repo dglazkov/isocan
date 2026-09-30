@@ -338,3 +338,230 @@ export function homeOrStub(home: Answerer, stub: Answerer, onFallback: (error: u
     },
   };
 }
+
+// ---------- entropy gating & PriorityGate (wireframes wave 2, design §12)
+
+/** Default Shannon entropy ceiling in bits above which a root decision asks for disambiguation. */
+export const DEFAULT_ENTROPY_GATE = 1.0;
+
+/** Default minimum top-option probability below which a root decision asks for disambiguation. */
+export const DEFAULT_CONFIDENCE_FLOOR = 0.5;
+
+/**
+ * Compute the Shannon entropy in bits ($H = -\sum p_i \log_2 p_i$) of a
+ * probability distribution. Normalizes positive entries so slight rounding in
+ * Jev's returned probabilities does not skew the bit count; returns `0` for
+ * empty, all-zero, or single-option distributions.
+ */
+export function entropyBits(probabilities: Record<string, number> | readonly number[]): number {
+  const raw = Array.isArray(probabilities) ? probabilities : Object.values(probabilities);
+  const pos = raw.filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+  if (pos.length <= 1) return 0;
+  const total = pos.reduce((s, v) => s + v, 0);
+  if (total <= 0) return 0;
+  let h = 0;
+  for (const v of pos) {
+    const p = v / total;
+    if (p > 0 && p < 1) h -= p * Math.log2(p);
+  }
+  return Math.round(h * 1000) / 1000;
+}
+
+/** One candidate option surfaced by `gatedChoice`, ordered most likely first. */
+export interface GatedChoiceOption {
+  /** Option identifier from the question's criteria. */
+  value: string;
+  /** Probability assigned by the answerer (`0..1`). */
+  p: number;
+}
+
+/** Options controlling `gatedChoice` disambiguation thresholds and overrides. */
+export interface GatedChoiceOptions {
+  /** Shannon entropy ceiling in bits (default `DEFAULT_ENTROPY_GATE` = `1.0`). */
+  maxEntropyBits?: number;
+  /** Minimum top-option probability (default `DEFAULT_CONFIDENCE_FLOOR` = `0.5`). */
+  minConfidence?: number;
+  /** Maximum number of top candidate options to surface on an ask (default `3`). */
+  topK?: number;
+  /** Pinned value from `WireSpec.pinned` or `--pin key=value`; bypasses the gate when valid. */
+  pinned?: string;
+  /** When `true` (`--no-ask`), never pauses for `/ask`; resolves to argmax even when uncertain. */
+  noAsk?: boolean;
+}
+
+/** The outcome of evaluating a Jev answer through `gatedChoice`. */
+export interface GatedChoiceResult {
+  /** `"pinned"` when `opts.pinned` matched; `"ask"` when entropy exceeds `maxEntropyBits` or top `p < minConfidence` (unless `noAsk`); otherwise `"confident"`. */
+  status: "confident" | "ask" | "pinned";
+  /** Chosen or pinned option value. */
+  value: string;
+  /** Probability of `value` in the answer's distribution. */
+  p: number;
+  /** Shannon entropy of the answer's distribution in bits. */
+  entropy: number;
+  /** Top `k` options sorted by descending probability. */
+  options: GatedChoiceOption[];
+  /** True when the distribution itself was uncertain (`entropy > maxEntropyBits` or `p < minConfidence`). */
+  uncertain: boolean;
+}
+
+/**
+ * Evaluate a Jev answer against an entropy and confidence gate.
+ * When `opts.pinned` names a valid option, returns `status: "pinned"` with
+ * that option immediately. Otherwise, if `entropy > maxEntropyBits` or
+ * `p < minConfidence`, returns `status: "ask"` (or `"confident"` when
+ * `opts.noAsk` is true) with the top `topK` options and their probabilities.
+ */
+export function gatedChoice(q: JevQuestion, a: JevAnswer, opts: GatedChoiceOptions = {}): GatedChoiceResult {
+  const { value, p, distribution } = chosenOption(q, a);
+  const entropy = entropyBits(distribution);
+  const maxEntropy = opts.maxEntropyBits ?? DEFAULT_ENTROPY_GATE;
+  const minConf = opts.minConfidence ?? DEFAULT_CONFIDENCE_FLOOR;
+  const topK = opts.topK ?? 3;
+  const options = Object.entries(distribution)
+    .map(([k, prob]) => ({ value: k, p: Math.round(prob * 1000) / 1000 }))
+    .sort((x, y) => y.p - x.p || x.value.localeCompare(y.value))
+    .slice(0, topK);
+  const uncertain = entropy > maxEntropy || p < minConf;
+  if (opts.pinned !== undefined && Object.prototype.hasOwnProperty.call(distribution, opts.pinned)) {
+    const pinnedP = Math.round((distribution[opts.pinned] ?? 0) * 1000) / 1000;
+    return { status: "pinned", value: opts.pinned, p: pinnedP, entropy, options, uncertain };
+  }
+  if (uncertain && !opts.noAsk) {
+    return { status: "ask", value, p: Math.round(p * 1000) / 1000, entropy, options, uncertain: true };
+  }
+  return { status: "confident", value, p: Math.round(p * 1000) / 1000, entropy, options, uncertain };
+}
+
+/** Priority lane for `PriorityGate`: `"high"` preempts queued `"normal"` work. */
+export type JevPriority = "high" | "normal";
+
+/** Configuration for `PriorityGate`. */
+export interface PriorityGateOptions {
+  /** Maximum concurrent in-flight calls (default `3`). */
+  concurrency?: number;
+  /** Alias for `concurrency` (default `3`). */
+  maxConcurrent?: number;
+  /** Maximum retries on transient `429` or `529` errors (default `3`). */
+  maxRetries?: number;
+  /** Backoff delays in ms between retries (default `[200, 500, 1000]`). */
+  backoffMs?: readonly number[];
+  /** Base backoff delay in ms when `backoffMs` is not given. */
+  baseDelayMs?: number;
+  /** Custom sleep function for deterministic tests. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+function isTransientJevError(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (status === 429 || status === 529) return true;
+  const msg = error instanceof Error ? error.message : String(error);
+  return /\b(?:429|529)\b/.test(msg);
+}
+
+/**
+ * Two-lane (`high` / `normal`) concurrency semaphore and retry wrapper around
+ * an `Answerer`. Interactive composer, edit, and `/ask` calls run on the
+ * `"high"` lane and always dequeue ahead of queued `"normal"` background work
+ * (such as class polish).
+ */
+export class PriorityGate {
+  readonly inner: Answerer | undefined;
+  readonly concurrency: number;
+  readonly maxRetries: number;
+  private readonly backoffMs: readonly number[];
+  private readonly sleep: (ms: number) => Promise<void>;
+  private active = 0;
+  private readonly highQueue: Array<() => void> = [];
+  private readonly normalQueue: Array<() => void> = [];
+
+  constructor(innerOrOpts?: Answerer | PriorityGateOptions, maybeOpts: PriorityGateOptions = {}) {
+    const isAnswerer = innerOrOpts !== undefined && typeof (innerOrOpts as Answerer).answer === "function";
+    this.inner = isAnswerer ? (innerOrOpts as Answerer) : undefined;
+    const opts = isAnswerer ? maybeOpts : ((innerOrOpts as PriorityGateOptions | undefined) ?? {});
+    this.concurrency = Math.max(1, opts.concurrency ?? opts.maxConcurrent ?? 3);
+    this.maxRetries = Math.max(0, opts.maxRetries ?? 3);
+    const base = opts.baseDelayMs;
+    this.backoffMs = opts.backoffMs ?? (base !== undefined ? [base, base * 2, base * 4] : [200, 500, 1000]);
+    this.sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  }
+
+  /** Number of currently in-flight calls across both lanes. */
+  get inFlight(): number {
+    return this.active;
+  }
+
+  /** Number of queued calls waiting for a slot (`high` + `normal`). */
+  get pending(): number {
+    return this.highQueue.length + this.normalQueue.length;
+  }
+
+  private acquire(priority: JevPriority): Promise<void> {
+    if (this.active < this.concurrency) {
+      this.active++;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      const task = () => {
+        this.active++;
+        resolve();
+      };
+      if (priority === "high") this.highQueue.push(task);
+      else this.normalQueue.push(task);
+    });
+  }
+
+  private release(): void {
+    this.active--;
+    const next = this.highQueue.shift() ?? this.normalQueue.shift();
+    if (next) next();
+  }
+
+  /** Run an arbitrary async operation through the priority semaphore with transient retry. */
+  async run<T>(
+    first: JevPriority | (() => Promise<T>),
+    second: (() => Promise<T>) | JevPriority = "high",
+  ): Promise<T> {
+    const priority: JevPriority = typeof first === "string" ? first : (second as JevPriority);
+    const fn: () => Promise<T> = typeof first === "function" ? first : (second as () => Promise<T>);
+    await this.acquire(priority);
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await fn();
+        } catch (error) {
+          if (isTransientJevError(error) && attempt < this.maxRetries) {
+            const wait = this.backoffMs[Math.min(attempt, this.backoffMs.length - 1)] ?? 200;
+            await this.sleep(wait);
+            continue;
+          }
+          throw error;
+        }
+      }
+    } finally {
+      this.release();
+    }
+  }
+
+  /** Answer a `JevRequest` at the given priority (`"high"` by default). */
+  answer(request: JevRequest, priority: JevPriority = "high"): Promise<Answered> {
+    if (!this.inner) throw new Error("PriorityGate has no default inner Answerer — pass one to constructor or use asAnswerer(answerer)");
+    return this.run(priority, () => this.inner!.answer(request));
+  }
+
+  /** View this gate as a standard `Answerer` bound to the given priority lane. */
+  asAnswerer(first: Answerer | JevPriority = "high", second: JevPriority = "high"): Answerer {
+    const target = typeof first === "string" ? this.inner : first;
+    const priority: JevPriority = typeof first === "string" ? first : second;
+    if (!target) throw new Error("PriorityGate.asAnswerer requires an Answerer");
+    const self = this;
+    return {
+      get name() {
+        return target.name;
+      },
+      answer(request: JevRequest) {
+        return self.run(priority, () => target.answer(request));
+      },
+    };
+  }
+}

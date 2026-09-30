@@ -23,7 +23,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phase 9 is PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) and `wireframes phase 10` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 (`PriorityGate` and entropy-gated `/ask`) next, then phase 11 (`wire edit` and `wire why`), phase 12 (`wire copy --ai` and `wire name`), and phase 13 (`wire ds` and `wire polish`).
+**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–10 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) and `wireframes phase 11` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 (`wire edit` and `wire why`) next, then phase 12 (`wire copy --ai` and `wire name`) and phase 13 (`wire ds` and `wire polish`).
 
 ## Phase 0 — The catalog, drawn
 
@@ -374,7 +374,7 @@ alongside `data-intent` and `data-hot`.
 
 ## Phase 10 — Entropy-gated `/ask` and `PriorityGate` in `@isocan/core/jev`
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 30 September 2026.** Built and verified in unit tests (`packages/core/test/jev.test.ts` and `packages/modules/wireframe/test/entropy-ask.test.ts`): `entropyBits`, `gatedChoice`, and `PriorityGate` (two-lane `high`/`normal` concurrency semaphore + `429`/`529` retry + `asAnswerer`) in `@isocan/core/jev`, plus `gateFlowDecision`, `formatAskComment`, `parsePinFlags`, `applyPinnedToSpecs`, and `--pin <key=value...>` / `--no-ask` in `@isocan/module-wireframe`. Browser walk with live `/ask` disambiguation remains before closing.
 
 **Outcome:** [journey.md](journey.md) scene 10, [design.md](design.md) §12.
 `packages/core/src/jev.ts` gains `entropyBits(probabilities)`,
@@ -405,6 +405,9 @@ re-ask.
 3. `npm test` and `npm run typecheck`.
 
 ### Trajectory
+
+- **2026-09-30** — `PriorityGate` accepts either an `Answerer` at construction (`new PriorityGate(answerer, opts)`) or acts as a shared semaphore (`new PriorityGate(opts)` with `gate.asAnswerer(answerer, priority)`), allowing a single gate instance to coordinate `answerer` and `mappingAnswerer` calls across lanes.
+- **2026-09-30** — `FlowCanvas.styled` only stamps `spec.pinned` when `activePinned` is non-empty (`--pin` or an answered `/ask`), keeping `WireSpec` output byte-identical on flows that do not pin root decisions.
 
 ---
 

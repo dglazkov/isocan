@@ -28,6 +28,7 @@ export * from "./links.ts";
 export * from "./prototype.ts";
 export * from "./compose.ts";
 export * from "./answerer.ts";
+export * from "./entropy-ask.ts";
 export * from "./vary.ts";
 export * from "./keep.ts";
 export * from "./maybe.ts";

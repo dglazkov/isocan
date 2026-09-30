@@ -103,6 +103,11 @@ export interface WireSpec {
    * round 1.
    */
   by?: WireBy;
+  /**
+   * Root or screen decisions pinned by the person or `--pin key=value`
+   * (design §12), so future composer or edit turns never re-ask them.
+   */
+  pinned?: Record<string, string>;
 }
 
 /** Who drew a wire: the person or agent, and the answerer whose decisions it carries. */
@@ -371,6 +376,15 @@ export function validateWire(input: unknown): string[] {
   if (spec.content !== undefined) problems.push(...contentProblems(spec.content));
   if (spec.by !== undefined && (typeof spec.by !== "object" || !["jev", "stub", "agent"].includes(spec.by?.answerer as string))) {
     problems.push("by must be { answerer: jev | stub | agent, actor?, via?, model? }");
+  }
+  if (spec.pinned !== undefined) {
+    if (!spec.pinned || typeof spec.pinned !== "object" || Array.isArray(spec.pinned)) {
+      problems.push("pinned must be an object of string key-value pairs");
+    } else {
+      for (const [k, v] of Object.entries(spec.pinned)) {
+        if (typeof v !== "string" || !k) problems.push(`pinned.${k} must be a string`);
+      }
+    }
   }
   let r: Recipe;
   try {

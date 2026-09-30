@@ -32,7 +32,11 @@ bar, tab bar) stays.
   record too. The CLI prints those lines to you instead and posts nothing:
   post your ONE comment saying what landed. The last line says who answered, the latency
   per round, calls, input tokens and cost. `--save <dir>` keeps every
-  round's request and response; `--at x,y` starts the row somewhere.
+  round's request and response; `--at x,y` starts the row somewhere;
+  `--pin <key=value...>` pins root decisions up front (`platform=web`,
+  `density=compact`, `template=dashboard`, `pack=commerce`) and stamps them in
+  `spec.pinned`; `--no-ask` suppresses root entropy `/ask` disambiguation
+  prompts and picks top-1 silently.
 - **Round 1 over-includes; the prototype prunes.** An archetype the
   answerer gives P(yes) ≥ 0.5 is a screen of the flow; one from 0.3 up to
   0.5 is drawn too, in its running place in the row, but marked **maybe**:
