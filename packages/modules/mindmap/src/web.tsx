@@ -37,7 +37,7 @@ const tidy: ModuleAction = {
 
 /**
  * **The mind map's web half**: the lines, as an underlay the shell mounts
- * inside `.world` under the items, fed the canvas and the live drag as props;
+ * inside `.world` under the items, fed the canvas (the live gesture folded in) as props;
  * and the tidy, as a palette action over facts. Nothing here knows the
  * shell's stores (`docs/projects/modules/design.md`).
  */

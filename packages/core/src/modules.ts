@@ -568,8 +568,11 @@ export interface UnderlayFacts {
   presentation?: WorkspacePresentation["items"] | undefined;
   /** Workspace-scoped activation, e.g. following a graph connection. */
   activateItem?: ((itemId: string) => boolean) | undefined;
-  /** The live drag, so a line can ride the gesture before the replica moves. */
-  drag: { itemIds: readonly string[]; dx: number; dy: number } | null;
+  // No `drag` since 30 Sep 2026: the shell folds whichever gesture is live —
+  // a legacy drag's delta or a groups canvas's preview boxes — into `canvas`,
+  // so a line rides the hand without knowing there are two kinds. A module
+  // that still reads `drag` gets undefined and draws from `canvas`, which is
+  // already right.
   /**
    * **This viewer's selection** (wireframes, 24 Sep 2026) — one person's,
    * never the canvas's, so what an underlay does with it is transient and

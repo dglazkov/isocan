@@ -20,7 +20,7 @@ import type { WireSpec } from "./spec.ts";
  * changes. Specs come from the arrows' own cache (`specOf`), which has read
  * every kept screen by the time anybody selects anything.
  */
-export function PrototypeLight({ canvas, selection, drag, specOf }: Pick<UnderlayFacts, "canvas" | "selection" | "drag"> & { specOf: (hash: string) => WireSpec | null | undefined }) {
+export function PrototypeLight({ canvas, selection, specOf }: Pick<UnderlayFacts, "canvas" | "selection"> & { specOf: (hash: string) => WireSpec | null | undefined }) {
   const id = selection?.length === 1 ? selection[0]! : null;
   const prototype = id ? canvas.items[id] : undefined;
   if (!prototype || prototype.properties?.[PROTOTYPE_PROP] === undefined) return null;
@@ -32,10 +32,7 @@ export function PrototypeLight({ canvas, selection, drag, specOf }: Pick<Underla
   }
   const members = prototypeScreens(canvas, prototype, wires);
   if (members.length === 0) return null;
-  const box = (i: Item) => {
-    const on = drag?.itemIds.includes(i.id) ? drag : null;
-    return { id: i.id, x: i.x + (on?.dx ?? 0), y: i.y + (on?.dy ?? 0), w: i.width, h: i.height };
-  };
+  const box = (i: Item) => ({ id: i.id, x: i.x, y: i.y, w: i.width, h: i.height });
   const all = Object.values(canvas.items).map(box);
   // The veil reaches well past everything on the canvas, so panning never finds its edge.
   const pad = 20000;

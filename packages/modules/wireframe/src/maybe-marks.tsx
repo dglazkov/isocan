@@ -15,15 +15,13 @@ import { MAYBE_PROP, MAYBE_TOOLTIP, maybeItems, maybeTagNeed } from "./maybe.ts"
  * item's own title strip, the tag and the badge side by side (the labels'
  * rule, `--w` world units against `--need` screen px); the outline stays.
  */
-export function WireMaybes({ canvas, drag }: Pick<UnderlayFacts, "canvas" | "drag">) {
+export function WireMaybes({ canvas }: Pick<UnderlayFacts, "canvas">) {
   const items = maybeItems(canvas);
   if (items.length === 0) return null;
   return (
     <>
       {items.map((item) => {
-        const on = drag?.itemIds.includes(item.id) ? drag : null;
-        const x = item.x + (on?.dx ?? 0);
-        const y = item.y + (on?.dy ?? 0);
+        const { x, y } = item;
         const p = item.properties?.[MAYBE_PROP] ?? "";
         return (
           <div key={item.id} data-wire-maybe={item.id} aria-hidden>

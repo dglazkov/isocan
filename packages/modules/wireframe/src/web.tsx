@@ -22,10 +22,10 @@ import { styleMenu } from "./style-menu.ts";
 function WireUnderlay(facts: UnderlayFacts) {
   return (
     <>
-      <WireMaybes canvas={facts.canvas} drag={facts.drag} />
+      <WireMaybes canvas={facts.canvas} />
       <WireBehind {...facts} />
       <WireArrows {...facts} />
-      <PrototypeLight canvas={facts.canvas} selection={facts.selection} drag={facts.drag} specOf={cachedSpec} />
+      <PrototypeLight canvas={facts.canvas} selection={facts.selection} specOf={cachedSpec} />
     </>
   );
 }

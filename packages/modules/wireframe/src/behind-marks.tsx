@@ -19,7 +19,7 @@ import { cachedDoc, cachedSpec, docs, specs } from "./spec-cache.ts";
  * (or the scrubber's past) sees the tag and cannot press it. Like the maybe
  * tag it fades out at a zoom where it would not fit under the item.
  */
-export function WireBehind({ canvas, drag, readText, host, canEdit, past }: Pick<UnderlayFacts, "canvas" | "drag" | "readText" | "host" | "canEdit" | "past">) {
+export function WireBehind({ canvas, readText, host, canEdit, past }: Pick<UnderlayFacts, "canvas" | "readText" | "host" | "canEdit" | "past">) {
   const [, setRead] = useState(0);
   const wires = Object.values(canvas.items).filter(isWire);
   const wanted = wires.map(specKey).filter((h): h is string => h !== null && !specs.has(h)).join(",");
@@ -57,9 +57,8 @@ export function WireBehind({ canvas, drag, readText, host, canEdit, past }: Pick
   for (const c of behind) bySystem.set(c.governedBy!.itemId, [...(bySystem.get(c.governedBy!.itemId) ?? []), c]);
   const press = !past && canEdit !== false && host ? (ids: readonly string[]) => restyleOnCanvas(host, ids) : undefined;
   const tag = (item: Item, key: string, text: string, title: string, ids: readonly string[]) => {
-    const on = drag?.itemIds.includes(item.id) ? drag : null;
     return (
-      <div key={key} className="wire-behind-anchor" data-wire-behind={item.id} style={{ left: item.x + (on?.dx ?? 0) + item.width, top: item.y + (on?.dy ?? 0) + item.height, "--w": item.width } as CSSProperties}>
+      <div key={key} className="wire-behind-anchor" data-wire-behind={item.id} style={{ left: item.x + item.width, top: item.y + item.height, "--w": item.width } as CSSProperties}>
         <button type="button" className="wire-behind-tag" title={title} aria-label={title} aria-disabled={!press} onPointerDown={(e) => e.stopPropagation()} onClick={() => press?.(ids)}>
           {text}
         </button>

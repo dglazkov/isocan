@@ -2,21 +2,14 @@ import { useId } from "react";
 import type { UnderlayFacts } from "@isocan/core";
 import { projectsOn, projectEdges } from "./manifest.ts";
 
-export default function Edges({ canvas, drag, activateItem, presentation }: UnderlayFacts) {
+export default function Edges({ canvas, activateItem, presentation }: UnderlayFacts) {
   const marker = useId();
   const edges = projectsOn(canvas).flatMap((p) => projectEdges(canvas, p.id))
     .filter(edge => !presentation || presentation[edge.from.id]?.detail !== "marker" || presentation[edge.to.id]?.detail !== "marker")
     // Focus links paint last, so distant relationships cannot intercept them.
     .sort((a, b) => Number(Boolean(presentation?.[a.from.id]?.emphasis || presentation?.[a.to.id]?.emphasis)) - Number(Boolean(presentation?.[b.from.id]?.emphasis || presentation?.[b.to.id]?.emphasis)));
   if (!edges.length) return null;
-  const at = (item: (typeof edges)[number]["from"]) => ({
-    x:
-      item.x + item.width / 2 + (drag?.itemIds.includes(item.id) ? drag.dx : 0),
-    y:
-      item.y +
-      item.height / 2 +
-      (drag?.itemIds.includes(item.id) ? drag.dy : 0),
-  });
+  const at = (item: (typeof edges)[number]["from"]) => ({ x: item.x + item.width / 2, y: item.y + item.height / 2 });
   return (
     <svg
       style={{

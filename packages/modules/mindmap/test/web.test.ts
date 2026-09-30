@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MapEdges } from "../src/edges.tsx";
 
 /**
  * The geometry is proved in `core/test/mindmap.test.ts`. This is the drawing,
@@ -63,10 +66,19 @@ describe("the map's lines", () => {
     expect(viewport.indexOf("<ModuleUnderlays ")).toBeLessThan(viewport.indexOf("{items.map("));
   });
 
-  it("rides a drag, so a line does not lag the node it joins", () => {
-    // The item has not moved in the replica while a drag is live — the same
-    // trick a comment pin uses.
-    expect(view).toMatch(/drag\?\.itemIds\.includes\(item\.id\)/);
+  it("draws from the canvas it is handed, so a line is wherever the shell says the node is", () => {
+    /**
+     * This used to assert the SOURCE rode `drag` — and it passed for as long
+     * as the lines lagged every drag on a groups canvas (30 Sep 2026), which
+     * previews through boxes and never sets `drag`. The shell now folds either
+     * gesture into the canvas (`web/test/underlay-preview.test.ts` proves
+     * that half); this proves the other: move a node in the canvas, and the
+     * line leaves from where it went.
+     */
+    const node = (id: string, x: number, parent?: string) => ({ id, title: `Acme ${id}`, createdAt: "2026-09-30T00:00:00.000Z", x, y: 0, width: 100, height: 40, properties: { map: "map_acme", ...(parent ? { mapParent: parent } : {}) } });
+    const draw = (rootX: number) => renderToStaticMarkup(createElement(MapEdges, { canvas: { items: { root: node("root", rootX), leaf: node("leaf", 400, "root") }, threads: {}, trash: [] } } as never));
+    expect(draw(0)).toContain('d="M 100 20 C');
+    expect(draw(50)).toContain('d="M 150 20 C');
   });
 
   it("counter-scales its stroke", () => {

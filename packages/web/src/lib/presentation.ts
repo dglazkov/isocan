@@ -28,6 +28,28 @@ export function presentedItem(item: Item, frame: PresentationFrame | null): Item
 }
 
 /**
+ * **A canvas as the hand has it mid-gesture** (30 Sep 2026). A gesture is
+ * previewed two ways: a legacy canvas's drag as `drag` (ids and a delta), and a
+ * groups canvas's — every new canvas's — drag, nudge or resize as a box per
+ * item (`groupPreview`, from `groupPreviewBoxes`). `ItemView` reads both. The
+ * things drawn FROM items — a mind map's edges, a wireframe's arrows, a comment
+ * pin — each rode `drag` alone, so on a groups canvas they stood still at the
+ * old place until the drop committed ("some of it doesn't catch up until I drop
+ * it"). This folds whichever gesture is live into the canvas once, so every such
+ * consumer reads one set of positions and none has to know how many kinds of
+ * gesture there are. A box wins over the presentation, as it does in
+ * `ItemView`. Nothing live, no copy: the same object back. One store read
+ * answers both, `s.drag ?? s.groupPreview`, because only one is ever set.
+ */
+export function previewedCanvas(canvas: CanvasContents, gesture: { itemIds: readonly string[]; dx: number; dy: number } | { boxes: ReadonlyMap<string, { x: number; y: number; width: number; height: number }> } | null): CanvasContents {
+  if (!gesture) return canvas;
+  const items = { ...canvas.items };
+  if ("boxes" in gesture) for (const [id, box] of gesture.boxes) { if (items[id]) items[id] = { ...items[id], ...box }; }
+  else for (const id of gesture.itemIds) if (items[id]) items[id] = { ...items[id], x: items[id].x + gesture.dx, y: items[id].y + gesture.dy };
+  return { ...canvas, items };
+}
+
+/**
  * Give geometry consumers a disposable view of the same canvas.
  *
  * **A view that drops a group must not leave a member pointing at it.** Core

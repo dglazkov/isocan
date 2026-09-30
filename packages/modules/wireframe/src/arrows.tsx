@@ -161,7 +161,7 @@ interface Retarget {
   over: string | null;
 }
 
-export function WireArrows({ canvas, drag, readText, host, canEdit, past, openItem }: UnderlayFacts) {
+export function WireArrows({ canvas, readText, host, canEdit, past, openItem }: UnderlayFacts) {
   const keepers = kept(canvas).filter((i) => i.properties?.[PROTOTYPE_PROP] === undefined);
   const hashes = keepers.map(keyOf).filter((h): h is string => h !== null);
   const [, setRead] = useState(0);
@@ -274,10 +274,7 @@ export function WireArrows({ canvas, drag, readText, host, canEdit, past, openIt
 
   if (flows.length === 0) return <svg ref={origin} className="wire-origin" aria-hidden />;
 
-  const box = (item: Item): RouteBox => {
-    const on = drag?.itemIds.includes(item.id) ? drag : null;
-    return { id: item.id, x: item.x + (on?.dx ?? 0), y: item.y + (on?.dy ?? 0), w: item.width, h: item.height };
-  };
+  const box = (item: Item): RouteBox => ({ id: item.id, x: item.x, y: item.y, w: item.width, h: item.height });
   const all = Object.values(canvas.items);
   const drawn: Drawn[] = flows.map((flow) => {
     const boxes = new Map(flow.items.map((i) => [i.id, box(i)]));
