@@ -11,7 +11,7 @@ Run by `scripts/persona-run.mjs` at `6841df9`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| bytes past the last size somebody agreed to is 3706, past 0 of 701300 | unanswered |
+| bytes past the last size somebody agreed to is 3706, past 0 of 701300 | accepted — fixed, not raised: down to 700,602 (0 past 701,300) after extracting `@isocan/core`'s `design-partner-values.ts` leaf and deferring `hostbridge.ts` (`?embed=1` only) and `ElsewherePage.tsx` (`lazy()`). |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

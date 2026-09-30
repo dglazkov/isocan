@@ -99,8 +99,7 @@ import { TrashPanel } from "../components/LazyTrashPanel.tsx";
 import { DesignComparisonHost } from "../components/DesignComparisonButton.tsx";
 import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
 import { RailStrip } from "../components/RailStrip.tsx";
-import { chatHiddenNow, openPanel } from "../lib/panels.ts";
-import { bridgeToHost } from "../lib/hostbridge.ts";
+import { chatHiddenNow, embeddedNow, openPanel } from "../lib/panels.ts";
 import { FilesPanel } from "../components/LazyFilesPanel.tsx";
 import { AgentTray } from "../components/LazyAgentTray.tsx";
 import { ContextPanel } from "../components/LazyContextPanel.tsx";
@@ -116,13 +115,15 @@ import { noteVisit } from "../lib/seen.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { useCanvasHome } from "../lib/homes.ts";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
-import { ElsewherePage } from "./ElsewherePage.tsx";
 
 /* Below the imports, and it has to stay there: vite's dev transform rewrites
  * `import { lazy } from "react"` into a binding at the import's own position,
  * so a `lazy()` call above it is a temporal dead zone and the page throws
  * "Cannot access 'lazy' before initialization". Rollup hoists, so the built
  * bundle and CI never saw it — only `npm run dev` did. */
+const ElsewherePage = lazy(() =>
+  import("./ElsewherePage.tsx").then((m) => ({ default: m.ElsewherePage })),
+);
 const CanvasGroupPanel = lazy(() =>
   import("../components/CanvasGroupPanel.tsx").then((m) => ({ default: m.CanvasGroupPanel })),
 );
@@ -404,7 +405,18 @@ function CanvasSurface({
 
   // A pane that framed this canvas (`?embed=1`) hears what is selected, and
   // may point at an item — `lib/hostbridge.ts` says who is told what.
-  useEffect(() => (canvasId ? bridgeToHost(canvasId) : undefined), [canvasId]);
+  useEffect(() => {
+    if (!canvasId || !embeddedNow() || window.parent === window) return;
+    let teardown: (() => void) | undefined;
+    let live = true;
+    void import("../lib/hostbridge.ts").then((m) => {
+      if (live) teardown = m.bridgeToHost(canvasId);
+    });
+    return () => {
+      live = false;
+      teardown?.();
+    };
+  }, [canvasId]);
 
   // Zoom-to-fit once, on the first snapshot. On arrival rather than on the
   // canvas: a subscription to the canvas re-rendered this page and all its
