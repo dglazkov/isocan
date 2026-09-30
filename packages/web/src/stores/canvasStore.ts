@@ -764,8 +764,15 @@ function flushPresence(): void {
  * at once — folded like every other write, invisible to the unsynced count,
  * never re-posted by a flush, retired by `seq` like the rest.
  */
-export async function sendEchoed(canvasId: string, actor: Actor, op: Operation, group?: string, originGroupMode?: "legacy" | "groups"): Promise<void> {
-  await sendEchoedResult(canvasId, actor, op, group, originGroupMode);
+export async function sendEchoed(
+  canvasId: string,
+  actor: Actor,
+  op: Operation,
+  group?: string,
+  originGroupMode?: "legacy" | "groups",
+  stagedBlob?: StagedBlob,
+): Promise<void> {
+  await sendEchoedResult(canvasId, actor, op, group, originGroupMode, stagedBlob);
 }
 
 /** Forms need the home’s receipt before announcing completion; ordinary gestures keep their existing void contract. */

@@ -9,7 +9,7 @@ import { availableActions, type Action, type ActionContext } from "../lib/action
 import { chatHiddenNow } from "../lib/panels.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { listCanvases, listSpaces } from "../lib/api.ts";
-import { readRecents } from "../lib/recents.ts";
+import { readRecents, recentCanvases } from "../lib/recents.ts";
 import { latelyIds } from "../lib/lately.ts";
 import { useInboxStore } from "../stores/inboxStore.ts";
 import { loadSeen } from "../lib/seen.ts";
@@ -475,23 +475,7 @@ function useCanvasList(canvasId: string | null, wanted: boolean): Canvas[] {
     // `fetched` is read to ask once, not to re-ask when it lands.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, wanted]);
-  return useMemo(() => {
-    if (fetched) return fetched;
-    // No stamps: the browser does not know when these were last touched, and
-    // `ago` of an unparseable date is "", which is the honest column.
-    return readRecents().map(
-      (recent): Canvas => ({
-        id: recent.id,
-        title: recent.title,
-        description: "",
-        properties: {},
-        createdAt: "",
-        createdBy: { id: "", name: "" },
-        updatedAt: "",
-        updatedBy: { id: "", name: "" },
-      }),
-    );
-  }, [fetched]);
+  return useMemo(() => fetched ?? recentCanvases(readRecents()), [fetched]);
 }
 
 /** Open the Chat, where a slash command becomes a message. */

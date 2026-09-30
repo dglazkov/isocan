@@ -4,11 +4,11 @@ loop: c4ce7a8c-c0b0-47e7-8e6a-7fe7d568e6d9
 loop_rank: P2
 loop_state: DISMISSED
 loop_goal: "Fast everywhere, local-first"
-decision: declined
-rank: never
-project: new
-since: 2026-09-29
-note: "By design: text creation uploads its blob before the echoed op because the echo must describe an existing blob, and comment inputs stay editable while pending. Only the send button disables. Reopen with a report of a frozen input."
+decision: done
+rank: next
+project: multiuser
+since: 2026-09-30
+note: "done 2026-09-29: addTextNode and reviseTextNode stage deterministic Markdown blobs via uploadOrStageTextBlob when offline, and TextComposer commit awaits success before clearing pendingText (offline.test.ts, textedit.test.ts)"
 ---
 
 # Text creation and comments await network requests
@@ -22,4 +22,8 @@ note: "By design: text creation uploads its blob before the echoed op because th
 
 ## Our read
 
-packages/web/src/lib/text.ts:47-49 awaits uploadBlob then sendCreatedItem; the comment at ~L60-70 explains the optimistic echo must describe a blob that exists at the home, and rejects echoing a version nobody can fetch. messagecontext.ts:89-102 submit() sets busy and disables the send control (disabled: busy || queued) but its own comment says inputs remain editable while the request is pending, and queued messages release the composer. CommentLayer.tsx:447 onSubmit just awaits that. A tiny text blob is fast locally; a slow-home case could show a delay before the node appears, not measured.
+**Verified and fixed against the code (2026-09-29):**
+
+- `packages/web/src/lib/text.ts` (`addTextNode`, `reviseTextNode`) now stages deterministic Markdown blobs via `uploadOrStageTextBlob` in `packages/web/src/lib/upload.ts` and forwards `stagedBlob` through `sendEchoed` (`packages/web/src/stores/canvasStore.ts`) so text creation and edits apply immediately to the local replica and replay on reconnect (`packages/web/test/offline.test.ts`).
+- `packages/web/src/components/TextComposer.tsx` (`commit`) awaits `addTextNode` / `reviseTextNode` and returns early if the write is refused before clearing `pendingText` (`packages/web/test/textedit.test.ts`).
+- Comment operations (`comment.add`, `comment.reply`) already routed through `sendEchoed` into the offline outbox.

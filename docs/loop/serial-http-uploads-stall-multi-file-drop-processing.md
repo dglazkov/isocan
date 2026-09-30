@@ -20,4 +20,4 @@ note: "By design: files upload one at a time before their item is created (uploa
 
 ## Our read
 
-packages/web/src/lib/upload.ts:145-175 loops files, awaits uploadBlob then measure then sendCreatedItem per file, so item 2 appears only after item 1 uploaded. Ordering keeps offsetX row placement deterministic (comment above at ~L130-145). Items are created per file, not after all uploads, so blocking is per-file, not all-at-once as Loop says. Uploads could be started with Promise.all and items created in order; not done. Real but small; I did not measure large drops.
+Verified in packages/web/src/lib/upload.ts:145-175 (uploadFiles): the for-of loop awaits uploadBlob, media dimension measurement, and sendCreatedItem sequentially per file so that each card's measured width advances offsetX deterministically for row layout. Items appear one by one as each upload finishes (not after all uploads complete, as Loop claimed), though firing the blob uploads + measurements concurrently with Promise.all before placing items in index order would remove the serial network wait on multi-file drops.

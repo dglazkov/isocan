@@ -42,15 +42,20 @@ describe("the Loop findings are derived, not written", () => {
     if (any) expect(roadmap).toContain("[Loop findings](LOOP.md)");
   });
 
-  it("never sends a decision it was not asked to — decide is not what a pull calls", () => {
-    /* `decide` pushes to a workspace other people read. The script's pull and
-       propose paths must not reach it; this holds the line in the source, where
-       an edit would cross it. */
+  it("never sends a decision it was not asked to — decide is not what a pull or prove calls", () => {
+    /* `decide` pushes to a workspace other people read. The script's pull,
+       prove and propose paths must not reach it; this holds the line in the
+       source, where an edit would cross it. */
     const script = readFileSync(`${repo}/scripts/loop.mjs`, "utf8");
+    const proveFn = script.slice(script.indexOf("function proveUntriaged"), script.indexOf("// ── commands"));
     const pull = script.slice(script.indexOf('case "pull"'), script.indexOf('case "list"'));
     const propose = script.slice(script.indexOf('case "propose"'), script.indexOf('case "decide"'));
-    for (const body of [pull, propose]) {
-      expect(body, "these two commands only read Loop and write files").not.toMatch(/await push\(|upsertContext|stitch\(\[\s*"(dismiss|create|delete|edit)"/);
+    const proveCmd = script.slice(script.indexOf('case "prove"'), script.indexOf('case "render"'));
+    expect(pull, "pull runs proveUntriaged over new findings unless --no-prove is set").toContain("proveUntriaged()");
+    for (const body of [proveFn, pull, propose, proveCmd]) {
+      expect(body, "these commands only read Loop, prove against the code, and write files").not.toMatch(
+        /await push\(|upsertContext|stitch\(\[\s*"(dismiss|create|delete|edit)"/,
+      );
     }
   });
 

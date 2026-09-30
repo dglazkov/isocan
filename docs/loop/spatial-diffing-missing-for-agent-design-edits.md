@@ -4,11 +4,11 @@ loop: ba981125-0632-4320-91c1-70d02ac7d6d3
 loop_rank: P2
 loop_state: RESOLVED
 loop_goal: "What canvas tools teach us"
-decision: accepted
-rank: later
-project: wireframes
+decision: done
+rank: next
+project: version-diff
 since: 2026-09-29
-note: "Partly answered since triage: isocan diff (dce876ed) prints what changed between two versions, or a variation and its source, and VersionCompare shows it in the app. What is still missing is a ghost overlay on the canvas itself. Loop reports it resolved. Keep as later work only if that overlay is wanted."
+note: "Shipped in dce876ed (docs/projects/version-diff/design.md): VersionFanOut.tsx:187-200 renders a Compare button on every fan card opening VersionCompare.tsx, with structural wireframe and HTML diffs injected via markSource in @isocan/core/diff."
 ---
 
 # Spatial diffing missing for agent design edits
@@ -21,4 +21,4 @@ note: "Partly answered since triage: isocan diff (dce876ed) prints what changed 
 
 ## Our read
 
-grep of packages/web/src/components/VersionFanOut.tsx finds no diff or ghost logic; versions are shown as cards. docs/research/feature-readiness.md:54 names visual diffs as a next step for design taste, so the idea is known but unscheduled. No roadmap project owns it; nearest homes are wireframes or design-lint. Loop state is already RESOLVED. Worth a design decision before any build.
+This Loop insight (ba981125-0632-4320-91c1-70d02ac7d6d3) was the genesis of docs/projects/version-diff/design.md (shipped 26 Sep 2026 in dce876ed). packages/web/src/components/VersionFanOut.tsx:187-200 renders a Compare button on every card in the fan-out strip that opens packages/web/src/components/VersionCompare.tsx. As documented in docs/projects/version-diff/design.md:68-106, diff highlights are injected into the HTML and wireframe source (markSource in packages/core/src/diff.ts) rather than drawn as an outer canvas ghost overlay because HTML items render inside sandboxed allow-scripts iframes whose internal scroll and viewport dimensions differ from the outer card box.

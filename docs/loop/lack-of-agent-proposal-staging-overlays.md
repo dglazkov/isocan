@@ -24,4 +24,4 @@ note: "Partly true: an agent edit is one version and one undo, but nothing holds
 
 ## Our read
 
-Agent edits are Operations applied by one reducer (packages/core/src/reducer.ts); an item edit is item.addVersion, which the version stack keeps and per-item undo removes, and VersionCompare.tsx compares versions after the fact. There is no pre-commit buffer, so the claim holds for approval-before-write. Whether it should is a design question (the trust-battery idea in the vision) and not a defect: the README states agents work visibly and reversibly. Not run: a session with an agent writing to see the moment a person can object.
+Verified in packages/core/src/reducer.ts and docs/projects/agent-custody/design.md: agent mutations are Operations applied directly by the single reducer (item.addVersion appends to the item's version stack, which per-item undo reverts and VersionCompare.tsx diffs after the fact). Neither agent-custody nor roles defines a pre-commit proposal overlay or awaiting-approval state before an agent's new version becomes the current head.

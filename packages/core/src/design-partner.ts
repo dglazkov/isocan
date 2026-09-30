@@ -1,8 +1,8 @@
-import { bad, object, recordFields, text, bool, integer, choice, list, nonempty, unique, ids, nullableText, url, fidelity, hash, base } from "./design-partner-values.ts";
+import { bad, object, recordFields, text, bool, integer, choice, list, nonempty, unique, ids, nullableText, url, fidelity, base, parseDesignArtifactRef, parseDesignReference, parseDesignQuestionSource, parseDesignDiscovery, parseDesignGoverning, type DesignArtifactRef, type DesignReference } from "./design-partner-values.ts";
+export { DesignPartnerContractError, parseDesignArtifactRef, parseDesignReference, type DesignArtifactRef, type DesignReference } from "./design-partner-values.ts";
 import { parseDesignBrief } from "./design-brief.ts";
 export { parseDesignBrief } from "./design-brief.ts";
 import type { ContextManifest } from "./canvas-group-context.ts";
-import { parseDesignDiscovery, parseDesignGoverning } from "./design-request-parse.ts";
 
 /** Maximum published batch size; explicit interviews may exceed the initial workflow budget. */
 const DESIGN_PARTNER_MAX_QUESTIONS = 32;
@@ -17,23 +17,7 @@ export type DesignActorKind = "human" | "agent" | "unknown";
 /** Presentation intent, independent of request progress and verification status. */
 type DesignFidelity = "wireframe" | "designed" | "implementation";
 
-/** A hash alone cannot identify which permitted source supplied an artifact. */
-export interface DesignArtifactRef {
-  home: string;
-  canvasId: string;
-  itemId: string;
-  versionId: string;
-  blobHash: string;
-}
 interface DesignRecordBase { schemaVersion: 1; requestId: string; epoch: number }
-/** Supplied locations and inspected bytes are distinct states; unavailable sources retain a reason. */
-export interface DesignReference {
-  id: string;
-  state: "supplied" | "fetched" | "inaccessible" | "superseded";
-  url?: string;
-  artifact?: DesignArtifactRef;
-  reason?: string;
-}
 /** Versioned request facts owned by the canvas; projections must preserve provenance and assumptions. */
 export interface DesignBrief extends DesignRecordBase {
   /** Optional on historical JSON; admitted requests require writer-stamped continuation provenance. */
@@ -151,29 +135,6 @@ export interface DesignReceipt extends DesignRecordBase {
 /** Closed persisted record family; unsupported kinds require a deliberate schema change. */
 type DesignPartnerRecord = DesignBrief | DesignQuestionSet | DesignResponse | DesignDecision | DesignReceipt;
 
-export { DesignPartnerContractError } from "./design-partner-values.ts";
-/** Checks source/version/hash shape without claiming the caller can access or has inspected its bytes. */
-export function parseDesignArtifactRef(value: unknown): DesignArtifactRef {
-  const v = object(value, ["home", "canvasId", "itemId", "versionId", "blobHash"]);
-  return { home: url(v.home), canvasId: text(v.canvasId), itemId: text(v.itemId), versionId: text(v.versionId), blobHash: hash(v.blobHash) };
-}
-/** Refuses filename-only uploads and fetched URLs without version identities; availability stays explicit. */
-export function parseDesignReference(value: unknown): DesignReference {
-  const v = object(value, ["id", "state", "url", "artifact", "reason"]);
-  const state = choice(v.state, ["supplied", "fetched", "inaccessible", "superseded"]);
-  const result: DesignReference = { id: text(v.id), state,
-    ...(v.url === undefined ? {} : { url: url(v.url) }),
-    ...(v.artifact === undefined ? {} : { artifact: parseDesignArtifactRef(v.artifact) }),
-    ...(v.reason === undefined ? {} : { reason: text(v.reason) }),
-  };
-  if (!result.url && !result.artifact) bad("A reference requires an actual URL or artifact identity, not a filename.");
-  if (state === "fetched" && !result.artifact) bad("A fetched reference requires retrievable version identity.");
-  if ((state === "inaccessible" || state === "superseded") && !result.reason) bad("Unavailable references require a reason.");
-  return result;
-}
-function questionSource(value: unknown): DesignQuestionSource {
-  const v = object(value, ["threadId", "commentId", "payloadId", "revision"]); return { threadId: text(v.threadId), commentId: text(v.commentId), payloadId: text(v.payloadId), revision: integer(v.revision, 1) };
-}
 function question(value: unknown): DesignQuestion {
   const v = object(value, ["id", "title", "consequence", "renderer", "options", "multiple", "skippable", "delegatable", "recommendedOptionId"]);
   const renderer = choice(v.renderer, ["choice-list", "visual-cards", "freeform", "url-collection", "upload"]);
@@ -192,7 +153,7 @@ function question(value: unknown): DesignQuestion {
 /** Validates immutable questions, unique choices and real visual-preview identities before publication. */
 export function parseDesignQuestionSet(value: unknown): DesignQuestionSet {
   const v = object(value, [...recordFields, "id", "revision", "brief", "respondentActorId", "headline", "inferredAnswers", "questions", "supersedes", "discovery"]); if (v.kind !== "questions") bad("Expected questions.");
-  return { ...base(v), kind: "questions", id: text(v.id), revision: integer(v.revision, 1), brief: parseDesignArtifactRef(v.brief), respondentActorId: text(v.respondentActorId), headline: text(v.headline), inferredAnswers: unique(list(v.inferredAnswers, (entry) => { const a = object(entry, ["questionId", "value", "sources"]); return { questionId: text(a.questionId), value: text(a.value), sources: list(a.sources, parseDesignArtifactRef) }; }), (a) => a.questionId), questions: unique(nonempty(list(v.questions, question, DESIGN_PARTNER_MAX_QUESTIONS)), (q) => q.id), supersedes: v.supersedes === null ? null : questionSource(v.supersedes), ...(v.discovery === undefined ? {} : { discovery: parseDesignDiscovery(v.discovery) }) };
+  return { ...base(v), kind: "questions", id: text(v.id), revision: integer(v.revision, 1), brief: parseDesignArtifactRef(v.brief), respondentActorId: text(v.respondentActorId), headline: text(v.headline), inferredAnswers: unique(list(v.inferredAnswers, (entry) => { const a = object(entry, ["questionId", "value", "sources"]); return { questionId: text(a.questionId), value: text(a.value), sources: list(a.sources, parseDesignArtifactRef) }; }), (a) => a.questionId), questions: unique(nonempty(list(v.questions, question, DESIGN_PARTNER_MAX_QUESTIONS)), (q) => q.id), supersedes: v.supersedes === null ? null : parseDesignQuestionSource(v.supersedes), ...(v.discovery === undefined ? {} : { discovery: parseDesignDiscovery(v.discovery) }) };
 }
 function resolution(value: unknown): DesignResolution {
   const v = object(value, ["questionId", "state", "value", "agentActorId"]);
@@ -215,7 +176,7 @@ function resolution(value: unknown): DesignResolution {
 /** Validates outcome shape; source freshness, respondent custody and allowed choices need association checks. */
 export function parseDesignResponse(value: unknown): DesignResponse {
   const v = object(value, [...recordFields, "id", "question", "respondentActorId", "resolutions", "supersedesResponseId"]); if (v.kind !== "response") bad("Expected a response.");
-  return { ...base(v), kind: "response", id: text(v.id), question: questionSource(v.question), respondentActorId: text(v.respondentActorId), resolutions: unique(nonempty(list(v.resolutions, resolution, DESIGN_PARTNER_MAX_QUESTIONS)), (r) => r.questionId), supersedesResponseId: nullableText(v.supersedesResponseId) };
+  return { ...base(v), kind: "response", id: text(v.id), question: parseDesignQuestionSource(v.question), respondentActorId: text(v.respondentActorId), resolutions: unique(nonempty(list(v.resolutions, resolution, DESIGN_PARTNER_MAX_QUESTIONS)), (r) => r.questionId), supersedesResponseId: nullableText(v.supersedesResponseId) };
 }
 /** Checks comparable alternatives and attribution consistency, without authorizing adoption into a target. */
 export function parseDesignDecision(value: unknown): DesignDecision {

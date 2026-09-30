@@ -391,16 +391,7 @@ export async function addDrawing(
    *  core into the entry (the `runtimeModules.ts` lesson). */
   const { drawingProperties } = await import("@isocan/core/colour");
   const born = drawingProperties(strokes);
-  const blob = new Blob([svg], { type: DRAWING_MIME });
-  let upload: { blobHash: string; size: number };
-  let stagedBlob: import("./replica.ts").StagedBlob | undefined;
-  try {
-    upload = await uploadBlob(canvasId, blob, DRAWING_FILENAME);
-  } catch (err) {
-    if (!(err instanceof Error && (err as { offline?: boolean }).offline === true)) throw err;
-    upload = await sha256OfText(svg);
-    stagedBlob = { blobHash: upload.blobHash, mimeType: DRAWING_MIME, filename: DRAWING_FILENAME, text: svg };
-  }
+  const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, svg, DRAWING_MIME, DRAWING_FILENAME);
   const itemId = newItemId();
   await sendCreatedItem(
     canvasId,
@@ -440,6 +431,29 @@ export async function addDrawing(
     { allowQueued: true, ...(stagedBlob ? { stagedBlob } : {}) },
   );
   return itemId;
+}
+
+/**
+ * Upload a deterministic text or SVG blob, or compute its SHA-256 and stage it
+ * locally for the outbox when the daemon cannot be reached offline.
+ */
+export async function uploadOrStageTextBlob(
+  canvasId: string,
+  text: string,
+  mimeType: string,
+  filename: string,
+): Promise<{ upload: { blobHash: string; size: number }; stagedBlob?: import("./replica.ts").StagedBlob }> {
+  const blob = new Blob([text], { type: mimeType });
+  try {
+    return { upload: await uploadBlob(canvasId, blob, filename) };
+  } catch (err) {
+    if (!(err instanceof Error && (err as { offline?: boolean }).offline === true)) throw err;
+    const upload = await sha256OfText(text);
+    return {
+      upload,
+      stagedBlob: { blobHash: upload.blobHash, mimeType, filename, text },
+    };
+  }
 }
 
 async function sha256OfText(text: string): Promise<{ blobHash: string; size: number }> {

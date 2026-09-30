@@ -4,11 +4,11 @@ loop: 08f51c0f-d98f-4206-a460-b3824a3b7dbc
 loop_rank: P2
 loop_state: RESOLVED
 loop_goal: "Always isomorphic"
-decision: stale
-rank: never
-project: canvas-groups
+decision: done
+rank: next
+project: cleanup
 since: 2026-09-29
-note: "Stale: the two files are not duplicates. The CLI parses flags into a placement and the web reads its stores, while shared geometry already lives in core. Reopen if a real shared computation is found."
+note: "Fixed in cleanup Phase 5 (DU-6, 26 Sep 2026): the seven copies of canonical JSON serialization across @isocan/core and @isocan/api were consolidated into canonicalJson in @isocan/core and guarded by test/copies.test.ts; questionnaire helpers live in @isocan/core/questionnaire and @isocan/api/questionnaire."
 ---
 
 # Duplication of domain computations across clients
@@ -20,4 +20,4 @@ note: "Stale: the two files are not duplicates. The CLI parses flags into a plac
 
 ## Our read
 
-packages/cli/src/group-placement.ts parses --cell and --in flags and calls groupContentBox from @isocan/core and resolveCanvasGroupRef from @isocan/api. packages/web/src/lib/groupplacement.ts reads useUiStore and useCanvasStore to build the creation destination and select created items. Different inputs, no shared body; the geometry is imported from core by the CLI. I did not check the canonical-JSON or questionnaire claims separately.
+packages/cli/src/group-placement.ts and packages/web/src/lib/groupplacement.ts are surface-specific adapters (CLI --cell/--in flag parsing vs Zustand store selection) over groupContentBox in @isocan/core and resolveCanvasGroupRef in @isocan/api. The canonical-JSON duplication Loop flagged across design-request, design-partner, and design-decision modules was real and was fixed in docs/projects/cleanup/phases.md Phase 5 (DU-6, 26 Sep 2026): seven copies were replaced by canonicalJson in @isocan/core, guarded by test/copies.test.ts. Questionnaire state and failure status are shared in @isocan/core/questionnaire and @isocan/api/questionnaire-reader.

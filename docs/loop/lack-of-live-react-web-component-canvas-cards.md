@@ -21,4 +21,4 @@ note: "Possible today without a new feature: an HTML item runs inline scripts an
 
 ## Our read
 
-browseritem.ts turns a typed address into what an iframe loads; wireframe render.ts emits static HTML strings; sandbox module runs a program through rc --sandbox (docs/decisions.md D1, opt-in). Canvas HTML items already run inline scripts under CSP (only tailwind and jsdelivr load per memory). No design doc proposes live component cards; docs/research/2026-08-28-component-libraries.md is about importing libraries, not this. Unverified: whether extensions project already covers it.
+Verified in packages/core/src/browseritem.ts, packages/modules/sandbox/src/core.ts, and docs/projects/extensions/design.md: HTML items run in an allow-scripts sandboxed iframe whose CSP permits Tailwind and jsdelivr ESM imports (documented in packages/cli/src/agent-guide.md under topic items, commit 49539211), so a single HTML card can already import React and render interactive components without an external server. docs/projects/extensions/design.md scopes extensions to canvas modules and commands rather than a browser bundler.

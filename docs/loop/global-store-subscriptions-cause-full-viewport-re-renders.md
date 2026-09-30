@@ -4,11 +4,11 @@ loop: f658a23e-5512-4405-9d65-7bb34b895b36
 loop_rank: P2
 loop_state: RESOLVED
 loop_goal: "Fast everywhere, local-first"
-decision: declined
-rank: never
-project: ui-refresh
+decision: done
+rank: next
+project: cleanup
 since: 2026-09-29
-note: "No measured frame problem: CanvasViewport subscribes to the whole canvas and re-sorts unmemoized, but uses narrow selectors elsewhere, and Loop already reports it resolved. Reopen with a profile showing dropped frames."
+note: "Fixed in cleanup Phase 3 (RP-1, RP-3, RP-6, RP-8, RP-9; 27 Sep 2026): CanvasViewport.tsx:1135 memoizes the filtered and groupAncestors-sorted items list with useMemo, and packages/web/test/canvaswide-rerender.test.ts guards against regressions."
 ---
 
 # Global store subscriptions cause full viewport re-renders
@@ -22,4 +22,4 @@ note: "No measured frame problem: CanvasViewport subscribes to the whole canvas 
 
 ## Our read
 
-CanvasViewport.tsx:102 subscribes to s.past?.canvas ?? s.canvas, and lines 1119-1123 build and sort items in render with no useMemo I could find (grep for useMemo in the file returned nothing). CommentLayer.tsx:68 does the same. EdgeRadar.tsx:43 selects only canvas.items. The theme check at line 108 is deliberately a narrow selector. Loop marks it resolved already. No profile was run, so cost is unquantified.
+Fixed on 27 Sep 2026 in docs/projects/cleanup/phases.md Phase 3 (RP-1, RP-3, RP-6, RP-8, RP-9). packages/web/src/components/CanvasViewport.tsx:1135-1137 wraps the visible-item filter and groupAncestors sort in useMemo(() => ..., [canvas, presentation]), and narrow store selectors +packages/web/test/canvaswide-rerender.test.ts keep cursor, pan, and presence ticks from re-sorting or re-rendering the item tree. Measured on a 250-note canvas at 4x CPU throttle, cursor-move frame time dropped from p50 50 ms (13-16 long frames) to 16.7 ms (0 long frames).

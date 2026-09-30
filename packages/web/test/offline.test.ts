@@ -1245,3 +1245,48 @@ it("places a drawing offline with its content-addressed SVG staged locally, surv
   expect(reloadedApi.blobUrl("prj_1", blobHash)).toBe(`/api/projects/prj_1/blobs/${blobHash}`);
 });
 
+it("creates and revises a text note offline with its Markdown blob staged locally, and uploads the blobs before the ops on reconnect", async () => {
+  const { useCanvasStore } = await store();
+  const { readBlobText } = await api();
+  const { addTextNode, reviseTextNode } = await import("../src/lib/text.ts");
+  await connected(2);
+  await goOffline();
+
+  const itemId = await addTextNode("prj_1", priya, "Acme offline note", { x: 40, y: 60, chosen: true });
+  const created = useCanvasStore.getState().canvas?.items[itemId];
+  expect(created).toMatchObject({
+    id: itemId,
+    title: "Acme offline note",
+    properties: { kind: "text" },
+  });
+  const firstHash = created!.versions[0]!.blobHash;
+  expect(await readBlobText("prj_1", firstHash)).toBe("Acme offline note");
+
+  await reviseTextNode("prj_1", priya, itemId, "Acme revised offline note", { width: 200, height: 80 }, true, "heading", "serif", "yellow");
+  const revised = useCanvasStore.getState().canvas?.items[itemId];
+  expect(revised).toMatchObject({
+    id: itemId,
+    title: "Acme revised offline note",
+    width: 200,
+    height: 80,
+    properties: { kind: "text", textStyle: "heading", textFace: "serif", paper: "yellow" },
+  });
+  const secondHash = revised!.versions[1]!.blobHash;
+  expect(await readBlobText("prj_1", secondHash)).toBe("Acme revised offline note");
+  expect(useCanvasStore.getState().queue).toHaveLength(4);
+
+  events = [];
+  seqs = [3, 4, 5, 6];
+  await comeBack();
+  await settle();
+  expect(events.slice(0, 6)).toEqual([
+    `blob:${firstHash}`,
+    `post:${posted[0]!.opId}`,
+    `blob:${secondHash}`,
+    `post:${posted[1]!.opId}`,
+    `post:${posted[2]!.opId}`,
+    `post:${posted[3]!.opId}`,
+  ]);
+});
+
+

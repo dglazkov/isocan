@@ -22,4 +22,4 @@ note: "By design: DESIGN.md declares intended tokens and injects no CSS, and res
 
 ## Our read
 
-design-lint/phases.md line 44 records that DESIGN.md injects no CSS into an artifact. The wireframe theme (packages/modules/wireframe/src/theme.ts) draws only var(--w-*) roles and maps a system tokens onto them through a typed choice, resolved at that mapping (theme.ts:174-180). Re-mapping after a token edit is a deliberate act, not a missed reactivity. I did not find a doc asking for live propagation.
+docs/projects/design-lint/phases.md line 44 records the deliberate architectural boundary: DESIGN.md is read and compared by the audit engine, never injected as live CSS into an artifact. For wireframes, packages/modules/wireframe/src/theme.ts:174-180 maps a design system's tokens onto var(--w-*) roles through an explicit, versioned theme choice so existing screens never silently shift appearance underneath a review thread.

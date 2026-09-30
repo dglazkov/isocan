@@ -20,4 +20,4 @@ note: "Fixed on 29 Sep 2026: when uploadBlob fails offline in addDrawing, the SV
 
 ## Our read
 
-packages/web/src/lib/upload.ts addDrawing (about line 360-400) builds the SVG, awaits uploadBlob(canvasId, blob, DRAWING_FILENAME) from api.ts:769, and only then calls sendCreatedItem. The store has a queued write status (canvasStore.ts:316) for item.add, so the offline gap is the blob upload specifically. The cited sketchplace.ts no longer exists; the code moved into upload.ts. I did not test the offline behaviour live.
+packages/web/src/lib/upload.ts addDrawing previously awaited uploadBlob(canvasId, blob, DRAWING_FILENAME) before calling sendCreatedItem, dropping the ink when offline. Fixed in 683cc0a2: when uploadBlob throws an offline error, addDrawing hashes the deterministic SVG bytes in the browser, stages a StagedBlob in the outbox (packages/web/src/lib/outbox.ts), and queues item.add with that content-addressed blob hash; flushOutbox uploads the staged bytes before replaying the op on reconnect, verified in packages/web/test/outbox.test.ts.

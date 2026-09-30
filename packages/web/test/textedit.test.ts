@@ -193,4 +193,12 @@ describe("hovering a step or a face previews it too", () => {
     expect(reset).toContain("setPeekStyle(undefined)");
     expect(reset).toContain("setPeekFace(undefined)");
   });
+
+  it("never clears pendingText before addTextNode or reviseTextNode succeeds", () => {
+    const beforeTry = composer.slice(composer.indexOf("async function commit("), composer.indexOf("try {"));
+    // Only the no-op close may clear pendingText before the write attempt.
+    const clears = beforeTry.split("\n").filter((l) => l.includes("setPendingText(null)"));
+    expect(clears).toEqual(['    if (decision.do === "nothing") { setPendingText(null); return; }']);
+  });
 });
+

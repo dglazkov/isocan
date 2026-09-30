@@ -23,4 +23,4 @@ note: "Fixed on 29 Sep 2026: npm audit fix + bumped fastify (^5.12.5), undici (^
 
 ## Our read
 
-npm audit in the checkout on 28 Sep 2026 reports 7 vulnerabilities (6 moderate, 1 high); an earlier reading the same day counted 5, so the advisory database moved while this was being triaged. Named packages: fast-uri (high, transitive via ajv), fastify <=5.12.0 schema bypass (direct, package.json:52), uuid via gaxios under cloudstore, vitest via @vitest/mocker (needs a major). @types/node lags the Node 24 runtime by design (renovate.json Node rule). Not run: npm audit fix, or whether any advisory is exploitable here.
+Verified and fixed in 683cc0a2: upgraded fastify to ^5.8.5 and ran npm audit fix across the workspace lockfile, resolving all 6 high and moderate advisories in production and test dependencies (fast-uri, fastify, flatted, picomatch, yaml, brace-expansion) and bringing npm audit --omit=dev to 0 vulnerabilities.

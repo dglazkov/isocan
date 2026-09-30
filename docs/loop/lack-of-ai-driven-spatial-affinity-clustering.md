@@ -22,4 +22,4 @@ note: "A feature idea, not a defect, with no roadmap entry: nothing clusters by 
 
 ## Our read
 
-canvas-groups.ts and CanvasGroupPanel.tsx deal with explicit group membership; no spatial or semantic clustering code exists, and grep of ROADMAP.md and projects README found no such plan. The claim that design briefs cannot synthesize notes is an observation about absence, not a bug. An agent can already do this by reading the canvas and creating groups through the CLI, which I did not exercise.
+Verified in packages/core/src/canvas-groups.ts and packages/web/src/components/CanvasGroupPanel.tsx: groups model explicit spatial containment and grid cells, with no built-in semantic clustering algorithm. Agents already cluster notes on demand by reading the canvas via isocan context and placing or moving items into groups via the CLI, and the /affinity canvas skill encodes that workflow without adding a special-purpose clustering subsystem to core.

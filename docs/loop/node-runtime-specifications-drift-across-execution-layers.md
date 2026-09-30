@@ -24,4 +24,4 @@ note: "Mostly stale and by design: every setup-node reads .nvmrc and test/workfl
 
 ## Our read
 
-package.json engines node >=24; .nvmrc 24.20.0; Dockerfile lines 53 and 135 use node:24.20.0-slim. workflows.test.ts:117-141 asserts every setup-node step uses node-version-file .nvmrc and the Dockerfile matches the .nvmrc major. suite-setup uses setup-node@v5 while changelog, grade, persona, review and journeys use @v4; both read .nvmrc so Node is identical. Subpackage engines fields are absent, which is unremarkable for private workspaces. Did not verify the Node 22 warning claim.
+Verified in package.json (engines.node >=24), .nvmrc (24.20.0), Dockerfile (lines 53 and 135, node:24.20.0-slim), and test/workflows.test.ts:117-141, which enforces that every GitHub Actions setup-node step reads node-version-file: .nvmrc and that the Dockerfile matches the .nvmrc major. Running npm on Node 22 prints an EBADENGINE warning because Node 24 is intentionally required (Node 24 provides native TypeScript execution and WebSocket globals used across packages).

@@ -164,4 +164,11 @@ describe("the browse controls' stylesheet", () => {
     const filter = sheet.find((r) => r.selector.includes(".canvas-filter"));
     expect(filter?.body).toMatch(/min-width:\s*0/);
   });
+
+  it("falls back to recentCanvases() when listCanvases() fails offline instead of wiping the list", () => {
+    expect(bare).toContain("const fallback = recentCanvases();");
+    expect(bare).toContain("setCanvases((prev) => (prev && prev.length > 0 ? prev : fallback));");
+    expect(bare).not.toContain("setCanvases([]);");
+  });
 });
+

@@ -161,6 +161,9 @@ export function serializeFinding(f: LoopFinding): string {
  * set of `docs/projects/` directory names; when given, a `project` that names
  * none of them is a finding pointing at nothing.
  */
+const UNVERIFIED_READ =
+  /\b(did not (?:check|verify|test|open|inspect|run|trace|find)|not (?:run|verified)|unverified)\b/i;
+
 export function findingProblems(f: LoopFinding, projects?: readonly string[]): string[] {
   const out: string[] = [];
   if (!f.loop.length) out.push("no loop ids — nothing links it back to Loop");
@@ -176,6 +179,13 @@ export function findingProblems(f: LoopFinding, projects?: readonly string[]): s
   }
   if (projects && f.project && f.project !== "new" && !projects.includes(f.project)) {
     out.push(`project ${f.project} is not a directory under docs/projects/`);
+  }
+  const readIdx = f.body.indexOf("## Our read");
+  const ourRead = readIdx >= 0 ? f.body.slice(readIdx) : f.body;
+  if (ourRead.includes("Not yet checked against the code.")) {
+    out.push("not yet read — prove the claim against the code before proposing or deciding");
+  } else if (UNVERIFIED_READ.test(ourRead)) {
+    out.push("unverified read — prove every sub-claim against the code instead of leaving 'did not check' or 'not run'");
   }
   return out;
 }
@@ -486,3 +496,63 @@ export function loopContextPayload(findings: LoopFinding[]) {
     })),
   };
 }
+
+/**
+ * The prompt handed to the harness when proving an untriaged Loop finding
+ * against the codebase (`node scripts/loop.mjs pull` / `prove`).
+ *
+ * Pure and in core so the contract — prove every sub-claim against the code,
+ * leave no unverified hedges, record via `loop.mjs propose`, never `decide` or
+ * `push` — is tested without spawning a model.
+ */
+export function provePrompt(f: LoopFinding, projects: readonly string[]): string {
+  return [
+    `Prove the untriaged Stitch Loop finding \`${f.slug}\` (` +
+      `docs/loop/${f.slug}.md, Loop rank ${f.loop_rank ?? "unranked"}` +
+      `${f.loop_goal ? `, goal "${f.loop_goal}"` : ""}) against the codebase and record a proposal.`,
+    "",
+    "Finding body:",
+    "```markdown",
+    f.body,
+    "```",
+    "",
+    `Valid docs/projects/ directories: ${projects.join(", ")} (or "new", or "none" when rank is "never").`,
+    "",
+    "Steps:",
+    "1. **Prove every sub-claim against the code.** Open and read every file and line range Loop cites,",
+    "   search for callers and existing tests/guards, and run non-destructive verification commands",
+    "   (`npx vitest run ...`, `npm audit`, etc.) when the claim is about runtime or build behavior.",
+    "   Never leave hedges like \"I did not check\", \"Not run\", or \"Unverified\" — `findingProblems` rejects them.",
+    "2. **Choose our independent rank and project** based on what the proof found:",
+    "   - `now`: ships broken/unsafe or fails its own contract",
+    "   - `next`: real friction or gap in an active project",
+    "   - `later`: real, but deferred behind a gate or lower priority",
+    "   - `never`: false positive, already fixed in the tree, or deliberately decided against in docs",
+    "3. **Record the proposal** by running:",
+    `   \`node scripts/loop.mjs propose ${f.slug} --rank <now|next|later|never> --project <project|new|none> --note "<verdict: one line with file:line>" --read "<multi-line markdown proof citing exact files, lines, and tests>"\``,
+    "   Never run `decide`, `push`, or `mine` — deciding sends to the shared Loop workspace and belongs to a person.",
+  ].join("\n");
+}
+
+/**
+ * CLI arguments for the bounded `claude -p` proof pass over one untriaged finding.
+ */
+export function proveArgs(prompt: string): string[] {
+  return [
+    "-p",
+    prompt,
+    "--bare",
+    "--output-format",
+    "json",
+    "--no-session-persistence",
+    "--max-turns",
+    "25",
+    "--permission-mode",
+    "bypassPermissions",
+    "--tools",
+    "Bash,Read",
+    "--allowedTools",
+    "Bash,Read",
+  ];
+}
+

@@ -4,11 +4,11 @@ loop: 57e209c1-720c-4570-8370-e3b1b3da40aa
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: "Fast everywhere, local-first"
-decision: accepted
-rank: later
+decision: done
+rank: next
 project: multiuser
-since: 2026-09-29
-note: "Partly true: the canvas list and homes lookup need the network, though colours and names already fall back to derived values. Small polish that serves the local-first priority; do it with the next offline pass."
+since: 2026-09-30
+note: "done 2026-09-29: CanvasListPage.refresh falls back to recentCanvases(readRecents()) when listCanvases() fails offline instead of wiping the list (canvaslist.test.ts)"
 ---
 
 # Remote calls bypass local canvas replicas
@@ -23,4 +23,7 @@ note: "Partly true: the canvas list and homes lookup need the network, though co
 
 ## Our read
 
-main.tsx:35-36 fires loadActorColors and loadActorNames void and both catch, falling back to derived colors and stamped names (colors.ts:46-52, names.ts:60-66), so a slow home stalls nothing. useCanvasHome (homes.ts:75-93) fails open to state here. CanvasListPage refresh uses Promise.all with listCanvases and turns failure into a listError with an empty list; there is no cached list, so offline the list page is empty. Only that last part is real.
+**Verified and fixed against the code (2026-09-29):**
+
+- `packages/web/src/pages/CanvasListPage.tsx` (`refresh`) now falls back to `recentCanvases()` (`packages/web/src/lib/recents.ts`, shared with `CommandPalette.tsx`) when `api.listCanvases()` fails offline instead of wiping the list with `setCanvases([])` (`packages/web/test/canvaslist.test.ts`).
+- `CommandPalette.tsx` and `CanvasPage.tsx` (`bootFromReplica`) already fell back to `readRecents()` and the IndexedDB replica (`packages/web/src/lib/replica.ts`).

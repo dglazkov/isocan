@@ -75,7 +75,31 @@ describe("a finding is a file whose front matter is the decision", () => {
     expect(findingProblems(finding({ project: "no-such" }), ["wireframes"])).toEqual([
       "project no-such is not a directory under docs/projects/",
     ]);
+    expect(findingProblems(finding({ body: "## Our read\n\nNot yet checked against the code." }))).toContain(
+      "not yet read — prove the claim against the code before proposing or deciding",
+    );
+    expect(findingProblems(finding({ body: "## Our read\n\nI did not check the bundle output." }))).toContain(
+      "unverified read — prove every sub-claim against the code instead of leaving 'did not check' or 'not run'",
+    );
     expect(findingProblems(finding(), ["wireframes"])).toEqual([]);
+  });
+
+  it("builds a bounded proof prompt that calls propose and never decide or push", async () => {
+    const { proveArgs, provePrompt } = await import("../src/index.ts");
+    const u = finding({
+      slug: "acme-claim",
+      decision: "untriaged",
+      rank: null,
+      project: null,
+      body: "# Acme claim\n\n> **Loop says** (P1): Something broke.\n\n- `packages/core/src/ops.ts`\n\n## Our read\n\nNot yet checked against the code.",
+    });
+    const prompt = provePrompt(u, ["multiuser", "wireframes"]);
+    expect(prompt).toContain("Prove every sub-claim against the code");
+    expect(prompt).toContain("node scripts/loop.mjs propose acme-claim");
+    expect(prompt).toContain("Never run `decide`, `push`, or `mine`");
+    const args = proveArgs(prompt);
+    expect(args).toContain("--bare");
+    expect(args).toContain("Bash,Read");
   });
 });
 

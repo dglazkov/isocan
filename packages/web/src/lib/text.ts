@@ -18,9 +18,9 @@ import {
   PAPER_SIZE,
   paperPatch,
 } from "@isocan/core";
-import { uploadBlob } from "./api.ts";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
+import { uploadOrStageTextBlob } from "./upload.ts";
 
 /**
  * Words typed onto the canvas, committed the same way ink is
@@ -45,8 +45,7 @@ export async function addTextNode(
   paper: Paper | null = null,
   destination = creationDestination(),
 ): Promise<string> {
-  const blob = new Blob([body], { type: TEXT_MIME });
-  const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
+  const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, body, TEXT_MIME, TEXT_FILENAME);
   const itemId = newItemId();
   /**
    * Paper is SQUARE rather than measured, and that is the whole point of it:
@@ -63,35 +62,41 @@ export async function addTextNode(
    * all, and it was reported exactly that way: "⌘Enter and nothing is added
    * to the canvas". The node WAS created. The tab never learned.
    *
-   * The blob is already uploaded by this line, so the optimistic apply
-   * describes something that genuinely exists at the home. An echo of a
-   * version nobody else could fetch would be a different and much worse idea.
+   * The blob is already uploaded (or staged locally when offline) by this line,
+   * so the optimistic apply describes something that exists at the home or in
+   * the local outbox ready to flush on reconnect.
    */
-  await sendCreatedItem(canvasId, actor, {
-    type: "item.add",
-    ...destination,
-    itemId,
-    version: {
-      id: newVersionId(),
-      blobHash: upload.blobHash,
-      mimeType: TEXT_MIME,
-      filename: TEXT_FILENAME,
-      size: upload.size,
+  await sendCreatedItem(
+    canvasId,
+    actor,
+    {
+      type: "item.add",
+      ...destination,
+      itemId,
+      version: {
+        id: newVersionId(),
+        blobHash: upload.blobHash,
+        mimeType: TEXT_MIME,
+        filename: TEXT_FILENAME,
+        size: upload.size,
+      },
+      width: box.width,
+      height: box.height,
+      placement,
+      title: textTitle(body),
+      // The defaults are written as ABSENCE, not as "body"/"sans": a node that
+      // says nothing renders the same as every node made before the ladder
+      // existed, and there is exactly one spelling of the default.
+      properties: {
+        ...TEXT_PROPERTIES,
+        ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
+        ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
+        ...(paper === null ? {} : { [PAPER_PROP]: paper }),
+      },
     },
-    width: box.width,
-    height: box.height,
-    placement,
-    title: textTitle(body),
-    // The defaults are written as ABSENCE, not as "body"/"sans": a node that
-    // says nothing renders the same as every node made before the ladder
-    // existed, and there is exactly one spelling of the default.
-    properties: {
-      ...TEXT_PROPERTIES,
-      ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
-      ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
-      ...(paper === null ? {} : { [PAPER_PROP]: paper }),
-    },
-  });
+    undefined,
+    { allowQueued: true, ...(stagedBlob ? { stagedBlob } : {}) },
+  );
   return itemId;
 }
 
@@ -132,8 +137,7 @@ export async function reviseTextNode(
   // One edit, one undo: the version, the title and any resize are one act.
   const group = newGroupId();
   const { originGroupMode } = creationDestination();
-  const blob = new Blob([body], { type: TEXT_MIME });
-  const upload = await uploadBlob(canvasId, blob, TEXT_FILENAME);
+  const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, body, TEXT_MIME, TEXT_FILENAME);
   await sendEchoed(
     canvasId,
     actor,
@@ -150,6 +154,7 @@ export async function reviseTextNode(
     },
     group,
     originGroupMode,
+    stagedBlob,
   );
   await sendEchoed(
     canvasId,

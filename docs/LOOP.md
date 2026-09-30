@@ -11,21 +11,9 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 5 accepted · 18 declined · 10 stale · 3 done · 0 not yet read.**
+**0 to decide · 2 accepted · 16 declined · 8 stale · 10 done · 0 not yet read.**
 
 ## Accepted, by project
-
-### [modules](projects/modules/)
-
-| Ours | Finding | Loop | Where | Why |
-| --- | --- | --- | --- | --- |
-| later | [Workspace package imports deviate from manifest declarations](loop/workspace-package-imports-deviate-from-manifest-declarations.md) | P2 | [modules](projects/modules/) | Partly true: packages/web/src/modules.ts imports @isocan/mindmap and other modules that packages/web/package.json does not list; it works through root workspaces and the loader. Declare them, or say in modules why not. |
-
-### [multiuser](projects/multiuser/)
-
-| Ours | Finding | Loop | Where | Why |
-| --- | --- | --- | --- | --- |
-| later | [Remote calls bypass local canvas replicas](loop/remote-calls-bypass-local-canvas-replicas.md) | P2 | [multiuser](projects/multiuser/) | Partly true: the canvas list and homes lookup need the network, though colours and names already fall back to derived values. Small polish that serves the local-first priority; do it with the next offline pass. |
 
 ### new project
 
@@ -38,7 +26,6 @@ workspace other people read.
 | Ours | Finding | Loop | Where | Why |
 | --- | --- | --- | --- | --- |
 | later | [Lack of multimodal sketch wireframe conversion](loop/lack-of-multimodal-sketch-wireframe-conversion.md) | P2 | [wireframes](projects/wireframes/) | Holds as a feature gap: wire takes a text request only, and a sketch or screenshot is the natural input for a wireframe. Needs a model that reads images. Take it after wireframes phase 8, which comes from real use. |
-| later | [Spatial diffing missing for agent design edits](loop/spatial-diffing-missing-for-agent-design-edits.md) | P2 | [wireframes](projects/wireframes/) | Partly answered since triage: isocan diff (dce876ed) prints what changed between two versions, or a variation and its source, and VersionCompare shows it in the app. What is still missing is a ghost overlay on the canvas itself. Loop reports it resolved. Keep as later work only if that overlay is wanted. |
 
 ## Declined
 
@@ -54,7 +41,6 @@ Real, and not doing it. Dismissed in Loop, with the reason sent back.
 | never | [Canvas frames lack multi-viewport responsive breakpoint matrices](loop/canvas-frames-lack-multi-viewport-responsive-breakpoint.md) | P2 | [wireframes](projects/wireframes/) | Real but unrequested: a wire renders at one width and PhoneFace covers mobile. Wireframes phase 8 comes from real use and lists no breakpoint matrix. Reopen if users ask. |
 | never | [Design system tokens lack reactive variable updates](loop/design-system-tokens-lack-reactive-variable-updates.md) | P2 | [design-lint](projects/design-lint/) | By design: DESIGN.md declares intended tokens and injects no CSS, and restyle is an explicit typed mapping. Live token binding would be a new feature. Reopen if someone asks for it. |
 | never | [Duplicated and misclassified monorepo package dependencies](loop/duplicated-and-misclassified-monorepo-package-dependencies.md) | P2 | [auto-upgrade](projects/auto-upgrade/) | By design: root duplication lets a git install of the release branch resolve the CLI dependencies, which is the install story. The tsx and types misclassification is real and harmless. Reopen if the install story changes. |
-| never | [Global store subscriptions cause full viewport re-renders](loop/global-store-subscriptions-cause-full-viewport-re-renders.md) | P2 | [ui-refresh](projects/ui-refresh/) | No measured frame problem: CanvasViewport subscribes to the whole canvas and re-sorts unmemoized, but uses narrow selectors elsewhere, and Loop already reports it resolved. Reopen with a profile showing dropped frames. |
 | never | [Lack of AI-driven spatial affinity clustering](loop/lack-of-ai-driven-spatial-affinity-clustering.md) | P2 | [canvas-groups](projects/canvas-groups/) | A feature idea, not a defect, with no roadmap entry: nothing clusters by position or meaning today. Reopen as an agent-driven op once canvas-groups is settled and someone asks. |
 | never | [Lack of generic canvas connectors for spatial items](loop/lack-of-generic-canvas-connectors-for-spatial-items.md) | P2 | [mindmap](projects/mindmap/) | Real arrows exist in the mindmap and wireframe modules only. Worth scheduling only if a use beyond maps and flows appears; none has. Reopen with a named one. |
 | never | [Media rendering bypasses local replica cache](loop/media-rendering-bypasses-local-replica-cache.md) | P2 | [multiuser](projects/multiuser/) | By design: blob routes are credentialed and Cache-Control private, so the service worker never caches them. Offline media needs a per-badge cache and its own design first. Reopen with that design. |
@@ -62,7 +48,6 @@ Real, and not doing it. Dismissed in Loop, with the reason sent back.
 | never | [Missing spatial developer redlining spec overlays](loop/missing-spatial-developer-redlining-spec-overlays.md) | P2 | [wireframes](projects/wireframes/) | Holds as a feature gap with untested demand: wires render as static HTML and the hand-off today is the build brief. Reopen if wireframes are handed to code-building agents often. |
 | never | [Node runtime specifications drift across execution layers](loop/node-runtime-specifications-drift-across-execution-layers.md) | P2 | new project | Mostly stale and by design: every setup-node reads .nvmrc and test/workflows.test.ts holds the Docker image to its major. Only an action version differs, harmlessly. Reopen if a layer is found on another Node major. |
 | never | [Serial HTTP uploads stall multi-file drop processing](loop/serial-http-uploads-stall-multi-file-drop-processing.md) | P2 | new project | By design: files upload one at a time before their item is created (upload.ts:145-175) so rows place in order. Parallel upload is a small optimisation. Reopen with a measured stall on a large multi-file drop. |
-| never | [Text creation and comments await network requests](loop/text-creation-and-comments-await-network-requests.md) | P2 | new project | By design: text creation uploads its blob before the echoed op because the echo must describe an existing blob, and comment inputs stay editable while pending. Only the send button disables. Reopen with a report of a frozen input. |
 | never | [Viewport scroll listener triggers layout reflows](loop/viewport-scroll-listener-triggers-layout-reflows.md) | P2 | new project | Partly true but narrow: the querySelectorAll and layout reads in scrollerIn run only for a wheel over a selected item, and ordinary panning skips them (CanvasViewport.tsx:226-265). Reopen with a profile showing jank. |
 
 ## Stale
@@ -71,12 +56,10 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 
 | Ours | Finding | Loop | Where | Why |
 | --- | --- | --- | --- | --- |
-| never | [Agent guide documentation omits daemon operation verbs](loop/agent-guide-documentation-omits-daemon-operation-verbs.md) | P1 | [iso-api](projects/iso-api/) | Stale: operations are not CLI verbs, and the enforced rule is that every registered CLI command appears in the guide, which surface.test.ts checks. Reopen if a CLI verb is found missing. |
+| never | [Agent guide documentation omits daemon operation verbs](loop/agent-guide-documentation-omits-daemon-operation-verbs.md) | P1 | [iso-api](projects/iso-api/) | Stale: operations in ops.ts are internal reducer mutations, not CLI verbs; surface.test.ts verifies 100% of non-plumbing CLI commands across main.ts and all modules are documented in agent-guide.md. |
 | never | [Absence of reactive auto-layout and item nesting](loop/absence-of-reactive-auto-layout-and-item-nesting.md) | P2 | [canvas-groups](projects/canvas-groups/) | Stale and partly by design: groups already nest and frames grow on commit to enclose content, and centroid membership is intentional. Flex auto-layout would be a different product. Loop dismissed it. Reopen with a case groups cannot do. |
 | never | [Asymmetry between CLI verbs and Web UI doors](loop/asymmetry-between-cli-verbs-and-web-ui-doors.md) | P2 | [design-partner](projects/design-partner/) | Stale: the cited recovery has a CLI counterpart through retry:true on design write files, and admin-only daemon verbs like serve and gc are plumbing by design. Reopen if a specific web-only act is named. |
-| never | [Duplication of domain computations across clients](loop/duplication-of-domain-computations-across-clients.md) | P2 | [canvas-groups](projects/canvas-groups/) | Stale: the two files are not duplicates. The CLI parses flags into a placement and the web reads its stores, while shared geometry already lives in core. Reopen if a real shared computation is found. |
 | never | [Eager canvas imports bloat entry bundle](loop/eager-canvas-imports-bloat-entry-bundle.md) | P2 | [ui-refresh](projects/ui-refresh/) | Stale: the entry has a budget with CEILING 727,800 and GOAL 640,000 in scripts/bundle-ceiling.mjs and a gate that holds it, and most pages and modules are already lazy. Reopen if the gate is bypassed. |
-| never | [Heavy parser dependencies bloat web entry chunk](loop/heavy-parser-dependencies-bloat-web-entry-chunk.md) | P2 | [design-lint](projects/design-lint/) | Stale: the markdown parser is lazy (App.tsx preloadMarkdown) and the design-audit analyzer moved to a lazy core subpath on 14 Sep. The entry budget has its own ceiling test. Reopen if a parser lands in the entry chunk. |
 | never | [Lack of interactive prototype state flow wiring](loop/lack-of-interactive-prototype-state-flow-wiring.md) | P2 | [wireframes](projects/wireframes/) | Stale: assemblePrototype already ships a playable router with a history stack over the kept screens. Richer state or event logic would be a new ask. Reopen with a flow it cannot express. |
 | never | [Limited real-time spatial presence during agent co-design](loop/limited-real-time-spatial-presence-during-agent-co-design.md) | P2 | [design-competition](projects/design-competition/) | Stale: presence already broadcasts cursor, selection and item-anchored activity for agents, so live focus is visible today. Loop itself dismissed it. Reopen if a specific missing signal is named. |
 | never | [Missing spatial prompt pins for canvas edits](loop/missing-spatial-prompt-pins-for-canvas-edits.md) | P2 | [design-partner](projects/design-partner/) | Stale: annotations bind ink to a card sub-region, comment pins anchor to points, and request-protocol.md already captures ambient pins. A dedicated prompt pin would duplicate them. Reopen with a case they cannot express. |
@@ -87,6 +70,13 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 | Ours | Finding | Loop | Where | Why |
 | --- | --- | --- | --- | --- |
 | next | [Drawing creation awaits network blob upload](loop/drawing-creation-awaits-network-blob-upload.md) | P2 | [multiuser](projects/multiuser/) | Fixed on 29 Sep 2026: when uploadBlob fails offline in addDrawing, the SVG's SHA-256 is computed locally, staged in memory and on the StoredWrite in IndexedDB so the drawing renders immediately via blobUrl/readBlobText, and uploaded before postOp when drainQueue flushes on reconnect. |
+| next | [Duplication of domain computations across clients](loop/duplication-of-domain-computations-across-clients.md) | P2 | [cleanup](projects/cleanup/) | Fixed in cleanup Phase 5 (DU-6, 26 Sep 2026): the seven copies of canonical JSON serialization across @isocan/core and @isocan/api were consolidated into canonicalJson in @isocan/core and guarded by test/copies.test.ts; questionnaire helpers live in @isocan/core/questionnaire and @isocan/api/questionnaire. |
+| next | [Global store subscriptions cause full viewport re-renders](loop/global-store-subscriptions-cause-full-viewport-re-renders.md) | P2 | [cleanup](projects/cleanup/) | Fixed in cleanup Phase 3 (RP-1, RP-3, RP-6, RP-8, RP-9; 27 Sep 2026): CanvasViewport.tsx:1135 memoizes the filtered and groupAncestors-sorted items list with useMemo, and packages/web/test/canvaswide-rerender.test.ts guards against regressions. |
+| next | [Heavy parser dependencies bloat web entry chunk](loop/heavy-parser-dependencies-bloat-web-entry-chunk.md) | P2 | [design-partner](projects/design-partner/) | done 2026-09-29: leaf design-partner validators extracted to design-partner-values.ts, eliminating all 3 Rollup circular-chunk warnings in @isocan/web build |
+| next | [Remote calls bypass local canvas replicas](loop/remote-calls-bypass-local-canvas-replicas.md) | P2 | [multiuser](projects/multiuser/) | done 2026-09-29: CanvasListPage.refresh falls back to recentCanvases(readRecents()) when listCanvases() fails offline instead of wiping the list (canvaslist.test.ts) |
+| next | [Spatial diffing missing for agent design edits](loop/spatial-diffing-missing-for-agent-design-edits.md) | P2 | [version-diff](projects/version-diff/) | Shipped in dce876ed (docs/projects/version-diff/design.md): VersionFanOut.tsx:187-200 renders a Compare button on every fan card opening VersionCompare.tsx, with structural wireframe and HTML diffs injected via markSource in @isocan/core/diff. |
+| next | [Text creation and comments await network requests](loop/text-creation-and-comments-await-network-requests.md) | P2 | [multiuser](projects/multiuser/) | done 2026-09-29: addTextNode and reviseTextNode stage deterministic Markdown blobs via uploadOrStageTextBlob when offline, and TextComposer commit awaits success before clearing pendingText (offline.test.ts, textedit.test.ts) |
 | next | [Vulnerable and outdated dependencies in workspace](loop/vulnerable-and-outdated-dependencies-in-workspace.md) | P2 | new project | Fixed on 29 Sep 2026: npm audit fix + bumped fastify (^5.12.5), undici (^7.30.0), vitest (^4.1.11) and transitive fast-uri; routed vulnerabilityAlerts into Renovate's daily patch-minor lane (note: the Mend Renovate GitHub App still needs to be enabled on dglazkov/isocan for renovate.json to run). |
+| next | [Workspace package imports deviate from manifest declarations](loop/workspace-package-imports-deviate-from-manifest-declarations.md) | P2 | [modules](projects/modules/) | done 2026-09-29: aligned workspace package.json manifests (@isocan/web, @isocan/cli, @isocan/talk) and added workspace import/dependency guard in test/packaging.test.ts |
 | later | [Renovate configuration gaps miss unhandled update paths](loop/renovate-configuration-gaps-miss-unhandled-update-paths.md) | P2 | new project | Fixed on 29 Sep 2026: scripts/release.mjs now derives buildCliBundle's esbuild target from .nvmrc's major version, guarded by test/workflows.test.ts. |
 

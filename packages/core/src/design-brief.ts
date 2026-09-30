@@ -1,7 +1,6 @@
 import { validateContextManifest, type ContextManifest } from "./canvas-group-context.ts";
-import { parseDesignArtifactRef, parseDesignReference, type DesignBrief } from "./design-partner.ts";
-import { bad, object, recordFields, text, choice, list, unique, ids, nullableText, fidelity, base } from "./design-partner-values.ts";
-import { parseDesignContinuation } from "./design-request-parse.ts";
+import type { DesignBrief } from "./design-partner.ts";
+import { bad, object, recordFields, text, choice, list, unique, ids, nullableText, fidelity, base, parseDesignArtifactRef, parseDesignReference, parseDesignContinuation } from "./design-partner-values.ts";
 
 /** Reuses the retained-context validator and preserves known facts separately from stated assumptions. */
 export function parseDesignBrief(value: unknown): DesignBrief {

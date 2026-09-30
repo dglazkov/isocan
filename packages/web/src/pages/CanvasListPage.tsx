@@ -24,6 +24,7 @@ import {
   type TakedownNotice,
   faceMark,
 } from "@isocan/core";
+import { recentCanvases } from "../lib/recents.ts";
 import {
   addToSpace,
   ApiError,
@@ -142,9 +143,10 @@ export function CanvasListPage({
           return found;
         },
         (err: unknown) => {
-          setCanvases([]);
+          const fallback = recentCanvases();
+          setCanvases((prev) => (prev && prev.length > 0 ? prev : fallback));
           setListError(err instanceof Error ? err.message : "the canvases could not be read");
-          return [] as Canvas[];
+          return fallback;
         },
       ),
     [],

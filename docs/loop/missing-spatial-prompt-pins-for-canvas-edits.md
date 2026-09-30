@@ -22,4 +22,4 @@ note: "Stale: annotations bind ink to a card sub-region, comment pins anchor to 
 
 ## Our read
 
-core/annotation.ts makes ink about an item with an annotates prop and a fractional x,y,w,h region; model.ts:277 defines conversations pinned to a point or anchored to an item. design-partner/request-protocol.md lines 93-99 record selected-root or ambient-pin capture provenance for requests. The brief carries targetItemId and groupId, but sub-region already flows through annotations. Did not verify the pin reaches the brief fields end to end.
+Verified end-to-end across packages/core/src/annotation.ts, packages/core/src/design-request.ts, and packages/api/src/design-request-reader.ts: annotations bind ink to an item with a fractional {x, y, w, h} box (annotation.ts), conversations anchor to a canvas point or item (model.ts:277), and design requests capture both the source comment thread and scope provenance (source-comment, current-selection, or current-ambient in DesignContinuation.scopeCapture, design-request.ts:20) plus governing references when building the craft packet (design-craft-packet.ts).

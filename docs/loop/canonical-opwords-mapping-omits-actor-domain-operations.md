@@ -20,4 +20,4 @@ note: "Stale: actor.claim, setColor, setMark and join are home-scoped and never 
 
 ## Our read
 
-ops.ts:104-208 defines the four actor ops with comments calling them home-scoped and not undoable; opwords.ts OP_WORDS covers canvas-history ops including agent.enroll/invite/withdraw, which do live in canvas state (ops.ts:445-509). I did not trace whether actor ops can ever be appended to a canvas oplog, so that is the residual uncertainty.
+packages/core/src/ops.ts:104-208 defines the four actor.* ops (actor.claim, actor.setMark, actor.join, actor.setColor) as home-scoped and not undoable; packages/core/src/opwords.ts OP_WORDS covers canvas-history operations including agent.enroll, agent.invite, and agent.withdraw, which do live in canvas state (ops.ts:445-509). Verified in packages/server/src/http.ts:1776-1825: the POST /ops handler intercepts all four actor.* operations and appends them to the home-level actors.jsonl log (paths.ts:55), returning early before engine.applyOp can ever write them to a canvas oplog.

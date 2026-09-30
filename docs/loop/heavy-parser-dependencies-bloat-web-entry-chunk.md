@@ -4,11 +4,11 @@ loop: 3ae25c04-e537-43f4-b3e4-b1672de10d50
 loop_rank: P2
 loop_state: DISMISSED
 loop_goal: "Dependencies healthy"
-decision: stale
-rank: never
-project: design-lint
-since: 2026-09-29
-note: "Stale: the markdown parser is lazy (App.tsx preloadMarkdown) and the design-audit analyzer moved to a lazy core subpath on 14 Sep. The entry budget has its own ceiling test. Reopen if a parser lands in the entry chunk."
+decision: done
+rank: next
+project: design-partner
+since: 2026-09-30
+note: "done 2026-09-29: leaf design-partner validators extracted to design-partner-values.ts, eliminating all 3 Rollup circular-chunk warnings in @isocan/web build"
 ---
 
 # Heavy parser dependencies bloat web entry chunk
@@ -21,4 +21,7 @@ note: "Stale: the markdown parser is lazy (App.tsx preloadMarkdown) and the desi
 
 ## Our read
 
-core/package.json lists remark, css-tree and parse5 as runtime dependencies, which is correct since core code uses them. design-lint/phases.md line 40 records moving the analyzer into a lazy @isocan/core/design-audit entry, cutting 72 KB gzip from the initial chunk; App.tsx line 91 notes Markdown is lazy to avoid a 175 KB parser. Bundle-ceiling.mjs records dropping a namespace import that pinned core. I did not find or test the circular-import warning at design-partner.ts.
+**Verified and fixed against the code (2026-09-29):**
+
+- `parse5`, `@codemirror/*`, and `react-markdown` were already behind dynamic `import()` / `React.lazy` boundaries (`packages/web/test/bundle.test.ts`).
+- Extracted the shared leaf types and validators (`DesignArtifactRef`, `DesignReference`, `parseDesignArtifactRef`, `parseDesignReference`, `parseDesignEntranceSource`, `parseDesignQuestionSource`, `parseDesignAcceptedResponses`, `parseDesignContinuation`, `parseDesignDiscovery`, `parseDesignGoverning`) into `packages/core/src/design-partner-values.ts` so `design-brief.ts`, `design-request-parse.ts`, and `design-partner.ts` form a clean DAG. `npm run build -w @isocan/web` now emits zero circular-chunk warnings.

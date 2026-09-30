@@ -23,4 +23,4 @@ note: "Stale: assemblePrototype already ships a playable router with a history s
 
 ## Our read
 
-packages/modules/wireframe/src/prototype.ts assembles one self-contained HTML file: every kept screen as a section, a tiny router with a history stack, data-go/back on hotspots, and dashed data-needs for missing links (header comment lines 8-19). Only links between screens, not stateful events, are modelled, which is deliberate per the header. I did not open PhonePresenting.tsx or StageEditor.tsx.
+packages/modules/wireframe/src/prototype.ts (assemblePrototype) already compiles every kept wireframe screen into a self-contained playable HTML prototype with a built-in history stack router, data-go/data-back hotspot navigation, and dashed data-needs indicators for unlinked targets. The other files Loop cited are unrelated: packages/web/src/components/PhonePresenting.tsx is the mobile slide-deck presenter bar (slide counter, speaker notes sheet, fullscreen toggle), and StageEditor.tsx is the CodeMirror source editor.

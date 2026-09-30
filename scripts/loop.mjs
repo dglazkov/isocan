@@ -28,7 +28,7 @@
  * dismissal alone carries no reason — Loop's API has no field for one — which is
  * why the context exists.
  */
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { closeSync, openSync, existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -55,6 +55,8 @@ const {
   normalizeInsight,
   parseFinding,
   pendingDismissals,
+  proveArgs,
+  provePrompt,
   reconcile,
   renderLoopDoc,
   serializeFinding,
@@ -294,6 +296,49 @@ async function upsertContext(ws, dryRun, c) {
   console.log(`${mine ? "updated" : "created"} the Loop context "${c.source}".`);
 }
 
+/**
+ * **Prove untriaged findings against the code and propose our rank** — the
+ * second step of the nightly pull, shaped like `persona-run.mjs`'s `smallPass`.
+ *
+ * When `ANTHROPIC_API_KEY` and `claude` (`CLAUDE_BIN`) are present, each
+ * `untriaged` finding is handed to a bounded `claude -p` run that reads the
+ * cited files, verifies the sub-claims, and invokes `loop.mjs propose <slug>`.
+ * Skipped — never failed — when the key or harness is absent, so a pull without
+ * a model key still lands the raw findings on disk.
+ */
+function proveUntriaged(slugFilter) {
+  const targets = loadFindings().filter(
+    (f) => (slugFilter ? f.slug === slugFilter : f.decision === "untriaged"),
+  );
+  if (!targets.length) return { proved: 0, skipped: null };
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { proved: 0, skipped: "no ANTHROPIC_API_KEY in the environment — left untriaged for `loop.mjs prove`" };
+  }
+  const bin = process.env.CLAUDE_BIN ?? "claude";
+  const validProjects = projects();
+  let proved = 0;
+  for (const f of targets) {
+    const res = spawnSync(bin, proveArgs(provePrompt(f, validProjects)), {
+      cwd: ROOT,
+      encoding: "utf8",
+      timeout: 5 * 60_000,
+      maxBuffer: 1 << 24,
+      env: { ...process.env, CLAUDECODE: "" },
+    });
+    if (res.error?.code === "ENOENT") {
+      return { proved, skipped: `\`${bin}\` is not installed here — left untriaged for \`loop.mjs prove\`` };
+    }
+    const after = find(f.slug);
+    if (after.decision === "proposed" && findingProblems(after, validProjects).length === 0) {
+      proved += 1;
+    } else {
+      console.error(`prove ${f.slug}: model pass did not leave a valid proposal (exit ${res.status ?? "?"})`);
+    }
+  }
+  if (proved > 0) render(false);
+  return { proved, skipped: null };
+}
+
 // ── commands ─────────────────────────────────────────────────────────────
 
 const { values: v, positionals } = parseArgs({
@@ -309,6 +354,7 @@ const { values: v, positionals } = parseArgs({
     check: { type: "boolean" },
     "dry-run": { type: "boolean" },
     "no-push": { type: "boolean" },
+    "no-prove": { type: "boolean" },
     "no-render": { type: "boolean" },
   },
 });
@@ -327,7 +373,12 @@ try {
       say("re-filed by Loop under a new id", r.refiled);
       say("Loop now reports resolved — worth checking and marking done", r.resolvedInLoop);
       say("dismissed in Loop with no decision here", r.dismissedInLoop);
-      const owed = pendingDismissals(r.findings, insights);
+      if (!v["no-prove"]) {
+        const proof = proveUntriaged();
+        if (proof.proved) console.log(`proved and proposed (${proof.proved}).`);
+        else if (proof.skipped && r.added.length) console.log(`prove skipped: ${proof.skipped}`);
+      }
+      const owed = pendingDismissals(loadFindings(), insights);
       if (owed.length) console.log(`${owed.length} declined id(s) still active in Loop — run: node scripts/loop.mjs push`);
       break;
     }
@@ -389,12 +440,18 @@ try {
       console.log("Loop is re-mining. Run `node scripts/loop.mjs pull` in 10–20 minutes to see what it found and resolved.");
       break;
     }
+    case "prove": {
+      const proof = proveUntriaged(rest[0]);
+      if (proof.skipped) console.log(`prove skipped: ${proof.skipped}`);
+      else console.log(`proved and proposed ${proof.proved} finding(s).`);
+      break;
+    }
     case "render":
       render(Boolean(v.check));
       if (!v.check) console.log("wrote docs/LOOP.md");
       break;
     default:
-      throw new Error(`unknown command "${cmd}" — pull, list, propose, decide, push, mine, render`);
+      throw new Error(`unknown command "${cmd}" — pull, list, propose, prove, decide, push, mine, render`);
   }
 } catch (e) {
   console.error(e.message);

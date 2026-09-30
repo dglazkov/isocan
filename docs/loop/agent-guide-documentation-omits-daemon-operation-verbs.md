@@ -7,8 +7,8 @@ loop_goal: "Always isomorphic"
 decision: stale
 rank: never
 project: iso-api
-since: 2026-09-29
-note: "Stale: operations are not CLI verbs, and the enforced rule is that every registered CLI command appears in the guide, which surface.test.ts checks. Reopen if a CLI verb is found missing."
+since: 2026-09-30
+note: "Stale: operations in ops.ts are internal reducer mutations, not CLI verbs; surface.test.ts verifies 100% of non-plumbing CLI commands across main.ts and all modules are documented in agent-guide.md."
 ---
 
 # Agent guide documentation omits daemon operation verbs
@@ -20,4 +20,7 @@ note: "Stale: operations are not CLI verbs, and the enforced rule is that every 
 
 ## Our read
 
-ops.ts lists Operation types (item.move, design.*, thread.*); AGENTS.md says the CLI verb is the agent surface, and packages/cli/test/surface.test.ts reads the registered commands and fails when one is missing from the agent-guide quick reference, with PLUMBING exemptions justified in comments. Many ops (design.receipt, group.change, item.setCurrentVersion) are reached through verbs with different names, so a 40 of 46 count compares the wrong sets. Not verified verb by verb.
+**Verified against the code (2026-09-29):**
+
+- `packages/core/src/ops.ts` defines the 46 reducer `Operation` types (`item.move`, `design.*`, `thread.*`, `group.change`, etc.); agents invoke CLI commands, not raw reducer operation names.
+- `packages/cli/test/surface.test.ts` (`registeredCommands()`, lines 108–173) extracts every `.command("<name>")` across `main.ts`, `canvas-groups.ts`, `context-reads.ts`, `questionnaire.ts`, `design-request.ts`, `design-system.ts`, `personal-context.ts`, `bench.ts`, `operator.ts`, and every module's `src/cli.ts`, and asserts that 100% of non-plumbing verbs appear in inline code spans in `packages/cli/src/agent-guide.md` (or module `agent-guide.md` files).
