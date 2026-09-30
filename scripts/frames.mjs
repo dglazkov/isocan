@@ -16,7 +16,7 @@
  * zoom, and on every operation anybody made), nothing noticed. This is that
  * harness, kept: a daemon of its own on a throwaway home, a canvas seeded
  * through `@isocan/api`, headless Chrome through `scripts/lib/browser.mjs`, and
- * three gestures —
+ * five gestures —
  *
  * - **pan**: ninety wheel events across the canvas;
  * - **zoom**: sixty ctrl-wheel events, out and back;
@@ -25,7 +25,10 @@
  *   shows;
  * - **cursor**: another client's cursor crossing the canvas sixty times, and
  *   nothing else — the cost of somebody merely being here (27 Sep 2026,
- *   cleanup RP-1: every roster used to re-render every item).
+ *   cleanup RP-1: every roster used to re-render every item);
+ * - **drag**: this browser's own pointer dragging one item sixty steps — the
+ *   gesture everything drawn from items (map edges, arrows, pins) has to ride
+ *   frame by frame (30 Sep 2026, when the lines stopped lagging the drag).
  *
  * Each reports the long-frame TAIL — p90, p99, worst, and how many frames went
  * over 16.7 and 32 ms — never an average (an average of 9 ms with one frame in
@@ -181,12 +184,32 @@ async function main() {
       const { client, actor } = canvas.ctx;
       const { sessionId } = await client.createSession(canvasId, actor, "Acme cursor");
       const results = {};
-      for (const [name, gesture] of [
+      for (const [name, gesture, prepare] of [
         ["pan", async () => { for (let i = 0; i < 90; i++) { await wheel(i < 45 ? 35 : -35, i % 2 ? 25 : -25); await sleep(16); } }],
         ["zoom", async () => { for (let i = 0; i < 60; i++) { await wheel(0, i < 30 ? 40 : -40, 2); await sleep(16); } }],
         ["remote", async () => { for (let i = 0; i < 60; i++) await canvas.move(ids[ids.length - 1], 7200 + (i % 10) * 12, 4000 + i * 3); }],
         ["cursor", async () => { for (let i = 0; i < 60; i++) { await client.updateSession(canvasId, sessionId, { actor, cursor: { x: 800 + i * 40, y: 1200 + (i % 2) * 30 } }); await sleep(16); } }],
+        ["drag", async () => {
+          // A real pointer on the item under the middle of the screen: pressed,
+          // moved sixty times, released — the local gesture, which on a groups
+          // canvas previews through boxes that items, lines and pins all ride.
+          const at = await b.ev(`(() => { const inView = (e) => { const q = e.getBoundingClientRect(); return q.width > 0 && q.x > 400 && q.y > 120 && q.x + q.width < 1100 && q.y + q.height < 700; }; const el = [...document.querySelectorAll(".item[data-item-id]")].find(inView); if (!el) return null; const r = el.getBoundingClientRect(); window.__dragged = el.dataset.itemId; const bar = el.querySelector(".item-titlebar"); const b2 = bar && bar.offsetParent ? bar.getBoundingClientRect() : null; const x = b2 ? b2.x + 8 : r.x + 8, y = b2 ? b2.y + b2.height / 2 : r.y + 8; return { x, y, left: r.x, hit: String(document.elementFromPoint(x, y)?.className) }; })()`);
+          if (!at) throw new Error(`REFUSED: no item fully on screen to drag: ${await b.ev(`JSON.stringify([...document.querySelectorAll(".item[data-item-id]")].slice(0, 6).map((e) => { const q = e.getBoundingClientRect(); return [q.x, q.y, q.width, q.height].map(Math.round); }))`)}`);
+          const mouse = (type, x, y) => b.send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mouseReleased" ? 0 : 1, clickCount: 1 });
+          await mouse("mousePressed", at.x, at.y);
+          for (let i = 1; i <= 60; i++) { await mouse("mouseMoved", at.x + i * 4, at.y + i * 2); await sleep(16); }
+          const mid = await b.ev(`document.querySelector('[data-item-id="' + window.__dragged + '"]').getBoundingClientRect().x`);
+          await mouse("mouseReleased", at.x + 240, at.y + 120);
+          if (Math.abs(mid - at.left) < 100) throw new Error(`REFUSED: the drag gesture moved its item ${Math.round(mid - at.left)}px — the pointer is not reaching an item (it pressed on "${at.hit}" at ${JSON.stringify(at)})`);
+        }, async () => {
+          // The zoom gesture leaves the camera where its clamp did; a fresh load
+          // puts it back where a person starts, before the probe, so it is not timed.
+          await b.send("Page.navigate", { url: `${origin}/p/${canvasId}` });
+          await until(b, `document.querySelectorAll("[data-item-id]").length >= ${need}`, "items to render again", 60_000);
+          await sleep(2500);
+        }],
       ]) {
+        if (prepare) await prepare();
         await b.ev(probe);
         if (profileOut) await b.send("Profiler.start");
         await gesture();
