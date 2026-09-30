@@ -11,15 +11,9 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 4 accepted · 21 declined · 8 stale · 10 done · 0 not yet read.**
+**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 0 not yet read.**
 
 ## Accepted, by project
-
-### [canvas-groups](projects/canvas-groups/)
-
-| Ours | Finding | Loop | Where | Why |
-| --- | --- | --- | --- | --- |
-| next | [Web UI lacks canvas group layout controls](loop/web-ui-lacks-canvas-group-layout-controls.md) | P2 | [canvas-groups](projects/canvas-groups/) | Dion 30 Sep: accepted as a bug — the web form lets you make a grid change it then can't save, and can't clear a grid. Building now. |
 
 ### new project
 
@@ -89,6 +83,7 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 | next | [Spatial diffing missing for agent design edits](loop/spatial-diffing-missing-for-agent-design-edits.md) | P2 | [version-diff](projects/version-diff/) | Shipped in dce876ed (docs/projects/version-diff/design.md): VersionFanOut.tsx:187-200 renders a Compare button on every fan card opening VersionCompare.tsx, with structural wireframe and HTML diffs injected via markSource in @isocan/core/diff. |
 | next | [Text creation and comments await network requests](loop/text-creation-and-comments-await-network-requests.md) | P2 | [multiuser](projects/multiuser/) | done 2026-09-29: addTextNode and reviseTextNode stage deterministic Markdown blobs via uploadOrStageTextBlob when offline, and TextComposer commit awaits success before clearing pendingText (offline.test.ts, textedit.test.ts) |
 | next | [Vulnerable and outdated dependencies in workspace](loop/vulnerable-and-outdated-dependencies-in-workspace.md) | P2 | new project | Fixed on 29 Sep 2026: npm audit fix + bumped fastify (^5.12.5), undici (^7.30.0), vitest (^4.1.11) and transitive fast-uri; routed vulnerabilityAlerts into Renovate's daily patch-minor lane (note: the Mend Renovate GitHub App still needs to be enabled on dglazkov/isocan for renovate.json to run). |
+| next | [Web UI lacks canvas group layout controls](loop/web-ui-lacks-canvas-group-layout-controls.md) | P2 | [canvas-groups](projects/canvas-groups/) | Built 30 Sep: one core rule (groupGridAction) trims labels past a lowered count in the same save for web and CLI, and the web has Clear grid. |
 | next | [Workspace package imports deviate from manifest declarations](loop/workspace-package-imports-deviate-from-manifest-declarations.md) | P2 | [modules](projects/modules/) | done 2026-09-29: aligned workspace package.json manifests (@isocan/web, @isocan/cli, @isocan/talk) and added workspace import/dependency guard in test/packaging.test.ts |
 | later | [Renovate configuration gaps miss unhandled update paths](loop/renovate-configuration-gaps-miss-unhandled-update-paths.md) | P2 | new project | Fixed on 29 Sep 2026: scripts/release.mjs now derives buildCliBundle's esbuild target from .nvmrc's major version, guarded by test/workflows.test.ts. |
 
