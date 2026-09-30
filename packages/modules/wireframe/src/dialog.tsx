@@ -13,6 +13,7 @@ import { presetUrlText } from "./preset-urls.ts";
 import { webAnswerer, webPort } from "./web-port.ts";
 import { editWireOnCanvas } from "./edit.ts";
 import { explainWireDecision } from "./why.ts";
+import { copyAiOnCanvas, nameFlowOnCanvas } from "./copy-schema.ts";
 import { wireTitle } from "./spec.ts";
 import type { PackChoice } from "./content/choose.ts";
 import { PACK_BY_ID } from "./content/packs.ts";
@@ -49,7 +50,10 @@ type Mode =
   | { kind: "links" }
   // ── phase 11: /wire edit and /wire why ──
   | { kind: "edit"; instruction: string }
-  | { kind: "why"; question?: string };
+  | { kind: "why"; question?: string }
+  // ── phase 12: /wire copy and /wire name ──
+  | { kind: "copy"; brief?: string }
+  | { kind: "name"; request?: string };
 
 export function modeOf(args: string): Mode {
   const words = args.trim();
@@ -64,6 +68,14 @@ export function modeOf(args: string): Mode {
   if (first === "why") {
     const q = rest.join(" ").trim();
     return q ? { kind: "why", question: q } : { kind: "why" };
+  }
+  if (first === "copy") {
+    const brief = rest.filter((w) => w !== "--ai").join(" ").trim();
+    return brief ? { kind: "copy", brief } : { kind: "copy" };
+  }
+  if (first === "name") {
+    const req = rest.join(" ").trim();
+    return req ? { kind: "name", request: req } : { kind: "name" };
   }
   if (first === "style" && rest.length === 0) return { kind: "styles" };
   if (first === "style" && rest.length === 1 && (rest[0] === "--default" || rest[0] === "default")) return { kind: "style", toDefault: true };
@@ -300,6 +312,36 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       host.notice(explanation.lines[0]!);
       record(host, newGroupId(), explanation.lines, [target.item]);
       host.close();
+    } else if (m.kind === "copy") {
+      setStatus("Writing schema-validated copy…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+      const r = await copyAiOnCanvas(port, canvas, all, screens, undefined, {
+        ...(m.brief ? { brief: m.brief } : {}),
+      });
+      const summary = `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} filled with AI copy (${r.by}) — one undo takes it back`;
+      host.notice(summary);
+      if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
+      host.close();
+      if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
+    } else if (m.kind === "name") {
+      setStatus("Naming the flow's screens and navigation…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+      const r = await nameFlowOnCanvas(port, canvas, all, screens, undefined, {
+        ...(m.request ? { request: m.request } : {}),
+      });
+      const summary = `named ${r.changed.length} wire${r.changed.length === 1 ? "" : "s"} (${r.brand}) — one undo takes it back`;
+      host.notice(summary);
+      if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
+      host.close();
+      if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
     }
   };
 

@@ -326,6 +326,15 @@ bar, tab bar) stays.
   `pinned`, per-slot `p` and `alternatives`, `declined`, `template`, `density`,
   and `decisions`) and explains why its archetype, layout, and blocks were chosen,
   citing the recorded probabilities and runner-up alternatives.
+- **Schema-driven AI copy (`isocan wire copy --ai`) and flow naming (`isocan wire name`)**:
+  `isocan wire copy [<screens...>] --ai [--brief "<words>"] [--flow <flow>]` (or
+  `/wire copy` in the Chat) builds a strict JSON schema (`blockContentSchema`) from
+  each screen's resolved blocks and variants, fills domain-specific words across
+  the screen(s) while keeping actionable button labels bound to their typed `Intent`,
+  and rebuilds any kept prototype in one op group. `isocan wire name [<screens...>]
+  [--flow <flow>] [--request "<words>"]` (or `/wire name` in the Chat) names the
+  flow's brand, per-screen titles, and shared navigation bar labels coherently so
+  tab bars, side navs, and headers match across every screen.
 
 **Words are typed, never free.** A button's label is its **intent**'s label
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of
@@ -333,8 +342,8 @@ bar, tab bar) stays.
 render` refuses a spec that gives one it cannot. Headings come from the
 spec's `title`; body copy is grey bars, never lorem ipsum — until `wire
 flesh` fills it from a content pack. If you want real copy on a screen,
-that is a separate, honest act — `wire copy <screen> --apply <file>` —
-not a label smuggled into an intent.
+that is a separate, honest act — `wire copy <screen> --apply <file>` or
+`wire copy --ai` — not a label smuggled into an intent.
 
 To draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,
 change a slot's `block` to another of its options with `"props": {}` and no

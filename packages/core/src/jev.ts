@@ -565,3 +565,155 @@ export class PriorityGate {
     };
   }
 }
+
+// ---------- structured text generation seam (wire copy --ai, wire name)
+
+/** Minimal JSON Schema subset used for structured text generation (`wire copy --ai`, `wire name`). */
+export interface JsonSchema {
+  type: "object" | "array" | "string" | "number" | "boolean";
+  description?: string;
+  properties?: Record<string, JsonSchema>;
+  required?: readonly string[];
+  items?: JsonSchema;
+  minItems?: number;
+  maxItems?: number;
+  enum?: readonly string[];
+  additionalProperties?: boolean | JsonSchema;
+}
+
+/**
+ * Vendor-neutral structured text generator seam.
+ *
+ * Implementations:
+ * - `stubTextGenerator(seed)`: deterministic offline generator that synthesizes valid JSON conforming to `schema`.
+ * - `httpTextGenerator(opts)`: standard HTTPS JSON-schema completion (`ISOCAN_TEXT_API_KEY` / `ISOCAN_TEXT_MODEL`, zero SDK dependencies).
+ */
+export interface TextGenerator {
+  readonly name: string;
+  generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T>;
+}
+
+/** Options for `httpTextGenerator`. */
+export interface HttpTextGeneratorOptions {
+  apiKey?: string;
+  model?: string;
+  endpoint?: string;
+  fetch?: typeof globalThis.fetch;
+}
+
+const STOP_WORDS = new Set([
+  "the", "and", "for", "with", "that", "this", "from", "into", "your", "app", "flow",
+  "screen", "screens", "wireframe", "design", "generate", "write", "copy", "json", "schema",
+]);
+
+function promptNouns(prompt: string): string[] {
+  const words = prompt
+    .replace(/[^a-zA-Z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w.toLowerCase()));
+  if (words.length === 0) return ["Acme", "Workspace", "Operations", "Status"];
+  const unique: string[] = [];
+  for (const w of words) {
+    const cap = w[0]!.toUpperCase() + w.slice(1);
+    if (!unique.includes(cap)) unique.push(cap);
+  }
+  return unique.length > 0 ? unique : ["Acme", "Workspace"];
+}
+
+function synthesizeFromSchema(schema: JsonSchema, prompt: string, path: string, seed: number): unknown {
+  const h = hash(`${seed}:${prompt}:${path}:${schema.description ?? ""}`);
+  if (schema.enum && schema.enum.length > 0) {
+    return schema.enum[h % schema.enum.length]!;
+  }
+  switch (schema.type) {
+    case "boolean":
+      return (h & 1) === 0;
+    case "number":
+      return (h % 90) + 10;
+    case "array": {
+      const len = schema.minItems ?? schema.maxItems ?? 3;
+      const itemSchema = schema.items ?? { type: "string" };
+      return Array.from({ length: len }, (_, i) => synthesizeFromSchema(itemSchema, prompt, `${path}.${i}`, seed));
+    }
+    case "object": {
+      const out: Record<string, unknown> = {};
+      for (const [k, propSchema] of Object.entries(schema.properties ?? {})) {
+        out[k] = synthesizeFromSchema(propSchema, prompt, path ? `${path}.${k}` : k, seed);
+      }
+      return out;
+    }
+    case "string":
+    default: {
+      const nouns = promptNouns(prompt);
+      const a = nouns[h % nouns.length]!;
+      const b = nouns[(h >>> 3) % nouns.length]!;
+      const leaf = path.split(".").pop() ?? path;
+      if (leaf === "brand") return `${a} ${b === a ? "Studio" : b}`;
+      if (leaf === "title" || leaf === "heading") return a === b ? `${a} Overview` : `${a} ${b}`;
+      if (leaf === "bar") return a;
+      if (leaf === "value") return `${(h % 900) + 100}`;
+      if (leaf === "delta") return `+${(h % 18) + 2}%`;
+      if (leaf === "status") return ["Active", "Scheduled", "Completed", "In review"][h % 4]!;
+      if (leaf === "label") return a;
+      return `${a} ${b.toLowerCase()} ${(h % 90) + 10}`;
+    }
+  }
+}
+
+/**
+ * Deterministic, offline `TextGenerator` that synthesizes schema-valid JSON
+ * from the prompt and schema structure without network calls.
+ */
+export function stubTextGenerator(seed = 1): TextGenerator {
+  return {
+    name: `stub-text (seed ${seed})`,
+    async generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T> {
+      return synthesizeFromSchema(schema, prompt, "", seed) as T;
+    },
+  };
+}
+
+/**
+ * Standard HTTPS JSON-schema `TextGenerator` using `fetch` with zero SDK dependencies.
+ * Reads `ISOCAN_TEXT_API_KEY` and `ISOCAN_TEXT_MODEL` when not passed in `opts`.
+ */
+export function httpTextGenerator(opts: HttpTextGeneratorOptions = {}): TextGenerator {
+  const apiKey = opts.apiKey ?? process.env.ISOCAN_TEXT_API_KEY ?? "";
+  const model = opts.model ?? process.env.ISOCAN_TEXT_MODEL ?? "gpt-4o-mini";
+  const endpoint = opts.endpoint ?? process.env.ISOCAN_TEXT_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
+  const fetchFn = opts.fetch ?? globalThis.fetch;
+
+  return {
+    name: model,
+    async generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T> {
+      if (!apiKey) throw new Error("httpTextGenerator requires apiKey or ISOCAN_TEXT_API_KEY");
+      const res = await fetchFn(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: "Return only valid JSON conforming to the provided JSON schema." },
+            { role: "user", content: prompt },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: { name: "wire_response", strict: true, schema },
+          },
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`TextGenerator HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      }
+      const body = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const text = body.choices?.[0]?.message?.content;
+      if (!text) throw new Error("TextGenerator returned an empty response");
+      return JSON.parse(text) as T;
+    },
+  };
+}

@@ -23,7 +23,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–11 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) and `wireframes phase 12` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 built (`wire edit` surgical single-section edits + prototype rebuild in one op group, and `wire why` decision Q&A over embedded `WireSpec.decisions`), phase 12 (`wire copy --ai` and `wire name`) next, then phase 13 (`wire ds` and `wire polish`).
+**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–12 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) and `wireframes phase 13` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 built (`wire edit` surgical single-section edits + prototype rebuild in one op group, and `wire why` decision Q&A over embedded `WireSpec.decisions`), phase 12 built (`TextGenerator` seam in `@isocan/core/jev`, `blockContentSchema`, `wire copy --ai`, `sanitizeFlowTitle`, and `wire name`), and phase 13 (`wire ds` and `wire polish`) is next.
 
 ## Phase 0 — The catalog, drawn
 
@@ -453,7 +453,7 @@ disk. `packages/modules/wireframe/src/edit.ts` and `why.ts` implement:
 
 ## Phase 12 — Schema-driven AI copy (`wire copy --ai`) and flow naming (`wire name`)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 30 September 2026.** Built and verified in unit tests (`packages/modules/wireframe/test/copy-schema.test.ts`, 4/4 green; `packages/modules/wireframe/test/flesh-cli.test.ts`, 8/8 green; `packages/cli/test/surface.test.ts` and export ratchets green): `JsonSchema`, `TextGenerator`, `stubTextGenerator`, and `httpTextGenerator` in `@isocan/core/jev`; `blockContentSchema`, `validateCopyPayload`, `generateWireCopy`, `sanitizeFlowTitle`, `flowNameSchema`, `nameFlow`, `copyAiOnCanvas`, and `nameFlowOnCanvas` in `copy-schema.ts`; `isocan wire copy --ai` and `isocan wire name` in `flesh-cli.ts` and `agent-guide.md`; `/wire copy` and `/wire name` in `dialog.tsx`. Browser walk owed before closing.
 
 **Outcome:** [journey.md](journey.md) scene 12, [design.md](design.md) §14.
 `packages/modules/wireframe/src/copy-schema.ts` builds a strict JSON schema
@@ -470,7 +470,7 @@ button labels bound to their typed `Intent`.
 **Proof:**
 
 1. Unit tests (`packages/modules/wireframe/test/copy-schema.test.ts`):
-   `blockContentSchema` covers all 28 blocks and their variants, rejects
+   `blockContentSchema` covers all 50 catalog components and their variants, rejects
    malformed payloads, and preserves every actionable `Intent`; `nameFlow`
    keeps shared tab-bar and top-bar labels identical across screens in a flow;
    `wire copy --ai` with a stub `TextGenerator` and `wire copy --apply` with an
@@ -483,6 +483,9 @@ button labels bound to their typed `Intent`.
 3. `packages/cli/test/surface.test.ts`, `npm test`, and `npm run typecheck`.
 
 ### Trajectory
+
+- **2026-09-30** — `blockContentSchema` derives each slot's replaceable dot-paths from `wordsOf(slot.fill)` (ensuring unfleshed slots are first shaped via `ensureFleshedForCopy`), omitting non-text slots (`heading`, `divider`, or motif-only fills) from `slots.properties` so strict JSON-schema generators never emit empty slot objects that `applyCopy` would reject.
+- **2026-09-30** — Navigation bars (`tab-bar`, `side-nav`, `navbar`) render their item labels through `slot.fill.actions` (`item-1`, `item-2`, ...), so `nameFlow` writes the shared `navLabels` array into `slot.fill.actions` across every screen in the flow to keep bottom tabs and side navs identical.
 
 ---
 
