@@ -1,5 +1,8 @@
 import {
   PAPERS,
+  TEXT_COLOURS,
+  TEXT_FONTS,
+  type TextColourValue,
   TEXT_FACES,
   TEXT_STYLES,
   TEXT_STYLE_LABEL,
@@ -37,6 +40,45 @@ import { useUiStore } from "../stores/uiStore.ts";
  * menu also answers a question the swatches cannot — right-click is where a
  * person looks for "what are the settings for this thing".
  */
+
+/**
+ * **Colour and font, the same two doors** (30 Sep 2026): the composer's
+ * pickers write `lastTextColour` / `lastTextFont`, and these rows write the
+ * same two facts. Auto and the plain face come first, ticked when chosen, for
+ * the reason None heads the paper list.
+ */
+function colourEntries(colour: TextColourValue | null, font: string | null): MenuEntry[] {
+  return [
+    { label: "Auto", checked: colour === null, run: () => useUiStore.getState().setLastTextInk(null, font) },
+    { separator: "" },
+    ...TEXT_COLOURS.map((c) => ({
+      label: capitalise(c),
+      checked: c === colour,
+      run: () => useUiStore.getState().setLastTextInk(c, font),
+    })),
+  ];
+}
+
+function fontEntries(colour: TextColourValue | null, font: string | null): MenuEntry[] {
+  return [
+    { label: "Plain face", checked: font === null, run: () => useUiStore.getState().setLastTextInk(colour, null) },
+    { separator: "" },
+    ...TEXT_FONTS.map((f) => ({
+      label: f.name,
+      checked: f.name === font,
+      run: () => {
+        // A font brings its face, so the Face row below says what you will get.
+        const ui = useUiStore.getState();
+        ui.setLastText(ui.lastTextStyle, f.face, ui.lastPaper);
+        ui.setLastTextInk(colour, f.name);
+      },
+    })),
+  ];
+}
+
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
 
 /** Ticked by what is current, so the menu says what you are about to get
  *  rather than only offering to change it. */
@@ -90,14 +132,27 @@ function paperEntries(style: TextStyle, face: TextFace, paper: Paper | null): Me
  * caller hand it stale ones, and there is exactly one caller.
  */
 export function textToolMenu(): MenuEntry[] {
-  const { lastTextStyle: style, lastTextFace: face, lastPaper: paper } = useUiStore.getState();
+  const {
+    lastTextStyle: style,
+    lastTextFace: face,
+    lastPaper: paper,
+    lastTextColour: colour,
+    lastTextFont: font,
+  } = useUiStore.getState();
   return [
     { separator: "NEXT TEXT NODE" },
     /* The current answer beside each name, so the shape of the menu says what
        you are about to get without opening all three — the `menu-value` the
        Background row already uses. */
     { label: "Size", value: TEXT_STYLE_LABEL[style], run: () => {}, submenu: styleEntries(style, face, paper) },
-    { label: "Font", value: textFaceLabel(face), run: () => {}, submenu: faceEntries(style, face, paper) },
+    { label: "Face", value: textFaceLabel(face), run: () => {}, submenu: faceEntries(style, face, paper) },
+    { label: "Font", value: font ?? "Plain face", run: () => {}, submenu: fontEntries(colour, font) },
+    {
+      label: "Colour",
+      value: colour === null ? "Auto" : colour.startsWith("#") ? colour : capitalise(colour),
+      run: () => {},
+      submenu: colourEntries(colour, font),
+    },
     {
       label: "Paper",
       value: paper === null ? "None" : paperLabel(paper),

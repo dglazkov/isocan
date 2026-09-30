@@ -33,7 +33,7 @@
 
 import { parseHex } from "./contrast.ts";
 import type { InkStroke } from "./drawing.ts";
-import { PAPER_PROP, isPaper } from "./textnode.ts";
+import { PAPER_PROP, TEXT_COLOR_PROP, isPaper } from "./textnode.ts";
 import { AREA_TINT_PROP } from "./area.ts";
 import { DRAWING_PROPERTIES, INK_PROP } from "./drawing.ts";
 
@@ -302,6 +302,16 @@ export function itemColour(item: ColouredItem): SpokenColour | null {
   const ink = properties[INK_PROP];
   if (ink !== undefined && (SPOKEN_COLOURS as readonly string[]).includes(ink)) {
     return ink as SpokenColour;
+  }
+  /**
+   * A caption's words in a colour (`textcolour.ts`) — the ink of a text
+   * node, so it is read where a drawing's ink is, before any paper it sits
+   * on. A name is already a spoken word; a hex is spoken the way a stroke is.
+   */
+  const words = properties[TEXT_COLOR_PROP];
+  if (words !== undefined) {
+    const said = (SPOKEN_COLOURS as readonly string[]).includes(words) ? (words as SpokenColour) : spokenColour(words);
+    if (said) return said;
   }
   for (const key of [PAPER_PROP, AREA_TINT_PROP]) {
     const raw = properties[key];

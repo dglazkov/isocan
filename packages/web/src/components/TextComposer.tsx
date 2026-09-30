@@ -1,7 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type {
-  Paper, Actor } from "@isocan/core";
+  Paper, Actor, TextColourValue } from "@isocan/core";
 import {
+  TEXT_COLOURS,
+  TEXT_FONTS,
+  textFontFrom,
+  textFontStack,
+  textInk,
   TEXT_FACES,
   TEXT_FACE_STACK,
   TEXT_COLUMN,
@@ -23,6 +28,7 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { creationDestination, QueuedItemError } from "../lib/groupplacement.ts";
 import { addTextNode, restyleTextNode, restyledTextBox, reviseTextNode, textCommit } from "../lib/text.ts";
+import { loadTextFont } from "../lib/textfont.ts";
 
 /**
  * The Text tool's one moment: a textarea sitting in world space exactly where
@@ -77,11 +83,20 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   // there, and goes back when it leaves. A click is what chooses.
   const [peekStyle, setPeekStyle] = useState<TextStyle | undefined>(undefined);
   const [peekFace, setPeekFace] = useState<TextFace | undefined>(undefined);
+  // The colour and the font on the same terms — `null` is a real answer
+  // (the theme's ink, the plain face), so "not peeking" is `undefined`.
+  const [peekColour, setPeekColour] = useState<TextColourValue | null | undefined>(undefined);
+  const [peekFont, setPeekFont] = useState<string | null | undefined>(undefined);
+  /** Which of the two small pickers is open over the bar, if either. */
+  const [picker, setPicker] = useState<"colour" | "font" | null>(null);
   useEffect(() => {
     setBody(pending?.body ?? "");
     setPeek(undefined);
     setPeekStyle(undefined);
     setPeekFace(undefined);
+    setPeekColour(undefined);
+    setPeekFont(undefined);
+    setPicker(null);
     done.current = false;
     setSaving(false); setSaveError("");
     placeCaret.current = true;
@@ -144,11 +159,27 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   // otherwise the chosen one. `restyle` and `commit` read `pending`, never
   // these, so a hover changes nothing but the picture.
   const style = peekStyle ?? pending?.style ?? "body";
-  const face = peekFace ?? pending?.face ?? "sans";
+  // A named font decides the face (core `TEXT_FONTS`): hovering a face
+  // previews that face alone, hovering a font previews the font.
+  const fontName = peekFace !== undefined ? null : peekFont !== undefined ? peekFont : (pending?.font ?? null);
+  const font = fontName ? textFontFrom(fontName) : null;
+  const face = font?.face ?? peekFace ?? pending?.face ?? "sans";
+  const colour = peekColour !== undefined ? peekColour : (pending?.colour ?? null);
+  const stack = textFontStack(font, face);
+  loadTextFont(font);
   // What the composer WEARS: the swatch being hovered wins while it is
   // hovered; otherwise the paper that was chosen. The box below follows,
   // so hovering yellow over a caption previews the square it would take.
   const paper = peek !== undefined ? peek : (pending?.paper ?? null);
+  // A named font's file arrives after the words were first measured in its
+  // fallback; measure again when it lands, or the box is the fallback's.
+  const [fontsLanded, setFontsLanded] = useState(0);
+  useEffect(() => {
+    const fonts = document.fonts as FontFaceSet | undefined;
+    const landed = () => setFontsLanded((n) => n + 1);
+    fonts?.addEventListener?.("loadingdone", landed);
+    return () => fonts?.removeEventListener?.("loadingdone", landed);
+  }, []);
   const mirror = useRef<HTMLDivElement | null>(null);
   const [fit, setFit] = useState({ width: TEXT_WIDTH, height: TEXT_SIZE * 2 });
   useLayoutEffect(() => {
@@ -166,8 +197,13 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     // heading in it, the estimate is asked too and the bigger box kept —
     // `textRefit` is exactly that, and null when the measurement already
     // holds the words. Without one, what was measured is what commits.
-    setFit((TEXT_HEADING_LINE.test(body) && textRefit(measured, body, style, face)) || measured);
-  }, [body, key, style, face]);
+    // A named font asks too: until its file lands the mirror measured the
+    // fallback, and a box committed from that would clip the family when it
+    // arrives. The estimate carries the family's width (`TEXT_FONTS`).
+    setFit(((TEXT_HEADING_LINE.test(body) || font) && textRefit(measured, body, style, face, font)) || measured);
+    // `font` is derived from `fontName`, which is the dependency that changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body, key, style, face, fontName, fontsLanded]);
 
   /**
    * Clicking away commits — and it has to be a POINTER listener, not `blur`.
@@ -253,16 +289,30 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
    * not exist yet there is nothing to update; the look is held in `pending`
    * and travels with the words when they commit.
    */
-  function restyle(next: { style?: TextStyle; face?: TextFace; paper?: Paper | null }) {
+  function restyle(next: {
+    style?: TextStyle;
+    face?: TextFace;
+    paper?: Paper | null;
+    colour?: TextColourValue | null;
+    font?: string | null;
+  }) {
     if (saving || done.current) return;
     const ui = useUiStore.getState();
     const at = ui.pendingText;
     if (!at) return;
+    setPicker(null);
+    setPeekColour(undefined);
+    setPeekFont(undefined);
     const style2 = next.style ?? at.style;
-    const face2 = next.face ?? at.face;
     // `undefined` is "unchanged" and `null` is "no paper", which are different
     // answers — so this asks whether the key was given, not whether it is set.
     const paper2 = "paper" in next ? (next.paper ?? null) : (at.paper ?? null);
+    const colour2 = "colour" in next ? (next.colour ?? null) : (at.colour ?? null);
+    // Choosing a face is choosing the plain face, so it lets go of a font;
+    // choosing a font brings its own face with it (core `TEXT_FONTS`).
+    const font2 = "font" in next ? (next.font ?? null) : next.face ? null : (at.font ?? null);
+    const face2 = (font2 ? textFontFrom(font2)?.face : undefined) ?? next.face ?? at.face;
+    const ink = { colour: colour2, font: font2 };
     // A caption putting paper ON takes the square, unless it is already
     // bigger: a 320×40 post-it is a caption with a background. Taking paper
     // OFF keeps the box; ⇧F re-fits whenever somebody wants that.
@@ -275,22 +325,24 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
       at.itemId && paper2 !== null && (at.paper ?? null) === null
         ? { width: Math.max(at.width ?? 0, PAPER_SIZE), height: Math.max(at.height ?? 0, PAPER_SIZE) }
         : item
-          ? restyledTextBox(item, { width: at.width ?? item.width, height: at.height ?? item.height }, body, style2, face2, paper2)
+          ? restyledTextBox(item, { width: at.width ?? item.width, height: at.height ?? item.height }, body, style2, face2, paper2, ink)
           : null;
     ui.setPendingText({
       ...at,
       style: style2,
       face: face2,
       paper: paper2,
+      ...ink,
       // A NEW node's column follows its step; an existing one keeps its box
       // unless the restyle changed its shape — paper, or words that no
       // longer fit — and then the composer takes the box that will land.
       ...(at.itemId ? (grows ?? {}) : { width: TEXT_COLUMN[style2] }),
     });
     ui.setLastText(style2, face2, paper2);
+    ui.setLastTextInk(colour2, font2);
     area.current?.focus();
     if (at.itemId) {
-      void restyleTextNode(canvasId, actor, at.itemId, style2, face2, paper2, grows).catch((err: unknown) => {
+      void restyleTextNode(canvasId, actor, at.itemId, style2, face2, paper2, grows, ink).catch((err: unknown) => {
         setNotice(`Could not restyle that text: ${err instanceof Error ? err.message : String(err)}`);
       });
     }
@@ -324,6 +376,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           at.style,
           at.face,
           at.paper ?? null,
+          { colour: at.colour ?? null, font: at.font ?? null },
         );
       } else {
         await addTextNode(
@@ -338,6 +391,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
           at.face,
           at.paper ?? null,
           creationDestination(at.containerId),
+          { colour: at.colour ?? null, font: at.font ?? null },
         );
       }
       if (useUiStore.getState().pendingText === at) setPendingText(null);
@@ -360,7 +414,15 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
     <div
       className={`text-composer${paper ? ` on-paper paper-${paper}` : ""}`}
       ref={box}
-      style={{ left: pending.x, top: pending.y, width, ...(paper ? { height } : {}) }}
+      style={{
+        left: pending.x,
+        top: pending.y,
+        width,
+        ...(paper ? { height } : {}),
+        // The words in the colour they will commit in (`textInk`: a token
+        // for a name, so the theme picks the shade), like the node.
+        ...({ "--text-ink": textInk(colour, paper !== null) } as React.CSSProperties),
+      }}
     >
       {/* The controls sit WITH the words, not on the selection, because size
           and face are things you decide while writing — and because the
@@ -414,6 +476,70 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
             onClick={() => restyle({ paper: one })}
           />
         ))}
+        <span className="text-style-gap" />
+        {/* Colour and font: one button each, opening a small picker over the
+            bar rather than eleven more buttons in it. INSIDE the composer's
+            box, so choosing does not count as clicking away — the same reason
+            the step and face buttons are here. */}
+        <button
+          className={`text-style-btn text-ink-btn${picker === "colour" ? " on" : ""}`}
+          style={{ "--swatch": textInk(colour, paper !== null) ?? "currentColor" } as React.CSSProperties}
+          title="Text colour"
+          aria-label="Text colour"
+          aria-expanded={picker === "colour"}
+          onClick={() => setPicker(picker === "colour" ? null : "colour")}
+        >
+          A
+        </button>
+        <button
+          className={`text-style-btn text-font-btn${picker === "font" ? " on" : ""}`}
+          title="Font"
+          aria-label="Font"
+          aria-expanded={picker === "font"}
+          onClick={() => setPicker(picker === "font" ? null : "font")}
+        >
+          {font?.name ?? "Font"}
+        </button>
+        {picker === "colour" && (
+          <div className="text-style-pop text-ink-pop" role="group" aria-label="Text colour">
+            {/* Auto first, for the reason "no paper" is first: the theme's own
+                ink is the common case, and the one that follows the theme. */}
+            {([null, ...TEXT_COLOURS, ...(colour?.startsWith("#") ? [colour] : [])] as const).map((one) => (
+              <button
+                key={one ?? "auto"}
+                className={`text-ink-swatch${one === null ? " text-ink-auto" : ""}${one === (pending.colour ?? null) ? " on" : ""}`}
+                style={one === null ? undefined : ({ "--swatch": textInk(one, paper !== null) } as React.CSSProperties)}
+                title={one === null ? "Auto — the theme's ink" : one}
+                aria-label={one === null ? "Auto colour" : `${one} text`}
+                onPointerEnter={() => setPeekColour(one)}
+                onPointerLeave={() => setPeekColour(undefined)}
+                onClick={() => restyle({ colour: one })}
+              />
+            ))}
+          </div>
+        )}
+        {picker === "font" && (
+          <div className="text-style-pop text-font-pop" role="group" aria-label="Font">
+            {/* Each name in its own family once its file is here — and only
+                a hover asks for the file, so opening the list fetches nothing. */}
+            {([null, ...TEXT_FONTS] as const).map((one) => (
+              <button
+                key={one?.name ?? "face"}
+                className={`text-font-row${(one?.name ?? null) === (pending.font ?? null) ? " on" : ""}`}
+                style={{ fontFamily: textFontStack(one, pending.face) }}
+                onPointerEnter={() => {
+                  loadTextFont(one);
+                  setPeekFont(one?.name ?? null);
+                }}
+                onPointerLeave={() => setPeekFont(undefined)}
+                onClick={() => restyle({ font: one?.name ?? null })}
+              >
+                {one?.name ?? "Plain face"}
+                <span className="text-font-face">{one?.face ?? ""}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {/* The mirror: same type, same wrapping, no ink. `aria-hidden` because
           it is the words a second time and a reader does not need them. */}
@@ -423,7 +549,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
         aria-hidden
         style={{
           fontSize: size,
-          fontFamily: TEXT_FACE_STACK[face],
+          fontFamily: stack,
           // An existing node's words wrap at ITS width — measuring them
           // against the column would answer a height for a box they are not
           // in. A new composer wraps at the hard limit, as before.
@@ -434,7 +560,7 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
       </div>
       <textarea
         ref={area}
-        style={{ fontSize: size, fontFamily: TEXT_FACE_STACK[face], height }}
+        style={{ fontSize: size, fontFamily: stack, height }}
         value={body}
         readOnly={saving || (done.current && saveError !== "")}
         placeholder="Type…"

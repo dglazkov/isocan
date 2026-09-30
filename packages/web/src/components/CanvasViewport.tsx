@@ -28,8 +28,28 @@ import { glideToBox } from "../lib/zoomactions.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
 import { longPress } from "../lib/longpress.ts";
 import { isTyping } from "../lib/keys.ts";
-import { TextComposer } from "./TextComposer.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
+/**
+ * **The composer arrives with the first composer** (30 Sep 2026).
+ *
+ * It was in every first visit's bytes, and it only ever draws while somebody
+ * is typing onto the canvas — a deliberate gesture with a frame to spare,
+ * the argument the menus and the fan make above and below. Moving it out is
+ * what paid for text colour and named fonts in the first paint: the pickers
+ * live here, and ItemView's share of them is a few hundred bytes.
+ *
+ * Mounted only while a composer is open. Its state is per-composer already
+ * (keyed on which node, where), so remounting between two loses nothing.
+ */
+const TextComposer = lazy(() => import("./TextComposer.tsx").then((m) => ({ default: m.TextComposer })));
+function TextComposerWhenOpen(props: { canvasId: string; actor: Actor }) {
+  const open = useUiStore((s) => s.pendingText !== null);
+  return open ? (
+    <Suspense fallback={null}>
+      <TextComposer {...props} />
+    </Suspense>
+  ) : null;
+}
 import { openContextMenu } from "../lib/contextmenu.ts";
 /**
  * **The menus arrive when a menu is asked for** (#195's budget, not its
@@ -702,6 +722,8 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         style: ui.lastTextStyle,
         face: ui.lastTextFace,
         paper: ui.lastPaper,
+        colour: ui.lastTextColour,
+        font: ui.lastTextFont,
         oneShot: !borrowing,
       });
       return;
@@ -1230,7 +1252,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
           </Suspense>
         )}
         <InkLayer />
-        {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}
+        {canEdit && <TextComposerWhenOpen canvasId={canvasId} actor={actor} />}
       </Follows>
       <CommentLayer canvasId={canvasId} actor={actor} />
       {!presentation && <CursorLayer actor={actor} />}

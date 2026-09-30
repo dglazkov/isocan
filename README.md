@@ -203,6 +203,20 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   card: the ink IS the item — and since that makes its box invisible, pointing
   at a drawing outlines the box you would grab, and `⌥`-click steps down
   through a stack of them.
+- **Text (`T`)**: click and type words straight onto the canvas — a chromeless
+  node that is a real `.md`. The bar over the words picks a size step (S/M/L/XL,
+  each readable twice as far out), a face (sans, mono, serif, handwriting), a
+  paper that turns it into a post-it, a **colour** and a **font**. A colour is
+  a word — red, orange, yellow, green, blue, purple, pink, brown, grey — whose
+  shade adapts to the light ground, the dark ground and paper, so it reads for
+  whoever is looking in either theme; Auto is the theme's own ink. A font is
+  one of ten families (Inter, IBM Plex Sans/Serif/Mono, DM Sans, Manrope,
+  Space Grotesk, Fraunces, Lora, JetBrains Mono), fetched only when a node on
+  screen names one, falling back to its face offline, and sized for its real
+  width so nothing clips. Right-click the T to set what the next node opens
+  with; the last choice is remembered. Agents use `isocan text --style
+  --face --paper --color --font`, and `isocan set --prop textColor=…
+  textFont=…` restyles and refits an existing node.
 - **What it answers to (`?`)**: every key the canvas takes, in one panel —
   opened with `?`, or the `?` in the top bar, or by typing `/help`. The list
   lives in `@isocan/core` and a test checks the letter keys against the code

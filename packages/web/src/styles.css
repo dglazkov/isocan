@@ -116,6 +116,31 @@
   --paper-green-edge: #b8dcbd;
   --paper-grey: #e6e7e3;
   --paper-grey-edge: #cfd0cb;
+  /* **Text colour** (`core/textcolour.ts`, which carries the argument and
+     the measurements). A named colour is a SHADE per surface: these are the
+     light ground's, each the lightest that holds 4.5:1 on `--ground` and
+     still reads as its own name; the dark block lifts them for graphite.
+     `--paper-text-*` is the shade on paper, the same in both themes because
+     paper is pale in both. `test/textcolour.test.ts` holds these equal to
+     core's `TEXT_COLOUR_SHADES`. */
+  --text-red: #df222f;
+  --text-orange: #cc4400;
+  --text-yellow: #877100;
+  --text-green: #218339;
+  --text-blue: #1f70db;
+  --text-purple: #9650d3;
+  --text-pink: #d42583;
+  --text-brown: #8b5a2b;
+  --text-grey: #6d737b;
+  --paper-text-red: #a71821;
+  --paper-text-orange: #993300;
+  --paper-text-yellow: #635300;
+  --paper-text-green: #18622b;
+  --paper-text-blue: #1753a1;
+  --paper-text-purple: #762db6;
+  --paper-text-pink: #9e1c61;
+  --paper-text-brown: #7a491f;
+  --paper-text-grey: #50555b;
   /* RUNNING: an item you have stepped inside, whose scripts are live and whose
      links work. Green because it is the one thing on this canvas that is not a
      picture of software but software — the same green a build goes when it
@@ -228,6 +253,27 @@
   --paper-green-edge: #a2bba7;
   --paper-grey: #cdcec9;
   --paper-grey-edge: #b0b1ac;
+  /* Text colour, lifted for graphite: each holds 4.5:1 on `--ground` here
+     and still reads as its own name. Paper's shades are repeated, not
+     inherited, for `--paper-ink`'s reason just above. */
+  --text-red: #f2707a;
+  --text-orange: #f59042;
+  --text-yellow: #e8c547;
+  --text-green: #5cc672;
+  --text-blue: #6ea8f0;
+  --text-purple: #b98ce8;
+  --text-pink: #ec7fbd;
+  --text-brown: #c76300;
+  --text-grey: #9aa0a8;
+  --paper-text-red: #a71821;
+  --paper-text-orange: #993300;
+  --paper-text-yellow: #635300;
+  --paper-text-green: #18622b;
+  --paper-text-blue: #1753a1;
+  --paper-text-purple: #762db6;
+  --paper-text-pink: #9e1c61;
+  --paper-text-brown: #7a491f;
+  --paper-text-grey: #50555b;
   --live-wash: rgba(86, 176, 106, 0.22);
   --accent-wash: rgba(76, 110, 245, 0.14);
   --accent-glow: rgba(76, 110, 245, 0.26);
@@ -4153,7 +4199,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Words on paper stop borrowing the canvas's ink: a note is its own surface,
    and light ink on a pale tint is what makes a sticky note unreadable in
    dark mode. */
-.item.textnode.paper .md-view { color: var(--paper-ink); }
+.item.textnode.paper .md-view { color: var(--text-ink, var(--paper-ink)); }
 /* The same inset the composer gives the words on paper (`.text-composer
    .on-paper textarea`, below). One number in two places on purpose: the
    composer sits on the note edge for edge while you type, and if the note
@@ -4306,7 +4352,9 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: var(--text-size, 16px);
   font-family: var(--text-face, inherit);
   line-height: 1.5;
-  color: var(--ink);
+  /* A colour the node names (`core/textcolour.ts`) — a token for a name, so
+     the theme picks the shade — or the theme's own ink. */
+  color: var(--text-ink, var(--ink));
   /* Words on a canvas are read, not scrolled: a node that outgrew its box
      should be re-fitted (⇧F), not given a scrollbar the size of a sentence. */
   overflow: hidden;
@@ -4389,6 +4437,37 @@ button.mt-card:hover { border-color: var(--accent); }
    the swatch's whole job is to be the colour it stands for. */
 .text-paper.on { background: var(--paper); outline: 2px solid var(--accent); outline-offset: 1px; }
 .text-paper-none.on { background: none; }
+/* **Colour and font** (`core/textcolour.ts`, `TEXT_FONTS`): one button each,
+   opening a small picker ABOVE the bar — inside the composer, so choosing is
+   not clicking away. The colour button is an A underlined in the colour the
+   words will be; `--swatch` is set per button, from the same token the node
+   is drawn with, so the swatch is the colour on this theme and this paper. */
+.text-ink-btn { box-shadow: inset 0 -3px 0 -0.5px var(--swatch); }
+.text-font-btn { max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.text-style-pop {
+  position: absolute; bottom: calc(100% + 6px); right: 0;
+  display: flex; gap: 4px; padding: 6px; border-radius: 10px;
+  background: var(--card); border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+}
+.text-font-pop { flex-direction: column; gap: 0; min-width: 190px; }
+.text-ink-swatch {
+  width: 22px; height: 22px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--swatch); border: 1px solid var(--line);
+}
+/* Auto is the theme's ink, drawn as a half-and-half disc of the two grounds'
+   inks so it reads as "follows the theme" rather than as one more colour. */
+.text-ink-auto { background: linear-gradient(135deg, var(--ink) 50%, var(--ground) 50%); }
+.text-ink-swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.text-font-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 6px 8px; border: none; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--ink); font-size: 14px; text-align: left;
+}
+.text-font-row:hover { background: var(--chip); }
+.text-font-row.on { background: var(--accent); color: var(--accent-ink); }
+/* The face beside each family, in the app's own voice rather than the family's. */
+.text-font-face { font-family: Inter, system-ui, sans-serif; font-size: 11px; }
 
 /* **The composer wearing paper: what you type into IS the note.**
 
@@ -4412,7 +4491,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .text-composer.on-paper textarea,
 .text-composer.on-paper .text-composer-mirror {
   background: none; border: none; box-shadow: none;
-  color: var(--paper-ink);
+  color: var(--text-ink, var(--paper-ink));
   padding: 10px;
 }
 /* A quieter INK rather than a dimmed one: opacity on text is a contrast
@@ -4442,7 +4521,7 @@ button.mt-card:hover { border-color: var(--accent); }
      that box inside the selected item. The accent hairline is the one thing
      that says where the box is; the words are otherwise the canvas's own. */
   background: transparent;
-  color: var(--ink);
+  color: var(--text-ink, var(--ink));
   font: inherit;
   font-size: 16px;
   line-height: 1.5;

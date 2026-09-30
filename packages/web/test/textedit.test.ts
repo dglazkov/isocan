@@ -51,7 +51,7 @@ describe("a look change on an existing node lands now", () => {
     const fn = text.slice(text.indexOf("export async function restyleTextNode"));
     const body = fn.slice(0, fn.indexOf("\n}\n"));
     expect(body).toContain('type: "item.update"');
-    expect(body).toContain("lookPatch(style, face, paper)");
+    expect(body).toContain("lookPatch(style, face, paper, ink)");
     expect(body).not.toContain("item.addVersion");
   });
 
@@ -72,7 +72,7 @@ describe("a look change on an existing node lands now", () => {
   it("revises words and restyles through the SAME patch, so they cannot drift", () => {
     // Three readers: the revision, the restyle, and the box a restyle grows
     // to (`restyledTextBox`), which must size the look the restyle writes.
-    expect(text.match(/lookPatch\(style, face, paper\)/g)?.length).toBe(3);
+    expect(text.match(/lookPatch\(style, face, paper, ink\)/g)?.length).toBe(3);
   });
 });
 
@@ -168,7 +168,9 @@ describe("the step buttons say sizes", () => {
 describe("hovering a step or a face previews it too", () => {
   it("draws the composer in the hovered step and face, chosen otherwise", () => {
     expect(composer).toContain('const style = peekStyle ?? pending?.style ?? "body";');
-    expect(composer).toContain('const face = peekFace ?? pending?.face ?? "sans";');
+    // A named font decides the face; a hovered face previews the plain face.
+    expect(composer).toContain('const face = font?.face ?? peekFace ?? pending?.face ?? "sans";');
+    expect(composer).toContain("const fontName = peekFace !== undefined ? null : peekFont !== undefined ? peekFont : (pending?.font ?? null);");
   });
 
   it("previews on enter, restores on leave, chooses only on click", () => {

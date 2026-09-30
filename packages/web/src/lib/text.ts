@@ -1,23 +1,37 @@
 import type {
-  Paper, Actor, Item, Placement } from "@isocan/core";
+  Paper, Actor, Item, Placement, TextColourValue } from "@isocan/core";
 import {
-  TEXT_FACE_PROP,
   TEXT_FILENAME,
   TEXT_MIME,
-  TEXT_PROPERTIES,
-  TEXT_STYLE_PROP,
   newGroupId,
   newItemId,
   newVersionId,
   textBox,
+  textFontFrom,
+  textLookPatch,
+  textLookProperties,
   textNodeRefit,
   textTitle,
   type TextFace,
   type TextStyle,
-  PAPER_PROP,
   PAPER_SIZE,
-  paperPatch,
 } from "@isocan/core";
+
+/**
+ * **The words' colour and named font**, beside the step, face and paper.
+ * Left out means "whatever the node has"; `null` means the default — the
+ * theme's ink, the plain face. The font travels by NAME, the property's own
+ * spelling, and is resolved against core's closed list at the last moment.
+ */
+interface TextInk {
+  colour?: TextColourValue | null;
+  font?: string | null;
+}
+
+/** The font a `TextInk` names, in `textLookPatch`'s terms: undefined stays undefined. */
+function fontOf(ink: TextInk) {
+  return ink.font === undefined ? undefined : ink.font === null ? null : textFontFrom(ink.font);
+}
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { creationDestination, sendCreatedItem } from "./groupplacement.ts";
 import { uploadOrStageTextBlob } from "./upload.ts";
@@ -44,15 +58,17 @@ export async function addTextNode(
   /** Paper, or null for a plain caption. See `core/textnode.ts`. */
   paper: Paper | null = null,
   destination = creationDestination(),
+  ink: TextInk = {},
 ): Promise<string> {
   const { upload, stagedBlob } = await uploadOrStageTextBlob(canvasId, body, TEXT_MIME, TEXT_FILENAME);
   const itemId = newItemId();
+  const font = fontOf(ink);
   /**
    * Paper is SQUARE rather than measured, and that is the whole point of it:
    * a post-it will not hold an essay, so it holds an idea. A note sized to
    * its words is a text node with a background.
    */
-  const box = paper !== null ? { width: PAPER_SIZE, height: PAPER_SIZE } : (measured ?? textBox(body, style, face));
+  const box = paper !== null ? { width: PAPER_SIZE, height: PAPER_SIZE } : (measured ?? textBox(body, style, face, font));
   /**
    * **`sendEchoed`, so the thing you just made appears when you make it.**
    *
@@ -86,13 +102,9 @@ export async function addTextNode(
       title: textTitle(body),
       // The defaults are written as ABSENCE, not as "body"/"sans": a node that
       // says nothing renders the same as every node made before the ladder
-      // existed, and there is exactly one spelling of the default.
-      properties: {
-        ...TEXT_PROPERTIES,
-        ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
-        ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
-        ...(paper === null ? {} : { [PAPER_PROP]: paper }),
-      },
+      // existed, and there is exactly one spelling of the default — core's,
+      // which `isocan text` writes too.
+      properties: textLookProperties({ style, face, paper, colour: ink.colour, font }),
     },
     undefined,
     { allowQueued: true, ...(stagedBlob ? { stagedBlob } : {}) },
@@ -133,6 +145,7 @@ export async function reviseTextNode(
    *  works only the first time. `null` takes the paper OFF; the patch comes
    *  from core so this cannot spell the property differently from the CLI. */
   paper: Paper | null = null,
+  ink: TextInk = {},
 ): Promise<void> {
   // One edit, one undo: the version, the title and any resize are one act.
   const group = newGroupId();
@@ -162,7 +175,7 @@ export async function reviseTextNode(
     {
     type: "item.update",
     itemId,
-    patch: { title: textTitle(body), ...lookPatch(style, face, paper) },
+    patch: { title: textTitle(body), ...lookPatch(style, face, paper, ink) },
     },
     group,
     originGroupMode,
@@ -179,32 +192,21 @@ export async function reviseTextNode(
 }
 
 /**
- * The patch that gives a text node its look — step, face and paper — in the
- * one spelling both surfaces write.
+ * The patch that gives a text node its look — step, face, paper, colour and
+ * font — in the one spelling both surfaces write: core's `textLookPatch`,
+ * which `isocan text` and `isocan set` write too.
  *
  * Restyling to a default must REMOVE the property rather than write the word
  * "body": otherwise there are two spellings of the same node and only one of
- * them matches what the CLI writes. Paper comes from core's `paperPatch` for
- * the same reason, and `null` takes it off.
+ * them matches what the CLI writes. `null` takes paper, colour or font off.
  */
 function lookPatch(
   style: TextStyle,
   face: TextFace,
   paper: Paper | null,
+  ink: TextInk,
 ): { properties: Record<string, string>; removeProperties: string[] } {
-  const onPaper = paperPatch(paper);
-  return {
-    properties: {
-      ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
-      ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
-      ...("properties" in onPaper ? onPaper.properties : {}),
-    },
-    removeProperties: [
-      ...(style === "body" ? [TEXT_STYLE_PROP] : []),
-      ...(face === "sans" ? [TEXT_FACE_PROP] : []),
-      ...("removeProperties" in onPaper ? onPaper.removeProperties : []),
-    ],
-  };
+  return textLookPatch({ style, face, paper, colour: ink.colour, font: fontOf(ink) });
 }
 
 /**
@@ -235,9 +237,10 @@ export async function restyleTextNode(
   face: TextFace,
   paper: Paper | null,
   box?: { width: number; height: number } | null,
+  ink: TextInk = {},
 ): Promise<void> {
   const group = newGroupId();
-  await sendEchoed(canvasId, actor, { type: "item.update", itemId, patch: lookPatch(style, face, paper) }, group);
+  await sendEchoed(canvasId, actor, { type: "item.update", itemId, patch: lookPatch(style, face, paper, ink) }, group);
   if (box) {
     await sendEchoed(canvasId, actor, { type: "item.resize", itemId, width: box.width, height: box.height }, group);
   }
@@ -262,8 +265,9 @@ export function restyledTextBox(
   style: TextStyle,
   face: TextFace,
   paper: Paper | null,
+  ink: TextInk = {},
 ): { width: number; height: number } | null {
-  return textNodeRefit({ ...item, ...box }, body, lookPatch(style, face, paper));
+  return textNodeRefit({ ...item, ...box }, body, lookPatch(style, face, paper, ink));
 }
 
 /** What committing a composer should actually do. */

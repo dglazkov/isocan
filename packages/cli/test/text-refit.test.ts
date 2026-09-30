@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { textBox, type TextFace, type TextStyle } from "@isocan/core";
+import { textBox, textFontFrom, textLookProperties, type TextFace, type TextStyle } from "@isocan/core";
 import { cliEnv, runCli, type Run } from "./cli.ts";
 
 /**
@@ -119,6 +119,73 @@ describe("re-wording a caption", () => {
     await fs.writeFile(file, words);
     await ok("--canvas", id, "edit", node, file);
     holds(await box(id, node), words, "heading");
+  });
+});
+
+/**
+ * **Colour and a named font, from the terminal** (30 Sep 2026). The same
+ * words the bar offers, read through core's doors, landing the properties the
+ * web's composer sends (`textLookProperties` — `web/test/textlook.test.ts`
+ * holds the web to it) — and a font change refits the box like a step change,
+ * because a wider family in the old box is lesson #94 again.
+ */
+describe("colour and font", () => {
+  async function props(canvasId: string, itemId: string): Promise<Record<string, string>> {
+    const items = JSON.parse(await ok("--canvas", canvasId, "--json", "ls")) as { id: string; properties: Record<string, string> }[];
+    return items.find((i) => i.id === itemId)!.properties;
+  }
+
+  it("births a node with core's properties for the look, in a box that holds the family", async () => {
+    const id = await canvas("Acme ink");
+    const node = await text(id, "0,0", "--style", "display", "--color", "Blue", "--font", "space grotesk", "Wayfinding");
+    const font = textFontFrom("Space Grotesk")!;
+    expect(await props(id, node)).toEqual(textLookProperties({ style: "display", face: "sans", paper: null, colour: "blue", font }));
+    const got = await box(id, node);
+    const need = textBox("Wayfinding", "display", "sans", font);
+    expect(got.width).toBeGreaterThanOrEqual(need.width);
+    expect(need.width, "the family's width is in the estimate").toBeGreaterThan(textBox("Wayfinding", "display", "sans").width);
+  });
+
+  it("sets a font by property, writes its face beside it, and grows the box", async () => {
+    const id = await canvas("Acme font set");
+    const node = await text(id, "0,0", "--style", "display", "Wayfinding");
+    const born = await box(id, node);
+    await ok("--canvas", id, "set", node, "--prop", "textFont=space grotesk");
+    expect(await props(id, node)).toMatchObject({ textFont: "Space Grotesk" });
+    const grown = await box(id, node);
+    expect(grown.width).toBeGreaterThan(born.width);
+    expect(grown.width).toBeGreaterThanOrEqual(textBox("Wayfinding", "display", "sans", textFontFrom("Space Grotesk")).width);
+    // A serif family brings its face, so an older client still draws a serif.
+    await ok("--canvas", id, "set", node, "--prop", "textFont=Lora");
+    expect(await props(id, node)).toMatchObject({ textFont: "Lora", textFace: "serif" });
+    // A face on its own lets go of the family, the way the bar's face does.
+    await ok("--canvas", id, "set", node, "--prop", "textFace=mono");
+    const plain = await props(id, node);
+    expect(plain.textFace).toBe("mono");
+    expect(plain.textFont).toBeUndefined();
+  });
+
+  it("normalises a colour, warns about a hex that will not read, and takes auto as the theme's ink", async () => {
+    const id = await canvas("Acme colour set");
+    const node = await text(id, "0,0", "Acme label");
+    await ok("--canvas", id, "set", node, "--prop", "textColor=Purple");
+    expect((await props(id, node)).textColor).toBe("purple");
+    const pale = await isocan("--canvas", id, "set", node, "--prop", "textColor=#EEE");
+    expect(pale.code, pale.stderr).toBe(0);
+    expect(pale.stderr).toMatch(/#eeeeee measures [\d.]+:1 on the ground in the light theme/);
+    expect((await props(id, node)).textColor).toBe("#eeeeee");
+    await ok("--canvas", id, "set", node, "--prop", "textColor=auto");
+    expect((await props(id, node)).textColor).toBeUndefined();
+  });
+
+  it("refuses a colour or font it cannot draw, with the list", async () => {
+    const id = await canvas("Acme refusals");
+    const black = await isocan("--canvas", id, "text", "--color", "black", "Acme");
+    expect(black.code).not.toBe(0);
+    expect(black.stderr).toMatch(/red, orange, yellow, green, blue, purple, pink, brown, grey, a #rrggbb, or auto/);
+    const papyrus = await isocan("--canvas", id, "text", "--font", "Papyrus", "Acme");
+    expect(papyrus.code).not.toBe(0);
+    expect(papyrus.stderr).toMatch(/Fraunces/);
   });
 });
 

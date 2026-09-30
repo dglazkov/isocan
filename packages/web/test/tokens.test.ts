@@ -239,6 +239,13 @@ describe("every token used is a token defined", () => {
       "--mention-color",
       "--text-size",
       "--text-face",
+      // `--text-ink` is a node's colour (`textInkOf`): a `--text-*` token for
+      // a name, a hex for a hex, and read as `var(--text-ink, var(--ink))`
+      // so a node that names none keeps the theme's ink.
+      "--text-ink",
+      // `--swatch` is the colour a text-colour button stands for, the same
+      // `textInk` value, set on each button (`TextComposer`).
+      "--swatch",
       // `--mark` is the kind mark's size, computed per item from its box and
       // the zoom (`textMarkSize`) — a number no stylesheet can know, for the
       // same reason `--scale` is not in one.

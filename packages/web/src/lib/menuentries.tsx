@@ -555,6 +555,8 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
           style: ui.lastTextStyle,
           face: ui.lastTextFace,
           paper: ui.lastPaper,
+          colour: ui.lastTextColour,
+          font: ui.lastTextFont,
         });
       },
     },

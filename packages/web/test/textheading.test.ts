@@ -44,6 +44,7 @@ describe("the composer's mirror, and a heading it cannot see", () => {
     // committed node then draws is checked in a real browser (the report of
     // 24 Sep 2026); this holds the one line that makes it so.
     const composer = readFileSync(fileURLToPath(new URL("../src/components/TextComposer.tsx", import.meta.url)), "utf8");
-    expect(composer).toMatch(/TEXT_HEADING_LINE\.test\(body\) && textRefit\(measured, body, style, face\)\) \|\| measured/);
+    // A named font asks too (30 Sep 2026): the mirror may have measured its fallback.
+    expect(composer).toMatch(/\(TEXT_HEADING_LINE\.test\(body\) \|\| font\) && textRefit\(measured, body, style, face, font\)\) \|\| measured/);
   });
 });

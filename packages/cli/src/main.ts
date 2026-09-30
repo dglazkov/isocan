@@ -220,12 +220,18 @@ import {
   newGroupId,
   ownsCanvas,
   TEXT_FACES,
-  TEXT_FACE_PROP,
   TEXT_FILENAME,
   TEXT_MIME,
   TEXT_PROPERTIES,
   TEXT_STYLES,
+  TEXT_COLOURS,
+  TEXT_FONTS,
   textStyleFrom,
+  textColourChoice,
+  textColourWarnings,
+  textFontChoice,
+  textLookProperties,
+  textPropsPatch,
   AREA_FILENAME,
   AREA_MIME,
   AREA_PROPERTIES,
@@ -259,7 +265,6 @@ import {
   freeSpotIn,
   areaEnclosing,
   itemsIn,
-  TEXT_STYLE_PROP,
   isTextItem,
   textBox,
   textNodeFit,
@@ -394,7 +399,6 @@ import {
   type LensLog,
   type LensSource,
   PAPERS,
-  PAPER_PROP,
   PAPER_SIZE,
   isFaceMark,
   PHASES,
@@ -6354,8 +6358,13 @@ program
     "--style <step>",
     "S | M | L | XL (or body | heading | title | display) — how far out it stays readable",
   )
-  .option("--face <face>", "sans | mono | serif")
+  .option("--face <face>", "sans | mono | serif | hand")
   .option("--paper <colour>", "yellow | pink | blue | green | grey — a post-it rather than a caption")
+  .option(
+    "--color <colour>",
+    `${TEXT_COLOURS.join(" | ")} | #rrggbb | auto — the words' colour; a name adapts to light and dark`,
+  )
+  .option("--font <name>", `a named font, which brings its face: ${TEXT_FONTS.map((f) => f.name).join(", ")}`)
   .action(
     run(
       async (
@@ -6369,6 +6378,8 @@ program
           style?: string;
           face?: string;
           paper?: string;
+          color?: string;
+          font?: string;
         },
         cmd: Command,
       ) => {
@@ -6431,9 +6442,20 @@ program
          * would be doing no work. `--size` still overrides, like everywhere.
          */
         const paper = opts.paper === undefined ? null : pickOne("paper", opts.paper, PAPERS, "yellow");
+        /**
+         * Colour and font through core's doors, so the terminal takes exactly
+         * the words the bar offers (`core/textcolour.ts`). A NAMED colour is
+         * adapted per theme and never warns; a hex is drawn exactly, so it is
+         * measured here and the canvas it will not read on is said out loud.
+         * The font's width is in the box below — the estimate is all the CLI
+         * has, and lesson #94 is what a font without one does.
+         */
+        const colour = opts.color === undefined ? null : textColourChoice(opts.color);
+        const font = opts.font === undefined ? null : textFontChoice(opts.font);
+        const warnings = textColourWarnings(colour, paper);
         const { width, height } = sizeFor(
           opts.size,
-          paper === null ? textBox(body, style, face) : { width: PAPER_SIZE, height: PAPER_SIZE },
+          paper === null ? textBox(body, style, face, font) : { width: PAPER_SIZE, height: PAPER_SIZE },
         );
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
@@ -6451,16 +6473,20 @@ program
           placement: placementFor(snapshot, opts, { width, height }),
           title: opts.title ?? textTitle(body),
           // Defaults are written as ABSENCE, so a plain `isocan text` makes
-          // the byte-identical item the web's plain Text tool makes.
-          properties: {
-            ...TEXT_PROPERTIES,
-            ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
-            ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
-            ...(paper === null ? {} : { [PAPER_PROP]: paper }),
-          },
+          // the byte-identical item the web's plain Text tool makes — by the
+          // one spelling both surfaces call (`textLookProperties`).
+          properties: textLookProperties({ style, face, paper, colour, font }),
         });
         const placed = insertionReceiptPlacement(result.envelope.op, itemId);
-        if (ctx.json) return printJson({ itemId, placement: placed, title: opts.title ?? textTitle(body) });
+        if (ctx.json) {
+          return printJson({
+            itemId,
+            placement: placed,
+            title: opts.title ?? textTitle(body),
+            ...(warnings.length ? { warnings } : {}),
+          });
+        }
+        for (const warning of warnings) console.error(`warning: ${warning}`);
         console.log(`wrote ${itemId} ("${textTitle(body)}") at ${placed.x},${placed.y}`);
       },
     ),
@@ -7945,6 +7971,21 @@ program
          * in half (23 Sep 2026). Core's `textNodeRefit` answers, grow-only,
          * and the resize rides in the same act; `--size` still wins outright.
          */
+        /**
+         * **A text node's colour and font, read through the bar's doors** —
+         * `textColor=Red` lands as `red`, `textFont=fraunces` as `Fraunces`
+         * with its face beside it, `auto`/`none` as a removal, anything else
+         * refused with the list (core `textPropsPatch`). A hex that will not
+         * read in one theme is said here and set anyway: it was chosen
+         * exactly.
+         */
+        if (isTextItem(item) && patch.properties) {
+          const { warnings, ...normalised } = textPropsPatch(item, patch);
+          delete patch.properties;
+          delete patch.removeProperties;
+          Object.assign(patch, normalised);
+          for (const warning of warnings) console.error(`warning: ${warning}`);
+        }
         const refit =
           !opts.size && (patch.properties || patch.removeProperties) && isTextItem(item)
             ? textNodeRefit(item, await currentText(ctx, p.id, item), patch)

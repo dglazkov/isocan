@@ -35,7 +35,10 @@ import {
   textFaceOf,
   textDrawSize,
   textStyleOf,
-  TEXT_FACE_STACK,
+  textStackOf,
+  textInkOf,
+  textFontOf,
+  textColourOf,
   parseUriList,
   renamedFilename,
   titleRoom,
@@ -43,6 +46,7 @@ import {
   visualFaceOf,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
+import { loadTextFont } from "../lib/textfont.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
@@ -418,6 +422,9 @@ function ItemViewInner({
   // the control promised. The composer measures with the same number, so the
   // node lands the shape it looked while being typed.
   const textSize = isText ? textDrawSize(item) : 0;
+  // A named font's file is asked for once, and only because a node on this canvas
+  // names it (`lib/textfont.ts`). Idempotent, so safe in render.
+  if (isText) loadTextFont(textFontOf(item));
   const textLegible = !isText || (held.t = (zoom & Z_LEGIBLE) !== 0);
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
@@ -776,6 +783,8 @@ function ItemViewInner({
       height,
       style: textStyleOf(item),
       face: textFaceOf(item),
+      colour: textColourOf(item.properties),
+      font: textFontOf(item)?.name ?? null,
       // The paper too, or a yellow note re-opens as a white field over its
       // own square — a card on a card, and not the note you double-clicked.
       paper,
@@ -884,7 +893,9 @@ function ItemViewInner({
         ...(isText
           ? ({
               "--text-size": `${textSize}px`,
-              "--text-face": TEXT_FACE_STACK[textFaceOf(item)],
+              // The named font first, its face's stack behind it.
+              "--text-face": textStackOf(item),
+              "--text-ink": textInkOf(item),
             } as React.CSSProperties)
           : {}),
       }}

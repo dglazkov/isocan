@@ -79,6 +79,7 @@ export { DESIGN_SECTIONS, DESIGN_SURFACES, canonicalSection, designSurface, pars
 export type { DesignTypography, DesignTokens, DesignDoc, DesignSurface } from "./designmd.ts";
 export * from "./contrast.ts";
 export * from "./colour.ts";
+export * from "./textcolour.ts";
 export * from "./shortcut.ts";
 export * from "./designcheck.ts";
 export * from "./tokens.ts";
