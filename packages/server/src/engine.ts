@@ -748,8 +748,9 @@ export class Engine {
         const holders = await Promise.all(
           (await this.desk.claimants(target)).map((held) => this.desk.claimsOf(held.badgeId)),
         );
-        const kinds = actorKinds((await this.actors()).registry);
-        if (!ownsAgent(holders, request.actor.id, kinds[target] === "agent")) throw notYourActor(target);
+        const { registry } = await this.actors();
+        const agent = actorKinds(registry)[resolveActor(registry.joined, target)] === "agent";
+        if (!ownsAgent(holders, request.actor.id, agent, registry.joined)) throw notYourActor(target);
       }
       const homes = this.homes?.all() ?? [];
       if (homes.length > 0) {

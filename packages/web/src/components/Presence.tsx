@@ -35,7 +35,7 @@ import { useAnswerable, useRcPolicies } from "../lib/answerable.ts";
  */
 
 const MAX_FACES = 5;
-/** "Set pointer…" on an agent's card — lazy, ownership read and picker and all. */
+/** The "Pointer" pill on an agent's card — lazy, ownership read and picker and all. */
 const AgentPointer = lazy(() => import("./AgentPointer.tsx"));
 
 export function Presence({ actor }: { actor: Actor }) {
@@ -305,7 +305,7 @@ function FaceCard({
           one (AgentPointer asks the home's rule before it draws anything). */}
       {isAgentActor(kinds, face.actor.id) && (
         <Suspense>
-          <AgentPointer agent={face.actor} />
+          <AgentPointer agent={face.actor} owner={face.owner?.name} />
         </Suspense>
       )}
       {/* The live half: what they say they are doing, right now. */}

@@ -38,7 +38,7 @@ import { useClockSecond } from "../lib/sprint.ts";
  * so both homes show what `isocan who` would print because all three read
  * `roster()`.
  */
-/** "Set pointer…", for the owner only — lazy, shared with the facepile's card. */
+/** The "Pointer" pill: what it wears, changed by its owner — lazy, shared with the facepile's card. */
 const AgentPointer = lazy(() => import("./AgentPointer.tsx"));
 
 /** How long ago, in core's words (cleanup DU-5, 27 Sep 2026: this row kept
@@ -150,6 +150,10 @@ export function AgentRowView({
   /** The reader is the owner — the one person who may widen it. */
   const owns = policy !== undefined && viewer !== undefined && sameActor(joined, policy.owner.id, viewer);
   const ownerName = policy ? nameOf(policy.owner.id) : "";
+  /** Who the pointer pill names to a reader who is not the owner: the
+   *  answering rc's owner, else whoever enrolled it. */
+  const writer = canvas?.agents?.[row.actorId]?.writtenBy;
+  const ownerOf = ownerName || (writer ? nameOf(writer.id) : undefined);
 
   // An enrolled row is a RECORD made visible (agents-on-demand phase 2.5):
   // standing to answer here, no session because nothing has arrived. Not
@@ -234,7 +238,7 @@ export function AgentRowView({
             </button>
           )}
           <Suspense>
-            <AgentPointer agent={{ id: row.actorId, name: row.name }} />
+            <AgentPointer agent={{ id: row.actorId, name: row.name }} owner={ownerOf} />
           </Suspense>
           {onDismiss && (
             <button
@@ -379,7 +383,7 @@ export function AgentRowView({
             Watch
           </button>
           <Suspense>
-            <AgentPointer agent={{ id: row.actorId, name: row.name }} />
+            <AgentPointer agent={{ id: row.actorId, name: row.name }} owner={ownerOf} />
           </Suspense>
           {onDismiss && (
             <button

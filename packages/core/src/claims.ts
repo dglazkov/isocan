@@ -710,8 +710,20 @@ export function ownsAgent(
   holders: readonly (readonly ActorClaim[])[],
   speakerId: string,
   targetIsAgent: boolean,
+  /**
+   * **Through joins** (30 Sep 2026, the first real owner it refused): the
+   * machine that enrolled the agent holds its owner under an id that has
+   * since been folded into the one now speaking. They are one person, so
+   * every claim is resolved before it is compared — the same resolution
+   * names, colours and undo already go through.
+   */
+  joined?: ActorJoins,
 ): boolean {
-  return targetIsAgent && holders.some((claims) => claimsActor(claims, speakerId));
+  const self = resolveActor(joined, speakerId);
+  return (
+    targetIsAgent &&
+    holders.some((claims) => claims.some((claim) => resolveActor(joined, claim.actorId) === self))
+  );
 }
 
 /**

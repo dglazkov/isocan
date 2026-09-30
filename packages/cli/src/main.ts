@@ -12920,7 +12920,7 @@ agentCommand
  * Not a new op: an agent's pointer IS its mark — the same `actor.setMark`
  * `identity --mark` sends for yourself, with the agent's id in it. The home
  * decides whether you may (`ownsAgent` in core): an actor this machine holds,
- * or an agent one of your own surfaces holds. The web's "Set pointer…" sends
+ * or an agent one of your own surfaces holds. The web's "Pointer" pill sends
  * exactly this op.
  */
 agentCommand

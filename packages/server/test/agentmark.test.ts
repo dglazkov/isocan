@@ -92,6 +92,15 @@ describe("the rule, as a function", () => {
     // Never a person, whoever holds them.
     expect(ownsAgent([laptop], ada.id, false)).toBe(false);
   });
+
+  it("reads the speaker and the holders through joins", () => {
+    const laptop = [claim(ada.id), claim(rover.id)];
+    const joined = { [ada.id]: "usr_acme_person" };
+    expect(ownsAgent([laptop], "usr_acme_person", true)).toBe(false);
+    expect(ownsAgent([laptop], "usr_acme_person", true, joined)).toBe(true);
+    // A join is not a skeleton key: somebody else is still somebody else.
+    expect(ownsAgent([laptop], bo.id, true, joined)).toBe(false);
+  });
 });
 
 describe("actor.setMark on an agent, over HTTP", () => {
@@ -108,6 +117,53 @@ describe("actor.setMark on an agent, over HTTP", () => {
   it("the machine holding the agent may, as it always could", async () => {
     const { laptop } = await rig();
     expect((await mark(laptop, ada, rover.id, "🐕")).status).toBe(200);
+  });
+
+  it("the owner may, through a join — the machine holds the identity they folded away", async () => {
+    // The shape that refused the first real owner (30 Sep 2026): the agent
+    // was enrolled by an identity the person has since folded into the one
+    // their browser speaks as. The laptop holds the OLD id and the agent;
+    // the browser holds only the new one.
+    const person = { id: "usr_acme_person", name: "Acme Person" };
+    const laptop = await mintTestBadge(base);
+    await laptop.speakAs(ada, "home:ada-laptop");
+    await laptop.speakAs(rover, "agent:rover-acme");
+    const browser = await mintTestBadge(base);
+    await browser.speakAs(person, "web:acme-person");
+    // Before the join, Ada's agent is not this person's to dress.
+    expect(await codeOf(await mark(browser, person, rover.id, "🐕"))).toBe("not-your-actor");
+
+    // The join is made where both are held, the way the identity menu makes
+    // it: the browser is handed Ada (a pass), then folds her into itself.
+    await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...laptop.headers },
+      body: JSON.stringify({ canvasId: null, actor: ada, op: { type: "project.create", canvasId: "prj_acme2", title: "Acme" } }),
+    });
+    const minted = await fetch(`${base}${passesRoute("prj_acme2")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...laptop.headers },
+      body: JSON.stringify({ actorId: ada.id }),
+    });
+    const { token } = (await minted.json()) as MintPassResponse;
+    const redeemed = await fetch(`${base}${PASS_REDEEM_ROUTE}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...browser.headers },
+      body: JSON.stringify({ token }),
+    });
+    expect(redeemed.status, await redeemed.clone().text()).toBe(200);
+    const join = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...browser.headers },
+      body: JSON.stringify({ canvasId: null, actor: person, op: { type: "actor.join", from: ada.id, into: person.id } }),
+    });
+    expect(join.status, await join.clone().text()).toBe(200);
+
+    // Speaking as the person the old id became, from a badge that does not
+    // hold the agent: theirs, through the join.
+    const res = await mark(browser, person, rover.id, "🐕");
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(JSON.stringify(await marks(browser))).toContain(`"${rover.id}":"🐕"`);
   });
 
   it("somebody else may not mark your agent", async () => {
