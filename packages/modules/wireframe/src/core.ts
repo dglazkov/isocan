@@ -29,6 +29,8 @@ export * from "./prototype.ts";
 export * from "./compose.ts";
 export * from "./answerer.ts";
 export * from "./entropy-ask.ts";
+export * from "./edit.ts";
+export * from "./why.ts";
 export * from "./vary.ts";
 export * from "./keep.ts";
 export * from "./maybe.ts";

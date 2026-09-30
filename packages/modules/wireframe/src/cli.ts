@@ -14,6 +14,7 @@ import { registerLinks } from "./links-cli.ts";
 import { registerStyle } from "./style-cli.ts";
 import { registerFlesh } from "./flesh-cli.ts";
 import { registerPlay } from "./play-cli.ts";
+import { registerEditAndWhy } from "./edit-cli.ts";
 import { cliPort } from "./cli-port.ts";
 import { wiresOn } from "./flow.ts";
 import { rerender, rerenderLines, rerenderSummary } from "./rerender.ts";
@@ -55,6 +56,7 @@ function register(host: CliHost): void {
   registerStyle(host, wire);
   registerFlesh(host, wire);
   registerPlay(host, wire);
+  registerEditAndWhy(host, wire);
 
   // The keep mark in the words the web says it in (24 Sep 2026): `use` is `keep`, `unuse` is `unkeep`.
   wire

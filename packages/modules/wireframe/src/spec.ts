@@ -108,6 +108,11 @@ export interface WireSpec {
    * (design §12), so future composer or edit turns never re-ask them.
    */
   pinned?: Record<string, string>;
+  /**
+   * Compact per-question top-3 probability distributions rounded to 2 decimal
+   * places (design §13), recorded on the spec for `wire why` Q&A.
+   */
+  decisions?: Record<string, Record<string, number>>;
 }
 
 /** Who drew a wire: the person or agent, and the answerer whose decisions it carries. */
@@ -469,6 +474,23 @@ export function validateWire(input: unknown): string[] {
   }
   for (const section of r.sections) {
     if (!section.optional && !seen.has(section.slot)) problems.push(`slot "${section.slot}" is required by ${r.id}`);
+  }
+  if (spec.decisions !== undefined) {
+    if (typeof spec.decisions !== "object" || spec.decisions === null || Array.isArray(spec.decisions)) {
+      problems.push("decisions must be an object mapping question ids to probability maps");
+    } else {
+      for (const [qId, dist] of Object.entries(spec.decisions)) {
+        if (typeof dist !== "object" || dist === null || Array.isArray(dist)) {
+          problems.push(`decisions["${qId}"] must be an object mapping options to probabilities`);
+          continue;
+        }
+        for (const [opt, prob] of Object.entries(dist)) {
+          if (!(typeof prob === "number" && prob >= 0 && prob <= 1)) {
+            problems.push(`decisions["${qId}"]["${opt}"] must be 0–1`);
+          }
+        }
+      }
+    }
   }
   return problems;
 }

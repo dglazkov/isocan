@@ -23,7 +23,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–10 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) and `wireframes phase 11` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 (`wire edit` and `wire why`) next, then phase 12 (`wire copy --ai` and `wire name`) and phase 13 (`wire ds` and `wire polish`).
+**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–11 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) and `wireframes phase 12` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 built (`wire edit` surgical single-section edits + prototype rebuild in one op group, and `wire why` decision Q&A over embedded `WireSpec.decisions`), phase 12 (`wire copy --ai` and `wire name`) next, then phase 13 (`wire ds` and `wire polish`).
 
 ## Phase 0 — The catalog, drawn
 
@@ -413,7 +413,7 @@ re-ask.
 
 ## Phase 11 — Surgical section editing (`wire edit`) and decision Q&A (`wire why`)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 30 September 2026.** Built and verified in unit tests (`packages/modules/wireframe/test/edit-why.test.ts`, 4/4 green; `packages/cli/test/surface.test.ts` and export ratchets green): `WireSpec.decisions`, `compactDecisions`, `recordDecisions`, and `explainWireDecision` in `why.ts`; `classifyTurn`, `routeTurn`, `scopeEdit`, `planEditWithJev`, and `editWireOnCanvas` in `edit.ts`; `isocan wire edit` and `isocan wire why` in `edit-cli.ts` and `agent-guide.md`; `/wire edit` and `/wire why` in `dialog.tsx`. Browser walk owed before closing.
 
 **Outcome:** [journey.md](journey.md) scene 11, [design.md](design.md) §13.
 `WireSpec` records compact `decisions` (top-3 probabilities and entropy per Jev
@@ -445,6 +445,9 @@ disk. `packages/modules/wireframe/src/edit.ts` and `why.ts` implement:
 3. `packages/cli/test/surface.test.ts`, `npm test`, and `npm run typecheck`.
 
 ### Trajectory
+
+- **2026-09-30** — `compactDecisions` stores up to the top-3 options (rounded to 3 decimal places) plus `entropy` (`_H` in bits) per question key in `WireSpec.decisions`, keeping the embedded JSON compact while giving `explainWireDecision` both the winning choice, its runner-up alternatives, and its uncertainty.
+- **2026-09-30** — `editWireOnCanvas` uses `followFlowPrototype` (`ModuleMark.follow`) inside the same `opGroupId` as `version.add` + `item.update`, so any surgical edit on a kept screen re-renders the clickable prototype in one undoable canvas gesture.
 
 ---
 

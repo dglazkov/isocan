@@ -11,6 +11,9 @@ import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
 import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, currentPreset, flowScreens, presetById, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
 import { presetUrlText } from "./preset-urls.ts";
 import { webAnswerer, webPort } from "./web-port.ts";
+import { editWireOnCanvas } from "./edit.ts";
+import { explainWireDecision } from "./why.ts";
+import { wireTitle } from "./spec.ts";
 import type { PackChoice } from "./content/choose.ts";
 import { PACK_BY_ID } from "./content/packs.ts";
 // ── phase 8, builder A: /wire links ──
@@ -43,7 +46,10 @@ type Mode =
   | { kind: "rerender" }
   | { kind: "prototypes" }
   // ── phase 8, builder A: /wire links — every hotspot with a target picker (links-panel.tsx) ──
-  | { kind: "links" };
+  | { kind: "links" }
+  // ── phase 11: /wire edit and /wire why ──
+  | { kind: "edit"; instruction: string }
+  | { kind: "why"; question?: string };
 
 export function modeOf(args: string): Mode {
   const words = args.trim();
@@ -54,6 +60,11 @@ export function modeOf(args: string): Mode {
   if (first === "rerender" && rest.length === 0) return { kind: "rerender" };
   // ── phase 8, builder A: /wire links ──
   if (first === "links" && rest.length === 0) return { kind: "links" };
+  if (first === "edit" && rest.length > 0) return { kind: "edit", instruction: rest.join(" ") };
+  if (first === "why") {
+    const q = rest.join(" ").trim();
+    return q ? { kind: "why", question: q } : { kind: "why" };
+  }
   if (first === "style" && rest.length === 0) return { kind: "styles" };
   if (first === "style" && rest.length === 1 && (rest[0] === "--default" || rest[0] === "default")) return { kind: "style", toDefault: true };
   // `system`: every wire in the design system that governs it — what `/wire style` alone did before the wire styles.
@@ -262,6 +273,32 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       const r = await rerenderOnWeb(canvasId, host);
       host.notice(rerenderSummary(r));
       if (r.changed.length) record(host, r.group, [`re-rendered from their specs: ${rerenderSummary(r)}.`]);
+      host.close();
+    } else if (m.kind === "edit") {
+      setStatus("Editing the wireframe section…");
+      const port = webPort(canvasId, host);
+      const selectedId = selection[0];
+      const r = await editWireOnCanvas(port, m.instruction, webAnswerer(canvasId, host), {
+        ...(selectedId ? { screenId: selectedId } : {}),
+      });
+      const protoWords = r.prototype ? ` · prototype "${r.prototype.title}" rebuilt` : "";
+      const summary = `edited ${wireTitle(r.screen.spec)} (${r.edit.slot}: ${r.edit.kind}${r.edit.block ? ` → ${r.edit.block}` : ""})${protoWords} — one undo takes it back`;
+      host.notice(summary);
+      record(host, r.group, [`${summary}.`], [r.screen.item, ...(r.prototype ? [r.prototype.itemId] : [])]);
+      host.close();
+      host.reveal([r.screen.item]);
+    } else if (m.kind === "why") {
+      setStatus("Reading recorded Jev decisions…");
+      const port = webPort(canvasId, host);
+      const all = await wiresOn(port, await port.canvas());
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const selectedId = selection[0];
+      const target = selectedId
+        ? (all.find((s) => s.item === selectedId) ?? all[all.length - 1]!)
+        : all[all.length - 1]!;
+      const explanation = explainWireDecision(target.spec, m.question);
+      host.notice(explanation.lines[0]!);
+      record(host, newGroupId(), explanation.lines, [target.item]);
       host.close();
     }
   };

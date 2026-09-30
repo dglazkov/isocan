@@ -313,6 +313,19 @@ bar, tab bar) stays.
   them (`--json` shows the property). In the web app ⌘K *Find prototypes* (or
   `/wire prototypes`) lists them and selects them, and while a pointer is on
   the minimap every prototype is lit and everything else steps back.
+- **Surgical section editing (`isocan wire edit`)**: `isocan wire edit [<screen>] "<instruction>"`
+  (or `/wire edit <instruction>` in the Chat) modifies a single section (`content`,
+  `add`, `remove`, `variant`, `restyle`) on an existing wireframe screen without
+  regenerating sibling slots or the rest of the flow. Explicit flags (`--screen`,
+  `--kind`, `--slot`, `--block`, `--density`, `--template`) bypass the model when
+  you already know the edit; otherwise Jev scopes the screen and slot in at most
+  two calls. The new screen version and any rebuilt prototype land in one op group,
+  so one `isocan undo` reverts both.
+- **Decision Q&A (`isocan wire why`)**: `isocan wire why [<screen>] [question...]`
+  (or `/wire why` in the Chat) reads a screen's embedded `WireSpec` (`need`, `by`,
+  `pinned`, per-slot `p` and `alternatives`, `declined`, `template`, `density`,
+  and `decisions`) and explains why its archetype, layout, and blocks were chosen,
+  citing the recorded probabilities and runner-up alternatives.
 
 **Words are typed, never free.** A button's label is its **intent**'s label
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of
