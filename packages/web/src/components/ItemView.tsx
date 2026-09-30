@@ -1177,7 +1177,11 @@ function ItemViewInner({
           {SLIDE_EMOJI} Notes for {noteSlideTitle}
         </span>
       )}
-      {!isCanvasGroup && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
+      {/* The door into reading mode, on the ONE item you chose — not on every
+          text item at once. Drawn on all of them it covered the words of small
+          chromeless nodes and wrapped into a column of "Read / select text"
+          (reported 30 Sep 2026); double-click still steps inside anything. */}
+      {!isCanvasGroup && (soleSelection || entered) && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
         <button type="button" className="btn item-read" aria-label={entered ? "Done reading" : `Read ${item.title} and select text`}
           onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
           {entered ? "Done reading" : "Read / select text"}
