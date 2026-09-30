@@ -248,6 +248,39 @@ export function groupFrameMinimum(item: Item): { width: number; height: number }
   return { width: Math.max(GROUP_MIN_SIZE.width, band.left + band.right + (columns - 1) * PLACEMENT_GAP + columns), height: Math.max(GROUP_MIN_SIZE.height, band.top + band.bottom + (rows - 1) * PLACEMENT_GAP + rows) };
 }
 
+const GRID_KEYS = ["rows", "columns", "rowCount", "columnCount", "rowGutter", "columnGutter"] as const;
+/** The row and column labels past a saved count: what `groupGridLayout` drops, for a surface to say before it saves. */
+export function groupGridTrimmedLabels(layout: GroupLayout | null | undefined): { rows: string[]; columns: string[] } {
+  return {
+    rows: layout?.rows && typeof layout.rowCount === "number" ? layout.rows.slice(layout.rowCount) : [],
+    columns: layout?.columns && typeof layout.columnCount === "number" ? layout.columns.slice(layout.columnCount) : [],
+  };
+}
+/**
+ * Counts and labels are one save. A count lowered below its labels drops the
+ * labels past it in the same layout — one op, one undo — so a grid a surface
+ * lets a person make is one the writer accepts. Members are not bound to
+ * cells: they keep their positions, and the frame still encloses them.
+ */
+export function groupGridLayout(layout: GroupLayout | null | undefined): GroupLayout {
+  const next: GroupLayout = { ...layout };
+  if (next.rows && typeof next.rowCount === "number" && next.rows.length > next.rowCount) next.rows = next.rows.slice(0, next.rowCount);
+  if (next.columns && typeof next.columnCount === "number" && next.columns.length > next.columnCount) next.columns = next.columns.slice(0, next.columnCount);
+  return next;
+}
+/** One grid act for every surface: counts and optional names over the saved layout, or `null` to clear the grid. */
+export function groupGridAction(group: Item, counts: { rows: number; columns: number } | null, options: { rows?: string[]; columns?: string[]; tidy?: boolean } = {}): Extract<GroupAction, { kind: "layout" }> {
+  if (counts === null) {
+    const layout: GroupLayout = { ...group.groupLayout };
+    for (const key of GRID_KEYS) delete layout[key];
+    return { kind: "layout", itemId: group.id, layout, clearGrid: true };
+  }
+  if ((options.rows?.length ?? 0) > counts.rows) fail(`${options.rows!.length} row names for ${counts.rows} rows`);
+  if ((options.columns?.length ?? 0) > counts.columns) fail(`${options.columns!.length} column names for ${counts.columns} columns`);
+  const layout = groupGridLayout({ ...group.groupLayout, rowCount: counts.rows, columnCount: counts.columns, ...(options.rows ? { rows: options.rows } : {}), ...(options.columns ? { columns: options.columns } : {}) });
+  return { kind: "layout", itemId: group.id, layout, ...(options.tidy ? { tidy: true } : {}) };
+}
+
 /** Historical dense grids stay readable; both surfaces can disclose that full spacing needs a larger frame. */
 export function groupGridNeedsRoom(item: Item): boolean {
   const minimum = groupFrameMinimum(item);
@@ -1041,7 +1074,7 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
       const group = groupIn(canvas, action.itemId);
       const oldContent = groupContentBox(group);
       const layout = { ...group.groupLayout, ...action.layout };
-      if (action.clearGrid) for (const key of ["rows", "columns", "rowCount", "columnCount", "rowGutter", "columnGutter"] as const) delete layout[key];
+      if (action.clearGrid) for (const key of GRID_KEYS) delete layout[key];
       put(group.id, { groupLayout: layout });
       const content = groupContentBox(itemIn(canvas, group.id));
       const dx = oldContent.x - content.x; const dy = oldContent.y - content.y;

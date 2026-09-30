@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Actor, CanvasContents, CanvasGroupMigrationPreview, CanvasSnapshotResponse, GroupAction, GroupAnchor, GroupBox, GroupCell, GroupCreation, GroupLayout, GroupPlacementPolicy, Item, Operation, PostOpResponse } from "@isocan/core";
-import { captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupCopyAction, groupCopySource, groupDescendants, groupFitAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation } from "@isocan/core";
+import { captureGroupExpectations, GROUP_DEFAULT_SIZE, groupArrangeAction, groupChildren, groupContentBox, groupCopyAction, groupCopySource, groupDescendants, groupFitAction, groupGridAction, groupRemoveAction, groupResizeBox, groupSelectionRoots, groupWrapAction, isGroupItem, newItemId, newOpId, newVersionId, PLACEMENT_GAP, resolveGroupOperation } from "@isocan/core";
 import type { DaemonRoutes } from "./routes.ts";
 import { copyFaces, transferCopyFaces, type CopyBytesPort } from "./copy-bytes.ts";
 import { assertGroupDestination } from "./canvas-group-access.ts";
@@ -184,15 +184,11 @@ export class CanvasGroups {
     return this.perform(state, { kind: "layout", itemId: item.id, layout: { ...item.groupLayout, ...layout }, ...(options.tidy ? { tidy: true } : {}) }, !!options.dryRun);
   }
 
-  /** Grid counts and optional names use the same saved layout as the browser. */
+  /** Grid counts and optional names use the same saved layout, and the same act, as the browser (`groupGridAction`). */
   async grid(ref: string, counts: { rows: number; columns: number } | null, options: { rows?: string[]; columns?: string[]; tidy?: boolean; dryRun?: boolean } = {}): Promise<CanvasGroupResult> {
-    if (counts === null) {
-      const state = await this.read(true);
-      const item = resolveCanvasGroupRef(state.canvas, ref, true);
-      const { rows: _rows, columns: _columns, rowCount: _rowCount, columnCount: _columnCount, rowGutter: _rowGutter, columnGutter: _columnGutter, ...layout } = item.groupLayout ?? {};
-      return this.perform(state, { kind: "layout", itemId: item.id, layout, clearGrid: true }, !!options.dryRun);
-    }
-    return this.layout(ref, { rowCount: counts.rows, columnCount: counts.columns, ...(options.rows ? { rows: options.rows } : {}), ...(options.columns ? { columns: options.columns } : {}) }, options);
+    const state = await this.read(true);
+    const item = resolveCanvasGroupRef(state.canvas, ref, true);
+    return this.perform(state, groupGridAction(item, counts, options), !!options.dryRun);
   }
 
   async arrange(refs: string[], arrangement: Parameters<typeof groupArrangeAction>[2], options: { dryRun?: boolean } = {}): Promise<CanvasGroupResult> {

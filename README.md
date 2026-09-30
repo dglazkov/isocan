@@ -506,7 +506,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   support an actual `--dry-run`, all commands support `--json`, and
   `mv <item> --in <group>` transfers membership and places the item atomically.
   Resize scales native frames and attached ink with a fixed anchor; Fit frame
-  keeps the arrangement and adjusts its border. CLI `mv`, `set --size`, `fit`,
+  keeps the arrangement and adjusts its border. The group's layout form sets
+  or clears its named grid; lowering a count drops the labels past it in the
+  same undoable save, exactly as `canvas group grid` does. CLI `mv`, `set --size`, `fit`,
   `align`, `distribute` and `tidy` share these semantics. Text, files, sites,
   Google Docs and modules insert with explicit `--in` membership; `--cell r,c`
   honors protected label gutters. New sandbox transcripts inherit their

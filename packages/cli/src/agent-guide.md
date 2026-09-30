@@ -1195,7 +1195,7 @@ continues to join log entries for undo. Neither establishes canvas membership.
 `canvas group grid <group> [RxC] [--rows names] [--cols names] [--tidy] [--clear]`,
 and `canvas group migrate [--dry-run] [--revision n]`.
 `area new <title>`, `area ls` and `area grid <group> [RxC] [--clear]` are compatibility aliases; `area ls` can also read legacy areas.
-Grid labels are comma-separated; cells count from 1. Every mutation accepts `--dry-run`:
+Grid labels are comma-separated; cells count from 1. Lowering a count drops the saved labels past it in the same write (the web's layout form does the same), and more names than cells is refused; members of a cell that goes away keep their places. Every mutation accepts `--dry-run`:
 it validates through the shared resolver and reports affected roots, parent
 changes, final boxes and frame adjustments without uploading note bytes or
 writing an operation. Every command supports `--json`. IDs are exact; title
