@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { wireThemeChoice } from "../src/theme.ts";
 import { headScript, voiceBody } from "./page.ts";
 
@@ -69,15 +69,29 @@ function choose(value: string): void {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+/**
+ * The real `setItem`, taken ONCE, before any test has spied on it. Taken
+ * inside `beforeEach` it was the previous test's spy from the second test
+ * on — and under vitest 4, which re-uses a spy on an already-spied method,
+ * that spy called itself until it threw, the page read the throw as a
+ * browser refusing storage, and three tests went red on CI from the
+ * dependency bump that moved this package to vitest 4 (683cc0a2) while
+ * each still passed alone.
+ */
+const realSetItem = Storage.prototype.setItem;
+
 beforeEach(() => {
   refuseStorage = false;
   localStorage.clear();
-  const setItem = Storage.prototype.setItem;
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
     if (refuseStorage) throw new DOMException("refused", "QuotaExceededError");
-    setItem.call(this, key, value);
+    realSetItem.call(this, key, value);
   });
   boot();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("the theme preference, from the control to the painted attribute", () => {
