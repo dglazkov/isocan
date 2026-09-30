@@ -425,7 +425,15 @@ export declare function applyActorMark(registry: ActorRegistry, op: ActorSetMark
  * `holders` is the claim list of every badge holding the target. The speaker
  * has already been checked against the PRESENTING badge before this runs.
  */
-export declare function ownsAgent(holders: readonly (readonly ActorClaim[])[], speakerId: string, targetIsAgent: boolean): boolean;
+export declare function ownsAgent(holders: readonly (readonly ActorClaim[])[], speakerId: string, targetIsAgent: boolean, 
+/**
+ * **Through joins** (30 Sep 2026, the first real owner it refused): the
+ * machine that enrolled the agent holds its owner under an id that has
+ * since been folded into the one now speaking. They are one person, so
+ * every claim is resolved before it is compared — the same resolution
+ * names, colours and undo already go through.
+ */
+joined?: ActorJoins): boolean;
 /**
  * **Two actors become one person** (`actor.join`, multi-identity phase 5).
  *

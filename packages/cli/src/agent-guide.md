@@ -2465,9 +2465,9 @@ exactly on the point, so pointing and selection land where they always did.
 An agent nobody has marked is drawn as 🤖; that default is decided when the
 pointer is drawn and never stored, so `none` puts an agent back on the robot.
 `isocan agent mark` is its OWNER's verb: the person whose machine enrolled it
-(or the agent itself, with `isocan identity --mark`). Anybody else is refused
-by the home, and the web's "Set pointer…" on an agent's card sends the same
-op. Choose one when a person asks for one; a mark is theirs to pick.
+(or the agent itself, with `isocan identity --mark`), including through an
+identity they have since joined. Anybody else is refused by the home, and the
+web's "Pointer" pill on an agent's card or row sends the same op. Choose one when a person asks for one; a mark is theirs to pick.
 
 The syntax is the containment: no `--canvas`, no `--dir` — the agent you add
 lives where you already are. Add one when a person asks, and only then; the
