@@ -100,7 +100,12 @@ export function vary(spec: WireSpec, d: Decision, variantOf: string): WireSpec {
     slots = slots.map((slot): WireSlot => {
       if (slot.slot !== d.slot) return slot;
       const alternatives = [{ block: d.from, p: d.p }, ...(slot.alternatives ?? []).filter((a) => a.block !== d.to)].sort((a, b) => b.p - a.p);
-      return { ...resolveSlot(r.id, slot.slot, d.to), p: d.runnerUp, alternatives };
+      return {
+        ...resolveSlot(r.id, slot.slot, d.to),
+        p: d.runnerUp,
+        alternatives,
+        ...(slot.region !== undefined ? { region: slot.region } : {}),
+      };
     });
   } else if (d.to === LEAVE_OUT) {
     slots = slots.filter((slot) => slot.slot !== d.slot);

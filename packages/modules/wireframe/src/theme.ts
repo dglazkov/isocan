@@ -1,5 +1,6 @@
 import { contrastRatio, CONTRAST_BODY, resolveToken, type DesignDoc, type DesignSurface, type DesignTokens } from "@isocan/core";
 import { chosenOption, type JevQuestion, type JevRequest, type JevResponse } from "./answerer.ts";
+import { DENSITY_SPACE, type DensityLevel } from "./catalog/index.ts";
 
 /**
  * **Style — the default wire, or your design system** (design §9).
@@ -149,8 +150,8 @@ export function styleProblems(input: unknown): string[] {
   return problems;
 }
 
-/** The value every role draws with under this style: the default, under whatever the style resolved. */
-export function themeValues(style: WireStyle | undefined): Record<Role, string> {
+/** The value every role draws with under this style: the default, under whatever the style resolved (and `density` for `space` when set). */
+export function themeValues(style: WireStyle | undefined, density?: DensityLevel): Record<Role, string> {
   const out = { ...DEFAULT_THEME };
   if (style?.source === "design-system") {
     for (const role of ROLES) {
@@ -158,6 +159,7 @@ export function themeValues(style: WireStyle | undefined): Record<Role, string> 
       if (v !== undefined && safeRoleValue(role, v)) out[role] = v;
     }
   }
+  if (density && DENSITY_SPACE[density]) out.space = DENSITY_SPACE[density];
   return out;
 }
 
@@ -178,8 +180,8 @@ export function linkColor(values: Pick<Record<Role, string>, "primary" | "ground
 }
 
 /** The custom properties a style sets, as declarations: `--w-primary:#d10a72;…`, then the derived ones. */
-export function themeDecls(style: WireStyle | undefined): string {
-  const values = themeValues(style);
+export function themeDecls(style: WireStyle | undefined, density?: DensityLevel): string {
+  const values = themeValues(style, density);
   return [...ROLES.map((role) => `--w-${role}:${values[role]}`), `--w-link:${linkColor(values)}`].join(";");
 }
 

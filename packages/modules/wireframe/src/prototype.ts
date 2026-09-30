@@ -1,6 +1,6 @@
 import { esc } from "./catalog/draw.ts";
 import { hotspots, startScreen, type WireLink, type WireScreen } from "./links.ts";
-import { renderFrame, styleOf, surfaceCss, wireCss } from "./render.ts";
+import { renderFrame, styleOf, surfaceCss, templateCss, wireCss } from "./render.ts";
 import { CAPTION_HEIGHT, wireSize } from "./spec.ts";
 import { surfaceOf, themeDecls } from "./theme.ts";
 
@@ -127,10 +127,15 @@ export function assemblePrototype(kept: readonly WireScreen[], links: readonly W
   // …and each frame wears its own surface's class, so the sheet carries every surface a screen here is drawn on.
   const leadSpec = { ...(undecided ?? first).spec, ...(lead ? { style: lead } : {}) };
   const leadSurface = surfaceOf(styleOf(leadSpec));
-  const sheet = wireCss(leadSpec) + surfaceCss(kept.map((s) => surfaceOf(styleOf(s.spec))).filter((s) => s !== leadSurface));
+  const needsTemplate = (!leadSpec.template || leadSpec.template === "single")
+    && kept.some((s) => s.spec.template && s.spec.template !== "single");
+  const sheet = wireCss(leadSpec)
+    + surfaceCss(kept.map((s) => surfaceOf(styleOf(s.spec))).filter((s) => s !== leadSurface))
+    + (needsTemplate ? templateCss("split") : "");
   const sections = kept.map((s) => {
     const mine = links.filter((l) => l.from === s.id);
-    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" style="${esc(themeDecls(styleOf(s.spec)))}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
+    const density = s.spec.slots.every((x) => x.block === null) ? undefined : s.spec.density;
+    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" style="${esc(themeDecls(styleOf(s.spec), density))}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
   });
   const table = {
     start,

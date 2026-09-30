@@ -1,4 +1,7 @@
-import { INTENT_BY_ID, component, type DrawContext, type Region, type Section } from "./catalog/index.ts";
+import {
+  INTENT_BY_ID, component, defaultSlotRegion, template,
+  type DensityLevel, type DrawContext, type Region, type Section, type TemplateId,
+} from "./catalog/index.ts";
 import { esc } from "./catalog/draw.ts";
 import { hotKey } from "./links.ts";
 import {
@@ -428,6 +431,34 @@ export function surfaceCss(surfaces: Iterable<string>): string {
   return [...new Set(surfaces)].map((s) => SURFACE_CSS[s as WireSurface] ?? "").join("");
 }
 
+/**
+ * Multi-region layout rules for `<div class="main">` when `spec.template` is
+ * anything other than `"single"`. Below `640px` every template collapses back
+ * to the default vertical stack (`.main`'s `display:flex;flex-direction:column`).
+ */
+const TEMPLATE_CSS = `
+.main[data-template]{container-type:inline-size}
+.tpl-region{display:flex;flex-direction:column;gap:var(--w-space);min-width:0}
+@container (min-width: 640px){
+.main.tpl-split{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.main.tpl-master_detail{display:grid;grid-template-columns:minmax(220px,2fr) minmax(0,3fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.main.tpl-master_detail .tpl-r-master{border-right:1px solid var(--w-line);padding-right:var(--w-space)}
+.main.tpl-grid .tpl-r-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--w-space);align-items:start}
+.main.tpl-bento .tpl-r-bento{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--w-space);align-items:stretch}
+.main.tpl-bento .tpl-r-bento>.slot{grid-column:span 3}
+.main.tpl-bento .tpl-r-bento>.slot:first-child{grid-column:span 4}
+.main.tpl-bento .tpl-r-bento>.slot:nth-child(2){grid-column:span 2}
+.main.tpl-hero_then_grid .tpl-r-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--w-space);align-items:start}
+.main.tpl-dashboard{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.main.tpl-dashboard .tpl-r-kpi{grid-column:1/-1}
+}
+`;
+
+/** The layout template's sheet — empty for absent or `"single"`. */
+export function templateCss(id: TemplateId | undefined): string {
+  return id && id !== "single" ? TEMPLATE_CSS : "";
+}
+
 /** The skeleton's sheet — written only when some slot is undecided. Every selector begins `.sk`. */
 const SKELETON_CSS = `
 .sk-frame{border-color:${BLUE}!important;background:#ffffff linear-gradient(${BLUE_GROUND} 1px,transparent 1px) 0 0/100% 24px}
@@ -467,7 +498,7 @@ function overlayPlacement(slot: WireSlot, section: Section): "left" | "center" |
 }
 
 function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolean): string {
-  const attrs = `data-slot="${esc(slot.slot)}" data-region="${section.region}"`;
+  const attrs = `data-slot="${esc(slot.slot)}" data-region="${section.region}" data-sec="${esc(slot.slot)}" data-wf="${esc(slot.slot)}"`;
   if (slot.block === null) {
     const c = component(section.options[0]!);
     const h = section.region === "nav" && navPlacement(slot, section, spec) === "side" ? 0 : c.h;
@@ -485,7 +516,10 @@ function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolea
     intent: intentOf,
     // A fleshed lone action says what it acts on ("Edit delivery"); anything else, its intent's own word.
     label: (element) => esc(slot.fill?.actions?.[element] ?? INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
-    hot: (element) => ` data-hot="${esc(hotKey(slot.slot, element))}"`,
+    hot: (element) => {
+      const intentId = slot.intents?.[element] ?? (c.elements?.[element] ? defaultIntent(r, c, element) : undefined);
+      return ` data-hot="${esc(hotKey(slot.slot, element))}" data-wf="${esc(`${slot.slot}.${element}`)}"${intentId ? ` data-intent="${esc(intentId)}"` : ""}`;
+    },
     title: esc(c.id === "app-bar" ? barTitleOf(spec) : headingOf(spec)),
     platform: spec.platform,
     wide: spec.platform !== "app",
@@ -553,13 +587,14 @@ export function styleOf(spec: WireSpec): WireStyle | undefined {
 }
 
 /** The theme as a rule: the roles' values on `:root`, for the sheet to read. */
-export function themeCss(style: WireStyle | undefined): string {
-  return `:root{${themeDecls(style)}}`;
+export function themeCss(style: WireStyle | undefined, density?: DensityLevel): string {
+  return `:root{${themeDecls(style, density)}}`;
 }
 
-/** The stylesheet a screen needs: its theme, the wire sheet, its surface's, and the skeleton's only while a slot is undecided. */
+/** The stylesheet a screen needs: its theme, the wire sheet, its surface's, its template's, and the skeleton's only while a slot is undecided. */
 export function wireCss(spec: WireSpec): string {
-  return `${themeCss(styleOf(spec))}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
+  const density = spec.slots.every((s) => s.block === null) ? undefined : spec.density;
+  return `${themeCss(styleOf(spec), density)}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${templateCss(spec.template)}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
 }
 
 /**
@@ -581,6 +616,7 @@ export function renderFrame(spec: WireSpec): string {
   };
   const mainSlots = placed.filter((p) => p.section.region === "main" || (spec.platform === "app" && p.section.region === "aside"));
   const lastMain = mainSlots[mainSlots.length - 1];
+  const mainEntries: Array<{ slot: WireSlot; html: string }> = [];
   let overlayAt: "left" | "center" | "bottom" = "center";
   for (const p of placed) {
     const side = p.section.region === "nav" && navPlacement(p.slot, p.section, spec) === "side";
@@ -588,11 +624,31 @@ export function renderFrame(spec: WireSpec): string {
     const html = drawSlot(spec, p.slot, p.section, grow);
     const region = p.section.region;
     if (region === "nav") regions[navPlacement(p.slot, p.section, spec)].push(html);
-    else if (region === "aside" && spec.platform === "app") regions.main.push(html);
-    else {
+    else if (region === "aside" && spec.platform === "app") {
+      regions.main.push(html);
+      mainEntries.push({ slot: p.slot, html });
+    } else {
       if (region === "overlay") overlayAt = overlayPlacement(p.slot, p.section);
+      if (region === "main") mainEntries.push({ slot: p.slot, html });
       regions[region].push(html);
     }
+  }
+
+  let mainContainer = `<div class="main">${regions.main.join("")}</div>`;
+  if (spec.template && spec.template !== "single") {
+    const tpl = template(spec.template);
+    const grouped = new Map<string, string[]>(tpl.regions.map((reg) => [reg, []]));
+    mainEntries.forEach(({ slot, html }, idx) => {
+      const sub = slot.region && tpl.regions.includes(slot.region)
+        ? slot.region
+        : defaultSlotRegion(tpl.id, slot, idx, mainEntries.length);
+      (grouped.get(sub) ?? grouped.get(tpl.regions[0]!)!).push(html);
+    });
+    const regionDivs = tpl.regions
+      .filter((reg) => (grouped.get(reg)?.length ?? 0) > 0)
+      .map((reg) => `<div class="tpl-region tpl-r-${esc(reg)}" data-tpl-region="${esc(reg)}">${grouped.get(reg)!.join("")}</div>`)
+      .join("");
+    mainContainer = `<div class="main tpl-${esc(spec.template)}" data-template="${esc(spec.template)}">${regionDivs}</div>`;
   }
 
   const { width, height } = PLATFORM_SIZE[spec.platform];
@@ -605,7 +661,7 @@ export function renderFrame(spec: WireSpec): string {
     ...regions.header,
     `<div class="body">`,
     regions.side.length ? `<div class="side">${regions.side.join("")}</div>` : "",
-    `<div class="main">${regions.main.join("")}</div>`,
+    mainContainer,
     regions.aside.length ? `<div class="aside">${regions.aside.join("")}</div>` : "",
     `</div>`,
     regions.footer.length ? `<div class="foot">${regions.footer.join("")}</div>` : "",

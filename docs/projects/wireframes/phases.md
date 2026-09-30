@@ -23,7 +23,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 (phases 9–13, [#369](https://github.com/dglazkov/isocan/issues/369)) is designed and `wireframes phase 9` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 (multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 (`PriorityGate` and entropy-gated `/ask`), phase 11 (`wire edit` and `wire why`), phase 12 (`wire copy --ai` and `wire name`), and phase 13 (`wire ds` and `wire polish`).
+**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phase 9 is PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) and `wireframes phase 10` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 (`PriorityGate` and entropy-gated `/ask`) next, then phase 11 (`wire edit` and `wire why`), phase 12 (`wire copy --ai` and `wire name`), and phase 13 (`wire ds` and `wire polish`).
 
 ## Phase 0 — The catalog, drawn
 
@@ -332,7 +332,7 @@ AA contrast; moving a DESIGN.md into a group says it changes what it governs.
 
 ## Phase 9 — Multi-region layout templates, density, and `data-wf` paths
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 30 September 2026.** Built and verified in unit tests (`packages/modules/wireframe/test/templates.test.ts`, 7/7 green; all 21 wireframe test files and export ratchets green; `npm run typecheck` clean across all 20 workspaces). Browser walk at `1280×800` and `375×812` owed after wave 2 CLI/web verbs land.
 
 **Outcome:** [journey.md](journey.md) scene 9, [design.md](design.md) §11
 ([#369](https://github.com/dglazkov/isocan/issues/369)).
@@ -340,22 +340,22 @@ AA contrast; moving a DESIGN.md into a group says it changes what it governs.
 responsive layout templates (`single`, `split`, `master_detail`, `grid`,
 `bento`, `hero_then_grid`, `dashboard`) and each archetype's compatible
 templates. `WireSpec` gains `template?: TemplateId` and `density?: "compact" |
-"default" | "spacious"`, and `WireSlotSpec` gains `region?: string`. Round 2
+"default" | "spacious"`, and `WireSlot` gains `region?: string`. Round 2
 (`compose.ts`) asks `template`, `density` (`score`), and per-slot `region`
 when multiple regions apply. `render.ts` renders multi-region containers with
 pure CSS `@container` queries (leaving `single` byte-identical to phases 0–8),
-sets `--wf-space` from `density`, and emits `data-sec="<slot>"` on every slot
+sets `--w-space` from `density`, and emits `data-sec="<slot>"` on every slot
 root and `data-wf="<slot>.<element>"` on every addressable block element
-alongside `data-intent` and `data-hotspot`.
+alongside `data-intent` and `data-hot`.
 
 **Proof:**
 
 1. Unit tests (`packages/modules/wireframe/test/templates.test.ts`): every
    template renders valid HTML with its regions and `@container` CSS rules;
    `single` (or absent `template`) is byte-identical to existing renders;
-   `density` maps `< 0.35 → compact`, `0.35–0.65 → default`, `> 0.65 →
-   spacious`; Round 2 assigns slots only to regions declared by the chosen
-   template while keeping chrome slots (`top-bar`, `tab-bar`, `bottom-bar`)
+   `density` maps `1 → compact (8px)`, `2 → default (12px)`, `3 → spacious (16px)`;
+   Round 2 assigns slots only to regions declared by the chosen
+   template while keeping chrome slots (`header`, `nav`, `footer`)
    anchored to the frame; every rendered block carries `data-sec` and
    `data-wf` alongside `data-intent`, and `inferLinks` + `assemblePrototype`
    route hotspots inside multi-region templates.
@@ -366,6 +366,9 @@ alongside `data-intent` and `data-hotspot`.
 3. `npm test` and `npm run typecheck`.
 
 ### Trajectory
+
+- **2026-09-30** — `TEMPLATE_CSS` (`@container (min-width: 640px)`) is appended by `wireCss(spec)` only when `spec.template && spec.template !== "single"`, keeping `single` and default specs byte-for-byte identical and keeping flat-rule CSS tests untouched.
+- **2026-09-30** — Some primitives (`app-bar`'s `"leading"`, `data-table`'s `"row"`) call `ctx.hot(element)` for structural hotspots that are not in `c.elements`; guarding `c.elements?.[element]` before calling `defaultIntent` stamps `data-wf="<slot>.<element>"` everywhere and `data-intent` wherever an actionable element is declared.
 
 ---
 

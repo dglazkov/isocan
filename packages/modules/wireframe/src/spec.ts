@@ -1,6 +1,6 @@
 import {
-  ARCHETYPE_IDS, COMPONENTS, INTENT_BY_ID, RECIPES, RECIPE_BY_ID, component,
-  type Component, type IntentId, type Platform, type PropDef, type Props, type Recipe, type Section,
+  ARCHETYPE_IDS, COMPONENTS, DENSITY_LEVELS, INTENT_BY_ID, RECIPES, RECIPE_BY_ID, TEMPLATE_BY_ID, TEMPLATE_IDS, component,
+  type Component, type DensityLevel, type IntentId, type Platform, type PropDef, type Props, type Recipe, type Section, type TemplateId,
 } from "./catalog/index.ts";
 import { styleProblems, type WireStyle } from "./theme.ts";
 import type { SlotFill, WireContent } from "./content/fill.ts";
@@ -31,6 +31,16 @@ export interface WireSpec {
   platform: Platform;
   /** In recipe order. */
   slots: WireSlot[];
+  /**
+   * Multi-region layout template for `<div class="main">` (design §11).
+   * Absent or `"single"` renders one vertical column of sections.
+   */
+  template?: TemplateId;
+  /**
+   * Spacing density (`compact` → `8px`, `default` → `12px`, `spacious` → `16px`).
+   * Absent uses the theme's `--w-space` (`12px` by default).
+   */
+  density?: DensityLevel;
   /** Item id of the screen this varies (a sibling placed under it — design §5). */
   variantOf?: string;
   /** On a variation: the one decision flipped from its screen's argmax. */
@@ -186,6 +196,8 @@ export interface WireSlot {
   alternatives?: Array<{ block: string; p: number }>;
   /** The words, numbers and pictograms this slot draws instead of bars — plain data, from `content`. */
   fill?: SlotFill;
+  /** Sub-region inside a multi-region layout template (`primary`, `secondary`, `master`, `detail`, `kpi`, `hero`, `grid`, `bento`). */
+  region?: string;
 }
 
 export const PLATFORMS: readonly Platform[] = ["app", "web", "site"];
@@ -340,6 +352,17 @@ export function validateWire(input: unknown): string[] {
     if (typeof spec[key] !== "string") problems.push(`${key} must be a string`);
   }
   if (!PLATFORMS.includes(spec.platform as Platform)) problems.push(`platform must be one of ${PLATFORMS.join(", ")}`);
+  if (spec.template !== undefined) {
+    const tpl = TEMPLATE_BY_ID.get(spec.template as TemplateId);
+    if (!tpl) {
+      problems.push(`template must be one of ${TEMPLATE_IDS.join(", ")}`);
+    } else if (PLATFORMS.includes(spec.platform as Platform) && !tpl.platforms.includes(spec.platform as Platform)) {
+      problems.push(`template "${spec.template}" is not available on platform "${spec.platform}" (allowed on ${tpl.platforms.join(", ")})`);
+    }
+  }
+  if (spec.density !== undefined && !(DENSITY_LEVELS as readonly string[]).includes(spec.density as string)) {
+    problems.push(`density must be one of ${DENSITY_LEVELS.join(", ")}`);
+  }
   if (spec.round !== undefined && ![0, 1, 2, 3].includes(spec.round)) problems.push("round must be 0, 1, 2 or 3");
   if (spec.chrome !== undefined && (typeof spec.chrome !== "object" || typeof spec.chrome?.nav !== "string" || typeof spec.chrome?.header !== "string")) {
     problems.push("chrome must be { nav, header }");
@@ -356,6 +379,7 @@ export function validateWire(input: unknown): string[] {
     return [...problems, (error as Error).message];
   }
   if (!Array.isArray(spec.slots)) return [...problems, "slots must be an array"];
+  const tpl = spec.template ? TEMPLATE_BY_ID.get(spec.template) : undefined;
   let last = -1;
   const seen = new Set<string>();
   for (const slot of spec.slots as WireSlot[]) {
@@ -374,6 +398,13 @@ export function validateWire(input: unknown): string[] {
     if (!props || typeof props !== "object" || Array.isArray(props)) {
       problems.push(`${where}: props must be an object`);
       continue;
+    }
+    if (slot.region !== undefined) {
+      if (typeof slot.region !== "string" || !slot.region) {
+        problems.push(`${where}: region must be a non-empty string`);
+      } else if (tpl && !tpl.regions.includes(slot.region) && slot.region !== "main") {
+        problems.push(`${where}: region "${slot.region}" is not one of ${tpl.id}'s regions (${tpl.regions.join(", ")})`);
+      }
     }
     if (slot.fill !== undefined) problems.push(...fillProblems(slot.fill, where));
     if (slot.block === null) {
