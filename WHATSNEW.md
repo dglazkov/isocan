@@ -23,6 +23,13 @@ second week.
 
 ## 30 September 2026
 
+- **Coloured text in a named font.** Pick a colour or one of ten families
+  (Inter, IBM Plex, Fraunces, Lora, Space Grotesk, JetBrains Mono…) from the
+  text bar, or `isocan text --color blue --font Fraunces`. A named colour picks
+  its own shade for light, dark and paper, so it reads for everyone.
+- **Shift-drag moves the whole selection** when you start on an item that's
+  already selected (and still snaps harder); Shift-click without moving adds
+  or removes it.
 - **Lines follow what you drag.** A mind map's branches, wireframe arrows
   and comment pins now move with the item while you drag it, not only when
   you let go.

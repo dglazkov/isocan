@@ -79,6 +79,7 @@ export { DESIGN_SECTIONS, DESIGN_SURFACES, canonicalSection, designSurface, pars
 export type { DesignTypography, DesignTokens, DesignDoc, DesignSurface } from "./designmd.js";
 export * from "./contrast.js";
 export * from "./colour.js";
+export * from "./textcolour.js";
 export * from "./shortcut.js";
 export * from "./designcheck.js";
 export * from "./tokens.js";

@@ -1,4 +1,5 @@
 import type { Item } from "./model.js";
+import type { TextColourValue } from "./textcolour.js";
 /**
  * **The text node: words typed straight onto the canvas.**
  *
@@ -155,8 +156,115 @@ export declare const TEXT_FACE_SCALE: Record<TextFace, number>;
 export declare function textDrawSize(item: Item): number;
 /** `properties.textFace` — absent means `sans`, the face every node had before the choice. */
 export declare const TEXT_FACE_PROP = "textFace";
-/** The face this node is set in; anything absent or unrecognised reads as `sans`. */
+/** The face this node is set in; anything absent or unrecognised reads as `sans`.
+ *  A named font decides it — see `TEXT_FONTS` — so the fallback, the draw
+ *  size and the fit estimate all agree on what KIND of letter is drawn. */
 export declare function textFaceOf(item: Item): TextFace;
+/**
+ * **A named font: a face, refined** (30 Sep 2026).
+ *
+ * The faces say what kind of letter — sans, serif, mono, hand — and stay the
+ * vocabulary. A font names WHICH one, from a closed list, for the reason the
+ * faces are closed: text is a shared fact whose box was measured on whoever
+ * typed it, so a family somebody happens to have installed renders one
+ * collaborator's canvas differently and overflows its box for the rest.
+ *
+ * Each font carries its face, and the face is its fallback: offline, or in
+ * the moment before the file arrives, Fraunces is Georgia and JetBrains Mono
+ * is Menlo — still a serif, still monospace. `textFaceOf` answers with the
+ * font's face, so the draw size and the fit estimate never disagree with it.
+ *
+ * `width` is the part that keeps the box honest (lessons #94). `textBox`
+ * guesses a line's width from glyph classes per face; a family wider than
+ * that guess clips. Each number is the family's widest measured regular-weight
+ * advance over the face's own estimate, rounded UP, from headless Chrome
+ * against the real files (`packages/core/test/textfont.test.ts` holds the
+ * measurements and fails if a factor is too small). Never below 1, because
+ * the fallback is the face itself.
+ *
+ * Inter is served from this app already (`index.html`). The rest arrive from
+ * Google Fonts, only when a node on the open canvas names one (`web/lib/textfont.ts`).
+ */
+export declare const TEXT_FONTS: readonly [{
+    readonly name: "Inter";
+    readonly face: "sans";
+    readonly width: 1.05;
+}, {
+    readonly name: "IBM Plex Sans";
+    readonly face: "sans";
+    readonly width: 1;
+}, {
+    readonly name: "DM Sans";
+    readonly face: "sans";
+    readonly width: 1.02;
+}, {
+    readonly name: "Manrope";
+    readonly face: "sans";
+    readonly width: 1.02;
+}, {
+    readonly name: "Space Grotesk";
+    readonly face: "sans";
+    readonly width: 1.08;
+}, {
+    readonly name: "IBM Plex Serif";
+    readonly face: "serif";
+    readonly width: 1;
+}, {
+    readonly name: "Fraunces";
+    readonly face: "serif";
+    readonly width: 1.02;
+}, {
+    readonly name: "Lora";
+    readonly face: "serif";
+    readonly width: 1;
+}, {
+    readonly name: "IBM Plex Mono";
+    readonly face: "mono";
+    readonly width: 1;
+}, {
+    readonly name: "JetBrains Mono";
+    readonly face: "mono";
+    readonly width: 1;
+}];
+/** One of the closed list of named fonts. */
+export type TextFont = (typeof TEXT_FONTS)[number];
+/** `properties.textFont` — a family from `TEXT_FONTS`, by its exact name. */
+export declare const TEXT_FONT_PROP = "textFont";
+/** A font from what somebody typed, any case — or null, to refuse with the list. */
+export declare function textFontFrom(value: string): TextFont | null;
+/** The named font this node is set in, or null for its plain face. */
+export declare function textFontOf(item: Item): TextFont | null;
+/** The CSS `font-family` a node is drawn in: its font first, then its face's stack. */
+export declare function textStackOf(item: Item): string;
+/** The same stack for a look not yet on an item — the composer's, and its font list's. */
+export declare function textFontStack(font: TextFont | null, face: TextFace): string;
+/**
+ * **Text colour** — `properties.textColor` (30 Sep 2026).
+ *
+ * Absent is today's ink, which follows the theme. Otherwise a word from the
+ * spoken vocabulary (`colour.ts`), minus black and white — the one pair no
+ * shade can make readable on both a light and a dark ground, and "auto"
+ * already is near-black in light and near-white in dark — or a `#rrggbb`
+ * somebody chose exactly. `textcolour.ts` carries the shades and the argument.
+ */
+export declare const TEXT_COLOR_PROP = "textColor";
+/** The named text colours: the spoken words a shade can honour on every ground. */
+export declare const TEXT_COLOURS: readonly ["red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "grey"];
+/**
+ * The CSS colour a node's words take, or undefined for the theme's own ink.
+ * A name is a TOKEN, so the stylesheet picks the shade for the theme — and
+ * on paper, which is pale in both themes, the paper shade. A hex is itself.
+ */
+export declare function textInkOf(item: Item): string | undefined;
+/**
+ * The colour a node's properties hold — a name, or a lowercase `#rrggbb` —
+ * or null for the theme's ink. Here rather than beside the shades in
+ * `textcolour.ts` because the canvas asks it on first paint (re-opening a
+ * node), and a first-paint import of that file carries every shade with it.
+ */
+export declare function textColourOf(properties: Record<string, string>): TextColourValue | null;
+/** `textInkOf` for a colour not yet on an item — the composer's, while typing. */
+export declare function textInk(raw: string | null | undefined, onPaper: boolean): string | undefined;
 /**
  * **Paper: the same words, on something you could pick up.**
  *
@@ -317,7 +425,9 @@ export declare const TEXT_HEADING_LINE: RegExp;
  * with — lands at a size somebody can read rather than at a default square.
  * How it errs, and why large, is the comment above the constants.
  */
-export declare function textBox(body: string, style?: TextStyle, face?: TextFace): {
+export declare function textBox(body: string, style?: TextStyle, face?: TextFace, 
+/** A named font: its face decides the glyphs, and its width scales them. */
+font?: TextFont | null): {
     width: number;
     height: number;
 };
@@ -345,7 +455,7 @@ export declare function textBox(body: string, style?: TextStyle, face?: TextFace
 export declare function textRefit(current: {
     width: number;
     height: number;
-}, body: string, style: TextStyle, face: TextFace): {
+}, body: string, style: TextStyle, face: TextFace, font?: TextFont | null): {
     width: number;
     height: number;
 } | null;

@@ -1053,8 +1053,22 @@ whole point of having both — put the orientation in the big text.
 words are a command or a path, which yours often are, and `hand` when you
 are scribbling on the board rather than labelling it.
 
+`--color red|orange|yellow|green|blue|purple|pink|brown|grey` colours the
+words. A NAME adapts: each has a shade chosen for the light ground, the dark
+ground and paper, so it reads for a collaborator in either theme — prefer
+names. `--color '#rrggbb'` is drawn exactly, and the CLI warns (and sets it
+anyway) where it will not reach 4.5:1. `auto`, or no flag, is the theme's own
+ink; there is no black or white, because neither reads in both themes.
+
+`--font <name>` names a family from a closed list — Inter, IBM Plex Sans,
+DM Sans, Manrope, Space Grotesk, IBM Plex Serif, Fraunces, Lora, IBM Plex
+Mono, JetBrains Mono. A font brings its face (`Lora` is a serif), which is
+also what shows offline or before the file arrives, and the box is sized for
+the family's real width. `none` returns to the plain face.
+
 Changing a node later keeps its words whole: `isocan set <item> --prop
-textStyle=title` (or `textFace=…`) and `isocan edit <item> words.md` grow the
+textStyle=title` (or `textFace=…`, `textColor=blue`, `textFont=Fraunces`,
+read with the same words as the flags) and `isocan edit <item> words.md` grow the
 box to hold the words at the new look, and `isocan fit <item>` re-fits a
 caption to its words from scratch — the repair for one that was left a line
 short. `--size` still wins when you give it.
@@ -3637,7 +3651,8 @@ travel when the canvas does),
 command — every parked agent hears it and the human sees it),
 `text <words…>` (words straight onto the canvas as a chromeless node —
 `--file -` for a paragraph from stdin, and it is a real `.md`, so `set --file`
-and `save` back it like anything else),
+and `save` back it like anything else; `--style`, `--face`, `--paper`,
+`--color <name|#hex|auto>`, `--font <name|none>`),
 `tree` (the bound directory as the daemon lists it — owner-scoped, so it
 answers only at the canvas's own machine),
 `save <items...>` (write backed items out to that directory — see **Screens
