@@ -405,6 +405,28 @@ export declare function applyActorColor(registry: ActorRegistry, op: ActorSetCol
  */
 export declare function applyActorMark(registry: ActorRegistry, op: ActorSetMarkOp): ActorRegistry;
 /**
+ * **May somebody choose the mark of an agent their own surface does not
+ * hold?** Yes, when it is THEIR agent — and "theirs" is read from the claims
+ * table rather than from anything a client says.
+ *
+ * `actor.setMark` asks the presenting badge to claim whose face changes, and
+ * for a person's own face that is the whole rule. An agent is the case it
+ * missed: the machine that enrolled Rover holds Rover's claim, and the
+ * person's browser — the surface where a pointer is actually looked at —
+ * holds only the person. So the rule has a second arm, and it is narrow on
+ * purpose:
+ *
+ * - the target is an AGENT (`actorKinds`, from the harness it claimed with),
+ *   so no person's face can be chosen by somebody else this way; and
+ * - some badge that holds the agent ALSO holds the speaker — the person's
+ *   own other surface is where the agent lives, which is what owning one
+ *   means here (`isocan agent add` mints it on "this machine's badge").
+ *
+ * `holders` is the claim list of every badge holding the target. The speaker
+ * has already been checked against the PRESENTING badge before this runs.
+ */
+export declare function ownsAgent(holders: readonly (readonly ActorClaim[])[], speakerId: string, targetIsAgent: boolean): boolean;
+/**
  * **Two actors become one person** (`actor.join`, multi-identity phase 5).
  *
  * Writes one row into the registry's `joined` map, `from` → `into`, and

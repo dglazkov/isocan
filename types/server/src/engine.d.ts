@@ -340,7 +340,8 @@ export declare class Engine {
      * Choosing the mark you wear instead of an initial. The colour's twin in
      * every respect — home-scoped, lands in the actors log, not undoable, both
      * actors checked because choosing a face for somebody else is exactly the
-     * impersonation mechanism 5 exists to stop — and forwarded to every home
+     * impersonation mechanism 5 exists to stop (the one exception is an agent
+     * the speaker owns, which is the pointer it wears) — and forwarded to every home
      * for the same reason: the actors log never replicates down, so a home not
      * told keeps drawing the old face forever with nothing to correct it.
      *

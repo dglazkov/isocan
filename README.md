@@ -335,6 +335,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   another (identity menu, or `isocan identity --color teal`) is
   `actor.setColor`: it lands in the daemon's actor registry beside your name,
   so everyone on every canvas sees you change, live, without a reload.
+- **Your mark, and your pointer**: an emoji you wear instead of your initial
+  (identity menu, or `isocan identity --mark 🦊`) — and everyone else sees
+  your pointer wear it instead of the arrow, with the arrow's tip kept in your
+  colour on the exact point. An agent nobody has marked moves as 🤖 (drawn,
+  never stored); a person with no mark keeps the arrow. An agent's owner
+  chooses its mark: "Set pointer…"
+  on the agent's card in the pile or its row in the tray, or
+  `isocan agent mark <name> 🐕`. Both are `actor.setMark`; the home lets you
+  mark an agent only when one of your own surfaces holds it.
 - **Snapping**: dragging an item shows alignment guides — a line for every
   edge or center it has settled onto — and the item lands exactly on them. The
   pull is measured in screen pixels, so it feels the same at any zoom, and

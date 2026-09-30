@@ -102,6 +102,22 @@ export declare function isFaceMark(mark: string): boolean;
 export declare function markOf(marks: ActorMarks | undefined, actor: {
     id: string;
 }): string | null;
+/** What an agent's pointer wears when nobody chose it anything. */
+export declare const AGENT_POINTER = "\uD83E\uDD16";
+/**
+ * **The glyph a remote pointer is drawn as, or null for the arrow** (agent
+ * pointers, 30 Sep 2026).
+ *
+ * A chosen mark always wins — an agent its owner dressed as 🐕 is a dog, a
+ * person who picked ⚓ is an anchor. Failing that an AGENT is a robot (Dion:
+ * *"can we default bots to use an emoji that is a 🤖? Always?"*) and a person
+ * keeps the arrow. The default is decided here, at render time, and never
+ * written as a mark: it costs no op, stores nothing, and an agent whose owner
+ * clears its mark goes back to 🤖 rather than to an arrow.
+ */
+export declare function pointerMark(marks: ActorMarks | undefined, actor: {
+    id: string;
+}, agent: boolean): string | null;
 export declare function faceMark(marks: ActorMarks | undefined, actor: {
     id: string;
     name: string;

@@ -163,7 +163,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `evals corpus|converge|pairs` — what was asked for here, and what came of it
 
 **Agents and rooms** (`agents`, `present`)
-- `agent add|remove|rules`, `rc add|listen|remove`, `bench add|join|rm`, `harness` — standing agents
+- `agent add|remove|rules|mark`, `rc add|listen|remove`, `bench add|join|rm`, `harness` — standing agents
 - `persona ls|show|runs`, `docket ls|answer` — roles and their findings
 - `slides add|rm|show|export|note|notes`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
 
@@ -963,6 +963,8 @@ isocan fit <items...>                  # grow items to the size their content wa
 - **Wear your color.** `isocan identity --color teal` (or any of crimson,
   violet, amber, forest, periwinkle, graphite, a `#hex`, or `none`) sets the
   color your cursor, face, and pins wear for everyone, on every canvas.
+  `isocan identity --mark 🦊` puts an emoji on your face, and everyone else
+  sees your pointer wear it instead of the arrow.
 - **Verify before you ship.** HTML items: test logic headlessly (extract the
   script, run in node with DOM stubs). Risky renders: upload the blob alone
   (`POST /api/projects/<id>/blobs`) and eyeball it in a browser before
@@ -2454,7 +2456,18 @@ asks you to set one up — `@You add a reviewer here` — do it with:
 isocan agent add <name>     # enrol an agent beside yourself, on THIS canvas
 isocan agent remove <name>  # withdraw its standing (the history stays)
 isocan agent rules [name]   # what an agent answers for here, and why
+isocan agent mark <name> 🐕  # the emoji it wears — its face AND its pointer; `none` clears
 ```
+
+**An agent's pointer is its mark.** Whoever wears a mark moves across the
+canvas as it rather than as an arrow — the arrow's tip stays, in their colour,
+exactly on the point, so pointing and selection land where they always did.
+An agent nobody has marked is drawn as 🤖; that default is decided when the
+pointer is drawn and never stored, so `none` puts an agent back on the robot.
+`isocan agent mark` is its OWNER's verb: the person whose machine enrolled it
+(or the agent itself, with `isocan identity --mark`). Anybody else is refused
+by the home, and the web's "Set pointer…" on an agent's card sends the same
+op. Choose one when a person asks for one; a mark is theirs to pick.
 
 The syntax is the containment: no `--canvas`, no `--dir` — the agent you add
 lives where you already are. Add one when a person asks, and only then; the

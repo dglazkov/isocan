@@ -414,12 +414,6 @@ export interface UnderlayFacts {
     presentation?: WorkspacePresentation["items"] | undefined;
     /** Workspace-scoped activation, e.g. following a graph connection. */
     activateItem?: ((itemId: string) => boolean) | undefined;
-    /** The live drag, so a line can ride the gesture before the replica moves. */
-    drag: {
-        itemIds: readonly string[];
-        dx: number;
-        dy: number;
-    } | null;
     /**
      * **This viewer's selection** (wireframes, 24 Sep 2026) — one person's,
      * never the canvas's, so what an underlay does with it is transient and
