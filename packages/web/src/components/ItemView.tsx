@@ -2,6 +2,7 @@ import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, group
 import { groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CanvasActivation } from "../lib/canvasActivation.ts";
+import { pressSelection } from "../lib/press.ts";
 import { Markdown } from "../lib/markdown.tsx";
 import type { Actor, Item, ItemVersion, Neighbour, Operation } from "@isocan/core";
 import {
@@ -531,23 +532,22 @@ function ItemViewInner({
     const stack = e.altKey && stackCanvas ? [...new Set(itemsUnder(e.clientX, e.clientY).map((id) => groupScopedRoot(stackCanvas, id, stackScope)).filter((id): id is string => id !== null))] : [];
     if (e.altKey && stackCanvas && stack.length === 0) return;
     const selectionId = e.altKey ? (stack[0] ?? item.id) : scopedHit(item.id);
-    const from = stack.findIndex((id) => ui.selectedItemIds.includes(id));
+    const was = ui.selectedItemIds;
+    const from = stack.findIndex((id) => was.includes(id));
     const targetId = stack.length > 1 ? stack[(from + 1) % stack.length]! : selectionId;
-    if (e.shiftKey) {
-      ui.toggleSelect(targetId);
-      return;
-    }
     if (!canEdit) {
-      // A reader selects; nothing moves under their hand. Selection stays
-      // available for context, navigation and group inspection.
-      ui.select(targetId);
+      // A reader selects; nothing moves under their hand.
+      // So Shift can toggle at the press. Selection stays available for
+      // context, navigation and group inspection.
+      e.shiftKey ? ui.toggleSelect(targetId) : ui.select(targetId);
       return;
     }
 
-    // Dragging a selected item moves the whole selection; dragging an
-    // unselected one selects it alone first.
-    const wasInSelection = ui.selectedItemIds.includes(targetId);
-    const chosen = wasInSelection ? ui.selectedItemIds : [targetId];
+    // Dragging a selected item moves the whole selection, Shift or not;
+    // a Shift-press adds an unselected one and drags the lot; a plain press
+    // selects it alone. Taking a selected item OUT waits for a release that
+    // never moved — `lib/press.ts` has the rule and the bug it fixes.
+    const chosen = pressSelection(was, targetId, e.shiftKey);
     // What is drawn on a thing travels with it. Otherwise dragging a screen
     // leaves the X you drew on it behind, which is the moment the mark stops
     // meaning anything.
@@ -570,7 +570,7 @@ function ItemViewInner({
           ),
         ]
       : chosen;
-    if (!wasInSelection) ui.select(targetId);
+    if (chosen !== was) ui.setSelection(chosen);
 
     const frame = e.currentTarget as HTMLElement;
     frame.setPointerCapture(e.pointerId);
@@ -591,8 +591,8 @@ function ItemViewInner({
       let dy = (ev.clientY - start.y) / scale;
 
       // Align to what is already on the canvas. Shift is read from the MOVE,
-      // not the press — a shift-press is "add to selection", so the magnet has
-      // to be something you reach for mid-gesture.
+      // not the press — Shift at the press is selection (`lib/press.ts`), so
+      // Shift held through a drag of the selection moves it AND snaps harder.
       const snapshot = useCanvasStore.getState().canvas;
       const presented = snapshot ? presentedCanvas(snapshot, currentPresentation()).items : {};
       const items = capturedItems ?? presented;
@@ -623,6 +623,8 @@ function ItemViewInner({
       frame.removeEventListener("pointerup", onUp);
       frame.removeEventListener("pointercancel", onUp);
       const state = useUiStore.getState();
+      // A Shift-click that never became a drag: now it takes the item out.
+      if (e.shiftKey && chosen === was && !moved && ev.type === "pointerup") state.toggleSelect(targetId);
       if (semantic) {
         if (ev.type === "pointercancel" || !moved) semantic.cancel();
         else void semantic.commit(canvasId, actor);
