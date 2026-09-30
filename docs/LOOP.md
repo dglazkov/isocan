@@ -11,7 +11,21 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 2 accepted · 16 declined · 8 stale · 10 done · 0 not yet read.**
+**7 to decide · 2 accepted · 16 declined · 8 stale · 10 done · 0 not yet read.**
+
+## Needs a decision
+
+Proposed rank and home; `never` is a recommendation to decline.
+
+| Ours | Finding | Loop | Where | Why |
+| --- | --- | --- | --- | --- |
+| next | [Web UI lacks canvas group layout controls](loop/web-ui-lacks-canvas-group-layout-controls.md) | P2 | [canvas-groups](projects/canvas-groups/) | Partly: fit and tidy have web buttons, and a cell is a drop target by pointer; but the web cannot clear a grid (never sends clearGrid) and lowering Grid rows/columns below the label count is refused with 'more grid labels than cells'. Cheap: trim labels to counts, add Clear grid. |
+| later | [Lack of reusable component symbol library instantiation](loop/lack-of-reusable-component-symbol-library-instantiation.md) | P2 | new project | Partly: wires already are instances (a slot names a catalog component with typed props, and wire render --all redraws every screen from its spec), and DESIGN.md carries component tokens; what is missing is a person-or-agent-defined symbol that designed HTML screens instantiate and that propagates when edited. |
+| never | [Duplicated group placement computation across clients](loop/duplicated-group-placement-computation-across-clients.md) | P2 | [canvas-groups](projects/canvas-groups/) | False, re-checked 30 Sep: both clients send only a hint (container id, a starting point, a policy); the final slot is resolved once, in the core reducer's insert branch through groupPlacement. Same finding as the 26 Sep read. |
+| never | [Lack of design-to-code JSX Tailwind export pipeline](loop/lack-of-design-to-code-jsx-tailwind-export-pipeline.md) | P2 | [design-partner](projects/design-partner/) | True that no JSX/Tailwind emitter exists, but it cuts against how isocan hands off: screens are already HTML, wires carry a typed spec, and design craft --out packs the brief and DESIGN.md for the coding agent that knows the repo's stack. Reopen if code-building agents are seen re-deriving wires by hand. |
+| never | [Lack of structured design variant branching matrices](loop/lack-of-structured-design-variant-branching-matrices.md) | P2 | [version-diff](projects/version-diff/) | Stale: diverge and converge are built. Variations carry parent lineage (core/lineage.ts), wires vary one decision at a time with variantOf (wireframe/vary.ts, spec.ts:35), prefer records A/B taste (core/preference.ts), diff --source compares a variation with its screen, and choose folds the winner back as one undo (core/converge.ts). |
+| never | [Serial HTTP transfers stall cross canvas paste](loop/serial-http-transfers-stall-cross-canvas-paste.md) | P2 | new project | True: cross-canvas paste awaits readBlob, uploadBlob and the item op one item at a time (clipboard.ts:79-83, 106-160). Same shape and same answer as the declined serial-http-uploads finding: a small optimisation on a rare gesture. Reopen with a measured stall on a many-item cross-canvas paste. |
+| never | [Unmemoized minimap bounds recomputations stall viewport panning](loop/unmemoized-minimap-bounds-recomputations-stall-viewport.md) | P2 | [cleanup](projects/cleanup/) | True mechanism, measured harmless: Minimap re-renders and re-runs itemsBounds on every viewport change, but the frame census (1440px, minimap open, 250 notes, 4x CPU) puts pan p99 at 16.8 ms. Reopen with a census that names Minimap. |
 
 ## Accepted, by project
 
