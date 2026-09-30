@@ -1,16 +1,17 @@
 ---
-status: designed
-since: 2026-09-23
+status: partial
+since: 2026-09-30
 see: wireframes, judge, design-partner, slides, modules, mindmap
-note: the mechanism. Screens are HTML items carrying their spec as embedded JSON; a module holds the catalog (archetype recipes, blocks, primitives, intents), the renderer (blue skeleton → grey wireframe), the Jev composer (three rounds), link inference and the prototype assembler, and a theme layer — the default wire look, or the governing design system's tokens mapped onto the wire's roles by Jev (§9). No new op. The keep mark is a property, like a slide.
-issue: 350
+note: the mechanism. Screens are HTML items carrying their spec as embedded JSON; a module holds the catalog (archetype recipes, blocks, primitives, intents, and 7 @container layout templates), the renderer (blue skeleton → grey wireframe with data-sec/data-wf paths), the Jev composer (three rounds behind a PriorityGate and entropy-gated /ask), link inference and the prototype assembler, surgical single-slot edits (wire edit) and decision Q&A (wire why), schema-driven AI copy (wire copy --ai), and a theme/synthesis layer (wire style, wire ds, wire polish). No new op, and zero external sidecars.
+issue: 369
 ---
 
 # Wireframes — the design
 
 The research is
-[Wireframes a typed model can choose](../../research/2026-09-23-wireframe-components.md);
-read its *short version* before this. The journey is [journey.md](journey.md).
+[Wireframes a typed model can choose](../../research/2026-09-23-wireframe-components.md)
+and [What a second Jev wireframe builder got right](../../research/2026-09-30-jev-isocan-synthesis.md);
+read their short versions before this. The journey is [journey.md](journey.md).
 This doc names the pieces and the lines between them.
 
 ## The debt it discharges
@@ -388,23 +389,195 @@ group, so one undo takes the flow back content and all; its variations take
 the same pack. `wire --basic "<request>"` / `/wire basic <request>` compose
 plain grey wires; `wire flesh --bars` takes content off afterwards.
 
+### 11. Multi-region layout templates, density, and `data-wf` paths
+
+Added 30 Sep 2026 ([#369](https://github.com/dglazkov/isocan/issues/369)).
+Scenes 1–8 lay every screen's slots in a single vertical stack, which fits a
+375px phone screen and fails a desktop console or tablet workspace.
+
+**Seven layout templates (`catalog/templates.ts`).** A screen's `WireSpec` may
+name `template?: TemplateId` (absent or `"single"` is the existing vertical
+stack, byte-identical to phases 0–8) and `density?: "compact" | "default" |
+"spacious"`:
+
+| `TemplateId` | Regions | `@container` layout | Compatible archetypes |
+| --- | --- | --- | --- |
+| `single` | `main` | Single column at all widths | All 18 archetypes |
+| `split` | `main`, `side` | 2 columns (`1fr 1fr`) above `640px`, stacked below | `detail`, `form`, `checkout`, `profile`, `onboarding` |
+| `master_detail` | `list`, `detail` | `320px 1fr` split with inner scroll above `640px` | `list`, `inbox`, `chat`, `search`, `notifications` |
+| `grid` | `header`, `cells` | Header over `repeat(auto-fill, minmax(240px, 1fr))` | `gallery`, `feed`, `home`, `search` |
+| `bento` | `hero`, `wide`, `tall`, `cells` | 12-column asymmetric bento grid above `640px` | `home`, `dashboard`, `profile` |
+| `hero_then_grid` | `top`, `grid` | Full-width hero/banner over 3-column feature grid | `welcome`, `home`, `gallery`, `onboarding` |
+| `dashboard` | `kpis`, `main`, `side` | Top KPI strip over `2fr 1fr` main + side rail | `dashboard`, `home`, `profile` |
+
+**Round 2 asks template, region, and density in the same call.** When
+`device` is `"desktop"` or `"tablet"` (or when an archetype offers multiple
+templates), Round 2 adds:
+- `template`: a `choice` over the archetype's compatible templates;
+- `density`: a `score` ("How information-dense should this screen be?"), mapped
+  at `< 0.35 → "compact"` (`--wf-space: 6px`), `0.35–0.65 → "default"`
+  (`--wf-space: 8px`), `> 0.65 → "spacious"` (`--wf-space: 12px`);
+- `<slot>.region`: when the compatible templates have multiple regions, each
+  content slot (chrome slots `top-bar`, `tab-bar`, `bottom-bar` stay anchored to
+  the frame) gets a region `choice` constrained to that template's regions.
+
+**Stable element paths (`data-sec`, `data-wf`).** Every rendered slot root
+carries `data-sec="<slot>"` and every addressable element inside a block carries
+`data-wf="<slot>.<element>"` alongside `data-intent` and `data-hotspot`. This
+gives `wire edit`, `wire polish`, `version-diff`, and hotspot measurement one
+selector contract.
+
+### 12. `PriorityGate` and entropy-gated `/ask` in `@isocan/core/jev`
+
+**`PriorityGate`.** `packages/core/src/jev.ts` wraps any `Answerer` in a
+zero-dependency `PriorityGate(answerer, { concurrency: 8 })`. Interactive calls
+(`wire`, `wire edit`, `wire why`) pass `priority: "high"`; background work
+(`wire polish`, batch restyling) passes `priority: "normal"` and yields the next
+slot in the queue whenever a high-priority call is waiting. Transient `429` and
+`529` responses back off exponentially up to 3 attempts inside the gate.
+
+**Shannon entropy and `gatedChoice`.** For a `ChoiceAnswer` with distribution
+$P = \{p_1, \dots, p_k\}$, `entropyBits(probabilities)` computes:
+$$H(P) = -\sum_{p_i > 0} p_i \log_2(p_i)$$
+Top-two margin ($p_1 - p_2$) catches a two-way tie (used for slot variations in
+§5); Shannon entropy catches a multi-way split across root decisions. On
+root flow questions (`platform`, `pack`, `style.direction`), `gatedChoice`
+checks whether $H(P) > 1.0\text{ bit}$ or `confidence < threshold`. When
+triggered (and neither `--no-ask` nor a pinned value in `WireSpec.pinned` is
+present), the composer pauses before Round 2, posts a canvas `/ask` (or prints
+the 3-option choice in the CLI) showing the top 3 options and their
+probabilities, and records the chosen option in `WireSpec.pinned` so subsequent
+edits never re-ask.
+
+### 13. Surgical section editing (`wire edit`) and decision Q&A (`wire why`)
+
+**No `.session.json` on disk.** Every screen item on the canvas already embeds
+its `WireSpec`. Extending `WireSpec` with compact `decisions?: Record<string, {
+choice: string; top: Record<string, number>; entropy?: number }>` (the top 3
+probabilities and entropy per question) makes every screen self-describing across
+machines and sessions.
+
+**Turn routing and `wire edit`.** `isocan wire edit [<screen>] "<instruction>"`
+(and `/wire edit <instruction>` in the Chat) modifies a single section of a
+screen without re-composing the flow:
+1. **Target screen (`scopeScreen`):** if a screen id/title is passed or selected
+   on the canvas, use it; otherwise ask one Jev `choice` over the flow's screens
+   (`title — archetype`).
+2. **Scoped edit (`scopeEdit`):** one batched Jev call with `{ request,
+   instruction, archetype, template, slots }` asks:
+   - `kind`: `choice` over `content | add | remove | variant | restyle`;
+   - `target`: `choice` over the screen's existing `slots` (by `slot: block`);
+   - `block`: `choice` over the catalog's blocks (used when `kind === "add"` or
+     replacing a block);
+   - `variant`: `choice` over the target block's variants (used when `kind ===
+     "variant"`).
+3. **Apply in one op group:** mutate only the targeted slot in `WireSpec`,
+   re-render HTML, write `item.addVersion`, and run `ModuleMark.follow` so the
+   flow's clickable prototype updates in the same op group (one undo).
+
+**Decision Q&A (`wire why`).** `isocan wire why [<screen>] ["<question>"]` (and
+`/wire why` in the Chat) reads `WireSpec` and `WireSpec.decisions` from the
+screen(s) and prints a structured explanation of why the screen exists (`need` P
+and `by`), why its archetype and template were chosen (with runner-up
+probabilities), why each slot picked its block and whether a variation was
+spawned, and how its theme/pack was selected.
+
+### 14. Schema-driven AI copy (`wire copy --ai`) and flow naming (`wire name`)
+
+Sample content packs (§10) fill screens in 0 ms with deterministic domain data.
+When a person or agent wants copy written for the exact prompt:
+
+- **`blockContentSchema(spec)` (`copy-schema.ts`):** a pure function in
+  `@isocan/module-wireframe` that inspects a screen's resolved `slots`, blocks,
+  and variants and returns a strict JSON schema describing every heading, body
+  line, table cell, stat label/value, form field label/placeholder, and media
+  slot description on that screen — while keeping actionable button labels locked
+  to their typed `Intent` unless an explicit intent-compatible label is allowed.
+- **`nameFlow(specs, request)`:** a small schema across all screens in a flow
+  that names the brand, each screen's specific title, and shared navigation bar
+  labels so tab bars and headers match across every screen.
+- **`TextGenerator` seam (`packages/core/src/jev.ts`):** a vendor-neutral
+  interface `{ generateJson<T>(prompt: string, schema: JsonSchema): Promise<T> }`
+  with three implementations:
+  1. Standard HTTPS JSON-schema completion (using `ISOCAN_TEXT_API_KEY` /
+     `ISOCAN_TEXT_MODEL` over `fetch`, zero SDK dependencies);
+  2. The home's proxy route when signed in;
+  3. The file-based `--answerer agent` seam (`wire copy <screen>` writes the
+     JSON schema alongside the current slots; `wire copy <screen> --apply
+     <file>` validates against `blockContentSchema(spec)` and applies it).
+
+### 15. Concurrent design system synthesis (`wire ds`) and guarded polish (`wire polish`)
+
+**`wire ds "<request>"` (`ds.ts`).** When a canvas has no governing `DESIGN.md`
+and the user wants a custom system rather than one of the 7 built-in presets:
+1. **`proposeThenPick`:** generate 4–5 candidate visual directions (or draw from
+   an expanded direction bank when running without a text generator) and ask Jev
+   one `choice` question (`ds.direction`) + `surface` choice (`flat | raised |
+   glass | bold`) + `density` score to pick the direction that fits the flow's
+   domain and platform.
+2. **Token synthesis & deterministic WCAG AA repair (`repairContrast`):**
+   synthesize a complete `DESIGN.md` with all eight colour roles
+   (`ground`, `surface`, `ink`, `muted`, `border`, `primary`, `on-primary`,
+   `accent`), typography, radius, spacing, and `surface:`. Before writing, a
+   pure contrast pass checks every foreground/background pair (`ink` on
+   `ground`/`surface`, `muted` on `ground`/`surface`, `on-primary` on `primary`)
+   and nudges OKLCH/HSL lightness until every pair meets $\ge 4.5:1$ (WCAG AA)
+   and `design check` passes with zero warnings.
+3. **Swap 1 in one op group:** write the `DESIGN.md` item beside the flow, set
+   it as the governing system with `designUse`, restyle every wire in the flow,
+   and rebuild the prototype — all inside one op group.
+
+**`wire polish [<screens…>]` and Swap 2 contract checks (`polish.ts`).**
+- **Jev-budgeted polish (`polish_intensity`):** Jev scores `polish_intensity` on
+  each target screen ($0\text{–}1$), which maps deterministically to an op
+  budget of `0` ($< 0.25$), `4` ($0.25\text{–}0.50$), `8` ($0.50\text{–}0.75$),
+  or `12` ($> 0.75$) patches. Each patch in `WireSpec.polish` is a typed
+  `{ target: string; add?: PolishToken[]; remove?: PolishToken[] }` keyed by a
+  valid `data-wf` or `data-sec` path on that screen, restricted to an allowlist
+  of visual refinement classes (emphasis, surface elevation, border treatment,
+  spacing rhythm).
+- **Contract gate (`verifyWireContract`):** whether applying `WireSpec.polish`
+  or a custom primitive override (**Swap 2**), a pure verification function
+  asserts before committing that:
+  1. Every `data-sec` and `data-wf` path present in the unpolished wireframe is
+     still present in the output HTML;
+  2. Every `data-intent` and `data-hotspot` attribute is preserved intact so
+     `inferLinks`, canvas flow arrows, and the clickable prototype never lose a
+     transition;
+  3. Every token reference resolves and foreground/background contrast stays
+     $\ge 4.5:1$.
+  Any patch that violates the contract is rejected before a version is written.
+
 ## Done means done on both surfaces
 
 1. **Ops** — none new: `item.add`, `item.addVersion`, `item.update`, op groups.
 2. **CLI** — `isocan wire <request>`, `wire vary`, `wire keep|unkeep`,
-   `wire link`, `wire prototype`, `wire style [--preset <name>|--list]`, `wire flesh`, `wire copy`, `wire questions|answer`, as the module's verbs.
+   `wire link`, `wire prototype`, `wire style [--preset <name>|--list]`,
+   `wire flesh`, `wire copy [--ai]`, `wire name`, `wire edit`, `wire why`,
+   `wire ds`, `wire polish`, `wire questions|answer`, as the module's verbs.
 3. **Agent guide** — the module's own `agent-guide.md`.
-4. **Core** — catalog, renderer, link inference and assembler in the module's
-   core, so the web and the CLI draw and link identically.
+4. **Core** — `PriorityGate`, `entropyBits`, `gatedChoice`, and `TextGenerator`
+   in `@isocan/core/jev`; catalog, templates, renderer, surgical editor,
+   decision explainer, schema builder, DS synthesizer, polish contract checker,
+   link inference and assembler in the module's core, so the web and the CLI
+   draw, edit, and link identically.
 5. **README** — a line in the feature list when phase 3 closes.
-6. **Tests** — renderer, rounds, variations, links and assembly are pure;
-   the skeleton-then-fill and the click-through are browser walks, said out
-   loud (a journey in `scripts/journeys.mjs`).
+6. **Tests** — renderer, templates, entropy gate, surgical edits, schema copy,
+   DS contrast repair, polish contract gate, links and assembly are pure; the
+   skeleton-then-fill, multi-region responsive layouts, and click-through are
+   browser walks, said out loud (a journey in `scripts/journeys.mjs`).
 
 ## What it refuses
 
-- **No lorem ipsum, no invented copy.** Bars until an agent writes words.
-- **No free-text labels on actionable elements.** Intents or nothing.
+- **No lorem ipsum, no unvalidated free-form copy.** Pack content or
+  schema-validated `wire copy` only.
+- **No free-text labels on actionable elements.** Intents or nothing, preserved
+  across every template, restyle, and polish pass.
 - **No stored links.** Computed, with a per-link override.
-- **No model in the box.** Jev is one answerer behind a seam; the stub and an
-  agent are the others.
+- **No local `.session.json` state.** Every screen's `WireSpec` (including
+  `template`, `density`, `pinned`, `decisions`, and `polish`) lives inside the
+  canvas item itself.
+- **No model or sidecar in the box.** Jev and `TextGenerator` sit behind pure
+  TypeScript seams in `@isocan/core`; the stub and an agent are the other
+  answerers, and no Python, Go, or React SSR sidecar process exists.
+

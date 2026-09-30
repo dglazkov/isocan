@@ -1,16 +1,17 @@
 ---
-status: built
-since: 2026-09-23
+status: partial
+since: 2026-09-30
 see: wireframes, judge
-note: the walk. Phase 0 is the catalog and the renderer (skeleton and wire), no model. Phase 1 is Jev composing a flow skeleton-first on a canvas. Phase 2 variations and keep. Phase 3 links and the prototype. Phase 4 wires in your design system. Phase 5 the web door. Phase 6 calibration against Enrico. Phase 7 sample content. Phase 8 what real use asked for — true arrows, just the screen, finding prototypes, the record in the Chat. All nine closed 23 Sep 2026; the Open list is the backlog.
-issue: 350
+note: the walk. Phases 0–8 closed 23–24 Sep 2026 and were walked on isocan.io (#350). Wave 2 (#369, phases 9–13, designed 30 Sep 2026) ports the standalone Jev design prototype's best mechanisms into pure TypeScript: Phase 9 is multi-region @container layout templates, density, and data-wf paths; Phase 10 is PriorityGate and entropy-gated /ask in @isocan/core/jev; Phase 11 is surgical single-slot edits (wire edit) and decision Q&A (wire why); Phase 12 is schema-driven AI copy (wire copy --ai) and flow naming (wire name); Phase 13 is concurrent design system synthesis (wire ds) and Jev-budgeted polish (wire polish).
+issue: 369
 ---
 
 # Wireframes — the walk
 
-**23 September 2026.** The order of work for [design.md](design.md), held to
-[journey.md](journey.md). Each phase ends with **Trajectory**: only what the
-phase discovered that changes the project's course.
+**23 September 2026 (wave 2 added 30 September 2026).** The order of work for
+[design.md](design.md), held to [journey.md](journey.md). Each phase ends with
+**Trajectory**: only what the phase discovered that changes the project's
+course.
 
 Two rules for every phase, on top of `AGENTS.md`:
 
@@ -22,7 +23,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–8 are CLOSED (23 Sep 2026) — the last two walked on isocan.io after the promotion.** **Next: nothing is scheduled; the Open list below is the backlog** (plain-words options, `by` on the spec, the maybe floor re-measured; on 24 Sep the isocan.io hang, arrow-label collisions, round 1's cut, text headings and `design set`'s note and web door were answered). Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. What is left is the Open list below — round 1's cut, plain-words options, `by` on the spec, and three from the prod walk.
+**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 (phases 9–13, [#369](https://github.com/dglazkov/isocan/issues/369)) is designed and `wireframes phase 9` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 (multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 (`PriorityGate` and entropy-gated `/ask`), phase 11 (`wire edit` and `wire why`), phase 12 (`wire copy --ai` and `wire name`), and phase 13 (`wire ds` and `wire polish`).
 
 ## Phase 0 — The catalog, drawn
 
@@ -326,3 +327,191 @@ AA contrast; moving a DESIGN.md into a group says it changes what it governs.
 - **2026-09-24** — Answered 24 Sep (`6c2387e2`: `ModuleMark.follow` re-versions the flow's prototype in the mark's own op group, on every keep path; a moved prototype stays put, none is created). Was: using or removing a screen does not rebuild the prototype; the Chat record and the CLI say so, but a person swapping a variation expects the prototype to follow.
 - **2026-09-24** — Answered 24 Sep (the floor half: re-measured with plain words, it stands. The arrow half stays open:). Was: an unkept *maybe* between kept screens turns their neighbour arrows into jumps over it; worth watching on a real flow. The 0.3 floor came from a which-archetype question, not round 1's yes/no — re-measure once plain-words options land.
 - **2026-09-23** — Answered 30 Sep (touch long-press cancel in `CanvasViewport.tsx` now matches `[role=button]`; hotspot positions on resized items remain open). Was: a touch long-press on an arrow may open the canvas menu (the shell's cancel check matches only real buttons and links), and hotspot positions are unverified on an item resized away from its document size.
+
+---
+
+## Phase 9 — Multi-region layout templates, density, and `data-wf` paths
+
+**Status: NOT STARTED.**
+
+**Outcome:** [journey.md](journey.md) scene 9, [design.md](design.md) §11
+([#369](https://github.com/dglazkov/isocan/issues/369)).
+`packages/modules/wireframe/src/catalog/templates.ts` defines the seven
+responsive layout templates (`single`, `split`, `master_detail`, `grid`,
+`bento`, `hero_then_grid`, `dashboard`) and each archetype's compatible
+templates. `WireSpec` gains `template?: TemplateId` and `density?: "compact" |
+"default" | "spacious"`, and `WireSlotSpec` gains `region?: string`. Round 2
+(`compose.ts`) asks `template`, `density` (`score`), and per-slot `region`
+when multiple regions apply. `render.ts` renders multi-region containers with
+pure CSS `@container` queries (leaving `single` byte-identical to phases 0–8),
+sets `--wf-space` from `density`, and emits `data-sec="<slot>"` on every slot
+root and `data-wf="<slot>.<element>"` on every addressable block element
+alongside `data-intent` and `data-hotspot`.
+
+**Proof:**
+
+1. Unit tests (`packages/modules/wireframe/test/templates.test.ts`): every
+   template renders valid HTML with its regions and `@container` CSS rules;
+   `single` (or absent `template`) is byte-identical to existing renders;
+   `density` maps `< 0.35 → compact`, `0.35–0.65 → default`, `> 0.65 →
+   spacious`; Round 2 assigns slots only to regions declared by the chosen
+   template while keeping chrome slots (`top-bar`, `tab-bar`, `bottom-bar`)
+   anchored to the frame; every rendered block carries `data-sec` and
+   `data-wf` alongside `data-intent`, and `inferLinks` + `assemblePrototype`
+   route hotspots inside multi-region templates.
+2. Browser walk: compose a desktop dispatch flow at `1280×800` and a mobile
+   flow at `375×812`; verify multi-column regions (`dashboard`,
+   `master_detail`, `bento`) render side by side on desktop and collapse cleanly
+   inside narrow containers, with flow arrows leaving from the right hotspots.
+3. `npm test` and `npm run typecheck`.
+
+### Trajectory
+
+---
+
+## Phase 10 — Entropy-gated `/ask` and `PriorityGate` in `@isocan/core/jev`
+
+**Status: NOT STARTED.**
+
+**Outcome:** [journey.md](journey.md) scene 10, [design.md](design.md) §12.
+`packages/core/src/jev.ts` gains `entropyBits(probabilities)`,
+`gatedChoice(answer, { maxEntropyBits, minConfidence })`, and
+`PriorityGate(answerer, { concurrency, maxRetries })` — all pure TypeScript with
+zero external dependencies. Interactive composer and edit calls run at
+`priority: "high"`, while background polish calls run at `priority: "normal"`
+and yield the queue when a high-priority call arrives. On root flow decisions
+(`platform`, `pack`, `style.direction`), when `entropyBits > 1.0` and neither
+`--no-ask` nor `WireSpec.pinned` is set, the composer surfaces the top 3
+options with their probabilities as a canvas `/ask` (or CLI prompt / `--pin
+<key=value>`) and records the answer in `WireSpec.pinned` so future turns never
+re-ask.
+
+**Proof:**
+
+1. Unit tests (`packages/core/test/jev.test.ts` and
+   `packages/modules/wireframe/test/entropy-ask.test.ts`): `entropyBits` returns
+   `0` on a deterministic distribution, `1.0` on a 50/50 split, and `~1.58` on
+   a three-way split; `gatedChoice` triggers `ask` above `1.0` bit and passes
+   through when pinned or `--no-ask`; `PriorityGate` bounds concurrency,
+   dispatches queued `high` calls ahead of queued `normal` calls, and retries
+   `429`/`529` responses.
+2. CLI & browser walk: run `/wire` on an underspecified prompt where root
+   entropy exceeds `1.0` bit, verify the 3-option `/ask` surfaces on the canvas,
+   answer it, and verify the flow completes with `pinned` recorded in every
+   screen's `WireSpec`.
+3. `npm test` and `npm run typecheck`.
+
+### Trajectory
+
+---
+
+## Phase 11 — Surgical section editing (`wire edit`) and decision Q&A (`wire why`)
+
+**Status: NOT STARTED.**
+
+**Outcome:** [journey.md](journey.md) scene 11, [design.md](design.md) §13.
+`WireSpec` records compact `decisions` (top-3 probabilities and entropy per Jev
+question) directly in the item's embedded JSON — no `.session.json` file on
+disk. `packages/modules/wireframe/src/edit.ts` and `why.ts` implement:
+- `isocan wire edit [<screen>] "<instruction>"` and `/wire edit <instruction>`:
+  1-call Jev screen scoping (when no screen is selected/named) + 1-call batched
+  `scopeEdit` (`kind: content | add | remove | variant | restyle`, `target`
+  slot, `block`, `variant`) that mutates only the targeted slot in `WireSpec`,
+  adds one version to the screen item, and rebuilds the flow's prototype via
+  `ModuleMark.follow` in the same op group (one undo).
+- `isocan wire why [<screen>] ["<question>"]` and `/wire why`: reads
+  `WireSpec.decisions`, `need`, `by`, and `variations` from the canvas item and
+  explains why the screen, archetype, template, blocks, and style mapping were
+  chosen, citing the recorded probabilities.
+
+**Proof:**
+
+1. Unit tests (`packages/modules/wireframe/test/edit-why.test.ts`): `scopeEdit`
+   correctly applies `content`, `add`, `remove`, `variant`, and `restyle` to a
+   single slot while leaving all sibling slots, `flow`, `screen`, and `pinned`
+   untouched; `wire edit` executes in one op group and updates the flow's
+   prototype in the same group; `wire why` formats the recorded probabilities
+   and runner-up alternatives from `WireSpec.decisions`.
+2. Surface & browser walk: select a wireframe screen on the canvas, run
+   `/wire edit` to swap one section's variant and add a block, verify one undo
+   reverts both the screen version and the prototype version, and run
+   `/wire why` to inspect the decision record in the Chat.
+3. `packages/cli/test/surface.test.ts`, `npm test`, and `npm run typecheck`.
+
+### Trajectory
+
+---
+
+## Phase 12 — Schema-driven AI copy (`wire copy --ai`) and flow naming (`wire name`)
+
+**Status: NOT STARTED.**
+
+**Outcome:** [journey.md](journey.md) scene 12, [design.md](design.md) §14.
+`packages/modules/wireframe/src/copy-schema.ts` builds a strict JSON schema
+(`blockContentSchema(spec)`) from each screen's resolved blocks and variants,
+plus `nameFlow(specs, request)` for coherent brand, screen title, and shared
+navigation bar naming across a flow. `@isocan/core/jev` defines the
+vendor-neutral `TextGenerator` seam (backed by standard HTTPS JSON-schema
+completion when configured, the home proxy, or the `--answerer agent` file
+seam, adding zero SDK dependencies). `isocan wire copy --ai` (and `/wire copy`
+in the Chat) fills realistic domain copy and media-slot prompts across a screen
+or flow and rebuilds the prototype in one op group, while keeping actionable
+button labels bound to their typed `Intent`.
+
+**Proof:**
+
+1. Unit tests (`packages/modules/wireframe/test/copy-schema.test.ts`):
+   `blockContentSchema` covers all 28 blocks and their variants, rejects
+   malformed payloads, and preserves every actionable `Intent`; `nameFlow`
+   keeps shared tab-bar and top-bar labels identical across screens in a flow;
+   `wire copy --ai` with a stub `TextGenerator` and `wire copy --apply` with an
+   agent JSON file produce identical versioned screens and updated prototypes in
+   one op group.
+2. Browser walk: compose a flow, run `/wire copy`, verify screen titles,
+   navigation labels, and block copy update coherently across both the canvas
+   screens and the clickable prototype, and verify one undo restores the pack
+   sample content.
+3. `packages/cli/test/surface.test.ts`, `npm test`, and `npm run typecheck`.
+
+### Trajectory
+
+---
+
+## Phase 13 — Concurrent design system synthesis (`wire ds`) and Jev-budgeted polish (`wire polish`)
+
+**Status: NOT STARTED.**
+
+**Outcome:** [journey.md](journey.md) scene 13, [design.md](design.md) §15.
+`packages/modules/wireframe/src/ds.ts` and `polish.ts` implement:
+- `isocan wire ds "<request>"` and `/wire ds <request>`: runs `proposeThenPick`
+  (Jev selects the best visual direction, `surface:` mode, and `density` from
+  candidate directions), synthesizes a complete `DESIGN.md` item on the canvas,
+  runs deterministic WCAG AA ($\ge 4.5:1$) contrast validation and lightness
+  self-repair (`repairContrast`) across all foreground/background token pairs,
+  sets the governing system with `designUse`, and restyles the flow and its
+  prototype in one op group (**Swap 1**).
+- `isocan wire polish [<screens…>]` and `/wire polish`: Jev scores
+  `polish_intensity` ($0\text{–}1$), mapping to a strict budget of
+  `0 | 4 | 8 | 12` visual refinement patches stored in `WireSpec.polish` and
+  keyed by `data-wf`/`data-sec` paths. Before writing a version (or applying a
+  custom primitive override in **Swap 2**), `verifyWireContract` asserts that
+  every `data-sec`, `data-wf`, `data-intent`, and `data-hotspot` node is
+  preserved and every token contrast stays $\ge 4.5:1$.
+
+**Proof:**
+
+1. Unit tests (`packages/modules/wireframe/test/ds-polish.test.ts`):
+   `repairContrast` repairs deliberately low-contrast token pairs to $\ge 4.5:1$
+   and passes `design check` with zero warnings; `wire ds` creates the
+   `DESIGN.md` item, governs the flow's scope, and restyles all screens +
+   prototype in one op group; `polish_intensity` maps to budgets `0 | 4 | 8 |
+   12`; `verifyWireContract` accepts valid `WireSpec.polish` patches and rejects
+   any patch or override that drops a `data-wf` path or `data-intent` hotspot.
+2. Browser walk: run `/wire ds` on a flow, verify the synthesized `DESIGN.md`
+   lands on the canvas and restyles every screen and the prototype at AA
+   contrast; run `/wire polish`, verify visual refinements apply while flow
+   arrows and prototype click-through continue to work; undo once per act.
+3. `packages/cli/test/surface.test.ts`, `npm test`, and `npm run typecheck`.
+
+### Trajectory
+
