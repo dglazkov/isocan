@@ -1154,7 +1154,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
           e.stopPropagation(); onPointerDown(e); return;
         }
         hold.current?.down(e);
-        if ((e.target as HTMLElement).closest("a, button, input, textarea, select, [contenteditable=true]")) hold.current?.cancel();
+        if ((e.target as HTMLElement).closest("a, button, [role=button], input, textarea, select, [contenteditable=true]")) hold.current?.cancel();
       }}
       onPointerMoveCapture={(e) => hold.current?.move(e)}
       onPointerUpCapture={(e) => {

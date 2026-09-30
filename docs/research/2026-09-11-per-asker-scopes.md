@@ -1,9 +1,9 @@
 ---
-status: designed
-since: 2026-09-11
+status: partial
+since: 2026-09-30
 see: agent-custody, roles
 issue: 273
-note: Recommends NOT building per-asker powers yet, and says what would change that. The mockup's two extra toggles are not one thing — "read and reply, no editing" is the Commenter rung the roles project already refused, and "no shell" turns the agent off, because an agent's hands are the CLI. The one power a per-asker grant could honestly hold is REACH (the fence), which is the owner's machine's and no canvas can promise. Cheapest first step, zero ops: the summons prompt tells the agent who woke it and whose bill it is.
+note: Built the recommended first step — `summonsPrompt` in `packages/rc/src/helpers.ts` and `room.ts` now tells a summoned turn when it was woken by someone other than its owner and whose machine/bill is running the turn, at zero op cost. Recommends NOT building per-asker powers yet, and says what would change that: "read and reply, no editing" is the Commenter rung the roles project already refused, and "no shell" turns the agent off, because an agent's hands are the CLI. The one power a per-asker grant could honestly hold is REACH (the fence), which is the owner's machine's and no canvas can promise.
 ---
 
 # A capability that travels with the summons

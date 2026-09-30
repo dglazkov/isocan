@@ -3,21 +3,16 @@ status: partial
 since: 2026-09-08
 issue: 206
 see: personas, standing-agents, on-demand, evals
-note: phases 1–6 built 7–8 Sep — cadence observed (scripts/cadence.mjs), the docket as a panel where a finding is decided by a ✅/❌ reaction and the repo keeps the commit (scripts/docket.mjs), the ✋ claim, docs/decisions.md derived from the Dn lines, and trust folded into the reviews index. Still open — phase 7, CI reaching the canvas, which waits on Dion minting a bearer; and D7's CLI half, because there is no `isocan docket` verb, so an agent can read the docket only through the canvas. No new op.
+note: phases 1–6 and D7's CLI half (`isocan docket` and `isocan docket answer`) built — cadence observed (`scripts/cadence.mjs`), the docket as a panel where a finding is decided by a ✅/❌ reaction and the repo keeps the commit (`scripts/docket.mjs`), the ✋ claim, `docs/decisions.md` derived from the Dn lines, trust folded into the reviews index, and `isocan docket` / `isocan docket answer` on the CLI. Still open — phase 7, CI reaching the canvas, which waits on Dion minting a bearer. No new op.
 ---
 
 # The docket: what a project knows about itself
 
 **7 September 2026.** Research. Nothing built that day.
 
-**Where this stands, 11 Sep 2026: phases 1–6 built** (7–8 Sep — 1efd5000,
-1f04f853, cec25ceb), each marked below. **Two things are owed:** phase 7, CI
-reaching the canvas, which needs a credential only Dion can mint; and D7's
-agent surface — there is no `isocan docket` verb, so the docket is run as
-`scripts/docket.mjs` from a checkout and an agent reaches it only through the
-canvas. D7 said a docket only a web app can read is a dashboard with a second
-name; this one is read by a script and a canvas, which is better than that and
-still not what D7 asked for.
+**Where this stands: phases 1–6 and D7's CLI half (`isocan docket` / `isocan docket answer`) are built** (7–8 Sep — 1efd5000,
+1f04f853, cec25ceb, plus `isocan docket` in `packages/cli/src/main.ts`), each marked below. **One thing is owed:** phase 7, CI
+reaching the canvas, which needs a credential only Dion can mint.
 
 > "I need to fully flesh out the system of building with standing agents and
 > personas etc. I want the ledger and learnings and issues and research and all

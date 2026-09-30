@@ -49,23 +49,61 @@ export function nameResolver(snapshot: CanvasSnapshotResponse): (actorId: string
   return (actorId) => names.get(actorId);
 }
 
+/** Optional thread, item, and non-owner standing context carried in a summons prompt. */
+export interface SummonsContext {
+  /** The full thread the summoning comment is in, including earlier comments. */
+  thread?: {
+    id: string;
+    comments: Array<{ id: string; author: string; body: string }>;
+  };
+  /** The item the thread is anchored on, or the first changed item. */
+  item?: {
+    id: string;
+    kind: string;
+    title: string;
+  };
+  /** Present when the turn was woken by someone other than the machine's owner (#273). */
+  wokenBy?: {
+    asker: string;
+    owner: string;
+  };
+}
+
 /** The fixed brief around the wait-shaped payload (phase 4's door):
  * identical for fresh and loaded sessions — delivery differs, content
  * never does — with orientation and the guide pointer carrying the
- * cold-arrival weight instead of 15k inlined tokens. */
+ * cold-arrival weight instead of 15k inlined tokens, and the thread,
+ * anchored item (`id`, `kind`, `title`) and non-owner standing (#273)
+ * carried right in the summons so the first command of a turn can be
+ * the edit. */
 export const summonsPrompt = (
   canvasTitle: string,
   agentName: string,
   payload: { reason: string; entries: WatchedLogEntry[] },
-): string =>
-  `You are ${agentName}, an agent enrolled on the isocan canvas "${canvasTitle}". ` +
-  `This is a summons: activity addressed to you arrived while nothing was running for you. ` +
-  `Work from this directory through the \`isocan\` CLI — \`isocan --agent-help\` is the full ` +
-  `protocol if you need orientation, and \`isocan comment reply <threadId> "…"\` answers a comment. ` +
-  `For a designed screen, HTML node or connected app, run \`isocan design workflow\` for the shared ` +
-  `procedure, canvas policy and existing work; precise edits and archive imports do not start a new interview. ` +
-  `Address what the payload below carries, reply on its thread, and then simply finish your ` +
-  `turn: do NOT run \`isocan wait\` — your session rests when you stop, and new activity ` +
-  `summons you again.\n\n` +
-  `The payload (the same shape \`isocan wait --json\` returns):\n` +
-  JSON.stringify(payload, null, 2);
+  context?: SummonsContext,
+): string => {
+  const standing = context?.wokenBy
+    ? `You were woken by ${context.wokenBy.asker}, who is not your owner. ` +
+      `${context.wokenBy.owner}'s machine is running this turn and paying for it, ` +
+      `and ${context.wokenBy.asker}'s grant covers replying on this thread. `
+    : "";
+  const fullPayload = {
+    ...payload,
+    ...(context?.item ? { item: context.item } : {}),
+    ...(context?.thread ? { thread: context.thread } : {}),
+  };
+  return (
+    `You are ${agentName}, an agent enrolled on the isocan canvas "${canvasTitle}". ` +
+    `This is a summons: activity addressed to you arrived while nothing was running for you. ` +
+    standing +
+    `Work from this directory through the \`isocan\` CLI — \`isocan --agent-help\` is the full ` +
+    `protocol if you need orientation, and \`isocan comment reply <threadId> "…"\` answers a comment. ` +
+    `For a designed screen, HTML node or connected app, run \`isocan design workflow\` for the shared ` +
+    `procedure, canvas policy and existing work; precise edits and archive imports do not start a new interview. ` +
+    `Address what the payload below carries, reply on its thread, and then simply finish your ` +
+    `turn: do NOT run \`isocan wait\` — your session rests when you stop, and new activity ` +
+    `summons you again.\n\n` +
+    `The payload (the same shape \`isocan wait --json\` returns):\n` +
+    JSON.stringify(fullPayload, null, 2)
+  );
+};

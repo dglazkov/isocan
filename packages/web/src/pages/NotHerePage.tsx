@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { CANVAS_PATH_PREFIX } from "@isocan/core";
+import "../components/notfound.css";
 
 /**
  * **Nothing is served here** — the app's answer to a path it does not have.

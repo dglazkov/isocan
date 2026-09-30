@@ -49,8 +49,8 @@ interface IdentityFile extends Actor {
 export interface ResolvedIdentity {
   actor: Actor;
   /** "session" = this agent, whatever directory it is in. "home" = the
-   * human's. */
-  source: "session" | "home";
+   * human's. "upstream" = a sandbox whose badge is injected upstream. */
+  source: "session" | "home" | "upstream";
   /** Where the slot lives, for saying so. */
   file: string;
   /** The harness that named this session, when `source` is "session". */
@@ -78,6 +78,40 @@ export interface ResolvedIdentity {
  * called "home".
  */
 export const HOME_CLAIM_KEY = "home:person";
+
+const BADGE_UPSTREAM_VAR = "ISOCAN_BADGE_UPSTREAM";
+const ACTOR_ID_VAR = "ISOCAN_ACTOR_ID";
+const ACTOR_NAME_VAR = "ISOCAN_ACTOR_NAME";
+const UPSTREAM_CLAIM_KEY = "upstream:badge";
+
+/**
+ * **An agent that holds no secret** (first-minute phase 5, `no-secret-identity.md`).
+ *
+ * True when `ISOCAN_BADGE_UPSTREAM` says an upstream egress proxy holds the
+ * badge outside this sandbox and attaches `Authorization` on the way out.
+ */
+export function isBadgeUpstream(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[BADGE_UPSTREAM_VAR]?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+function resolveUpstreamIdentity(env: NodeJS.ProcessEnv = process.env): ResolvedIdentity | null {
+  if (!isBadgeUpstream(env)) return null;
+  const id = env[ACTOR_ID_VAR]?.trim();
+  const name = env[ACTOR_NAME_VAR]?.trim();
+  if (!id || !name) {
+    throw new Error(
+      `${BADGE_UPSTREAM_VAR}=1 says an upstream proxy holds your badge, so ` +
+        `${ACTOR_ID_VAR} and ${ACTOR_NAME_VAR} are both required to say who it vouches for`,
+    );
+  }
+  return {
+    actor: { id, name },
+    source: "upstream",
+    file: `${BADGE_UPSTREAM_VAR}=1`,
+    key: UPSTREAM_CLAIM_KEY,
+  };
+}
 
 async function readFrom(file: string): Promise<Actor | null> {
   try {
@@ -236,7 +270,9 @@ async function legacyTolerant<T>(request: Promise<T>): Promise<T | null> {
  * carry authorization.
  */
 export async function noIdentityHere(client: DaemonClient, home: string): Promise<string> {
-  const blank = 'no identity configured — run `isocan identity --name "Your Name" --session` first';
+  const blank =
+    'no identity configured — run `isocan identity --name "Your Name" --session` first, ' +
+    `or set ${BADGE_UPSTREAM_VAR}=1 with ${ACTOR_ID_VAR} and ${ACTOR_NAME_VAR} when an upstream proxy holds your badge`;
   let orphaned: ActorBindingRecord[];
   try {
     const present = await harnessSessions(home);
@@ -284,6 +320,7 @@ async function realPathOrResolved(p: string): Promise<string> {
  * notice saying what it was and the deliberate way back (`--as`).
  */
 export async function retireStrandedIdentities(cwd: string, home: string): Promise<void> {
+  if (isBadgeUpstream()) return;
   const isocanHome = await realPathOrResolved(home);
   const userHome = await realPathOrResolved(os.homedir());
   let dir = await realPathOrResolved(cwd);
@@ -314,15 +351,20 @@ export async function retireStrandedIdentities(cwd: string, home: string): Promi
 }
 
 /**
- * Who this command speaks as: this agent, else the human. The session slot is
- * path-independent by design, so an agent that named itself keeps its name
- * after it wanders into another directory, and two agents sharing one
- * directory stay two people.
+ * Who this command speaks as: an upstream-badged actor when declared, else
+ * this agent, else the human. The session slot is path-independent by design,
+ * so an agent that named itself keeps its name after it wanders into another
+ * directory, and two agents sharing one directory stay two people.
  */
 export async function resolveIdentity(
   client: DaemonClient,
   home: string,
 ): Promise<ResolvedIdentity | null> {
+  const upstream = resolveUpstreamIdentity();
+  if (upstream) {
+    client.reclaimWith(() => reclaimIdentity(client, upstream));
+    return upstream;
+  }
   const session = await findSessionIdentity(client, home);
   const resolved: ResolvedIdentity | null = session
     ? {

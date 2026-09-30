@@ -36,6 +36,7 @@ import {
   dispatchReason,
   gateSetAside,
   isSystemActor,
+  itemKind,
   lapsedFor,
   lastRoll,
   mayWake,
@@ -51,7 +52,7 @@ import {
   turnedAwayLine,
 } from "@isocan/core";
 import { gateTurn, type GuardLimits, type GuardState } from "./guards.ts";
-import { itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
+import { itemCenter, nameResolver, summonsPrompt, threadLocus, type SummonsContext } from "./helpers.ts";
 import type { RcAgentRow } from "./rows.ts";
 
 /**
@@ -898,7 +899,8 @@ async function room(
     const authors = flagged.map((e) => e.envelope.actor.id);
     const carried = new Map<string, ReadonlySet<string> | undefined>();
     for (const id of new Set(authors)) carried.set(id, await originsOf(id));
-    await state.set(keys.origins(record.actor.id), [...speakersFor(authors, (id) => carried.get(id))]);
+    const speakers = [...speakersFor(authors, (id) => carried.get(id))];
+    await state.set(keys.origins(record.actor.id), speakers);
     const say = (line: string) => narrate(`${record.actor.name} · ${line}`);
     // The binding (on-demand phase 3): idempotent for CLI-added agents, the
     // one rebinding a web-added one needs. Made before anything is said: an
@@ -953,11 +955,13 @@ async function room(
     // it is what animates the cursor, and each applied op retires it.
     const threadId = firstComment ? (firstComment.envelope.op as { threadId: string }).threadId : null;
     const changedItemId = (flagged[0]?.envelope.op as { itemId?: string }).itemId ?? null;
+    const snapshot = await routes.snapshot(p.id).catch(() => null);
+    const thread = threadId ? snapshot?.canvas.threads[threadId] : undefined;
+    const anchoredItem = thread?.anchorItemId ? snapshot?.canvas.items[thread.anchorItemId] : undefined;
+    const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : undefined;
+    const contextItem = anchoredItem ?? item;
     let working: PresenceActivity | null = null;
     if (face) {
-      const snapshot = await routes.snapshot(p.id).catch(() => null);
-      const thread = threadId ? snapshot?.canvas.threads[threadId] : undefined;
-      const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : undefined;
       working = threadId ? { kind: "working", threadId } : item ? { kind: "working", itemId: item.id } : null;
       await routes
         .updateSession(p.id, face.sessionId, {
@@ -970,6 +974,38 @@ async function room(
         })
         .catch(() => {});
     }
+    const guestSpeakerId = speakers.find((id) => !ownersWord(keeping, id, policyState.joined));
+    const guestAsker =
+      guestSpeakerId !== undefined
+        ? (flagged.find((e) => e.envelope.actor.id === guestSpeakerId)?.envelope.actor.name ??
+            known.get(guestSpeakerId) ??
+            policyState.nameOf(guestSpeakerId) ??
+            from)
+        : undefined;
+    const summonsContext: SummonsContext = {
+      ...(thread
+        ? {
+            thread: {
+              id: thread.id,
+              comments: thread.comments.map((c) => ({
+                id: c.id,
+                author: c.author.name,
+                body: c.body,
+              })),
+            },
+          }
+        : {}),
+      ...(contextItem
+        ? {
+            item: {
+              id: contextItem.id,
+              kind: itemKind({ ...contextItem, properties: contextItem.properties ?? {} }),
+              title: contextItem.title,
+            },
+          }
+        : {}),
+      ...(guestAsker ? { wokenBy: { asker: guestAsker, owner: owner.name } } : {}),
+    };
     const beat = (patch: UpdateSessionRequest): void => {
       if (!face) return;
       void routes.updateSession(p.id, face.sessionId, { actor: record.actor, ...patch }).catch(() => {});
@@ -1015,7 +1051,7 @@ async function room(
       let lastToolBeat = 0;
       const turn = await agent.prompt(
         session.sessionId,
-        summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }),
+        summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }, summonsContext),
         (event) => {
           if (event.kind === "permission") say(`permission ${event.detail}`);
           if (event.kind === "tool" && event.detail && clock.now() - lastToolBeat >= 2_000) {

@@ -1,9 +1,9 @@
 ---
-status: designed
-since: 2026-09-19
+status: partial
+since: 2026-09-20
 issue: 337
 see: judge, evals, embed
-note: a video of voice-driven canvas editing ("move the red one next to the blue one, actually undo that") asked whether Gemini Live 3.8 and Jev could do this in isocan. Both halves of the marriage are further along than expected — `models/gemini-3.8-live` is wired and verified, `@isocan/talk` already hands the model 47 canvas ops as tools, and function calling is synchronous. The blocker is neither model. `canvasSnapshotText` hands a live session `title [id]` per item and nothing else — no position, no size, no kind, no colour — so "the red one" is not hard to resolve but IMPOSSIBLE, and "next to" is uncomputable from what the model is shown. The finding is that the bottleneck is the projection, not the judge: widening it needs no vendor at all and gets most of the demo with Gemini alone. Jev's contribution is specifically latency and a confidence that decides act-versus-ask — not capability. `Item` carries no colour field, so "red" is derivable for strokes and unknowable for a picture's face; that is the one genuinely new mechanism the demo needs.
+note: Steps 1–3 built 19–20 Sep 2026 — `canvasSnapshotText` widened with kind, `W×H at (x,y)` and `itemColour` (`packages/core/src/colour.ts`), and `besideBox` (`packages/core/src/placement.ts`) wired into `move_item`'s `beside`/`side` parameters in `@isocan/voice-agent` and `@isocan/talk`. Still open: step 4 (dominant colour for raster images at upload) and step 5 (putting `@isocan/judge` in front of `resolveItem` when `matchItemRef` returns ambiguous).
 ---
 
 # Move the red one

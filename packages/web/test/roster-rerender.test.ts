@@ -96,9 +96,11 @@ beforeEach(async () => {
   commits = new Map();
   const items = Object.values(useCanvasStore.getState().canvas!.items);
   expect(items).toHaveLength(ITEMS);
-  act(() => root.render(h(MemoryRouter, null, ...items.map((item) =>
-    h(Profiler, { key: item.id, id: item.id, onRender: (id: string) => commits.set(id, (commits.get(id) ?? 0) + 1) },
-      h(ItemView, { item, canvasId: "prj_acme", actor: acme }))))));
+  await act(async () => {
+    root.render(h(MemoryRouter, null, ...items.map((item) =>
+      h(Profiler, { key: item.id, id: item.id, onRender: (id: string) => commits.set(id, (commits.get(id) ?? 0) + 1) },
+        h(ItemView, { item, canvasId: "prj_acme", actor: acme })))));
+  });
   commits.clear();
 });
 

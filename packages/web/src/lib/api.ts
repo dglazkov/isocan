@@ -1302,6 +1302,7 @@ export function unstageLocalBlob(canvasId: string, blobHash: string): void {
   stagedBlobs.delete(`${canvasId}/${blobHash}`);
 }
 
+/** URL for an `<img src>`, video, or iframe — returns an inline data URL while a blob is staged in the offline queue. */
 export function blobUrl(canvasId: string, blobHash: string): string {
   return stagedBlobs.get(`${canvasId}/${blobHash}`)?.dataUrl ?? `/api/projects/${canvasId}/blobs/${blobHash}`;
 }

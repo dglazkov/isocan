@@ -1244,7 +1244,9 @@ program
             scope:
               resolved.source === "session"
                 ? `this agent session (${resolved.harness})`
-                : "this machine's person",
+                : resolved.source === "upstream"
+                  ? "upstream badge"
+                  : "this machine's person",
             file: resolved.file,
           });
         }
@@ -1276,7 +1278,12 @@ program
           home: client.base,
         });
       }
-      const suffix = resolved.source === "session" ? " — this agent session" : "";
+      const suffix =
+        resolved.source === "session"
+          ? " — this agent session"
+          : resolved.source === "upstream"
+            ? " — upstream badge"
+            : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
       // The badge, never its secret. Nothing is DONE to a badge in this phase
       // — getting one is automatic and invisible, which is the point of it —

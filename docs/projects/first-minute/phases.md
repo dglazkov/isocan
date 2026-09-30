@@ -5,11 +5,9 @@ Each phase ends with **Trajectory**: only what the phase discovered
 that changes the project's course. A phase that went as planned leaves
 it empty.
 
-**Where we are: phases 0 to 3 are done; phase 4 is next, and it opens with a
-decision that is Dimitri's.** Seven phases. Phases 0 to 3
-need no person. Phases 4 and 5 each open with a decision that is Dimitri's
-(design.md, "Open doors") and stop there until it is made. Phase 6 is the
-walk in the sandbox #332 was measured in, which lives in
+**Where we are: phases 0 to 5 are done; phase 6 (the walk in isocannery's
+sandbox) is next.** Seven phases. Phases 0 to 5 are built and tested in the
+suite. Phase 6 is the walk in the sandbox #332 was measured in, which lives in
 dglazkov/isocannery and needs its owner. The rule for every phase:
 `npm test` and `npm run typecheck` whole, and `npm run test:deep` before the
 push.
@@ -165,9 +163,12 @@ build-time text constants, which is the same end by a different means.
 
 ## Phase 4 — The guide in tiers, the summons with its context
 
-**Status: OPEN — waiting on Dimitri.** The proposed cut is
-[guide-cut.md](guide-cut.md): a core of about 6,600 tokens against today's
-46,700, 46 topics, and three judgements named. Nothing is built.
+**Status: DONE, 30 Sep 2026.** The tiered guide (`isocan --agent-help` cold
+start under 3,500 tokens + topic index, `packages/cli/test/agent-guide.test.ts`
+and `packages/cli/test/surface.test.ts`) and `SummonsContext` in
+`packages/rc/src/helpers.ts` + `packages/rc/src/room.ts` carrying the thread's
+earlier comments, the anchored item's `id`, `kind`, and `title`, and the
+non-owner standing sentence (#273). Proof in `packages/rc/test/room.test.ts`.
 
 **Outcome:** opens with a proposed cut of `agent-guide.md` into a core and
 topics, as a list of headings with token counts, and stops for Dimitri.
@@ -186,10 +187,12 @@ item's title.
 
 ## Phase 5 — An agent that holds no secret
 
-**Status: OPEN — waiting on Dimitri.** The three shapes are
-[no-secret-identity.md](no-secret-identity.md), with environment variables
-recommended and the proxy half noted as having no decision in it. Nothing is
-built.
+**Status: DONE, 30 Sep 2026.** Shape 1 (`ISOCAN_BADGE_UPSTREAM=1` with
+`ISOCAN_ACTOR_ID` and `ISOCAN_ACTOR_NAME`) in `packages/api/src/identity.ts`,
+`packages/api/src/client.ts`, `packages/api/src/routes.ts`, and
+`packages/cli/src/main.ts`, plus `EnvHttpProxyAgent` and `proxyForBase` in
+`packages/api/src/client.ts`. Documented under topic `homes` in
+`packages/cli/src/agent-guide.md`; proof in `packages/cli/test/direct.test.ts`.
 
 **Outcome:** opens with the three shapes design.md names, one recommended,
 and stops for Dimitri. After the decision: the chosen mode is documented in

@@ -3,11 +3,90 @@ import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import path from "node:path";
 import { packageBin, packageRoot } from "@isocan/core/packageroot";
-import { Agent, fetch as undiciFetch } from "undici";
+import { Agent, EnvHttpProxyAgent, fetch as undiciFetch, setGlobalDispatcher } from "undici";
 import { isLoopbackBase } from "@isocan/core";
-import type { SourceRequestContext } from "@isocan/core";
+import type { BadgeStore, SourceRequestContext } from "@isocan/core";
 import { fileBadgeStore, paths } from "@isocan/server";
+import { isBadgeUpstream } from "./identity.ts";
 import { DaemonRoutes, platformFetch } from "./routes.ts";
+
+if (
+  process.env.https_proxy?.trim() ||
+  process.env.HTTPS_PROXY?.trim() ||
+  process.env.http_proxy?.trim() ||
+  process.env.HTTP_PROXY?.trim()
+) {
+  setGlobalDispatcher(new EnvHttpProxyAgent({ proxyTunnel: false }));
+}
+
+const upstreamBadgeStore: BadgeStore = {
+  upstream: true,
+  async read() {
+    return null;
+  },
+  async keep() {},
+};
+
+/**
+ * The proxy URL configured in `env` for `base`, or `null` when none is set or
+ * `NO_PROXY` / `no_proxy` excludes the target host and port.
+ */
+function proxyForBase(base: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    return null;
+  }
+  const raw =
+    url.protocol === "https:"
+      ? (env.https_proxy ?? env.HTTPS_PROXY ?? env.http_proxy ?? env.HTTP_PROXY)
+      : (env.http_proxy ?? env.HTTP_PROXY ?? env.https_proxy ?? env.HTTPS_PROXY);
+  const proxy = raw?.trim();
+  if (!proxy) return null;
+  const noProxy = (env.no_proxy ?? env.NO_PROXY ?? "").trim();
+  if (noProxy === "*") return null;
+  if (noProxy) {
+    const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    const port = Number.parseInt(url.port, 10) || (url.protocol === "https:" ? 443 : 80);
+    for (const part of noProxy.split(/[,\s]+/)) {
+      if (!part) continue;
+      const m = /^(.+):(\d+)$/.exec(part);
+      const entryHost = (m ? m[1]! : part)
+        .replace(/^\*?\./, "")
+        .replace(/^\[|\]$/g, "")
+        .toLowerCase();
+      const entryPort = m ? Number.parseInt(m[2]!, 10) : 0;
+      if (entryPort && entryPort !== port) continue;
+      if (host === entryHost || host.endsWith(`.${entryHost}`)) return null;
+    }
+  }
+  return proxy;
+}
+
+function proxyFetch(base: string, proxyUrl: string): typeof fetch {
+  const dispatcher = new EnvHttpProxyAgent({
+    httpProxy: proxyUrl,
+    httpsProxy: proxyUrl,
+    noProxy: "",
+    proxyTunnel: false,
+  });
+  return async (input, init) => {
+    try {
+      return (await undiciFetch(input as Parameters<typeof undiciFetch>[0], {
+        ...(init as Parameters<typeof undiciFetch>[1]),
+        dispatcher,
+      })) as unknown as Response;
+    } catch (err) {
+      if (err instanceof Error) {
+        const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+        const detail = cause?.code ?? cause?.message ?? err.message;
+        err.message = `could not reach proxy ${proxyUrl} (for ${base}): ${detail}`;
+      }
+      throw err;
+    }
+  };
+}
 
 /**
  * **A SYN that goes nowhere costs a second, not eight** — the product half of
@@ -132,19 +211,26 @@ export class DaemonClient extends DaemonRoutes {
   readonly home: string;
 
   constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext) {
-    super(base, fileBadgeStore(home, base), lifetime, sourceContext);
+    super(
+      base,
+      isBadgeUpstream() ? upstreamBadgeStore : fileBadgeStore(home, base),
+      lifetime,
+      sourceContext,
+    );
     this.home = home;
   }
 
   /**
    * The Node half's one addition to how a request is MADE, rather than to
-   * what is in it: on this machine, a bounded connect and a bounded retry;
-   * anywhere else, the surface's own default and today's behaviour. See
-   * `boundedFetch` above for why the split is by address.
+   * what is in it: through the configured HTTP(S) proxy when one applies,
+   * else on this machine a bounded connect and a bounded retry, else the
+   * surface's own default.
    */
-  protected override fetcher: typeof fetch = isLoopbackBase(this.base)
-    ? boundedFetch(this.base)
-    : platformFetch;
+  protected override fetcher: typeof fetch = (() => {
+    const proxy = proxyForBase(this.base);
+    if (proxy) return proxyFetch(this.base, proxy);
+    return isLoopbackBase(this.base) ? boundedFetch(this.base) : platformFetch;
+  })();
 
   /**
    * **A blob, as the bytes Node code reads.** The route

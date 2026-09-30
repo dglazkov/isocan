@@ -51,7 +51,7 @@ import { classesOf, eagerWebFiles, namedBy, sources } from "./cssuse.ts";
  * sections whose chunk has no sheet yet, each worth ~40 bytes of entry JS the
  * bundle ceiling no longer has to spare.
  */
-const CEILING = 319;
+const CEILING = 318;
 
 const eagerFiles = eagerWebFiles();
 const isLazyWeb = (file: string) => file.startsWith("packages/web/src/") && !eagerFiles.has(file);

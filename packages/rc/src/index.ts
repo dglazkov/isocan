@@ -27,7 +27,7 @@ export type { BadgeStore, StoredBadge } from "@isocan/core";
 export { canvasUrlWithPass, isLoopbackBase, parseCanvasAddress, type CanvasAddress } from "@isocan/core";
 export { gateTurn, type GuardLimits, type GuardState, type GuardVerdict } from "./guards.ts";
 export type { RcAgentRow } from "./rows.ts";
-export { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus } from "./helpers.ts";
+export { actorNamesOn, itemCenter, nameResolver, summonsPrompt, threadLocus, type SummonsContext } from "./helpers.ts";
 export {
   mapState,
   RoomHold,
