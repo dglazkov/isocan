@@ -15,7 +15,6 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
  */
 describe("the reading-mode door", () => {
   const view = read("../src/components/ItemView.tsx");
-  const css = read("../src/styles.css");
 
   it("renders only for the sole selection or the entered item", () => {
     const at = view.indexOf('className="btn item-read"');
@@ -24,10 +23,9 @@ describe("the reading-mode door", () => {
     expect(guard).toMatch(/\(soleSelection \|\| entered\)/);
   });
 
-  it("hangs below a text node, never over its words, on one line", () => {
-    const rule = css.match(/\.item\.textnode \.item-read \{([^}]*)\}/);
-    expect(rule, "a text-node placement rule exists").not.toBeNull();
-    expect(rule![1]).toMatch(/top:\s*calc\(100% \+ \d+px\)/);
-    expect(rule![1]).toMatch(/white-space:\s*nowrap/);
+  it("is never offered on a text node, where double-click already edits and selects the words", () => {
+    const at = view.indexOf('className="btn item-read"');
+    const guard = view.slice(view.lastIndexOf("{!isCanvasGroup", at), at);
+    expect(guard).toMatch(/!isText/);
   });
 });

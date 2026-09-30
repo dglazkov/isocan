@@ -1193,8 +1193,10 @@ function ItemViewInner({
       {/* The door into reading mode, on the ONE item you chose — not on every
           text item at once. Drawn on all of them it covered the words of small
           chromeless nodes and wrapped into a column of "Read / select text"
-          (reported 30 Sep 2026); double-click still steps inside anything. */}
-      {!isCanvasGroup && (soleSelection || entered) && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
+          (reported 30 Sep 2026); double-click still steps inside anything. Never on a
+          text node: double-click already edits and selects its words there, and a
+          door below the words sat on the selection's own Full screen chip. */}
+      {!isCanvasGroup && !isText && (soleSelection || entered) && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
         <button type="button" className="btn item-read" aria-label={entered ? "Done reading" : `Read ${item.title} and select text`}
           onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
           {entered ? "Done reading" : "Read / select text"}
