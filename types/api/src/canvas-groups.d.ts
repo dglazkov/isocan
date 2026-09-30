@@ -150,7 +150,7 @@ export declare class CanvasGroups {
         tidy?: boolean;
         dryRun?: boolean;
     }): Promise<CanvasGroupResult>;
-    /** Grid counts and optional names use the same saved layout as the browser. */
+    /** Grid counts and optional names use the same saved layout, and the same act, as the browser (`groupGridAction`). */
     grid(ref: string, counts: {
         rows: number;
         columns: number;

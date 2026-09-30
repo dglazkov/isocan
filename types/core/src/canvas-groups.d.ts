@@ -1,5 +1,5 @@
 import type { Actor, CanvasContents, CanvasState, Item } from "./model.js";
-import type { GroupAction, GroupAnchor, GroupBox, GroupCell, GroupChange, GroupExpectation, GroupOperation, GroupPlacementPolicy, GroupStamp } from "./canvas-group-types.js";
+import type { GroupAction, GroupAnchor, GroupBox, GroupCell, GroupChange, GroupExpectation, GroupLayout, GroupOperation, GroupPlacementPolicy, GroupStamp } from "./canvas-group-types.js";
 import type { Operation } from "./ops.js";
 /** Empty frames have one shared initial size on the CLI and browser shelf. */
 export declare const GROUP_DEFAULT_SIZE: {
@@ -39,6 +39,29 @@ export declare function groupFrameMinimum(item: Item): {
     width: number;
     height: number;
 };
+/** The row and column labels past a saved count: what `groupGridLayout` drops, for a surface to say before it saves. */
+export declare function groupGridTrimmedLabels(layout: GroupLayout | null | undefined): {
+    rows: string[];
+    columns: string[];
+};
+/**
+ * Counts and labels are one save. A count lowered below its labels drops the
+ * labels past it in the same layout — one op, one undo — so a grid a surface
+ * lets a person make is one the writer accepts. Members are not bound to
+ * cells: they keep their positions, and the frame still encloses them.
+ */
+export declare function groupGridLayout(layout: GroupLayout | null | undefined): GroupLayout;
+/** One grid act for every surface: counts and optional names over the saved layout, or `null` to clear the grid. */
+export declare function groupGridAction(group: Item, counts: {
+    rows: number;
+    columns: number;
+} | null, options?: {
+    rows?: string[];
+    columns?: string[];
+    tidy?: boolean;
+}): Extract<GroupAction, {
+    kind: "layout";
+}>;
 /** Historical dense grids stay readable; both surfaces can disclose that full spacing needs a larger frame. */
 export declare function groupGridNeedsRoom(item: Item): boolean;
 /** A cell's usable box excludes saved row/column gutters and inter-cell clearance. */

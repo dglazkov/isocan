@@ -23,6 +23,10 @@ second week.
 
 ## 30 September 2026
 
+- **A group's grid can shrink and be cleared from the canvas.** Lowering rows
+  or columns below the number of labels now saves, showing which labels it
+  drops (one undo) — `isocan canvas group grid` had the same refusal and is
+  fixed too. A new *Clear grid* button removes a group's grid.
 - **Coloured text in a named font.** Pick a colour or one of ten families
   (Inter, IBM Plex, Fraunces, Lora, Space Grotesk, JetBrains Mono…) from the
   text bar, or `isocan text --color blue --font Fraunces`. A named colour picks
