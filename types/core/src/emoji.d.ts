@@ -18,7 +18,7 @@
  * entry chunk (the `arrow.ts` lesson). So would the one top-level call in the
  * file losing its `@__PURE__` — see `ALL_EMOJI`.
  *
- * The set is ~580 marks across fourteen groups, each with the words somebody
+ * The set is ~600 marks across fourteen groups, each with the words somebody
  * would actually type to find it. Keywords are lowercase and matched as
  * PREFIXES of whole words, so "fi" finds 🔥 (fire) and "re" finds ❤️ (red
  * heart) without "ire" matching either — substring search on a set this size
@@ -34,7 +34,7 @@
  * country name and its two-letter code, because somebody reaching for theirs
  * types either one.
  *
- * It is still curation, not completeness — ~580 of Unicode's ~1,900, chosen
+ * It is still curation, not completeness — ~600 of Unicode's ~1,900, chosen
  * so that every one of them has words worth searching. A full dataset is the
  * 200–800KB this file exists not to ship.
  *

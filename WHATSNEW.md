@@ -29,6 +29,11 @@ second week.
 - **Your own pointer wears your mark.** If you've picked an emoji for your
   face, your pointer is that emoji on your screen too, not only on everyone
   else's. Without one, you wear the canvas's pointer.
+- **More sports in the emoji picker.** Cricket 🏏, softball, field and ice
+  hockey, lacrosse, frisbee, curling, golf, surfing, rowing, fencing,
+  handball, horse racing, diving, roller skating, sledding, kites and
+  boomerangs. "pickleball" finds 🏓 (Unicode has no pickleball of its own), and
+  "soccer" finds ⚽.
 
 ## 30 September 2026
 
