@@ -553,7 +553,9 @@ import {
   CONTRAST_BODY,
   contrastRatio,
   designSurface,
+  luminance,
   parseDesign,
+  parseHex,
   resolveToken,
   serializeDesign,
   toCss,
@@ -10264,7 +10266,7 @@ var talkCli = {
 };
 
 // packages/modules/wireframe/agent-guide.md
-var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module. The file is **the screen alone** \u2014 no name strip\nabove it and no device outline inside it: the item\'s own title names it and\nthe item\'s own frame is the device. The screen\'s own chrome (status bar, app\nbar, tab bar) stays.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; without a key the default is `--answerer home` \u2014 Jev\n  through the canvas\'s home, with the home\'s key \u2014 and when the home has no\n  key either it says so and the stub answers; `--answerer stub` draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. A person does the same from the Chat with\n  `/wire <request>` (and `/wire prototype`, `/wire style [name]`, `/wire flesh`,\n  `/wire rerender`): the browser runs this same composer against the home\'s\n  judge, as that person, and when it finishes it leaves one **record in the\n  Chat** in the Wire builder\'s words \u2014 what was made and the numbers \u2014 in\n  the act\'s own op group, so the undo that takes the flow back takes its\n  record too. The CLI prints those lines to you instead and posts nothing:\n  post your ONE comment saying what landed. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere.\n- **Round 1 over-includes; the prototype prunes.** An archetype the\n  answerer gives P(yes) \u2265 0.5 is a screen of the flow; one from 0.3 up to\n  0.5 is drawn too, in its running place in the row, but marked **maybe**:\n  the item carries `wireMaybe=<p>` (set by the op that adds it), its spec\n  `"maybe": true`, and its title reads `(maybe)` in the lines and the Chat\n  record. The canvas draws a dashed blue outline round it and a *maybe* tag\n  above its top edge \u2014 outside the screen, never over it \u2014 **while it is\n  not in the prototype** (the tag\'s tooltip: *Not in the prototype yet \u2014 \u21E7K\n  to use it*): using it is the answer, so the mark goes; remove it from the\n  prototype and the mark returns. A maybe gets no variations until someone\n  uses it (`wire vary` draws them).\n  Under 0.3 it is declined. Jev ranks screens well and is overconfident\n  about them (phase 6), so a maybe is often wanted: look at each one and\n  **use what belongs in the prototype (\u{1F4D0})** \u2014 a maybe left out is only a\n  screen on the canvas, never in `wire links`, the arrows or the prototype. Every\n  composed screen\'s spec carries `need`, round 1\'s P(yes) for it, and\n  `by` \u2014 who drew it: `{ actor: {id, name}, answerer: "jev" | "stub" |\n  "agent", via?: "home", model? }` \u2014 so a later reader (or a \u{1F4D0} mark that\n  labels a decision) knows whether Jev chose it or the stub threw dice. A\n  variation carries its screen\'s answerer and the actor who asked for it.\n- **Variations come at the end of every flow**, in the same op group:\n  under each screen, up to two siblings titled `<Screen> \xB7 <what flipped>`\n  (`List \xB7 data table instead of stacked list`, `Detail \xB7 without button\n  group`, `Home \xB7 with stats row`). Each flips ONE decision to its runner-up,\n  where the answerer was least certain \u2014 the decision whose runner-up held\n  the most probability first \u2014 and nothing whose runner-up is under 0.10.\n  Nothing is asked again: the probabilities are the ones the screen already\n  carries. A screen whose answerer was sure everywhere gets no sibling and\n  says **one way to draw this** (the screen\'s tooltip, `data-varied="none"`\n  on its body, and the CLI\'s line). A variation\'s spec has\n  `variantOf` (its screen\'s item id) and `flip` (`{slot, from, to}`; `omit`\n  is a section left out). The header and nav are never varied \u2014 the flow\n  fixed them once for every screen.\n- `isocan wire vary <screen> [--count n]` adds more, the next least certain\n  flips a sibling does not already show, under the lowest sibling, in an op\n  group of their own, inside the screen\'s canvas group when it has one;\n  `--count` is how many variations the screen should\n  have in all (default 2), so running it twice adds nothing. It refuses a\n  variation (vary its screen) and a hand-drawn screen (no distribution).\n- **Use in prototype (\u{1F4D0})**: `isocan wire use <screens...>` puts screens\n  in the prototype \u2014 the property `wireKeep=yes` through `item.update`, as\n  a slide is marked, so anyone can take it off with\n  `isocan wire unuse <screens...>`. Every screen stays on the canvas either\n  way: the mark only says which ones the prototype plays. The mark was born\n  as *keep*, and `wire keep|unkeep` still work \u2014 the same act under its\n  first names; the property keeps its name too. `isocan wire kept` lists\n  the screens in the prototype in reading order (rows top to bottom, each\n  left to right). A variation can be used in place of its screen. People do\n  the same from the item menu (\u{1F4D0} *Use in prototype* / *Remove from\n  prototype*) or \u21E7K; a marked screen\'s \u{1F4D0} says *In the prototype*.\n  `isocan wire kept --prototype <item>` lists only the screens that\n  prototype plays, in its order \u2014 its flow\'s marked screens and any guest\n  marked in another flow; it is what a person sees when they select the\n  prototype on the canvas (its screens pulse, then stay outlined, and\n  everything else dims \u2014 their view only, nothing is written).\n- **Links are computed, never stored.** `isocan wire links [screen]` prints\n  where every hotspot on the screens in the prototype goes, worked out each\n  time from intents, archetypes and reading order: an intent with a target\n  goes to the first screen in the prototype of that archetype (`sign-in` \u2192\n  the first home, list or feed; `next`/`continue`/`save` \u2192 the next screen\n  in it); `back` and an app bar\'s chevron go back; a list, grid, table or\n  feed row opens the first `detail` in it after the row\'s screen; a nav item\n  can say it IS one of the flow\'s screens \u2014 `open-list`, `open-feed`,\n  `open-gallery` go to the first list, feed or gallery in the prototype (and a fleshed one reads in the pack\'s words, "Deliveries") \u2014\n  so when you answer round 3, give the tab that shows the list `open-list`\n  rather than a jump whose screen does not exist; tab *i* whose intent found\n  nothing takes the *i*-th top-level screen (one that draws the nav) no other\n  tab reaches. Anything else that navigates and found nothing is **dashed**\n  and says what it needs (`- - needs Settings`) \u2014 the list of screens still\n  to make. A hotspot\'s key is `<slot>#<element>` (`main.3#row`,\n  `header#leading`, `nav#tab-2`); `--json` has every link with its `rule`.\n- `isocan wire link <screen> <element> <target>` overrides one hotspot \u2014\n  `<element>` is the key or its part after `#` when that is unique \u2014\n  `--none` switches it off, `--back` sends it back, `--clear` gives it back\n  to the rules. Each hotspot\'s override is its own property on the source\n  screen, `wireLink:<slot>#<element>`, through `item.update` \u2014 so two `wire\n  link` calls on one screen at once (or a person retargeting an arrow while\n  you relink) both survive; a screen still carrying the older `wireLinks`\n  JSON is folded into per-hotspot properties by the first write. It reads\n  only the source screen\'s file and exits when the write lands; one `isocan\n  undo` takes it back. A target may be a screen **in another flow\'s prototype**:\n  the link resolves, and that screen joins this flow\'s prototype so the\n  link plays.\n- **The canvas draws one arrow per hotspot**, flow by flow \u2014 so the rows of\n  `wire links` that go to a screen and the arrows correspond one to one (tabs\n  show only while a person points at their screen; back never). A person\n  can click an arrow to change where it goes, remove it or reset it: each is\n  exactly the `wire link` above, and `/wire links` in the dialog is the same\n  table with a picker per hotspot. `isocan wire play <screen> [element]`\n  prints the address that opens the flow\'s prototype full screen AT that\n  screen, the hotspot pointed out \u2014 what an arrow\'s *Play from here* opens;\n  it writes nothing.\n- `isocan wire prototype` assembles a flow\'s screens marked \u{1F4D0} (`--flow\n  <id>` when more than one flow has some) as **one self-contained HTML\n  item** centred **above** them, clear of the arrows\' lanes and of anything\n  already there (higher still if it must be) \u2014 inside the canvas group those\n  screens share, when they share one: every screen, a router with a history\n  stack, the links as click targets, a push / pop / fade / slide-up by link\n  kind, a Restart. **It follows its marks**: using a screen in it or\n  removing one \u2014 `wire use|unuse|keep|unkeep`, \u21E7K, the item menu \u2014\n  re-versions a flow\'s prototype in the same op group as the mark, so one\n  `isocan undo` takes back both (the CLI\'s line says `prototype <id>\n  follows`, and `--json` lists it under `prototypes`). Marks never create\n  one: a flow with no prototype stays without until `wire prototype`, and\n  a flow with nothing left marked keeps its prototype as it was. Run `wire\n  prototype` yourself after a screen itself changes, and the same\n  item **gains a version** (found by its `wirePrototype` property); with\n  nothing changed it writes nothing. A rebuild (this, `wire style`, `wire\n  flesh`, `wire render --all`) also moves it back above its flow, in the\n  same op group \u2014 unless it was moved by hand: `wirePrototypeAt` records\n  where it was placed, and a prototype standing anywhere else stays put.\n  `isocan open <item>` plays it full screen.\n- **Wires draw in the canvas\'s design system.** The look is a theme over\n  the same spec: eleven roles (`ground`, `surface`, `line`, `ink`,\n  `ink-muted`, `bar`, `primary`, `on-primary`, `radius`, `font`, `space`),\n  by default the greys. `isocan wire style` restyles every wire on the\n  canvas in the `DESIGN.md` that governs where it sits (a group\'s own system\n  first, then the canvas\'s \u2014 `isocan design set DESIGN.md [--in <group>]`):\n  Jev maps the system\'s own tokens onto the roles \u2014 one choice per role over\n  the token names, once per system *version* \u2014 and every wire whose theme\n  changed gains a version, in one op group, so one `isocan undo` takes the\n  restyle back. The output names the token chosen for each role with its\n  probability; a role Jev is unsure of (under 0.5) keeps the default and says\n  so, and an on-primary under 4.5:1 against primary becomes the system\'s ink\n  or ground. Nothing is ever a colour the system does not hold. Blueprints\n  stay blue in every system. `--default` restores the greys; `--flow <id>`\n  restyles one flow; `--check` writes nothing and lists wires behind the\n  system that governs them (a new `DESIGN.md` version does not restyle\n  anything by itself \u2014 run `wire style` to bring them forward, or\n  `wire style <screen>` for one wire\'s flow, which is what the canvas\'s\n  quiet **behind** tag under the wire and its menu\'s *Restyle to <system>*\n  run; the DESIGN.md\'s own tag says how many wires are behind it). A wire is\n  behind only when something it draws from moved \u2014 a token one of its roles\n  took, a role that now has something to draw from, or the `surface:` \u2014 so a\n  version that only adds tints is not. Running it\n  again with nothing changed asks nothing and writes nothing \u2014 and a new\n  system version that maps every role to the same values as before writes\n  nothing either (the wire looks the same; its spec keeps naming the version\n  that drew it). Words drawn in the primary\'s voice on the ground \u2014 text\n  links, secondary and tertiary button labels, the current tab \u2014 use the\n  primary only where it reads at 4.5:1 on the ground, else the ink. A flow\'s\n  prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the\n  home\'s judge maps it; when the home has no key either, the stub answers,\n  and its flat distributions keep every asked role at the default. The spec records it as `style` (`{ "source": "design-system",\n  "itemId", "versionId", "roles", "surface"? }`).\n- **Wire styles \u2014 a named look in one act.** `isocan wire style --preset\n  <name> [screens\u2026]` puts a flow in a ready-made look: `material`,\n  `shadcn`, `glass`, `ios`, `fluent`, `carbon`, `brutalist` (the module\'s\n  own \u2014 original token sets inspired by each system, system fonts only), or\n  a design-competition pack by name (`rams`, `linear`, `frog`, \u2026). `house`\n  is the default greys. `--list` names them all. One op group does three\n  things, so one `isocan undo` takes all of it back: the style\'s DESIGN.md\n  lands beside the flow as an item marked `wirePreset=<name>` (or, where the\n  flow\'s scope already wears a wire style, that item gains a new version and\n  name \u2014 styles never pile up); it becomes the design system of the flow\'s\n  group, or of the canvas when the flow is in none (the op `design use`\n  sends); and the flow is restyled. `house` moves the style\'s DESIGN.md to\n  the trash and returns the greys. With screens named, only their flows;\n  with none, every wire. A scope governed by a DESIGN.md somebody wrote is\n  refused, never versioned over \u2014 the error says how to stop it governing.\n  The module\'s own styles name their tokens for the wire\'s roles, so nothing\n  is asked (the output says "named for the role"); a pack is mapped by the\n  answerer once, like any system. A person does the same by right-clicking a\n  wire \u2192 **Style \u25B8** (ticked on the current one), or `/wire style <name>`;\n  `/wire style` alone lists them, and `/wire style system` is the plain\n  restyle above.\n- **`surface:` in a DESIGN.md** \u2014 isocan\'s one addition to the format: `flat`\n  (the default, and what an absent or unknown value reads as), `raised`\n  (elevation shadows on cards, bars, sheets), `glass` (translucent panes\n  with a backdrop blur over a gradient ground drawn from the system\'s own\n  primary and surface) or `bold` (thick ink borders, hard offset shadows).\n  `isocan design check` warns on a value it does not know. A DESIGN.md that\n  names all eight colour roles (`colors.ground` \u2026 `colors.on-primary`), with\n  `typography.body`, `rounded.base` and `spacing.base`, maps onto the wire\n  directly, with nothing asked.\n- `isocan wire "<request>"` starts in the governing system: the mapping is\n  asked while round 1 is, and the screens arrive in it. `--in <group>`\n  composes the flow inside a group \u2014 under everything the group already\n  holds, so a second flow never lands across the first\'s variations \u2014 and in\n  that group\'s own system, when it has one. Moving a `DESIGN.md` into or out\n  of a group changes what it governs, and `isocan mv --in` / `canvas group\n  add|remove` say so in a `note:` line.\n- **Fleshed out: sample content instead of bars.** `isocan wire flesh\n  [screens\u2026|--flow <id>] [--pack <id>]` fills every wire with believable\n  content for *this* app \u2014 list rows with titles, second lines and\n  statuses ("Parcel 4471 \xB7 3 items \xB7 Out for delivery"), stats with values\n  and deltas, table cells under domain column names, first names with\n  initials in avatars, greyscale pictograms in image slots, and a heading\n  from the domain ("Deliveries" instead of "List"). The screen is **named**\n  in the pack\'s words too \u2014 a list "Deliveries", a detail "Delivery", a\n  form "New delivery", a search "Search deliveries" (a home or a sign-in\n  keeps its name) \u2014 and so is its item, in the same op group, unless\n  somebody renamed the item: a name a person or an agent gave is never\n  overwritten. `--bars` names them back. A block\'s lone bare verb says what\n  it acts on ("Edit delivery", "Edit profile"; `actions.<element>` in `wire\n  copy`). The words come from one\n  of 24 synthetic **content packs** (`wire flesh --packs` lists them), never\n  written by a model: Jev chooses the pack per flow from its request \u2014 one\n  choice question, its p printed and recorded on each screen as `content`\n  (`{ "source": "pack", "pack", "p", "by", "title" }`); under 0.4 the\n  generic pack fills and the line says so; `--pack <id>` overrides a wrong\n  guess without asking. Each slot\'s words are stored as `fill` in the spec,\n  seeded by the screen\'s item id and the slot (a variation\'s by its\n  screen\'s), so a re-render, `wire style`, `wire vary` and `wire prototype`\n  all show the same content. One op group, a version per wire whose content\n  changed; running it again asks nothing and writes nothing; `--bars` goes\n  back to bars. Blueprints stay blue and unfilled. A flow\'s prototype\n  is rebuilt in the same group. People do the same with `/wire flesh` in\n  the Chat.\n- **A composed flow arrives fleshed.** `isocan wire "<request>"` (and\n  `/wire <request>`) asks for the pack beside round 1 \u2014 one call more \u2014 so\n  the screens land blue, then grey (round 2), then filled (round 3), all in\n  the flow\'s one op group: one `isocan undo` takes the flow back, content\n  and all. Its variations, and later `wire vary`\'s, take the same pack.\n  `--pack <id>` picks the pack without asking; `isocan wire --basic\n  "<request>"` (`/wire basic <request>` in the Chat) composes plain grey\n  wires with no content, and `wire flesh --bars` takes content off\n  afterwards. A pack that cannot be chosen leaves the flow in bars and says\n  so. The agent path (`--answerer agent`) fills nothing: once your rounds\n  are answered, `isocan wire flesh --flow <id>` does.\n- **A composed flow ends with a prototype you can click.** After round 3\n  (and the flesh), the first choice of every row round 1 was confident of\n  (P(yes) \u2265 0.5) goes in the prototype (\u{1F4D0}) \u2014 never a *maybe*, never a\n  variation \u2014 and the prototype is built above the row (a flow composed\n  under others starts its row lower, leaving the prototype that room), all\n  in the flow\'s op group: one `isocan undo` takes the screens, the picks and the\n  prototype back together. The arrows draw between those screens at once.\n  The lines (and `--json`\'s `prototype`) say which item it is, what it\n  plays and whose first choices they are; in the Chat the record says\n  "Prototype of 6 screens, Jev\'s first choices \u2014 swap in a variation with\n  \u21E7K and the prototype follows". To swap: `isocan wire use <variation>`\n  and `isocan wire unuse <its screen>` \u2014 the prototype follows each. `--basic` puts nothing in a prototype and builds none; so does the\n  agent path \u2014 you answered, so you choose, then `wire prototype`.\n- **Who put a screen in the prototype** is `wireKeepBy` beside `wireKeep`:\n  `jev` or `stub` when a composed flow picked it (the answerer whose first\n  choice it was), the actor\'s id when a person or an agent used it \u2014 \u21E7K,\n  the menu, `wire use|keep`. Taking the mark off takes `wireKeepBy` with\n  it. A person swapping a variation in for one of Jev\'s picks is the\n  calibration signal, so never re-mark a screen Jev picked just to sign\n  it, and never mark one "as Jev".\n- `isocan wire copy <screen>` prints a fleshed screen\'s words as JSON \u2014\n  per slot, each word by path (`items.0.title`, `stats.1.value`,\n  `labels.2`). Edit the words, then `isocan wire copy <screen> --apply\n  <file>` writes them as one version, with `content.source` `"copy"` and\n  `--by <name>` recorded; a path the slot does not hold is refused, so copy\n  changes words, never the screen\'s shape. `"title"` sets the heading.\n  `wire flesh` leaves a copied screen alone unless `--pack` or `--bars`.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n- `isocan wire render --all [--flow <id>]` **re-renders every wire already\n  on the canvas** from the spec it carries \u2014 how a change to the renderer\n  reaches screens drawn before it (a flesh or a restyle writes only where\n  the spec changed). A version only where the bytes differ, the item resized\n  where the screen\'s size moved, the flows\' prototypes rebuilt, all one op\n  group; it says how many changed, and a rerun writes nothing. `/wire\n  rerender` in the Chat does the same.\n- **Finding prototypes**: a prototype item carries `wirePrototype=<flow>`\n  and is titled `Prototype \xB7 <request>`, so `isocan ls --filter Prototype` finds\n  them (`--json` shows the property). In the web app \u2318K *Find prototypes* (or\n  `/wire prototypes`) lists them and selects them, and while a pointer is on\n  the minimap every prototype is lit and everything else steps back.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n52; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; body copy is grey bars, never lorem ipsum \u2014 until `wire\nflesh` fills it from a content pack. If you want real copy on a screen,\nthat is a separate, honest act \u2014 `wire copy <screen> --apply <file>` \u2014\nnot a label smuggled into an intent.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
+var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec drawn from a catalog**: an archetype\'s recipe\n(`sign-in`, `home`, `list`, `detail`\u2026 \u2014 18 of them) names its slots, and each\nslot holds one block chosen from two to four options (`stacked-list |\ncard-grid | data-table`). A slot nobody has chosen draws as a **blue\nblueprint box** with its name; a chosen one draws in **grey**. The screen\nlands as an ordinary HTML item with its spec embedded in it, so comments,\nversions, undo and `isocan get` all work on it, and it still renders on a\nhome without this module. The file is **the screen alone** \u2014 no name strip\nabove it and no device outline inside it: the item\'s own title names it and\nthe item\'s own frame is the device. The screen\'s own chrome (status bar, app\nbar, tab bar) stays.\n\n- `isocan wire "<request>"` composes a **flow** from words: a blueprint\n  titled with the request lands at once, then an answerer is asked in three\n  rounds \u2014 the flow (which archetypes, the platform, the shared nav and\n  header), each screen\'s structure, each screen\'s props and intents \u2014 and\n  each round writes a new version into the same items, so the row goes blue\n  then grey in place. The whole request is one op group: one `isocan undo`\n  takes it all back. `--answerer jev` (the default when `TYPESAFE_API_KEY`\n  is set) asks Jev; without a key the default is `--answerer home` \u2014 Jev\n  through the canvas\'s home, with the home\'s key \u2014 and when the home has no\n  key either it says so and the stub answers; `--answerer stub` draws a\n  random but valid flow, deterministic under `--seed`; `--answerer agent`\n  leaves the rounds to you. A person does the same from the Chat with\n  `/wire <request>` (and `/wire prototype`, `/wire style [name]`, `/wire flesh`,\n  `/wire rerender`): the browser runs this same composer against the home\'s\n  judge, as that person, and when it finishes it leaves one **record in the\n  Chat** in the Wire builder\'s words \u2014 what was made and the numbers \u2014 in\n  the act\'s own op group, so the undo that takes the flow back takes its\n  record too. The CLI prints those lines to you instead and posts nothing:\n  post your ONE comment saying what landed. The last line says who answered, the latency\n  per round, calls, input tokens and cost. `--save <dir>` keeps every\n  round\'s request and response; `--at x,y` starts the row somewhere;\n  `--pin <key=value...>` pins root decisions up front (`platform=web`,\n  `density=compact`, `template=dashboard`, `pack=commerce`) and stamps them in\n  `spec.pinned`; `--no-ask` suppresses root entropy `/ask` disambiguation\n  prompts and picks top-1 silently.\n- **Round 1 over-includes; the prototype prunes.** An archetype the\n  answerer gives P(yes) \u2265 0.5 is a screen of the flow; one from 0.3 up to\n  0.5 is drawn too, in its running place in the row, but marked **maybe**:\n  the item carries `wireMaybe=<p>` (set by the op that adds it), its spec\n  `"maybe": true`, and its title reads `(maybe)` in the lines and the Chat\n  record. The canvas draws a dashed blue outline round it and a *maybe* tag\n  above its top edge \u2014 outside the screen, never over it \u2014 **while it is\n  not in the prototype** (the tag\'s tooltip: *Not in the prototype yet \u2014 \u21E7K\n  to use it*): using it is the answer, so the mark goes; remove it from the\n  prototype and the mark returns. A maybe gets no variations until someone\n  uses it (`wire vary` draws them).\n  Under 0.3 it is declined. Jev ranks screens well and is overconfident\n  about them (phase 6), so a maybe is often wanted: look at each one and\n  **use what belongs in the prototype (\u{1F4D0})** \u2014 a maybe left out is only a\n  screen on the canvas, never in `wire links`, the arrows or the prototype. Every\n  composed screen\'s spec carries `need`, round 1\'s P(yes) for it, and\n  `by` \u2014 who drew it: `{ actor: {id, name}, answerer: "jev" | "stub" |\n  "agent", via?: "home", model? }` \u2014 so a later reader (or a \u{1F4D0} mark that\n  labels a decision) knows whether Jev chose it or the stub threw dice. A\n  variation carries its screen\'s answerer and the actor who asked for it.\n- **Variations come at the end of every flow**, in the same op group:\n  under each screen, up to two siblings titled `<Screen> \xB7 <what flipped>`\n  (`List \xB7 data table instead of stacked list`, `Detail \xB7 without button\n  group`, `Home \xB7 with stats row`). Each flips ONE decision to its runner-up,\n  where the answerer was least certain \u2014 the decision whose runner-up held\n  the most probability first \u2014 and nothing whose runner-up is under 0.10.\n  Nothing is asked again: the probabilities are the ones the screen already\n  carries. A screen whose answerer was sure everywhere gets no sibling and\n  says **one way to draw this** (the screen\'s tooltip, `data-varied="none"`\n  on its body, and the CLI\'s line). A variation\'s spec has\n  `variantOf` (its screen\'s item id) and `flip` (`{slot, from, to}`; `omit`\n  is a section left out). The header and nav are never varied \u2014 the flow\n  fixed them once for every screen.\n- `isocan wire vary <screen> [--count n]` adds more, the next least certain\n  flips a sibling does not already show, under the lowest sibling, in an op\n  group of their own, inside the screen\'s canvas group when it has one;\n  `--count` is how many variations the screen should\n  have in all (default 2), so running it twice adds nothing. It refuses a\n  variation (vary its screen) and a hand-drawn screen (no distribution).\n- **Use in prototype (\u{1F4D0})**: `isocan wire use <screens...>` puts screens\n  in the prototype \u2014 the property `wireKeep=yes` through `item.update`, as\n  a slide is marked, so anyone can take it off with\n  `isocan wire unuse <screens...>`. Every screen stays on the canvas either\n  way: the mark only says which ones the prototype plays. The mark was born\n  as *keep*, and `wire keep|unkeep` still work \u2014 the same act under its\n  first names; the property keeps its name too. `isocan wire kept` lists\n  the screens in the prototype in reading order (rows top to bottom, each\n  left to right). A variation can be used in place of its screen. People do\n  the same from the item menu (\u{1F4D0} *Use in prototype* / *Remove from\n  prototype*) or \u21E7K; a marked screen\'s \u{1F4D0} says *In the prototype*.\n  `isocan wire kept --prototype <item>` lists only the screens that\n  prototype plays, in its order \u2014 its flow\'s marked screens and any guest\n  marked in another flow; it is what a person sees when they select the\n  prototype on the canvas (its screens pulse, then stay outlined, and\n  everything else dims \u2014 their view only, nothing is written).\n- **Links are computed, never stored.** `isocan wire links [screen]` prints\n  where every hotspot on the screens in the prototype goes, worked out each\n  time from intents, archetypes and reading order: an intent with a target\n  goes to the first screen in the prototype of that archetype (`sign-in` \u2192\n  the first home, list or feed; `next`/`continue`/`save` \u2192 the next screen\n  in it); `back` and an app bar\'s chevron go back; a list, grid, table or\n  feed row opens the first `detail` in it after the row\'s screen; a nav item\n  can say it IS one of the flow\'s screens \u2014 `open-list`, `open-feed`,\n  `open-gallery` go to the first list, feed or gallery in the prototype (and a fleshed one reads in the pack\'s words, "Deliveries") \u2014\n  so when you answer round 3, give the tab that shows the list `open-list`\n  rather than a jump whose screen does not exist; tab *i* whose intent found\n  nothing takes the *i*-th top-level screen (one that draws the nav) no other\n  tab reaches. Anything else that navigates and found nothing is **dashed**\n  and says what it needs (`- - needs Settings`) \u2014 the list of screens still\n  to make. A hotspot\'s key is `<slot>#<element>` (`main.3#row`,\n  `header#leading`, `nav#tab-2`); `--json` has every link with its `rule`.\n- `isocan wire link <screen> <element> <target>` overrides one hotspot \u2014\n  `<element>` is the key or its part after `#` when that is unique \u2014\n  `--none` switches it off, `--back` sends it back, `--clear` gives it back\n  to the rules. Each hotspot\'s override is its own property on the source\n  screen, `wireLink:<slot>#<element>`, through `item.update` \u2014 so two `wire\n  link` calls on one screen at once (or a person retargeting an arrow while\n  you relink) both survive; a screen still carrying the older `wireLinks`\n  JSON is folded into per-hotspot properties by the first write. It reads\n  only the source screen\'s file and exits when the write lands; one `isocan\n  undo` takes it back. A target may be a screen **in another flow\'s prototype**:\n  the link resolves, and that screen joins this flow\'s prototype so the\n  link plays.\n- **The canvas draws one arrow per hotspot**, flow by flow \u2014 so the rows of\n  `wire links` that go to a screen and the arrows correspond one to one (tabs\n  show only while a person points at their screen; back never). A person\n  can click an arrow to change where it goes, remove it or reset it: each is\n  exactly the `wire link` above, and `/wire links` in the dialog is the same\n  table with a picker per hotspot. `isocan wire play <screen> [element]`\n  prints the address that opens the flow\'s prototype full screen AT that\n  screen, the hotspot pointed out \u2014 what an arrow\'s *Play from here* opens;\n  it writes nothing.\n- `isocan wire prototype` assembles a flow\'s screens marked \u{1F4D0} (`--flow\n  <id>` when more than one flow has some) as **one self-contained HTML\n  item** centred **above** them, clear of the arrows\' lanes and of anything\n  already there (higher still if it must be) \u2014 inside the canvas group those\n  screens share, when they share one: every screen, a router with a history\n  stack, the links as click targets, a push / pop / fade / slide-up by link\n  kind, a Restart. **It follows its marks**: using a screen in it or\n  removing one \u2014 `wire use|unuse|keep|unkeep`, \u21E7K, the item menu \u2014\n  re-versions a flow\'s prototype in the same op group as the mark, so one\n  `isocan undo` takes back both (the CLI\'s line says `prototype <id>\n  follows`, and `--json` lists it under `prototypes`). Marks never create\n  one: a flow with no prototype stays without until `wire prototype`, and\n  a flow with nothing left marked keeps its prototype as it was. Run `wire\n  prototype` yourself after a screen itself changes, and the same\n  item **gains a version** (found by its `wirePrototype` property); with\n  nothing changed it writes nothing. A rebuild (this, `wire style`, `wire\n  flesh`, `wire render --all`) also moves it back above its flow, in the\n  same op group \u2014 unless it was moved by hand: `wirePrototypeAt` records\n  where it was placed, and a prototype standing anywhere else stays put.\n  `isocan open <item>` plays it full screen.\n- **Wires draw in the canvas\'s design system.** The look is a theme over\n  the same spec: eleven roles (`ground`, `surface`, `line`, `ink`,\n  `ink-muted`, `bar`, `primary`, `on-primary`, `radius`, `font`, `space`),\n  by default the greys. `isocan wire style` restyles every wire on the\n  canvas in the `DESIGN.md` that governs where it sits (a group\'s own system\n  first, then the canvas\'s \u2014 `isocan design set DESIGN.md [--in <group>]`):\n  Jev maps the system\'s own tokens onto the roles \u2014 one choice per role over\n  the token names, once per system *version* \u2014 and every wire whose theme\n  changed gains a version, in one op group, so one `isocan undo` takes the\n  restyle back. The output names the token chosen for each role with its\n  probability; a role Jev is unsure of (under 0.5) keeps the default and says\n  so, and an on-primary under 4.5:1 against primary becomes the system\'s ink\n  or ground. Nothing is ever a colour the system does not hold. Blueprints\n  stay blue in every system. `--default` restores the greys; `--flow <id>`\n  restyles one flow; `--check` writes nothing and lists wires behind the\n  system that governs them (a new `DESIGN.md` version does not restyle\n  anything by itself \u2014 run `wire style` to bring them forward, or\n  `wire style <screen>` for one wire\'s flow, which is what the canvas\'s\n  quiet **behind** tag under the wire and its menu\'s *Restyle to <system>*\n  run; the DESIGN.md\'s own tag says how many wires are behind it). A wire is\n  behind only when something it draws from moved \u2014 a token one of its roles\n  took, a role that now has something to draw from, or the `surface:` \u2014 so a\n  version that only adds tints is not. Running it\n  again with nothing changed asks nothing and writes nothing \u2014 and a new\n  system version that maps every role to the same values as before writes\n  nothing either (the wire looks the same; its spec keeps naming the version\n  that drew it). Words drawn in the primary\'s voice on the ground \u2014 text\n  links, secondary and tertiary button labels, the current tab \u2014 use the\n  primary only where it reads at 4.5:1 on the ground, else the ink. A flow\'s\n  prototype is rebuilt in the same group. Without `TYPESAFE_API_KEY` the\n  home\'s judge maps it; when the home has no key either, the stub answers,\n  and its flat distributions keep every asked role at the default. The spec records it as `style` (`{ "source": "design-system",\n  "itemId", "versionId", "roles", "surface"? }`).\n- **Wire styles \u2014 a named look in one act.** `isocan wire style --preset\n  <name> [screens\u2026]` puts a flow in a ready-made look: `material`,\n  `shadcn`, `glass`, `ios`, `fluent`, `carbon`, `brutalist` (the module\'s\n  own \u2014 original token sets inspired by each system, system fonts only), or\n  a design-competition pack by name (`rams`, `linear`, `frog`, \u2026). `house`\n  is the default greys. `--list` names them all. One op group does three\n  things, so one `isocan undo` takes all of it back: the style\'s DESIGN.md\n  lands beside the flow as an item marked `wirePreset=<name>` (or, where the\n  flow\'s scope already wears a wire style, that item gains a new version and\n  name \u2014 styles never pile up); it becomes the design system of the flow\'s\n  group, or of the canvas when the flow is in none (the op `design use`\n  sends); and the flow is restyled. `house` moves the style\'s DESIGN.md to\n  the trash and returns the greys. With screens named, only their flows;\n  with none, every wire. A scope governed by a DESIGN.md somebody wrote is\n  refused, never versioned over \u2014 the error says how to stop it governing.\n  The module\'s own styles name their tokens for the wire\'s roles, so nothing\n  is asked (the output says "named for the role"); a pack is mapped by the\n  answerer once, like any system. A person does the same by right-clicking a\n  wire \u2192 **Style \u25B8** (ticked on the current one), or `/wire style <name>`;\n  `/wire style` alone lists them, and `/wire style system` is the plain\n  restyle above.\n- **`surface:` in a DESIGN.md** \u2014 isocan\'s one addition to the format: `flat`\n  (the default, and what an absent or unknown value reads as), `raised`\n  (elevation shadows on cards, bars, sheets), `glass` (translucent panes\n  with a backdrop blur over a gradient ground drawn from the system\'s own\n  primary and surface) or `bold` (thick ink borders, hard offset shadows).\n  `isocan design check` warns on a value it does not know. A DESIGN.md that\n  names all eight colour roles (`colors.ground` \u2026 `colors.on-primary`), with\n  `typography.body`, `rounded.base` and `spacing.base`, maps onto the wire\n  directly, with nothing asked.\n- `isocan wire "<request>"` starts in the governing system: the mapping is\n  asked while round 1 is, and the screens arrive in it. `--in <group>`\n  composes the flow inside a group \u2014 under everything the group already\n  holds, so a second flow never lands across the first\'s variations \u2014 and in\n  that group\'s own system, when it has one. Moving a `DESIGN.md` into or out\n  of a group changes what it governs, and `isocan mv --in` / `canvas group\n  add|remove` say so in a `note:` line.\n- **Fleshed out: sample content instead of bars.** `isocan wire flesh\n  [screens\u2026|--flow <id>] [--pack <id>]` fills every wire with believable\n  content for *this* app \u2014 list rows with titles, second lines and\n  statuses ("Parcel 4471 \xB7 3 items \xB7 Out for delivery"), stats with values\n  and deltas, table cells under domain column names, first names with\n  initials in avatars, greyscale pictograms in image slots, and a heading\n  from the domain ("Deliveries" instead of "List"). The screen is **named**\n  in the pack\'s words too \u2014 a list "Deliveries", a detail "Delivery", a\n  form "New delivery", a search "Search deliveries" (a home or a sign-in\n  keeps its name) \u2014 and so is its item, in the same op group, unless\n  somebody renamed the item: a name a person or an agent gave is never\n  overwritten. `--bars` names them back. A block\'s lone bare verb says what\n  it acts on ("Edit delivery", "Edit profile"; `actions.<element>` in `wire\n  copy`). The words come from one\n  of 24 synthetic **content packs** (`wire flesh --packs` lists them), never\n  written by a model: Jev chooses the pack per flow from its request \u2014 one\n  choice question, its p printed and recorded on each screen as `content`\n  (`{ "source": "pack", "pack", "p", "by", "title" }`); under 0.4 the\n  generic pack fills and the line says so; `--pack <id>` overrides a wrong\n  guess without asking. Each slot\'s words are stored as `fill` in the spec,\n  seeded by the screen\'s item id and the slot (a variation\'s by its\n  screen\'s), so a re-render, `wire style`, `wire vary` and `wire prototype`\n  all show the same content. One op group, a version per wire whose content\n  changed; running it again asks nothing and writes nothing; `--bars` goes\n  back to bars. Blueprints stay blue and unfilled. A flow\'s prototype\n  is rebuilt in the same group. People do the same with `/wire flesh` in\n  the Chat.\n- **A composed flow arrives fleshed.** `isocan wire "<request>"` (and\n  `/wire <request>`) asks for the pack beside round 1 \u2014 one call more \u2014 so\n  the screens land blue, then grey (round 2), then filled (round 3), all in\n  the flow\'s one op group: one `isocan undo` takes the flow back, content\n  and all. Its variations, and later `wire vary`\'s, take the same pack.\n  `--pack <id>` picks the pack without asking; `isocan wire --basic\n  "<request>"` (`/wire basic <request>` in the Chat) composes plain grey\n  wires with no content, and `wire flesh --bars` takes content off\n  afterwards. A pack that cannot be chosen leaves the flow in bars and says\n  so. The agent path (`--answerer agent`) fills nothing: once your rounds\n  are answered, `isocan wire flesh --flow <id>` does.\n- **A composed flow ends with a prototype you can click.** After round 3\n  (and the flesh), the first choice of every row round 1 was confident of\n  (P(yes) \u2265 0.5) goes in the prototype (\u{1F4D0}) \u2014 never a *maybe*, never a\n  variation \u2014 and the prototype is built above the row (a flow composed\n  under others starts its row lower, leaving the prototype that room), all\n  in the flow\'s op group: one `isocan undo` takes the screens, the picks and the\n  prototype back together. The arrows draw between those screens at once.\n  The lines (and `--json`\'s `prototype`) say which item it is, what it\n  plays and whose first choices they are; in the Chat the record says\n  "Prototype of 6 screens, Jev\'s first choices \u2014 swap in a variation with\n  \u21E7K and the prototype follows". To swap: `isocan wire use <variation>`\n  and `isocan wire unuse <its screen>` \u2014 the prototype follows each. `--basic` puts nothing in a prototype and builds none; so does the\n  agent path \u2014 you answered, so you choose, then `wire prototype`.\n- **Who put a screen in the prototype** is `wireKeepBy` beside `wireKeep`:\n  `jev` or `stub` when a composed flow picked it (the answerer whose first\n  choice it was), the actor\'s id when a person or an agent used it \u2014 \u21E7K,\n  the menu, `wire use|keep`. Taking the mark off takes `wireKeepBy` with\n  it. A person swapping a variation in for one of Jev\'s picks is the\n  calibration signal, so never re-mark a screen Jev picked just to sign\n  it, and never mark one "as Jev".\n- `isocan wire copy <screen>` prints a fleshed screen\'s words as JSON \u2014\n  per slot, each word by path (`items.0.title`, `stats.1.value`,\n  `labels.2`). Edit the words, then `isocan wire copy <screen> --apply\n  <file>` writes them as one version, with `content.source` `"copy"` and\n  `--by <name>` recorded; a path the slot does not hold is refused, so copy\n  changes words, never the screen\'s shape. `"title"` sets the heading.\n  `wire flesh` leaves a copied screen alone unless `--pack` or `--bars`.\n- `isocan wire questions` prints the pending round of a flow (`--flow <id>`,\n  default the newest waiting) as a file of calls, each a request in Jev\'s\n  shape (`state` and named questions, of type `noul` \u2014 yes/no \u2014 `choice` or\n  `score`). Fill each call\'s `"response"` in Jev\'s response shape\n  (`{"answers": {"<id>": {"type": "choice", "choice": "\u2026", "probabilities":\n  {\u2026}}}}`, `{"type": "noul", "noul": 0.8}`, `{"type": "score", "score": 2,\n  "probabilities": {"0": \u2026}}`) and `isocan wire answer <file>` applies it;\n  repeat until it says the flow is drawn. An answer with an option its\n  question never offered is refused, and nothing is written.\n- `isocan wire catalog` lists every archetype and each slot\'s options;\n  `--json` adds every block\'s props and every intent.\n- `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);\n  `--resolved` fills each slot with its first option at default props;\n  `--platform app|web|site` sizes it (390\xD7844, 1280\xD7800, 1280 wide).\n- `isocan wire render <spec.json>` draws a spec and adds it to the canvas \u2014\n  one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,\n  `--anchor`, `--in`/`--cell` place it like `isocan add`.\n- `isocan wire render --all [--flow <id>]` **re-renders every wire already\n  on the canvas** from the spec it carries \u2014 how a change to the renderer\n  reaches screens drawn before it (a flesh or a restyle writes only where\n  the spec changed). A version only where the bytes differ, the item resized\n  where the screen\'s size moved, the flows\' prototypes rebuilt, all one op\n  group; it says how many changed, and a rerun writes nothing. `/wire\n  rerender` in the Chat does the same.\n- **Finding prototypes**: a prototype item carries `wirePrototype=<flow>`\n  and is titled `Prototype \xB7 <request>`, so `isocan ls --filter Prototype` finds\n  them (`--json` shows the property). In the web app \u2318K *Find prototypes* (or\n  `/wire prototypes`) lists them and selects them, and while a pointer is on\n  the minimap every prototype is lit and everything else steps back.\n- **Surgical section editing (`isocan wire edit`)**: `isocan wire edit [<screen>] "<instruction>"`\n  (or `/wire edit <instruction>` in the Chat) modifies a single section (`content`,\n  `add`, `remove`, `variant`, `restyle`) on an existing wireframe screen without\n  regenerating sibling slots or the rest of the flow. Explicit flags (`--screen`,\n  `--kind`, `--slot`, `--block`, `--density`, `--template`) bypass the model when\n  you already know the edit; otherwise Jev scopes the screen and slot in at most\n  two calls. The new screen version and any rebuilt prototype land in one op group,\n  so one `isocan undo` reverts both.\n- **Decision Q&A (`isocan wire why`)**: `isocan wire why [<screen>] [question...]`\n  (or `/wire why` in the Chat) reads a screen\'s embedded `WireSpec` (`need`, `by`,\n  `pinned`, per-slot `p` and `alternatives`, `declined`, `template`, `density`,\n  and `decisions`) and explains why its archetype, layout, and blocks were chosen,\n  citing the recorded probabilities and runner-up alternatives.\n- **Schema-driven AI copy (`isocan wire copy --ai`) and flow naming (`isocan wire name`)**:\n  `isocan wire copy [<screens...>] --ai [--brief "<words>"] [--flow <flow>]` (or\n  `/wire copy` in the Chat) builds a strict JSON schema (`blockContentSchema`) from\n  each screen\'s resolved blocks and variants, fills domain-specific words across\n  the screen(s) while keeping actionable button labels bound to their typed `Intent`,\n  and rebuilds any kept prototype in one op group. `isocan wire name [<screens...>]\n  [--flow <flow>] [--request "<words>"]` (or `/wire name` in the Chat) names the\n  flow\'s brand, per-screen titles, and shared navigation bar labels coherently so\n  tab bars, side navs, and headers match across every screen.\n- **Design system synthesis (`isocan wire ds`) and Jev-budgeted polish (`isocan wire polish`)**:\n  `isocan wire ds [request...] [--flow <flow>] [--name "<name>"] [--surface flat|raised|glass|bold]`\n  (or `/wire ds <request>` in the Chat) asks Jev to pick the best visual direction,\n  `surface:` mode, and `density`, repairs any low-contrast foreground/background\n  colour pairs to \u2265 4.5:1 WCAG AA (`repairContrast`), writes a complete `DESIGN.md`\n  item beside the flow, makes it govern the scope, and restyles all screens and\n  the prototype in one op group. `isocan wire polish [<screens...>] [--flow <flow>]\n  [--intensity <0-1>] [--clear]` (or `/wire polish` in the Chat) scores\n  `polish_intensity` (`0 | 4 | 8 | 12` patch budget) and applies `WireSpec.polish`\n  refinements guarded by `verifyWireContract`, which rejects any patch that drops\n  a `data-sec`, `data-wf`, `data-hot`, or `data-intent` attribute.\n\n**Words are typed, never free.** A button\'s label is its **intent**\'s label\n(`sign-in` \u2192 "Sign in", `back` \u2192 "Back"), chosen from a fixed vocabulary of\n52; each actionable element names which intents it can take, and `wire\nrender` refuses a spec that gives one it cannot. Headings come from the\nspec\'s `title`; body copy is grey bars, never lorem ipsum \u2014 until `wire\nflesh` fills it from a content pack. If you want real copy on a screen,\nthat is a separate, honest act \u2014 `wire copy <screen> --apply <file>` or\n`wire copy --ai` \u2014 not a label smuggled into an intent.\n\nTo draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,\nchange a slot\'s `block` to another of its options with `"props": {}` and no\n`intents` (the new block\'s defaults fill in), or set it to `null` to leave it\nblue, and `isocan wire render detail.json`. Leaving an optional slot out of\n`slots` altogether means "not on this screen".\n';
 
 // packages/modules/wireframe/src/cli.ts
 import { readFile as readFile3 } from "node:fs/promises";
@@ -10841,7 +10843,7 @@ function listRows(props, action = "", hot = "", items) {
 function stepsRow(n, current, labels, names) {
   return `<div class="steps">${rowsOf(n, (i) => `<span class="step${i + 1 < current ? " done" : i + 1 === current ? " on" : ""}"><b>${i + 1}</b>${labels ? names && names.length > 0 ? `<small>${word(names, i, "")}</small>` : bar(70, "in") : ""}</span>`)}</div>`;
 }
-var SHADES = [77, 53, 36, 22].map((pct2) => `color-mix(in srgb, var(--w-primary) ${pct2}%, var(--w-ground))`);
+var SHADES = [77, 53, 36, 22].map((pct3) => `color-mix(in srgb, var(--w-primary) ${pct3}%, var(--w-ground))`);
 function valuesOf(fill, s, fallback, lo, hi) {
   const v = fill?.series?.[s % (fill.series.length || 1)];
   if (!v || v.length === 0) return [...fallback];
@@ -11498,6 +11500,120 @@ function parseRecipe(text) {
 var RECIPES = WAVE_1.map(({ recipe: recipe2, ...rest }) => ({ ...rest, sections: parseRecipe(recipe2) }));
 var RECIPE_BY_ID = new Map(RECIPES.map((r) => [r.id, r]));
 
+// packages/modules/wireframe/src/catalog/templates.ts
+var TEMPLATE_IDS = [
+  "single",
+  "split",
+  "master_detail",
+  "grid",
+  "bento",
+  "hero_then_grid",
+  "dashboard"
+];
+var DENSITY_LEVELS = ["compact", "default", "spacious"];
+var DENSITY_SPACE = {
+  compact: "8px",
+  default: "12px",
+  spacious: "16px"
+};
+function densityFromScore(score) {
+  const n = typeof score === "number" ? score : Number(score);
+  if (!Number.isFinite(n)) return "default";
+  if (n <= 1) return "compact";
+  if (n >= 3) return "spacious";
+  return "default";
+}
+var TEMPLATES = [
+  {
+    id: "single",
+    label: "Single column",
+    description: "One vertical column of sections in reading order",
+    platforms: ["app", "web", "site"],
+    archetypes: ARCHETYPE_IDS,
+    regions: ["main"]
+  },
+  {
+    id: "split",
+    label: "Two-column split",
+    description: "Primary content on the left (60%) and secondary context or summary on the right (40%)",
+    platforms: ["web", "site"],
+    archetypes: ["home", "detail", "form", "settings", "profile", "checkout", "pricing"],
+    regions: ["primary", "secondary"]
+  },
+  {
+    id: "master_detail",
+    label: "Master / detail",
+    description: "Selectable list or index on the left (40%) with an inline detail or preview pane on the right (60%)",
+    platforms: ["web", "site"],
+    archetypes: ["list", "search", "feed", "detail", "master-detail"],
+    regions: ["master", "detail"]
+  },
+  {
+    id: "grid",
+    label: "Responsive grid",
+    description: "Multi-column responsive grid of peer sections or cards",
+    platforms: ["web", "site"],
+    archetypes: ["list", "gallery", "search", "home", "pricing", "feed", "storefront"],
+    regions: ["grid"]
+  },
+  {
+    id: "bento",
+    label: "Bento grid",
+    description: "Asymmetric multi-span bento grid highlighting the lead section alongside compact peers",
+    platforms: ["web", "site"],
+    archetypes: ["home", "profile", "pricing", "gallery"],
+    regions: ["bento"]
+  },
+  {
+    id: "hero_then_grid",
+    label: "Hero then grid",
+    description: "Full-width lead banner or hero section above a multi-column grid below",
+    platforms: ["app", "web", "site"],
+    archetypes: ["home", "welcome", "pricing", "search", "list", "gallery", "landing", "storefront"],
+    regions: ["hero", "grid"]
+  },
+  {
+    id: "dashboard",
+    label: "KPI + 2-column dashboard",
+    description: "Full-width KPI summary row across the top above a 2:1 primary and secondary column split",
+    platforms: ["web", "site"],
+    archetypes: ["home", "profile", "detail"],
+    regions: ["kpi", "primary", "secondary"]
+  }
+];
+var TEMPLATE_BY_ID = new Map(
+  TEMPLATES.map((t) => [t.id, t])
+);
+function template(id3) {
+  const found = TEMPLATE_BY_ID.get(id3);
+  if (!found) throw new Error(`no layout template "${id3}" in the wireframe catalog`);
+  return found;
+}
+function templatesFor(archetype, platform) {
+  return TEMPLATES.filter(
+    (t) => t.platforms.includes(platform) && t.archetypes.includes(archetype)
+  );
+}
+function defaultSlotRegion(templateId, slot, index2, totalMain) {
+  switch (templateId) {
+    case "single":
+      return "main";
+    case "grid":
+      return "grid";
+    case "bento":
+      return "bento";
+    case "hero_then_grid":
+      return index2 === 0 ? "hero" : "grid";
+    case "split":
+      return index2 < Math.ceil(totalMain / 2) ? "primary" : "secondary";
+    case "master_detail":
+      return index2 === 0 ? "master" : "detail";
+    case "dashboard":
+      if (slot.block === "stat-row" || index2 === 0 && totalMain >= 3) return "kpi";
+      return index2 < Math.ceil((totalMain + 1) / 2) ? "primary" : "secondary";
+  }
+}
+
 // packages/modules/wireframe/src/catalog/words.ts
 var ARCHETYPE_WORDS = {
   welcome: "the first screen a new person sees: a big picture, the app's name and a button to get started",
@@ -11737,6 +11853,250 @@ function homeOrStub(home, stub, onFallback) {
     }
   };
 }
+var DEFAULT_ENTROPY_GATE = 1;
+var DEFAULT_CONFIDENCE_FLOOR = 0.5;
+function entropyBits(probabilities) {
+  const raw = Array.isArray(probabilities) ? probabilities : Object.values(probabilities);
+  const pos = raw.filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+  if (pos.length <= 1) return 0;
+  const total = pos.reduce((s, v) => s + v, 0);
+  if (total <= 0) return 0;
+  let h = 0;
+  for (const v of pos) {
+    const p = v / total;
+    if (p > 0 && p < 1) h -= p * Math.log2(p);
+  }
+  return Math.round(h * 1e3) / 1e3;
+}
+function gatedChoice(q, a, opts = {}) {
+  const { value, p, distribution } = chosenOption(q, a);
+  const entropy = entropyBits(distribution);
+  const maxEntropy = opts.maxEntropyBits ?? DEFAULT_ENTROPY_GATE;
+  const minConf = opts.minConfidence ?? DEFAULT_CONFIDENCE_FLOOR;
+  const topK = opts.topK ?? 3;
+  const options = Object.entries(distribution).map(([k, prob]) => ({ value: k, p: Math.round(prob * 1e3) / 1e3 })).sort((x, y) => y.p - x.p || x.value.localeCompare(y.value)).slice(0, topK);
+  const uncertain = entropy > maxEntropy || p < minConf;
+  if (opts.pinned !== void 0 && Object.prototype.hasOwnProperty.call(distribution, opts.pinned)) {
+    const pinnedP = Math.round((distribution[opts.pinned] ?? 0) * 1e3) / 1e3;
+    return { status: "pinned", value: opts.pinned, p: pinnedP, entropy, options, uncertain };
+  }
+  if (uncertain && !opts.noAsk) {
+    return { status: "ask", value, p: Math.round(p * 1e3) / 1e3, entropy, options, uncertain: true };
+  }
+  return { status: "confident", value, p: Math.round(p * 1e3) / 1e3, entropy, options, uncertain };
+}
+function isTransientJevError(error) {
+  const status2 = error?.status;
+  if (status2 === 429 || status2 === 529) return true;
+  const msg = error instanceof Error ? error.message : String(error);
+  return /\b(?:429|529)\b/.test(msg);
+}
+var PriorityGate = class {
+  inner;
+  concurrency;
+  maxRetries;
+  backoffMs;
+  sleep;
+  active = 0;
+  highQueue = [];
+  normalQueue = [];
+  constructor(innerOrOpts, maybeOpts = {}) {
+    const isAnswerer2 = innerOrOpts !== void 0 && typeof innerOrOpts.answer === "function";
+    this.inner = isAnswerer2 ? innerOrOpts : void 0;
+    const opts = isAnswerer2 ? maybeOpts : innerOrOpts ?? {};
+    this.concurrency = Math.max(1, opts.concurrency ?? opts.maxConcurrent ?? 3);
+    this.maxRetries = Math.max(0, opts.maxRetries ?? 3);
+    const base = opts.baseDelayMs;
+    this.backoffMs = opts.backoffMs ?? (base !== void 0 ? [base, base * 2, base * 4] : [200, 500, 1e3]);
+    this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  }
+  /** Number of currently in-flight calls across both lanes. */
+  get inFlight() {
+    return this.active;
+  }
+  /** Number of queued calls waiting for a slot (`high` + `normal`). */
+  get pending() {
+    return this.highQueue.length + this.normalQueue.length;
+  }
+  acquire(priority2) {
+    if (this.active < this.concurrency) {
+      this.active++;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const task = () => {
+        this.active++;
+        resolve();
+      };
+      if (priority2 === "high") this.highQueue.push(task);
+      else this.normalQueue.push(task);
+    });
+  }
+  release() {
+    this.active--;
+    const next2 = this.highQueue.shift() ?? this.normalQueue.shift();
+    if (next2) next2();
+  }
+  /** Run an arbitrary async operation through the priority semaphore with transient retry. */
+  async run(first, second = "high") {
+    const priority2 = typeof first === "string" ? first : second;
+    const fn = typeof first === "function" ? first : second;
+    await this.acquire(priority2);
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await fn();
+        } catch (error) {
+          if (isTransientJevError(error) && attempt < this.maxRetries) {
+            const wait = this.backoffMs[Math.min(attempt, this.backoffMs.length - 1)] ?? 200;
+            await this.sleep(wait);
+            continue;
+          }
+          throw error;
+        }
+      }
+    } finally {
+      this.release();
+    }
+  }
+  /** Answer a `JevRequest` at the given priority (`"high"` by default). */
+  answer(request, priority2 = "high") {
+    if (!this.inner) throw new Error("PriorityGate has no default inner Answerer \u2014 pass one to constructor or use asAnswerer(answerer)");
+    return this.run(priority2, () => this.inner.answer(request));
+  }
+  /** View this gate as a standard `Answerer` bound to the given priority lane. */
+  asAnswerer(first = "high", second = "high") {
+    const target2 = typeof first === "string" ? this.inner : first;
+    const priority2 = typeof first === "string" ? first : second;
+    if (!target2) throw new Error("PriorityGate.asAnswerer requires an Answerer");
+    const self = this;
+    return {
+      get name() {
+        return target2.name;
+      },
+      answer(request) {
+        return self.run(priority2, () => target2.answer(request));
+      }
+    };
+  }
+};
+var STOP_WORDS = /* @__PURE__ */ new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "that",
+  "this",
+  "from",
+  "into",
+  "your",
+  "app",
+  "flow",
+  "screen",
+  "screens",
+  "wireframe",
+  "design",
+  "generate",
+  "write",
+  "copy",
+  "json",
+  "schema"
+]);
+function promptNouns(prompt) {
+  const words2 = prompt.replace(/[^a-zA-Z0-9\s-]/g, " ").split(/\s+/).map((w) => w.trim()).filter((w) => w.length >= 3 && !STOP_WORDS.has(w.toLowerCase()));
+  if (words2.length === 0) return ["Acme", "Workspace", "Operations", "Status"];
+  const unique2 = [];
+  for (const w of words2) {
+    const cap = w[0].toUpperCase() + w.slice(1);
+    if (!unique2.includes(cap)) unique2.push(cap);
+  }
+  return unique2.length > 0 ? unique2 : ["Acme", "Workspace"];
+}
+function synthesizeFromSchema(schema, prompt, path19, seed) {
+  const h = hash(`${seed}:${prompt}:${path19}:${schema.description ?? ""}`);
+  if (schema.enum && schema.enum.length > 0) {
+    return schema.enum[h % schema.enum.length];
+  }
+  switch (schema.type) {
+    case "boolean":
+      return (h & 1) === 0;
+    case "number":
+      return h % 90 + 10;
+    case "array": {
+      const len = schema.minItems ?? schema.maxItems ?? 3;
+      const itemSchema = schema.items ?? { type: "string" };
+      return Array.from({ length: len }, (_, i) => synthesizeFromSchema(itemSchema, prompt, `${path19}.${i}`, seed));
+    }
+    case "object": {
+      const out = {};
+      for (const [k, propSchema] of Object.entries(schema.properties ?? {})) {
+        out[k] = synthesizeFromSchema(propSchema, prompt, path19 ? `${path19}.${k}` : k, seed);
+      }
+      return out;
+    }
+    case "string":
+    default: {
+      const nouns = promptNouns(prompt);
+      const a = nouns[h % nouns.length];
+      const b = nouns[(h >>> 3) % nouns.length];
+      const leaf = path19.split(".").pop() ?? path19;
+      if (leaf === "brand") return `${a} ${b === a ? "Studio" : b}`;
+      if (leaf === "title" || leaf === "heading") return a === b ? `${a} Overview` : `${a} ${b}`;
+      if (leaf === "bar") return a;
+      if (leaf === "value") return `${h % 900 + 100}`;
+      if (leaf === "delta") return `+${h % 18 + 2}%`;
+      if (leaf === "status") return ["Active", "Scheduled", "Completed", "In review"][h % 4];
+      if (leaf === "label") return a;
+      return `${a} ${b.toLowerCase()} ${h % 90 + 10}`;
+    }
+  }
+}
+function stubTextGenerator(seed = 1) {
+  return {
+    name: `stub-text (seed ${seed})`,
+    async generateJson(prompt, schema) {
+      return synthesizeFromSchema(schema, prompt, "", seed);
+    }
+  };
+}
+function httpTextGenerator(opts = {}) {
+  const apiKey = opts.apiKey ?? process.env.ISOCAN_TEXT_API_KEY ?? "";
+  const model = opts.model ?? process.env.ISOCAN_TEXT_MODEL ?? "gpt-4o-mini";
+  const endpoint = opts.endpoint ?? process.env.ISOCAN_TEXT_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
+  const fetchFn = opts.fetch ?? globalThis.fetch;
+  return {
+    name: model,
+    async generateJson(prompt, schema) {
+      if (!apiKey) throw new Error("httpTextGenerator requires apiKey or ISOCAN_TEXT_API_KEY");
+      const res = await fetchFn(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: "Return only valid JSON conforming to the provided JSON schema." },
+            { role: "user", content: prompt }
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: { name: "wire_response", strict: true, schema }
+          }
+        })
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`TextGenerator HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      }
+      const body = await res.json();
+      const text = body.choices?.[0]?.message?.content;
+      if (!text) throw new Error("TextGenerator returned an empty response");
+      return JSON.parse(text);
+    }
+  };
+}
 
 // packages/modules/wireframe/src/theme.ts
 var COLOR_ROLES = ["ground", "surface", "line", "ink", "ink-muted", "bar", "primary", "on-primary"];
@@ -11795,7 +12155,7 @@ function styleProblems(input) {
   }
   return problems;
 }
-function themeValues(style2) {
+function themeValues(style2, density) {
   const out = { ...DEFAULT_THEME };
   if (style2?.source === "design-system") {
     for (const role of ROLES) {
@@ -11803,14 +12163,15 @@ function themeValues(style2) {
       if (v !== void 0 && safeRoleValue(role, v)) out[role] = v;
     }
   }
+  if (density && DENSITY_SPACE[density]) out.space = DENSITY_SPACE[density];
   return out;
 }
 function linkColor(values) {
   const ratio2 = contrastRatio(values.primary, values.ground);
   return ratio2 === null || ratio2 >= CONTRAST_BODY ? values.primary : values.ink;
 }
-function themeDecls(style2) {
-  const values = themeValues(style2);
+function themeDecls(style2, density) {
+  const values = themeValues(style2, density);
   return [...ROLES.map((role) => `--w-${role}:${values[role]}`), `--w-link:${linkColor(values)}`].join(";");
 }
 function sameLook(a, b) {
@@ -12038,6 +12399,16 @@ function fillProblems(input, where) {
 }
 
 // packages/modules/wireframe/src/spec.ts
+var POLISH_TOKENS = [
+  "wf-elevated",
+  "wf-bordered",
+  "wf-subtle",
+  "wf-emphasis",
+  "wf-compact-pad",
+  "wf-spacious-pad",
+  "wf-rounded-lg",
+  "wf-accent-ring"
+];
 function wireBy(model, actor) {
   const home = / via the home$/.test(model);
   const bare = model.replace(/ via the home$/, "");
@@ -12166,6 +12537,17 @@ function validateWire(input) {
     if (typeof spec[key] !== "string") problems.push(`${key} must be a string`);
   }
   if (!PLATFORMS.includes(spec.platform)) problems.push(`platform must be one of ${PLATFORMS.join(", ")}`);
+  if (spec.template !== void 0) {
+    const tpl2 = TEMPLATE_BY_ID.get(spec.template);
+    if (!tpl2) {
+      problems.push(`template must be one of ${TEMPLATE_IDS.join(", ")}`);
+    } else if (PLATFORMS.includes(spec.platform) && !tpl2.platforms.includes(spec.platform)) {
+      problems.push(`template "${spec.template}" is not available on platform "${spec.platform}" (allowed on ${tpl2.platforms.join(", ")})`);
+    }
+  }
+  if (spec.density !== void 0 && !DENSITY_LEVELS.includes(spec.density)) {
+    problems.push(`density must be one of ${DENSITY_LEVELS.join(", ")}`);
+  }
   if (spec.round !== void 0 && ![0, 1, 2, 3].includes(spec.round)) problems.push("round must be 0, 1, 2 or 3");
   if (spec.chrome !== void 0 && (typeof spec.chrome !== "object" || typeof spec.chrome?.nav !== "string" || typeof spec.chrome?.header !== "string")) {
     problems.push("chrome must be { nav, header }");
@@ -12175,6 +12557,15 @@ function validateWire(input) {
   if (spec.by !== void 0 && (typeof spec.by !== "object" || !["jev", "stub", "agent"].includes(spec.by?.answerer))) {
     problems.push("by must be { answerer: jev | stub | agent, actor?, via?, model? }");
   }
+  if (spec.pinned !== void 0) {
+    if (!spec.pinned || typeof spec.pinned !== "object" || Array.isArray(spec.pinned)) {
+      problems.push("pinned must be an object of string key-value pairs");
+    } else {
+      for (const [k, v] of Object.entries(spec.pinned)) {
+        if (typeof v !== "string" || !k) problems.push(`pinned.${k} must be a string`);
+      }
+    }
+  }
   let r;
   try {
     r = recipe(String(spec.archetype));
@@ -12182,6 +12573,7 @@ function validateWire(input) {
     return [...problems, error.message];
   }
   if (!Array.isArray(spec.slots)) return [...problems, "slots must be an array"];
+  const tpl = spec.template ? TEMPLATE_BY_ID.get(spec.template) : void 0;
   let last = -1;
   const seen = /* @__PURE__ */ new Set();
   for (const slot of spec.slots) {
@@ -12200,6 +12592,13 @@ function validateWire(input) {
     if (!props || typeof props !== "object" || Array.isArray(props)) {
       problems.push(`${where}: props must be an object`);
       continue;
+    }
+    if (slot.region !== void 0) {
+      if (typeof slot.region !== "string" || !slot.region) {
+        problems.push(`${where}: region must be a non-empty string`);
+      } else if (tpl && !tpl.regions.includes(slot.region) && slot.region !== "main") {
+        problems.push(`${where}: region "${slot.region}" is not one of ${tpl.id}'s regions (${tpl.regions.join(", ")})`);
+      }
     }
     if (slot.fill !== void 0) problems.push(...fillProblems(slot.fill, where));
     if (slot.block === null) {
@@ -12250,6 +12649,42 @@ function validateWire(input) {
   }
   for (const section of r.sections) {
     if (!section.optional && !seen.has(section.slot)) problems.push(`slot "${section.slot}" is required by ${r.id}`);
+  }
+  if (spec.decisions !== void 0) {
+    if (typeof spec.decisions !== "object" || spec.decisions === null || Array.isArray(spec.decisions)) {
+      problems.push("decisions must be an object mapping question ids to probability maps");
+    } else {
+      for (const [qId, dist] of Object.entries(spec.decisions)) {
+        if (typeof dist !== "object" || dist === null || Array.isArray(dist)) {
+          problems.push(`decisions["${qId}"] must be an object mapping options to probabilities`);
+          continue;
+        }
+        for (const [opt, prob] of Object.entries(dist)) {
+          if (!(typeof prob === "number" && prob >= 0 && prob <= 1)) {
+            problems.push(`decisions["${qId}"]["${opt}"] must be 0\u20131`);
+          }
+        }
+      }
+    }
+  }
+  if (spec.polish !== void 0) {
+    if (!Array.isArray(spec.polish)) {
+      problems.push("polish must be an array of { target, add?, remove? } patches");
+    } else {
+      const allowedTokens = new Set(POLISH_TOKENS);
+      for (const patch of spec.polish) {
+        if (!patch || typeof patch !== "object" || typeof patch.target !== "string" || !patch.target.trim()) {
+          problems.push("polish patch must have a non-empty string target");
+          continue;
+        }
+        for (const t of patch.add ?? []) {
+          if (!allowedTokens.has(t)) problems.push(`polish["${patch.target}"]: unknown add token "${t}"`);
+        }
+        for (const t of patch.remove ?? []) {
+          if (!allowedTokens.has(t)) problems.push(`polish["${patch.target}"]: unknown remove token "${t}"`);
+        }
+      }
+    }
   }
   return problems;
 }
@@ -12385,9 +12820,25 @@ function flowScreen(archetype, request, flow, decision) {
     ...asked?.maybe ? { maybe: true } : {}
   };
 }
-function structureRequest(spec, flowTitles) {
+function structureRequest(spec, flowTitles, opts = {}) {
   const r = recipe(spec.archetype);
   const questions2 = {};
+  const candidates = opts.layout ? templatesFor(spec.archetype, spec.platform) : [];
+  if (opts.layout && !spec.template && candidates.length > 1) {
+    questions2.template = {
+      type: "choice",
+      instructions: `Which layout template best organizes the main body of the ${spec.title} screen?`,
+      criteria: Object.fromEntries(candidates.map((t) => [t.id, t.description]))
+    };
+  }
+  if (opts.layout && !spec.density) {
+    questions2.density = {
+      type: "score",
+      instructions: `How dense should the spacing on the ${spec.title} screen be?`,
+      criteria: ["1: compact", "2: default", "3: spacious"]
+    };
+  }
+  const regionPool = opts.layout ? spec.template ? template(spec.template).regions : [...new Set(candidates.filter((t) => t.id !== "single" && t.regions.length > 1).flatMap((t) => t.regions))] : [];
   for (const slot of spec.slots) {
     if (slot.block !== null) continue;
     const section = r.sections.find((s) => s.slot === slot.slot);
@@ -12404,6 +12855,13 @@ function structureRequest(spec, flowTitles) {
         criteria: Object.fromEntries(section.options.map((o) => [o, `a ${component(o).category} block`]))
       };
     }
+    if (opts.layout && section.region === "main" && !slot.region && regionPool.length > 1) {
+      questions2[`${section.slot}:region`] = {
+        type: "choice",
+        instructions: `Which template region does ${section.slot} sit in on the ${spec.title} screen?`,
+        criteria: Object.fromEntries(regionPool.map((reg) => [reg, `the ${reg} region`]))
+      };
+    }
   }
   return {
     model: JEV_MODEL,
@@ -12413,6 +12871,8 @@ function structureRequest(spec, flowTitles) {
 }
 function applyStructure(spec, req, res) {
   const r = recipe(spec.archetype);
+  const chosenTemplate = req.questions.template && res.answers.template ? chosenOption(req.questions.template, res.answers.template).value : spec.template;
+  const chosenDensity = req.questions.density && res.answers.density ? densityFromScore(chosenOption(req.questions.density, res.answers.density).value) : spec.density;
   const slots = [];
   const declined = [...spec.declined ?? []];
   for (const slot of spec.slots) {
@@ -12437,9 +12897,33 @@ function applyStructure(spec, req, res) {
       ...pOut > 0 ? [{ block: LEAVE_OUT, p: pOut }] : []
     ].sort((a, b) => b.p - a.p);
     const p = pick ? pick.p : section.optional ? 1 - pOut : void 0;
-    slots.push({ ...resolveSlot(r.id, section.slot, block), ...p !== void 0 ? { p } : {}, ...alternatives.length ? { alternatives } : {} });
+    const regionQ = req.questions[`${section.slot}:region`];
+    const regionA = res.answers[`${section.slot}:region`];
+    const pickedRegion = regionQ && regionA ? chosenOption(regionQ, regionA).value : slot.region;
+    slots.push({
+      ...resolveSlot(r.id, section.slot, block),
+      ...p !== void 0 ? { p } : {},
+      ...alternatives.length ? { alternatives } : {},
+      ...pickedRegion !== void 0 ? { region: pickedRegion } : {}
+    });
   }
-  return { ...spec, slots, round: 2, ...declined.length ? { declined } : {} };
+  if (chosenTemplate && chosenTemplate !== "single") {
+    const tpl = template(chosenTemplate);
+    const mainSlots = slots.filter((s) => r.sections.find((sec) => sec.slot === s.slot)?.region === "main");
+    mainSlots.forEach((s, idx) => {
+      if (!s.region || !tpl.regions.includes(s.region)) {
+        s.region = defaultSlotRegion(tpl.id, s, idx, mainSlots.length);
+      }
+    });
+  }
+  return {
+    ...spec,
+    slots,
+    round: 2,
+    ...chosenTemplate !== void 0 ? { template: chosenTemplate } : {},
+    ...chosenDensity !== void 0 ? { density: chosenDensity } : {},
+    ...declined.length ? { declined } : {}
+  };
 }
 function propQuestion(label, def) {
   switch (def.kind) {
@@ -12529,6 +13013,7 @@ function applyProps(spec, req, res) {
     if (present.length > 0) out.intents = intents;
     if (slot.p !== void 0) out.p = slot.p;
     if (slot.alternatives) out.alternatives = slot.alternatives;
+    if (slot.region !== void 0) out.region = slot.region;
     return out;
   });
   return { ...spec, slots, round: 3 };
@@ -12610,6 +13095,75 @@ function firstChoices(screens) {
 }
 function kept(canvas2) {
   return readingOrder(Object.values(canvas2.items).filter(isKept));
+}
+
+// packages/modules/wireframe/src/entropy-ask.ts
+var ROOT_GATE_KEYS = ["platform", "pack", "style.direction"];
+var ROOT_PROMPTS = {
+  platform: "Which platform should this flow target?",
+  pack: "Which domain content pack fits this request best?",
+  "style.direction": "Which visual style direction should govern this flow?"
+};
+function parsePinFlags(flags) {
+  const out = {};
+  if (!flags) return out;
+  for (const raw of flags) {
+    const eq = raw.indexOf("=");
+    if (eq <= 0 || eq === raw.length - 1) {
+      throw new Error(`--pin "${raw}" must be key=value (for example: --pin platform=web)`);
+    }
+    const key = raw.slice(0, eq).trim();
+    const value = raw.slice(eq + 1).trim();
+    if (!key || !value) {
+      throw new Error(`--pin "${raw}" must have a non-empty key and value`);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+function gateFlowDecision(req, res, opts = {}) {
+  const resolved3 = { ...opts.pinned ?? {} };
+  const asks = [];
+  for (const key of ROOT_GATE_KEYS) {
+    const q = req.questions[key];
+    const a = res.answers[key];
+    if (!q || !a) continue;
+    const gated = gatedChoice(q, a, {
+      ...opts.pinned?.[key] !== void 0 ? { pinned: opts.pinned[key] } : {},
+      ...opts.noAsk !== void 0 ? { noAsk: opts.noAsk } : {},
+      maxEntropyBits: opts.maxEntropyBits ?? DEFAULT_ENTROPY_GATE,
+      minConfidence: opts.minConfidence ?? DEFAULT_CONFIDENCE_FLOOR,
+      topK: 3
+    });
+    resolved3[key] = gated.value;
+    if (gated.status === "ask") {
+      asks.push({
+        key,
+        prompt: ROOT_PROMPTS[key],
+        entropy: gated.entropy,
+        options: gated.options,
+        chosen: gated.value
+      });
+    }
+  }
+  return { resolved: resolved3, asks };
+}
+function formatAskComment(q) {
+  const opts = q.options.map((o) => `${o.value} (${Math.round(o.p * 100)}%)`).join(" \xB7 ");
+  return `/ask ${q.prompt} [entropy ${q.entropy.toFixed(2)} bits] \u2014 ${opts}`;
+}
+function applyPinnedToSpecs(specs, pinned) {
+  if (!pinned || Object.keys(pinned).length === 0) return [...specs];
+  const pinnedPlatform = PLATFORMS.includes(pinned.platform) ? pinned.platform : void 0;
+  const pinnedTemplate = TEMPLATE_IDS.includes(pinned.template) ? pinned.template : void 0;
+  const pinnedDensity = DENSITY_LEVELS.includes(pinned.density) ? pinned.density : void 0;
+  return specs.map((spec) => ({
+    ...spec,
+    ...pinnedPlatform ? { platform: pinnedPlatform } : {},
+    ...pinnedTemplate ? { template: pinnedTemplate } : {},
+    ...pinnedDensity ? { density: pinnedDensity } : {},
+    pinned: { ...spec.pinned ?? {}, ...pinned }
+  }));
 }
 
 // packages/modules/wireframe/src/port.ts
@@ -13112,6 +13666,49 @@ var SURFACE_CSS = {
 function surfaceCss(surfaces) {
   return [...new Set(surfaces)].map((s) => SURFACE_CSS[s] ?? "").join("");
 }
+var TEMPLATE_CSS = `
+.main[data-template]{container-type:inline-size}
+.tpl-region{display:flex;flex-direction:column;gap:var(--w-space);min-width:0}
+@container (min-width: 640px){
+.main.tpl-split{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.main.tpl-master_detail{display:grid;grid-template-columns:minmax(220px,2fr) minmax(0,3fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.main.tpl-master_detail .tpl-r-master{border-right:1px solid var(--w-line);padding-right:var(--w-space)}
+.main.tpl-grid .tpl-r-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--w-space);align-items:start}
+.main.tpl-bento .tpl-r-bento{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--w-space);align-items:stretch}
+.main.tpl-bento .tpl-r-bento>.slot{grid-column:span 3}
+.main.tpl-bento .tpl-r-bento>.slot:first-child{grid-column:span 4}
+.main.tpl-bento .tpl-r-bento>.slot:nth-child(2){grid-column:span 2}
+.main.tpl-hero_then_grid .tpl-r-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--w-space);align-items:start}
+.main.tpl-dashboard{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.main.tpl-dashboard .tpl-r-kpi{grid-column:1/-1}
+}
+`;
+function templateCss(id3) {
+  return id3 && id3 !== "single" ? TEMPLATE_CSS : "";
+}
+var POLISH_CSS = `
+.wf-elevated{background:var(--w-ground);border:1px solid var(--w-line);border-radius:var(--w-radius);padding:var(--w-space);box-shadow:0 4px 14px ${INK_AT(8)}}
+.wf-bordered{border:1.5px solid var(--w-line);border-radius:var(--w-radius);padding:var(--w-space)}
+.wf-subtle{background:var(--w-surface);border-radius:var(--w-radius);padding:var(--w-space)}
+.wf-emphasis{border-left:3px solid var(--w-primary);padding-left:var(--w-space)}
+.wf-compact-pad{padding:calc(var(--w-space)*0.5)}
+.wf-spacious-pad{padding:calc(var(--w-space)*1.5)}
+.wf-rounded-lg{border-radius:calc(var(--w-radius)*1.5)}
+.wf-accent-ring{outline:2px solid var(--w-primary);outline-offset:2px}
+`;
+function polishCss(patches) {
+  return patches && patches.length > 0 ? POLISH_CSS : "";
+}
+function resolvePolishTokens(patches, target2) {
+  if (!patches || patches.length === 0) return [];
+  const active = /* @__PURE__ */ new Set();
+  for (const p of patches) {
+    if (p.target !== target2) continue;
+    for (const r of p.remove ?? []) active.delete(r);
+    for (const a of p.add ?? []) active.add(a);
+  }
+  return [...active];
+}
 var SKELETON_CSS = `
 .sk-frame{border-color:${BLUE}!important;background:#ffffff linear-gradient(${BLUE_GROUND} 1px,transparent 1px) 0 0/100% 24px}
 .sk{display:flex;flex-direction:column}
@@ -13141,7 +13738,7 @@ function overlayPlacement(slot, section) {
   return "center";
 }
 function drawSlot(spec, slot, section, grow) {
-  const attrs = `data-slot="${esc(slot.slot)}" data-region="${section.region}"`;
+  const attrs = `data-slot="${esc(slot.slot)}" data-region="${section.region}" data-sec="${esc(slot.slot)}" data-wf="${esc(slot.slot)}"`;
   if (slot.block === null) {
     const c2 = component(section.options[0]);
     const h = section.region === "nav" && navPlacement(slot, section, spec) === "side" ? 0 : c2.h;
@@ -13152,18 +13749,25 @@ function drawSlot(spec, slot, section, grow) {
   const c = component(slot.block);
   const props = propsFor(c, slot.props);
   const intentOf = (element) => slot.intents?.[element] ?? defaultIntent(r, c, element);
+  const slotPolish = resolvePolishTokens(spec.polish, slot.slot);
   const ctx = {
     props,
     intent: intentOf,
     // A fleshed lone action says what it acts on ("Edit delivery"); anything else, its intent's own word.
     label: (element) => esc(slot.fill?.actions?.[element] ?? INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
-    hot: (element) => ` data-hot="${esc(hotKey(slot.slot, element))}"`,
+    hot: (element) => {
+      const intentId = slot.intents?.[element] ?? (c.elements?.[element] ? defaultIntent(r, c, element) : void 0);
+      const elPolish = resolvePolishTokens(spec.polish, `${slot.slot}.${element}`);
+      const polishAttr = elPolish.length > 0 ? ` data-polish="${esc(elPolish.join(" "))}"` : "";
+      return ` data-hot="${esc(hotKey(slot.slot, element))}" data-wf="${esc(`${slot.slot}.${element}`)}"${intentId ? ` data-intent="${esc(intentId)}"` : ""}${polishAttr}`;
+    },
     title: esc(c.id === "app-bar" ? barTitleOf(spec) : headingOf(spec)),
     platform: spec.platform,
     wide: spec.platform !== "app",
     ...slot.fill ? { fill: slot.fill } : {}
   };
-  return `<section class="slot w" ${attrs} data-block="${esc(c.id)}" data-state="wire">${c.draw(ctx)}</section>`;
+  const slotClass = ["slot", "w", ...slotPolish].join(" ");
+  return `<section class="${esc(slotClass)}" ${attrs} data-block="${esc(c.id)}" data-state="wire">${c.draw(ctx)}</section>`;
 }
 function headingOf(spec) {
   return spec.content?.title ?? spec.title;
@@ -13200,11 +13804,12 @@ ${frame}
 function styleOf(spec) {
   return spec.slots.every((s) => s.block === null) ? void 0 : spec.style;
 }
-function themeCss(style2) {
-  return `:root{${themeDecls(style2)}}`;
+function themeCss(style2, density) {
+  return `:root{${themeDecls(style2, density)}}`;
 }
 function wireCss(spec) {
-  return `${themeCss(styleOf(spec))}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
+  const density = spec.slots.every((s) => s.block === null) ? void 0 : spec.density;
+  return `${themeCss(styleOf(spec), density)}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${templateCss(spec.template)}${polishCss(spec.polish)}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
 }
 function renderFrame(spec) {
   const problems = validateWire(spec);
@@ -13228,6 +13833,7 @@ function renderFrame(spec) {
   };
   const mainSlots = placed.filter((p) => p.section.region === "main" || spec.platform === "app" && p.section.region === "aside");
   const lastMain = mainSlots[mainSlots.length - 1];
+  const mainEntries = [];
   let overlayAt = "center";
   for (const p of placed) {
     const side = p.section.region === "nav" && navPlacement(p.slot, p.section, spec) === "side";
@@ -13235,11 +13841,25 @@ function renderFrame(spec) {
     const html = drawSlot(spec, p.slot, p.section, grow);
     const region = p.section.region;
     if (region === "nav") regions[navPlacement(p.slot, p.section, spec)].push(html);
-    else if (region === "aside" && spec.platform === "app") regions.main.push(html);
-    else {
+    else if (region === "aside" && spec.platform === "app") {
+      regions.main.push(html);
+      mainEntries.push({ slot: p.slot, html });
+    } else {
       if (region === "overlay") overlayAt = overlayPlacement(p.slot, p.section);
+      if (region === "main") mainEntries.push({ slot: p.slot, html });
       regions[region].push(html);
     }
+  }
+  let mainContainer = `<div class="main">${regions.main.join("")}</div>`;
+  if (spec.template && spec.template !== "single") {
+    const tpl = template(spec.template);
+    const grouped = new Map(tpl.regions.map((reg) => [reg, []]));
+    mainEntries.forEach(({ slot, html }, idx) => {
+      const sub = slot.region && tpl.regions.includes(slot.region) ? slot.region : defaultSlotRegion(tpl.id, slot, idx, mainEntries.length);
+      (grouped.get(sub) ?? grouped.get(tpl.regions[0])).push(html);
+    });
+    const regionDivs = tpl.regions.filter((reg) => (grouped.get(reg)?.length ?? 0) > 0).map((reg) => `<div class="tpl-region tpl-r-${esc(reg)}" data-tpl-region="${esc(reg)}">${grouped.get(reg).join("")}</div>`).join("");
+    mainContainer = `<div class="main tpl-${esc(spec.template)}" data-template="${esc(spec.template)}">${regionDivs}</div>`;
   }
   const { width, height } = PLATFORM_SIZE[spec.platform];
   const size = spec.platform === "site" ? `width:${width}px;min-height:${SITE_MIN}px` : `width:${width}px;height:${height}px`;
@@ -13250,7 +13870,7 @@ function renderFrame(spec) {
     ...regions.header,
     `<div class="body">`,
     regions.side.length ? `<div class="side">${regions.side.join("")}</div>` : "",
-    `<div class="main">${regions.main.join("")}</div>`,
+    mainContainer,
     regions.aside.length ? `<div class="aside">${regions.aside.join("")}</div>` : "",
     `</div>`,
     regions.footer.length ? `<div class="foot">${regions.footer.join("")}</div>` : "",
@@ -13398,10 +14018,12 @@ function assemblePrototype(kept2, links, opts = {}) {
   const lead2 = styleOf(first.spec);
   const leadSpec = { ...(undecided ?? first).spec, ...lead2 ? { style: lead2 } : {} };
   const leadSurface = surfaceOf(styleOf(leadSpec));
-  const sheet = wireCss(leadSpec) + surfaceCss(kept2.map((s) => surfaceOf(styleOf(s.spec))).filter((s) => s !== leadSurface));
+  const needsTemplate = (!leadSpec.template || leadSpec.template === "single") && kept2.some((s) => s.spec.template && s.spec.template !== "single");
+  const sheet = wireCss(leadSpec) + surfaceCss(kept2.map((s) => surfaceOf(styleOf(s.spec))).filter((s) => s !== leadSurface)) + (needsTemplate ? templateCss("split") : "");
   const sections = kept2.map((s) => {
     const mine = links.filter((l) => l.from === s.id);
-    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" style="${esc(themeDecls(styleOf(s.spec)))}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
+    const density = s.spec.slots.every((x) => x.block === null) ? void 0 : s.spec.density;
+    return `<section class="pscreen" data-screen="${esc(s.id)}" data-title="${esc(s.title)}" style="${esc(themeDecls(styleOf(s.spec), density))}" hidden>${bind(renderFrame(s.spec), mine)}</section>`;
   });
   const table = {
     start,
@@ -14468,11 +15090,11 @@ var Ink = class {
   name() {
     return `${this.pick(FIRST_NAMES)} ${this.pick(INITIALS.split(""))}.`;
   }
-  x(template) {
-    return singular(this.expand(template));
+  x(template2) {
+    return singular(this.expand(template2));
   }
-  expand(template) {
-    return template.replace(/\{([^}]+)\}/g, (whole, token) => {
+  expand(template2) {
+    return template2.replace(/\{([^}]+)\}/g, (whole, token) => {
       const range = /^#(\d+)-(\d+)$/.exec(token);
       if (range) {
         const [lo, hi] = [range[1], range[2]];
@@ -14574,8 +15196,8 @@ var Picker = class {
     const off = from0 ? 0 : this.start % list.length;
     return Array.from({ length: count2 }, (_, i) => list[(off + i) % list.length]);
   }
-  x(template) {
-    return this.ink.x(template);
+  x(template2) {
+    return this.ink.x(template2);
   }
   sentences(count2) {
     return this.cycle(this.pack.lines, count2).map((l) => this.x(l));
@@ -14966,7 +15588,12 @@ function vary(spec, d, variantOf) {
     slots = slots.map((slot) => {
       if (slot.slot !== d.slot) return slot;
       const alternatives = [{ block: d.from, p: d.p }, ...(slot.alternatives ?? []).filter((a) => a.block !== d.to)].sort((a, b) => b.p - a.p);
-      return { ...resolveSlot(r.id, slot.slot, d.to), p: d.runnerUp, alternatives };
+      return {
+        ...resolveSlot(r.id, slot.slot, d.to),
+        p: d.runnerUp,
+        alternatives,
+        ...slot.region !== void 0 ? { region: slot.region } : {}
+      };
     });
   } else if (d.to === LEAVE_OUT) {
     slots = slots.filter((slot) => slot.slot !== d.slot);
@@ -15076,9 +15703,15 @@ var FlowCanvas = class {
    * `wire answer` for an agent, `wire vary` from the screen it varies.
    */
   by;
+  /**
+   * Root decisions pinned via `--pin key=value` or `/ask` disambiguation
+   * (design §12), stamped on every non-blueprint spec this flow writes.
+   */
+  pinned;
   styled(given, itemId) {
     const signed = this.by && given.round !== 0 ? { ...given, by: this.by } : given;
-    const spec = this.style && signed.style === void 0 ? { ...signed, style: this.style } : signed;
+    const withPinned = given.round !== 0 ? applyPinnedToSpecs([signed], this.pinned)[0] : signed;
+    const spec = this.style && withPinned.style === void 0 ? { ...withPinned, style: this.style } : withPinned;
     if (!this.pack || spec.round !== 3 || spec.content) return spec;
     return fleshSpec(spec, seedKey(spec, itemId), packOf(this.pack.pack), { p: this.pack.p, by: this.pack.by });
   }
@@ -15281,26 +15914,67 @@ async function startFlow(port, request, placement, room = 0) {
 async function composeFlow(port, request, answerer, opts = {}) {
   const say2 = opts.say ?? (() => {
   });
+  const gate = opts.priorityGate ?? new PriorityGate();
+  const gatedAnswerer = gate.asAnswerer(answerer, "normal");
+  const activePinned = { ...opts.pinned ?? {} };
   const t0 = Date.now();
   const { canvas: canvas2, first, flow } = await startFlow(port, request, opts.placement, opts.flesh === false ? 0 : PROTOTYPE_ROOM);
+  if (Object.keys(activePinned).length > 0) canvas2.pinned = activePinned;
   const firstMs = Date.now() - t0;
   await opts.onBlueprint?.(first, firstMs, flow);
-  const mapper = new StyleResolver(port, opts.mappingAnswerer ?? answerer, async () => (await wiresOn(port, await port.canvas())).map((s) => s.spec), opts.onMappingAsked);
+  const mapper = new StyleResolver(port, opts.mappingAnswerer ?? gatedAnswerer, async () => (await wiresOn(port, await port.canvas())).map((s) => s.spec), opts.onMappingAsked);
   const styling = styleAt(port, first.item, mapper);
   styling.catch(() => {
   });
   const fleshWith = opts.flesh === false ? void 0 : opts.flesh ?? {};
-  const choosing = fleshWith ? (fleshWith.pack !== void 0 ? Promise.resolve(flagPack(fleshWith.pack)) : choosePack(answerer, request)).catch((e) => e instanceof Error ? e : new Error(String(e))) : void 0;
+  const packPin = activePinned.pack ?? fleshWith?.pack;
+  const choosing = fleshWith ? (packPin !== void 0 ? Promise.resolve(flagPack(packPin)) : choosePack(gatedAnswerer, request)).catch((e) => e instanceof Error ? e : new Error(String(e))) : void 0;
   let screens = [first];
   const tallies = [];
   let by = answerer.name;
+  let askedGates;
   for (const round of [1, 2, 3]) {
     const calls = roundCalls(round, screens);
-    const asked = await ask(answerer, round, calls, opts.onAsked);
+    const asked = await ask(gatedAnswerer, round, calls, opts.onAsked);
     tallies.push(asked.tally);
     by = asked.by;
     canvas2.by = wireBy(by, port.actor);
     if (round === 1) {
+      const gateResult = gateFlowDecision(calls[0].request, asked.responses[0], {
+        pinned: activePinned,
+        ...opts.noAsk !== void 0 ? { noAsk: opts.noAsk } : {}
+      });
+      if (gateResult.asks.length > 0) {
+        askedGates = gateResult.asks;
+        if (opts.onGateAsk) {
+          for (const q of gateResult.asks) {
+            const comment2 = formatAskComment(q);
+            say2(comment2);
+            const picked = await opts.onGateAsk(q, comment2);
+            if (picked) activePinned[q.key] = picked;
+          }
+        }
+      }
+      if (Object.keys(activePinned).length > 0) {
+        canvas2.pinned = { ...activePinned };
+        const prevPlatform = asked.responses[0]?.answers.platform;
+        if (activePinned.platform && prevPlatform?.type === "choice") {
+          asked.responses[0] = {
+            ...asked.responses[0],
+            answers: {
+              ...asked.responses[0].answers,
+              platform: {
+                type: "choice",
+                choice: activePinned.platform,
+                probabilities: {
+                  ...Object.fromEntries(Object.keys(prevPlatform.probabilities).map((k) => [k, 0])),
+                  [activePinned.platform]: 1
+                }
+              }
+            }
+          };
+        }
+      }
       const styled = await styling;
       canvas2.style = styled.system ? styled.style : void 0;
       for (const line of styled.lines) say2(line);
@@ -15321,7 +15995,21 @@ async function composeFlow(port, request, answerer, opts = {}) {
     screens = await applyRound(canvas2, round, screens, calls, asked.responses, say2);
   }
   const prototype = fleshWith ? await prototypeOfFirstChoices(canvas2, screens, say2) : void 0;
-  return { flow, screens, variants: canvas2.variants, tallies, by, firstMs, totalMs: Date.now() - t0, style: canvas2.style, mapper, ...canvas2.pack ? { pack: canvas2.pack } : {}, ...prototype ? { prototype } : {} };
+  return {
+    flow,
+    screens,
+    variants: canvas2.variants,
+    tallies,
+    by,
+    firstMs,
+    totalMs: Date.now() - t0,
+    style: canvas2.style,
+    mapper,
+    ...canvas2.pack ? { pack: canvas2.pack } : {},
+    ...prototype ? { prototype } : {},
+    ...canvas2.pinned ? { pinned: canvas2.pinned } : {},
+    ...askedGates ? { askedGates } : {}
+  };
 }
 async function prototypeOfFirstChoices(canvas2, screens, say2 = () => {
 }) {
@@ -15570,6 +16258,1400 @@ var wireframeCore = {
   commands: [WIRE_COMMAND]
 };
 
+// packages/modules/wireframe/src/edit.ts
+var EDIT_KINDS = ["content", "add", "remove", "variant", "restyle"];
+function scopeEdit(spec, edit) {
+  const r = recipe(spec.archetype);
+  if (edit.kind === "content") {
+    const idx = spec.slots.findIndex((s) => s.slot === edit.slot);
+    if (idx < 0) throw new Error(`${spec.title} has no slot "${edit.slot}" to update content on`);
+    const slots2 = spec.slots.map((s, i) => {
+      if (i !== idx) return s;
+      const mergedFill = { ...s.fill ?? {}, ...edit.fill ?? {} };
+      return { ...s, fill: mergedFill };
+    });
+    return {
+      ...spec,
+      slots: slots2,
+      content: spec.content ?? { source: "copy", by: spec.by?.model ?? spec.by?.answerer ?? "agent" }
+    };
+  }
+  if (edit.kind === "variant") {
+    const idx = spec.slots.findIndex((s) => s.slot === edit.slot);
+    if (idx < 0) throw new Error(`${spec.title} has no slot "${edit.slot}" to vary`);
+    const current = spec.slots[idx];
+    const section = r.sections.find((s) => s.slot === edit.slot);
+    const nextBlock = edit.block ?? current.block;
+    if (!nextBlock) throw new Error(`slot "${edit.slot}" is undecided \u2014 give a block to resolve it`);
+    if (section && !section.options.includes(nextBlock)) {
+      throw new Error(`slot "${edit.slot}" on ${r.id} accepts ${section.options.join(", ")} \u2014 not "${nextBlock}"`);
+    }
+    const baseSlot = nextBlock !== current.block ? resolveSlot(r.id, edit.slot, nextBlock, edit.props) : (() => {
+      const c = component(nextBlock);
+      const mergedProps = { ...current.props, ...edit.props ?? {} };
+      const present = presentElements(c, mergedProps);
+      const resolved3 = resolveSlot(r.id, edit.slot, nextBlock, mergedProps);
+      const intents = present.length > 0 ? Object.fromEntries(present.map((el) => [el, current.intents?.[el] ?? resolved3.intents[el]])) : void 0;
+      return {
+        ...current,
+        props: resolved3.props,
+        ...intents ? { intents } : {}
+      };
+    })();
+    const updatedSlot = {
+      ...baseSlot,
+      ...current.p !== void 0 && nextBlock === current.block ? { p: current.p } : {},
+      ...current.alternatives && nextBlock === current.block ? { alternatives: current.alternatives } : {},
+      ...edit.region ?? current.region ? { region: edit.region ?? current.region } : {},
+      ...current.fill && nextBlock === current.block ? { fill: current.fill } : {}
+    };
+    const slots2 = spec.slots.map((s, i) => i === idx ? updatedSlot : s);
+    return { ...spec, slots: slots2 };
+  }
+  if (edit.kind === "add") {
+    const section = r.sections.find((s) => s.slot === edit.slot);
+    if (!section) {
+      throw new Error(`${r.id} has no section "${edit.slot}" \u2014 valid sections: ${r.sections.map((s) => s.slot).join(", ")}`);
+    }
+    const chosenBlock = edit.block ?? spec.declined?.find((d) => d.slot === edit.slot)?.block ?? section.options[0];
+    if (!section.options.includes(chosenBlock)) {
+      throw new Error(`slot "${edit.slot}" on ${r.id} accepts ${section.options.join(", ")} \u2014 not "${chosenBlock}"`);
+    }
+    const resolved3 = resolveSlot(r.id, edit.slot, chosenBlock, edit.props);
+    const newSlot = {
+      ...resolved3,
+      ...edit.region ? { region: edit.region } : {},
+      ...edit.fill ? { fill: edit.fill } : {}
+    };
+    const existingIdx = spec.slots.findIndex((s) => s.slot === edit.slot);
+    let slots2;
+    if (existingIdx >= 0) {
+      slots2 = spec.slots.map((s, i) => i === existingIdx ? newSlot : s);
+    } else {
+      const order = r.sections.map((s) => s.slot);
+      const targetOrder = order.indexOf(edit.slot);
+      slots2 = [...spec.slots];
+      const insertAt = slots2.findIndex((s) => order.indexOf(s.slot) > targetOrder);
+      if (insertAt < 0) slots2.push(newSlot);
+      else slots2.splice(insertAt, 0, newSlot);
+    }
+    const nextDeclined = (spec.declined ?? []).filter((d) => d.slot !== edit.slot);
+    const out = { ...spec, slots: slots2 };
+    if (nextDeclined.length > 0) out.declined = nextDeclined;
+    else delete out.declined;
+    return out;
+  }
+  if (edit.kind === "remove") {
+    const idx = spec.slots.findIndex((s) => s.slot === edit.slot);
+    if (idx < 0) throw new Error(`${spec.title} has no slot "${edit.slot}" to remove`);
+    const removed = spec.slots[idx];
+    const section = r.sections.find((s) => s.slot === edit.slot);
+    const slots2 = spec.slots.filter((_, i) => i !== idx);
+    const nextDeclined = [...(spec.declined ?? []).filter((d) => d.slot !== edit.slot)];
+    if (section?.optional && removed.block) {
+      nextDeclined.push({ slot: edit.slot, p: 1, block: removed.block });
+    }
+    return {
+      ...spec,
+      slots: slots2,
+      ...nextDeclined.length > 0 ? { declined: nextDeclined } : {}
+    };
+  }
+  const nextTemplate = edit.template && TEMPLATE_IDS.includes(edit.template) ? edit.template : spec.template;
+  const nextDensity = edit.density && DENSITY_LEVELS.includes(edit.density) ? edit.density : spec.density;
+  const slots = edit.region ? spec.slots.map((s) => s.slot === edit.slot ? { ...s, region: edit.region } : s) : spec.slots;
+  return {
+    ...spec,
+    slots,
+    ...nextTemplate ? { template: nextTemplate } : {},
+    ...nextDensity ? { density: nextDensity } : {}
+  };
+}
+async function planEditWithJev(screens, instruction, answerer, targetScreenId) {
+  if (screens.length === 0) {
+    throw new Error("no wireframe screens on this canvas to edit");
+  }
+  let screen;
+  let by = answerer.name;
+  if (targetScreenId) {
+    screen = screens.find((s) => s.item === targetScreenId || s.spec.title.toLowerCase() === targetScreenId.toLowerCase());
+    if (!screen) throw new Error(`no wireframe screen "${targetScreenId}" on this canvas`);
+  } else if (screens.length === 1) {
+    screen = screens[0];
+  } else {
+    const pickReq = {
+      model: JEV_MODEL,
+      state: { instruction, screens: screens.map((s) => ({ id: s.item, title: s.spec.title, archetype: s.spec.archetype })) },
+      questions: {
+        screen: {
+          type: "choice",
+          instructions: "Which wireframe screen should this edit instruction apply to?",
+          criteria: Object.fromEntries(screens.map((s) => [s.item, `${s.spec.title} (${s.spec.archetype})`]))
+        }
+      }
+    };
+    const picked = await answerer.answer(pickReq);
+    by = picked.by;
+    const itemId = chosenOption(pickReq.questions.screen, picked.response.answers.screen).value;
+    screen = screens.find((s) => s.item === itemId) ?? screens[0];
+  }
+  const r = recipe(screen.spec.archetype);
+  const allSlots = r.sections.map((s) => s.slot);
+  const presentSlots = screen.spec.slots.map((s) => s.slot);
+  const slotChoices = allSlots.length > 0 ? allSlots : presentSlots;
+  const questions2 = {
+    kind: {
+      type: "choice",
+      instructions: "What kind of surgical edit does the instruction ask for?",
+      criteria: {
+        variant: "Swap a slot's block or adjust its component props",
+        content: "Change the heading, labels, or sample text inside a slot",
+        add: "Add or restore an optional section on the screen",
+        remove: "Remove an optional section from the screen",
+        restyle: "Adjust layout template, region assignment, or spacing density"
+      }
+    },
+    slot: {
+      type: "choice",
+      instructions: "Which slot on the screen does the instruction target?",
+      criteria: Object.fromEntries(
+        r.sections.map((s) => [s.slot, `${s.region} (${s.options.join(" | ")}${s.optional ? ", optional" : ""})`])
+      )
+    },
+    density: {
+      type: "choice",
+      instructions: "If the instruction adjusts spacing density, which density should apply?",
+      criteria: {
+        compact: "Tight 8px spacing",
+        default: "Balanced 12px spacing",
+        spacious: "Airy 16px spacing"
+      }
+    }
+  };
+  for (const s of r.sections) {
+    if (s.options.length > 1) {
+      questions2[`block:${s.slot}`] = {
+        type: "choice",
+        instructions: `If slot ${s.slot} changes block, which block should fill it?`,
+        criteria: Object.fromEntries(s.options.map((o) => [o, o.replace(/-/g, " ")]))
+      };
+    }
+  }
+  const editReq = {
+    model: JEV_MODEL,
+    state: {
+      instruction,
+      screen: screen.spec.title,
+      archetype: screen.spec.archetype,
+      slots: screen.spec.slots.map((s) => ({ slot: s.slot, block: s.block })),
+      declined: screen.spec.declined ?? []
+    },
+    questions: questions2
+  };
+  const answered = await answerer.answer(editReq);
+  by = answered.by;
+  const kind = chosenOption(questions2.kind, answered.response.answers.kind).value;
+  const chosenSlot = slotChoices.includes(chosenOption(questions2.slot, answered.response.answers.slot).value) ? chosenOption(questions2.slot, answered.response.answers.slot).value : presentSlots[0] ?? slotChoices[0];
+  const targetSlot = (kind === "remove" || kind === "variant" || kind === "content") && !presentSlots.includes(chosenSlot) ? presentSlots.find((s) => s.startsWith("main")) ?? presentSlots[0] : chosenSlot;
+  const section = r.sections.find((s) => s.slot === targetSlot);
+  const blockQ = questions2[`block:${targetSlot}`];
+  const blockA = answered.response.answers[`block:${targetSlot}`];
+  const chosenBlock = blockQ && blockA ? chosenOption(blockQ, blockA).value : section?.options[0];
+  const chosenDensity = chosenOption(questions2.density, answered.response.answers.density).value;
+  const edit = {
+    kind,
+    slot: targetSlot,
+    ...kind === "variant" || kind === "add" ? chosenBlock ? { block: chosenBlock } : {} : {},
+    ...kind === "content" ? { fill: { heading: instruction } } : {},
+    ...kind === "restyle" ? { density: chosenDensity } : {}
+  };
+  return { screen, edit, by };
+}
+async function editWireOnCanvas(port, instruction, answerer, opts = {}) {
+  const beforeCanvas = await port.canvas();
+  const all = await wiresOn(port, beforeCanvas);
+  const primaryScreens = all.filter((s) => !s.spec.variantOf);
+  const pool = opts.screenId ? all : primaryScreens.length > 0 ? primaryScreens : all;
+  const planned = opts.edit ? (() => {
+    const target2 = opts.screenId ? pool.find((s) => s.item === opts.screenId || s.spec.title.toLowerCase() === opts.screenId.toLowerCase()) : pool[0];
+    if (!target2) throw new Error(opts.screenId ? `no wireframe screen "${opts.screenId}" on this canvas` : "no wireframe screens on this canvas");
+    return { screen: target2, edit: opts.edit, by: answerer.name };
+  })() : await planEditWithJev(pool, instruction, answerer, opts.screenId);
+  const previous = planned.screen.spec;
+  const nextSpec = {
+    ...scopeEdit(previous, planned.edit),
+    by: wireBy(planned.by, port.actor)
+  };
+  const group = newGroupId();
+  const title = wireTitle(nextSpec);
+  const filename = `${titleSlug(title, { max: 60 }) || "screen"}.html`;
+  const html = renderWire(nextSpec);
+  const upload = await port.put(html, "text/html", filename);
+  const version4 = {
+    id: newVersionId(),
+    blobHash: upload.blobHash,
+    mimeType: "text/html",
+    filename,
+    size: upload.size
+  };
+  await port.send({ type: "item.addVersion", itemId: planned.screen.item, version: version4 }, group);
+  const { width, height } = wireSize(nextSpec);
+  if (title !== wireTitle(previous)) {
+    await port.send({ type: "item.update", itemId: planned.screen.item, patch: { title } }, group);
+  }
+  if (width !== planned.screen.width || height !== planned.screen.height) {
+    await port.send({ type: "item.resize", itemId: planned.screen.item, width, height }, group);
+  }
+  const updatedScreen = {
+    ...planned.screen,
+    spec: nextSpec,
+    width,
+    height
+  };
+  const afterCanvas = await port.canvas();
+  const afterWires = await wiresOn(port, afterCanvas);
+  const keptFlows2 = keptFlowsOf(afterCanvas, afterWires);
+  const affectedFlow = keptFlows2.find((f) => f.items.some((i) => i.id === updatedScreen.item));
+  let prototype;
+  if (affectedFlow) {
+    const written = await writePrototype(port, afterCanvas, affectedFlow, group);
+    prototype = { itemId: written.itemId, title: written.title };
+  }
+  return {
+    group,
+    screen: updatedScreen,
+    previous,
+    edit: planned.edit,
+    by: planned.by,
+    ...prototype ? { prototype } : {}
+  };
+}
+
+// packages/modules/wireframe/src/why.ts
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+function compactDecisions(req, res) {
+  const out = {};
+  for (const [id3, q] of Object.entries(req.questions)) {
+    const a = res.answers[id3];
+    if (!a) continue;
+    const { distribution } = chosenOption(q, a);
+    const top3 = Object.entries(distribution).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).slice(0, 3).map(([k, p]) => [k, round2(p)]);
+    out[id3] = Object.fromEntries(top3);
+  }
+  return out;
+}
+function pct2(p) {
+  return `${Math.round(p * 100)}%`;
+}
+function explainWireDecision(spec, question) {
+  const by = spec.by?.model ?? spec.by?.answerer ?? "hand-drawn";
+  const lines = [];
+  const needPart = spec.need !== void 0 ? ` \xB7 need P(yes)=${pct2(spec.need)}${spec.maybe ? " (maybe)" : ""}` : "";
+  const tplPart = spec.template ? ` \xB7 template=${spec.template}` : "";
+  const denPart = spec.density ? ` \xB7 density=${spec.density}` : "";
+  lines.push(
+    `${spec.title} (${spec.archetype}, ${spec.platform}) \u2014 answered by ${by}${needPart}${tplPart}${denPart}`
+  );
+  if (spec.pinned && Object.keys(spec.pinned).length > 0) {
+    const pins = Object.entries(spec.pinned).map(([k, v]) => `${k}=${v}`).join(", ");
+    lines.push(`  pinned: ${pins}`);
+  }
+  const slotRows = spec.slots.map((s) => {
+    const alts = s.alternatives ?? [];
+    const dist = {};
+    if (s.block && s.p !== void 0) dist[s.block] = s.p;
+    for (const a of alts) dist[a.block] = a.p;
+    const entropy = Object.keys(dist).length > 0 ? round2(entropyBits(dist)) : void 0;
+    return {
+      slot: s.slot,
+      block: s.block,
+      ...s.p !== void 0 ? { p: s.p } : {},
+      ...entropy !== void 0 ? { entropy } : {},
+      alternatives: alts,
+      ...s.region ? { region: s.region } : {}
+    };
+  });
+  const qLower = question?.trim().toLowerCase();
+  const matchesFilter = (key, text) => {
+    if (!qLower) return true;
+    return key.toLowerCase().includes(qLower) || text.toLowerCase().includes(qLower);
+  };
+  for (const row of slotRows) {
+    const pStr = row.p !== void 0 ? ` (${pct2(row.p)})` : "";
+    const regStr = row.region ? ` [${row.region}]` : "";
+    const altStr = row.alternatives.length > 0 ? ` \u2014 runners-up: ${row.alternatives.map((a) => `${a.block} ${pct2(a.p)}`).join(", ")}` : "";
+    const line = `  ${row.slot}: ${row.block ?? "blueprint"}${pStr}${regStr}${altStr}`;
+    if (matchesFilter(row.slot, line)) lines.push(line);
+  }
+  const declined = spec.declined ?? [];
+  if (declined.length > 0) {
+    const decLine = `  declined optional slots: ${declined.map((d) => `${d.slot} (${d.block}, P(omit)=${pct2(d.p)})`).join(", ")}`;
+    if (matchesFilter("declined", decLine)) lines.push(decLine);
+  }
+  const decisions3 = spec.decisions ?? {};
+  for (const [qId, dist] of Object.entries(decisions3)) {
+    const formatted = Object.entries(dist).map(([k, p]) => `${k} ${pct2(p)}`).join(", ");
+    const line = `  decision ${qId}: ${formatted}`;
+    if (matchesFilter(qId, line)) lines.push(line);
+  }
+  if (lines.length === 1 && qLower) {
+    for (const row of slotRows) {
+      const pStr = row.p !== void 0 ? ` (${pct2(row.p)})` : "";
+      const altStr = row.alternatives.length > 0 ? ` \u2014 runners-up: ${row.alternatives.map((a) => `${a.block} ${pct2(a.p)}`).join(", ")}` : "";
+      lines.push(`  ${row.slot}: ${row.block ?? "blueprint"}${pStr}${altStr}`);
+    }
+  }
+  return {
+    screenTitle: spec.title,
+    archetype: spec.archetype,
+    platform: spec.platform,
+    by,
+    ...spec.need !== void 0 ? { need: spec.need } : {},
+    ...spec.maybe ? { maybe: true } : {},
+    ...spec.template ? { template: spec.template } : {},
+    ...spec.density ? { density: spec.density } : {},
+    ...spec.pinned ? { pinned: spec.pinned } : {},
+    slots: slotRows,
+    declined,
+    decisions: decisions3,
+    lines
+  };
+}
+
+// packages/modules/wireframe/src/copy-schema.ts
+function ensureFleshedForCopy(spec, key) {
+  const resolvedKey = key ?? seedKey(spec, spec.archetype || "screen");
+  if (!spec.content) {
+    return fleshSpec(spec, resolvedKey, packOf(void 0), { by: "pack" });
+  }
+  const pack = packOf(spec.content.pack);
+  let missingFill = false;
+  for (const s of spec.slots) {
+    if (s.block && !s.fill) {
+      missingFill = true;
+      break;
+    }
+  }
+  if (!missingFill) return spec;
+  const fleshed = fleshSpec(spec, resolvedKey, pack, { by: spec.content.by ?? "pack" });
+  return {
+    ...spec,
+    slots: spec.slots.map((s, i) => s.fill ? s : fleshed.slots[i] ?? s)
+  };
+}
+function describeWordPath(spec, slot, path19, sample) {
+  if (path19.startsWith("actions.") && slot.block) {
+    const element = path19.slice("actions.".length);
+    const c = component(slot.block);
+    const r = recipe(spec.archetype);
+    const intent = slot.intents?.[element] ?? (c.elements?.[element] ? defaultIntent(r, c, element) : element);
+    const intentLabel = INTENT_BY_ID.get(intent)?.label ?? intent;
+    return `Action label bound to intent "${intent}" (keep verb "${intentLabel}", e.g. "${sample}")`;
+  }
+  return `${slot.block ?? "slot"} ${path19} (e.g. "${sample}")`;
+}
+function blockContentSchema(spec) {
+  const fleshed = ensureFleshedForCopy(spec);
+  const slotProps = {};
+  const requiredSlots = [];
+  for (const slot of fleshed.slots) {
+    if (!slot.block || !slot.fill) continue;
+    const words2 = wordsOf(slot.fill);
+    const paths = Object.keys(words2);
+    if (paths.length === 0) continue;
+    const wordProps = {};
+    for (const p of paths) {
+      wordProps[p] = {
+        type: "string",
+        description: describeWordPath(fleshed, slot, p, words2[p] ?? "")
+      };
+    }
+    const variant = typeof slot.props?.variant === "string" ? slot.props.variant : "default";
+    slotProps[slot.slot] = {
+      type: "object",
+      description: `Words for slot "${slot.slot}" (block "${slot.block}", variant "${variant}")`,
+      properties: wordProps,
+      required: paths,
+      additionalProperties: false
+    };
+    requiredSlots.push(slot.slot);
+  }
+  const properties = {
+    title: {
+      type: "string",
+      description: `Screen heading for ${fleshed.archetype} screen (currently "${fleshed.content?.title ?? fleshed.title}")`
+    },
+    ...fleshed.archetype === "detail" || fleshed.content?.bar !== void 0 ? {
+      bar: {
+        type: "string",
+        description: `App bar context label above the detail heading (currently "${fleshed.content?.bar ?? fleshed.title}")`
+      }
+    } : {},
+    slots: {
+      type: "object",
+      description: "Replacement words keyed by slot id and dot-path",
+      properties: slotProps,
+      required: requiredSlots,
+      additionalProperties: false
+    }
+  };
+  return {
+    type: "object",
+    description: `Wireframe copy schema for screen "${fleshed.title}" (archetype "${fleshed.archetype}", ${COMPONENTS.size} catalog components supported)`,
+    properties,
+    required: ["title", "slots"],
+    additionalProperties: false
+  };
+}
+function validateCopyPayload(spec, raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("copy payload must be a JSON object");
+  }
+  const obj = raw;
+  if ("intents" in obj) {
+    throw new Error("copy payload cannot modify actionable intents");
+  }
+  if (obj.title !== void 0 && (typeof obj.title !== "string" || obj.title.trim().length === 0)) {
+    throw new Error("title must be a non-empty string");
+  }
+  if (obj.bar !== void 0 && (typeof obj.bar !== "string" || obj.bar.trim().length === 0)) {
+    throw new Error("bar must be a non-empty string");
+  }
+  if (obj.slots !== void 0 && (!obj.slots || typeof obj.slots !== "object" || Array.isArray(obj.slots))) {
+    throw new Error("slots must be an object mapping slot names to words");
+  }
+  const fleshed = ensureFleshedForCopy(spec);
+  const bySlot = new Map(fleshed.slots.map((s) => [s.slot, s]));
+  const normalizedSlots = {};
+  for (const [slotName2, rawEntry] of Object.entries(obj.slots ?? {})) {
+    const slot = bySlot.get(slotName2);
+    if (!slot) {
+      throw new Error(`no slot "${slotName2}" on this screen \u2014 it has ${fleshed.slots.map((s) => s.slot).join(", ")}`);
+    }
+    if (!slot.fill) {
+      if (rawEntry && typeof rawEntry === "object" && !Array.isArray(rawEntry) && Object.keys(rawEntry).length === 0) {
+        continue;
+      }
+      throw new Error(`slot "${slotName2}" (${slot.block ?? "undecided"}) holds no words`);
+    }
+    const have = wordsOf(slot.fill);
+    const validPaths = Object.keys(have);
+    if (Array.isArray(rawEntry)) {
+      if (rawEntry.length > validPaths.length) {
+        throw new Error(`slot "${slotName2}": ${rawEntry.length} words given, but the slot holds ${validPaths.length}`);
+      }
+      for (let i = 0; i < rawEntry.length; i++) {
+        if (typeof rawEntry[i] !== "string") {
+          throw new Error(`slot "${slotName2}": entry ${i} must be a string`);
+        }
+      }
+      normalizedSlots[slotName2] = rawEntry;
+      continue;
+    }
+    if (!rawEntry || typeof rawEntry !== "object") {
+      throw new Error(`slot "${slotName2}" must be an object or array of strings`);
+    }
+    const unwrapped = "words" in rawEntry && typeof rawEntry.words === "object" && rawEntry.words !== null ? rawEntry.words : rawEntry;
+    const slotWords = {};
+    for (const [path19, val] of Object.entries(unwrapped)) {
+      if (!(path19 in have)) {
+        throw new Error(`slot "${slotName2}": no word at "${path19}" \u2014 it holds ${validPaths.join(", ")}`);
+      }
+      if (typeof val !== "string") {
+        throw new Error(`slot "${slotName2}": "${path19}" must be a string`);
+      }
+      slotWords[path19] = val;
+    }
+    normalizedSlots[slotName2] = slotWords;
+  }
+  return {
+    ...typeof obj.title === "string" ? { title: sanitizeFlowTitle(obj.title) } : {},
+    ...typeof obj.bar === "string" ? { bar: sanitizeFlowTitle(obj.bar) } : {},
+    slots: normalizedSlots
+  };
+}
+async function generateWireCopy(spec, generator = stubTextGenerator(1), opts = {}) {
+  const base = ensureFleshedForCopy(spec, opts.key);
+  const schema = blockContentSchema(base);
+  const current = copyOf(base);
+  const promptLines = [
+    `Write realistic product UI copy for the "${base.title}" screen (archetype: ${base.archetype}).`,
+    `Flow request: ${base.request || base.title}`,
+    ...opts.brief ? [`Copy brief: ${opts.brief}`] : [],
+    `Current slots and sample words: ${JSON.stringify(current.slots)}`
+  ];
+  const raw = await generator.generateJson(promptLines.join("\n"), schema);
+  const validated = validateCopyPayload(base, raw);
+  return applyCopy(base, validated, generator.name);
+}
+function sanitizeFlowTitle(raw) {
+  let text = raw.trim();
+  const firstLine = text.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0);
+  text = firstLine ?? "";
+  text = text.replace(
+    /^(?:sure[!,.]?\s*|certainly[!,.]?\s*|of course[!,.]?\s*)?(?:here(?:'s| is)\s+(?:a|the|your)\s+(?:suggested\s+|concise\s+)?(?:flow\s+|screen\s+|product\s+|app\s+|brand\s+)?(?:title|name)\s*[:\-–—]\s*)/i,
+    ""
+  );
+  text = text.replace(/^(?:title|name|flow|brand|screen)\s*[:\-–—]\s*/i, "");
+  text = text.replace(/^[`*"'\u2018\u2019\u201c\u201d.;:!?]+|[`*"'\u2018\u2019\u201c\u201d.;:!?]+$/g, "").trim();
+  text = text.replace(/\s+/g, " ");
+  if (text.length > 48) {
+    text = text.slice(0, 48).replace(/\s+\S*$/, "").trim() || text.slice(0, 48).trim();
+  }
+  return text || "Untitled";
+}
+var NAV_BLOCKS = /* @__PURE__ */ new Set(["tab-bar", "side-nav", "navbar"]);
+function flowNameSchema(specs) {
+  const titleProps = {};
+  const requiredKeys = [];
+  let navItemCount = 4;
+  for (let i = 0; i < specs.length; i++) {
+    const s = ensureFleshedForCopy(specs[i], `screen-${i}`);
+    const key = `${s.archetype}-${i}`;
+    titleProps[key] = {
+      type: "string",
+      description: `Specific screen title for archetype "${s.archetype}" (currently "${s.title}")`
+    };
+    requiredKeys.push(key);
+    for (const slot of s.slots) {
+      if (slot.block && NAV_BLOCKS.has(slot.block)) {
+        const actionKeys = Object.keys(slot.fill?.actions ?? {});
+        if (actionKeys.length > 0) navItemCount = actionKeys.length;
+        else if (slot.fill?.items?.length) navItemCount = slot.fill.items.length;
+      }
+    }
+  }
+  return {
+    type: "object",
+    description: "Coherent flow naming: brand, per-screen titles, and shared navigation labels",
+    properties: {
+      brand: {
+        type: "string",
+        description: "Short brand or product name (1-3 words)"
+      },
+      titles: {
+        type: "object",
+        description: "Screen title keyed by screen id",
+        properties: titleProps,
+        required: requiredKeys,
+        additionalProperties: false
+      },
+      navLabels: {
+        type: "array",
+        description: "Shared navigation item labels in order across the flow",
+        items: { type: "string", description: "Navigation tab or link label" },
+        minItems: navItemCount,
+        maxItems: navItemCount
+      }
+    },
+    required: ["brand", "titles", "navLabels"],
+    additionalProperties: false
+  };
+}
+async function nameFlow(specs, request, generator = stubTextGenerator(1)) {
+  if (specs.length === 0) {
+    return { brand: "Acme", titles: {}, navLabels: [], specs: [] };
+  }
+  const fleshedSpecs = specs.map((s, i) => ensureFleshedForCopy(s, seedKey(s, `screen-${i}`)));
+  const schema = flowNameSchema(fleshedSpecs);
+  const flowReq = request ?? fleshedSpecs[0]?.request ?? fleshedSpecs[0]?.title ?? "Product flow";
+  const prompt = [
+    `Name the product brand, each screen's specific title, and the shared navigation bar labels for this flow.`,
+    `Flow request: ${flowReq}`,
+    `Screens: ${fleshedSpecs.map((s, i) => `${s.archetype}-${i} (${s.archetype})`).join(", ")}`
+  ].join("\n");
+  const raw = await generator.generateJson(prompt, schema);
+  const brand = sanitizeFlowTitle(raw?.brand ?? "Acme");
+  const navLabels = (raw?.navLabels ?? []).map((l) => sanitizeFlowTitle(String(l)));
+  const titles = {};
+  const namedSpecs = fleshedSpecs.map((spec, i) => {
+    const key = `${spec.archetype}-${i}`;
+    const rawTitle = raw?.titles?.[key] ?? spec.content?.title ?? spec.title;
+    const cleanTitle = sanitizeFlowTitle(rawTitle);
+    titles[key] = cleanTitle;
+    const slots = spec.slots.map((slot) => {
+      if (!slot.block) return slot;
+      if (NAV_BLOCKS.has(slot.block) && navLabels.length > 0) {
+        const baseFill = slot.fill ? structuredClone(slot.fill) : {};
+        const actionKeys = Object.keys(baseFill.actions ?? {});
+        const keysToFill = actionKeys.length > 0 ? actionKeys : navLabels.map((_, idx) => `item-${idx + 1}`);
+        const actions2 = { ...baseFill.actions ?? {} };
+        keysToFill.forEach((k, idx) => {
+          actions2[k] = navLabels[idx % navLabels.length];
+        });
+        const fill = {
+          ...baseFill,
+          actions: actions2,
+          ...slot.block === "navbar" ? { heading: brand } : {},
+          ...baseFill.items ? {
+            items: baseFill.items.map((it, idx) => ({
+              ...it,
+              title: navLabels[idx % navLabels.length] ?? it.title
+            }))
+          } : {}
+        };
+        return { ...slot, fill };
+      }
+      return slot;
+    });
+    const content = spec.content ? {
+      ...spec.content,
+      source: "copy",
+      by: generator.name,
+      title: cleanTitle
+    } : {
+      source: "copy",
+      by: generator.name,
+      title: cleanTitle
+    };
+    return {
+      ...spec,
+      title: cleanTitle,
+      content,
+      slots
+    };
+  });
+  return { brand, titles, navLabels, specs: namedSpecs };
+}
+function resolveTextGenerator(opts = {}) {
+  if (!opts.useStub && process.env.ISOCAN_TEXT_API_KEY) {
+    return httpTextGenerator();
+  }
+  return stubTextGenerator(opts.seed ?? 1);
+}
+async function copyAiOnCanvas(port, canvas2, all, screens, generator = stubTextGenerator(1), opts = {}) {
+  const group = opts.group ?? newGroupId();
+  const changed = [];
+  for (const s of screens) {
+    if (isBlueprint(s.spec)) continue;
+    const next2 = await generateWireCopy(s.spec, generator, {
+      ...opts.brief ? { brief: opts.brief } : {},
+      key: seedKey(s.spec, s.item)
+    });
+    if (JSON.stringify(next2) === JSON.stringify(s.spec)) continue;
+    const item = canvas2.items[s.item];
+    if (!item) continue;
+    if (await writeWire(port, item, next2, group, s.spec)) {
+      changed.push({ itemId: s.item, title: wireTitle(next2), spec: next2 });
+    }
+  }
+  const prototypes = await rebuildPrototypes(
+    port,
+    canvas2,
+    all,
+    changed.map((c) => ({ item: c.itemId, spec: c.spec })),
+    group
+  );
+  return { group, by: generator.name, changed, prototypes };
+}
+async function nameFlowOnCanvas(port, canvas2, all, screens, generator = stubTextGenerator(1), opts = {}) {
+  const group = opts.group ?? newGroupId();
+  const targetScreens = screens.filter((s) => !isBlueprint(s.spec));
+  const named = await nameFlow(
+    targetScreens.map((s) => s.spec),
+    opts.request,
+    generator
+  );
+  const changed = [];
+  for (let i = 0; i < targetScreens.length; i++) {
+    const s = targetScreens[i];
+    const next2 = named.specs[i];
+    if (JSON.stringify(next2) === JSON.stringify(s.spec)) continue;
+    const item = canvas2.items[s.item];
+    if (!item) continue;
+    if (await writeWire(port, item, next2, group, s.spec)) {
+      changed.push({ itemId: s.item, title: wireTitle(next2), spec: next2 });
+    }
+  }
+  const prototypes = await rebuildPrototypes(
+    port,
+    canvas2,
+    all,
+    changed.map((c) => ({ item: c.itemId, spec: c.spec })),
+    group
+  );
+  return {
+    group,
+    by: generator.name,
+    brand: named.brand,
+    navLabels: named.navLabels,
+    changed,
+    prototypes
+  };
+}
+
+// packages/modules/wireframe/src/ds.ts
+var DS_DIRECTIONS = [
+  {
+    id: "nordic-slate",
+    name: "Nordic Slate",
+    summary: "Crisp cool slate greys, deep navy primary, high-clarity technical tables and operations tools",
+    surface: "flat",
+    colors: {
+      ground: "#ffffff",
+      surface: "#f1f5f9",
+      line: "#cbd5e1",
+      ink: "#0f172a",
+      "ink-muted": "#475569",
+      bar: "#e2e8f0",
+      primary: "#1e3a8a",
+      "on-primary": "#ffffff"
+    },
+    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif",
+    radius: { sm: "4px", base: "6px", lg: "10px", full: "999px" }
+  },
+  {
+    id: "editorial-warm",
+    name: "Editorial Warm",
+    summary: "Warm paper ground, stone surfaces, espresso ink and terracotta primary for consumer and publishing flows",
+    surface: "raised",
+    colors: {
+      ground: "#fafaf9",
+      surface: "#f5f5f4",
+      line: "#d6d3d1",
+      ink: "#1c1917",
+      "ink-muted": "#57534e",
+      bar: "#e7e5e4",
+      primary: "#9a3412",
+      "on-primary": "#ffffff"
+    },
+    fontFamily: "Georgia, 'Times New Roman', ui-serif, serif",
+    radius: { sm: "6px", base: "8px", lg: "14px", full: "999px" }
+  },
+  {
+    id: "precision-cobalt",
+    name: "Precision Cobalt",
+    summary: "Clean white ground, cool zinc borders, cobalt primary and raised cards for SaaS dashboards and analytics",
+    surface: "raised",
+    colors: {
+      ground: "#ffffff",
+      surface: "#f4f4f5",
+      line: "#d4d4d8",
+      ink: "#18181b",
+      "ink-muted": "#52525b",
+      bar: "#e4e4e7",
+      primary: "#1d4ed8",
+      "on-primary": "#ffffff"
+    },
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    radius: { sm: "6px", base: "8px", lg: "12px", full: "999px" }
+  },
+  {
+    id: "verdant-studio",
+    name: "Verdant Studio",
+    summary: "Soft sage-tinted surface, deep forest ink and emerald primary for health, sustainability and finance apps",
+    surface: "glass",
+    colors: {
+      ground: "#ffffff",
+      surface: "#f0fdf4",
+      line: "#bbf7d0",
+      ink: "#052e16",
+      "ink-muted": "#166534",
+      bar: "#dcfce7",
+      primary: "#15803d",
+      "on-primary": "#ffffff"
+    },
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+    radius: { sm: "8px", base: "12px", lg: "16px", full: "999px" }
+  },
+  {
+    id: "industrial-amber",
+    name: "Industrial Amber",
+    summary: "High-contrast stark borders, bold surface shadows, dark bronze primary for field, warehouse and logistics tools",
+    surface: "bold",
+    colors: {
+      ground: "#ffffff",
+      surface: "#fef3c7",
+      line: "#1c1917",
+      ink: "#1c1917",
+      "ink-muted": "#44403c",
+      bar: "#fde68a",
+      primary: "#78350f",
+      "on-primary": "#ffffff"
+    },
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    radius: { sm: "2px", base: "4px", lg: "6px", full: "999px" }
+  }
+];
+function toHexByte(n) {
+  return Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+}
+function rgbToHex(r, g, b) {
+  return `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`;
+}
+function mixRgb(rgb, target2, t) {
+  return {
+    r: rgb.r + (target2.r - rgb.r) * t,
+    g: rgb.g + (target2.g - rgb.g) * t,
+    b: rgb.b + (target2.b - rgb.b) * t
+  };
+}
+function ensurePairContrast(fgHex, bgHexes, minRatio) {
+  const parsedFg = parseHex(fgHex);
+  const bgLums = bgHexes.map((b) => luminance(b)).filter((l) => l !== null);
+  if (!parsedFg || bgLums.length === 0) return fgHex;
+  const passesAll = (candidate) => bgHexes.every((bg) => {
+    const r = contrastRatio(candidate, bg);
+    return r !== null && r >= minRatio;
+  });
+  if (passesAll(fgHex)) return fgHex;
+  const avgBgLum = bgLums.reduce((acc, l) => acc + l, 0) / bgLums.length;
+  const primaryTarget = avgBgLum > 0.35 ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
+  const fallbackTarget = avgBgLum > 0.35 ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+  for (const target2 of [primaryTarget, fallbackTarget]) {
+    for (let step = 1; step <= 50; step++) {
+      const t = step / 50;
+      const mixed = mixRgb(parsedFg, target2, t);
+      const hex = rgbToHex(mixed.r, mixed.g, mixed.b);
+      if (passesAll(hex)) return hex;
+    }
+  }
+  return avgBgLum > 0.35 ? "#000000" : "#ffffff";
+}
+function repairContrast(colors, minRatio = CONTRAST_BODY) {
+  const out = { ...colors };
+  const repairs = [];
+  const ground = out.ground ?? "#ffffff";
+  const surface = out.surface ?? ground;
+  const bgs = [ground, surface];
+  for (const role of ["ink", "ink-muted", "primary"]) {
+    const current = out[role];
+    if (!current) continue;
+    const worstBefore = Math.min(
+      ...bgs.map((bg) => contrastRatio(current, bg) ?? minRatio)
+    );
+    if (worstBefore < minRatio) {
+      const fixed = ensurePairContrast(current, bgs, minRatio);
+      const worstAfter = Math.min(
+        ...bgs.map((bg) => contrastRatio(fixed, bg) ?? minRatio)
+      );
+      out[role] = fixed;
+      repairs.push({
+        role,
+        against: "ground/surface",
+        from: current,
+        to: fixed,
+        beforeRatio: worstBefore,
+        afterRatio: worstAfter
+      });
+    }
+  }
+  if (out["on-primary"] && out.primary) {
+    const current = out["on-primary"];
+    const before = contrastRatio(current, out.primary) ?? minRatio;
+    if (before < minRatio) {
+      const fixed = ensurePairContrast(current, [out.primary], minRatio);
+      const after = contrastRatio(fixed, out.primary) ?? minRatio;
+      out["on-primary"] = fixed;
+      repairs.push({
+        role: "on-primary",
+        against: "primary",
+        from: current,
+        to: fixed,
+        beforeRatio: before,
+        afterRatio: after
+      });
+    }
+  }
+  return { colors: out, repairs };
+}
+async function proposeThenPick(request, answerer = stubAnswerer(1), candidates = DS_DIRECTIONS) {
+  const list = candidates.length > 0 ? candidates : DS_DIRECTIONS;
+  const dirCriteria = Object.fromEntries(list.map((c) => [c.id, `${c.name}: ${c.summary}`]));
+  const surfaceCriteria = {
+    flat: "Flat hairline borders and crisp surfaces without drop shadows",
+    raised: "Subtle elevation and soft card shadows",
+    glass: "Translucent frosted panels with backdrop blur",
+    bold: "High-contrast stark borders and offset shadows"
+  };
+  const dirQ = {
+    type: "choice",
+    instructions: "Select the visual direction that best fits the product and request.",
+    criteria: dirCriteria
+  };
+  const surfQ = {
+    type: "choice",
+    instructions: "Select the surface elevation mode for the design system.",
+    criteria: surfaceCriteria
+  };
+  const densQ = {
+    type: "score",
+    instructions: "Score the appropriate information density for the product.",
+    criteria: [
+      "1 \u2014 compact density (tight 8px spacing for data-dense tools)",
+      "2 \u2014 default density (balanced 12px spacing)",
+      "3 \u2014 spacious density (generous 16px editorial spacing)"
+    ]
+  };
+  const questions2 = {
+    "ds.direction": dirQ,
+    "ds.surface": surfQ,
+    "ds.density": densQ
+  };
+  const req = {
+    model: JEV_MODEL,
+    state: { task: "Choose design system direction, surface and density", request },
+    questions: questions2
+  };
+  const answered = await answerer.answer(req);
+  const dirAns = answered.response.answers["ds.direction"];
+  const dirChoice = dirAns ? chosenOption(dirQ, dirAns) : null;
+  const pickedId = dirChoice ? dirChoice.value : list[0].id;
+  const direction = list.find((c) => c.id === pickedId) ?? list[0];
+  const p = dirChoice ? dirChoice.p : 1;
+  const surfAns = answered.response.answers["ds.surface"];
+  const pickedSurface = surfAns && surfAns.type === "choice" ? chosenOption(surfQ, surfAns).value : direction.surface;
+  const densAns = answered.response.answers["ds.density"];
+  const scoreIdx = densAns && densAns.type === "score" ? Math.max(0, Math.min(2, Math.round(densAns.score))) : 1;
+  const density = DENSITY_LEVELS[scoreIdx] ?? "default";
+  return {
+    direction,
+    surface: pickedSurface,
+    density,
+    p: Math.round(p * 1e3) / 1e3,
+    by: answered.by,
+    decisions: compactDecisions(req, answered.response)
+  };
+}
+async function synthesizeDesignSystem(request, answerer = stubAnswerer(1), opts = {}) {
+  const picked = await proposeThenPick(request, answerer, opts.candidates);
+  const surface = opts.surface ?? picked.surface;
+  const mergedColors = { ...picked.direction.colors };
+  for (const [k, v] of Object.entries(opts.colors ?? {})) {
+    if (typeof v === "string") mergedColors[k] = v;
+  }
+  const { colors, repairs } = repairContrast(mergedColors, CONTRAST_BODY);
+  const name = sanitizeFlowTitle(opts.name ?? `${picked.direction.name} \u2014 ${request || "Design System"}`);
+  const { fontFamily, radius } = picked.direction;
+  const markdown = [
+    "---",
+    "version: alpha",
+    `name: "${name.replace(/"/g, "'")}"`,
+    `description: "Synthesized design system (${picked.direction.name}, surface ${surface}, density ${picked.density}) for ${request.replace(/"/g, "'") || "wireframe flow"}."`,
+    `surface: ${surface}`,
+    "colors:",
+    `  ground: "${colors.ground}"`,
+    `  surface: "${colors.surface}"`,
+    `  line: "${colors.line}"`,
+    `  ink: "${colors.ink}"`,
+    `  ink-muted: "${colors["ink-muted"]}"`,
+    `  bar: "${colors.bar}"`,
+    `  primary: "${colors.primary}"`,
+    `  on-primary: "${colors["on-primary"]}"`,
+    "typography:",
+    "  title:",
+    `    fontFamily: "${fontFamily}"`,
+    "    fontSize: 20px",
+    "    fontWeight: 600",
+    "    lineHeight: 1.3",
+    "  body:",
+    `    fontFamily: "${fontFamily}"`,
+    "    fontSize: 14px",
+    "    fontWeight: 400",
+    "    lineHeight: 1.5",
+    "  label:",
+    `    fontFamily: "${fontFamily}"`,
+    "    fontSize: 14px",
+    "    fontWeight: 500",
+    "    lineHeight: 1.4",
+    "rounded:",
+    `  sm: ${radius.sm}`,
+    `  base: ${radius.base}`,
+    `  lg: ${radius.lg}`,
+    `  full: ${radius.full}`,
+    "spacing:",
+    "  xs: 4px",
+    `  base: ${picked.density === "compact" ? "8px" : picked.density === "spacious" ? "16px" : "12px"}`,
+    "  md: 16px",
+    "  lg: 24px",
+    "components:",
+    "  button-primary:",
+    '    backgroundColor: "{colors.primary}"',
+    '    textColor: "{colors.on-primary}"',
+    '    typography: "{typography.label}"',
+    '    rounded: "{rounded.base}"',
+    "    height: 40px",
+    '    padding: "0 {spacing.md}"',
+    "  card:",
+    '    backgroundColor: "{colors.ground}"',
+    '    textColor: "{colors.ink}"',
+    '    rounded: "{rounded.lg}"',
+    '    padding: "{spacing.lg}"',
+    "---",
+    "",
+    "## Overview",
+    "",
+    `${picked.direction.summary}. Synthesized for "${request || "this canvas"}" with deterministic WCAG AA contrast verification.`,
+    "",
+    "## Colors",
+    "",
+    `- **ground** (${colors.ground}) and **surface** (${colors.surface}) establish the canvas hierarchy.`,
+    `- **ink** (${colors.ink}) and **ink-muted** (${colors["ink-muted"]}) maintain \u2265 4.5:1 AA contrast against both ground and surface.`,
+    `- **primary** (${colors.primary}) and **on-primary** (${colors["on-primary"]}) anchor primary actions.`,
+    "",
+    "## Typography",
+    "",
+    `Set in ${fontFamily} with a 20px semibold title and 14px body/label scale.`,
+    "",
+    "## Layout",
+    "",
+    `Default density is ${picked.density}.`,
+    "",
+    "## Elevation & Depth",
+    "",
+    `\`surface: ${surface}\` governs card and chrome depth across the flow.`,
+    "",
+    "## Shapes",
+    "",
+    `Controls use ${radius.base} corners; cards use ${radius.lg}.`,
+    "",
+    "## Components",
+    "",
+    "Primary buttons use `{colors.primary}` with `{colors.on-primary}`; cards sit on `{colors.ground}`.",
+    "",
+    "## Do's and Don'ts",
+    "",
+    "- Do keep every foreground/background pair at or above 4.5:1 contrast.",
+    "- Don't introduce unmapped literal hex colours outside the role tokens.",
+    ""
+  ].join("\n");
+  const doc2 = parseDesign(markdown);
+  const findings = checkDesign(doc2).filter((f) => f.severity === "error" || f.severity === "warning");
+  if (findings.length > 0) {
+    throw new Error(`Synthesized DESIGN.md failed design check: ${findings.map((f) => `${f.where}: ${f.what}`).join("; ")}`);
+  }
+  return {
+    name,
+    direction: picked.direction,
+    surface,
+    density: picked.density,
+    colors,
+    repairs,
+    markdown,
+    by: picked.by,
+    p: picked.p,
+    decisions: picked.decisions
+  };
+}
+var GAP3 = 160;
+async function wireDsOnCanvas(port, all, screens, request, answerer = stubAnswerer(1), opts = {}) {
+  if (screens.length === 0) {
+    throw new Error('no wireframe to style \u2014 `isocan wire "<request>"` composes some');
+  }
+  const effectiveRequest = request.trim() || screens[0].spec.request || screens[0].spec.title;
+  const synthesized = await synthesizeDesignSystem(effectiveRequest, answerer, opts);
+  const before = await port.canvas();
+  const group = newGroupId();
+  const firstItem = before.items[screens[0].item];
+  const scope = firstItem ? canvasScopes(before, firstItem)[0]?.id ?? null : null;
+  const existing3 = ownDesignSystemAt(before, scope);
+  const title = `DESIGN.md \u2014 ${synthesized.direction.name}`;
+  let dsItemId;
+  let what;
+  if (existing3) {
+    dsItemId = existing3.id;
+    const upload = await port.put(synthesized.markdown, "text/markdown", "DESIGN.md");
+    await port.send(
+      {
+        type: "item.addVersion",
+        itemId: existing3.id,
+        version: {
+          id: newVersionId(),
+          blobHash: upload.blobHash,
+          mimeType: "text/markdown",
+          filename: "DESIGN.md",
+          size: upload.size
+        }
+      },
+      group
+    );
+    await port.send(
+      {
+        type: "item.update",
+        itemId: existing3.id,
+        patch: { title, properties: { [PRESET_PROP]: synthesized.direction.id } }
+      },
+      group
+    );
+    what = "versioned";
+  } else {
+    dsItemId = newItemId();
+    const upload = await port.put(synthesized.markdown, "text/markdown", "DESIGN.md");
+    const scopeItem = scope ? before.items[scope] : void 0;
+    await port.send(
+      {
+        type: "item.add",
+        itemId: dsItemId,
+        version: {
+          id: newVersionId(),
+          blobHash: upload.blobHash,
+          mimeType: "text/markdown",
+          filename: "DESIGN.md",
+          size: upload.size
+        },
+        width: 560,
+        height: 720,
+        placement: {
+          x: Math.max(...screens.map((s) => s.x + s.width)) + GAP3,
+          y: Math.min(...screens.map((s) => s.y)),
+          chosen: true
+        },
+        title,
+        properties: { [PRESET_PROP]: synthesized.direction.id },
+        ...scopeItem && isGroupItem(scopeItem) ? { containerId: scopeItem.id, groupPlacement: "exact" } : {}
+      },
+      group
+    );
+    const landed = await port.canvas();
+    await port.send(designUse(landed, landed.items[dsItemId]).op, group);
+    what = "added";
+  }
+  const after = await port.canvas();
+  const governs2 = (canvas2, s) => {
+    const item = canvas2.items[s.item];
+    const system = item ? governingSystem(canvas2, item) : null;
+    return system ? `${system.id}@${system.currentVersionId}` : "";
+  };
+  const asked = new Set(screens.map((s) => s.item));
+  const touched = all.filter(
+    (s) => after.items[s.item] && (asked.has(s.item) || governs2(before, s) !== governs2(after, s))
+  );
+  const resolver = new StyleResolver(port, answerer, async () => all.map((s) => s.spec));
+  const restyled = await restyle(port, after, all, touched, resolver, { toDefault: false, group });
+  return {
+    group,
+    dsItemId,
+    what,
+    synthesized,
+    restyled
+  };
+}
+
+// packages/modules/wireframe/src/polish.ts
+function polishIntensityBudget(intensity) {
+  const clamped = Math.max(0, Math.min(1, intensity));
+  if (clamped < 0.25) return 0;
+  if (clamped < 0.5) return 4;
+  if (clamped <= 0.75) return 8;
+  return 12;
+}
+function collectAttrValues(html, attr) {
+  const out = /* @__PURE__ */ new Set();
+  const re = new RegExp(`\\b${attr}="([^"]+)"`, "g");
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    if (m[1]) out.add(m[1]);
+  }
+  return out;
+}
+function verifyWireContract(baselineHtml, candidateHtml, spec) {
+  const problems = [];
+  const baseSec = collectAttrValues(baselineHtml, "data-sec");
+  const candSec = collectAttrValues(candidateHtml, "data-sec");
+  for (const s of baseSec) {
+    if (!candSec.has(s)) {
+      problems.push(`missing data-sec="${s}" in candidate HTML`);
+    }
+  }
+  const baseWf = collectAttrValues(baselineHtml, "data-wf");
+  const candWf = collectAttrValues(candidateHtml, "data-wf");
+  for (const w of baseWf) {
+    if (!candWf.has(w)) {
+      problems.push(`missing data-wf="${w}" in candidate HTML`);
+    }
+  }
+  const baseHot = collectAttrValues(baselineHtml, "data-hot");
+  const candHot = collectAttrValues(candidateHtml, "data-hot");
+  for (const h of baseHot) {
+    if (!candHot.has(h)) {
+      problems.push(`missing hotspot data-hot="${h}" in candidate HTML`);
+    }
+  }
+  const baseIntent = collectAttrValues(baselineHtml, "data-intent");
+  const candIntent = collectAttrValues(candidateHtml, "data-intent");
+  for (const intent of baseIntent) {
+    if (!candIntent.has(intent)) {
+      problems.push(`missing actionable intent data-intent="${intent}" in candidate HTML`);
+    }
+  }
+  if (spec?.polish) {
+    const allowedTokens = new Set(POLISH_TOKENS);
+    for (const patch of spec.polish) {
+      if (!baseWf.has(patch.target) && !baseSec.has(patch.target)) {
+        problems.push(`polish target "${patch.target}" does not match any data-wf or data-sec path on the screen`);
+      }
+      for (const t of patch.add ?? []) {
+        if (!allowedTokens.has(t)) {
+          problems.push(`polish token "${t}" on "${patch.target}" is not in POLISH_TOKENS`);
+        }
+      }
+      for (const t of patch.remove ?? []) {
+        if (!allowedTokens.has(t)) {
+          problems.push(`polish remove token "${t}" on "${patch.target}" is not in POLISH_TOKENS`);
+        }
+      }
+    }
+  }
+  if (spec?.style && spec.style.source === "design-system") {
+    const roles = spec.style.roles;
+    const ground = roles.ground?.value ?? DEFAULT_THEME.ground;
+    const surface = roles.surface?.value ?? DEFAULT_THEME.surface;
+    const ink = roles.ink?.value ?? DEFAULT_THEME.ink;
+    const muted = roles["ink-muted"]?.value ?? DEFAULT_THEME["ink-muted"];
+    const primary = roles.primary?.value ?? DEFAULT_THEME.primary;
+    const onPrimary = roles["on-primary"]?.value ?? DEFAULT_THEME["on-primary"];
+    const pairs = [
+      ["ink vs ground", ink, ground],
+      ["ink vs surface", ink, surface],
+      ["ink-muted vs ground", muted, ground],
+      ["ink-muted vs surface", muted, surface],
+      ["on-primary vs primary", onPrimary, primary]
+    ];
+    for (const [label, fg, bg] of pairs) {
+      const ratio2 = contrastRatio(fg, bg);
+      if (ratio2 !== null && ratio2 < CONTRAST_BODY) {
+        problems.push(`contrast violation (${label}): ${ratio2}:1 < ${CONTRAST_BODY}:1`);
+      }
+    }
+  }
+  return { ok: problems.length === 0, problems };
+}
+function applyWirePolish(spec, patches) {
+  const unpolishedSpec = { ...spec };
+  delete unpolishedSpec.polish;
+  const baselineHtml = renderWire(unpolishedSpec);
+  const mergedPatches = [...spec.polish ?? [], ...patches];
+  const nextSpec = mergedPatches.length > 0 ? { ...spec, polish: mergedPatches } : unpolishedSpec;
+  const candidateHtml = renderWire(nextSpec);
+  const check3 = verifyWireContract(baselineHtml, candidateHtml, nextSpec);
+  if (!check3.ok) {
+    throw new Error(`wire polish rejected by contract gate:
+  ${check3.problems.join("\n  ")}`);
+  }
+  return { spec: nextSpec, html: candidateHtml };
+}
+var POLISH_DESCRIPTIONS = {
+  "wf-elevated": "Elevated card surface with soft shadow and border",
+  "wf-bordered": "Crisp 1.5px bordered container with balanced padding",
+  "wf-subtle": "Subtle tinted surface background fill",
+  "wf-emphasis": "Left accent border emphasizing the section",
+  "wf-compact-pad": "Tighter inner padding for compact data sections",
+  "wf-spacious-pad": "Generous inner padding for hero or focal sections",
+  "wf-rounded-lg": "Larger corner radius for prominent cards",
+  "wf-accent-ring": "Primary focus/accent outline ring",
+  none: "Leave section unpolished"
+};
+async function planPolishWithJev(spec, answerer = stubAnswerer(1), opts = {}) {
+  const resolvedSlots = spec.slots.filter((s) => s.block !== null);
+  const questions2 = {
+    "polish.intensity": {
+      type: "noul",
+      instructions: "Should this screen receive visual polish refinements (elevation, surface contrast, emphasis borders)?",
+      criteria: {
+        true: "Apply visual polish tokens to refine section hierarchy and surface depth",
+        false: "Keep sections unpolished"
+      }
+    }
+  };
+  for (const s of resolvedSlots) {
+    questions2[`polish.slot.${s.slot}`] = {
+      type: "choice",
+      instructions: `Choose the visual polish token for slot "${s.slot}" (${s.block}).`,
+      criteria: POLISH_DESCRIPTIONS
+    };
+  }
+  const req = {
+    model: JEV_MODEL,
+    state: {
+      task: "Score polish_intensity and choose per-slot visual refinement tokens",
+      archetype: spec.archetype,
+      title: spec.title,
+      request: spec.request,
+      slots: resolvedSlots.map((s) => ({ slot: s.slot, block: s.block }))
+    },
+    questions: questions2
+  };
+  const answered = await answerer.answer(req);
+  const intAns = answered.response.answers["polish.intensity"];
+  const rawIntensity = opts.intensity !== void 0 ? opts.intensity : intAns && intAns.type === "noul" ? intAns.noul : 0.5;
+  const budget = polishIntensityBudget(rawIntensity);
+  const patches = [];
+  if (budget > 0) {
+    for (const s of resolvedSlots) {
+      if (patches.length >= budget) break;
+      const q = questions2[`polish.slot.${s.slot}`];
+      const ans = answered.response.answers[`polish.slot.${s.slot}`];
+      const pick = ans && ans.type === "choice" ? chosenOption(q, ans).value : "wf-bordered";
+      const token = pick !== "none" && POLISH_TOKENS.includes(pick) ? pick : s.slot.startsWith("main") ? "wf-elevated" : "wf-subtle";
+      patches.push({ target: s.slot, add: [token] });
+    }
+  }
+  return {
+    intensity: Math.round(rawIntensity * 1e3) / 1e3,
+    budget,
+    patches,
+    by: answered.by,
+    decisions: compactDecisions(req, answered.response)
+  };
+}
+async function polishWireOnCanvas(port, canvas2, all, screens, answerer = stubAnswerer(1), opts = {}) {
+  const group = opts.group ?? newGroupId();
+  const changed = [];
+  let by = answerer.name;
+  for (const s of screens) {
+    if (isBlueprint(s.spec)) continue;
+    const item = canvas2.items[s.item];
+    if (!item) continue;
+    if (opts.clear) {
+      if (!s.spec.polish || s.spec.polish.length === 0) continue;
+      const cleared = { ...s.spec };
+      delete cleared.polish;
+      if (await writeWire(port, item, cleared, group, s.spec)) {
+        changed.push({
+          itemId: s.item,
+          title: wireTitle(cleared),
+          intensity: 0,
+          budget: 0,
+          patches: [],
+          spec: cleared
+        });
+      }
+      continue;
+    }
+    const planned = await planPolishWithJev(s.spec, answerer, {
+      ...opts.intensity !== void 0 ? { intensity: opts.intensity } : {}
+    });
+    by = planned.by;
+    if (planned.patches.length === 0) continue;
+    const mergedDecisions = { ...s.spec.decisions ?? {}, ...planned.decisions };
+    const { spec: polished } = applyWirePolish(
+      Object.keys(mergedDecisions).length > 0 ? { ...s.spec, decisions: mergedDecisions } : s.spec,
+      planned.patches
+    );
+    if (JSON.stringify(polished) === JSON.stringify(s.spec)) continue;
+    if (await writeWire(port, item, polished, group, s.spec)) {
+      changed.push({
+        itemId: s.item,
+        title: wireTitle(polished),
+        intensity: planned.intensity,
+        budget: planned.budget,
+        patches: planned.patches,
+        spec: polished
+      });
+    }
+  }
+  const prototypes = await rebuildPrototypes(
+    port,
+    canvas2,
+    all,
+    changed.map((c) => ({ item: c.itemId, spec: c.spec })),
+    group
+  );
+  return { group, by, changed, prototypes };
+}
+
 // packages/modules/wireframe/src/behind.ts
 function checkState(spec, system, doc2) {
   const s = spec.style;
@@ -15777,7 +17859,7 @@ function mappingSaver(dir) {
 }
 function registerCompose(host, wire) {
   const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, printJson: printJson2, placementFor: placementFor2 } = host;
-  wire.argument("[request...]", "what the screens are for, in words \u2014 composes a flow").option("--answerer <name>", "jev (needs TYPESAFE_API_KEY), home (Jev through the canvas's home, with its key), stub (random, seeded) or agent (you answer: `wire questions` / `wire answer`) \u2014 default jev when the key is set, else the home, else the stub").option("--seed <n>", "the stub's seed", "1").option("--save <dir>", "write each round's requests and responses there as JSON").option("--canvas <canvas>").option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)").option("--in <group>", "compose the flow inside this group \u2014 and in its design system, if it has one").option("--basic", "plain grey wires: no sample content and no prototype (the default fleshes the screens and puts the answerer's first choices in a prototype)").option("--flesh", "arrive fleshed \u2014 the default now; kept so older scripts still run").option("--pack <id>", "the content pack to flesh with, instead of asking (`wire flesh --packs` lists them)").action(
+  wire.argument("[request...]", "what the screens are for, in words \u2014 composes a flow").option("--answerer <name>", "jev (needs TYPESAFE_API_KEY), home (Jev through the canvas's home, with its key), stub (random, seeded) or agent (you answer: `wire questions` / `wire answer`) \u2014 default jev when the key is set, else the home, else the stub").option("--seed <n>", "the stub's seed", "1").option("--save <dir>", "write each round's requests and responses there as JSON").option("--canvas <canvas>").option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)").option("--in <group>", "compose the flow inside this group \u2014 and in its design system, if it has one").option("--basic", "plain grey wires: no sample content and no prototype (the default fleshes the screens and puts the answerer's first choices in a prototype)").option("--flesh", "arrive fleshed \u2014 the default now; kept so older scripts still run").option("--pack <id>", "the content pack to flesh with, instead of asking (`wire flesh --packs` lists them)").option("--pin <key=value...>", "pin root flow decisions up front (for example: --pin platform=web --pin density=compact)").option("--no-ask", "suppress high-entropy root /ask prompts and pick top-1 silently").action(
     run2(async (words2, opts, cmd) => {
       const request = words2.join(" ").trim();
       if (!request) {
@@ -15792,6 +17874,7 @@ function registerCompose(host, wire) {
       const port = cliPort(host, ctx, p.id);
       const seed = Number(opts.seed);
       if (opts.basic && (opts.pack !== void 0 || opts.flesh)) throw new Error("--basic arrives unfleshed \u2014 it cannot take --pack or --flesh too");
+      const pinned = parsePinFlags(opts.pin);
       if (opts.pack !== void 0) flagPack(opts.pack);
       const answerer = opts.answerer === "agent" ? "agent" : cliAnswerer(ctx, p.id, opts.answerer, seed, say2);
       const snapshot = await ctx.client.snapshot(p.id);
@@ -15819,7 +17902,9 @@ function registerCompose(host, wire) {
           say2(`answering with ${who}`);
         },
         ...saver(opts.save) ? { onAsked: saver(opts.save), onMappingAsked: mappingSaver(opts.save) } : {},
-        flesh: opts.basic ? false : opts.pack !== void 0 ? { pack: opts.pack } : {}
+        flesh: opts.basic ? false : opts.pack !== void 0 ? { pack: opts.pack } : {},
+        ...Object.keys(pinned).length > 0 ? { pinned } : {},
+        ...opts.ask === false ? { noAsk: true } : {}
       });
       const { mapper, tallies } = composed;
       if (ctx.json) {
@@ -16196,6 +18281,92 @@ function registerStyle(host, wire) {
       say2(restyleSummary(result2).replace("one undo takes", "`isocan undo` takes"));
     })
   );
+  wire.command("ds [request...]").description("Synthesize a WCAG AA contrast-repaired DESIGN.md with Jev, make it govern the flow's scope, and restyle all screens and prototype in one op group").option("--canvas <canvas>").option("--flow <flow>", "only this flow's screens").option("--name <name>", "explicit name for the synthesized design system").option("--surface <surface>", "override surface mode: flat | raised | glass | bold").action(
+    run2(async (words2, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const ctx = await ctxOf2(cmd);
+      const say2 = (line) => {
+        if (!ctx.json) console.log(line);
+      };
+      const p = await resolveCanvas2(ctx);
+      const port = cliPort(host, ctx, p.id);
+      const canvas2 = await port.canvas();
+      const all = await wiresOn(port, canvas2);
+      const screens = opts.flow === void 0 ? all : all.filter((s) => s.spec.flow === opts.flow);
+      if (screens.length === 0) {
+        throw new Error(opts.flow === void 0 ? 'no wireframe on this canvas \u2014 `isocan wire "<request>"` composes some' : `no wireframe in flow "${opts.flow}" on this canvas`);
+      }
+      const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? void 0 : opts.answerer, Number(opts.seed ?? 1), say2);
+      const r = await wireDsOnCanvas(port, all, screens, words2.join(" "), answerer, {
+        ...opts.name ? { name: opts.name } : {},
+        ...opts.surface ? { surface: opts.surface } : {}
+      });
+      if (ctx.json) {
+        return printJson2({
+          group: r.group,
+          dsItemId: r.dsItemId,
+          what: r.what,
+          direction: r.synthesized.direction.id,
+          surface: r.synthesized.surface,
+          density: r.synthesized.density,
+          repairs: r.synthesized.repairs,
+          restyled: r.restyled.changed.map((t) => ({ itemId: t.item.id, title: wireTitle(t.screen.spec) })),
+          prototypes: r.restyled.prototypes
+        });
+      }
+      say2(`${r.dsItemId}  ${r.synthesized.name} (${r.synthesized.direction.id} \xB7 surface:${r.synthesized.surface} \xB7 density:${r.synthesized.density} \xB7 p ${r.synthesized.p.toFixed(2)})`);
+      if (r.synthesized.repairs.length > 0) {
+        say2(`  repaired ${r.synthesized.repairs.length} contrast pair${r.synthesized.repairs.length === 1 ? "" : "s"} to \u2265 4.5:1 AA`);
+      }
+      say2(`${r.restyled.changed.length} of ${r.restyled.targets.length} wires restyled \u2014 \`isocan undo\` takes it back`);
+    })
+  );
+  wire.command("polish [screens...]").description("Apply Jev-budgeted visual refinement patches (0 | 4 | 8 | 12) guarded by verifyWireContract in one op group").option("--canvas <canvas>").option("--flow <flow>", "only this flow's screens").option("--intensity <n>", "override polish_intensity (0\u20131)").option("--clear", "remove polish patches from target screens").action(
+    run2(async (refs, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const ctx = await ctxOf2(cmd);
+      const say2 = (line) => {
+        if (!ctx.json) console.log(line);
+      };
+      const p = await resolveCanvas2(ctx);
+      const port = cliPort(host, ctx, p.id);
+      const canvas2 = await port.canvas();
+      const all = await wiresOn(port, canvas2);
+      const named = (refs ?? []).map((ref) => {
+        const item = host.resolveItem({ canvas: canvas2 }, ref);
+        const found = all.find((s) => s.item === item.id);
+        if (!found) throw new Error(`"${item.title}" is not a wireframe screen`);
+        return found;
+      });
+      const screens = named.length ? named : opts.flow === void 0 ? all : all.filter((s) => s.spec.flow === opts.flow);
+      if (screens.length === 0) {
+        throw new Error('no wireframe on this canvas \u2014 `isocan wire "<request>"` composes some');
+      }
+      const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? void 0 : opts.answerer, Number(opts.seed ?? 1), say2);
+      const r = await polishWireOnCanvas(port, canvas2, all, screens, answerer, {
+        ...opts.intensity !== void 0 ? { intensity: Number(opts.intensity) } : {},
+        ...opts.clear ? { clear: true } : {}
+      });
+      if (ctx.json) {
+        return printJson2({
+          group: r.group,
+          by: r.by,
+          changed: r.changed.map((c) => ({
+            itemId: c.itemId,
+            title: c.title,
+            intensity: c.intensity,
+            budget: c.budget,
+            patches: c.patches
+          })),
+          prototypes: r.prototypes
+        });
+      }
+      for (const c of r.changed) {
+        say2(`${c.itemId}  ${c.title} \u2014 ${c.patches.length} polish patch${c.patches.length === 1 ? "" : "es"} (intensity ${c.intensity}, budget ${c.budget})`);
+      }
+      say2(`${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} ${opts.clear ? "unpolished" : "polished"} (${r.by})${r.prototypes.length ? ", prototype rebuilt" : ""} \u2014 \`isocan undo\` takes it back`);
+    })
+  );
 }
 function listPresets(json5, printJson2, say2) {
   const rows2 = [
@@ -16268,14 +18439,41 @@ function registerFlesh(host, wire) {
       say2(fleshSummary(r, Boolean(opts.bars)).replace("one undo takes", "`isocan undo` takes"));
     })
   );
-  wire.command("copy <screen>").description(`Print a fleshed screen's words by slot and path, as a file to edit; --apply <file> writes exact words back (source "copy") as one version`).option("--canvas <canvas>").option("--apply <file>", 'a JSON file: { "title"?: string, "slots": { "<slot>": { "<path>": "words" } | ["words", \u2026] } }').option("--by <name>", "who wrote the words \u2014 recorded on the screen", "agent").action(
-    run2(async (ref, _local, cmd) => {
+  wire.command("copy [screens...]").description(`Print a fleshed screen's words and JSON schema by slot and path; --apply <file> writes exact words back (source "copy") as one version; --ai fills schema-validated copy across one screen or flow`).option("--canvas <canvas>").option("--flow <flow>", "with --ai: only this flow's screens").option("--apply <file>", 'a JSON file: { "title"?: string, "slots": { "<slot>": { "<path>": "words" } | ["words", \u2026] } }').option("--ai", "generate schema-validated copy across target screen(s) in one op group").option("--brief <words>", "extra domain or tone brief for --ai").option("--by <name>", "who wrote the words \u2014 recorded on the screen", "agent").action(
+    run2(async (refs, _local, cmd) => {
       const opts = cmd.optsWithGlobals();
       const ctx = await ctxOf2(cmd);
       const p = await resolveCanvas2(ctx);
       const port = cliPort(host, ctx, p.id);
       const snapshot = await ctx.client.snapshot(p.id);
       const all = await wiresOn(port, snapshot.canvas);
+      if (opts.ai) {
+        const screens = await screensFor(host, snapshot, all, refs, opts.flow);
+        const gen = resolveTextGenerator({
+          seed: Number(opts.seed ?? 1),
+          useStub: opts.answerer === "stub"
+        });
+        const r = await copyAiOnCanvas(port, snapshot.canvas, all, screens, gen, {
+          ...opts.brief ? { brief: opts.brief } : {}
+        });
+        if (ctx.json) {
+          return printJson2({
+            group: r.group,
+            by: r.by,
+            changed: r.changed.map((c) => ({ itemId: c.itemId, title: c.title, content: c.spec.content })),
+            prototypes: r.prototypes
+          });
+        }
+        for (const c of r.changed) {
+          console.log(`${c.itemId}  ${c.title}${c.spec.content?.title ? ` \u2014 "${c.spec.content.title}"` : ""}`);
+        }
+        console.log(
+          `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} filled with AI copy (${r.by})${r.prototypes.length ? ", prototype rebuilt" : ""} \u2014 \`isocan undo\` takes it back`
+        );
+        return;
+      }
+      const ref = refs[0];
+      if (!ref) throw new Error("missing required argument 'screen' (or pass --ai)");
       const [screen] = await screensFor(host, snapshot, all, [ref], void 0);
       const spec = screen.spec;
       if (!opts.apply) {
@@ -16286,6 +18484,7 @@ function registerFlesh(host, wire) {
           title: words2.title,
           ...spec.content.bar !== void 0 ? { bar: spec.content.bar } : {},
           content: words2.content,
+          schema: blockContentSchema(spec),
           slots: Object.fromEntries(words2.slots.map((s) => [s.slot, { block: s.block, words: s.words }]))
         }, null, 2));
         return;
@@ -16296,8 +18495,8 @@ function registerFlesh(host, wire) {
       } catch (error) {
         throw new Error(`${opts.apply} is not a JSON file this can read: ${error.message}`);
       }
-      const slots = Object.fromEntries(Object.entries(raw.slots ?? {}).map(([k, v]) => [k, v?.words ?? v]));
-      const next2 = applyCopy(spec, { ...raw.title !== void 0 ? { title: raw.title } : {}, ...raw.bar !== void 0 ? { bar: raw.bar } : {}, ...slots ? { slots } : {} }, opts.by);
+      const validated = validateCopyPayload(spec, raw);
+      const next2 = applyCopy(spec, validated, opts.by);
       if (JSON.stringify(next2) === JSON.stringify(spec)) {
         if (ctx.json) return printJson2({ itemId: screen.item, changed: false });
         console.log(`${screen.item}  ${wireTitle(spec)} \u2014 the same words; nothing written`);
@@ -16311,6 +18510,41 @@ function registerFlesh(host, wire) {
       const prototypes = await rebuildPrototypes(port, snapshot.canvas, all, [{ item: item.id, spec: next2 }], group);
       if (ctx.json) return printJson2({ itemId: item.id, changed: true, group, content: next2.content, prototypes });
       console.log(`${item.id}  ${wireTitle(next2)} \u2014 exact copy by ${opts.by}, one version${prototypes.length ? `, prototype rebuilt` : ""} \u2014 \`isocan undo\` takes it back`);
+    })
+  );
+  wire.command("name [screens...]").description("Name a flow's brand, per-screen titles, and shared navigation bar labels coherently in one op group").option("--canvas <canvas>").option("--flow <flow>", "only this flow's screens").option("--request <words>", "override the flow request when naming").action(
+    run2(async (refs, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const port = cliPort(host, ctx, p.id);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const all = await wiresOn(port, snapshot.canvas);
+      const screens = await screensFor(host, snapshot, all, refs, opts.flow);
+      const gen = resolveTextGenerator({
+        seed: Number(opts.seed ?? 1),
+        useStub: opts.answerer === "stub"
+      });
+      const r = await nameFlowOnCanvas(port, snapshot.canvas, all, screens, gen, {
+        ...opts.request ? { request: opts.request } : {}
+      });
+      if (ctx.json) {
+        return printJson2({
+          group: r.group,
+          by: r.by,
+          brand: r.brand,
+          navLabels: r.navLabels,
+          changed: r.changed.map((c) => ({ itemId: c.itemId, title: c.title })),
+          prototypes: r.prototypes
+        });
+      }
+      console.log(`brand: ${r.brand} \xB7 nav: ${r.navLabels.join(" \xB7 ") || "none"}`);
+      for (const c of r.changed) {
+        console.log(`${c.itemId}  ${c.title}`);
+      }
+      console.log(
+        `${r.changed.length} wire${r.changed.length === 1 ? "" : "s"} named (${r.by})${r.prototypes.length ? ", prototype rebuilt" : ""} \u2014 \`isocan undo\` takes it back`
+      );
     })
   );
 }
@@ -16345,6 +18579,114 @@ function registerPlay(host, wire) {
   );
 }
 
+// packages/modules/wireframe/src/edit-cli.ts
+function registerEditAndWhy(host, wire) {
+  const { run: run2, ctxOf: ctxOf2, resolveCanvas: resolveCanvas2, printJson: printJson2 } = host;
+  wire.command("edit [words...]").description("Surgically edit a single slot or layout setting on an existing wireframe screen (`content`, `add`, `remove`, `variant`, `restyle`) in one op group, rebuilding its prototype automatically").option("--canvas <canvas>").option("--screen <item>", "target wireframe screen item id or title (default: Jev picks from the instruction)").option("--kind <kind>", `explicit edit kind (${EDIT_KINDS.join(", ")})`).option("--slot <slot>", "explicit target slot id (for example: main.1, main.2, header, nav)").option("--block <block>", "replacement or added block id").option("--density <density>", "spacing density override (compact, default, spacious)").option("--template <template>", "multi-region layout template override").option("--answerer <name>", "jev, home, or stub").option("--seed <n>", "the stub's seed", "1").action(
+    run2(
+      async (words2, _local, cmd) => {
+        const opts = cmd.optsWithGlobals();
+        const ctx = await ctxOf2(cmd);
+        const say2 = (line) => {
+          if (!ctx.json) console.log(line);
+        };
+        const p = await resolveCanvas2(ctx);
+        const port = cliPort(host, ctx, p.id);
+        const all = await wiresOn(port, await port.canvas());
+        if (all.length === 0) {
+          throw new Error('no wireframe screens on this canvas \u2014 `isocan wire "<request>"` composes some');
+        }
+        let screenId = opts.screen;
+        let instruction = words2.join(" ").trim();
+        if (!screenId && words2.length > 1) {
+          const firstMatch = all.find(
+            (s) => s.item === words2[0] || s.spec.title.toLowerCase() === words2[0].toLowerCase()
+          );
+          if (firstMatch) {
+            screenId = firstMatch.item;
+            instruction = words2.slice(1).join(" ").trim();
+          }
+        }
+        if (!instruction && !opts.kind) {
+          throw new Error('what should change? `isocan wire edit [<screen>] "<instruction>"`');
+        }
+        let explicitEdit;
+        if (opts.kind || opts.slot) {
+          const kind = opts.kind ?? (opts.density || opts.template ? "restyle" : "variant");
+          if (!EDIT_KINDS.includes(kind)) {
+            throw new Error(`--kind must be one of ${EDIT_KINDS.join(", ")} \u2014 got "${opts.kind}"`);
+          }
+          const slot = opts.slot ?? "main.1";
+          explicitEdit = {
+            kind,
+            slot,
+            ...opts.block ? { block: opts.block } : {},
+            ...opts.density ? { density: opts.density } : {},
+            ...opts.template ? { template: opts.template } : {},
+            ...kind === "content" && instruction ? { fill: { heading: instruction } } : {}
+          };
+        }
+        const seed = Number(opts.seed ?? "1");
+        const answerer = cliAnswerer(ctx, p.id, opts.answerer, seed, say2);
+        const result2 = await editWireOnCanvas(port, instruction || `${explicitEdit?.kind ?? "edit"} ${explicitEdit?.slot ?? ""}`, answerer, {
+          ...screenId ? { screenId } : {},
+          ...explicitEdit ? { edit: explicitEdit } : {}
+        });
+        if (ctx.json) {
+          return printJson2({
+            group: result2.group,
+            itemId: result2.screen.item,
+            title: wireTitle(result2.screen.spec),
+            edit: result2.edit,
+            by: result2.by,
+            prototype: result2.prototype ?? null
+          });
+        }
+        const protoPart = result2.prototype ? ` \xB7 prototype ${result2.prototype.itemId} rebuilt` : "";
+        say2(
+          `${result2.screen.item}  ${wireTitle(result2.screen.spec)} \u2014 edited ${result2.edit.slot} (${result2.edit.kind}${result2.edit.block ? ` \u2192 ${result2.edit.block}` : ""})${protoPart} \xB7 \`isocan undo\` takes it back`
+        );
+      }
+    )
+  );
+  wire.command("why [words...]").description("Explain why a wireframe screen's archetype, template, density, and slot blocks were chosen, citing recorded Jev probabilities and runner-up alternatives").option("--canvas <canvas>").option("--screen <item>", "wireframe screen item id or title (default: newest wireframe screen)").action(
+    run2(async (words2, _local, cmd) => {
+      const opts = cmd.optsWithGlobals();
+      const ctx = await ctxOf2(cmd);
+      const p = await resolveCanvas2(ctx);
+      const port = cliPort(host, ctx, p.id);
+      const all = await wiresOn(port, await port.canvas());
+      if (all.length === 0) {
+        throw new Error('no wireframe screens on this canvas \u2014 `isocan wire "<request>"` composes some');
+      }
+      let screenId = opts.screen;
+      let question = words2.join(" ").trim();
+      if (!screenId && words2.length > 0) {
+        const match = all.find(
+          (s) => s.item === words2[0] || s.spec.title.toLowerCase() === words2[0].toLowerCase()
+        );
+        if (match) {
+          screenId = match.item;
+          question = words2.slice(1).join(" ").trim();
+        }
+      }
+      const primary = all.filter((s) => !s.spec.variantOf);
+      const target2 = screenId ? all.find((s) => s.item === screenId || s.spec.title.toLowerCase() === screenId.toLowerCase()) : primary[primary.length - 1] ?? all[all.length - 1];
+      if (!target2) {
+        throw new Error(`no wireframe screen "${screenId}" on this canvas`);
+      }
+      const explanation = explainWireDecision(target2.spec, question || void 0);
+      if (ctx.json) {
+        return printJson2({
+          itemId: target2.item,
+          ...explanation
+        });
+      }
+      for (const line of explanation.lines) console.log(line);
+    })
+  );
+}
+
 // packages/modules/wireframe/src/cli.ts
 function slugOf2(title) {
   return titleSlug(title) || "screen";
@@ -16361,6 +18703,7 @@ function register6(host) {
   registerStyle(host, wire);
   registerFlesh(host, wire);
   registerPlay(host, wire);
+  registerEditAndWhy(host, wire);
   wire.command("use <screens...>").description("Use screens in the prototype (\u{1F4D0}) \u2014 the same act as `wire keep`, in the words the item menu says").option("--canvas <canvas>").action(markScreens(host, true));
   wire.command("unuse <screens...>").description("Remove screens from the prototype (\u{1F4D0}) \u2014 the same act as `wire unkeep`").option("--canvas <canvas>").action(markScreens(host, false));
   wire.command("questions").description("Print the pending round of a wireframe flow as a question file, in Jev's request shape \u2014 for an agent to answer in Jev's place").option("--canvas <canvas>").option("--flow <flow>", "which flow (default: the newest one waiting on answers)").action(run2((opts, cmd) => questions(host, opts, cmd)));
@@ -22370,13 +24713,13 @@ function enrolTemplate(id3) {
   return null;
 }
 async function prepareFromTemplate(home, canvasId, name, id3, args) {
-  const template = enrolTemplate(id3);
-  if (!template) throw new Error(`no module on this machine offers the template ${id3} \u2014 isocan module ls`);
+  const template2 = enrolTemplate(id3);
+  if (!template2) throw new Error(`no module on this machine offers the template ${id3} \u2014 isocan module ls`);
   const base = path18.join(home, "templates", id3, canvasId);
   const before = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const dir = path18.join(base, before && existsSync6(path18.join(base, before)) ? before : titleSlug(name) || "agent");
   await fs17.mkdir(dir, { recursive: true });
-  const out = await template.prepare(args, dir);
+  const out = await template2.prepare(args, dir);
   return { dir, ...out?.harness ? { harness: out.harness } : {} };
 }
 for (const m of CLI_MODULES) {

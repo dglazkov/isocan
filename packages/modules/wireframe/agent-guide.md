@@ -32,7 +32,11 @@ bar, tab bar) stays.
   record too. The CLI prints those lines to you instead and posts nothing:
   post your ONE comment saying what landed. The last line says who answered, the latency
   per round, calls, input tokens and cost. `--save <dir>` keeps every
-  round's request and response; `--at x,y` starts the row somewhere.
+  round's request and response; `--at x,y` starts the row somewhere;
+  `--pin <key=value...>` pins root decisions up front (`platform=web`,
+  `density=compact`, `template=dashboard`, `pack=commerce`) and stamps them in
+  `spec.pinned`; `--no-ask` suppresses root entropy `/ask` disambiguation
+  prompts and picks top-1 silently.
 - **Round 1 over-includes; the prototype prunes.** An archetype the
   answerer gives P(yes) ≥ 0.5 is a screen of the flow; one from 0.3 up to
   0.5 is drawn too, in its running place in the row, but marked **maybe**:
@@ -309,6 +313,39 @@ bar, tab bar) stays.
   them (`--json` shows the property). In the web app ⌘K *Find prototypes* (or
   `/wire prototypes`) lists them and selects them, and while a pointer is on
   the minimap every prototype is lit and everything else steps back.
+- **Surgical section editing (`isocan wire edit`)**: `isocan wire edit [<screen>] "<instruction>"`
+  (or `/wire edit <instruction>` in the Chat) modifies a single section (`content`,
+  `add`, `remove`, `variant`, `restyle`) on an existing wireframe screen without
+  regenerating sibling slots or the rest of the flow. Explicit flags (`--screen`,
+  `--kind`, `--slot`, `--block`, `--density`, `--template`) bypass the model when
+  you already know the edit; otherwise Jev scopes the screen and slot in at most
+  two calls. The new screen version and any rebuilt prototype land in one op group,
+  so one `isocan undo` reverts both.
+- **Decision Q&A (`isocan wire why`)**: `isocan wire why [<screen>] [question...]`
+  (or `/wire why` in the Chat) reads a screen's embedded `WireSpec` (`need`, `by`,
+  `pinned`, per-slot `p` and `alternatives`, `declined`, `template`, `density`,
+  and `decisions`) and explains why its archetype, layout, and blocks were chosen,
+  citing the recorded probabilities and runner-up alternatives.
+- **Schema-driven AI copy (`isocan wire copy --ai`) and flow naming (`isocan wire name`)**:
+  `isocan wire copy [<screens...>] --ai [--brief "<words>"] [--flow <flow>]` (or
+  `/wire copy` in the Chat) builds a strict JSON schema (`blockContentSchema`) from
+  each screen's resolved blocks and variants, fills domain-specific words across
+  the screen(s) while keeping actionable button labels bound to their typed `Intent`,
+  and rebuilds any kept prototype in one op group. `isocan wire name [<screens...>]
+  [--flow <flow>] [--request "<words>"]` (or `/wire name` in the Chat) names the
+  flow's brand, per-screen titles, and shared navigation bar labels coherently so
+  tab bars, side navs, and headers match across every screen.
+- **Design system synthesis (`isocan wire ds`) and Jev-budgeted polish (`isocan wire polish`)**:
+  `isocan wire ds [request...] [--flow <flow>] [--name "<name>"] [--surface flat|raised|glass|bold]`
+  (or `/wire ds <request>` in the Chat) asks Jev to pick the best visual direction,
+  `surface:` mode, and `density`, repairs any low-contrast foreground/background
+  colour pairs to ≥ 4.5:1 WCAG AA (`repairContrast`), writes a complete `DESIGN.md`
+  item beside the flow, makes it govern the scope, and restyles all screens and
+  the prototype in one op group. `isocan wire polish [<screens...>] [--flow <flow>]
+  [--intensity <0-1>] [--clear]` (or `/wire polish` in the Chat) scores
+  `polish_intensity` (`0 | 4 | 8 | 12` patch budget) and applies `WireSpec.polish`
+  refinements guarded by `verifyWireContract`, which rejects any patch that drops
+  a `data-sec`, `data-wf`, `data-hot`, or `data-intent` attribute.
 
 **Words are typed, never free.** A button's label is its **intent**'s label
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of
@@ -316,8 +353,8 @@ bar, tab bar) stays.
 render` refuses a spec that gives one it cannot. Headings come from the
 spec's `title`; body copy is grey bars, never lorem ipsum — until `wire
 flesh` fills it from a content pack. If you want real copy on a screen,
-that is a separate, honest act — `wire copy <screen> --apply <file>` —
-not a label smuggled into an intent.
+that is a separate, honest act — `wire copy <screen> --apply <file>` or
+`wire copy --ai` — not a label smuggled into an intent.
 
 To draw a screen by hand: `isocan wire spec detail --resolved > detail.json`,
 change a slot's `block` to another of its options with `"props": {}` and no

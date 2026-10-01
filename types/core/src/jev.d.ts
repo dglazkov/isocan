@@ -136,4 +136,144 @@ export declare function isNoJudge(error: unknown): boolean;
  * screens under Jev's name.
  */
 export declare function homeOrStub(home: Answerer, stub: Answerer, onFallback: (error: unknown) => void): Answerer;
+/** Default Shannon entropy ceiling in bits above which a root decision asks for disambiguation. */
+export declare const DEFAULT_ENTROPY_GATE = 1;
+/** Default minimum top-option probability below which a root decision asks for disambiguation. */
+export declare const DEFAULT_CONFIDENCE_FLOOR = 0.5;
+/**
+ * Compute the Shannon entropy in bits ($H = -\sum p_i \log_2 p_i$) of a
+ * probability distribution. Normalizes positive entries so slight rounding in
+ * Jev's returned probabilities does not skew the bit count; returns `0` for
+ * empty, all-zero, or single-option distributions.
+ */
+export declare function entropyBits(probabilities: Record<string, number> | readonly number[]): number;
+/** One candidate option surfaced by `gatedChoice`, ordered most likely first. */
+export interface GatedChoiceOption {
+    /** Option identifier from the question's criteria. */
+    value: string;
+    /** Probability assigned by the answerer (`0..1`). */
+    p: number;
+}
+/** Options controlling `gatedChoice` disambiguation thresholds and overrides. */
+export interface GatedChoiceOptions {
+    /** Shannon entropy ceiling in bits (default `DEFAULT_ENTROPY_GATE` = `1.0`). */
+    maxEntropyBits?: number;
+    /** Minimum top-option probability (default `DEFAULT_CONFIDENCE_FLOOR` = `0.5`). */
+    minConfidence?: number;
+    /** Maximum number of top candidate options to surface on an ask (default `3`). */
+    topK?: number;
+    /** Pinned value from `WireSpec.pinned` or `--pin key=value`; bypasses the gate when valid. */
+    pinned?: string;
+    /** When `true` (`--no-ask`), never pauses for `/ask`; resolves to argmax even when uncertain. */
+    noAsk?: boolean;
+}
+/** The outcome of evaluating a Jev answer through `gatedChoice`. */
+export interface GatedChoiceResult {
+    /** `"pinned"` when `opts.pinned` matched; `"ask"` when entropy exceeds `maxEntropyBits` or top `p < minConfidence` (unless `noAsk`); otherwise `"confident"`. */
+    status: "confident" | "ask" | "pinned";
+    /** Chosen or pinned option value. */
+    value: string;
+    /** Probability of `value` in the answer's distribution. */
+    p: number;
+    /** Shannon entropy of the answer's distribution in bits. */
+    entropy: number;
+    /** Top `k` options sorted by descending probability. */
+    options: GatedChoiceOption[];
+    /** True when the distribution itself was uncertain (`entropy > maxEntropyBits` or `p < minConfidence`). */
+    uncertain: boolean;
+}
+/**
+ * Evaluate a Jev answer against an entropy and confidence gate.
+ * When `opts.pinned` names a valid option, returns `status: "pinned"` with
+ * that option immediately. Otherwise, if `entropy > maxEntropyBits` or
+ * `p < minConfidence`, returns `status: "ask"` (or `"confident"` when
+ * `opts.noAsk` is true) with the top `topK` options and their probabilities.
+ */
+export declare function gatedChoice(q: JevQuestion, a: JevAnswer, opts?: GatedChoiceOptions): GatedChoiceResult;
+/** Priority lane for `PriorityGate`: `"high"` preempts queued `"normal"` work. */
+export type JevPriority = "high" | "normal";
+/** Configuration for `PriorityGate`. */
+export interface PriorityGateOptions {
+    /** Maximum concurrent in-flight calls (default `3`). */
+    concurrency?: number;
+    /** Alias for `concurrency` (default `3`). */
+    maxConcurrent?: number;
+    /** Maximum retries on transient `429` or `529` errors (default `3`). */
+    maxRetries?: number;
+    /** Backoff delays in ms between retries (default `[200, 500, 1000]`). */
+    backoffMs?: readonly number[];
+    /** Base backoff delay in ms when `backoffMs` is not given. */
+    baseDelayMs?: number;
+    /** Custom sleep function for deterministic tests. */
+    sleep?: (ms: number) => Promise<void>;
+}
+/**
+ * Two-lane (`high` / `normal`) concurrency semaphore and retry wrapper around
+ * an `Answerer`. Interactive composer, edit, and `/ask` calls run on the
+ * `"high"` lane and always dequeue ahead of queued `"normal"` background work
+ * (such as class polish).
+ */
+export declare class PriorityGate {
+    readonly inner: Answerer | undefined;
+    readonly concurrency: number;
+    readonly maxRetries: number;
+    private readonly backoffMs;
+    private readonly sleep;
+    private active;
+    private readonly highQueue;
+    private readonly normalQueue;
+    constructor(innerOrOpts?: Answerer | PriorityGateOptions, maybeOpts?: PriorityGateOptions);
+    /** Number of currently in-flight calls across both lanes. */
+    get inFlight(): number;
+    /** Number of queued calls waiting for a slot (`high` + `normal`). */
+    get pending(): number;
+    private acquire;
+    private release;
+    /** Run an arbitrary async operation through the priority semaphore with transient retry. */
+    run<T>(first: JevPriority | (() => Promise<T>), second?: (() => Promise<T>) | JevPriority): Promise<T>;
+    /** Answer a `JevRequest` at the given priority (`"high"` by default). */
+    answer(request: JevRequest, priority?: JevPriority): Promise<Answered>;
+    /** View this gate as a standard `Answerer` bound to the given priority lane. */
+    asAnswerer(first?: Answerer | JevPriority, second?: JevPriority): Answerer;
+}
+/** Minimal JSON Schema subset used for structured text generation (`wire copy --ai`, `wire name`). */
+export interface JsonSchema {
+    type: "object" | "array" | "string" | "number" | "boolean";
+    description?: string;
+    properties?: Record<string, JsonSchema>;
+    required?: readonly string[];
+    items?: JsonSchema;
+    minItems?: number;
+    maxItems?: number;
+    enum?: readonly string[];
+    additionalProperties?: boolean | JsonSchema;
+}
+/**
+ * Vendor-neutral structured text generator seam.
+ *
+ * Implementations:
+ * - `stubTextGenerator(seed)`: deterministic offline generator that synthesizes valid JSON conforming to `schema`.
+ * - `httpTextGenerator(opts)`: standard HTTPS JSON-schema completion (`ISOCAN_TEXT_API_KEY` / `ISOCAN_TEXT_MODEL`, zero SDK dependencies).
+ */
+export interface TextGenerator {
+    readonly name: string;
+    generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T>;
+}
+/** Options for `httpTextGenerator`. */
+export interface HttpTextGeneratorOptions {
+    apiKey?: string;
+    model?: string;
+    endpoint?: string;
+    fetch?: typeof globalThis.fetch;
+}
+/**
+ * Deterministic, offline `TextGenerator` that synthesizes schema-valid JSON
+ * from the prompt and schema structure without network calls.
+ */
+export declare function stubTextGenerator(seed?: number): TextGenerator;
+/**
+ * Standard HTTPS JSON-schema `TextGenerator` using `fetch` with zero SDK dependencies.
+ * Reads `ISOCAN_TEXT_API_KEY` and `ISOCAN_TEXT_MODEL` when not passed in `opts`.
+ */
+export declare function httpTextGenerator(opts?: HttpTextGeneratorOptions): TextGenerator;
 export {};
