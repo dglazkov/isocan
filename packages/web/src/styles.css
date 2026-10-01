@@ -3602,11 +3602,6 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; flex-direction: column; align-items: flex-start;
   box-shadow: 0 4px 10px -4px var(--shade);
 }
-/* The chosen mark, in front of the name it stands beside. No size of its own:
-   an emoji already draws larger than a letter at the same font-size, and the
-   scale ratchet is right that a seventeenth size earns nothing. A hair of
-   space so it does not touch the first letter. */
-.cursor-mark { font-weight: 400; margin-right: 3px; }
 /* **A mark is worn AS the pointer** (agent pointers, 30 Sep 2026). The arrow
    shrinks to its tip — scaled about its own top-left, so the point stays on
    the hotspot where selection and `session point` land — and keeps the
@@ -3620,6 +3615,11 @@ button.mt-card:hover { border-color: var(--accent); }
   filter: drop-shadow(0 0 1px currentColor) drop-shadow(0 0 1px currentColor) drop-shadow(0 1px 2px var(--shade));
 }
 .remote-cursor.marked .cursor-chip { margin: 18px 0 0 28px; }
+/* Your own pointer wears your mark the same way (1 Oct 2026): the canvas's
+   shape is the default for everybody, and a mark you chose replaces it — on
+   your screen as on everyone else's. Same tip, same hotspot. */
+.own-cursor.marked svg { width: 9px; height: 10px; }
+.own-cursor.marked .cursor-chip { margin: 18px 0 0 28px; }
 .remote-cursor.quiet .cursor-glyph { animation: cursor-breathe 2.6s ease-in-out infinite; }
 .cursor-chip-row { display: flex; align-items: center; gap: 8px; }
 .cursor-chip-input {

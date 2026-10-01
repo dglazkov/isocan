@@ -13,9 +13,11 @@ describe("the stylesheet keeps the tip on the hotspot", () => {
     // The arrow's point is at the top-left of its viewBox, so resizing it
     // about that corner keeps the point where it was; a margin, position or
     // transform here would move every pointer on the canvas off its target.
-    const shrink = body(".remote-cursor.marked svg");
-    expect(shrink).toMatch(/width:\s*9px/);
-    expect(shrink).not.toMatch(/margin|transform|translate|position|left|top/);
+    for (const selector of [".remote-cursor.marked svg", ".own-cursor.marked svg"]) {
+      const shrink = body(selector);
+      expect(shrink, selector).toMatch(/width:\s*9px/);
+      expect(shrink, selector).not.toMatch(/margin|transform|translate|position|left|top/);
+    }
   });
 
   it("lays the glyph over the arrow's body, out of flow and a fixed screen size", () => {

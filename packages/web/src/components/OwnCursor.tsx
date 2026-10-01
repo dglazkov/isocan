@@ -151,14 +151,23 @@ export function OwnCursor({ actor }: { actor: Actor }) {
 
   if (!shown) return null;
   const label = cursorChipLabel(signal, actorName(actor));
+  /**
+   * **Your mark is your pointer, here as everywhere else** (1 Oct 2026). The
+   * canvas's shape is the default; a mark you chose for your face replaces it,
+   * which is how everybody else already sees you (`CursorLayer`). Drawing the
+   * arrow under your own hand while they see your emoji made the one pointer
+   * you look at all day the one that disagreed. The raw mark, not
+   * `faceMark` — an initial is not a pointer.
+   */
   const mark = markOf(marks, actor);
   return (
-    <div className="own-cursor" ref={ref} aria-hidden={!editing} style={{ opacity: 0 }}>
+    <div className={`own-cursor${mark ? " marked" : ""}`} ref={ref} aria-hidden={!editing} style={{ opacity: 0, color }}>
       {/* Your own cursor wears the canvas's ground too — otherwise the one
           pointer you look at all day is the one that never joins in (#195). */}
       <svg width="18" height="20" viewBox="0 0 18 20">
         <path d={cursorPath} fill={color} strokeWidth="1" />
       </svg>
+      {mark && <b className="cursor-glyph">{mark}</b>}
       <span className="cursor-chip" style={{ background: color }}>
         {editing ? (
           <span className="cursor-chip-row">
@@ -192,10 +201,7 @@ export function OwnCursor({ actor }: { actor: Actor }) {
             <em>Esc</em>
           </span>
         ) : (
-          <span>
-            {mark && <b className="cursor-mark">{mark}</b>}
-            {label}
-          </span>
+          <span>{label}</span>
         )}
       </span>
     </div>

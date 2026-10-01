@@ -46,7 +46,7 @@ describe("the cursor chip", () => {
   const src = read("../src/components/CursorLayer.tsx");
   const own = read("../src/components/OwnCursor.tsx");
 
-  it("wears the mark in front of the name on the same line on your own cursor, and AS the pointer on everyone else's", () => {
+  it("wears the mark AS the pointer — everyone else's, and your own", () => {
     // A cursor is where somebody is identified at a glance, and it is the one
     // that moves — a glyph is easier to follow than a word is to read.
     // `.cursor-chip` is `flex-direction: column` so the status `<em>` stacks
@@ -58,7 +58,12 @@ describe("the cursor chip", () => {
     expect(src).toContain('{mark && <b className="cursor-glyph">{mark}</b>}');
     expect(src).not.toContain("cursor-mark");
     expect(own).toContain("markOf(marks, actor)");
-    expect(own).toMatch(/<span>\s*\{mark && <b className="cursor-mark">\{mark\}<\/b>\}\s*\{label\}\s*<\/span>/);
+    // Your own pointer too (1 Oct 2026): the canvas's shape is the default and
+    // a mark you chose replaces it, on your screen as on everyone else's —
+    // so the chip under your hand is the name alone, as theirs is.
+    expect(own).toContain('{mark && <b className="cursor-glyph">{mark}</b>}');
+    expect(own).toContain('own-cursor${mark ? " marked" : ""}');
+    expect(own).not.toContain("cursor-mark");
   });
 
   it("asks for the raw mark, not the disc's fallback", () => {
