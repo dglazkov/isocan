@@ -67,8 +67,11 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
   const key = pending ? `${pending.itemId ?? "new"}:${pending.x},${pending.y}` : null;
   // Set when a composer opens, cleared once its words are in the field and
   // the caret has been placed — see the focus effect for why that is not
-  // the same render.
-  const placeCaret = useRef(false);
+  // the same render. It STARTS set: since a22c3f1a the composer mounts only
+  // while one is open, so mounting IS opening, and on a fresh mount the open
+  // effect below changes nothing that would render the focus effect again
+  // (1 Oct 2026 — typed words went to the canvas's shortcuts for a day).
+  const placeCaret = useRef(true);
   /**
    * The paper under the pointer, while it is over a swatch — `undefined` when
    * it is not. A preview, in the exact sense: the composer dresses in it for
@@ -110,9 +113,10 @@ export function TextComposer({ canvasId, actor }: { canvasId: string; actor: Act
    * Focus, and place the caret — once per composer, and only once the words
    * are actually IN the field.
    *
-   * The component stays mounted between composers, so on open the field
-   * still holds the last draft for one render while the effect above swaps
-   * the words in. Keyed on `key` alone this ran during that render: it
+   * Moving straight from one composer to another keeps the component
+   * mounted (it mounts only while one is open — `TextComposerWhenOpen`), so on
+   * that switch the field still holds the last draft for one render while the
+   * effect above swaps the words in. Keyed on `key` alone this ran during that render: it
    * selected the stale value, the real words then landed, and the browser
    * put the caret at their end — a select-all that never showed. So it
    * watches `body` too, and acts only on the render where the field holds
