@@ -132,6 +132,12 @@ describe("finding a mark by typing", () => {
     expect(top("pizza")).toBe("🍕");
     expect(top("guitar")).toBe("🎸");
     expect(top("mountain")).toBe("🏔️");
+    // Sports somebody went looking for and could not find (1 Oct 2026).
+    expect(top("cricket")).toBe("🏏");
+    expect(top("soccer")).toBe("⚽");
+    expect(top("pickleball")).toBe("🏓");
+    expect(top("hockey")).toBe("🏑");
+    expect(top("frisbee")).toBe("🥏");
   });
 
   it("honours the limit", () => {
