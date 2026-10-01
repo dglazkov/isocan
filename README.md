@@ -505,6 +505,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|migrate`; mutations
   support an actual `--dry-run`, all commands support `--json`, and
   `mv <item> --in <group>` transfers membership and places the item atomically.
+  The outline under the pointer is what a press would take — the group at the
+  canvas level, including the space between its members. Hold ⌘ (Ctrl off a
+  Mac) to reach one item at any depth: ⌘-click selects just it, and ⌘-drag
+  carries it into another group or out onto the canvas, labelled *Add to …* /
+  *Out of …* before you let go, as one undo. A plain drag never detaches; the
+  frame grows instead. ⌘⇧G on a member, *Move to canvas*, and
+  `mv <item> --out [--to-root]` take an item out from the keyboard, menu and CLI.
   Resize scales native frames and attached ink with a fixed anchor; Fit frame
   keeps the arrangement and adjusts its border. The group's layout form sets
   or clears its named grid; lowering a count drops the labels past it in the

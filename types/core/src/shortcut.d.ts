@@ -10,9 +10,10 @@
  * It lives in core rather than in the web app because a MODULE needs it too,
  * and a module may import nothing but core.
  *
- * **Nothing here reads a keyboard event.** This names a key for a human; the
- * decision about which modifier was actually held belongs at the event, where
- * both are accepted.
+ * **Almost nothing here reads a keyboard event.** This names a key for a
+ * human; the decision about which modifier was actually held belongs at the
+ * event, where both are accepted — except `reachHeld`, whose whole point is
+ * that only one of them is.
  */
 /**
  * Is this an Apple keyboard, where the modifier is ⌘ and shortcuts are
@@ -29,6 +30,16 @@
 export declare function applePlatform(hint?: string): boolean;
 /** The modifier's name on its own: `⌘` or `Ctrl`. */
 export declare function cmdKey(hint?: string): string;
+/**
+ * Is the modifier that reaches ONE item held (groups-by-hand phase 2)? ⌘ on a
+ * Mac and Ctrl elsewhere — never Ctrl on a Mac, where Ctrl-click is a
+ * right-click. The one place this file reads an event, because which key it
+ * is and what it is called must not come apart.
+ */
+export declare function reachHeld(e: {
+    metaKey: boolean;
+    ctrlKey: boolean;
+}, hint?: string): boolean;
 /** The shift key's name: `⇧` or `Shift`. */
 export declare function shiftKey(hint?: string): string;
 /**

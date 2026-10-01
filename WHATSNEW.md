@@ -23,6 +23,15 @@ second week.
 
 ## 1 October 2026
 
+- **Getting things out of a group.** Hold ⌘ (Ctrl on Windows and Linux)
+  and the outline jumps from a group to the one item under your pointer;
+  ⌘-drag it and drop it outside the frame to take it out (*Out of …* says so
+  before you let go), or onto another group to move it there. One ⌘Z puts it
+  back. A plain drag still grows the frame, so nothing leaves by accident.
+  ⌘⇧G on a member takes it out too; agents use `isocan mv <item> --out`.
+- **The outline shows what a click takes.** Pointing at a card inside a
+  group, or at the space between its cards, outlines the group — because
+  that is what a click selects. Hold ⌘ to aim at the card instead.
 - **Picked-up things look picked up.** While you drag a card it rises onto
   a deeper shadow, the same size and exactly under your hand, and settles
   back when you let go. Dragging a group lifts the whole frame.
