@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Command } from "commander";
 import { moduleAsset, type CanvasContents, type DesignDoc, type Item } from "@isocan/core";
-import { packagePath } from "@isocan/core/packageroot";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { cliAnswerer, cliPort } from "./cli-port.ts";
 import { mappingSaver } from "./compose-cli.ts";
@@ -23,10 +24,28 @@ import { wireTitle } from "./spec.ts";
 const OWN_DIR = "packages/modules/wireframe";
 const PACKS_DIR = "packages/modules/design-competition";
 
+function rootPath(...parts: string[]): string {
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let up = 0; up < 12; up++) {
+    const manifest = path.join(dir, "package.json");
+    if (existsSync(manifest)) {
+      try {
+        if ((JSON.parse(readFileSync(manifest, "utf8")) as { name?: string }).name === "isocan") {
+          return path.join(dir, ...parts);
+        }
+      } catch {
+        // continue walking up
+      }
+    }
+    dir = path.dirname(dir);
+  }
+  return path.join(dir, ...parts);
+}
+
 /** A wire style's DESIGN.md, as text — or a refusal that says why it cannot be read here. */
 export function presetText(preset: WirePreset): string {
   const rel = presetFile(preset);
-  const where = preset.from === "own" ? moduleAsset(wireframeModule.name, rel) ?? packagePath(OWN_DIR, rel) : packagePath(PACKS_DIR, rel);
+  const where = preset.from === "own" ? moduleAsset(wireframeModule.name, rel) ?? rootPath(OWN_DIR, rel) : rootPath(PACKS_DIR, rel);
   if (!existsSync(where)) {
     throw new Error(preset.from === "pack"
       ? `the design competition's packs are not on this machine, so "${preset.id}" cannot be read — the module's own styles can (\`isocan wire style --list\`)`

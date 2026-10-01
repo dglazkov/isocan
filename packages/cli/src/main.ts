@@ -172,6 +172,8 @@ import {
   CURSORS,
   cursorOf,
   cursorPatch,
+  cursorSignal,
+  TEXT_ATTENTION_MS,
   GROUND_MAX_BYTES,
   isCursor,
   noCursorPatch,
@@ -11127,7 +11129,6 @@ async function readCommentDocument(ctx: Ctx, canvasId: string, item: Item) {
   const face = visualFaceOf(version);
   if (!["text/markdown", "text/plain"].includes(face.mimeType)) throw new Error("Text comments need a Markdown or plain-text item");
   const { markdownText } = await import("@isocan/core/markdown");
-  const { isTextItem } = await import("@isocan/core");
   const flavor = face.mimeType === "text/plain" ? "plain" as const : isTextItem(item) ? "text-node" as const : "document" as const;
   const text = markdownText((await ctx.client.downloadBlob(canvasId, face.blobHash)).toString("utf8"), flavor);
   return { text, versionId: version.id, blobHash: face.blobHash, flavor };
@@ -11669,7 +11670,6 @@ session
       return console.log(`selected ${item.id}`);
     }
     const doc = await readCommentDocument(ctx, p.id, item);
-    const { TEXT_ATTENTION_MS } = await import("@isocan/core");
     const range = quoteRange(doc.text, opts.quote, opts.occurrence === undefined ? undefined : Number(opts.occurrence));
     const textSelection = { itemId: item.id, versionId: doc.versionId, blobHash: doc.blobHash,
       textSpace: "markdown-hast-v1" as const, flavor: doc.flavor, ...range, expiresAt: Date.now() + TEXT_ATTENTION_MS };
@@ -11750,7 +11750,6 @@ session
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       if (opts.signal) {
-        const { cursorSignal } = await import("@isocan/core");
         await touchSession(ctx, p.id, { signal: status ? cursorSignal(status) : null });
         console.log(status ? `signal: ${status} (20s)` : "signal cleared");
         return;
@@ -11767,7 +11766,6 @@ session
     run(async (text: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
-      const { cursorSignal } = await import("@isocan/core");
       await touchSession(ctx, p.id, { signal: text ? cursorSignal(text) : null });
       console.log(text ? `signal: ${text} (20s)` : "signal cleared");
     }),

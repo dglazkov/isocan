@@ -40,7 +40,7 @@ import {
   type Minted,
 } from "./bout.ts";
 import { competitionCore } from "./core.ts";
-import { findFighter, fighters, packPath, rosterClashes, type Fighter, type FighterPack, type PackFile } from "./packs.ts";
+import { findFighter, fighters, packPath, packProblems, rosterClashes, type Fighter, type FighterPack, type PackFile } from "./packs.ts";
 import { competitionTally, standings } from "./tally.ts";
 
 /**
@@ -697,7 +697,7 @@ your own rc, each named for its principle — an homage, never the person.
           quote: null,
           ...(opts.self ? { self: true } : {}),
         };
-        const problems = (await import("./packs.ts")).packProblems(pack);
+        const problems = packProblems(pack);
         if (problems.length) {
           const hint = problems.some((p) => /reference/.test(p)) ? " — add one with --ref \"Title|https://…|what to learn\"" : "";
           throw new Error(`this pack would be refused: ${problems.join("; ")}${hint}`);

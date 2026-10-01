@@ -1,23 +1,8 @@
 import guideText from "../agent-guide.md";
-import { readFile } from "node:fs/promises";
-import type { Command } from "commander";
-import { FIDELITY_PROP, newItemId, newVersionId, titleSlug } from "@isocan/core";
+import type { CoreModule } from "@isocan/core";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
-import {
-  BLOCKS, INTENTS, PLATFORMS, PRIMITIVES, RECIPES, blueprint, renderWire, validateWire, wireSize, wireTitle, wireframe,
-  type Component, type Platform, type WireSpec,
-} from "./core.ts";
-import { wireframeCore } from "./command.ts";
-import { answer, questions, registerCompose } from "./compose-cli.ts";
-import { markScreens, registerVary } from "./vary-cli.ts";
-import { registerLinks } from "./links-cli.ts";
-import { registerStyle } from "./style-cli.ts";
-import { registerFlesh } from "./flesh-cli.ts";
-import { registerPlay } from "./play-cli.ts";
-import { registerEditAndWhy } from "./edit-cli.ts";
-import { cliPort } from "./cli-port.ts";
-import { wiresOn } from "./flow.ts";
-import { rerender, rerenderLines, rerenderSummary } from "./rerender.ts";
+import { KEEP_EMOJI, wireframeModule } from "./record.ts";
+import { WIRE_COMMAND, WIRE_PROPERTY_KEYS } from "./wire-command.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
@@ -33,56 +18,196 @@ import { rerender, rerenderLines, rerenderSummary } from "./rerender.ts";
  * a screen; take this module away and every screen still renders — only
  * these verbs are gone. `wire spec` and `wire catalog` exist so an agent can
  * write a valid spec without reading this module's source.
+ *
+ * All action implementations live behind a single `await import("./cli-runtime.ts")`
+ * so `isocan --version` and non-wireframe commands never pay to load the
+ * wireframe catalog, 24 content packs, or renderer at startup.
  */
 
-/** A screen's filename stem: core's one title rule (cleanup DU-2), or "screen". */
-function slugOf(title: string): string {
-  return titleSlug(title) || "screen";
-}
-
-/** A component as JSON: its draw function and element predicates left out. */
-function asData({ id, category, props, elements }: Component) {
-  return { id, category, props, elements: Object.fromEntries(Object.entries(elements ?? {}).map(([k, e]) => [k, { accepts: e.accepts, default: e.default }])) };
+function dispatch(host: CliHost, subcommand: string) {
+  return host.run(async (...args: unknown[]) => {
+    const { executeWire } = await import("./cli-runtime.ts");
+    await executeWire(host, subcommand, args);
+  });
 }
 
 function register(host: CliHost): void {
-  const { run, ctxOf, resolveCanvas, sendOp, printJson, placementFor } = host;
   const wire = host.program
     .command("wire")
-    .description("Wireframes: `wire \"<request>\"` composes a flow of screens from a catalog of blocks — a blue blueprint where a slot is undecided, grey where it is chosen");
-  registerCompose(host, wire);
-  registerVary(host, wire);
-  registerLinks(host, wire);
-  registerStyle(host, wire);
-  registerFlesh(host, wire);
-  registerPlay(host, wire);
-  registerEditAndWhy(host, wire);
+    .description("Wireframes: `wire \"<request>\"` composes a flow of screens from a catalog of blocks — a blue blueprint where a slot is undecided, grey where it is chosen")
+    .argument("[request...]", "what the screens are for, in words — composes a flow")
+    .option("--answerer <name>", "jev (needs TYPESAFE_API_KEY), home (Jev through the canvas's home, with its key), stub (random, seeded) or agent (you answer: `wire questions` / `wire answer`) — default jev when the key is set, else the home, else the stub")
+    .option("--seed <n>", "the stub's seed", "1")
+    .option("--save <dir>", "write each round's requests and responses there as JSON")
+    .option("--canvas <canvas>")
+    .option("--at <x,y>", "start the row at world coordinates (default: under everything on the canvas)")
+    .option("--in <group>", "compose the flow inside this group — and in its design system, if it has one")
+    .option("--basic", "plain grey wires: no sample content and no prototype (the default fleshes the screens and puts the answerer's first choices in a prototype)")
+    .option("--flesh", "arrive fleshed — the default now; kept so older scripts still run")
+    .option("--pack <id>", "the content pack to flesh with, instead of asking (`wire flesh --packs` lists them)")
+    .option("--pin <key=value...>", "pin root flow decisions up front (for example: --pin platform=web --pin density=compact)")
+    .option("--no-ask", "suppress high-entropy root /ask prompts and pick top-1 silently")
+    .action(dispatch(host, ""));
+
+  wire
+    .command("vary <screen>")
+    .description("Add a screen's variations under it — each flips the least certain remaining decision to its runner-up, from the distribution the answerer already gave")
+    .option("--canvas <canvas>")
+    .option("--count <n>", "how many variations the screen should have in all (default 2)")
+    .action(dispatch(host, "vary"));
+
+  wire
+    .command("keep <items...>")
+    .description(`Use screens in the prototype (${KEEP_EMOJI}) — a property on the item, as a slide is, so anyone can take it off. \`wire use\` says the same`)
+    .option("--canvas <canvas>")
+    .action(dispatch(host, "keep"));
+
+  wire
+    .command("unkeep <items...>")
+    .description(`Take screens out of the prototype (${KEEP_EMOJI}) — anyone's mark, not only your own. \`wire unuse\` says the same`)
+    .option("--canvas <canvas>")
+    .action(dispatch(host, "unkeep"));
+
+  wire
+    .command("kept")
+    .description(`List the screens in the prototype (${KEEP_EMOJI}) in reading order — rows top to bottom, each left to right`)
+    .option("--canvas <canvas>")
+    .option("--prototype <item>", "only the screens this prototype plays, in its order — its flow's screens in the prototype and any guest from another flow (what selecting it lights on the canvas)")
+    .action(dispatch(host, "kept"));
+
+  wire
+    .command("links [screen]")
+    .description("Print where every hotspot on the screens in the prototype goes — inferred from intents, archetypes and reading order, and any override set with `wire link`")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "which flow's prototype (default: the only one)")
+    .action(dispatch(host, "links"));
+
+  wire
+    .command("link <screen> <element> [target]")
+    .description("Override where one hotspot goes: to a screen, or --none to switch it off; --clear gives it back to the rules. A property on the source screen")
+    .option("--canvas <canvas>")
+    .option("--none", "the hotspot goes nowhere")
+    .option("--back", "the hotspot goes back, whatever the rules say")
+    .option("--clear", "forget the override — the rules decide again")
+    .action(dispatch(host, "link"));
+
+  wire
+    .command("prototype")
+    .description("Assemble the screens in the prototype (📐) as one clickable HTML item above them — rebuilt, it gains a version rather than being replaced")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "which flow's prototype (default: the only one)")
+    .action(dispatch(host, "prototype"));
+
+  wire
+    .command("style")
+    .description("Restyle every wire in the design system that governs it — Jev maps the system's tokens onto the wire's roles, once per system version; one op group, a version per changed wire. --preset <name> chooses a named wire style for the flows (material, shadcn, glass, ios, fluent, carbon, brutalist, a design-competition pack, or house for the greys); --list names them; --default restores the greys; --check lists wires behind their system")
+    .argument("[screens...]", "only these screens' flows (ids, titles or #refs) — every wire when none")
+    .option("--canvas <canvas>")
+    .option("--preset <name>", "a wire style: its DESIGN.md placed beside the flow and made its group's (or the canvas's) design system, and the flow restyled — one op group; house returns to the greys and lets the style's file go")
+    .option("--list", "write nothing: name the wire styles --preset takes, and say which cannot be read here")
+    .option("--default", "back to the default wire look (the greys)")
+    .option("--check", "write nothing: list the wires that are behind the system that governs them")
+    .option("--flow <flow>", "only this flow's screens and their variations")
+    .action(dispatch(host, "style"));
+
+  wire
+    .command("ds [request...]")
+    .description("Synthesize a WCAG AA contrast-repaired DESIGN.md with Jev, make it govern the flow's scope, and restyle all screens and prototype in one op group")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--name <name>", "explicit name for the synthesized design system")
+    .option("--surface <surface>", "override surface mode: flat | raised | glass | bold")
+    .action(dispatch(host, "ds"));
+
+  wire
+    .command("polish [screens...]")
+    .description("Apply Jev-budgeted visual refinement patches (0 | 4 | 8 | 12) guarded by verifyWireContract in one op group")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--intensity <n>", "override polish_intensity (0–1)")
+    .option("--clear", "remove polish patches from target screens")
+    .action(dispatch(host, "polish"));
+
+  wire
+    .command("flesh [screens...]")
+    .description("Fill wires with sample content instead of grey bars — Jev picks one content pack per flow from its request (p recorded; --pack <id> overrides); one op group, a version per changed wire. --bars goes back to bars")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens and their variations")
+    .option("--bars", "back to bars: take the content off")
+    .option("--packs", "write nothing: list the content packs")
+    .action(dispatch(host, "flesh"));
+
+  wire
+    .command("copy [screens...]")
+    .description("Print a fleshed screen's words and JSON schema by slot and path; --apply <file> writes exact words back (source \"copy\") as one version; --ai fills schema-validated copy across one screen or flow")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "with --ai: only this flow's screens")
+    .option("--apply <file>", "a JSON file: { \"title\"?: string, \"slots\": { \"<slot>\": { \"<path>\": \"words\" } | [\"words\", …] } }")
+    .option("--ai", "generate schema-validated copy across target screen(s) in one op group")
+    .option("--brief <words>", "extra domain or tone brief for --ai")
+    .option("--by <name>", "who wrote the words — recorded on the screen", "agent")
+    .action(dispatch(host, "copy"));
+
+  wire
+    .command("name [screens...]")
+    .description("Name a flow's brand, per-screen titles, and shared navigation bar labels coherently in one op group")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--request <words>", "override the flow request when naming")
+    .action(dispatch(host, "name"));
+
+  wire
+    .command("play <screen> [element]")
+    .description("Print the address that opens the flow's prototype full screen AT this screen of it — with [element], its hotspot pointed out. What an arrow's Play from here opens")
+    .option("--canvas <canvas>")
+    .action(dispatch(host, "play"));
+
+  wire
+    .command("edit [words...]")
+    .description("Surgically edit a single slot or layout setting on an existing wireframe screen (`content`, `add`, `remove`, `variant`, `restyle`) in one op group, rebuilding its prototype automatically")
+    .option("--canvas <canvas>")
+    .option("--screen <item>", "target wireframe screen item id or title (default: Jev picks from the instruction)")
+    .option("--kind <kind>", "explicit edit kind (content, add, remove, variant, restyle)")
+    .option("--slot <slot>", "explicit target slot id (for example: main.1, main.2, header, nav)")
+    .option("--block <block>", "replacement or added block id")
+    .option("--density <density>", "spacing density override (compact, default, spacious)")
+    .option("--template <template>", "multi-region layout template override")
+    .option("--answerer <name>", "jev, home, or stub")
+    .option("--seed <n>", "the stub's seed", "1")
+    .action(dispatch(host, "edit"));
+
+  wire
+    .command("why [words...]")
+    .description("Explain why a wireframe screen's archetype, template, density, and slot blocks were chosen, citing recorded Jev probabilities and runner-up alternatives")
+    .option("--canvas <canvas>")
+    .option("--screen <item>", "wireframe screen item id or title (default: newest wireframe screen)")
+    .action(dispatch(host, "why"));
 
   // The keep mark in the words the web says it in (24 Sep 2026): `use` is `keep`, `unuse` is `unkeep`.
   wire
     .command("use <screens...>")
     .description("Use screens in the prototype (📐) — the same act as `wire keep`, in the words the item menu says")
     .option("--canvas <canvas>")
-    .action(markScreens(host, true));
+    .action(dispatch(host, "use"));
 
   wire
     .command("unuse <screens...>")
     .description("Remove screens from the prototype (📐) — the same act as `wire unkeep`")
     .option("--canvas <canvas>")
-    .action(markScreens(host, false));
+    .action(dispatch(host, "unuse"));
 
   wire
     .command("questions")
     .description("Print the pending round of a wireframe flow as a question file, in Jev's request shape — for an agent to answer in Jev's place")
     .option("--canvas <canvas>")
     .option("--flow <flow>", "which flow (default: the newest one waiting on answers)")
-    .action(run((opts: { flow?: string }, cmd: Command) => questions(host, opts, cmd)));
+    .action(dispatch(host, "questions"));
 
   wire
     .command("answer <file>")
     .description("Apply a question file whose calls each carry a `response` in Jev's response shape — the screens fill in place, in the flow's op group")
     .option("--canvas <canvas>")
-    .action(run((file: string, _opts: unknown, cmd: Command) => answer(host, file, cmd)));
+    .action(dispatch(host, "answer"));
 
   wire
     .command("render [spec]")
@@ -95,123 +220,31 @@ function register(host: CliHost): void {
     .option("--anchor <item>", "place to the left of this item")
     .option("--in <group>", "insert into this group")
     .option("--cell <row,col>", "with --in: one cell of the sheet's grid")
-    .action(
-      run(async (file: string | undefined, _local: unknown, cmd: Command) => {
-        // `--at` is `wire`'s own flag too (it starts a composed row), so read
-        // it wherever commander put it.
-        const opts = cmd.optsWithGlobals() as { title?: string; at?: string; anchor?: string; in?: string; cell?: string; all?: boolean; flow?: string };
-        if (opts.all || opts.flow !== undefined) {
-          if (file !== undefined) throw new Error("--all draws the wires already on the canvas — give it no spec file");
-          return rerenderAll(host, cmd, opts.flow);
-        }
-        if (file === undefined) throw new Error("which spec? `isocan wire render <spec.json>` adds a screen; `isocan wire render --all` re-renders the ones already here");
-        let spec: WireSpec;
-        try {
-          spec = JSON.parse(await readFile(file, "utf8")) as WireSpec;
-        } catch (error) {
-          throw new Error(`${file} is not a JSON file this can read: ${(error as Error).message}`);
-        }
-        const problems = validateWire(spec);
-        if (problems.length > 0) {
-          throw new Error(`${file} is not a drawable wireframe spec:\n  ${problems.join("\n  ")}\n  \`isocan wire spec <archetype>\` prints one that is.`);
-        }
-        const html = renderWire(spec);
-        const ctx = await ctxOf(cmd);
-        const p = await resolveCanvas(ctx);
-        const snapshot = await ctx.client.snapshot(p.id);
-        const title = opts.title ?? wireTitle(spec);
-        const filename = `${slugOf(title)}.html`;
-        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(html, "utf8"), "text/html", filename);
-        const { width, height } = wireSize(spec);
-        const itemId = newItemId();
-        const result = await sendOp(ctx, p.id, {
-          type: "item.add",
-          itemId,
-          version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size },
-          width,
-          height,
-          placement: placementFor(snapshot, opts, { width, height }) as never,
-          title,
-          properties: { [FIDELITY_PROP]: "wireframe" },
-        });
-        const at = host.insertionReceiptPlacement(result.envelope.op, itemId);
-        const slots = spec.slots.length;
-        const open = spec.slots.filter((s) => s.block === null).length;
-        if (ctx.json) return printJson({ itemId, title, archetype: spec.archetype, platform: spec.platform, slots, undecided: open, ...at });
-        console.log(`${itemId}  ${title} — ${spec.archetype}, ${spec.platform}, ${open === 0 ? "wireframe" : open === slots ? "blueprint" : `${slots - open} of ${slots} slots chosen`}`);
-      }),
-    );
+    .action(dispatch(host, "render"));
 
   wire
     .command("spec <archetype>")
     .description("Print a spec for an archetype — a blueprint (every slot undecided), or with --resolved each slot's first block at its defaults")
-    .option("--platform <platform>", `one of ${PLATFORMS.join(", ")} (default: the archetype's first)`)
+    .option("--platform <platform>", "one of mobile, tablet, web (default: the archetype's first)")
     .option("--resolved", "choose each slot's first option, with default props and intents")
     .option("--title <title>")
     .option("--request <words>", "the words that asked for it")
-    .action(
-      run(async (archetype: string, opts: { platform?: string; resolved?: boolean; title?: string; request?: string }) => {
-        if (opts.platform !== undefined && !PLATFORMS.includes(opts.platform as Platform)) {
-          throw new Error(`--platform must be one of ${PLATFORMS.join(", ")} — got: ${opts.platform}`);
-        }
-        const o = {
-          ...(opts.platform ? { platform: opts.platform as Platform } : {}),
-          ...(opts.title ? { title: opts.title } : {}),
-          ...(opts.request ? { request: opts.request } : {}),
-        };
-        console.log(JSON.stringify(opts.resolved ? wireframe(archetype, o) : blueprint(archetype, o), null, 2));
-      }),
-    );
+    .action(dispatch(host, "spec"));
 
   wire
     .command("catalog")
     .description("List the archetypes (with each slot's options), and count the blocks, primitives and intents")
-    .action(
-      run(async (_opts: unknown, cmd: Command) => {
-        if ((cmd.optsWithGlobals() as { json?: boolean }).json) {
-          return printJson({
-            archetypes: RECIPES,
-            blocks: BLOCKS.map(asData),
-            primitives: PRIMITIVES.map(asData),
-            intents: INTENTS,
-          });
-        }
-        for (const r of RECIPES) {
-          console.log(`${r.id} (${r.platforms.join(", ")})`);
-          for (const s of r.sections) console.log(`  ${s.slot.padEnd(9)} ${s.options.join(" | ")}${s.optional ? "  (optional)" : ""}`);
-        }
-        console.log(`\n${RECIPES.length} archetypes, ${BLOCKS.length} blocks, ${PRIMITIVES.length} primitives, ${INTENTS.length} intents — \`isocan wire catalog --json\` has every prop and intent.`);
-      }),
-    );
+    .action(dispatch(host, "catalog"));
 }
 
-/** `wire render --all [--flow]`: every wire drawn again from its spec, one op group. */
-async function rerenderAll(host: CliHost, cmd: Command, flow: string | undefined): Promise<void> {
-  const ctx = await host.ctxOf(cmd);
-  const p = await host.resolveCanvas(ctx);
-  const port = cliPort(host, ctx, p.id);
-  const canvas = await port.canvas();
-  const all = await wiresOn(port, canvas);
-  const screens = flow === undefined ? all : all.filter((s) => s.spec.flow === flow);
-  if (screens.length === 0) throw new Error(flow === undefined ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `no wireframe in flow "${flow}" on this canvas`);
-  const r = await rerender(port, canvas, all, screens);
-  if (ctx.json) {
-    return host.printJson({
-      group: r.group,
-      wires: r.screens.length,
-      rerendered: r.changed.map((s) => ({ itemId: s.item, title: wireTitle(s.spec) })),
-      unchanged: r.screens.length - r.changed.length,
-      resized: r.resized,
-      prototypes: r.prototypes,
-    });
-  }
-  for (const line of rerenderLines(r)) console.log(line);
-  for (const pr of r.prototypes) if (pr.what !== "unchanged") console.log(`prototype ${pr.itemId} — ${pr.what === "moved" ? "moved back above its flow" : "rebuilt as a new version"}`);
-  console.log(rerenderSummary(r).replace("one undo takes", "`isocan undo` takes"));
-}
+const wireframeCliCore: CoreModule = {
+  ...wireframeModule,
+  propertyKeys: [...WIRE_PROPERTY_KEYS],
+  commands: [WIRE_COMMAND],
+};
 
 export const wireframeCli: CliModule = {
-  core: wireframeCore,
+  core: wireframeCliCore,
   register,
   guide: guideText,
 };
