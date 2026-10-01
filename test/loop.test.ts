@@ -86,6 +86,9 @@ describe("the Loop findings are derived, not written", () => {
     );
     expect(yml, "an unconfigured repository skips; it does not fail").toContain("enabled=false");
     expect(yml).toContain("secrets.LOOP_API_KEY");
+    expect(yml, "the Linux build reads STITCH_API_KEY, not LOOP_API_KEY: the 1 Oct run failed 'Missing authentication' with the secret set").toMatch(
+      /STITCH_API_KEY: \$\{\{ secrets\.LOOP_API_KEY \}\}/,
+    );
     expect(yml).toContain("secrets.STITCH_INSTALLER_URL");
     expect(yml, "the merge is checked on the branch, not trusted").toMatch(/render --check[\s\S]*vitest run/);
   });

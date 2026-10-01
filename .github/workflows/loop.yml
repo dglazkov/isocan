@@ -44,6 +44,10 @@ jobs:
     timeout-minutes: 20
     env:
       LOOP_API_KEY: ${{ secrets.LOOP_API_KEY }}
+      # The Linux build the installer serves reads its key from this name and
+      # has no mention of LOOP_API_KEY (its strings say so); older builds read
+      # LOOP_API_KEY. One secret, both names, so either build can see it.
+      STITCH_API_KEY: ${{ secrets.LOOP_API_KEY }}
       STITCH_INSTALLER_URL: ${{ secrets.STITCH_INSTALLER_URL }}
     steps:
       - id: configured
