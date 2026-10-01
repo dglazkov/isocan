@@ -79,6 +79,17 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/stitch" --version
 
+      # Loop is an experiment in the CLI and is off until it is switched on, per
+      # runner: without this the pull stops at its first Loop call with
+      # `"priorities" requires Loop` (the nightlies of 29 Sep to 1 Oct all did).
+      # The command is `stitch enable loop` in newer builds and
+      # `stitch yolo --enable loop` in the build the installer served on 1 Oct,
+      # so try the new one and fall back. If neither works this step fails, and
+      # it should: a pull that cannot reach Loop must not look like a quiet night.
+      - name: Turn Loop on in the CLI
+        if: steps.configured.outputs.enabled == 'true'
+        run: stitch enable loop || stitch yolo --enable loop
+
       # An instrument that cannot reach Loop fails here, loudly. A quiet night
       # is a pull that changed nothing, which the next step notices.
       - name: Pull Loop's insights

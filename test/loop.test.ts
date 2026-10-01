@@ -81,6 +81,9 @@ describe("the Loop findings are derived, not written", () => {
       /loop\.mjs (decide|push|mine|propose)/,
     );
     expect(yml).toContain("scripts/loop.mjs pull");
+    expect(yml, "Loop is off in a fresh CLI until it is enabled; the 29 Sep to 1 Oct nightlies all died on this").toMatch(
+      /stitch enable loop \|\| stitch yolo --enable loop[\s\S]*scripts\/loop\.mjs pull/,
+    );
     expect(yml, "an unconfigured repository skips; it does not fail").toContain("enabled=false");
     expect(yml).toContain("secrets.LOOP_API_KEY");
     expect(yml).toContain("secrets.STITCH_INSTALLER_URL");
