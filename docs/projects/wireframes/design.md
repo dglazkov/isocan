@@ -11,7 +11,8 @@ issue: 369
 The research is
 [Wireframes a typed model can choose](../../research/2026-09-23-wireframe-components.md)
 and [What a second Jev wireframe builder got right](../../research/2026-09-30-jev-isocan-synthesis.md);
-read their short versions before this. The journey is [journey.md](journey.md).
+read their short versions before this. The end-to-end UX designer's walkthrough is
+[ux-guide.md](ux-guide.md) and the scene suite is [journey.md](journey.md).
 This doc names the pieces and the lines between them.
 
 ## The debt it discharges

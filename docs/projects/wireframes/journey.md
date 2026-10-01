@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-30
 see: wireframes, judge, design-partner, slides, modules
-note: the ideal, as scenes. Phases 0–8 closed 23–24 Sep 2026 and were walked on isocan.io: skeleton-first composition with Jev, sample content packs, maybe screens and uncertainty variations, clickable prototype above the row, true flow arrows, and DESIGN.md restyling (#350). Wave 2 (#369, phases 9–13, 30 Sep 2026) ports the best of the standalone Jev design pipeline into pure TypeScript: phase 9 built (7 multi-region @container layout templates + density + data-wf/data-sec paths); phase 10 built (PriorityGate and entropy-gated /ask on root decisions); phase 11 (wire edit and wire why) is next, followed by phase 12 (wire copy --ai and wire name) and phase 13 (wire ds + wire polish).
+note: the ideal, as scenes. Phases 0–8 closed 23–24 Sep 2026 and were walked on isocan.io: skeleton-first composition with Jev, sample content packs, maybe screens and uncertainty variations, clickable prototype above the row, true flow arrows, and DESIGN.md restyling (#350). Wave 2 (#369, phases 9–13, 30 Sep 2026) ports the best of the standalone Jev design pipeline into pure TypeScript and is live on isocan.io: 7 multi-region @container layout templates + density + data-wf/data-sec paths (phase 9), PriorityGate and entropy-gated /ask on root decisions (phase 10), surgical single-section edits wire edit and decision Q&A wire why (phase 11), schema-driven AI copy wire copy --ai and flow naming wire name (phase 12), and concurrent design system synthesis wire ds + Jev-budgeted wire polish (phase 13).
 issue: 369
 ---
 
@@ -16,7 +16,8 @@ you can to make the obvious transitions.* And, the same day: *start with a
 skeleton in the typical blue on white so it LOOKS like a wire is starting.*
 
 These scenes are the acceptance suite. Mechanism appears only where a scene
-forced it; [design.md](design.md) is the mechanism and
+forced it; [ux-guide.md](ux-guide.md) is the end-to-end UX designer's guide,
+[design.md](design.md) is the mechanism, and
 [phases.md](phases.md) the walk. The research under all of it is
 [Wireframes a typed model can choose](../../research/2026-09-23-wireframe-components.md)
 and [What a second Jev wireframe builder got right](../../research/2026-09-30-jev-isocan-synthesis.md).
