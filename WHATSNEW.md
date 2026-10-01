@@ -21,6 +21,15 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 1 October 2026
+
+- **A cricket bat pointer.** Canvas pointers now include a cricket bat and
+  ball (*Background › Cursor* on a canvas standing on a picture, or `isocan canvas background --cursor
+  cricket`), filled with each person's own colour like the rest.
+- **Your own pointer wears your mark.** If you've picked an emoji for your
+  face, your pointer is that emoji on your screen too, not only on everyone
+  else's. Without one, you wear the canvas's pointer.
+
 ## 30 September 2026
 
 - **A group's grid can shrink and be cleared from the canvas.** Lowering rows

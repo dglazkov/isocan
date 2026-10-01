@@ -404,7 +404,7 @@ export declare function groundIsPlace(canvas: {
 export declare const CURSOR_PROP = "cursor";
 /** The shapes this build can draw. Not a string, for `THEMES`' reason: a
  *  canvas wearing a name nothing can draw is a pointer that vanishes. */
-export declare const CURSORS: readonly ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep"];
+export declare const CURSORS: readonly ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep", "cricket"];
 /** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
  *  reason: a name nothing can draw is a pointer that vanishes. */
 export type CanvasCursor = (typeof CURSORS)[number];
