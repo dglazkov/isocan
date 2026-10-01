@@ -2,7 +2,7 @@
 title: "Duplicated group placement computation across clients"
 loop: 648e6a1d-5a50-45d0-84e5-0b16e2ae33db
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: "Always isomorphic"
 decision: declined
 rank: never

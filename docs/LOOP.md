@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 0 not yet read.**
+**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 5 not yet read.**
 
 ## Accepted, by project
 
@@ -86,4 +86,12 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 | next | [Web UI lacks canvas group layout controls](loop/web-ui-lacks-canvas-group-layout-controls.md) | P2 | [canvas-groups](projects/canvas-groups/) | Built 30 Sep: one core rule (groupGridAction) trims labels past a lowered count in the same save for web and CLI, and the web has Clear grid. |
 | next | [Workspace package imports deviate from manifest declarations](loop/workspace-package-imports-deviate-from-manifest-declarations.md) | P2 | [modules](projects/modules/) | done 2026-09-29: aligned workspace package.json manifests (@isocan/web, @isocan/cli, @isocan/talk) and added workspace import/dependency guard in test/packaging.test.ts |
 | later | [Renovate configuration gaps miss unhandled update paths](loop/renovate-configuration-gaps-miss-unhandled-update-paths.md) | P2 | new project | Fixed on 29 Sep 2026: scripts/release.mjs now derives buildCliBundle's esbuild target from .nvmrc's major version, guarded by test/workflows.test.ts. |
+
+## Not yet read
+
+- [Group brief creation waits for blob upload](loop/group-brief-creation-waits-for-blob-upload.md) — Loop P2
+- [Lack of bidirectional canvas to code symbol bindings](loop/lack-of-bidirectional-canvas-to-code-symbol-bindings.md) — Loop P2
+- [Lack of spatial canvas semantic query indexing](loop/lack-of-spatial-canvas-semantic-query-indexing.md) — Loop P2
+- [Lack of structured design decision rationale documentation](loop/lack-of-structured-design-decision-rationale-documentation.md) — Loop P2
+- [Speaker note creation blocks on network upload](loop/speaker-note-creation-blocks-on-network-upload.md) — Loop P2
 

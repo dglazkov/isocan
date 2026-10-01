@@ -2,7 +2,7 @@
 title: "Lack of agent proposal staging overlays"
 loop: 1d1014ca-9ec4-403c-a723-f898b969f765
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: RESOLVED
 loop_goal: "What canvas tools teach us"
 decision: accepted
 rank: later
