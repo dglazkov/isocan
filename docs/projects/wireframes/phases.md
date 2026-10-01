@@ -23,7 +23,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–12 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) and `wireframes phase 13` is next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 built (`wire edit` surgical single-section edits + prototype rebuild in one op group, and `wire why` decision Q&A over embedded `WireSpec.decisions`), phase 12 built (`TextGenerator` seam in `@isocan/core/jev`, `blockContentSchema`, `wire copy --ai`, `sanitizeFlowTitle`, and `wire name`), and phase 13 (`wire ds` and `wire polish`) is next.
+**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–13 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) — built and unit-tested, browser walk next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 built (`wire edit` surgical single-section edits + prototype rebuild in one op group, and `wire why` decision Q&A over embedded `WireSpec.decisions`), phase 12 built (`TextGenerator` seam in `@isocan/core/jev`, `blockContentSchema`, `wire copy --ai`, `sanitizeFlowTitle`, and `wire name`), and phase 13 built (`proposeThenPick`, `repairContrast`, `wire ds`, `polishIntensityBudget`, `verifyWireContract`, and `wire polish`).
 
 ## Phase 0 — The catalog, drawn
 
@@ -491,7 +491,7 @@ button labels bound to their typed `Intent`.
 
 ## Phase 13 — Concurrent design system synthesis (`wire ds`) and Jev-budgeted polish (`wire polish`)
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 30 September 2026.** Built and verified in unit tests (`packages/modules/wireframe/test/ds-polish.test.ts`, 4/4 green; `packages/modules/wireframe/test/theme.test.ts`, 14/14 green; `packages/cli/test/surface.test.ts` and export ratchets green): `POLISH_TOKENS`, `WirePolishPatch`, and `WireSpec.polish` in `spec.ts` and `render.ts`; `DS_DIRECTIONS`, `repairContrast`, `proposeThenPick`, `synthesizeDesignSystem`, and `wireDsOnCanvas` in `ds.ts`; `POLISH_BUDGETS`, `polishIntensityBudget`, `verifyWireContract`, `applyWirePolish`, `planPolishWithJev`, and `polishWireOnCanvas` in `polish.ts`; `isocan wire ds` and `isocan wire polish` in `style-cli.ts` and `agent-guide.md`; `/wire ds` and `/wire polish` in `dialog.tsx`. Browser walk owed before closing.
 
 **Outcome:** [journey.md](journey.md) scene 13, [design.md](design.md) §15.
 `packages/modules/wireframe/src/ds.ts` and `polish.ts` implement:
@@ -526,4 +526,7 @@ button labels bound to their typed `Intent`.
 3. `packages/cli/test/surface.test.ts`, `npm test`, and `npm run typecheck`.
 
 ### Trajectory
+
+- **2026-09-30** — `repairContrast` checks foreground role tokens (`ink`, `ink-muted`, `primary`) against both `ground` and `surface` simultaneously (`ensurePairContrast` against the worst of the two backgrounds), and `on-primary` against `primary`, nudging sRGB lightness in 2% steps so synthesized `DESIGN.md` items always pass `checkDesign` with zero AA contrast warnings.
+- **2026-09-30** — `verifyWireContract` gates both `WireSpec.polish` patches and **Swap 2** custom primitive overrides by asserting that every `data-sec`, `data-wf`, `data-hot`, and `data-intent` attribute from the unpolished baseline HTML survives in the candidate HTML and every design-system token pair stays $\ge 4.5:1$ before writing a version.
 

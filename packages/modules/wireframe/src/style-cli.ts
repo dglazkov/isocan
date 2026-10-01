@@ -9,6 +9,8 @@ import { wiresOn, type Screen } from "./flow.ts";
 import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, flowScreens, presetFile, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
 import { wireframeModule } from "./record.ts";
 import { checkWire, checkWords, readSystemDoc, restyleLabel, specKey, systemsToRead, type DocOf } from "./behind.ts";
+import { wireDsOnCanvas } from "./ds.ts";
+import { polishWireOnCanvas } from "./polish.ts";
 import { StyleResolver, mappingLines, restyle, restyleSummary } from "./restyle.ts";
 import { wireTitle } from "./spec.ts";
 
@@ -156,6 +158,120 @@ export function registerStyle(host: CliHost, wire: Command): void {
         if (inDefault) say(`${inDefault} wire${inDefault === 1 ? "" : "s"} in the default look${opts.default ? "" : " — no design system governs where they sit"}`);
         for (const pr of prototypes) say(`prototype ${pr.itemId} — ${pr.what === "versioned" ? "rebuilt as a new version" : pr.what}`);
         say(restyleSummary(result).replace("one undo takes", "`isocan undo` takes"));
+      }),
+    );
+
+  wire
+    .command("ds [request...]")
+    .description("Synthesize a WCAG AA contrast-repaired DESIGN.md with Jev, make it govern the flow's scope, and restyle all screens and prototype in one op group")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--name <name>", "explicit name for the synthesized design system")
+    .option("--surface <surface>", "override surface mode: flat | raised | glass | bold")
+    .action(
+      run(async (words: string[], _local: unknown, cmd: Command) => {
+        const opts = cmd.optsWithGlobals() as {
+          flow?: string;
+          name?: string;
+          surface?: "flat" | "raised" | "glass" | "bold";
+          answerer?: string;
+          seed?: string;
+        };
+        const ctx = await ctxOf(cmd);
+        const say = (line: string) => {
+          if (!ctx.json) console.log(line);
+        };
+        const p = await resolveCanvas(ctx);
+        const port = cliPort(host, ctx, p.id);
+        const canvas = await port.canvas();
+        const all = await wiresOn(port, canvas);
+        const screens = opts.flow === undefined ? all : all.filter((s) => s.spec.flow === opts.flow);
+        if (screens.length === 0) {
+          throw new Error(opts.flow === undefined ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `no wireframe in flow "${opts.flow}" on this canvas`);
+        }
+        const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? undefined : opts.answerer, Number(opts.seed ?? 1), say);
+        const r = await wireDsOnCanvas(port, all, screens, words.join(" "), answerer, {
+          ...(opts.name ? { name: opts.name } : {}),
+          ...(opts.surface ? { surface: opts.surface } : {}),
+        });
+        if (ctx.json) {
+          return printJson({
+            group: r.group,
+            dsItemId: r.dsItemId,
+            what: r.what,
+            direction: r.synthesized.direction.id,
+            surface: r.synthesized.surface,
+            density: r.synthesized.density,
+            repairs: r.synthesized.repairs,
+            restyled: r.restyled.changed.map((t) => ({ itemId: t.item.id, title: wireTitle(t.screen.spec) })),
+            prototypes: r.restyled.prototypes,
+          });
+        }
+        say(`${r.dsItemId}  ${r.synthesized.name} (${r.synthesized.direction.id} · surface:${r.synthesized.surface} · density:${r.synthesized.density} · p ${r.synthesized.p.toFixed(2)})`);
+        if (r.synthesized.repairs.length > 0) {
+          say(`  repaired ${r.synthesized.repairs.length} contrast pair${r.synthesized.repairs.length === 1 ? "" : "s"} to ≥ 4.5:1 AA`);
+        }
+        say(`${r.restyled.changed.length} of ${r.restyled.targets.length} wires restyled — \`isocan undo\` takes it back`);
+      }),
+    );
+
+  wire
+    .command("polish [screens...]")
+    .description("Apply Jev-budgeted visual refinement patches (0 | 4 | 8 | 12) guarded by verifyWireContract in one op group")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--intensity <n>", "override polish_intensity (0–1)")
+    .option("--clear", "remove polish patches from target screens")
+    .action(
+      run(async (refs: string[], _local: unknown, cmd: Command) => {
+        const opts = cmd.optsWithGlobals() as {
+          flow?: string;
+          intensity?: string;
+          clear?: boolean;
+          answerer?: string;
+          seed?: string;
+        };
+        const ctx = await ctxOf(cmd);
+        const say = (line: string) => {
+          if (!ctx.json) console.log(line);
+        };
+        const p = await resolveCanvas(ctx);
+        const port = cliPort(host, ctx, p.id);
+        const canvas = await port.canvas();
+        const all = await wiresOn(port, canvas);
+        const named = (refs ?? []).map((ref) => {
+          const item = host.resolveItem({ canvas } as never, ref) as { id: string; title: string };
+          const found = all.find((s) => s.item === item.id);
+          if (!found) throw new Error(`"${item.title}" is not a wireframe screen`);
+          return found;
+        });
+        const screens = named.length ? named : opts.flow === undefined ? all : all.filter((s) => s.spec.flow === opts.flow);
+        if (screens.length === 0) {
+          throw new Error("no wireframe on this canvas — `isocan wire \"<request>\"` composes some");
+        }
+        const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? undefined : opts.answerer, Number(opts.seed ?? 1), say);
+        const r = await polishWireOnCanvas(port, canvas, all, screens, answerer, {
+          ...(opts.intensity !== undefined ? { intensity: Number(opts.intensity) } : {}),
+          ...(opts.clear ? { clear: true } : {}),
+        });
+        if (ctx.json) {
+          return printJson({
+            group: r.group,
+            by: r.by,
+            changed: r.changed.map((c) => ({
+              itemId: c.itemId,
+              title: c.title,
+              intensity: c.intensity,
+              budget: c.budget,
+              patches: c.patches,
+            })),
+            prototypes: r.prototypes,
+          });
+        }
+        for (const c of r.changed) {
+          say(`${c.itemId}  ${c.title} — ${c.patches.length} polish patch${c.patches.length === 1 ? "" : "es"} (intensity ${c.intensity}, budget ${c.budget})`);
+        }
+        say(`${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} ${opts.clear ? "unpolished" : "polished"} (${r.by})${r.prototypes.length ? ", prototype rebuilt" : ""} — \`isocan undo\` takes it back`);
       }),
     );
 }

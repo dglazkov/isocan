@@ -335,6 +335,17 @@ bar, tab bar) stays.
   [--flow <flow>] [--request "<words>"]` (or `/wire name` in the Chat) names the
   flow's brand, per-screen titles, and shared navigation bar labels coherently so
   tab bars, side navs, and headers match across every screen.
+- **Design system synthesis (`isocan wire ds`) and Jev-budgeted polish (`isocan wire polish`)**:
+  `isocan wire ds [request...] [--flow <flow>] [--name "<name>"] [--surface flat|raised|glass|bold]`
+  (or `/wire ds <request>` in the Chat) asks Jev to pick the best visual direction,
+  `surface:` mode, and `density`, repairs any low-contrast foreground/background
+  colour pairs to ≥ 4.5:1 WCAG AA (`repairContrast`), writes a complete `DESIGN.md`
+  item beside the flow, makes it govern the scope, and restyles all screens and
+  the prototype in one op group. `isocan wire polish [<screens...>] [--flow <flow>]
+  [--intensity <0-1>] [--clear]` (or `/wire polish` in the Chat) scores
+  `polish_intensity` (`0 | 4 | 8 | 12` patch budget) and applies `WireSpec.polish`
+  refinements guarded by `verifyWireContract`, which rejects any patch that drops
+  a `data-sec`, `data-wf`, `data-hot`, or `data-intent` attribute.
 
 **Words are typed, never free.** A button's label is its **intent**'s label
 (`sign-in` → "Sign in", `back` → "Back"), chosen from a fixed vocabulary of

@@ -14,6 +14,8 @@ import { webAnswerer, webPort } from "./web-port.ts";
 import { editWireOnCanvas } from "./edit.ts";
 import { explainWireDecision } from "./why.ts";
 import { copyAiOnCanvas, nameFlowOnCanvas } from "./copy-schema.ts";
+import { wireDsOnCanvas } from "./ds.ts";
+import { polishWireOnCanvas } from "./polish.ts";
 import { wireTitle } from "./spec.ts";
 import type { PackChoice } from "./content/choose.ts";
 import { PACK_BY_ID } from "./content/packs.ts";
@@ -53,7 +55,10 @@ type Mode =
   | { kind: "why"; question?: string }
   // ── phase 12: /wire copy and /wire name ──
   | { kind: "copy"; brief?: string }
-  | { kind: "name"; request?: string };
+  | { kind: "name"; request?: string }
+  // ── phase 13: /wire ds and /wire polish ──
+  | { kind: "ds"; request: string }
+  | { kind: "polish"; clear?: boolean };
 
 export function modeOf(args: string): Mode {
   const words = args.trim();
@@ -76,6 +81,13 @@ export function modeOf(args: string): Mode {
   if (first === "name") {
     const req = rest.join(" ").trim();
     return req ? { kind: "name", request: req } : { kind: "name" };
+  }
+  if (first === "ds") {
+    return { kind: "ds", request: rest.join(" ").trim() };
+  }
+  if (first === "polish") {
+    const clear = rest.includes("--clear") || rest.includes("clear");
+    return clear ? { kind: "polish", clear: true } : { kind: "polish" };
   }
   if (first === "style" && rest.length === 0) return { kind: "styles" };
   if (first === "style" && rest.length === 1 && (rest[0] === "--default" || rest[0] === "default")) return { kind: "style", toDefault: true };
@@ -338,6 +350,34 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
         ...(m.request ? { request: m.request } : {}),
       });
       const summary = `named ${r.changed.length} wire${r.changed.length === 1 ? "" : "s"} (${r.brand}) — one undo takes it back`;
+      host.notice(summary);
+      if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
+      host.close();
+      if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
+    } else if (m.kind === "ds") {
+      setStatus("Synthesizing design system and restyling flow…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+      const r = await wireDsOnCanvas(port, all, screens, m.request, webAnswerer(canvasId, host));
+      const summary = `synthesized ${r.synthesized.name} (${r.synthesized.direction.id}, surface:${r.synthesized.surface}) · ${r.restyled.changed.length} wire${r.restyled.changed.length === 1 ? "" : "s"} restyled — one undo takes it back`;
+      host.notice(summary);
+      record(host, r.group, [`${summary}.`], [r.dsItemId, ...r.restyled.changed.map((t) => t.item.id)]);
+      host.close();
+      host.reveal([r.dsItemId]);
+    } else if (m.kind === "polish") {
+      setStatus("Applying Jev-budgeted visual polish…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+      const r = await polishWireOnCanvas(port, canvas, all, screens, webAnswerer(canvasId, host), {
+        ...(m.clear ? { clear: true } : {}),
+      });
+      const summary = `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} ${m.clear ? "unpolished" : "polished"} (${r.by}) — one undo takes it back`;
       host.notice(summary);
       if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
       host.close();

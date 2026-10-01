@@ -459,6 +459,33 @@ export function templateCss(id: TemplateId | undefined): string {
   return id && id !== "single" ? TEMPLATE_CSS : "";
 }
 
+const POLISH_CSS = `
+.wf-elevated{background:var(--w-ground);border:1px solid var(--w-line);border-radius:var(--w-radius);padding:var(--w-space);box-shadow:0 4px 14px ${INK_AT(8)}}
+.wf-bordered{border:1.5px solid var(--w-line);border-radius:var(--w-radius);padding:var(--w-space)}
+.wf-subtle{background:var(--w-surface);border-radius:var(--w-radius);padding:var(--w-space)}
+.wf-emphasis{border-left:3px solid var(--w-primary);padding-left:var(--w-space)}
+.wf-compact-pad{padding:calc(var(--w-space)*0.5)}
+.wf-spacious-pad{padding:calc(var(--w-space)*1.5)}
+.wf-rounded-lg{border-radius:calc(var(--w-radius)*1.5)}
+.wf-accent-ring{outline:2px solid var(--w-primary);outline-offset:2px}
+`;
+
+/** The polish refinement sheet — empty when `spec.polish` is absent or empty. */
+export function polishCss(patches: WireSpec["polish"]): string {
+  return patches && patches.length > 0 ? POLISH_CSS : "";
+}
+
+function resolvePolishTokens(patches: WireSpec["polish"], target: string): string[] {
+  if (!patches || patches.length === 0) return [];
+  const active = new Set<string>();
+  for (const p of patches) {
+    if (p.target !== target) continue;
+    for (const r of p.remove ?? []) active.delete(r);
+    for (const a of p.add ?? []) active.add(a);
+  }
+  return [...active];
+}
+
 /** The skeleton's sheet — written only when some slot is undecided. Every selector begins `.sk`. */
 const SKELETON_CSS = `
 .sk-frame{border-color:${BLUE}!important;background:#ffffff linear-gradient(${BLUE_GROUND} 1px,transparent 1px) 0 0/100% 24px}
@@ -511,6 +538,7 @@ function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolea
   const c = component(slot.block);
   const props = propsFor(c, slot.props);
   const intentOf = (element: string): string => slot.intents?.[element] ?? defaultIntent(r, c, element);
+  const slotPolish = resolvePolishTokens(spec.polish, slot.slot);
   const ctx: DrawContext = {
     props,
     intent: intentOf,
@@ -518,14 +546,17 @@ function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolea
     label: (element) => esc(slot.fill?.actions?.[element] ?? INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
     hot: (element) => {
       const intentId = slot.intents?.[element] ?? (c.elements?.[element] ? defaultIntent(r, c, element) : undefined);
-      return ` data-hot="${esc(hotKey(slot.slot, element))}" data-wf="${esc(`${slot.slot}.${element}`)}"${intentId ? ` data-intent="${esc(intentId)}"` : ""}`;
+      const elPolish = resolvePolishTokens(spec.polish, `${slot.slot}.${element}`);
+      const polishAttr = elPolish.length > 0 ? ` data-polish="${esc(elPolish.join(" "))}"` : "";
+      return ` data-hot="${esc(hotKey(slot.slot, element))}" data-wf="${esc(`${slot.slot}.${element}`)}"${intentId ? ` data-intent="${esc(intentId)}"` : ""}${polishAttr}`;
     },
     title: esc(c.id === "app-bar" ? barTitleOf(spec) : headingOf(spec)),
     platform: spec.platform,
     wide: spec.platform !== "app",
     ...(slot.fill ? { fill: slot.fill } : {}),
   };
-  return `<section class="slot w" ${attrs} data-block="${esc(c.id)}" data-state="wire">${c.draw(ctx)}</section>`;
+  const slotClass = ["slot", "w", ...slotPolish].join(" ");
+  return `<section class="${esc(slotClass)}" ${attrs} data-block="${esc(c.id)}" data-state="wire">${c.draw(ctx)}</section>`;
 }
 
 /** The heading inside the frame: a fleshed screen's ("Deliveries"), else the spec's title ("List"). */
@@ -591,10 +622,10 @@ export function themeCss(style: WireStyle | undefined, density?: DensityLevel): 
   return `:root{${themeDecls(style, density)}}`;
 }
 
-/** The stylesheet a screen needs: its theme, the wire sheet, its surface's, its template's, and the skeleton's only while a slot is undecided. */
+/** The stylesheet a screen needs: its theme, the wire sheet, its surface's, its template's, its polish sheet, and the skeleton's only while a slot is undecided. */
 export function wireCss(spec: WireSpec): string {
   const density = spec.slots.every((s) => s.block === null) ? undefined : spec.density;
-  return `${themeCss(styleOf(spec), density)}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${templateCss(spec.template)}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
+  return `${themeCss(styleOf(spec), density)}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${templateCss(spec.template)}${polishCss(spec.polish)}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
 }
 
 /**

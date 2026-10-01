@@ -22,7 +22,7 @@ import { wireframeCore } from "./command.ts";
  */
 export * from "./catalog/index.ts";
 export * from "./spec.ts";
-export { SKELETON_COLORS, WIRE_MARKER, WIRE_SCRIPT_ID, readWire, renderFrame, renderWire, styleOf, templateCss, themeCss, wireCss } from "./render.ts";
+export { SKELETON_COLORS, WIRE_MARKER, WIRE_SCRIPT_ID, polishCss, readWire, renderFrame, renderWire, styleOf, templateCss, themeCss, wireCss } from "./render.ts";
 export * from "./theme.ts";
 export * from "./links.ts";
 export * from "./prototype.ts";
@@ -32,6 +32,8 @@ export * from "./entropy-ask.ts";
 export * from "./edit.ts";
 export * from "./why.ts";
 export * from "./copy-schema.ts";
+export * from "./ds.ts";
+export * from "./polish.ts";
 export * from "./vary.ts";
 export * from "./keep.ts";
 export * from "./maybe.ts";

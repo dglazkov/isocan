@@ -113,6 +113,36 @@ export interface WireSpec {
    * places (design §13), recorded on the spec for `wire why` Q&A.
    */
   decisions?: Record<string, Record<string, number>>;
+  /**
+   * Jev-budgeted visual refinement patches (`wire polish`, design §15),
+   * keyed by `data-wf` or `data-sec` path on the screen.
+   */
+  polish?: WirePolishPatch[];
+}
+
+/** Allowed visual refinement classes for `WireSpec.polish` (`design.md` §15). */
+export const POLISH_TOKENS = [
+  "wf-elevated",
+  "wf-bordered",
+  "wf-subtle",
+  "wf-emphasis",
+  "wf-compact-pad",
+  "wf-spacious-pad",
+  "wf-rounded-lg",
+  "wf-accent-ring",
+] as const;
+
+/** A single allowed polish refinement token. */
+export type PolishToken = (typeof POLISH_TOKENS)[number];
+
+/** A targeted polish class patch on a `data-wf` or `data-sec` element path. */
+export interface WirePolishPatch {
+  /** A `data-wf` or `data-sec` path on the screen (e.g. `"main.1"` or `"main.1.submit"`). */
+  target: string;
+  /** Visual refinement classes to add. */
+  add?: PolishToken[];
+  /** Visual refinement classes to remove. */
+  remove?: PolishToken[];
 }
 
 /** Who drew a wire: the person or agent, and the answerer whose decisions it carries. */
@@ -488,6 +518,25 @@ export function validateWire(input: unknown): string[] {
           if (!(typeof prob === "number" && prob >= 0 && prob <= 1)) {
             problems.push(`decisions["${qId}"]["${opt}"] must be 0–1`);
           }
+        }
+      }
+    }
+  }
+  if (spec.polish !== undefined) {
+    if (!Array.isArray(spec.polish)) {
+      problems.push("polish must be an array of { target, add?, remove? } patches");
+    } else {
+      const allowedTokens = new Set<string>(POLISH_TOKENS);
+      for (const patch of spec.polish) {
+        if (!patch || typeof patch !== "object" || typeof patch.target !== "string" || !patch.target.trim()) {
+          problems.push("polish patch must have a non-empty string target");
+          continue;
+        }
+        for (const t of patch.add ?? []) {
+          if (!allowedTokens.has(t)) problems.push(`polish["${patch.target}"]: unknown add token "${t}"`);
+        }
+        for (const t of patch.remove ?? []) {
+          if (!allowedTokens.has(t)) problems.push(`polish["${patch.target}"]: unknown remove token "${t}"`);
         }
       }
     }
