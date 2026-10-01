@@ -2,7 +2,7 @@
 title: "Serial HTTP transfers stall cross canvas paste"
 loop: 7b9be7e9-aad9-4b63-a547-a1df2b51fd86
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: "Fast everywhere, local-first"
 decision: declined
 rank: never
