@@ -45,6 +45,13 @@ second week.
   item at once; double-click still steps inside.
 - **An agent's arrival note stays long enough to read,** and holds while you
   point at it.
+- **Say "undo" to the voice dialog and it undoes.** The in-app voice dialog
+  used to say it couldn't; now it takes back your last change, the same as ⌘Z.
+- **Simple spoken moves happen at once (try it).** In ⌘K → *Configure voice*,
+  the fast path now has three settings: *Fast path off* (the default), *in
+  shadow*, and *acting*. Set to *acting*, a plain move like "move the login page to the left of home" is
+  done as you finish saying it, before the voice model replies, and it tells
+  you what it did. Anything less simple goes to the voice model as before.
 
 ## 28 September 2026
 

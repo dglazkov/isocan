@@ -52,7 +52,8 @@ this canvas lives. It writes nothing and holds no key.
 Add notes and pages, rename/update items, move (including "move it right
 50"), resize, delete, restore **from the trash**, react, switch versions
 (`first`, `last`, a filename, an id), comment on an item, say/ask/notify on
-the main thread, draw with the pen tool, and the read tools.
+the main thread, draw with the pen tool, undo (a retract of your last change,
+as ⌘Z does), and the read tools.
 
 ## What is not wired (yet)
 
@@ -82,6 +83,30 @@ within ten seconds, in this browser's OPFS (`voice/fast-path-shadow.jsonl`,
   (`test/fixtures/fast-path-commands.json`) through the resolver with a real
   key, or `--record <file>` to read a person's exported record. The walk with
   a microphone is `docs/verify/2026-09-23-voice-fast-path-shadow.md`.
+
+## The fast path, acting (off by default)
+
+Voice-agent phase 7. The same switch has a third state, **Fast path
+acting**. A command Jev answers at or above the MEASURED threshold for its
+act is done at once — through the same `runTool` the model's call uses, so
+one operation, one undo, your identity — and announced (*moved “Checkout”
+left — say undo*). While Jev decides, the model's own calls for that turn
+are held (never past 1.5 s); when the fast path acted they are answered
+"already done" instead of run. Anything else — no threshold, under it, a
+number said, words still arriving, the deadline passed — goes to the model
+unchanged. Only `move` has a threshold today.
+
+- `src/thresholds.ts` — the thresholds as data, each with p, n, agreement,
+  date and source. A line here is a measurement first.
+- `src/fastact.ts` — the controller: the hold, the act, the drop. It is
+  handed its executor and the shadow stays a file that cannot act.
+- `scripts/fast-path-act.ts` — the scripted set end to end on a throwaway
+  daemon of its own: every act checked on the canvas and taken back with one
+  undo, every escalation checked to have written nothing. The walk is
+  `docs/verify/2026-09-30-voice-fast-path-acting.md`.
+
+The browser's `undo` tool now retracts (`WebHost.retract`, the home's
+actor-scoped undo — what ⌘Z does) instead of refusing.
 
 ## The module rule, honoured exactly
 

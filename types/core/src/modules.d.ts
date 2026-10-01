@@ -378,6 +378,23 @@ export interface WebHost {
      * parked, nobody will.
      */
     runCommand: (text: string) => Promise<"local" | "posted">;
+    /**
+     * **Take back this viewer's last change** (proposed: `host`, voice-agent
+     * phase 7, 30 Sep 2026) — exactly what ⌘Z does: the home's actor-scoped
+     * undo for the actor `send` writes as. No new operation and no inverse
+     * computed here: the home walks the viewer's own stack, so one `group`
+     * sent through `send` is one retract.
+     *
+     * It exists because the voice session's `undo` tool had to be refused in
+     * the browser ("undo is not carried by the browser voice dialog yet") — and
+     * the fast path announces every act with "say undo", which would have been
+     * a promise nobody could keep. Note what "this viewer" means: a module
+     * writing through `send` writes AS the viewer, so this takes back the
+     * viewer's last change whoever made it — the module's act or the person's
+     * own drag — which is what ⌘Z on the same screen would take back too.
+     * Refused with a sentence for a reader, and when there is nothing to undo.
+     */
+    retract: () => Promise<void>;
 }
 /** What a component asks the parked rc to enrol. */
 export interface EnrolAsk {
@@ -952,8 +969,12 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * members a module is HANDED, never one it must provide. A module built for
  * `^0.2.0` still loads; one that uses the new parts says `^0.2.1` and names
  * them in `proposed`.
+ *
+ * **0.2.2 → 0.2.3 on 30 Sep 2026**, an addition: `WebHost.retract`, a member
+ * a module is handed (under the existing `host` proposal), never one it must
+ * provide. A module built for `^0.2.2` still loads.
  */
-export declare const MODULE_API_VERSION = "0.2.2";
+export declare const MODULE_API_VERSION = "0.2.3";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.

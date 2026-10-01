@@ -9,7 +9,7 @@ import {
   cleanupOps,
   cleanupSelection,
   parseBefore
-} from "./chunk-XHW52VJP.mjs";
+} from "./chunk-4PS5UKUN.mjs";
 import {
   KEEP_EMOJI,
   WIRE_COMMAND,
@@ -18,7 +18,7 @@ import {
   designUse,
   ownDesignSystemAt,
   wireframeModule
-} from "./chunk-VZTETSPV.mjs";
+} from "./chunk-UT5IN62Y.mjs";
 import {
   CanvasHandle,
   DEFAULT_MODE,
@@ -46,7 +46,7 @@ import {
   resolveCanvas,
   resolveCtx,
   resolveDeclared
-} from "./chunk-Q6FV3ECI.mjs";
+} from "./chunk-EHXLTSBD.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -57,7 +57,7 @@ import {
   prepareDesignVerifierOffer,
   submitDesignReviewWrite,
   validatePreparedDesignReviewWrite
-} from "./chunk-UMMOEUON.mjs";
+} from "./chunk-NWXJSLJE.mjs";
 import {
   parseDesignProjection,
   prepareDesignReconciliation,
@@ -66,7 +66,7 @@ import {
   readDesignSystem,
   reconcileDesignProjection,
   writeDesignDirection
-} from "./chunk-3TNZJMIJ.mjs";
+} from "./chunk-X5HBSAOO.mjs";
 import {
   actorNamesOn,
   itemCenter,
@@ -74,13 +74,13 @@ import {
   nameResolver,
   runRoom,
   threadLocus
-} from "./chunk-YKYFUVLF.mjs";
+} from "./chunk-IVRRRPCS.mjs";
 import {
   parseDesignRepairBasis,
   prepareDesignRepair,
   submitDesignRepair,
   validatePreparedDesignRepair
-} from "./chunk-622ADMI3.mjs";
+} from "./chunk-NZDUOLOW.mjs";
 import {
   CanvasGroups,
   DaemonClient,
@@ -106,7 +106,7 @@ import {
   retireStrandedIdentities,
   shaOfRoot,
   writeIdentity
-} from "./chunk-3PRKWZOA.mjs";
+} from "./chunk-6FVX5C44.mjs";
 import {
   bindableRoot,
   buildStamp,
@@ -134,31 +134,31 @@ import {
   updateConfigFile,
   writeGoogleToken,
   writeMarker
-} from "./chunk-HZTCVEHK.mjs";
+} from "./chunk-UZ2ZAWSS.mjs";
 import {
   DaemonRoutes
-} from "./chunk-NNFXQRRX.mjs";
+} from "./chunk-SLJIRS7J.mjs";
 import {
   auditDesignSource,
   designAuditFails,
   readDesignAuditAdvisory,
   readDesignSourceAudit
-} from "./chunk-YDB4RQZW.mjs";
+} from "./chunk-IOBZ2O4H.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import {
   prepareDesignDecision
-} from "./chunk-MCD7IU3C.mjs";
-import "./chunk-T5UWZTVR.mjs";
+} from "./chunk-SG43XFA3.mjs";
+import "./chunk-7D6R6D2T.mjs";
 import {
   changeDesignRequest,
   publishDesignReceipt
-} from "./chunk-W3DWYUAP.mjs";
+} from "./chunk-YMKRTM6C.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import {
   classifyAutomaticSource,
   questionnaireSubmissionIds
-} from "./chunk-REYAWBXG.mjs";
-import "./chunk-FBGO46RF.mjs";
+} from "./chunk-BE2ETU7Z.mjs";
+import "./chunk-7XHBZUPA.mjs";
 import {
   ALIGN_EDGES,
   AREA_FILENAME,
@@ -547,7 +547,7 @@ import {
   wallFor,
   withModuleCommands,
   workbenchUrl
-} from "./chunk-ICS4EDXB.mjs";
+} from "./chunk-5OEPL7IS.mjs";
 import "./chunk-GUY4UN4O.mjs";
 import {
   serializeDesign,
@@ -10269,7 +10269,7 @@ var anatomyCli = {
 };
 
 // packages/modules/talk/agent-guide.md
-var agent_guide_default9 = "## isocan voice\n\n`isocan voice` says where the browser voice lives: open the canvas in the web\napp and choose **Configure voice** (\u2318K, Canvas group) \u2014 that is the settings\ndoor (key and model); the floating mic is the talking. The dialog opens a\nGemini Live session from that browser with that person's own API key \u2014 the\nkey is stored in the browser's storage, never on the canvas and never in the\ndaemon \u2014 and hands the model the canvas's operations as tools, so a spoken\nrequest lands as the same operations a click would send, carrying the\nspeaker's identity and undo.\n\nPrefer the enrolled voice harness (`isocan rc add <name> --harness voice`) for\na standing agent the canvas can summon; the browser dialog is for the person\nwho is already in the app.\n\nThe voice settings also carry **Fast path in shadow** (off by default): Jev\nresolves each spoken turn into a simple act and records it beside what the\nmodel did, never acting. An agent measures the resolver without a browser:\n`node --import tsx packages/modules/talk/scripts/fast-path-eval.ts` (with\n`TYPESAFE_API_KEY`), or `--record <fast-path-shadow.jsonl>` for a person's\nexported record.\n";
+var agent_guide_default9 = "## isocan voice\n\n`isocan voice` says where the browser voice lives: open the canvas in the web\napp and choose **Configure voice** (\u2318K, Canvas group) \u2014 that is the settings\ndoor (key and model); the floating mic is the talking. The dialog opens a\nGemini Live session from that browser with that person's own API key \u2014 the\nkey is stored in the browser's storage, never on the canvas and never in the\ndaemon \u2014 and hands the model the canvas's operations as tools, so a spoken\nrequest lands as the same operations a click would send, carrying the\nspeaker's identity and undo.\n\nPrefer the enrolled voice harness (`isocan rc add <name> --harness voice`) for\na standing agent the canvas can summon; the browser dialog is for the person\nwho is already in the app.\n\nThe voice settings also carry a **fast path** switch (off by default):\n**in shadow**, Jev resolves each spoken turn into a simple act and records it\nbeside what the model did, never acting; **acting**, a move Jev is sure of\n(above the threshold measured in `src/thresholds.ts`) is done at once through\nthe same tool code the model uses and the model's duplicate call is dropped.\nAn agent measures the resolver without a browser:\n`node --import tsx packages/modules/talk/scripts/fast-path-eval.ts` (with\n`TYPESAFE_API_KEY`), or `--record <fast-path-shadow.jsonl>` for a person's\nexported record; `scripts/fast-path-act.ts` runs the acting path end to end\non a throwaway daemon. The browser's voice `undo` retracts the viewer's last\nchange, as \u2318Z does.\n";
 
 // packages/modules/talk/src/core.ts
 var voiceCore = {
@@ -10300,7 +10300,7 @@ var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec dra
 // packages/modules/wireframe/src/cli.ts
 function dispatch(host, subcommand) {
   return host.run(async (...args) => {
-    const { executeWire } = await import("./cli-runtime-ZESZZXVD.mjs");
+    const { executeWire } = await import("./cli-runtime-4FDTF57B.mjs");
     await executeWire(host, subcommand, args);
   });
 }
@@ -13521,7 +13521,7 @@ program2.command("mcp").description(
   "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)"
 ).action(
   run(async () => {
-    const { serveStdio } = await import("./src-647KZYYH.mjs");
+    const { serveStdio } = await import("./src-CLMJ4VWQ.mjs");
     await serveStdio({ version: buildStamp().version });
     await new Promise(() => {
     });
@@ -13536,14 +13536,14 @@ program2.command("serve").alias("start").description("Run the state daemon (auto
       throw refuseDaemonVerb("serve", declared.at ?? "its home");
     }
     if (opts.foreground) {
-      const { runDaemon } = await import("./daemon-MZDPDSXB.mjs");
+      const { runDaemon } = await import("./daemon-55A66GFB.mjs");
       await runDaemon({ port, home, ...opts.force ? { takeover: true } : {} });
       return new Promise(() => {
       });
     }
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
     if (opts.force) {
-      const { stopDaemons } = await import("./daemon-MZDPDSXB.mjs");
+      const { stopDaemons } = await import("./daemon-55A66GFB.mjs");
       const stopped = await stopDaemons(port, home);
       if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
     } else if (await client.health()) {
@@ -13734,7 +13734,7 @@ async function rosterCaveat(ctx, canvasId) {
   return why === null ? null : `this is only who this machine can see \u2014 ${why}`;
 }
 async function restartDaemon(home, port) {
-  const { stopDaemons } = await import("./daemon-MZDPDSXB.mjs");
+  const { stopDaemons } = await import("./daemon-55A66GFB.mjs");
   const stopped = await stopDaemons(port, home);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home);
   await client.ensureDaemon();
@@ -14207,7 +14207,7 @@ function say(adoption) {
 }
 program2.command("stop").description("Stop the daemon \u2014 asks the port who it is, so a stale one can't hide").action(
   run(async (_opts, cmd) => {
-    const { stopDaemons } = await import("./daemon-MZDPDSXB.mjs");
+    const { stopDaemons } = await import("./daemon-55A66GFB.mjs");
     const declared = await resolveDeclared(paths_exports.isocanHome());
     if (declared?.mode === "direct") {
       throw refuseDaemonVerb("stop", declared.at ?? "its home");
@@ -15157,7 +15157,7 @@ program2.command("setup [target]").description(
               }
             }
           } else if (before && stalenessOf(before).stale) {
-            const { stopDaemons } = await import("./daemon-MZDPDSXB.mjs");
+            const { stopDaemons } = await import("./daemon-55A66GFB.mjs");
             await stopDaemons(port, home);
             await fs17.rm(path17.join(home, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
@@ -15382,7 +15382,7 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     let ownerInput;
     if (access.kind !== "ordinary") {
       if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
-      const { personalCaptureOwner } = await import("./personal-capture-PZJUFBWL.mjs");
+      const { personalCaptureOwner } = await import("./personal-capture-44IPYLVA.mjs");
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }
