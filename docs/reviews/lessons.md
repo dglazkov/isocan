@@ -327,6 +327,7 @@ one claim for concurrent reads and no replay by a cancelled waiter.
   reasoning. A lesson nobody obeys is a lesson that needs a smaller ask — so
   the ask is now literal: `git add <paths>`, never `-A`, while a task
   notification is still outstanding.
+| 105 | **A test fixture built with the developer's own tools inherits the developer's own config.** `git add .` honours a global gitignore silently, so a fixture repository is missing files on exactly the laptops whose owners ignore them, and the test is red there and green on CI. The same family as #104: the suite reaching for the environment of the person running it. | `documents.test.ts`'s "module add from a git spec" commits a built module with `dist/cli.mjs` in it. On a Mac whose `~/.gitignore_global` lists `dist/`, that file was never committed, and `isocan module add` refused the clone with "declares dist/cli.mjs and the file is not there". It was found by `npm run test:deep` before the voice-agent phase 7 push on 30 Sep 2026 and first read as a regression in that phase. It passed with `GIT_CONFIG_GLOBAL=/dev/null`. | The fixture's git runs with `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`. `test/git-fixtures.test.ts` finds every test file that spawns git with a `commit` and fails unless it sets both, and checks it finds this one so it cannot pass by matching nothing. It went red with the fix removed. The habit: **when a test fails on one machine and passes with that machine's config bypassed, isolate the config in the test; do not edit the machine.** |
 
 ## Adding to this file
 
