@@ -23,6 +23,9 @@ second week.
 
 ## 1 October 2026
 
+- **Picked-up things look picked up.** While you drag a card it rises onto
+  a deeper shadow, the same size and exactly under your hand, and settles
+  back when you let go. Dragging a group lifts the whole frame.
 - **A cricket bat pointer.** Canvas pointers now include a cricket bat and
   ball (*Background › Cursor* on a canvas standing on a picture, or `isocan canvas background --cursor
   cricket`), filled with each person's own colour like the rest.
