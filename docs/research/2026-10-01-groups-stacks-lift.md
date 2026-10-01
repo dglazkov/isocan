@@ -1,7 +1,8 @@
 ---
-status: open
+status: designed
 since: 2026-10-01
-see: canvas-groups
+see: canvas-groups, groups-by-hand
+issue: 373
 note: "Four proposals for working with groups by hand, each checked against the code. (1) ⌘/Ctrl takes one item: hold it to aim at and drag a single member of a group from any scope, and drop it outside the frame to take it out. Today nothing can drag an item out of a group, because the frame grows to keep it. This needs no new op: transform with containerId already moves and reparents in one undo, and null means the canvas. (2) Stacks: a group shown as a slightly messy pile of cards, the top one upright in the middle and the rest turned and nudged behind it. The turns are seeded from each item's id, so every viewer sees the same pile. It fans into a hand of cards on hover and opens into a temporary grid on click. The layout is stored on the group and members keep their positions, so spreading the stack restores them exactly. (3) Lift: a new --shadow-lift token while dragging, with no scale and no offset, so where you see it is where it lands. (4) Others see the drag live: it travels on presence, not as ops, so nothing replays and a landed move cancels the live view. A prototype in groups-stacks/ shows the first three."
 ---
 
@@ -98,6 +99,39 @@ scope:
   Shift's snapping already does, so you can pick up an item normally and decide
   at the edge.
 
+**Hover says what a press would take** (Dion, 1 Oct: "it should be clear if
+the target is the group or individual items… and if you are hovered over space
+between items and still over the group the group can be highlighted"). Today
+this is broken in both directions:
+
+- The dashed hover outline is plain CSS `:hover` on whatever element is under
+  the pointer (`styles.css:1259`). So at the canvas level, pointing at a member
+  outlines **the member**, while a click on it takes **the group**. The preview
+  lies.
+- The empty space inside a frame takes no pointer events at all
+  (`styles.css:4225-4230`). Pointing at it outlines nothing, and pressing it
+  starts a selection box on the canvas behind.
+
+The rule that fixes both: **the dashed outline goes on exactly the thing a press
+would take, decided by the same function the press uses** (`scopedHit`), never
+by CSS `:hover`. The cases:
+
+| Where the pointer is | Outlined | A press takes |
+| --- | --- | --- |
+| Canvas level, over a member | the **group** | the group |
+| Canvas level, over the space between members, inside the frame | the **group** | the group (click selects, drag moves it) |
+| Canvas level, ⌘ held, over a member | the **member**; the group gets a faint solid line, for "inside this" | the member |
+| Canvas level, ⌘ held, over the space between members | the group's members, dimly | a selection box among its members |
+| Inside the group (entered), over a member | the **member** | the member |
+| Inside the group, over the space between members | nothing; the frame is the scope you are in | a selection box among its members, as today |
+| A nested group | the outermost group at the canvas level; ⌘ reaches the deepest item | the same |
+
+One change in behaviour comes with it, and it is deliberate. At the canvas level,
+pressing the empty space inside a frame takes the group rather than starting a
+selection box, because the hover just said it would. A selection box across a
+group's members starts with ⌘ held, or from inside the group, or from outside
+every frame, as today.
+
 **Why ⌘, and not a gesture.** ⌘ is the one modifier with no meaning on a press
 or drag here, and it is the key designers already use for this. The rejected
 alternative is a *tear-off*: drag past the frame by some distance and the item
@@ -170,12 +204,15 @@ the group's title band (*Stack* / *Spread*), with a CLI twin.
 - **Reduced motion:** fan and open happen without the transition. The positions
   are the same.
 
-**The decision underneath: shared or per-viewer?** *Recommend shared.*
-Stacking a group is an arrangement, like squaring a pile of paper on a shared
-desk, and a stack one person sees and another doesn't is a canvas two people
-describe differently. So it is a `GroupLayout` field (`display: "stack"`), set
-with the existing `group.change` `layout` action, so it is one undo with no
-new op type. Fanning and opening are per-viewer and never written.
+**Shared, and it remembers** (decided by Dion, 1 Oct). Stacking a group is an
+arrangement, like squaring a pile of paper on a shared desk, and a stack one
+person sees and another doesn't is a canvas two people describe differently.
+So it is a `GroupLayout` field (`display: "stack"`), set with the existing
+`group.change` `layout` action, so it is one undo with no new op type.
+**Stacked or spread is the state that persists**: a stacked group comes back
+stacked, for everyone, after a reload. **Fanning and opening are never
+stored.** They are per-viewer and momentary, so closing an opened stack, or
+reloading with it open, always returns to the stack.
 
 **Members keep their spread positions.** Stacking draws them at the stack, and
 leaves `x`/`y` untouched. *Spread* puts every member back exactly where it was,
@@ -326,7 +363,7 @@ Agents do not drag; their moves are instant ops and keep arriving as today.
 
 1. **The lift (S).** One token, CSS only. Checked by eye in both themes, which
    the prototype already shows. Nothing waits on it.
-2. **⌘ takes one item (M).** Hover preview, ⌘-click, ⌘-drag with *Out of …*,
+2. **⌘ takes one item (M).** Hover that says what a press takes (the table above), ⌘-click, ⌘-drag with *Out of …*,
    *Move to canvas*, ⌘⇧G on a member, and `mv --out`. No op change. It is
    driven in a real browser before it is called done, because a drag is the
    thing a unit test can't prove.
@@ -336,10 +373,16 @@ Agents do not drag; their moves are instant ops and keep arriving as today.
    agent-guide line. It reuses 1–3: the lift on a fanned layer, ⌘-drag out of
    an open stack, and a stack's top card moving live for viewers.
 
-**Decisions for Dion:**
+**Decided by Dion, 1 Oct 2026:**
 
-1. **Stacks shared or per-viewer?** I recommend shared.
-2. **⌘-drag out lands where?** I recommend wherever the pointer is: another frame,
-   or the canvas, never "one level up". The pill names it before you let go.
-3. **Should a plain drag ever detach?** I recommend no. Keep the frame-grows rule,
-   and keep ⌘ as the one deliberate way out.
+1. **Stacks are shared**, and stacked-or-spread is remembered. Opening a stack
+   is never remembered.
+2. **⌘-drag out lands wherever the pointer is:** another frame, or the canvas,
+   never "one level up". The pill names it before you let go.
+3. **A plain drag never detaches.** The frame-grows rule stays, and ⌘ is the one
+   deliberate way out.
+
+He added a fourth requirement the same day: **hover must say what a press
+would take.** The group is outlined when the group is the target, including
+over the space between its members, and the item is outlined when the item is.
+The table is under proposal 1, and it belongs to phase 2.
