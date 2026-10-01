@@ -821,6 +821,169 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "lift",
+    /**
+     * **The lift** (groups-by-hand phase 1): what the hand holds wears
+     * `--shadow-lift` once the press has become a drag, and settles back to
+     * the card's shadow on release. Depth only — nothing grows, nothing
+     * fades, nothing leaves the hand — and a dragged group lifts its FRAME,
+     * not each of its members.
+     *
+     * Asserted as STATE: the computed `box-shadow` is polled until it equals
+     * the token (a probe element resolves `var(--shadow-lift)` and
+     * `var(--shadow-card)` in this page's theme, so the comparison is
+     * theme-proof), never caught mid-transition.
+     */
+    what: "a dragged card wears the lift and settles back; a dragged group lifts its frame, not its members",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme lift");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-lift-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Lift CLI");
+      const md = path.join(rig.home, "acme-lift.md");
+      writeFileSync(md, "# Acme\n\nA card to pick up.\n");
+      // Somewhere bare and on screen (the panels take part of a small
+      // window), with room above for the title bar and to the right for the
+      // drag — converted from screen to world through the world's own box.
+      const spot = await openSpot(rig, 340, 260);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+        return { left: r.left, top: r.top, scale };
+      })()`);
+      const wx = Math.round((spot.x + 20 - world.left) / world.scale), wy = Math.round((spot.y + 50 - world.top) / world.scale);
+      const card = runCli("--canvas", id, "add", md, "--title", "Acme card", "--at", `${wx},${wy}`, "--size", "240x160").itemId;
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      await until(b, `!!document.querySelector(${sel(card)})`, "the card to arrive on the canvas");
+      await rig.type("v");
+
+      // The two shadows, resolved in this page's own theme.
+      const tokens = await b.ev(`(() => {
+        const probe = document.createElement("div");
+        document.querySelector(".item").parentElement.appendChild(probe);
+        probe.style.boxShadow = "var(--shadow-lift)";
+        const lift = getComputedStyle(probe).boxShadow;
+        probe.style.boxShadow = "var(--shadow-card)";
+        const card = getComputedStyle(probe).boxShadow;
+        probe.remove();
+        return { lift, card };
+      })()`);
+      if (!tokens.lift || tokens.lift === "none" || tokens.lift === tokens.card) throw new Error(`--shadow-lift does not resolve to its own shadow (${tokens.lift})`);
+      const look = (itemId) => b.ev(`(() => {
+        const el = document.querySelector(${sel(itemId)});
+        if (!el) return null;
+        const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+        // An identity matrix is no transform: the arrival animation's
+        // filled end state reads either way depending on when it is asked.
+        const transform = cs.transform === "matrix(1, 0, 0, 1, 0, 0)" ? "none" : cs.transform;
+        return { shadow: cs.boxShadow, transform, opacity: cs.opacity, scale: cs.scale, translate: cs.translate,
+                 lifted: el.classList.contains("lifted"), x: r.left, y: r.top, w: r.width, h: r.height };
+      })()`);
+      const shadowIs = (itemId, want, what) =>
+        until(b, `getComputedStyle(document.querySelector(${sel(itemId)})).boxShadow === ${JSON.stringify(want)}`, what, 3000);
+
+      /** A real press on a point of the item a person would grab, then a
+       *  move of 40px in steps — returns the release. */
+      const grab = async (selector, what) => {
+        const at = await b.ev(`(() => {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + Math.min(r.height / 2, 12));
+          const top = document.elementFromPoint(x, y);
+          return { x, y, hit: !!top && (el === top || el.contains(top)), over: top ? (top.className?.toString?.() || top.tagName) : "nothing" };
+        })()`);
+        if (!at) throw new Error(`no ${what} on screen`);
+        if (!at.hit) throw new Error(`${what} is covered by ${at.over} — a person could not grab it (${JSON.stringify(at)}; ${await b.ev(`JSON.stringify(document.querySelector(".canvas-viewport").getBoundingClientRect())`)}; ${await b.ev(`document.querySelector(${JSON.stringify(selector)}).closest(".item").outerHTML.slice(0,300)`)})`);
+        await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: at.x, y: at.y, button: "left", buttons: 1, clickCount: 1 });
+        return {
+          at,
+          move: async (dx) => {
+            for (let s = 1; s <= 4; s++) {
+              await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at.x + (dx * s) / 4, y: at.y, button: "left", buttons: 1 });
+              await sleep(40);
+            }
+          },
+          release: (dx) => b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at.x + dx, y: at.y, button: "left", buttons: 0, clickCount: 1 }),
+        };
+      };
+
+      // 1. A card. At rest: the card's shadow.
+      // The card arrived from another actor (the CLI), so it plays the
+      // arrival motion, which a headless page throttles: wait for the STATE
+      // it ends in (no transform) rather than read its scale as the lift's.
+      await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(card)})).transform)`, "the card to come to rest at its own size");
+      await shadowIs(card, tokens.card, "the card to rest in --shadow-card");
+      const rest = await look(card);
+      const hand = await grab(`.item[data-item-id="${card}"] .item-titlebar`, "the card's title bar");
+      // A press that has not moved is a click, and a click never lifts.
+      await sleep(250);
+      const pressed = await look(card);
+      if (pressed.lifted || pressed.shadow !== tokens.card) {
+        await hand.release(0);
+        throw new Error(`a press that never moved already lifted the card (${pressed.shadow})`);
+      }
+      await hand.move(40);
+      try {
+        await shadowIs(card, tokens.lift, "the dragged card to wear --shadow-lift");
+      } catch (err) {
+        const now = await look(card);
+        await hand.release(40);
+        throw new Error(`${err.message} — it wears ${now.shadow}, lifted class ${now.lifted}`);
+      }
+      const mid = await look(card);
+      await hand.release(40);
+      if (mid.transform !== "none" || mid.scale !== "none" || mid.translate !== "none") throw new Error(`the lift moved or scaled the card (transform ${mid.transform}, scale ${mid.scale}, translate ${mid.translate})`);
+      if (mid.opacity !== "1") throw new Error(`a dragged card is translucent (opacity ${mid.opacity}) — the lift says moving, not a fade`);
+      if (Math.abs(mid.w - rest.w) > 0.5 || Math.abs(mid.h - rest.h) > 0.5) throw new Error(`the lifted card changed size (${rest.w}×${rest.h} → ${mid.w}×${mid.h})`);
+      if (Math.abs(mid.x - rest.x - 40) > 8) throw new Error(`the card is not under the hand: moved ${mid.x - rest.x}px for a 40px drag`);
+      await shadowIs(card, tokens.card, "the released card to settle back to --shadow-card");
+      const settled = await look(card);
+      if (settled.lifted) throw new Error("the released card still wears .lifted");
+
+      // 2. A group: its frame lifts, its member does not.
+      // A new canvas may be legacy (areas) or groups; the card above went
+      // through whichever drag path it has, and the proof says which.
+      let wrapped, migrated = false;
+      try {
+        wrapped = runCli("--canvas", id, "canvas", "group", "wrap", card, "--title", "Acme group");
+      } catch {
+        const preview = runCli("--canvas", id, "canvas", "group", "migrate", "--dry-run");
+        runCli("--canvas", id, "canvas", "group", "migrate", "--revision", String(preview.revision));
+        migrated = true;
+        wrapped = runCli("--canvas", id, "canvas", "group", "wrap", card, "--title", "Acme group");
+      }
+      const group = wrapped.groupId ?? wrapped.itemId ?? wrapped.group?.id ?? wrapped.id;
+      if (!group) throw new Error(`wrap returned no group id: ${JSON.stringify(wrapped).slice(0, 200)}`);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.area[data-item-id="${group}"] .area-title`)})`, "the group's frame and title strip");
+      await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(group)})).transform)`, "the frame to come to rest at its own size");
+      const frameRest = await look(group);
+      const handle = await grab(`.item[data-item-id="${group}"] .area-title`, "the group's title strip");
+      await handle.move(40);
+      try {
+        await shadowIs(group, tokens.lift, "the dragged group's frame to wear --shadow-lift");
+      } catch (err) {
+        const now = await look(group);
+        await handle.release(40);
+        throw new Error(`${err.message} — it wears ${now.shadow}, lifted class ${now.lifted}`);
+      }
+      const frameMid = await look(group);
+      const memberMid = await look(card);
+      await handle.release(40);
+      if (memberMid.lifted || memberMid.shadow !== tokens.card) throw new Error(`a member of the dragged group lifted too (${memberMid.shadow}) — the frame lifts, its members ride flat`);
+      if (Math.abs(frameMid.x - frameRest.x - 40) > 8) throw new Error(`the group is not under the hand: moved ${frameMid.x - frameRest.x}px for a 40px drag`);
+      if (frameMid.transform !== "none" || Math.abs(frameMid.w - frameRest.w) > 0.5) throw new Error(`the lifted frame was transformed or resized (${frameRest.w}×${frameRest.h}, ${frameRest.transform} → ${frameMid.w}×${frameMid.h}, ${frameMid.transform})`);
+      await shadowIs(group, "none", "the released group's frame to lie flat again");
+      return { cardDragMode: migrated ? "legacy" : "groups", lift: tokens.lift, card: tokens.card, memberDuringGroupDrag: memberMid.shadow };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**

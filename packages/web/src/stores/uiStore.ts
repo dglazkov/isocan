@@ -22,6 +22,10 @@ export interface DragState {
   dx: number;
   dy: number;
   moved: boolean;
+  /** What the hand is holding — the items that wear the lift (`.item.lifted`).
+   * The roots of the drag, not everything riding it: an area's contents and
+   * an item's marks travel along but stay flat. */
+  lift?: readonly string[];
 }
 
 /** Live rubber-band rectangle in world coordinates (unnormalized corners). */
@@ -104,7 +108,10 @@ interface UiStore {
   fannedItemId: string | null;
   drag: DragState | null;
   resize: ResizeState | null;
-  groupPreview: { id: string; boxes: ReadonlyMap<string, GroupBox> } | null;
+  /** A group gesture's live boxes. `lift` is set by a pointer drag once the
+   * press has become one — the gesture's roots, so a dragged group lifts its
+   * frame and not its members. A resize or a keyboard nudge never lifts. */
+  groupPreview: { id: string; boxes: ReadonlyMap<string, GroupBox>; lift?: readonly string[] } | null;
   groupDropTargetId: string | null;
   marquee: MarqueeState | null;
   /** Alignment guides for the drag in hand: the lines the dragged box has

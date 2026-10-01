@@ -187,6 +187,8 @@ function ItemViewInner({
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
   );
   const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
+  // Held, not merely carried: see `DragState.lift` and `.item.lifted`.
+  const lifted = useUiStore((s) => !!(s.drag?.lift?.includes(item.id) || s.groupPreview?.lift?.includes(item.id)));
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
   const groupBox = useUiStore((s) => s.groupPreview?.boxes.get(item.id));
   const dropTarget = useUiStore((s) => s.groupDropTargetId === item.id);
@@ -571,6 +573,17 @@ function ItemViewInner({
         ]
       : chosen;
     if (chosen !== was) ui.setSelection(chosen);
+    // What the hand holds — the chosen items, less anything a chosen area is
+    // carrying (its contents ride along flat, the way a group's members do).
+    const lift = semantic ? semantic.roots : canvasNow
+      ? (() => {
+          const carried = new Set(chosen.flatMap((id) => {
+            const one = canvasNow.items[id];
+            return one && isArea(one) ? itemsIn(canvasNow, one).map((held) => held.id) : [];
+          }));
+          return chosen.filter((id) => !carried.has(id));
+        })()
+      : chosen;
 
     const frame = e.currentTarget as HTMLElement;
     frame.setPointerCapture(e.pointerId);
@@ -586,6 +599,7 @@ function ItemViewInner({
       if (semantic && !semantic.active()) return;
       const scale = ui.viewport.scale;
       if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_SLOP) return;
+      if (!moved) semantic?.lift();
       moved = true;
       let dx = (ev.clientX - start.x) / scale;
       let dy = (ev.clientY - start.y) / scale;
@@ -615,7 +629,7 @@ function ItemViewInner({
         const destination = target && semantic.roots.some((id) => semantic.start.canvas.items[id]?.containerId !== target.id) ? target : null;
         ui.setGroupDropTarget(destination?.id ?? null);
         semantic.move(dx, dy, destination?.id, destination ? groupDropPolicy(destination, point) : undefined);
-      } else ui.setDrag({ itemIds: dragIds, dx, dy, moved });
+      } else ui.setDrag({ itemIds: dragIds, dx, dy, moved, lift });
     }
     function onUp(ev: PointerEvent) {
       if (frame.hasPointerCapture(ev.pointerId)) frame.releasePointerCapture(ev.pointerId);
@@ -853,7 +867,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? " canvas-group" : ""}${dropTarget ? " group-drop-target" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? " canvas-group" : ""}${dropTarget ? " group-drop-target" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       data-group-id={isCanvasGroup ? item.id : undefined}
       data-presentation={detail}

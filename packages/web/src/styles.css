@@ -155,6 +155,11 @@
   /* Dimmer behind a modal. */
   --overlay: rgba(35, 38, 43, 0.35);
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
+  /* **A card in the hand** (`.item.lifted`): the card's two shadows, the
+     contact one tighter and the ambient one twice as deep and further down.
+     Depth, never size — a lifted card does not grow, or you could not see
+     where it will land (docs/research/2026-10-01-groups-stacks-lift.md §3). */
+  --shadow-lift: 0 2px 4px rgba(30, 34, 40, 0.1), 0 22px 44px -14px rgba(30, 34, 40, 0.38);
   --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
   /* **The same lift, drawn by `filter` instead of `box-shadow`.** A shadow
      from `filter` follows the rendered SILHOUETTE rather than the border box,
@@ -353,6 +358,7 @@
   --panel: rgba(23, 26, 31, 0.9);
   --overlay: rgba(0, 0, 0, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 48px -12px rgba(0, 0, 0, 0.85);
   --shadow-pop: 0 14px 30px -14px rgba(0, 0, 0, 0.75);
   /* Deeper on graphite: a shadow on a dark ground has less room to darken,
      so it earns its edge by being nearly opaque at the contact. */
@@ -1168,6 +1174,8 @@ img { height: auto; }
   position: absolute; background: var(--card);
   border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow-card);
+  /* The lift's settle: see `.item.lifted`. */
+  transition: box-shadow 160ms ease-out;
   display: flex; flex-direction: column;
   /* Each item is its own stacking context so internal layers (version
      badge, plies, resize handle) can never paint over sibling items. */
@@ -1237,7 +1245,24 @@ img { height: auto; }
 @media (prefers-reduced-motion: reduce) {
   .item.entered { animation: none; }
 }
-.item.dragging { opacity: 0.92; cursor: grabbing; z-index: 2; }
+/* Every item riding a drag: what is under the hand stays readable at full
+   opacity — the lift below is what says it is moving. */
+.item.dragging { cursor: grabbing; z-index: 2; }
+/* **The lift** (groups-by-hand phase 1): what the hand is holding — the roots
+   of the drag, never the members a group or an area carries along with it,
+   because twenty lifted cards inside a lifted frame read as mud. Set only once
+   the press has become a drag, so a click never flickers a shadow.
+
+   Shadow only: no transform, no scale, no offset. An item's position under
+   the hand is a fact (docs/research/2026-08-28-motion.md), and a card that grew
+   would hide where it is about to land. The shadow is kind-1 decoration, so it
+   eases — 120ms up, and a slightly slower 160ms settle that makes a drop read
+   as put down rather than let go (the settle is `.item`'s own transition) —
+   and reduced motion swaps it instantly. */
+.item.lifted { box-shadow: var(--shadow-lift); transition-duration: 120ms; z-index: 2; }
+@media (prefers-reduced-motion: reduce) {
+  .item, .item.lifted { transition: none; }
+}
 /* The read-only canvas (roles phase 1): nothing here is a handle, so nothing
    here wears a grab cursor. The daemon refuses the write; this stops the
    pointer promising one. */
@@ -4191,6 +4216,10 @@ button.mt-card:hover { border-color: var(--accent); }
   border-color: var(--paper-edge);
   box-shadow: var(--shadow-card);
 }
+/* Paper is something you could pick up, so it lifts like a card. A bare
+   caption and ink do not: they wear no card, and a lifted shadow would draw
+   the box they deliberately do not have. */
+.item.textnode.paper.lifted { box-shadow: var(--shadow-lift); }
 .item.textnode.paper .item-content { background: transparent; }
 /* The ply reads as a second sheet under the first, which for paper is
    exactly right — so it takes the paper's own colour rather than the
@@ -4249,6 +4278,12 @@ button.mt-card:hover { border-color: var(--accent); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .item.area.dragging .area-title { cursor: grabbing; }
+/* A sheet lies flat until it is picked up: a dragged group lifts its FRAME
+   (the members it carries stay flat — see `.item.lifted`). Declared after
+   `.item.area` so it beats that rule's `box-shadow: none`; it keeps the
+   area's own stacking, because a frame raised over its members would wash
+   them in its tint. */
+.item.area.lifted { box-shadow: var(--shadow-lift); z-index: 0; }
 
 /* ---------- a canvas on a canvas ----------
    `core/canvasitem.ts`: a picture of a place, drawn live and small from the

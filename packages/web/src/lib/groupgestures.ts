@@ -52,6 +52,8 @@ export function beginGroupGesture(itemIds: string[], onInterrupt?: () => void) {
   const id = newOpId();
   if (onInterrupt) interruptible = { id, finish: onInterrupt };
   let action: Transform | null = null;
+  // What the hand holds, once a pointer drag has begun: `lift()` below.
+  let lifted: readonly string[] | undefined;
   const active = () => useUiStore.getState().groupPreview?.id === id;
   const clear = () => {
     if (interruptible?.id === id) interruptible = null;
@@ -67,7 +69,7 @@ export function beginGroupGesture(itemIds: string[], onInterrupt?: () => void) {
     try {
       const boxes = groupPreviewBoxes(start, next);
       action = next;
-      useUiStore.getState().setGroupPreview({ id, boxes });
+      useUiStore.getState().setGroupPreview(lifted ? { id, boxes, lift: lifted } : { id, boxes });
     } catch (error) {
       clear();
       setNotice(error instanceof Error ? error.message : "That group transform is not possible.");
@@ -75,6 +77,9 @@ export function beginGroupGesture(itemIds: string[], onInterrupt?: () => void) {
   }
   return {
     start, roots, active,
+    /** The press has become a drag: the roots wear the lift from the next
+     * preview on. Only a pointer drag calls it — a nudge is not held. */
+    lift(): void { lifted = roots; },
     move(dx: number, dy: number, containerId?: string, groupPlacement: GroupPlacementPolicy = "preserve"): void {
       if (containerId && !destinationExpected.has(containerId)) destinationExpected.set(containerId, captureGroupExpectations(start, [...roots, containerId]));
       preview({ kind: "transform", itemIds: roots, by: { x: dx, y: dy }, expected: containerId ? destinationExpected.get(containerId)! : expected, ...(containerId ? { containerId, groupPlacement } : {}) });

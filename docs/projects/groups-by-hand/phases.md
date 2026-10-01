@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-01
 see: canvas-groups
 note: "the walk: lift, ⌘ takes one item (with hover that says what a press takes), live drag for viewers, stacks."
@@ -14,7 +14,7 @@ issue: 373
 remembered (opening is not); ⌘-drag-out lands where the pointer is; a plain
 drag never detaches.
 
-**Where we are, 1 Oct 2026: nothing built. Next: groups-by-hand phase 1, the lift.**
+**Where we are, 1 Oct 2026: phase 1 is CLOSED (the lift). Next: groups-by-hand phase 2, ⌘ takes one item.**
 
 Two rules for every phase, on top of `AGENTS.md`:
 
@@ -26,7 +26,7 @@ Two rules for every phase, on top of `AGENTS.md`:
 
 ## Phase 1 — The lift
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 1 October 2026.** A dragged card wears `--shadow-lift` once the press becomes a drag and settles back on release; a dragged group lifts its frame and not its members — the `lift` journey drove both in Chrome, and it fails when the rule is removed.
 
 **Outcome:** while an item (or a group's frame) is being dragged it wears
 `--shadow-lift`, defined in both theme blocks, eased in once the press becomes
@@ -40,6 +40,12 @@ without transition.
    both themes; a test holds that `.item.dragging` adds no transform or scale.
 2. A journey `lift` that presses an item, moves it 40 px, and reads the item's
    computed `box-shadow` mid-drag (the lift) and after release (the card's).
+
+### Trajectory
+
+- **2026-10-01** — The lift is its own class, `.lifted`, not `.dragging`: `.dragging` sits on everything riding a drag (an area's contents, marks), `.lifted` only on the drag's roots, held in `DragState.lift` / `groupPreview.lift` so it clears with the gesture. Phases 3 and 4 reuse `.lifted`.
+- **2026-10-01** — A groups-mode drag had never put any class on the item, only `groupPreview`, so `.dragging`'s cursor and z-index never applied on group canvases. `groupPreview` is also set at the press, before any movement: anything meaning "a drag is real" needs the first-move flag `lift()` uses.
+- **2026-10-01** — Ink and bare text nodes do not lift: a shadow would draw the box they deliberately lack. A paper note needs its own `.lifted` variant, because `.item.textnode.paper` sets its own shadow at higher specificity.
 
 ## Phase 2 — ⌘ takes one item
 
