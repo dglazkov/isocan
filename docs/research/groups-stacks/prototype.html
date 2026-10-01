@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Groups, stacks and lift</title>
+<!--
+  A throwaway harness for docs/research/2026-10-01-groups-stacks-lift.md.
+  Not isocan code: it imitates the canvas closely enough to judge three
+  behaviours by eye — ⌘-reach into a group, a group shown as a stack, and the
+  lift shadow while dragging. Synthetic content only ("Acme").
+-->
+<style>
+  :root {
+    --ground: #f4f1ea; --dot: #d9d3c6; --card: #ffffff; --ink: #1f2328; --ink-soft: #6b6f76;
+    --line: #dcd6c8; --accent: #1f3fd0; --accent-wash: rgba(31,63,208,.08);
+    --shadow-card: 0 1px 2px rgba(30,34,40,.08), 0 10px 24px -14px rgba(30,34,40,.28);
+    /* The proposal: one new token, both themes. Bigger blur and offset than
+       --shadow-card, same footprint — the card does NOT grow. */
+    --shadow-lift: 0 2px 4px rgba(30,34,40,.10), 0 22px 44px -14px rgba(30,34,40,.38);
+    --radius: 10px;
+  }
+  :root[data-theme="dark"] {
+    --ground: #15171b; --dot: #2a2e35; --card: #1f2329; --ink: #e8eaed; --ink-soft: #9aa1ab;
+    --line: #333944; --accent: #6f8cff; --accent-wash: rgba(111,140,255,.12);
+    --shadow-card: 0 1px 2px rgba(0,0,0,.4), 0 10px 24px -14px rgba(0,0,0,.7);
+    --shadow-lift: 0 2px 4px rgba(0,0,0,.5), 0 24px 48px -12px rgba(0,0,0,.85);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 Inter, system-ui, sans-serif; color: var(--ink); background: var(--ground); overflow: hidden; }
+  #canvas { position: fixed; inset: 0; background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px); background-size: 22px 22px; }
+  .bar { position: fixed; top: 12px; left: 12px; right: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; z-index: 50; }
+  .bar button { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  .hint { color: var(--ink-soft); font-size: 12px; }
+  kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--card); }
+
+  .card { position: absolute; width: 150px; height: 104px; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line);
+          box-shadow: var(--shadow-card); padding: 10px; user-select: none; cursor: default;
+          transition: box-shadow .16s ease-out; }
+  .card .t { font-weight: 600; font-size: 12.5px; }
+  .card .k { color: var(--ink-soft); font-size: 11px; margin-top: 2px; }
+  .card .swatch { height: 34px; border-radius: 6px; margin-top: 10px; }
+  .card.selected { outline: 2px solid var(--accent); z-index: 3; }
+  .card.reach { outline: 2px dashed var(--accent); outline-offset: 2px; }
+  /* LIFT: shadow only. No scale, no translate — where you see it is where it lands. */
+  .card.lifted, .group.lifted { box-shadow: var(--shadow-lift); z-index: 20; cursor: grabbing; transition: box-shadow .12s ease-out; }
+
+  .group { position: absolute; border-radius: 14px; border: 1.5px solid var(--line); background: var(--accent-wash); transition: box-shadow .16s ease-out, outline-color .1s; }
+  .group .title { position: absolute; left: 0; right: 0; top: 0; height: 44px; padding: 10px 14px; font-weight: 650; font-size: 16px; display: flex; gap: 10px; align-items: center; cursor: grab; }
+  .group .title .n { font-weight: 400; color: var(--ink-soft); font-size: 12px; }
+  .group .title button { margin-left: auto; font: 12px Inter, system-ui, sans-serif; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+  .group.selected { outline: 2px solid var(--accent); }
+  .group.drop { outline: 3px solid var(--accent); }
+  .group.dim { opacity: .55; }
+  .pill { position: fixed; padding: 4px 10px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; pointer-events: none; z-index: 60; white-space: nowrap; }
+
+  /* STACK: the frame shrinks to one card; members keep their spread positions in data. */
+  .group.stacked { background: transparent; border-color: transparent; }
+  .group.stacked .title { font-size: 14px; height: 36px; padding: 8px 2px; }
+  .stack { position: absolute; left: 12px; top: 62px; width: 150px; height: 104px; cursor: pointer; }
+  .stack .layer { position: absolute; inset: 0; border-radius: var(--radius); background: var(--card); border: 1px solid var(--line);
+                  box-shadow: var(--shadow-card); overflow: hidden; transition: transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .14s; }
+  /* An EDGE, not a blank ply: each layer behind shows its own colour strip and
+     title along the top, so the stack says what is in it — the difference from
+     a version stack, whose plies are blank and sit down-right. */
+  .stack .layer { padding: 10px; transform-origin: 50% 85%; }
+  .stack .layer .lbl { position: absolute; left: 10px; top: 10px; line-height: 14px; font-size: 12px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; right: 8px; }
+  .stack .layer.top { padding: 10px; }
+  .stack .layer.right .lbl { text-align: right; }
+  .stack .count { position: absolute; right: -8px; bottom: -8px; background: var(--ink); color: var(--card); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 2px 7px; z-index: 30; }
+  .stack .layer.hot { box-shadow: var(--shadow-lift); }
+  .explode { position: fixed; inset: 0; z-index: 40; }
+  .explode .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.14); }
+  .explode .card { transition: left .22s cubic-bezier(.2,.7,.2,1), top .22s cubic-bezier(.2,.7,.2,1); cursor: grab; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card, .group, .stack .layer, .explode .card { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="canvas"></div>
+<div class="bar">
+  <button id="theme">Dark / light</button>
+  <span class="hint">Press a card in a group: the group moves. Hold <kbd id="mod">⌘</kbd> and press: just that card — drag it out to the canvas or into another group. <kbd>Shift</kbd>-drag snaps. Hover a stack to fan it, click to open it, <kbd>Esc</kbd> closes.</span>
+</div>
+<script>
+const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+document.getElementById("mod").textContent = mac ? "⌘" : "Ctrl";
+const reach = (e) => (mac ? e.metaKey : e.ctrlKey);
+document.getElementById("theme").onclick = () => {
+  const r = document.documentElement; r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark";
+};
+
+// Synthetic content: x/y are world positions; parent is the group id or null.
+const hues = ["#e8a33d", "#3d8be8", "#5bb37a", "#c45bd6", "#e8603d", "#3dc4c4", "#8a7be8", "#d6b85b"];
+const items = [
+  { id: "a", t: "Welcome", k: "screen", x: 90, y: 150, parent: "g1" },
+  { id: "b", t: "Sign up", k: "screen", x: 260, y: 150, parent: "g1" },
+  { id: "c", t: "Verify email", k: "screen", x: 90, y: 280, parent: "g1" },
+  { id: "d", t: "Pick a plan", k: "screen", x: 260, y: 280, parent: "g1" },
+  { id: "e", t: "Old pricing", k: "screen", x: 0, y: 0, parent: "g2" },
+  { id: "f", t: "Dark mode v1", k: "screen", x: 0, y: 0, parent: "g2" },
+  { id: "g", t: "Acme logo", k: "image", x: 0, y: 0, parent: "g2" },
+  { id: "h", t: "Retired flow", k: "doc", x: 0, y: 0, parent: "g2" },
+  { id: "k", t: "Beta banner", k: "screen", x: 0, y: 0, parent: "g2" },
+  { id: "l", t: "Promo email", k: "doc", x: 0, y: 0, parent: "g2" },
+  { id: "m", t: "Acme v0 icon", k: "image", x: 0, y: 0, parent: "g2" },
+  { id: "i", t: "Release notes", k: "doc", x: 560, y: 470, parent: null },
+  { id: "j", t: "Checkout", k: "screen", x: 740, y: 470, parent: null },
+];
+items.forEach((it, n) => (it.hue = hues[n % hues.length]));
+const groups = {
+  g1: { id: "g1", t: "Onboarding", x: 70, y: 96, stacked: false },
+  g2: { id: "g2", t: "Archive", x: 620, y: 140, stacked: true },
+};
+// Archive's members still have SPREAD positions; stacking only changes the view.
+["e", "f", "g", "h", "k", "l", "m"].forEach((id, n) => Object.assign(items.find((i) => i.id === id), { x: 640 + (n % 3) * 170, y: 190 + Math.floor(n / 3) * 130 }));
+
+const canvas = document.getElementById("canvas");
+const W = 150, H = 104, PAD = 20, TITLE = 44;
+const members = (g) => items.filter((i) => i.parent === g);
+let selected = null, reaching = null;
+
+function fit(g) {
+  const m = members(g.id);
+  if (g.stacked || m.length === 0) return;
+  const minX = Math.min(...m.map((i) => i.x)), minY = Math.min(...m.map((i) => i.y));
+  const maxX = Math.max(...m.map((i) => i.x + W)), maxY = Math.max(...m.map((i) => i.y + H));
+  // Grow-only, like fitAncestors: a frame never shrinks under you.
+  g.x = Math.min(g.x, minX - PAD); g.y = Math.min(g.y, minY - PAD - TITLE);
+  g.w = Math.max((g.w ?? 0) + 0, maxX + PAD - g.x); g.h = Math.max(g.h ?? 0, maxY + PAD - g.y);
+}
+
+function cardEl(it) {
+  const el = document.createElement("div");
+  el.className = "card"; el.dataset.id = it.id;
+  el.innerHTML = `<div class="t">${it.t}</div><div class="k">${it.k}</div><div class="swatch" style="background:${it.hue}"></div>`;
+  return el;
+}
+
+function render() {
+  canvas.innerHTML = "";
+  for (const g of Object.values(groups)) {
+    fit(g);
+    const el = document.createElement("div");
+    el.className = "group" + (g.stacked ? " stacked" : "") + (selected === g.id ? " selected" : "");
+    el.dataset.group = g.id;
+    const m = members(g.id);
+    if (g.stacked) {
+      Object.assign(el.style, { left: g.x + "px", top: g.y + "px", width: W + "px", height: H + 92 + "px" });
+      el.innerHTML = `<div class="title">${g.t} <span class="n">${m.length}</span><button>Spread</button></div>`;
+      const st = document.createElement("div"); st.className = "stack";
+      const shown = m.slice(0, 7);
+      shown.slice().reverse().forEach((it, r) => {
+        const depth = shown.length - 1 - r;
+        const layer = document.createElement("div");
+        layer.className = "layer" + (depth === 0 ? " top" : depth % 2 ? "" : " right");
+        // Behind the top card, each card is lightly tinted with its own colour,
+        // so the rim of the pile says what is in it.
+        if (depth > 0) { layer.style.background = `color-mix(in srgb, ${it.hue} 16%, var(--card))`; layer.style.borderColor = `color-mix(in srgb, ${it.hue} 45%, var(--line))`; }
+        layer.dataset.depth = depth; layer.dataset.id = it.id;
+        layer.dataset.n = shown.length; layer.style.transform = rest(depth, it.id);
+        layer.innerHTML = depth === 0
+          ? `<div class="t" style="font-weight:600">${it.t}</div><div class="k" style="color:var(--ink-soft);font-size:11px">${it.k}</div><div style="height:34px;border-radius:6px;margin-top:10px;background:${it.hue}"></div>`
+          : `<div class="lbl">${it.t}</div><div style="position:absolute;left:10px;right:10px;bottom:12px;height:34px;border-radius:6px;background:${it.hue}"></div>`;
+        st.appendChild(layer);
+      });
+      st.insertAdjacentHTML("beforeend", `<span class="count">${m.length}</span>`);
+      st.onmouseenter = () => fan(st, true);
+      st.onmouseleave = () => fan(st, false);
+      st.onclick = () => explode(g);
+      el.appendChild(st);
+    } else {
+      Object.assign(el.style, { left: g.x + "px", top: g.y + "px", width: g.w + "px", height: g.h + "px" });
+      el.innerHTML = `<div class="title">${g.t} <span class="n">${m.length} items</span><button>Stack</button></div>`;
+    }
+    el.querySelector(".title button").onclick = (e) => { e.stopPropagation(); g.stacked = !g.stacked; if (!g.stacked) { g.w = 0; g.h = 0; } render(); };
+    canvas.appendChild(el);
+  }
+  for (const it of items) {
+    if (it.parent && groups[it.parent].stacked) continue;
+    const el = cardEl(it);
+    Object.assign(el.style, { left: it.x + "px", top: it.y + "px" });
+    if (selected === it.id) el.classList.add("selected");
+    canvas.appendChild(el);
+  }
+}
+
+// A messy pile, not a neat offset: the top card sits upright in the middle and
+// each card behind it is turned and nudged a little, so edges show on every
+// side, like a hand-squared stack of playing cards. The mess is SEEDED from the
+// member's id, so it is the same pile for every viewer and never reshuffles on
+// a re-render, and nothing about it is stored.
+function seed(id, salt) {
+  let h = 2166136261;
+  for (const ch of id + salt) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return ((h >>> 0) % 1000) / 1000 - 0.5; // -0.5 … 0.5
+}
+const turn = (id) => { const r = seed(id, "r") * 18; return Math.abs(r) < 3 ? Math.sign(r || 1) * 3 + r : r; };
+const rest = (d, id) => d === 0
+  ? "rotate(-0.6deg)"
+  : `translate(${seed(id, "x") * 34}px, ${seed(id, "y") * 24}px) rotate(${turn(id)}deg)`;
+// Hover fans the pile into a hand of cards: an arc about the bottom centre,
+// the top card staying in the middle.
+const fanned = (d, n) => {
+  const slot = d === 0 ? 0 : (d % 2 ? -1 : 1) * Math.ceil(d / 2);
+  return `translate(${slot * 26}px, ${Math.abs(slot) * 5 - 8}px) rotate(${slot * 9}deg)`;
+};
+function fan(st, on) {
+  st.querySelectorAll(".layer").forEach((l) => {
+    const d = +l.dataset.depth;
+    l.style.transform = on ? fanned(d, +l.dataset.n) : rest(d, l.dataset.id);
+    l.onmouseenter = on && d > 0 ? () => l.classList.add("hot") : null;
+    l.onmouseleave = () => l.classList.remove("hot");
+  });
+}
+
+// Open: a temporary grid in front of the canvas. Nothing moves in the data;
+// ⌘-drag a card out of it to take it out of the group.
+function explode(g) {
+  const m = members(g.id);
+  const ov = document.createElement("div"); ov.className = "explode";
+  ov.innerHTML = `<div class="scrim"></div>`;
+  document.body.appendChild(ov);
+  const cols = Math.ceil(Math.sqrt(m.length)), ox = g.x, oy = g.y + 62;
+  m.forEach((it, n) => {
+    const el = cardEl(it); el.style.left = ox + "px"; el.style.top = oy + "px"; el.style.zIndex = 45;
+    ov.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.left = ox - 40 + (n % cols) * (W + 18) + "px"; el.style.top = oy + 60 + Math.floor(n / cols) * (H + 18) + "px";
+    }));
+    el.onpointerdown = (e) => {
+      if (!reach(e)) return;
+      const r = el.getBoundingClientRect();
+      ov.remove();
+      it.x = r.left; it.y = r.top; it.parent = null; render();
+      startDrag(e, { kind: "card", id: it.id, from: g.id });
+    };
+  });
+  const close = () => { ov.remove(); removeEventListener("keydown", esc); };
+  const esc = (e) => e.key === "Escape" && close();
+  ov.querySelector(".scrim").onclick = close;
+  addEventListener("keydown", esc);
+}
+
+// Hover with the modifier held: show WHICH thing a press will take.
+addEventListener("pointermove", (e) => { if (!drag) markReach(e); });
+addEventListener("keydown", (e) => { if (e.key === "Meta" || e.key === "Control") markReach(last); });
+addEventListener("keyup", () => markReach(last));
+let last = { clientX: 0, clientY: 0, metaKey: false, ctrlKey: false };
+function markReach(e) {
+  last = e;
+  document.querySelectorAll(".reach").forEach((n) => n.classList.remove("reach"));
+  const card = document.elementFromPoint(e.clientX, e.clientY)?.closest(".card");
+  if (card && reach(e) && items.find((i) => i.id === card.dataset.id)?.parent) card.classList.add("reach");
+}
+
+let drag = null;
+canvas.addEventListener("pointerdown", (e) => {
+  const card = e.target.closest(".card"), title = e.target.closest(".title");
+  if (e.target.closest("button")) return;
+  if (card) {
+    const it = items.find((i) => i.id === card.dataset.id);
+    // Plain press on a member takes its group (today's root-scope rule);
+    // ⌘/Ctrl takes just the card, from any scope.
+    if (it.parent && !reach(e)) return startDrag(e, { kind: "group", id: it.parent });
+    return startDrag(e, { kind: "card", id: it.id, from: it.parent });
+  }
+  if (title) return startDrag(e, { kind: "group", id: title.parentElement.dataset.group });
+  selected = null; render();
+});
+
+function startDrag(e, what) {
+  e.preventDefault();
+  selected = what.id; render();
+  const start = { x: e.clientX, y: e.clientY };
+  const orig = what.kind === "card"
+    ? { x: items.find((i) => i.id === what.id).x, y: items.find((i) => i.id === what.id).y }
+    : { x: groups[what.id].x, y: groups[what.id].y, kids: members(what.id).map((i) => ({ i, x: i.x, y: i.y })) };
+  const el = what.kind === "card" ? canvas.querySelector(`.card[data-id="${what.id}"]`) : canvas.querySelector(`.group[data-group="${what.id}"]`);
+  let lifted = false, target;
+  const pill = document.createElement("div"); pill.className = "pill"; pill.hidden = true; document.body.appendChild(pill);
+  drag = true;
+  const move = (ev) => {
+    const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
+    // Lift only once it is really a drag (past 3px), never on a click.
+    if (!lifted && Math.hypot(dx, dy) > 3) { lifted = true; el.classList.add("lifted"); }
+    if (!lifted) return;
+    const snap = ev.shiftKey ? 22 : 1;
+    const nx = Math.round((orig.x + dx) / snap) * snap, ny = Math.round((orig.y + dy) / snap) * snap;
+    el.style.left = nx + "px"; el.style.top = ny + "px";
+    if (what.kind === "group") {
+      const g = groups[what.id]; g.x = nx; g.y = ny;
+      orig.kids.forEach(({ i, x, y }) => { i.x = x + nx - orig.x; i.y = y + ny - orig.y; const c = canvas.querySelector(`.card[data-id="${i.id}"]`); if (c) { c.style.left = i.x + "px"; c.style.top = i.y + "px"; } });
+      return;
+    }
+    // Where would it go? The frame under the POINTER, as isocan decides today.
+    document.querySelectorAll(".group.drop").forEach((n) => n.classList.remove("drop"));
+    el.style.pointerEvents = "none";
+    const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".group");
+    el.style.pointerEvents = "";
+    target = under ? under.dataset.group : null;
+    if (under && target !== what.from) under.classList.add("drop");
+    const label = target && target !== what.from ? `Add to ${groups[target].t}` : !target && what.from ? `Out of ${groups[what.from].t}` : "";
+    pill.hidden = !label; pill.textContent = label;
+    pill.style.left = ev.clientX + 14 + "px"; pill.style.top = ev.clientY + 16 + "px";
+  };
+  const up = () => {
+    removeEventListener("pointermove", move); removeEventListener("pointerup", up);
+    pill.remove(); drag = null;
+    if (what.kind === "card" && lifted) {
+      const it = items.find((i) => i.id === what.id);
+      it.x = parseFloat(el.style.left); it.y = parseFloat(el.style.top);
+      // One act: move + reparent (transform with containerId — null is the canvas).
+      it.parent = target ?? null;
+    }
+    // Set down: the shadow eases back to resting rather than snapping off.
+    el.classList.remove("lifted");
+    setTimeout(render, 170);
+  };
+  addEventListener("pointermove", move); addEventListener("pointerup", up);
+}
+
+render();
+</script>
+</body>
+</html>

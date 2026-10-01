@@ -9,9 +9,9 @@ what it describes. Run `node scripts/roadmap.mjs` after changing one.
 The same board lives on a canvas, [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),
 open to anyone with the address — it should say what `main` says.
 
-**43 built · 55 still open** — of which 46 partly
+**43 built · 56 still open** — of which 46 partly
 built, 9 designed, 0 blocked, and
-**0 with no verdict recorded at all**, which is the number worth
+**1 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
@@ -87,6 +87,12 @@ below counts the findings that name it.
 | research | [Retiring a name](research/2026-08-25-retiring-a-name.md) | 2026-08-29 | who may retire an actor without it becoming a way to take somebody's name. Recommends no retire verb at all — a claim that is stale AND not live stops holding its name, so nothing is added that anyone could point at another person — with a verb scoped to your own sessions only if still wanted afterwards. Not built; `allocateName` still reads no claim ages · [#140](https://github.com/dglazkov/isocan/issues/140) |
 | research | [Semantic zoom: what a canvas becomes when you stand back](research/2026-09-07-semantic-zoom.md) | 2026-09-07 | the canvas already does four kinds of zoom-responsive drawing and every one of them SUBTRACTS — the thing maps actually do is substitute, and that needs a unit to substitute for · see ui-refresh, mindmap · [#203](https://github.com/dglazkov/isocan/issues/203) |
 | **project** | [webmcp-cobrowsing](projects/webmcp-cobrowsing/journey.md) | 2026-09-11 | roadmap defined — the WebMCP surface is designed against the verified API and the existing @isocan/mcp vocabulary; design and phases follow the census-informed design · see iso-api, embed |
+
+## No verdict recorded <sub>1</sub>
+
+| | What | Since | |
+| --- | --- | --- | --- |
+| research | [Getting things in and out of groups, stacks, and the lift](research/2026-10-01-groups-stacks-lift.md) | 2026-10-01 | Four proposals for working with groups by hand, each checked against the code. (1) ⌘/Ctrl takes one item: hold it to aim at and drag a single member of a group from any scope, and drop it outside the frame to take it out. Today nothing can drag an item out of a group, because the frame grows to keep it. This needs no new op: transform with containerId already moves and reparents in one undo, and null means the canvas. (2) Stacks: a group shown as a slightly messy pile of cards, the top one upright in the middle and the rest turned and nudged behind it. The turns are seeded from each item's id, so every viewer sees the same pile. It fans into a hand of cards on hover and opens into a temporary grid on click. The layout is stored on the group and members keep their positions, so spreading the stack restores them exactly. (3) Lift: a new --shadow-lift token while dragging, with no scale and no offset, so where you see it is where it lands. (4) Others see the drag live: it travels on presence, not as ops, so nothing replays and a landed move cancels the live view. A prototype in groups-stacks/ shows the first three. · see canvas-groups |
 
 ## Built <sub>43</sub>
 
