@@ -1278,10 +1278,13 @@ img { height: auto; }
 .item.ink .ply { background: transparent; border-color: var(--line-soft); }
 /* Pointing at an item shows the box you would get, in the accent color that
    means "this one" everywhere else — a dashed preview of the solid outline a
-   click would give it. It matters most for a drawing, whose box is otherwise
+   click would give it. NOT `:hover` since groups-by-hand phase 2: `:hover`
+   is whatever element is under the pointer, so at the canvas level it
+   outlined a group's MEMBER while a click took the GROUP. `.hover-target` is
+   set from `aim` (core `groupAim`), the same answer the press reads. It matters most for a drawing, whose box is otherwise
    invisible, but a screenshot or a note earns the same courtesy.
    (Not while the Pen is up: there you are drawing over items, not aiming.) */
-.canvas-viewport:not(.pen) .item:hover {
+.canvas-viewport:not(.pen) .item.hover-target {
   /* Counter-scaled, like every other outline here (7 Sep 2026). This one was
      left in WORLD units when `.selected`, `.entered` and `.peeked` were fixed,
      so at 10% zoom a 1px dashed line is a tenth of a screen pixel and the
@@ -1296,9 +1299,20 @@ img { height: auto; }
   outline: calc(1px / var(--scale, 1)) dashed var(--accent);
   outline-offset: calc(2px / var(--scale, 1));
 }
-.canvas-viewport:not(.pen) .item.selected:hover { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
+.canvas-viewport:not(.pen) .item.selected.hover-target { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
+/* ⌘ held: the item it reaches is the target above; its group is drawn faint
+   and SOLID — "inside this", not "this" — and over a frame's open space the
+   members a selection box would reach are drawn dimly. */
+.canvas-viewport:not(.pen) .item.reach-inside:not(.selected) {
+  outline: calc(1px / var(--scale, 1)) solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: calc(2px / var(--scale, 1));
+}
+.canvas-viewport:not(.pen) .item.reach-among:not(.selected) {
+  outline: calc(1px / var(--scale, 1)) dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: calc(2px / var(--scale, 1));
+}
 /* …and pointing at a running item does not turn it back into a selected one. */
-.canvas-viewport:not(.pen) .item.entered:hover {
+.canvas-viewport:not(.pen) .item.entered.hover-target {
   /* Width only. Restating the COLOUR here would out-specify the keyframes on
      the hovered item and freeze the shimmer exactly when somebody is pointing
      at it. */
@@ -4258,6 +4272,12 @@ button.mt-card:hover { border-color: var(--accent); }
   pointer-events: none;
 }
 .item.area.selected { border-style: solid; }
+/* At the canvas level the open space inside a group's frame is the GROUP
+   (groups-by-hand phase 2): the hover outlines it, so a press there takes it.
+   Only for the Select tool — the Text tool, the Pen and a comment still reach
+   the canvas through it — and never the scope you are in, or a frame around
+   it, where that space is floor for a selection box (`pressable`, ItemView). */
+.canvas-viewport.own-cursor-on .item.canvas-group.pressable { pointer-events: auto; }
 .item.area .area-title,
 .item.area .item-titlebar,
 .item.area .resize-handle,
@@ -5135,6 +5155,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Explicit groups keep their world-space header and leave interiors available to tools. */
 .item.canvas-group .area-title { color: var(--ink); }
 .item.group-drop-target { outline: 3px solid var(--accent); }
+.group-drop-label.out { border-style: dashed; }
 .group-drop-label { position: absolute; right: 12px; top: 8px; padding: 4px 8px; background: var(--card); color: var(--accent-text); border: 1px solid var(--accent); border-radius: 6px; pointer-events: none; }
 .group-column-label, .group-row-label { position: absolute; padding: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); box-sizing: border-box; }
 .group-grid-cell { position: absolute; border: 1px dashed var(--line); box-sizing: border-box; }

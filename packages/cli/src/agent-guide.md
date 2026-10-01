@@ -1138,6 +1138,7 @@ isocan canvas group ls
 isocan text "Acme first sketch" --in Sketches
 isocan add sketch.html --in Sketches
 isocan mv <item> --in Sketches
+isocan mv <item> --out                     # one level up; --to-root for the canvas
 isocan ls --in Sketches                    # direct members; --recursive expands
 isocan tidy --in Sketches
 isocan canvas group grid Sketches 2x3 --rows "Draft,Review"
@@ -1204,7 +1205,10 @@ and ID prefixes must be unique, and ambiguities list candidates.
 Wrapping preserves the arrangement and keeps nested groups intact. Add
 preserves positions and fits the destination frame; `--place` finds room
 below its current members. `mv <item> --in <group> [--cell r,c] [--dry-run]` uses that same
-atomic add-and-place operation. Remove promotes each item to its group's
+atomic add-and-place operation, and `mv <item> --out [--to-root] [--dry-run]` is
+its twin, the same act as `group remove`: out to the group's parent, or with
+`--to-root` straight to the canvas, without moving. (A person does it by
+⌘-dragging the item off its frame, or ⌘⇧G on it, or *Move to canvas*.) Remove promotes each item to its group's
 parent, or directly to the canvas with `--to-root`; it preserves geometry.
 Ungroup trashes the frames and preserves their children. These are single
 undoable acts, including required ancestor frame changes. An overlapping
@@ -3625,7 +3629,7 @@ on the thread before putting one on somebody else's canvas,
 `design receipt [request] [--publish <file>]`,
 `design compare [request] [--publish <file>|--target <item>] [--option <id> --out <file>]`,
 `design respond <file> [--thread <id>] [--retry]`, `design decide <file> [--thread <id>] [--retry]`,
-`add [--drawing] [--visual]`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by] [--beside <item> --side left|right|above|below]`, `align`, `distribute`,
+`add [--drawing] [--visual]`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by] [--beside <item> --side left|right|above|below] [--in <group>|--out [--to-root]]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `docket` and `docket answer <finding> accepted|rejected [--because <words>]`
 (persona findings asked on the board — see **The roles you can take on**),

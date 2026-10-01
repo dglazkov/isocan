@@ -14,7 +14,7 @@ issue: 373
 remembered (opening is not); ⌘-drag-out lands where the pointer is; a plain
 drag never detaches.
 
-**Where we are, 1 Oct 2026: phase 1 is CLOSED (the lift). Next: groups-by-hand phase 2, ⌘ takes one item.**
+**Where we are, 1 Oct 2026: phases 1 and 2 are CLOSED (the lift; ⌘ takes one item). Next: groups-by-hand phase 3, others see the drag.**
 
 Two rules for every phase, on top of `AGENTS.md`:
 
@@ -49,7 +49,7 @@ without transition.
 
 ## Phase 2 — ⌘ takes one item
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 1 October 2026.** One function decides hover and press; ⌘-drag carries a member out to the canvas in one undo while a plain drag still grows the frame — the `group-reach` journey drove every case in Chrome and fails when the ⌘ destination is removed.
 
 **Outcome:** the research note's hover table, built: one function (from
 `scopedHit`) decides both the dashed outline and what a press takes, replacing
@@ -69,6 +69,13 @@ member, `isocan mv <item> --out [--to-root]`, the agent-guide line, and
    ⌘-hovers (member outlined), ⌘-drags a member out to the canvas (one item
    fewer, one undo restores it), and plain-drags one past the frame (still a
    member, frame grew).
+
+### Trajectory
+
+- **2026-10-01** — The hover outline is no longer CSS `:hover`: core's `groupAim` decides it and the press reads the same answer (`uiStore.aim`). Phase 4's stacks extend `groupAim` rather than adding a second notion of what the pointer means.
+- **2026-10-01** — A frame's open space now takes the pointer (`.pressable`, Select tool, never the current scope), so presses there reach the group's `ItemView`, which gives phase 4's stack footprint hit-testing for free.
+- **2026-10-01** — A core function used only by a lazy chunk still lands in the entry chunk while it shares a module with eager code; `groupAim` left the entry only in its own file (`group-aim.ts`). Phase 2 ends 62 bytes under the ceiling, so phases 3 and 4 must load lazily or pay it back.
+- **2026-10-01** — `mv --out` takes one item (like `mv --in`, positional); several go through `canvas group remove`. *Move to canvas* shows only for nested members, where it differs from *Remove from group*.
 
 ## Phase 3 — Others see the drag
 

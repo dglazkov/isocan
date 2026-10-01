@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyOperation, applyGroupChange, blobsNamedBy, buildRecap, harvestPreferences, captureGroupExpectations, GroupConflictError, groupArrangeAction, groupCellBox, groupDropPolicy, groupDropTarget, groupFitAction, groupGridNeedsRoom, groupPreviewBoxes, groupAncestors, groupChildren, groupContentBox, groupDescendants, groupFitBox, groupRemoveAction, groupResizeBox, groupScopedRoot, groupScopeRoots, groupSelectionRoots, groupTransform, groupTransformClosure, groupWrapAction, invertOperation, itemsTouchedBy, majors, resolveCanvasGroupRequest, resolveGroupOperation, validateGroupForest, weightOf } from "../src/index.ts";
+import { applyOperation, applyGroupChange, blobsNamedBy, groupAim, buildRecap, harvestPreferences, captureGroupExpectations, GroupConflictError, groupArrangeAction, groupCellBox, groupDropPolicy, groupDropTarget, groupFitAction, groupGridNeedsRoom, groupPreviewBoxes, groupAncestors, groupChildren, groupContentBox, groupDescendants, groupFitBox, groupRemoveAction, groupResizeBox, groupScopedRoot, groupScopeRoots, groupSelectionRoots, groupTransform, groupTransformClosure, groupWrapAction, invertOperation, itemsTouchedBy, majors, resolveCanvasGroupRequest, resolveGroupOperation, validateGroupForest, weightOf } from "../src/index.ts";
 import type { CanvasState, GroupAction, GroupBox, GroupChange, GroupOperation, LogEntry, Operation } from "../src/index.ts";
 import { activityOpType, lensActs, opWords } from "../src/index.ts";
 
@@ -502,4 +502,79 @@ it.each(["transform", "delete", "restore"] as const)("marks counted-grid %s prec
   if (result.op.action.kind !== "apply") throw new Error("not resolved");
   const { schemaVersion: _version, ...untagged } = result.op.action.change;
   expect(() => applyGroupChange(before, untagged, actor, ts)).toThrow(/preconditions require group schema v2/);
+});
+
+/**
+ * **Hover says what a press would take** (groups-by-hand phase 2): every row
+ * of the research note's table (docs/research/2026-10-01-groups-stacks-lift.md,
+ * "Hover says what a press would take"), through the one function the hover
+ * outline and the press both read.
+ */
+describe("groupAim — the hover outline and the press, one answer", () => {
+  // outer ⊃ inner ⊃ a, and b a direct member of outer, and loose on its own.
+  function nested(): CanvasState {
+    let state = wrap(card(), "inner", ["a"]).state;
+    state = ordinary(state, "b", { x: 700, y: 200, width: 200, height: 200 });
+    state = wrap(state, "outer", ["inner", "b"]).state;
+    return ordinary(state, "loose", { x: 3000, y: 3000, width: 100, height: 100 });
+  }
+  const at = (itemId: string) => ({ itemId });
+  const gap = (gapIn: string) => ({ gapIn });
+
+  it("at the canvas level: a member and the space between members both aim at the group", () => {
+    const { canvas } = nested();
+    expect(groupAim(canvas, at("b"), null, false)).toEqual({ itemId: "outer", inside: null, among: null });
+    expect(groupAim(canvas, gap("outer"), null, false)).toEqual({ itemId: "outer", inside: null, among: null });
+  });
+  it("at the canvas level with ⌘: a member aims at itself inside its group; the space aims a selection box at the members", () => {
+    const { canvas } = nested();
+    expect(groupAim(canvas, at("b"), null, true)).toEqual({ itemId: "b", inside: "outer", among: null });
+    expect(groupAim(canvas, gap("outer"), null, true)).toEqual({ itemId: null, inside: null, among: "outer" });
+  });
+  it("inside an entered group: a member aims at itself, and the space between is floor for a selection box", () => {
+    const { canvas } = nested();
+    expect(groupAim(canvas, at("b"), "outer", false)).toEqual({ itemId: "b", inside: null, among: null });
+    expect(groupAim(canvas, gap("outer"), "outer", false)).toEqual({ itemId: null, inside: null, among: null });
+  });
+  it("nested: the outermost group at the canvas level, the deepest item with ⌘, and a scope's own child frame is pressable", () => {
+    const { canvas } = nested();
+    expect(groupAim(canvas, at("a"), null, false).itemId).toBe("outer");
+    expect(groupAim(canvas, gap("inner"), null, false).itemId).toBe("outer");
+    expect(groupAim(canvas, at("a"), null, true)).toEqual({ itemId: "a", inside: "inner", among: null });
+    expect(groupAim(canvas, at("a"), "outer", false).itemId).toBe("inner");
+    expect(groupAim(canvas, gap("inner"), "outer", false).itemId).toBe("inner");
+    // Standing in the inner group, the outer frame around it is floor too.
+    expect(groupAim(canvas, gap("outer"), "inner", false).itemId).toBeNull();
+    expect(groupAim(canvas, at("a"), "inner", false).itemId).toBe("a");
+  });
+  it("outside the scope, aims where a press steps out to; a loose item is itself; nothing is nothing", () => {
+    const { canvas } = nested();
+    expect(groupAim(canvas, at("loose"), "inner", false).itemId).toBe("loose");
+    expect(groupAim(canvas, at("loose"), null, true)).toEqual({ itemId: "loose", inside: null, among: null });
+    expect(groupAim(canvas, at("b"), "inner", false).itemId).toBe("outer");
+    expect(groupAim(canvas, null, null, false)).toEqual({ itemId: null, inside: null, among: null });
+    expect(groupAim(canvas, at("gone"), null, false).itemId).toBeNull();
+    expect(groupAim(canvas, gap("outer"), "gone", false).itemId).toBe("outer");
+  });
+});
+
+describe("⌘-drag out: one transform with containerId", () => {
+  it("moves a member out onto the canvas, marks and all, as one undo", () => {
+    const marked = ordinary(card(), "ink", { x: 120, y: 220, width: 50, height: 50 }, { kind: "drawing", annotates: "a" });
+    const state = wrap(marked, "g", ["a"]).state;
+    expect(state.canvas.items.ink?.containerId).toBe("g");
+    const before = state;
+    const action: GroupAction = { kind: "transform", itemIds: ["a"], by: { x: 2000, y: 0 }, containerId: null, groupPlacement: "preserve", expected: captureGroupExpectations(state, ["a"]) };
+    const preview = groupPreviewBoxes(state, action);
+    const out = change(state, action);
+    for (const [id, box] of preview) expect(out.state.canvas.items[id]).toMatchObject(box);
+    expect(out.state.canvas.items.a?.containerId ?? null).toBeNull();
+    expect(out.state.canvas.items.ink?.containerId ?? null).toBeNull();
+    expect(out.state.canvas.items.a!.x).toBe(2100);
+    expect(out.state.canvas.items.ink!.x).toBe(2120);
+    expect(groupChildren(out.state.canvas, "g")).toHaveLength(0);
+    const back = undo(out.state, out.inverse);
+    expect(back.canvas.items.a?.containerId).toBe("g");
+    expect(boxes(back)).toEqual(boxes(before));
+  });
 });

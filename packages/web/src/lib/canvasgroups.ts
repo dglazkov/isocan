@@ -131,3 +131,14 @@ export function leaveGroupAtPoint(world: { x: number; y: number }): void {
   const active = ui.activeGroupId ? useCanvasStore.getState().canvas?.items[ui.activeGroupId] : null;
   if (active && (world.x < active.x || world.y < active.y || world.x > active.x + active.width || world.y > active.y + active.height)) ui.setActiveGroup(null);
 }
+
+/** A frame's own handles: the parts of a group that are the group, not the
+ * open space inside it. */
+const HANDLES = ".area-title, .group-border, .group-brief, .resize-handle, .item-titlebar, .version-badge";
+/** The group whose open space (between its members) this element is, or null.
+ * Eager, because the press reads it; the hover's `aim.ts` is lazy. */
+export function frameGap(target: EventTarget | null): string | null {
+  const el = target as HTMLElement | null;
+  const frame = el?.closest?.(".item.canvas-group");
+  return frame && !el!.closest(HANDLES) ? frame.getAttribute("data-item-id") : null;
+}

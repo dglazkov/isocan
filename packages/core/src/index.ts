@@ -25,6 +25,7 @@ export * from "./placement.ts";
 export * from "./area.ts";
 export * from "./canvas-group-types.ts";
 export * from "./canvas-groups.ts";
+export * from "./group-aim.ts";
 export * from "./canvas-scope.ts";
 export * from "./canvas-group-create.ts";
 export * from "./canvasitem.ts";

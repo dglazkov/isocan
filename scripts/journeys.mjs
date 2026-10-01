@@ -984,6 +984,176 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "group-reach",
+    /**
+     * **⌘ takes one item** (groups-by-hand phase 2), driven with real CDP
+     * mouse and key events carrying the modifier. Hover says what a press
+     * would take — the group, over a member AND over the space between
+     * members — and ⌘ moves the outline to the member, live as the key goes
+     * down under a still pointer. A ⌘-drag carries a member out onto the open
+     * canvas under an *Out of …* label, as one act that one ⌘Z undoes; a plain
+     * drag past the frame keeps the member and grows the frame.
+     *
+     * ⌘ on a Mac, Ctrl elsewhere: the browser runs on this machine, so this
+     * machine's platform is the page's (`reachHeld` in core). Asserted as
+     * STATE — classes in the DOM, membership and boxes the server holds.
+     */
+    what: "hover outlines what a press takes; ⌘ reaches one member and drags it out (one undo back); a plain drag keeps it and grows the frame",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme reach");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-reach-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      /** Poll the home until it says so — the op lands after the release. */
+      const home = async (read, want, what, ms = 8000) => {
+        const deadline = Date.now() + ms;
+        for (;;) {
+          const got = read();
+          if (want(got)) return got;
+          if (Date.now() > deadline) throw new Error(`never became true: ${what} (the home says ${JSON.stringify(got)})`);
+          await sleep(200);
+        }
+      };
+      runCli("identity", "--session", "--name", "Acme Reach CLI");
+      const MOD = process.platform === "darwin" ? 4 : 2;
+      const MOD_KEY = process.platform === "darwin"
+        ? { key: "Meta", code: "MetaLeft", windowsVirtualKeyCode: 91 }
+        : { key: "Control", code: "ControlLeft", windowsVirtualKeyCode: 17 };
+
+      // Two cards with a clear gap between them, wrapped in one group, with
+      // open canvas to the right to drag a member out onto.
+      const spot = await openSpot(rig, 620, 300);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 40 - world.left) / world.scale), wy = Math.round((spot.y + 110 - world.top) / world.scale);
+      const one = runCli("--canvas", id, "text", "Acme one", "--at", `${wx},${wy}`, "--size", "120x80").itemId;
+      const two = runCli("--canvas", id, "text", "Acme two", "--at", `${wx + 240},${wy}`, "--size", "120x80").itemId;
+      let wrapped;
+      try { wrapped = runCli("--canvas", id, "canvas", "group", "wrap", one, two, "--title", "Acme group"); }
+      catch {
+        const preview = runCli("--canvas", id, "canvas", "group", "migrate", "--dry-run");
+        runCli("--canvas", id, "canvas", "group", "migrate", "--revision", String(preview.revision));
+        wrapped = runCli("--canvas", id, "canvas", "group", "wrap", one, two, "--title", "Acme group");
+      }
+      const group = wrapped.itemId ?? wrapped.groupId;
+      if (!group) throw new Error(`wrap returned no group id: ${JSON.stringify(wrapped).slice(0, 200)}`);
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      for (const itemId of [group, one, two]) {
+        await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to arrive on the canvas`);
+        await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(itemId)})).transform)`, `${itemId} to come to rest`);
+      }
+      await rig.type("v");
+      const rect = (itemId) => b.ev(`(() => { const r = document.querySelector(${sel(itemId)}).getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, w: r.width, h: r.height, cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + r.height / 2) }; })()`);
+      const mouse = (type, x, y, { buttons = 0, modifiers = 0 } = {}) => b.send("Input.dispatchMouseEvent", {
+        type, x, y, modifiers, buttons, button: type === "mouseMoved" && !buttons ? "none" : "left", clickCount: type === "mouseMoved" ? 0 : 1,
+      });
+      const has = (itemId, cls, what) => until(b, `!!document.querySelector(${sel(itemId)})?.classList.contains(${JSON.stringify(cls)})`, what, 3000);
+      const lacks = async (itemId, cls, what) => {
+        if (await b.ev(`!!document.querySelector(${sel(itemId)})?.classList.contains(${JSON.stringify(cls)})`)) throw new Error(what);
+      };
+      const parentOf = (itemId) => runCli("--canvas", id, "show", itemId).containerId ?? null;
+      const members = () => runCli("--canvas", id, "ls", "--in", group).map((row) => row.id ?? row.itemId).sort();
+
+      // 1. At the canvas level, pointing at a member outlines the GROUP.
+      const r1 = await rect(one), r2 = await rect(two);
+      await mouse("mouseMoved", r1.cx, r1.cy);
+      await has(group, "hover-target", "pointing at a member at the canvas level to outline its group");
+      await lacks(one, "hover-target", "pointing at a member outlined the member, while a press takes the group");
+
+      // 2. …and so does the open space between the members, which takes the
+      // pointer there now.
+      const gap = { x: Math.round((r1.right + r2.left) / 2), y: r1.cy };
+      const under = await b.ev(`document.elementFromPoint(${gap.x}, ${gap.y})?.closest("[data-item-id]")?.getAttribute("data-item-id") ?? null`);
+      if (under !== group) throw new Error(`the space between members does not take the pointer for the group (under it: ${under})`);
+      await mouse("mouseMoved", gap.x, gap.y);
+      await mouse("mouseMoved", gap.x + 2, gap.y);
+      await has(group, "hover-target", "pointing at the space between members to outline the group");
+
+      // 3. ⌘ moves the outline to the member, and the group reads "inside this".
+      await mouse("mouseMoved", r1.cx, r1.cy, { modifiers: MOD });
+      await has(one, "hover-target", "⌘ over a member to outline the member");
+      await has(group, "reach-inside", "⌘ over a member to draw its group faint, as the thing it is inside");
+      await lacks(group, "hover-target", "⌘ over a member still outlined the group");
+      // Live: ⌘ going up and down under a pointer that does not move.
+      await mouse("mouseMoved", r1.cx + 1, r1.cy);
+      await has(group, "hover-target", "letting go of ⌘ to put the outline back on the group");
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: MOD, ...MOD_KEY });
+      await has(one, "hover-target", "pressing ⌘ under a still pointer to move the outline to the member");
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 0, ...MOD_KEY });
+      await has(group, "hover-target", "releasing ⌘ under a still pointer to move the outline back");
+      // ⌘ over the space between members: the members, dimly; a press there
+      // is a selection box among them, not a grab of the group.
+      await mouse("mouseMoved", gap.x, gap.y, { modifiers: MOD });
+      await has(two, "reach-among", "⌘ over the space between members to show the members a selection box would reach");
+      await mouse("mousePressed", gap.x, gap.y, { buttons: 1, modifiers: MOD });
+      for (let s = 1; s <= 4; s++) { await mouse("mouseMoved", gap.x + Math.round(((r2.cx - gap.x) * s) / 4), gap.y + Math.round(((r2.bottom + 6 - gap.y) * s) / 4), { buttons: 1, modifiers: MOD }); await sleep(30); }
+      await mouse("mouseReleased", r2.cx, r2.bottom + 6, { modifiers: MOD });
+      await has(two, "selected", "a ⌘ selection box from the space between members to select the member it crosses");
+      await lacks(group, "selected", "a ⌘ press on the space between members took the group instead of starting a selection box");
+      await lacks(one, "selected", "the ⌘ selection box selected a member it never crossed");
+
+      // 4. ⌘-drag the member out onto open canvas: the label says so first.
+      const frame0 = runCli("--canvas", id, "show", group);
+      const at0 = runCli("--canvas", id, "show", one);
+      const fr = await rect(group);
+      const out = { x: Math.round(fr.right + 140), y: r1.cy };
+      await mouse("mousePressed", r1.cx, r1.cy, { buttons: 1, modifiers: MOD });
+      for (let s = 1; s <= 8; s++) {
+        await mouse("mouseMoved", Math.round(r1.cx + ((out.x - r1.cx) * s) / 8), out.y, { buttons: 1, modifiers: MOD });
+        await sleep(40);
+      }
+      try {
+        await until(b, `document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .group-drop-label.out`)})?.textContent === "Out of Acme group"`, "the Out of Acme group label before letting go", 3000);
+      } catch (err) {
+        await mouse("mouseReleased", out.x, out.y, { modifiers: MOD });
+        throw err;
+      }
+      await mouse("mouseReleased", out.x, out.y, { modifiers: MOD });
+      await home(() => parentOf(one), (parent) => parent === null, "the ⌘-dragged member to be on the canvas, out of its group");
+      const left = members();
+      if (left.length !== 1 || left[0] !== two) throw new Error(`the group should hold one item fewer, just ${two}; it holds ${JSON.stringify(left)}`);
+      const landed = runCli("--canvas", id, "show", one);
+      if (landed.x <= frame0.x + frame0.width) throw new Error(`the member did not land where the pointer was, out past the frame (x ${landed.x}, frame ends ${frame0.x + frame0.width})`);
+
+      // …and one ⌘Z puts it back: in the group, where it was.
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+      const back = await home(() => runCli("--canvas", id, "show", one), (item) => item.containerId === group, "one undo to put the member back in its group");
+      if (back.x !== at0.x || back.y !== at0.y) throw new Error(`undo restored membership but not the place (${back.x},${back.y}, was ${at0.x},${at0.y})`);
+
+      // 5. A plain drag never detaches. ⌘-click steps into the group (a plain
+      // press at the canvas level takes the group), then a plain drag of the
+      // member past the frame's left edge keeps it a member and grows the frame.
+      await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(one)})).transform)`, "the member to come to rest after the undo");
+      const r3 = await rect(one);
+      await mouse("mousePressed", r3.cx, r3.cy, { buttons: 1, modifiers: MOD });
+      await mouse("mouseReleased", r3.cx, r3.cy, { modifiers: MOD });
+      await has(one, "selected", "⌘-click to select just the member");
+      await lacks(group, "selected", "⌘-click selected the group");
+      const frame1 = runCli("--canvas", id, "show", group);
+      const past = { x: Math.round((await rect(group)).left - 90), y: r3.cy };
+      await mouse("mousePressed", r3.cx, r3.cy, { buttons: 1 });
+      for (let s = 1; s <= 8; s++) {
+        await mouse("mouseMoved", Math.round(r3.cx + ((past.x - r3.cx) * s) / 8), past.y, { buttons: 1 });
+        await sleep(40);
+      }
+      const outLabel = await b.ev(`!!document.querySelector(".group-drop-label.out")`);
+      await mouse("mouseReleased", past.x, past.y);
+      if (outLabel) throw new Error("a plain drag past the frame offered to take the member out");
+      const grown = await home(() => runCli("--canvas", id, "show", group), (frame) => frame.x < frame1.x, "the frame to grow to keep the plainly dragged member");
+      if (parentOf(one) !== group) throw new Error("a plain drag past the frame detached the member");
+      return { modifier: MOD === 4 ? "meta" : "ctrl", frameBefore: { x: frame1.x, width: frame1.width }, frameAfter: { x: grown.x, width: grown.width }, outAt: { x: landed.x, y: landed.y } };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**

@@ -1,9 +1,23 @@
 import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, isGroupItem } from "@isocan/core";
-import { groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
+import { frameGap, groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
+/** The hover outline's module (`lib/aim.ts`), fetched on the first pointer move
+ * over the canvas and kept: hover may arrive a frame late; a press never waits. */
+let aimModule: typeof import("../lib/aim.ts") | null = null;
+let aimLoading = false;
+let aimPending: ((aim: typeof import("../lib/aim.ts")) => void) | null = null;
+function withAim(then: (aim: typeof import("../lib/aim.ts")) => void): void {
+  if (aimModule) { then(aimModule); return; }
+  // The latest ask waits for the module and runs when it lands, so the very
+  // first hover still gets its outline without another move.
+  aimPending = then;
+  if (aimLoading) return;
+  aimLoading = true;
+  void import("../lib/aim.ts").then((loaded) => { aimModule = loaded; aimPending?.(loaded); aimPending = null; }, () => { aimLoading = false; });
+}
 import { Suspense, forwardRef, lazy, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { groundIsPlace, hasGround, isArea, parseUriList } from "@isocan/core";
+import { groundIsPlace, hasGround, isArea, parseUriList, reachHeld } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
@@ -382,6 +396,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     }
 
     function down(e: KeyboardEvent) {
+      withAim((aim) => aim.aimKeys(e)); // ⌘ under a still pointer re-aims the hover
       if (isTyping(e.target)) return;
       if (e.code === "Space" && spacePrevTool.current === null) {
         const ui = useUiStore.getState();
@@ -428,6 +443,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       }
     }
     function up(e: KeyboardEvent) {
+      withAim((aim) => aim.aimKeys(e));
       const held = holdTool.current;
       if (held && e.code === held.code) {
         const ui = useUiStore.getState();
@@ -626,7 +642,10 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
 
   function onPointerDown(e: React.PointerEvent) {
     stopGlide();
-    const isBackground = Boolean(onPlanItem) || e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
+    // A frame's open space reaches here only when the item yielded it: ⌘ is
+    // held (a selection box among its members), or the tool is not Select.
+    const gapIn = frameGap(e.target);
+    const isBackground = Boolean(onPlanItem) || e.target === ref.current || (e.target as HTMLElement).classList.contains("world") || gapIn !== null;
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
     // through activeTool too.) The Hand tool pans from anywhere — an item
     // yields its pointer when it is active — so it is not gated on background.
@@ -995,6 +1014,10 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     const ui = useUiStore.getState();
     const additive = e.shiftKey;
     const startWorld = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    // ⌘ over a frame's open space: a selection box among ITS members, so the
+    // scope steps into that frame first (groups-by-hand phase 2).
+    const into = reachHeld(e) && canvas && groupsEnabled() ? groupDropTarget(canvas, startWorld, []) : null;
+    if (into && into.id !== ui.activeGroupId) ui.setActiveGroup(into.id);
     leaveGroupAtPoint(startWorld);
     // Leaving scope clears its child selection before Shift captures a base.
     const baseSelection = additive ? useUiStore.getState().selectedItemIds : [];
@@ -1191,8 +1214,10 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       onPointerMove={(e) => {
         const ui = useUiStore.getState();
         publishCursor(currentPresentation() ? null : screenToWorld(ui.viewport, e.clientX, e.clientY));
+        const at = { clientX: e.clientX, clientY: e.clientY, target: e.target, buttons: e.buttons, pointerType: e.pointerType, metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+        withAim((aim) => aim.aimPointer(at));
       }}
-      onPointerLeave={() => publishCursor(null)}
+      onPointerLeave={() => { publishCursor(null); withAim((aim) => aim.aimNowhere()); }}
       /**
        * **Every finger that goes down has to come back up** (#182 stage 0).
        *

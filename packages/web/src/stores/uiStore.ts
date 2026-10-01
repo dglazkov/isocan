@@ -1,4 +1,4 @@
-import type { CursorSignal, GroupBox, TextAnchor } from "@isocan/core";
+import type { CursorSignal, GroupAim, GroupBox, TextAnchor } from "@isocan/core";
 import { create } from "zustand";
 import { shallow } from "zustand/shallow";
 import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper, TextColourValue } from "@isocan/core";
@@ -113,6 +113,13 @@ interface UiStore {
    * frame and not its members. A resize or a keyboard nudge never lifts. */
   groupPreview: { id: string; boxes: ReadonlyMap<string, GroupBox>; lift?: readonly string[] } | null;
   groupDropTargetId: string | null;
+  /** A ⌘-drag that would put its items on the open canvas: the group they
+   * leave, which wears the *Out of …* pill. Cleared with the drop target. */
+  groupDropOutId: string | null;
+  /** What a press here would take — the dashed outline — and, with ⌘, the
+   * group around it or the members a selection box would reach. One answer,
+   * `groupAim` in core, read by the hover and the press alike. */
+  aim: GroupAim | null;
   marquee: MarqueeState | null;
   /** Alignment guides for the drag in hand: the lines the dragged box has
    * settled onto. World coordinates; empty when nothing is aligned. */
@@ -323,7 +330,8 @@ interface UiStore {
   setDrag: (drag: DragState | null) => void;
   setResize: (resize: ResizeState | null) => void;
   setGroupPreview: (preview: UiStore["groupPreview"]) => void;
-  setGroupDropTarget: (itemId: string | null) => void;
+  setGroupDropTarget: (itemId: string | null, outOf?: string | null) => void;
+  setAim: (aim: GroupAim | null) => void;
   setMarquee: (marquee: MarqueeState | null) => void;
   setGuides: (guides: Guide[], spacing?: SpacingGuide[]) => void;
   setEntered: (itemId: string | null) => void;
@@ -679,6 +687,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     resize: null,
     groupPreview: null,
     groupDropTargetId: null,
+    groupDropOutId: null,
+    aim: null,
     marquee: null,
     guides: [],
     spacing: [],
@@ -762,7 +772,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     setDrag: (drag) => set({ drag }),
     setResize: (resize) => set({ resize }),
     setGroupPreview: (groupPreview) => set({ groupPreview }),
-    setGroupDropTarget: (groupDropTargetId) => set({ groupDropTargetId }),
+    setGroupDropTarget: (groupDropTargetId, groupDropOutId = null) => set({ groupDropTargetId, groupDropOutId }),
+    setAim: (aim) => set({ aim }),
     setMarquee: (marquee) => set({ marquee }),
     setGuides: (guides, spacing = []) => set({ guides, spacing }),
     setEntered: (enteredItemId) => set({ enteredItemId }),

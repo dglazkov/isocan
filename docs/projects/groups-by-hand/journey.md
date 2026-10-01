@@ -2,7 +2,7 @@
 status: partial
 since: 2026-10-01
 see: canvas-groups
-note: "Working with groups by hand, as scenes: hover that says what a press takes, ⌘ that takes one item and lets it leave, a lift while you drag, a drag others watch live, and a group shown as a stack. The design and its evidence are docs/research/2026-10-01-groups-stacks-lift.md; the walk is phases.md. Phase 1 (the lift) closed 1 Oct 2026."
+note: "Working with groups by hand, as scenes: hover that says what a press takes, ⌘ that takes one item and lets it leave, a lift while you drag, a drag others watch live, and a group shown as a stack. The design and its evidence are docs/research/2026-10-01-groups-stacks-lift.md; the walk is phases.md. Phases 1 (the lift) and 2 (⌘ takes one item, hover that says what a press takes) closed 1 Oct 2026."
 issue: 373
 ---
 

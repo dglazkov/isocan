@@ -7326,7 +7326,9 @@ program
   .option("--beside <item>", "put it next to this item, clear of it by the standard gap")
   .option("--side <side>", "with --beside: left | right | above | below (default: right)")
   .option("--in <group>", "move into a canvas group atomically, or into an area on a legacy canvas")
-  .option("--dry-run", "with group --in: report resolved membership and placement without writing")
+  .option("--out", "take it out of its canvas group, to that group's parent; where it is stays put")
+  .option("--to-root", "take it out of every group, straight to the canvas (implies --out)")
+  .option("--dry-run", "with group --in or --out: report resolved membership and placement without writing")
   .option("--cell <row,col>", "with --in: into one cell of the sheet's grid, counted from 1")
   .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
@@ -7335,7 +7337,7 @@ program
         ref: string,
         x: string | undefined,
         y: string | undefined,
-        opts: { by?: string; in?: string; cell?: string; dryRun?: boolean; beside?: string; side?: string },
+        opts: { by?: string; in?: string; out?: boolean; toRoot?: boolean; cell?: string; dryRun?: boolean; beside?: string; side?: string },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
@@ -7378,6 +7380,16 @@ program
             ctx,
             await new CanvasGroups(ctx.client, p.id, () => ctx.actor).move(ref, { at: beside }, opts),
           );
+        }
+        /**
+         * **Out, the twin of `--in`** (groups-by-hand phase 2): one level up,
+         * or with `--to-root` straight to the canvas. The web's ⌘-drag,
+         * ⌘⇧G and *Move to canvas* are the same act; `group remove` does it.
+         */
+        if (opts.out || opts.toRoot) {
+          if (opts.in !== undefined || opts.beside !== undefined || opts.by !== undefined || x !== undefined || y !== undefined || opts.cell) throw new Error("--out keeps the item where it is; omit coordinates, --by, --beside, --in and --cell");
+          if (snapshot.project.groupMode !== "groups") throw new Error("--out needs a canvas with groups — `isocan canvas group migrate --dry-run` previews converting this one");
+          return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).remove([ref], { toRoot: !!opts.toRoot, dryRun: !!opts.dryRun }));
         }
         if (opts.in !== undefined && snapshot.project.groupMode === "groups") {
           if (opts.by !== undefined || x !== undefined || y !== undefined) throw new Error("--in chooses placement; omit coordinates and --by");

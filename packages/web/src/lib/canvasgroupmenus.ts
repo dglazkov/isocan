@@ -32,6 +32,9 @@ export function canvasGroupEntries(items: Item[], ctx: { canvasId: string; actor
     { label: items.some((item) => item.containerId) ? "Move to group…" : "Add to group…", writes: true, disabled: ids.length === 0, ...(!enabled ? { value: "Preview conversion first" } : {}), run: () => openGroupAddition(ids) },
     ...(one?.containerId ? [{ label: "Select parent group", run: () => selectParentGroup(one.id) }] : []),
     ...(members.length ? [{ label: members.length === ids.length ? "Remove from group" : `Remove ${members.length} ${members.length === 1 ? "member" : "members"} from group`, writes: true, run: () => groupTask(() => removeFromCanvasGroup(ctx.canvasId, ctx.actor, members.map((item) => item.id))) }] : []),
+    // The web door for `toRoot`: straight to the canvas from any depth. Only
+    // where it differs from the entry above — a member of a nested group.
+    ...(members.some((item) => item.containerId && useCanvasStore.getState().canvas?.items[item.containerId]?.containerId) ? [{ label: "Move to canvas", writes: true, run: () => groupTask(() => removeFromCanvasGroup(ctx.canvasId, ctx.actor, members.map((item) => item.id), true)) }] : []),
     ...(one && annotationTarget(one) ? [{ label: "Detach from annotated item", writes: true, run: () => groupTask(() => detachGroupInk(ctx.canvasId, ctx.actor, one)) }] : []),
   ];
 }

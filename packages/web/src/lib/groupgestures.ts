@@ -80,9 +80,11 @@ export function beginGroupGesture(itemIds: string[], onInterrupt?: () => void) {
     /** The press has become a drag: the roots wear the lift from the next
      * preview on. Only a pointer drag calls it — a nudge is not held. */
     lift(): void { lifted = roots; },
-    move(dx: number, dy: number, containerId?: string, groupPlacement: GroupPlacementPolicy = "preserve"): void {
+    /** `containerId` names a destination: a group, or `null` for the open
+     * canvas (a ⌘-drag out). Left out, the roots keep their parents. */
+    move(dx: number, dy: number, containerId?: string | null, groupPlacement: GroupPlacementPolicy = "preserve"): void {
       if (containerId && !destinationExpected.has(containerId)) destinationExpected.set(containerId, captureGroupExpectations(start, [...roots, containerId]));
-      preview({ kind: "transform", itemIds: roots, by: { x: dx, y: dy }, expected: containerId ? destinationExpected.get(containerId)! : expected, ...(containerId ? { containerId, groupPlacement } : {}) });
+      preview({ kind: "transform", itemIds: roots, by: { x: dx, y: dy }, expected: containerId ? destinationExpected.get(containerId)! : expected, ...(containerId !== undefined ? { containerId, groupPlacement } : {}) });
     },
     resize(itemId: string, width: number, height: number, anchor: GroupAnchor, aspect = false): void {
       const item = canvas!.items[itemId];
@@ -103,7 +105,7 @@ export function beginGroupGesture(itemIds: string[], onInterrupt?: () => void) {
       try {
         const result = await sendEchoedResult(canvasId, actor, { type: "group.change", action }, undefined, project.groupMode);
         if (result.status !== "accepted" && active() && useCanvasStore.getState().canvasId === canvasId) setNotice(result.message || "This group change is queued until the home is reachable.");
-        else if (active() && useCanvasStore.getState().canvasId === canvasId && action.containerId) {
+        else if (active() && useCanvasStore.getState().canvasId === canvasId && action.containerId !== undefined) {
           const ui = useUiStore.getState();
           ui.setActiveGroup(action.containerId);
           ui.setSelection(roots);

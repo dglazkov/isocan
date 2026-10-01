@@ -1,7 +1,7 @@
 import { selectCreatedItems } from "../lib/groupplacement.ts";
 import { createGroupNudger } from "../lib/groupgestures.ts";
 import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
-import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask } from "../lib/canvasgroups.ts";
+import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask, removeFromCanvasGroup } from "../lib/canvasgroups.ts";
 import { CanvasGroupScope } from "../components/CanvasGroupScope.tsx";
 import { presentedCanvas, presentedLocus } from "../lib/presentation.ts";
 import { currentPresentation } from "../lib/canvasPresentation.ts";
@@ -772,9 +772,14 @@ function CanvasSurface({
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "g") {
         e.preventDefault();
         if (e.shiftKey) {
-          const groups = ui.selectedItemIds.filter((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); });
+          const items = useCanvasStore.getState().canvas?.items ?? {};
+          const groups = ui.selectedItemIds.filter((id) => { const item = items[id]; return item && isGroupItem(item); });
+          // On a member rather than a group, the same intent one level down:
+          // take it out, to its group's parent (groups-by-hand phase 2).
+          const members = ui.selectedItemIds.filter((id) => items[id]?.containerId);
           if (groups.length) groupTask(() => changeCanvasGroup(canvasId!, actor, { kind: "ungroup", itemIds: groups }));
-          else setNotice("Select a group to ungroup.");
+          else if (members.length) groupTask(() => removeFromCanvasGroup(canvasId!, actor, members));
+          else setNotice("Select a group to ungroup, or a member to take out.");
         } else if (ui.selectedItemIds.length) openGroupCreation(ui.selectedItemIds);
         else setNotice("Select items to group first.");
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
