@@ -48,6 +48,13 @@ jobs:
       # has no mention of LOOP_API_KEY (its strings say so); older builds read
       # LOOP_API_KEY. One secret, both names, so either build can see it.
       STITCH_API_KEY: ${{ secrets.LOOP_API_KEY }}
+      # The Linux build defaults to the Stitch Canvas API (stitch.googleapis.com);
+      # the key here is Loop's, and Loop lives at jules.googleapis.com, which is
+      # what the build on the Mac this was made on is configured for. Sent to the
+      # wrong host the run (2 Oct, second try) died with 'Stitch API has not been
+      # used in project ... or it is disabled'. Both names, as with the key.
+      STITCH_BASE_URL: https://jules.googleapis.com/v2alpha
+      LOOP_BASE_URL: https://jules.googleapis.com/v2alpha
       STITCH_INSTALLER_URL: ${{ secrets.STITCH_INSTALLER_URL }}
     steps:
       - id: configured

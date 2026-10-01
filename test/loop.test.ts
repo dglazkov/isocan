@@ -90,6 +90,9 @@ describe("the Loop findings are derived, not written", () => {
       /STITCH_API_KEY: \$\{\{ secrets\.LOOP_API_KEY \}\}/,
     );
     expect(yml).toContain("secrets.STITCH_INSTALLER_URL");
+    expect(yml, "the Loop key goes to Loop's host, not the Canvas API the Linux build defaults to").toContain(
+      "STITCH_BASE_URL: https://jules.googleapis.com/v2alpha",
+    );
     expect(yml, "the merge is checked on the branch, not trusted").toMatch(/render --check[\s\S]*vitest run/);
   });
 });
