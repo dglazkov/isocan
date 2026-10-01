@@ -1,0 +1,1 @@
+import{cZ as o,c_ as r,h as a}from"./index-Kotca_dw.js";async function i(t,e){await o(null,t,{type:"actor.setColor",actorId:t.id,color:e});const s={...a.getState().actorColors};e===null?delete s[t.id]:s[t.id]=e,a.setState({actorColors:s})}async function l(t,e,s=t){await o(null,t,{type:"actor.setMark",actorId:s.id,mark:e}),r(s.id,e)}export{i as a,l as s};
