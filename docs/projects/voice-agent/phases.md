@@ -3,7 +3,7 @@
 **11 September 2026.** The implementation walk for [design.md](design.md),
 guided by the acceptance criteria in [journey.md](journey.md).
 
-**Where we are, 23 Sep 2026: phases 1–5 are PART-DONE (the 18 Sep reconciliation below); phase 6 is CLOSED — the fast path runs in shadow and Jev agrees with the meant act ~95% of the time on scripted commands. Next: voice-agent phase 7**, the fast path acting, starting with `move`.
+**Where we are, 30 Sep 2026: phases 1–5 are PART-DONE (the 18 Sep reconciliation below); phase 6 is CLOSED; phase 7 is PART-DONE — the fast path acts on `move` behind an off-by-default switch, and a spoken "undo" in the browser now retracts. What waits is a person: the ten-command microphone walk (`docs/verify/2026-09-30-voice-fast-path-acting.md`), which is also the first reading of the hold, the quiet and the model path's latency. No phase is written after 7; the next measured act (delete, shrink, select or show past n = 30) is a line in `thresholds.ts`, not a phase.**
 
 **Where we are (reconciled 18 Sep 2026): most of this walk is built, and it was
 not built in this order.** The system was re-implemented and landed as
@@ -214,12 +214,12 @@ and the threshold at which agreement reaches 95% on at least 30 commands.
 - **2026-09-23** — On commands Jev is *under*-confident (ECE ~0.19; right 98–100% above p 0.7) — the opposite of the wireframe archetypes, so calibration is per question, never borrowed. `move` meets 95%-on-30 at p ≥ 0.60 today; `delete`, `shrink`, `select`, `show` are at 100% but short of n = 30.
 - **2026-09-23** — `resize` split into `grow`/`shrink` (Jev chooses, it does not count); numbers and single axes ("300 pixels", "400 by 800") must escalate. Never fast-path: aligns, multi-item acts, "into a group", colour words the canvas does not name, version switches.
 - **2026-09-23** — The Jev client moved to `@isocan/core/jev` (a subpath) for its second caller; the wireframe answerer re-exports it.
-- **2026-09-23** — Open: the entry chunk grew 79 bytes (two lazy-chunk file names in the entry's preload list), to 728,446 — now 646 over CEILING, joining wireframes phase 5's 567 in the one answer owed to Dion.
-- **2026-09-23** — Open: phase 7 must first read, from a real record, whether the transcript finishes before the model's first tool call; if not, it holds the model's calls until Jev answers rather than racing it. The browser `undo` tool is still refused (no web retract) — the fast path's own undo needs that first.
+- **2026-09-23** — Paid (30 Sep: the chunk is 698,503 under a 701,300 ceiling). Was: the entry chunk grew 79 bytes (two lazy-chunk file names in the entry's preload list), to 728,446 — now 646 over CEILING, joining wireframes phase 5's 567 in the one answer owed to Dion.
+- **2026-09-23** — Answered by phase 7 (30 Sep: the hold, and `WebHost.retract`). Was: phase 7 must first read, from a real record, whether the transcript finishes before the model's first tool call; if not, it holds the model's calls until Jev answers rather than racing it. The browser `undo` tool is still refused (no web retract) — the fast path's own undo needs that first.
 
 ## Phase 7 — The fast path acts
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 30 September 2026.** On a fresh local daemon, 197 scripted commands: 63 acted, 61 the act meant, 63/63 one operation that one retract restored, 134/134 escalations wrote nothing, last word → acknowledged p50 565 ms — the conductor's rerun; the microphone walk and the model-path latency wait on a person.
 
 **Outcome:** for each action whose phase-6 threshold exists, a command whose
 answers all clear it is executed at once through the same tool implementation
@@ -238,3 +238,13 @@ them.
    path against the model path measured.
 3. A `docs/verify/` walk: a person says ten commands out loud and reports
    which felt instant, which escalated, and whether any acted wrongly.
+
+### Trajectory
+
+- **2026-09-30** — Jev's thresholds drift between runs: rerun on the same 197 commands, phase 6's `move` cut of 0.60 scored 94.3% (n 70) and the 95%-on-30 cut moved to 0.63 (95.5%, n 66). The stricter shipped; a threshold wants more than one run before it acts.
+- **2026-09-30** — Probability alone does not keep numbers off the fast path: "300 pixels to the right" cleared p ≥ 0.63 and acted as a nudge. A deterministic `saysANumber` (titles excepted) now escalates them on the acting path; the shadow still records Jev's raw proposal.
+- **2026-09-30** — The race was not measured, so it is not run: the model's acting calls for a turn are held up to 1.5 s while the words settle (300 ms quiet) and Jev answers; on an act they are refused "already done", on escalate or the deadline released in order.
+- **2026-09-30** — `WebHost.retract` (module API 0.2.3) is ⌘Z handed to modules, so the browser's `undo` tool retracts instead of refusing. A module writes as the viewer, so a retract can take back the person's own last drag; `live.ts`'s undo description, written for the harness, says otherwise.
+- **2026-09-30** — Act-mode turns record `undone: null` and `rowsFromRecord` skips them, so acting teaches the thresholds nothing; labelling a fast act by its take-back would need `fastact.ts` to watch for undos. The common wrong act left is "below <item>" read as move-down.
+- **2026-09-30** — Open: whether 300 ms of quiet is enough on real speech (`fast.late`), what the hold costs model-handled turns, and whether a `clientContent` text turn sent mid-answer behaves. Waits on the microphone walk — a person, twenty minutes.
+- **2026-09-30** — Open: `live.ts`'s shared `undo` description ("can never reach something the collaborator did") is untrue in the browser now. A copy fix with a test, owed to whoever next touches the tool descriptions.

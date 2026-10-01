@@ -73,9 +73,9 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
  */
 function lazyHost(canvasId: string, actor: Actor, canEdit: boolean): WebHost {
   type Call = (...args: unknown[]) => unknown;
-  const later = (name: "send" | "putBlob" | "enrol" | "reveal" | "select" | "runCommand") => (...args: unknown[]) =>
+  const later = (name: "send" | "putBlob" | "enrol" | "reveal" | "select" | "runCommand" | "retract") => (...args: unknown[]) =>
     import("../lib/modulehost.ts").then((m) => (m.webHostFor(canvasId, actor, undefined, canEdit)[name] as Call)(...args));
   // `commands` answers synchronously, so it cannot wait on the chunk; it reads
   // the same store the real host does, through the same function.
-  return { send: later("send"), putBlob: later("putBlob"), enrol: later("enrol"), reveal: later("reveal"), select: later("select"), runCommand: later("runCommand"), commands: currentCommands, viewer: { id: actor.id, name: actor.name } } as unknown as WebHost;
+  return { send: later("send"), putBlob: later("putBlob"), enrol: later("enrol"), reveal: later("reveal"), select: later("select"), runCommand: later("runCommand"), retract: later("retract"), commands: currentCommands, viewer: { id: actor.id, name: actor.name } } as unknown as WebHost;
 }

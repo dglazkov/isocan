@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useUiStore } from "../stores/uiStore.ts";
 import type { Actor, EnrolAsk, Operation, WebHost } from "@isocan/core";
-import { askEnrolAgent, uploadBlob } from "./api.ts";
+import { askEnrolAgent, undo, uploadBlob } from "./api.ts";
 import { canEditNow, useCanEdit } from "./capability.ts";
 import { creationDestination, QueuedItemError, sendCreatedItem } from "./groupplacement.ts";
 import { sendEchoedResult, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -125,6 +125,18 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
       if (!canEditNow()) throw new Error("You are reading this canvas — nothing can be posted from here.");
       await postToMain(canvasId, actor, text, [...useUiStore.getState().selectedItemIds]);
       return "posted";
+    },
+    /**
+     * **⌘Z, handed over** — the same `undo` the canvas's own key calls
+     * (`CanvasPage`, `ModuleWorkspace`): the home walks this actor's stack, so
+     * nothing here chooses what to take back. The door test is `send`'s,
+     * because a reader's undo would be a write.
+     */
+    async retract(): Promise<void> {
+      if (!couldEdit || (useCanvasStore.getState().canvasId === canvasId && !canEditNow())) {
+        throw new Error("You are reading this canvas — nothing can be undone from here.");
+      }
+      await undo(canvasId, actor);
     },
     reveal(itemIds: readonly string[]): void {
       const items = itemIds
