@@ -32,6 +32,11 @@ second week.
 - **The outline shows what a click takes.** Pointing at a card inside a
   group, or at the space between its cards, outlines the group — because
   that is what a click selects. Hold ⌘ to aim at the card instead.
+- **Submenus wait for you.** Moving from a menu row like *Style* across to
+  its submenu no longer closes it on the way: the menu sees you heading for
+  the submenu and lets you cut across the rows between. Submenus also open
+  after a brief pause (sweeping down a menu doesn't flash them all) and
+  close after a moment's grace rather than the instant you overshoot.
 - **Stacks.** Press *Stack* on a group's title band and it becomes a pile
   of cards — the first one upright on top, the rest turned and tucked
   behind it in their own colours. Point at it and it fans out like a hand;
