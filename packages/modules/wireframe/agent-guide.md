@@ -319,7 +319,10 @@ bar, tab bar) stays.
   regenerating sibling slots or the rest of the flow. Explicit flags (`--screen`,
   `--kind`, `--slot`, `--block`, `--density`, `--template`) bypass the model when
   you already know the edit; otherwise Jev scopes the screen and slot in at most
-  two calls. The new screen version and any rebuilt prototype land in one op group,
+  two calls. A `content` edit's instruction is a request about the words, not the
+  words: the text generator (`wire copy --ai`'s — `ISOCAN_TEXT_API_KEY` where the CLI runs, else the stub, as with
+  `--answerer stub`) rewrites that one slot, held to its copy schema with action
+  labels bound to their intents. The new screen version and any rebuilt prototype land in one op group,
   so one `isocan undo` reverts both.
 - **Decision Q&A (`isocan wire why`)**: `isocan wire why [<screen>] [question...]`
   (or `/wire why` in the Chat) reads a screen's embedded `WireSpec` (`need`, `by`,

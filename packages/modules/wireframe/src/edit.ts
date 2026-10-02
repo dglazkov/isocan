@@ -9,6 +9,8 @@ import {
   type TemplateId,
 } from "./catalog/index.ts";
 import type { SlotFill } from "./content/fill.ts";
+import { stubTextGenerator, type TextGenerator } from "./answerer.ts";
+import { rewriteSlotCopy } from "./copy-schema.ts";
 import { wiresOn, type Screen } from "./flow.ts";
 import { keptFlowsOf, writePrototype } from "./kept-flows.ts";
 import type { WirePort } from "./port.ts";
@@ -100,8 +102,14 @@ export interface EditOperation {
   block?: string;
   /** Prop overrides to merge onto the targeted slot (for `"variant"` or `"add"`). */
   props?: Props;
-  /** Copy fill to merge onto the targeted slot (for `"content"`). */
+  /**
+   * Copy fill to merge onto the targeted slot (for `"content"`) — words, never
+   * an instruction. `editWireOnCanvas` writes it from `instruction` with the
+   * text generator when it is absent.
+   */
   fill?: SlotFill;
+  /** What the person asked the slot's words to become (for `"content"`) — a request to the text generator, never copy itself. */
+  instruction?: string;
   /** Screen spacing density override (for `"restyle"`). */
   density?: DensityLevel;
   /** Screen multi-region layout template override (for `"restyle"`). */
@@ -121,6 +129,10 @@ export function scopeEdit(spec: WireSpec, edit: EditOperation): WireSpec {
   if (edit.kind === "content") {
     const idx = spec.slots.findIndex((s) => s.slot === edit.slot);
     if (idx < 0) throw new Error(`${spec.title} has no slot "${edit.slot}" to update content on`);
+    if (!edit.fill) {
+      // An instruction is not copy: the words come from the text generator (`editWireOnCanvas`), never from here.
+      throw new Error(`a content edit on "${edit.slot}" needs words — \`editWireOnCanvas\` writes them from the instruction`);
+    }
     const slots = spec.slots.map((s, i) => {
       if (i !== idx) return s;
       const mergedFill: SlotFill = { ...(s.fill ?? {}), ...(edit.fill ?? {}) };
@@ -355,7 +367,7 @@ export async function planEditWithJev(
     kind,
     slot: targetSlot,
     ...(kind === "variant" || kind === "add" ? (chosenBlock ? { block: chosenBlock } : {}) : {}),
-    ...(kind === "content" ? { fill: { heading: instruction } } : {}),
+    ...(kind === "content" ? { instruction } : {}),
     ...(kind === "restyle" ? { density: chosenDensity } : {}),
   };
 
@@ -387,7 +399,7 @@ export async function editWireOnCanvas(
   port: WirePort,
   instruction: string,
   answerer: Answerer,
-  opts: { screenId?: string; edit?: EditOperation } = {},
+  opts: { screenId?: string; edit?: EditOperation; generator?: TextGenerator } = {},
 ): Promise<EditedWire> {
   const beforeCanvas = await port.canvas();
   const all = await wiresOn(port, beforeCanvas);
@@ -404,6 +416,11 @@ export async function editWireOnCanvas(
     : await planEditWithJev(pool, instruction, answerer, opts.screenId);
 
   const previous = planned.screen.spec;
+  if (planned.edit.kind === "content" && !planned.edit.fill) {
+    // The instruction is a request about the words: the text generator writes them, held to the copy schema.
+    const fill = await rewriteSlotCopy(previous, planned.edit.slot, planned.edit.instruction ?? instruction, opts.generator ?? stubTextGenerator(1));
+    planned.edit = { ...planned.edit, fill };
+  }
   const nextSpec: WireSpec = {
     ...scopeEdit(previous, planned.edit),
     by: wireBy(planned.by, port.actor),

@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 2 Oct 2026: nothing built. Next: copy-edit phase 0, two bugs.**
+**Where we are, 2 Oct 2026: phase 0 is CLOSED (a content edit writes words). Next: copy-edit phase 0.5, a generator the browser can reach.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -24,17 +24,41 @@ Rules for every phase, on top of `AGENTS.md`:
 - **Text generation through `TextGenerator`** (`core/src/jev.ts`); the stub in
   tests; never a key in the browser.
 
-## Phase 0 — Two bugs
+## Phase 0 — A content edit writes words
+
+**Status: CLOSED, 2 October 2026.** `wire edit --kind content` — from the CLI and from Jev's planner — now sends the instruction to the text generator as a request about one slot's words, validated by the copy schema, and can no longer write the instruction itself as text.
+
+**Outcome:** `wire edit --kind content` calls the text generator and writes
+words for the slot, never the instruction itself (`edit.ts:358`).
+
+**Proof:** tests that the instruction never lands as text, that a planned
+content edit calls the generator once with a one-slot schema, and that a
+greedy answer is refused; `npm test`, typecheck.
+
+### Trajectory
+
+- **2026-10-02** — Re-cut: the plan had the web `/wire copy`/`name` fix in this phase, but the browser has no route to any text model — the home's only door is the Jev judgment route, typed questions only. The fix needs a route, so it became phase 0.5.
+
+## Phase 0.5 — A generator the browser can reach
 
 **Status: NOT STARTED.**
 
-**Outcome:** `wire edit --kind content` calls the text generator and writes
-words for the slot, never the instruction itself (`edit.ts:358`); the web
-`/wire copy` and `/wire name` reach a configured generator instead of always
-the stub (`dialog.tsx:341,356`) — through the daemon/home, no key in the page.
+**Outcome:** `POST /api/text` on the daemon and the home (`TEXT_ROUTE` in
+core beside `JUDGMENT_ROUTE`): a JSON-schema text completion for a badge that
+may edit the canvas, size-checked and rate-limited per badge, forwarded to the
+home when this daemon has no key (as judgment is), refusing in words
+(`text-unavailable`) when nobody has one. `TextGenerator` gains a Claude route
+beside the OpenAI-shaped one. The wireframe module's web path (`/wire copy`,
+`/wire name`, `/wire edit` content) uses it through `DialogHost.generate`, in
+the lazy dialog chunk.
 
-**Proof:** tests that the instruction never lands as text and that a
-configured generator is called from the web path; `npm test`, typecheck.
+**Proof:** a route test with a fake provider (refusal without a key, a
+non-editor refused, the key never in a response or error); a dialog test that a
+configured `host.generate` is called; `npm test`, typecheck.
+
+⚑ **Provision:** a text-model key on isocan.io (`ISOCAN_TEXT_API_KEY`, and
+which provider) is Dion's decision; until then the route refuses in words and
+the browser keeps the stub.
 
 ## Phase 1 — The copy deck
 

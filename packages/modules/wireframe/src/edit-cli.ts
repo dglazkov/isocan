@@ -8,6 +8,7 @@ import {
   type EditOperation,
 } from "./edit.ts";
 import { wiresOn } from "./flow.ts";
+import { resolveTextGenerator } from "./copy-schema.ts";
 import { wireTitle } from "./spec.ts";
 import { explainWireDecision } from "./why.ts";
 import type { DensityLevel, TemplateId } from "./catalog/index.ts";
@@ -82,6 +83,9 @@ export function registerEditAndWhy(host: CliHost, wire: Command): void {
             if (!EDIT_KINDS.includes(kind)) {
               throw new Error(`--kind must be one of ${EDIT_KINDS.join(", ")} — got "${opts.kind}"`);
             }
+            if (kind === "content" && !instruction) {
+              throw new Error("what should the words become? `isocan wire edit --kind content --slot <slot> \"<instruction>\"`");
+            }
             const slot = opts.slot ?? "main.1";
             explicitEdit = {
               kind,
@@ -89,7 +93,7 @@ export function registerEditAndWhy(host: CliHost, wire: Command): void {
               ...(opts.block ? { block: opts.block } : {}),
               ...(opts.density ? { density: opts.density as DensityLevel } : {}),
               ...(opts.template ? { template: opts.template as TemplateId } : {}),
-              ...(kind === "content" && instruction ? { fill: { heading: instruction } } : {}),
+              ...(kind === "content" && instruction ? { instruction } : {}),
             };
           }
 
@@ -98,6 +102,8 @@ export function registerEditAndWhy(host: CliHost, wire: Command): void {
           const result = await editWireOnCanvas(port, instruction || `${explicitEdit?.kind ?? "edit"} ${explicitEdit?.slot ?? ""}`, answerer, {
             ...(screenId ? { screenId } : {}),
             ...(explicitEdit ? { edit: explicitEdit } : {}),
+            // A content edit's words come from the text generator, as `wire copy --ai`'s do: the home's key, or the stub.
+            generator: resolveTextGenerator({ seed, useStub: opts.answerer === "stub" }),
           });
 
           if (ctx.json) {

@@ -10,7 +10,7 @@ import {
 } from "./answerer.ts";
 import { COMPONENTS, component } from "./catalog/index.ts";
 import { INTENT_BY_ID } from "./catalog/intents.ts";
-import { applyCopy, copyOf, fleshSpec, isBlueprint, seedKey, wordsOf, type CopyFile } from "./content/flesh-spec.ts";
+import { applyCopy, copyOf, fleshSpec, isBlueprint, seedKey, withWords, wordsOf, type CopyFile } from "./content/flesh-spec.ts";
 import { packOf, type SlotFill } from "./content/fill.ts";
 import type { Screen } from "./flow.ts";
 import { rebuildPrototypes } from "./kept-flows.ts";
@@ -244,6 +244,62 @@ export async function generateWireCopy(
   const raw = await generator.generateJson<CopyFile>(promptLines.join("\n"), schema);
   const validated = validateCopyPayload(base, raw);
   return applyCopy(base, validated, generator.name);
+}
+
+/**
+ * **Rewrite one slot's words per an instruction** — what a `content` edit
+ * (`wire edit --kind content`, `/wire edit`) does with the person's words.
+ * The instruction is a request ABOUT the words, not the words: it goes to
+ * `generator` with the slot's current words and a schema narrowed to that one
+ * slot (`blockContentSchema`), and the answer is held to `validateCopyPayload`
+ * — so action labels stay bound to their intents, and no other slot, title or
+ * bar can change. Returns the slot's whole fill with the new words in place.
+ */
+export async function rewriteSlotCopy(
+  spec: WireSpec,
+  slotId: string,
+  instruction: string,
+  generator: TextGenerator = stubTextGenerator(1),
+): Promise<SlotFill> {
+  const base = ensureFleshedForCopy(spec);
+  const slot = base.slots.find((s) => s.slot === slotId);
+  if (!slot) throw new Error(`${base.title} has no slot "${slotId}" to update content on`);
+  const full = blockContentSchema(base);
+  const slotSchema = full.properties?.slots?.properties?.[slotId];
+  if (!slot.fill || !slotSchema) throw new Error(`slot "${slotId}" (${slot.block ?? "undecided"}) holds no words to rewrite`);
+  const schema: JsonSchema = {
+    type: "object",
+    description: `Rewritten words for slot "${slotId}" on screen "${base.title}"`,
+    properties: {
+      slots: {
+        type: "object",
+        description: "Replacement words keyed by slot id and dot-path",
+        properties: { [slotId]: slotSchema },
+        required: [slotId],
+        additionalProperties: false,
+      },
+    },
+    required: ["slots"],
+    additionalProperties: false,
+  };
+  const prompt = [
+    `Rewrite the UI copy in slot "${slotId}" (block "${slot.block}") of the "${base.title}" screen (archetype: ${base.archetype}).`,
+    `Flow request: ${base.request || base.title}`,
+    `Edit instruction: ${instruction}`,
+    `Follow the instruction by writing the slot's words — do not repeat the instruction as copy, and keep each action's verb.`,
+    `Current words: ${JSON.stringify(wordsOf(slot.fill))}`,
+  ].join("\n");
+  const raw = await generator.generateJson<CopyFile>(prompt, schema);
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const extra = Object.keys(raw as Record<string, unknown>).filter((k) => k !== "slots");
+    if (extra.length > 0) throw new Error(`a content edit changes only slot "${slotId}" — the answer also set ${extra.join(", ")}`);
+  }
+  const validated = validateCopyPayload(base, raw);
+  const others = Object.keys(validated.slots ?? {}).filter((k) => k !== slotId);
+  if (others.length > 0) throw new Error(`a content edit changes only slot "${slotId}" — the answer also set ${others.join(", ")}`);
+  const words = validated.slots?.[slotId];
+  if (!words) throw new Error(`the answer held no words for slot "${slotId}"`);
+  return withWords(slot.fill, words, `slot "${slotId}"`);
 }
 
 /**

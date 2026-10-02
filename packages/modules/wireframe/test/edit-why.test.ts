@@ -26,6 +26,9 @@ import {
   type WirePort,
   type WireSpec,
 } from "../src/core.ts";
+import { rewriteSlotCopy } from "../src/copy-schema.ts";
+import { stubTextGenerator, type Answerer, type JevResponse as Response, type JsonSchema, type TextGenerator } from "../src/answerer.ts";
+import { wordsOf } from "../src/content/flesh-spec.ts";
 
 function memoryPort(): {
   port: WirePort;
@@ -268,5 +271,110 @@ describe("surgical section editing and decision Q&A (Phase 11)", () => {
     expect(explanation.lines.join("\n")).toContain("pinned: platform=web");
     expect(explanation.lines.join("\n")).toContain("main.3: data-table (62%) [detail] — runners-up: stacked-list 28%, card-grid 10%");
     expect(explanation.lines.join("\n")).toContain("declined optional slots: main.1 (search-field, P(omit)=72%)");
+  });
+
+  describe("a content edit writes words, never the instruction (copy-edit phase 0)", () => {
+    const INSTRUCTION = "make the heading about overdue Acme refunds";
+
+    /** A text generator double: the stub's words, with every call it was asked recorded. */
+    function recordingGenerator(): { gen: TextGenerator; calls: Array<{ prompt: string; schema: JsonSchema }> } {
+      const inner = stubTextGenerator(3);
+      const calls: Array<{ prompt: string; schema: JsonSchema }> = [];
+      return {
+        calls,
+        gen: {
+          name: "recording",
+          async generateJson<T>(prompt: string, schema: JsonSchema): Promise<T> {
+            calls.push({ prompt, schema });
+            return inner.generateJson<T>(prompt, schema);
+          },
+        },
+      };
+    }
+
+    /** An answerer that always plans a `content` edit on `slot`, else the stub's picks. */
+    function contentAnswerer(slot: string): Answerer {
+      const stub = stubAnswerer(2);
+      return {
+        name: "stub",
+        async answer(request) {
+          const got = await stub.answer(request);
+          const answers: Response["answers"] = { ...got.response.answers };
+          if (request.questions.kind) answers.kind = { type: "choice", choice: "content", probabilities: { content: 1 } };
+          if (request.questions.slot) answers.slot = { type: "choice", choice: slot, probabilities: { [slot]: 1 } };
+          return { ...got, response: { answers } };
+        },
+      };
+    }
+
+    const wordySlot = (spec: WireSpec) => spec.slots.find((s) => s.block && Object.keys(wordsOf(s.fill)).length > 0)!;
+
+    it("refuses a content edit that carries no words, rather than writing the instruction", () => {
+      const base = wireframe("list", { platform: "web", request: "Acme orders", flow: "flow-1" });
+      expect(() => scopeEdit(base, { kind: "content", slot: "main.3", instruction: INSTRUCTION })).toThrow(/needs words/);
+    });
+
+    it("the planner carries the instruction as a request, not as a fill", async () => {
+      const { port } = memoryPort();
+      const composed = await composeFlow(port, "Acme refunds desk", stubAnswerer(2));
+      const target = composed.screens[0]!;
+      const planned = await planEditWithJev(composed.screens, INSTRUCTION, contentAnswerer(wordySlot(target.spec).slot), target.item);
+      expect(planned.edit.kind).toBe("content");
+      expect(planned.edit.instruction).toBe(INSTRUCTION);
+      expect(planned.edit.fill).toBeUndefined();
+    });
+
+    it("a planned content edit asks the generator for the slot's words and never lands the instruction as text", async () => {
+      const { port } = memoryPort();
+      const composed = await composeFlow(port, "Acme refunds desk", stubAnswerer(2));
+      const target = composed.screens[0]!;
+      const slot = wordySlot(target.spec);
+      const { gen, calls } = recordingGenerator();
+      const edited = await editWireOnCanvas(port, INSTRUCTION, contentAnswerer(slot.slot), { screenId: target.item, generator: gen });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.prompt).toContain(INSTRUCTION);
+      // The schema is narrowed to the one slot: no title, no bar, no other slot can change.
+      expect(Object.keys(calls[0]!.schema.properties ?? {})).toEqual(["slots"]);
+      expect(Object.keys(calls[0]!.schema.properties!.slots!.properties ?? {})).toEqual([slot.slot]);
+
+      const after = edited.screen.spec;
+      const words = Object.values(wordsOf(after.slots.find((s) => s.slot === slot.slot)!.fill));
+      expect(words.length).toBeGreaterThan(0);
+      expect(words).not.toContain(INSTRUCTION);
+      expect(JSON.stringify(after)).not.toContain(INSTRUCTION);
+      // Intents stay bound, and every sibling slot is untouched.
+      for (const s of target.spec.slots) {
+        const a = after.slots.find((x) => x.slot === s.slot)!;
+        expect(a.intents).toEqual(s.intents);
+        if (s.slot !== slot.slot) expect(a.fill).toEqual(s.fill);
+      }
+    });
+
+    it("an explicit `--kind content` edit (the CLI's shape) goes through the generator too — the stub's words by default", async () => {
+      const { port } = memoryPort();
+      const composed = await composeFlow(port, "Acme refunds desk", stubAnswerer(2));
+      const target = composed.screens[0]!;
+      const slot = wordySlot(target.spec);
+      const edited = await editWireOnCanvas(port, INSTRUCTION, stubAnswerer(2), {
+        screenId: target.item,
+        edit: { kind: "content", slot: slot.slot, instruction: INSTRUCTION },
+      });
+      const fill = edited.screen.spec.slots.find((s) => s.slot === slot.slot)!.fill;
+      expect(Object.values(wordsOf(fill))).not.toContain(INSTRUCTION);
+      expect(fill).not.toEqual(slot.fill);
+      expect(edited.edit.fill).toEqual(fill);
+    });
+
+    it("refuses an answer that reaches past its slot or tries to move an intent", async () => {
+      const { port } = memoryPort();
+      const composed = await composeFlow(port, "Acme refunds desk", stubAnswerer(2));
+      const spec = composed.screens[0]!.spec;
+      const slot = wordySlot(spec);
+      const greedy: TextGenerator = { name: "greedy", generateJson: async <T>() => ({ title: "Elsewhere", slots: {} }) as T };
+      await expect(rewriteSlotCopy(spec, slot.slot, INSTRUCTION, greedy)).rejects.toThrow(/only slot/);
+      const intents: TextGenerator = { name: "intents", generateJson: async <T>() => ({ intents: {}, slots: {} }) as T };
+      await expect(rewriteSlotCopy(spec, slot.slot, INSTRUCTION, intents)).rejects.toThrow(/only slot|intents/);
+    });
   });
 });
