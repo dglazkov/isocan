@@ -20,6 +20,7 @@ import type { Ctx } from "./ctx.ts";
 import { printJson, printTable, truncate } from "./output.ts";
 import { scanHarnesses } from "./harnesses.ts";
 import { readRcAgents } from "./rc.ts";
+import { RC_DISCOVER_MS } from "./rc-discover.ts";
 import { withContext } from "./run.ts";
 
 /**
@@ -438,7 +439,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
             return printJson({ canvasId: target.id, from: benchId, joined: false, agent: row });
           }
           return console.log(
-            `${standing.actor.name} already answers on ${target.title} (${target.id}).`,
+            `${standing.actor.name} already stands on ${target.title} (${target.id}).`,
           );
         }
         await ctx.client.sendOp(target.id, ctx.actor, {
@@ -454,8 +455,18 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
         if (ctx.json) {
           return printJson({ canvasId: target.id, from: benchId, joined: true, agent: joined });
         }
+        /**
+         * **Standing here, not answering here — yet** (pets phase 1). This
+         * said "answers on", and `ready` beside it is measured across the
+         * agent's canvases: an rc parked somewhere ELSE. What makes it answer
+         * on this one is a running `isocan rc --all` on its machine, whose
+         * next look (`RC_DISCOVER_MS`) parks here; a plain `isocan rc` never
+         * does. So the line says which, rather than promising either.
+         */
         console.log(
-          `${joined.name} answers on ${target.title} — ${benchWords(joined)}, ${benchStandingWords(joined)}. Nothing else moved: no turn was started, no summons rule was written, and no other canvas changed.`,
+          `${joined.name} stands on ${target.title} now — ${benchWords(joined)}, ${benchStandingWords(joined)}. ` +
+            `A running \`isocan rc --all\` on its machine picks this up within ${Math.round(RC_DISCOVER_MS / 1000)} s; a plain \`isocan rc\` parked elsewhere does not. ` +
+            "Nothing else moved: no turn was started, no summons rule was written, and no other canvas changed.",
         );
       }),
     );

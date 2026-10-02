@@ -498,6 +498,51 @@ describe("the room over in-memory deps", () => {
     await room.done;
   });
 
+  /**
+   * **An invited agent keeps how it runs** (pets phase 1). The agent is one
+   * actor on every canvas, so the row a room writes for it here is copied from
+   * its row on another canvas — a row that names a harness over one that says
+   * null, the last in the file among those — and the room's own cwd and no
+   * harness only when the machine has no row for it anywhere.
+   */
+  it("an agent taken up here copies harness, model and cwd from its row on another canvas", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    const SCOUT: Actor = { id: "act_scout", name: "Scout" };
+    const elsewhere = (canvasId: string, harness: string | null, cwd: string, model?: string): RcAgentRow => ({
+      canvasId,
+      actorId: SCOUT.id,
+      name: "Scout",
+      harness,
+      ...(model ? { model } : {}),
+      cwd,
+      sessionId: "ses_other",
+    });
+    const { deps, lines, rows } = roomOver(home, clock, {
+      rows: [
+        elsewhere("prj_old", "claude-code", "/acme/old"),
+        elsewhere("prj_bridge", "jetski", "/acme/scout", "acme-model-1"),
+        elsewhere("prj_web", null, "/acme"),
+      ],
+    });
+    const room = runRoom(deps);
+    await clock.advance(0);
+    home.enrol(SCOUT);
+    await clock.advance(1_000);
+    expect(rows.find((r) => r.canvasId === CANVAS.id && r.actorId === SCOUT.id)).toEqual({
+      canvasId: CANVAS.id,
+      actorId: SCOUT.id,
+      name: "Scout",
+      harness: "jetski",
+      model: "acme-model-1",
+      cwd: "/acme/scout",
+      sessionId: null,
+    });
+    expect(lines).toContain("Scout · where and how supplied — /acme/scout · jetski (acme-model-1)");
+    await room.stop();
+    await room.done;
+  });
+
   it("a withdrawal landing between the opening roster and the start tip is reaped", async () => {
     const clock = new HandClock();
     const home = new AcmeHome(clock);

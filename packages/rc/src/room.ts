@@ -298,6 +298,13 @@ const NOT_YOUR_ACTOR = "not-your-actor";
 const heldElsewhere = (err: unknown): boolean =>
   err instanceof ApiError && err.code === "name-taken" && err.reason === CLAIM_REFUSAL.heldElsewhere;
 
+/** The supplied row, said: its directory, and its harness (and model) when
+ * it was copied from another canvas — the cwd alone, as before, otherwise. */
+function suppliedWords(row: RcAgentRow): string {
+  if (row.harness === null) return row.cwd;
+  return `${row.cwd} · ${row.harness}${row.model ? ` (${row.model})` : ""}`;
+}
+
 /** One canvas's whole rc — holds, cursors, dispatch, narration. */
 export function runRoom(deps: RoomDeps): Room {
   const life = new AbortController();
@@ -352,17 +359,40 @@ async function room(
       if (row.canvasId === p.id && !roster[row.actorId]) await rows.remove(p.id, row.actorId);
     }
   };
+  /**
+   * **The row a room writes for an agent that arrived without one** — a web
+   * add, a take-up, an invite (`bench join`, `@Name join`, a pet following).
+   * The agent is the same actor everywhere it stands, so where and how it runs
+   * is copied from its row on another canvas: harness, model and cwd (pets
+   * phase 1 — an invited Scout ran on the machine default otherwise, not on
+   * the harness he was set up with). Today's fallback (no harness named, the
+   * room's cwd) only when this machine has no row for the agent anywhere.
+   *
+   * Which row, when several disagree: a row that NAMES a harness beats one
+   * that says null (a row that said nothing is not a choice to copy), and
+   * among those the last in the file. Rows carry no write time; the file keeps
+   * them in the order they were first written (re-enrolment replaces in
+   * place), so the last is the canvas the agent was most recently set up on.
+   * The session handle is not copied: the room keeps one per agent in `state`.
+   */
+  const adoptionRow = async (actorId: string, name: string): Promise<RcAgentRow> => {
+    const elsewhere = (await rows.list()).filter((r) => r.actorId === actorId && r.canvasId !== p.id);
+    const named = elsewhere.filter((r) => r.harness !== null);
+    const from = (named.length > 0 ? named : elsewhere).at(-1);
+    return {
+      canvasId: p.id,
+      actorId,
+      name,
+      harness: from?.harness ?? null,
+      ...(from?.model ? { model: from.model } : {}),
+      cwd: from?.cwd ?? rcCwd,
+      sessionId: null,
+    };
+  };
   const reconcile = async (roster: Record<string, EnrolledAgent>) => {
     for (const record of Object.values(roster)) {
       if (notHeld.has(record.actor.id)) continue;
-      await rows.adopt({
-        canvasId: p.id,
-        actorId: record.actor.id,
-        name: record.actor.name,
-        harness: null,
-        cwd: rcCwd,
-        sessionId: null,
-      });
+      await rows.adopt(await adoptionRow(record.actor.id, record.actor.name));
     }
     await reap(roster);
   };
@@ -1127,15 +1157,9 @@ async function room(
        * place, and it was right to: the line is missing because the RECORD
        * is missing, not because the narration is.
        */
-      const adopted = await rows.adopt({
-        canvasId: p.id,
-        actorId: record.actor.id,
-        name: record.actor.name,
-        harness: null,
-        cwd: rcCwd,
-        sessionId: null,
-      });
-      if (adopted) narrate(`${record.actor.name} · where and how supplied — ${rcCwd}`);
+      const row = await adoptionRow(record.actor.id, record.actor.name);
+      const adopted = await rows.adopt(row);
+      if (adopted) narrate(`${record.actor.name} · where and how supplied — ${suppliedWords(row)}`);
       if (parked !== "held") couldNotHold(record.actor.id, parked.error);
     }
   };
@@ -1262,15 +1286,9 @@ async function room(
           const record = roster[op.agent.id];
           narrate(`${by.name} enrolled ${op.agent.name} — answerable here${record ? ` · ${policyLine(record)}` : ""}`);
           if (record) await sayPolicy(record);
-          const adopted = await rows.adopt({
-            canvasId: p.id,
-            actorId: op.agent.id,
-            name: op.agent.name,
-            harness: null,
-            cwd: rcCwd,
-            sessionId: null,
-          });
-          if (adopted) narrate(`${op.agent.name} · where and how supplied — ${rcCwd}`);
+          const row = await adoptionRow(op.agent.id, op.agent.name);
+          const adopted = await rows.adopt(row);
+          if (adopted) narrate(`${op.agent.name} · where and how supplied — ${suppliedWords(row)}`);
           if (parked !== "held") couldNotHold(op.agent.id, parked.error);
         }
         continue;

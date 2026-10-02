@@ -2553,7 +2553,9 @@ both. Nothing is duplicated and nothing needs a vouch; the enrolment key is
 derived from the name by a secret kept in this machine's `~/.isocan`, so the
 same machine always gets the same agent back and another machine cannot take
 it by its name. One `isocan rc --all` (the person's, again) answers on every canvas
-this machine's enrolments name: one budget per agent across all of them, one
+this machine's enrolments name — and, while it runs, on any canvas one of its
+agents is brought to (`bench join`, the web's Join, `@Name join`) within 30
+seconds, no restart: one budget per agent across all of them, one
 conversation per agent that carries on wherever it is summoned, and
 `ISOCAN_CANVAS` in your environment says which canvas asked this time.
 
@@ -2661,7 +2663,9 @@ this directory is bound to — and it needs **no parked `isocan rc` there**,
 which is the difference between naming an agent you already have and
 introducing a stranger. `isocan agent add` mints an actor and so must ask the
 machine that will answer for it; an agent on your bench already has one, so
-its fifth canvas costs exactly what its first did.
+its fifth canvas costs exactly what its first did. It stands there at once;
+it ANSWERS there once its machine parks on that canvas, which a running
+`isocan rc --all` does within 30 seconds and a plain `isocan rc` never does.
 
 What joining does NOT do is the part worth reading twice: it grants standing
 on that one canvas and nothing else. No turn is started, nobody new may summon

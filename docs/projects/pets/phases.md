@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-01
 see: bench, standing-agents
 note: "the walk: the rc hears invites, then pets that follow."
@@ -11,7 +11,7 @@ note: "the walk: the rc hears invites, then pets that follow."
 [the sheepdog note](../../research/2026-09-04-sheepdog.md), the machinery is
 the [bench](../bench/phases.md).
 
-**Where we are, 1 Oct 2026: nothing built. Next: pets phase 1, the rc hears invites.**
+**Where we are, 1 Oct 2026: phase 1 is CLOSED — a running rc hears invites. Next: pets phase 2, pets follow.**
 
 Two rules for every phase, on top of `AGENTS.md`:
 
@@ -23,7 +23,7 @@ Two rules for every phase, on top of `AGENTS.md`:
 
 ## Phase 1 — The rc hears invites
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 1 October 2026.** A running `rc --all` invited onto a canvas it never parked on answers the owner's summons there within its 30 s look, with no restart, on the agent's own harness — proved against a real daemon and the spawned CLI, and the test fails with the look slowed to ten minutes.
 
 **Outcome:** a running `isocan rc --all` periodically (and on the home's
 roster change where it can see one) lists the canvases this machine can
@@ -39,6 +39,12 @@ reasoned. `isocan bench` then reads `ready` for the agent on that canvas.
    starts `rc --all` on canvas A, invites the same agent to canvas B with
    `bench join`, and sees a summons on B answered without a restart.
 2. Scene 1, by the conductor, against a local home.
+
+### Trajectory
+
+- **2026-10-01** — A running `rc --all` looks every 30 s (`RC_DISCOVER_MS`, `rc-discover.ts`) for canvases where an actor it holds stands; it reads only canvases whose `updatedAt` moved, so a quiet home costs one listing a look. No new route, no op. Withdrawal now closes the room, as a restart would.
+- **2026-10-01** — Every adopted row used to be written with `harness: null` and the rc's cwd, so an invited agent ran on the machine's default harness — pets would have multiplied it. A room now copies harness, model and cwd from the agent's row on another canvas (a named harness wins, then file order).
+- **2026-10-01** — `bench join` said "answers on" beside a `ready` that meant an rc parked elsewhere; it now says "stands on" and names what makes it answer. The web's matching copy moves in phase 2.
 
 ## Phase 2 — Pets follow
 

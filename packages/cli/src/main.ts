@@ -492,6 +492,7 @@ import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
+import { decide, discoverEvery, heldAgents, survey } from "./rc-discover.ts";
 import { announceRule, fileRcRows, readRcAgents, removeRcAgent, rollMemory, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type RcAgentRow } from "./rc.ts";
 import { actorNamesOn, itemCenter, mapState, nameResolver, runRoom, threadLocus, type RoomAdapter, type RoomState, type RoomTurn } from "@isocan/rc";
 import { AcpAgentProcess, adapterEnv } from "./acp.ts";
@@ -13517,11 +13518,14 @@ interface RcShared {
  * default is what the on-demand rule frowns on. Every canvas this machine's
  * enrolment records name, plus the bound one if there is one; a canvas the
  * records name that the home no longer has is said and skipped.
+ *
+ * **And every canvas an agent this machine holds was brought to** (pets
+ * phase 1): the same look the running rc repeats (`rc-discover.ts`), once
+ * here, so a restart finds a canvas it was only ever invited to.
  */
-async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
+async function rcRooms(ctx: Ctx, bound: Canvas | null, look: RcLook): Promise<Canvas[]> {
   const canvases = await ctx.client.listCanvases();
   const wanted = new Set((await readRcAgents(ctx.home)).map((row) => row.canvasId));
-  const bound = await resolveCanvas(ctx).catch(() => null);
   if (bound) wanted.add(bound.id);
   const rooms: Canvas[] = [];
   for (const id of wanted) {
@@ -13529,11 +13533,27 @@ async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
     if (canvas) rooms.push(canvas);
     else console.log(`rc: the records name ${id}, which this home no longer has — skipped`);
   }
+  const found = await lookForInvites(ctx, canvases, look);
+  for (const canvas of decide(found, new Set(rooms.map((c) => c.id)), bound?.id ?? null).open) rooms.push(canvas);
   return rooms;
 }
 
+/** What the looks keep between them (`survey` in `rc-discover.ts`). */
+interface RcLook {
+  stamps: Map<string, string>;
+  held: string;
+}
+
+/** One look at the home: which canvases have an agent this machine holds
+ * standing on them, read only where something moved since the last. */
+async function lookForInvites(ctx: Ctx, canvases: Canvas[], look: RcLook) {
+  const [bindings, rows] = await Promise.all([ctx.client.actorBindings().catch(() => []), readRcAgents(ctx.home)]);
+  const held = heldAgents(bindings, rows, ctx.actor.id);
+  return survey(canvases, held, look, async (id) => (await ctx.client.snapshot(id).catch(() => null))?.canvas.agents ?? null);
+}
+
 rcCommand
-  .option("--all", "answer on every canvas this machine's enrolments name, not only this directory's")
+  .option("--all", "answer on every canvas this machine's enrolments name, not only this directory's — and, while running, any its agents are brought to")
   .option("--default-harness <name>", "the harness agents that named none run on — kept as config.json's defaultHarness")
   .option("--sandbox", "fence every adapter: its own directory, ~/.isocan, /tmp, this daemon and its harness's API")
   .option("--codex-sandbox", "opt in to Codex tool sandboxing; exact daemon host and configured domains, no escalation")
@@ -13556,7 +13576,9 @@ rcCommand
           "this turn until the harness kills it. Your spelling of its verbs is `isocan agent`.",
       );
     }
-    const rooms = opts.all ? await rcRooms(ctx) : [await resolveCanvas(ctx)];
+    const look: RcLook = { stamps: new Map(), held: "" };
+    const bound = opts.all ? await resolveCanvas(ctx).catch(() => null) : null;
+    const rooms = opts.all ? await rcRooms(ctx, bound, look) : [await resolveCanvas(ctx)];
     if (rooms.length === 0) {
       throw new Error("`isocan rc --all` found no canvas to answer on — nothing is enrolled from this machine yet (`isocan rc add <name>` on a bound canvas)");
     }
@@ -13600,7 +13622,53 @@ rcCommand
       });
     }
     if (rooms.length > 1) console.log(`rc: answering on ${rooms.length} canvases — one process, one budget per agent`);
-    await Promise.all(rooms.map((p) => runRcRoom(ctx, p, shared)));
+    // A room that fails ends the rc, as when every room was one `Promise.all`;
+    // a room that is closed (below) just stops.
+    let fail: (err: unknown) => void = () => {};
+    const failed = new Promise<never>((_, reject) => {
+      fail = reject;
+    });
+    const parked = new Map<string, () => Promise<void>>();
+    const open = (p: Canvas) => {
+      parked.set(p.id, async () => {});
+      runRcRoom(ctx, p, shared, (close) => {
+        if (parked.has(p.id)) parked.set(p.id, close);
+      }).catch(fail);
+    };
+    for (const p of rooms) open(p);
+    /**
+     * **The rc hears invites** (pets phase 1). Only under `--all`: a plain
+     * `rc` answers for one canvas, the directory's, and its room already
+     * takes up whoever is brought there. Every `discoverEvery()` it looks
+     * again; a canvas an agent it holds was brought to gets a room, said in
+     * the words the start uses, and a room where nobody it holds stands any
+     * more is closed — what a restart would do, since the room's own reap
+     * took its rows. A look that fails is said and tried again next time.
+     */
+    if (opts.all) {
+      void (async () => {
+        for (;;) {
+          await new Promise((resolve) => setTimeout(resolve, discoverEvery()));
+          try {
+            const found = await lookForInvites(ctx, await ctx.client.listCanvases(), look);
+            const { open: opening, close } = decide(found, new Set(parked.keys()), bound?.id ?? null);
+            for (const id of close) {
+              const stop = parked.get(id);
+              parked.delete(id);
+              console.log(rcLine("", `no longer answering on "${found.get(id)!.canvas.title}" — nobody this machine holds stands there now`));
+              await stop?.();
+            }
+            for (const p of opening) {
+              shared.rooms += 1;
+              open(p);
+            }
+          } catch (err) {
+            console.log(rcLine("", `could not look for canvases to answer on — ${(err as Error).message} (trying again)`));
+          }
+        }
+      })();
+    }
+    await failed;
   }),
 );
 
@@ -13692,7 +13760,12 @@ function rcLine(tag: string, text: string): string {
  * upgrade window, the sandbox fence, the harness scan, the session pointer
  * file loaned to the agent's own CLI, and the daemon restart. Never returns.
  */
-async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> {
+async function runRcRoom(
+  ctx: Ctx,
+  p: Canvas,
+  shared: RcShared,
+  opened?: (close: () => Promise<void>) => void,
+): Promise<never> {
   const tag = shared.rooms > 1 ? `[${p.title}]` : "";
   const print = (line: string) => console.log(rcLine(tag, line));
   const rcCwd = process.cwd();
@@ -13818,7 +13891,14 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         signal.addEventListener("abort", done, { once: true });
       }),
   });
-  shared.standDowns.push(() => room.stop());
+  const standDown = () => room.stop();
+  shared.standDowns.push(standDown);
+  // Closed by the host (pets phase 1): out of the Ctrl-C list, and stopped.
+  opened?.(async () => {
+    const at = shared.standDowns.indexOf(standDown);
+    if (at >= 0) shared.standDowns.splice(at, 1);
+    await room.stop();
+  });
   await room.done;
   return new Promise<never>(() => {});
 }

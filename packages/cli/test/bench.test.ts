@@ -217,7 +217,7 @@ describe("isocan bench join", () => {
 
     const joined = await isocan("--canvas", "prj_2", "bench", "join", "Percy");
     expect(joined.code, joined.stderr).toBe(0);
-    expect(joined.stdout).toContain("Percy answers on Acme two");
+    expect(joined.stdout).toContain("Percy stands on Acme two now");
     // Said in journey 1's words, measured rather than asserted: nothing is
     // parked, so this is not `ready` however recently it was benched.
     expect(joined.stdout).toContain("its machine is not here");
@@ -259,7 +259,7 @@ describe("isocan bench join", () => {
     // A second join is not a second grant: it says so and writes nothing new.
     const again = await isocan("--canvas", "prj_2", "bench", "join", "Percy");
     expect(again.code, again.stderr).toBe(0);
-    expect(again.stdout).toContain("already answers");
+    expect(again.stdout).toContain("already stands on");
     expect(standingOn(await canvasOf("prj_2"))).toEqual(standingOn(after2));
 
     // And an agent nobody benched cannot be joined from a bench it is not on.

@@ -6,6 +6,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { cliEnv, spawnCli as startCli } from "./cli.ts";
 import {
   answeringFor,
   badge,
@@ -22,6 +23,7 @@ import {
   restartDaemon,
   snapshotAgents,
   spawnCli,
+  started,
   TEAM,
   until,
   useRcHome,
@@ -672,6 +674,153 @@ describe("one rc, every canvas its rows name (phase 2)", () => {
     rc.kill("SIGINT");
     await done;
   }, 20_000);
+});
+
+/**
+ * **The rc hears invites** (pets phase 1, docs/projects/pets/phases.md).
+ * Before it, `rc --all` parked once, where its rows said, and an
+ * `agent.invite` writes no row — so an agent brought to a new canvas stood
+ * there and nothing answered, restart or not. The interval is shortened by
+ * `ISOCAN_RC_DISCOVER_MS`; the test never sleeps the real thirty seconds.
+ */
+describe("the rc hears invites (pets phase 1)", () => {
+  it("a running `rc --all` parks on a canvas its agent was benched onto, answers there, and closes it on withdrawal", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Acme launch" },
+    });
+    expect((await isocan("--canvas", "prj_1", "rc", "add", "Sian")).code).toBe(0);
+    expect((await isocan("bench", "add", "Sian")).code).toBe(0);
+    const sian = Object.values(await snapshotAgents()).find((a) => a.actor.name === "Sian")!.actor;
+
+    const rc = spawnCli(["rc", "--all"], { ISOCAN_RC_DISCOVER_MS: "300" });
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    rc.stderr!.setEncoding("utf8");
+    rc.stderr!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes('answering on "P"'), "the rc to come up on P");
+    expect(out).not.toContain("Acme launch");
+
+    // Brought to a canvas this rc never parked on, while it runs.
+    const joined = await isocan("--canvas", "prj_2", "bench", "join", "Sian");
+    expect(joined.code, joined.stderr).toBe(0);
+    expect(joined.stdout).toContain("Sian stands on Acme launch now");
+    expect(joined.stdout).toContain("picks this up within 30 s");
+
+    // No restart: the same process says the start's words for the new room,
+    // and the daemon's connection-bound hold names Sian there.
+    await until(async () => out, (o) => o.includes('[Acme launch] answering on "Acme launch"'), "the new room announced");
+    await until(() => answeringFor("prj_2"), (ids) => ids.includes(sian.id), "Sian held on Acme launch");
+    // …recorded the way a parked room records a take-up.
+    await until(rcRows, (rows) => rows.some((r) => r.canvasId === "prj_2" && r.actorId === sian.id), "the rc row for prj_2");
+    // …and the bench reads `ready` for her now.
+    const bench = await isocan("--json", "bench");
+    expect(bench.code, bench.stderr).toBe(0);
+    expect((JSON.parse(bench.stdout) as { bench: { name: string; reach: string }[] }).bench.find((r) => r.name === "Sian")?.reach).toBe("ready");
+
+    // The owner's summons on the new canvas starts a turn and ends one. An
+    // invite writes no gate, so this is Nico's word — the rc's own person.
+    const asked = await isocan("--canvas", "prj_2", "comment", "add", "@Sian the launch copy, please", "--at", "0,0");
+    expect(asked.code, asked.stderr).toBe(0);
+    await until(async () => out, (o) => o.includes("[Acme launch] Sian · summons from Nico"), "the summons on Acme launch");
+    await until(async () => out, (o) => o.includes("[Acme launch] Sian · turn ended"), "the turn on Acme launch");
+
+    // A withdrawal closes the room — what a restart would do, since the room
+    // reaps its row — and the canvas it started on is untouched.
+    const removed = await isocan("--canvas", "prj_2", "rc", "remove", "Sian");
+    expect(removed.code, removed.stderr).toBe(0);
+    await until(async () => out, (o) => o.includes('no longer answering on "Acme launch"'), "the room closed");
+    await until(() => answeringFor("prj_2"), (ids) => ids.length === 0, "nothing held on Acme launch");
+    expect(await answeringFor("prj_1")).toContain(sian.id);
+    expect(rc.exitCode).toBeNull();
+
+    rc.kill("SIGINT");
+    await done;
+  }, 60_000);
+
+  it("an invited agent runs on the harness, model and directory it was set up with, not the machine default", async () => {
+    const fakeAcp = fileURLToPath(new URL("./fake-acp.mjs", import.meta.url));
+    await fs.writeFile(
+      path.join(home, "config.json"),
+      JSON.stringify({
+        adapterEnv: ["FAKE_ACP_*"],
+        acpAdapters: { "claude-code": [process.execPath, fakeAcp], fake: [process.execPath, fakeAcp] },
+        defaultHarness: "claude-code",
+      }),
+    );
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Acme launch" },
+    });
+    expect((await isocan("--canvas", "prj_1", "rc", "add", "Sian", "--harness", "fake", "--model", "acme-model-1")).code).toBe(0);
+    expect((await isocan("bench", "add", "Sian")).code).toBe(0);
+    const onA = (await rcRows()).find((r) => r.canvasId === "prj_1" && r.name === "Sian")!;
+    expect(onA.harness).toBe("fake");
+
+    // The rc starts somewhere else, so a copied cwd is told apart from its own.
+    const elsewhere = path.join(home, "elsewhere");
+    await fs.mkdir(elsewhere);
+    const rc = startCli(["--canvas", "prj_1", "rc", "--all"], {
+      cwd: elsewhere,
+      env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ISOCAN_RC_DISCOVER_MS: "300" }),
+    });
+    started.push(rc);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    rc.stderr!.setEncoding("utf8");
+    rc.stderr!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes('answering on "P"'), "the rc to come up on P");
+
+    expect((await isocan("--canvas", "prj_2", "bench", "join", "Sian")).code).toBe(0);
+    const onB = (
+      await until(rcRows, (rows) => rows.some((r) => r.canvasId === "prj_2" && r.actorId === onA.actorId), "the row on prj_2")
+    ).find((r) => r.canvasId === "prj_2")!;
+    expect({ harness: onB.harness, model: onB.model, cwd: onB.cwd }).toEqual({ harness: "fake", model: "acme-model-1", cwd: onA.cwd });
+    expect(onB.cwd).not.toBe(elsewhere);
+
+    // And the turn runs on it: the harness line names the copied harness…
+    await until(() => answeringFor("prj_2"), (ids) => ids.includes(onA.actorId), "Sian held on Acme launch");
+    const asked = await isocan("--canvas", "prj_2", "comment", "add", "@Sian the launch copy, please", "--at", "0,0");
+    expect(asked.code, asked.stderr).toBe(0);
+    await until(async () => out, (o) => o.includes("[Acme launch] Sian · turn ended"), "the turn on Acme launch");
+    expect(out).toContain("[Acme launch] Sian · fake");
+    expect(out).not.toContain("[Acme launch] Sian · claude-code");
+    // …in the directory copied from prj_1, not the one the rc started in.
+    // (The model rides the row into `adapterFor`; the row is asserted above.)
+    expect(out).toContain(`[Acme launch] Sian · session started in ${onA.cwd}`);
+
+    rc.kill("SIGINT");
+    await done;
+  }, 60_000);
+
+  it("a start finds a canvas its agent was only ever invited to", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Acme launch" },
+    });
+    expect((await isocan("--canvas", "prj_1", "rc", "add", "Sian")).code).toBe(0);
+    expect((await isocan("bench", "add", "Sian")).code).toBe(0);
+    // Invited with nothing running: no row names prj_2.
+    expect((await isocan("--canvas", "prj_2", "bench", "join", "Sian")).code).toBe(0);
+    expect((await rcRows()).map((r) => r.canvasId)).toEqual(["prj_1"]);
+
+    const rc = spawnCli(["rc", "--all"]);
+    let out = "";
+    rc.stdout!.setEncoding("utf8");
+    rc.stdout!.on("data", (chunk) => (out += chunk));
+    const done = new Promise<void>((resolve) => rc.on("close", () => resolve()));
+    await until(async () => out, (o) => o.includes("answering on 2 canvases"), "the rc to come up on both");
+    await until(async () => out, (o) => o.includes('[Acme launch] answering on "Acme launch"'), "the invited canvas announced");
+    rc.kill("SIGINT");
+    await done;
+  }, 30_000);
 });
 
 describe("which harness an unnamed agent runs on (decided 2026-09-04)", () => {
