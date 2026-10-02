@@ -79,8 +79,8 @@ there — and the workflow finds nothing to do when you have.
 
 ## The night shift's pull requests
 
-Three workflows open a pull request on a schedule — `changelog.yml`,
-`grade.yml`, `persona.yml` — and until this section existed, nothing said what
+Four workflows open a pull request on a schedule — `changelog.yml`,
+`grade.yml`, `persona.yml`, `loop.yml` — and until this section existed, nothing said what
 happens to yesterday's machine PR when today's lands. What that cost: five
 open machine PRs at once on 9 Sep 2026 (three grades, two changelogs), each
 waiting on a person remembering — the same failure as the hand-kept review
@@ -106,6 +106,19 @@ longer does, with a comment naming the run that closed it. Merging is the
 default because the pages are a time series — yesterday's readings are
 yesterday's, not stale — and a conflict can only mean somebody hand-edited a
 generated page, which is what supersede is for.
+
+**Loop pulls prove, propose, and merge themselves — and only the findings.**
+`loop.yml` reads Stitch Loop, files new insights in `docs/loop/`, and (when
+`ANTHROPIC_API_KEY` is set) proves every untriaged claim against the codebase
+and records a proposal via `loop.mjs propose` (`decision: proposed`). It never
+decides, pushes or mines, because a decision dismisses an insight for everyone
+in the workspace. A newer run closes an older `loop/` PR as superseded, and the
+run merges its own only when the diff is the findings and their two views *and*
+the checks (`render --check`, which rejects unverified reads, plus the Loop and
+roadmap suites) pass on the branch. It skips with a notice, rather than
+failing, until the `LOOP_API_KEY` and `STITCH_INSTALLER_URL` secrets exist —
+the second is a secret because it carries a read token for a bucket that is not
+public, and this repository is.
 
 **Changelogs are the exception, and the reason the rule is per-workflow.** The
 entry is a judgement — "read it before merging", says the PR body — and a day
@@ -184,6 +197,20 @@ in August measured, and writes its findings back there as a dated page.
 `docs/reviews/lessons.md` is the one to read even if you never run them: the
 failure modes this codebase has actually produced, each with the guard that
 now catches it. Add to it when a bug turns out to have a shape.
+
+## Loop's findings
+
+isocan is paired with a Stitch Loop workspace (`.stitch.json`). Loop mines the
+code for insights; **the ranking is ours, not Loop's**. Each insight is a finding
+in `docs/loop/` — Loop's claim, our read of it against the code, and the
+decision in front matter — and [`docs/LOOP.md`](docs/LOOP.md) and the Loop
+counts in [`docs/ROADMAP.md`](docs/ROADMAP.md) are generated from those files.
+`node scripts/loop.mjs` is the whole verb set and `isocan --agent-help` has the
+protocol: **an agent proposes, a person decides**, because a decision is sent to
+a workspace other people read. Ledger's `scripts/loop.ts` is where this ran
+first; the two differences are that a finding names a *project* here, and the
+context Loop gets is the repo's own `measure.mjs` numbers, not an oplog digest —
+that would carry what people did on their canvases to a third party.
 
 ## What needs a person
 

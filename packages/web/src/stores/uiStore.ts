@@ -1,8 +1,8 @@
-import type { CursorSignal, GroupBox, TextAnchor } from "@isocan/core";
+import type { CursorSignal, GroupAim, GroupBox, TextAnchor } from "@isocan/core";
 import { create } from "zustand";
 import { shallow } from "zustand/shallow";
-import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper } from "@isocan/core";
-import { TEXT_FACES, TEXT_STYLES, isPaper } from "@isocan/core";
+import type { AddKind, InkPoint, InkStroke, TextFace, TextStyle, Paper, TextColourValue } from "@isocan/core";
+import { TEXT_FACES, TEXT_STYLES, isPaper, textFontFrom, textInk } from "@isocan/core";
 import type { Clipboard } from "../lib/clipboard.ts";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
@@ -22,6 +22,10 @@ export interface DragState {
   dx: number;
   dy: number;
   moved: boolean;
+  /** What the hand is holding — the items that wear the lift (`.item.lifted`).
+   * The roots of the drag, not everything riding it: an area's contents and
+   * an item's marks travel along but stay flat. */
+  lift?: readonly string[];
 }
 
 /** Live rubber-band rectangle in world coordinates (unnormalized corners). */
@@ -80,6 +84,10 @@ export interface PendingText {
   /** The paper being typed on, or null/absent for a plain caption — local
    *  until it commits, like the step and the face. */
   paper?: Paper | null;
+  /** The words' colour and named font (`core/textcolour.ts`, `TEXT_FONTS`),
+   *  null/absent for the theme's ink and the plain face. */
+  colour?: TextColourValue | null;
+  font?: string | null;
 }
 
 export interface PendingComment {
@@ -100,8 +108,18 @@ interface UiStore {
   fannedItemId: string | null;
   drag: DragState | null;
   resize: ResizeState | null;
-  groupPreview: { id: string; boxes: ReadonlyMap<string, GroupBox> } | null;
+  /** A group gesture's live boxes. `lift` is set by a pointer drag once the
+   * press has become one — the gesture's roots, so a dragged group lifts its
+   * frame and not its members. A resize or a keyboard nudge never lifts. */
+  groupPreview: { id: string; boxes: ReadonlyMap<string, GroupBox>; lift?: readonly string[] } | null;
   groupDropTargetId: string | null;
+  /** A ⌘-drag that would put its items on the open canvas: the group they
+   * leave, which wears the *Out of …* pill. Cleared with the drop target. */
+  groupDropOutId: string | null;
+  /** What a press here would take — the dashed outline — and, with ⌘, the
+   * group around it or the members a selection box would reach. One answer,
+   * `groupAim` in core, read by the hover and the press alike. */
+  aim: GroupAim | null;
   marquee: MarqueeState | null;
   /** Alignment guides for the drag in hand: the lines the dragged box has
    * settled onto. World coordinates; empty when nothing is aligned. */
@@ -139,6 +157,9 @@ interface UiStore {
    *  times — the same argument that remembers the step. The DEFAULT is still
    *  no paper; this only remembers what you chose last. */
   lastPaper: Paper | null;
+  /** The colour and font too, remembered on the same terms (30 Sep 2026). */
+  lastTextColour: TextColourValue | null;
+  lastTextFont: string | null;
   /** Ink drawn with the Pen that has not landed as an item YET. It lives in
    * world coordinates and is local for the moment between lifting the pen and
    * the settle timer firing, when `commitSketch` turns it into an ordinary
@@ -309,7 +330,8 @@ interface UiStore {
   setDrag: (drag: DragState | null) => void;
   setResize: (resize: ResizeState | null) => void;
   setGroupPreview: (preview: UiStore["groupPreview"]) => void;
-  setGroupDropTarget: (itemId: string | null) => void;
+  setGroupDropTarget: (itemId: string | null, outOf?: string | null) => void;
+  setAim: (aim: GroupAim | null) => void;
   setMarquee: (marquee: MarqueeState | null) => void;
   setGuides: (guides: Guide[], spacing?: SpacingGuide[]) => void;
   setEntered: (itemId: string | null) => void;
@@ -322,6 +344,7 @@ interface UiStore {
   setClipboard: (clipboard: Clipboard | null) => void;
   setContextMenu: (menu: { at: { x: number; y: number }; entries: MenuEntry[] } | null) => void;
   setLastText: (style: TextStyle, face: TextFace, paper: Paper | null) => void;
+  setLastTextInk: (colour: TextColourValue | null, font: string | null) => void;
   setSketchError: (message: string | null) => void;
   setPenSession: (open: boolean) => void;
   setHelpOpen: (open: boolean) => void;
@@ -534,6 +557,34 @@ function writeFlag(key: string, value: boolean): void {
 const TEXT_STEP_KEY = "isocan.text.style";
 const TEXT_FACE_KEY = "isocan.text.face";
 const TEXT_PAPER_KEY = "isocan.text.paper";
+const TEXT_COLOR_KEY = "isocan.text.color";
+const TEXT_FONT_KEY = "isocan.text.font";
+
+/** A remembered colour or font, checked against what core will draw — a stale
+ *  key opens the composer in the theme's ink and the plain face, never in
+ *  something that no longer exists. */
+function readTextInk(): { lastTextColour: TextColourValue | null; lastTextFont: string | null } {
+  try {
+    const colour = localStorage.getItem(TEXT_COLOR_KEY);
+    return {
+      lastTextColour: textInk(colour, false) ? (colour as TextColourValue) : null,
+      lastTextFont: textFontFrom(localStorage.getItem(TEXT_FONT_KEY) ?? "")?.name ?? null,
+    };
+  } catch {
+    return { lastTextColour: null, lastTextFont: null };
+  }
+}
+
+function writeTextInk(colour: string | null, font: string | null): void {
+  try {
+    for (const [key, value] of [[TEXT_COLOR_KEY, colour], [TEXT_FONT_KEY, font]] as const) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    }
+  } catch {
+    // As `writeText`: the choice holds for this session.
+  }
+}
 
 /**
  * **The step and face you last typed in, kept across reloads.**
@@ -636,6 +687,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     resize: null,
     groupPreview: null,
     groupDropTargetId: null,
+    groupDropOutId: null,
+    aim: null,
     marquee: null,
     guides: [],
     spacing: [],
@@ -651,6 +704,7 @@ export const useUiStore = create<UiStore>((set, get) => {
     lastTextStyle: readTextStyle(),
     lastTextFace: readTextFace(),
     lastPaper: readPaper(),
+    ...readTextInk(),
     sketch: [],
     sketchError: null,
     penSession: false,
@@ -718,7 +772,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     setDrag: (drag) => set({ drag }),
     setResize: (resize) => set({ resize }),
     setGroupPreview: (groupPreview) => set({ groupPreview }),
-    setGroupDropTarget: (groupDropTargetId) => set({ groupDropTargetId }),
+    setGroupDropTarget: (groupDropTargetId, groupDropOutId = null) => set({ groupDropTargetId, groupDropOutId }),
+    setAim: (aim) => set({ aim }),
     setMarquee: (marquee) => set({ marquee }),
     setGuides: (guides, spacing = []) => set({ guides, spacing }),
     setEntered: (enteredItemId) => set({ enteredItemId }),
@@ -747,6 +802,10 @@ export const useUiStore = create<UiStore>((set, get) => {
       ),
     setClipboard: (clipboard) => set({ clipboard }),
     setContextMenu: (contextMenu) => set({ contextMenu }),
+    setLastTextInk: (lastTextColour, lastTextFont) => {
+      writeTextInk(lastTextColour, lastTextFont);
+      set({ lastTextColour, lastTextFont });
+    },
     setLastText: (lastTextStyle, lastTextFace, lastPaper) => {
       writeText(lastTextStyle, lastTextFace, lastPaper);
       set({ lastTextStyle, lastTextFace, lastPaper });

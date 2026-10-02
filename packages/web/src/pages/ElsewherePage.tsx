@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { canvasUrl } from "@isocan/core";
+import "../components/notfound.css";
 
 /**
  * **This canvas lives somewhere else** — the app's half of the per-canvas

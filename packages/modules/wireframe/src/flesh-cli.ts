@@ -5,6 +5,7 @@ import type { CliHost } from "@isocan/cli/modulehost";
 import { cliAnswerer, cliPort } from "./cli-port.ts";
 import { PACKS } from "./content/packs.ts";
 import { applyCopy, copyOf, type CopyFile } from "./content/flesh-spec.ts";
+import { blockContentSchema, copyAiOnCanvas, nameFlowOnCanvas, resolveTextGenerator, validateCopyPayload } from "./copy-schema.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
 import { wiresOn, type Screen } from "./flow.ts";
 import { rebuildPrototypes } from "./kept-flows.ts";
@@ -89,19 +90,59 @@ export function registerFlesh(host: CliHost, wire: Command): void {
     );
 
   wire
-    .command("copy <screen>")
-    .description("Print a fleshed screen's words by slot and path, as a file to edit; --apply <file> writes exact words back (source \"copy\") as one version")
+    .command("copy [screens...]")
+    .description("Print a fleshed screen's words and JSON schema by slot and path; --apply <file> writes exact words back (source \"copy\") as one version; --ai fills schema-validated copy across one screen or flow")
     .option("--canvas <canvas>")
+    .option("--flow <flow>", "with --ai: only this flow's screens")
     .option("--apply <file>", "a JSON file: { \"title\"?: string, \"slots\": { \"<slot>\": { \"<path>\": \"words\" } | [\"words\", …] } }")
+    .option("--ai", "generate schema-validated copy across target screen(s) in one op group")
+    .option("--brief <words>", "extra domain or tone brief for --ai")
     .option("--by <name>", "who wrote the words — recorded on the screen", "agent")
     .action(
-      run(async (ref: string, _local: unknown, cmd: Command) => {
-        const opts = cmd.optsWithGlobals() as { apply?: string; by: string };
+      run(async (refs: string[], _local: unknown, cmd: Command) => {
+        const opts = cmd.optsWithGlobals() as {
+          apply?: string;
+          ai?: boolean;
+          brief?: string;
+          flow?: string;
+          by: string;
+          answerer?: string;
+          seed?: string;
+        };
         const ctx = await ctxOf(cmd);
         const p = await resolveCanvas(ctx);
         const port = cliPort(host, ctx, p.id);
         const snapshot = await ctx.client.snapshot(p.id);
         const all = await wiresOn(port, snapshot.canvas);
+
+        if (opts.ai) {
+          const screens = await screensFor(host, snapshot, all, refs, opts.flow);
+          const gen = resolveTextGenerator({
+            seed: Number(opts.seed ?? 1),
+            useStub: opts.answerer === "stub",
+          });
+          const r = await copyAiOnCanvas(port, snapshot.canvas, all, screens, gen, {
+            ...(opts.brief ? { brief: opts.brief } : {}),
+          });
+          if (ctx.json) {
+            return printJson({
+              group: r.group,
+              by: r.by,
+              changed: r.changed.map((c) => ({ itemId: c.itemId, title: c.title, content: c.spec.content })),
+              prototypes: r.prototypes,
+            });
+          }
+          for (const c of r.changed) {
+            console.log(`${c.itemId}  ${c.title}${c.spec.content?.title ? ` — "${c.spec.content.title}"` : ""}`);
+          }
+          console.log(
+            `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} filled with AI copy (${r.by})${r.prototypes.length ? ", prototype rebuilt" : ""} — \`isocan undo\` takes it back`,
+          );
+          return;
+        }
+
+        const ref = refs[0];
+        if (!ref) throw new Error("missing required argument 'screen' (or pass --ai)");
         const [screen] = await screensFor(host, snapshot, all, [ref], undefined);
         const spec = screen!.spec;
         if (!opts.apply) {
@@ -113,6 +154,7 @@ export function registerFlesh(host: CliHost, wire: Command): void {
             title: words.title,
             ...(spec.content.bar !== undefined ? { bar: spec.content.bar } : {}),
             content: words.content,
+            schema: blockContentSchema(spec),
             slots: Object.fromEntries(words.slots.map((s) => [s.slot, { block: s.block, words: s.words }])),
           }, null, 2));
           return;
@@ -123,9 +165,8 @@ export function registerFlesh(host: CliHost, wire: Command): void {
         } catch (error) {
           throw new Error(`${opts.apply} is not a JSON file this can read: ${(error as Error).message}`);
         }
-        // `wire copy` prints { block, words } per slot; the file may give that back as it is.
-        const slots = Object.fromEntries(Object.entries(raw.slots ?? {}).map(([k, v]) => [k, (v as { words?: unknown })?.words ?? v])) as CopyFile["slots"];
-        const next = applyCopy(spec, { ...(raw.title !== undefined ? { title: raw.title } : {}), ...(raw.bar !== undefined ? { bar: raw.bar } : {}), ...(slots ? { slots } : {}) }, opts.by);
+        const validated = validateCopyPayload(spec, raw);
+        const next = applyCopy(spec, validated, opts.by);
         if (JSON.stringify(next) === JSON.stringify(spec)) {
           if (ctx.json) return printJson({ itemId: screen!.item, changed: false });
           console.log(`${screen!.item}  ${wireTitle(spec)} — the same words; nothing written`);
@@ -139,6 +180,53 @@ export function registerFlesh(host: CliHost, wire: Command): void {
         const prototypes = await rebuildPrototypes(port, snapshot.canvas, all, [{ item: item.id, spec: next }], group);
         if (ctx.json) return printJson({ itemId: item.id, changed: true, group, content: next.content, prototypes });
         console.log(`${item.id}  ${wireTitle(next)} — exact copy by ${opts.by}, one version${prototypes.length ? `, prototype rebuilt` : ""} — \`isocan undo\` takes it back`);
+      }),
+    );
+
+  wire
+    .command("name [screens...]")
+    .description("Name a flow's brand, per-screen titles, and shared navigation bar labels coherently in one op group")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--request <words>", "override the flow request when naming")
+    .action(
+      run(async (refs: string[], _local: unknown, cmd: Command) => {
+        const opts = cmd.optsWithGlobals() as {
+          flow?: string;
+          request?: string;
+          answerer?: string;
+          seed?: string;
+        };
+        const ctx = await ctxOf(cmd);
+        const p = await resolveCanvas(ctx);
+        const port = cliPort(host, ctx, p.id);
+        const snapshot = await ctx.client.snapshot(p.id);
+        const all = await wiresOn(port, snapshot.canvas);
+        const screens = await screensFor(host, snapshot, all, refs, opts.flow);
+        const gen = resolveTextGenerator({
+          seed: Number(opts.seed ?? 1),
+          useStub: opts.answerer === "stub",
+        });
+        const r = await nameFlowOnCanvas(port, snapshot.canvas, all, screens, gen, {
+          ...(opts.request ? { request: opts.request } : {}),
+        });
+        if (ctx.json) {
+          return printJson({
+            group: r.group,
+            by: r.by,
+            brand: r.brand,
+            navLabels: r.navLabels,
+            changed: r.changed.map((c) => ({ itemId: c.itemId, title: c.title })),
+            prototypes: r.prototypes,
+          });
+        }
+        console.log(`brand: ${r.brand} · nav: ${r.navLabels.join(" · ") || "none"}`);
+        for (const c of r.changed) {
+          console.log(`${c.itemId}  ${c.title}`);
+        }
+        console.log(
+          `${r.changed.length} wire${r.changed.length === 1 ? "" : "s"} named (${r.by})${r.prototypes.length ? ", prototype rebuilt" : ""} — \`isocan undo\` takes it back`,
+        );
       }),
     );
 }

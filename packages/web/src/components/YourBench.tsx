@@ -1,5 +1,5 @@
-import { benchStandingWords, benchWords, type Actor } from "@isocan/core";
-import { useBench } from "../lib/bench.ts";
+import { benchStandingWords, benchWords, type Actor, type BenchAgent } from "@isocan/core";
+import { followsHint, useBench, useFollows } from "../lib/bench.ts";
 import "./yourbench.css";
 
 /**
@@ -26,7 +26,7 @@ import "./yourbench.css";
  * the same way two copies of the fold would.
  */
 export function YourBench({ actor, onClose }: { actor: Actor; onClose: () => void }) {
-  const { rows, error } = useBench(actor.id);
+  const { rows, error, canvasId: benchCanvasId } = useBench(actor.id);
 
   return (
     <div className="identity-menu bench-panel" onKeyDown={(e) => e.key === "Escape" && onClose()}>
@@ -51,6 +51,7 @@ export function YourBench({ actor, onClose }: { actor: Actor; onClose: () => voi
               <span className="bench-where">
                 {row.harness ?? "harness unsaid"} · {benchStandingWords(row)}
               </span>
+              {benchCanvasId && <Follows row={row} benchCanvasId={benchCanvasId} actor={actor} />}
             </li>
           ))}
         </ul>
@@ -59,5 +60,16 @@ export function YourBench({ actor, onClose }: { actor: Actor; onClose: () => voi
         Close
       </button>
     </div>
+  );
+}
+
+/** *Follows me* on one row — the markup; `useFollows` is the act. */
+function Follows({ row, benchCanvasId, actor }: { row: BenchAgent; benchCanvasId: string; actor: Actor }) {
+  const [on, flip] = useFollows(row, benchCanvasId, actor);
+  return (
+    <label className="bench-follows" title={followsHint(row.name)}>
+      <input type="checkbox" checked={on} onChange={(event) => flip(event.target.checked)} />
+      Follows me
+    </label>
   );
 }

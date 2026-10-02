@@ -180,5 +180,5 @@ export function benchJoinRefusal(name: string): string {
  * confers nothing, and a join confers standing here and nothing else.
  */
 export function benchJoinWords(name: string): string {
-  return `${name} answers on this canvas now, from a bench. Nothing else moved: no turn was started, no summons rule was written, and no other canvas changed.`;
+  return `${name} stands on this canvas now. Nothing else moved: no turn was started, no summons rule was written, and no other canvas changed.`;
 }

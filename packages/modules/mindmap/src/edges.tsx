@@ -1,4 +1,4 @@
-import type { Item, UnderlayFacts } from "@isocan/core";
+import type { UnderlayFacts } from "@isocan/core";
 import { allMapEdges, edgeAnchors } from "./graph.ts";
 
 /**
@@ -53,25 +53,15 @@ function curve({ x1, y1, x2, y2, axis }: ReturnType<typeof edgeAnchors>): string
 /** Facts as props — the shell reads its stores once and hands them over
  *  (`ModuleUnderlays.tsx`), so this component knows core and React and
  *  nothing about where the canvas came from. */
-export function MapEdges({ canvas, drag }: UnderlayFacts) {
+export function MapEdges({ canvas }: UnderlayFacts) {
+  // The live gesture is already in `canvas` — the shell folds a drag or a
+  // group preview in before handing it over — so a line never lags the node
+  // it joins, on either kind of canvas.
   const edges = allMapEdges(canvas);
   if (edges.length === 0) return null;
 
-  // While a drag is live the item has not moved in the replica yet, so a node
-  // rides the gesture's delta to stay under the hand — the same trick a
-  // comment pin uses, and the reason a line does not lag the node it joins.
-  const riding = (item: Item) => {
-    const on = drag?.itemIds.includes(item.id) ? drag : null;
-    return {
-      x: item.x + (on?.dx ?? 0),
-      y: item.y + (on?.dy ?? 0),
-      width: item.width,
-      height: item.height,
-    };
-  };
-
   const drawn = edges.map(({ from, to }) => {
-    const a = edgeAnchors(riding(from), riding(to));
+    const a = edgeAnchors(from, to);
     return { key: `${from.id}->${to.id}`, ...a, d: curve(a) };
   });
 

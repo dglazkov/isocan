@@ -6,9 +6,10 @@ import { ago, groupSwitchRows, isShelved, keyFor, litRuns, rankCanvases, type Sh
 import { useUiStore, type PaletteMode } from "../stores/uiStore.ts";
 import { useCommands } from "../lib/commands.ts";
 import { availableActions, type Action, type ActionContext } from "../lib/actions.ts";
+import { chatHiddenNow } from "../lib/panels.ts";
 import { useCanEdit } from "../lib/capability.ts";
 import { listCanvases, listSpaces } from "../lib/api.ts";
-import { readRecents } from "../lib/recents.ts";
+import { readRecents, recentCanvases } from "../lib/recents.ts";
 import { latelyIds } from "../lib/lately.ts";
 import { useInboxStore } from "../stores/inboxStore.ts";
 import { loadSeen } from "../lib/seen.ts";
@@ -161,8 +162,10 @@ export function CommandPalette({
     // home screen, so offering to post one would be an entry that cannot work.
     // Nor can a reader post one: a slash command is a comment, and a comment
     // is a write (roles phase 1).
+    // Nor inside a pane that hides the Chat (`?embed=1`): choosing a command
+    // opens the Chat with it typed, and the host's chat is the only one there.
     const asks =
-      canvasId && canEdit ? commands.filter((c) => hits(`/${c.name} ${c.description}`)) : [];
+      canvasId && canEdit && !chatHiddenNow() ? commands.filter((c) => hits(`/${c.name} ${c.description}`)) : [];
     // Only once something is typed: with an empty field the switcher's own
     // face is the place for the list, and it is one row away.
     const jumps =
@@ -472,23 +475,7 @@ function useCanvasList(canvasId: string | null, wanted: boolean): Canvas[] {
     // `fetched` is read to ask once, not to re-ask when it lands.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, wanted]);
-  return useMemo(() => {
-    if (fetched) return fetched;
-    // No stamps: the browser does not know when these were last touched, and
-    // `ago` of an unparseable date is "", which is the honest column.
-    return readRecents().map(
-      (recent): Canvas => ({
-        id: recent.id,
-        title: recent.title,
-        description: "",
-        properties: {},
-        createdAt: "",
-        createdBy: { id: "", name: "" },
-        updatedAt: "",
-        updatedBy: { id: "", name: "" },
-      }),
-    );
-  }, [fetched]);
+  return useMemo(() => fetched ?? recentCanvases(readRecents()), [fetched]);
 }
 
 /** Open the Chat, where a slash command becomes a message. */

@@ -65,6 +65,108 @@ describe("installable straight from git", () => {
     for (const name of Object.keys(kept)) expect(pkg.dependencies).toHaveProperty(name);
   });
 
+  it("every workspace declares its runtime imports and carries no unused dependencies", async () => {
+    const { withoutComments } = await import("./source.ts");
+    const moduleDir = path.join(repo, "packages/modules");
+    const moduleNames = new Set(
+      await Promise.all(
+        (await fs.readdir(moduleDir)).map(async (d) => {
+          const p = path.join(moduleDir, d, "package.json");
+          return (await fs.stat(p).then(() => true, () => false))
+            ? (await readJson(`packages/modules/${d}/package.json`)).name
+            : null;
+        }),
+      ).then((names) => names.filter((n): n is string => Boolean(n))),
+    );
+
+    const workspaceDirs = [
+      ...(await fs.readdir(path.join(repo, "packages")))
+        .filter((d) => d !== "modules")
+        .map((d) => `packages/${d}`),
+      ...(await fs.readdir(moduleDir)).map((d) => `packages/modules/${d}`),
+    ];
+
+    const pkgNameOf = (spec: string) =>
+      spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0]!;
+
+    const walkFiles = async (dir: string): Promise<string[]> => {
+      const found: string[] = [];
+      if (!(await fs.stat(dir).then((s) => s.isDirectory(), () => false))) return found;
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name === "dist") continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) found.push(...(await walkFiles(full)));
+        else if (/\.(m?js|cjs|tsx?)$/.test(entry.name)) found.push(full);
+      }
+      return found;
+    };
+
+    const missing: string[] = [];
+    const unused: string[] = [];
+
+    for (const relDir of workspaceDirs) {
+      const manifestPath = path.join(repo, relDir, "package.json");
+      if (!(await fs.stat(manifestPath).then(() => true, () => false))) continue;
+      const pkg = await readJson(`${relDir}/package.json`);
+      const runtimeDeclared = new Set([
+        ...Object.keys(pkg.dependencies ?? {}),
+        ...Object.keys(pkg.peerDependencies ?? {}),
+      ]);
+
+      const runtimeFiles = [
+        ...(await walkFiles(path.join(repo, relDir, "src"))),
+        ...(await walkFiles(path.join(repo, relDir, "bin"))),
+      ];
+      const allFiles = await walkFiles(path.join(repo, relDir));
+
+      const runtimeImports = new Set<string>();
+      for (const file of runtimeFiles) {
+        const text = withoutComments(await fs.readFile(file, "utf8"));
+        if (file.endsWith(".tsx") && /<\/[A-Za-z>]|<[A-Za-z][^>\n]*\/>/.test(text)) runtimeImports.add("react");
+        for (const m of text.matchAll(
+          /^\s*(?:import|export)\s+(?!type\b)(?:[^"'\n;]*?\s+from\s+)?["']([^"'./][^"']*)["']|\bimport\(\s*["']([^"'./][^"']*)["']\s*\)/gm,
+        )) {
+          const spec = m[1] ?? m[2];
+          if (!spec || spec.startsWith("node:")) continue;
+          runtimeImports.add(pkgNameOf(spec));
+        }
+      }
+
+      for (const imp of runtimeImports) {
+        if (imp === pkg.name) continue;
+        // @isocan/server reaches @isocan/cloudstore by dynamic import only on Cloud Run (tested below).
+        if (pkg.name === "@isocan/server" && imp === "@isocan/cloudstore") continue;
+        // Build-time modules are coupled exclusively by the two module lists (test/modules.test.ts).
+        if ((pkg.name === "@isocan/web" || pkg.name === "@isocan/cli") && moduleNames.has(imp)) continue;
+        if (!runtimeDeclared.has(imp)) {
+          missing.push(`${relDir}/package.json is missing runtime dependency "${imp}"`);
+        }
+      }
+
+      const anyReferenced = new Set<string>(runtimeImports);
+      for (const file of allFiles) {
+        const text = withoutComments(await fs.readFile(file, "utf8"));
+        if (file.endsWith(".tsx") && /<\/[A-Za-z>]|<[A-Za-z][^>\n]*\/>/.test(text)) anyReferenced.add("react");
+        for (const m of text.matchAll(
+          /^\s*(?:import|export)\s+(?:type\s+)?(?:[^"'\n;]*?\s+from\s+)?["']([^"'./][^"']*)["']|\bimport\(\s*["']([^"'./][^"']*)["']\s*\)/gm,
+        )) {
+          const spec = m[1] ?? m[2];
+          if (!spec || spec.startsWith("node:")) continue;
+          anyReferenced.add(pkgNameOf(spec));
+        }
+      }
+
+      for (const dep of runtimeDeclared) {
+        if (!anyReferenced.has(dep)) {
+          unused.push(`${relDir}/package.json declares unused dependency "${dep}"`);
+        }
+      }
+    }
+
+    expect(missing, missing.join("\n")).toEqual([]);
+    expect(unused, unused.join("\n")).toEqual([]);
+  });
+
   it("keeps the cloud backing's 43 MiB out of the CLI install, in both directions", async () => {
     // The two-way guard, and the direction that matters is the SECOND one.
     // The root manifest once carried a copy of what the CLI needs at runtime

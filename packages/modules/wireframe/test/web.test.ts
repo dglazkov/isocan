@@ -466,7 +466,7 @@ describe("the maybe marks", () => {
     const lib = "react-dom/server";
     const { renderToStaticMarkup } = (await import(lib)) as { renderToStaticMarkup: (el: unknown) => string };
     const { createElement } = await import("react");
-    const draw = (canvas: CanvasContents) => renderToStaticMarkup(createElement(WireMaybes, { canvas, drag: null }));
+    const draw = (canvas: CanvasContents) => renderToStaticMarkup(createElement(WireMaybes, { canvas }));
     const html = draw(canvasOf(item("itm_confirm", { [MAYBE_PROP]: "0.36" }, 470)));
     expect(html).toContain('data-wire-maybe="itm_confirm"');
     // The outline sits on the item's own box (the stylesheet offsets it outward); the tag's anchor is the item's top-right corner, and the tag rises above it.
@@ -618,7 +618,7 @@ describe("a wire behind its design system", () => {
         throw new Error("looking wrote something");
       },
     } as unknown as WebHost;
-    const html = renderToStaticMarkup(createElement(WireBehind, { canvas, drag: null, host, canEdit: true, past: false }));
+    const html = renderToStaticMarkup(createElement(WireBehind, { canvas, host, canEdit: true, past: false }));
     expect(html).toContain(`data-wire-behind="${wire}"`);
     expect(html).toContain('title="behind: drawn in &quot;Acme Warm&quot; version 1, governed by &quot;DESIGN.md&quot; version 2 of 2 — Restyle to Acme Warm"');
     expect(html).toContain(`>${n} wires behind</button>`);

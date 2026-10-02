@@ -1286,8 +1286,25 @@ export function runGc(canvasId: string, options: GcRequest = {}): Promise<GcRepo
   return request("POST", `/api/projects/${canvasId}/gc`, options);
 }
 
+const stagedBlobs = new Map<string, { mimeType: string; text: string; dataUrl: string }>();
+
+/** Make a staged text blob available to `blobUrl` and `readBlobText` while its write is in the offline queue. */
+export function stageLocalBlob(canvasId: string, blob: { blobHash: string; mimeType: string; text: string }): void {
+  stagedBlobs.set(`${canvasId}/${blob.blobHash}`, {
+    mimeType: blob.mimeType,
+    text: blob.text,
+    dataUrl: `data:${blob.mimeType};utf8,${encodeURIComponent(blob.text)}`,
+  });
+}
+
+/** Drop a staged text blob once the home has confirmed the write or refused it. */
+export function unstageLocalBlob(canvasId: string, blobHash: string): void {
+  stagedBlobs.delete(`${canvasId}/${blobHash}`);
+}
+
+/** URL for an `<img src>`, video, or iframe — returns an inline data URL while a blob is staged in the offline queue. */
 export function blobUrl(canvasId: string, blobHash: string): string {
-  return `/api/projects/${canvasId}/blobs/${blobHash}`;
+  return stagedBlobs.get(`${canvasId}/${blobHash}`)?.dataUrl ?? `/api/projects/${canvasId}/blobs/${blobHash}`;
 }
 
 /**
@@ -1312,7 +1329,7 @@ export function blobUrl(canvasId: string, blobHash: string): string {
  * say which silence it is instead of rendering empty.
  */
 async function fetchBlob(canvasId: string, blobHash: string, signal?: AbortSignal, headers: Record<string, string> = {}): Promise<Response> {
-  const url = blobUrl(canvasId, blobHash);
+  const url = `/api/projects/${canvasId}/blobs/${blobHash}`;
   const send = () => fetch(url, { signal: signal ?? null, headers });
   let res = await send();
   signal?.throwIfAborted();
@@ -1329,6 +1346,8 @@ async function fetchBlob(canvasId: string, blobHash: string, signal?: AbortSigna
 
 /** A version's bytes. */
 export async function readBlob(canvasId: string, blobHash: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<Blob> {
+  const staged = stagedBlobs.get(`${canvasId}/${blobHash}`);
+  if (staged) return new Blob([staged.text], { type: staged.mimeType });
   return (await fetchBlob(canvasId, blobHash, signal, headers)).blob();
 }
 
@@ -1341,6 +1360,8 @@ export async function readBlob(canvasId: string, blobHash: string, signal?: Abor
  * and saved back over the file.
  */
 export async function readBlobText(canvasId: string, blobHash: string, signal?: AbortSignal): Promise<string> {
+  const staged = stagedBlobs.get(`${canvasId}/${blobHash}`);
+  if (staged) return staged.text;
   return (await fetchBlob(canvasId, blobHash, signal)).text();
 }
 

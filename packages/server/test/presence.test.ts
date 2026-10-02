@@ -137,6 +137,33 @@ describe("PresenceHub", () => {
     hub.close();
   });
 
+  it("a drag rides the beat while the hand is down, and is gone from the beat that lets go", () => {
+    // groups-by-hand phase 3. Latest state per session and nothing else:
+    // the roster carries where the drag IS, never a history of it.
+    const hub = new PresenceHub(1000);
+    const tab = hub.createSession("prj", alice, "web");
+    const drag = { gesture: "g1", roots: ["itm_1"], from: { x: 10, y: 20 }, dx: 5, dy: -3, into: null };
+    hub.touch("prj", tab.sessionId, { drag });
+    expect(hub.roster("prj")[0]!.drag).toEqual(drag);
+    hub.touch("prj", tab.sessionId, { drag: { ...drag, dx: 40 } });
+    expect(hub.roster("prj")[0]!.drag?.dx).toBe(40);
+    // A beat about something else leaves the drag alone…
+    hub.touch("prj", tab.sessionId, { cursor: { x: 1, y: 1 } });
+    expect(hub.roster("prj")[0]!.drag?.dx).toBe(40);
+    // …and the beat without one ends it: the field is absent, not null.
+    hub.touch("prj", tab.sessionId, { drag: null });
+    expect("drag" in hub.roster("prj")[0]!).toBe(false);
+    // A malformed drag is dropped, not relayed to every screen.
+    hub.touch("prj", tab.sessionId, { drag: { gesture: "g2", roots: [], from: { x: 0, y: 0 }, dx: 0, dy: 0 } });
+    expect("drag" in hub.roster("prj")[0]!).toBe(false);
+    // A mirrored face carries its drag across the wire, sanitized the same way.
+    hub.mirror("prj", "home:x", [{ ...hub.roster("prj")[0]!, sessionId: "far", drag: { ...drag, dx: "no" } as never }]);
+    expect("drag" in hub.roster("prj").find((s) => s.sessionId === "far")!).toBe(false);
+    hub.mirror("prj", "home:x", [{ ...hub.roster("prj")[0]!, sessionId: "far", drag }]);
+    expect(hub.roster("prj").find((s) => s.sessionId === "far")!.drag).toEqual(drag);
+    hub.close();
+  });
+
   it("opLocus maps ops to canvas positions", () => {
     const canvas = {
       ...emptyCanvas(),
@@ -304,6 +331,32 @@ describe("presence over the daemon", () => {
       expect(daemon.presence.roster("prj_1").every(s => !s.textSelection)).toBe(true);
       expect((await daemon.engine.getSnapshot("prj_1")).lastSeq).toBe(before);
     } finally { ws.close(); }
+  });
+
+  it("a web drag reaches other clients on presence, ends with the beat, and writes no ops", async () => {
+    const before = (await daemon.engine.getSnapshot("prj_1")).lastSeq;
+    const open = async () => {
+      const ws = new WebSocket(currentSocketUrl(`${base.replace("http", "ws")}/ws?canvasId=prj_1`), { headers: badge.headers });
+      const messages: ServerMessage[] = [];
+      ws.on("message", (data) => messages.push(JSON.parse(String(data))));
+      await new Promise((resolve, reject) => { ws.once("open", resolve); ws.once("error", reject); });
+      await until(() => messages.some((m) => m.type === "snapshot"));
+      return { ws, messages };
+    };
+    const mover = await open();
+    const viewer = await open();
+    try {
+      const drag = { gesture: "g1", roots: ["itm_1"], from: { x: 500, y: 300 }, dx: 30, dy: 12 };
+      const beat = (extra: object) => mover.ws.send(JSON.stringify({ type: "presence", sessionId: "drag_tab", actor: alice, cursor: { x: 1, y: 1 }, selection: ["itm_1"], ...extra }));
+      beat({ drag });
+      const seen = (pred: (s: PresenceSession) => boolean) =>
+        viewer.messages.some((m) => m.type === "presence-roster" && m.sessions.some((s) => s.sessionId === "drag_tab" && pred(s)));
+      await until(() => seen((s) => s.drag?.dx === 30 && s.drag.roots[0] === "itm_1"));
+      beat({});
+      viewer.messages.length = 0;
+      await until(() => seen((s) => s.drag === undefined));
+      expect((await daemon.engine.getSnapshot("prj_1")).lastSeq).toBe(before);
+    } finally { mover.ws.close(); viewer.ws.close(); }
   });
 
   it("web presence flows to the roster and other clients", async () => {

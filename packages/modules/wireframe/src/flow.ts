@@ -1,6 +1,7 @@
 import { FIDELITY_PROP, groupContentBox, groupDescendants, newGroupId, newItemId, newVersionId, titleSlug, type CanvasContents, type Item, type Operation } from "@isocan/core";
 import { RECIPES } from "./catalog/index.ts";
-import { JEV_INPUT_PRICE, type Answerer, type JevResponse } from "./answerer.ts";
+import { JEV_INPUT_PRICE, PriorityGate, type Answerer, type JevResponse } from "./answerer.ts";
+import { applyPinnedToSpecs, formatAskComment, gateFlowDecision, type RootGateQuestion } from "./entropy-ask.ts";
 import {
   applyPropsRound, applyStructure, decideFlow, flowScreen, pendingRound, requestBlueprint, roundCalls,
   type FlowDecision, type RoundCall,
@@ -97,12 +98,18 @@ export class FlowCanvas {
    * `wire answer` for an agent, `wire vary` from the screen it varies.
    */
   by: WireBy | undefined;
+  /**
+   * Root decisions pinned via `--pin key=value` or `/ask` disambiguation
+   * (design §12), stamped on every non-blueprint spec this flow writes.
+   */
+  pinned: Record<string, string> | undefined;
 
   constructor(readonly port: WirePort, readonly group: string) {}
 
   private styled(given: WireSpec, itemId: string): WireSpec {
     const signed = this.by && given.round !== 0 ? { ...given, by: this.by } : given;
-    const spec = this.style && signed.style === undefined ? { ...signed, style: this.style } : signed;
+    const withPinned = given.round !== 0 ? applyPinnedToSpecs([signed], this.pinned)[0]! : signed;
+    const spec = this.style && withPinned.style === undefined ? { ...withPinned, style: this.style } : withPinned;
     if (!this.pack || spec.round !== 3 || spec.content) return spec;
     return fleshSpec(spec, seedKey(spec, itemId), packOf(this.pack.pack), { p: this.pack.p, by: this.pack.by });
   }
@@ -323,13 +330,20 @@ export async function addVariations(canvas: FlowCanvas, screen: Screen, siblings
 
 // ---------- reading a flow back off the canvas
 
-/** Every wireframe screen on the canvas whose file carries a spec, read back off its current version. */
+/** Every wireframe screen on the canvas whose file carries a spec, read back off its current version (or its saved wireLayer:system / wireLayer:wire version when on a bespoke High-Fi layer). */
 export async function wiresOn(port: Pick<WirePort, "readText">, canvas: CanvasContents): Promise<Screen[]> {
   const items = Object.values(canvas.items ?? {}).filter((i) => i.properties?.[FIDELITY_PROP] === "wireframe");
   const read = await Promise.all(items.map(async (item) => {
     const current = currentVersionOf(item);
     if (!current || current.mimeType !== "text/html") return null;
-    const spec = readWire(await port.readText(current.blobHash));
+    let spec = readWire(await port.readText(current.blobHash));
+    if (!spec) {
+      const fallbackId = item.properties?.["wireLayer:system"] ?? item.properties?.["wireLayer:wire"];
+      const fallbackVer = fallbackId ? item.versions.find((v) => v.id === fallbackId) : undefined;
+      if (fallbackVer && fallbackVer.mimeType === "text/html") {
+        spec = readWire(await port.readText(fallbackVer.blobHash));
+      }
+    }
     return spec ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height, ...(item.containerId ? { containerId: item.containerId } : {}) } : null;
   }));
   return read.filter((s): s is Screen => s !== null);
@@ -405,6 +419,18 @@ export interface ComposeOptions {
    * before, for `wire flesh` later — and nothing is put in a prototype.
    */
   flesh?: { pack?: string } | false;
+  /** Root decisions pinned ahead of time via `--pin key=value` (design §12). */
+  pinned?: Record<string, string>;
+  /** Suppress interactive `/ask` prompts and pick top-1 argmax silently (`--no-ask`). */
+  noAsk?: boolean;
+  /**
+   * Optional handler invoked when a root decision in round 1 has high entropy
+   * (`H(p) > 1.0` bits or `max(p) < 0.50`). May return the user's chosen option id
+   * to pin it before round 1 draws, or `undefined` to accept top-1.
+   */
+  onGateAsk?: (ask: RootGateQuestion, comment: string) => Promise<string | undefined> | string | undefined;
+  /** Shared priority gate for concurrent Jev calls (design §12). */
+  priorityGate?: PriorityGate;
 }
 
 /** The prototype a composed flow ends with: the answerer's first choices, played above the row. */
@@ -412,7 +438,7 @@ export interface FlowPrototype {
   itemId: string;
   title: string;
   links: WireLink[];
-  /** The screens in it, in reading order — each signed with `answerer` as `wireKeepBy`. */
+  /** The screens in it, in reading order — each signed with `wireKeepBy`. */
   screens: Screen[];
   /** Whose first choices they are: `jev` or `stub`. */
   answerer: string;
@@ -433,6 +459,10 @@ export interface Composed {
   pack?: PackChoice;
   /** The prototype it ends with — absent for `--basic`, or when round 1 was confident of no screen. */
   prototype?: FlowPrototype;
+  /** Root decisions pinned during composition (`--pin` or `/ask`). */
+  pinned?: Record<string, string>;
+  /** High-entropy root questions surfaced on round 1 when `noAsk` is not set. */
+  askedGates?: RootGateQuestion[];
 }
 
 /**
@@ -458,33 +488,74 @@ export async function startFlow(port: WirePort, request: string, placement?: Rec
 /** `wire "<request>"`, whole: the blueprint, the three rounds, the variations — one op group. */
 export async function composeFlow(port: WirePort, request: string, answerer: Answerer, opts: ComposeOptions = {}): Promise<Composed> {
   const say = opts.say ?? (() => {});
+  const gate = opts.priorityGate ?? new PriorityGate();
+  const gatedAnswerer = gate.asAnswerer(answerer, "normal");
+  const activePinned: Record<string, string> = { ...(opts.pinned ?? {}) };
   const t0 = Date.now();
   // A flow that will end with a prototype leaves it room over its own row.
   const { canvas, first, flow } = await startFlow(port, request, opts.placement, opts.flesh === false ? 0 : PROTOTYPE_ROOM);
+  if (Object.keys(activePinned).length > 0) canvas.pinned = activePinned;
   const firstMs = Date.now() - t0;
   await opts.onBlueprint?.(first, firstMs, flow);
   // The governing design system's mapping is asked for while round 1 is (design §9): a flow
   // asked for where a system governs arrives in it, and the wait is the longer of the two.
-  const mapper = new StyleResolver(port, opts.mappingAnswerer ?? answerer, async () => (await wiresOn(port, await port.canvas())).map((s) => s.spec), opts.onMappingAsked);
+  const mapper = new StyleResolver(port, opts.mappingAnswerer ?? gatedAnswerer, async () => (await wiresOn(port, await port.canvas())).map((s) => s.spec), opts.onMappingAsked);
   const styling = styleAt(port, first.item, mapper);
   styling.catch(() => {});
   // The pack is one more question, asked beside round 1 — the wait is the longer of the two.
   // A pack that cannot be chosen is not a flow that cannot be drawn: it arrives in bars, and says so.
   const fleshWith = opts.flesh === false ? undefined : (opts.flesh ?? {});
+  const packPin = activePinned.pack ?? fleshWith?.pack;
   const choosing: Promise<PackChoice | Error> | undefined = fleshWith
-    ? (fleshWith.pack !== undefined ? Promise.resolve(flagPack(fleshWith.pack)) : choosePack(answerer, request)).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))))
+    ? (packPin !== undefined ? Promise.resolve(flagPack(packPin)) : choosePack(gatedAnswerer, request)).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))))
     : undefined;
   let screens = [first];
   const tallies: RoundTally[] = [];
   let by = answerer.name as string;
+  let askedGates: RootGateQuestion[] | undefined;
   for (const round of [1, 2, 3] as const) {
     const calls = roundCalls(round, screens);
-    const asked = await ask(answerer, round, calls, opts.onAsked);
+    const asked = await ask(gatedAnswerer, round, calls, opts.onAsked);
     tallies.push(asked.tally);
     by = asked.by;
     // Signed by whoever answered this round — a home that fell back to the stub says so on the screens too.
     canvas.by = wireBy(by, port.actor);
     if (round === 1) {
+      const gateResult = gateFlowDecision(calls[0]!.request, asked.responses[0]!, {
+        pinned: activePinned,
+        ...(opts.noAsk !== undefined ? { noAsk: opts.noAsk } : {}),
+      });
+      if (gateResult.asks.length > 0) {
+        askedGates = gateResult.asks;
+        if (opts.onGateAsk) {
+          for (const q of gateResult.asks) {
+            const comment = formatAskComment(q);
+            say(comment);
+            const picked = await opts.onGateAsk(q, comment);
+            if (picked) activePinned[q.key] = picked;
+          }
+        }
+      }
+      if (Object.keys(activePinned).length > 0) {
+        canvas.pinned = { ...activePinned };
+        const prevPlatform = asked.responses[0]?.answers.platform;
+        if (activePinned.platform && prevPlatform?.type === "choice") {
+          asked.responses[0] = {
+            ...asked.responses[0]!,
+            answers: {
+              ...asked.responses[0]!.answers,
+              platform: {
+                type: "choice",
+                choice: activePinned.platform,
+                probabilities: {
+                  ...Object.fromEntries(Object.keys(prevPlatform.probabilities).map((k) => [k, 0])),
+                  [activePinned.platform]: 1,
+                },
+              },
+            },
+          };
+        }
+      }
       const styled = await styling;
       canvas.style = styled.system ? styled.style : undefined;
       for (const line of styled.lines) say(line);
@@ -507,7 +578,21 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
   }
   // `basic` is plain grey wires with nothing chosen; anything else ends with a prototype you can click.
   const prototype = fleshWith ? await prototypeOfFirstChoices(canvas, screens, say) : undefined;
-  return { flow, screens, variants: canvas.variants, tallies, by, firstMs, totalMs: Date.now() - t0, style: canvas.style, mapper, ...(canvas.pack ? { pack: canvas.pack } : {}), ...(prototype ? { prototype } : {}) };
+  return {
+    flow,
+    screens,
+    variants: canvas.variants,
+    tallies,
+    by,
+    firstMs,
+    totalMs: Date.now() - t0,
+    style: canvas.style,
+    mapper,
+    ...(canvas.pack ? { pack: canvas.pack } : {}),
+    ...(prototype ? { prototype } : {}),
+    ...(canvas.pinned ? { pinned: canvas.pinned } : {}),
+    ...(askedGates ? { askedGates } : {}),
+  };
 }
 
 /**

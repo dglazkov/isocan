@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { benchAgents, benchRows, type BenchAgent, type BenchCanvas, type BenchRow } from "@isocan/core";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { benchAgents, benchFollowPatch, benchRows, type Actor, type BenchAgent, type BenchCanvas, type BenchRow } from "@isocan/core";
+import { sendEchoedResult } from "../stores/canvasStore.ts";
 import { fetchRcAnswering, getSnapshot, listCanvases } from "./api.ts";
 import { personalApi } from "./personal.ts";
 
@@ -66,6 +67,9 @@ export async function readBenchAgents(
   return { agents: benchAgents(mine.canvas), canvasId: source };
 }
 
+/** The person's bench as rows with their reach, read live from their own
+ *  canvas and the canvases they can see — the agents panel's and the identity
+ *  menu's list. `rows` is null until it has loaded. */
 export function useBench(actorId: string): Bench {
   const [bench, setBench] = useState<Bench>({ rows: null, canvasId: null, error: null });
 
@@ -121,3 +125,40 @@ export function useBench(actorId: string): Bench {
 
   return bench;
 }
+
+/**
+ * **Follows me** — the switch that makes a bench agent your pet
+ * (`docs/projects/pets`, phase 2, scenes 2 and 4), as a hook both bench panels
+ * draw: under your face (`YourBench`) and in the agents panel (`BenchJoin`).
+ *
+ * One `item.update` on the row on your personal canvas, its patch spelled by
+ * core's `benchFollowPatch` so this and `isocan bench follow` write the same
+ * bytes. Flipping it invites the agent nowhere: following is acted on when you
+ * next ARRIVE on a canvas you can edit (`lib/pets.ts`). Off takes it off
+ * nothing — where it already stands, it stays.
+ *
+ * A hook here rather than a component of its own, and that is a measurement:
+ * a component imported by both panels became a chunk of its own, and the
+ * entry's preload list grew by its name — 34 bytes against a ceiling with a
+ * hundred in it. Both panels already load this file.
+ *
+ * The bench is read once per panel, so the switch keeps its own word until the
+ * next read rather than waiting on one; a refusal puts it back.
+ */
+export function useFollows(row: BenchAgent, benchCanvasId: string, actor: Actor): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(row.follows);
+  const flip = useCallback(
+    (next: boolean) => {
+      setOn(next);
+      void sendEchoedResult(benchCanvasId, actor, { type: "item.update", itemId: row.itemId, patch: benchFollowPatch(next) })
+        .then((receipt) => { if (receipt.status === "refused") setOn(!next); })
+        .catch(() => setOn(!next));
+    },
+    [benchCanvasId, actor, row.itemId],
+  );
+  return useMemo((): [boolean, (on: boolean) => void] => [on, flip], [on, flip]);
+}
+
+/** What the switch says on hover, spelled once for both panels. */
+export const followsHint = (name: string): string =>
+  `${name} comes along to every canvas you open and can edit, unless somebody removed it there`;

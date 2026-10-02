@@ -1,9 +1,10 @@
-import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, groupAncestors, groupScopedRoot, groupDropTarget, groupDropPolicy, groupTransformClosure, isGroupItem } from "@isocan/core";
-import { groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
+import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, groupAncestors, groupScopedRoot, groupDropTarget, groupDropPolicy, groupTransformClosure, groupStackBox, isGroupItem, reachHeld } from "@isocan/core";
+import { frameGap, groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CanvasActivation } from "../lib/canvasActivation.ts";
+import { pressSelection } from "../lib/press.ts";
 import { Markdown } from "../lib/markdown.tsx";
-import type { Actor, Item, ItemVersion, Neighbour, Operation } from "@isocan/core";
+import type { Actor, Item, ItemVersion, Neighbour } from "@isocan/core";
 import {
   backingOf,
   isDesignSystem,
@@ -35,7 +36,10 @@ import {
   textFaceOf,
   textDrawSize,
   textStyleOf,
-  TEXT_FACE_STACK,
+  textStackOf,
+  textInkOf,
+  textFontOf,
+  textColourOf,
   parseUriList,
   renamedFilename,
   titleRoom,
@@ -43,6 +47,7 @@ import {
   visualFaceOf,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
+import { loadTextFont } from "../lib/textfont.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
@@ -50,7 +55,7 @@ import { FrameAnchor, anchored } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
 import { useUiStore } from "../stores/uiStore.ts";
-import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { publishDrag, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
@@ -64,6 +69,8 @@ import { itemPath } from "@isocan/core";
  */
 const CanvasPreviewBoundary = lazy(() => import("./CanvasPreviewBoundary.tsx").then((m) => ({ default: m.CanvasPreviewBoundary })));
 const CanvasCard = lazy(() => import("./CanvasCard.tsx").then((m) => ({ default: m.CanvasCard })));
+// A group band's Stack button, or a stacked group's whole pile (phase 4).
+const GroupBand = lazy(() => import("./GroupBand.tsx"));
 import { iconKindFor, kindNoun } from "../lib/kinds.ts";
 import { moduleRendererFor } from "../modules.ts";
 import { fileMarkTip } from "../lib/backing.ts";
@@ -84,6 +91,8 @@ const ARRIVAL_MS = 1500;
 // How close an edge has to come before it snaps, in SCREEN pixels — the same
 // pull at every zoom. Holding Shift mid-drag widens it: the same gesture, more
 // magnetic, for when you are aiming at a line rather than a place.
+/** A control inside an item keeps its press and its click to itself. One function, ten callers. */
+const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
 const SNAP_PX = 6;
 const SNAP_PX_MAGNETIC = 18;
 const MIN_W = 80;
@@ -182,9 +191,14 @@ function ItemViewInner({
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
   );
   const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
+  // Held, not merely carried: see `DragState.lift` and `.item.lifted`.
+  const lifted = useUiStore((s) => !!(s.drag?.lift?.includes(item.id) || s.groupPreview?.lift?.includes(item.id)));
   const resize = useUiStore((s) => (s.resize?.itemId === item.id ? s.resize : null));
   const groupBox = useUiStore((s) => s.groupPreview?.boxes.get(item.id));
   const dropTarget = useUiStore((s) => s.groupDropTargetId === item.id);
+  const dropOut = useUiStore((s) => s.groupDropOutId === item.id);
+  // What a press here would take (core `groupAim`), never CSS `:hover`.
+  const aimed = useUiStore((s) => s.aim?.itemId === item.id ? " hover-target" : s.aim?.inside === item.id ? " reach-inside" : item.containerId && s.aim?.among === item.containerId ? " reach-among" : "");
   const entered = useUiStore((s) => s.enteredItemId === item.id);
   const renaming = useUiStore((s) => s.renamingItemId === item.id);
   const peeked = useUiStore((s) => s.peekedItemId === item.id);
@@ -222,8 +236,10 @@ function ItemViewInner({
 
   const x = groupBox?.x ?? display.x + (drag?.dx ?? 0) + (resize?.dx ?? 0);
   const y = groupBox?.y ?? display.y + (drag?.dy ?? 0) + (resize?.dy ?? 0);
-  const width = groupBox?.width ?? resize?.width ?? display.width;
-  const height = groupBox?.height ?? resize?.height ?? display.height;
+  // A stacked group is drawn as one card at its own origin; its frame is kept.
+  const stackBox = groupStackBox(item);
+  const width = stackBox?.width ?? groupBox?.width ?? resize?.width ?? display.width;
+  const height = stackBox?.height ?? groupBox?.height ?? resize?.height ?? display.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const visual = visualFaceOf(current);
   const stackDepth = Math.min(item.versions.length - 1, 2);
@@ -344,6 +360,8 @@ function ItemViewInner({
   // apart by kind: it is a picture of a place, not a live frame, and it
   // opens in a tab rather than being entered (`core/canvasitem.ts`).
   const isCanvas = isCanvasItem(item);
+  // Whether that canvas's context is read here (memory phase 3), asked once.
+  const memory = memoryOf(item);
   const isBrowser = current.mimeType === BROWSER_MIME && !isCanvas;
   const source = sourceOf(item);
   // A doorway: this item points somewhere else — a canvas card, a live site, a
@@ -387,6 +405,12 @@ function ItemViewInner({
   // a depth worth asking for, and nothing else reads them.
   const memberCount = useCanvasStore((s) => { const c = shown(s); return c && isCanvasGroup ? groupChildren(c, item.id).length : 0; });
   const groupDepth = useCanvasStore((s) => { const c = shown(s); return isCanvasGroup && c?.items[item.id] ? groupAncestors(c, item.id).length : 0; });
+  // The scope you stand in, and every frame around it, is floor: its open
+  // space takes a selection box. Any other frame's open space is the group.
+  const floor = useUiStore((s) => {
+    const c = isCanvasGroup && s.activeGroupId ? useCanvasStore.getState().canvas : null;
+    return !!c?.items[s.activeGroupId!] && (s.activeGroupId === item.id || groupAncestors(c, s.activeGroupId!).some((up) => up.id === item.id));
+  });
   /** See `picture` above: the mark appears once the chrome has gone, and only
    *  for the kinds whose small form no longer says what they are. A sheet is
    *  excluded because it is a place rather than a thing, and it keeps its own
@@ -418,6 +442,9 @@ function ItemViewInner({
   // the control promised. The composer measures with the same number, so the
   // node lands the shape it looked while being typed.
   const textSize = isText ? textDrawSize(item) : 0;
+  // A named font's file is asked for once, and only because a node on this canvas
+  // names it (`lib/textfont.ts`). Idempotent, so safe in render.
+  if (isText) loadTextFont(textFontOf(item));
   const textLegible = !isText || (held.t = (zoom & Z_LEGIBLE) !== 0);
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
@@ -464,6 +491,12 @@ function ItemViewInner({
     // bubbles to the viewport — Hand pans, Zoom fits this item, the Pen draws
     // over it — even though it started here.
     if (ui.activeTool === "hand" || ui.activeTool === "zoom" || ui.activeTool === "pen") return;
+    // ⌘ (Ctrl off a Mac) reaches the ONE item under the pointer, at any depth
+    // (groups-by-hand phase 2). Over a frame's open space it is a selection
+    // box among the members instead — and only Select takes a frame by its
+    // open space at all — so those presses go on to the canvas.
+    const reachOne = reachHeld(e) && groupsEnabled();
+    if (isCanvasGroup && !stackBox && frameGap(target) && (reachOne || ui.activeTool !== "select" || commentMode || ui.stamp)) return;
     /**
      * **Placing a dot** (sprint phase 4). While a mark is being placed, a
      * press on a sketch ON THE WALL puts the mark where the press landed, as
@@ -523,24 +556,26 @@ function ItemViewInner({
     const stackScope = ui.activeGroupId;
     const stack = e.altKey && stackCanvas ? [...new Set(itemsUnder(e.clientX, e.clientY).map((id) => groupScopedRoot(stackCanvas, id, stackScope)).filter((id): id is string => id !== null))] : [];
     if (e.altKey && stackCanvas && stack.length === 0) return;
-    const selectionId = e.altKey ? (stack[0] ?? item.id) : scopedHit(item.id);
-    const from = stack.findIndex((id) => ui.selectedItemIds.includes(id));
+    const selectionId = e.altKey ? (stack[0] ?? item.id) : reachOne ? item.id : scopedHit(item.id);
+    // ⌘ stands in the reached item's group, as if you had stepped in; Esc
+    // steps out the way it always has.
+    if (reachOne && !e.altKey && (item.containerId ?? null) !== ui.activeGroupId) ui.setActiveGroup(item.containerId ?? null);
+    const was = useUiStore.getState().selectedItemIds;
+    const from = stack.findIndex((id) => was.includes(id));
     const targetId = stack.length > 1 ? stack[(from + 1) % stack.length]! : selectionId;
-    if (e.shiftKey) {
-      ui.toggleSelect(targetId);
-      return;
-    }
     if (!canEdit) {
-      // A reader selects; nothing moves under their hand. Selection stays
-      // available for context, navigation and group inspection.
-      ui.select(targetId);
+      // A reader selects; nothing moves under their hand.
+      // So Shift can toggle at the press. Selection stays available for
+      // context, navigation and group inspection.
+      e.shiftKey ? ui.toggleSelect(targetId) : ui.select(targetId);
       return;
     }
 
-    // Dragging a selected item moves the whole selection; dragging an
-    // unselected one selects it alone first.
-    const wasInSelection = ui.selectedItemIds.includes(targetId);
-    const chosen = wasInSelection ? ui.selectedItemIds : [targetId];
+    // Dragging a selected item moves the whole selection, Shift or not;
+    // a Shift-press adds an unselected one and drags the lot; a plain press
+    // selects it alone. Taking a selected item OUT waits for a release that
+    // never moved — `lib/press.ts` has the rule and the bug it fixes.
+    const chosen = reachOne && !e.shiftKey ? [targetId] : pressSelection(was, targetId, e.shiftKey);
     // What is drawn on a thing travels with it. Otherwise dragging a screen
     // leaves the X you drew on it behind, which is the moment the mark stops
     // meaning anything.
@@ -549,21 +584,19 @@ function ItemViewInner({
     // sheet is the handle for everything placed there, and membership is
     // read off geometry at the moment of the grab (`core/area.ts`).
     const semantic = groupsEnabled() ? beginGroupGesture(chosen) : null;
+    // What a chosen area is carrying: its contents ride along flat.
+    const carried = (id: string) => {
+      const one = canvasNow?.items[id];
+      return one && isArea(one) ? itemsIn(canvasNow!, one).map((held) => held.id) : [];
+    };
     const dragIds = semantic ? groupTransformClosure(semantic.start.canvas, semantic.roots) : canvasNow
-      ? [
-          ...new Set(
-            chosen.flatMap((id) => {
-              const one = canvasNow.items[id];
-              return [
-                id,
-                ...annotationsOf(canvasNow, id).map((mark) => mark.id),
-                ...(one && isArea(one) ? itemsIn(canvasNow, one).map((held) => held.id) : []),
-              ];
-            }),
-          ),
-        ]
+      ? [...new Set(chosen.flatMap((id) => [id, ...annotationsOf(canvasNow, id).map((mark) => mark.id), ...carried(id)]))]
       : chosen;
-    if (!wasInSelection) ui.select(targetId);
+    if (chosen !== was) ui.setSelection(chosen);
+    // What the hand holds — the chosen items, less anything a chosen area is
+    // carrying (its contents ride along flat, the way a group's members do).
+    const inside = new Set(semantic ? [] : chosen.flatMap(carried));
+    const lift = semantic ? semantic.roots : chosen.filter((id) => !inside.has(id));
 
     const frame = e.currentTarget as HTMLElement;
     frame.setPointerCapture(e.pointerId);
@@ -574,24 +607,32 @@ function ItemViewInner({
     const capturedMoving = capturedItems ? unionBox(dragIds.map((id) => capturedItems[id]).filter((one) => one !== undefined)) : null;
     const capturedOthers = capturedItems ? Object.values(capturedItems).filter((other) => !draggingIds.has(other.id)) : null;
 
-    function onMove(ev: PointerEvent) {
+    // The last move, so ⌘ going down or up under a still hand re-reads the
+    // destination at once, the way Shift's snapping already does.
+    let last: PointerEvent | null = null;
+    function onKey(ev: KeyboardEvent) {
+      if (last && moved && (ev.key === "Meta" || ev.key === "Control")) onMove({ clientX: last.clientX, clientY: last.clientY, shiftKey: last.shiftKey, altKey: last.altKey, metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
+    }
+    function onMove(ev: Pick<PointerEvent, "clientX" | "clientY" | "shiftKey" | "altKey" | "metaKey" | "ctrlKey">) {
       const ui = useUiStore.getState();
+      if (ev instanceof PointerEvent) last = ev;
       if (semantic && !semantic.active()) return;
       const scale = ui.viewport.scale;
       if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_SLOP) return;
+      if (!moved) semantic?.lift();
       moved = true;
       let dx = (ev.clientX - start.x) / scale;
       let dy = (ev.clientY - start.y) / scale;
 
       // Align to what is already on the canvas. Shift is read from the MOVE,
-      // not the press — a shift-press is "add to selection", so the magnet has
-      // to be something you reach for mid-gesture.
+      // not the press — Shift at the press is selection (`lib/press.ts`), so
+      // Shift held through a drag of the selection moves it AND snaps harder.
       const snapshot = useCanvasStore.getState().canvas;
       const presented = snapshot ? presentedCanvas(snapshot, currentPresentation()).items : {};
       const items = capturedItems ?? presented;
       const moving = semantic
         ? capturedMoving
-        : unionBox(dragIds.map((id) => items[id]).filter((one) => one !== undefined));
+        : unionBox(dragIds.flatMap((id) => items[id] ?? []));
       if (moving) {
         const others = capturedOthers ?? Object.values(items).filter((other) => !draggingIds.has(other.id));
         const threshold = (ev.shiftKey ? SNAP_PX_MAGNETIC : SNAP_PX) / scale;
@@ -600,67 +641,54 @@ function ItemViewInner({
         dy += snap.dy;
         ui.setGuides(snap.guides, snap.spacing);
       }
+      let destination: string | null | undefined;
       if (semantic) {
         const point = screenToWorldPoint(ev.clientX, ev.clientY);
         const target = ev.altKey ? null : groupDropTarget(semantic.start.canvas, point, semantic.roots);
-        // Staying outside the current parent grows it; only a named different
-        // destination deliberately changes the relationship.
-        const destination = target && semantic.roots.some((id) => semantic.start.canvas.items[id]?.containerId !== target.id) ? target : null;
-        ui.setGroupDropTarget(destination?.id ?? null);
-        semantic.move(dx, dy, destination?.id, destination ? groupDropPolicy(destination, point) : undefined);
-      } else ui.setDrag({ itemIds: dragIds, dx, dy, moved });
+        const from = semantic.roots.map((id) => semantic.start.canvas.items[id]?.containerId ?? null);
+        // Plain: staying outside the current parent grows it; only a named
+        // different destination deliberately changes the relationship. ⌘:
+        // the pointer decides, and open canvas (null) is a destination too —
+        // the one deliberate way out of a group.
+        const to = reachHeld(ev) && !ev.altKey ? (target?.id ?? null) : target?.id;
+        destination = to !== undefined && from.some((parent) => parent !== to) ? to : undefined;
+        ui.setGroupDropTarget(destination ?? null, destination === null ? from.find((parent) => parent !== null) ?? null : null);
+        semantic.move(dx, dy, destination, destination && target ? groupDropPolicy(target, point) : undefined);
+      } else ui.setDrag({ itemIds: dragIds, dx, dy, moved, lift });
+      // Everyone else on the canvas sees it move (groups-by-hand phase 3).
+      publishDrag(lift, dx, dy, destination);
     }
     function onUp(ev: PointerEvent) {
-      if (frame.hasPointerCapture(ev.pointerId)) frame.releasePointerCapture(ev.pointerId);
-      frame.removeEventListener("pointermove", onMove);
-      frame.removeEventListener("pointerup", onUp);
-      frame.removeEventListener("pointercancel", onUp);
+      publishDrag();
       const state = useUiStore.getState();
+      // A Shift-click that never became a drag: now it takes the item out.
+      if (e.shiftKey && chosen === was && !moved && ev.type === "pointerup") state.toggleSelect(targetId);
       if (semantic) {
         if (ev.type === "pointercancel" || !moved) semantic.cancel();
         else void semantic.commit(canvasId, actor);
         return;
       }
-      if (ev.type === "pointercancel") { state.setDrag(null); state.setGuides([]); return; }
       state.setGuides([]); // the lines belong to the gesture, not the canvas
+      // One op per gesture — a group drag is a single undo step. Nothing for
+      // a gesture the browser took away, or a press that never moved.
       const final = state.drag;
-      if (!moved || !final) {
-        state.setDrag(null);
-        return;
-      }
-      // One op per gesture — a group drag is a single undo step.
       const canvas = useCanvasStore.getState().canvas;
-      if (!canvas) {
-        state.setDrag(null);
-        return;
-      }
-      const moves = final.itemIds
-        .map((itemId) => canvas.items[itemId])
-        .filter((dragged) => dragged !== undefined)
-        .map((dragged) => ({
-          itemId: dragged.id,
-          x: Math.round(dragged.x + final.dx),
-          y: Math.round(dragged.y + final.dy),
-        }));
-      const op: Operation | null =
-        moves.length === 1
-          ? { type: "item.move", ...moves[0]! }
-          : moves.length > 1
-            ? { type: "items.move", moves }
-            : null;
-      if (op) {
-        // Fold the final position into the replica BEFORE dropping the drag
-        // override — otherwise the item flashes at its old position until the
-        // WS echo lands.
-        void sendEchoed(canvasId, actor, op);
-      }
+      const moves = ev.type === "pointerup" && moved && final && canvas
+        ? final.itemIds.flatMap((itemId) => {
+            const dragged = canvas.items[itemId];
+            return dragged ? [{ itemId, x: Math.round(dragged.x + final.dx), y: Math.round(dragged.y + final.dy) }] : [];
+          })
+        : [];
+      // Fold the final position into the replica BEFORE dropping the drag
+      // override — otherwise the item flashes at its old position until the
+      // WS echo lands.
+      if (moves.length) void sendEchoed(canvasId, actor, moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves });
       state.setDrag(null);
     }
-    frame.addEventListener("pointermove", onMove);
-    frame.addEventListener("pointerup", onUp);
     // A gesture the browser takes away must not leave guides on screen or an
-    // item frozen mid-drag.
-    frame.addEventListener("pointercancel", onUp);
+    // item frozen mid-drag: pointercancel ends it too (`follow`).
+    const signal = follow(frame, onMove, onUp);
+    if (semantic) { window.addEventListener("keydown", onKey, { signal }); window.addEventListener("keyup", onKey, { signal }); }
   }
 
   function onResizeDown(corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent) {
@@ -679,17 +707,10 @@ function ItemViewInner({
         const scale = useUiStore.getState().viewport.scale;
         semantic!.resize(item.id, original.width + (ev.clientX - startPoint.x) / scale * sx, original.height + (ev.clientY - startPoint.y) / scale * sy, anchor, ev.shiftKey);
       }
-      function finish(ev: PointerEvent) {
-        if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
-        handle.removeEventListener("pointermove", move);
-        handle.removeEventListener("pointerup", finish);
-        handle.removeEventListener("pointercancel", finish);
+      follow(handle, move, (ev) => {
         if (ev.type === "pointercancel") semantic!.cancel();
         else void semantic!.commit(canvasId, actor);
-      }
-      handle.addEventListener("pointermove", move);
-      handle.addEventListener("pointerup", finish);
-      handle.addEventListener("pointercancel", finish);
+      });
       return;
     }
     const start = { x: e.clientX, y: e.clientY, width: item.width, height: item.height };
@@ -710,10 +731,6 @@ function ItemViewInner({
       useUiStore.getState().setResize({ itemId: item.id, width: newW, height: newH, dx, dy });
     }
     function onUp(ev: PointerEvent) {
-      if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
-      handle.removeEventListener("pointercancel", onUp);
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
       const state = useUiStore.getState();
       const final = state.resize;
       if (ev.type !== "pointercancel" && final && (final.width !== item.width || final.height !== item.height)) {
@@ -737,9 +754,7 @@ function ItemViewInner({
       }
       state.setResize(null);
     }
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
-    handle.addEventListener("pointercancel", onUp);
+    follow(handle, onMove, onUp);
   }
 
   /**
@@ -776,6 +791,8 @@ function ItemViewInner({
       height,
       style: textStyleOf(item),
       face: textFaceOf(item),
+      colour: textColourOf(item.properties),
+      font: textFontOf(item)?.name ?? null,
       // The paper too, or a yellow note re-opens as a white field over its
       // own square — a card on a card, and not the note you double-clicked.
       paper,
@@ -842,7 +859,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? " canvas-group" : ""}${dropTarget ? " group-drop-target" : ""}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       data-group-id={isCanvasGroup ? item.id : undefined}
       data-presentation={detail}
@@ -867,7 +884,7 @@ function ItemViewInner({
         )
       }
       style={{
-        ...(isCanvasGroup ? { zIndex: -10000 + groupDepth } : {}),
+        ...(isCanvasGroup && !stackBox ? { zIndex: -10000 + groupDepth } : {}),
         left: x,
         top: y,
         width,
@@ -884,7 +901,9 @@ function ItemViewInner({
         ...(isText
           ? ({
               "--text-size": `${textSize}px`,
-              "--text-face": TEXT_FACE_STACK[textFaceOf(item)],
+              // The named font first, its face's stack behind it.
+              "--text-face": textStackOf(item),
+              "--text-ink": textInkOf(item),
             } as React.CSSProperties)
           : {}),
       }}
@@ -949,7 +968,7 @@ function ItemViewInner({
           ))}
         </div>
       )}
-      {isAreaItem && (
+      {isAreaItem && !stackBox && (
         /* The strip is the area's name AND its handle — the one part of the
            sheet that takes the pointer, so it can be grabbed at any zoom
            while the sheet itself lets tools through to the canvas. */
@@ -963,9 +982,13 @@ function ItemViewInner({
       )}
       {isCanvasGroup && <>
         {dropTarget && <span className="group-drop-label" role="status">Add to {item.title}</span>}
+        {dropOut && <span className="group-drop-label out" role="status">Out of {item.title}</span>}
+        <Suspense fallback={null}><GroupBand item={item} canvasId={canvasId} actor={actor} lifted={lifted} /></Suspense>
+        {!stackBox && <>
         <GroupGrid item={displayedGroup} />
-        <span className="group-border north" /><span className="group-border south" /><span className="group-border east" /><span className="group-border west" />
+        {["north", "south", "east", "west"].map((side) => <span key={side} className={`group-border ${side}`} />)}
         {(item.groupLayout?.briefHeight ?? 0) > 0 && <div className="group-brief" style={{ top: item.groupLayout?.titleHeight ?? 56, height: item.groupLayout?.briefHeight, left: groupContent!.x - x, right: item.groupLayout?.inset ?? 24 }}><GroupBrief canvasId={canvasId} blobHash={current.blobHash} /></div>}
+        </>}
       </>}
       {dotMarks.some((m) => reactionPointsOf(item, m).length > 0) && (
         /* The heat map: the mark, drawn where each person put it. Under the
@@ -1073,8 +1096,8 @@ function ItemViewInner({
             target="_blank"
             rel="noopener noreferrer"
             title={`Open in a new tab — ${source}`}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
+            onClick={stop}
+            onPointerDown={stop}
           >
             ↗
           </a>
@@ -1085,26 +1108,26 @@ function ItemViewInner({
              the switch — `memory=inherit` on, `removeProperties` off, the same
              patch `isocan context inherit | uninherit` writes. */
           <button
-            className={`memory-mark${memoryOf(item) === "inherit" ? " active" : ""}`}
+            className={`memory-mark${memory === "inherit" ? " active" : ""}`}
             title={
-              memoryOf(item) === "inherit"
+              memory === "inherit"
                 ? "Inherited here — its design system and pins are read as part of this canvas's context. Click to stop."
                 : "Not inherited — click to read its design system and pins as part of this canvas's context."
             }
-            aria-pressed={memoryOf(item) === "inherit"}
+            aria-pressed={memory === "inherit"}
             onClick={(e) => {
               e.stopPropagation();
               void (async () => {
-                if (memoryOf(item) === "personal") throw new Error("Use Context to unlink your personal canvas.");
-                if (memoryOf(item) !== "inherit") {
+                if (memory === "personal") throw new Error("Use Context to unlink your personal canvas.");
+                if (memory !== "inherit") {
                   const { automaticSource } = await import("../lib/personal.ts");
                   const access = await automaticSource(canvasIdOf(item)!, source, canvasId);
                   if (access.kind !== "ordinary") throw new Error(access.refused);
                 }
-                await sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit") });
+                await sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: memoryPatch(memory === "inherit" ? null : "inherit") });
               })().catch((error) => setNotice(error.message ?? String(error)));
             }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={stop}
           >
             memory
           </button>
@@ -1122,7 +1145,7 @@ function ItemViewInner({
               e.stopPropagation();
               setDocLive(item.id, !liveDoc);
             }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={stop}
           >
             {liveDoc ? "Words" : "Live"}
           </button>
@@ -1177,9 +1200,15 @@ function ItemViewInner({
           {SLIDE_EMOJI} Notes for {noteSlideTitle}
         </span>
       )}
-      {!isCanvasGroup && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
+      {/* The door into reading mode, on the ONE item you chose — not on every
+          text item at once. Drawn on all of them it covered the words of small
+          chromeless nodes and wrapped into a column of "Read / select text"
+          (reported 30 Sep 2026); double-click still steps inside anything. Never on a
+          text node: double-click already edits and selects its words there, and a
+          door below the words sat on the selection's own Full screen chip. */}
+      {!isCanvasGroup && !isText && (soleSelection || entered) && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
         <button type="button" className="btn item-read" aria-label={entered ? "Done reading" : `Read ${item.title} and select text`}
-          onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
+          onPointerDown={stop} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
           {entered ? "Done reading" : "Read / select text"}
         </button>
       )}
@@ -1323,7 +1352,7 @@ function ItemViewInner({
                   // name too.
                   data-tip={spellItOut ? "Enter — Esc comes back" : "Full screen — Enter, Esc comes back"}
                   aria-label="Full screen"
-                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerDown={stop}
                   onClick={(e) => {
                     e.stopPropagation();
                     navigate(itemPath(canvasId, item.id));
@@ -1352,10 +1381,7 @@ function ItemViewInner({
       {soleSelection && !entered && canEdit && (
         !detail &&
         <>
-          <span className="resize-handle resize-handle-nw" onPointerDown={(e) => onResizeDown("nw", e)} />
-          <span className="resize-handle resize-handle-ne" onPointerDown={(e) => onResizeDown("ne", e)} />
-          <span className="resize-handle resize-handle-sw" onPointerDown={(e) => onResizeDown("sw", e)} />
-          <span className="resize-handle resize-handle-se" onPointerDown={(e) => onResizeDown("se", e)} />
+          {(["nw", "ne", "sw", "se"] as const).map((corner) => <span key={corner} className={`resize-handle resize-handle-${corner}`} onPointerDown={(e) => onResizeDown(corner, e)} />)}
         </>
       )}
     </div>
@@ -1402,8 +1428,8 @@ function NameInput({ title, onDone }: { title: string; onDone: (next: string) =>
       value={draft}
       onFocus={(e) => e.currentTarget.select()}
       onChange={(e) => setDraft(e.target.value)}
-      onPointerDown={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
+      onPointerDown={stop}
+      onDoubleClick={stop}
       onBlur={() => finish(draft)}
       onKeyDown={(e) => {
         e.stopPropagation(); // the canvas's shortcuts are not for this field
@@ -1472,6 +1498,26 @@ function itemsUnder(x: number, y: number): string[] {
   return [...document.querySelectorAll("[data-item-id]")]
     .map((el) => el.getAttribute("data-item-id")!)
     .filter((id) => hit.has(id));
+}
+
+/**
+ * A pointer gesture's listeners on the element that captured it: moves go to
+ * `move`; a release — or a gesture the browser takes away — lets go of the
+ * capture, takes every listener off at once, and goes to `end`. The signal
+ * comes back so a gesture can hang more listeners on the same lifetime.
+ */
+export function follow(el: HTMLElement, move: (ev: PointerEvent) => void, end: (ev: PointerEvent) => void): AbortSignal {
+  const off = new AbortController();
+  const { signal } = off;
+  const done = (ev: PointerEvent) => {
+    if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    off.abort();
+    end(ev);
+  };
+  el.addEventListener("pointermove", move, { signal });
+  el.addEventListener("pointerup", done, { signal });
+  el.addEventListener("pointercancel", done, { signal });
+  return signal;
 }
 
 function screenToWorldPoint(sx: number, sy: number): { x: number; y: number } {
@@ -1900,7 +1946,7 @@ function SiteFrame({ site }: { site: string }) {
       {state === "slow" && (
         <div className="browser-slow" role="status">
           <span>Still loading after a while — some sites refuse to be shown in a frame, and a browser does not say which.</span>
-          <a href={site} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <a href={site} target="_blank" rel="noopener noreferrer" onClick={stop} onPointerDown={stop}>
             Open it in a tab ↗
           </a>
         </div>

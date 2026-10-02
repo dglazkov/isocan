@@ -203,6 +203,20 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   card: the ink IS the item — and since that makes its box invisible, pointing
   at a drawing outlines the box you would grab, and `⌥`-click steps down
   through a stack of them.
+- **Text (`T`)**: click and type words straight onto the canvas — a chromeless
+  node that is a real `.md`. The bar over the words picks a size step (S/M/L/XL,
+  each readable twice as far out), a face (sans, mono, serif, handwriting), a
+  paper that turns it into a post-it, a **colour** and a **font**. A colour is
+  a word — red, orange, yellow, green, blue, purple, pink, brown, grey — whose
+  shade adapts to the light ground, the dark ground and paper, so it reads for
+  whoever is looking in either theme; Auto is the theme's own ink. A font is
+  one of ten families (Inter, IBM Plex Sans/Serif/Mono, DM Sans, Manrope,
+  Space Grotesk, Fraunces, Lora, JetBrains Mono), fetched only when a node on
+  screen names one, falling back to its face offline, and sized for its real
+  width so nothing clips. Right-click the T to set what the next node opens
+  with; the last choice is remembered. Agents use `isocan text --style
+  --face --paper --color --font`, and `isocan set --prop textColor=…
+  textFont=…` restyles and refits an existing node.
 - **What it answers to (`?`)**: every key the canvas takes, in one panel —
   opened with `?`, or the `?` in the top bar, or by typing `/help`. The list
   lives in `@isocan/core` and a test checks the letter keys against the code
@@ -335,6 +349,16 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   another (identity menu, or `isocan identity --color teal`) is
   `actor.setColor`: it lands in the daemon's actor registry beside your name,
   so everyone on every canvas sees you change, live, without a reload.
+- **Your mark, and your pointer**: an emoji you wear instead of your initial
+  (identity menu, or `isocan identity --mark 🦊`) — and everyone else sees
+  your pointer wear it instead of the arrow, with the arrow's tip kept in your
+  colour on the exact point. An agent nobody has marked moves as 🤖 (drawn,
+  never stored); a person with no mark keeps the arrow. An agent's owner
+  chooses its mark with the "🤖 Pointer" pill — which shows the current one —
+  on the agent's card in the pile or its row in the tray, or
+  `isocan agent mark <name> 🐕`. Both are `actor.setMark`; the home lets you
+  mark an agent only when one of your own surfaces holds it, read through
+  joined identities. Anybody else's click is told whose choice it is.
 - **Snapping**: dragging an item shows alignment guides — a line for every
   edge or center it has settled onto — and the item lands exactly on them. The
   pull is measured in screen pixels, so it feels the same at any zoom, and
@@ -343,6 +367,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   axis has no line to claim it, equal spacing does: dropped between two
   neighbours, the item centers itself and purple measure bars — a rule with end
   caps across each gap — say the two distances match.
+- **Seeing somebody else's drag**: while another person drags, everyone else
+  on the canvas sees the cards move under their cursor — lifted, edged in
+  their colour, and the group they are dropping into outlined — rather than a
+  jump when they let go. It travels on presence beside the cursor, never as
+  ops: nothing is logged or undoable, a late arrival sees where the drag is
+  now rather than a replay, and a drag that never lands (Esc, a closed tab)
+  glides home. A selection of more than fifty moves as one outline. Agents
+  move by op, so their moves arrive as they always have.
 - **The edge radar**: items that pan out of sight leave a bar lying flush along
   the rim — tucked under the top bar, against the window elsewhere, and against
   the docked panel when one is open — where a ray from the middle of the screen
@@ -478,11 +510,25 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   add or remove members, and ungroup while preserving their positions.
   Membership is explicit: overlapping cards stay independent, nested groups
   keep their identity, and each structural act is one undo. The matching CLI
-  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|migrate`; mutations
+  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|stack|migrate`; mutations
   support an actual `--dry-run`, all commands support `--json`, and
   `mv <item> --in <group>` transfers membership and places the item atomically.
+  The outline under the pointer is what a press would take — the group at the
+  canvas level, including the space between its members. Hold ⌘ (Ctrl off a
+  Mac) to reach one item at any depth: ⌘-click selects just it, and ⌘-drag
+  carries it into another group or out onto the canvas, labelled *Add to …* /
+  *Out of …* before you let go, as one undo. A plain drag never detaches; the
+  frame grows instead. ⌘⇧G on a member, *Move to canvas*, and
+  `mv <item> --out [--to-root]` take an item out from the keyboard, menu and CLI.
   Resize scales native frames and attached ink with a fixed anchor; Fit frame
-  keeps the arrangement and adjusts its border. CLI `mv`, `set --size`, `fit`,
+  keeps the arrangement and adjusts its border. The group's layout form sets
+  or clears its named grid; lowering a count drops the labels past it in the
+  same undoable save, exactly as `canvas group grid` does. *Stack* on the title
+  band (or `canvas group stack <group> [--spread]`) shows a group as a pile of
+  cards — the top one upright, the rest turned behind it by a hash of their
+  ids — for everyone, until *Spread*; members keep their positions throughout.
+  Pointing fans the pile into a hand, a click opens it into a grid (Esc
+  closes), and ⌘-dragging a card out of the grid takes it out. CLI `mv`, `set --size`, `fit`,
   `align`, `distribute` and `tidy` share these semantics. Text, files, sites,
   Google Docs and modules insert with explicit `--in` membership; `--cell r,c`
   honors protected label gutters. New sandbox transcripts inherit their
@@ -758,6 +804,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   never a different answer for a name that happens to exist on somebody
   else's bench, because a bench is a private canvas and a refusal that varied
   would be a way to read it one name at a time.
+- **Pets follow you**: tick **Follows me** on an agent's bench row, or run
+  `isocan bench follow <name>`, and it comes along to every canvas you open
+  and can edit — the app sends the same invite **Join** sends, once per
+  arrival, and the thread says *Scout came with Dion*. Not onto a canvas you
+  can only read, and never back onto one where somebody removed it: a removal
+  is the room's word. It arrives answering only you, as any joined agent
+  does. `--off` (or the same tick) stops it, and where it already stands it
+  stays — turning a pet off is not sending it away.
 - **Cleaning up the Chat**: the canvas's owner can take any message out of
   it — a ✕ on the message — or many at once from the ⋯ in the Chat's header:
   every ⚙ isocan notice, everything one person or agent said, everything
@@ -900,8 +954,8 @@ isocan pass [--admit-only]         # a one-use pass: the command another
                                    # machine of yours pastes to join
 isocan badges [--kill <badgeId>]   # the surfaces carrying your identity, and
                                    # what each has proved; end one
-isocan bench [add <name> [--actor <id>] [--harness <n>] [--runs-at <label>]]
-             [join <name>] [rm <name>]
+isocan bench [add <name> [--actor <id>] [--harness <n>] [--model <id>]
+                         [--runs-at <label>]] [join <name>] [rm <name>]
                                    # the agents you have, and whether anything
                                    # could answer for one right now: ready /
                                    # elsewhere / unreachable. A row is a
@@ -1320,3 +1374,61 @@ answering a mention or the Chat; listens only to Nico."*, *is back* after
 five minutes away, *stepped away* on a deliberate stop. Off by default. The
 lines are records, so they summon nobody, and no agent answers another's
 hello.
+
+### Jetski plugin and model-pinned agents
+
+[`plugins/jetski/`](plugins/jetski/) is isocan as a Jetski plugin: the canvas
+your workspace is bound to, in a pane beside the Jetski chat. Every part of it
+is an `isocan` command, so the plugin can do nothing the CLI cannot. The
+`#release` install carries it alongside the CLI: `isocan setup --jetski` (or
+`node scripts/install-jetski-plugin.mjs` in a checkout) links it into
+`~/.gemini/config/plugins/isocan`. Restart Jetski after installing: it reads
+a plugin's hooks once, when the plugin loads.
+
+- **A canvas without its own Chat (`isocan embed`)**: the embed address opens
+  with `?embed=1`, which means no Chat dock and no way in to one (⌘J, the rail,
+  the palette and the menus are all closed). The conversation beside it is
+  where you talk. Presence, comments and the rest of the canvas stay.
+  `isocan embed --chat` keeps the Chat. A framed canvas tells its parent it is
+  ready. Once the parent answers, it tells that one origin what is selected,
+  and that is how the pane sees your selection.
+- **The pane** (`sidecars/canvas/`) opens the canvas that the workspace's
+  `.isocan/project.json` names. An unbound folder can be bound to an existing
+  canvas (by id, link or title) or to a new one. Selected items show as chips,
+  and **Ask** hands your question, with the item ids, to the Jetski
+  conversation. **Open ↗** opens the same canvas in a tab, with its Chat.
+- **Skills on both sides**: type `/` in the pane's box and the canvas's own
+  skills drop down (`isocan command ls`, built in and added with `/skill
+  add`). Run one in this conversation, which gets `/name args` and is told
+  `isocan command show <name>` holds its instructions, or hand it to a
+  standing agent as a comment (`/design-audit @Orla …`). Starters under the
+  box change with the selection and show what you can do: *Build this in the
+  repo*, *Put what we did here on the canvas*, the design skills, and *Answer
+  N open questions*.
+- **The canvas can reach the conversation**: while the pane runs, a mention
+  of a Jetski conversation on the canvas (or a reply in its thread) is
+  relayed into that conversation, which answers on the canvas.
+  `ISOCAN_JETSKI_RELAY=off` turns this off. **Asks N** in the header lists
+  the questions agents left for you. **Fan out** asks Jetski's `flash`,
+  `pro` or `flash_lite` tiers the same thing in new conversations that join
+  the canvas under their own names. 💬 beside a face opens that conversation.
+- **Arriving**: a SessionStart hook runs when a conversation starts in a
+  bound workspace. It names the conversation (`isocan identity --session`,
+  keyed to that conversation) and starts its session, so what it writes is
+  attributed to it rather than to you. With `ISOCAN_JETSKI_JOIN=off` the
+  conversation still gets the note, but nothing joins.
+- **Model-pinned agents (`--model <id>`)**: `isocan agent add`,
+  `isocan rc add` and `isocan bench add` take a model id, spelled the way its
+  harness spells it. The id always rides `ISOCAN_MODEL`. It reaches the
+  harness itself only through a door that harness really has:
+  `ANTHROPIC_MODEL` for Claude Code, `model` in Codex's `CODEX_CONFIG`, or
+  `{model}` in an `acpAdapters` declaration. `isocan harness` shows
+  `model: pins` or `model: own` for each harness, so you know which agents
+  are really pinned before you compare them. The pane's **Agents** bar enrols
+  the presets in `sidecars/canvas/presets.json`, with buttons like
+  *+ Orla · Opus 5.5*. Each agent has a name of its own, never its model's.
+  They answer @mentions while your `isocan rc` runs.
+
+A canvas on this machine's own daemon (`http://127.0.0.1:…`) can only be
+framed by a browser on this machine. To use Jetski Web from anywhere else,
+bind the folder to a canvas on a shared home such as isocan.io.

@@ -264,4 +264,59 @@ describe("the harness scan", () => {
     await ensureBinary(home, "x-acp", "1.0.0", { archive: "http://127.0.0.1:9/none.zip", cmd: "./x" }, (l) => said.push(l));
     expect(said).toEqual([]);
   });
+
+  it("pins a model only through a door the harness has, and never passes {model} through unfilled", async () => {
+    const opus = await adapterFor(home, "claude-code", { PATH: bin }, "claude-opus-5-5");
+    expect(opus?.model).toBe("claude-opus-5-5");
+    expect(opus?.env).toEqual({
+      ISOCAN_MODEL: "claude-opus-5-5",
+      ANTHROPIC_MODEL: "claude-opus-5-5",
+    });
+
+    // Codex takes it as `model` in its bridge's CODEX_CONFIG, merged with any
+    // overrides the person already exports.
+    const codex = await adapterFor(home, "codex", { PATH: bin, CODEX_CONFIG: '{"model_provider":"acme"}' }, "acme-large");
+    expect(codex?.env?.ISOCAN_MODEL).toBe("acme-large");
+    expect(JSON.parse(codex?.env?.CODEX_CONFIG ?? "{}")).toEqual({ model_provider: "acme", model: "acme-large" });
+    expect(codex?.env?.INITIAL_AGENT_MODE).toBe("agent-full-access");
+    await expect(adapterFor(home, "codex", { PATH: bin, CODEX_CONFIG: "[1]" }, "acme-large")).rejects.toThrow(
+      "CODEX_CONFIG must be a JSON object",
+    );
+
+    // A harness with no known model door gets ISOCAN_MODEL and nothing invented.
+    const antigravity = await adapterFor(home, "antigravity", { PATH: bin }, "acme-flash");
+    expect(antigravity?.env).toEqual({ ISOCAN_MODEL: "acme-flash" });
+
+    await config({
+      acpAdapters: {
+        custom: ["my-adapter", "--model", "{model}", "--stdio"],
+        flat: "flat-acp -model={model} --stdio",
+        plain: "plain-acp --stdio",
+      },
+    });
+    const declared = await adapterFor(home, "custom", { PATH: bin }, "acme-pro");
+    expect(declared?.args).toEqual(["--model", "acme-pro", "--stdio"]);
+    expect(declared?.env).toEqual({ ISOCAN_MODEL: "acme-pro" });
+    expect((await adapterFor(home, "flat", { PATH: bin }, "acme-pro"))?.args).toEqual(["-model=acme-pro", "--stdio"]);
+
+    // Unpinned, the template and the flag that introduces it are left out.
+    const unpinned = await adapterFor(home, "custom", { PATH: bin });
+    expect(unpinned?.args).toEqual(["--stdio"]);
+    expect(unpinned?.model).toBeUndefined();
+    expect((await adapterFor(home, "flat", { PATH: bin }))?.args).toEqual(["--stdio"]);
+
+    // The scan says the same thing out loud, so whoever presents the choice
+    // can tell a person which pins are real before two agents are compared.
+    const scan = await scanHarnesses(home, { PATH: bin });
+    const pins = Object.fromEntries(scan.rows.map((r) => [r.name, r.pinsModel]));
+    expect(pins).toMatchObject({
+      "claude-code": true,
+      codex: true,
+      custom: true,
+      flat: true,
+      antigravity: false,
+      pi: false,
+      plain: false,
+    });
+  });
 });

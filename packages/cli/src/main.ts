@@ -112,6 +112,8 @@ import {
   urlWithPass,
   workbenchUrl,
   canvasUrlWithPass,
+  embedCanvasUrl,
+  splitPassFragment,
   parseCanvasAddress,
   parseExportTarget,
   describeExportedCanvas,
@@ -170,6 +172,8 @@ import {
   CURSORS,
   cursorOf,
   cursorPatch,
+  cursorSignal,
+  TEXT_ATTENTION_MS,
   GROUND_MAX_BYTES,
   isCursor,
   noCursorPatch,
@@ -218,12 +222,18 @@ import {
   newGroupId,
   ownsCanvas,
   TEXT_FACES,
-  TEXT_FACE_PROP,
   TEXT_FILENAME,
   TEXT_MIME,
   TEXT_PROPERTIES,
   TEXT_STYLES,
+  TEXT_COLOURS,
+  TEXT_FONTS,
   textStyleFrom,
+  textColourChoice,
+  textColourWarnings,
+  textFontChoice,
+  textLookProperties,
+  textPropsPatch,
   AREA_FILENAME,
   AREA_MIME,
   AREA_PROPERTIES,
@@ -257,7 +267,6 @@ import {
   freeSpotIn,
   areaEnclosing,
   itemsIn,
-  TEXT_STYLE_PROP,
   isTextItem,
   textBox,
   textNodeFit,
@@ -392,7 +401,6 @@ import {
   type LensLog,
   type LensSource,
   PAPERS,
-  PAPER_PROP,
   PAPER_SIZE,
   isFaceMark,
   PHASES,
@@ -484,6 +492,7 @@ import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
 import { harnessSessions } from "@isocan/api";
+import { decide, discoverEvery, heldAgents, survey } from "./rc-discover.ts";
 import { announceRule, fileRcRows, readRcAgents, removeRcAgent, rollMemory, setRcSessionId, upsertRcAgent, withPreparedRcAgent, type RcAgentRow } from "./rc.ts";
 import { actorNamesOn, itemCenter, mapState, nameResolver, runRoom, threadLocus, type RoomAdapter, type RoomState, type RoomTurn } from "@isocan/rc";
 import { AcpAgentProcess, adapterEnv } from "./acp.ts";
@@ -525,6 +534,7 @@ import {
   type Build,
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
+import { installJetskiPlugin } from "./jetski-plugin.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import { inlineHtmlAssets, inlineMarkdownAssets } from "./inline.ts";
 import {
@@ -669,6 +679,10 @@ interface SessionFile {
    * fetched has the thread in it. */
   onThread?: string;
   onThreadAt?: string;
+  /** Latest hostbridge command for a framed pane on this machine, stamped
+   * with `at` (ms) so the pane forwards each CLI-driven camera/focus move
+   * once. */
+  bridge?: { at: number; message: Record<string, unknown> };
 }
 
 async function readSessionFile(home: string, actorId: string): Promise<SessionFile | null> {
@@ -696,6 +710,21 @@ async function writeSessionFile(
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, JSON.stringify(session, null, 2));
   }
+}
+
+/** Record a hostbridge command on this actor's session file so a framing host
+ * pane on this machine can forward it to the embedded canvas. */
+async function touchBridge(
+  ctx: Ctx,
+  canvasId: string,
+  message: Record<string, unknown>,
+): Promise<void> {
+  const active = await readSessionFile(ctx.home, ctx.actor.id);
+  if (!active || active.canvasId !== canvasId) return;
+  await writeSessionFile(ctx.home, ctx.actor.id, {
+    ...active,
+    bridge: { at: Date.now(), message },
+  });
 }
 
 /** The active session for this canvas, or an error telling how to start one. */
@@ -1222,7 +1251,9 @@ program
             scope:
               resolved.source === "session"
                 ? `this agent session (${resolved.harness})`
-                : "this machine's person",
+                : resolved.source === "upstream"
+                  ? "upstream badge"
+                  : "this machine's person",
             file: resolved.file,
           });
         }
@@ -1254,7 +1285,12 @@ program
           home: client.base,
         });
       }
-      const suffix = resolved.source === "session" ? " — this agent session" : "";
+      const suffix =
+        resolved.source === "session"
+          ? " — this agent session"
+          : resolved.source === "upstream"
+            ? " — upstream badge"
+            : "";
       console.log(`${resolved.actor.name} (${resolved.actor.id})${suffix}`);
       // The badge, never its secret. Nothing is DONE to a badge in this phase
       // — getting one is automatic and invisible, which is the point of it —
@@ -3842,8 +3878,12 @@ program
     "--admit-only",
     "let the window in but hand it no identity — whoever opens it names themselves",
   )
+  .option(
+    "--chat",
+    "keep the canvas's own Chat dock in the embedded frame (by default it is hidden so the host pane's chat owns the conversation)",
+  )
   .action(
-    run(async (opts: { admitOnly?: boolean }, cmd: Command) => {
+    run(async (opts: { admitOnly?: boolean; chat?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       // `--canvas` is how every verb here says which one; a positional would
       // be a second spelling of a question already answered.
@@ -3854,7 +3894,7 @@ program
       const origin = (await ctx.homeOf(canvas.id)) ?? ctx.client.base;
       const actor = opts.admitOnly ? null : ctx.actor;
       const { pass, token } = await ctx.client.mintPass(canvas.id, actor?.id);
-      const address = canvasUrlWithPass(origin, canvas.id, token);
+      const address = embedCanvasUrl(origin, canvas.id, token, { chat: opts.chat });
       const minutes = Math.round(PASS_TTL_MS / 60_000);
 
       if (ctx.json) {
@@ -3862,7 +3902,7 @@ program
           address,
           // The clean one too: a pane that has already been admitted once
           // should be pointed at this, never at a spent credential.
-          canvas: canvasUrl(origin, canvas.id),
+          canvas: splitPassFragment(address).address,
           expiresAt: pass.expiresAt,
           ...(actor ? { actor } : {}),
         });
@@ -4285,6 +4325,7 @@ program
   .option("--force", "refresh the skill even if this directory already has one")
   .option("--direct", "run no daemon here — speak to the home itself, keeping no local copy")
   .option("--daemon", "run a daemon here with a replica of its own, whatever this place looks like")
+  .option("--jetski", "link the Jetski plugin into ~/.gemini/config/plugins/isocan")
   .action(
     run(
       async (
@@ -4295,6 +4336,7 @@ program
           force?: boolean;
           direct?: boolean;
           daemon?: boolean;
+          jetski?: boolean;
         },
         cmd: Command,
       ) => {
@@ -4439,6 +4481,14 @@ program
         // are the transient one, the installed copy is handed the daemon.
         const transient = (await whichInstall(path.resolve(myRoot()))).kind === "npx";
         const handOff = transient && !direct ? durableBin : null;
+        if (opts.jetski) {
+          const pluginRoot = transient && durableBin ? rootOfBin(durableBin) : myRoot();
+          const said = installJetskiPlugin({
+            sourceDir: path.join(pluginRoot, "plugins", "jetski"),
+            force: opts.force ?? false,
+          });
+          report.jetski = `${said} — restart Jetski so it loads hooks.json`;
+        }
         /**
          * **The whole daemon paragraph, skipped** — this is what direct mode
          * IS, and every line of it is about a process this machine has decided
@@ -6311,8 +6361,13 @@ program
     "--style <step>",
     "S | M | L | XL (or body | heading | title | display) — how far out it stays readable",
   )
-  .option("--face <face>", "sans | mono | serif")
+  .option("--face <face>", "sans | mono | serif | hand")
   .option("--paper <colour>", "yellow | pink | blue | green | grey — a post-it rather than a caption")
+  .option(
+    "--color <colour>",
+    `${TEXT_COLOURS.join(" | ")} | #rrggbb | auto — the words' colour; a name adapts to light and dark`,
+  )
+  .option("--font <name>", `a named font, which brings its face: ${TEXT_FONTS.map((f) => f.name).join(", ")}`)
   .action(
     run(
       async (
@@ -6326,6 +6381,8 @@ program
           style?: string;
           face?: string;
           paper?: string;
+          color?: string;
+          font?: string;
         },
         cmd: Command,
       ) => {
@@ -6388,9 +6445,20 @@ program
          * would be doing no work. `--size` still overrides, like everywhere.
          */
         const paper = opts.paper === undefined ? null : pickOne("paper", opts.paper, PAPERS, "yellow");
+        /**
+         * Colour and font through core's doors, so the terminal takes exactly
+         * the words the bar offers (`core/textcolour.ts`). A NAMED colour is
+         * adapted per theme and never warns; a hex is drawn exactly, so it is
+         * measured here and the canvas it will not read on is said out loud.
+         * The font's width is in the box below — the estimate is all the CLI
+         * has, and lesson #94 is what a font without one does.
+         */
+        const colour = opts.color === undefined ? null : textColourChoice(opts.color);
+        const font = opts.font === undefined ? null : textFontChoice(opts.font);
+        const warnings = textColourWarnings(colour, paper);
         const { width, height } = sizeFor(
           opts.size,
-          paper === null ? textBox(body, style, face) : { width: PAPER_SIZE, height: PAPER_SIZE },
+          paper === null ? textBox(body, style, face, font) : { width: PAPER_SIZE, height: PAPER_SIZE },
         );
         const itemId = newItemId();
         const result = await sendOp(ctx, p.id, {
@@ -6408,16 +6476,20 @@ program
           placement: placementFor(snapshot, opts, { width, height }),
           title: opts.title ?? textTitle(body),
           // Defaults are written as ABSENCE, so a plain `isocan text` makes
-          // the byte-identical item the web's plain Text tool makes.
-          properties: {
-            ...TEXT_PROPERTIES,
-            ...(style === "body" ? {} : { [TEXT_STYLE_PROP]: style }),
-            ...(face === "sans" ? {} : { [TEXT_FACE_PROP]: face }),
-            ...(paper === null ? {} : { [PAPER_PROP]: paper }),
-          },
+          // the byte-identical item the web's plain Text tool makes — by the
+          // one spelling both surfaces call (`textLookProperties`).
+          properties: textLookProperties({ style, face, paper, colour, font }),
         });
         const placed = insertionReceiptPlacement(result.envelope.op, itemId);
-        if (ctx.json) return printJson({ itemId, placement: placed, title: opts.title ?? textTitle(body) });
+        if (ctx.json) {
+          return printJson({
+            itemId,
+            placement: placed,
+            title: opts.title ?? textTitle(body),
+            ...(warnings.length ? { warnings } : {}),
+          });
+        }
+        for (const warning of warnings) console.error(`warning: ${warning}`);
         console.log(`wrote ${itemId} ("${textTitle(body)}") at ${placed.x},${placed.y}`);
       },
     ),
@@ -7255,7 +7327,9 @@ program
   .option("--beside <item>", "put it next to this item, clear of it by the standard gap")
   .option("--side <side>", "with --beside: left | right | above | below (default: right)")
   .option("--in <group>", "move into a canvas group atomically, or into an area on a legacy canvas")
-  .option("--dry-run", "with group --in: report resolved membership and placement without writing")
+  .option("--out", "take it out of its canvas group, to that group's parent; where it is stays put")
+  .option("--to-root", "take it out of every group, straight to the canvas (implies --out)")
+  .option("--dry-run", "with group --in or --out: report resolved membership and placement without writing")
   .option("--cell <row,col>", "with --in: into one cell of the sheet's grid, counted from 1")
   .allowUnknownOption() // lets negative coordinates through: isocan mv itm -80 420
   .action(
@@ -7264,7 +7338,7 @@ program
         ref: string,
         x: string | undefined,
         y: string | undefined,
-        opts: { by?: string; in?: string; cell?: string; dryRun?: boolean; beside?: string; side?: string },
+        opts: { by?: string; in?: string; out?: boolean; toRoot?: boolean; cell?: string; dryRun?: boolean; beside?: string; side?: string },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
@@ -7307,6 +7381,16 @@ program
             ctx,
             await new CanvasGroups(ctx.client, p.id, () => ctx.actor).move(ref, { at: beside }, opts),
           );
+        }
+        /**
+         * **Out, the twin of `--in`** (groups-by-hand phase 2): one level up,
+         * or with `--to-root` straight to the canvas. The web's ⌘-drag,
+         * ⌘⇧G and *Move to canvas* are the same act; `group remove` does it.
+         */
+        if (opts.out || opts.toRoot) {
+          if (opts.in !== undefined || opts.beside !== undefined || opts.by !== undefined || x !== undefined || y !== undefined || opts.cell) throw new Error("--out keeps the item where it is; omit coordinates, --by, --beside, --in and --cell");
+          if (snapshot.project.groupMode !== "groups") throw new Error("--out needs a canvas with groups — `isocan canvas group migrate --dry-run` previews converting this one");
+          return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).remove([ref], { toRoot: !!opts.toRoot, dryRun: !!opts.dryRun }));
         }
         if (opts.in !== undefined && snapshot.project.groupMode === "groups") {
           if (opts.by !== undefined || x !== undefined || y !== undefined) throw new Error("--in chooses placement; omit coordinates and --by");
@@ -7902,6 +7986,21 @@ program
          * in half (23 Sep 2026). Core's `textNodeRefit` answers, grow-only,
          * and the resize rides in the same act; `--size` still wins outright.
          */
+        /**
+         * **A text node's colour and font, read through the bar's doors** —
+         * `textColor=Red` lands as `red`, `textFont=fraunces` as `Fraunces`
+         * with its face beside it, `auto`/`none` as a removal, anything else
+         * refused with the list (core `textPropsPatch`). A hex that will not
+         * read in one theme is said here and set anyway: it was chosen
+         * exactly.
+         */
+        if (isTextItem(item) && patch.properties) {
+          const { warnings, ...normalised } = textPropsPatch(item, patch);
+          delete patch.properties;
+          delete patch.removeProperties;
+          Object.assign(patch, normalised);
+          for (const warning of warnings) console.error(`warning: ${warning}`);
+        }
         const refit =
           !opts.size && (patch.properties || patch.removeProperties) && isTextItem(item)
             ? textNodeRefit(item, await currentText(ctx, p.id, item), patch)
@@ -11043,7 +11142,6 @@ async function readCommentDocument(ctx: Ctx, canvasId: string, item: Item) {
   const face = visualFaceOf(version);
   if (!["text/markdown", "text/plain"].includes(face.mimeType)) throw new Error("Text comments need a Markdown or plain-text item");
   const { markdownText } = await import("@isocan/core/markdown");
-  const { isTextItem } = await import("@isocan/core");
   const flavor = face.mimeType === "text/plain" ? "plain" as const : isTextItem(item) ? "text-node" as const : "document" as const;
   const text = markdownText((await ctx.client.downloadBlob(canvasId, face.blobHash)).toString("utf8"), flavor);
   return { text, versionId: version.id, blobHash: face.blobHash, flavor };
@@ -11481,28 +11579,85 @@ session
     run(async (x: string, y: string, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
+      const wx = Number(x);
+      const wy = Number(y);
       await touchSession(ctx, p.id, {
-        cursor: { x: Number(x), y: Number(y) },
+        cursor: { x: wx, y: wy },
         activity: null,
       });
+      await touchBridge(ctx, p.id, { type: "isocan:camera", action: "point", x: wx, y: wy });
       console.log(`cursor at ${x},${y}`);
     }),
   );
 
 session
-  .command("point <item>")
-  .description("Move your cursor to an item")
+  .command("point [item]")
+  .description("Move your cursor to an item (and optionally zoom/fit a framed canvas pane)")
+  .option("-z, --zoom", "zoom a framed canvas pane to fit this item")
+  .option("--fit", "zoom a framed canvas pane to fit the entire canvas")
+  .option("--100", "snap a framed canvas pane to 100% zoom")
+  .option("--in", "zoom in on a framed canvas pane")
+  .option("--out", "zoom out on a framed canvas pane")
+  .option("--selection", "zoom a framed canvas pane to fit the current selection")
+  .option("--follow", "follow this session's cursor in a framed canvas pane")
   .action(
-    run(async (ref: string, _opts: unknown, cmd: Command) => {
-      const ctx = await ctxOf(cmd);
-      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      const item = resolveItem(snapshot, ref);
-      await touchSession(ctx, p.id, {
-        cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
-        activity: null,
-      });
-      console.log(`pointing at ${item.id}`);
-    }),
+    run(
+      async (
+        ref: string | undefined,
+        opts: {
+          zoom?: boolean;
+          fit?: boolean;
+          100?: boolean;
+          in?: boolean;
+          out?: boolean;
+          selection?: boolean;
+          follow?: boolean;
+        },
+        cmd: Command,
+      ) => {
+        const ctx = await ctxOf(cmd);
+        const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        if (ref) {
+          const item = resolveItem(snapshot, ref);
+          await touchSession(ctx, p.id, {
+            cursor: { x: item.x + item.width / 2, y: item.y + item.height / 2 },
+            selection: [item.id],
+            activity: null,
+          });
+          await touchBridge(ctx, p.id, {
+            type: "isocan:focus-item",
+            itemId: item.id,
+            zoom: Boolean(opts.zoom),
+          });
+          console.log(`pointing at ${item.id}${opts.zoom ? " (zoomed)" : ""}`);
+          return;
+        }
+        const active = await requireSession(ctx, p.id);
+        if (opts.follow) {
+          await touchBridge(ctx, p.id, {
+            type: "isocan:follow",
+            sessionId: active.sessionId,
+            actorId: ctx.actor.id,
+          });
+          console.log(`following session ${active.sessionId}`);
+          return;
+        }
+        const action = opts.fit
+          ? "fit"
+          : opts[100]
+            ? "100"
+            : opts.selection
+              ? "selection"
+              : opts.in
+                ? "in"
+                : opts.out
+                  ? "out"
+                  : null;
+        if (!action) throw new Error("pass an <item> or one of --fit, --100, --in, --out, --selection, --follow");
+        await touchBridge(ctx, p.id, { type: "isocan:camera", action });
+        console.log(`camera: ${action}`);
+      },
+    ),
   );
 
 session
@@ -11510,19 +11665,29 @@ session
   .description("Point to a quote in saved Markdown/plain text for 15 seconds; --clear puts it down")
   .option("--quote <text>", "exact rendered words, not Markdown source syntax")
   .option("--occurrence <number>", "which matching passage, counted from 1")
+  .option("-z, --zoom", "zoom a framed canvas pane to fit the selected item")
   .option("--clear", "clear your shared text selection")
-  .action(run(async (ref: string | undefined, opts: { quote?: string; occurrence?: string; clear?: boolean }, cmd: Command) => {
+  .action(run(async (ref: string | undefined, opts: { quote?: string; occurrence?: string; zoom?: boolean; clear?: boolean }, cmd: Command) => {
     const ctx = await ctxOf(cmd);
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-    if (opts.clear) { await touchSession(ctx, p.id, { textSelection: null }); return console.log("text selection cleared"); }
-    if (!ref || !opts.quote) throw new Error("pass an item and --quote, or --clear");
+    if (opts.clear) {
+      await touchSession(ctx, p.id, { textSelection: null, selection: [] });
+      await touchBridge(ctx, p.id, { type: "isocan:select", itemIds: [] });
+      return console.log("text selection cleared");
+    }
+    if (!ref) throw new Error("pass an item and --quote, or --clear");
     const item = resolveItem(snapshot, ref);
+    if (!opts.quote) {
+      await touchSession(ctx, p.id, { selection: [item.id] });
+      await touchBridge(ctx, p.id, { type: "isocan:select", itemIds: [item.id], zoom: Boolean(opts.zoom) });
+      return console.log(`selected ${item.id}`);
+    }
     const doc = await readCommentDocument(ctx, p.id, item);
-    const { TEXT_ATTENTION_MS } = await import("@isocan/core");
     const range = quoteRange(doc.text, opts.quote, opts.occurrence === undefined ? undefined : Number(opts.occurrence));
     const textSelection = { itemId: item.id, versionId: doc.versionId, blobHash: doc.blobHash,
       textSpace: "markdown-hast-v1" as const, flavor: doc.flavor, ...range, expiresAt: Date.now() + TEXT_ATTENTION_MS };
     await touchSession(ctx, p.id, { textSelection, selection: [item.id] });
+    await touchBridge(ctx, p.id, { type: "isocan:select", itemIds: [item.id], zoom: Boolean(opts.zoom) });
     if (ctx.json) return printJson(textSelection);
     console.log(`selecting “${opts.quote}” on ${item.title} for 15 seconds`);
   }));
@@ -11545,6 +11710,7 @@ session
         cursor: threadLocus(snapshot, thread),
         ...(opts.say ? { status: opts.say, statusSource: "explicit" as const } : {}),
       });
+      await touchBridge(ctx, p.id, { type: "isocan:open-thread", threadId: thread.id });
       console.error(
         `on ${thread.id}${opts.say ? ` — "${opts.say}"` : ""} (posting a reply clears it)`,
       );
@@ -11564,22 +11730,26 @@ session
       let activity: import("@isocan/core").PresenceActivity;
       let cursor: { x: number; y: number };
       let where: string;
+      let bridgeMsg: Record<string, unknown>;
       if (ref) {
         const item = resolveItem(snapshot, ref);
         activity = { kind: "working", itemId: item.id };
         cursor = { x: item.x + item.width / 2, y: item.y + item.height / 2 };
         where = item.id;
+        bridgeMsg = { type: "isocan:focus-item", itemId: item.id };
       } else {
         const point = parseXY(opts.at!);
         activity = { kind: "working", ...point };
         cursor = point;
         where = opts.at!;
+        bridgeMsg = { type: "isocan:camera", action: "point", x: point.x, y: point.y };
       }
       await touchSession(ctx, p.id, {
         activity,
         cursor,
         ...(opts.say !== undefined ? { status: opts.say } : {}),
       });
+      await touchBridge(ctx, p.id, bridgeMsg);
       console.log(`working on ${where}${opts.say ? ` — ${opts.say}` : ""}`);
     }),
   );
@@ -11593,7 +11763,6 @@ session
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
       if (opts.signal) {
-        const { cursorSignal } = await import("@isocan/core");
         await touchSession(ctx, p.id, { signal: status ? cursorSignal(status) : null });
         console.log(status ? `signal: ${status} (20s)` : "signal cleared");
         return;
@@ -11610,7 +11779,6 @@ session
     run(async (text: string | undefined, _opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const p = await resolveCanvas(ctx);
-      const { cursorSignal } = await import("@isocan/core");
       await touchSession(ctx, p.id, { signal: text ? cursorSignal(text) : null });
       console.log(text ? `signal: ${text} (20s)` : "signal cleared");
     }),
@@ -12556,7 +12724,13 @@ async function mintAndEnrol(
   ctx: Ctx,
   canvasId: string,
   name: string,
-  opts: { cwd: string; harness: string | null; rules?: unknown; say?: (line: string) => void },
+  opts: {
+    cwd: string;
+    harness: string | null;
+    model?: string | null | undefined;
+    rules?: unknown;
+    say?: (line: string) => void;
+  },
 ): Promise<Actor> {
   // An actor this badge still holds under the key the name derives moves to
   // the machine key first (agent-key.ts), so re-enrolling it resumes it
@@ -12580,11 +12754,13 @@ async function mintAndEnrol(
     name,
   });
   const agent = claimed.envelope.actor;
+  const trimmedModel = opts.model?.trim() || null;
   const enrolled = await withPreparedRcAgent(ctx.home, {
     canvasId,
     actorId: agent.id,
     name: agent.name,
     harness: opts.harness,
+    ...(trimmedModel ? { model: trimmedModel } : {}),
     cwd: opts.cwd,
     sessionId: null,
   }, () => ctx.client.sendOp(canvasId, ctx.actor, {
@@ -12604,14 +12780,14 @@ async function mintAndEnrol(
   // `noteOnBench` cannot throw, never retries, and never creates the personal
   // canvas it would write to. A person who has never made one enrols exactly
   // as they did before phase 3.
-  await noteOnBench(ctx, agent.name, { actorId: agent.id, harness: opts.harness }, say);
+  await noteOnBench(ctx, agent.name, { actorId: agent.id, harness: opts.harness, model: trimmedModel }, say);
   return agent;
 }
 
 async function enrolAgent(
   cmd: Command,
   name: string,
-  opts: { dir?: string; harness?: string; rules?: string; listen?: string },
+  opts: { dir?: string; harness?: string; model?: string; rules?: string; listen?: string },
   contained: boolean,
 ): Promise<void> {
   const ctx = await ctxOf(cmd);
@@ -12625,6 +12801,7 @@ async function enrolAgent(
   // The rc half's harness: a flag (rc add), else the enrolling caller's own
   // — an agent enrolls an agent like itself — else null, "not yet said".
   const harness = opts.harness ?? ctx.harness ?? null;
+  const model = opts.model?.trim() || null;
   // Re-enrolling an agent that already stands here (for instance to set
   // `--harness` or `--dir` via `rc add <name>`) must preserve its
   // existing routing rules and `listen` grant unless `--rules` or `--listen`
@@ -12642,7 +12819,7 @@ async function enrolAgent(
     listen === undefined
       ? handed
       : { ...(handed && typeof handed === "object" ? handed : {}), listen };
-  const agent = await mintAndEnrol(ctx, p.id, name, { cwd, harness, rules });
+  const agent = await mintAndEnrol(ctx, p.id, name, { cwd, harness, model, rules });
   // Whose word will wake it, said at the moment it is decided: this
   // machine's person is its owner (owner-only summons), and with no
   // `--listen` the owner is the only one it answers.
@@ -12654,9 +12831,17 @@ async function enrolAgent(
   const gate =
     policyWords(policy, (id) => (id === person.id ? person.name : named(id)), ctx.actor.id) ??
     "listens to everyone";
-  if (ctx.json) return printJson({ enrolled: agent, canvasId: p.id, ...(listen ? { listen } : {}), policy });
+  if (ctx.json) {
+    return printJson({
+      enrolled: agent,
+      canvasId: p.id,
+      ...(model ? { model } : {}),
+      ...(listen ? { listen } : {}),
+      policy,
+    });
+  }
   console.log(
-    `enrolled ${agent.name} — answerable on "${p.title}" · ${gate}. ` +
+    `enrolled ${agent.name}${model ? ` (${model})` : ""} — answerable on "${p.title}" · ${gate}. ` +
       "A running `isocan rc` picks this up without a restart; nothing runs until something arrives." +
       (policy.listen.length === 0
         ? ` Nobody else's word wakes it — \`isocan rc listen ${agent.name} --to <names|everyone>\` widens that.`
@@ -12708,10 +12893,12 @@ is an op everyone can read, and a running \`isocan rc\` narrates it.`,
 agentCommand
   .command("add <name>")
   .description("Enrol an agent beside yourself — on this canvas, in this directory")
+  .option("--harness <name>", "how its sessions start: claude-code, pi, codex, antigravity (default: yours, else unsaid)")
+  .option("--model <id>", "pin this agent's model, spelled as its harness spells it (e.g. claude-opus-5-5) — see `isocan --agent-help agents`")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
   .option("--listen <who>", "whose word wakes it besides its owner: names/ids comma-separated, or everyone (default: its owner alone — the person whose rc answers)")
   .action(
-    run(async (name: string, opts: { rules?: string; listen?: string }, cmd: Command) =>
+    run(async (name: string, opts: { harness?: string; model?: string; rules?: string; listen?: string }, cmd: Command) =>
       enrolAgent(cmd, name, opts, true),
     ),
   );
@@ -12778,6 +12965,57 @@ agentCommand
     }),
   );
 
+/**
+ * **The pointer an agent wears** (agent pointers, 30 Sep 2026: *"select an
+ * emoji… so I can have a dog emoji for"* an agent).
+ *
+ * Not a new op: an agent's pointer IS its mark — the same `actor.setMark`
+ * `identity --mark` sends for yourself, with the agent's id in it. The home
+ * decides whether you may (`ownsAgent` in core): an actor this machine holds,
+ * or an agent one of your own surfaces holds. The web's "Pointer" pill sends
+ * exactly this op.
+ */
+agentCommand
+  .command("mark <name> <emoji>")
+  .description("Choose the emoji an agent of yours wears — on its face and as its pointer; `none` clears it")
+  .action(
+    run(async (name: string, emoji: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const mark = parseFaceMark(emoji);
+      const p = await resolveCanvas(ctx);
+      const snapshot = await ctx.client.snapshot(p.id);
+      const wanted = name.trim();
+      // Standing agents first — the roster a person reads — then anybody the
+      // canvas has a name for, which is where a session agent that was never
+      // enrolled is found. An id always works.
+      const known = [
+        ...Object.values(snapshot.canvas.agents ?? {}).map((a) => a.actor),
+        ...[...actorNamesOn(snapshot)].map(([id, known]) => ({ id, name: known })),
+      ];
+      const agent = known.find((a) => a.id === wanted || a.name.toLowerCase() === wanted.toLowerCase());
+      if (!agent) {
+        throw new Error(
+          `nobody on "${p.title}" answers to "${name}" — \`isocan who --all\` lists them; an actor id also works`,
+        );
+      }
+      try {
+        await ctx.client.sendOp(null, ctx.actor, { type: "actor.setMark", actorId: agent.id, mark });
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.code !== "not-your-actor") throw err;
+        throw new Error(
+          `${agent.name} is not yours to mark — only its owner can: the person whose own machine ` +
+            "enrolled it, or the agent itself (`isocan identity --mark`)",
+        );
+      }
+      if (ctx.json) return printJson({ actor: agent, mark });
+      console.log(
+        mark === null
+          ? `${agent.name} wears its initial again, and its pointer is the robot every agent gets`
+          : `${agent.name} now wears ${mark} — on its face, and as its pointer`,
+      );
+    }),
+  );
+
 program
   .command("harness")
   .description("Which coding harnesses this machine can run agents on, and the default")
@@ -12787,9 +13025,11 @@ program
 A fact about this machine, read without a daemon: every harness isocan
 knows — builtin, or declared in ~/.isocan/config.json under acpAdapters or
 harnessVars — with whether its executable is on the PATH, where the rc
-would get its ACP bridge, whether it could run here, and which one an
-agent enrolled with no harness named runs on. --json adds a \`runnable\`
-field so an agent presenting the choice need not derive it.`,
+would get its ACP bridge, whether it could run here, whether a model
+pinned with \`--model\` reaches it (a harness with no door for one runs its
+own default), and which one an agent enrolled with no harness named runs
+on. --json adds \`runnable\` and \`pinsModel\` fields so an agent presenting
+the choice need not derive them.`,
   )
   .action(
     run(async (_opts: unknown, cmd: Command) => {
@@ -12814,6 +13054,7 @@ field so an agent presenting the choice need not derive it.`,
           installed: r.installed === null ? "?" : r.installed ? "yes" : "no",
           adapter: r.adapter ?? "none",
           runnable: r.runnable ? "yes" : "no",
+          model: r.pinsModel ? "pins" : "own",
           default: r.default ? "yes" : "",
         })),
       );
@@ -12881,10 +13122,11 @@ rcCommand
   .description("Enrol an agent — the person's point-anywhere form")
   .option("--dir <path>", "the agent's working directory (default: here)")
   .option("--harness <name>", "how its sessions start: claude-code, pi, codex, antigravity (default: yours, else unsaid)")
+  .option("--model <id>", "pin this agent's model, spelled as its harness spells it (e.g. claude-opus-5-5) — see `isocan --agent-help agents`")
   .option("--rules <json>", "routing rules, stored as handed over (interpreted from phase 4)")
   .option("--listen <who>", "whose word wakes it besides its owner: names/ids comma-separated, or everyone (default: its owner alone — the person whose rc answers)")
   .action(
-    run(async (name: string, opts: { dir?: string; harness?: string; rules?: string; listen?: string }, cmd: Command) =>
+    run(async (name: string, opts: { dir?: string; harness?: string; model?: string; rules?: string; listen?: string }, cmd: Command) =>
       enrolAgent(cmd, name, opts, false),
     ),
   );
@@ -13124,7 +13366,7 @@ try a policy against one agent before starting an rc with it.`,
         };
         await upsertRcAgent(ctx.home, row);
       }
-      const spec = await adapterFor(ctx.home, row.harness);
+      const spec = await adapterFor(ctx.home, row.harness, process.env, row.model);
       if (!spec) {
         throw new Error(
           row.harness === null
@@ -13276,11 +13518,14 @@ interface RcShared {
  * default is what the on-demand rule frowns on. Every canvas this machine's
  * enrolment records name, plus the bound one if there is one; a canvas the
  * records name that the home no longer has is said and skipped.
+ *
+ * **And every canvas an agent this machine holds was brought to** (pets
+ * phase 1): the same look the running rc repeats (`rc-discover.ts`), once
+ * here, so a restart finds a canvas it was only ever invited to.
  */
-async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
+async function rcRooms(ctx: Ctx, bound: Canvas | null, look: RcLook): Promise<Canvas[]> {
   const canvases = await ctx.client.listCanvases();
   const wanted = new Set((await readRcAgents(ctx.home)).map((row) => row.canvasId));
-  const bound = await resolveCanvas(ctx).catch(() => null);
   if (bound) wanted.add(bound.id);
   const rooms: Canvas[] = [];
   for (const id of wanted) {
@@ -13288,11 +13533,27 @@ async function rcRooms(ctx: Ctx): Promise<Canvas[]> {
     if (canvas) rooms.push(canvas);
     else console.log(`rc: the records name ${id}, which this home no longer has — skipped`);
   }
+  const found = await lookForInvites(ctx, canvases, look);
+  for (const canvas of decide(found, new Set(rooms.map((c) => c.id)), bound?.id ?? null).open) rooms.push(canvas);
   return rooms;
 }
 
+/** What the looks keep between them (`survey` in `rc-discover.ts`). */
+interface RcLook {
+  stamps: Map<string, string>;
+  held: string;
+}
+
+/** One look at the home: which canvases have an agent this machine holds
+ * standing on them, read only where something moved since the last. */
+async function lookForInvites(ctx: Ctx, canvases: Canvas[], look: RcLook) {
+  const [bindings, rows] = await Promise.all([ctx.client.actorBindings().catch(() => []), readRcAgents(ctx.home)]);
+  const held = heldAgents(bindings, rows, ctx.actor.id);
+  return survey(canvases, held, look, async (id) => (await ctx.client.snapshot(id).catch(() => null))?.canvas.agents ?? null);
+}
+
 rcCommand
-  .option("--all", "answer on every canvas this machine's enrolments name, not only this directory's")
+  .option("--all", "answer on every canvas this machine's enrolments name, not only this directory's — and, while running, any its agents are brought to")
   .option("--default-harness <name>", "the harness agents that named none run on — kept as config.json's defaultHarness")
   .option("--sandbox", "fence every adapter: its own directory, ~/.isocan, /tmp, this daemon and its harness's API")
   .option("--codex-sandbox", "opt in to Codex tool sandboxing; exact daemon host and configured domains, no escalation")
@@ -13315,7 +13576,9 @@ rcCommand
           "this turn until the harness kills it. Your spelling of its verbs is `isocan agent`.",
       );
     }
-    const rooms = opts.all ? await rcRooms(ctx) : [await resolveCanvas(ctx)];
+    const look: RcLook = { stamps: new Map(), held: "" };
+    const bound = opts.all ? await resolveCanvas(ctx).catch(() => null) : null;
+    const rooms = opts.all ? await rcRooms(ctx, bound, look) : [await resolveCanvas(ctx)];
     if (rooms.length === 0) {
       throw new Error("`isocan rc --all` found no canvas to answer on — nothing is enrolled from this machine yet (`isocan rc add <name>` on a bound canvas)");
     }
@@ -13359,7 +13622,53 @@ rcCommand
       });
     }
     if (rooms.length > 1) console.log(`rc: answering on ${rooms.length} canvases — one process, one budget per agent`);
-    await Promise.all(rooms.map((p) => runRcRoom(ctx, p, shared)));
+    // A room that fails ends the rc, as when every room was one `Promise.all`;
+    // a room that is closed (below) just stops.
+    let fail: (err: unknown) => void = () => {};
+    const failed = new Promise<never>((_, reject) => {
+      fail = reject;
+    });
+    const parked = new Map<string, () => Promise<void>>();
+    const open = (p: Canvas) => {
+      parked.set(p.id, async () => {});
+      runRcRoom(ctx, p, shared, (close) => {
+        if (parked.has(p.id)) parked.set(p.id, close);
+      }).catch(fail);
+    };
+    for (const p of rooms) open(p);
+    /**
+     * **The rc hears invites** (pets phase 1). Only under `--all`: a plain
+     * `rc` answers for one canvas, the directory's, and its room already
+     * takes up whoever is brought there. Every `discoverEvery()` it looks
+     * again; a canvas an agent it holds was brought to gets a room, said in
+     * the words the start uses, and a room where nobody it holds stands any
+     * more is closed — what a restart would do, since the room's own reap
+     * took its rows. A look that fails is said and tried again next time.
+     */
+    if (opts.all) {
+      void (async () => {
+        for (;;) {
+          await new Promise((resolve) => setTimeout(resolve, discoverEvery()));
+          try {
+            const found = await lookForInvites(ctx, await ctx.client.listCanvases(), look);
+            const { open: opening, close } = decide(found, new Set(parked.keys()), bound?.id ?? null);
+            for (const id of close) {
+              const stop = parked.get(id);
+              parked.delete(id);
+              console.log(rcLine("", `no longer answering on "${found.get(id)!.canvas.title}" — nobody this machine holds stands there now`));
+              await stop?.();
+            }
+            for (const p of opening) {
+              shared.rooms += 1;
+              open(p);
+            }
+          } catch (err) {
+            console.log(rcLine("", `could not look for canvases to answer on — ${(err as Error).message} (trying again)`));
+          }
+        }
+      })();
+    }
+    await failed;
   }),
 );
 
@@ -13451,7 +13760,12 @@ function rcLine(tag: string, text: string): string {
  * upgrade window, the sandbox fence, the harness scan, the session pointer
  * file loaned to the agent's own CLI, and the daemon restart. Never returns.
  */
-async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> {
+async function runRcRoom(
+  ctx: Ctx,
+  p: Canvas,
+  shared: RcShared,
+  opened?: (close: () => Promise<void>) => void,
+): Promise<never> {
   const tag = shared.rooms > 1 ? `[${p.title}]` : "";
   const print = (line: string) => console.log(rcLine(tag, line));
   const rcCwd = process.cwd();
@@ -13537,7 +13851,7 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
     cwd: rcCwd,
     rows: fileRcRows(ctx.home),
     adapterFor: async (row) => {
-      const spec = await adapterFor(ctx.home, row.harness);
+      const spec = await adapterFor(ctx.home, row.harness, process.env, row.model);
       if (!spec) {
         throw new Error(
           row.harness === null
@@ -13577,7 +13891,14 @@ async function runRcRoom(ctx: Ctx, p: Canvas, shared: RcShared): Promise<never> 
         signal.addEventListener("abort", done, { once: true });
       }),
   });
-  shared.standDowns.push(() => room.stop());
+  const standDown = () => room.stop();
+  shared.standDowns.push(standDown);
+  // Closed by the host (pets phase 1): out of the Ctrl-C list, and stopped.
+  opened?.(async () => {
+    const at = shared.standDowns.indexOf(standDown);
+    if (at >= 0) shared.standDowns.splice(at, 1);
+    await room.stop();
+  });
   await room.done;
   return new Promise<never>(() => {});
 }

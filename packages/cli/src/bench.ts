@@ -3,6 +3,7 @@ import type { Command } from "commander";
 import {
   BENCH_ITEM_SIZE,
   benchAgents,
+  benchFollowPatch,
   benchItemOf,
   benchJoinRefusal,
   benchRows,
@@ -20,6 +21,7 @@ import type { Ctx } from "./ctx.ts";
 import { printJson, printTable, truncate } from "./output.ts";
 import { scanHarnesses } from "./harnesses.ts";
 import { readRcAgents } from "./rc.ts";
+import { RC_DISCOVER_MS } from "./rc-discover.ts";
 import { withContext } from "./run.ts";
 
 /**
@@ -171,7 +173,9 @@ async function knownAgent(ctx: Ctx, name: string): Promise<BenchAgent | null> {
     name: row.name,
     actorId: row.actorId,
     harness,
+    model: row.model ?? null,
     runsAt: thisMachine(),
+    follows: false,
   };
 }
 
@@ -188,8 +192,17 @@ async function writeBenchRow(
   ctx: Ctx,
   canvasId: string,
   name: string,
-  agent: { actorId: string; harness?: string | null; runsAt?: string | null },
-  explicit?: { harness?: boolean; runsAt?: boolean },
+  agent: {
+    actorId: string;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+    runsAt?: string | null | undefined;
+  },
+  explicit?: {
+    harness?: boolean | undefined;
+    model?: boolean | undefined;
+    runsAt?: boolean | undefined;
+  },
 ): Promise<{ itemId: string; wrote: "add" | "fill" | "already" }> {
   const snapshot = await ctx.client.snapshot(canvasId);
   const write = benchWriteFor(snapshot.canvas, agent, explicit);
@@ -250,7 +263,11 @@ async function writeBenchRow(
 export async function noteOnBench(
   ctx: Ctx,
   name: string,
-  agent: { actorId: string; harness?: string | null },
+  agent: {
+    actorId: string;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+  },
   say: (line: string) => void,
 ): Promise<void> {
   let canvasId: string | null;
@@ -273,6 +290,7 @@ export async function noteOnBench(
     await writeBenchRow(ctx, canvasId, name, {
       actorId: agent.actorId,
       harness,
+      model: agent.model ?? null,
       runsAt: thisMachine(),
     });
   } catch (error) {
@@ -301,7 +319,11 @@ summon it. Reachability is measured every time you look:
 It fills itself: enrolling an agent anywhere writes its row, so you rarely
 need \`bench add\`. Withdrawing one does not take it off — the bench is the
 agents you HAVE, so a row that stands nowhere stays, reading unreachable.
-\`bench rm\` is the only way one leaves.`,
+\`bench rm\` is the only way one leaves.
+
+\`bench follow <name>\` makes one your pet: when you open a canvas you can
+edit in the app, it is invited there and the thread says it came with you —
+never where somebody removed it. \`--off\` stops it; where it stands, it stays.`,
     );
 
   const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => withContext(contextOf, work);
@@ -319,9 +341,10 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
       printTable(
         rows.map((row) => ({
           name: truncate(row.name, 20),
-          harness: row.harness ?? "—",
+          harness: row.model ? `${row.harness ?? "—"} (${row.model})` : row.harness ?? "—",
           standing: benchStandingWords(row),
           reach: benchWords(row),
+          follows: row.follows ? "follows you" : "",
         })),
       );
     }),
@@ -332,11 +355,12 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
     .description("Put an agent on your bench, from what this machine already knows")
     .option("--actor <id>", "the actor it speaks as — required for an agent this machine has no rc row for")
     .option("--harness <name>", "which agent it is: claude-code, codex, pi, …")
+    .option("--model <id>", "pin this agent's model, spelled as its harness spells it (e.g. claude-opus-5-5) — see `isocan --agent-help agents`")
     .option("--runs-at <label>", "an opaque label for where it runs (default: this machine)")
     .action(
       act(async (ctx, args) => {
         const name = args[0] as string;
-        const opts = args[1] as { actor?: string; harness?: string; runsAt?: string };
+        const opts = args[1] as { actor?: string; harness?: string; model?: string; runsAt?: string };
         const matched = await knownAgent(ctx, name);
         // What the machine knows is only inherited when it is about the SAME
         // actor. `--actor` naming somebody else means the row is for an agent
@@ -352,6 +376,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
         const agent = {
           actorId,
           harness: opts.harness ?? known?.harness ?? null,
+          model: opts.model ?? known?.model ?? null,
           runsAt: opts.runsAt ?? known?.runsAt ?? null,
         };
         // `bench add` is the ONE bench write that may create the canvas: it is
@@ -363,6 +388,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
         if (!canvasId) throw new Error("your personal canvas is not live here, so there is nowhere to keep a bench");
         const { itemId, wrote } = await writeBenchRow(ctx, canvasId, name, agent, {
           harness: Boolean(opts.harness),
+          model: Boolean(opts.model),
           runsAt: Boolean(opts.runsAt),
         });
         if (wrote !== "add") {
@@ -402,7 +428,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
    */
   bench
     .command("join <name>")
-    .description("Bring an agent from your bench to this canvas — it answers here, and nothing else changes")
+    .description("Bring an agent from your bench to this canvas — it stands here, and nothing else changes")
     .action(
       act(async (ctx, args) => {
         const name = args[0] as string;
@@ -420,7 +446,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
             return printJson({ canvasId: target.id, from: benchId, joined: false, agent: row });
           }
           return console.log(
-            `${standing.actor.name} already answers on ${target.title} (${target.id}).`,
+            `${standing.actor.name} already stands on ${target.title} (${target.id}).`,
           );
         }
         await ctx.client.sendOp(target.id, ctx.actor, {
@@ -436,8 +462,63 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
         if (ctx.json) {
           return printJson({ canvasId: target.id, from: benchId, joined: true, agent: joined });
         }
+        /**
+         * **Standing here, not answering here — yet** (pets phase 1). This
+         * said "answers on", and `ready` beside it is measured across the
+         * agent's canvases: an rc parked somewhere ELSE. What makes it answer
+         * on this one is a running `isocan rc --all` on its machine, whose
+         * next look (`RC_DISCOVER_MS`) parks here; a plain `isocan rc` never
+         * does. So the line says which, rather than promising either.
+         */
         console.log(
-          `${joined.name} answers on ${target.title} — ${benchWords(joined)}, ${benchStandingWords(joined)}. Nothing else moved: no turn was started, no summons rule was written, and no other canvas changed.`,
+          `${joined.name} stands on ${target.title} now — ${benchWords(joined)}, ${benchStandingWords(joined)}. ` +
+            `A running \`isocan rc --all\` on its machine picks this up within ${Math.round(RC_DISCOVER_MS / 1000)} s; a plain \`isocan rc\` parked elsewhere does not. ` +
+            "Nothing else moved: no turn was started, no summons rule was written, and no other canvas changed.",
+        );
+      }),
+    );
+
+  /**
+   * **`isocan bench follow <name> [--off]`** — make an agent your pet, or stop
+   * (`docs/projects/pets`, phase 2, scenes 2 and 4).
+   *
+   * One `item.update` on the bench row, the patch spelled by core's
+   * `benchFollowPatch` so the app's *Follows me* switch writes the same
+   * bytes. It invites the agent nowhere by itself: following is acted on by
+   * the person's app when they ARRIVE on a canvas they can edit, which a
+   * terminal never does. And off takes it off nothing — the canvases it
+   * already stands on keep it, because turning a pet off is not sending it
+   * away (`isocan rc remove` on that canvas is that).
+   */
+  bench
+    .command("follow <name>")
+    .description("Make an agent your pet: it comes along to every canvas you open and can edit (--off stops it)")
+    .option("--off", "stop following — the canvases it already stands on keep it")
+    .action(
+      act(async (ctx, args) => {
+        const name = args[0] as string;
+        const opts = args[1] as { off?: boolean };
+        const on = !opts.off;
+        const canvasId = await benchCanvasId(ctx);
+        if (!canvasId) throw new Error("you have no bench here — `isocan bench add <name>` puts an agent on one first");
+        const row = oneRow(benchAgents((await ctx.client.snapshot(canvasId)).canvas), name);
+        if (row.follows !== on) {
+          await ctx.client.sendOp(canvasId, ctx.actor, {
+            type: "item.update",
+            itemId: row.itemId,
+            patch: benchFollowPatch(on),
+          });
+        }
+        const agent = { ...row, follows: on };
+        if (ctx.json) return printJson({ canvasId, itemId: row.itemId, changed: row.follows !== on, agent });
+        if (row.follows === on) {
+          return console.log(on ? `${row.name} already follows you.` : `${row.name} does not follow you.`);
+        }
+        console.log(
+          on
+            ? `${row.name} follows you now: when you open a canvas you can edit in the app, it is invited there and the thread says it came with you. ` +
+                "Not where somebody removed it, and not on canvases you can only read. Nothing was invited just now."
+            : `${row.name} no longer follows you. The canvases it already stands on keep it — \`isocan rc remove\` on a canvas is how it leaves one.`,
         );
       }),
     );

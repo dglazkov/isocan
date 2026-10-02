@@ -404,6 +404,30 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(inside.stdout).toContain("Percy");
   }, 30_000);
 
+  it("a model pinned at enrolment rides the row into the adapter, and an unpinned one gets no template (jetski phase 1)", async () => {
+    await fs.writeFile(
+      path.join(home, "config.json"),
+      JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { fake: [process.execPath, fakeAcp, "--model", "{model}"] } }),
+    );
+    const add = await isocan("--json", "rc", "add", "Sian", "--harness", "fake", "--model", "acme-pro");
+    expect(add.code, add.stderr).toBe(0);
+    expect(JSON.parse(add.stdout)).toMatchObject({ model: "acme-pro" });
+    expect((await rcRows()).find((row) => row.name === "Sian")?.model).toBe("acme-pro");
+    // A person's own ISOCAN_MODEL is blanked so only the pin can speak.
+    const pinned = await collect(spawnCli(["rc", "turn", "Sian", "which", "model"], { ISOCAN_MODEL: "" }));
+    expect(pinned.code, pinned.stderr).toBe(0);
+    expect(pinned.stdout).toContain("model:acme-pro:acme-pro ");
+
+    // The same declaration, nothing pinned: the flag goes with its template,
+    // so the harness is never handed the literal text `{model}`.
+    expect((await isocan("rc", "add", "Rowan", "--harness", "fake")).code).toBe(0);
+    expect((await rcRows()).find((row) => row.name === "Rowan")?.model ?? null).toBeNull();
+    const plain = await collect(spawnCli(["rc", "turn", "Rowan", "hello"], { ISOCAN_MODEL: "" }));
+    expect(plain.code, plain.stderr).toBe(0);
+    expect(plain.stdout).toContain("echo:hello");
+    expect(plain.stdout).not.toContain("model:");
+  }, 40_000);
+
   it("`rc turn` is a person's verb — a harness session is refused", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");
     const run = await collect(spawnCli(["rc", "turn", "Sian", "hi"], { ISOCAN_SESSION_ID: "s1" }));

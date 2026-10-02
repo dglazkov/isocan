@@ -1,5 +1,5 @@
 import "./agent-row.css";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AgentRow } from "@isocan/core";
 import {
@@ -38,6 +38,9 @@ import { useClockSecond } from "../lib/sprint.ts";
  * so both homes show what `isocan who` would print because all three read
  * `roster()`.
  */
+/** The "Pointer" pill: what it wears, changed by its owner — lazy, shared with the facepile's card. */
+const AgentPointer = lazy(() => import("./AgentPointer.tsx"));
+
 /** How long ago, in core's words (cleanup DU-5, 27 Sep 2026: this row kept
  *  two private copies that said "72h" where every other surface says "3d"),
  *  down to the second because the row re-renders every second. */
@@ -147,6 +150,10 @@ export function AgentRowView({
   /** The reader is the owner — the one person who may widen it. */
   const owns = policy !== undefined && viewer !== undefined && sameActor(joined, policy.owner.id, viewer);
   const ownerName = policy ? nameOf(policy.owner.id) : "";
+  /** Who the pointer pill names to a reader who is not the owner: the
+   *  answering rc's owner, else whoever enrolled it. */
+  const writer = canvas?.agents?.[row.actorId]?.writtenBy;
+  const ownerOf = ownerName || (writer ? nameOf(writer.id) : undefined);
 
   // An enrolled row is a RECORD made visible (agents-on-demand phase 2.5):
   // standing to answer here, no session because nothing has arrived. Not
@@ -230,6 +237,9 @@ export function AgentRowView({
               Who can ask
             </button>
           )}
+          <Suspense>
+            <AgentPointer agent={{ id: row.actorId, name: row.name }} owner={ownerOf} />
+          </Suspense>
           {onDismiss && (
             <button
               className="wb-dismiss"
@@ -372,6 +382,9 @@ export function AgentRowView({
           >
             Watch
           </button>
+          <Suspense>
+            <AgentPointer agent={{ id: row.actorId, name: row.name }} owner={ownerOf} />
+          </Suspense>
           {onDismiss && (
             <button
               className="wb-watch wb-dismiss-live"

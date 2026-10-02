@@ -70,6 +70,14 @@ export interface ShadowTurn {
   error?: string;
   /** Milliseconds from the turn's first transcription piece: its last piece, the model's first call, and the end of the turn. */
   timing: { lastHeard?: number; firstCall?: number; done: number };
+  /**
+   * Present only on a turn recorded with the fast path ACTING (phase 7,
+   * `fastact.ts`) — this file never writes it. What was decided, how long the
+   * model's calls were held, how many were answered "already done", and when
+   * (ms from the first piece) Jev was asked and the act was acknowledged.
+   * `late`: words arrived after the act.
+   */
+  fast?: { decision: "act" | "escalate" | "released"; held: number; dropped: number; asked?: number; acted?: number; late?: true };
 }
 
 /** An item's place and size, or null when it is not on the canvas — what an undo would put back. */

@@ -1,25 +1,24 @@
-import { isDesignSystem, type ModuleMenuFacts, type ModuleMenuRow } from "@isocan/core";
+import { isDesignSystem, type Item, type ModuleMenuFacts, type ModuleMenuRow } from "@isocan/core";
 import { behindCount, isWire, restyleArgs, restyleLabel, wiresBehind } from "./behind.ts";
+import { LAYER_LABELS, TIER_LABELS, resolveItemLayers } from "./layers.ts";
+import { currentVersionOf } from "./port.ts";
 import { HOUSE, OWN_PRESETS, PACK_PRESETS, currentPreset, presetById } from "./presets.ts";
+import { WIRE_FIDELITY_TIERS, WIRE_LAYER_IDS } from "./spec.ts";
 import { cachedDoc, cachedSpec } from "./spec-cache.ts";
 
 /**
- * **Right-click a wire → Style ▸** (24 Sep 2026, Dion: *"right click on a
- * wire and have 'Style' as an option in the context menu and be able to
- * choose a type"*).
+ * **Right-click a wire → Style ▸ and Layers ▸** (24 Sep 2026 & 1 Oct 2026,
+ * Dion: *"right click on a wire and have 'Style' as an option in the context
+ * menu"* and *"bake in layers so when you select the screen there are layers
+ * you can check/uncheck to turn on and off"*).
  *
  * A submenu of the wire styles — house, the module's own, then the design
  * competition's packs under their own heading — with a tick on the one that
  * governs every selected wire (`currentPreset`), and its name beside
- * *Style* so the answer shows without opening it. Offered only when every
- * item is a wire (a screen or a variation; a prototype is not styled, its
- * screens are).
- *
- * A pick does nothing of its own: it opens the Wireframes dialog with
- * `style <id>`, which is what typing `/wire style <id>` does — so the menu,
- * the Chat and `isocan wire style --preset` are one act (`presets.ts`), and
- * the dialog applies it to the flows of the wires selected. This is the
- * module's lazy half; the shell's entry chunk pays one call to ask for it.
+ * *Style* so the answer shows without opening it. Beside it, **Layers ▸**
+ * offers checkable fidelity layers (`System`, `Copy`, `Low-Fi`, `High-Fi`)
+ * and the four fidelity tiers (`1 · Wire`, `2 · Wire + Design System`,
+ * `3 · Low-Fi`, `4 · High-Fi`).
  */
 export function styleMenu(facts: ModuleMenuFacts): ModuleMenuRow[] {
   const { canvas, items, open } = facts;
@@ -27,16 +26,65 @@ export function styleMenu(facts: ModuleMenuFacts): ModuleMenuRow[] {
   if (items.length === 0 || !items.every(isWire)) return [];
   const now = currentPreset(canvas, items);
   const row = (id: string, label: string): ModuleMenuRow => ({ label, checked: id === now, writes: true, run: () => open("wire", `style ${id}`) });
-  return [...behindRows(facts), {
-    label: "Style",
-    value: now === undefined ? "" : now === HOUSE ? "House" : presetById(now)?.name ?? now,
+  return [
+    ...behindRows(facts),
+    {
+      label: "Style",
+      value: now === undefined ? "" : now === HOUSE ? "House" : presetById(now)?.name ?? now,
+      writes: true,
+      run: () => {},
+      submenu: [
+        row(HOUSE, "House"),
+        ...OWN_PRESETS.map((p) => row(p.id, p.name)),
+        { separator: "Design packs" },
+        ...PACK_PRESETS.map((p) => row(p.id, p.name)),
+      ],
+    },
+    ...layersRows(items, open),
+  ];
+}
+
+function layersRows(items: readonly Item[], open: ModuleMenuFacts["open"]): ModuleMenuRow[] {
+  const first = items[0];
+  if (!first) return [];
+  const ver = currentVersionOf(first);
+  const spec = ver ? cachedSpec(ver.blobHash) : null;
+  const resolved = resolveItemLayers(first, spec);
+  const tierInfo = TIER_LABELS[resolved.tier];
+
+  const checkRows: ModuleMenuRow[] = WIRE_LAYER_IDS.map((layerId) => {
+    const on = resolved[layerId];
+    const meta = LAYER_LABELS[layerId];
+    return {
+      label: `${meta.short} — ${meta.label}`,
+      checked: on,
+      writes: true,
+      run: () => open("wire", `layer ${on ? "-" : "+"}${layerId}`),
+    };
+  });
+
+  const tierRows: ModuleMenuRow[] = WIRE_FIDELITY_TIERS.map((tier) => ({
+    label: TIER_LABELS[tier].title,
+    checked: resolved.tier === tier,
+    writes: true,
+    run: () => open("wire", `layer ${tier}`),
+  }));
+
+  return [{
+    label: "Layers",
+    value: tierInfo.badge,
     writes: true,
     run: () => {},
     submenu: [
-      row(HOUSE, "House"),
-      ...OWN_PRESETS.map((p) => row(p.id, p.name)),
-      { separator: "Design packs" },
-      ...PACK_PRESETS.map((p) => row(p.id, p.name)),
+      ...checkRows,
+      { separator: "Fidelity tiers" },
+      ...tierRows,
+      { separator: "Flow" },
+      {
+        label: `Sync entire flow to ${tierInfo.badge}`,
+        writes: true,
+        run: () => open("wire", `layer ${resolved.tier} --flow`),
+      },
     ],
   }];
 }

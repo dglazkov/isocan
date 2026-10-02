@@ -178,6 +178,13 @@ describe("every Node comes from .nvmrc", () => {
       new Set([nvmrc.split(".")[0]]),
     );
   });
+
+  it("is what the CLI bundle's esbuild target reads", () => {
+    const release = withoutComments(readFileSync(`${root}/scripts/release.mjs`, "utf8"));
+    expect(release).not.toMatch(/target:\s*["']node\d+["']/);
+    expect(release).toMatch(/\.nvmrc/);
+    expect(release).toMatch(/target:\s*`node\$\{nodeMajor\}`/);
+  });
 });
 
 /**
@@ -215,6 +222,12 @@ describe("renovate.json keeps its lanes", () => {
   it("merges by itself only what is not a major", () => {
     const auto = config.packageRules.filter((r: { automerge?: boolean }) => r.automerge);
     for (const rule of auto) expect(rule.matchUpdateTypes ?? []).not.toContain("major");
+  });
+
+  it("routes vulnerability alerts into the daily patch-minor lane so transitive lockfile advisories do not wait for Monday", () => {
+    expect(config.vulnerabilityAlerts?.enabled).toBe(true);
+    expect(config.vulnerabilityAlerts?.groupSlug).toBe("patch-minor");
+    expect(config.vulnerabilityAlerts?.automerge).toBe(true);
   });
 });
 

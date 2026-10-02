@@ -12,6 +12,13 @@ export interface GroupLayout {
   columns?: string[];
   rowCount?: number;
   columnCount?: number;
+  /**
+   * Shown as a pile of cards (groups-by-hand phase 4). Shared and stored, so a
+   * stacked group comes back stacked for everyone; absent is spread. A
+   * `layout` action may send `"spread"`, which the reducer saves as absence.
+   * Members keep their x/y either way — stacking only changes the drawing.
+   */
+  display?: "stack" | "spread";
 }
 
 /** A named grid cell is one-based on both user surfaces. */

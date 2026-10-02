@@ -371,6 +371,7 @@ export class DaemonRoutes {
    * the act the door just refused. Carry its status, code and words instead;
    * other recovery failures leave the original answer intact. */
   private async reBadge(signal: AbortSignal | undefined = this.lifetime): Promise<boolean> {
+    if (this.badgeStore.upstream) return false;
     signal?.throwIfAborted();
     const answer = await askTheDoor(this.base, 10_000, signal);
     signal?.throwIfAborted();

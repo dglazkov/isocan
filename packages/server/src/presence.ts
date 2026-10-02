@@ -7,7 +7,7 @@ import type {
   PresenceActivity,
   PresenceSession,
 } from "@isocan/core";
-import { cursorSignal, groupChangeItemIds, narrowed, newId, textAttention } from "@isocan/core";
+import { cursorSignal, groupChangeItemIds, narrowed, newId, presenceDrag, textAttention } from "@isocan/core";
 
 /**
  * The ephemeral plane. Presence lives in daemon memory and WS fan-out only —
@@ -107,6 +107,8 @@ export class PresenceHub {
       selection?: string[];
       textSelection?: import("@isocan/core").TextAttention | null;
       signal?: CursorSignal | string | null;
+      /** The drag the hand is making; `null` ends it. Omit to leave it. */
+      drag?: unknown;
       status?: string | null;
       statusSource?: "explicit" | "lifecycle" | "inferred";
       activity?: PresenceActivity | null;
@@ -235,9 +237,11 @@ export class PresenceHub {
       // "which side is this on", and holding it here would have this daemon
       // repeat somebody else's perspective as its own. `roster()` derives it
       // fresh from `origin` below.
-      const { via: _theirs, ...incoming } = session;
+      const { via: _theirs, drag: theirDrag, ...incoming } = session;
+      const drag = presenceDrag(theirDrag);
       const next: SessionState = {
         ...incoming,
+        ...(drag ? { drag } : {}),
         ...(incoming.textSelection !== undefined ? { textSelection: textAttention(incoming.textSelection) } : {}),
         ...(incoming.signal !== undefined ? { signal: cursorSignal(incoming.signal) } : {}),
         origin,
@@ -373,6 +377,7 @@ function patchSession(
     selection?: string[];
     textSelection?: import("@isocan/core").TextAttention | null;
     signal?: CursorSignal | string | null;
+    drag?: unknown;
     status?: string | null;
     statusSource?: "explicit" | "lifecycle" | "inferred";
     activity?: PresenceActivity | null;
@@ -386,6 +391,14 @@ function patchSession(
   if (patch.selection !== undefined) session.selection = patch.selection;
   if (patch.textSelection !== undefined) session.textSelection = textAttention(patch.textSelection);
   if (patch.signal !== undefined) session.signal = cursorSignal(patch.signal);
+  // Absent, not null, when there is none: every web face rides every roster,
+  // and a field on all of them for the one moment one of them is dragging is
+  // bytes for nothing.
+  if (patch.drag !== undefined) {
+    const drag = presenceDrag(patch.drag);
+    if (drag) session.drag = drag;
+    else delete session.drag;
+  }
   if (patch.status !== undefined) {
     // Words the actor said outrank narration the system derived; lifecycle
     // turns (parking, waking, a posted comment) outrank everything. The

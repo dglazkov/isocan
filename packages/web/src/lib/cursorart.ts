@@ -77,4 +77,15 @@ export const CURSOR_ART: Record<CanvasCursor, string> = {
    */
   sheep:
     "M1.5 0.5 L9.9 6.1 L7.1 10.7 Z M10.9 7.7 A2.8 2.8 0 0 1 16.2 8.8 A2.8 2.8 0 0 1 17.9 13.9 A2.8 2.8 0 0 1 14.3 17.9 A2.8 2.8 0 0 1 9 16.8 A2.8 2.8 0 0 1 7.3 11.7 A2.8 2.8 0 0 1 10.9 7.7 Z",
+  /**
+   * **A cricket bat and its ball** (1 Oct 2026, asked for by name). The
+   * handle's end is the hotspot, so the bat is held from the tip and swings
+   * down-right the way every pointer here points; the blade widens past a
+   * shoulder and ends in a rounded toe, and the ball sits off to the right as
+   * its own subpath. Looked at rendered at 18, 24, 32 and 64 on both grounds
+   * in two identity colours before it went in: the shoulder is what makes it a
+   * bat rather than a bottle, and the ball is what makes it cricket.
+   */
+  cricket:
+    "M1.5 0.5 L1.0 1.4 L5.1 6.9 L4.7 9.2 L10.7 17.3 L11.4 17.5 L12.4 17.3 L13.6 16.6 L14.6 15.7 L15.1 14.7 L15.0 14.0 L9.0 6.0 L6.6 5.7 L2.5 0.2 Z M17.6 3.6 A2 2 0 1 1 13.6 3.6 A2 2 0 1 1 17.6 3.6 Z",
 };

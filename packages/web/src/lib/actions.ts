@@ -6,7 +6,7 @@ import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, 
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { openPanel } from "./panels.ts";
+import { chatHiddenNow, openPanel } from "./panels.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
 import { formatMoves, formatScope } from "@isocan/core";
 import { canEditNow } from "./capability.ts";
@@ -204,7 +204,8 @@ export const ACTIONS: readonly Action[] = [
       name: `Open ${name}`,
       hint,
       group: "Open",
-      available: onCanvas,
+      // Inside a pane that hides the Chat (`?embed=1`) there is none to open.
+      available: panel === "main" ? (ctx) => onCanvas(ctx) && !chatHiddenNow() : onCanvas,
       run: (ctx) => openPanel(ctx.canvasId!, panel),
     }),
   ),

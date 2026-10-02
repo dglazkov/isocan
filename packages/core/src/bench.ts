@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
+import type { MetaPatch } from "./ops.ts";
 import type { PresenceSession } from "./protocol.ts";
 import { roster, type RowState } from "./roster.ts";
 
@@ -51,6 +52,10 @@ const AGENT_ACTOR_PROP = "actorId";
 /** `harness=<name>` — `claude-code`, `codex`, `pi`, … so a reader knows
  * WHAT Percy is without being told where it runs. */
 const AGENT_HARNESS_PROP = "harness";
+/** `model=<id>` — `claude-opus-5-5`, … spelled as the agent's harness spells
+ * it, so a bench row records which model an agent is pinned to when one was
+ * chosen. */
+const AGENT_MODEL_PROP = "model";
 /**
  * `runsAt=<label>` — an opaque label for WHERE this agent runs.
  *
@@ -60,6 +65,17 @@ const AGENT_HARNESS_PROP = "harness";
  * reader may infer a working directory from it.
  */
 const AGENT_RUNS_AT_PROP = "runsAt";
+/**
+ * `follows=true` — this agent is the person's PET: it comes along to every
+ * canvas they open and can edit (`docs/projects/pets`, phase 2). Absent means
+ * off, and off is written by REMOVING the property rather than by a second
+ * spelling of no, so a row has exactly one way to say it follows.
+ *
+ * Still a record, like the rest of the row: it grants nothing by itself. What
+ * it asks for is an `agent.invite` the arriving person's own app sends, on a
+ * canvas that person could have joined it to by hand anyway.
+ */
+const AGENT_FOLLOWS_PROP = "follows";
 /** The blob a bench item carries. An item.add needs a version, and the honest
  * one here is the row written out — readable on the canvas itself, so the
  * registry is not a row of blank cards. */
@@ -120,8 +136,13 @@ export interface BenchAgent {
   actorId: string;
   /** Which agent this is, or null when the row was written without one. */
   harness: string | null;
+  /** Which model this agent is pinned to, or null when unsaid. */
+  model?: string | null | undefined;
   /** Where it runs, opaquely. Null when nobody said. */
   runsAt: string | null;
+  /** Comes along to every canvas its owner opens and can edit — a pet
+   * (`petsToBring`). False when the row never said. */
+  follows: boolean;
 }
 
 /** Is this item a bench row at all? The `kind` test, spelled once — and kept
@@ -144,8 +165,70 @@ export function benchAgentOf(item: Item): BenchAgent | null {
     name: item.title || actorId,
     actorId,
     harness: item.properties[AGENT_HARNESS_PROP] ?? null,
+    model: item.properties[AGENT_MODEL_PROP] ?? null,
     runsAt: item.properties[AGENT_RUNS_AT_PROP] ?? null,
+    follows: item.properties[AGENT_FOLLOWS_PROP] === "true",
   };
+}
+
+/**
+ * **The one write that turns following on or off** — an `item.update` patch
+ * for the bench row, spelled here so `isocan bench follow` and the app's
+ * *Follows me* switch cannot write the field two ways. One op, so one undo.
+ */
+export function benchFollowPatch(on: boolean): MetaPatch {
+  return on
+    ? { properties: { [AGENT_FOLLOWS_PROP]: "true" } }
+    : { removeProperties: [AGENT_FOLLOWS_PROP] };
+}
+
+/**
+ * **The pets an arrival brings** (`docs/projects/pets`, phase 2, scene 3) —
+ * the following rows on this person's bench that should be invited to the
+ * canvas they just opened.
+ *
+ * Three exclusions, each a scene:
+ *
+ * - **Nothing at all when the person cannot edit.** A reader on a canvas
+ *   shared read-only could not have joined an agent by hand, and a pet is
+ *   not a way around that: the home would refuse the invite anyway, and a
+ *   refusal is not something to try once per arrival.
+ * - **Not one already standing here.** Inviting it again would change
+ *   nothing but put a second line in the thread.
+ * - **Not one somebody withdrew from here.** A removal is the room's word
+ *   (`CanvasContents.withdrawn`); a pet respects it. A person may
+ *   still join it again by hand, which is a person's word, not a pet's.
+ *
+ * Pure: the caller sends the invites, so the CLI and the app cannot disagree
+ * about which agents an arrival should bring.
+ */
+export function petsToBring(
+  bench: readonly BenchAgent[],
+  canvas: CanvasContents,
+  canEdit: boolean,
+): BenchAgent[] {
+  if (!canEdit) return [];
+  return bench.filter(
+    (row) =>
+      row.follows &&
+      canvas.agents?.[row.actorId] === undefined &&
+      canvas.withdrawn?.[row.actorId] === undefined,
+  );
+}
+
+/**
+ * The one line the thread gets when a pet arrives — the same kind of line
+ * `@Name join` posts (`benchJoinWords`), naming whose pet it is.
+ *
+ * It says the agent CAME, never that it is answering: the line lands the
+ * moment the home accepts the invite, and the agent's own machine notices
+ * the canvas up to `RC_DISCOVER_MS` later (pets phase 1). Lives here, in the
+ * lazy half, rather than beside `benchJoinWords` in the eager `benchjoin.ts`:
+ * the entry chunk has a hundred-odd bytes of room and only an arrival with a
+ * following bench ever needs these words.
+ */
+export function petCameWords(name: string, owner: string): string {
+  return `${name} came with ${owner}. It stands on this canvas now; no turn was started and no other canvas changed.`;
 }
 
 /** Everybody on this bench, by name. The canvas is the registry, so this is
@@ -164,16 +247,23 @@ export function benchAgents(canvas: CanvasContents): BenchAgent[] {
  */
 export function benchItemOf(
   name: string,
-  agent: { actorId: string; harness?: string | null; runsAt?: string | null },
+  agent: {
+    actorId: string;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+    runsAt?: string | null | undefined;
+  },
 ): { properties: Record<string, string>; blob: string; mimeType: string; filename: string } {
   const properties: Record<string, string> = { kind: AGENT_KIND, [AGENT_ACTOR_PROP]: agent.actorId };
   if (agent.harness) properties[AGENT_HARNESS_PROP] = agent.harness;
+  if (agent.model) properties[AGENT_MODEL_PROP] = agent.model;
   if (agent.runsAt) properties[AGENT_RUNS_AT_PROP] = agent.runsAt;
   const lines = [
     `# ${name}`,
     "",
     `- actor: ${agent.actorId}`,
     `- harness: ${agent.harness ?? "unsaid"}`,
+    ...(agent.model ? [`- model: ${agent.model}`] : []),
     `- runs at: ${agent.runsAt ?? "unsaid"}`,
     "",
     "A bench row is a record. It grants no standing and no reach.",
@@ -212,8 +302,17 @@ export function benchItemOf(
  */
 export function benchWriteFor(
   canvas: CanvasContents,
-  agent: { actorId: string; harness?: string | null; runsAt?: string | null },
-  explicit?: { harness?: boolean; runsAt?: boolean },
+  agent: {
+    actorId: string;
+    harness?: string | null | undefined;
+    model?: string | null | undefined;
+    runsAt?: string | null | undefined;
+  },
+  explicit?: {
+    harness?: boolean | undefined;
+    model?: boolean | undefined;
+    runsAt?: boolean | undefined;
+  },
 ):
   | { kind: "add"; x: number; y: number }
   | { kind: "fill"; itemId: string; properties: Record<string, string> }
@@ -231,6 +330,9 @@ export function benchWriteFor(
   const properties: Record<string, string> = {};
   if (agent.harness && (!already.harness || (explicit?.harness && agent.harness !== already.harness))) {
     properties[AGENT_HARNESS_PROP] = agent.harness;
+  }
+  if (agent.model && (!already.model || (explicit?.model && agent.model !== already.model))) {
+    properties[AGENT_MODEL_PROP] = agent.model;
   }
   if (agent.runsAt && (!already.runsAt || (explicit?.runsAt && agent.runsAt !== already.runsAt))) {
     properties[AGENT_RUNS_AT_PROP] = agent.runsAt;

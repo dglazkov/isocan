@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, GroupLayout, Item } from "@isocan/core";
-import { captureGroupExpectations } from "@isocan/core";
+import { captureGroupExpectations, groupGridAction, groupGridLayout, groupGridTrimmedLabels } from "@isocan/core";
 import { readBlobText } from "../lib/api.ts";
 import { changeCanvasGroup, PendingGroupWriteError, saveGroupBrief } from "../lib/canvasgroups.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
@@ -37,6 +37,11 @@ export function GroupLayoutControls({ canvasId, actor, item }: { canvasId: strin
     catch (error) { setError((error as Error).message); if (error instanceof PendingGroupWriteError) setQueued(true); }
     finally { setBusy(false); }
   }
+  // Lowering a count drops the labels past it in the same save; say which before it happens.
+  const trimmed = groupGridTrimmedLabels(layout);
+  const dropping = [...trimmed.rows, ...trimmed.columns];
+  const saved = item.groupLayout ?? {};
+  const hasGrid = ["rows", "columns", "rowCount", "columnCount", "rowGutter", "columnGutter"].some((key) => Object.prototype.hasOwnProperty.call(saved, key));
   function number(key: keyof GroupLayout, fallback: number, label: string, minimum = 0) {
     return <label>{label}<input aria-label={label} type="number" min={minimum} value={typeof layout[key] === "number" ? layout[key] : fallback} onChange={(event) => setLayout({ ...layout, [key]: Number(event.target.value) })} /></label>;
   }
@@ -61,8 +66,10 @@ export function GroupLayoutControls({ canvasId, actor, item }: { canvasId: strin
       <label>Column names<input aria-label="Grid column names" value={layout.columns?.join(", ") ?? ""} onChange={(event) => setLayout({ ...layout, columns: event.target.value ? event.target.value.split(",").map((name) => name.trim()) : [] })} /></label>
       {number("rowGutter", 120, "Row label gutter")}
       {number("columnGutter", 32, "Column label gutter")}
-      <button type="button" onClick={() => void apply(() => changeCanvasGroup(canvasId, actor, { kind: "layout", itemId: item.id, layout }))}>Save layout</button>
-      <button type="button" onClick={() => void apply(() => changeCanvasGroup(canvasId, actor, { kind: "layout", itemId: item.id, layout, tidy: true }))}>Tidy contents with layout</button>
+      {dropping.length > 0 && <p>Removes labels: {dropping.join(", ")}</p>}
+      <button type="button" onClick={() => void apply(() => changeCanvasGroup(canvasId, actor, { kind: "layout", itemId: item.id, layout: groupGridLayout(layout) }))}>Save layout</button>
+      <button type="button" onClick={() => void apply(() => changeCanvasGroup(canvasId, actor, { kind: "layout", itemId: item.id, layout: groupGridLayout(layout), tidy: true }))}>Tidy contents with layout</button>
+      {hasGrid && <button type="button" onClick={() => void apply(() => changeCanvasGroup(canvasId, actor, groupGridAction(item, null)))}>Clear grid</button>}
     </fieldset>
     <fieldset disabled={busy || queued || changed || brief === null}>
       <legend>Edit brief</legend>

@@ -27,7 +27,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { JEV_INPUT_PRICE, jevAnswerer, stubAnswerer, type Answerer } from "@isocan/core/jev";
 import { canonicalCall, fastPathQuestions, readProposal, type CanonicalAct, type FastPathCanvas } from "../src/fastpath.ts";
-import { report, rowsFromRecord, type EvalRow } from "../src/fastpath-report.ts";
+import { fastSummary, report, rowsFromRecord, type EvalRow } from "../src/fastpath-report.ts";
 import { parseShadow } from "../src/shadow.ts";
 import type { SnapshotItem } from "../src/live.ts";
 
@@ -81,8 +81,9 @@ async function main(): Promise<void> {
 
   const recordFile = flag("--record");
   if (recordFile) {
-    const { rows, titles } = rowsFromRecord(parseShadow(readFileSync(recordFile, "utf8")));
-    const md = report(rows, { title: "The fast path in shadow — a person's record", answerer: "recorded", titles });
+    const turns = parseShadow(readFileSync(recordFile, "utf8"));
+    const { rows, titles } = rowsFromRecord(turns);
+    const md = report(rows, { title: "The fast path in shadow — a person's record", answerer: "recorded", titles }) + fastSummary(turns);
     writeFileSync(path.join(out, "report.record.md"), md);
     console.log(md);
     return;

@@ -33,3 +33,7 @@
    a person reads before clicking is never squeezed out by the control. */
 .tray-bench-join { grid-column: 2 / 3; grid-row: 2 / 3; justify-self: end; padding: 2px 10px; font-size: 12px; }
 .tray-bench-row .bench-reach { grid-row: 1 / 2; }
+
+/* *Follows me* (pets phase 2): a third line across the row, so the switch
+   never crowds the reach word a person reads first. Loaded with both panels. */
+.bench-follows { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-muted); }

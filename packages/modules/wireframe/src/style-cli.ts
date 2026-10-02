@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Command } from "commander";
 import { moduleAsset, type CanvasContents, type DesignDoc, type Item } from "@isocan/core";
-import { packagePath } from "@isocan/core/packageroot";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { cliAnswerer, cliPort } from "./cli-port.ts";
 import { mappingSaver } from "./compose-cli.ts";
@@ -9,8 +10,11 @@ import { wiresOn, type Screen } from "./flow.ts";
 import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, flowScreens, presetFile, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
 import { wireframeModule } from "./record.ts";
 import { checkWire, checkWords, readSystemDoc, restyleLabel, specKey, systemsToRead, type DocOf } from "./behind.ts";
+import { wireDsOnCanvas } from "./ds.ts";
+import { LAYER_LABELS, TIER_LABELS, applyLayersOnCanvas, layerSummary, resolveItemLayers } from "./layers.ts";
+import { polishWireOnCanvas } from "./polish.ts";
 import { StyleResolver, mappingLines, restyle, restyleSummary } from "./restyle.ts";
-import { wireTitle } from "./spec.ts";
+import { WIRE_LAYER_IDS, wireTitle } from "./spec.ts";
 
 /**
  * Where this module's files, and the design competition's, sit inside a copy
@@ -21,10 +25,28 @@ import { wireTitle } from "./spec.ts";
 const OWN_DIR = "packages/modules/wireframe";
 const PACKS_DIR = "packages/modules/design-competition";
 
+function rootPath(...parts: string[]): string {
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let up = 0; up < 12; up++) {
+    const manifest = path.join(dir, "package.json");
+    if (existsSync(manifest)) {
+      try {
+        if ((JSON.parse(readFileSync(manifest, "utf8")) as { name?: string }).name === "isocan") {
+          return path.join(dir, ...parts);
+        }
+      } catch {
+        // continue walking up
+      }
+    }
+    dir = path.dirname(dir);
+  }
+  return path.join(dir, ...parts);
+}
+
 /** A wire style's DESIGN.md, as text — or a refusal that says why it cannot be read here. */
 export function presetText(preset: WirePreset): string {
   const rel = presetFile(preset);
-  const where = preset.from === "own" ? moduleAsset(wireframeModule.name, rel) ?? packagePath(OWN_DIR, rel) : packagePath(PACKS_DIR, rel);
+  const where = preset.from === "own" ? moduleAsset(wireframeModule.name, rel) ?? rootPath(OWN_DIR, rel) : rootPath(PACKS_DIR, rel);
   if (!existsSync(where)) {
     throw new Error(preset.from === "pack"
       ? `the design competition's packs are not on this machine, so "${preset.id}" cannot be read — the module's own styles can (\`isocan wire style --list\`)`
@@ -156,6 +178,181 @@ export function registerStyle(host: CliHost, wire: Command): void {
         if (inDefault) say(`${inDefault} wire${inDefault === 1 ? "" : "s"} in the default look${opts.default ? "" : " — no design system governs where they sit"}`);
         for (const pr of prototypes) say(`prototype ${pr.itemId} — ${pr.what === "versioned" ? "rebuilt as a new version" : pr.what}`);
         say(restyleSummary(result).replace("one undo takes", "`isocan undo` takes"));
+      }),
+    );
+
+  wire
+    .command("ds [request...]")
+    .description("Synthesize a WCAG AA contrast-repaired DESIGN.md with Jev, make it govern the flow's scope, and restyle all screens and prototype in one op group")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--name <name>", "explicit name for the synthesized design system")
+    .option("--surface <surface>", "override surface mode: flat | raised | glass | bold")
+    .action(
+      run(async (words: string[], _local: unknown, cmd: Command) => {
+        const opts = cmd.optsWithGlobals() as {
+          flow?: string;
+          name?: string;
+          surface?: "flat" | "raised" | "glass" | "bold";
+          answerer?: string;
+          seed?: string;
+        };
+        const ctx = await ctxOf(cmd);
+        const say = (line: string) => {
+          if (!ctx.json) console.log(line);
+        };
+        const p = await resolveCanvas(ctx);
+        const port = cliPort(host, ctx, p.id);
+        const canvas = await port.canvas();
+        const all = await wiresOn(port, canvas);
+        const screens = opts.flow === undefined ? all : all.filter((s) => s.spec.flow === opts.flow);
+        if (screens.length === 0) {
+          throw new Error(opts.flow === undefined ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `no wireframe in flow "${opts.flow}" on this canvas`);
+        }
+        const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? undefined : opts.answerer, Number(opts.seed ?? 1), say);
+        const r = await wireDsOnCanvas(port, all, screens, words.join(" "), answerer, {
+          ...(opts.name ? { name: opts.name } : {}),
+          ...(opts.surface ? { surface: opts.surface } : {}),
+        });
+        if (ctx.json) {
+          return printJson({
+            group: r.group,
+            dsItemId: r.dsItemId,
+            what: r.what,
+            direction: r.synthesized.direction.id,
+            surface: r.synthesized.surface,
+            density: r.synthesized.density,
+            repairs: r.synthesized.repairs,
+            restyled: r.restyled.changed.map((t) => ({ itemId: t.item.id, title: wireTitle(t.screen.spec) })),
+            prototypes: r.restyled.prototypes,
+          });
+        }
+        say(`${r.dsItemId}  ${r.synthesized.name} (${r.synthesized.direction.id} · surface:${r.synthesized.surface} · density:${r.synthesized.density} · p ${r.synthesized.p.toFixed(2)})`);
+        if (r.synthesized.repairs.length > 0) {
+          say(`  repaired ${r.synthesized.repairs.length} contrast pair${r.synthesized.repairs.length === 1 ? "" : "s"} to ≥ 4.5:1 AA`);
+        }
+        say(`${r.restyled.changed.length} of ${r.restyled.targets.length} wires restyled — \`isocan undo\` takes it back`);
+      }),
+    );
+
+  wire
+    .command("polish [screens...]")
+    .description("Apply Jev-budgeted visual refinement patches (0 | 4 | 8 | 12) guarded by verifyWireContract in one op group")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--intensity <n>", "override polish_intensity (0–1)")
+    .option("--clear", "remove polish patches from target screens")
+    .action(
+      run(async (refs: string[], _local: unknown, cmd: Command) => {
+        const opts = cmd.optsWithGlobals() as {
+          flow?: string;
+          intensity?: string;
+          clear?: boolean;
+          answerer?: string;
+          seed?: string;
+        };
+        const ctx = await ctxOf(cmd);
+        const say = (line: string) => {
+          if (!ctx.json) console.log(line);
+        };
+        const p = await resolveCanvas(ctx);
+        const port = cliPort(host, ctx, p.id);
+        const canvas = await port.canvas();
+        const all = await wiresOn(port, canvas);
+        const named = (refs ?? []).map((ref) => {
+          const item = host.resolveItem({ canvas } as never, ref) as { id: string; title: string };
+          const found = all.find((s) => s.item === item.id);
+          if (!found) throw new Error(`"${item.title}" is not a wireframe screen`);
+          return found;
+        });
+        const screens = named.length ? named : opts.flow === undefined ? all : all.filter((s) => s.spec.flow === opts.flow);
+        if (screens.length === 0) {
+          throw new Error("no wireframe on this canvas — `isocan wire \"<request>\"` composes some");
+        }
+        const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? undefined : opts.answerer, Number(opts.seed ?? 1), say);
+        const r = await polishWireOnCanvas(port, canvas, all, screens, answerer, {
+          ...(opts.intensity !== undefined ? { intensity: Number(opts.intensity) } : {}),
+          ...(opts.clear ? { clear: true } : {}),
+        });
+        if (ctx.json) {
+          return printJson({
+            group: r.group,
+            by: r.by,
+            changed: r.changed.map((c) => ({
+              itemId: c.itemId,
+              title: c.title,
+              intensity: c.intensity,
+              budget: c.budget,
+              patches: c.patches,
+            })),
+            prototypes: r.prototypes,
+          });
+        }
+        for (const c of r.changed) {
+          say(`${c.itemId}  ${c.title} — ${c.patches.length} polish patch${c.patches.length === 1 ? "" : "es"} (intensity ${c.intensity}, budget ${c.budget})`);
+        }
+        say(`${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} ${opts.clear ? "unpolished" : "polished"} (${r.by})${r.prototypes.length ? ", prototype rebuilt" : ""} — \`isocan undo\` takes it back`);
+      }),
+    );
+
+  wire
+    .command("layer [directive] [screens...]")
+    .description("Check or uncheck non-destructive fidelity layers (`+system`, `-system`, `+copy`, `-copy`, `+lofi`, `-lofi`, `+hifi`, `-hifi`) or jump between the 4 fidelity tiers (`wire`, `system`, `lofi`, `hifi`) in one op group; with no directive or --list, prints each screen's active layers")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--list", "write nothing: print each wireframe screen's active fidelity layers and tier")
+    .action(
+      run(async (directive: string | undefined, refs: string[], _local: unknown, cmd: Command) => {
+        const opts = cmd.optsWithGlobals() as { flow?: string; list?: boolean };
+        const ctx = await ctxOf(cmd);
+        const say = (line: string) => {
+          if (!ctx.json) console.log(line);
+        };
+        const p = await resolveCanvas(ctx);
+        const port = cliPort(host, ctx, p.id);
+        const canvas = await port.canvas();
+        const all = await wiresOn(port, canvas);
+        const inFlow = opts.flow === undefined ? all : all.filter((s) => s.spec.flow === opts.flow);
+        if (inFlow.length === 0) {
+          throw new Error("no wireframe on this canvas — `isocan wire \"<request>\"` composes some");
+        }
+        if (opts.list || !directive) {
+          const rows = inFlow.map((s) => {
+            const item = canvas.items[s.item]!;
+            const resolved = resolveItemLayers(item, s.spec);
+            return {
+              itemId: item.id,
+              title: item.title,
+              tier: resolved.tier,
+              layers: {
+                system: resolved.system,
+                copy: resolved.copy,
+                lofi: resolved.lofi,
+                hifi: resolved.hifi,
+              },
+            };
+          });
+          if (ctx.json) return printJson({ screens: rows });
+          for (const r of rows) {
+            const checks = WIRE_LAYER_IDS.map((id) => `${r.layers[id] ? "☑" : "☐"} ${LAYER_LABELS[id].short}`).join("  ");
+            say(`${r.itemId}  ${r.title.padEnd(36)} ${TIER_LABELS[r.tier].badge.padEnd(8)} ${checks}`);
+          }
+          return;
+        }
+        const named = (refs ?? []).map((ref) => {
+          const item = host.resolveItem({ canvas } as never, ref) as { id: string; title: string };
+          const found = inFlow.find((s) => s.item === item.id);
+          if (!found) throw new Error(`"${item.title}" is not a wireframe screen`);
+          return found;
+        });
+        const targets = named.length ? named : inFlow;
+        const r = await applyLayersOnCanvas(port, canvas, all, targets, directive);
+        if (ctx.json) return printJson(r);
+        for (const c of r.changed) {
+          const checks = WIRE_LAYER_IDS.map((id) => `${c.layers[id] ? "☑" : "☐"} ${LAYER_LABELS[id].short}`).join("  ");
+          say(`${c.itemId}  ${c.title} → ${TIER_LABELS[c.tier].badge} (${checks})`);
+        }
+        say(layerSummary(r).replace("one undo takes", "`isocan undo` takes"));
       }),
     );
 }

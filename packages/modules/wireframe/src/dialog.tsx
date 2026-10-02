@@ -11,6 +11,13 @@ import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
 import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, currentPreset, flowScreens, presetById, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
 import { presetUrlText } from "./preset-urls.ts";
 import { webAnswerer, webPort } from "./web-port.ts";
+import { editWireOnCanvas } from "./edit.ts";
+import { explainWireDecision } from "./why.ts";
+import { copyAiOnCanvas, nameFlowOnCanvas } from "./copy-schema.ts";
+import { wireDsOnCanvas } from "./ds.ts";
+import { polishWireOnCanvas } from "./polish.ts";
+import { applyLayersOnCanvas, layerSummary } from "./layers.ts";
+import { wireTitle } from "./spec.ts";
 import type { PackChoice } from "./content/choose.ts";
 import { PACK_BY_ID } from "./content/packs.ts";
 // ── phase 8, builder A: /wire links ──
@@ -43,7 +50,17 @@ type Mode =
   | { kind: "rerender" }
   | { kind: "prototypes" }
   // ── phase 8, builder A: /wire links — every hotspot with a target picker (links-panel.tsx) ──
-  | { kind: "links" };
+  | { kind: "links" }
+  // ── phase 11: /wire edit and /wire why ──
+  | { kind: "edit"; instruction: string }
+  | { kind: "why"; question?: string }
+  // ── phase 12: /wire copy and /wire name ──
+  | { kind: "copy"; brief?: string }
+  | { kind: "name"; request?: string }
+  // ── phase 13: /wire ds, /wire polish, and /wire layer ──
+  | { kind: "ds"; request: string }
+  | { kind: "polish"; clear?: boolean }
+  | { kind: "layer"; directive: string; wholeFlow?: boolean };
 
 export function modeOf(args: string): Mode {
   const words = args.trim();
@@ -54,6 +71,31 @@ export function modeOf(args: string): Mode {
   if (first === "rerender" && rest.length === 0) return { kind: "rerender" };
   // ── phase 8, builder A: /wire links ──
   if (first === "links" && rest.length === 0) return { kind: "links" };
+  if (first === "edit" && rest.length > 0) return { kind: "edit", instruction: rest.join(" ") };
+  if (first === "why") {
+    const q = rest.join(" ").trim();
+    return q ? { kind: "why", question: q } : { kind: "why" };
+  }
+  if (first === "copy") {
+    const brief = rest.filter((w) => w !== "--ai").join(" ").trim();
+    return brief ? { kind: "copy", brief } : { kind: "copy" };
+  }
+  if (first === "name") {
+    const req = rest.join(" ").trim();
+    return req ? { kind: "name", request: req } : { kind: "name" };
+  }
+  if (first === "ds") {
+    return { kind: "ds", request: rest.join(" ").trim() };
+  }
+  if (first === "polish") {
+    const clear = rest.includes("--clear") || rest.includes("clear");
+    return clear ? { kind: "polish", clear: true } : { kind: "polish" };
+  }
+  if (first === "layer" || first === "layers") {
+    const wholeFlow = rest.includes("--flow") || rest.includes("--all");
+    const directive = rest.filter((w) => w !== "--flow" && w !== "--all").join(" ").trim() || "lofi";
+    return { kind: "layer", directive, ...(wholeFlow ? { wholeFlow: true } : {}) };
+  }
   if (first === "style" && rest.length === 0) return { kind: "styles" };
   if (first === "style" && rest.length === 1 && (rest[0] === "--default" || rest[0] === "default")) return { kind: "style", toDefault: true };
   // `system`: every wire in the design system that governs it — what `/wire style` alone did before the wire styles.
@@ -262,6 +304,105 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       const r = await rerenderOnWeb(canvasId, host);
       host.notice(rerenderSummary(r));
       if (r.changed.length) record(host, r.group, [`re-rendered from their specs: ${rerenderSummary(r)}.`]);
+      host.close();
+    } else if (m.kind === "edit") {
+      setStatus("Editing the wireframe section…");
+      const port = webPort(canvasId, host);
+      const selectedId = selection[0];
+      const r = await editWireOnCanvas(port, m.instruction, webAnswerer(canvasId, host), {
+        ...(selectedId ? { screenId: selectedId } : {}),
+      });
+      const protoWords = r.prototype ? ` · prototype "${r.prototype.title}" rebuilt` : "";
+      const summary = `edited ${wireTitle(r.screen.spec)} (${r.edit.slot}: ${r.edit.kind}${r.edit.block ? ` → ${r.edit.block}` : ""})${protoWords} — one undo takes it back`;
+      host.notice(summary);
+      record(host, r.group, [`${summary}.`], [r.screen.item, ...(r.prototype ? [r.prototype.itemId] : [])]);
+      host.close();
+      host.reveal([r.screen.item]);
+    } else if (m.kind === "why") {
+      setStatus("Reading recorded Jev decisions…");
+      const port = webPort(canvasId, host);
+      const all = await wiresOn(port, await port.canvas());
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const selectedId = selection[0];
+      const target = selectedId
+        ? (all.find((s) => s.item === selectedId) ?? all[all.length - 1]!)
+        : all[all.length - 1]!;
+      const explanation = explainWireDecision(target.spec, m.question);
+      host.notice(explanation.lines[0]!);
+      record(host, newGroupId(), explanation.lines, [target.item]);
+      host.close();
+    } else if (m.kind === "copy") {
+      setStatus("Writing schema-validated copy…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+      const r = await copyAiOnCanvas(port, canvas, all, screens, undefined, {
+        ...(m.brief ? { brief: m.brief } : {}),
+      });
+      const summary = `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} filled with AI copy (${r.by}) — one undo takes it back`;
+      host.notice(summary);
+      if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
+      host.close();
+      if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
+    } else if (m.kind === "name") {
+      setStatus("Naming the flow's screens and navigation…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+      const r = await nameFlowOnCanvas(port, canvas, all, screens, undefined, {
+        ...(m.request ? { request: m.request } : {}),
+      });
+      const summary = `named ${r.changed.length} wire${r.changed.length === 1 ? "" : "s"} (${r.brand}) — one undo takes it back`;
+      host.notice(summary);
+      if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
+      host.close();
+      if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
+    } else if (m.kind === "ds") {
+      setStatus("Synthesizing design system and restyling flow…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+      const r = await wireDsOnCanvas(port, all, screens, m.request, webAnswerer(canvasId, host));
+      const summary = `synthesized ${r.synthesized.name} (${r.synthesized.direction.id}, surface:${r.synthesized.surface}) · ${r.restyled.changed.length} wire${r.restyled.changed.length === 1 ? "" : "s"} restyled — one undo takes it back`;
+      host.notice(summary);
+      record(host, r.group, [`${summary}.`], [r.dsItemId, ...r.restyled.changed.map((t) => t.item.id)]);
+      host.close();
+      host.reveal([r.dsItemId]);
+    } else if (m.kind === "polish") {
+      setStatus("Applying Jev-budgeted visual polish…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+      const r = await polishWireOnCanvas(port, canvas, all, screens, webAnswerer(canvasId, host), {
+        ...(m.clear ? { clear: true } : {}),
+      });
+      const summary = `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} ${m.clear ? "unpolished" : "polished"} (${r.by}) — one undo takes it back`;
+      host.notice(summary);
+      if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
+      host.close();
+      if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
+    } else if (m.kind === "layer") {
+      setStatus("Updating fidelity layers…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const selectedScreens = all.filter((s) => selection.includes(s.item));
+      const targets = m.wholeFlow || selectedScreens.length === 0
+        ? flowScreens(all, selectedScreens.map((s) => s.item))
+        : selectedScreens;
+      const r = await applyLayersOnCanvas(port, canvas, all, targets, m.directive);
+      const summary = layerSummary(r);
+      host.notice(summary);
+      if (r.changed.length) record(host, r.group, [`wire layer — ${summary}.`], [...r.changed.map((c) => c.itemId), ...r.prototypes]);
       host.close();
     }
   };

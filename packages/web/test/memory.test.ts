@@ -60,8 +60,10 @@ describe("the Context sheet, and the memory mark (phase 3)", () => {
   });
 
   it("a canvas card wears the memory mark on its strip, and the mark is the switch", () => {
-    expect(view).toContain('className={`memory-mark${memoryOf(item) === "inherit" ? " active" : ""}`}');
-    expect(view).toContain('patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit")');
+    // `memory` is `memoryOf(item)`, asked once per render (groups-by-hand phase 4's bytes).
+    expect(view).toContain("const memory = memoryOf(item);");
+    expect(view).toContain('className={`memory-mark${memory === "inherit" ? " active" : ""}`}');
+    expect(view).toContain('patch: memoryPatch(memory === "inherit" ? null : "inherit")');
     expect(css).toContain(".memory-mark.active");
   });
 });

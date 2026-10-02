@@ -1,7 +1,7 @@
 import { selectCreatedItems } from "../lib/groupplacement.ts";
 import { createGroupNudger } from "../lib/groupgestures.ts";
 import { groupAncestors, groupScopeRoots, isGroupItem } from "@isocan/core";
-import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask } from "../lib/canvasgroups.ts";
+import { enterCanvasGroup, leaveCanvasGroup, openGroupCreation, changeCanvasGroup, groupsEnabled, groupTask, removeFromCanvasGroup } from "../lib/canvasgroups.ts";
 import { CanvasGroupScope } from "../components/CanvasGroupScope.tsx";
 import { presentedCanvas, presentedLocus } from "../lib/presentation.ts";
 import { currentPresentation } from "../lib/canvasPresentation.ts";
@@ -34,10 +34,10 @@ import { useUiStore } from "../stores/uiStore.ts";
 import { captureClipboard, pasteInto } from "../lib/clipboard.ts";
 import { redo, undo } from "../lib/api.ts";
 import { deleteItems, downloadItem } from "../lib/itemactions.ts";
-import { applyLocalEcho, flashNotice, sendEchoed } from "../stores/canvasStore.ts";
+import { applyLocalEcho, flashNotice, sendEchoed, unsynced } from "../stores/canvasStore.ts";
 import { centerOn, fitInto, itemsBounds } from "../lib/viewport.ts";
 import { stageRect } from "../lib/stage.ts";
-import { checkForUpdate } from "../lib/appversion.ts";
+import { checkForUpdate, mayReloadUnseen } from "../lib/appversion.ts";
 import { arriveSketch, placeSketch } from "../lib/sketch.ts";
 import { CanvasViewport } from "../components/CanvasViewport.tsx";
 import { pageTitle } from "../lib/title.ts";
@@ -99,7 +99,7 @@ import { TrashPanel } from "../components/LazyTrashPanel.tsx";
 import { DesignComparisonHost } from "../components/DesignComparisonButton.tsx";
 import { MainThreadPanel } from "../components/MainThreadPanel.tsx";
 import { RailStrip } from "../components/RailStrip.tsx";
-import { openPanel } from "../lib/panels.ts";
+import { chatHiddenNow, embeddedNow, openPanel } from "../lib/panels.ts";
 import { FilesPanel } from "../components/LazyFilesPanel.tsx";
 import { AgentTray } from "../components/LazyAgentTray.tsx";
 import { ContextPanel } from "../components/LazyContextPanel.tsx";
@@ -115,13 +115,15 @@ import { noteVisit } from "../lib/seen.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { useCanvasHome } from "../lib/homes.ts";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
-import { ElsewherePage } from "./ElsewherePage.tsx";
 
 /* Below the imports, and it has to stay there: vite's dev transform rewrites
  * `import { lazy } from "react"` into a binding at the import's own position,
  * so a `lazy()` call above it is a temporal dead zone and the page throws
  * "Cannot access 'lazy' before initialization". Rollup hoists, so the built
  * bundle and CI never saw it — only `npm run dev` did. */
+const ElsewherePage = lazy(() =>
+  import("./ElsewherePage.tsx").then((m) => ({ default: m.ElsewherePage })),
+);
 const CanvasGroupPanel = lazy(() =>
   import("../components/CanvasGroupPanel.tsx").then((m) => ({ default: m.CanvasGroupPanel })),
 );
@@ -330,10 +332,17 @@ function CanvasSurface({
     let live = true;
     setPriorVisit(null);
     void noteVisit(canvasId, useCanvasStore.getState().lastSeq, actor.id).then((prior) => { if (live) setPriorVisit(prior); });
+    // Pets follow (pets phase 2): the same once-per-arrival moment, lazily —
+    // `lib/pets.ts`, reached through the join chunk, decides in core whether
+    // anybody comes.
+    void import("../lib/benchjoin.ts").then((m) => m.bringPets(canvasId, actor));
     // `arrived` rather than the title itself: the head is only worth
     // recording once the snapshot has landed, and a RENAME while you stand
-    // here is not a second visit.
+    // here is not a second visit. And `actor.id` rather than `actor`: the pet
+    // line names the person as they stand at arrival, and a renamed or
+    // re-rendered actor object is not a second arrival either.
     return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, actor.id, arrived]);
   const switching = useUiStore((s) => s.switching);
   const connection = useCanvasStore((s) => s.connection);
@@ -400,6 +409,21 @@ function CanvasSurface({
   useEffect(() => useUiStore.subscribe((s, prev) => {
     if (s.selectedItemIds !== prev.selectedItemIds) publishSelection();
   }), []);
+
+  // A pane that framed this canvas (`?embed=1`) hears what is selected, and
+  // may point at an item — `lib/hostbridge.ts` says who is told what.
+  useEffect(() => {
+    if (!canvasId || !embeddedNow() || window.parent === window) return;
+    let teardown: (() => void) | undefined;
+    let live = true;
+    void import("../lib/hostbridge.ts").then((m) => {
+      if (live) teardown = m.bridgeToHost(canvasId);
+    });
+    return () => {
+      live = false;
+      teardown?.();
+    };
+  }, [canvasId]);
 
   // Zoom-to-fit once, on the first snapshot. On arrival rather than on the
   // canvas: a subscription to the canvas re-rendered this page and all its
@@ -508,6 +532,28 @@ function CanvasSurface({
       cancelled = true;
     };
   }, [connection]);
+
+  // An outdated tab in the background reloads itself instead of waiting to be
+  // asked: the pill is for a tab somebody is looking at. Checked when the tab
+  // is hidden and every few seconds while it stays hidden, so a write still in
+  // flight at the moment of hiding only delays the reload.
+  useEffect(() => {
+    if (!outdated) return;
+    const tryReload = () => {
+      const ui = useUiStore.getState();
+      const active = document.activeElement as HTMLElement | null;
+      const typing = Boolean(active?.isContentEditable || active?.matches?.("input, textarea, select"));
+      const unfinished = ui.sketch.length > 0 || ui.pendingText !== null || ui.pendingComment !== null || typing;
+      if (mayReloadUnseen({ hidden: document.hidden, unsynced: unsynced(), unfinished })) location.reload();
+    };
+    tryReload();
+    document.addEventListener("visibilitychange", tryReload);
+    const timer = window.setInterval(tryReload, 10_000);
+    return () => {
+      document.removeEventListener("visibilitychange", tryReload);
+      window.clearInterval(timer);
+    };
+  }, [outdated]);
 
   // Keyboard shortcuts — typical visual-editor ergonomics.
   useEffect(() => {
@@ -680,6 +726,9 @@ function CanvasSurface({
        */
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j" && canvasId) {
         e.preventDefault();
+        // Inside a pane that hides the Chat (`?embed=1`) the key has no
+        // target, and must not close whatever else is open on its way there.
+        if (chatHiddenNow()) return;
         const ui = useUiStore.getState();
         // The CHAT, not "whatever is open". From Files it used to close the
         // rail, so the key named for the Chat was the one way you could not
@@ -730,9 +779,14 @@ function CanvasSurface({
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "g") {
         e.preventDefault();
         if (e.shiftKey) {
-          const groups = ui.selectedItemIds.filter((id) => { const item = useCanvasStore.getState().canvas?.items[id]; return item && isGroupItem(item); });
+          const items = useCanvasStore.getState().canvas?.items ?? {};
+          const groups = ui.selectedItemIds.filter((id) => { const item = items[id]; return item && isGroupItem(item); });
+          // On a member rather than a group, the same intent one level down:
+          // take it out, to its group's parent (groups-by-hand phase 2).
+          const members = ui.selectedItemIds.filter((id) => items[id]?.containerId);
           if (groups.length) groupTask(() => changeCanvasGroup(canvasId!, actor, { kind: "ungroup", itemIds: groups }));
-          else setNotice("Select a group to ungroup.");
+          else if (members.length) groupTask(() => removeFromCanvasGroup(canvasId!, actor, members));
+          else setNotice("Select a group to ungroup, or a member to take out.");
         } else if (ui.selectedItemIds.length) openGroupCreation(ui.selectedItemIds);
         else setNotice("Select items to group first.");
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {

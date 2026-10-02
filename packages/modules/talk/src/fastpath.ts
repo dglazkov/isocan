@@ -489,6 +489,28 @@ export function readProposal(ask: FastPathAsk, response: JevResponse): Proposal 
   return { answers, action, reasons, p: Math.min(...used), act: { act: action, subject: subject.id }, call };
 }
 
+// ---------- what Jev is never trusted with
+
+/** A number in words or digits, or a unit — "300 pixels", "three changes", "twice as big". "one" is not here: "the blue one" is a pronoun. */
+const NUMBER_SAID = /\d|\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|pixels?|px|percent|double|twice|half)\b/i;
+
+/**
+ * **Did the person say a number?** — not counting the numbers in the
+ * canvas's own titles ("Home v2"). Numbers belong to the model (phase 6's
+ * trajectory: "numbers and single axes must escalate"), and the scripted set
+ * showed Jev will still answer `move` for "move the checkout 300 pixels to
+ * the right" above the threshold — so the acting path checks the words
+ * itself rather than trusting a probability to notice. An ASR spelling of a
+ * title ("home v two") escalates too: the safe direction.
+ */
+export function saysANumber(utterance: string, items: readonly SnapshotItem[]): boolean {
+  let said = ` ${utterance.toLowerCase()} `;
+  for (const title of items.map((i) => (i.title ?? "").toLowerCase().trim()).filter(Boolean).sort((a, b) => b.length - a.length)) {
+    said = said.split(title).join(" ");
+  }
+  return NUMBER_SAID.test(said);
+}
+
 // ---------- the rule
 
 /** A measured threshold per action; an action with none stays with the model. */

@@ -161,7 +161,7 @@ interface Retarget {
   over: string | null;
 }
 
-export function WireArrows({ canvas, drag, readText, host, canEdit, past, openItem }: UnderlayFacts) {
+export function WireArrows({ canvas, readText, host, canEdit, past, openItem }: UnderlayFacts) {
   const keepers = kept(canvas).filter((i) => i.properties?.[PROTOTYPE_PROP] === undefined);
   const hashes = keepers.map(keyOf).filter((h): h is string => h !== null);
   const [, setRead] = useState(0);
@@ -274,10 +274,7 @@ export function WireArrows({ canvas, drag, readText, host, canEdit, past, openIt
 
   if (flows.length === 0) return <svg ref={origin} className="wire-origin" aria-hidden />;
 
-  const box = (item: Item): RouteBox => {
-    const on = drag?.itemIds.includes(item.id) ? drag : null;
-    return { id: item.id, x: item.x + (on?.dx ?? 0), y: item.y + (on?.dy ?? 0), w: item.width, h: item.height };
-  };
+  const box = (item: Item): RouteBox => ({ id: item.id, x: item.x, y: item.y, w: item.width, h: item.height });
   const all = Object.values(canvas.items);
   const drawn: Drawn[] = flows.map((flow) => {
     const boxes = new Map(flow.items.map((i) => [i.id, box(i)]));
@@ -488,23 +485,51 @@ export function WireArrows({ canvas, drag, readText, host, canEdit, past, openIt
         {focused && (() => {
           const src = focused.d.boxes.get(focused.a.link.from)!;
           const item = canvas.items[focused.a.link.from];
+          const tier = item?.properties?.wireLayer;
+          if (tier === "hifi" || tier === "lofi") return null;
           const r = item ? hotOn(item, undefined, focused.a.link.key) : null;
           return r ? <rect className="wire-hot" x={src.x + r.x - 3} y={src.y + r.y - 3} width={r.w + 6} height={r.h + 6} rx={6} /> : null;
         })()}
-        {drawn.flatMap((d) => d.needs).map((n) => (
-          <rect key={n.id} className="wire-needs" x={n.rect.x - 3} y={n.rect.y - 3} width={n.rect.w + 6} height={n.rect.h + 6} rx={6} />
-        ))}
+        {drawn
+          .flatMap((d) => d.needs)
+          .filter((n) => {
+            const tier = canvas.items[n.link.from]?.properties?.wireLayer;
+            return tier !== "hifi" && tier !== "lofi";
+          })
+          .map((n) => (
+            <rect key={n.id} className="wire-needs" x={n.rect.x - 3} y={n.rect.y - 3} width={n.rect.w + 6} height={n.rect.h + 6} rx={6} />
+          ))}
         {retarget && sel && (() => {
           const pts = sel.a.pts;
           const [px, py] = pts[pts.length - 2]!;
           return <path className="wire-band" d={`M ${px} ${py} L ${retarget.x} ${retarget.y}`} />;
         })()}
       </svg>
-      {drawn.flatMap((d) => d.needs).map((n) => (
-        <div key={n.id} className="wire-needs-label" style={{ left: n.rect.x + n.rect.w / 2, top: n.rect.y }} aria-hidden>
-          needs {n.link.needs}
-        </div>
-      ))}
+      {(() => {
+        const visibleNeeds = drawn
+          .flatMap((d) => d.needs)
+          .filter((n) => {
+            const tier = canvas.items[n.link.from]?.properties?.wireLayer;
+            return tier !== "hifi" && tier !== "lofi";
+          });
+        return visibleNeeds.map((n, idx) => {
+          const prev = idx > 0 ? visibleNeeds[idx - 1] : undefined;
+          const crowdedRow =
+            prev &&
+            Math.abs(n.rect.y - prev.rect.y) < 16 &&
+            Math.abs(n.rect.x - prev.rect.x) < 120;
+          return (
+            <div
+              key={n.id}
+              className="wire-needs-label"
+              style={{ left: n.rect.x + n.rect.w / 2, top: crowdedRow ? n.rect.y - 22 : n.rect.y }}
+              aria-hidden
+            >
+              needs {n.link.needs}
+            </div>
+          );
+        });
+      })()}
       {sel && interactive && (() => {
         const { a, d } = sel;
         const tip = a.pts[a.pts.length - 1]!;

@@ -682,7 +682,11 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
         throw new OpValidationError("unknown-actor", `no standing agent: ${op.actorId}`);
       }
       delete agents[op.actorId];
-      return withCanvas({ ...canvas, agents });
+      // The room's word, kept: a pet reads it and does not come back
+      // (`CanvasContents.withdrawn`, pets phase 2). Spread from a
+      // possibly-absent record on purpose — `{...undefined}` is `{}`, and the
+      // entry chunk has no bytes for a `?? {}`.
+      return withCanvas({ ...canvas, agents, withdrawn: { ...canvas.withdrawn, [op.actorId]: actor } });
     }
 
     default:

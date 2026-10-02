@@ -1,3 +1,21 @@
+import type { DesignAcceptedResponse, DesignContinuation, DesignDiscovery, DesignGoverningBinding } from "./design-request.ts";
+
+/** A hash alone cannot identify which permitted source supplied an artifact. */
+export interface DesignArtifactRef {
+  home: string;
+  canvasId: string;
+  itemId: string;
+  versionId: string;
+  blobHash: string;
+}
+/** Supplied locations and inspected bytes are distinct states; unavailable sources retain a reason. */
+export interface DesignReference {
+  id: string;
+  state: "supplied" | "fetched" | "inaccessible" | "superseded";
+  url?: string;
+  artifact?: DesignArtifactRef;
+  reason?: string;
+}
 /** Shape or association refusal; authentication remains the writer’s separate responsibility. */
 export class DesignPartnerContractError extends Error {
   constructor(readonly code: "invalid" | "association" | "actor" | "stale" | "conflict", message: string) {
@@ -47,4 +65,57 @@ export const hash = (v: unknown): string => typeof v === "string" && /^[a-f0-9]{
 export function base(v: Record<string, unknown>): { schemaVersion: 1; requestId: string; epoch: number } {
   if (v.schemaVersion !== 1) bad("Unsupported design-partner schema version.");
   return { schemaVersion: 1, requestId: text(v.requestId), epoch: integer(v.epoch, 1) };
+}
+/** Checks source/version/hash shape without claiming the caller can access or has inspected its bytes. */
+export function parseDesignArtifactRef(value: unknown): DesignArtifactRef {
+  const v = object(value, ["home", "canvasId", "itemId", "versionId", "blobHash"]);
+  return { home: url(v.home), canvasId: text(v.canvasId), itemId: text(v.itemId), versionId: text(v.versionId), blobHash: hash(v.blobHash) };
+}
+/** Refuses filename-only uploads and fetched URLs without version identities; availability stays explicit. */
+export function parseDesignReference(value: unknown): DesignReference {
+  const v = object(value, ["id", "state", "url", "artifact", "reason"]);
+  const state = choice(v.state, ["supplied", "fetched", "inaccessible", "superseded"]);
+  const result: DesignReference = { id: text(v.id), state,
+    ...(v.url === undefined ? {} : { url: url(v.url) }),
+    ...(v.artifact === undefined ? {} : { artifact: parseDesignArtifactRef(v.artifact) }),
+    ...(v.reason === undefined ? {} : { reason: text(v.reason) }),
+  };
+  if (!result.url && !result.artifact) bad("A reference requires an actual URL or artifact identity, not a filename.");
+  if (state === "fetched" && !result.artifact) bad("A fetched reference requires retrievable version identity.");
+  if ((state === "inaccessible" || state === "superseded") && !result.reason) bad("Unavailable references require a reason.");
+  return result;
+}
+/** Parses the entrance source of a design brief or interview. */
+export function parseDesignEntranceSource(value: unknown): import("./design-partner.ts").DesignBrief["source"] {
+  const v = object(value), entrance = choice(v.entrance, ["canvas-chat", "external-agent"]);
+  object(v, entrance === "canvas-chat" ? ["entrance", "threadId", "commentId"] : ["entrance", "externalRequestId"]);
+  return entrance === "canvas-chat" ? { entrance, threadId: text(v.threadId), commentId: text(v.commentId) } : { entrance, externalRequestId: text(v.externalRequestId) };
+}
+/** Parses a question source reference. */
+export function parseDesignQuestionSource(value: unknown): import("./design-partner.ts").DesignQuestionSource {
+  const v = object(value, ["threadId", "commentId", "payloadId", "revision"]);
+  return { threadId: text(v.threadId), commentId: text(v.commentId), payloadId: text(v.payloadId), revision: integer(v.revision, 1) };
+}
+/** Parses a list of accepted response references. */
+export function parseDesignAcceptedResponses(value: unknown): DesignAcceptedResponse[] {
+  return unique(list(value, (entry) => { const v = object(entry, ["question", "responseId"]); return { question: parseDesignQuestionSource(v.question), responseId: text(v.responseId) }; }), (v) => v.responseId);
+}
+/** Validates writer-stamped continuation facts without elevating native reports into human responses. */
+export function parseDesignContinuation(value: unknown): DesignContinuation {
+  const v = object(value, ["sourceCapture", "scopeCapture", "acceptedResponses", "factProvenance", "resumedBy"]);
+  const capture = v.sourceCapture === null ? null : object(v.sourceCapture, ["bodyHash", "boundaryCommentId"]);
+  const scope = object(v.scopeCapture, ["kind", "revision"]);
+  const resumed = v.resumedBy === undefined ? undefined : object(v.resumedBy, ["actorId", "reason"]);
+  return { sourceCapture: capture && { bodyHash: hash(capture.bodyHash), boundaryCommentId: text(capture.boundaryCommentId) }, scopeCapture: { kind: choice(scope.kind, ["source-comment", "current-selection", "current-ambient"]), revision: integer(scope.revision) }, acceptedResponses: parseDesignAcceptedResponses(v.acceptedResponses), factProvenance: unique(list(v.factProvenance, (entry) => { const f = object(entry, ["field", "actorId", "kind", "responseId"]); const kind = choice(f.kind, ["direct", "reported", "questionnaire"]); if ((kind === "questionnaire") !== (f.responseId !== undefined)) bad("Questionnaire provenance requires its accepted response."); return { field: text(f.field), actorId: text(f.actorId), kind, ...(f.responseId === undefined ? {} : { responseId: text(f.responseId) }) }; }), (f) => f.field), ...(resumed ? { resumedBy: { actorId: text(resumed.actorId), reason: text(resumed.reason) } } : {}) };
+}
+/** Explicit purpose and fact bindings support a request-wide initial discovery allowance. */
+export function parseDesignDiscovery(value: unknown): DesignDiscovery {
+  const v = object(value, ["purpose", "reason", "source", "factBindings"]), purpose = choice(v.purpose, ["initial", "consequential", "interview"]);
+  if (purpose !== "initial" && v.reason === undefined || purpose === "interview" && v.source === undefined) bad("Additional discovery needs a reason and interviews need provenance.");
+  return { purpose, ...(v.reason === undefined ? {} : { reason: text(v.reason) }), ...(v.source === undefined ? {} : { source: parseDesignEntranceSource(v.source) }), factBindings: unique(list(v.factBindings, (entry) => { const f = object(entry, ["questionId", "factId"]); return { questionId: text(f.questionId), factId: text(f.factId) }; }, 32), (f) => f.questionId) };
+}
+/** The expected governing winner is separate from the list of incidental input references. */
+export function parseDesignGoverning(value: unknown): DesignGoverningBinding {
+  const v = object(value, ["atItemId", "artifact", "explicitNone"]);
+  return { atItemId: nullableText(v.atItemId), artifact: v.artifact === null ? null : parseDesignArtifactRef(v.artifact), explicitNone: bool(v.explicitNone) };
 }

@@ -12,7 +12,6 @@ import { HistoryGlyph } from "./Glyphs.tsx";
 const AddPopover = lazy(() => import("./AddPopover.tsx").then((module) => ({ default: module.AddPopover })));
 import { hideMenu, showMenu, useChromeHidden } from "../lib/chromemenu.tsx";
 import { openContextMenu } from "../lib/contextmenu.ts";
-import { textToolMenu } from "../lib/textmenu.ts";
 import { screenToWorld } from "../lib/viewport.ts";
 import { openReactionBar } from "./ReactionBar.tsx";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
@@ -261,7 +260,10 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
                 ? (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    openContextMenu({ x: e.clientX, y: e.clientY }, textToolMenu());
+                    // The rows arrive with the right-click, as the canvas
+                    // menus do: a deliberate gesture with a frame to spare.
+                    const at = { x: e.clientX, y: e.clientY };
+                    void import("../lib/textmenu.ts").then((m) => openContextMenu(at, m.textToolMenu()));
                   }
                 : undefined
             }

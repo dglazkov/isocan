@@ -153,6 +153,7 @@ export const {
   harnessSessions,
   harnessVars,
   harnessVarsFor,
+  isBadgeUpstream,
   noIdentityHere,
   readIdentity,
   reclaimIdentity,

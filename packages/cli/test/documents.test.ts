@@ -80,7 +80,14 @@ describe("module add from a git spec", () => {
     await fs.mkdir(path.join(work, "build", "dist"), { recursive: true });
     await fs.writeFile(path.join(work, "build", "manifest.json"), JSON.stringify({ name: "@acme/hello", version: "0.3.0", engines: ">=0.1.0", cli: "dist/cli.mjs" }));
     await fs.writeFile(path.join(work, "build", "dist", "cli.mjs"), 'export default { register(host) { host.program.command("hello").action(() => console.log("hi from git")); } };\n');
-    const git = (args: string[], cwd: string) => spawn("git", args, { cwd, stdio: "ignore" });
+    /**
+     * The fixture's git must not read the developer's config: a global
+     * gitignore with `dist/` in it (a common one) made `git add .` skip
+     * `build/dist/cli.mjs` silently, and the install then refused a module
+     * whose file was never committed — red on that laptop, green on CI.
+     */
+    const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+    const git = (args: string[], cwd: string) => spawn("git", args, { cwd, stdio: "ignore", env: gitEnv });
     const runGit = (args: string[], cwd: string) => new Promise<void>((resolve, reject) => git(args, cwd).on("close", (code) => (code === 0 ? resolve() : reject(new Error(`git ${args.join(" ")} → ${code}`)))));
     await runGit(["init", "-q", "-b", "main"], work);
     await runGit(["-c", "user.email=t@t", "-c", "user.name=t", "add", "."], work);

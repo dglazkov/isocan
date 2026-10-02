@@ -138,7 +138,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `version ls|promote|prune` — the version stack (prune ⚠)
 - `mv`, `align`, `distribute`, `fit`, `tidy`, `merge`, `react`, `copy` — arrange, mark, duplicate
 - `rm`, `restore`, `trash ls|restore|empty` (empty ⚠), `undo`, `redo` — take back
-- `canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|migrate`, `area` — groups
+- `canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|stack|migrate`, `area` — groups
 - `gdoc auth|sync` — Google Docs kept current; `shortcuts` — the keys a person has
 
 **Canvases** (`items`, `homes`)
@@ -163,7 +163,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `evals corpus|converge|pairs` — what was asked for here, and what came of it
 
 **Agents and rooms** (`agents`, `present`)
-- `agent add|remove|rules`, `rc add|listen|remove`, `bench add|join|rm`, `harness` — standing agents
+- `agent add|remove|rules|mark`, `rc add|listen|remove`, `bench add|join|follow|rm`, `harness` — standing agents
 - `persona ls|show|runs`, `docket ls|answer` — roles and their findings
 - `slides add|rm|show|export|note|notes`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
 
@@ -189,7 +189,8 @@ isocan canvas ls              # the directory's canvas; --all for the home
 
 A directory nobody has readied yet takes one command: `isocan setup` puts
 this guide's skill where agents look, the CLI on PATH, and the daemon behind
-the app. On a machine that has never held a canvas it also writes **isocan.io**
+the app (`--jetski` also links the Jetski plugin into
+`~/.gemini/config/plugins/isocan`). On a machine that has never held a canvas it also writes **isocan.io**
 down as the birth default, so the first canvas somebody makes is at the hosted
 home rather than trapped on one laptop — it says so in its report, and `isocan
 home --clear` undoes it. A machine that already holds canvases keeps birthing
@@ -613,15 +614,23 @@ that woke you, with no `session start` needed.
 
 ## Pointing to words together
 
-With a session started (`isocan session start`),
+With a session started (`isocan session start`), `isocan session point <item>`
+highlights an item under your cursor for 8 seconds; adding `--zoom` also glides
+a framed pane's camera to fill its viewport with that item. Camera-only cues work
+without naming an item: `session point --fit` (fit all), `--100` (100% zoom),
+`--selection` (fit current selection), `--in` / `--out` (step zoom), and
+`--follow` (follow your cursor in a framed pane). `session select <item> --zoom`,
+`session move <x> <y>`, and `session on <thread>` likewise forward their cue to a
+framed pane beside your conversation.
+
 `isocan session select <item> --quote "exact rendered words"` shares a text
 range in the current saved Markdown/plain-text version for 15 seconds, without
 editing it. For repeated words, use `--occurrence 2`; ambiguity is refused.
 `session select --clear` puts it down. `isocan --json who` includes the version,
 text space, range and expiry in each session's `textSelection`. Source markup
 is not a rendered quote: select `important`, not `**important**`.
-The browser's Read / select text button enters the same surface; selections
-never move another reader's viewport.
+The browser's Read / select text button enters the same surface; a standalone
+tab's viewport never moves unless a framed host pane asks it to.
 
 To leave a durable discussion, use
 `isocan comment add --item <item> --quote "exact rendered words" "feedback"`.
@@ -954,6 +963,8 @@ isocan fit <items...>                  # grow items to the size their content wa
 - **Wear your color.** `isocan identity --color teal` (or any of crimson,
   violet, amber, forest, periwinkle, graphite, a `#hex`, or `none`) sets the
   color your cursor, face, and pins wear for everyone, on every canvas.
+  `isocan identity --mark 🦊` puts an emoji on your face, and everyone else
+  sees your pointer wear it instead of the arrow.
 - **Verify before you ship.** HTML items: test logic headlessly (extract the
   script, run in node with DOM stubs). Risky renders: upload the blob alone
   (`POST /api/projects/<id>/blobs`) and eyeball it in a browser before
@@ -1042,8 +1053,22 @@ whole point of having both — put the orientation in the big text.
 words are a command or a path, which yours often are, and `hand` when you
 are scribbling on the board rather than labelling it.
 
+`--color red|orange|yellow|green|blue|purple|pink|brown|grey` colours the
+words. A NAME adapts: each has a shade chosen for the light ground, the dark
+ground and paper, so it reads for a collaborator in either theme — prefer
+names. `--color '#rrggbb'` is drawn exactly, and the CLI warns (and sets it
+anyway) where it will not reach 4.5:1. `auto`, or no flag, is the theme's own
+ink; there is no black or white, because neither reads in both themes.
+
+`--font <name>` names a family from a closed list — Inter, IBM Plex Sans,
+DM Sans, Manrope, Space Grotesk, IBM Plex Serif, Fraunces, Lora, IBM Plex
+Mono, JetBrains Mono. A font brings its face (`Lora` is a serif), which is
+also what shows offline or before the file arrives, and the box is sized for
+the family's real width. `none` returns to the plain face.
+
 Changing a node later keeps its words whole: `isocan set <item> --prop
-textStyle=title` (or `textFace=…`) and `isocan edit <item> words.md` grow the
+textStyle=title` (or `textFace=…`, `textColor=blue`, `textFont=Fraunces`,
+read with the same words as the flags) and `isocan edit <item> words.md` grow the
 box to hold the words at the new look, and `isocan fit <item>` re-fits a
 caption to its words from scratch — the repair for one that was left a line
 short. `--size` still wins when you give it.
@@ -1113,12 +1138,20 @@ isocan canvas group ls
 isocan text "Acme first sketch" --in Sketches
 isocan add sketch.html --in Sketches
 isocan mv <item> --in Sketches
+isocan mv <item> --out                     # one level up; --to-root for the canvas
 isocan ls --in Sketches                    # direct members; --recursive expands
 isocan tidy --in Sketches
 isocan canvas group grid Sketches 2x3 --rows "Draft,Review"
 isocan text "Acme review" --in Sketches --cell 2,1
 isocan canvas group grid Sketches --clear
+isocan canvas group stack Sketches         # a pile of cards; --spread puts it back
 ```
+
+`canvas group stack` shows a group as a pile — one card on top, the rest
+turned behind it — for everyone, until `--spread`. It only changes the
+drawing: every member keeps its x/y, `ls`, `mv`, `add --in` and `show` work
+as before (`show` says `stacked`), and placing into a stacked group places in
+spread space, so spreading shows it where it was put.
 
 `area new`, `area ls` and `area grid` are compatibility spellings for these
 canvas-group acts; `area new --tint yellow` also sets the frame's tint. All
@@ -1168,9 +1201,10 @@ continues to join log entries for undo. Neither establishes canvas membership.
 `canvas group frame <groups...> --fit` (or one group with `--size WxH`/`--at x,y`),
 `canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy]`,
 `canvas group grid <group> [RxC] [--rows names] [--cols names] [--tidy] [--clear]`,
+`canvas group stack <group> [--spread]`,
 and `canvas group migrate [--dry-run] [--revision n]`.
 `area new <title>`, `area ls` and `area grid <group> [RxC] [--clear]` are compatibility aliases; `area ls` can also read legacy areas.
-Grid labels are comma-separated; cells count from 1. Every mutation accepts `--dry-run`:
+Grid labels are comma-separated; cells count from 1. Lowering a count drops the saved labels past it in the same write (the web's layout form does the same), and more names than cells is refused; members of a cell that goes away keep their places. Every mutation accepts `--dry-run`:
 it validates through the shared resolver and reports affected roots, parent
 changes, final boxes and frame adjustments without uploading note bytes or
 writing an operation. Every command supports `--json`. IDs are exact; title
@@ -1179,7 +1213,10 @@ and ID prefixes must be unique, and ambiguities list candidates.
 Wrapping preserves the arrangement and keeps nested groups intact. Add
 preserves positions and fits the destination frame; `--place` finds room
 below its current members. `mv <item> --in <group> [--cell r,c] [--dry-run]` uses that same
-atomic add-and-place operation. Remove promotes each item to its group's
+atomic add-and-place operation, and `mv <item> --out [--to-root] [--dry-run]` is
+its twin, the same act as `group remove`: out to the group's parent, or with
+`--to-root` straight to the canvas, without moving. (A person does it by
+⌘-dragging the item off its frame, or ⌘⇧G on it, or *Move to canvas*.) Remove promotes each item to its group's
 parent, or directly to the canvas with `--to-root`; it preserves geometry.
 Ungroup trashes the frames and preserves their children. These are single
 undoable acts, including required ancestor frame changes. An overlapping
@@ -2083,7 +2120,7 @@ inputs, with no critical defects or source findings. Unsupported static limits
 remain visible in the final receipt. Older manual receipts retain their original
 semantics and are not retrospectively branded a completed shared review.
 
-<!-- topic: context | what an agent reads before it starts — the Chat, `context`, pins and exclusions, personal and group context, document status -->
+<!-- topic: context | what an agent reads before it starts — the Chat, `context`, pins and exclusions, personal and group context, document status, Loop findings -->
 
 ## The Chat
 
@@ -2300,6 +2337,40 @@ derived rather than kept.
 If you finish something a note describes, change its front matter and re-run
 the generator. CI checks the view is current.
 
+## Triaging Loop's findings
+
+Stitch Loop mines this repository for **insights** and files them in a shared
+workspace (pinned by `.stitch.json`). An insight is a claim, not a verdict: it
+is often stale, filed twice, or ranked by the wrong lights. So each one becomes
+a **finding**, a file in `docs/loop/` whose front matter holds the decision, and
+`docs/LOOP.md` plus the Loop counts on `docs/ROADMAP.md` are generated from
+those files. Same rule as the roadmap: the decision is written once, where it
+lives.
+
+    node scripts/loop.mjs pull        # fetch; new insights land as untriaged, nothing of ours is overwritten
+    node scripts/loop.mjs list -d untriaged
+    node scripts/loop.mjs propose <slug> --rank next --project <docs/projects/ name | new> \
+        --note "holds: one line, why" --read "what the code shows, with file:line"
+    node scripts/loop.mjs render --check   # CI: LOOP.md is current, every finding says why
+
+**`propose` is yours, `decide` is a person's.** When asked to look at Loop (or
+in `loop.yml`'s nightly prove pass): pull, then for each untriaged finding
+**prove every sub-claim against the code** — open every cited file and line,
+check surrounding callers and tests, and run non-destructive checks (`vitest`,
+`npm audit`, `npm run build`) when a claim is about runtime or build output.
+Never leave `"I did not check"` or `"Not run"` in `## Our read`; `render
+--check` rejects unverified reads. State whether the claim **holds**, is
+**partly true**, is **stale** (cite what fixed it) or is **by design** (cite
+the doc that decided it). Propose a rank — `now` (a defect people would hit),
+`next`, `later`, `never` (a recommendation to decline) — and the
+`docs/projects/` directory it belongs to. The note is what Loop is told, so
+give it a verdict, a `file:line`, and what would change the answer.
+
+**Never `decide`, `push` or `mine` unasked.** A decision dismisses the insight
+for everyone in the workspace, and all decisions go up as one context Loop reads
+while mining. `decide` pushes by default; `--no-push` records it locally.
+`push --dry-run` shows what would be sent. Nothing merely proposed is ever sent.
+
 <!-- topic: history | what happened — `timeline`, `activity`, `lens`, `history`, `at`, `recap`, `whatsnew` -->
 
 ## Where the seams are
@@ -2411,7 +2482,18 @@ asks you to set one up — `@You add a reviewer here` — do it with:
 isocan agent add <name>     # enrol an agent beside yourself, on THIS canvas
 isocan agent remove <name>  # withdraw its standing (the history stays)
 isocan agent rules [name]   # what an agent answers for here, and why
+isocan agent mark <name> 🐕  # the emoji it wears — its face AND its pointer; `none` clears
 ```
+
+**An agent's pointer is its mark.** Whoever wears a mark moves across the
+canvas as it rather than as an arrow — the arrow's tip stays, in their colour,
+exactly on the point, so pointing and selection land where they always did.
+An agent nobody has marked is drawn as 🤖; that default is decided when the
+pointer is drawn and never stored, so `none` puts an agent back on the robot.
+`isocan agent mark` is its OWNER's verb: the person whose machine enrolled it
+(or the agent itself, with `isocan identity --mark`), including through an
+identity they have since joined. Anybody else is refused by the home, and the
+web's "Pointer" pill on an agent's card or row sends the same op. Choose one when a person asks for one; a mark is theirs to pick.
 
 The syntax is the containment: no `--canvas`, no `--dir` — the agent you add
 lives where you already are. Add one when a person asks, and only then; the
@@ -2471,7 +2553,9 @@ both. Nothing is duplicated and nothing needs a vouch; the enrolment key is
 derived from the name by a secret kept in this machine's `~/.isocan`, so the
 same machine always gets the same agent back and another machine cannot take
 it by its name. One `isocan rc --all` (the person's, again) answers on every canvas
-this machine's enrolments name: one budget per agent across all of them, one
+this machine's enrolments name — and, while it runs, on any canvas one of its
+agents is brought to (`bench join`, the web's Join, `@Name join`) within 30
+seconds, no restart: one budget per agent across all of them, one
 conversation per agent that carries on wherever it is summoned, and
 `ISOCAN_CANVAS` in your environment says which canvas asked this time.
 
@@ -2485,12 +2569,20 @@ canvas, or a list of agent names/ids and canvas ids that announce.
 
 Which harness a summoned agent runs in is the enrolment's `--harness`
 (claude-code, pi, codex and antigravity are known; `~/.isocan/config.json`'s `acpAdapters`
-declares others), and an agent enrolled with none named runs on the
-machine's default: the only runnable harness, or the one picked with
-`isocan rc --default-harness <name>`. `isocan harness` lists what this
-machine can run and which is the default (`--json` adds a `runnable`
-field) — the thing to read before presenting the choice to a person, and
-the thing to tell them when a summons fails for want of one.
+declares others), and `--model <id>` on `isocan agent add`, `isocan rc add` or
+`isocan bench add` pins its model, spelled the way that harness spells it. The
+id always rides `ISOCAN_MODEL`; it reaches the harness itself only through a
+door it has — Claude Code's `ANTHROPIC_MODEL`, `model` in Codex's
+`CODEX_CONFIG`, or `{model}` in a declared `acpAdapters` entry's arguments
+(left out, with the flag before it, when no model is pinned). Anything else
+runs its own default whatever the row says, so say which specialists are
+really pinned before comparing them. An agent enrolled with no harness
+named runs on the machine's default: the only runnable harness, or the one
+picked with `isocan rc --default-harness <name>`. `isocan harness` lists
+what this machine can run, which is the default, and whether a pin reaches
+each (`--json` adds `runnable` and `pinsModel` fields) — the thing to read
+before presenting the choice to a person, and the thing to tell them when a
+summons fails for want of one.
 
 A summoned session's environment is a list, not the person's shell: what a
 process needs, `ISOCAN_*`, and each vendor's own namespace (`ANTHROPIC_*`,
@@ -2523,6 +2615,7 @@ them between machines instead of dying with the laptop it was made on.
 isocan bench                # every agent on your bench, with its reachability
 isocan bench add <name>     # put one on the bench, from what this machine knows
 isocan bench join <name>    # have it answer on THIS canvas too
+isocan bench follow <name>  # make it your pet (--off stops it)
 isocan bench rm <name>      # take it off — its standing is untouched
 ```
 
@@ -2571,7 +2664,9 @@ this directory is bound to — and it needs **no parked `isocan rc` there**,
 which is the difference between naming an agent you already have and
 introducing a stranger. `isocan agent add` mints an actor and so must ask the
 machine that will answer for it; an agent on your bench already has one, so
-its fifth canvas costs exactly what its first did.
+its fifth canvas costs exactly what its first did. It stands there at once;
+it ANSWERS there once its machine parks on that canvas, which a running
+`isocan rc --all` does within 30 seconds and a plain `isocan rc` never does.
 
 What joining does NOT do is the part worth reading twice: it grants standing
 on that one canvas and nothing else. No turn is started, nobody new may summon
@@ -2596,6 +2691,22 @@ deliberate and it is a security property rather than a phrasing: a bench is a
 private canvas, and a refusal that read differently for a name that exists
 somewhere would let a stranger enumerate one name at a time. Do not "improve"
 it, and do not offer to look the name up.
+
+**A pet is a bench agent that follows its owner: `isocan bench follow
+<name>`** (the web's *Follows me*), and `--off` to stop. It is one fact on the
+bench row, and it invites the agent nowhere by itself: when its owner ARRIVES
+on a canvas in the app and can edit it, the app sends the same `agent.invite`
+a join sends — once per arrival, never onto a canvas the owner can only read,
+and never back onto one where somebody withdrew it (`isocan rc remove`, or an
+agent's own `isocan agent remove`: a removal is the room's word, and only a
+person joining or enrolling it again by hand brings it back). The thread then
+gets one line, *"Scout came with Dion"*. Like any
+join, the new row carries no `rules`, so it answers only its owner until
+somebody widens it. Turning following off takes the agent off nothing.
+
+If you ARE somebody's pet, that line is a record of your arrival, not a
+request — nothing is being asked of you. A running `isocan rc --all` on your
+machine parks on that canvas within 30 seconds; a plain `isocan rc` does not.
 
 ## The roles you can take on
 
@@ -3080,6 +3191,14 @@ says so without editing anything. What matters for you is what changes:
 Same as `isocan home`: **do not switch a machine on your own initiative.** Read
 it freely — plain `isocan direct` — and say what you found.
 
+When a sandbox holds no secret of its own and an egress proxy adds
+`Authorization` upstream, the launcher sets `ISOCAN_BADGE_UPSTREAM=1` with
+`ISOCAN_ACTOR_ID` and `ISOCAN_ACTOR_NAME` (beside `ISOCAN_DIRECT`). In that
+mode the CLI reads and writes no `identity.json` and sends no `Authorization`
+of its own (`isocan whoami` prints `— upstream badge`). Standard proxy
+variables (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`) are honoured directly, with
+no `NODE_USE_ENV_PROXY` needed, and a failed connection names the proxy.
+
 ## Taking a canvas somewhere else
 
 `isocan export <file>` writes this canvas as [JSON Canvas](https://jsoncanvas.org)
@@ -3387,7 +3506,8 @@ this canvas. It is not the address, and the difference is the whole point:
 isocan pass               # the whole command to paste on the other machine
 isocan pass --admit-only  # admit it, but hand over no identity
 isocan pass --agent Percy # an address that arrives as Percy, for his new host
-isocan embed              # the address to paste into a pane or an IDE panel
+isocan embed              # the address to paste into a pane or an IDE panel (chat-free by default)
+isocan embed --chat       # keep the canvas's own Chat dock inside the pane
 isocan embed --admit-only # let the window in, but hand it no identity
 ```
 
@@ -3397,7 +3517,9 @@ If the person you are working with is in an agent manager or an IDE — you are
 in one, so they may well be — they can watch this canvas in a pane next to
 your conversation rather than in a window of its own. `isocan embed` is the
 address for that, and it is worth offering unprompted the first time you make
-something worth looking at.
+something worth looking at. The pane opens without the canvas's own Chat,
+because the conversation beside it is where the two of you talk;
+`isocan embed --chat` keeps it, for a pane that is not beside a conversation.
 
 Two things to say when you hand it over, because both will otherwise look like
 bugs. **It admits the window once**, within the pass's few minutes; after it
@@ -3536,7 +3658,7 @@ on the thread before putting one on somebody else's canvas,
 `design receipt [request] [--publish <file>]`,
 `design compare [request] [--publish <file>|--target <item>] [--option <id> --out <file>]`,
 `design respond <file> [--thread <id>] [--retry]`, `design decide <file> [--thread <id>] [--retry]`,
-`add [--drawing] [--visual]`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by] [--beside <item> --side left|right|above|below]`, `align`, `distribute`,
+`add [--drawing] [--visual]`, `edit [--visual]`, `get [--visual]`, `inline <file>`, `mv [--by] [--beside <item> --side left|right|above|below] [--in <group>|--out [--to-root]]`, `align`, `distribute`,
 `react <emoji> <items...> [--off|--who]`,
 `docket` and `docket answer <finding> accepted|rejected [--because <words>]`
 (persona findings asked on the board — see **The roles you can take on**),
@@ -3562,7 +3684,8 @@ travel when the canvas does),
 command — every parked agent hears it and the human sees it),
 `text <words…>` (words straight onto the canvas as a chromeless node —
 `--file -` for a paragraph from stdin, and it is a real `.md`, so `set --file`
-and `save` back it like anything else),
+and `save` back it like anything else; `--style`, `--face`, `--paper`,
+`--color <name|#hex|auto>`, `--font <name|none>`),
 `tree` (the bound directory as the daemon lists it — owner-scoped, so it
 answers only at the canvas's own machine),
 `save <items...>` (write backed items out to that directory — see **Screens

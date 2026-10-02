@@ -16,6 +16,10 @@ export interface RcAgentRow {
   /** How to start a session — the enrolling caller's harness, a flag, or
    * null for "not yet said"; phase 3 reads it. */
   harness: string | null;
+  /** The model this agent is pinned to (`--model`, e.g. claude-opus-5-5),
+   * handed to its harness by `adapterFor`; absent or null runs the harness's
+   * own default. */
+  model?: string | null | undefined;
   /** Where the agent's sessions run. The agent verb takes no --dir: this is
    * always where the enrolling caller already stood. */
   cwd: string;

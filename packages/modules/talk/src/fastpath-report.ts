@@ -222,7 +222,10 @@ export function report(rows: readonly EvalRow[], meta: { title: string; answerer
  */
 export function rowsFromRecord(turns: readonly ShadowTurn[]): { rows: EvalRow[]; titles: Record<string, string> } {
   const titles: Record<string, string> = {};
-  const rows = turns.map((t, i): EvalRow => {
+  // A turn recorded with the fast path ACTING is not a shadow turn: when it
+  // acted, the model's calls were dropped, so there is no independent act to
+  // agree with; and act mode watches for no take-back. `fastSummary` reads them.
+  const rows = turns.filter((t) => !t.fast).map((t, i): EvalRow => {
     Object.assign(titles, t.titles);
     const action = (t.answers?.action.value ?? actionOf(t.proposed.act)) as FastAct | "none";
     return {
@@ -242,4 +245,37 @@ export function rowsFromRecord(turns: readonly ShadowTurn[]): { rows: EvalRow[];
     };
   });
   return { rows, titles };
+}
+
+/**
+ * **The turns recorded with the fast path acting** (phase 7): what it did,
+ * what the hold cost, and how often the words were still arriving after the
+ * act — the number the microphone walk exists to read. Empty when the record
+ * has none.
+ */
+export function fastSummary(turns: readonly ShadowTurn[]): string {
+  const fast = turns.filter((t) => t.fast);
+  if (fast.length === 0) return "";
+  const q = (xs: number[], f: number) => {
+    const s = [...xs].sort((a, b) => a - b);
+    return s.length ? s[Math.min(s.length - 1, Math.floor(f * s.length))]! : 0;
+  };
+  const acted = fast.filter((t) => t.fast!.decision === "act");
+  const held = fast.filter((t) => t.fast!.held > 0).map((t) => t.fast!.held);
+  const ackd = acted.map((t) => (t.fast!.acted ?? 0) - (t.timing.lastHeard ?? 0));
+  const lines = [
+    "## The fast path acting",
+    "",
+    `- turns: **${fast.length}** — acted **${acted.length}**, escalated ${fast.filter((t) => t.fast!.decision === "escalate").length}, released at the deadline ${fast.filter((t) => t.fast!.decision === "released").length}`,
+    `- model calls answered "already done": ${fast.reduce((n, t) => n + t.fast!.dropped, 0)}`,
+    `- hold on the model's calls (turns that held any, ${held.length}): p50 **${q(held, 0.5)} ms**, p90 ${q(held, 0.9)} ms, max ${held.length ? Math.max(...held) : 0} ms`,
+    `- last word heard → act acknowledged: p50 **${q(ackd, 0.5)} ms**, p90 ${q(ackd, 0.9)} ms`,
+    `- words still arriving after the act: **${acted.filter((t) => t.fast!.late).length} of ${acted.length}**`,
+    "",
+    "| utterance | decided | held ms | acted ms | late |",
+    "|---|---|---|---|---|",
+    ...fast.map((t) => `| ${t.utterance.replace(/\|/g, "/")} | ${t.fast!.decision} | ${t.fast!.held} | ${t.fast!.acted ?? "—"} | ${t.fast!.late ? "yes" : ""} |`),
+    "",
+  ];
+  return lines.join("\n");
 }

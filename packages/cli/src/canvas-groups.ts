@@ -101,7 +101,7 @@ export function registerCanvasGroups(canvas: Command, context: (cmd: Command) =>
       const found = await handle.show(ref, !!opts.recursive);
       if (ctx.json) return printJson(found);
       printTable(rows([found]));
-      console.log(`frame ${found.outerBox.x},${found.outerBox.y} ${found.outerBox.width}x${found.outerBox.height}; content ${found.contentBox.x},${found.contentBox.y} ${found.contentBox.width}x${found.contentBox.height}`);
+      console.log(`frame ${found.outerBox.x},${found.outerBox.y} ${found.outerBox.width}x${found.outerBox.height}; content ${found.contentBox.x},${found.contentBox.y} ${found.contentBox.width}x${found.contentBox.height}${found.stacked ? "; stacked (members keep their spread positions)" : ""}`);
       printTable(found.members.map((item) => ({ id: item.id, title: item.title, parent: item.parentId ?? "canvas" })));
     }));
 
@@ -149,6 +149,11 @@ export function registerCanvasGroups(canvas: Command, context: (cmd: Command) =>
       if (!Object.keys(layout).length && !opts.tidy) throw new Error("choose a layout setting or --tidy");
       report(ctx, await handle.layout(ref, layout, opts));
     }));
+
+  groups.command("stack <group>").description("Show a group as a pile of cards, or spread it back; members never move")
+    .option("--spread", "spread a stacked group back out")
+    .option("--dry-run", "report the change without writing")
+    .action(act(async (handle, ctx, [ref, opts]) => report(ctx, await handle.stack(ref, !opts.spread, opts))));
 
   groups.command("grid <group> [RxC]").description("Set a named grid, or remove it with --clear")
     .option("--rows <names>", "comma-separated row labels")

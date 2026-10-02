@@ -1,4 +1,7 @@
-import { ARCHETYPE_WORDS, RECIPES, component, type Platform, type Props, type Recipe, type Section } from "./catalog/index.ts";
+import {
+  ARCHETYPE_WORDS, RECIPES, component, defaultSlotRegion, densityFromScore, template, templatesFor,
+  type DensityLevel, type Platform, type Props, type Recipe, type Section, type TemplateId,
+} from "./catalog/index.ts";
 import { JEV_MODEL, chosenOption, readResponse, type JevAnswer, type JevQuestion, type JevRequest, type JevResponse } from "./answerer.ts";
 import { LEAVE_OUT, PLATFORMS, blueprint, presentElements, recipe, resolveSlot, type WireChrome, type WireDeclined, type WireSlot, type WireSpec } from "./spec.ts";
 
@@ -222,9 +225,35 @@ export function flowScreen(archetype: string, request: string, flow: string, dec
 
 // ---------- round 2: structure
 
-export function structureRequest(spec: WireSpec, flowTitles: readonly string[]): JevRequest {
+/**
+ * Build Round 2's structure request for a screen. When `opts.layout` is set,
+ * also asks Jev for `template` (over `templatesFor(spec.archetype, spec.platform)`),
+ * `density` (1–3 score), and per-slot `<slot>:region` when the template has
+ * multiple sub-regions.
+ */
+export function structureRequest(spec: WireSpec, flowTitles: readonly string[], opts: { layout?: boolean } = {}): JevRequest {
   const r = recipe(spec.archetype);
   const questions: Record<string, JevQuestion> = {};
+  const candidates = opts.layout ? templatesFor(spec.archetype, spec.platform) : [];
+  if (opts.layout && !spec.template && candidates.length > 1) {
+    questions.template = {
+      type: "choice",
+      instructions: `Which layout template best organizes the main body of the ${spec.title} screen?`,
+      criteria: Object.fromEntries(candidates.map((t) => [t.id, t.description])),
+    };
+  }
+  if (opts.layout && !spec.density) {
+    questions.density = {
+      type: "score",
+      instructions: `How dense should the spacing on the ${spec.title} screen be?`,
+      criteria: ["1: compact", "2: default", "3: spacious"],
+    };
+  }
+  const regionPool = opts.layout
+    ? spec.template
+      ? template(spec.template).regions
+      : [...new Set(candidates.filter((t) => t.id !== "single" && t.regions.length > 1).flatMap((t) => t.regions))]
+    : [];
   for (const slot of spec.slots) {
     if (slot.block !== null) continue;
     const section = r.sections.find((s) => s.slot === slot.slot)!;
@@ -239,6 +268,13 @@ export function structureRequest(spec: WireSpec, flowTitles: readonly string[]):
         type: "choice",
         instructions: `Which block fills the ${section.region} of the ${spec.title} screen here?`,
         criteria: Object.fromEntries(section.options.map((o) => [o, `a ${component(o).category} block`])),
+      };
+    }
+    if (opts.layout && section.region === "main" && !slot.region && regionPool.length > 1) {
+      questions[`${section.slot}:region`] = {
+        type: "choice",
+        instructions: `Which template region does ${section.slot} sit in on the ${spec.title} screen?`,
+        criteria: Object.fromEntries(regionPool.map((reg) => [reg, `the ${reg} region`])),
       };
     }
   }
@@ -258,6 +294,12 @@ export function structureRequest(spec: WireSpec, flowTitles: readonly string[]):
  */
 export function applyStructure(spec: WireSpec, req: JevRequest, res: JevResponse): WireSpec {
   const r = recipe(spec.archetype);
+  const chosenTemplate: TemplateId | undefined = req.questions.template && res.answers.template
+    ? (chosenOption(req.questions.template, res.answers.template).value as TemplateId)
+    : spec.template;
+  const chosenDensity: DensityLevel | undefined = req.questions.density && res.answers.density
+    ? densityFromScore(chosenOption(req.questions.density, res.answers.density).value)
+    : spec.density;
   const slots: WireSlot[] = [];
   const declined: WireDeclined[] = [...(spec.declined ?? [])];
   for (const slot of spec.slots) {
@@ -282,9 +324,33 @@ export function applyStructure(spec: WireSpec, req: JevRequest, res: JevResponse
       ...(pOut > 0 ? [{ block: LEAVE_OUT, p: pOut }] : []),
     ].sort((a, b) => b.p - a.p);
     const p = pick ? pick.p : section.optional ? 1 - pOut : undefined;
-    slots.push({ ...resolveSlot(r.id, section.slot, block), ...(p !== undefined ? { p } : {}), ...(alternatives.length ? { alternatives } : {}) });
+    const regionQ = req.questions[`${section.slot}:region`];
+    const regionA = res.answers[`${section.slot}:region`];
+    const pickedRegion = regionQ && regionA ? chosenOption(regionQ, regionA).value : slot.region;
+    slots.push({
+      ...resolveSlot(r.id, section.slot, block),
+      ...(p !== undefined ? { p } : {}),
+      ...(alternatives.length ? { alternatives } : {}),
+      ...(pickedRegion !== undefined ? { region: pickedRegion } : {}),
+    });
   }
-  return { ...spec, slots, round: 2, ...(declined.length ? { declined } : {}) };
+  if (chosenTemplate && chosenTemplate !== "single") {
+    const tpl = template(chosenTemplate);
+    const mainSlots = slots.filter((s) => r.sections.find((sec) => sec.slot === s.slot)?.region === "main");
+    mainSlots.forEach((s, idx) => {
+      if (!s.region || !tpl.regions.includes(s.region)) {
+        s.region = defaultSlotRegion(tpl.id, s, idx, mainSlots.length);
+      }
+    });
+  }
+  return {
+    ...spec,
+    slots,
+    round: 2,
+    ...(chosenTemplate !== undefined ? { template: chosenTemplate } : {}),
+    ...(chosenDensity !== undefined ? { density: chosenDensity } : {}),
+    ...(declined.length ? { declined } : {}),
+  };
 }
 
 // ---------- round 3: props and intents
@@ -399,6 +465,7 @@ export function applyProps(spec: WireSpec, req: JevRequest, res: JevResponse): W
     if (present.length > 0) out.intents = intents;
     if (slot.p !== undefined) out.p = slot.p;
     if (slot.alternatives) out.alternatives = slot.alternatives;
+    if (slot.region !== undefined) out.region = slot.region;
     return out;
   });
   return { ...spec, slots, round: 3 };

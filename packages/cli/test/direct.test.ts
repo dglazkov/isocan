@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import type { Canvas } from "@isocan/core";
@@ -420,3 +421,106 @@ describe("nothing is ever guessed", () => {
     expect(JSON.parse(shown.stdout).mode).toBe("daemon");
   });
 });
+
+describe("an agent that holds no secret (first-minute phase 5)", () => {
+  it("succeeds through an auth-injecting proxy with an empty HOME, writes no identity.json, and names the proxy when it is down", async () => {
+    const priya = { id: "usr_priya", name: "Priya" };
+    await badge.speakAs(priya);
+    await fetch(`${homeUrl}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...badge.headers },
+      body: JSON.stringify({
+        canvasId: null,
+        actor: priya,
+        op: { type: "project.create", canvasId: "prj_acme", title: "Acme redesign" },
+      }),
+    });
+
+    let proxiedCount = 0;
+    const seenClientAuth: (string | undefined)[] = [];
+    const proxy = http.createServer(async (req, res) => {
+      proxiedCount++;
+      seenClientAuth.push(req.headers.authorization);
+      const target = new URL(req.url ?? "/", homeUrl);
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk));
+      const body = chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+      const forwardHeaders: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (typeof v === "string" && k.toLowerCase() !== "host" && k.toLowerCase() !== "proxy-connection") {
+          forwardHeaders[k] = v;
+        }
+      }
+      Object.assign(forwardHeaders, badge.headers);
+      const upstream = await fetch(`${homeUrl}${target.pathname}${target.search}`, {
+        method: req.method ?? "GET",
+        headers: forwardHeaders,
+        ...(body && body.length > 0 ? { body } : {}),
+      });
+      res.statusCode = upstream.status;
+      upstream.headers.forEach((value, key) => {
+        if (key.toLowerCase() !== "transfer-encoding") res.setHeader(key, value);
+      });
+      res.end(Buffer.from(await upstream.arrayBuffer()));
+    });
+    await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+    const proxyAddress = proxy.address();
+    const proxyPort = typeof proxyAddress === "object" && proxyAddress ? proxyAddress.port : 0;
+    const proxyUrl = `http://127.0.0.1:${proxyPort}`;
+
+    const sandboxEnv = {
+      HOME: machine,
+      ISOCAN_HOME: machine,
+      ISOCAN_DIRECT: homeUrl,
+      ISOCAN_BADGE_UPSTREAM: "1",
+      ISOCAN_ACTOR_ID: priya.id,
+      ISOCAN_ACTOR_NAME: priya.name,
+      HTTPS_PROXY: proxyUrl,
+      NO_PROXY: "",
+      no_proxy: "",
+      CLAUDE_CODE_SESSION_ID: "",
+    };
+
+    try {
+      const added = await isocan(["text", "hello", "--title", "Hero card", "--canvas", "prj_acme"], sandboxEnv);
+      expect(added.code, added.stderr).toBe(0);
+
+      const listed = await isocan(["ls", "--canvas", "prj_acme"], sandboxEnv);
+      expect(listed.code, listed.stderr).toBe(0);
+      expect(listed.stdout).toContain("Hero card");
+      expect(proxiedCount).toBeGreaterThan(0);
+      expect(seenClientAuth.every((header) => header === undefined)).toBe(true);
+
+      const whoami = await isocan(["whoami"], sandboxEnv);
+      expect(whoami.code, whoami.stderr).toBe(0);
+      expect(whoami.stdout).toContain("Priya (usr_priya) — upstream badge");
+
+      // Nothing written to identity.json in the empty HOME.
+      await expect(fs.access(path.join(machine, "identity.json"))).rejects.toThrow();
+      expect(await daemonStarted()).toBe(false);
+    } finally {
+      await new Promise<void>((resolve) => proxy.close(() => resolve()));
+    }
+
+    // With the proxy down, the refusal names the proxy rather than the home.
+    const down = await isocan(["ls", "--canvas", "prj_acme"], sandboxEnv);
+    expect(down.code).not.toBe(0);
+    expect(down.stderr).toContain(`could not reach proxy ${proxyUrl}`);
+    await expect(fs.access(path.join(machine, "identity.json"))).rejects.toThrow();
+  });
+
+  it("refuses when ISOCAN_BADGE_UPSTREAM=1 is set without actor variables", async () => {
+    const out = await isocan(["whoami"], {
+      ISOCAN_DIRECT: homeUrl,
+      ISOCAN_BADGE_UPSTREAM: "1",
+      ISOCAN_ACTOR_ID: "",
+      ISOCAN_ACTOR_NAME: "",
+      CLAUDE_CODE_SESSION_ID: "",
+    });
+    expect(out.code).not.toBe(0);
+    expect(out.stderr).toContain("ISOCAN_BADGE_UPSTREAM=1");
+    expect(out.stderr).toContain("ISOCAN_ACTOR_ID");
+    expect(out.stderr).toContain("ISOCAN_ACTOR_NAME");
+  });
+});
+

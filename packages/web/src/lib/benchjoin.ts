@@ -31,7 +31,7 @@ import { postToMain } from "./mainthread.ts";
  * Carry out the ask, or say why not.
  *
  * Returns what to tell the ASKER — a refusal, or the note that the agent
- * already answers here — and null when the join landed and the thread now
+ * already stands here — and null when the join landed and the thread now
  * carries its line. One channel for both, because both are answers to a
  * sentence somebody typed and neither is news for the canvas.
  */
@@ -47,7 +47,7 @@ export async function joinFromChat(
   // would preserve the existing rules anyway, and sending the op regardless
   // would put a second line in the thread saying something that was already
   // true.
-  if (!row.notHereYet) return `${row.name} already answers here`;
+  if (!row.notHereYet) return `${row.name} already stands here`;
   // The RECEIPT decides, not the optimistic echo: `sendEchoed` applies the op
   // locally before the home has seen it, so reading the store back would say
   // "she is here" for an invite the home refused. The thread's line is a
@@ -63,3 +63,14 @@ export async function joinFromChat(
   await postToMain(canvasId, actor, benchJoinWords(row.name));
   return null;
 }
+
+/**
+ * **The arrival's join, through the same lazy door** (pets phase 2). A pet
+ * arriving with its owner is the join above without the sentence, so the
+ * canvas page reaches it through this chunk — which the composer already
+ * loads with no preload list — rather than through a chunk of its own: the
+ * entry pays one `import()` either way, and a new chunk would add its name and
+ * its preload list to the entry beside it, bytes the ceiling did not have.
+ */
+export const bringPets = (canvasId: string, actor: Actor): Promise<void> =>
+  import("./pets.ts").then((m) => m.bringPets(canvasId, actor));

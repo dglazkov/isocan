@@ -158,6 +158,8 @@ export function newNoteIn(state: SprintState): void {
     style: ui.lastTextStyle,
     face: ui.lastTextFace,
     paper: phasePaper(state.phase.name),
+    colour: ui.lastTextColour,
+    font: ui.lastTextFont,
   });
 }
 

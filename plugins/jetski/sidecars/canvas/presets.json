@@ -1,0 +1,10 @@
+{
+  "about": "The pane's Agents bar. Each button enrols a standing agent on the workspace's canvas with `isocan rc add <name> --harness <harness> --model <model>`. A name is an agent's, never a model's or a vendor's (`isocan --agent-help agents`). A null harness means this machine's default (`isocan harness`). A model is spelled the way that harness spells it, and the pane says when a harness has no way to take one (`pinsModel`). Edit freely, or point ISOCAN_JETSKI_PRESETS at a file of your own.",
+  "presets": [
+    { "id": "opus", "name": "Orla", "label": "Opus 5.5", "harness": "claude-code", "model": "claude-opus-5-5" },
+    { "id": "barium", "name": "Bram", "label": "Barium", "harness": null, "model": "barium" },
+    { "id": "gemini-pro", "name": "Gil", "label": "Gemini Pro", "harness": null, "model": "gemini-3-pro" },
+    { "id": "gemini-flash", "name": "Fen", "label": "Gemini Flash", "harness": null, "model": "gemini-3-flash" },
+    { "id": "codex", "name": "Cole", "label": "Codex", "harness": "codex", "model": null }
+  ]
+}

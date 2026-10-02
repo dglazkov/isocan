@@ -1,7 +1,7 @@
-import type { Actor } from "@isocan/core";
+import type { Actor, BenchAgent } from "@isocan/core";
 import { benchWords } from "@isocan/core";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
-import { useBench } from "../lib/bench.ts";
+import { followsHint, useBench, useFollows } from "../lib/bench.ts";
 import "./yourbench.css";
 
 /**
@@ -56,7 +56,7 @@ export function BenchJoin({ canvasId, actor }: { canvasId: string; actor: Actor 
               <span className="bench-name">{row.name}</span>
               <span className={`bench-reach ${row.reach}`}>{benchWords(row)}</span>
               {here ? (
-                <span className="bench-where">answers here already</span>
+                <span className="bench-where">stands here already</span>
               ) : (
                 <button
                   className="btn tray-bench-join"
@@ -72,10 +72,22 @@ export function BenchJoin({ canvasId, actor }: { canvasId: string; actor: Actor 
                   Join
                 </button>
               )}
+              <Follows row={row} benchCanvasId={benchCanvasId} actor={actor} />
             </li>
           );
         })}
       </ul>
     </section>
+  );
+}
+
+/** *Follows me* on one row — the markup; `useFollows` is the act. */
+function Follows({ row, benchCanvasId, actor }: { row: BenchAgent; benchCanvasId: string; actor: Actor }) {
+  const [on, flip] = useFollows(row, benchCanvasId, actor);
+  return (
+    <label className="bench-follows" title={followsHint(row.name)}>
+      <input type="checkbox" checked={on} onChange={(event) => flip(event.target.checked)} />
+      Follows me
+    </label>
   );
 }

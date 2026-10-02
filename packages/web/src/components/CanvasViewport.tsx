@@ -1,9 +1,23 @@
-import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, isGroupItem } from "@isocan/core";
-import { groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
+import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, groupUnderStack, isGroupItem } from "@isocan/core";
+import { frameGap, groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
+/** The hover outline's module (`lib/aim.ts`), fetched on the first pointer move
+ * over the canvas and kept: hover may arrive a frame late; a press never waits. */
+let aimModule: typeof import("../lib/aim.ts") | null = null;
+let aimLoading = false;
+let aimPending: ((aim: typeof import("../lib/aim.ts")) => void) | null = null;
+function withAim(then: (aim: typeof import("../lib/aim.ts")) => void): void {
+  if (aimModule) { then(aimModule); return; }
+  // The latest ask waits for the module and runs when it lands, so the very
+  // first hover still gets its outline without another move.
+  aimPending = then;
+  if (aimLoading) return;
+  aimLoading = true;
+  void import("../lib/aim.ts").then((loaded) => { aimModule = loaded; aimPending?.(loaded); aimPending = null; }, () => { aimLoading = false; });
+}
 import { Suspense, forwardRef, lazy, useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Actor } from "@isocan/core";
-import { groundIsPlace, hasGround, isArea, parseUriList } from "@isocan/core";
+import { groundIsPlace, hasGround, isArea, parseUriList, reachHeld } from "@isocan/core";
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
@@ -28,8 +42,28 @@ import { glideToBox } from "../lib/zoomactions.ts";
 import { settleDelay, wasHeld } from "../lib/pensession.ts";
 import { longPress } from "../lib/longpress.ts";
 import { isTyping } from "../lib/keys.ts";
-import { TextComposer } from "./TextComposer.tsx";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
+/**
+ * **The composer arrives with the first composer** (30 Sep 2026).
+ *
+ * It was in every first visit's bytes, and it only ever draws while somebody
+ * is typing onto the canvas — a deliberate gesture with a frame to spare,
+ * the argument the menus and the fan make above and below. Moving it out is
+ * what paid for text colour and named fonts in the first paint: the pickers
+ * live here, and ItemView's share of them is a few hundred bytes.
+ *
+ * Mounted only while a composer is open. Its state is per-composer already
+ * (keyed on which node, where), so remounting between two loses nothing.
+ */
+const TextComposer = lazy(() => import("./TextComposer.tsx").then((m) => ({ default: m.TextComposer })));
+function TextComposerWhenOpen(props: { canvasId: string; actor: Actor }) {
+  const open = useUiStore((s) => s.pendingText !== null);
+  return open ? (
+    <Suspense fallback={null}>
+      <TextComposer {...props} />
+    </Suspense>
+  ) : null;
+}
 import { openContextMenu } from "../lib/contextmenu.ts";
 /**
  * **The menus arrive when a menu is asked for** (#195's budget, not its
@@ -362,6 +396,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     }
 
     function down(e: KeyboardEvent) {
+      withAim((aim) => aim.aimKeys(e)); // ⌘ under a still pointer re-aims the hover
       if (isTyping(e.target)) return;
       if (e.code === "Space" && spacePrevTool.current === null) {
         const ui = useUiStore.getState();
@@ -408,6 +443,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       }
     }
     function up(e: KeyboardEvent) {
+      withAim((aim) => aim.aimKeys(e));
       const held = holdTool.current;
       if (held && e.code === held.code) {
         const ui = useUiStore.getState();
@@ -606,7 +642,10 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
 
   function onPointerDown(e: React.PointerEvent) {
     stopGlide();
-    const isBackground = Boolean(onPlanItem) || e.target === ref.current || (e.target as HTMLElement).classList.contains("world");
+    // A frame's open space reaches here only when the item yielded it: ⌘ is
+    // held (a selection box among its members), or the tool is not Select.
+    const gapIn = frameGap(e.target);
+    const isBackground = Boolean(onPlanItem) || e.target === ref.current || (e.target as HTMLElement).classList.contains("world") || gapIn !== null;
     // Middle-drag or the Hand tool pan. (Space is momentary Hand, so it flows
     // through activeTool too.) The Hand tool pans from anywhere — an item
     // yields its pointer when it is active — so it is not gated on background.
@@ -702,6 +741,8 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         style: ui.lastTextStyle,
         face: ui.lastTextFace,
         paper: ui.lastPaper,
+        colour: ui.lastTextColour,
+        font: ui.lastTextFont,
         oneShot: !borrowing,
       });
       return;
@@ -973,6 +1014,10 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     const ui = useUiStore.getState();
     const additive = e.shiftKey;
     const startWorld = screenToWorld(ui.viewport, e.clientX, e.clientY);
+    // ⌘ over a frame's open space: a selection box among ITS members, so the
+    // scope steps into that frame first (groups-by-hand phase 2).
+    const into = reachHeld(e) && canvas && groupsEnabled() ? groupDropTarget(canvas, startWorld, []) : null;
+    if (into && into.id !== ui.activeGroupId) ui.setActiveGroup(into.id);
     leaveGroupAtPoint(startWorld);
     // Leaving scope clears its child selection before Shift captures a base.
     const baseSelection = additive ? useUiStore.getState().selectedItemIds : [];
@@ -1132,9 +1177,12 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
   // siblings at one z-index, and DOM order is the only order there is. A
   // stable sort keeps the rest as they were. Once per canvas (cleanup RP-9,
   // 27 Sep 2026): it ran, `groupAncestors` and all, on every pan frame.
+  // A stacked group's members are drawn in its pile, not here — except one in
+  // the hand, being ⌘-dragged out of the opened stack (groups-by-hand phase 4).
+  const held = useUiStore((s) => s.groupPreview?.lift);
   const items = useMemo(() => canvas
-    ? Object.values(canvas.items).filter((item) => !presentation?.isolate || presentation.items[item.id]).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
-    : [], [canvas, presentation]);
+    ? Object.values(canvas.items).filter((item) => (!presentation?.isolate || presentation.items[item.id]) && (!groupUnderStack(canvas, item.id) || held?.includes(item.id))).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
+    : [], [canvas, presentation, held]);
 
   return (
     <Follows
@@ -1154,7 +1202,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
           e.stopPropagation(); onPointerDown(e); return;
         }
         hold.current?.down(e);
-        if ((e.target as HTMLElement).closest("a, button, input, textarea, select, [contenteditable=true]")) hold.current?.cancel();
+        if ((e.target as HTMLElement).closest("a, button, [role=button], input, textarea, select, [contenteditable=true]")) hold.current?.cancel();
       }}
       onPointerMoveCapture={(e) => hold.current?.move(e)}
       onPointerUpCapture={(e) => {
@@ -1169,8 +1217,10 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       onPointerMove={(e) => {
         const ui = useUiStore.getState();
         publishCursor(currentPresentation() ? null : screenToWorld(ui.viewport, e.clientX, e.clientY));
+        const at = { clientX: e.clientX, clientY: e.clientY, target: e.target, buttons: e.buttons, pointerType: e.pointerType, metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+        withAim((aim) => aim.aimPointer(at));
       }}
-      onPointerLeave={() => publishCursor(null)}
+      onPointerLeave={() => { publishCursor(null); withAim((aim) => aim.aimNowhere()); }}
       /**
        * **Every finger that goes down has to come back up** (#182 stage 0).
        *
@@ -1230,10 +1280,10 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
           </Suspense>
         )}
         <InkLayer />
-        {canEdit && <TextComposer canvasId={canvasId} actor={actor} />}
+        {canEdit && <TextComposerWhenOpen canvasId={canvasId} actor={actor} />}
       </Follows>
       <CommentLayer canvasId={canvasId} actor={actor} />
-      {!presentation && <CursorLayer />}
+      {!presentation && <CursorLayer actor={actor} />}
       <MarqueeRect />
       <GuideLines />
       {!presentation && <EdgeRadar canvasId={canvasId} />}

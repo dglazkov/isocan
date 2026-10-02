@@ -51,6 +51,9 @@ export interface AdapterSpec {
   harness: string;
   command: string;
   args: string[];
+  /** Pin this adapter spawn to a specific model identifier when the enrolled
+   * agent row carries one (`docs/projects/jetski/design.md`). */
+  model?: string | null | undefined;
   /** Variables the bridge itself needs, laid over the person's environment
    * at spawn — a builtin's knowledge of its own harness, never a person's
    * setting. */
@@ -103,6 +106,63 @@ export const REGISTRY_IDS: Record<string, string> = {
 const BUILTIN_ENV: Record<string, Record<string, string>> = {
   codex: { INITIAL_AGENT_MODE: "agent-full-access", NO_BROWSER: "1" },
 };
+
+/** How a pinned model (`--model <id>`, `docs/projects/jetski/design.md`)
+ * reaches a harness that is known to read one — laid beside `ISOCAN_MODEL`,
+ * which every spawn gets. Only variables the harness itself documents belong
+ * here: a guessed name is a pin that silently does nothing. Codex is not a
+ * variable but a key in its bridge's `CODEX_CONFIG` overrides (see
+ * `codexModelConfig`), and anything else takes the model through `{model}`
+ * in its `acpAdapters` declaration. */
+const HARNESS_MODEL_ENV: Record<string, string> = {
+  "claude-code": "ANTHROPIC_MODEL",
+};
+
+/** Codex's bridge reads its config overrides from `CODEX_CONFIG` (the same
+ * JSON `codexSandboxSpec` extends), and `model` is one of them — so a pin is
+ * merged into whatever overrides the spawn would already carry. */
+function codexModelConfig(model: string, inherited: string | undefined): string {
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(inherited ?? "{}");
+  } catch {
+    // Reported below, in the words `codexSandboxSpec` uses for the same file.
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("CODEX_CONFIG must be a JSON object");
+  }
+  return JSON.stringify({ ...parsed, model });
+}
+
+/** A declared adapter's arguments with `{model}` filled in. With no model
+ * pinned, an argument that names `{model}` is left out rather than handed to
+ * the harness as the literal text — and when it is a bare `{model}` after a
+ * flag (`--model {model}`), the flag goes with it. */
+function modelArgs(args: string[], model: string | null): string[] {
+  if (model) return args.map((arg) => arg.replaceAll("{model}", model));
+  const out: string[] = [];
+  for (const arg of args) {
+    if (!arg.includes("{model}")) {
+      out.push(arg);
+      continue;
+    }
+    if (arg === "{model}" && out.length > 0 && out[out.length - 1]!.startsWith("-")) out.pop();
+  }
+  return out;
+}
+
+/** Whether a pinned model reaches this harness itself, through the doors
+ * `adapterFor` opens: `HARNESS_MODEL_ENV`'s variable, Codex's
+ * `CODEX_CONFIG`, or `{model}` in a declared adapter's arguments. False
+ * means a pin would ride `ISOCAN_MODEL` alone while the harness runs its
+ * own default — which is what `isocan harness --json` says with
+ * `pinsModel`, so nobody compares two "pinned" agents that are not. */
+function modelReaches(raw: HarnessConfig, name: string): boolean {
+  if (Object.hasOwn(HARNESS_MODEL_ENV, name) || name === "codex") return true;
+  const declared = raw.acpAdapters?.[name];
+  const args = typeof declared === "string" ? declared.split(/\s+/) : Array.isArray(declared) ? declared : [];
+  return args.some((arg) => typeof arg === "string" && arg.includes("{model}"));
+}
 
 export interface RegistryBinary {
   archive: string;
@@ -371,6 +431,9 @@ export interface HarnessRow {
   /** Could run here: a declared adapter (deliberate, so believed as is), or
    * a builtin one whose harness is not known to be absent. */
   runnable: boolean;
+  /** Whether `--model` reaches the harness itself (`modelReaches`), rather
+   * than riding `ISOCAN_MODEL` past a harness that runs its own default. */
+  pinsModel: boolean;
   /** The one an agent that named no harness runs on. */
   default: boolean;
 }
@@ -401,14 +464,16 @@ export async function onPath(bin: string, env: NodeJS.ProcessEnv): Promise<boole
 function declaredAdapter(
   raw: HarnessConfig,
   name: string,
+  model?: string | null | undefined,
 ): Omit<AdapterSpec, "harness"> | null {
   const declared = raw.acpAdapters?.[name];
+  const pinned = model?.trim() || null;
   if (typeof declared === "string" && declared.trim()) {
     const [command, ...args] = declared.trim().split(/\s+/);
-    return { command: command!, args };
+    return { command: command!, args: modelArgs(args, pinned) };
   }
   if (Array.isArray(declared) && declared.length > 0 && declared.every((p) => typeof p === "string")) {
-    return { command: declared[0]!, args: declared.slice(1) };
+    return { command: declared[0]!, args: modelArgs(declared.slice(1), pinned) };
   }
   return null;
 }
@@ -429,7 +494,7 @@ export async function scanHarnesses(home: string, env: NodeJS.ProcessEnv = proce
     const installed = await installedProbe(home, name, env);
     const adapter = declaredAdapter(raw, name) ? "config" : (await builtinAdapter(home, name)) ? "builtin" : null;
     const runnable = adapter === "config" || (adapter === "builtin" && installed !== false);
-    rows.push({ name, installed, adapter, runnable, default: false });
+    rows.push({ name, installed, adapter, runnable, pinsModel: modelReaches(raw, name), default: false });
   }
   const runnable = rows.filter((r) => r.runnable);
   const wanted = typeof raw.defaultHarness === "string" ? raw.defaultHarness.trim() : "";
@@ -452,17 +517,33 @@ export async function setDefaultHarness(home: string, name: string): Promise<voi
 /** The adapter for a harness — config first, then builtin — or, for a null
  * harness ("not yet said"), the machine's default. Null when nothing can
  * answer; the caller owes a refusal, and `noDefaultLine` words the null
- * case. */
+ * case. A pinned `model` always rides `ISOCAN_MODEL`, and reaches the harness
+ * itself only where it has a known door: `HARNESS_MODEL_ENV`'s variable,
+ * `model` in Codex's `CODEX_CONFIG`, or `{model}` in a declared adapter's
+ * arguments. Anywhere else the harness runs its own default. */
 export async function adapterFor(
   home: string,
   harness: string | null,
   env: NodeJS.ProcessEnv = process.env,
+  model?: string | null | undefined,
 ): Promise<AdapterSpec | null> {
   const wanted = harness ?? (await scanHarnesses(home, env)).default?.name ?? null;
   if (!wanted) return null;
   const raw = await readConfigFile<HarnessConfig>(home);
-  const spec = declaredAdapter(raw, wanted) ?? (await builtinAdapter(home, wanted)) ?? null;
-  return spec ? { harness: wanted, ...spec } : null;
+  const pinned = model?.trim() || null;
+  const spec = declaredAdapter(raw, wanted, pinned) ?? (await builtinAdapter(home, wanted)) ?? null;
+  if (!spec) return null;
+  if (!pinned) return { harness: wanted, ...spec };
+  const modelVar = Object.hasOwn(HARNESS_MODEL_ENV, wanted) ? HARNESS_MODEL_ENV[wanted] : undefined;
+  const modelEnv: Record<string, string> = {
+    ...(spec.env ?? {}),
+    ISOCAN_MODEL: pinned,
+    ...(modelVar ? { [modelVar]: pinned } : {}),
+    ...(wanted === "codex"
+      ? { CODEX_CONFIG: codexModelConfig(pinned, spec.env?.CODEX_CONFIG ?? env.CODEX_CONFIG) }
+      : {}),
+  };
+  return { harness: wanted, ...spec, model: pinned, env: modelEnv };
 }
 
 /** One line for the rc's start, saying what an unnamed harness means here. */

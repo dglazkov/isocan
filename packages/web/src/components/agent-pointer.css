@@ -1,0 +1,21 @@
+/* The agent's pointer, as a pill that shows it — on an agent's card and its
+   row. The row's quiet pill (`.wb-watch`), because it is a setting, not a call
+   to act. Ships with the lazy chunk that draws it, not with the first paint. */
+.agent-pointer {
+  align-self: flex-start; flex: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  font: inherit; font-size: 11px; cursor: pointer;
+  padding: 1px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-muted);
+}
+.agent-pointer:hover { color: var(--ink); border-color: var(--accent); }
+/* Somebody else's agent: the pointer is shown, the pill does not pretend to
+   be a control you can use — a click says whose choice it is. */
+.agent-pointer.not-yours { border-style: dashed; cursor: help; }
+.agent-pointer.not-yours:hover { border-color: var(--line); color: var(--ink-muted); }
+.agent-pointer-glyph { font-size: 13px; line-height: 1; }
+.agent-pointer-said { font-style: normal; font-size: 11px; color: var(--ink-soft); }
+/* The tray also lives on a module's page and in the workbench — covers that
+   sit above every popover — so this one picker is lifted to the modal layer,
+   or it opens behind the row that asked for it. */
+.react-picker.over-covers { z-index: var(--z-modal); }

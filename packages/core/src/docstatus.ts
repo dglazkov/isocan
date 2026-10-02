@@ -77,6 +77,20 @@ interface DocStatus {
 const isState = (s: string): s is DocState => (DOC_STATES as readonly string[]).includes(s);
 
 /**
+ * The `key: value` lines of a front matter block, quotes stripped. ONE reader:
+ * status, and the Loop findings beside it, both go through this, so two files
+ * that say the same thing in the same way are read the same way.
+ */
+export function frontMatterFields(front: string): Map<string, string> {
+  const kv = new Map<string, string>();
+  for (const line of front.split(/\r?\n/)) {
+    const m = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(line);
+    if (m) kv.set(m[1]!, m[2]!.trim().replace(/^["']|["']$/g, ""));
+  }
+  return kv;
+}
+
+/**
  * Read the front matter, or say there is none. A doc without it is not
  * malformed — it is untriaged, which is `open`, and the roadmap counts it.
  */
@@ -105,12 +119,7 @@ export function docStatus(text: string): DocStatus {
 function frontFields(text: string): Map<string, string> | null {
   const split = splitFrontMatter(text);
   if (!split) return null;
-  const kv = new Map<string, string>();
-  for (const line of split.front.split(/\r?\n/)) {
-    const m = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(line);
-    if (m) kv.set(m[1]!, m[2]!.trim().replace(/^["']|["']$/g, ""));
-  }
-  return kv;
+  return frontMatterFields(split.front);
 }
 
 // A number, or nothing: "#134" and "134" both mean issue 134, and a word there

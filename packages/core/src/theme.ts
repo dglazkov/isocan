@@ -461,7 +461,7 @@ export const CURSOR_PROP = "cursor";
 
 /** The shapes this build can draw. Not a string, for `THEMES`' reason: a
  *  canvas wearing a name nothing can draw is a pointer that vanishes. */
-export const CURSORS = ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep"] as const;
+export const CURSORS = ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep", "cricket"] as const;
 
 /** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
  *  reason: a name nothing can draw is a pointer that vanishes. */
@@ -493,6 +493,8 @@ export function cursorLabel(cursor: CanvasCursor): string {
       return "Crescent";
     case "sheep":
       return "Sheep";
+    case "cricket":
+      return "Cricket bat";
   }
 }
 

@@ -18,7 +18,7 @@
  * entry chunk (the `arrow.ts` lesson). So would the one top-level call in the
  * file losing its `@__PURE__` — see `ALL_EMOJI`.
  *
- * The set is ~580 marks across fourteen groups, each with the words somebody
+ * The set is ~600 marks across fourteen groups, each with the words somebody
  * would actually type to find it. Keywords are lowercase and matched as
  * PREFIXES of whole words, so "fi" finds 🔥 (fire) and "re" finds ❤️ (red
  * heart) without "ire" matching either — substring search on a set this size
@@ -34,7 +34,7 @@
  * country name and its two-letter code, because somebody reaching for theirs
  * types either one.
  *
- * It is still curation, not completeness — ~580 of Unicode's ~1,900, chosen
+ * It is still curation, not completeness — ~600 of Unicode's ~1,900, chosen
  * so that every one of them has words worth searching. A full dataset is the
  * 200–800KB this file exists not to ship.
  *
@@ -523,8 +523,28 @@ export const EMOJI_GROUPS: readonly EmojiGroup[] = [
       e("🏐", "volleyball", "ball", "sport"),
       e("🏉", "rugby", "ball", "sport"),
       e("🎱", "pool", "8 ball", "billiards", "snooker"),
-      e("🏓", "table tennis", "ping pong", "sport"),
+      // Unicode has no pickleball, so the paddle answers for it — asked for by
+      // name (1 Oct 2026), and a search that finds nothing reads as broken.
+      e("🏓", "table tennis", "ping pong", "pickleball", "paddle", "sport"),
       e("🏸", "badminton", "sport"),
+      e("🏏", "cricket", "bat", "ball", "sport"),
+      e("🥎", "softball", "ball", "sport"),
+      e("🏑", "field hockey", "hockey", "stick", "sport"),
+      e("🏒", "ice hockey", "hockey", "stick", "puck", "sport"),
+      e("🥍", "lacrosse", "stick", "ball", "sport"),
+      e("🥏", "flying disc", "frisbee", "ultimate", "sport"),
+      e("🥌", "curling", "stone", "winter", "sport"),
+      e("🏌️", "golfer", "golf", "swing", "sport"),
+      e("🏄", "surfing", "surf", "wave", "beach"),
+      e("🚣", "rowing", "row", "boat", "crew"),
+      e("🤺", "fencing", "sword", "duel", "sport"),
+      e("🤾", "handball", "throw", "sport"),
+      e("🏇", "horse racing", "jockey", "race"),
+      e("🤿", "diving", "snorkel", "scuba", "dive"),
+      e("🛼", "roller skate", "skating", "roller derby"),
+      e("🛷", "sled", "sledge", "winter", "snow"),
+      e("🪁", "kite", "fly", "wind"),
+      e("🪃", "boomerang", "return", "throw"),
       e("🥅", "goal", "net", "sport", "score"),
       e("⛳", "golf", "hole", "sport"),
       e("🏹", "bow and arrow", "archery", "aim", "target"),

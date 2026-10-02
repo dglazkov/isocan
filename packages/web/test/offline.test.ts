@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import type {
   Actor,
   LogEntry,
@@ -152,8 +153,19 @@ function stubGlobals(): void {
   (globalThis as Record<string, unknown>).fetch = fakeFetch;
 }
 
-async function fakeFetch(url: string, init?: { body?: string }): Promise<any> {
+async function fakeFetch(url: string, init?: { body?: any }): Promise<any> {
   if (!online) throw new TypeError("Failed to fetch"); // what a browser with no route throws
+  if (String(url).endsWith("/blobs")) {
+    const text = typeof init?.body === "string" ? init.body : await (init?.body as Blob).text();
+    const bytes = Buffer.from(text, "utf8");
+    const blobHash = createHash("sha256").update(bytes).digest("hex");
+    events.push(`blob:${blobHash}`);
+    return {
+      ok: true,
+      status: 201,
+      json: async () => ({ blobHash, size: bytes.byteLength }),
+    };
+  }
   const body = init?.body ? JSON.parse(init.body) : null;
   if (String(url).endsWith("/api/ops")) {
     posted.push(body);
@@ -1174,3 +1186,107 @@ it.each([
   expect(FakeSocket.opened).toHaveLength(sockets);
   expect(attempts).toHaveLength(1);
 });
+
+it("places a drawing offline with its content-addressed SVG staged locally, survives a reload, and uploads the blob before the op on reconnect", async () => {
+  const { useCanvasStore, disconnect } = await store();
+  const { blobUrl, readBlobText } = await api();
+  const { addDrawing } = await import("../src/lib/upload.ts");
+  await connected(2);
+  await goOffline();
+
+  const itemId = await addDrawing("prj_1", priya, [
+    { color: "#e02424", width: 6, points: [{ x: 10, y: 20 }, { x: 110, y: 120 }] },
+  ]);
+  const item = useCanvasStore.getState().canvas?.items[itemId];
+  expect(item).toMatchObject({
+    id: itemId,
+    title: "Sketch",
+    properties: { kind: "drawing", ink: "red" },
+  });
+  const blobHash = item!.versions[0]!.blobHash;
+  expect(blobUrl("prj_1", blobHash)).toMatch(/^data:image\/svg\+xml;utf8,/);
+  expect(await readBlobText("prj_1", blobHash)).toContain("<svg");
+  expect(disk.get("prj_1")!.queue[0]!.stagedBlob).toMatchObject({
+    blobHash,
+    mimeType: "image/svg+xml",
+    filename: "sketch.svg",
+  });
+
+  // Reload while still offline: the restored replica re-stages the SVG so it still renders.
+  disconnect();
+  vi.resetModules();
+  const reloadedStore = await store();
+  const reloadedApi = await api();
+  reloadedApi.onOfflineWrite(reloadedStore.queueOfflineWrite, reloadedStore.queuedWriteOrigin);
+  const { setReplicaStore } = await import("../src/lib/replica.ts");
+  setReplicaStore(diskStore());
+  reloadedStore.connectToCanvas("prj_1", priya);
+  await settle();
+  expect(reloadedStore.useCanvasStore.getState().canvas?.items[itemId]).toBeDefined();
+  expect(reloadedApi.blobUrl("prj_1", blobHash)).toMatch(/^data:image\/svg\+xml;utf8,/);
+
+  // Reconnect: the staged SVG blob goes up BEFORE the item.add op that names its hash.
+  events = [];
+  seqs = [3];
+  await comeBack();
+  await settle();
+  const opId = posted[0]!.opId;
+  expect(events.slice(0, 3)).toEqual([
+    `blob:${blobHash}`,
+    `post:${opId}`,
+    expect.stringMatching(/^dial:/),
+  ]);
+  FakeSocket.last.deliver({
+    type: "op-applied",
+    entry: { seq: 3, envelope: { ...posted[0], id: opId, ts: "2026-08-24T00:00:00Z" }, inverse: null },
+  });
+  await settle();
+  expect(reloadedStore.useCanvasStore.getState().queue).toEqual([]);
+  expect(reloadedApi.blobUrl("prj_1", blobHash)).toBe(`/api/projects/prj_1/blobs/${blobHash}`);
+});
+
+it("creates and revises a text note offline with its Markdown blob staged locally, and uploads the blobs before the ops on reconnect", async () => {
+  const { useCanvasStore } = await store();
+  const { readBlobText } = await api();
+  const { addTextNode, reviseTextNode } = await import("../src/lib/text.ts");
+  await connected(2);
+  await goOffline();
+
+  const itemId = await addTextNode("prj_1", priya, "Acme offline note", { x: 40, y: 60, chosen: true });
+  const created = useCanvasStore.getState().canvas?.items[itemId];
+  expect(created).toMatchObject({
+    id: itemId,
+    title: "Acme offline note",
+    properties: { kind: "text" },
+  });
+  const firstHash = created!.versions[0]!.blobHash;
+  expect(await readBlobText("prj_1", firstHash)).toBe("Acme offline note");
+
+  await reviseTextNode("prj_1", priya, itemId, "Acme revised offline note", { width: 200, height: 80 }, true, "heading", "serif", "yellow");
+  const revised = useCanvasStore.getState().canvas?.items[itemId];
+  expect(revised).toMatchObject({
+    id: itemId,
+    title: "Acme revised offline note",
+    width: 200,
+    height: 80,
+    properties: { kind: "text", textStyle: "heading", textFace: "serif", paper: "yellow" },
+  });
+  const secondHash = revised!.versions[1]!.blobHash;
+  expect(await readBlobText("prj_1", secondHash)).toBe("Acme revised offline note");
+  expect(useCanvasStore.getState().queue).toHaveLength(4);
+
+  events = [];
+  seqs = [3, 4, 5, 6];
+  await comeBack();
+  await settle();
+  expect(events.slice(0, 6)).toEqual([
+    `blob:${firstHash}`,
+    `post:${posted[0]!.opId}`,
+    `blob:${secondHash}`,
+    `post:${posted[1]!.opId}`,
+    `post:${posted[2]!.opId}`,
+    `post:${posted[3]!.opId}`,
+  ]);
+});
+
+

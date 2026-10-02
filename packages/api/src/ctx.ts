@@ -296,7 +296,8 @@ export async function resolveCtx(options: CtxOptions = {}): Promise<Ctx> {
     get actor(): Actor {
       if (!actor) {
         throw new Error(
-          'no identity yet — `isocan identity --name "Your Name" --session` names this agent',
+          'no identity yet — `isocan identity --name "Your Name" --session` names this agent, ' +
+            "or set ISOCAN_BADGE_UPSTREAM=1 with ISOCAN_ACTOR_ID and ISOCAN_ACTOR_NAME when an upstream proxy holds your badge",
         );
       }
       return actor;

@@ -25,6 +25,8 @@ export * from "./placement.ts";
 export * from "./area.ts";
 export * from "./canvas-group-types.ts";
 export * from "./canvas-groups.ts";
+export * from "./group-aim.ts";
+export * from "./group-stack.ts";
 export * from "./canvas-scope.ts";
 export * from "./canvas-group-create.ts";
 export * from "./canvasitem.ts";
@@ -79,6 +81,7 @@ export { DESIGN_SECTIONS, DESIGN_SURFACES, canonicalSection, designSurface, pars
 export type { DesignTypography, DesignTokens, DesignDoc, DesignSurface } from "./designmd.ts";
 export * from "./contrast.ts";
 export * from "./colour.ts";
+export * from "./textcolour.ts";
 export * from "./shortcut.ts";
 export * from "./designcheck.ts";
 export * from "./tokens.ts";
@@ -128,6 +131,7 @@ export * from "./lens.ts";
 export * from "./export.ts";
 
 export * from "./text-attention.ts";
+export * from "./live-drag.ts";
 
 export * from "./text-anchor.ts";
 export { markdownResource, markdownTargetOffCanvas, SOURCE_PATH_PROP } from "./markdown-resources.ts";
@@ -139,3 +143,4 @@ export type * from "./design-partner.ts";
 export type * from "./questionnaire.ts";
 export type * from "./design-request.ts";
 export type * from "./design-record.ts";
+export * from "./loop.ts";

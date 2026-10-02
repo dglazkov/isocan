@@ -86,7 +86,7 @@ only way "removed" can mean removed.
 The shell owns the slots and the modules fill them. A slot is a place in the
 shell's tree where it maps over `MODULES` and mounts what each contributes,
 handing it **facts as props, never stores**: the module's component gets the
-canvas and the live drag, not the zustand hooks. That keeps the dependency
+canvas with the live gesture already folded in, not the zustand hooks. That keeps the dependency
 pointing one way — a module knows core and React; it does not know the shell.
 
 Slots, in the order they are needed:

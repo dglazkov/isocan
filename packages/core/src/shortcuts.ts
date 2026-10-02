@@ -69,7 +69,9 @@ export const SHORTCUTS: Shortcut[] = [
 
   // ---- Items ----
   { keys: ["⌘G"], does: "Group selection", group: "Items", note: "Wrap selected roots in a named frame, preserving their arrangement" },
-  { keys: ["⌘⇧G"], does: "Ungroup", group: "Items", note: "Dissolve the selected group frames and preserve their members" },
+  { keys: ["⌘⇧G"], does: "Ungroup", group: "Items", note: "Dissolve the selected group frames and preserve their members. On a member instead of a group, take it out of its group" },
+  { keys: ["⌘-click"], does: "Select one item inside a group", group: "Items", note: "Reaches past the group to the item under the pointer, at any depth, and steps into its group. Hold ⌘ to see which item before you press" },
+  { keys: ["⌘-drag"], does: "Drag one item in or out of its group", group: "Items", note: "It lands where the pointer is — in another group, or out on the canvas — and the label says which before you let go. A plain drag never takes an item out: its group grows to keep it" },
   { keys: ["⇧F10"], does: "Open selection menu", group: "Items", note: "The Menu key also opens it; arrows move and Enter chooses" },
   { keys: ["←", "→", "↑", "↓"], does: "Nudge the selection", group: "Items" },
   { keys: ["⇧-drag"], does: "Snap harder to the guides", group: "Items", note: "Blue says aligned; purple says the gaps match" },

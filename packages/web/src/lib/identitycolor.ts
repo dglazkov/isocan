@@ -29,7 +29,13 @@ export async function setActorColor(actor: Actor, color: string | null): Promise
  * your screen on your next load rather than instantly. The local echo below
  * is what makes YOUR own face change under your hand.
  */
-export async function setActorMark(actor: Actor, mark: string | null): Promise<void> {
-  await sendOp(null, actor, { type: "actor.setMark", actorId: actor.id, mark });
-  rememberMark(actor.id, mark);
+export async function setActorMark(
+  actor: Actor,
+  mark: string | null,
+  /** Whose mark — yours by default, or an agent of yours (its pointer). The
+   *  home decides whether you may, by the same rule `isocan agent mark` meets. */
+  of: { id: string } = actor,
+): Promise<void> {
+  await sendOp(null, actor, { type: "actor.setMark", actorId: of.id, mark });
+  rememberMark(of.id, mark);
 }

@@ -338,3 +338,382 @@ export function homeOrStub(home: Answerer, stub: Answerer, onFallback: (error: u
     },
   };
 }
+
+// ---------- entropy gating & PriorityGate (wireframes wave 2, design §12)
+
+/** Default Shannon entropy ceiling in bits above which a root decision asks for disambiguation. */
+export const DEFAULT_ENTROPY_GATE = 1.0;
+
+/** Default minimum top-option probability below which a root decision asks for disambiguation. */
+export const DEFAULT_CONFIDENCE_FLOOR = 0.5;
+
+/**
+ * Compute the Shannon entropy in bits ($H = -\sum p_i \log_2 p_i$) of a
+ * probability distribution. Normalizes positive entries so slight rounding in
+ * Jev's returned probabilities does not skew the bit count; returns `0` for
+ * empty, all-zero, or single-option distributions.
+ */
+export function entropyBits(probabilities: Record<string, number> | readonly number[]): number {
+  const raw = Array.isArray(probabilities) ? probabilities : Object.values(probabilities);
+  const pos = raw.filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+  if (pos.length <= 1) return 0;
+  const total = pos.reduce((s, v) => s + v, 0);
+  if (total <= 0) return 0;
+  let h = 0;
+  for (const v of pos) {
+    const p = v / total;
+    if (p > 0 && p < 1) h -= p * Math.log2(p);
+  }
+  return Math.round(h * 1000) / 1000;
+}
+
+/** One candidate option surfaced by `gatedChoice`, ordered most likely first. */
+export interface GatedChoiceOption {
+  /** Option identifier from the question's criteria. */
+  value: string;
+  /** Probability assigned by the answerer (`0..1`). */
+  p: number;
+}
+
+/** Options controlling `gatedChoice` disambiguation thresholds and overrides. */
+export interface GatedChoiceOptions {
+  /** Shannon entropy ceiling in bits (default `DEFAULT_ENTROPY_GATE` = `1.0`). */
+  maxEntropyBits?: number;
+  /** Minimum top-option probability (default `DEFAULT_CONFIDENCE_FLOOR` = `0.5`). */
+  minConfidence?: number;
+  /** Maximum number of top candidate options to surface on an ask (default `3`). */
+  topK?: number;
+  /** Pinned value from `WireSpec.pinned` or `--pin key=value`; bypasses the gate when valid. */
+  pinned?: string;
+  /** When `true` (`--no-ask`), never pauses for `/ask`; resolves to argmax even when uncertain. */
+  noAsk?: boolean;
+}
+
+/** The outcome of evaluating a Jev answer through `gatedChoice`. */
+export interface GatedChoiceResult {
+  /** `"pinned"` when `opts.pinned` matched; `"ask"` when entropy exceeds `maxEntropyBits` or top `p < minConfidence` (unless `noAsk`); otherwise `"confident"`. */
+  status: "confident" | "ask" | "pinned";
+  /** Chosen or pinned option value. */
+  value: string;
+  /** Probability of `value` in the answer's distribution. */
+  p: number;
+  /** Shannon entropy of the answer's distribution in bits. */
+  entropy: number;
+  /** Top `k` options sorted by descending probability. */
+  options: GatedChoiceOption[];
+  /** True when the distribution itself was uncertain (`entropy > maxEntropyBits` or `p < minConfidence`). */
+  uncertain: boolean;
+}
+
+/**
+ * Evaluate a Jev answer against an entropy and confidence gate.
+ * When `opts.pinned` names a valid option, returns `status: "pinned"` with
+ * that option immediately. Otherwise, if `entropy > maxEntropyBits` or
+ * `p < minConfidence`, returns `status: "ask"` (or `"confident"` when
+ * `opts.noAsk` is true) with the top `topK` options and their probabilities.
+ */
+export function gatedChoice(q: JevQuestion, a: JevAnswer, opts: GatedChoiceOptions = {}): GatedChoiceResult {
+  const { value, p, distribution } = chosenOption(q, a);
+  const entropy = entropyBits(distribution);
+  const maxEntropy = opts.maxEntropyBits ?? DEFAULT_ENTROPY_GATE;
+  const minConf = opts.minConfidence ?? DEFAULT_CONFIDENCE_FLOOR;
+  const topK = opts.topK ?? 3;
+  const options = Object.entries(distribution)
+    .map(([k, prob]) => ({ value: k, p: Math.round(prob * 1000) / 1000 }))
+    .sort((x, y) => y.p - x.p || x.value.localeCompare(y.value))
+    .slice(0, topK);
+  const uncertain = entropy > maxEntropy || p < minConf;
+  if (opts.pinned !== undefined && Object.prototype.hasOwnProperty.call(distribution, opts.pinned)) {
+    const pinnedP = Math.round((distribution[opts.pinned] ?? 0) * 1000) / 1000;
+    return { status: "pinned", value: opts.pinned, p: pinnedP, entropy, options, uncertain };
+  }
+  if (uncertain && !opts.noAsk) {
+    return { status: "ask", value, p: Math.round(p * 1000) / 1000, entropy, options, uncertain: true };
+  }
+  return { status: "confident", value, p: Math.round(p * 1000) / 1000, entropy, options, uncertain };
+}
+
+/** Priority lane for `PriorityGate`: `"high"` preempts queued `"normal"` work. */
+export type JevPriority = "high" | "normal";
+
+/** Configuration for `PriorityGate`. */
+export interface PriorityGateOptions {
+  /** Maximum concurrent in-flight calls (default `3`). */
+  concurrency?: number;
+  /** Alias for `concurrency` (default `3`). */
+  maxConcurrent?: number;
+  /** Maximum retries on transient `429` or `529` errors (default `3`). */
+  maxRetries?: number;
+  /** Backoff delays in ms between retries (default `[200, 500, 1000]`). */
+  backoffMs?: readonly number[];
+  /** Base backoff delay in ms when `backoffMs` is not given. */
+  baseDelayMs?: number;
+  /** Custom sleep function for deterministic tests. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+function isTransientJevError(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (status === 429 || status === 529) return true;
+  const msg = error instanceof Error ? error.message : String(error);
+  return /\b(?:429|529)\b/.test(msg);
+}
+
+/**
+ * Two-lane (`high` / `normal`) concurrency semaphore and retry wrapper around
+ * an `Answerer`. Interactive composer, edit, and `/ask` calls run on the
+ * `"high"` lane and always dequeue ahead of queued `"normal"` background work
+ * (such as class polish).
+ */
+export class PriorityGate {
+  readonly inner: Answerer | undefined;
+  readonly concurrency: number;
+  readonly maxRetries: number;
+  private readonly backoffMs: readonly number[];
+  private readonly sleep: (ms: number) => Promise<void>;
+  private active = 0;
+  private readonly highQueue: Array<() => void> = [];
+  private readonly normalQueue: Array<() => void> = [];
+
+  constructor(innerOrOpts?: Answerer | PriorityGateOptions, maybeOpts: PriorityGateOptions = {}) {
+    const isAnswerer = innerOrOpts !== undefined && typeof (innerOrOpts as Answerer).answer === "function";
+    this.inner = isAnswerer ? (innerOrOpts as Answerer) : undefined;
+    const opts = isAnswerer ? maybeOpts : ((innerOrOpts as PriorityGateOptions | undefined) ?? {});
+    this.concurrency = Math.max(1, opts.concurrency ?? opts.maxConcurrent ?? 3);
+    this.maxRetries = Math.max(0, opts.maxRetries ?? 3);
+    const base = opts.baseDelayMs;
+    this.backoffMs = opts.backoffMs ?? (base !== undefined ? [base, base * 2, base * 4] : [200, 500, 1000]);
+    this.sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  }
+
+  /** Number of currently in-flight calls across both lanes. */
+  get inFlight(): number {
+    return this.active;
+  }
+
+  /** Number of queued calls waiting for a slot (`high` + `normal`). */
+  get pending(): number {
+    return this.highQueue.length + this.normalQueue.length;
+  }
+
+  private acquire(priority: JevPriority): Promise<void> {
+    if (this.active < this.concurrency) {
+      this.active++;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      const task = () => {
+        this.active++;
+        resolve();
+      };
+      if (priority === "high") this.highQueue.push(task);
+      else this.normalQueue.push(task);
+    });
+  }
+
+  private release(): void {
+    this.active--;
+    const next = this.highQueue.shift() ?? this.normalQueue.shift();
+    if (next) next();
+  }
+
+  /** Run an arbitrary async operation through the priority semaphore with transient retry. */
+  async run<T>(
+    first: JevPriority | (() => Promise<T>),
+    second: (() => Promise<T>) | JevPriority = "high",
+  ): Promise<T> {
+    const priority: JevPriority = typeof first === "string" ? first : (second as JevPriority);
+    const fn: () => Promise<T> = typeof first === "function" ? first : (second as () => Promise<T>);
+    await this.acquire(priority);
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await fn();
+        } catch (error) {
+          if (isTransientJevError(error) && attempt < this.maxRetries) {
+            const wait = this.backoffMs[Math.min(attempt, this.backoffMs.length - 1)] ?? 200;
+            await this.sleep(wait);
+            continue;
+          }
+          throw error;
+        }
+      }
+    } finally {
+      this.release();
+    }
+  }
+
+  /** Answer a `JevRequest` at the given priority (`"high"` by default). */
+  answer(request: JevRequest, priority: JevPriority = "high"): Promise<Answered> {
+    if (!this.inner) throw new Error("PriorityGate has no default inner Answerer — pass one to constructor or use asAnswerer(answerer)");
+    return this.run(priority, () => this.inner!.answer(request));
+  }
+
+  /** View this gate as a standard `Answerer` bound to the given priority lane. */
+  asAnswerer(first: Answerer | JevPriority = "high", second: JevPriority = "high"): Answerer {
+    const target = typeof first === "string" ? this.inner : first;
+    const priority: JevPriority = typeof first === "string" ? first : second;
+    if (!target) throw new Error("PriorityGate.asAnswerer requires an Answerer");
+    const self = this;
+    return {
+      get name() {
+        return target.name;
+      },
+      answer(request: JevRequest) {
+        return self.run(priority, () => target.answer(request));
+      },
+    };
+  }
+}
+
+// ---------- structured text generation seam (wire copy --ai, wire name)
+
+/** Minimal JSON Schema subset used for structured text generation (`wire copy --ai`, `wire name`). */
+export interface JsonSchema {
+  type: "object" | "array" | "string" | "number" | "boolean";
+  description?: string;
+  properties?: Record<string, JsonSchema>;
+  required?: readonly string[];
+  items?: JsonSchema;
+  minItems?: number;
+  maxItems?: number;
+  enum?: readonly string[];
+  additionalProperties?: boolean | JsonSchema;
+}
+
+/**
+ * Vendor-neutral structured text generator seam.
+ *
+ * Implementations:
+ * - `stubTextGenerator(seed)`: deterministic offline generator that synthesizes valid JSON conforming to `schema`.
+ * - `httpTextGenerator(opts)`: standard HTTPS JSON-schema completion (`ISOCAN_TEXT_API_KEY` / `ISOCAN_TEXT_MODEL`, zero SDK dependencies).
+ */
+export interface TextGenerator {
+  readonly name: string;
+  generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T>;
+}
+
+/** Options for `httpTextGenerator`. */
+export interface HttpTextGeneratorOptions {
+  apiKey?: string;
+  model?: string;
+  endpoint?: string;
+  fetch?: typeof globalThis.fetch;
+}
+
+const STOP_WORDS = new Set([
+  "the", "and", "for", "with", "that", "this", "from", "into", "your", "app", "flow",
+  "screen", "screens", "wireframe", "design", "generate", "write", "copy", "json", "schema",
+]);
+
+function promptNouns(prompt: string): string[] {
+  const words = prompt
+    .replace(/[^a-zA-Z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w.toLowerCase()));
+  if (words.length === 0) return ["Acme", "Workspace", "Operations", "Status"];
+  const unique: string[] = [];
+  for (const w of words) {
+    const cap = w[0]!.toUpperCase() + w.slice(1);
+    if (!unique.includes(cap)) unique.push(cap);
+  }
+  return unique.length > 0 ? unique : ["Acme", "Workspace"];
+}
+
+function synthesizeFromSchema(schema: JsonSchema, prompt: string, path: string, seed: number): unknown {
+  const h = hash(`${seed}:${prompt}:${path}:${schema.description ?? ""}`);
+  if (schema.enum && schema.enum.length > 0) {
+    return schema.enum[h % schema.enum.length]!;
+  }
+  switch (schema.type) {
+    case "boolean":
+      return (h & 1) === 0;
+    case "number":
+      return (h % 90) + 10;
+    case "array": {
+      const len = schema.minItems ?? schema.maxItems ?? 3;
+      const itemSchema = schema.items ?? { type: "string" };
+      return Array.from({ length: len }, (_, i) => synthesizeFromSchema(itemSchema, prompt, `${path}.${i}`, seed));
+    }
+    case "object": {
+      const out: Record<string, unknown> = {};
+      for (const [k, propSchema] of Object.entries(schema.properties ?? {})) {
+        out[k] = synthesizeFromSchema(propSchema, prompt, path ? `${path}.${k}` : k, seed);
+      }
+      return out;
+    }
+    case "string":
+    default: {
+      const nouns = promptNouns(prompt);
+      const a = nouns[h % nouns.length]!;
+      const b = nouns[(h >>> 3) % nouns.length]!;
+      const leaf = path.split(".").pop() ?? path;
+      if (leaf === "brand") return `${a} ${b === a ? "Studio" : b}`;
+      if (leaf === "title" || leaf === "heading") return a === b ? `${a} Overview` : `${a} ${b}`;
+      if (leaf === "bar") return a;
+      if (leaf === "value") return `${(h % 900) + 100}`;
+      if (leaf === "delta") return `+${(h % 18) + 2}%`;
+      if (leaf === "status") return ["Active", "Scheduled", "Completed", "In review"][h % 4]!;
+      if (leaf === "label") return a;
+      return `${a} ${b.toLowerCase()} ${(h % 90) + 10}`;
+    }
+  }
+}
+
+/**
+ * Deterministic, offline `TextGenerator` that synthesizes schema-valid JSON
+ * from the prompt and schema structure without network calls.
+ */
+export function stubTextGenerator(seed = 1): TextGenerator {
+  return {
+    name: `stub-text (seed ${seed})`,
+    async generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T> {
+      return synthesizeFromSchema(schema, prompt, "", seed) as T;
+    },
+  };
+}
+
+/**
+ * Standard HTTPS JSON-schema `TextGenerator` using `fetch` with zero SDK dependencies.
+ * Reads `ISOCAN_TEXT_API_KEY` and `ISOCAN_TEXT_MODEL` when not passed in `opts`.
+ */
+export function httpTextGenerator(opts: HttpTextGeneratorOptions = {}): TextGenerator {
+  const apiKey = opts.apiKey ?? process.env.ISOCAN_TEXT_API_KEY ?? "";
+  const model = opts.model ?? process.env.ISOCAN_TEXT_MODEL ?? "gpt-4o-mini";
+  const endpoint = opts.endpoint ?? process.env.ISOCAN_TEXT_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
+  const fetchFn = opts.fetch ?? globalThis.fetch;
+
+  return {
+    name: model,
+    async generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T> {
+      if (!apiKey) throw new Error("httpTextGenerator requires apiKey or ISOCAN_TEXT_API_KEY");
+      const res = await fetchFn(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: "Return only valid JSON conforming to the provided JSON schema." },
+            { role: "user", content: prompt },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: { name: "wire_response", strict: true, schema },
+          },
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`TextGenerator HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      }
+      const body = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const text = body.choices?.[0]?.message?.content;
+      if (!text) throw new Error("TextGenerator returned an empty response");
+      return JSON.parse(text) as T;
+    },
+  };
+}

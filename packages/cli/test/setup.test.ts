@@ -126,4 +126,22 @@ describe("isocan setup", () => {
     const [canvas] = await canvases();
     expect(canvas!.createdBy.name).toBe("Nico");
   });
+
+  it("links the Jetski plugin with --jetski, without touching ~/.gemini unless asked", async () => {
+    const jetskiTarget = path.join(home, "plugins", "isocan");
+    const done = await runCli(["setup", "--jetski", "--no-install", "--no-open", "--json"], {
+      cwd: work,
+      env: {
+        ...process.env,
+        ISOCAN_HOME: home,
+        ISOCAN_PORT: String(port),
+        ISOCAN_JETSKI_PLUGIN_DIR: jetskiTarget,
+      },
+    });
+    expect(done.code).toBe(0);
+    const report = JSON.parse(done.stdout) as Record<string, string>;
+    expect(report.jetski).toContain(`installed: ${jetskiTarget}`);
+    expect((await fs.lstat(jetskiTarget)).isSymbolicLink()).toBe(true);
+    expect(await fs.readFile(path.join(jetskiTarget, "plugin.json"), "utf8")).toContain('"isocan"');
+  });
 });

@@ -62,12 +62,12 @@ export function makeComment(body: string): NewComment {
  * threads store an offset from their item's origin, so pins follow drags.
  */
 import { usePresentation } from "../lib/canvasPresentation.ts";
-import { presentedOffset } from "../lib/presentation.ts";
+import { presentedOffset, previewedCanvas } from "../lib/presentation.ts";
 
 export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   const viewport = useUiStore((s) => s.viewport);
-  const drag = useUiStore((s) => s.drag);
+  const gesture = useUiStore((s) => s.drag ?? s.groupPreview);
   const openThreadId = useUiStore((s) => s.openThreadId);
   const pendingComment = useUiStore((s) => s.pendingComment);
   const presentation = usePresentation();
@@ -79,17 +79,15 @@ export function CommentLayer({ canvasId, actor }: { canvasId: string; actor: Act
   const canEdit = useCanEdit();
 
   if (!canvas) return null;
+  const shown = previewedCanvas(canvas, gesture);
 
   function pinWorldPos(thread: CommentThread): { x: number; y: number } {
     const view = textViews[thread.id];
     const positioned = thread.textAnchor && view?.x !== undefined && view.y !== undefined ? { ...thread, x: view.x, y: view.y } : thread;
-    const anchor = positioned.anchorItemId ? canvas!.items[positioned.anchorItemId] : undefined;
-    const world = anchor ? presentedOffset(anchor, presentation, positioned) : threadWorldPos(canvas!, positioned);
-    // While a drag is live the item has not moved in the replica yet, so the
-    // pin rides the gesture's delta to stay glued to it.
-    const riding =
-      thread.anchorItemId && drag?.itemIds.includes(thread.anchorItemId) ? drag : null;
-    return { x: world.x + (riding?.dx ?? 0), y: world.y + (riding?.dy ?? 0) };
+    // While a gesture is live the item has not moved in the replica yet, so
+    // the pin reads the anchor where the hand has it (`previewedCanvas`).
+    const anchor = positioned.anchorItemId ? shown.items[positioned.anchorItemId] : undefined;
+    return anchor ? presentedOffset(anchor, presentation, positioned) : threadWorldPos(canvas!, positioned);
   }
 
   // The main thread has no pin — it lives in the docked panel instead.

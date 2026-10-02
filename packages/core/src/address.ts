@@ -202,6 +202,61 @@ export function urlWithPass(url: string, token: string): string {
   return `${url}#${token}`;
 }
 
+/** The query keys `embedCanvasUrl` writes and the two readers below read —
+ * spelled once, for the reason the rest of this file is. */
+const EMBED_PARAM = "embed";
+const CHAT_PARAM = "chat";
+
+/** A query string's parameters, with or without its leading `?`. */
+function queryOf(search: string): URLSearchParams {
+  return new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+}
+
+/**
+ * The address `isocan embed` hands a host pane (`docs/projects/jetski/design.md`).
+ *
+ * When a canvas is framed inside an agent manager's pane beside an existing
+ * conversation column, opening the 320px left Chat dock by default puts two
+ * chat columns side by side and spends half the pane. `?embed=1` before the
+ * `#<pass>` fragment says "a host framed me": the web client keeps the Chat
+ * dock and its rail button off while leaving the live Agent Presence strip
+ * intact, and answers the host's selection bridge. `{ chat: true }` keeps the
+ * dock (`&chat=on`) without ceasing to be an embed.
+ *
+ * A query parameter rather than more fragment, because the fragment is the
+ * pass's and is stripped the moment it is redeemed; `?embed=1` has to
+ * outlive that. It is not a credential, so being logged costs nothing.
+ */
+export function embedCanvasUrl(
+  origin: string,
+  canvasId: string,
+  token: string,
+  opts?: { chat?: boolean | undefined },
+): string {
+  const base = canvasUrl(origin, canvasId);
+  return urlWithPass(`${base}?${EMBED_PARAM}=1${opts?.chat ? `&${CHAT_PARAM}=on` : ""}`, token);
+}
+
+/**
+ * Whether a page was opened by a host pane: `?embed=1`, exactly what
+ * `embedCanvasUrl` writes and nothing else. The web client answers a framing
+ * host's selection bridge only when this holds, so a tab nobody framed never
+ * posts what is selected in it to anybody.
+ */
+export function isEmbedded(search: string): boolean {
+  return queryOf(search).get(EMBED_PARAM) === "1";
+}
+
+/**
+ * Whether an embedded page keeps its own Chat dock off: framed
+ * (`isEmbedded`), and not asked to keep it with `chat=on`. The Agent
+ * Presence strip stays either way — who is on the canvas is not the host's
+ * business to replace.
+ */
+export function isEmbeddedChatHidden(search: string): boolean {
+  return isEmbedded(search) && queryOf(search).get(CHAT_PARAM) !== "on";
+}
+
 /**
  * Split an address into the address and the pass it carries, if any.
  *

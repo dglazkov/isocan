@@ -1,4 +1,4 @@
-import type { TextAttention } from "@isocan/core";
+import type { PresenceDrag, TextAttention } from "@isocan/core";
 import { create } from "zustand";
 import { shallow } from "zustand/shallow";
 import type {
@@ -41,6 +41,7 @@ import {
 import {
   ApiError,
   CLIENT_ID,
+  OfflineError,
   fetchEnded,
   fetchRefused,
   fetchTakedown,
@@ -49,12 +50,16 @@ import {
   knockOnDoor,
   postOp,
   sendOp,
+  stageLocalBlob,
+  unstageLocalBlob,
+  uploadBlob,
 } from "../lib/api.ts";
 import {
   flushReplicaWrites,
   forgetReplica,
   loadReplica,
   saveReplica,
+  type StagedBlob,
   type StoredReplica,
 } from "../lib/replica.ts";
 import {
@@ -69,6 +74,7 @@ import {
   type RefusedWrite,
 } from "../lib/writequeue.ts";
 import { useUiStore } from "./uiStore.ts";
+import { unionBox } from "../lib/snap.ts";
 import { markRead, noticeComment, syncCanvas } from "./unreadStore.ts";
 
 /**
@@ -302,7 +308,13 @@ export const useCanvasStore = create<CanvasStore>(() => ({
 function confirm(state: CanvasState, lastSeq: number, observed?: OpEnvelope): void {
   // An ordered echo proves this write landed even if its HTTP receipt has
   // not supplied a seq yet. Never fold its public intent over its own effect.
-  const queue = retire(useCanvasStore.getState().queue, lastSeq).filter((write) => write.opId !== observed?.id);
+  const prevQueue = useCanvasStore.getState().queue;
+  const queue = retire(prevQueue, lastSeq).filter((write) => write.opId !== observed?.id);
+  for (const write of prevQueue) {
+    if (write.stagedBlob && !queue.some((kept) => kept.opId === write.opId)) {
+      unstageLocalBlob(state.project.id, write.stagedBlob.blobHash);
+    }
+  }
   const view = foldQueue(state, queue);
   useCanvasStore.setState({
     confirmed: state,
@@ -350,7 +362,7 @@ function persist(immediate = false): void {
     canvas: confirmed.canvas,
     lastSeq,
     migrationRefusals: refused.filter((write) => write.code === "migration-boundary" && write.op),
-    queue: queue.map(({ opId, actor, op, at, seq, group, accepted, originGroupMode }) => ({
+    queue: queue.map(({ opId, actor, op, at, seq, group, accepted, originGroupMode, stagedBlob }) => ({
       opId,
       actor,
       op,
@@ -359,6 +371,7 @@ function persist(immediate = false): void {
       ...(group !== undefined ? { group } : {}),
       ...(accepted ? { accepted } : {}),
       ...(originGroupMode ? { originGroupMode } : {}),
+      ...(stagedBlob ? { stagedBlob } : {}),
     })),
     savedAt: new Date().toISOString(),
   };
@@ -464,6 +477,13 @@ async function drainQueue(): Promise<boolean> {
       continue;
     }
     try {
+      if (next.stagedBlob) {
+        await uploadBlob(
+          canvasId,
+          new Blob([next.stagedBlob.text], { type: next.stagedBlob.mimeType }),
+          next.stagedBlob.filename,
+        );
+      }
       const answer = await postOp(canvasId, next.actor, next.op, next.opId, next.group, next.originGroupMode);
       settleWrite(canvasId, next.opId, { status: "accepted", envelope: answer.envelope });
       // Navigation shares this flush promise. Ignore the old canvas's answer
@@ -471,13 +491,19 @@ async function drainQueue(): Promise<boolean> {
       if (useCanvasStore.getState().canvasId !== canvasId || useCanvasStore.getState().confirmed?.project.id !== canvasId) continue;
       // Not removed — marked. It retires when the tail reaches its seq, so the
       // view never rewinds between the answer and the history that carries it.
-      useCanvasStore.setState({
-        queue: retire(useCanvasStore
-          .getState()
-          .queue.map((write) =>
-            write.opId === next.opId ? { ...write, seq: answer.seq, accepted: answer.envelope } : write,
-          ), useCanvasStore.getState().lastSeq),
-      });
+      const prevQueue = useCanvasStore.getState().queue;
+      const nextQueue = retire(
+        prevQueue.map((write) =>
+          write.opId === next.opId ? { ...write, seq: answer.seq, accepted: answer.envelope } : write,
+        ),
+        useCanvasStore.getState().lastSeq,
+      );
+      for (const write of prevQueue) {
+        if (write.stagedBlob && !nextQueue.some((kept) => kept.opId === write.opId)) {
+          unstageLocalBlob(canvasId, write.stagedBlob.blobHash);
+        }
+      }
+      useCanvasStore.setState({ queue: nextQueue });
       render();
       persist();
     } catch (err) {
@@ -497,7 +523,10 @@ async function drainQueue(): Promise<boolean> {
 /** The home said no to something a person already saw happen. */
 function refuse(write: QueuedWrite, err: ApiError): void {
   const canvasId = useCanvasStore.getState().canvasId;
-  if (canvasId) settleWrite(canvasId, write.opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
+  if (canvasId) {
+    settleWrite(canvasId, write.opId, { status: "refused", message: err.message, ...(err.code ? { code: err.code } : {}) });
+    if (write.stagedBlob) unstageLocalBlob(canvasId, write.stagedBlob.blobHash);
+  }
   const { queue, refused } = useCanvasStore.getState();
   useCanvasStore.setState({
     queue: queue.filter((other) => other.opId !== write.opId),
@@ -638,6 +667,29 @@ export function publishSelection(): void {
   schedulePresenceFlush();
 }
 
+let drag: PresenceDrag | undefined;
+/**
+ * **The drag the hand is making, for everyone watching** (groups-by-hand
+ * phase 3). Called on every move once a press has become a drag, with the
+ * roots it holds and the snapped offset this screen draws; called with
+ * nothing when the hand lets go, and the next beat carries no drag. It rides
+ * the cursor's throttle, so a drag costs no more messages than the cursor
+ * already sends. `from` and the over-fifty box are read once, at the first
+ * move, off the canvas as it stood — see `PresenceDrag`.
+ */
+export function publishDrag(roots?: string[], dx = 0, dy = 0, into?: string | null): void {
+  const items = useCanvasStore.getState().canvas?.items;
+  const first = roots && items?.[roots[0]!];
+  // 50 is core's `LIVE_DRAG_MAX_ROOTS`, written out: importing it pulls the
+  // daemon's sanitizer into the first paint with it (694 bytes, measured).
+  const big = first && roots.length > 50;
+  drag = first ? {
+    ...(drag ?? { gesture: newOpId(), roots: big ? [first.id] : roots, from: { x: first.x, y: first.y }, ...(big && { box: unionBox(roots.flatMap((id) => items[id] ?? []))! }) }),
+    dx, dy, into,
+  } : undefined;
+  schedulePresenceFlush();
+}
+
 let signalTimer: ReturnType<typeof setTimeout> | null = null;
 function resetSignalTimer(ms = CURSOR_SIGNAL_MS): void {
   if (signalTimer) clearTimeout(signalTimer);
@@ -705,6 +757,7 @@ function flushPresence(): void {
     selection: ui.selectedItemIds,
     textSelection: selectedText,
     signal: cursorSignal(ui.cursorSignal),
+    drag,
   };
   socket.send(JSON.stringify(message));
 }
@@ -736,8 +789,15 @@ function flushPresence(): void {
  * at once — folded like every other write, invisible to the unsynced count,
  * never re-posted by a flush, retired by `seq` like the rest.
  */
-export async function sendEchoed(canvasId: string, actor: Actor, op: Operation, group?: string, originGroupMode?: "legacy" | "groups"): Promise<void> {
-  await sendEchoedResult(canvasId, actor, op, group, originGroupMode);
+export async function sendEchoed(
+  canvasId: string,
+  actor: Actor,
+  op: Operation,
+  group?: string,
+  originGroupMode?: "legacy" | "groups",
+  stagedBlob?: StagedBlob,
+): Promise<void> {
+  await sendEchoedResult(canvasId, actor, op, group, originGroupMode, stagedBlob);
 }
 
 /** Forms need the home’s receipt before announcing completion; ordinary gestures keep their existing void contract. */
@@ -749,6 +809,8 @@ export async function sendEchoedResult(
   group?: string,
   /** Uploads capture this before preparing bytes; a cutover cannot refresh their meaning. */
   capturedOrigin?: "legacy" | "groups",
+  /** Offline text blob staged alongside this operation until the queue drains. */
+  stagedBlob?: StagedBlob,
 ): Promise<WriteReceipt> {
   /**
    * **The past does not take writes.** The scrubber is a way of looking, not a
@@ -769,6 +831,9 @@ export async function sendEchoedResult(
   // An upload may finish after navigation. Its original canvas still owns
   // the operation; another canvas's queue and optimistic view cannot hold it.
   if (!confirmed || !ownsCanvas()) {
+    if (stagedBlob) {
+      throw new OfflineError("This drawing could not be saved because its canvas is no longer open while offline.");
+    }
     const answer = await sendOp(canvasId, actor, op, group, capturedOrigin);
     return answer ? { status: "accepted", envelope: answer.envelope } : { status: "queued" };
   }
@@ -778,10 +843,20 @@ export async function sendEchoedResult(
   const completion = new Promise<WriteOutcome>((resolve) => {
     writeWaiters.set(`${canvasId}:${opId}`, (answer) => { outcome = answer; resolve(answer); });
   });
-  const write: QueuedWrite = { ...newWrite(opId, actor, op, group, originGroupMode), inflight: true };
-  useCanvasStore.setState({ queue: [...useCanvasStore.getState().queue, write] });
+  if (stagedBlob) stageLocalBlob(canvasId, stagedBlob);
+  const write: QueuedWrite = {
+    ...newWrite(opId, actor, op, group, originGroupMode, stagedBlob),
+    inflight: !stagedBlob,
+  };
+  useCanvasStore.setState({
+    queue: [...useCanvasStore.getState().queue, write],
+    ...(stagedBlob ? { connection: afterQueueFailure(useCanvasStore.getState().connection) } : {}),
+  });
   render();
   persist();
+  if (stagedBlob) {
+    return { status: "queued", completion };
+  }
   try {
     const answer = await postOp(canvasId, actor, op, opId, group, originGroupMode);
     settleWrite(canvasId, opId, { status: "accepted", envelope: answer.envelope });
@@ -971,6 +1046,9 @@ async function restoreThenOpen(canvasId: string): Promise<void> {
     // tab that posted it is gone. They become ordinary pending work and go up
     // again, which the idempotency key makes free if they already landed.
     const queue = adopt(stored.queue as QueuedWrite[]).map((write) => write.originGroupMode || stored.project.groupMigration ? write : { ...write, originGroupMode: stored.project.groupMode ?? "legacy" as const });
+    for (const write of queue) {
+      if (write.stagedBlob) stageLocalBlob(canvasId, write.stagedBlob);
+    }
     const view = foldQueue(confirmed, queue);
     useCanvasStore.setState({
       confirmed,
@@ -1355,10 +1433,13 @@ function openSocket(canvasId: string): void {
       });
       schedulePresenceFlush();
     } else if (message.type === "presence-roster") {
+      const others = message.sessions.filter((session) => session.sessionId !== CLIENT_ID);
       useCanvasStore.setState({
-        sessions: held(useCanvasStore.getState().sessions, message.sessions.filter((session) => session.sessionId !== CLIENT_ID)),
+        sessions: held(useCanvasStore.getState().sessions, others),
         ...heldRegistry(message),
       });
+      // Somebody is dragging: the viewer that draws it, fetched the first time.
+      if (others.some((session) => session.drag)) void import("../lib/livedrag.ts");
     } else if (message.type === "op-applied") {
       // **The tail is applied to the CONFIRMED state, never to the view.**
       // Phase 10's one-line change with the whole phase in it: the view has

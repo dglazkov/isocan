@@ -217,7 +217,7 @@ describe("isocan bench join", () => {
 
     const joined = await isocan("--canvas", "prj_2", "bench", "join", "Percy");
     expect(joined.code, joined.stderr).toBe(0);
-    expect(joined.stdout).toContain("Percy answers on Acme two");
+    expect(joined.stdout).toContain("Percy stands on Acme two now");
     // Said in journey 1's words, measured rather than asserted: nothing is
     // parked, so this is not `ready` however recently it was benched.
     expect(joined.stdout).toContain("its machine is not here");
@@ -259,11 +259,59 @@ describe("isocan bench join", () => {
     // A second join is not a second grant: it says so and writes nothing new.
     const again = await isocan("--canvas", "prj_2", "bench", "join", "Percy");
     expect(again.code, again.stderr).toBe(0);
-    expect(again.stdout).toContain("already answers");
+    expect(again.stdout).toContain("already stands on");
     expect(standingOn(await canvasOf("prj_2"))).toEqual(standingOn(after2));
 
     // And an agent nobody benched cannot be joined from a bench it is not on.
     const stranger = await isocan("--canvas", "prj_2", "bench", "join", "Wooly");
+    expect(stranger.code).not.toBe(0);
+    expect(stranger.stderr).toContain("on your bench");
+  }, 120_000);
+});
+
+/**
+ * **`isocan bench follow`** (pets phase 2, scenes 2 and 4), walked with the
+ * real binary. One fact on one bench row: on, off, and read back in both
+ * `--json` and the table — and, the half most likely to erode, following
+ * invites the agent NOWHERE by itself and turning it off sends it away from
+ * nowhere. Bringing a pet is the person's app arriving on a canvas, which a
+ * terminal never does (`scripts/journeys.mjs`'s `pet-follows` walks that).
+ */
+describe("isocan bench follow", () => {
+  it("flips one fact on the row, invites nobody, and off moves nobody", async () => {
+    await post("/api/ops", {
+      canvasId: null,
+      actor: dimitri,
+      op: { type: "project.create", canvasId: "prj_2", title: "Acme two" },
+    });
+    expect((await isocan("--canvas", "prj_1", "rc", "add", "Percy", ...TEAM)).code).toBe(0);
+    expect((await isocan("bench", "add", "Percy")).code).toBe(0);
+    expect((await bench())[0]!.follows).toBe(false);
+    expect((await isocan("bench")).stdout).not.toContain("follows you");
+
+    const on = await isocan("bench", "follow", "Percy");
+    expect(on.code, on.stderr).toBe(0);
+    expect(on.stdout).toContain("Percy follows you now");
+    expect((await bench())[0]!.follows).toBe(true);
+    expect((await isocan("bench")).stdout).toContain("follows you");
+    // Following is not a join: nothing stands anywhere new.
+    expect(await agentsOn("prj_2")).toEqual([]);
+
+    // Saying it twice writes nothing and says so.
+    const again = await isocan("--json", "bench", "follow", "Percy");
+    expect(again.code, again.stderr).toBe(0);
+    expect(JSON.parse(again.stdout)).toMatchObject({ changed: false, agent: { follows: true } });
+
+    const off = await isocan("bench", "follow", "Percy", "--off");
+    expect(off.code, off.stderr).toBe(0);
+    expect(off.stdout).toContain("no longer follows you");
+    expect((await bench())[0]!.follows).toBe(false);
+    expect((await isocan("bench")).stdout).not.toContain("follows you");
+    // Off is not sending it away: it still stands where it stood.
+    expect(await agentsOn("prj_1")).toEqual(["Percy"]);
+
+    // A name nobody benched gets the bench's one refusal.
+    const stranger = await isocan("bench", "follow", "Wooly");
     expect(stranger.code).not.toBe(0);
     expect(stranger.stderr).toContain("on your bench");
   }, 120_000);

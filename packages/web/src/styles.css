@@ -116,6 +116,31 @@
   --paper-green-edge: #b8dcbd;
   --paper-grey: #e6e7e3;
   --paper-grey-edge: #cfd0cb;
+  /* **Text colour** (`core/textcolour.ts`, which carries the argument and
+     the measurements). A named colour is a SHADE per surface: these are the
+     light ground's, each the lightest that holds 4.5:1 on `--ground` and
+     still reads as its own name; the dark block lifts them for graphite.
+     `--paper-text-*` is the shade on paper, the same in both themes because
+     paper is pale in both. `test/textcolour.test.ts` holds these equal to
+     core's `TEXT_COLOUR_SHADES`. */
+  --text-red: #df222f;
+  --text-orange: #cc4400;
+  --text-yellow: #877100;
+  --text-green: #218339;
+  --text-blue: #1f70db;
+  --text-purple: #9650d3;
+  --text-pink: #d42583;
+  --text-brown: #8b5a2b;
+  --text-grey: #6d737b;
+  --paper-text-red: #a71821;
+  --paper-text-orange: #993300;
+  --paper-text-yellow: #635300;
+  --paper-text-green: #18622b;
+  --paper-text-blue: #1753a1;
+  --paper-text-purple: #762db6;
+  --paper-text-pink: #9e1c61;
+  --paper-text-brown: #7a491f;
+  --paper-text-grey: #50555b;
   /* RUNNING: an item you have stepped inside, whose scripts are live and whose
      links work. Green because it is the one thing on this canvas that is not a
      picture of software but software — the same green a build goes when it
@@ -130,6 +155,11 @@
   /* Dimmer behind a modal. */
   --overlay: rgba(35, 38, 43, 0.35);
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
+  /* **A card in the hand** (`.item.lifted`): the card's two shadows, the
+     contact one tighter and the ambient one twice as deep and further down.
+     Depth, never size — a lifted card does not grow, or you could not see
+     where it will land (docs/research/2026-10-01-groups-stacks-lift.md §3). */
+  --shadow-lift: 0 2px 4px rgba(30, 34, 40, 0.1), 0 22px 44px -14px rgba(30, 34, 40, 0.38);
   --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
   /* **The same lift, drawn by `filter` instead of `box-shadow`.** A shadow
      from `filter` follows the rendered SILHOUETTE rather than the border box,
@@ -228,6 +258,27 @@
   --paper-green-edge: #a2bba7;
   --paper-grey: #cdcec9;
   --paper-grey-edge: #b0b1ac;
+  /* Text colour, lifted for graphite: each holds 4.5:1 on `--ground` here
+     and still reads as its own name. Paper's shades are repeated, not
+     inherited, for `--paper-ink`'s reason just above. */
+  --text-red: #f2707a;
+  --text-orange: #f59042;
+  --text-yellow: #e8c547;
+  --text-green: #5cc672;
+  --text-blue: #6ea8f0;
+  --text-purple: #b98ce8;
+  --text-pink: #ec7fbd;
+  --text-brown: #c76300;
+  --text-grey: #9aa0a8;
+  --paper-text-red: #a71821;
+  --paper-text-orange: #993300;
+  --paper-text-yellow: #635300;
+  --paper-text-green: #18622b;
+  --paper-text-blue: #1753a1;
+  --paper-text-purple: #762db6;
+  --paper-text-pink: #9e1c61;
+  --paper-text-brown: #7a491f;
+  --paper-text-grey: #50555b;
   --live-wash: rgba(86, 176, 106, 0.22);
   --accent-wash: rgba(76, 110, 245, 0.14);
   --accent-glow: rgba(76, 110, 245, 0.26);
@@ -307,6 +358,7 @@
   --panel: rgba(23, 26, 31, 0.9);
   --overlay: rgba(0, 0, 0, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 48px -12px rgba(0, 0, 0, 0.85);
   --shadow-pop: 0 14px 30px -14px rgba(0, 0, 0, 0.75);
   /* Deeper on graphite: a shadow on a dark ground has less room to darken,
      so it earns its edge by being nearly opaque at the contact. */
@@ -1122,6 +1174,8 @@ img { height: auto; }
   position: absolute; background: var(--card);
   border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow-card);
+  /* The lift's settle: see `.item.lifted`. */
+  transition: box-shadow 160ms ease-out;
   display: flex; flex-direction: column;
   /* Each item is its own stacking context so internal layers (version
      badge, plies, resize handle) can never paint over sibling items. */
@@ -1191,7 +1245,24 @@ img { height: auto; }
 @media (prefers-reduced-motion: reduce) {
   .item.entered { animation: none; }
 }
-.item.dragging { opacity: 0.92; cursor: grabbing; z-index: 2; }
+/* Every item riding a drag: what is under the hand stays readable at full
+   opacity — the lift below is what says it is moving. */
+.item.dragging { cursor: grabbing; z-index: 2; }
+/* **The lift** (groups-by-hand phase 1): what the hand is holding — the roots
+   of the drag, never the members a group or an area carries along with it,
+   because twenty lifted cards inside a lifted frame read as mud. Set only once
+   the press has become a drag, so a click never flickers a shadow.
+
+   Shadow only: no transform, no scale, no offset. An item's position under
+   the hand is a fact (docs/research/2026-08-28-motion.md), and a card that grew
+   would hide where it is about to land. The shadow is kind-1 decoration, so it
+   eases — 120ms up, and a slightly slower 160ms settle that makes a drop read
+   as put down rather than let go (the settle is `.item`'s own transition) —
+   and reduced motion swaps it instantly. */
+.item.lifted { box-shadow: var(--shadow-lift); transition-duration: 120ms; z-index: 2; }
+@media (prefers-reduced-motion: reduce) {
+  .item, .item.lifted { transition: none; }
+}
 /* The read-only canvas (roles phase 1): nothing here is a handle, so nothing
    here wears a grab cursor. The daemon refuses the write; this stops the
    pointer promising one. */
@@ -1207,10 +1278,13 @@ img { height: auto; }
 .item.ink .ply { background: transparent; border-color: var(--line-soft); }
 /* Pointing at an item shows the box you would get, in the accent color that
    means "this one" everywhere else — a dashed preview of the solid outline a
-   click would give it. It matters most for a drawing, whose box is otherwise
+   click would give it. NOT `:hover` since groups-by-hand phase 2: `:hover`
+   is whatever element is under the pointer, so at the canvas level it
+   outlined a group's MEMBER while a click took the GROUP. `.hover-target` is
+   set from `aim` (core `groupAim`), the same answer the press reads. It matters most for a drawing, whose box is otherwise
    invisible, but a screenshot or a note earns the same courtesy.
    (Not while the Pen is up: there you are drawing over items, not aiming.) */
-.canvas-viewport:not(.pen) .item:hover {
+.canvas-viewport:not(.pen) .item.hover-target {
   /* Counter-scaled, like every other outline here (7 Sep 2026). This one was
      left in WORLD units when `.selected`, `.entered` and `.peeked` were fixed,
      so at 10% zoom a 1px dashed line is a tenth of a screen pixel and the
@@ -1225,9 +1299,20 @@ img { height: auto; }
   outline: calc(1px / var(--scale, 1)) dashed var(--accent);
   outline-offset: calc(2px / var(--scale, 1));
 }
-.canvas-viewport:not(.pen) .item.selected:hover { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
+.canvas-viewport:not(.pen) .item.selected.hover-target { outline: calc(2px / var(--scale, 1)) solid var(--accent); }
+/* ⌘ held: the item it reaches is the target above; its group is drawn faint
+   and SOLID — "inside this", not "this" — and over a frame's open space the
+   members a selection box would reach are drawn dimly. */
+.canvas-viewport:not(.pen) .item.reach-inside:not(.selected) {
+  outline: calc(1px / var(--scale, 1)) solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: calc(2px / var(--scale, 1));
+}
+.canvas-viewport:not(.pen) .item.reach-among:not(.selected) {
+  outline: calc(1px / var(--scale, 1)) dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: calc(2px / var(--scale, 1));
+}
 /* …and pointing at a running item does not turn it back into a selected one. */
-.canvas-viewport:not(.pen) .item.entered:hover {
+.canvas-viewport:not(.pen) .item.entered.hover-target {
   /* Width only. Restating the COLOUR here would out-specify the keyframes on
      the hovered item and freeze the shimmer exactly when somebody is pointing
      at it. */
@@ -2156,8 +2241,7 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
   grid-column: 2 / 4; color: var(--ink-muted);
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
 }
-.face-card-foot { font-size: 10.5px; color: var(--ink-soft); }
-/* Faces sit side by side rather than overlapping Figma-style: at this size an
+.face-card-foot { font-size: 10.5px; color: var(--ink-soft); }/* Faces sit side by side rather than overlapping Figma-style: at this size an
    overlap buries the unread badge under the next person's disc. */
 .face {
   position: relative; flex: none; padding: 0;
@@ -3557,11 +3641,25 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; flex-direction: column; align-items: flex-start;
   box-shadow: 0 4px 10px -4px var(--shade);
 }
-/* The chosen mark, in front of the name it stands beside. No size of its own:
-   an emoji already draws larger than a letter at the same font-size, and the
-   scale ratchet is right that a seventeenth size earns nothing. A hair of
-   space so it does not touch the first letter. */
-.cursor-mark { font-weight: 400; margin-right: 3px; }
+/* **A mark is worn AS the pointer** (agent pointers, 30 Sep 2026). The arrow
+   shrinks to its tip — scaled about its own top-left, so the point stays on
+   the hotspot where selection and `session point` land — and keeps the
+   actor's colour, which is how whose it is still reads. The emoji takes the
+   arrow's body, ringed in the same colour (`color` on the cursor is the
+   actor's; the chip sets its own ink). Screen space: one size at every zoom. */
+.remote-cursor.marked svg { width: 9px; height: 10px; }
+.cursor-glyph {
+  position: absolute; left: 5px; top: 5px;
+  font-size: 22px; font-weight: 400; line-height: 1;
+  filter: drop-shadow(0 0 1px currentColor) drop-shadow(0 0 1px currentColor) drop-shadow(0 1px 2px var(--shade));
+}
+.remote-cursor.marked .cursor-chip { margin: 18px 0 0 28px; }
+/* Your own pointer wears your mark the same way (1 Oct 2026): the canvas's
+   shape is the default for everybody, and a mark you chose replaces it — on
+   your screen as on everyone else's. Same tip, same hotspot. */
+.own-cursor.marked svg { width: 9px; height: 10px; }
+.own-cursor.marked .cursor-chip { margin: 18px 0 0 28px; }
+.remote-cursor.quiet .cursor-glyph { animation: cursor-breathe 2.6s ease-in-out infinite; }
 .cursor-chip-row { display: flex; align-items: center; gap: 8px; }
 .cursor-chip-input {
   border: 0; outline: none; background: transparent; color: inherit; font: inherit;
@@ -3574,6 +3672,10 @@ button.mt-card:hover { border-color: var(--accent); }
    presence rather than a crash. */
 .remote-cursor.quiet svg,
 .remote-cursor.quiet .cursor-chip { animation: cursor-breathe 2.6s ease-in-out infinite; }
+/* Another tab of the same person: ghosted with a dashed inner ring so a parked
+   cursor from a background browser tab never reads as a stuck local pointer. */
+.remote-cursor.other-tab { opacity: 0.62; }
+.remote-cursor.other-tab .cursor-chip { outline: 1px dashed var(--card); outline-offset: -2px; }
 @keyframes cursor-breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
@@ -3862,26 +3964,6 @@ button.mt-card:hover { border-color: var(--accent); }
 .operator-signin label { font-size: 12.5px; color: var(--ink-muted); }
 .operator-signin input { min-width: min(320px, 100%); }
 
-/* ---------- nothing here ---------- */
-.notfound-page {
-  max-width: 560px; margin: 0 auto; padding: 96px 24px;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
-}
-.notfound-page h1 { font-size: 22px; margin: 0; }
-.notfound-page p { margin: 0; color: var(--ink-muted); font-size: 13.5px; line-height: 1.5; }
-.notfound-path {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
-  padding: 6px 10px; border-radius: 6px;
-  background: var(--chip); border: 1px solid var(--chip-line); color: var(--ink);
-  max-width: 100%; overflow-wrap: anywhere;
-}
-.notfound-page code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
-}
-/* Two ways out of "this canvas lives elsewhere": its home, and this one's
-   list. Wraps rather than shrinks — a home address is long. */
-.notfound-page .row { display: flex; gap: 6px; flex-wrap: wrap; }
-
 /* **One modal shell, worn by every full-screen overlay.** `Modal.tsx` is the
    component; these are its clothes. Written once for the shortcut list and
    then wanted verbatim by What's new — two copies of this drift in the small
@@ -4148,6 +4230,10 @@ button.mt-card:hover { border-color: var(--accent); }
   border-color: var(--paper-edge);
   box-shadow: var(--shadow-card);
 }
+/* Paper is something you could pick up, so it lifts like a card. A bare
+   caption and ink do not: they wear no card, and a lifted shadow would draw
+   the box they deliberately do not have. */
+.item.textnode.paper.lifted { box-shadow: var(--shadow-lift); }
 .item.textnode.paper .item-content { background: transparent; }
 /* The ply reads as a second sheet under the first, which for paper is
    exactly right — so it takes the paper's own colour rather than the
@@ -4156,7 +4242,7 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Words on paper stop borrowing the canvas's ink: a note is its own surface,
    and light ink on a pale tint is what makes a sticky note unreadable in
    dark mode. */
-.item.textnode.paper .md-view { color: var(--paper-ink); }
+.item.textnode.paper .md-view { color: var(--text-ink, var(--paper-ink)); }
 /* The same inset the composer gives the words on paper (`.text-composer
    .on-paper textarea`, below). One number in two places on purpose: the
    composer sits on the note edge for edge while you type, and if the note
@@ -4186,6 +4272,12 @@ button.mt-card:hover { border-color: var(--accent); }
   pointer-events: none;
 }
 .item.area.selected { border-style: solid; }
+/* At the canvas level the open space inside a group's frame is the GROUP
+   (groups-by-hand phase 2): the hover outlines it, so a press there takes it.
+   Only for the Select tool — the Text tool, the Pen and a comment still reach
+   the canvas through it — and never the scope you are in, or a frame around
+   it, where that space is floor for a selection box (`pressable`, ItemView). */
+.canvas-viewport.own-cursor-on .item.canvas-group.pressable { pointer-events: auto; }
 .item.area .area-title,
 .item.area .item-titlebar,
 .item.area .resize-handle,
@@ -4206,6 +4298,12 @@ button.mt-card:hover { border-color: var(--accent); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .item.area.dragging .area-title { cursor: grabbing; }
+/* A sheet lies flat until it is picked up: a dragged group lifts its FRAME
+   (the members it carries stay flat — see `.item.lifted`). Declared after
+   `.item.area` so it beats that rule's `box-shadow: none`; it keeps the
+   area's own stacking, because a frame raised over its members would wash
+   them in its tint. */
+.item.area.lifted { box-shadow: var(--shadow-lift); z-index: 0; }
 
 /* ---------- a canvas on a canvas ----------
    `core/canvasitem.ts`: a picture of a place, drawn live and small from the
@@ -4309,7 +4407,9 @@ button.mt-card:hover { border-color: var(--accent); }
   font-size: var(--text-size, 16px);
   font-family: var(--text-face, inherit);
   line-height: 1.5;
-  color: var(--ink);
+  /* A colour the node names (`core/textcolour.ts`) — a token for a name, so
+     the theme picks the shade — or the theme's own ink. */
+  color: var(--text-ink, var(--ink));
   /* Words on a canvas are read, not scrolled: a node that outgrew its box
      should be re-fitted (⇧F), not given a scrollbar the size of a sentence. */
   overflow: hidden;
@@ -4392,6 +4492,37 @@ button.mt-card:hover { border-color: var(--accent); }
    the swatch's whole job is to be the colour it stands for. */
 .text-paper.on { background: var(--paper); outline: 2px solid var(--accent); outline-offset: 1px; }
 .text-paper-none.on { background: none; }
+/* **Colour and font** (`core/textcolour.ts`, `TEXT_FONTS`): one button each,
+   opening a small picker ABOVE the bar — inside the composer, so choosing is
+   not clicking away. The colour button is an A underlined in the colour the
+   words will be; `--swatch` is set per button, from the same token the node
+   is drawn with, so the swatch is the colour on this theme and this paper. */
+.text-ink-btn { box-shadow: inset 0 -3px 0 -0.5px var(--swatch); }
+.text-font-btn { max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.text-style-pop {
+  position: absolute; bottom: calc(100% + 6px); right: 0;
+  display: flex; gap: 4px; padding: 6px; border-radius: 10px;
+  background: var(--card); border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+}
+.text-font-pop { flex-direction: column; gap: 0; min-width: 190px; }
+.text-ink-swatch {
+  width: 22px; height: 22px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--swatch); border: 1px solid var(--line);
+}
+/* Auto is the theme's ink, drawn as a half-and-half disc of the two grounds'
+   inks so it reads as "follows the theme" rather than as one more colour. */
+.text-ink-auto { background: linear-gradient(135deg, var(--ink) 50%, var(--ground) 50%); }
+.text-ink-swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.text-font-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 6px 8px; border: none; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--ink); font-size: 14px; text-align: left;
+}
+.text-font-row:hover { background: var(--chip); }
+.text-font-row.on { background: var(--accent); color: var(--accent-ink); }
+/* The face beside each family, in the app's own voice rather than the family's. */
+.text-font-face { font-family: Inter, system-ui, sans-serif; font-size: 11px; }
 
 /* **The composer wearing paper: what you type into IS the note.**
 
@@ -4415,7 +4546,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .text-composer.on-paper textarea,
 .text-composer.on-paper .text-composer-mirror {
   background: none; border: none; box-shadow: none;
-  color: var(--paper-ink);
+  color: var(--text-ink, var(--paper-ink));
   padding: 10px;
 }
 /* A quieter INK rather than a dimmed one: opacity on text is a contrast
@@ -4445,7 +4576,7 @@ button.mt-card:hover { border-color: var(--accent); }
      that box inside the selected item. The accent hairline is the one thing
      that says where the box is; the words are otherwise the canvas's own. */
   background: transparent;
-  color: var(--ink);
+  color: var(--text-ink, var(--ink));
   font: inherit;
   font-size: 16px;
   line-height: 1.5;
@@ -4521,7 +4652,10 @@ button.mt-card:hover { border-color: var(--accent); }
   font: inherit; font-size: 12.5px; line-height: 1.2; text-align: left;
   cursor: pointer;
 }
-.context-item:hover:enabled { background: var(--chip-hover); }
+.context-item:hover:enabled, .context-item.open { background: var(--chip-hover); }
+/* A pointer on its way to an open submenu crosses rows it is not choosing
+   (`lib/menuaim.ts`); they do not light up, and the open row stays lit. */
+.context-menu[data-aim] .context-item:not(.open):hover { background: none; }
 /* Dimmed, not removed: a menu whose shape changes between one open and the
    next is a menu you cannot learn. */
 .context-item:disabled { opacity: 0.4; cursor: default; }
@@ -5024,11 +5158,27 @@ button.mt-card:hover { border-color: var(--accent); }
 /* Explicit groups keep their world-space header and leave interiors available to tools. */
 .item.canvas-group .area-title { color: var(--ink); }
 .item.group-drop-target { outline: 3px solid var(--accent); }
+.group-drop-label.out { border-style: dashed; }
 .group-drop-label { position: absolute; right: 12px; top: 8px; padding: 4px 8px; background: var(--card); color: var(--accent-text); border: 1px solid var(--accent); border-radius: 6px; pointer-events: none; }
 .group-column-label, .group-row-label { position: absolute; padding: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); box-sizing: border-box; }
 .group-grid-cell { position: absolute; border: 1px dashed var(--line); box-sizing: border-box; }
 .text-composer-status { position: absolute; top: 100%; padding: 8px; background: var(--card); color: var(--ink); font-size: 13px; }
 .item.canvas-group:not(.renaming) .item-titlebar { display: none; }
+
+/* ---------- a group shown as a stack (groups-by-hand phase 4) ----------
+   One card's footprint at the group's origin (core `GROUP_STACK`): the frame
+   and its wash step aside and the pile is the group. The pile takes the
+   pointer — it is one card, with no open space for a tool to reach through.
+   The top member upright; the cards behind turned by a hash of their ids
+   (`stackPile`), tinted with their own colour (`--tint`, set per card from a
+   token) so the rim says WHAT is in it. Never the version stack's look:
+   that is blank plies, neat and down-right. */
+.item.canvas-group.stacked { background: transparent; border-color: transparent; pointer-events: auto; overflow: visible; }
+/* A pile is not resized: its size is the card's, and the frame it keeps is
+   the spread one, which Spread gives back. */
+.item.canvas-group.stacked .resize-handle, .item.canvas-group.stacked .item-hint.size { display: none; }
+/* Room at the band's right for the Stack button (`GroupBand`). */
+.item.canvas-group .area-title { padding-right: 112px; }
 .item.canvas-group .group-border { position: absolute; pointer-events: auto; }
 .item.canvas-group .group-border.north, .item.canvas-group .group-border.south { left: 0; right: 0; height: calc(5px / var(--scale, 1)); }
 .item.canvas-group .group-border.north { top: 0; }

@@ -162,11 +162,17 @@ class AcmeHome {
     const seq = this.log.length + 1;
     this.log.push({ seq, envelope: { actor, op, ts: new Date(this.clock.now).toISOString() } } as unknown as WatchedLogEntry);
     if (op.type === "thread.create" || op.type === "thread.reply") {
-      const o = op as unknown as { threadId: string; main?: true; comment: { id: string; body: string; record?: true | string } };
+      const o = op as unknown as {
+        threadId: string;
+        anchorItemId?: string | null;
+        main?: true;
+        comment: { id: string; body: string; record?: true | string };
+      };
       const thread = (this.threads[o.threadId] ??= {
         id: o.threadId,
         createdBy: actor,
         comments: [],
+        ...(o.anchorItemId !== undefined ? { anchorItemId: o.anchorItemId } : {}),
         ...(o.main ? { main: true } : {}),
       } as unknown as CommentThread);
       thread.comments.push({
@@ -180,6 +186,8 @@ class AcmeHome {
     for (const wake of this.waiters.splice(0)) wake();
   }
 
+  items: Record<string, Record<string, unknown>> = {};
+
   get tip(): number {
     return this.log.length;
   }
@@ -187,7 +195,12 @@ class AcmeHome {
   private snapshotNow(): CanvasSnapshotResponse {
     return {
       project: CANVAS,
-      canvas: { agents: structuredClone(this.agents), threads: structuredClone(this.threads), items: {}, trash: [] },
+      canvas: {
+        agents: structuredClone(this.agents),
+        threads: structuredClone(this.threads),
+        items: structuredClone(this.items),
+        trash: [],
+      },
       lastSeq: this.tip,
       colors: {},
       names: {},
@@ -481,6 +494,51 @@ describe("the room over in-memory deps", () => {
     home.enrol(RUE);
     await clock.advance(0);
     expect(lines).toContain("Rue · where and how supplied — /acme");
+    await room.stop();
+    await room.done;
+  });
+
+  /**
+   * **An invited agent keeps how it runs** (pets phase 1). The agent is one
+   * actor on every canvas, so the row a room writes for it here is copied from
+   * its row on another canvas — a row that names a harness over one that says
+   * null, the last in the file among those — and the room's own cwd and no
+   * harness only when the machine has no row for it anywhere.
+   */
+  it("an agent taken up here copies harness, model and cwd from its row on another canvas", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    const SCOUT: Actor = { id: "act_scout", name: "Scout" };
+    const elsewhere = (canvasId: string, harness: string | null, cwd: string, model?: string): RcAgentRow => ({
+      canvasId,
+      actorId: SCOUT.id,
+      name: "Scout",
+      harness,
+      ...(model ? { model } : {}),
+      cwd,
+      sessionId: "ses_other",
+    });
+    const { deps, lines, rows } = roomOver(home, clock, {
+      rows: [
+        elsewhere("prj_old", "claude-code", "/acme/old"),
+        elsewhere("prj_bridge", "jetski", "/acme/scout", "acme-model-1"),
+        elsewhere("prj_web", null, "/acme"),
+      ],
+    });
+    const room = runRoom(deps);
+    await clock.advance(0);
+    home.enrol(SCOUT);
+    await clock.advance(1_000);
+    expect(rows.find((r) => r.canvasId === CANVAS.id && r.actorId === SCOUT.id)).toEqual({
+      canvasId: CANVAS.id,
+      actorId: SCOUT.id,
+      name: "Scout",
+      harness: "jetski",
+      model: "acme-model-1",
+      cwd: "/acme/scout",
+      sessionId: null,
+    });
+    expect(lines).toContain("Scout · where and how supplied — /acme/scout · jetski (acme-model-1)");
     await room.stop();
     await room.done;
   });
@@ -1278,5 +1336,96 @@ describe("the roll call", () => {
     await silent.stop();
     await silent.done;
     expect(chat(other)).toEqual([]);
+  });
+});
+
+describe("the summons carries thread history, item metadata, and non-owner standing (#332 phase 4, #273)", () => {
+  it("a reply deep in a thread anchored on an item carries the earlier comments and the item's id, kind and title", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.items["itm_checkout"] = {
+      id: "itm_checkout",
+      title: "Acme Checkout Screen",
+      x: 100,
+      y: 200,
+      width: 400,
+      height: 600,
+      properties: {},
+      versions: [
+        {
+          id: "ver_1",
+          blobHash: "blob_1",
+          mimeType: "text/html",
+          filename: "checkout.html",
+          byteLength: 120,
+          createdAt: new Date(clock.now).toISOString(),
+          createdBy: OWNER,
+        },
+      ],
+      currentVersionId: "ver_1",
+      createdAt: new Date(clock.now).toISOString(),
+      createdBy: OWNER,
+    };
+    // Earlier discussion on the thread before the room starts:
+    home.append(OWNER, {
+      type: "thread.create",
+      threadId: "thr_deep",
+      x: 10,
+      y: 20,
+      anchorItemId: "itm_checkout",
+      comment: { id: "cmt_1", body: "The header button is currently green." },
+    } as unknown as Operation);
+    home.append(WRITER, {
+      type: "thread.reply",
+      threadId: "thr_deep",
+      comment: { id: "cmt_2", body: "Agreed, let's switch it to the brand primary." },
+    } as unknown as Operation);
+    home.enrol(PERCY, OWNER, { listen: ["*"] });
+
+    const { deps, turns } = roomOver(home, clock);
+    const room = runRoom(deps);
+    await clock.advance(0);
+
+    // Now WRITER replies deep in the thread mentioning Percy:
+    home.append(WRITER, {
+      type: "thread.reply",
+      threadId: "thr_deep",
+      comment: { id: "cmt_3", body: "@Percy make it blue", mentions: [PERCY.id] },
+    } as unknown as Operation);
+    await clock.advance(0);
+
+    expect(turns).toHaveLength(1);
+    const prompt = turns[0]!.prompt;
+    // Earlier comments in the thread and the anchored item's id, kind and title:
+    expect(prompt).toContain("The header button is currently green.");
+    expect(prompt).toContain("Agreed, let's switch it to the brand primary.");
+    expect(prompt).toContain("@Percy make it blue");
+    expect(prompt).toContain('"id": "itm_checkout"');
+    expect(prompt).toContain('"kind": "screen"');
+    expect(prompt).toContain('"title": "Acme Checkout Screen"');
+    // And because WRITER (Nico) is not OWNER (Ada), the non-owner standing sentence is present (#273):
+    expect(prompt).toContain(
+      "You were woken by Nico, who is not your owner. Ada's machine is running this turn and paying for it, and Nico's grant covers replying on this thread.",
+    );
+
+    await room.stop();
+    await room.done;
+  });
+
+  it("a summons from the owner does not claim a non-owner woke the turn", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const { deps, turns } = roomOver(home, clock);
+    const room = runRoom(deps);
+    await clock.advance(0);
+
+    home.mention(OWNER, PERCY, "@Percy tighten the padding");
+    await clock.advance(0);
+
+    expect(turns).toHaveLength(1);
+    expect(turns[0]!.prompt).not.toContain("who is not your owner");
+    await room.stop();
+    await room.done;
   });
 });

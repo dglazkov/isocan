@@ -38,7 +38,7 @@ import { MentionField } from "./MentionField.tsx";
 import { ItemPeek, ItemThumb } from "./ItemThumb.tsx";
 import { submitOnCmdEnter, submitOnEnter } from "../lib/submit.ts";
 import { markRead } from "../stores/unreadStore.ts";
-import { openPanel, storedPanel } from "../lib/panels.ts";
+import { chatHiddenNow, openPanel, storedPanel } from "../lib/panels.ts";
 import { ChatGlyph } from "./Glyphs.tsx";
 import { OnIt } from "./OnIt.tsx";
 import { GateGrant } from "./LazyGate.tsx";
@@ -247,13 +247,14 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
     // it is already correct. Panning here would slide the canvas sideways on
     // every load.
     // Never chosen here (undefined): open with the Chat, not remembered, so
-    // the first real choice is still the person's.
+    // the first real choice is still the person's (`openPanel` folds `"main"`
+    // to `null` when `?embed=1` / `chatHiddenNow()` is active).
     openPanel(canvasId, stored === undefined ? "main" : stored, false, false);
   }, [canvasId]);
 
   // Closed, the panel has no surface of its own — its toggle (wearing the
   // unread badge) is the "Main" button in the top bar's create actions.
-  if (!canvas || !open) return null;
+  if (!canvas || !open || chatHiddenNow()) return null;
   return <Panel key={canvasId} canvasId={canvasId} actor={actor} />;
 }
 

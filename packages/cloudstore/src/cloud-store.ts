@@ -107,6 +107,8 @@ interface SnapshotObject {
    * before the field — those predate any `agent.enroll` op, so absent means
    * empty, never lost. */
   agents?: CanvasState["canvas"]["agents"];
+  /** Withdrawals a pet respects (pets phase 2). Absent when there are none. */
+  withdrawn?: CanvasState["canvas"]["withdrawn"];
 }
 
 /**
@@ -375,6 +377,7 @@ export class CloudStore implements Store {
             trash: snapshot.trash,
             agents: snapshot.agents ?? {},
             ...(snapshot.groupCohorts ? { groupCohorts: snapshot.groupCohorts } : {}),
+            ...(snapshot.withdrawn ? { withdrawn: snapshot.withdrawn } : {}),
           }
         : { ...emptyCanvas(), trash: [] },
     };
@@ -880,6 +883,7 @@ export class CloudStore implements Store {
       threads: state.canvas.threads,
       trash: state.canvas.trash,
       agents: state.canvas.agents ?? {},
+      ...(state.canvas.withdrawn ? { withdrawn: state.canvas.withdrawn } : {}),
     };
     await this.objects.put(snapshotKey(id), Buffer.from(JSON.stringify(snapshot), "utf8"), {
       contentType: "application/json",

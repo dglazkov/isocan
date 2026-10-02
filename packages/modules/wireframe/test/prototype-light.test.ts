@@ -53,7 +53,7 @@ describe("the screens a prototype plays", () => {
 describe("PrototypeLight", () => {
   const draw = (selection: string[]) => {
     const { c, specs } = canvas();
-    return renderToStaticMarkup(createElement(PrototypeLight, { canvas: c, selection, drag: null, specOf: (h: string) => specs.get(h) }));
+    return renderToStaticMarkup(createElement(PrototypeLight, { canvas: c, selection, specOf: (h: string) => specs.get(h) }));
   };
 
   it("rings every member and veils the rest while one prototype is selected", () => {

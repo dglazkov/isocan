@@ -6,12 +6,15 @@ import {
   BENCH_REACH,
   benchAgentOf,
   benchAgents,
+  benchFollowPatch,
   benchItemOf,
   benchRows,
   benchStandingWords,
   benchWords,
   benchWriteFor,
   emptyCanvas,
+  petCameWords,
+  petsToBring,
   type BenchCanvas,
   type CanvasContents,
   type Item,
@@ -117,17 +120,28 @@ describe("the bench, read off a personal canvas", () => {
   });
 
   it("writes a row the reader above can read back, and says nothing it was not told", () => {
-    const card = benchItemOf("Percy", { actorId: percy.id, harness: "claude-code" });
-    expect(card.properties).toEqual({ kind: AGENT_KIND, actorId: percy.id, harness: "claude-code" });
+    const card = benchItemOf("Percy", { actorId: percy.id, harness: "claude-code", model: "claude-opus-5-5" });
+    expect(card.properties).toEqual({
+      kind: AGENT_KIND,
+      actorId: percy.id,
+      harness: "claude-code",
+      model: "claude-opus-5-5",
+    });
     // `runsAt` unsaid is absent, not "unknown": an empty property would be a
     // reader's problem forever.
     expect(card.properties.runsAt).toBeUndefined();
     const canvas = emptyCanvas();
     canvas.items.itm_x = agentItem("itm_x", "Percy", card.properties);
-    expect(benchAgentOf(canvas.items.itm_x!)).toMatchObject({ name: "Percy", runsAt: null });
+    expect(benchAgentOf(canvas.items.itm_x!)).toMatchObject({
+      name: "Percy",
+      harness: "claude-code",
+      model: "claude-opus-5-5",
+      runsAt: null,
+    });
     // The blob is the row written out, so the card is readable on the canvas
     // itself rather than being a blank rectangle.
     expect(card.blob).toContain(percy.id);
+    expect(card.blob).toContain("claude-opus-5-5");
     expect(card.blob).toContain("grants no standing");
   });
 
@@ -330,5 +344,63 @@ describe("benchWriteFor", () => {
       kind: "already",
       itemId: "itm_quiet",
     });
+  });
+});
+
+/**
+ * **Pets follow** (`docs/projects/pets`, phase 2). One field on the row, one
+ * patch to flip it, and one pure decision about which agents an arrival
+ * brings — each exclusion reached from inputs that differ only in the fact
+ * that decides it.
+ */
+describe("pets: the follows field and what an arrival brings", () => {
+  it("reads follows off the row, off unless it says true, and flips with one patch", () => {
+    const canvas = bench();
+    expect(benchAgents(canvas).map((row) => row.follows)).toEqual([false, false, false]);
+    expect(benchFollowPatch(true)).toEqual({ properties: { follows: "true" } });
+    // Off is the property removed, not a second spelling of no.
+    expect(benchFollowPatch(false)).toEqual({ removeProperties: ["follows"] });
+    canvas.items.itm_percy!.properties.follows = "true";
+    expect(benchAgentOf(canvas.items.itm_percy!)).toMatchObject({ name: "Percy", follows: true });
+    // Anything but the one spelling is off.
+    canvas.items.itm_sian!.properties.follows = "yes";
+    expect(benchAgentOf(canvas.items.itm_sian!)!.follows).toBe(false);
+    // And a fresh card never says it follows: following is the person's act.
+    expect(benchItemOf("Percy", { actorId: percy.id }).properties).not.toHaveProperty("follows");
+  });
+
+  function following(): ReturnType<typeof benchAgents> {
+    const canvas = bench();
+    canvas.items.itm_percy!.properties.follows = "true";
+    canvas.items.itm_sian!.properties.follows = "true";
+    return benchAgents(canvas);
+  }
+  const names = (rows: ReturnType<typeof benchAgents>) => rows.map((row) => row.name);
+
+  it("brings the following agents to a canvas the person can edit, and not the others", () => {
+    expect(names(petsToBring(following(), emptyCanvas(), true))).toEqual(["Percy", "Sian"]);
+    // Off: Wooly is on the bench and does not follow.
+    expect(names(petsToBring(benchAgents(bench()), emptyCanvas(), true))).toEqual([]);
+  });
+
+  it("brings nobody to a canvas the person can only read", () => {
+    expect(petsToBring(following(), emptyCanvas(), false)).toEqual([]);
+  });
+
+  it("does not bring one already standing here", () => {
+    expect(names(petsToBring(following(), standingOn("prj_x", "Acme", [percy]), true))).toEqual(["Sian"]);
+  });
+
+  it("does not bring one somebody withdrew from here", () => {
+    const canvas = emptyCanvas();
+    canvas.withdrawn = { [sian.id]: actor("usr_mira", "Mira") };
+    expect(names(petsToBring(following(), canvas, true))).toEqual(["Percy"]);
+  });
+
+  it("says the pet came with its owner, never that it is answering", () => {
+    const line = petCameWords("Scout", "Dion");
+    expect(line).toMatch(/^Scout came with Dion\./);
+    expect(line).not.toMatch(/answer|listening/);
+    expect(line).toContain("no turn was started");
   });
 });

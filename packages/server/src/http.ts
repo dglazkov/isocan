@@ -505,6 +505,18 @@ export interface RouteOptions {
    */
   modulesHome?: string;
   /**
+   * **Whose `dirs.json` the directory routes read and write** — the roster of
+   * which directory is bound to which canvas (`binding.ts`), behind the tree,
+   * the picker, the bind and the backing. `daemon.ts` passes the home it runs
+   * out of; absent, the process's own (`isocanHome()`), read per request.
+   *
+   * It was always the process's, which is the same directory in every real
+   * daemon and a different one in every test: a daemon started on a temp home
+   * recorded its binds in the person's own `~/.isocan/dirs.json`
+   * (`docs/reviews/lessons.md` #104).
+   */
+  rosterHome?: string;
+  /**
    * **Does this daemon serve the world?** What the bind says, stated rather
    * than sniffed: `daemon.ts` derives it from the address it was told to listen
    * on, and absent it the socket is read (`loopbackBound`).
@@ -613,6 +625,11 @@ export interface RouteOptions {
    */
   refusals?: Refusals;
 }
+
+/** The home whose `dirs.json` the directory routes read and write: the one the
+ * daemon runs out of (`RouteOptions.rosterHome`), else the process's. Out here
+ * rather than inside `registerRoutes`, which is held to a length. */
+const rosterHomeOf = (options: RouteOptions): string => options.rosterHome ?? isocanHome();
 
 export function registerRoutes(
   app: FastifyInstance,
@@ -4890,7 +4907,7 @@ export function registerRoutes(
       });
       return null;
     }
-    const dirs = await boundDirs(isocanHome(), canvasId);
+    const dirs = await boundDirs(rosterHomeOf(options), canvasId);
     if (dirs.length === 0) {
       reply.status(404).send({
         // The fact, and only the fact. It used to append "(isocan use
@@ -4939,7 +4956,7 @@ export function registerRoutes(
       });
     }
     const at = (req.query as { at?: string }).at ?? null;
-    const listing = await pickList(isocanHome(), at);
+    const listing = await pickList(rosterHomeOf(options), at);
     // One sentence for every refusal here, unlike the bind route's: this one
     // enumerates, so "which rule refused" would describe the shape of a disk
     // the caller cannot see. Absent, outside the jail, a symlink, a file —
@@ -4967,8 +4984,8 @@ export function registerRoutes(
     if (typeof asked !== "string" || asked.trim() === "") {
       return reply.status(400).send({ error: "which directory? give a path", code: "bad-op" });
     }
+    const home = rosterHomeOf(options);
     // `~` is what a person types; nothing else expands it for them here.
-    const home = isocanHome();
     const typed = asked.trim();
     const wanted = path.resolve(
       typed.startsWith("~") ? path.join(os.homedir(), typed.slice(1)) : typed,
@@ -5120,7 +5137,7 @@ export function registerRoutes(
     const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
     const bound =
       loopbackBound(app) && local && (options.homes?.homeOf(id) ?? null) === null
-        ? await boundDirs(isocanHome(), id)
+        ? await boundDirs(rosterHomeOf(options), id)
         : [];
     const hashOf = (data: Buffer) => createHash("sha256").update(data).digest("hex");
     const onDisk: Record<string, string> = {};

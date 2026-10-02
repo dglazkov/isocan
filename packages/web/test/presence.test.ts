@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyCanvas, type Item, type PresenceSession } from "@isocan/core";
-import { sessionLocus, spreadOverlaps } from "../src/lib/presence.ts";
+import { otherTabSessionIds, sessionLocus, spreadOverlaps } from "../src/lib/presence.ts";
 import { sessionName } from "../src/lib/names.ts";
 
 function session(overrides: Partial<PresenceSession>): PresenceSession {
@@ -123,5 +123,37 @@ describe("who is working here", () => {
     expect(sessionName(names, session({ label: "deploy bot", actor: { id: "usr_1", name: "Fable" } }))).toBe(
       "deploy bot",
     );
+  });
+});
+
+describe("otherTabSessionIds", () => {
+  it("marks any remote session belonging to the current viewport's actor (including joined identities or same name)", () => {
+    const self = { id: "usr_acme", name: "Acme" };
+    const sessions = [
+      session({ sessionId: "s_other_tab", kind: "web", actor: { id: "usr_acme", name: "Acme" } }),
+      session({ sessionId: "s_joined_tab", kind: "web", actor: { id: "usr_acme_2", name: "Old Acme" } }),
+      session({ sessionId: "s_peer", kind: "web", actor: { id: "usr_ada", name: "Ada" } }),
+    ];
+    const marked = otherTabSessionIds(sessions, self, {}, { usr_acme_2: "usr_acme" });
+    expect([...marked]).toEqual(["s_other_tab", "s_joined_tab"]);
+  });
+
+  it("marks older duplicate-named remote tabs while keeping the most recently active one unmarked", () => {
+    const sessions = [
+      session({
+        sessionId: "s_older",
+        kind: "web",
+        actor: { id: "usr_ada", name: "Ada" },
+        lastSeen: "2026-09-29T12:00:00.000Z",
+      }),
+      session({
+        sessionId: "s_newer",
+        kind: "web",
+        actor: { id: "usr_ada", name: "Ada" },
+        lastSeen: "2026-09-29T12:05:00.000Z",
+      }),
+    ];
+    const marked = otherTabSessionIds(sessions, { id: "usr_acme", name: "Acme" });
+    expect([...marked]).toEqual(["s_older"]);
   });
 });

@@ -1,6 +1,6 @@
 import {
-  ARCHETYPE_IDS, COMPONENTS, INTENT_BY_ID, RECIPES, RECIPE_BY_ID, component,
-  type Component, type IntentId, type Platform, type PropDef, type Props, type Recipe, type Section,
+  ARCHETYPE_IDS, COMPONENTS, DENSITY_LEVELS, INTENT_BY_ID, RECIPES, RECIPE_BY_ID, TEMPLATE_BY_ID, TEMPLATE_IDS, component,
+  type Component, type DensityLevel, type IntentId, type Platform, type PropDef, type Props, type Recipe, type Section, type TemplateId,
 } from "./catalog/index.ts";
 import { styleProblems, type WireStyle } from "./theme.ts";
 import type { SlotFill, WireContent } from "./content/fill.ts";
@@ -31,6 +31,16 @@ export interface WireSpec {
   platform: Platform;
   /** In recipe order. */
   slots: WireSlot[];
+  /**
+   * Multi-region layout template for `<div class="main">` (design §11).
+   * Absent or `"single"` renders one vertical column of sections.
+   */
+  template?: TemplateId;
+  /**
+   * Spacing density (`compact` → `8px`, `default` → `12px`, `spacious` → `16px`).
+   * Absent uses the theme's `--w-space` (`12px` by default).
+   */
+  density?: DensityLevel;
   /** Item id of the screen this varies (a sibling placed under it — design §5). */
   variantOf?: string;
   /** On a variation: the one decision flipped from its screen's argmax. */
@@ -93,6 +103,73 @@ export interface WireSpec {
    * round 1.
    */
   by?: WireBy;
+  /**
+   * Root or screen decisions pinned by the person or `--pin key=value`
+   * (design §12), so future composer or edit turns never re-ask them.
+   */
+  pinned?: Record<string, string>;
+  /**
+   * Compact per-question top-3 probability distributions rounded to 2 decimal
+   * places (design §13), recorded on the spec for `wire why` Q&A.
+   */
+  decisions?: Record<string, Record<string, number>>;
+  /**
+   * Jev-budgeted visual refinement patches (`wire polish`, design §15),
+   * keyed by `data-wf` or `data-sec` path on the screen.
+   */
+  polish?: WirePolishPatch[];
+  /**
+   * Non-destructive layer visibility toggles (`wire layer`): when a layer is
+   * `false`, `renderWire` hides that layer (returning to default greys, grey
+   * bars, or unpolished blocks) while keeping `style`, `content`, `slot.fill`,
+   * and `polish` intact in the embedded spec so checking it back on restores it.
+   */
+  layers?: WireLayers;
+}
+
+/** Checkable additive layers on a wireframe screen. */
+export const WIRE_LAYER_IDS = ["system", "copy", "lofi", "hifi"] as const;
+export type WireLayerId = (typeof WIRE_LAYER_IDS)[number];
+
+/** Named fidelity tiers corresponding to cumulative layer combinations. */
+export const WIRE_FIDELITY_TIERS = ["wire", "system", "lofi", "hifi"] as const;
+export type WireFidelityTier = (typeof WIRE_FIDELITY_TIERS)[number];
+
+/** Non-destructive visibility state for each layer on a wireframe spec. */
+export interface WireLayers {
+  /** Design system tokens and surface (`spec.style`). */
+  system?: boolean;
+  /** Fleshed sample content or copy (`spec.content` and `slot.fill`). */
+  copy?: boolean;
+  /** Low-fi unboxed fluid layout and visual polish (`spec.polish`). */
+  lofi?: boolean;
+  /** High-fi visual craft (`wireLayer:hifi` or elevated high-craft rendering). */
+  hifi?: boolean;
+}
+
+/** Allowed visual refinement classes for `WireSpec.polish` (`design.md` §15). */
+export const POLISH_TOKENS = [
+  "wf-elevated",
+  "wf-bordered",
+  "wf-subtle",
+  "wf-emphasis",
+  "wf-compact-pad",
+  "wf-spacious-pad",
+  "wf-rounded-lg",
+  "wf-accent-ring",
+] as const;
+
+/** A single allowed polish refinement token. */
+export type PolishToken = (typeof POLISH_TOKENS)[number];
+
+/** A targeted polish class patch on a `data-wf` or `data-sec` element path. */
+export interface WirePolishPatch {
+  /** A `data-wf` or `data-sec` path on the screen (e.g. `"main.1"` or `"main.1.submit"`). */
+  target: string;
+  /** Visual refinement classes to add. */
+  add?: PolishToken[];
+  /** Visual refinement classes to remove. */
+  remove?: PolishToken[];
 }
 
 /** Who drew a wire: the person or agent, and the answerer whose decisions it carries. */
@@ -186,6 +263,8 @@ export interface WireSlot {
   alternatives?: Array<{ block: string; p: number }>;
   /** The words, numbers and pictograms this slot draws instead of bars — plain data, from `content`. */
   fill?: SlotFill;
+  /** Sub-region inside a multi-region layout template (`primary`, `secondary`, `master`, `detail`, `kpi`, `hero`, `grid`, `bento`). */
+  region?: string;
 }
 
 export const PLATFORMS: readonly Platform[] = ["app", "web", "site"];
@@ -340,6 +419,17 @@ export function validateWire(input: unknown): string[] {
     if (typeof spec[key] !== "string") problems.push(`${key} must be a string`);
   }
   if (!PLATFORMS.includes(spec.platform as Platform)) problems.push(`platform must be one of ${PLATFORMS.join(", ")}`);
+  if (spec.template !== undefined) {
+    const tpl = TEMPLATE_BY_ID.get(spec.template as TemplateId);
+    if (!tpl) {
+      problems.push(`template must be one of ${TEMPLATE_IDS.join(", ")}`);
+    } else if (PLATFORMS.includes(spec.platform as Platform) && !tpl.platforms.includes(spec.platform as Platform)) {
+      problems.push(`template "${spec.template}" is not available on platform "${spec.platform}" (allowed on ${tpl.platforms.join(", ")})`);
+    }
+  }
+  if (spec.density !== undefined && !(DENSITY_LEVELS as readonly string[]).includes(spec.density as string)) {
+    problems.push(`density must be one of ${DENSITY_LEVELS.join(", ")}`);
+  }
   if (spec.round !== undefined && ![0, 1, 2, 3].includes(spec.round)) problems.push("round must be 0, 1, 2 or 3");
   if (spec.chrome !== undefined && (typeof spec.chrome !== "object" || typeof spec.chrome?.nav !== "string" || typeof spec.chrome?.header !== "string")) {
     problems.push("chrome must be { nav, header }");
@@ -349,6 +439,15 @@ export function validateWire(input: unknown): string[] {
   if (spec.by !== undefined && (typeof spec.by !== "object" || !["jev", "stub", "agent"].includes(spec.by?.answerer as string))) {
     problems.push("by must be { answerer: jev | stub | agent, actor?, via?, model? }");
   }
+  if (spec.pinned !== undefined) {
+    if (!spec.pinned || typeof spec.pinned !== "object" || Array.isArray(spec.pinned)) {
+      problems.push("pinned must be an object of string key-value pairs");
+    } else {
+      for (const [k, v] of Object.entries(spec.pinned)) {
+        if (typeof v !== "string" || !k) problems.push(`pinned.${k} must be a string`);
+      }
+    }
+  }
   let r: Recipe;
   try {
     r = recipe(String(spec.archetype));
@@ -356,6 +455,7 @@ export function validateWire(input: unknown): string[] {
     return [...problems, (error as Error).message];
   }
   if (!Array.isArray(spec.slots)) return [...problems, "slots must be an array"];
+  const tpl = spec.template ? TEMPLATE_BY_ID.get(spec.template) : undefined;
   let last = -1;
   const seen = new Set<string>();
   for (const slot of spec.slots as WireSlot[]) {
@@ -374,6 +474,13 @@ export function validateWire(input: unknown): string[] {
     if (!props || typeof props !== "object" || Array.isArray(props)) {
       problems.push(`${where}: props must be an object`);
       continue;
+    }
+    if (slot.region !== undefined) {
+      if (typeof slot.region !== "string" || !slot.region) {
+        problems.push(`${where}: region must be a non-empty string`);
+      } else if (tpl && !tpl.regions.includes(slot.region) && slot.region !== "main") {
+        problems.push(`${where}: region "${slot.region}" is not one of ${tpl.id}'s regions (${tpl.regions.join(", ")})`);
+      }
     }
     if (slot.fill !== undefined) problems.push(...fillProblems(slot.fill, where));
     if (slot.block === null) {
@@ -424,6 +531,53 @@ export function validateWire(input: unknown): string[] {
   }
   for (const section of r.sections) {
     if (!section.optional && !seen.has(section.slot)) problems.push(`slot "${section.slot}" is required by ${r.id}`);
+  }
+  if (spec.decisions !== undefined) {
+    if (typeof spec.decisions !== "object" || spec.decisions === null || Array.isArray(spec.decisions)) {
+      problems.push("decisions must be an object mapping question ids to probability maps");
+    } else {
+      for (const [qId, dist] of Object.entries(spec.decisions)) {
+        if (typeof dist !== "object" || dist === null || Array.isArray(dist)) {
+          problems.push(`decisions["${qId}"] must be an object mapping options to probabilities`);
+          continue;
+        }
+        for (const [opt, prob] of Object.entries(dist)) {
+          if (!(typeof prob === "number" && prob >= 0 && prob <= 1)) {
+            problems.push(`decisions["${qId}"]["${opt}"] must be 0–1`);
+          }
+        }
+      }
+    }
+  }
+  if (spec.polish !== undefined) {
+    if (!Array.isArray(spec.polish)) {
+      problems.push("polish must be an array of { target, add?, remove? } patches");
+    } else {
+      const allowedTokens = new Set<string>(POLISH_TOKENS);
+      for (const patch of spec.polish) {
+        if (!patch || typeof patch !== "object" || typeof patch.target !== "string" || !patch.target.trim()) {
+          problems.push("polish patch must have a non-empty string target");
+          continue;
+        }
+        for (const t of patch.add ?? []) {
+          if (!allowedTokens.has(t)) problems.push(`polish["${patch.target}"]: unknown add token "${t}"`);
+        }
+        for (const t of patch.remove ?? []) {
+          if (!allowedTokens.has(t)) problems.push(`polish["${patch.target}"]: unknown remove token "${t}"`);
+        }
+      }
+    }
+  }
+  if (spec.layers !== undefined) {
+    if (!spec.layers || typeof spec.layers !== "object" || Array.isArray(spec.layers)) {
+      problems.push("layers must be an object of boolean flags (system, copy, lofi, hifi)");
+    } else {
+      const allowedLayers = new Set<string>(WIRE_LAYER_IDS);
+      for (const [k, v] of Object.entries(spec.layers)) {
+        if (!allowedLayers.has(k)) problems.push(`layers: unknown layer "${k}"`);
+        else if (typeof v !== "boolean") problems.push(`layers.${k} must be a boolean`);
+      }
+    }
   }
   return problems;
 }

@@ -14,7 +14,7 @@ Run by `scripts/persona-run.mjs` at `9b385b3`. **Nothing was changed.**
 
 | Finding | Outcome |
 | --- | --- |
-| lines in the files every feature must edit is 25362, past 25267 | unanswered |
+| lines in the files every feature must edit is 25362, past 25267 | accepted — fixed, not moved: paid down to 23,366 at `2386c09d` (394 lazy-only rules moved out of `styles.css`), well under 25,267. |
 
 `unanswered` until somebody writes `accepted` or `rejected`. **After 3 days
 an unanswered row fails `npm test`** — the queue can fail, so a correct report

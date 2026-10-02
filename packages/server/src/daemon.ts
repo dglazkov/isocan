@@ -536,6 +536,10 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     park: new ParkCursors(home),
     // This machine's runtime modules, read per request (modules phase 3).
     modulesHome: home,
+    // And its `dirs.json`: which directory is bound to which canvas, for the
+    // tree, the picker, the bind and the backing — this daemon's, not the
+    // process's, which in a test is the person's own ~/.isocan.
+    rosterHome: home,
     adoptIdentity: (actor: Actor) => adoptIdentity(home, actor),
     // What the bind means, said once here rather than read off the socket at
     // every listing: anything but the loopback address is a daemon other

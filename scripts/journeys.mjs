@@ -821,6 +821,699 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "lift",
+    /**
+     * **The lift** (groups-by-hand phase 1): what the hand holds wears
+     * `--shadow-lift` once the press has become a drag, and settles back to
+     * the card's shadow on release. Depth only — nothing grows, nothing
+     * fades, nothing leaves the hand — and a dragged group lifts its FRAME,
+     * not each of its members.
+     *
+     * Asserted as STATE: the computed `box-shadow` is polled until it equals
+     * the token (a probe element resolves `var(--shadow-lift)` and
+     * `var(--shadow-card)` in this page's theme, so the comparison is
+     * theme-proof), never caught mid-transition.
+     */
+    what: "a dragged card wears the lift and settles back; a dragged group lifts its frame, not its members",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme lift");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-lift-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Lift CLI");
+      const md = path.join(rig.home, "acme-lift.md");
+      writeFileSync(md, "# Acme\n\nA card to pick up.\n");
+      // Somewhere bare and on screen (the panels take part of a small
+      // window), with room above for the title bar and to the right for the
+      // drag — converted from screen to world through the world's own box.
+      const spot = await openSpot(rig, 340, 260);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+        return { left: r.left, top: r.top, scale };
+      })()`);
+      const wx = Math.round((spot.x + 20 - world.left) / world.scale), wy = Math.round((spot.y + 50 - world.top) / world.scale);
+      const card = runCli("--canvas", id, "add", md, "--title", "Acme card", "--at", `${wx},${wy}`, "--size", "240x160").itemId;
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      await until(b, `!!document.querySelector(${sel(card)})`, "the card to arrive on the canvas");
+      await rig.type("v");
+
+      // The two shadows, resolved in this page's own theme.
+      const tokens = await b.ev(`(() => {
+        const probe = document.createElement("div");
+        document.querySelector(".item").parentElement.appendChild(probe);
+        probe.style.boxShadow = "var(--shadow-lift)";
+        const lift = getComputedStyle(probe).boxShadow;
+        probe.style.boxShadow = "var(--shadow-card)";
+        const card = getComputedStyle(probe).boxShadow;
+        probe.remove();
+        return { lift, card };
+      })()`);
+      if (!tokens.lift || tokens.lift === "none" || tokens.lift === tokens.card) throw new Error(`--shadow-lift does not resolve to its own shadow (${tokens.lift})`);
+      const look = (itemId) => b.ev(`(() => {
+        const el = document.querySelector(${sel(itemId)});
+        if (!el) return null;
+        const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+        // An identity matrix is no transform: the arrival animation's
+        // filled end state reads either way depending on when it is asked.
+        const transform = cs.transform === "matrix(1, 0, 0, 1, 0, 0)" ? "none" : cs.transform;
+        return { shadow: cs.boxShadow, transform, opacity: cs.opacity, scale: cs.scale, translate: cs.translate,
+                 lifted: el.classList.contains("lifted"), x: r.left, y: r.top, w: r.width, h: r.height };
+      })()`);
+      const shadowIs = (itemId, want, what) =>
+        until(b, `getComputedStyle(document.querySelector(${sel(itemId)})).boxShadow === ${JSON.stringify(want)}`, what, 3000);
+
+      /** A real press on a point of the item a person would grab, then a
+       *  move of 40px in steps — returns the release. */
+      const grab = async (selector, what) => {
+        const at = await b.ev(`(() => {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + Math.min(r.height / 2, 12));
+          const top = document.elementFromPoint(x, y);
+          return { x, y, hit: !!top && (el === top || el.contains(top)), over: top ? (top.className?.toString?.() || top.tagName) : "nothing" };
+        })()`);
+        if (!at) throw new Error(`no ${what} on screen`);
+        if (!at.hit) throw new Error(`${what} is covered by ${at.over} — a person could not grab it (${JSON.stringify(at)}; ${await b.ev(`JSON.stringify(document.querySelector(".canvas-viewport").getBoundingClientRect())`)}; ${await b.ev(`document.querySelector(${JSON.stringify(selector)}).closest(".item").outerHTML.slice(0,300)`)})`);
+        await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: at.x, y: at.y, button: "left", buttons: 1, clickCount: 1 });
+        return {
+          at,
+          move: async (dx) => {
+            for (let s = 1; s <= 4; s++) {
+              await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at.x + (dx * s) / 4, y: at.y, button: "left", buttons: 1 });
+              await sleep(40);
+            }
+          },
+          release: (dx) => b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at.x + dx, y: at.y, button: "left", buttons: 0, clickCount: 1 }),
+        };
+      };
+
+      // 1. A card. At rest: the card's shadow.
+      // The card arrived from another actor (the CLI), so it plays the
+      // arrival motion, which a headless page throttles: wait for the STATE
+      // it ends in (no transform) rather than read its scale as the lift's.
+      await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(card)})).transform)`, "the card to come to rest at its own size");
+      await shadowIs(card, tokens.card, "the card to rest in --shadow-card");
+      const rest = await look(card);
+      const hand = await grab(`.item[data-item-id="${card}"] .item-titlebar`, "the card's title bar");
+      // A press that has not moved is a click, and a click never lifts.
+      await sleep(250);
+      const pressed = await look(card);
+      if (pressed.lifted || pressed.shadow !== tokens.card) {
+        await hand.release(0);
+        throw new Error(`a press that never moved already lifted the card (${pressed.shadow})`);
+      }
+      await hand.move(40);
+      try {
+        await shadowIs(card, tokens.lift, "the dragged card to wear --shadow-lift");
+      } catch (err) {
+        const now = await look(card);
+        await hand.release(40);
+        throw new Error(`${err.message} — it wears ${now.shadow}, lifted class ${now.lifted}`);
+      }
+      const mid = await look(card);
+      await hand.release(40);
+      if (mid.transform !== "none" || mid.scale !== "none" || mid.translate !== "none") throw new Error(`the lift moved or scaled the card (transform ${mid.transform}, scale ${mid.scale}, translate ${mid.translate})`);
+      if (mid.opacity !== "1") throw new Error(`a dragged card is translucent (opacity ${mid.opacity}) — the lift says moving, not a fade`);
+      if (Math.abs(mid.w - rest.w) > 0.5 || Math.abs(mid.h - rest.h) > 0.5) throw new Error(`the lifted card changed size (${rest.w}×${rest.h} → ${mid.w}×${mid.h})`);
+      if (Math.abs(mid.x - rest.x - 40) > 8) throw new Error(`the card is not under the hand: moved ${mid.x - rest.x}px for a 40px drag`);
+      await shadowIs(card, tokens.card, "the released card to settle back to --shadow-card");
+      const settled = await look(card);
+      if (settled.lifted) throw new Error("the released card still wears .lifted");
+
+      // 2. A group: its frame lifts, its member does not.
+      // A new canvas may be legacy (areas) or groups; the card above went
+      // through whichever drag path it has, and the proof says which.
+      let wrapped, migrated = false;
+      try {
+        wrapped = runCli("--canvas", id, "canvas", "group", "wrap", card, "--title", "Acme group");
+      } catch {
+        const preview = runCli("--canvas", id, "canvas", "group", "migrate", "--dry-run");
+        runCli("--canvas", id, "canvas", "group", "migrate", "--revision", String(preview.revision));
+        migrated = true;
+        wrapped = runCli("--canvas", id, "canvas", "group", "wrap", card, "--title", "Acme group");
+      }
+      const group = wrapped.groupId ?? wrapped.itemId ?? wrapped.group?.id ?? wrapped.id;
+      if (!group) throw new Error(`wrap returned no group id: ${JSON.stringify(wrapped).slice(0, 200)}`);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.area[data-item-id="${group}"] .area-title`)})`, "the group's frame and title strip");
+      await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(group)})).transform)`, "the frame to come to rest at its own size");
+      const frameRest = await look(group);
+      const handle = await grab(`.item[data-item-id="${group}"] .area-title`, "the group's title strip");
+      await handle.move(40);
+      try {
+        await shadowIs(group, tokens.lift, "the dragged group's frame to wear --shadow-lift");
+      } catch (err) {
+        const now = await look(group);
+        await handle.release(40);
+        throw new Error(`${err.message} — it wears ${now.shadow}, lifted class ${now.lifted}`);
+      }
+      const frameMid = await look(group);
+      const memberMid = await look(card);
+      await handle.release(40);
+      if (memberMid.lifted || memberMid.shadow !== tokens.card) throw new Error(`a member of the dragged group lifted too (${memberMid.shadow}) — the frame lifts, its members ride flat`);
+      if (Math.abs(frameMid.x - frameRest.x - 40) > 8) throw new Error(`the group is not under the hand: moved ${frameMid.x - frameRest.x}px for a 40px drag`);
+      if (frameMid.transform !== "none" || Math.abs(frameMid.w - frameRest.w) > 0.5) throw new Error(`the lifted frame was transformed or resized (${frameRest.w}×${frameRest.h}, ${frameRest.transform} → ${frameMid.w}×${frameMid.h}, ${frameMid.transform})`);
+      await shadowIs(group, "none", "the released group's frame to lie flat again");
+      return { cardDragMode: migrated ? "legacy" : "groups", lift: tokens.lift, card: tokens.card, memberDuringGroupDrag: memberMid.shadow };
+    },
+  },
+  {
+    name: "group-reach",
+    /**
+     * **⌘ takes one item** (groups-by-hand phase 2), driven with real CDP
+     * mouse and key events carrying the modifier. Hover says what a press
+     * would take — the group, over a member AND over the space between
+     * members — and ⌘ moves the outline to the member, live as the key goes
+     * down under a still pointer. A ⌘-drag carries a member out onto the open
+     * canvas under an *Out of …* label, as one act that one ⌘Z undoes; a plain
+     * drag past the frame keeps the member and grows the frame.
+     *
+     * ⌘ on a Mac, Ctrl elsewhere: the browser runs on this machine, so this
+     * machine's platform is the page's (`reachHeld` in core). Asserted as
+     * STATE — classes in the DOM, membership and boxes the server holds.
+     */
+    what: "hover outlines what a press takes; ⌘ reaches one member and drags it out (one undo back); a plain drag keeps it and grows the frame",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme reach");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-reach-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      /** Poll the home until it says so — the op lands after the release. */
+      const home = async (read, want, what, ms = 8000) => {
+        const deadline = Date.now() + ms;
+        for (;;) {
+          const got = read();
+          if (want(got)) return got;
+          if (Date.now() > deadline) throw new Error(`never became true: ${what} (the home says ${JSON.stringify(got)})`);
+          await sleep(200);
+        }
+      };
+      runCli("identity", "--session", "--name", "Acme Reach CLI");
+      const MOD = process.platform === "darwin" ? 4 : 2;
+      const MOD_KEY = process.platform === "darwin"
+        ? { key: "Meta", code: "MetaLeft", windowsVirtualKeyCode: 91 }
+        : { key: "Control", code: "ControlLeft", windowsVirtualKeyCode: 17 };
+
+      // Two cards with a clear gap between them, wrapped in one group, with
+      // open canvas to the right to drag a member out onto.
+      const spot = await openSpot(rig, 620, 300);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 40 - world.left) / world.scale), wy = Math.round((spot.y + 110 - world.top) / world.scale);
+      const one = runCli("--canvas", id, "text", "Acme one", "--at", `${wx},${wy}`, "--size", "120x80").itemId;
+      const two = runCli("--canvas", id, "text", "Acme two", "--at", `${wx + 240},${wy}`, "--size", "120x80").itemId;
+      let wrapped;
+      try { wrapped = runCli("--canvas", id, "canvas", "group", "wrap", one, two, "--title", "Acme group"); }
+      catch {
+        const preview = runCli("--canvas", id, "canvas", "group", "migrate", "--dry-run");
+        runCli("--canvas", id, "canvas", "group", "migrate", "--revision", String(preview.revision));
+        wrapped = runCli("--canvas", id, "canvas", "group", "wrap", one, two, "--title", "Acme group");
+      }
+      const group = wrapped.itemId ?? wrapped.groupId;
+      if (!group) throw new Error(`wrap returned no group id: ${JSON.stringify(wrapped).slice(0, 200)}`);
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      for (const itemId of [group, one, two]) {
+        await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to arrive on the canvas`);
+        await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(itemId)})).transform)`, `${itemId} to come to rest`);
+      }
+      await rig.type("v");
+      const rect = (itemId) => b.ev(`(() => { const r = document.querySelector(${sel(itemId)}).getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, w: r.width, h: r.height, cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + r.height / 2) }; })()`);
+      const mouse = (type, x, y, { buttons = 0, modifiers = 0 } = {}) => b.send("Input.dispatchMouseEvent", {
+        type, x, y, modifiers, buttons, button: type === "mouseMoved" && !buttons ? "none" : "left", clickCount: type === "mouseMoved" ? 0 : 1,
+      });
+      const has = (itemId, cls, what) => until(b, `!!document.querySelector(${sel(itemId)})?.classList.contains(${JSON.stringify(cls)})`, what, 3000);
+      const lacks = async (itemId, cls, what) => {
+        if (await b.ev(`!!document.querySelector(${sel(itemId)})?.classList.contains(${JSON.stringify(cls)})`)) throw new Error(what);
+      };
+      const parentOf = (itemId) => runCli("--canvas", id, "show", itemId).containerId ?? null;
+      const members = () => runCli("--canvas", id, "ls", "--in", group).map((row) => row.id ?? row.itemId).sort();
+
+      // 1. At the canvas level, pointing at a member outlines the GROUP.
+      const r1 = await rect(one), r2 = await rect(two);
+      await mouse("mouseMoved", r1.cx, r1.cy);
+      await has(group, "hover-target", "pointing at a member at the canvas level to outline its group");
+      await lacks(one, "hover-target", "pointing at a member outlined the member, while a press takes the group");
+
+      // 2. …and so does the open space between the members, which takes the
+      // pointer there now.
+      const gap = { x: Math.round((r1.right + r2.left) / 2), y: r1.cy };
+      const under = await b.ev(`document.elementFromPoint(${gap.x}, ${gap.y})?.closest("[data-item-id]")?.getAttribute("data-item-id") ?? null`);
+      if (under !== group) throw new Error(`the space between members does not take the pointer for the group (under it: ${under})`);
+      await mouse("mouseMoved", gap.x, gap.y);
+      await mouse("mouseMoved", gap.x + 2, gap.y);
+      await has(group, "hover-target", "pointing at the space between members to outline the group");
+
+      // 3. ⌘ moves the outline to the member, and the group reads "inside this".
+      await mouse("mouseMoved", r1.cx, r1.cy, { modifiers: MOD });
+      await has(one, "hover-target", "⌘ over a member to outline the member");
+      await has(group, "reach-inside", "⌘ over a member to draw its group faint, as the thing it is inside");
+      await lacks(group, "hover-target", "⌘ over a member still outlined the group");
+      // Live: ⌘ going up and down under a pointer that does not move.
+      await mouse("mouseMoved", r1.cx + 1, r1.cy);
+      await has(group, "hover-target", "letting go of ⌘ to put the outline back on the group");
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: MOD, ...MOD_KEY });
+      await has(one, "hover-target", "pressing ⌘ under a still pointer to move the outline to the member");
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 0, ...MOD_KEY });
+      await has(group, "hover-target", "releasing ⌘ under a still pointer to move the outline back");
+      // ⌘ over the space between members: the members, dimly; a press there
+      // is a selection box among them, not a grab of the group.
+      await mouse("mouseMoved", gap.x, gap.y, { modifiers: MOD });
+      await has(two, "reach-among", "⌘ over the space between members to show the members a selection box would reach");
+      await mouse("mousePressed", gap.x, gap.y, { buttons: 1, modifiers: MOD });
+      for (let s = 1; s <= 4; s++) { await mouse("mouseMoved", gap.x + Math.round(((r2.cx - gap.x) * s) / 4), gap.y + Math.round(((r2.bottom + 6 - gap.y) * s) / 4), { buttons: 1, modifiers: MOD }); await sleep(30); }
+      await mouse("mouseReleased", r2.cx, r2.bottom + 6, { modifiers: MOD });
+      await has(two, "selected", "a ⌘ selection box from the space between members to select the member it crosses");
+      await lacks(group, "selected", "a ⌘ press on the space between members took the group instead of starting a selection box");
+      await lacks(one, "selected", "the ⌘ selection box selected a member it never crossed");
+
+      // 4. ⌘-drag the member out onto open canvas: the label says so first.
+      const frame0 = runCli("--canvas", id, "show", group);
+      const at0 = runCli("--canvas", id, "show", one);
+      const fr = await rect(group);
+      const out = { x: Math.round(fr.right + 140), y: r1.cy };
+      await mouse("mousePressed", r1.cx, r1.cy, { buttons: 1, modifiers: MOD });
+      for (let s = 1; s <= 8; s++) {
+        await mouse("mouseMoved", Math.round(r1.cx + ((out.x - r1.cx) * s) / 8), out.y, { buttons: 1, modifiers: MOD });
+        await sleep(40);
+      }
+      try {
+        await until(b, `document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .group-drop-label.out`)})?.textContent === "Out of Acme group"`, "the Out of Acme group label before letting go", 3000);
+      } catch (err) {
+        await mouse("mouseReleased", out.x, out.y, { modifiers: MOD });
+        throw err;
+      }
+      await mouse("mouseReleased", out.x, out.y, { modifiers: MOD });
+      await home(() => parentOf(one), (parent) => parent === null, "the ⌘-dragged member to be on the canvas, out of its group");
+      const left = members();
+      if (left.length !== 1 || left[0] !== two) throw new Error(`the group should hold one item fewer, just ${two}; it holds ${JSON.stringify(left)}`);
+      const landed = runCli("--canvas", id, "show", one);
+      if (landed.x <= frame0.x + frame0.width) throw new Error(`the member did not land where the pointer was, out past the frame (x ${landed.x}, frame ends ${frame0.x + frame0.width})`);
+
+      // …and one ⌘Z puts it back: in the group, where it was.
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+      const back = await home(() => runCli("--canvas", id, "show", one), (item) => item.containerId === group, "one undo to put the member back in its group");
+      if (back.x !== at0.x || back.y !== at0.y) throw new Error(`undo restored membership but not the place (${back.x},${back.y}, was ${at0.x},${at0.y})`);
+
+      // 5. A plain drag never detaches. ⌘-click steps into the group (a plain
+      // press at the canvas level takes the group), then a plain drag of the
+      // member past the frame's left edge keeps it a member and grows the frame.
+      await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(one)})).transform)`, "the member to come to rest after the undo");
+      const r3 = await rect(one);
+      await mouse("mousePressed", r3.cx, r3.cy, { buttons: 1, modifiers: MOD });
+      await mouse("mouseReleased", r3.cx, r3.cy, { modifiers: MOD });
+      await has(one, "selected", "⌘-click to select just the member");
+      await lacks(group, "selected", "⌘-click selected the group");
+      const frame1 = runCli("--canvas", id, "show", group);
+      const past = { x: Math.round((await rect(group)).left - 90), y: r3.cy };
+      await mouse("mousePressed", r3.cx, r3.cy, { buttons: 1 });
+      for (let s = 1; s <= 8; s++) {
+        await mouse("mouseMoved", Math.round(r3.cx + ((past.x - r3.cx) * s) / 8), past.y, { buttons: 1 });
+        await sleep(40);
+      }
+      const outLabel = await b.ev(`!!document.querySelector(".group-drop-label.out")`);
+      await mouse("mouseReleased", past.x, past.y);
+      if (outLabel) throw new Error("a plain drag past the frame offered to take the member out");
+      const grown = await home(() => runCli("--canvas", id, "show", group), (frame) => frame.x < frame1.x, "the frame to grow to keep the plainly dragged member");
+      if (parentOf(one) !== group) throw new Error("a plain drag past the frame detached the member");
+      return { modifier: MOD === 4 ? "meta" : "ctrl", frameBefore: { x: frame1.x, width: frame1.width }, frameAfter: { x: grown.x, width: grown.width }, outAt: { x: landed.x, y: landed.y } };
+    },
+  },
+  {
+    name: "live-drag",
+    /**
+     * **Others see the drag** (groups-by-hand phase 3), with TWO browsers on
+     * one canvas: a second Chrome — its own cookie, so its own person — drags
+     * a card with real CDP mouse events and holds it mid-air, and this page
+     * (the viewer) must already be drawing the card offset by about the same
+     * world distance, lifted and edged in the mover's colour. After the
+     * release the card stands at the mover's final spot on both screens with
+     * no ghost left behind: no translate, no ghost classes.
+     *
+     * Asserted as STATE on the viewer's DOM — the computed `translate` and
+     * the item's `left`/`top` — polled until it holds, never an animation
+     * caught mid-frame.
+     */
+    what: "a second person's drag shows on this screen as it happens, and lands with no ghost left",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme live drag");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-live-drag-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Live Drag CLI");
+      const md = path.join(rig.home, "acme-live-drag.md");
+      writeFileSync(md, "# Acme\n\nA card somebody else will carry.\n");
+      const spot = await openSpot(rig, 340, 260);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+        return { left: r.left, top: r.top, scale };
+      })()`);
+      const wx = Math.round((spot.x + 20 - world.left) / world.scale), wy = Math.round((spot.y + 50 - world.top) / world.scale);
+      const card = runCli("--canvas", id, "add", md, "--title", "Acme carried card", "--at", `${wx},${wy}`, "--size", "240x160").itemId;
+      const sel = JSON.stringify(`.item[data-item-id="${card}"]`);
+      const look = (page) => page.ev(`(() => {
+        const el = document.querySelector(${sel});
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { left: parseFloat(el.style.left), top: parseFloat(el.style.top), translate: cs.translate,
+                 lifted: el.classList.contains("lifted"), root: el.classList.contains("ghost-root"),
+                 ghosted: !!document.querySelector(".ghosted, .ghost-root, .ghost-into, .ghost-box"),
+                 edge: cs.outlineStyle + " " + cs.outlineColor };
+      })()`);
+      await until(b, `!!document.querySelector(${sel})`, "the card to arrive on the viewer's canvas");
+      const rest = await look(b);
+
+      // The second person: a browser of its own, through the door as somebody else.
+      const m = await browser();
+      try {
+        const loaded = m.once("Page.loadEventFired");
+        await m.send("Page.navigate", { url: rig.origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await throughTheDoor(m, rig.origin, "Acme Mover", "journeys-mover");
+        await m.send("Page.navigate", { url: `${rig.origin}/p/${id}` });
+        await until(m, `!!document.querySelector(${sel})`, "the card to render for the mover", 30_000);
+        await until(m, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel})).transform)`, "the card to come to rest for the mover");
+        const at = await m.ev(`(() => {
+          const el = document.querySelector(${JSON.stringify(`.item[data-item-id="${card}"] .item-titlebar`)});
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + Math.min(r.height / 2, 12));
+          const top = document.elementFromPoint(x, y);
+          const w = document.querySelector(".world");
+          return { x, y, hit: !!top && (el === top || el.contains(top)), over: top ? String(top.className) : "nothing",
+                   scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+        })()`);
+        if (!at) throw new Error("the mover has no title bar to grab");
+        if (!at.hit) throw new Error(`the mover's grab point is covered by ${at.over}`);
+        const DX = 180, DY = 60;
+        const mouse = (type, x, y) => m.send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mouseReleased" ? 0 : 1, clickCount: 1 });
+        await mouse("mousePressed", at.x, at.y);
+        for (let s = 1; s <= 12; s++) { await mouse("mouseMoved", at.x + (DX * s) / 12, at.y + (DY * s) / 12); await sleep(40); }
+        // Held mid-air: nothing has landed, so the viewer can only know
+        // where the card is from the mover's presence.
+        const wantX = DX / at.scale, wantY = DY / at.scale;
+        let mid;
+        try {
+          await until(b, `(() => {
+            const el = document.querySelector(${sel});
+            const t = getComputedStyle(el).translate.split(" ").map(parseFloat);
+            return Math.abs((t[0] || 0) - ${wantX}) < 14 && Math.abs((t[1] || 0) - ${wantY}) < 14;
+          })()`, "the viewer to draw the card under the mover's hand", 6000);
+          mid = await look(b);
+        } catch (err) {
+          const now = await look(b);
+          await mouse("mouseReleased", at.x + DX, at.y + DY);
+          throw new Error(`${err.message} — the viewer shows ${JSON.stringify(now)}`);
+        }
+        const landedBefore = await look(b);
+        if (landedBefore.left !== rest.left || landedBefore.top !== rest.top) {
+          await mouse("mouseReleased", at.x + DX, at.y + DY);
+          throw new Error(`the card's own position moved before the release (${rest.left},${rest.top} → ${landedBefore.left},${landedBefore.top}) — the ghost is meant to be presence, not an op`);
+        }
+        await mouse("mouseReleased", at.x + DX, at.y + DY);
+        if (!mid.lifted || !mid.root) throw new Error(`the carried card was offset but not lifted and edged (${JSON.stringify(mid)})`);
+        if (!/solid/.test(mid.edge)) throw new Error(`the carried card wears no solid edge in the mover's colour (${mid.edge})`);
+
+        // Released: the op lands, and the ghost goes with it.
+        const final = await (async () => {
+          await until(m, `(() => { const el = document.querySelector(${sel}); return !!el && !el.classList.contains("lifted"); })()`, "the mover's card to settle");
+          return look(m);
+        })();
+        if (Math.abs(final.left - rest.left - wantX) > 14) throw new Error(`the mover's drop landed ${final.left - rest.left} world px across for a ${wantX} drag`);
+        await until(b, `(() => {
+          const el = document.querySelector(${sel});
+          return parseFloat(el.style.left) === ${final.left} && parseFloat(el.style.top) === ${final.top}
+            && getComputedStyle(el).translate === "none"
+            && !document.querySelector(".ghosted, .ghost-root, .ghost-into, .ghost-box");
+        })()`, "the viewer to show the card at the mover's final spot with no ghost left", 6000).catch(async (err) => {
+          throw new Error(`${err.message} — it shows ${JSON.stringify(await look(b))}, the mover dropped it at ${final.left},${final.top}`);
+        });
+        const after = await look(b);
+        if (after.lifted) throw new Error("the viewer's card still wears .lifted after the drop");
+        return { rest: [rest.left, rest.top], midTranslate: mid.translate, edge: mid.edge, landed: [after.left, after.top] };
+      } finally {
+        await m.close();
+      }
+    },
+  },
+  {
+    name: "stack",
+    /**
+     * **Stacks** (groups-by-hand phase 4): *Stack* on a group's title band
+     * draws it as a pile of cards — shared and stored, so it survives a
+     * reload — while every member keeps its x/y. Pointing fans the pile, a
+     * click opens it into a grid in front of the canvas, Esc closes the grid
+     * (and the stack is still a stack, because opening is never stored), and
+     * *Spread* puts every member back exactly where it was.
+     *
+     * Asserted as STATE — classes in the DOM, what the home holds, and the
+     * members' boxes before and after — never an animation having run.
+     */
+    what: "Stack draws a pile that survives reload; hover fans, click opens, Esc closes; Spread puts every member back where it was; ⌘-drag takes a card out of the opened stack",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme stack");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-stack-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const home = async (read, want, what, ms = 8000) => {
+        const deadline = Date.now() + ms;
+        for (;;) {
+          const got = read();
+          if (want(got)) return got;
+          if (Date.now() > deadline) throw new Error(`never became true: ${what} (the home says ${JSON.stringify(got)})`);
+          await sleep(200);
+        }
+      };
+      runCli("identity", "--session", "--name", "Acme Stack CLI");
+
+      // Three cards in a row, wrapped in one group, on bare canvas.
+      const spot = await openSpot(rig, 560, 300);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 40 - world.left) / world.scale), wy = Math.round((spot.y + 110 - world.top) / world.scale);
+      const cards = ["Acme one", "Acme two", "Acme three"].map((words, n) => runCli("--canvas", id, "text", words, "--at", `${wx + n * 170},${wy}`, "--size", "120x80").itemId);
+      let wrapped;
+      try { wrapped = runCli("--canvas", id, "canvas", "group", "wrap", ...cards, "--title", "Acme archive"); }
+      catch {
+        const preview = runCli("--canvas", id, "canvas", "group", "migrate", "--dry-run");
+        runCli("--canvas", id, "canvas", "group", "migrate", "--revision", String(preview.revision));
+        wrapped = runCli("--canvas", id, "canvas", "group", "wrap", ...cards, "--title", "Acme archive");
+      }
+      const group = wrapped.itemId ?? wrapped.groupId;
+      if (!group) throw new Error(`wrap returned no group id: ${JSON.stringify(wrapped).slice(0, 200)}`);
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      for (const itemId of [group, ...cards]) {
+        await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to arrive on the canvas`);
+        await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(itemId)})).transform)`, `${itemId} to come to rest`);
+      }
+      await rig.type("v");
+      const saved = () => cards.map((itemId) => { const item = runCli("--canvas", id, "show", itemId); return { id: itemId, x: item.x, y: item.y, width: item.width, height: item.height, in: item.containerId ?? null }; });
+      const drawn = () => b.ev(`JSON.stringify(${JSON.stringify(cards)}.map((id) => { const r = document.querySelector('.item[data-item-id="' + id + '"]')?.getBoundingClientRect(); return r ? [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)] : null; }))`);
+      const before = saved();
+      const drawnBefore = await drawn();
+      const stacked = () => runCli("--canvas", id, "canvas", "group", "show", group).stacked;
+      const mouse = (type, x, y, { buttons = 0 } = {}) => b.send("Input.dispatchMouseEvent", {
+        type, x, y, buttons, button: type === "mouseMoved" && !buttons ? "none" : "left", clickCount: type === "mouseMoved" ? 0 : 1,
+      });
+
+      // 1. Stack, from the title band.
+      await rig.click(`.item[data-item-id="${group}"] .group-stack-toggle.band`, "the group's Stack button");
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"] .stack-card.top`)})`, "the group to draw as a pile");
+      await home(stacked, (on) => on === true, "the home to hold the group as stacked");
+      if (JSON.stringify(saved()) !== JSON.stringify(before)) throw new Error(`stacking moved a member: ${JSON.stringify(saved())} (was ${JSON.stringify(before)})`);
+      for (const itemId of cards) if (await b.ev(`!!document.querySelector(${sel(itemId)})`)) throw new Error(`${itemId} is still drawn at its spread position under a stack`);
+
+      // 2. Reload: still a stack — the stored part.
+      await rig.go(`/p/${id}`);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"] .stack-card.top`)})`, "the pile to come back after a reload", 12000);
+      const layers = await b.ev(`document.querySelectorAll(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card`)}).length`);
+      if (layers !== 3) throw new Error(`the pile should show three cards, it shows ${layers}`);
+      const turns = await b.ev(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card:not(.top)`)})].map((el) => el.style.transform))`);
+      if (!/rotate\(-?[3-9]/.test(turns)) throw new Error(`the cards behind the top are not turned: ${turns}`);
+      await rig.type("v");
+
+      // 3. Point at it: it fans.
+      const pile = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-pile`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      const under = await b.ev(`document.elementFromPoint(${pile.x}, ${pile.y})?.closest("[data-item-id]")?.getAttribute("data-item-id") ?? null`);
+      if (under !== group) throw new Error(`the pile does not take the pointer (under it: ${under})`);
+      await mouse("mouseMoved", pile.x - 30, pile.y);
+      await mouse("mouseMoved", pile.x, pile.y);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-pile.fanned`)})`, "pointing at the pile to fan it", 3000);
+      if (stacked() !== true) throw new Error("fanning changed what the home holds");
+
+      // 4. Click: it opens into a grid of every member.
+      await mouse("mousePressed", pile.x, pile.y, { buttons: 1 });
+      await mouse("mouseReleased", pile.x, pile.y);
+      await until(b, `document.querySelectorAll(".stack-open .stack-open-card").length === 3`, "a click to open the stack into a grid of its three cards", 3000);
+
+      // 5. Esc closes it — and the stack is still a stack.
+      await rig.press("Escape");
+      await until(b, `!document.querySelector(".stack-open")`, "Esc to close the opened stack", 3000);
+      if (!(await b.ev(`!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"]`)})`))) throw new Error("closing the opened stack spread the group");
+      if (stacked() !== true) throw new Error("opening or closing the stack changed what the home holds");
+
+      // 6. Spread: every member where it was.
+      await mouse("mouseMoved", 5, 5);
+      await rig.click(`.item[data-item-id="${group}"] .stack-band .group-stack-toggle`, "the stack's Spread button");
+      await home(stacked, (on) => on === false, "the home to hold the group as spread");
+      for (const itemId of cards) await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to be drawn again after Spread`);
+      const after = saved();
+      if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`Spread did not put every member back: ${JSON.stringify(after)} (was ${JSON.stringify(before)})`);
+      const drawnAfter = await drawn();
+
+      // 7. ⌘-drag a card out of the opened stack: it leaves the group, in one act.
+      runCli("--canvas", id, "canvas", "group", "stack", group);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"] .stack-card.top`)})`, "the group to stack again from the terminal");
+      const pile2 = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-pile`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), right: Math.round(r.right) }; })()`);
+      await mouse("mousePressed", pile2.x, pile2.y, { buttons: 1 });
+      await mouse("mouseReleased", pile2.x, pile2.y);
+      const taken = cards[2];
+      await until(b, `!!document.querySelector(${JSON.stringify(`.stack-open .stack-open-card[data-member-id="${taken}"]`)})`, "the stack to open again", 3000);
+      const c = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.stack-open-card[data-member-id="${taken}"]`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      const MOD = process.platform === "darwin" ? 4 : 2;
+      const outAt = { x: Math.min(1200, pile2.right + 200), y: 820 };
+      await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: c.x, y: c.y, modifiers: MOD, buttons: 1, button: "left", clickCount: 1 });
+      for (let s = 1; s <= 8; s++) {
+        await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: Math.round(c.x + ((outAt.x - c.x) * s) / 8), y: Math.round(c.y + ((outAt.y - c.y) * s) / 8), modifiers: MOD, buttons: 1, button: "left" });
+        await sleep(40);
+      }
+      const inHand = await b.ev(`!!document.querySelector(${JSON.stringify(`.item.lifted[data-item-id="${taken}"]`)}) && !document.querySelector(".stack-open")`);
+      await b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: outAt.x, y: outAt.y, modifiers: MOD, buttons: 0, button: "left", clickCount: 1 });
+      if (!inHand) throw new Error("⌘-dragging a card out of the opened stack did not close the grid and put the card in the hand");
+      await home(() => runCli("--canvas", id, "show", taken).containerId ?? null, (parent) => parent === null, "the ⌘-dragged card to leave the stacked group");
+      await until(b, `!!document.querySelector(${sel(taken)})`, "the card taken out to be drawn on the canvas");
+      return { members: before.length, saved: after, drawnBefore: JSON.parse(drawnBefore), drawnAfter: JSON.parse(drawnAfter), takenOut: taken };
+    },
+  },
+  {
+    name: "submenu-diagonal",
+    /**
+     * **A submenu forgives a diagonal** (1 Oct 2026). Dion: right-click, hover
+     * Style ›, move toward its children — and they vanished, because the
+     * shortest path crosses the row below. Now a pointer heading into the open
+     * submenu keeps it (`lib/menuaim.ts`): this walks that diagonal in small
+     * real mouse steps, crossing the row below Align, and chooses the far item;
+     * then walks straight DOWN from Align and insists the menu does let go.
+     */
+    what: "a diagonal from Align › across the row below keeps the submenu and chooses its far item; straight down lets it go",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme menus");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-menu-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Menu CLI");
+      const spot = await openSpot(rig, 400, 260);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 20 - world.left) / world.scale), wy = Math.round((spot.y + 20 - world.top) / world.scale);
+      const cards = [["Acme left", `${wx},${wy}`, "120x80"], ["Acme right", `${wx + 200},${wy + 40}`, "120x120"]]
+        .map(([words, at, size]) => runCli("--canvas", id, "text", words, "--at", at, "--size", size).itemId);
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      for (const itemId of cards) await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to arrive on the canvas`);
+      const centre = (selector) => b.ev(`(() => { const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r && { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      const mouse = (type, x, y, { button = "none", modifiers = 0 } = {}) => b.send("Input.dispatchMouseEvent", {
+        type, x, y, modifiers, button: type === "mouseMoved" ? "none" : button,
+        buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: type === "mouseMoved" ? 0 : 1,
+      });
+      const press = async (at, opts) => { await mouse("mousePressed", at.x, at.y, opts); await mouse("mouseReleased", at.x, at.y, opts); };
+      const walk = async (from, to, steps, each, pace = 16) => {
+        for (let s = 1; s <= steps; s++) {
+          const at = { x: Math.round(from.x + ((to.x - from.x) * s) / steps), y: Math.round(from.y + ((to.y - from.y) * s) / steps) };
+          await mouse("mouseMoved", at.x, at.y);
+          await sleep(pace);
+          if (each) await each(at);
+        }
+      };
+      // Both cards selected, so Align is offered; then the menu, by a real right-click.
+      const a = await centre(`.item[data-item-id="${cards[0]}"]`), c = await centre(`.item[data-item-id="${cards[1]}"]`);
+      await press(a, { button: "left" });
+      await press(c, { button: "left", modifiers: 8 });
+      const ROOT = `.context-menu:not(.context-submenu)`;
+      const ALIGN = `${ROOT} > .context-sub > button[aria-haspopup="menu"]`;
+      const findAlign = `[...document.querySelectorAll(${JSON.stringify(ALIGN)})].find((el) => el.textContent.trim().startsWith("Align"))`;
+      const openMenu = async () => {
+        await mouse("mouseMoved", c.x, c.y);
+        await press(c, { button: "right" });
+        await until(b, `!!${findAlign} && !${findAlign}.disabled`, "the item menu, with Align offered for two cards", 4000);
+        const row = await b.ev(`(() => { const r = ${findAlign}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), left: Math.round(r.left), h: Math.round(r.height) }; })()`);
+        // Onto Align from its left, the way a hand arrives, and wait out the beat.
+        await walk({ x: row.left + 4, y: row.y }, row, 4);
+        await until(b, `${findAlign}.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`, "hovering Align to open its submenu", 2000);
+        return row;
+      };
+      const subOpen = `${findAlign}?.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`;
+
+      // 1. The diagonal: Align's centre to the submenu's LAST row, crossing the rows below Align.
+      const row = await openMenu();
+      const far = await b.ev(`(() => { const all = [...document.querySelectorAll(".context-submenu button")]; const el = all[all.length - 1]; el.setAttribute("data-journey-far", ""); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
+      const crossed = new Set();
+      const diagonalAt = Date.now();
+      await walk(row, far, 24, async (at) => {
+        const over = await b.ev(`(() => { const el = document.elementFromPoint(${at.x}, ${at.y})?.closest("button"); return el && !el.closest(".context-submenu") && el !== ${findAlign} ? el.textContent.trim() : null; })()`);
+        if (over) crossed.add(over);
+        if (!(await b.ev(subOpen))) throw new Error(`the submenu closed on the way to "${far.label}", at ${at.x},${at.y}${over ? ` over "${over}"` : ""}`);
+      }, 50); // a hand's pace: ~1.3s, so the close grace (300ms) alone cannot carry it — only the aim can
+      const diagonalMs = Date.now() - diagonalAt;
+      if (crossed.size === 0) throw new Error("the diagonal never crossed another row — it proves nothing");
+      await sleep(400); // past every grace and pause: arriving settles it, nothing pending reopens or closes
+      if (!(await b.ev(subOpen))) throw new Error(`the submenu closed once the pointer reached "${far.label}"`);
+      const hovered = await b.ev(`document.querySelector("[data-journey-far]")?.matches(":hover")`);
+      if (!hovered) throw new Error(`"${far.label}" does not have the hover after the diagonal`);
+      await press(far, { button: "left" });
+      await until(b, `!document.querySelector(".context-menu")`, `choosing "${far.label}" to close the menu`, 2000);
+      const edges = async () => cards.map((itemId) => { const it = runCli("--canvas", id, "show", itemId); return it.y + it.height; });
+      const deadline = Date.now() + 6000;
+      let bottoms = await edges();
+      while (bottoms[0] !== bottoms[1] && Date.now() < deadline) { await sleep(200); bottoms = await edges(); }
+      if (far.label !== "Bottom" || bottoms[0] !== bottoms[1]) throw new Error(`choosing "${far.label}" did not align the bottoms: ${JSON.stringify(bottoms)}`);
+
+      // 2. Straight down from Align is choosing another row: the submenu lets go.
+      await openMenu();
+      const below = await b.ev(`(() => { const el = ${findAlign}.parentElement.nextElementSibling; const r = el.getBoundingClientRect(); return { x: ${row.x}, y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
+      const leftAt = Date.now();
+      await walk(row, below, 4);
+      await until(b, `!(${subOpen})`, `moving straight down onto "${below.label}" to close Align's submenu`, 1500);
+      const letGoMs = Date.now() - leftAt;
+      return { crossed: [...crossed], diagonalMs, chose: far.label, bottoms, straightDown: { onto: below.label, letGoMs } };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**
@@ -932,6 +1625,106 @@ export const JOURNEYS = [
       }
       const errors = rig.b.takeErrors();
       if (errors.length > 0) throw new Error(`the panel threw on Join: ${errors[0]}`);
+    },
+  },
+  {
+    name: "pet-follows",
+    /**
+     * **Pets follow — pets phase 2, scenes 2 to 4, walked.**
+     *
+     * A guard can prove `petsToBring` decides; only the running app proves an
+     * ARRIVAL acts on it: the page, after the snapshot, once, sending the
+     * invite and writing one line. So: Theo ticks *Follows me* on Scout in
+     * the agents panel, opens a second canvas, and Scout stands there with
+     * the thread saying so; a reload says nothing twice; a removal is
+     * respected; and with following off, a third canvas stays Scout-free.
+     * Every read-back is the terminal's — the other surface, asked
+     * independently.
+     */
+    what: "a pet comes along to a canvas its owner opens, once, and stops when following is off",
+    async run(rig) {
+      const runCli = (...args) =>
+        execFileSync(process.execPath, [cli, ...args], {
+          cwd: rig.home,
+          encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port },
+        });
+      const poll = async (read, what, ms = 10_000) => {
+        const deadline = Date.now() + ms;
+        for (;;) {
+          if (read()) return;
+          if (Date.now() > deadline) throw new Error(`never became true: ${what}`);
+          await sleep(250);
+        }
+      };
+      const standing = (canvasId) =>
+        (JSON.parse(runCli("--json", "--canvas", canvasId, "who")).standing ?? []).map((row) => row.actor.name);
+      const lines = (canvasId) =>
+        JSON.stringify(JSON.parse(runCli("--json", "--canvas", canvasId, "comment", "ls"))).split("Scout came with Theo").length - 1;
+      const open = async (canvasId, what) => {
+        await rig.b.send("Page.navigate", { url: `${rig.origin}/p/${canvasId}` });
+        await sleep(1500);
+        await until(rig.b, `!!document.querySelector(".world")`, what);
+      };
+
+      writeFileSync(
+        path.join(rig.home, "identity.json"),
+        JSON.stringify({ id: "usr_pet_theo", name: "Theo", createdAt: new Date().toISOString() }),
+      );
+      // Scout is a record — an actor nothing runs. A pet's arrival asks
+      // nothing of any machine, so none is needed to watch one arrive.
+      runCli("bench", "add", "Scout", "--actor", "usr_journey_scout", "--harness", "pi");
+      const [one, two, three] = ["Acme pets one", "Acme pets two", "Acme pets three"].map(
+        (title) => JSON.parse(runCli("--json", "canvas", "create", title)).canvasId,
+      );
+      const { address } = JSON.parse(runCli("--json", "--canvas", one, "pass"));
+      await rig.b.ev(`(() => { localStorage.clear(); return true; })()`);
+      await rig.b.send("Page.navigate", { url: address });
+      await sleep(2500);
+      await until(rig.b, `!!document.querySelector(".world")`, "the canvas to open for Theo");
+
+      // Scene 2: Follows me, in the agents panel — one fact on one row.
+      await rig.click('button[aria-label="More"]', "the ··· menu");
+      await rig.clickText(".menu-entry,[role=menuitem],.ctx-entry", "Agents", "the Agents entry");
+      await until(rig.b, `!!document.querySelector(".tray-bench .bench-follows input")`, "Follows me on Scout's row");
+      await rig.click(".tray-bench .bench-follows input", "Follows me");
+      await poll(() => JSON.parse(runCli("--json", "bench")).bench.find((row) => row.name === "Scout")?.follows === true, "the bench row to say Scout follows");
+      // Ticking it invites Scout nowhere — not even here.
+      if (standing(one).includes("Scout")) throw new Error("ticking Follows me brought Scout to the canvas it was ticked on");
+
+      // Scene 3: it follows, and the thread says so — once.
+      await open(two, "the second canvas to open");
+      await poll(() => standing(two).includes("Scout"), "Scout to stand on the second canvas");
+      await poll(() => lines(two) === 1, "the thread to say Scout came with Theo");
+      await rig.b.send("Page.reload", {});
+      await sleep(1500);
+      await until(rig.b, `!!document.querySelector(".world")`, "the second canvas to reopen");
+      await sleep(3000);
+      if (lines(two) !== 1) throw new Error(`a reload said it again: ${lines(two)} lines`);
+
+      // A removal is the room's word: withdrawn from the second canvas, Scout
+      // does not walk back on when Theo reopens it.
+      runCli("--canvas", two, "rc", "remove", "Scout");
+      await open(one, "the first canvas to reopen");
+      await open(two, "the second canvas, after the removal");
+      await sleep(3000);
+      if (standing(two).includes("Scout")) throw new Error("Scout came back onto a canvas it was removed from");
+
+      // The first canvas was opened again with following on: Scout came there
+      // too, which is the feature rather than a leak.
+      await poll(() => standing(one).includes("Scout"), "Scout to follow Theo back to the first canvas");
+
+      // Scene 4: off. A new canvas stays Scout-free, and where it stands it stays.
+      runCli("bench", "follow", "Scout", "--off");
+      await open(three, "the third canvas to open");
+      await sleep(3000);
+      if (standing(three).includes("Scout")) throw new Error("Scout followed with following off");
+      if (lines(three) !== 0) throw new Error("the third canvas was told Scout came");
+      if (!standing(one).includes("Scout")) throw new Error("turning following off sent Scout away");
+
+      const errors = rig.b.takeErrors();
+      if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+      return { lines: lines(two), standingOn: { one: standing(one), two: standing(two), three: standing(three) } };
     },
   },
   {

@@ -1,7 +1,8 @@
-import type { CanvasContents, PresenceSession } from "@isocan/core";
-import { QUIET_AFTER_MS } from "@isocan/core";
+import type { ActorJoins, ActorNames, CanvasContents, PresenceSession } from "@isocan/core";
+import { QUIET_AFTER_MS, sameActor } from "@isocan/core";
 
 export { QUIET_AFTER_MS };
+import { actorNameIn, sessionName } from "./names.ts";
 import { threadWorldPos } from "./viewport.ts";
 
 /**
@@ -60,7 +61,7 @@ export function statusLine(session: PresenceSession): string | null {
 
 /**
  * Two cursors on exactly the same point read as one. The choreography lands
- * them there honestly — a summons parks every woken agent on the summoning
+ * them them honestly — a summons parks every woken agent on the summoning
  * thread, and op piggyback puts a replying agent on the thread's pin — so
  * legibility is the renderer's job: when several sessions share a locus,
  * each is fanned onto a small ring, evenly spaced by its rank among the
@@ -106,4 +107,35 @@ export function spreadOverlaps(
  */
 export function liveActorIds(sessions: PresenceSession[]): Set<string> {
   return new Set(sessions.map((session) => session.actor.id));
+}
+
+/**
+ * Which remote sessions in `CursorLayer` share an identity or display name with
+ * this viewport's own actor (or with a more recently active session of the same
+ * name) and should therefore identify themselves as being in another tab rather
+ * than looking like a stuck copy of the local pointer.
+ */
+export function otherTabSessionIds(
+  sessions: PresenceSession[],
+  selfActor: { id: string; name: string } | null = null,
+  names: ActorNames = {},
+  joined: ActorJoins = {},
+): Set<string> {
+  const out = new Set<string>();
+  const selfName = selfActor ? actorNameIn(names, selfActor) : null;
+  const byName = new Map<string, PresenceSession[]>();
+  for (const s of sessions) {
+    const name = sessionName(names, s);
+    if (selfActor && (sameActor(joined, s.actor.id, selfActor.id) || name === selfName)) {
+      out.add(s.sessionId);
+      continue;
+    }
+    byName.set(name, [...(byName.get(name) ?? []), s]);
+  }
+  for (const group of byName.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => (Date.parse(b.lastSeen) || 0) - (Date.parse(a.lastSeen) || 0));
+    for (const s of sorted.slice(1)) out.add(s.sessionId);
+  }
+  return out;
 }

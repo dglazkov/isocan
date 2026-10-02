@@ -21,6 +21,100 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 1 October 2026
+
+- **Getting things out of a group.** Hold ⌘ (Ctrl on Windows and Linux)
+  and the outline jumps from a group to the one item under your pointer;
+  ⌘-drag it and drop it outside the frame to take it out (*Out of …* says so
+  before you let go), or onto another group to move it there. One ⌘Z puts it
+  back. A plain drag still grows the frame, so nothing leaves by accident.
+  ⌘⇧G on a member takes it out too; agents use `isocan mv <item> --out`.
+- **The outline shows what a click takes.** Pointing at a card inside a
+  group, or at the space between its cards, outlines the group — because
+  that is what a click selects. Hold ⌘ to aim at the card instead.
+- **Pets follow you.** Tick *Follows me* on an agent in your bench (the
+  agents panel, or your identity menu) and it comes along: open any canvas
+  you can edit and it joins, with one line in the Chat saying it came with
+  you. It never goes back to a canvas somebody removed it from, and it
+  still answers only you. Agents: `isocan bench follow <name> [--off]`.
+- **Invited agents actually answer.** An agent you bring to a canvas with
+  *Join* or `@Name join` is now picked up by its machine's running
+  `isocan rc --all` within half a minute — no restart — and runs on its own
+  harness there.
+- **Submenus wait for you.** Moving from a menu row like *Style* across to
+  its submenu no longer closes it on the way: the menu sees you heading for
+  the submenu and lets you cut across the rows between. Submenus also open
+  after a brief pause (sweeping down a menu doesn't flash them all) and
+  close after a moment's grace rather than the instant you overshoot.
+- **Stacks.** Press *Stack* on a group's title band and it becomes a pile
+  of cards — the first one upright on top, the rest turned and tucked
+  behind it in their own colours. Point at it and it fans out like a hand;
+  click to open it into a grid (Esc closes); *Spread* puts every card back
+  exactly where it was. Everyone sees the same pile, and it stays stacked
+  until somebody spreads it. Agents: `isocan canvas group stack <group>
+  [--spread]`.
+- **Watch a drag as it happens.** When someone drags a card, everyone else
+  sees it travel with their cursor — lifted, edged in their colour — instead
+  of sitting still and then jumping. It settles where they put it.
+- **Picked-up things look picked up.** While you drag a card it rises onto
+  a deeper shadow, the same size and exactly under your hand, and settles
+  back when you let go. Dragging a group lifts the whole frame.
+- **A cricket bat pointer.** Canvas pointers now include a cricket bat and
+  ball (*Background › Cursor* on a canvas standing on a picture, or `isocan canvas background --cursor
+  cricket`), filled with each person's own colour like the rest.
+- **Your own pointer wears your mark.** If you've picked an emoji for your
+  face, your pointer is that emoji on your screen too, not only on everyone
+  else's. Without one, you wear the canvas's pointer.
+- **More sports in the emoji picker.** Cricket 🏏, softball, field and ice
+  hockey, lacrosse, frisbee, curling, golf, surfing, rowing, fencing,
+  handball, horse racing, diving, roller skating, sledding, kites and
+  boomerangs. "pickleball" finds 🏓 (Unicode has no pickleball of its own), and
+  "soccer" finds ⚽.
+
+## 30 September 2026
+
+- **A group's grid can shrink and be cleared from the canvas.** Lowering rows
+  or columns below the number of labels now saves, showing which labels it
+  drops (one undo) — `isocan canvas group grid` had the same refusal and is
+  fixed too. A new *Clear grid* button removes a group's grid.
+- **Coloured text in a named font.** Pick a colour or one of ten families
+  (Inter, IBM Plex, Fraunces, Lora, Space Grotesk, JetBrains Mono…) from the
+  text bar, or `isocan text --color blue --font Fraunces`. A named colour picks
+  its own shade for light, dark and paper, so it reads for everyone.
+- **Shift-drag moves the whole selection** when you start on an item that's
+  already selected (and still snaps harder); Shift-click without moving adds
+  or removes it.
+- **Lines follow what you drag.** A mind map's branches, wireframe arrows
+  and comment pins now move with the item while you drag it, not only when
+  you let go.
+- **Agents move as an emoji.** An agent's pointer is 🤖 by default, or
+  whatever its owner picks — *Set pointer…* on the agent's card, or
+  `isocan agent mark <name> 🐕`. Anyone who wears an emoji mark moves as it
+  too, and the tip still points at the exact spot.
+- **"Read / select text" only on the item you chose,** not on every text
+  item at once; double-click still steps inside.
+- **An agent's arrival note stays long enough to read,** and holds while you
+  point at it.
+- **Say "undo" to the voice dialog and it undoes.** The in-app voice dialog
+  used to say it couldn't; now it takes back your last change, the same as ⌘Z.
+- **Simple spoken moves happen at once (try it).** In ⌘K → *Configure voice*,
+  the fast path now has three settings: *Fast path off* (the default), *in
+  shadow*, and *acting*. Set to *acting*, a plain move like "move the login page to the left of home" is
+  done as you finish saying it, before the voice model replies, and it tells
+  you what it did. Anything less simple goes to the voice model as before.
+
+## 28 September 2026
+
+- **A canvas in a pane beside your agent has no Chat of its own.**
+  `isocan embed` now gives an address that opens without the Chat, because
+  the conversation beside it is where you talk. Every way in to the Chat is
+  closed with it. `isocan embed --chat` keeps the Chat.
+- **Pin an agent to a model.** `isocan agent add <name> --model <id>` (and
+  `rc add`, `bench add`) enrols a standing agent on a particular model, spelled
+  the way its harness spells it. `isocan harness` shows which harnesses can
+  really take a model, so you know which agents are pinned before you compare
+  them.
+
 ## 26 September 2026
 
 - **See what changed.** Right-click an item → *Compare versions* (or *Compare*

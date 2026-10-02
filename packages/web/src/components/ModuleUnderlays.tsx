@@ -1,7 +1,7 @@
 import type { Actor, WebHost } from "@isocan/core";
 import { itemPath } from "@isocan/core";
 import { usePresentation } from "../lib/canvasPresentation.ts";
-import { presentedCanvas } from "../lib/presentation.ts";
+import { presentedCanvas, previewedCanvas } from "../lib/presentation.ts";
 import { modules } from "../modules.ts";
 import { useCallback, useContext, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -18,8 +18,9 @@ import { fetchBlobText } from "../lib/blobtext.ts";
  * Mounted inside `.world` before the items, so whatever a module draws here
  * passes UNDER the nodes it joins — a map node is chromeless text, and a line
  * over it strikes through the words. The shell reads the stores once, here,
- * and hands every module the same facts as props: the canvas, and the live
- * drag so a line can ride the gesture before the replica moves. A module
+ * and hands every module the same facts as props: the canvas, with the live
+ * gesture already folded in, so a line rides the hand before the replica moves
+ * without knowing what kind of gesture it is. A module
  * never sees a store, which is what keeps the dependency pointing one way.
  *
  * Since wireframes phase 8 an underlay can also WRITE — the same `WebHost`
@@ -32,7 +33,9 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
   const activateItem = useContext(CanvasActivation);
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
   const past = useCanvasStore((s) => s.past !== null && s.past !== undefined);
-  const drag = useUiStore((s) => s.drag);
+  // Both kinds of live gesture, folded into the canvas the underlays are
+  // handed (`previewedCanvas`): a groups canvas never sets `drag`.
+  const gesture = useUiStore((s) => s.drag ?? s.groupPreview);
   const selection = useUiStore((s) => s.selectedItemIds);
   const canEdit = useCanEdit();
   const host = useMemo(() => lazyHost(canvasId, actor, canEdit), [canvasId, actor, canEdit]);
@@ -42,10 +45,9 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
   useUiStore((s) => s.modulesGeneration);
   if (!canvas) return null;
   const facts = {
-    canvas: presentedCanvas(canvas, presentation),
+    canvas: previewedCanvas(presentedCanvas(canvas, presentation), gesture),
     presentation: presentation?.items,
     activateItem,
-    drag: drag ? { itemIds: drag.itemIds, dx: drag.dx, dy: drag.dy } : null,
     selection,
     readText: (hash: string) => fetchBlobText(canvasId, hash),
     host,
@@ -71,9 +73,9 @@ export function ModuleUnderlays({ canvasId, actor }: { canvasId: string; actor: 
  */
 function lazyHost(canvasId: string, actor: Actor, canEdit: boolean): WebHost {
   type Call = (...args: unknown[]) => unknown;
-  const later = (name: "send" | "putBlob" | "enrol" | "reveal" | "select" | "runCommand") => (...args: unknown[]) =>
+  const later = (name: "send" | "putBlob" | "enrol" | "reveal" | "select" | "runCommand" | "retract") => (...args: unknown[]) =>
     import("../lib/modulehost.ts").then((m) => (m.webHostFor(canvasId, actor, undefined, canEdit)[name] as Call)(...args));
   // `commands` answers synchronously, so it cannot wait on the chunk; it reads
   // the same store the real host does, through the same function.
-  return { send: later("send"), putBlob: later("putBlob"), enrol: later("enrol"), reveal: later("reveal"), select: later("select"), runCommand: later("runCommand"), commands: currentCommands, viewer: { id: actor.id, name: actor.name } } as unknown as WebHost;
+  return { send: later("send"), putBlob: later("putBlob"), enrol: later("enrol"), reveal: later("reveal"), select: later("select"), runCommand: later("runCommand"), retract: later("retract"), commands: currentCommands, viewer: { id: actor.id, name: actor.name } } as unknown as WebHost;
 }
