@@ -54,8 +54,9 @@ describe("an area lets tools through, and is grabbed by its name", () => {
   });
 
   it("carries what is on it when dragged, read off geometry at the grab", () => {
-    const drag = view.slice(view.indexOf("const dragIds"), view.indexOf("if (!wasInSelection)"));
-    expect(drag).toContain("isArea(one) ? itemsIn(canvasNow, one)");
+    const drag = view.slice(view.indexOf("const carried"), view.indexOf("if (!wasInSelection)"));
+    expect(drag).toContain("isArea(one) ? itemsIn(canvasNow!, one)");
+    expect(drag).toContain("...carried(id)");
   });
 });
 

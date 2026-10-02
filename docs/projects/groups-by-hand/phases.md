@@ -14,7 +14,7 @@ issue: 373
 remembered (opening is not); ⌘-drag-out lands where the pointer is; a plain
 drag never detaches.
 
-**Where we are, 1 Oct 2026: phases 1 and 2 are CLOSED (the lift; ⌘ takes one item). Next: groups-by-hand phase 3, others see the drag.**
+**Where we are, 1 Oct 2026: phases 1–3 are CLOSED (the lift; ⌘ takes one item; others see the drag). Next: groups-by-hand phase 4, stacks.**
 
 Two rules for every phase, on top of `AGENTS.md`:
 
@@ -79,7 +79,7 @@ member, `isocan mv <item> --out [--to-root]`, the agent-guide line, and
 
 ## Phase 3 — Others see the drag
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 1 October 2026.** A drag travels on presence, never as an op; the `live-drag` journey watched it from a second browser mid-air and saw it settle with no ghost left, and the remote-drag frame census reads p99 16.8 ms with nothing over 32 ms.
 
 **Outcome:** the presence message carries an optional `drag` (`gesture`,
 `roots`, `from`, `dx`, `dy`, `into`), sent only while dragging at the existing
@@ -98,6 +98,13 @@ Over ~50 roots it sends a bounding box.
    with no regression past the 26 Sep numbers.
 3. A journey `live-drag` with two browser sessions: the viewer sees the item
    offset mid-drag and at the final spot after release.
+
+### Trajectory
+
+- **2026-10-01** — A remote drag costs viewers nothing measurable when written as a CSS `translate` straight to the DOM (never React state) and loaded on the first roster that carries one: frames.mjs remote-drag p99 16.8 ms, 0 frames over 32 ms, against one 133 ms frame before.
+- **2026-10-01** — The entry chunk went DOWN with the feature in it (701,238 → 700,798): one `follow()` helper replaced fifteen hand-kept listener add/removes in ItemView. Importing one constant from a core module had cost 694 bytes; the web spells `50` and a test holds it equal to core's.
+- **2026-10-01** — Open: a mover who holds still sends no beats, so "stale" means the session leaving; a frozen tab still connected keeps its ghost up until the socket dies. A drag heartbeat (~1 s) on the mover would bound it. Waits on work, nobody's call.
+- **2026-10-01** — Viewers move the cards only: lines attached to them and a frame growing under a group drag appear when the op lands, not live.
 
 ## Phase 4 — Stacks
 

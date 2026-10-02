@@ -367,6 +367,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   axis has no line to claim it, equal spacing does: dropped between two
   neighbours, the item centers itself and purple measure bars — a rule with end
   caps across each gap — say the two distances match.
+- **Seeing somebody else's drag**: while another person drags, everyone else
+  on the canvas sees the cards move under their cursor — lifted, edged in
+  their colour, and the group they are dropping into outlined — rather than a
+  jump when they let go. It travels on presence beside the cursor, never as
+  ops: nothing is logged or undoable, a late arrival sees where the drag is
+  now rather than a replay, and a drag that never lands (Esc, a closed tab)
+  glides home. A selection of more than fifty moves as one outline. Agents
+  move by op, so their moves arrive as they always have.
 - **The edge radar**: items that pan out of sight leave a bar lying flush along
   the rim — tucked under the top bar, against the window elsewhere, and against
   the docked panel when one is open — where a ray from the middle of the screen

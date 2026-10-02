@@ -28,7 +28,13 @@
  *   cleanup RP-1: every roster used to re-render every item);
  * - **drag**: this browser's own pointer dragging one item sixty steps — the
  *   gesture everything drawn from items (map edges, arrows, pins) has to ride
- *   frame by frame (30 Sep 2026, when the lines stopped lagging the drag).
+ *   frame by frame (30 Sep 2026, when the lines stopped lagging the drag);
+ * - **remote-drag**: a SECOND browser dragging one item sixty steps while this
+ *   one only watches — somebody else's drag, which since groups-by-hand phase
+ *   3 (1 Oct 2026) travels on presence and is drawn here as a ghost. On 26 Sep
+ *   exactly this load froze every viewer at two frames a second, so it is
+ *   measured rather than argued. `ghostPositions` says how many distinct
+ *   offsets the ghost was drawn at (0 on a build without live drag).
  *
  * Each reports the long-frame TAIL — p90, p99, worst, and how many frames went
  * over 16.7 and 32 ms — never an average (an average of 9 ms with one frame in
@@ -164,6 +170,7 @@ async function main() {
     for (let t = 0; t < Math.min(40, items); t++) await canvas.comment(ids[(t * 3) % ids.length], `Acme comment ${t}`);
 
     const b = await browser();
+    let mover = null;
     try {
       await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
       await b.send("Page.navigate", { url: origin });
@@ -175,8 +182,8 @@ async function main() {
       const rendered = await b.ev(`document.querySelectorAll("[data-item-id]").length`);
       if (rendered < need) throw new Error(`REFUSED: only ${rendered} items rendered`);
       await b.send("Emulation.setCPUThrottlingRate", { rate: throttle });
-      const probe = `(() => { window.__gaps = []; window.__cams = new Set(); window.__cursors = new Set(); let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; window.__cams.add(document.querySelector('.world')?.style.transform ?? ''); window.__cursors.add(document.querySelector('.remote-cursor')?.style.left ?? ''); if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); window.__loaf = []; if (!window.__loafOn) { window.__loafOn = true; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__loaf.push({ duration: e.duration, render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0, scripts: e.scripts.map((x) => ({ duration: x.duration, invoker: x.invoker })) }); }).observe({ type: 'long-animation-frame' }); } catch {} } return true; })()`;
-      const collect = `(() => { window.__on = false; return { gaps: window.__gaps.slice(1), cams: window.__cams.size, cursors: window.__cursors.size, loaf: window.__loaf }; })()`;
+      const probe = `(() => { window.__gaps = []; window.__cams = new Set(); window.__cursors = new Set(); window.__ghosts = new Set(); let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; window.__cams.add(document.querySelector('.world')?.style.transform ?? ''); window.__cursors.add([...document.querySelectorAll('.remote-cursor')].map((c) => c.style.left).join()); window.__ghosts.add(document.querySelector('.item.ghosted')?.style.translate ?? ''); if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); window.__loaf = []; if (!window.__loafOn) { window.__loafOn = true; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__loaf.push({ duration: e.duration, render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0, scripts: e.scripts.map((x) => ({ duration: x.duration, invoker: x.invoker })) }); }).observe({ type: 'long-animation-frame' }); } catch {} } return true; })()`;
+      const collect = `(() => { window.__on = false; return { gaps: window.__gaps.slice(1), cams: window.__cams.size, cursors: window.__cursors.size, ghosts: window.__ghosts.size - 1, loaf: window.__loaf }; })()`;
       const wheel = (dx, dy, modifiers = 0) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: dx, deltaY: dy, modifiers });
       if (profileOut) { await b.send("Profiler.enable"); await b.send("Profiler.setSamplingInterval", { interval: 250 }); }
       // A face of its own for the cursor gesture, made before any gesture is
@@ -184,6 +191,12 @@ async function main() {
       const { client, actor } = canvas.ctx;
       const { sessionId } = await client.createSession(canvasId, actor, "Acme cursor");
       const results = {};
+      // The second person, for remote-drag: a browser of its own (its own
+      // cookie, so its own actor), unthrottled — only the viewer is measured.
+      const pointer = (page) => async (type, x, y) => page.send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mouseReleased" ? 0 : 1, clickCount: 1 });
+      // An item fully on screen whose grab point is its own — not covered by one
+      // an earlier gesture dropped on it.
+      const grabbable = `(() => { const grip = (el) => { const r = el.getBoundingClientRect(); const bar = el.querySelector(".item-titlebar"); const b2 = bar && bar.offsetParent ? bar.getBoundingClientRect() : null; return { x: b2 ? b2.x + 8 : r.x + 8, y: b2 ? b2.y + b2.height / 2 : r.y + 8, left: r.x }; }; const ok = (e) => { const q = e.getBoundingClientRect(); if (!(q.width > 0 && q.x > 400 && q.y > 120 && q.x + q.width < 1100 && q.y + q.height < 700)) return false; const g = grip(e); return document.elementFromPoint(g.x, g.y)?.closest(".item") === e; }; const el = [...document.querySelectorAll(".item[data-item-id]")].find(ok); return el ? { id: el.dataset.itemId, ...grip(el) } : null; })()`;
       for (const [name, gesture, prepare] of [
         ["pan", async () => { for (let i = 0; i < 90; i++) { await wheel(i < 45 ? 35 : -35, i % 2 ? 25 : -25); await sleep(16); } }],
         ["zoom", async () => { for (let i = 0; i < 60; i++) { await wheel(0, i < 30 ? 40 : -40, 2); await sleep(16); } }],
@@ -208,6 +221,25 @@ async function main() {
           await until(b, `document.querySelectorAll("[data-item-id]").length >= ${need}`, "items to render again", 60_000);
           await sleep(2500);
         }],
+        ["remote-drag", async () => {
+          const at = await mover.ev(grabbable);
+          if (!at) throw new Error("REFUSED: the mover has no item fully on screen to drag");
+          const mouse = pointer(mover);
+          await mouse("mousePressed", at.x, at.y);
+          for (let i = 1; i <= 60; i++) { await mouse("mouseMoved", at.x + i * 4, at.y + i * 2); await sleep(16); }
+          await mouse("mouseReleased", at.x + 240, at.y + 120);
+          await sleep(700);
+          const moved = await b.ev(`document.querySelector('[data-item-id="${at.id}"]').getBoundingClientRect().x`);
+          if (Math.abs(moved - at.left) < 100) throw new Error(`REFUSED: the mover's drag moved its item only ${Math.round(moved - at.left)}px on the viewer — the drag is not landing`);
+        }, async () => {
+          mover = await browser();
+          await mover.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+          await mover.send("Page.navigate", { url: origin });
+          await throughTheDoor(mover, origin, "Acme Mover");
+          await mover.send("Page.navigate", { url: `${origin}/p/${canvasId}` });
+          await until(mover, `document.querySelectorAll("[data-item-id]").length >= ${need}`, "items to render for the mover", 60_000);
+          await sleep(2500);
+        }],
       ]) {
         if (prepare) await prepare();
         await b.ev(probe);
@@ -217,12 +249,13 @@ async function main() {
         const profile = profileOut ? (await b.send("Profiler.stop")).profile : null;
         const got = await b.ev(collect);
         if (name === "cursor" && got.cursors < 10) throw new Error(`REFUSED: the cursor gesture drew the remote cursor at only ${got.cursors} positions — its beats are not reaching this browser`);
+        if (name === "remote-drag" && got.cursors < 10) throw new Error(`REFUSED: the mover's cursor reached this browser at only ${got.cursors} positions — its beats are not arriving`);
         if ((name === "pan" || name === "zoom") && got.cams < 10) throw new Error(`REFUSED: the ${name} gesture moved the camera through only ${got.cams} positions — the wheel is not reaching the canvas`);
-        results[name] = { ...frameStats(got.gaps), cameraPositions: got.cams, longFrames: longFrames(got.loaf), ...(profile ? { bySource: selfTimeBySource(profile, assets) } : {}) };
+        results[name] = { ...frameStats(got.gaps), cameraPositions: got.cams, ...(name === "remote-drag" ? { ghostPositions: got.ghosts } : {}), longFrames: longFrames(got.loaf), ...(profile ? { bySource: selfTimeBySource(profile, assets) } : {}) };
       }
       if (profileOut) writeFileSync(profileOut, JSON.stringify({ items, throttle, results }, null, 2));
       for (const [name, r] of Object.entries(results)) {
-        console.log(`${name.padEnd(6)} items=${items} throttle=${throttle}x frames=${r.frames} p50=${r.p50.toFixed(1)} p90=${r.p90.toFixed(1)} p99=${r.p99.toFixed(1)} worst=${r.worst.toFixed(1)} >16.7ms=${r.over16} >32ms=${r.over32}`);
+        console.log(`${name.padEnd(6)} items=${items}${r.ghostPositions !== undefined ? ` ghosts=${r.ghostPositions}` : ""} throttle=${throttle}x frames=${r.frames} p50=${r.p50.toFixed(1)} p90=${r.p90.toFixed(1)} p99=${r.p99.toFixed(1)} worst=${r.worst.toFixed(1)} >16.7ms=${r.over16} >32ms=${r.over32}`);
         const lf = r.longFrames;
         if (lf.count) console.log(`         long frames ${lf.count}: script ${lf.scriptMs.toFixed(0)} ms, style/layout/paint ${lf.renderMs.toFixed(0)} ms; worst ${lf.worst.map((w) => `${w.ms.toFixed(0)} (${w.scriptMs.toFixed(0)} script, ${w.renderMs.toFixed(0)} render, ${w.by})`).join(", ")}`);
         if (r.bySource) for (const f of r.bySource.files.slice(0, 8)) console.log(`         ${f.ms.toFixed(0).padStart(6)} ms ${(100 * f.share).toFixed(1).padStart(5)}%  ${f.file}`);
@@ -230,6 +263,7 @@ async function main() {
       const errors = b.takeErrors();
       if (errors.length) console.log(`page errors: ${JSON.stringify(errors).slice(0, 300)}`);
     } finally {
+      await mover?.close();
       await b.close();
     }
   } finally {

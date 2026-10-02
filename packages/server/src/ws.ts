@@ -1016,6 +1016,8 @@ export function attachWebSockets(
           selection: Array.isArray(message.selection) ? message.selection : [],
           textSelection: selectedText,
           ...(message.signal !== undefined ? { signal: message.signal } : {}),
+          // Every beat is the whole state, so a beat without a drag ends one.
+          drag: message.drag ?? null,
         });
       };
       if (vouched.has(actor.id)) { void beat().catch(() => {}); return; }

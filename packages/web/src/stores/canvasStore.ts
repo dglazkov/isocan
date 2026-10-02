@@ -1,4 +1,4 @@
-import type { TextAttention } from "@isocan/core";
+import type { PresenceDrag, TextAttention } from "@isocan/core";
 import { create } from "zustand";
 import { shallow } from "zustand/shallow";
 import type {
@@ -74,6 +74,7 @@ import {
   type RefusedWrite,
 } from "../lib/writequeue.ts";
 import { useUiStore } from "./uiStore.ts";
+import { unionBox } from "../lib/snap.ts";
 import { markRead, noticeComment, syncCanvas } from "./unreadStore.ts";
 
 /**
@@ -666,6 +667,29 @@ export function publishSelection(): void {
   schedulePresenceFlush();
 }
 
+let drag: PresenceDrag | undefined;
+/**
+ * **The drag the hand is making, for everyone watching** (groups-by-hand
+ * phase 3). Called on every move once a press has become a drag, with the
+ * roots it holds and the snapped offset this screen draws; called with
+ * nothing when the hand lets go, and the next beat carries no drag. It rides
+ * the cursor's throttle, so a drag costs no more messages than the cursor
+ * already sends. `from` and the over-fifty box are read once, at the first
+ * move, off the canvas as it stood — see `PresenceDrag`.
+ */
+export function publishDrag(roots?: string[], dx = 0, dy = 0, into?: string | null): void {
+  const items = useCanvasStore.getState().canvas?.items;
+  const first = roots && items?.[roots[0]!];
+  // 50 is core's `LIVE_DRAG_MAX_ROOTS`, written out: importing it pulls the
+  // daemon's sanitizer into the first paint with it (694 bytes, measured).
+  const big = first && roots.length > 50;
+  drag = first ? {
+    ...(drag ?? { gesture: newOpId(), roots: big ? [first.id] : roots, from: { x: first.x, y: first.y }, ...(big && { box: unionBox(roots.flatMap((id) => items[id] ?? []))! }) }),
+    dx, dy, into,
+  } : undefined;
+  schedulePresenceFlush();
+}
+
 let signalTimer: ReturnType<typeof setTimeout> | null = null;
 function resetSignalTimer(ms = CURSOR_SIGNAL_MS): void {
   if (signalTimer) clearTimeout(signalTimer);
@@ -733,6 +757,7 @@ function flushPresence(): void {
     selection: ui.selectedItemIds,
     textSelection: selectedText,
     signal: cursorSignal(ui.cursorSignal),
+    drag,
   };
   socket.send(JSON.stringify(message));
 }
@@ -1408,10 +1433,13 @@ function openSocket(canvasId: string): void {
       });
       schedulePresenceFlush();
     } else if (message.type === "presence-roster") {
+      const others = message.sessions.filter((session) => session.sessionId !== CLIENT_ID);
       useCanvasStore.setState({
-        sessions: held(useCanvasStore.getState().sessions, message.sessions.filter((session) => session.sessionId !== CLIENT_ID)),
+        sessions: held(useCanvasStore.getState().sessions, others),
         ...heldRegistry(message),
       });
+      // Somebody is dragging: the viewer that draws it, fetched the first time.
+      if (others.some((session) => session.drag)) void import("../lib/livedrag.ts");
     } else if (message.type === "op-applied") {
       // **The tail is applied to the CONFIRMED state, never to the view.**
       // Phase 10's one-line change with the whole phase in it: the view has

@@ -1,0 +1,13 @@
+/* **Somebody else's drag** (groups-by-hand phase 3): what another person's
+   hand is carrying, drawn here as they move it. This sheet rides with
+   `livedrag.ts`, so a screen that has never seen a drag loads neither. Offset
+   by the CSS `translate` property, which the script writes and React never
+   does. What they hold wears the same lift as your own hand's, edged solid in
+   their colour (`--who`, set beside it) — over the dashed outline their
+   selection already draws, which is inline, hence the !important. The frame
+   their pill names as the drop target is outlined dashed. A selection of more
+   than fifty is one lifted outline (`.ghost-box`) rather than fifty cards. */
+.item.ghosted { z-index: 2; }
+.item.ghost-root { outline: 2px solid var(--who, var(--accent)) !important; outline-offset: 1px !important; }
+.item.ghost-into { outline: 2px dashed var(--who, var(--accent)) !important; outline-offset: 2px !important; }
+.ghost-box { position: absolute; pointer-events: none; z-index: 3; border-radius: var(--radius); box-shadow: var(--shadow-lift); outline: 2px solid var(--who, var(--accent)); }

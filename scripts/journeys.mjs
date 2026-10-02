@@ -1154,6 +1154,129 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "live-drag",
+    /**
+     * **Others see the drag** (groups-by-hand phase 3), with TWO browsers on
+     * one canvas: a second Chrome — its own cookie, so its own person — drags
+     * a card with real CDP mouse events and holds it mid-air, and this page
+     * (the viewer) must already be drawing the card offset by about the same
+     * world distance, lifted and edged in the mover's colour. After the
+     * release the card stands at the mover's final spot on both screens with
+     * no ghost left behind: no translate, no ghost classes.
+     *
+     * Asserted as STATE on the viewer's DOM — the computed `translate` and
+     * the item's `left`/`top` — polled until it holds, never an animation
+     * caught mid-frame.
+     */
+    what: "a second person's drag shows on this screen as it happens, and lands with no ghost left",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme live drag");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-live-drag-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Live Drag CLI");
+      const md = path.join(rig.home, "acme-live-drag.md");
+      writeFileSync(md, "# Acme\n\nA card somebody else will carry.\n");
+      const spot = await openSpot(rig, 340, 260);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+        return { left: r.left, top: r.top, scale };
+      })()`);
+      const wx = Math.round((spot.x + 20 - world.left) / world.scale), wy = Math.round((spot.y + 50 - world.top) / world.scale);
+      const card = runCli("--canvas", id, "add", md, "--title", "Acme carried card", "--at", `${wx},${wy}`, "--size", "240x160").itemId;
+      const sel = JSON.stringify(`.item[data-item-id="${card}"]`);
+      const look = (page) => page.ev(`(() => {
+        const el = document.querySelector(${sel});
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { left: parseFloat(el.style.left), top: parseFloat(el.style.top), translate: cs.translate,
+                 lifted: el.classList.contains("lifted"), root: el.classList.contains("ghost-root"),
+                 ghosted: !!document.querySelector(".ghosted, .ghost-root, .ghost-into, .ghost-box"),
+                 edge: cs.outlineStyle + " " + cs.outlineColor };
+      })()`);
+      await until(b, `!!document.querySelector(${sel})`, "the card to arrive on the viewer's canvas");
+      const rest = await look(b);
+
+      // The second person: a browser of its own, through the door as somebody else.
+      const m = await browser();
+      try {
+        const loaded = m.once("Page.loadEventFired");
+        await m.send("Page.navigate", { url: rig.origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await throughTheDoor(m, rig.origin, "Acme Mover", "journeys-mover");
+        await m.send("Page.navigate", { url: `${rig.origin}/p/${id}` });
+        await until(m, `!!document.querySelector(${sel})`, "the card to render for the mover", 30_000);
+        await until(m, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel})).transform)`, "the card to come to rest for the mover");
+        const at = await m.ev(`(() => {
+          const el = document.querySelector(${JSON.stringify(`.item[data-item-id="${card}"] .item-titlebar`)});
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + Math.min(r.height / 2, 12));
+          const top = document.elementFromPoint(x, y);
+          const w = document.querySelector(".world");
+          return { x, y, hit: !!top && (el === top || el.contains(top)), over: top ? String(top.className) : "nothing",
+                   scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+        })()`);
+        if (!at) throw new Error("the mover has no title bar to grab");
+        if (!at.hit) throw new Error(`the mover's grab point is covered by ${at.over}`);
+        const DX = 180, DY = 60;
+        const mouse = (type, x, y) => m.send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mouseReleased" ? 0 : 1, clickCount: 1 });
+        await mouse("mousePressed", at.x, at.y);
+        for (let s = 1; s <= 12; s++) { await mouse("mouseMoved", at.x + (DX * s) / 12, at.y + (DY * s) / 12); await sleep(40); }
+        // Held mid-air: nothing has landed, so the viewer can only know
+        // where the card is from the mover's presence.
+        const wantX = DX / at.scale, wantY = DY / at.scale;
+        let mid;
+        try {
+          await until(b, `(() => {
+            const el = document.querySelector(${sel});
+            const t = getComputedStyle(el).translate.split(" ").map(parseFloat);
+            return Math.abs((t[0] || 0) - ${wantX}) < 14 && Math.abs((t[1] || 0) - ${wantY}) < 14;
+          })()`, "the viewer to draw the card under the mover's hand", 6000);
+          mid = await look(b);
+        } catch (err) {
+          const now = await look(b);
+          await mouse("mouseReleased", at.x + DX, at.y + DY);
+          throw new Error(`${err.message} — the viewer shows ${JSON.stringify(now)}`);
+        }
+        const landedBefore = await look(b);
+        if (landedBefore.left !== rest.left || landedBefore.top !== rest.top) {
+          await mouse("mouseReleased", at.x + DX, at.y + DY);
+          throw new Error(`the card's own position moved before the release (${rest.left},${rest.top} → ${landedBefore.left},${landedBefore.top}) — the ghost is meant to be presence, not an op`);
+        }
+        await mouse("mouseReleased", at.x + DX, at.y + DY);
+        if (!mid.lifted || !mid.root) throw new Error(`the carried card was offset but not lifted and edged (${JSON.stringify(mid)})`);
+        if (!/solid/.test(mid.edge)) throw new Error(`the carried card wears no solid edge in the mover's colour (${mid.edge})`);
+
+        // Released: the op lands, and the ghost goes with it.
+        const final = await (async () => {
+          await until(m, `(() => { const el = document.querySelector(${sel}); return !!el && !el.classList.contains("lifted"); })()`, "the mover's card to settle");
+          return look(m);
+        })();
+        if (Math.abs(final.left - rest.left - wantX) > 14) throw new Error(`the mover's drop landed ${final.left - rest.left} world px across for a ${wantX} drag`);
+        await until(b, `(() => {
+          const el = document.querySelector(${sel});
+          return parseFloat(el.style.left) === ${final.left} && parseFloat(el.style.top) === ${final.top}
+            && getComputedStyle(el).translate === "none"
+            && !document.querySelector(".ghosted, .ghost-root, .ghost-into, .ghost-box");
+        })()`, "the viewer to show the card at the mover's final spot with no ghost left", 6000).catch(async (err) => {
+          throw new Error(`${err.message} — it shows ${JSON.stringify(await look(b))}, the mover dropped it at ${final.left},${final.top}`);
+        });
+        const after = await look(b);
+        if (after.lifted) throw new Error("the viewer's card still wears .lifted after the drop");
+        return { rest: [rest.left, rest.top], midTranslate: mid.translate, edge: mid.edge, landed: [after.left, after.top] };
+      } finally {
+        await m.close();
+      }
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**

@@ -32,6 +32,9 @@ second week.
 - **The outline shows what a click takes.** Pointing at a card inside a
   group, or at the space between its cards, outlines the group — because
   that is what a click selects. Hold ⌘ to aim at the card instead.
+- **Watch a drag as it happens.** When someone drags a card, everyone else
+  sees it travel with their cursor — lifted, edged in their colour — instead
+  of sitting still and then jumping. It settles where they put it.
 - **Picked-up things look picked up.** While you drag a card it rises onto
   a deeper shadow, the same size and exactly under your hand, and settles
   back when you let go. Dragging a group lifts the whole frame.

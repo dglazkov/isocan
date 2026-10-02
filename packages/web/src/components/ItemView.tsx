@@ -4,7 +4,7 @@ import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffe
 import { CanvasActivation } from "../lib/canvasActivation.ts";
 import { pressSelection } from "../lib/press.ts";
 import { Markdown } from "../lib/markdown.tsx";
-import type { Actor, Item, ItemVersion, Neighbour, Operation } from "@isocan/core";
+import type { Actor, Item, ItemVersion, Neighbour } from "@isocan/core";
 import {
   backingOf,
   isDesignSystem,
@@ -55,7 +55,7 @@ import { FrameAnchor, anchored } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
 import { useUiStore } from "../stores/uiStore.ts";
-import { sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
+import { publishDrag, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
@@ -576,32 +576,19 @@ function ItemViewInner({
     // sheet is the handle for everything placed there, and membership is
     // read off geometry at the moment of the grab (`core/area.ts`).
     const semantic = groupsEnabled() ? beginGroupGesture(chosen) : null;
+    // What a chosen area is carrying: its contents ride along flat.
+    const carried = (id: string) => {
+      const one = canvasNow?.items[id];
+      return one && isArea(one) ? itemsIn(canvasNow!, one).map((held) => held.id) : [];
+    };
     const dragIds = semantic ? groupTransformClosure(semantic.start.canvas, semantic.roots) : canvasNow
-      ? [
-          ...new Set(
-            chosen.flatMap((id) => {
-              const one = canvasNow.items[id];
-              return [
-                id,
-                ...annotationsOf(canvasNow, id).map((mark) => mark.id),
-                ...(one && isArea(one) ? itemsIn(canvasNow, one).map((held) => held.id) : []),
-              ];
-            }),
-          ),
-        ]
+      ? [...new Set(chosen.flatMap((id) => [id, ...annotationsOf(canvasNow, id).map((mark) => mark.id), ...carried(id)]))]
       : chosen;
     if (chosen !== was) ui.setSelection(chosen);
     // What the hand holds — the chosen items, less anything a chosen area is
     // carrying (its contents ride along flat, the way a group's members do).
-    const lift = semantic ? semantic.roots : canvasNow
-      ? (() => {
-          const carried = new Set(chosen.flatMap((id) => {
-            const one = canvasNow.items[id];
-            return one && isArea(one) ? itemsIn(canvasNow, one).map((held) => held.id) : [];
-          }));
-          return chosen.filter((id) => !carried.has(id));
-        })()
-      : chosen;
+    const inside = new Set(semantic ? [] : chosen.flatMap(carried));
+    const lift = semantic ? semantic.roots : chosen.filter((id) => !inside.has(id));
 
     const frame = e.currentTarget as HTMLElement;
     frame.setPointerCapture(e.pointerId);
@@ -637,7 +624,7 @@ function ItemViewInner({
       const items = capturedItems ?? presented;
       const moving = semantic
         ? capturedMoving
-        : unionBox(dragIds.map((id) => items[id]).filter((one) => one !== undefined));
+        : unionBox(dragIds.flatMap((id) => items[id] ?? []));
       if (moving) {
         const others = capturedOthers ?? Object.values(items).filter((other) => !draggingIds.has(other.id));
         const threshold = (ev.shiftKey ? SNAP_PX_MAGNETIC : SNAP_PX) / scale;
@@ -646,6 +633,7 @@ function ItemViewInner({
         dy += snap.dy;
         ui.setGuides(snap.guides, snap.spacing);
       }
+      let destination: string | null | undefined;
       if (semantic) {
         const point = screenToWorldPoint(ev.clientX, ev.clientY);
         const target = ev.altKey ? null : groupDropTarget(semantic.start.canvas, point, semantic.roots);
@@ -655,18 +643,15 @@ function ItemViewInner({
         // the pointer decides, and open canvas (null) is a destination too —
         // the one deliberate way out of a group.
         const to = reachHeld(ev) && !ev.altKey ? (target?.id ?? null) : target?.id;
-        const destination = to !== undefined && from.some((parent) => parent !== to) ? to : undefined;
+        destination = to !== undefined && from.some((parent) => parent !== to) ? to : undefined;
         ui.setGroupDropTarget(destination ?? null, destination === null ? from.find((parent) => parent !== null) ?? null : null);
         semantic.move(dx, dy, destination, destination && target ? groupDropPolicy(target, point) : undefined);
       } else ui.setDrag({ itemIds: dragIds, dx, dy, moved, lift });
+      // Everyone else on the canvas sees it move (groups-by-hand phase 3).
+      publishDrag(lift, dx, dy, destination);
     }
     function onUp(ev: PointerEvent) {
-      if (frame.hasPointerCapture(ev.pointerId)) frame.releasePointerCapture(ev.pointerId);
-      frame.removeEventListener("pointermove", onMove);
-      frame.removeEventListener("pointerup", onUp);
-      frame.removeEventListener("pointercancel", onUp);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keyup", onKey);
+      publishDrag();
       const state = useUiStore.getState();
       // A Shift-click that never became a drag: now it takes the item out.
       if (e.shiftKey && chosen === was && !moved && ev.type === "pointerup") state.toggleSelect(targetId);
@@ -675,47 +660,27 @@ function ItemViewInner({
         else void semantic.commit(canvasId, actor);
         return;
       }
-      if (ev.type === "pointercancel") { state.setDrag(null); state.setGuides([]); return; }
       state.setGuides([]); // the lines belong to the gesture, not the canvas
+      // One op per gesture — a group drag is a single undo step. Nothing for
+      // a gesture the browser took away, or a press that never moved.
       const final = state.drag;
-      if (!moved || !final) {
-        state.setDrag(null);
-        return;
-      }
-      // One op per gesture — a group drag is a single undo step.
       const canvas = useCanvasStore.getState().canvas;
-      if (!canvas) {
-        state.setDrag(null);
-        return;
-      }
-      const moves = final.itemIds
-        .map((itemId) => canvas.items[itemId])
-        .filter((dragged) => dragged !== undefined)
-        .map((dragged) => ({
-          itemId: dragged.id,
-          x: Math.round(dragged.x + final.dx),
-          y: Math.round(dragged.y + final.dy),
-        }));
-      const op: Operation | null =
-        moves.length === 1
-          ? { type: "item.move", ...moves[0]! }
-          : moves.length > 1
-            ? { type: "items.move", moves }
-            : null;
-      if (op) {
-        // Fold the final position into the replica BEFORE dropping the drag
-        // override — otherwise the item flashes at its old position until the
-        // WS echo lands.
-        void sendEchoed(canvasId, actor, op);
-      }
+      const moves = ev.type === "pointerup" && moved && final && canvas
+        ? final.itemIds.flatMap((itemId) => {
+            const dragged = canvas.items[itemId];
+            return dragged ? [{ itemId, x: Math.round(dragged.x + final.dx), y: Math.round(dragged.y + final.dy) }] : [];
+          })
+        : [];
+      // Fold the final position into the replica BEFORE dropping the drag
+      // override — otherwise the item flashes at its old position until the
+      // WS echo lands.
+      if (moves.length) void sendEchoed(canvasId, actor, moves.length === 1 ? { type: "item.move", ...moves[0]! } : { type: "items.move", moves });
       state.setDrag(null);
     }
-    frame.addEventListener("pointermove", onMove);
-    frame.addEventListener("pointerup", onUp);
     // A gesture the browser takes away must not leave guides on screen or an
-    // item frozen mid-drag.
-    frame.addEventListener("pointercancel", onUp);
-    if (semantic) { window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKey); }
+    // item frozen mid-drag: pointercancel ends it too (`follow`).
+    const signal = follow(frame, onMove, onUp);
+    if (semantic) { window.addEventListener("keydown", onKey, { signal }); window.addEventListener("keyup", onKey, { signal }); }
   }
 
   function onResizeDown(corner: "nw" | "ne" | "sw" | "se", e: React.PointerEvent) {
@@ -734,17 +699,10 @@ function ItemViewInner({
         const scale = useUiStore.getState().viewport.scale;
         semantic!.resize(item.id, original.width + (ev.clientX - startPoint.x) / scale * sx, original.height + (ev.clientY - startPoint.y) / scale * sy, anchor, ev.shiftKey);
       }
-      function finish(ev: PointerEvent) {
-        if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
-        handle.removeEventListener("pointermove", move);
-        handle.removeEventListener("pointerup", finish);
-        handle.removeEventListener("pointercancel", finish);
+      follow(handle, move, (ev) => {
         if (ev.type === "pointercancel") semantic!.cancel();
         else void semantic!.commit(canvasId, actor);
-      }
-      handle.addEventListener("pointermove", move);
-      handle.addEventListener("pointerup", finish);
-      handle.addEventListener("pointercancel", finish);
+      });
       return;
     }
     const start = { x: e.clientX, y: e.clientY, width: item.width, height: item.height };
@@ -765,10 +723,6 @@ function ItemViewInner({
       useUiStore.getState().setResize({ itemId: item.id, width: newW, height: newH, dx, dy });
     }
     function onUp(ev: PointerEvent) {
-      if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
-      handle.removeEventListener("pointercancel", onUp);
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
       const state = useUiStore.getState();
       const final = state.resize;
       if (ev.type !== "pointercancel" && final && (final.width !== item.width || final.height !== item.height)) {
@@ -792,9 +746,7 @@ function ItemViewInner({
       }
       state.setResize(null);
     }
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
-    handle.addEventListener("pointercancel", onUp);
+    follow(handle, onMove, onUp);
   }
 
   /**
@@ -1538,6 +1490,26 @@ function itemsUnder(x: number, y: number): string[] {
   return [...document.querySelectorAll("[data-item-id]")]
     .map((el) => el.getAttribute("data-item-id")!)
     .filter((id) => hit.has(id));
+}
+
+/**
+ * A pointer gesture's listeners on the element that captured it: moves go to
+ * `move`; a release — or a gesture the browser takes away — lets go of the
+ * capture, takes every listener off at once, and goes to `end`. The signal
+ * comes back so a gesture can hang more listeners on the same lifetime.
+ */
+function follow(el: HTMLElement, move: (ev: PointerEvent) => void, end: (ev: PointerEvent) => void): AbortSignal {
+  const off = new AbortController();
+  const { signal } = off;
+  const done = (ev: PointerEvent) => {
+    if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    off.abort();
+    end(ev);
+  };
+  el.addEventListener("pointermove", move, { signal });
+  el.addEventListener("pointerup", done, { signal });
+  el.addEventListener("pointercancel", done, { signal });
+  return signal;
 }
 
 function screenToWorldPoint(sx: number, sy: number): { x: number; y: number } {
