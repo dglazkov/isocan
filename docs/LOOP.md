@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 5 not yet read.**
+**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 13 not yet read.**
 
 ## Accepted, by project
 
@@ -89,9 +89,17 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 
 ## Not yet read
 
+- [CLI lacks interactive questionnaire authoring commands](loop/cli-lacks-interactive-questionnaire-authoring-commands.md) — Loop P2
+- [Evaluation scripts depend on unpinned external CLIs](loop/evaluation-scripts-depend-on-unpinned-external-clis.md) — Loop P2
 - [Group brief creation waits for blob upload](loop/group-brief-creation-waits-for-blob-upload.md) — Loop P2
+- [Jetski plugin relies on unmanaged sidecar SDK](loop/jetski-plugin-relies-on-unmanaged-sidecar-sdk.md) — Loop P2
 - [Lack of bidirectional canvas to code symbol bindings](loop/lack-of-bidirectional-canvas-to-code-symbol-bindings.md) — Loop P2
+- [Lack of component interface prop-table canvas documentation](loop/lack-of-component-interface-prop-table-canvas-documentation.md) — Loop P2
+- [Lack of multi-screen user flow canvas scaffolding](loop/lack-of-multi-screen-user-flow-canvas-scaffolding.md) — Loop P2
 - [Lack of spatial canvas semantic query indexing](loop/lack-of-spatial-canvas-semantic-query-indexing.md) — Loop P2
 - [Lack of structured design decision rationale documentation](loop/lack-of-structured-design-decision-rationale-documentation.md) — Loop P2
+- [Scripts hardcode relative node module paths](loop/scripts-hardcode-relative-node-module-paths.md) — Loop P2
 - [Speaker note creation blocks on network upload](loop/speaker-note-creation-blocks-on-network-upload.md) — Loop P2
+- [Web UI lacks questionnaire response supersedes capability](loop/web-ui-lacks-questionnaire-response-supersedes-capability.md) — Loop P2
+- [Web UI lacks retained answer reference inspection door](loop/web-ui-lacks-retained-answer-reference-inspection-door.md) — Loop P2
 
