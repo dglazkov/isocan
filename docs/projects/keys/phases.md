@@ -9,7 +9,7 @@ note: "the walk: close the voice harness door, the store and CLI, the settings a
 
 **2 October 2026.** Held to [design.md](design.md).
 
-**Where we are, 2 Oct 2026: phases 0 and 1 are CLOSED — the harness door is shut, and keys live in `~/.isocan/keys.json` behind `isocan keys`. Next: keys phase 2, the settings area.**
+**Where we are, 2 Oct 2026: phases 0–2 are CLOSED — the harness door is shut, keys live in `~/.isocan/keys.json` behind `isocan keys` and the *Model keys…* area. Next: keys phase 3, owner-only spend.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -61,15 +61,24 @@ keys set` is used by `/api/text` with no restart.
 
 ## Phase 2 — The settings area
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** *Model keys…* under *This machine* sets, replaces, tests and removes keys on machine-local routes, never showing one back — the `model-keys` journey set a key in Chrome, saw `…abcd`, found the value nowhere in the page, and removed it; the routes refuse foreign Origins and Hosts and 404 on a hosted home.
 
 **Outcome:** *Model keys…* in the identity menu under *This machine*, shown when
 the page is served by this machine's daemon: each provider with set/not set,
 last four, what uses it, Set/Replace/Remove/Test; write-only; on a hosted home
 the honest sentence instead.
 
-**Proof:** a journey that sets a key, sees it as `…abcd`, tests it against a
-fake provider, removes it; the value never in the DOM after save.
+**Proof:** a journey that sets a key, sees it as `…abcd`, removes it; the value
+never in the DOM after save. *Test* against a fake provider is proved in the
+server route tests (amended 2 Oct: a spawned daemon has no seam to a fake
+provider, and adding one for the journey was not worth a new env hook).
+
+### Trajectory
+
+- **2026-10-02** — The rows `isocan keys ls` prints moved into core (`keyRows`), so the CLI and `GET /api/keys` read one function.
+- **2026-10-02** — The key routes sit in their own Fastify scope with exactly one parser, `application/json`: a cross-site `text/plain` PUT is a 415 before any handler, and a malformed body is refused without the parse error (which would have quoted the key back).
+- **2026-10-02** — The menu decides "this machine" by `location.hostname` (loopback), the rule the routes enforce; no request is made to draw a menu row. The password field is uncontrolled and emptied before the PUT.
+- **2026-10-02** — Open: the loopback Host/Origin helpers now live twice (voice-harness.ts and key-routes.ts — the harness depends on the server, not the reverse); a shared core home would remove the copy.
 
 ## Phase 3 — Owner-only spend
 

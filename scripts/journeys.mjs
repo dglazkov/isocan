@@ -33,7 +33,7 @@
  * cannot tell its own limits from a defect generates confident nonsense.
  */
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -2093,6 +2093,70 @@ export const JOURNEYS = [
         `[...document.querySelectorAll(".palette-group")].some(g => g.textContent === "Switch to") && [...document.querySelectorAll(".palette-canvas-title")].some(t => t.textContent === "Lake House")`,
         "the launcher to list Lake House under the actions",
       );
+    },
+  },
+  {
+    name: "model-keys",
+    /**
+     * **The settings area, walked** (keys phase 2). The proof the phase names
+     * is a sentence about a screen: set a key from the identity menu, see it
+     * as `…abcd`, and find the value nowhere in the page afterwards — the
+     * password field emptied, nothing in the DOM — then remove it. The routes'
+     * own refusals are `key-routes.test.ts`; this is that a person can reach
+     * them, and that the page keeps the write-only promise the routes make.
+     */
+    what: "a model key set from the identity menu shows as …abcd, is nowhere in the page, and removes",
+    async run(rig) {
+      const key = "sk-ant-journeyfake-0123456789-abcd";
+      await rig.go("/");
+      await until(rig.b, `!!document.querySelector(".who-btn")`, "your face on the canvas list");
+      await rig.click(".who-btn", "your face");
+      await until(
+        rig.b,
+        `[...document.querySelectorAll(".identity-action")].some(e => e.textContent.trim().startsWith("Model keys"))`,
+        "the identity menu to offer Model keys… under This machine",
+      );
+      // The menu scrolls inside its popover (it is taller than a laptop's
+      // window); a person scrolls to the row, so the journey does too.
+      const reach = (selector, text) =>
+        rig.b.ev(`([...document.querySelectorAll(${JSON.stringify(selector)})].find(e => e.textContent.trim().startsWith(${JSON.stringify(text)}))?.scrollIntoView({ block: "center" }), true)`);
+      await reach(".identity-action", "Model keys");
+      await rig.clickText(".identity-action", "Model keys", "Model keys…");
+      const row = '.keys-row[data-provider="anthropic"]';
+      await until(rig.b, `!!document.querySelector(${JSON.stringify(row)})`, "the Anthropic row in the keys panel");
+      const before = await rig.b.ev(`document.querySelector(${JSON.stringify(row + " .keys-state")})?.textContent ?? ""`);
+      if (!/not set/.test(before)) throw new Error(`a fresh home's Anthropic key reads "${before}", not "not set"`);
+
+      await reach(`${row} button`, "Set");
+      await rig.clickText(`${row} button`, "Set", "Anthropic's Set");
+      await until(rig.b, `document.activeElement?.type === "password"`, "a password field, focused");
+      await rig.type(key);
+      await reach(`${row} button`, "Save");
+      await rig.clickText(`${row} button`, "Save", "Save");
+      await until(
+        rig.b,
+        `(document.querySelector(${JSON.stringify(row + " .keys-state")})?.textContent ?? "").includes("…abcd")`,
+        "the row to read set …abcd",
+      );
+      // The promise: the value is nowhere in the page — not in the markup, and
+      // not in any field's live value (which innerHTML would not show).
+      const leaked = await rig.b.ev(`document.body.innerHTML.includes(${JSON.stringify(key)}) ||
+        [...document.querySelectorAll("input")].some(i => i.value.includes(${JSON.stringify(key)}))`);
+      if (leaked) throw new Error("the key is still in the page after it was saved");
+      const onDisk = JSON.parse(readFileSync(path.join(rig.home, "keys.json"), "utf8"));
+      if (onDisk.anthropic?.key !== key) throw new Error("the panel said set, but this machine's keys.json does not hold the key");
+
+      await reach(`${row} button`, "Remove…");
+      await rig.clickText(`${row} button`, "Remove…", "Anthropic's Remove…");
+      await reach(`${row} button`, "Remove it");
+      await rig.clickText(`${row} button`, "Remove it", "Remove it");
+      await until(
+        rig.b,
+        `/not set/.test(document.querySelector(${JSON.stringify(row + " .keys-state")})?.textContent ?? "")`,
+        "the row to read not set again",
+      );
+      const errors = rig.b.takeErrors();
+      if (errors.length > 0) throw new Error(`the keys panel threw: ${errors[0]}`);
     },
   },
   {

@@ -28,6 +28,7 @@ import { contentPorts, registerContentRoutes } from "./content.ts";
 import { contentTtl } from "./content-auth.ts";
 import { adoptIdentity } from "./badge-store.ts";
 import type { JudgmentOptions } from "./judgment.ts";
+import type { KeyRouteOptions } from "./key-routes.ts";
 import type { TextOptions } from "./text.ts";
 
 export interface DaemonOptions {
@@ -215,6 +216,9 @@ export interface DaemonOptions {
    * transport; a running home reads `ISOCAN_TEXT_API_KEY`, else its
    * `keys.json`, per call. */
   text?: TextOptions;
+  /** The settings area's key routes (`key-routes.ts`) — tests hand them an
+   * environment and a fake provider; a running home reads its own. */
+  keys?: KeyRouteOptions;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
@@ -557,6 +561,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // home's, not the process's, for the reason `rosterHome` is.
     judgment: { keysHome: home, ...options.judgment },
     text: { keysHome: home, ...options.text },
+    ...(options.keys ? { keys: options.keys } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);
   /**
