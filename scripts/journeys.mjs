@@ -1277,6 +1277,143 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "stack",
+    /**
+     * **Stacks** (groups-by-hand phase 4): *Stack* on a group's title band
+     * draws it as a pile of cards — shared and stored, so it survives a
+     * reload — while every member keeps its x/y. Pointing fans the pile, a
+     * click opens it into a grid in front of the canvas, Esc closes the grid
+     * (and the stack is still a stack, because opening is never stored), and
+     * *Spread* puts every member back exactly where it was.
+     *
+     * Asserted as STATE — classes in the DOM, what the home holds, and the
+     * members' boxes before and after — never an animation having run.
+     */
+    what: "Stack draws a pile that survives reload; hover fans, click opens, Esc closes; Spread puts every member back where it was; ⌘-drag takes a card out of the opened stack",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme stack");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-stack-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const home = async (read, want, what, ms = 8000) => {
+        const deadline = Date.now() + ms;
+        for (;;) {
+          const got = read();
+          if (want(got)) return got;
+          if (Date.now() > deadline) throw new Error(`never became true: ${what} (the home says ${JSON.stringify(got)})`);
+          await sleep(200);
+        }
+      };
+      runCli("identity", "--session", "--name", "Acme Stack CLI");
+
+      // Three cards in a row, wrapped in one group, on bare canvas.
+      const spot = await openSpot(rig, 560, 300);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 40 - world.left) / world.scale), wy = Math.round((spot.y + 110 - world.top) / world.scale);
+      const cards = ["Acme one", "Acme two", "Acme three"].map((words, n) => runCli("--canvas", id, "text", words, "--at", `${wx + n * 170},${wy}`, "--size", "120x80").itemId);
+      let wrapped;
+      try { wrapped = runCli("--canvas", id, "canvas", "group", "wrap", ...cards, "--title", "Acme archive"); }
+      catch {
+        const preview = runCli("--canvas", id, "canvas", "group", "migrate", "--dry-run");
+        runCli("--canvas", id, "canvas", "group", "migrate", "--revision", String(preview.revision));
+        wrapped = runCli("--canvas", id, "canvas", "group", "wrap", ...cards, "--title", "Acme archive");
+      }
+      const group = wrapped.itemId ?? wrapped.groupId;
+      if (!group) throw new Error(`wrap returned no group id: ${JSON.stringify(wrapped).slice(0, 200)}`);
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      for (const itemId of [group, ...cards]) {
+        await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to arrive on the canvas`);
+        await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(itemId)})).transform)`, `${itemId} to come to rest`);
+      }
+      await rig.type("v");
+      const saved = () => cards.map((itemId) => { const item = runCli("--canvas", id, "show", itemId); return { id: itemId, x: item.x, y: item.y, width: item.width, height: item.height, in: item.containerId ?? null }; });
+      const drawn = () => b.ev(`JSON.stringify(${JSON.stringify(cards)}.map((id) => { const r = document.querySelector('.item[data-item-id="' + id + '"]')?.getBoundingClientRect(); return r ? [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)] : null; }))`);
+      const before = saved();
+      const drawnBefore = await drawn();
+      const stacked = () => runCli("--canvas", id, "canvas", "group", "show", group).stacked;
+      const mouse = (type, x, y, { buttons = 0 } = {}) => b.send("Input.dispatchMouseEvent", {
+        type, x, y, buttons, button: type === "mouseMoved" && !buttons ? "none" : "left", clickCount: type === "mouseMoved" ? 0 : 1,
+      });
+
+      // 1. Stack, from the title band.
+      await rig.click(`.item[data-item-id="${group}"] .group-stack-toggle.band`, "the group's Stack button");
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"] .stack-card.top`)})`, "the group to draw as a pile");
+      await home(stacked, (on) => on === true, "the home to hold the group as stacked");
+      if (JSON.stringify(saved()) !== JSON.stringify(before)) throw new Error(`stacking moved a member: ${JSON.stringify(saved())} (was ${JSON.stringify(before)})`);
+      for (const itemId of cards) if (await b.ev(`!!document.querySelector(${sel(itemId)})`)) throw new Error(`${itemId} is still drawn at its spread position under a stack`);
+
+      // 2. Reload: still a stack — the stored part.
+      await rig.go(`/p/${id}`);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"] .stack-card.top`)})`, "the pile to come back after a reload", 12000);
+      const layers = await b.ev(`document.querySelectorAll(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card`)}).length`);
+      if (layers !== 3) throw new Error(`the pile should show three cards, it shows ${layers}`);
+      const turns = await b.ev(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card:not(.top)`)})].map((el) => el.style.transform))`);
+      if (!/rotate\(-?[3-9]/.test(turns)) throw new Error(`the cards behind the top are not turned: ${turns}`);
+      await rig.type("v");
+
+      // 3. Point at it: it fans.
+      const pile = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-pile`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      const under = await b.ev(`document.elementFromPoint(${pile.x}, ${pile.y})?.closest("[data-item-id]")?.getAttribute("data-item-id") ?? null`);
+      if (under !== group) throw new Error(`the pile does not take the pointer (under it: ${under})`);
+      await mouse("mouseMoved", pile.x - 30, pile.y);
+      await mouse("mouseMoved", pile.x, pile.y);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-pile.fanned`)})`, "pointing at the pile to fan it", 3000);
+      if (stacked() !== true) throw new Error("fanning changed what the home holds");
+
+      // 4. Click: it opens into a grid of every member.
+      await mouse("mousePressed", pile.x, pile.y, { buttons: 1 });
+      await mouse("mouseReleased", pile.x, pile.y);
+      await until(b, `document.querySelectorAll(".stack-open .stack-open-card").length === 3`, "a click to open the stack into a grid of its three cards", 3000);
+
+      // 5. Esc closes it — and the stack is still a stack.
+      await rig.press("Escape");
+      await until(b, `!document.querySelector(".stack-open")`, "Esc to close the opened stack", 3000);
+      if (!(await b.ev(`!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"]`)})`))) throw new Error("closing the opened stack spread the group");
+      if (stacked() !== true) throw new Error("opening or closing the stack changed what the home holds");
+
+      // 6. Spread: every member where it was.
+      await mouse("mouseMoved", 5, 5);
+      await rig.click(`.item[data-item-id="${group}"] .stack-band .group-stack-toggle`, "the stack's Spread button");
+      await home(stacked, (on) => on === false, "the home to hold the group as spread");
+      for (const itemId of cards) await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to be drawn again after Spread`);
+      const after = saved();
+      if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`Spread did not put every member back: ${JSON.stringify(after)} (was ${JSON.stringify(before)})`);
+      const drawnAfter = await drawn();
+
+      // 7. ⌘-drag a card out of the opened stack: it leaves the group, in one act.
+      runCli("--canvas", id, "canvas", "group", "stack", group);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"] .stack-card.top`)})`, "the group to stack again from the terminal");
+      const pile2 = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-pile`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), right: Math.round(r.right) }; })()`);
+      await mouse("mousePressed", pile2.x, pile2.y, { buttons: 1 });
+      await mouse("mouseReleased", pile2.x, pile2.y);
+      const taken = cards[2];
+      await until(b, `!!document.querySelector(${JSON.stringify(`.stack-open .stack-open-card[data-member-id="${taken}"]`)})`, "the stack to open again", 3000);
+      const c = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.stack-open-card[data-member-id="${taken}"]`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      const MOD = process.platform === "darwin" ? 4 : 2;
+      const outAt = { x: Math.min(1200, pile2.right + 200), y: 820 };
+      await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: c.x, y: c.y, modifiers: MOD, buttons: 1, button: "left", clickCount: 1 });
+      for (let s = 1; s <= 8; s++) {
+        await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: Math.round(c.x + ((outAt.x - c.x) * s) / 8), y: Math.round(c.y + ((outAt.y - c.y) * s) / 8), modifiers: MOD, buttons: 1, button: "left" });
+        await sleep(40);
+      }
+      const inHand = await b.ev(`!!document.querySelector(${JSON.stringify(`.item.lifted[data-item-id="${taken}"]`)}) && !document.querySelector(".stack-open")`);
+      await b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: outAt.x, y: outAt.y, modifiers: MOD, buttons: 0, button: "left", clickCount: 1 });
+      if (!inHand) throw new Error("⌘-dragging a card out of the opened stack did not close the grid and put the card in the hand");
+      await home(() => runCli("--canvas", id, "show", taken).containerId ?? null, (parent) => parent === null, "the ⌘-dragged card to leave the stacked group");
+      await until(b, `!!document.querySelector(${sel(taken)})`, "the card taken out to be drawn on the canvas");
+      return { members: before.length, saved: after, drawnBefore: JSON.parse(drawnBefore), drawnAfter: JSON.parse(drawnAfter), takenOut: taken };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**

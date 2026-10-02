@@ -138,7 +138,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `version ls|promote|prune` — the version stack (prune ⚠)
 - `mv`, `align`, `distribute`, `fit`, `tidy`, `merge`, `react`, `copy` — arrange, mark, duplicate
 - `rm`, `restore`, `trash ls|restore|empty` (empty ⚠), `undo`, `redo` — take back
-- `canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|migrate`, `area` — groups
+- `canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|stack|migrate`, `area` — groups
 - `gdoc auth|sync` — Google Docs kept current; `shortcuts` — the keys a person has
 
 **Canvases** (`items`, `homes`)
@@ -1144,7 +1144,14 @@ isocan tidy --in Sketches
 isocan canvas group grid Sketches 2x3 --rows "Draft,Review"
 isocan text "Acme review" --in Sketches --cell 2,1
 isocan canvas group grid Sketches --clear
+isocan canvas group stack Sketches         # a pile of cards; --spread puts it back
 ```
+
+`canvas group stack` shows a group as a pile — one card on top, the rest
+turned behind it — for everyone, until `--spread`. It only changes the
+drawing: every member keeps its x/y, `ls`, `mv`, `add --in` and `show` work
+as before (`show` says `stacked`), and placing into a stacked group places in
+spread space, so spreading shows it where it was put.
 
 `area new`, `area ls` and `area grid` are compatibility spellings for these
 canvas-group acts; `area new --tint yellow` also sets the frame's tint. All
@@ -1194,6 +1201,7 @@ continues to join log entries for undo. Neither establishes canvas membership.
 `canvas group frame <groups...> --fit` (or one group with `--size WxH`/`--at x,y`),
 `canvas group layout <group> [--title-height n] [--brief-height n] [--inset n] [--row-gutter n] [--column-gutter n] [--tidy]`,
 `canvas group grid <group> [RxC] [--rows names] [--cols names] [--tidy] [--clear]`,
+`canvas group stack <group> [--spread]`,
 and `canvas group migrate [--dry-run] [--revision n]`.
 `area new <title>`, `area ls` and `area grid <group> [RxC] [--clear]` are compatibility aliases; `area ls` can also read legacy areas.
 Grid labels are comma-separated; cells count from 1. Lowering a count drops the saved labels past it in the same write (the web's layout form does the same), and more names than cells is refused; members of a cell that goes away keep their places. Every mutation accepts `--dry-run`:

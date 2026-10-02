@@ -256,6 +256,10 @@ describe("every token used is a token defined", () => {
       // canvas with no ground of its own falls back to the app's page ground
       // and the declaration never drops.
       "--canvas-ground",
+      // `--tint` is a stacked group's member colour (`GroupStack.tsx`
+      // `tintOf`): always a token by name — a paper or a kind family — set on
+      // the card that reads it, and read with a fallback.
+      "--tint",
       // The modules' own, set on the element that reads them, from numbers a
       // stylesheet cannot know: the anatomy workspace's pane sizes as the
       // person drags them (`workspace.tsx`), and a wireframe arrow label's

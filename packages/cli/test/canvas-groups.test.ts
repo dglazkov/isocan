@@ -98,10 +98,31 @@ describe("the canonical canvas group CLI", () => {
     expect(c.errors).toHaveBeenCalledWith(expect.stringContaining("positive row,column"));
     expect(c.f.writes).toHaveLength(count);
   });
+  it("stacks and spreads a group in one undo each, never moving a member, and show says stacked", async () => {
+    const c = cli(); c.f.card("a", "Acme one"); c.f.card("b", "Acme two");
+    const made = JSON.parse(await c.run("--json", "canvas", "group", "wrap", "a", "b", "--title", "Acme pile"));
+    const boxes = () => ["a", "b", made.itemId].map((id) => { const { x, y, width, height } = c.f.state.canvas.items[id]!; return { x, y, width, height }; });
+    const before = boxes();
+    const writes = c.f.writes.length;
+    await c.run("canvas", "group", "stack", "Acme pile");
+    expect(c.f.writes).toHaveLength(writes + 1);
+    expect(c.f.state.canvas.items[made.itemId]!.groupLayout?.display).toBe("stack");
+    expect(boxes()).toEqual(before);
+    expect(JSON.parse(await c.run("--json", "canvas", "group", "show", made.itemId)).stacked).toBe(true);
+    expect(await c.run("canvas", "group", "show", made.itemId)).toContain("stacked");
+    await c.run("canvas", "group", "stack", made.itemId, "--spread");
+    expect(c.f.writes).toHaveLength(writes + 2);
+    expect(c.f.state.canvas.items[made.itemId]!.groupLayout).not.toHaveProperty("display");
+    expect(boxes()).toEqual(before);
+    expect(JSON.parse(await c.run("--json", "canvas", "group", "show", made.itemId)).stacked).toBe(false);
+    // The undo of a stack is the write's own inverse: one act, one undo.
+    expect(c.f.writes.at(-1)!.inverse).toMatchObject({ type: "group.change" });
+  });
+
   it("registers and documents every actual family leaf without touching people-group or session-selection verbs", () => {
     const { program } = cli();
     const group = program.commands[0]!.commands[0]!;
-    expect(group.commands.map((cmd) => cmd.name())).toEqual(["migrate", "new", "wrap", "ls", "show", "add", "remove", "ungroup", "resize", "frame", "layout", "grid"]);
+    expect(group.commands.map((cmd) => cmd.name())).toEqual(["migrate", "new", "wrap", "ls", "show", "add", "remove", "ungroup", "resize", "frame", "layout", "stack", "grid"]);
     const guide = readFileSync(new URL("../src/agent-guide.md", import.meta.url), "utf8");
     for (const cmd of group.commands) expect(guide).toMatch(new RegExp("`canvas group " + cmd.name() + "(?:[ `])"));
     expect(group.helpInformation()).toContain("remove");

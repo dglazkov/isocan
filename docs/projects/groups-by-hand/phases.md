@@ -1,5 +1,5 @@
 ---
-status: partial
+status: built
 since: 2026-10-01
 see: canvas-groups
 note: "the walk: lift, ⌘ takes one item (with hover that says what a press takes), live drag for viewers, stacks."
@@ -14,7 +14,7 @@ issue: 373
 remembered (opening is not); ⌘-drag-out lands where the pointer is; a plain
 drag never detaches.
 
-**Where we are, 1 Oct 2026: phases 1–3 are CLOSED (the lift; ⌘ takes one item; others see the drag). Next: groups-by-hand phase 4, stacks.**
+**Where we are, 1 Oct 2026: all four phases are CLOSED — the lift, ⌘ takes one item, others see the drag, stacks. What is left is the Open roster below: work, not a person.**
 
 Two rules for every phase, on top of `AGENTS.md`:
 
@@ -108,7 +108,7 @@ Over ~50 roots it sends a bounding box.
 
 ## Phase 4 — Stacks
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 1 October 2026.** A group stacks into a seeded pile that survives a reload, fans on hover, opens into a grid Esc closes, and spreads back with every member exactly where it was — the `stack` journey drove all of it, plus a ⌘-drag out of the open grid, in Chrome.
 
 **Outcome:** `GroupLayout.display: "stack"`, set by the `layout` action (one
 undo), shared and stored; members' positions untouched. Rendered as the seeded
@@ -125,3 +125,11 @@ content. Dropping onto a stack adds to it; ⌘-drag out of the open grid leaves.
    same ids; CLI test of `stack`/`--spread`.
 2. A journey `stack` that stacks a group, reloads (still stacked), fans, opens,
    closes with Esc, and spreads (every member where it was).
+
+### Trajectory
+
+- **2026-10-01** — A stack is drawn at a fixed 420×320 card (`defaultSize`) at the group's origin, never the top member's size: the first paint locates a stack without reading members, and `groupStackBox` is the one footprint aim, drop and render share.
+- **2026-10-01** — Spread is stored as the ABSENCE of `display`: the `layout` action takes `"spread"` and the reducer deletes the key, so a canvas that never stacked is byte-identical.
+- **2026-10-01** — The band's Stack button and the pile share one lazy `GroupBand`; with ItemView's duplicated handle spans folded into maps, the phase costs the entry 388 bytes and ends 114 under the ceiling.
+- **2026-10-01** — Open: viewers do not see a card ⌘-dragged out of an open stack until it lands — `livedrag` translates existing elements and a stacked member has none on their screen. A whole stack dragged is seen live.
+- **2026-10-01** — Open: dragging a whole stack snaps against the union with its members' spread boxes, so guides can come from the spread extent; the minimap still draws stacked members at their spread positions, and auto-placement still avoids the spread area.

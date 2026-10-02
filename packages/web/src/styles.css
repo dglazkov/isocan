@@ -5161,6 +5161,21 @@ button.mt-card:hover { border-color: var(--accent); }
 .group-grid-cell { position: absolute; border: 1px dashed var(--line); box-sizing: border-box; }
 .text-composer-status { position: absolute; top: 100%; padding: 8px; background: var(--card); color: var(--ink); font-size: 13px; }
 .item.canvas-group:not(.renaming) .item-titlebar { display: none; }
+
+/* ---------- a group shown as a stack (groups-by-hand phase 4) ----------
+   One card's footprint at the group's origin (core `GROUP_STACK`): the frame
+   and its wash step aside and the pile is the group. The pile takes the
+   pointer — it is one card, with no open space for a tool to reach through.
+   The top member upright; the cards behind turned by a hash of their ids
+   (`stackPile`), tinted with their own colour (`--tint`, set per card from a
+   token) so the rim says WHAT is in it. Never the version stack's look:
+   that is blank plies, neat and down-right. */
+.item.canvas-group.stacked { background: transparent; border-color: transparent; pointer-events: auto; overflow: visible; }
+/* A pile is not resized: its size is the card's, and the frame it keeps is
+   the spread one, which Spread gives back. */
+.item.canvas-group.stacked .resize-handle, .item.canvas-group.stacked .item-hint.size { display: none; }
+/* Room at the band's right for the Stack button (`GroupBand`). */
+.item.canvas-group .area-title { padding-right: 112px; }
 .item.canvas-group .group-border { position: absolute; pointer-events: auto; }
 .item.canvas-group .group-border.north, .item.canvas-group .group-border.south { left: 0; right: 0; height: calc(5px / var(--scale, 1)); }
 .item.canvas-group .group-border.north { top: 0; }

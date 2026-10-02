@@ -1,5 +1,5 @@
 ---
-status: designed
+status: built
 since: 2026-10-01
 see: canvas-groups, groups-by-hand
 issue: 373

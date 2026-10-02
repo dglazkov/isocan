@@ -50,9 +50,11 @@ function validVisual(value: unknown): void {
   if (own(value, "size") && (typeof value.size !== "number" || !Number.isFinite(value.size) || value.size < 0)) fail("invalid visual size");
 }
 function validLayout(layout: unknown): asserts layout is GroupLayout {
-  exactKeys(layout, ["titleHeight", "briefHeight", "inset", "rowGutter", "columnGutter", "rows", "columns", "rowCount", "columnCount"], "layout");
+  exactKeys(layout, ["titleHeight", "briefHeight", "inset", "rowGutter", "columnGutter", "rows", "columns", "rowCount", "columnCount", "display"], "layout");
   for (const [key, value] of Object.entries(layout)) {
-    if (key === "rows" || key === "columns") {
+    if (key === "display") {
+      if (value !== "stack" && value !== "spread") fail("invalid display");
+    } else if (key === "rows" || key === "columns") {
       if (!Array.isArray(value) || value.length > 100 || value.some((label) => typeof label !== "string" || label.length > 1000)) fail("invalid grid labels");
     } else if (key === "rowCount" || key === "columnCount") {
       if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 100) fail("invalid grid count");
@@ -334,10 +336,26 @@ export function groupPlacement(canvas: CanvasContents, groupId: string, footprin
 export function groupDropTarget(canvas: CanvasContents, point: { x: number; y: number }, movingIds: readonly string[]): Item | null {
   const excluded = new Set(groupTransformClosure(canvas, movingIds));
   return Object.values(canvas.items).map((item, order) => ({ item, order })).filter(({ item }) => {
-    if (!isGroupItem(item) || excluded.has(item.id)) return false;
-    const box = boxOf(item);
+    // A frame inside a stack is not drawn, so it is not somewhere to drop.
+    if (!isGroupItem(item) || excluded.has(item.id) || groupUnderStack(canvas, item.id)) return false;
+    const box = groupStackBox(item) ?? boxOf(item);
     return point.x >= box.x && point.y >= box.y && point.x <= box.x + box.width && point.y <= box.y + box.height;
   }).sort((a, b) => groupAncestors(canvas, b.item.id).length - groupAncestors(canvas, a.item.id).length || b.order - a.order)[0]?.item ?? null;
+}
+/**
+ * **A stacked group is drawn as one card** (groups-by-hand phase 4): where it
+ * is on the canvas — its footprint at its own origin — or null when it is
+ * spread. Its saved frame is untouched. The numbers are `GROUP_STACK`'s
+ * (`group-stack.ts`, which the web loads only with a stack): a 420×320 card
+ * under a 48 band, 28 of room on every side. Written out here so the first
+ * paint does not carry the pile to know where a stack is.
+ */
+export function groupStackBox(group: Item): GroupBox | null {
+  return group.groupLayout?.display === "stack" ? { x: group.x, y: group.y, width: 476, height: 424 } : null;
+}
+/** Inside a stacked group at any depth: drawn in the pile, not at its own x/y. */
+export function groupUnderStack(canvas: CanvasContents, itemId: string): boolean {
+  return !!canvas.items[itemId]?.containerId && groupAncestors(canvas, itemId).some((up) => up.groupLayout?.display === "stack");
 }
 /** Header drops request a clear content slot; a content drop preserves the deliberate world position. */
 export function groupDropPolicy(group: Item, point: { x: number; y: number }): "auto" | "preserve" {
@@ -1075,6 +1093,8 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
       const oldContent = groupContentBox(group);
       const layout = { ...group.groupLayout, ...action.layout };
       if (action.clearGrid) for (const key of GRID_KEYS) delete layout[key];
+      // Spread is saved as absence, so a canvas that never stacked reads the same.
+      if (layout.display === "spread") delete layout.display;
       put(group.id, { groupLayout: layout });
       const content = groupContentBox(itemIn(canvas, group.id));
       const dx = oldContent.x - content.x; const dy = oldContent.y - content.y;

@@ -1,4 +1,4 @@
-import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, groupAncestors, groupScopedRoot, groupDropTarget, groupDropPolicy, groupTransformClosure, isGroupItem, reachHeld } from "@isocan/core";
+import { groupContentBox, groupCellBox, groupGridNeedsRoom, groupChildren, groupAncestors, groupScopedRoot, groupDropTarget, groupDropPolicy, groupTransformClosure, groupStackBox, isGroupItem, reachHeld } from "@isocan/core";
 import { frameGap, groupsEnabled, enterCanvasGroup, scopedHit } from "../lib/canvasgroups.ts";
 import { Suspense, lazy, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CanvasActivation } from "../lib/canvasActivation.ts";
@@ -69,6 +69,8 @@ import { itemPath } from "@isocan/core";
  */
 const CanvasPreviewBoundary = lazy(() => import("./CanvasPreviewBoundary.tsx").then((m) => ({ default: m.CanvasPreviewBoundary })));
 const CanvasCard = lazy(() => import("./CanvasCard.tsx").then((m) => ({ default: m.CanvasCard })));
+// A group band's Stack button, or a stacked group's whole pile (phase 4).
+const GroupBand = lazy(() => import("./GroupBand.tsx"));
 import { iconKindFor, kindNoun } from "../lib/kinds.ts";
 import { moduleRendererFor } from "../modules.ts";
 import { fileMarkTip } from "../lib/backing.ts";
@@ -89,6 +91,8 @@ const ARRIVAL_MS = 1500;
 // How close an edge has to come before it snaps, in SCREEN pixels — the same
 // pull at every zoom. Holding Shift mid-drag widens it: the same gesture, more
 // magnetic, for when you are aiming at a line rather than a place.
+/** A control inside an item keeps its press and its click to itself. One function, ten callers. */
+const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
 const SNAP_PX = 6;
 const SNAP_PX_MAGNETIC = 18;
 const MIN_W = 80;
@@ -232,8 +236,10 @@ function ItemViewInner({
 
   const x = groupBox?.x ?? display.x + (drag?.dx ?? 0) + (resize?.dx ?? 0);
   const y = groupBox?.y ?? display.y + (drag?.dy ?? 0) + (resize?.dy ?? 0);
-  const width = groupBox?.width ?? resize?.width ?? display.width;
-  const height = groupBox?.height ?? resize?.height ?? display.height;
+  // A stacked group is drawn as one card at its own origin; its frame is kept.
+  const stackBox = groupStackBox(item);
+  const width = stackBox?.width ?? groupBox?.width ?? resize?.width ?? display.width;
+  const height = stackBox?.height ?? groupBox?.height ?? resize?.height ?? display.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
   const visual = visualFaceOf(current);
   const stackDepth = Math.min(item.versions.length - 1, 2);
@@ -354,6 +360,8 @@ function ItemViewInner({
   // apart by kind: it is a picture of a place, not a live frame, and it
   // opens in a tab rather than being entered (`core/canvasitem.ts`).
   const isCanvas = isCanvasItem(item);
+  // Whether that canvas's context is read here (memory phase 3), asked once.
+  const memory = memoryOf(item);
   const isBrowser = current.mimeType === BROWSER_MIME && !isCanvas;
   const source = sourceOf(item);
   // A doorway: this item points somewhere else — a canvas card, a live site, a
@@ -488,7 +496,7 @@ function ItemViewInner({
     // box among the members instead — and only Select takes a frame by its
     // open space at all — so those presses go on to the canvas.
     const reachOne = reachHeld(e) && groupsEnabled();
-    if (isCanvasGroup && frameGap(target) && (reachOne || ui.activeTool !== "select" || commentMode || ui.stamp)) return;
+    if (isCanvasGroup && !stackBox && frameGap(target) && (reachOne || ui.activeTool !== "select" || commentMode || ui.stamp)) return;
     /**
      * **Placing a dot** (sprint phase 4). While a mark is being placed, a
      * press on a sketch ON THE WALL puts the mark where the press landed, as
@@ -851,7 +859,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       data-group-id={isCanvasGroup ? item.id : undefined}
       data-presentation={detail}
@@ -876,7 +884,7 @@ function ItemViewInner({
         )
       }
       style={{
-        ...(isCanvasGroup ? { zIndex: -10000 + groupDepth } : {}),
+        ...(isCanvasGroup && !stackBox ? { zIndex: -10000 + groupDepth } : {}),
         left: x,
         top: y,
         width,
@@ -960,7 +968,7 @@ function ItemViewInner({
           ))}
         </div>
       )}
-      {isAreaItem && (
+      {isAreaItem && !stackBox && (
         /* The strip is the area's name AND its handle — the one part of the
            sheet that takes the pointer, so it can be grabbed at any zoom
            while the sheet itself lets tools through to the canvas. */
@@ -975,9 +983,12 @@ function ItemViewInner({
       {isCanvasGroup && <>
         {dropTarget && <span className="group-drop-label" role="status">Add to {item.title}</span>}
         {dropOut && <span className="group-drop-label out" role="status">Out of {item.title}</span>}
+        <Suspense fallback={null}><GroupBand item={item} canvasId={canvasId} actor={actor} lifted={lifted} /></Suspense>
+        {!stackBox && <>
         <GroupGrid item={displayedGroup} />
-        <span className="group-border north" /><span className="group-border south" /><span className="group-border east" /><span className="group-border west" />
+        {["north", "south", "east", "west"].map((side) => <span key={side} className={`group-border ${side}`} />)}
         {(item.groupLayout?.briefHeight ?? 0) > 0 && <div className="group-brief" style={{ top: item.groupLayout?.titleHeight ?? 56, height: item.groupLayout?.briefHeight, left: groupContent!.x - x, right: item.groupLayout?.inset ?? 24 }}><GroupBrief canvasId={canvasId} blobHash={current.blobHash} /></div>}
+        </>}
       </>}
       {dotMarks.some((m) => reactionPointsOf(item, m).length > 0) && (
         /* The heat map: the mark, drawn where each person put it. Under the
@@ -1085,8 +1096,8 @@ function ItemViewInner({
             target="_blank"
             rel="noopener noreferrer"
             title={`Open in a new tab — ${source}`}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
+            onClick={stop}
+            onPointerDown={stop}
           >
             ↗
           </a>
@@ -1097,26 +1108,26 @@ function ItemViewInner({
              the switch — `memory=inherit` on, `removeProperties` off, the same
              patch `isocan context inherit | uninherit` writes. */
           <button
-            className={`memory-mark${memoryOf(item) === "inherit" ? " active" : ""}`}
+            className={`memory-mark${memory === "inherit" ? " active" : ""}`}
             title={
-              memoryOf(item) === "inherit"
+              memory === "inherit"
                 ? "Inherited here — its design system and pins are read as part of this canvas's context. Click to stop."
                 : "Not inherited — click to read its design system and pins as part of this canvas's context."
             }
-            aria-pressed={memoryOf(item) === "inherit"}
+            aria-pressed={memory === "inherit"}
             onClick={(e) => {
               e.stopPropagation();
               void (async () => {
-                if (memoryOf(item) === "personal") throw new Error("Use Context to unlink your personal canvas.");
-                if (memoryOf(item) !== "inherit") {
+                if (memory === "personal") throw new Error("Use Context to unlink your personal canvas.");
+                if (memory !== "inherit") {
                   const { automaticSource } = await import("../lib/personal.ts");
                   const access = await automaticSource(canvasIdOf(item)!, source, canvasId);
                   if (access.kind !== "ordinary") throw new Error(access.refused);
                 }
-                await sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: memoryPatch(memoryOf(item) === "inherit" ? null : "inherit") });
+                await sendEchoed(canvasId, actor, { type: "item.update", itemId: item.id, patch: memoryPatch(memory === "inherit" ? null : "inherit") });
               })().catch((error) => setNotice(error.message ?? String(error)));
             }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={stop}
           >
             memory
           </button>
@@ -1134,7 +1145,7 @@ function ItemViewInner({
               e.stopPropagation();
               setDocLive(item.id, !liveDoc);
             }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={stop}
           >
             {liveDoc ? "Words" : "Live"}
           </button>
@@ -1197,7 +1208,7 @@ function ItemViewInner({
           door below the words sat on the selection's own Full screen chip. */}
       {!isCanvasGroup && !isText && (soleSelection || entered) && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
         <button type="button" className="btn item-read" aria-label={entered ? "Done reading" : `Read ${item.title} and select text`}
-          onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
+          onPointerDown={stop} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
           {entered ? "Done reading" : "Read / select text"}
         </button>
       )}
@@ -1341,7 +1352,7 @@ function ItemViewInner({
                   // name too.
                   data-tip={spellItOut ? "Enter — Esc comes back" : "Full screen — Enter, Esc comes back"}
                   aria-label="Full screen"
-                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerDown={stop}
                   onClick={(e) => {
                     e.stopPropagation();
                     navigate(itemPath(canvasId, item.id));
@@ -1370,10 +1381,7 @@ function ItemViewInner({
       {soleSelection && !entered && canEdit && (
         !detail &&
         <>
-          <span className="resize-handle resize-handle-nw" onPointerDown={(e) => onResizeDown("nw", e)} />
-          <span className="resize-handle resize-handle-ne" onPointerDown={(e) => onResizeDown("ne", e)} />
-          <span className="resize-handle resize-handle-sw" onPointerDown={(e) => onResizeDown("sw", e)} />
-          <span className="resize-handle resize-handle-se" onPointerDown={(e) => onResizeDown("se", e)} />
+          {(["nw", "ne", "sw", "se"] as const).map((corner) => <span key={corner} className={`resize-handle resize-handle-${corner}`} onPointerDown={(e) => onResizeDown(corner, e)} />)}
         </>
       )}
     </div>
@@ -1420,8 +1428,8 @@ function NameInput({ title, onDone }: { title: string; onDone: (next: string) =>
       value={draft}
       onFocus={(e) => e.currentTarget.select()}
       onChange={(e) => setDraft(e.target.value)}
-      onPointerDown={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
+      onPointerDown={stop}
+      onDoubleClick={stop}
       onBlur={() => finish(draft)}
       onKeyDown={(e) => {
         e.stopPropagation(); // the canvas's shortcuts are not for this field
@@ -1498,7 +1506,7 @@ function itemsUnder(x: number, y: number): string[] {
  * capture, takes every listener off at once, and goes to `end`. The signal
  * comes back so a gesture can hang more listeners on the same lifetime.
  */
-function follow(el: HTMLElement, move: (ev: PointerEvent) => void, end: (ev: PointerEvent) => void): AbortSignal {
+export function follow(el: HTMLElement, move: (ev: PointerEvent) => void, end: (ev: PointerEvent) => void): AbortSignal {
   const off = new AbortController();
   const { signal } = off;
   const done = (ev: PointerEvent) => {
@@ -1938,7 +1946,7 @@ function SiteFrame({ site }: { site: string }) {
       {state === "slow" && (
         <div className="browser-slow" role="status">
           <span>Still loading after a while — some sites refuse to be shown in a frame, and a browser does not say which.</span>
-          <a href={site} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <a href={site} target="_blank" rel="noopener noreferrer" onClick={stop} onPointerDown={stop}>
             Open it in a tab ↗
           </a>
         </div>

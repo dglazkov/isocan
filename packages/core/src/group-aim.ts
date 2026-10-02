@@ -28,7 +28,9 @@ export function groupAim(canvas: CanvasContents, hit: { itemId: string } | { gap
   const id = !hit ? null : "itemId" in hit ? hit.itemId : hit.gapIn;
   const item = id ? canvas.items[id] : undefined;
   if (!hit || !item) return aim;
-  if ("gapIn" in hit) {
+  // A stack has no open space: the whole pile is one card, so it is aimed at
+  // as the group itself, with ⌘ or without (groups-by-hand phase 4).
+  if ("gapIn" in hit && item.groupLayout?.display !== "stack") {
     if (reach) return { ...aim, among: item.id };
     // The scope you stand in, and any frame around it, is open floor there.
     const scope = activeGroupId ? canvas.items[activeGroupId] : undefined;

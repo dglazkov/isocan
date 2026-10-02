@@ -1,4 +1,4 @@
-import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, isGroupItem } from "@isocan/core";
+import { groupAncestors, groupDropPolicy, groupDropTarget, groupScopedRoot, groupScopeRoots, groupUnderStack, isGroupItem } from "@isocan/core";
 import { frameGap, groupsEnabled, leaveGroupAtPoint, scopedHit } from "../lib/canvasgroups.ts";
 /** The hover outline's module (`lib/aim.ts`), fetched on the first pointer move
  * over the canvas and kept: hover may arrive a frame late; a press never waits. */
@@ -1177,9 +1177,12 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
   // siblings at one z-index, and DOM order is the only order there is. A
   // stable sort keeps the rest as they were. Once per canvas (cleanup RP-9,
   // 27 Sep 2026): it ran, `groupAncestors` and all, on every pan frame.
+  // A stacked group's members are drawn in its pile, not here — except one in
+  // the hand, being ⌘-dragged out of the opened stack (groups-by-hand phase 4).
+  const held = useUiStore((s) => s.groupPreview?.lift);
   const items = useMemo(() => canvas
-    ? Object.values(canvas.items).filter((item) => !presentation?.isolate || presentation.items[item.id]).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
-    : [], [canvas, presentation]);
+    ? Object.values(canvas.items).filter((item) => (!presentation?.isolate || presentation.items[item.id]) && (!groupUnderStack(canvas, item.id) || held?.includes(item.id))).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
+    : [], [canvas, presentation, held]);
 
   return (
     <Follows
