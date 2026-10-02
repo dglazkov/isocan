@@ -12,6 +12,7 @@ import { collectInbox, sequenceInbox } from "./inbox.ts";
 import type { JudgmentOptions } from "./judgment.ts";
 import type { TextOptions } from "./text.ts";
 import { registerModelRoutes } from "./model-routes.ts";
+import { registerKeyRoutes, type KeyRouteOptions } from "./key-routes.ts";
 import { textAttention } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
@@ -475,6 +476,9 @@ export interface RouteOptions {
   /** The home's text model (`text.ts`): its key, provider, rate and transport.
    * Absent, the key is `ISOCAN_TEXT_API_KEY`, else `keys.json`, read per call. */
   text?: TextOptions;
+  /** The machine-local key routes (`key-routes.ts`): the environment and the
+   * provider transport they read. Absent, `process.env` and `fetch`. */
+  keys?: KeyRouteOptions;
   /** Local setup persists its pass-returned person in the same process as
    * home badge writes. The route guards local custody before spending a pass. */
   adoptIdentity?: (actor: Actor) => Promise<{ actor: Actor; adopted: boolean }>;
@@ -1939,6 +1943,8 @@ export function registerRoutes(
 
   // `POST /api/judgment` and `POST /api/text`, the two routes that spend the home's keys — in `model-routes.ts`.
   registerModelRoutes(app, { engine, options, refusals, admit, viewOnly });
+  // `/api/keys`, the settings area's machine-local key routes — in `key-routes.ts`.
+  registerKeyRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld, ...(options.keys ? { keys: options.keys } : {}) });
 
   // ---- the actor registry: who a session key speaks as (#57) ----
 

@@ -509,7 +509,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the CLI's own wireframe answers and the voice harness read it per call — a
   key set now is used without a restart — with `TYPESAFE_API_KEY`,
   `ISOCAN_TEXT_API_KEY` and `GEMINI_API_KEY` still winning. A key is never
-  shown (`ls` gives the last four) and never taken from the command line. See
+  shown (`ls` gives the last four) and never taken from the command line.
+  The web app has the same hands — *Model keys…* in the identity menu, under
+  *This machine*, on a page this machine's daemon serves (set, replace, test,
+  remove; write-only; a hosted home says its keys are its operator's). See
   [the design](docs/projects/keys/design.md).
 - **Design competitions**: `/design-competition` or ⌘K opens a lazy picker
   with nine designer-inspired packs. Choose fighters and a brief to create

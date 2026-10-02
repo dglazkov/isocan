@@ -80,39 +80,6 @@ function promptHidden(question: string): Promise<string> {
   });
 }
 
-/** One provider's row, as `ls` shows it and as `--json` returns it. Never a value. */
-export interface KeyRow {
-  provider: KeyProvider;
-  label: string;
-  stored: boolean;
-  lastFour: string | null;
-  addedAt: string | null;
-  model: string | null;
-  /** The environment variable that overrides the file, when one is set. */
-  env: { variable: string; lastFour: string } | null;
-  /** Which key a spender uses now: the environment's, the file's, or none. */
-  inUse: "env" | "file" | null;
-  usedFor: string[];
-}
-
-function keyRows(k: Loaded, stored: KeyFile, env: Record<string, string | undefined>): KeyRow[] {
-  return k.KEY_PROVIDERS.map((provider) => {
-    const entry = stored[provider];
-    const fromEnv = k.envKeyFor(provider, env);
-    return {
-      provider,
-      label: k.KEY_PROVIDER_INFO[provider].label,
-      stored: !!entry,
-      lastFour: entry ? k.lastFour(entry.key) : null,
-      addedAt: entry?.addedAt || null,
-      model: entry?.model ?? null,
-      env: fromEnv ? { variable: fromEnv.variable, lastFour: k.lastFour(fromEnv.key) } : null,
-      inUse: fromEnv ? "env" : entry ? "file" : null,
-      usedFor: k.KEY_PROVIDER_INFO[provider].usedFor,
-    };
-  });
-}
-
 export function registerKeys(program: Command): void {
   const keys = program
     .command("keys")
@@ -152,7 +119,8 @@ line, which your shell keeps in its history.
       } catch (err) {
         refused = (err as Error).message;
       }
-      const rows = keyRows(k, stored, process.env);
+      // core's rows — the same ones `GET /api/keys` serves the settings area.
+      const rows = k.keyRows(stored, process.env);
       if (cmd.optsWithGlobals().json) {
         printJson({ file, ...(refused ? { refused } : {}), keys: rows });
       } else {

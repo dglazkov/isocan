@@ -1,5 +1,5 @@
 import { faceMark } from "@isocan/core";
-import { type ReactNode, useRef, useState } from "react";
+import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import {
   adoptIdentity,
@@ -27,6 +27,18 @@ import { VerifyDialog } from "./VerifyDialog.tsx";
 import { canVerifyEmail, useAttestOffer } from "../lib/signin.ts";
 import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
 import { AgentsGlyph } from "./Glyphs.tsx";
+
+/** The settings area (keys phase 2) — a chunk of its own, fetched only when opened. */
+const KeysDialog = lazy(() => import("./KeysDialog.tsx").then((m) => ({ default: m.KeysDialog })));
+
+/**
+ * **Is this page served by this machine's own daemon?** A loopback hostname is
+ * the answer the key routes themselves ask (`key-routes.ts`: loopback Host and
+ * Origin), so the row is offered exactly where its routes can answer — the
+ * daemon on 4441 and the Vite dev page alike. Anywhere else, the honest
+ * sentence instead of a door that would 404.
+ */
+const servedByThisMachine = () => typeof location !== "undefined" && ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
   { value: "light", label: "Light" },
@@ -125,6 +137,7 @@ export function IdentityMenu({
   const [surfaces, setSurfaces] = useState(false);
   const [bench, setBench] = useState(false);
   const [verify, setVerify] = useState(false);
+  const [keys, setKeys] = useState(false);
   // The same gate every control of this project stands behind: the refusal's
   // "Prove your address" is drawn only where the home can verify an email.
   const offer = useAttestOffer();
@@ -207,6 +220,13 @@ export function IdentityMenu({
   }
   if (surfaces) return <SurfacesDialog onClose={onClose} />;
   if (bench) return <YourBench actor={actor} onClose={onClose} />;
+  if (keys) {
+    return (
+      <Suspense fallback={null}>
+        <KeysDialog onClose={onClose} />
+      </Suspense>
+    );
+  }
   if (verify) {
     return <VerifyDialog actor={actor} onIdentity={onIdentity} onClose={onClose} />;
   }
@@ -416,6 +436,26 @@ export function IdentityMenu({
           />
         )}
       </div>
+      {/* **This machine** (keys phase 2): what belongs to the computer this
+          page is served from rather than to you — model keys first. Shown as
+          a door only where the daemon is this machine's; on a hosted home the
+          group is one sentence, because the keys there are the operator's. */}
+      <div className="identity-menu-head">This machine</div>
+      {servedByThisMachine() ? (
+        <div className="identity-actions">
+          <Action
+            icon={<KeyMark />}
+            label="Model keys…"
+            note="The keys this machine spends on the judge, words and voice."
+            title="Set, replace, test or remove this machine's model keys — never shown, only the last four"
+            onClick={() => setKeys(true)}
+          />
+        </div>
+      ) : (
+        <div className="share-link-note">
+          Your keys live on your machine; this home&rsquo;s keys are set by whoever runs it.
+        </div>
+      )}
       <div className="identity-menu-head">Your color</div>
       <div className="identity-colors" role="group" aria-label="Your color">
         {IDENTITY_COLORS.map((option) => {
@@ -614,6 +654,14 @@ const MachineMark = () => (
   <Mark>
     <rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.4" />
     <path d="M4.6 6.2 6.8 8.2 4.6 10.2M8.6 10.2h2.8" />
+  </Mark>
+);
+
+/** A key: the model keys this machine holds. */
+const KeyMark = () => (
+  <Mark>
+    <circle cx="5.2" cy="10.8" r="2.8" />
+    <path d="M7.2 8.8 13.6 2.4M11.4 4.6l1.8 1.8M9.6 6.4l1.4 1.4" />
   </Mark>
 );
 
