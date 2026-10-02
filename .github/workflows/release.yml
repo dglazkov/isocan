@@ -39,26 +39,11 @@ permissions:
   # being a workflow change — and it is right on its own terms besides.
 
 jobs:
-  # ---- the gate, in four pieces ----
-  #
-  # **`npm run test:ci` was 82% of a release run**: 14.4 minutes of a 17.6
-  # minute median, measured across the successful runs with
-  # `npm run timings -- --ci`. Everything else in this workflow together was
-  # under a fifth, so this is the only step whose length is worth an argument.
-  #
-  # It is 38 files that spawn the CLI per case plus five hundred that do not,
-  # and none of them need each other — so they shard. `vitest --shard=N/4`
-  # splits by file; measured here with the deep lane on, the four shards take
-  # 55s, 48s, 74s and 73s against 190s whole. That is 2.6x rather than 4x,
-  # because the split is by file COUNT and the files are not equal: the shard
-  # holding `canvas-board` and `dispatch` sets the floor. Said out loud because
-  # the arithmetic is tempting and wrong, and the next person to wonder whether
-  # eight shards would halve it again should know the answer is no — it would
-  # bottom out at the slowest single file, about 75 seconds, and stop.
-  #
-  # `fail-fast: false` so one shard's failure does not hide the other three. A
-  # red shard is a red gate either way; what changes is whether you learn about
-  # one failure or all of them.
+  # The complete suite, duration-balanced across four runners. The immutable
+  # snapshot in test/shard-weights.json schedules the discovered files; it
+  # never selects which tests exist. On 2 Oct the default path-hash split put
+  # 41% of file duration on shard 4 (553s against 289–305s elsewhere).
+  # Keep every shard's result, including when another fails.
   suite:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -95,6 +80,17 @@ jobs:
       # this file deliberately keeps no copy of that list, because the copy in
       # `pr.yml` and the copy here are exactly what drifts.
       - run: npm run test:ci -- --shard=${{ matrix.shard }}/4
+
+      - name: Keep test timings
+        if: always()
+        continue-on-error: true # Telemetry availability does not change the test verdict.
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-profile-${{ matrix.shard }}
+          path: .isocan/test-profile.json
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: warn
 
   # Everything that is not the suite, on its own runner and at the same time.
   # Around two minutes against the suite's five, so it costs nothing and takes
@@ -183,14 +179,6 @@ jobs:
           git fetch --no-tags origin +refs/heads/release:refs/remotes/origin/release \
             || echo "no release branch yet — this run creates it"
 
-      # Node, Java, the Firestore emulator and `npm ci`. Shared with `pr.yml`
-      # so the two cannot disagree about what `npm test` runs on — see the
-      # action for why that drift is the dangerous kind.
-
-      # Node, Java, the Firestore emulator and `npm ci`. Shared with `pr.yml`
-      # so the two cannot disagree about what `npm test` runs on — see the
-      # action for why that drift is the dangerous kind.
-      - uses: ./.github/actions/suite-setup
       # ---- the gate the dev home deploys behind (phase 10.5) ----
       #
       # `green` is a ref that means one thing: **the suite passed on this
@@ -251,6 +239,15 @@ jobs:
             echo "::error::green could not be advanced to ${GITHUB_SHA}, and not because of ordering. The reason git gave is above."
             exit 1
           fi
+      # green needs only git after the gate. CLI publication needs Node and
+      # dependencies, but no emulator. release.mjs builds the web app itself;
+      # skipping prepare here avoids building it twice on the publish runner.
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+
       - name: Build and publish the release branch
         run: |
           git config user.name "github-actions[bot]"

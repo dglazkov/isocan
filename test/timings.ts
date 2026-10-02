@@ -44,6 +44,13 @@ export interface RunRecord {
   failed: number;
   /** Wall clock, which is what somebody actually waited. */
   ms: number;
+  /** Runtime and source identity make measurements comparable across runs. */
+  revision?: string;
+  dirty?: boolean;
+  ciRun?: string;
+  node?: string;
+  platform?: string;
+  workers?: number;
 }
 
 const repo = fileURLToPath(new URL("..", import.meta.url));

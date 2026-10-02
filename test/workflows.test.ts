@@ -137,6 +137,30 @@ describe("the sharded gate covers the whole suite", () => {
     // suite and `green` means nothing at all.
     expect(read("release.yml")).toMatch(/needs: \[suite, checks\]/);
   });
+
+  it("advances green after the gate but before setting up publication's toolchain", () => {
+    const publish = read("release.yml").split("  publish:")[1]!;
+    expect(publish).toMatch(/needs: \[suite, checks\]/);
+    const green = publish.indexOf("- name: Advance `green`");
+    const setup = publish.indexOf("- uses: actions/setup-node@");
+    expect(green).toBeGreaterThan(-1);
+    expect(setup).toBeGreaterThan(green);
+    expect(publish).not.toMatch(/uses:.*suite-setup|uses:.*setup-java|uses:.*setup-gcloud/);
+    expect(publish).toContain("npm ci --ignore-scripts");
+    expect(publish.indexOf("npm run release")).toBeGreaterThan(setup);
+    expect(publish).toContain('${GITHUB_SHA}:refs/heads/green');
+    expect(publish).not.toMatch(/git push[^\n]*--force/);
+  });
+
+  it("keeps a profile from every shard, including failures", () => {
+    for (const workflow of runsGate) {
+      const text = read(workflow);
+      expect(text).toMatch(/name: Keep test timings\s+if: always\(\)/);
+      expect(text).toContain("name: test-profile-${{ matrix.shard }}");
+      expect(text).toContain("path: .isocan/test-profile.json");
+      expect(text).toContain("include-hidden-files: true");
+    }
+  });
 });
 
 /**

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { defineConfig } from "vitest/config";
 import { DEEP, runningDeep } from "./test/deep.ts";
+import DurationSequencer from "./test/shard-sequencer.ts";
 
 /**
  * **A `.md` import is its text**, here as everywhere else: source mode gets
@@ -44,6 +45,7 @@ export default defineConfig({
        remembers it. Every run, no flag — `scripts/timings.mjs` reads them back
        and says which kind of run is getting slower. */
     reporters: ["default", "./test/timing-reporter.ts"],
+    sequence: { sequencer: DurationSequencer },
     /**
      * NOT the 5-second default, and this is the third time it has been paid
      * for.

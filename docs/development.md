@@ -432,8 +432,9 @@ The repository uses three branches:
 Edit `main` only. CI generates `green` and `release`.
 
 On every push to `main`,
-[`release.yml`](../.github/workflows/release.yml) runs `npm run test:ci`, then
-`npm run typecheck`. If both pass, it fast-forwards `green` to that commit.
+[`release.yml`](../.github/workflows/release.yml) runs four complete-suite shards
+and the typecheck/other checks in parallel. If all pass, it fast-forwards
+`green` to that commit before installing the CLI publication toolchain.
 Cloud Build deploys `dev.isocan.io` from `green`.
 
 `npm run test:ci` is `vitest run` with every anti-skip switch set — the list
@@ -461,6 +462,36 @@ and the deployed home stays where it is.
 **Note:** Since 2026-08-24, pushing to `main` doesn't deploy on its own. Expect
 a delay of roughly one CI run, and no deployment at all if CI fails. Check
 `gh run list --workflow=release.yml` before the build history.
+
+### Test timings and shard balance
+
+`npm run timings` summarizes local runs; `npm run timings -- --ci 10` reports
+the last ten releases, separating initial queue time, elapsed execution and
+the completed `green` step. Per-step durations overlap and are not added to
+claim a wall-clock total. A completed `green` step can decline a stale ref;
+it does not prove the downstream deployment has completed.
+
+CI partitions the files Vitest discovers by their measured durations, then
+runs longer files first. Every runner reads the same committed
+`test/shard-weights.json`; a missing measurement gets a default cost, never
+an exclusion. Local unsharded runs retain Vitest's ordinary failed-first
+ordering and existing worker limits.
+
+Every test run writes `.isocan/test-profile.json` with file durations, shard,
+worker count, Node/platform, revision and whether the checkout was dirty.
+CI uploads it as `test-profile-N`, including on failures. To refresh the
+weights, download all four artifacts from one successful full CI run:
+
+```sh
+gh run download RUN_ID --pattern 'test-profile-*' --dir /tmp/isocan-profiles-RUN_ID
+node scripts/update-shard-weights.mjs /tmp/isocan-profiles-RUN_ID/test-profile-*/test-profile.json
+```
+
+Review and commit the snapshot. The refresh refuses missing shards, mixed
+runs, filtered runs, dirty trees and failures. Do not restore mutable timing
+caches independently on the runners: different estimates could give them
+different partitions. The initial snapshot came from release run
+`36963426667`, where shard 4 took 553 seconds while the others took 289–305.
 
 ### Repoint the deploy trigger
 

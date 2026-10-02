@@ -106,6 +106,17 @@ jobs:
       # cannot come to disagree about what CI tests.
       - run: npm run test:ci -- --shard=${{ matrix.shard }}/4
 
+      - name: Keep test timings
+        if: always()
+        continue-on-error: true # Telemetry availability does not change the test verdict.
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-profile-${{ matrix.shard }}
+          path: .isocan/test-profile.json
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: warn
+
   # Everything that is not the suite, on its own runner and at the same time —
   # `release.yml`'s `checks` job, minus the steps that only matter to a
   # release. Typecheck and lint used to run AFTER the suite on the same

@@ -29,6 +29,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ciTiming } from "./lib/ci-timings.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const argv = process.argv.slice(2);
@@ -92,7 +93,7 @@ function local() {
 /** The runner's own numbers, asked for rather than kept. */
 function ci(limit) {
   const runs = JSON.parse(
-    execFileSync("gh", ["run", "list", "--workflow=release.yml", "-L", String(limit), "--json", "databaseId,conclusion,headSha"], {
+    execFileSync("gh", ["run", "list", "--workflow=release.yml", "-L", String(limit), "--json", "databaseId,conclusion,headSha,createdAt"], {
       cwd: repo,
       encoding: "utf8",
       timeout: 60_000,
@@ -103,19 +104,23 @@ function ci(limit) {
     return;
   }
   const steps = new Map();
+  const timings = [];
   for (const run of runs) {
     let jobs;
     try {
       jobs = JSON.parse(
-        execFileSync("gh", ["api", `repos/{owner}/{repo}/actions/runs/${run.databaseId}/jobs`], {
+        execFileSync("gh", ["api", "--paginate", "--slurp", `repos/{owner}/{repo}/actions/runs/${run.databaseId}/jobs?per_page=100`], {
           cwd: repo,
           encoding: "utf8",
           timeout: 60_000,
         }),
-      ).jobs;
+      ).flatMap((page) => page.jobs);
     } catch {
       continue; // a run whose logs have aged out
     }
+    const timing = ciTiming(run, jobs);
+    if (!timing) continue;
+    timings.push(timing);
     for (const job of jobs) {
       for (const step of job.steps ?? []) {
         if (!step.started_at || !step.completed_at) continue;
@@ -128,13 +133,21 @@ function ci(limit) {
   const rows = [...steps.entries()]
     .map(([name, times]) => ({ name, median: median(times), runs: times.length }))
     .sort((a, b) => b.median - a.median);
-  const total = rows.reduce((sum, row) => sum + row.median, 0);
-  console.log(`${runs.length} successful release runs · a median run is ${mins(Math.round(total))}\n`);
-  for (const row of rows.filter((one) => one.median >= 1)) {
-    const share = Math.round((row.median / total) * 100);
-    console.log(`${mins(Math.round(row.median)).padStart(6)}  ${String(share).padStart(3)}%  ${row.name}`);
+  if (!timings.length) {
+    console.log("No completed job timings could be read.");
+    return;
   }
-  console.log("\nthe share is of one run's wall clock: the top row is what to shorten first.");
+  console.log(`${timings.length} successful release runs with job timings · medians\n`);
+  for (const [key, label] of [["queue", "initial queue"], ["execution", "execution (parallel jobs overlap)"],
+    ["elapsed", "created → release complete"], ["green", "created → green step complete"]]) {
+    const values = timings.map((timing) => timing[key]).filter((value) => value !== null);
+    if (values.length) console.log(`${mins(Math.round(median(values))).padStart(6)}  ${label}`);
+  }
+  console.log("\nPer-step medians (overlapping work, not shares of elapsed time):\n");
+  for (const row of rows.filter((one) => one.median >= 1)) {
+    console.log(`${mins(Math.round(row.median)).padStart(6)}  ${row.name}`);
+  }
+  console.log("\nThe green step may decline a stale ref; its completion is not proof of a deployment.");
 }
 
 if (argv.includes("--ci")) {

@@ -1,4 +1,7 @@
-import type { Reporter, TestModule } from "vitest/node";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import type { Reporter, TestModule, Vitest, TestRunEndReason } from "vitest/node";
 import { filteredRun } from "./deep.ts";
 import { laneOf, record } from "./timings.ts";
 
@@ -20,26 +23,58 @@ import { laneOf, record } from "./timings.ts";
  */
 export default class TimingReporter implements Reporter {
   private started = 0;
+  private ctx!: Vitest;
+  private revision: string | undefined;
+  private dirty: boolean | undefined;
 
-  onInit(): void {
+  onInit(ctx: Vitest): void {
     this.started = Date.now();
+    this.ctx = ctx;
+    try {
+      this.revision = process.env.GITHUB_SHA || execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: ctx.config.root, encoding: "utf8", timeout: 1000, stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      this.dirty = Boolean(execFileSync("git", ["status", "--porcelain"], {
+        cwd: ctx.config.root, encoding: "utf8", timeout: 1000, stdio: ["ignore", "pipe", "ignore"],
+      }).trim());
+    } catch { /* A non-git fixture can still report timings. */ }
   }
 
-  onTestRunEnd(testModules: ReadonlyArray<TestModule> = []): void {
+  onTestRunEnd(testModules: ReadonlyArray<TestModule> = [], errors: ReadonlyArray<unknown> = [], reason?: TestRunEndReason): void {
     try {
-      record({
+      const config = this.ctx.config;
+      const shard = config.shard;
+      const entry = {
         at: new Date().toISOString(),
         lane: laneOf(),
-        ...(process.env["VITEST_SHARD"] ? { shard: process.env["VITEST_SHARD"] } : {}),
-        filtered: filteredRun(),
+        ...(shard ? { shard: `${shard.index}/${shard.count}` } : {}),
+        filtered: filteredRun() || Boolean(config.testNamePattern || config.changed || config.related?.length),
         files: testModules.length,
         tests: testModules.reduce((total, mod) => total + Array.from(mod.children.allTests()).length, 0),
         failed: testModules.filter((mod) => !mod.ok()).length,
         ms: Date.now() - this.started,
-      });
+        ...(this.revision ? { revision: this.revision } : {}),
+        ...(this.dirty === undefined ? {} : { dirty: this.dirty }),
+        ...(process.env.GITHUB_RUN_ID ? { ciRun: `${process.env.GITHUB_RUN_ID}.${process.env.GITHUB_RUN_ATTEMPT ?? "1"}` } : {}),
+        node: process.version,
+        platform: `${process.platform}/${process.arch}`,
+        workers: config.maxWorkers,
+      };
+      const dir = path.join(config.root, ".isocan");
+      record(entry, path.join(dir, "timings.jsonl"));
+      mkdirSync(dir, { recursive: true });
+      // One artifact per CI runner, kept even for failures. Never read as a
+      // partition input in this run; refresh the committed snapshot explicitly.
+      writeFileSync(path.join(dir, "test-profile.json"), JSON.stringify({
+        ...entry, reason, errors: errors.length,
+        fileDurations: testModules.map((mod) => ({
+          file: path.relative(config.root, mod.moduleId).split(path.sep).join("/"),
+          ms: Math.round(mod.diagnostic().duration),
+          passed: mod.ok(),
+        })).sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0),
+      }, null, 2) + "\n");
     } catch {
       /* Never the reason a suite goes red — see `test/timings.ts`. */
     }
   }
 }
-
