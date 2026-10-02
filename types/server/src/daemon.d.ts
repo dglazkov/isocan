@@ -186,10 +186,12 @@ export interface DaemonOptions {
      */
     refusalsNow?: () => number;
     /** The home's judge (`judgment.ts`) — tests hand it a key and a fake
-     * transport; a running home reads `TYPESAFE_API_KEY` per call. */
+     * transport; a running home reads `TYPESAFE_API_KEY`, else its
+     * `keys.json`, per call. */
     judgment?: JudgmentOptions;
     /** The home's text model (`text.ts`) — tests hand it a key and a fake
-     * transport; a running home reads `ISOCAN_TEXT_API_KEY` per call. */
+     * transport; a running home reads `ISOCAN_TEXT_API_KEY`, else its
+     * `keys.json`, per call. */
     text?: TextOptions;
 }
 export interface RunDaemonOptions extends DaemonOptions {

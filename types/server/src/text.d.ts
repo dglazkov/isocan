@@ -1,24 +1,6 @@
 import { type JsonSchema, type TextProvider } from "../../core/src/jev.js";
-/**
- * **The home's text model** — `POST /api/text`'s other half (`@isocan/core`'s
- * `text.ts` has the route and the codes). The judge's twin (`judgment.ts`),
- * for words rather than judgments.
- *
- * It holds the one thing a browser must never hold: the key. A prompt and the
- * schema its answer must satisfy come in, core's `TextGenerator` for the
- * configured provider asks with this home's key, and the value comes back
- * with the model that wrote it. No prompt of its own — what the web asks
- * through it is exactly what the CLI asks with a key of its own. The key is
- * read per call (a secret mounted into the environment can be rotated without
- * a restart) and is scrubbed from every word this sends back, including the
- * provider's own error bodies.
- *
- * Configured by the environment, read per call like the key:
- * `ISOCAN_TEXT_API_KEY` (the key), `ISOCAN_TEXT_PROVIDER` (`anthropic` or
- * `openai`; absent, an `sk-ant-` key is Claude's and anything else the
- * OpenAI-shaped endpoint) and `ISOCAN_TEXT_MODEL` (the provider's default when
- * absent — `claude-opus-5-5` for Claude).
- */
+/** Says once on stderr that a loose keys file was refused, and carries on with no key. */
+export declare function warnRefusedKeys<T>(read: () => T | undefined): T | undefined;
 /**
  * **How a home's text model is configured** — the daemon passes it through
  * from `DaemonOptions.text`. Every field has a production default; the fields
@@ -26,8 +8,10 @@ import { type JsonSchema, type TextProvider } from "../../core/src/jev.js";
  * the real vendor, and must still prove the refusals that depend on all three.
  */
 export interface TextOptions {
-    /** The key, read per call. Default: `ISOCAN_TEXT_API_KEY` from the environment. */
+    /** The key, read per call. Default: `resolveTextKey` — `ISOCAN_TEXT_API_KEY`, else `keys.json` under `keysHome`. */
     key?: () => string | undefined;
+    /** Whose `keys.json` the default key reads: the daemon's home. Default `ISOCAN_HOME`, else `~/.isocan`. */
+    keysHome?: string;
     /** The provider. Default: `ISOCAN_TEXT_PROVIDER`, else the key's shape. */
     provider?: () => TextProvider | undefined;
     /** The model. Default: `ISOCAN_TEXT_MODEL`, else the provider's default. */
@@ -46,6 +30,8 @@ export declare class TextModel {
     private readonly opts;
     private asked;
     constructor(opts?: TextOptions);
+    /** The key, the provider it is for and the model to ask, read now. A test's own `key` keeps the old shape: provider and model from its own options, else the key's shape. */
+    private resolve;
     private key;
     /** Does this home hold a key — can anything be written here at all. */
     available(): boolean;

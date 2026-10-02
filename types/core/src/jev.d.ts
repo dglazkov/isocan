@@ -1,3 +1,27 @@
+/**
+ * **The answerer seam** (design §4, *The answerer is a seam*).
+ *
+ * A round is a question file in Jev's own request shape — one `state`, named
+ * questions — and its answers come back in Jev's response shape. Four things
+ * answer it: Jev over HTTP with a key of your own, the home (Jev through the
+ * home's `/api/judgment`, with the home's key — what the web uses, so no key
+ * ever reaches a browser), a seeded uniform stub, and an agent through
+ * `isocan wire questions` / `wire answer`. The composer never knows which.
+ *
+ * Shaped as judge's `Judgment` seam will be (`docs/projects/judge/design.md`):
+ * the full distribution comes back, `confidence` is kept apart from the
+ * probability, and what a call cost is returned rather than estimated — so
+ * when judge phase 2 lands that interface in core, `jevAnswerer` becomes one
+ * implementation of it rather than a second client.
+ *
+ * Pure except for `fetch`, which every surface has. No Node import.
+ *
+ * **Moved to core on 23 Sep 2026** (voice-agent phase 6) from the wireframe
+ * module, whose `answerer.ts` now re-exports it: the talk module's fast path
+ * is the second caller, and a module importing another module is a module
+ * that cannot be removed on its own. A subpath (`@isocan/core/jev`) rather
+ * than the barrel, so nothing here can reach a first visit's bytes.
+ */
 import type { TextRequest } from "./text.js";
 /** Where Jev answers for a caller holding its own key — the CLI and the measurement scripts; the web never calls it (the home does). */
 export declare const JEV_URL = "https://api.typesafe.ai/v1/systemone";
@@ -338,7 +362,13 @@ interface EnvTextGeneratorOptions {
     provider?: TextProvider;
     fetch?: typeof globalThis.fetch;
 }
-/** The text generator the environment names — the CLI's with a key of its own, and the home's behind `/api/text`. */
+/**
+ * The text generator the environment names — the CLI's with a key of its own,
+ * and the home's behind `/api/text`. Core is isomorphic, so this reads only
+ * the environment; on a machine with stored keys (`~/.isocan/keys.json`) the
+ * node-side callers resolve the key first (`@isocan/core/keystore`'s
+ * `resolveTextKey`) and pass `apiKey`, `provider` and `model` in.
+ */
 export declare function envTextGenerator(opts?: EnvTextGeneratorOptions): TextGenerator;
 /**
  * **Words, through the home** — `POST /api/text` with the home's key, so the

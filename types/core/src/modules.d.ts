@@ -3,6 +3,7 @@ import type { Canvas, CanvasContents, Item } from "./model.js";
 import type { Operation } from "./ops.js";
 import type { JudgmentRequest } from "./judgment.js";
 import type { TextRequest } from "./text.js";
+import type { CopyEdit } from "./copy-deck.js";
 import type { CommandMetadata, SlashCommand } from "./commands.js";
 /**
  * **The module registry** (`docs/projects/modules/design.md`).
@@ -874,6 +875,22 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
     dialogs?: readonly ModuleDialog<D>[];
     /** **Rows in an item's right-click menu** — only once the module's lazy half is loaded (`ModuleMenuFacts`). */
     menu?: (facts: ModuleMenuFacts) => readonly ModuleMenuRow[];
+    /**
+     * **Who writes a copy variant of a screen this module draws** (copy-edit
+     * phase 2, module API 0.2.5). A screen whose copy deck has this `kind`
+     * (`"wire"`) keeps its words somewhere other than its HTML, so *Vary the
+     * copy…* hands this the screen's HTML and one voice's edits and gets back
+     * the variant's file and the properties a screen of this kind wears. Pure:
+     * nothing is sent — the shell adds every variant the same way
+     * (`copyVariantOps`). The CLI's twin is `CliModule.copy.variant`.
+     */
+    copy?: {
+        kind: string;
+        variant: (html: string, edits: readonly CopyEdit[], by: string, sourceId: string) => Promise<{
+            html: string;
+            properties: Record<string, string>;
+        }>;
+    };
 }
 /**
  * **What a module's item-menu rows are handed** (wireframes, 24 Sep 2026:
@@ -989,8 +1006,12 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * home's text route (`TEXT_ROUTE`) handed to a dialog (under the existing
  * `dialogs` proposal), optional so a module can tell an older host by its
  * absence. A module built for `^0.2.3` still loads.
+ *
+ * **0.2.4 → 0.2.5 on 2 Oct 2026**, an addition: `WebModule.copy`, a writer a
+ * module MAY provide for its screens' copy variants (copy-edit phase 2),
+ * read only by *Vary the copy…*. A module built for `^0.2.4` still loads.
  */
-export declare const MODULE_API_VERSION = "0.2.4";
+export declare const MODULE_API_VERSION = "0.2.5";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.

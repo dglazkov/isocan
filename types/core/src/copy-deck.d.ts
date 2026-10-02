@@ -99,6 +99,15 @@ export declare function checkCopyEdits(deck: CopyDeck, edits: readonly CopyEdit[
  * its spec's, and the wireframe module writes them (`wireCopyFile`).
  */
 export declare function applyCopyDeck(html: string, edits: readonly CopyEdit[]): CopyApplyOutcome;
+/**
+ * **The same edits on an item's visual face** — the inlined-assets HTML some
+ * versions carry beside their source. It must hold the same words in the same
+ * order (same text, same role, string by string), and then each edit lands on
+ * the face's string at the same place in the deck; otherwise it is refused
+ * rather than guessed. `isocan words --apply`, `words vary` and *Vary the
+ * copy…* all reword a face through here.
+ */
+export declare function applyCopyDeckToFace(deck: CopyDeck, faceHtml: string, edits: readonly CopyEdit[]): CopyApplyOutcome;
 /** The `wire copy --apply` file a set of wire edits is: `{ title?, bar?, slots: { slot: { path: words } } }`. */
 interface WireCopyFile {
     title?: string;
@@ -119,7 +128,7 @@ export declare function wireCopyFile(html: string, edits: readonly CopyEdit[]): 
     reason: string;
 };
 /**
- * Read an apply file: the deck as `isocan copy --json` printed it, with a
+ * Read an apply file: the deck as `isocan words <item> --json` printed it, with a
  * `to` beside each string that should change — or a bare array of
  * `{ address, text, to }`. Strings without a `to` are left alone.
  */
