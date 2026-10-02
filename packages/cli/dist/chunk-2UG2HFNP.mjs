@@ -124,6 +124,10 @@ var keys = {
 var SEEN_EVERY_MS = 6e4;
 var NOT_YOUR_ACTOR = "not-your-actor";
 var heldElsewhere = (err) => err instanceof ApiError && err.code === "name-taken" && err.reason === CLAIM_REFUSAL.heldElsewhere;
+function suppliedWords(row) {
+  if (row.harness === null) return row.cwd;
+  return `${row.cwd} \xB7 ${row.harness}${row.model ? ` (${row.model})` : ""}`;
+}
 function runRoom(deps) {
   const life = new AbortController();
   let announcement = null;
@@ -170,17 +174,24 @@ async function room(deps, life, announce, onLeave) {
       if (row.canvasId === p.id && !roster[row.actorId]) await rows.remove(p.id, row.actorId);
     }
   };
+  const adoptionRow = async (actorId, name) => {
+    const elsewhere = (await rows.list()).filter((r) => r.actorId === actorId && r.canvasId !== p.id);
+    const named = elsewhere.filter((r) => r.harness !== null);
+    const from = (named.length > 0 ? named : elsewhere).at(-1);
+    return {
+      canvasId: p.id,
+      actorId,
+      name,
+      harness: from?.harness ?? null,
+      ...from?.model ? { model: from.model } : {},
+      cwd: from?.cwd ?? rcCwd,
+      sessionId: null
+    };
+  };
   const reconcile = async (roster) => {
     for (const record of Object.values(roster)) {
       if (notHeld.has(record.actor.id)) continue;
-      await rows.adopt({
-        canvasId: p.id,
-        actorId: record.actor.id,
-        name: record.actor.name,
-        harness: null,
-        cwd: rcCwd,
-        sessionId: null
-      });
+      await rows.adopt(await adoptionRow(record.actor.id, record.actor.name));
     }
     await reap(roster);
   };
@@ -666,15 +677,9 @@ async function room(deps, life, announce, onLeave) {
         await sayNotHeld(record.actor.id);
         continue;
       }
-      const adopted = await rows.adopt({
-        canvasId: p.id,
-        actorId: record.actor.id,
-        name: record.actor.name,
-        harness: null,
-        cwd: rcCwd,
-        sessionId: null
-      });
-      if (adopted) narrate(`${record.actor.name} \xB7 where and how supplied \u2014 ${rcCwd}`);
+      const row = await adoptionRow(record.actor.id, record.actor.name);
+      const adopted = await rows.adopt(row);
+      if (adopted) narrate(`${record.actor.name} \xB7 where and how supplied \u2014 ${suppliedWords(row)}`);
       if (parked !== "held") couldNotHold(record.actor.id, parked.error);
     }
   };
@@ -746,15 +751,9 @@ async function room(deps, life, announce, onLeave) {
           const record = roster[op.agent.id];
           narrate(`${by.name} enrolled ${op.agent.name} \u2014 answerable here${record ? ` \xB7 ${policyLine(record)}` : ""}`);
           if (record) await sayPolicy(record);
-          const adopted = await rows.adopt({
-            canvasId: p.id,
-            actorId: op.agent.id,
-            name: op.agent.name,
-            harness: null,
-            cwd: rcCwd,
-            sessionId: null
-          });
-          if (adopted) narrate(`${op.agent.name} \xB7 where and how supplied \u2014 ${rcCwd}`);
+          const row = await adoptionRow(op.agent.id, op.agent.name);
+          const adopted = await rows.adopt(row);
+          if (adopted) narrate(`${op.agent.name} \xB7 where and how supplied \u2014 ${suppliedWords(row)}`);
           if (parked !== "held") couldNotHold(op.agent.id, parked.error);
         }
         continue;
