@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-02
 see: wireframes, version-diff
 note: "the walk: two bugs, the copy deck, copy variants, compare and mix, fit and voice, wire-time voice, evidence."
@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 2 Oct 2026: phase 0 is CLOSED (a content edit writes words). Next: copy-edit phase 0.5, a generator the browser can reach.**
+**Where we are, 2 Oct 2026: phase 0 is CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 1, the copy deck.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -41,7 +41,7 @@ greedy answer is refused; `npm test`, typecheck.
 
 ## Phase 0.5 — A generator the browser can reach
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 2 October 2026.** `POST /api/text` is built on the daemon and the home with Claude and OpenAI-shaped providers, every refusal and the key-never-leaks rule proved against a real daemon; it waits on a text-model key on isocan.io, which is Dion's decision.
 
 **Outcome:** `POST /api/text` on the daemon and the home (`TEXT_ROUTE` in
 core beside `JUDGMENT_ROUTE`): a JSON-schema text completion for a badge that
@@ -59,6 +59,14 @@ configured `host.generate` is called; `npm test`, typecheck.
 ⚑ **Provision:** a text-model key on isocan.io (`ISOCAN_TEXT_API_KEY`, and
 which provider) is Dion's decision; until then the route refuses in words and
 the browser keeps the stub.
+
+### Trajectory
+
+- **2026-10-02** — The route's path lives in a core subpath (`@isocan/core/text`), not beside `JUDGMENT_ROUTE` in modules.ts: there it cost the entry 14 bytes, shared 33; read only by the lazy dialog chunk, the entry stays 701,285.
+- **2026-10-02** — `/api/judgment` moved beside `/api/text` in `model-routes.ts`: one more registration line put `registerRoutes` past its agreed size, and the two routes that spend the home's keys belong together.
+- **2026-10-02** — Claude is the default when the key is `sk-ant-…` (model `claude-opus-5-5`, `effort: low`, per the claude-api guidance), raw `fetch` rather than the SDK because core loads in the browser and the lockfile is someone else's.
+- **2026-10-02** — Open: a text-model key on isocan.io (`ISOCAN_TEXT_API_KEY`, and the provider) — Dion's. Until then the browser fills placeholder words and says so once.
+- **2026-10-02** — Open: 30 completions per badge per minute will bind phase 2 (N voices × M screens); batch or raise it with a stated reason there.
 
 ## Phase 1 — The copy deck
 

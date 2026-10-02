@@ -10,7 +10,10 @@ import { ACME_WARM } from "./fixtures/design-systems.ts";
 import { wireframeCore } from "../src/command.ts";
 import wireframeCli from "../src/cli.ts";
 import { keptArrows } from "../src/arrows.tsx";
-import { composeOnWeb, fleshOnWeb, modeOf, presetOnWeb, prototypeRecordWords, restyleOnWeb } from "../src/dialog.tsx";
+import { composeOnWeb, copyOnWeb, fleshOnWeb, modeOf, nameOnWeb, presetOnWeb, prototypeRecordWords, restyleOnWeb } from "../src/dialog.tsx";
+import { PLACEHOLDER_WORDS } from "../src/web-port.ts";
+import { stubTextGenerator } from "@isocan/core/jev";
+import type { TextRequest } from "@isocan/core/text";
 import { presetText } from "../src/style-cli.ts";
 import { WireMaybes } from "../src/maybe-marks.tsx";
 import { KEEP_PROP, MAYBE_PROP, homeAnswerer, homeOrStub, readWire, renderWire, stubAnswerer, wireframe, type WireSpec } from "../src/core.ts";
@@ -625,5 +628,70 @@ describe("a wire behind its design system", () => {
     expect(web.c.sent.length).toBe(sentBefore);
     restyleOnCanvas(host, [wire]);
     expect(ran).toEqual([`/wire style system ${wire}`]);
+  });
+});
+
+describe("/wire copy and /wire name ask the home's text model", () => {
+  async function withGenerate(generate?: (request: TextRequest) => Promise<unknown>) {
+    const web = await viaWeb();
+    const notices: Array<{ text: string; problem: boolean }> = [];
+    const host = { ...web.host, notice: (text: string, problem?: boolean) => notices.push({ text, problem: problem === true }), ...(generate ? { generate } : {}) } as unknown as DialogHost;
+    return { web, host, notices };
+  }
+
+  it("/wire copy calls host.generate once per screen, naming the canvas, and signs the words with the model that wrote them", async () => {
+    const asked: TextRequest[] = [];
+    const writer = stubTextGenerator(4);
+    const { web, host, notices } = await withGenerate(async (request) => {
+      asked.push(request);
+      return { model: "claude-acme", value: await writer.generateJson(request.prompt, request.schema) };
+    });
+    const before = web.c.sent.length;
+    const { r, screens } = await copyOnWeb("canvas-acme", host, [], "warm and brief");
+    expect(asked.length).toBe(screens.length);
+    for (const request of asked) {
+      expect(request.canvasId).toBe("canvas-acme");
+      expect(request.prompt).toContain("warm and brief");
+      expect(request.schema.type).toBe("object");
+      expect(Object.keys(request).sort()).toEqual(["canvasId", "prompt", "schema"]);
+    }
+    expect(r.by).toBe("claude-acme via the home");
+    expect(r.changed.length).toBeGreaterThan(0);
+    expect(web.c.sent.length).toBeGreaterThan(before);
+    expect(notices).toEqual([]);
+  });
+
+  it("/wire name calls host.generate for the flow", async () => {
+    const asked: TextRequest[] = [];
+    const writer = stubTextGenerator(5);
+    const { host } = await withGenerate(async (request) => {
+      asked.push(request);
+      return { model: "claude-acme", value: await writer.generateJson(request.prompt, request.schema) };
+    });
+    const { r } = await nameOnWeb("canvas-acme", host, [], "Acme Couriers");
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.canvasId).toBe("canvas-acme");
+    expect(r.by).toBe("claude-acme via the home");
+  });
+
+  it("with no text model at the home, fills placeholder words and says so once, as a problem", async () => {
+    let calls = 0;
+    const { host, notices } = await withGenerate(async () => {
+      calls++;
+      throw Object.assign(new Error("this home has no text model"), { code: "text-unavailable" });
+    });
+    const { r } = await copyOnWeb("canvas-acme", host, []);
+    expect(calls).toBeGreaterThan(0);
+    expect(r.by).toBe(PLACEHOLDER_WORDS);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ problem: true });
+    expect(notices[0]!.text).toMatch(/placeholder words, not written copy/);
+  });
+
+  it("any other refusal is a failure, not placeholder words", async () => {
+    const { host } = await withGenerate(async () => {
+      throw Object.assign(new Error("view-only"), { code: "view-only" });
+    });
+    await expect(copyOnWeb("canvas-acme", host, [])).rejects.toThrow("view-only");
   });
 });

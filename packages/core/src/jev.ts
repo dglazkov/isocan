@@ -23,6 +23,7 @@
  * than the barrel, so nothing here can reach a first visit's bytes.
  */
 import { JUDGMENT_UNAVAILABLE } from "./judgment.ts";
+import type { TextRequest, TextResponse } from "./text.ts";
 
 /** Where Jev answers for a caller holding its own key — the CLI and the measurement scripts; the web never calls it (the home does). */
 export const JEV_URL = "https://api.typesafe.ai/v1/systemone";
@@ -586,7 +587,10 @@ export interface JsonSchema {
  *
  * Implementations:
  * - `stubTextGenerator(seed)`: deterministic offline generator that synthesizes valid JSON conforming to `schema`.
- * - `httpTextGenerator(opts)`: standard HTTPS JSON-schema completion (`ISOCAN_TEXT_API_KEY` / `ISOCAN_TEXT_MODEL`, zero SDK dependencies).
+ * - `httpTextGenerator(opts)`: an OpenAI-shaped HTTPS JSON-schema completion (zero SDK dependencies).
+ * - `claudeTextGenerator(opts)`: Claude's Messages API with structured outputs (zero SDK dependencies).
+ * - `envTextGenerator(opts)`: whichever of the two the environment names (`ISOCAN_TEXT_PROVIDER`, else the key's shape).
+ * - `homeTextGenerator(post, canvasId)`: the home's `/api/text`, with the home's key — what the web uses.
  */
 export interface TextGenerator {
   readonly name: string;
@@ -679,9 +683,9 @@ export function stubTextGenerator(seed = 1): TextGenerator {
  * Reads `ISOCAN_TEXT_API_KEY` and `ISOCAN_TEXT_MODEL` when not passed in `opts`.
  */
 export function httpTextGenerator(opts: HttpTextGeneratorOptions = {}): TextGenerator {
-  const apiKey = opts.apiKey ?? process.env.ISOCAN_TEXT_API_KEY ?? "";
-  const model = opts.model ?? process.env.ISOCAN_TEXT_MODEL ?? "gpt-4o-mini";
-  const endpoint = opts.endpoint ?? process.env.ISOCAN_TEXT_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
+  const apiKey = opts.apiKey ?? textEnv("ISOCAN_TEXT_API_KEY") ?? "";
+  const model = opts.model ?? textEnv("ISOCAN_TEXT_MODEL") ?? "gpt-4o-mini";
+  const endpoint = opts.endpoint ?? textEnv("ISOCAN_TEXT_ENDPOINT") ?? "https://api.openai.com/v1/chat/completions";
   const fetchFn = opts.fetch ?? globalThis.fetch;
 
   return {
@@ -714,6 +718,236 @@ export function httpTextGenerator(opts: HttpTextGeneratorOptions = {}): TextGene
       const text = body.choices?.[0]?.message?.content;
       if (!text) throw new Error("TextGenerator returned an empty response");
       return JSON.parse(text) as T;
+    },
+  };
+}
+
+/** An environment variable where there is an environment — the browser has none, and this file must load there. */
+function textEnv(name: string): string | undefined {
+  const value = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[name];
+  return value?.trim() || undefined;
+}
+
+// ---------- Claude
+
+/** Where Claude answers: the Messages API. `ISOCAN_TEXT_ENDPOINT` overrides it, as it does the OpenAI-shaped one. */
+export const CLAUDE_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+
+/**
+ * The Claude model a text request names when `ISOCAN_TEXT_MODEL` names none:
+ * Claude Opus 5.5, the current default model (the `claude-api` skill's
+ * recommendation, 2 Oct 2026). Its cost lever is `CLAUDE_TEXT_EFFORT`, not a
+ * smaller model: a screen's labels are short structured copy, which low effort
+ * writes well and fast.
+ */
+export const CLAUDE_TEXT_MODEL = "claude-opus-5-5";
+
+/**
+ * How hard Claude thinks before writing a screen's words. Low: the output is a
+ * few dozen labels held to a schema, the dialog is waiting on it, and the
+ * skill's guidance is `low` for simple, latency-sensitive work (Opus 5.5's
+ * own default is `medium`, so it is set explicitly).
+ */
+export const CLAUDE_TEXT_EFFORT = "low";
+
+/**
+ * Claude declines in classifier categories; `fallbacks: "default"` re-runs a
+ * declined request on Anthropic's recommended substitute inside the same call
+ * (beta header below) rather than handing the dialog a refusal.
+ */
+const CLAUDE_FALLBACK_BETA = "server-side-fallback-2026-07-01";
+
+/** Options for `claudeTextGenerator`. */
+interface ClaudeTextGeneratorOptions {
+  apiKey?: string;
+  model?: string;
+  endpoint?: string;
+  fetch?: typeof globalThis.fetch;
+}
+
+/**
+ * The schema as Claude's structured outputs accept it: every object closed
+ * (`additionalProperties: false` is required) and array lengths dropped
+ * (only `minItems` of 0 or 1 is supported). What is dropped is checked by the
+ * caller's own validation (`validateCopyPayload` and its kin), as it is for
+ * every generator.
+ */
+export function claudeSchema(schema: JsonSchema): JsonSchema {
+  const out: JsonSchema = { type: schema.type };
+  if (schema.description !== undefined) out.description = schema.description;
+  if (schema.enum !== undefined) out.enum = schema.enum;
+  if (schema.type === "object") {
+    const properties: Record<string, JsonSchema> = {};
+    for (const [key, value] of Object.entries(schema.properties ?? {})) properties[key] = claudeSchema(value);
+    out.properties = properties;
+    if (schema.required !== undefined) out.required = schema.required;
+    out.additionalProperties = false;
+  }
+  if (schema.type === "array") {
+    if (schema.items !== undefined) out.items = claudeSchema(schema.items);
+    if (schema.minItems === 0 || schema.minItems === 1) out.minItems = schema.minItems;
+  }
+  return out;
+}
+
+/**
+ * **Claude, writing to a schema** — the Messages API with structured outputs
+ * (`output_config.format`), over `fetch` with no SDK: core is isomorphic and
+ * loads in the browser, and the seam it implements is a `fetch` an injected
+ * test transport can stand in for. The key travels as `x-api-key` and never
+ * appears in an error this throws; a refusal and a truncated answer are
+ * errors in words, never half a schema.
+ */
+export function claudeTextGenerator(opts: ClaudeTextGeneratorOptions = {}): TextGenerator {
+  const apiKey = opts.apiKey ?? textEnv("ISOCAN_TEXT_API_KEY") ?? "";
+  const model = opts.model ?? textEnv("ISOCAN_TEXT_MODEL") ?? CLAUDE_TEXT_MODEL;
+  const endpoint = opts.endpoint ?? textEnv("ISOCAN_TEXT_ENDPOINT") ?? CLAUDE_MESSAGES_URL;
+  const fetchFn = opts.fetch ?? globalThis.fetch;
+  const scrub = (text: string) => (apiKey ? text.split(apiKey).join("[key]") : text);
+
+  return {
+    name: model,
+    async generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T> {
+      if (!apiKey) throw new Error("claudeTextGenerator requires apiKey or ISOCAN_TEXT_API_KEY");
+      let res: Response;
+      try {
+        res = await fetchFn(endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": CLAUDE_FALLBACK_BETA,
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: 16000,
+            fallbacks: "default",
+            system: "You write the words on an app's screens: labels, headings, buttons, sample content. Answer with the JSON the schema asks for and nothing else.",
+            messages: [{ role: "user", content: prompt }],
+            output_config: {
+              effort: CLAUDE_TEXT_EFFORT,
+              format: { type: "json_schema", schema: claudeSchema(schema) },
+            },
+          }),
+        });
+      } catch (error) {
+        throw new Error(scrub(`Claude could not be reached: ${(error as Error).message}`));
+      }
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(scrub(`TextGenerator HTTP ${res.status}: ${errText.slice(0, 200)}`));
+      }
+      const body = (await res.json()) as {
+        stop_reason?: string;
+        stop_details?: { category?: string | null; explanation?: string } | null;
+        content?: Array<{ type?: string; text?: string }>;
+      };
+      if (body.stop_reason === "refusal") {
+        const why = body.stop_details?.category ? ` (${body.stop_details.category})` : "";
+        throw new Error(`Claude declined to write these words${why}`);
+      }
+      if (body.stop_reason === "max_tokens") throw new Error("Claude ran out of room before the words were finished");
+      const text = (body.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
+      if (!text) throw new Error("TextGenerator returned an empty response");
+      return JSON.parse(text) as T;
+    },
+  };
+}
+
+// ---------- which provider
+
+/** The text-model vendors core can call. */
+export type TextProvider = "anthropic" | "openai";
+
+/**
+ * **Which provider a key is for.** `ISOCAN_TEXT_PROVIDER` says so when set
+ * (`anthropic` or `openai`); otherwise the key's own shape decides — an
+ * Anthropic key starts `sk-ant-` — and anything else is the OpenAI-shaped
+ * endpoint, which is what `ISOCAN_TEXT_API_KEY` meant before Claude was a
+ * choice, so no existing setup changes meaning.
+ */
+export function textProvider(apiKey: string | undefined = textEnv("ISOCAN_TEXT_API_KEY"), named: string | undefined = textEnv("ISOCAN_TEXT_PROVIDER")): TextProvider {
+  const said = named?.toLowerCase();
+  if (said === "anthropic" || said === "claude") return "anthropic";
+  if (said === "openai") return "openai";
+  return apiKey?.startsWith("sk-ant-") ? "anthropic" : "openai";
+}
+
+/** Options for `envTextGenerator`: each overrides the environment. */
+interface EnvTextGeneratorOptions {
+  apiKey?: string;
+  model?: string;
+  provider?: TextProvider;
+  fetch?: typeof globalThis.fetch;
+}
+
+/** The text generator the environment names — the CLI's with a key of its own, and the home's behind `/api/text`. */
+export function envTextGenerator(opts: EnvTextGeneratorOptions = {}): TextGenerator {
+  const apiKey = opts.apiKey ?? textEnv("ISOCAN_TEXT_API_KEY");
+  const provider = opts.provider ?? textProvider(apiKey);
+  const shared = { ...(apiKey !== undefined ? { apiKey } : {}), ...(opts.model !== undefined ? { model: opts.model } : {}), ...(opts.fetch ? { fetch: opts.fetch } : {}) };
+  return provider === "anthropic" ? claudeTextGenerator(shared) : httpTextGenerator(shared);
+}
+
+// ---------- the home's text model
+
+/**
+ * **Words, through the home** — `POST /api/text` with the home's key, so the
+ * web writes copy with a real model and never holds a key. `post` is the
+ * surface's own authenticated call (the dialog host's `generate`); it throws
+ * on a refusal, with the refusal's `code` on the error. Says who wrote the
+ * words: the model the home named, via the home.
+ */
+export function homeTextGenerator(post: (request: TextRequest) => Promise<unknown>, canvasId: string): TextGenerator {
+  let by = "the home's text model";
+  return {
+    get name() {
+      return by;
+    },
+    async generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T> {
+      const body = (await post({ canvasId, prompt, schema })) as Partial<TextResponse> | null;
+      if (!body || typeof body !== "object" || !("value" in body)) throw new Error("the home's text model answered without a value");
+      if (typeof body.model === "string" && body.model) by = `${body.model} via the home`;
+      return body.value as T;
+    },
+  };
+}
+
+/** The home's text route's refusal when it holds no text-model key (`text.ts` re-exports it with the route's other codes). */
+export const TEXT_UNAVAILABLE = "text-unavailable";
+
+/** Did the home refuse because it holds no text-model key — the one refusal a fallback may answer. */
+function isNoTextModel(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === TEXT_UNAVAILABLE;
+}
+
+/**
+ * **The home, else placeholder words — said out loud.** `homeOrStub`'s twin
+ * for words: the home's text model, and when the home has none (only that
+ * refusal; any other failure is a failure), the given stub, with `onFallback`
+ * told once. The stub's `name` is what the person reads, so name it as what
+ * it is.
+ */
+export function homeTextOrStub(home: TextGenerator, stub: TextGenerator, onFallback: (error: unknown) => void): TextGenerator {
+  let fell = false;
+  let current = home;
+  return {
+    get name() {
+      return current.name;
+    },
+    async generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T> {
+      try {
+        return await current.generateJson<T>(prompt, schema);
+      } catch (error) {
+        if (!isNoTextModel(error)) throw error;
+        current = stub;
+        if (!fell) {
+          fell = true;
+          onFallback(error);
+        }
+        return stub.generateJson<T>(prompt, schema);
+      }
     },
   };
 }

@@ -10,7 +10,7 @@ import { StyleResolver, restyle, restyleSummary } from "./restyle.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
 import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, currentPreset, flowScreens, presetById, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
 import { presetUrlText } from "./preset-urls.ts";
-import { webAnswerer, webPort } from "./web-port.ts";
+import { PLACEHOLDER_WORDS, webAnswerer, webPort, webTextGenerator } from "./web-port.ts";
 import { editWireOnCanvas } from "./edit.ts";
 import { explainWireDecision } from "./why.ts";
 import { copyAiOnCanvas, nameFlowOnCanvas } from "./copy-schema.ts";
@@ -220,6 +220,33 @@ export async function fleshOnWeb(canvasId: string, host: DialogHost, opts: { pac
   return flesh(port, canvas, all, all, webAnswerer(canvasId, host), { ...(opts.pack !== undefined ? { pack: opts.pack } : {}), bars: opts.bars });
 }
 
+/**
+ * `/wire copy [brief]` — the selection's flow (every wire, when none is
+ * selected) in words the home's text model writes (`POST /api/text`), or
+ * placeholder words said as such when the home has none. Exported so a test
+ * can hold the web to asking the host.
+ */
+export async function copyOnWeb(canvasId: string, host: DialogHost, selection: readonly string[], brief?: string) {
+  const port = webPort(canvasId, host);
+  const canvas = await port.canvas();
+  const all = await wiresOn(port, canvas);
+  if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+  const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+  const r = await copyAiOnCanvas(port, canvas, all, screens, webTextGenerator(canvasId, host), { ...(brief ? { brief } : {}) });
+  return { r, screens };
+}
+
+/** `/wire name [request]` — the flow's brand, titles and nav labels, from the home's text model as `/wire copy` is. */
+export async function nameOnWeb(canvasId: string, host: DialogHost, selection: readonly string[], request?: string) {
+  const port = webPort(canvasId, host);
+  const canvas = await port.canvas();
+  const all = await wiresOn(port, canvas);
+  if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+  const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+  const r = await nameFlowOnCanvas(port, canvas, all, screens, webTextGenerator(canvasId, host), { ...(request ? { request } : {}) });
+  return { r, screens };
+}
+
 export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogFacts) {
   const [mode, setMode] = useState<Mode>(() => modeOf(args));
   const [draft, setDraft] = useState("");
@@ -311,6 +338,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       const selectedId = selection[0];
       const r = await editWireOnCanvas(port, m.instruction, webAnswerer(canvasId, host), {
         ...(selectedId ? { screenId: selectedId } : {}),
+        generator: webTextGenerator(canvasId, host),
       });
       const protoWords = r.prototype ? ` · prototype "${r.prototype.title}" rebuilt` : "";
       const summary = `edited ${wireTitle(r.screen.spec)} (${r.edit.slot}: ${r.edit.kind}${r.edit.block ? ` → ${r.edit.block}` : ""})${protoWords} — one undo takes it back`;
@@ -333,29 +361,16 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       host.close();
     } else if (m.kind === "copy") {
       setStatus("Writing schema-validated copy…");
-      const port = webPort(canvasId, host);
-      const canvas = await port.canvas();
-      const all = await wiresOn(port, canvas);
-      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
-      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
-      const r = await copyAiOnCanvas(port, canvas, all, screens, undefined, {
-        ...(m.brief ? { brief: m.brief } : {}),
-      });
-      const summary = `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} filled with AI copy (${r.by}) — one undo takes it back`;
+      const { r, screens } = await copyOnWeb(canvasId, host, selection, m.brief);
+      const words = r.by === PLACEHOLDER_WORDS ? "placeholder words (this home has no text model)" : `AI copy (${r.by})`;
+      const summary = `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} filled with ${words} — one undo takes it back`;
       host.notice(summary);
       if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
       host.close();
       if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
     } else if (m.kind === "name") {
       setStatus("Naming the flow's screens and navigation…");
-      const port = webPort(canvasId, host);
-      const canvas = await port.canvas();
-      const all = await wiresOn(port, canvas);
-      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
-      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
-      const r = await nameFlowOnCanvas(port, canvas, all, screens, undefined, {
-        ...(m.request ? { request: m.request } : {}),
-      });
+      const { r } = await nameOnWeb(canvasId, host, selection, m.request);
       const summary = `named ${r.changed.length} wire${r.changed.length === 1 ? "" : "s"} (${r.brand}) — one undo takes it back`;
       host.notice(summary);
       if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));

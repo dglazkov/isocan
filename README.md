@@ -475,7 +475,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the request, and every list, table, stat, card and image slot fills with
   its nouns, numbers, first names and greyscale pictograms, seeded so a
   restyle, a variation or the prototype shows the same words; `wire copy`
-  lets an agent write the exact ones. A wire is the screen alone — the item's
+  lets an agent write the exact ones, and `/wire copy` in the Chat has the
+  home's text model write them (`POST /api/text`, Claude or an OpenAI-shaped
+  model, the key kept on the home). A wire is the screen alone — the item's
   title names it and its frame is the device — and `wire render --all` (or
   `/wire rerender`) redraws every wire from its spec when the renderer
   changes, as one undo. `/wire` acts leave a record of what they made in the

@@ -1,5 +1,5 @@
 import type { DialogHost } from "@isocan/core";
-import { homeAnswerer, type Answerer } from "./answerer.ts";
+import { homeAnswerer, homeTextGenerator, homeTextOrStub, stubTextGenerator, type Answerer, type TextGenerator } from "./answerer.ts";
 import type { WirePort } from "./port.ts";
 
 /**
@@ -29,4 +29,33 @@ export function webPort(canvasId: string, host: Pick<DialogHost, "send" | "putBl
 /** The web's answerer: always the home's judge — the key stays there, and no key there is a refusal said out loud. */
 export function webAnswerer(canvasId: string, host: Pick<DialogHost, "judge">): Answerer {
   return homeAnswerer((question) => host.judge(question), canvasId);
+}
+
+/** What the web's words are called when the home has no text model: the stub's, said as what they are. */
+export const PLACEHOLDER_WORDS = "placeholder words";
+
+/**
+ * **The web's text generator: the home's text model** (`POST /api/text`,
+ * copy-edit phase 0.5) — the key stays at the home. When the home holds none
+ * (`text-unavailable`), or the host predates `generate`, the words are the
+ * seeded stub's, named `PLACEHOLDER_WORDS` and said once in the notice bar as
+ * a problem: the dialog still fills the screens, and nobody mistakes the
+ * filler for written copy. Any other refusal is a failure.
+ */
+export function webTextGenerator(canvasId: string, host: Pick<DialogHost, "notice"> & Partial<Pick<DialogHost, "generate">>): TextGenerator {
+  const placeholder: TextGenerator = { name: PLACEHOLDER_WORDS, generateJson: (prompt, schema) => stubTextGenerator(1).generateJson(prompt, schema) };
+  const said = "This home has no text model (text-unavailable) — these are placeholder words, not written copy. One undo takes them back.";
+  const generate = host.generate;
+  if (!generate) {
+    let told = false;
+    return {
+      name: PLACEHOLDER_WORDS,
+      generateJson: (prompt, schema) => {
+        if (!told) host.notice(said, true);
+        told = true;
+        return placeholder.generateJson(prompt, schema);
+      },
+    };
+  }
+  return homeTextOrStub(homeTextGenerator((request) => generate(request), canvasId), placeholder, () => host.notice(said, true));
 }

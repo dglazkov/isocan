@@ -235,6 +235,14 @@ fi
 # attached by hand; stating it here is what makes a full re-provision keep it.
 # `--update-` rather than `--set-`, so a secret attached out of band for an
 # experiment is not silently dropped by the next deploy.
+#
+# NOT attached yet: the home's text-model key (`POST /api/text`,
+# `packages/server/src/text.ts`) — `ISOCAN_TEXT_API_KEY`, with
+# `ISOCAN_TEXT_PROVIDER` (`anthropic` or `openai`; absent, an `sk-ant-` key is
+# Claude's) and optionally `ISOCAN_TEXT_MODEL`. Which provider and key is
+# Dion's decision (copy-edit phase 0.5's provision); until a secret is added
+# beside the judge's, the route refuses with `text-unavailable` and the
+# browser's /wire copy fills placeholder words, said as such.
 gcloud run deploy "${SERVICE}" \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \

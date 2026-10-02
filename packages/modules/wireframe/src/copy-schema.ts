@@ -3,7 +3,7 @@ import {
   type CanvasContents,
 } from "@isocan/core";
 import {
-  httpTextGenerator,
+  envTextGenerator,
   stubTextGenerator,
   type JsonSchema,
   type TextGenerator,
@@ -479,10 +479,14 @@ export async function nameFlow(
   return { brand, titles, navLabels, specs: namedSpecs };
 }
 
-/** Resolve a `TextGenerator` from environment or stub seed. */
+/**
+ * Resolve a `TextGenerator` from the environment or a stub seed: with
+ * `ISOCAN_TEXT_API_KEY` set, the provider `ISOCAN_TEXT_PROVIDER` names (else
+ * the key's shape — `sk-ant-` is Claude's), otherwise the seeded stub.
+ */
 export function resolveTextGenerator(opts: { seed?: number; useStub?: boolean } = {}): TextGenerator {
   if (!opts.useStub && process.env.ISOCAN_TEXT_API_KEY) {
-    return httpTextGenerator();
+    return envTextGenerator();
   }
   return stubTextGenerator(opts.seed ?? 1);
 }

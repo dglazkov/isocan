@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-02
 see: wireframes, version-diff, design-lint, judge
 note: "A deep copy edit, as scenes: ask a screen for N voices of its words, see them side by side in the real screen, take a headline from one and a button from another, see which ones do not fit, keep the product's voice and words, and at wire time choose one voice for a whole flow. The design and evidence are docs/research/2026-10-02-copy-edit.md (#377)."

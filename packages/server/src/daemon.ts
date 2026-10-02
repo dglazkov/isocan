@@ -28,6 +28,7 @@ import { contentPorts, registerContentRoutes } from "./content.ts";
 import { contentTtl } from "./content-auth.ts";
 import { adoptIdentity } from "./badge-store.ts";
 import type { JudgmentOptions } from "./judgment.ts";
+import type { TextOptions } from "./text.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -209,6 +210,9 @@ export interface DaemonOptions {
   /** The home's judge (`judgment.ts`) — tests hand it a key and a fake
    * transport; a running home reads `TYPESAFE_API_KEY` per call. */
   judgment?: JudgmentOptions;
+  /** The home's text model (`text.ts`) — tests hand it a key and a fake
+   * transport; a running home reads `ISOCAN_TEXT_API_KEY` per call. */
+  text?: TextOptions;
 }
 
 export interface RunDaemonOptions extends DaemonOptions {
@@ -548,6 +552,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     rc,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
     ...(options.judgment ? { judgment: options.judgment } : {}),
+    ...(options.text ? { text: options.text } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);
   /**
