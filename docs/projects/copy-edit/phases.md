@@ -86,7 +86,7 @@ refusal, markup byte-identical outside text); a CLI test of read and apply.
 - **2026-10-02** — `isocan copy` was taken ("copy items"), so the deck shipped as `isocan words`; phase 2 is `isocan words vary`. The docs were renamed with it.
 - **2026-10-02** — A wireframe's rendered text is not its words (one row draws three words joined by " · "), so a wire deck is addressed by `wire copy` word paths from the embedded spec and written by the module (`writeWireCopy`), never spliced. Plain HTML uses the WYSIWYG splice's ordinals; a test holds the two walks equal.
 - **2026-10-02** — The CLI gained a per-kind copy writer hook (`CliModule.copy`, beside `templates`): plain HTML is spliced by the CLI, a wire deck routed to its module.
-- **2026-10-02** — Open: the web's WYSIWYG text edit splices a wire screen's HTML without updating its embedded spec, so the next re-render (restyle, flesh) silently reverts it. A bug beside this phase, not in it.
+- **2026-10-02** — Fixed (`d01ed53a`): the web's inline text edit on a wire screen now writes the spec through the wireframe module (`WebModule.copy.at`/`apply`, the mapping in `@isocan/core/wire-words`), so a re-render keeps it; ambiguous nodes are refused in words. It also found every inline text save had been refused since stage 2 — the frame counted its own marker `<style>` when numbering text nodes.
 - **2026-10-02** — Open: `--by` on plain HTML has nowhere to live (a version has only `createdBy`); it is said in the receipt only.
 
 ## Phase 2 — Copy variants
