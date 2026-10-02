@@ -1,5 +1,6 @@
 import { parse, type DefaultTreeAdapterMap } from "parse5";
 import { embeddedWire } from "./diff.ts";
+import { wireWordsOf, type WireSpecWords } from "./wire-words.ts";
 
 /**
  * **The copy deck: a screen's words as data** (copy-edit phase 1 —
@@ -39,8 +40,8 @@ import { embeddedWire } from "./diff.ts";
  *   wire deck is written by the wireframe module (it re-renders), never
  *   spliced here.
  *
- * Core cannot import the wireframe module, so the word walk is repeated here
- * the way `diff.ts` repeats the marker; `packages/modules/wireframe/test/copy-deck.test.ts`
+ * Core cannot import the wireframe module, so the word walk is repeated (in
+ * `wire-words.ts`) the way `diff.ts` repeats the marker; `packages/modules/wireframe/test/copy-deck.test.ts`
  * holds this deck's paths equal to `wordsOf` on rendered screens.
  */
 
@@ -286,38 +287,6 @@ function attrValueSpan(html: string, start: number, end: number): { start: numbe
 // ---------------------------------------------------------------------------
 // Wireframes
 
-/** The words a wire slot's fill holds, by path — the wireframe module's
- *  `wordsOf` (`content/flesh-spec.ts`), repeated because core cannot import a
- *  module; its test holds the two equal. */
-function wireWordsOf(fill: unknown): Array<[string, string]> {
-  const out: Array<[string, string]> = [];
-  if (!fill || typeof fill !== "object") return out;
-  const f = fill as Record<string, unknown>;
-  const str = (v: unknown): v is string => typeof v === "string";
-  for (const key of ["heading", "sub", "person"]) if (str(f[key])) out.push([key, f[key] as string]);
-  for (const key of ["lines", "labels", "values", "groups"]) {
-    const list = f[key];
-    if (Array.isArray(list)) list.forEach((w, i) => str(w) && out.push([`${key}.${i}`, w]));
-  }
-  if (Array.isArray(f.items)) {
-    f.items.forEach((it: Record<string, unknown>, i) => {
-      for (const key of ["title", "sub", "status", "meta", "person", "text"]) if (str(it?.[key])) out.push([`items.${i}.${key}`, it[key] as string]);
-      if (Array.isArray(it?.cells)) (it.cells as unknown[]).forEach((w, j) => str(w) && out.push([`items.${i}.cells.${j}`, w]));
-    });
-  }
-  if (Array.isArray(f.stats)) {
-    f.stats.forEach((s: Record<string, unknown>, i) => {
-      if (str(s?.label)) out.push([`stats.${i}.label`, s.label as string]);
-      if (str(s?.value)) out.push([`stats.${i}.value`, s.value as string]);
-      if (str(s?.delta)) out.push([`stats.${i}.delta`, s.delta as string]);
-    });
-  }
-  if (f.actions && typeof f.actions === "object") {
-    for (const [element, w] of Object.entries(f.actions as Record<string, unknown>)) if (str(w)) out.push([`actions.${element}`, w]);
-  }
-  return out;
-}
-
 const NAV_BLOCKS = new Set(["tab-bar", "side-nav", "navbar", "tabs", "segmented-control", "page-indicator"]);
 
 function wireRole(block: string, region: string, path: string): CopyRole {
@@ -339,12 +308,6 @@ function wireSections(html: string): Map<string, { at: number; region: string }>
     if (sec !== undefined && !out.has(sec)) out.set(sec, { at: el.sourceCodeLocation?.startOffset ?? Number.MAX_SAFE_INTEGER, region: attr(el, "data-region") ?? sec.split(".")[0]! });
   }
   return out;
-}
-
-interface WireSpecWords {
-  title?: string;
-  slots?: Array<{ slot: string; block: string | null; fill?: unknown }>;
-  content?: { title?: string; bar?: string } & Record<string, unknown>;
 }
 
 function wireDeck(html: string, spec: WireSpecWords): CopyDeck {

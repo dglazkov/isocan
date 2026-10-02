@@ -11,6 +11,7 @@ import { WireLayersBar } from "./layers-bar.tsx";
 import { WireMaybes } from "./maybe-marks.tsx";
 import { PROTOTYPE_PROP } from "./prototype.ts";
 import { styleMenu } from "./style-menu.ts";
+import { wireWebCopy } from "./web-copy.ts";
 
 /**
  * **The web half** (phase 5) — fetched, never bundled into first paint: the
@@ -47,10 +48,13 @@ export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never,
   }],
   // Right-click a wire → Style ▸ (style-menu.ts): each pick opens the dialog with `style <name>`.
   menu: styleMenu,
-  // *Vary the copy…* on a wire screen (copy-edit phase 2): its words are its spec's, so each voice is rendered here.
+  // A wire screen's words are its spec's: *Vary the copy…* renders each voice here (copy-edit phase 2), and the
+  // stage's in-place text edit names the word a node draws and writes it to the spec (web-copy.ts).
   copy: {
     kind: "wire",
     variant: async (...args) => (await import("./copy-variant.ts")).wireCopyVariant(...args),
+    at: wireWebCopy.at,
+    apply: wireWebCopy.apply,
   },
 };
 

@@ -2187,6 +2187,130 @@ export const JOURNEYS = [
       if (!/own canvases/.test(seen.note)) throw new Error("the lens does not say things live elsewhere");
     },
   },
+  {
+    name: "wire-text-edit",
+    /** Copy-edit phase 1's open bug (2 Oct 2026): an in-place edit on a wire
+     *  screen spliced its HTML and the next restyle — which redraws from the
+     *  spec the file carries — silently took the words back. */
+    what: "a wireframe's heading edited in place survives a restyle, and a row that joins several words is refused in words",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 1000, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme wire words");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-wire-words-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Wire CLI");
+      runCli("--canvas", id, "wire", "an orders app for Acme — a list of orders and one order's detail", "--answerer", "stub", "--seed", "4", "--no-ask");
+      const snapshot = async () => (await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json())`)).canvas;
+      const textOf = (item) => b.ev(`fetch('/api/projects/${id}/blobs/${item.versions.find((v) => v.id === item.currentVersionId).blobHash}').then(r => r.text())`);
+      const specIn = (html) => JSON.parse(/<script type="application\/json" id="[^"]+">([\s\S]*?)<\/script>/.exec(html)[1]);
+      // Two screens of the flow: one whose rows join three words on one line, and one whose
+      // title is drawn as itself and said by no slot's words — so the node double-clicked IS the title.
+      let rowScreen = null, screen = null;
+      for (const item of Object.values((await snapshot()).items)) {
+        if (item.properties?.fidelity !== "wireframe" || item.properties?.wirePrototype) continue;
+        const html = await textOf(item);
+        const spec = specIn(html);
+        if (!spec.content) continue;
+        const rows = spec.slots.find((s) => Array.isArray(s.fill?.items) && s.fill.items[0]?.status && s.fill.items[0]?.sub && s.fill.items[0]?.meta);
+        if (!rowScreen && rows && html.includes(`>${rows.fill.items[0].sub} · ${rows.fill.items[0].status} · ${rows.fill.items[0].meta}<`)) rowScreen = { item, row: rows.fill.items[0] };
+        const words = JSON.stringify(spec.slots.map((s) => s.fill ?? null));
+        if (!screen && spec.content.title && html.includes(`>${spec.content.title}<`) && !words.includes(JSON.stringify(spec.content.title))) screen = { item, spec };
+      }
+      if (!rowScreen) throw new Error("the composed flow has no screen whose rows join several words");
+      if (!screen) throw new Error("the composed flow has no screen whose title is drawn as itself");
+      const title = screen.spec.content.title;
+      const NEW = "Acme open orders";
+
+      const openEditText = async (itemId) => {
+        await rig.go(`/p/${id}/w/${itemId}`);
+        await until(b, `[...document.querySelectorAll(".stage-editor-btn")].some((e) => e.textContent.trim() === "Edit text")`, "the Edit text button");
+        await rig.clickText(".stage-editor-btn", "Edit text");
+        await until(b, `!!document.querySelector(".text-edit-frame iframe")?.contentDocument?.querySelector("[data-sec]")`, "the wire screen in the frozen frame");
+        await sleep(600); // the frame wires its listeners on load, and fetches the save half for a wire screen
+      };
+
+      /** Where, on the page, the frame's text node saying `words` is — a real double-click goes there. */
+      const pointAt = (words, sec) => b.ev(`(() => {
+        const frame = document.querySelector(".text-edit-frame iframe");
+        const doc = frame.contentDocument;
+        const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          if (walker.currentNode.data.trim() !== ${JSON.stringify(words)}) continue;
+          if (${JSON.stringify(sec ?? null)} !== null && walker.currentNode.parentElement.closest("[data-sec]")?.dataset.sec !== ${JSON.stringify(sec ?? null)}) continue;
+          walker.currentNode.parentElement.scrollIntoView({ block: "center" });
+          const range = doc.createRange();
+          range.selectNodeContents(walker.currentNode);
+          const r = range.getBoundingClientRect(), f = frame.getBoundingClientRect();
+          if (r.width === 0) continue;
+          // The stage may scale the frame to fit; the frame's own pixels are not the page's.
+          const sx = f.width / frame.offsetWidth, sy = f.height / frame.offsetHeight;
+          const x = r.left + r.width / 2, y = r.top + r.height / 2;
+          if (doc.elementFromPoint(x, y) !== walker.currentNode.parentElement) return { covered: doc.elementFromPoint(x, y)?.outerHTML?.slice(0, 120) ?? "nothing" };
+          return { x: Math.round(f.left + x * sx), y: Math.round(f.top + y * sy) };
+        }
+        return null;
+      })()`);
+      /**
+       * A real double-click on the words. One click first, and the point
+       * measured again: a click selects the element and opens its properties
+       * strip above the frame, which moves everything in it down — so the
+       * second half of a double-click aimed before that lands on whatever
+       * slid under the pointer.
+       */
+      const doubleClickOn = async (words, what, sec) => {
+        const press = async (at, clickCount) => {
+          await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: at.x, y: at.y, button: "left", buttons: 1, clickCount });
+          await b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at.x, y: at.y, button: "left", buttons: 0, clickCount });
+        };
+        const aim = async () => {
+          const at = await pointAt(words, sec);
+          if (!at || at.covered) throw new Error(`${what} is not drawn where a person could double-click it (${at?.covered ?? "not found"})`);
+          return at;
+        };
+        await press(await aim(), 1);
+        await sleep(300);
+        const at = await aim();
+        await press(at, 1);
+        await press(at, 2);
+        await sleep(300);
+      };
+
+      // A row that draws sub · status · meta on one line is refused before anything is typed.
+      await openEditText(rowScreen.item.id);
+      const { row } = rowScreen;
+      await doubleClickOn(`${row.sub} · ${row.status} · ${row.meta}`, "the row's joined line");
+      await until(b, `/several of the screen's words/.test(document.querySelector(".text-edit-refusal")?.textContent ?? "")`, "the joined row refused in words");
+      const refusal = await b.ev(`document.querySelector(".text-edit-refusal").textContent`);
+      if (await b.ev(`!!document.querySelector(".text-edit-frame iframe").contentDocument.querySelector("[contenteditable]")`)) throw new Error("the joined row became editable anyway");
+
+      // The heading: double-click, type over it, Enter, save.
+      await openEditText(screen.item.id);
+      await doubleClickOn(title, `the heading "${title}"`);
+      await until(b, `!!document.querySelector(".text-edit-frame iframe").contentDocument.querySelector("[contenteditable]")`, "the heading to become editable");
+      await b.send("Input.insertText", { text: NEW });
+      await rig.press("Enter");
+      await until(b, `/1 text/.test(document.querySelector(".stage-editor-dirty")?.textContent ?? "")`, "one pending text edit");
+      const before = screen.item.currentVersionId;
+      await rig.clickText(".stage-editor-btn", "Save version");
+      await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.canvas.items[${JSON.stringify(screen.item.id)}].currentVersionId !== ${JSON.stringify(before)})`, "the edit saved as a version", 12_000);
+      const saved = await textOf((await snapshot()).items[screen.item.id]);
+      if (specIn(saved).content.title !== NEW) throw new Error(`the save left the spec saying "${specIn(saved).content.title}" — the next re-render would take the edit back`);
+
+      // The re-render that used to revert it: a style redraws every screen from its spec.
+      runCli("--canvas", id, "wire", "style", "--preset", "material");
+      const restyled = await textOf((await snapshot()).items[screen.item.id]);
+      if (restyled === saved) throw new Error("the restyle did not redraw the screen — nothing was proved");
+      if (!restyled.includes(`>${NEW}<`)) throw new Error("the restyle took the heading's words back");
+      if (restyled.includes(`>${title}<`)) throw new Error(`the restyled screen still draws the old heading "${title}"`);
+      return { screen: screen.item.id, from: title, to: NEW, refusedOn: rowScreen.item.id, refusal };
+    },
+  },
 ];
 
 /**

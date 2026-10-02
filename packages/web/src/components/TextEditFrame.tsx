@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Actor, Item } from "@isocan/core";
 import { readBlobText } from "../lib/api.ts";
-import { addVersionFromFile } from "../lib/upload.ts";
-import { applyEdits, foldEdit, isAttrEdit, type AttrEdit, type InPlaceEdit } from "../lib/textPatch.ts";
+import { foldEdit, isAttrEdit, type AttrEdit, type InPlaceEdit } from "../lib/textEdits.ts";
 
 /**
  * Edit-in-place: the frozen frame — WYSIWYG's V0 and its second stage
@@ -25,7 +24,9 @@ import { applyEdits, foldEdit, isAttrEdit, type AttrEdit, type InPlaceEdit } fro
  * pending edit by source position (`textPatch.ts`) and lands as an ordinary
  * `item.addVersion` — so even a wrong edit was never destructive; it is one
  * S-fan from restored, and an agent parked on the item wakes on it like on
- * any other version.
+ * any other version. **A wireframe's words are its spec's**, so on a wire
+ * screen the save goes to the module's writer instead (`lib/inlineSave.ts`),
+ * and a node that is not one word of its own is refused at the double-click.
  */
 
 /** The inline styles the panel offers. Enough to change what a screen looks
@@ -79,6 +80,8 @@ export function TextEditFrame({
   const [fields, setFields] = useState<Record<string, string>>({});
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
+  /** On a wire screen, why a node cannot be edited in place (`lib/inlineSave.ts`). */
+  const wireNo = useRef<((node: Text) => Promise<string | null>) | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -115,6 +118,7 @@ export function TextEditFrame({
       const marker = theDoc.createElement("style");
       marker.textContent = "[data-isocan-selected]{outline:2px solid #1f3fd0 !important;outline-offset:1px}";
       theDoc.head?.appendChild(marker);
+      if (source.includes("<!-- isocan:wireframe -->")) void import("../lib/inlineSave.ts").then((m) => (wireNo.current = (n) => m.wireRefusal(source, n)));
 
       /**
        * Which text node this is, counted in document order over the whole
@@ -124,14 +128,17 @@ export function TextEditFrame({
        *
        * A plain walk, not an index cached at mount: `plaintext-only` editing
        * can split a node, and the count has to be of the tree as it is when
-       * the edit is committed.
+       * the edit is committed. Never counting our own marker's text, which
+       * is not in the file: counted, it put every node after `<head>` one
+       * past its place, and every save of one was refused as "the file
+       * changed" (found 2 Oct 2026 by the `wire-text-edit` journey).
        */
       function ordinalOf(node: Text): number {
         const walker = theDoc.createTreeWalker(theDoc, NodeFilter.SHOW_TEXT);
         let seen = 0;
         while (walker.nextNode()) {
           if (walker.currentNode === node) return seen;
-          seen++;
+          if (walker.currentNode.parentNode !== marker) seen++;
         }
         return -1;
       }
@@ -229,6 +236,14 @@ export function TextEditFrame({
         };
         parent.addEventListener("blur", done);
         parent.addEventListener("keydown", onKey);
+        // On a wire screen, a node that is not one word of its own is handed back at once, in words.
+        void wireNo.current?.(text).then((no) => {
+          setRefusal(no);
+          if (no) {
+            text.data = original;
+            parent.blur();
+          }
+        });
       }
 
       /**
@@ -315,18 +330,9 @@ export function TextEditFrame({
     if (source === null || saving) return;
     setSaving(true);
     try {
-      const outcome = await applyEdits(source, pendingRef.current);
-      if (!outcome.ok) {
-        setRefusal(outcome.reason);
-        return;
-      }
-      await addVersionFromFile(
-        canvasId,
-        actor,
-        item.id,
-        new File([outcome.source], current.filename, { type: current.mimeType }),
-      );
-      onDone();
+      const no = await (await import("../lib/inlineSave.ts")).saveInPlace(canvasId, actor, item, source, pendingRef.current);
+      if (no) setRefusal(no);
+      else onDone();
     } finally {
       setSaving(false);
     }

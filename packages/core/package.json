@@ -26,6 +26,7 @@
     "./keystore": "./src/keystore.ts",
     "./copy-deck": "./src/copy-deck.ts",
     "./copy-variants": "./src/copy-variants.ts",
+    "./wire-words": "./src/wire-words.ts",
     "./chatclean": "./src/chatclean.ts",
     "./diff": "./src/diff.ts",
     "./voice-dsp": "./src/voice-dsp.ts"

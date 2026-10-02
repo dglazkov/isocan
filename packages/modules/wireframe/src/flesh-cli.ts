@@ -1,20 +1,16 @@
 import { readFile } from "node:fs/promises";
 import type { Command } from "commander";
-import { newGroupId, newVersionId } from "@isocan/core";
-import type { CanvasContents } from "@isocan/core";
 import { wireCopyFile } from "@isocan/core/copy-deck";
 import type { CliHost, CopyWriter } from "@isocan/cli/modulehost";
 import { cliAnswerer, cliPort, localTextKey } from "./cli-port.ts";
 import { PACKS } from "./content/packs.ts";
-import { applyCopy, copyOf, type CopyFile } from "./content/flesh-spec.ts";
-import { blockContentSchema, copyAiOnCanvas, nameFlowOnCanvas, resolveTextGenerator, validateCopyPayload } from "./copy-schema.ts";
+import { copyOf, type CopyFile } from "./content/flesh-spec.ts";
+import { blockContentSchema, copyAiOnCanvas, nameFlowOnCanvas, resolveTextGenerator } from "./copy-schema.ts";
+import { writeWireCopy } from "./copy-write.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
 import { wiresOn, type Screen } from "./flow.ts";
-import { rebuildPrototypes } from "./kept-flows.ts";
 import { currentVersionOf } from "./port.ts";
-import { renderWire } from "./render.ts";
-import type { WirePort } from "./port.ts";
-import { wireTitle, type WireSpec } from "./spec.ts";
+import { wireTitle } from "./spec.ts";
 
 /**
  * **`isocan wire flesh` and `isocan wire copy`** (design §10, journey scene 7).
@@ -41,35 +37,6 @@ async function screensFor(host: CliHost, snapshot: { canvas: unknown }, all: Scr
   const screens = flow === undefined ? all : all.filter((s) => s.spec.flow === flow);
   if (screens.length === 0) throw new Error(flow === undefined ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `no wireframe in flow "${flow}" on this canvas`);
   return screens;
-}
-
-/**
- * **The one writer of a wireframe's words**: validate a copy file against
- * the screen, apply it as `source: "copy"` by `by`, re-render, and land one
- * version plus any kept-flow prototype rebuilt — one op group, one undo.
- * `wire copy --apply` and `isocan words <item> --apply` (the copy deck,
- * through `wireCopyWriter`) both come here.
- */
-export async function writeWireCopy(
-  port: WirePort,
-  canvas: CanvasContents,
-  all: Screen[],
-  screen: Screen,
-  raw: unknown,
-  by: string,
-): Promise<{ changed: false } | { changed: true; next: WireSpec; group: string; versionId: string; prototypes: Awaited<ReturnType<typeof rebuildPrototypes>> }> {
-  const spec = screen.spec;
-  const validated = validateCopyPayload(spec, raw);
-  const next = applyCopy(spec, validated, by);
-  if (JSON.stringify(next) === JSON.stringify(spec)) return { changed: false };
-  const item = canvas.items[screen.item]!;
-  const filename = currentVersionOf(item)?.filename ?? "wireframe.html";
-  const group = newGroupId();
-  const versionId = newVersionId();
-  const upload = await port.put(renderWire(next), "text/html", filename);
-  await port.send({ type: "item.addVersion", itemId: item.id, version: { id: versionId, blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
-  const prototypes = await rebuildPrototypes(port, canvas, all, [{ item: item.id, spec: next }], group);
-  return { changed: true, next, group, versionId, prototypes };
 }
 
 /**
