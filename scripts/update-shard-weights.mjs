@@ -12,6 +12,7 @@ export function snapshotFrom(profiles) {
   if (!profiles.length) throw new Error("pass every test-profile.json from one successful sharded CI run");
   const first = profiles[0];
   if (!first.revision || !first.ciRun) throw new Error("profiles need a source revision and CI run identity");
+  if (!Number.isInteger(first.workers) || first.workers < 1) throw new Error("profiles need a worker limit");
   const count = Number(first.shard?.split("/")[1]);
   if (!Number.isInteger(count) || count < 1 || profiles.length !== count) throw new Error("missing shard profiles");
   const seen = new Set();

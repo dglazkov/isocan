@@ -20,6 +20,7 @@ describe("refreshing the shared shard weights", () => {
     expect(() => snapshotFrom([profile(1)])).toThrow();
     expect(() => snapshotFrom([profile(1), profile(1)])).toThrow();
     expect(() => snapshotFrom([profile(1), { ...profile(2), fileDurations: profile(1).fileDurations }])).toThrow();
+    expect(() => snapshotFrom([profile(1), profile(2)].map((p) => ({ ...p, workers: undefined })))).toThrow(/worker limit/);
   });
 
   it("refuses mixed, partial, failed, interrupted and incomplete measurements", () => {

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 import type { Reporter, TestModule, Vitest, TestRunEndReason } from "vitest/node";
 import { filteredRun } from "./deep.ts";
@@ -44,6 +45,10 @@ export default class TimingReporter implements Reporter {
     try {
       const config = this.ctx.config;
       const shard = config.shard;
+      // Vitest 4 resolves its default inside the pool, leaving config.maxWorkers
+      // absent. Mirror that default for telemetry without changing scheduling.
+      const cpus = availableParallelism();
+      const workers = config.maxWorkers ?? Math.max(config.watch ? Math.floor(cpus / 2) : cpus - 1, 1);
       const entry = {
         at: new Date().toISOString(),
         lane: laneOf(),
@@ -58,7 +63,7 @@ export default class TimingReporter implements Reporter {
         ...(process.env.GITHUB_RUN_ID ? { ciRun: `${process.env.GITHUB_RUN_ID}.${process.env.GITHUB_RUN_ATTEMPT ?? "1"}` } : {}),
         node: process.version,
         platform: `${process.platform}/${process.arch}`,
-        workers: config.maxWorkers,
+        workers,
       };
       const dir = path.join(config.root, ".isocan");
       record(entry, path.join(dir, "timings.jsonl"));
