@@ -688,6 +688,12 @@ describe("the bundle", () => {
     // rather than calling `openSlash()` (whose `replaceChildren()` resets `scrollTop`).
     expect(page).toContain("return setSlashIndex(slashIndex + (e.key === \"ArrowDown\" ? 1 : -1), true);");
     expect(page).toContain("active.scrollIntoView?.({ block: \"nearest\" });");
+    // `[data-tip]` elements must not also set `title`, or the browser draws a
+    // second native tooltip on top of the styled one; and `#where` is the sole
+    // "Open in browser ↗" link (no redundant `#open` button on the right).
+    expect(page).toContain('const tip = url ? "Open in browser ↗" : fallbackTip;');
+    expect(page).not.toContain('id="open"');
+    expect(page).not.toMatch(/<(?:a|button|span)\b[^>]*\btitle="[^"]*"[^>]*\bdata-tip=/);
   });
 
   it("carries its own rule, and the collaboration skill as a doorway rather than a copy", () => {

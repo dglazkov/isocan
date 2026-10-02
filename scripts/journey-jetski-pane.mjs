@@ -172,9 +172,9 @@ try {
   check("an unbound folder shows the bind card", true);
   await press("#create");
   await until(b, `Boolean(framed && framed.origin) && document.getElementById("frame").src.includes("embed=1")`, "the framed canvas", 30_000);
-  const first = await b.ev(`({ ...framed, src: document.getElementById("frame").src, open: document.getElementById("open").href })`);
+  const first = await b.ev(`({ ...framed, src: document.getElementById("frame").src, open: document.getElementById("where").href })`);
   check("Create bound the folder to a new canvas and framed an embed address", fs.existsSync(path.join(app, ".isocan", "project.json")), `${first.canvasId} at ${first.origin}`);
-  check("Open ↗ is the plain canvas address, no pass and no embed switch", !/embed=|#/.test(first.open), first.open);
+  check("#where is the plain canvas address, no pass and no embed switch", !/embed=|#/.test(first.open), first.open);
 
   // 2. The frame: no Chat, the Agents door kept, the pass spent.
   await untilInFrame(`Boolean(document.querySelector(".rail-strip"))`, "the canvas rail");
@@ -195,7 +195,7 @@ try {
   fs.writeFileSync(path.join(app, "acme-note.md"), "# Acme note\n\nA synthetic item for the journey.\n");
   const itemId = /itm_[A-Za-z0-9_-]+/.exec(await isocan("--json", "add", "acme-note.md"))?.[0];
   check("an item was added through the CLI", Boolean(itemId), itemId ?? "");
-  await press("#reload");
+  await b.ev(`load()`);
   await until(b, `document.getElementById("frame").src !== ${JSON.stringify(first.src)} && document.getElementById("frame").src.includes("embed=1#")`, "a fresh pass for the frame", 30_000);
   const item = `[data-item-id="${itemId}"]`;
   await untilInFrame(`Boolean(document.querySelector(${JSON.stringify(item)}))`, "the item after Reload", 30_000);
@@ -241,7 +241,7 @@ try {
 
   // 8. The control, so the checks above could have failed: the same canvas
   // as an ordinary tab has its Chat, and its palette offers it.
-  const tab = await b.ev(`document.getElementById("open").href`);
+  const tab = await b.ev(`document.getElementById("where").href`);
   loaded = b.once("Page.loadEventFired");
   await b.send("Page.navigate", { url: tab });
   await Promise.race([loaded, sleep(15_000)]);
