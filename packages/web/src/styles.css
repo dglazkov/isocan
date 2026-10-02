@@ -742,6 +742,16 @@ img { height: auto; }
    because `oneblock.test.ts` reads a class chained onto another as a STATE
    class — `:has(.terminal-menu)` would look to it like a stranded `.away`. */
 .identity-popover:has(> .terminal-menu) { width: 360px; }
+/* **On a phone it is a sheet, inside the screen** (2 Oct 2026). Pinned to the
+   right edge of the button that opened it, a 260px popover hangs off the LEFT
+   edge whenever that button sits nearer the left than 260px — measured 8px
+   past the edge on the canvas list at 375px. Fixed with the page's 16px
+   gutters keeps it inside wherever the button is, and `top: auto` keeps its
+   static position, so it still opens directly under the button. */
+@media (max-width: 480px) {
+  .identity-popover,
+  .identity-popover:has(> .terminal-menu) { position: fixed; top: auto; left: 16px; right: 16px; width: auto; margin-top: 8px; }
+}
 .terminal-menu { display: flex; flex-direction: column; gap: 10px; }
 /* The line itself: monospace, selectable, and allowed to wrap — the address
    inside it can be any length, and a horizontal scrollbar in a popover hides
