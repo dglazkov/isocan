@@ -21,6 +21,22 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 2 October 2026
+
+- **Model keys, in one place.** *Model keys…* under *This machine* in your
+  identity menu (on your own machine) lists Anthropic, OpenAI, Gemini and
+  Jev with whether each is set, the last four characters, and what uses it —
+  Set, Replace, Test, Remove. Keys live in `~/.isocan/keys.json`, readable
+  only by you, and are never shown back. Terminal: `isocan keys`.
+- **Vary the copy.** On any screen, *Vary the copy…* writes three voices of
+  its words — each a variation titled with its stance — and you choose one;
+  only the words change. Agents: `isocan words vary`, and `isocan words` to
+  read or change a screen's strings.
+- **The facepile reads other people, other agents, your pets, then you** on
+  the far right.
+- **The identity menu's actions come first,** as rows that look like
+  actions; on a phone the menu stays inside the screen.
+
 ## 1 October 2026
 
 - **Getting things out of a group.** Hold ⌘ (Ctrl on Windows and Linux)
