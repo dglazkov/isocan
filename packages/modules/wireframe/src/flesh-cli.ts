@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 import type { Command } from "commander";
 import { newGroupId, newVersionId } from "@isocan/core";
-import type { CliHost } from "@isocan/cli/modulehost";
+import type { CanvasContents } from "@isocan/core";
+import { wireCopyFile } from "@isocan/core/copy-deck";
+import type { CliHost, CopyWriter } from "@isocan/cli/modulehost";
 import { cliAnswerer, cliPort } from "./cli-port.ts";
 import { PACKS } from "./content/packs.ts";
 import { applyCopy, copyOf, type CopyFile } from "./content/flesh-spec.ts";
@@ -11,7 +13,8 @@ import { wiresOn, type Screen } from "./flow.ts";
 import { rebuildPrototypes } from "./kept-flows.ts";
 import { currentVersionOf } from "./port.ts";
 import { renderWire } from "./render.ts";
-import { wireTitle } from "./spec.ts";
+import type { WirePort } from "./port.ts";
+import { wireTitle, type WireSpec } from "./spec.ts";
 
 /**
  * **`isocan wire flesh` and `isocan wire copy`** (design §10, journey scene 7).
@@ -39,6 +42,59 @@ async function screensFor(host: CliHost, snapshot: { canvas: unknown }, all: Scr
   if (screens.length === 0) throw new Error(flow === undefined ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `no wireframe in flow "${flow}" on this canvas`);
   return screens;
 }
+
+/**
+ * **The one writer of a wireframe's words**: validate a copy file against
+ * the screen, apply it as `source: "copy"` by `by`, re-render, and land one
+ * version plus any kept-flow prototype rebuilt — one op group, one undo.
+ * `wire copy --apply` and `isocan copy <screen> --apply` (the copy deck,
+ * through `wireCopyWriter`) both come here.
+ */
+export async function writeWireCopy(
+  port: WirePort,
+  canvas: CanvasContents,
+  all: Screen[],
+  screen: Screen,
+  raw: unknown,
+  by: string,
+): Promise<{ changed: false } | { changed: true; next: WireSpec; group: string; versionId: string; prototypes: Awaited<ReturnType<typeof rebuildPrototypes>> }> {
+  const spec = screen.spec;
+  const validated = validateCopyPayload(spec, raw);
+  const next = applyCopy(spec, validated, by);
+  if (JSON.stringify(next) === JSON.stringify(spec)) return { changed: false };
+  const item = canvas.items[screen.item]!;
+  const filename = currentVersionOf(item)?.filename ?? "wireframe.html";
+  const group = newGroupId();
+  const versionId = newVersionId();
+  const upload = await port.put(renderWire(next), "text/html", filename);
+  await port.send({ type: "item.addVersion", itemId: item.id, version: { id: versionId, blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
+  const prototypes = await rebuildPrototypes(port, canvas, all, [{ item: item.id, spec: next }], group);
+  return { changed: true, next, group, versionId, prototypes };
+}
+
+/**
+ * **`isocan copy <screen> --apply` on a wireframe** (copy-edit phase 1). The
+ * deck's wire addresses are `wire copy`'s word paths, so the edits become a
+ * copy file (`wireCopyFile`, which refuses a stale string by name) and go
+ * through the same writer as `wire copy --apply`.
+ */
+export const wireCopyWriter: CopyWriter = {
+  kind: "wire",
+  async apply(host, ctx, canvasId, itemId, edits, by) {
+    const port = cliPort(host, ctx, canvasId);
+    const snapshot = await ctx.client.snapshot(canvasId);
+    const all = await wiresOn(port, snapshot.canvas);
+    const screen = all.find((s) => s.item === itemId);
+    if (!screen) throw new Error("this wireframe's spec could not be read — `isocan wire copy` cannot write it either");
+    const item = snapshot.canvas.items[itemId]!;
+    const html = await port.readText(currentVersionOf(item)!.blobHash);
+    const file = wireCopyFile(html, edits);
+    if (!file.ok) throw new Error(file.reason);
+    const r = await writeWireCopy(port, snapshot.canvas, all, screen, file.file, by);
+    if (!r.changed) return { changed: [] };
+    return { changed: file.changed, group: r.group, versionId: r.versionId, note: `exact copy by ${by}${r.prototypes.length ? ", prototype rebuilt" : ""}` };
+  },
+};
 
 export function registerFlesh(host: CliHost, wire: Command): void {
   const { run, ctxOf, resolveCanvas, printJson } = host;
@@ -165,21 +221,14 @@ export function registerFlesh(host: CliHost, wire: Command): void {
         } catch (error) {
           throw new Error(`${opts.apply} is not a JSON file this can read: ${(error as Error).message}`);
         }
-        const validated = validateCopyPayload(spec, raw);
-        const next = applyCopy(spec, validated, opts.by);
-        if (JSON.stringify(next) === JSON.stringify(spec)) {
+        const r = await writeWireCopy(port, snapshot.canvas, all, screen!, raw, opts.by);
+        if (!r.changed) {
           if (ctx.json) return printJson({ itemId: screen!.item, changed: false });
           console.log(`${screen!.item}  ${wireTitle(spec)} — the same words; nothing written`);
           return;
         }
-        const item = snapshot.canvas.items[screen!.item]!;
-        const filename = currentVersionOf(item)?.filename ?? "wireframe.html";
-        const group = newGroupId();
-        const upload = await port.put(renderWire(next), "text/html", filename);
-        await port.send({ type: "item.addVersion", itemId: item.id, version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
-        const prototypes = await rebuildPrototypes(port, snapshot.canvas, all, [{ item: item.id, spec: next }], group);
-        if (ctx.json) return printJson({ itemId: item.id, changed: true, group, content: next.content, prototypes });
-        console.log(`${item.id}  ${wireTitle(next)} — exact copy by ${opts.by}, one version${prototypes.length ? `, prototype rebuilt` : ""} — \`isocan undo\` takes it back`);
+        if (ctx.json) return printJson({ itemId: screen!.item, changed: true, group: r.group, content: r.next.content, prototypes: r.prototypes });
+        console.log(`${screen!.item}  ${wireTitle(r.next)} — exact copy by ${opts.by}, one version${r.prototypes.length ? `, prototype rebuilt` : ""} — \`isocan undo\` takes it back`);
       }),
     );
 

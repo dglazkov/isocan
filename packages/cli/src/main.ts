@@ -8250,6 +8250,117 @@ program
   );
 
 /**
+ * **A screen's words, as data** — `isocan words <item>` (copy-edit phase 1).
+ *
+ * The copy deck (`@isocan/core/copy-deck`): every string in reading order
+ * with its role and address, so an agent edits STRINGS and never the file.
+ * `--apply <deck.json>` takes the deck back with a `to` beside each string
+ * that changes and lands ONE new version: plain HTML is spliced here — only
+ * those words' bytes change — and a wireframe goes to the module that
+ * renders it (its words are its spec's), the writer `wire copy --apply` uses.
+ * A string whose `text` no longer matches is refused by address, never
+ * guessed. Named `words` because `copy` already copies items.
+ */
+program
+  .command("words <item>")
+  .description("A screen's words as a copy deck — each string's role, address and text in reading order; --apply <deck.json> writes edited strings (a `to` beside each) as one version, words only")
+  .option("--apply <file>", "the deck as `words --json` printed it, with \"to\" beside each string to change")
+  .option("--by <name>", "who wrote the words — recorded on a wireframe's spec, and in the receipt", "agent")
+  .action(
+    run(async (ref: string, opts: { apply?: string; by: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      const current = item.versions.find((v) => v.id === item.currentVersionId);
+      if (!current || current.mimeType !== "text/html") {
+        throw new Error(`"${item.title || item.id}" is ${current ? current.mimeType : "empty"} — \`words\` reads HTML screens`);
+      }
+      const { applyCopyDeck, copyDeck, parseCopyEdits } = await import("@isocan/core/copy-deck");
+      const html = (await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8");
+      const deck = copyDeck(html);
+      const label = truncate(item.title || item.id, 24);
+
+      if (!opts.apply) {
+        if (ctx.json) return printJson({ itemId: item.id, versionId: current.id, ...deck });
+        if (deck.unfleshed) {
+          console.log(`"${label}" is a wireframe drawing bars — \`isocan wire flesh ${item.id}\` gives it words first`);
+          return;
+        }
+        if (deck.strings.length === 0) {
+          console.log(`"${label}" has no words`);
+          return;
+        }
+        printTable(deck.strings.map((s) => ({ address: s.address, role: s.role, text: truncate(s.text.replace(/\s+/g, " "), 60) })));
+        console.log(`${deck.strings.length} string${deck.strings.length === 1 ? "" : "s"} — \`isocan --json words ${item.id}\` prints the deck to edit; add "to" beside a string and \`--apply\` it`);
+        return;
+      }
+
+      let edits;
+      try {
+        edits = parseCopyEdits(JSON.parse(await fs.readFile(opts.apply, "utf8")));
+      } catch (error) {
+        throw new Error(`${opts.apply}: ${(error as Error).message}`);
+      }
+      await narrate(ctx, p.id, {
+        activity: { kind: "working", itemId: item.id },
+        cursor: itemCenter(item),
+        status: `rewording "${label}"…`,
+      });
+
+      if (deck.kind !== "html") {
+        const writer = CLI_MODULES.find((m) => m.copy?.kind === deck.kind)?.copy;
+        if (!writer) throw new Error(`"${label}" is a ${deck.kind} screen and no loaded module writes its words`);
+        const r = await writer.apply(moduleHost, ctx, p.id, item.id, edits, opts.by);
+        if (ctx.json) return printJson({ itemId: item.id, kind: deck.kind, changed: r.changed, ...(r.versionId ? { versionId: r.versionId } : {}), ...(r.group ? { group: r.group } : {}) });
+        if (r.changed.length === 0) return void console.log(`"${label}" already says that — nothing written`);
+        console.log(`${r.changed.length} string${r.changed.length === 1 ? "" : "s"} reworded on ${item.id}${r.note ? ` — ${r.note}` : ""}, one version — \`isocan undo\` takes it back`);
+        return;
+      }
+
+      const out = applyCopyDeck(html, edits);
+      if (!out.ok) {
+        if (out.reason === "nothing changed") {
+          if (ctx.json) return printJson({ itemId: item.id, kind: deck.kind, changed: [] });
+          return void console.log(`"${label}" already says that — nothing written`);
+        }
+        throw new Error(out.reason);
+      }
+      // The visual face, when the item has one apart from its source (assets
+      // inlined at add/edit), carries the same words in the same order: the
+      // same edits land on it, matched string by string, or nothing lands.
+      let visualFace = current.visual;
+      if (current.visual && current.visual.blobHash !== current.blobHash && current.visual.mimeType === "text/html") {
+        const visualHtml = (await ctx.client.downloadBlob(p.id, current.visual.blobHash)).toString("utf8");
+        const visualDeck = copyDeck(visualHtml).strings;
+        const same = visualDeck.length === deck.strings.length && visualDeck.every((s, i) => s.text === deck.strings[i]!.text && s.role === deck.strings[i]!.role);
+        if (!same) throw new Error(`"${label}" has a visual face whose words differ from its source — \`isocan edit\` it instead`);
+        const at = new Map(deck.strings.map((s, i) => [s.address, visualDeck[i]!.address]));
+        const visualOut = applyCopyDeck(visualHtml, edits.map((e) => ({ ...e, address: at.get(e.address) ?? e.address })));
+        if (!visualOut.ok) throw new Error(`the visual face: ${visualOut.reason}`);
+        const filename = current.visual.filename ?? current.filename;
+        const up = await ctx.client.uploadBlob(p.id, Buffer.from(visualOut.html, "utf8"), "text/html", filename);
+        visualFace = { blobHash: up.blobHash, mimeType: "text/html", filename, size: up.size };
+      }
+      const upload = await ctx.client.uploadBlob(p.id, Buffer.from(out.html, "utf8"), "text/html", current.filename);
+      const versionId = newVersionId();
+      await sendOp(ctx, p.id, {
+        type: "item.addVersion",
+        itemId: item.id,
+        version: {
+          id: versionId,
+          blobHash: upload.blobHash,
+          mimeType: "text/html",
+          filename: current.filename,
+          size: upload.size,
+          ...(visualFace ? { visual: visualFace } : {}),
+        },
+      });
+      if (ctx.json) return printJson({ itemId: item.id, kind: deck.kind, changed: out.changed, versionId, by: opts.by });
+      console.log(`${out.changed.length} string${out.changed.length === 1 ? "" : "s"} reworded on ${item.id} by ${opts.by}, words only — new version ${versionId} (${item.versions.length + 1} total); \`isocan undo\` takes it back`);
+    }),
+  );
+
+/**
  * **An item's version stack, listed** — `version ls <item>`, beside the
  * family's other verbs (#124). `versions <item>` is the older spelling and
  * still works: one action, two doors, and the guide teaches the first.

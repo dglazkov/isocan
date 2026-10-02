@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 2 Oct 2026: phase 0 is CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 1, the copy deck.**
+**Where we are, 2 Oct 2026: phases 0 and 1 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 2, copy variants.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -70,22 +70,30 @@ the browser keeps the stub.
 
 ## Phase 1 — The copy deck
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** `isocan words <item>` reads any screen's strings with roles and stable addresses, and `--apply` changes words only as one version, refusing a stale string by name — proved byte for byte in core and against a real daemon for plain HTML and wireframes, with undo.
 
 **Outcome:** a pure core `copyDeck(html)` → strings in reading order with role,
 address (wire `data-wf` where present, else the element path the WYSIWYG splice
-uses, checked by current text) and, where measured, a budget; `isocan copy
-<item> [--json]`; `isocan copy <item> --apply deck.json` splicing text only,
+uses, checked by current text) and, where measured, a budget; `isocan words
+<item> [--json]`; `isocan words <item> --apply deck.json` splicing text only,
 refusing a stale address, one version.
 
 **Proof:** core tests over wire and plain HTML (roles, addresses, a stale
 refusal, markup byte-identical outside text); a CLI test of read and apply.
 
+### Trajectory
+
+- **2026-10-02** — `isocan copy` was taken ("copy items"), so the deck shipped as `isocan words`; phase 2 is `isocan words vary`. The docs were renamed with it.
+- **2026-10-02** — A wireframe's rendered text is not its words (one row draws three words joined by " · "), so a wire deck is addressed by `wire copy` word paths from the embedded spec and written by the module (`writeWireCopy`), never spliced. Plain HTML uses the WYSIWYG splice's ordinals; a test holds the two walks equal.
+- **2026-10-02** — The CLI gained a per-kind copy writer hook (`CliModule.copy`, beside `templates`): plain HTML is spliced by the CLI, a wire deck routed to its module.
+- **2026-10-02** — Open: the web's WYSIWYG text edit splices a wire screen's HTML without updating its embedded spec, so the next re-render (restyle, flesh) silently reverts it. A bug beside this phase, not in it.
+- **2026-10-02** — Open: `--by` on plain HTML has nowhere to live (a version has only `createdBy`); it is said in the receipt only.
+
 ## Phase 2 — Copy variants
 
 **Status: NOT STARTED.**
 
-**Outcome:** `isocan copy vary <item> --n 3 [--brief] [--from voices.json]`
+**Outcome:** `isocan words vary <item> --n 3 [--brief] [--from voices.json]`
 and *Vary the copy…* on a screen produce N variants, each a `parent=` variation
 titled with its stance and carrying its reason; words only.
 

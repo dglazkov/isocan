@@ -158,3 +158,23 @@ describe("folding re-edits", () => {
     expect(pending).toEqual([edit(0, "Submit", "Send"), edit(1, "Submit", "Go")]);
   });
 });
+
+describe("the copy deck counts nodes the way this splice does (copy-edit phase 1)", () => {
+  it("a deck's t<n> and a WYSIWYG ordinal name the same node and write the same bytes", async () => {
+    const { applyCopyDeck, copyDeck } = await import("@isocan/core/copy-deck");
+    // Templates, entities, repeats and a script before the body: every way
+    // a count could drift. Synthetic: Acme's plans page.
+    const page = `<!doctype html><html><head><title>Acme</title><script>let a = "<b>x</b>";</script></head><body><template><p>Hidden plan</p></template><h1>Rest &amp; Play</h1><button>Submit</button><button>Submit</button></body></html>`;
+    const strings = copyDeck(page).strings;
+    const second = strings.filter((s) => s.text === "Submit")[1]!;
+    const ordinal = Number(second.address.slice(1));
+    const viaSplice = await applyEdits(page, [edit(ordinal, "Submit", "Go")]);
+    const viaDeck = applyCopyDeck(page, [{ address: second.address, text: "Submit", to: "Go" }]);
+    expect(viaSplice.ok && viaDeck.ok).toBe(true);
+    if (viaSplice.ok && viaDeck.ok) expect(viaDeck.html).toBe(viaSplice.source);
+    const heading = strings.find((s) => s.role === "heading")!;
+    const a = await applyEdits(page, [edit(Number(heading.address.slice(1)), "Rest & Play", "Work & Play")]);
+    const b = applyCopyDeck(page, [{ address: heading.address, text: heading.text, to: "Work & Play" }]);
+    expect(a.ok && b.ok && a.source === b.html).toBe(true);
+  });
+});

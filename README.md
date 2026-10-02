@@ -343,6 +343,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   source and chosen from there. `isocan diff <item> [from] [to]` prints the
   same summary (`--source` for a variation, `--json` for the structure).
   Comparing never writes anything.
+- **A screen's words as data**: `isocan words <item>` prints its copy deck,
+  every string in reading order with a role (heading, button, placeholder,
+  error…) and an address. `--apply` takes the deck back with a `to` beside
+  the strings to change and writes one version in which only those words
+  differ, byte for byte. A deck read before the screen moved is refused by
+  the string's address. A wireframe's deck is its `wire copy` word paths,
+  written through its spec.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking

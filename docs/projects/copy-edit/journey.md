@@ -47,8 +47,8 @@ every screen's words change together, buttons still bound to where they go.
 
 ## Scene 6 — An agent does it too
 
-Rowan, an agent, runs `isocan copy <screen>` and gets the deck as JSON, writes
-three voices, `isocan copy vary <screen> --from voices.json`, and comments which
+Rowan, an agent, runs `isocan words <screen>` and gets the deck as JSON, writes
+three voices, `isocan words vary <screen> --from voices.json`, and comments which
 it would keep — the same variants, the same compare, the same pick.
 
 ## What the scenes force

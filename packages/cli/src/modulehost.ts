@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import type { CanvasSnapshotResponse } from "@isocan/core";
 import type { Canvas, CoreModule, GroupBox, Item, Operation, Placement } from "@isocan/core";
+import type { CopyEdit } from "@isocan/core/copy-deck";
 import type { Ctx } from "./ctx.ts";
 import type { FencedRequest, FencedRun } from "./sandbox.ts";
 
@@ -107,4 +108,33 @@ export interface CliModule {
   guide: string;
   /** Working-directory templates this module offers the rc. */
   templates?: readonly EnrolTemplate[];
+  /** The writer for a copy-deck kind whose words this module owns. */
+  copy?: CopyWriter;
+}
+
+/**
+ * **Who writes a screen's words, when the screen is not just HTML**
+ * (copy-edit phase 1).
+ *
+ * `isocan copy <item> --apply` splices plain HTML itself (`applyCopyDeck`).
+ * A wireframe's words are its embedded spec's: the rendered text is a join
+ * of several words, and the next re-render would undo a splice. So the
+ * module that renders a kind writes its words — the same writer its own
+ * verb uses (`wire copy --apply`), one version, one op group — and the CLI
+ * routes by the deck's `kind`. Without the module loaded, that kind's apply
+ * is refused rather than spliced.
+ */
+export interface CopyWriter {
+  /** The `CopyDeck.kind` this writes: `"wire"`. */
+  kind: string;
+  apply: (host: CliHost, ctx: Ctx, canvasId: string, itemId: string, edits: readonly CopyEdit[], by: string) => Promise<CopyWritten>;
+}
+
+export interface CopyWritten {
+  /** The addresses that changed; empty when the words were already these. */
+  changed: string[];
+  group?: string;
+  versionId?: string;
+  /** One line the CLI adds to its receipt ("prototype rebuilt"). */
+  note?: string;
 }
