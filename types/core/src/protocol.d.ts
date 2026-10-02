@@ -1,4 +1,5 @@
 import type { CursorSignal, TextAttention } from "./text-attention.js";
+import type { PresenceDrag } from "./live-drag.js";
 import type { Capability } from "./grants.js";
 import type { ActorColors, ActorJoins, ActorNames } from "./identity.js";
 import type { Actor, Canvas, CanvasContents } from "./model.js";
@@ -209,6 +210,9 @@ export type ClientMessage = {
     selection: string[];
     textSelection?: TextAttention | null;
     signal?: CursorSignal | null;
+    /** A drag in progress — only while the press has become a drag, and
+     * absent from the first beat after it ends. See `PresenceDrag`. */
+    drag?: PresenceDrag | undefined;
 }
 /**
  * A whole roster, from a connection that speaks for several people at once.
@@ -308,6 +312,9 @@ export interface PresenceSession {
     textSelection?: TextAttention | null;
     /** Temporary 20-second cursor signal replacing the username on the cursor chip. */
     signal?: CursorSignal | null;
+    /** The drag this session's hand is making right now, absent otherwise
+     * (groups-by-hand phase 3). Latest state only: nothing replays it. */
+    drag?: PresenceDrag;
     status: string | null;
     /**
      * Who is speaking when `status` is set — the same tri-state the update

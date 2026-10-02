@@ -129,6 +129,7 @@ export * from "./seen.js";
 export * from "./lens.js";
 export * from "./export.js";
 export * from "./text-attention.js";
+export * from "./live-drag.js";
 export * from "./text-anchor.js";
 export { markdownResource, markdownTargetOffCanvas, SOURCE_PATH_PROP } from "./markdown-resources.js";
 export * from "./inbox-api.js";

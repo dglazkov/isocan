@@ -29,6 +29,8 @@ export declare class PresenceHub {
         selection?: string[];
         textSelection?: import("../../core/src/index.js").TextAttention | null;
         signal?: CursorSignal | string | null;
+        /** The drag the hand is making; `null` ends it. Omit to leave it. */
+        drag?: unknown;
         status?: string | null;
         statusSource?: "explicit" | "lifecycle" | "inferred";
         activity?: PresenceActivity | null;
