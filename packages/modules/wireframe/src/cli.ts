@@ -129,6 +129,14 @@ function register(host: CliHost): void {
     .action(dispatch(host, "polish"));
 
   wire
+    .command("layer [directive] [screens...]")
+    .description("Check or uncheck non-destructive fidelity layers (`+system`, `-system`, `+copy`, `-copy`, `+lofi`, `-lofi`, `+hifi`, `-hifi`) or jump between the 4 fidelity tiers (`wire`, `system`, `lofi`, `hifi`) in one op group; with no directive or --list, prints each screen's active layers")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--list", "write nothing: print each wireframe screen's active fidelity layers and tier")
+    .action(dispatch(host, "layer"));
+
+  wire
     .command("flesh [screens...]")
     .description("Fill wires with sample content instead of grey bars — Jev picks one content pack per flow from its request (p recorded; --pack <id> overrides); one op group, a version per changed wire. --bars goes back to bars")
     .option("--canvas <canvas>")

@@ -470,13 +470,31 @@ const POLISH_CSS = `
 .wf-accent-ring{outline:2px solid var(--w-primary);outline-offset:2px}
 `;
 
-/** The polish refinement sheet — empty when `spec.polish` is absent or empty. */
-export function polishCss(patches: WireSpec["polish"]): string {
-  return patches && patches.length > 0 ? POLISH_CSS : "";
+const LOFI_CSS = `
+.frame.lofi{border-color:transparent;background:var(--w-ground)}
+.frame.lofi .slot.w{border-color:transparent;background:transparent}
+.frame.lofi .card,.frame.lofi .stat,.frame.lofi .row,.frame.lofi .form{background:var(--w-surface);border:1px solid var(--w-line);border-radius:var(--w-radius);box-shadow:0 2px 8px ${INK_AT(6)}}
+.frame.lofi .btn{border-radius:999px;font-weight:600}
+`;
+
+const HIFI_CSS = `
+.frame.hifi{background:radial-gradient(120% 80% at 50% 0%,${PRIMARY_AT(10)},transparent 65%),var(--w-ground)}
+.frame.hifi .appbar,.frame.hifi .navbar,.frame.hifi .tabbar{background:${PANE};backdrop-filter:${BLUR};-webkit-backdrop-filter:${BLUR};border-color:${INK_AT(10)}}
+.frame.hifi .card,.frame.hifi .stat,.frame.hifi .row{box-shadow:0 8px 24px ${INK_AT(10)};border-color:${INK_AT(8)}}
+.frame.hifi .btn.pri{box-shadow:0 4px 14px ${PRIMARY_AT(28)}}
+`;
+
+/** The polish refinement sheet — empty when `spec.polish` is absent/empty or `layers.lofi === false`. */
+export function polishCss(patches: WireSpec["polish"], layers?: WireSpec["layers"]): string {
+  if (layers?.lofi === false) return "";
+  const base = patches && patches.length > 0 ? POLISH_CSS : "";
+  const lofi = layers?.lofi || layers?.hifi ? LOFI_CSS : "";
+  const hifi = layers?.hifi ? HIFI_CSS : "";
+  return `${base}${lofi}${hifi}`;
 }
 
-function resolvePolishTokens(patches: WireSpec["polish"], target: string): string[] {
-  if (!patches || patches.length === 0) return [];
+function resolvePolishTokens(patches: WireSpec["polish"], target: string, layers?: WireSpec["layers"]): string[] {
+  if (layers?.lofi === false || !patches || patches.length === 0) return [];
   const active = new Set<string>();
   for (const p of patches) {
     if (p.target !== target) continue;
@@ -538,22 +556,24 @@ function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolea
   const c = component(slot.block);
   const props = propsFor(c, slot.props);
   const intentOf = (element: string): string => slot.intents?.[element] ?? defaultIntent(r, c, element);
-  const slotPolish = resolvePolishTokens(spec.polish, slot.slot);
+  const slotPolish = resolvePolishTokens(spec.polish, slot.slot, spec.layers);
+  const copyOn = spec.layers?.copy !== false;
+  const activeFill = copyOn ? slot.fill : undefined;
   const ctx: DrawContext = {
     props,
     intent: intentOf,
     // A fleshed lone action says what it acts on ("Edit delivery"); anything else, its intent's own word.
-    label: (element) => esc(slot.fill?.actions?.[element] ?? INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
+    label: (element) => esc(activeFill?.actions?.[element] ?? INTENT_BY_ID.get(intentOf(element))?.label ?? intentOf(element)),
     hot: (element) => {
       const intentId = slot.intents?.[element] ?? (c.elements?.[element] ? defaultIntent(r, c, element) : undefined);
-      const elPolish = resolvePolishTokens(spec.polish, `${slot.slot}.${element}`);
+      const elPolish = resolvePolishTokens(spec.polish, `${slot.slot}.${element}`, spec.layers);
       const polishAttr = elPolish.length > 0 ? ` data-polish="${esc(elPolish.join(" "))}"` : "";
       return ` data-hot="${esc(hotKey(slot.slot, element))}" data-wf="${esc(`${slot.slot}.${element}`)}"${intentId ? ` data-intent="${esc(intentId)}"` : ""}${polishAttr}`;
     },
     title: esc(c.id === "app-bar" ? barTitleOf(spec) : headingOf(spec)),
     platform: spec.platform,
     wide: spec.platform !== "app",
-    ...(slot.fill ? { fill: slot.fill } : {}),
+    ...(activeFill ? { fill: activeFill } : {}),
   };
   const slotClass = ["slot", "w", ...slotPolish].join(" ");
   return `<section class="${esc(slotClass)}" ${attrs} data-block="${esc(c.id)}" data-state="wire">${c.draw(ctx)}</section>`;
@@ -561,6 +581,7 @@ function drawSlot(spec: WireSpec, slot: WireSlot, section: Section, grow: boolea
 
 /** The heading inside the frame: a fleshed screen's ("Deliveries"), else the spec's title ("List"). */
 export function headingOf(spec: WireSpec): string {
+  if (spec.layers?.copy === false) return spec.title;
   return spec.content?.title ?? spec.title;
 }
 
@@ -571,7 +592,7 @@ export function headingOf(spec: WireSpec): string {
  * (`content.bar`), else the archetype's title.
  */
 export function barTitleOf(spec: WireSpec): string {
-  if (!spec.content) return spec.title;
+  if (spec.layers?.copy === false || !spec.content) return spec.title;
   if (spec.content.bar !== undefined) return spec.content.bar;
   return spec.slots.some((s) => s.block === "heading" || (s.block === "detail-header" && s.fill?.heading !== undefined)) ? spec.title : headingOf(spec);
 }
@@ -609,12 +630,14 @@ ${frame}
 }
 
 /**
- * The theme a screen draws in: its spec's `style`, except on a blueprint —
- * blue on white means *still being drawn* in every system, so a screen with
- * nothing chosen draws in the default whatever its spec records.
+ * The theme a screen draws in: its spec's `style`, except on a blueprint or
+ * when `layers.system === false` — blue on white means *still being drawn* in
+ * every system, and unchecking the system layer returns to the default greys
+ * without erasing `spec.style`.
  */
 export function styleOf(spec: WireSpec): WireStyle | undefined {
-  return spec.slots.every((s) => s.block === null) ? undefined : spec.style;
+  if (spec.slots.every((s) => s.block === null) || spec.layers?.system === false) return undefined;
+  return spec.style;
 }
 
 /** The theme as a rule: the roles' values on `:root`, for the sheet to read. */
@@ -625,7 +648,7 @@ export function themeCss(style: WireStyle | undefined, density?: DensityLevel): 
 /** The stylesheet a screen needs: its theme, the wire sheet, its surface's, its template's, its polish sheet, and the skeleton's only while a slot is undecided. */
 export function wireCss(spec: WireSpec): string {
   const density = spec.slots.every((s) => s.block === null) ? undefined : spec.density;
-  return `${themeCss(styleOf(spec), density)}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${templateCss(spec.template)}${polishCss(spec.polish)}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
+  return `${themeCss(styleOf(spec), density)}${WIRE_CSS}${surfaceCss([surfaceOf(styleOf(spec))])}${templateCss(spec.template)}${polishCss(spec.polish, spec.layers)}${spec.slots.some((s) => s.block === null) ? SKELETON_CSS : ""}`;
 }
 
 /**
@@ -686,8 +709,10 @@ export function renderFrame(spec: WireSpec): string {
   const size = spec.platform === "site" ? `width:${width}px;min-height:${SITE_MIN}px` : `width:${width}px;height:${height}px`;
   // A surface is the style's (render's `SURFACE_CSS`); a blueprint has none, as it has no theme.
   const surface = surfaceOf(styleOf(spec));
+  const lofiClass = !undecided && (spec.layers?.lofi || spec.layers?.hifi) ? " lofi" : "";
+  const hifiClass = !undecided && spec.layers?.hifi ? " hifi" : "";
   return [
-    `<div class="frame ${spec.platform}${undecided ? " sk-frame" : ""}${surface === "flat" ? "" : ` s-${surface}`}" style="${size}">`,
+    `<div class="frame ${spec.platform}${undecided ? " sk-frame" : ""}${surface === "flat" ? "" : ` s-${surface}`}${lofiClass}${hifiClass}" style="${size}">`,
     ...regions.shell,
     ...regions.header,
     `<div class="body">`,
@@ -713,6 +738,29 @@ export function readWire(html: string): WireSpec | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Embed or update a `WireSpec` inside any HTML screen (including bespoke
+ * Low-Fi or High-Fi craft) so it keeps its wireframe DNA, flow arrows, and
+ * non-destructive layer switching.
+ */
+export function embedWireSpec(html: string, spec: WireSpec): string {
+  const tag = `<script type="application/json" id="${WIRE_SCRIPT_ID}">${specJson(spec)}</script>`;
+  const scriptRe = new RegExp(`<script type="application/json" id="${WIRE_SCRIPT_ID}">[\\s\\S]*?</script>`);
+  let out = html;
+  if (!out.includes(WIRE_MARKER)) {
+    out = out.replace(/<!doctype html>/i, `<!doctype html>\n${WIRE_MARKER}`);
+    if (!out.includes(WIRE_MARKER)) out = `${WIRE_MARKER}\n${out}`;
+  }
+  if (scriptRe.test(out)) {
+    out = out.replace(scriptRe, tag);
+  } else if (/<\/head>/i.test(out)) {
+    out = out.replace(/<\/head>/i, `${tag}\n</head>`);
+  } else {
+    out = `${tag}\n${out}`;
+  }
+  return out;
 }
 
 /** For the tests: the greyscale sheet, which must hold no skeleton colour. */

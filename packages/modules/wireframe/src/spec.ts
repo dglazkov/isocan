@@ -118,6 +118,33 @@ export interface WireSpec {
    * keyed by `data-wf` or `data-sec` path on the screen.
    */
   polish?: WirePolishPatch[];
+  /**
+   * Non-destructive layer visibility toggles (`wire layer`): when a layer is
+   * `false`, `renderWire` hides that layer (returning to default greys, grey
+   * bars, or unpolished blocks) while keeping `style`, `content`, `slot.fill`,
+   * and `polish` intact in the embedded spec so checking it back on restores it.
+   */
+  layers?: WireLayers;
+}
+
+/** Checkable additive layers on a wireframe screen. */
+export const WIRE_LAYER_IDS = ["system", "copy", "lofi", "hifi"] as const;
+export type WireLayerId = (typeof WIRE_LAYER_IDS)[number];
+
+/** Named fidelity tiers corresponding to cumulative layer combinations. */
+export const WIRE_FIDELITY_TIERS = ["wire", "system", "lofi", "hifi"] as const;
+export type WireFidelityTier = (typeof WIRE_FIDELITY_TIERS)[number];
+
+/** Non-destructive visibility state for each layer on a wireframe spec. */
+export interface WireLayers {
+  /** Design system tokens and surface (`spec.style`). */
+  system?: boolean;
+  /** Fleshed sample content or copy (`spec.content` and `slot.fill`). */
+  copy?: boolean;
+  /** Low-fi unboxed fluid layout and visual polish (`spec.polish`). */
+  lofi?: boolean;
+  /** High-fi visual craft (`wireLayer:hifi` or elevated high-craft rendering). */
+  hifi?: boolean;
 }
 
 /** Allowed visual refinement classes for `WireSpec.polish` (`design.md` §15). */
@@ -538,6 +565,17 @@ export function validateWire(input: unknown): string[] {
         for (const t of patch.remove ?? []) {
           if (!allowedTokens.has(t)) problems.push(`polish["${patch.target}"]: unknown remove token "${t}"`);
         }
+      }
+    }
+  }
+  if (spec.layers !== undefined) {
+    if (!spec.layers || typeof spec.layers !== "object" || Array.isArray(spec.layers)) {
+      problems.push("layers must be an object of boolean flags (system, copy, lofi, hifi)");
+    } else {
+      const allowedLayers = new Set<string>(WIRE_LAYER_IDS);
+      for (const [k, v] of Object.entries(spec.layers)) {
+        if (!allowedLayers.has(k)) problems.push(`layers: unknown layer "${k}"`);
+        else if (typeof v !== "boolean") problems.push(`layers.${k} must be a boolean`);
       }
     }
   }

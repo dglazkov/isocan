@@ -330,13 +330,20 @@ export async function addVariations(canvas: FlowCanvas, screen: Screen, siblings
 
 // ---------- reading a flow back off the canvas
 
-/** Every wireframe screen on the canvas whose file carries a spec, read back off its current version. */
+/** Every wireframe screen on the canvas whose file carries a spec, read back off its current version (or its saved wireLayer:system / wireLayer:wire version when on a bespoke High-Fi layer). */
 export async function wiresOn(port: Pick<WirePort, "readText">, canvas: CanvasContents): Promise<Screen[]> {
   const items = Object.values(canvas.items ?? {}).filter((i) => i.properties?.[FIDELITY_PROP] === "wireframe");
   const read = await Promise.all(items.map(async (item) => {
     const current = currentVersionOf(item);
     if (!current || current.mimeType !== "text/html") return null;
-    const spec = readWire(await port.readText(current.blobHash));
+    let spec = readWire(await port.readText(current.blobHash));
+    if (!spec) {
+      const fallbackId = item.properties?.["wireLayer:system"] ?? item.properties?.["wireLayer:wire"];
+      const fallbackVer = fallbackId ? item.versions.find((v) => v.id === fallbackId) : undefined;
+      if (fallbackVer && fallbackVer.mimeType === "text/html") {
+        spec = readWire(await port.readText(fallbackVer.blobHash));
+      }
+    }
     return spec ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height, ...(item.containerId ? { containerId: item.containerId } : {}) } : null;
   }));
   return read.filter((s): s is Screen => s !== null);

@@ -11,9 +11,10 @@ import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, flowScreens, presetFile,
 import { wireframeModule } from "./record.ts";
 import { checkWire, checkWords, readSystemDoc, restyleLabel, specKey, systemsToRead, type DocOf } from "./behind.ts";
 import { wireDsOnCanvas } from "./ds.ts";
+import { LAYER_LABELS, TIER_LABELS, applyLayersOnCanvas, layerSummary, resolveItemLayers } from "./layers.ts";
 import { polishWireOnCanvas } from "./polish.ts";
 import { StyleResolver, mappingLines, restyle, restyleSummary } from "./restyle.ts";
-import { wireTitle } from "./spec.ts";
+import { WIRE_LAYER_IDS, wireTitle } from "./spec.ts";
 
 /**
  * Where this module's files, and the design competition's, sit inside a copy
@@ -291,6 +292,67 @@ export function registerStyle(host: CliHost, wire: Command): void {
           say(`${c.itemId}  ${c.title} — ${c.patches.length} polish patch${c.patches.length === 1 ? "" : "es"} (intensity ${c.intensity}, budget ${c.budget})`);
         }
         say(`${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} ${opts.clear ? "unpolished" : "polished"} (${r.by})${r.prototypes.length ? ", prototype rebuilt" : ""} — \`isocan undo\` takes it back`);
+      }),
+    );
+
+  wire
+    .command("layer [directive] [screens...]")
+    .description("Check or uncheck non-destructive fidelity layers (`+system`, `-system`, `+copy`, `-copy`, `+lofi`, `-lofi`, `+hifi`, `-hifi`) or jump between the 4 fidelity tiers (`wire`, `system`, `lofi`, `hifi`) in one op group; with no directive or --list, prints each screen's active layers")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "only this flow's screens")
+    .option("--list", "write nothing: print each wireframe screen's active fidelity layers and tier")
+    .action(
+      run(async (directive: string | undefined, refs: string[], _local: unknown, cmd: Command) => {
+        const opts = cmd.optsWithGlobals() as { flow?: string; list?: boolean };
+        const ctx = await ctxOf(cmd);
+        const say = (line: string) => {
+          if (!ctx.json) console.log(line);
+        };
+        const p = await resolveCanvas(ctx);
+        const port = cliPort(host, ctx, p.id);
+        const canvas = await port.canvas();
+        const all = await wiresOn(port, canvas);
+        const inFlow = opts.flow === undefined ? all : all.filter((s) => s.spec.flow === opts.flow);
+        if (inFlow.length === 0) {
+          throw new Error("no wireframe on this canvas — `isocan wire \"<request>\"` composes some");
+        }
+        if (opts.list || !directive) {
+          const rows = inFlow.map((s) => {
+            const item = canvas.items[s.item]!;
+            const resolved = resolveItemLayers(item, s.spec);
+            return {
+              itemId: item.id,
+              title: item.title,
+              tier: resolved.tier,
+              layers: {
+                system: resolved.system,
+                copy: resolved.copy,
+                lofi: resolved.lofi,
+                hifi: resolved.hifi,
+              },
+            };
+          });
+          if (ctx.json) return printJson({ screens: rows });
+          for (const r of rows) {
+            const checks = WIRE_LAYER_IDS.map((id) => `${r.layers[id] ? "☑" : "☐"} ${LAYER_LABELS[id].short}`).join("  ");
+            say(`${r.itemId}  ${r.title.padEnd(36)} ${TIER_LABELS[r.tier].badge.padEnd(8)} ${checks}`);
+          }
+          return;
+        }
+        const named = (refs ?? []).map((ref) => {
+          const item = host.resolveItem({ canvas } as never, ref) as { id: string; title: string };
+          const found = inFlow.find((s) => s.item === item.id);
+          if (!found) throw new Error(`"${item.title}" is not a wireframe screen`);
+          return found;
+        });
+        const targets = named.length ? named : inFlow;
+        const r = await applyLayersOnCanvas(port, canvas, all, targets, directive);
+        if (ctx.json) return printJson(r);
+        for (const c of r.changed) {
+          const checks = WIRE_LAYER_IDS.map((id) => `${c.layers[id] ? "☑" : "☐"} ${LAYER_LABELS[id].short}`).join("  ");
+          say(`${c.itemId}  ${c.title} → ${TIER_LABELS[c.tier].badge} (${checks})`);
+        }
+        say(layerSummary(r).replace("one undo takes", "`isocan undo` takes"));
       }),
     );
 }

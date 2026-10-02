@@ -16,6 +16,7 @@ import { explainWireDecision } from "./why.ts";
 import { copyAiOnCanvas, nameFlowOnCanvas } from "./copy-schema.ts";
 import { wireDsOnCanvas } from "./ds.ts";
 import { polishWireOnCanvas } from "./polish.ts";
+import { applyLayersOnCanvas, layerSummary } from "./layers.ts";
 import { wireTitle } from "./spec.ts";
 import type { PackChoice } from "./content/choose.ts";
 import { PACK_BY_ID } from "./content/packs.ts";
@@ -56,9 +57,10 @@ type Mode =
   // ── phase 12: /wire copy and /wire name ──
   | { kind: "copy"; brief?: string }
   | { kind: "name"; request?: string }
-  // ── phase 13: /wire ds and /wire polish ──
+  // ── phase 13: /wire ds, /wire polish, and /wire layer ──
   | { kind: "ds"; request: string }
-  | { kind: "polish"; clear?: boolean };
+  | { kind: "polish"; clear?: boolean }
+  | { kind: "layer"; directive: string; wholeFlow?: boolean };
 
 export function modeOf(args: string): Mode {
   const words = args.trim();
@@ -88,6 +90,11 @@ export function modeOf(args: string): Mode {
   if (first === "polish") {
     const clear = rest.includes("--clear") || rest.includes("clear");
     return clear ? { kind: "polish", clear: true } : { kind: "polish" };
+  }
+  if (first === "layer" || first === "layers") {
+    const wholeFlow = rest.includes("--flow") || rest.includes("--all");
+    const directive = rest.filter((w) => w !== "--flow" && w !== "--all").join(" ").trim() || "lofi";
+    return { kind: "layer", directive, ...(wholeFlow ? { wholeFlow: true } : {}) };
   }
   if (first === "style" && rest.length === 0) return { kind: "styles" };
   if (first === "style" && rest.length === 1 && (rest[0] === "--default" || rest[0] === "default")) return { kind: "style", toDefault: true };
@@ -382,6 +389,21 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
       host.close();
       if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
+    } else if (m.kind === "layer") {
+      setStatus("Updating fidelity layers…");
+      const port = webPort(canvasId, host);
+      const canvas = await port.canvas();
+      const all = await wiresOn(port, canvas);
+      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+      const selectedScreens = all.filter((s) => selection.includes(s.item));
+      const targets = m.wholeFlow || selectedScreens.length === 0
+        ? flowScreens(all, selectedScreens.map((s) => s.item))
+        : selectedScreens;
+      const r = await applyLayersOnCanvas(port, canvas, all, targets, m.directive);
+      const summary = layerSummary(r);
+      host.notice(summary);
+      if (r.changed.length) record(host, r.group, [`wire layer — ${summary}.`], [...r.changed.map((c) => c.itemId), ...r.prototypes]);
+      host.close();
     }
   };
 

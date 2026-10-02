@@ -36,6 +36,10 @@ screen by hand, and never write its copy yourself unless asked.
   \`isocan wire copy <screen> --apply <file>\` — only when asked for copy.
 - \`/wire rerender\` → \`isocan wire render --all\` (every wire drawn again from
   its own spec; a version only where the bytes change).
+- \`/wire layer <wire|system|lofi|hifi|+layer|-layer>\` → \`isocan wire layer
+  <directive> [screens…]\` (check or uncheck fidelity layers \`system\`,
+  \`copy\`, \`lofi\`, \`hifi\`, or jump between the 4 fidelity tiers
+  non-destructively).
 - \`/wire prototypes\` → \`isocan ls --filter Prototype\` (the prototypes carry
   \`wirePrototype\`); say which ones there are and where.
 
@@ -53,4 +57,6 @@ export const WIRE_PROPERTY_KEYS: readonly string[] = [
   "wirePrototype",
   "wirePrototypeAt",
   "wirePreset",
+  "wireLayer",
+  "wireLayer:*",
 ];
