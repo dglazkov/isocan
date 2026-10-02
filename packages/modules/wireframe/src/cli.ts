@@ -255,11 +255,13 @@ export const wireframeCli: CliModule = {
   core: wireframeCliCore,
   register,
   guide: guideText,
-  // `isocan copy <screen> --apply` on a wireframe: its words are the spec's,
+  // `isocan words <screen> --apply` on a wireframe: its words are the spec's,
   // so this module writes them — loaded only when somebody applies a deck.
   copy: {
     kind: "wire",
     apply: async (...args) => (await import("./flesh-cli.ts")).wireCopyWriter.apply(...args),
+    // `isocan words vary <screen>`: each voice's file is the spec with its words, rendered (`copy-variant.ts`).
+    variant: async (...args) => (await import("./copy-variant.ts")).wireCopyVariant(...args),
   },
 };
 

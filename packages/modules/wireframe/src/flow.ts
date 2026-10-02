@@ -344,6 +344,12 @@ export async function wiresOn(port: Pick<WirePort, "readText">, canvas: CanvasCo
         spec = readWire(await port.readText(fallbackVer.blobHash));
       }
     }
+    // A variation chosen home (`isocan choose`, copy-edit phase 2) is folded onto its source as-is, so the
+    // source's spec can say `variantOf` itself: a screen is never a variation of itself, so it reads as none.
+    if (spec?.variantOf === item.id) {
+      const { variantOf: _self, ...own } = spec;
+      spec = own;
+    }
     return spec ? { item: item.id, spec, x: item.x, y: item.y, width: item.width, height: item.height, ...(item.containerId ? { containerId: item.containerId } : {}) } : null;
   }));
   return read.filter((s): s is Screen => s !== null);

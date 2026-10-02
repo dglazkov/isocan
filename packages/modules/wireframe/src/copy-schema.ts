@@ -480,11 +480,18 @@ export async function nameFlow(
 }
 
 /**
- * Resolve a `TextGenerator` from the environment or a stub seed: with
+ * Resolve a `TextGenerator` from a resolved key, the environment or a stub
+ * seed. `text` is this machine's key as the CLI resolved it
+ * (`cli-port.ts`'s `localTextKey`: `ISOCAN_TEXT_API_KEY`, else
+ * `~/.isocan/keys.json`) — passed in because this file is also the web
+ * dialog's, and the browser has no file to read. Without it, with
  * `ISOCAN_TEXT_API_KEY` set, the provider `ISOCAN_TEXT_PROVIDER` names (else
- * the key's shape — `sk-ant-` is Claude's), otherwise the seeded stub.
+ * the key's shape — `sk-ant-` is Claude's); otherwise the seeded stub.
  */
-export function resolveTextGenerator(opts: { seed?: number; useStub?: boolean } = {}): TextGenerator {
+export function resolveTextGenerator(opts: { seed?: number; useStub?: boolean; text?: { key: string; provider: "anthropic" | "openai"; model?: string } | undefined } = {}): TextGenerator {
+  if (!opts.useStub && opts.text) {
+    return envTextGenerator({ apiKey: opts.text.key, provider: opts.text.provider, ...(opts.text.model ? { model: opts.text.model } : {}) });
+  }
   if (!opts.useStub && process.env.ISOCAN_TEXT_API_KEY) {
     return envTextGenerator();
   }

@@ -2,6 +2,7 @@ import { classifyAutomaticSource } from "@isocan/api/context";
 import { contextPinPort, pinFromSource } from "@isocan/api";
 import { registerPersonalContext } from "./personal-context.ts";
 import { noteOnBench, registerBench } from "./bench.ts";
+import { registerKeys } from "./keys.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
 import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
@@ -436,6 +437,7 @@ import {
   type FetchedDoc,
 } from "@isocan/server";
 import { canvasRefOf, makeCtx, metaPatch, readConfig, writeConfig, type Ctx } from "./ctx.ts";
+import type { CopyDeck, CopyEdit } from "@isocan/core/copy-deck";
 import {
   type HomeRecord,
   type ResolveOptions,
@@ -8261,7 +8263,7 @@ program
  * A string whose `text` no longer matches is refused by address, never
  * guessed. Named `words` because `copy` already copies items.
  */
-program
+const wordsCommand = program
   .command("words <item>")
   .description("A screen's words as a copy deck — each string's role, address and text in reading order; --apply <deck.json> writes edited strings (a `to` beside each) as one version, words only")
   .option("--apply <file>", "the deck as `words --json` printed it, with \"to\" beside each string to change")
@@ -8325,22 +8327,7 @@ program
         }
         throw new Error(out.reason);
       }
-      // The visual face, when the item has one apart from its source (assets
-      // inlined at add/edit), carries the same words in the same order: the
-      // same edits land on it, matched string by string, or nothing lands.
-      let visualFace = current.visual;
-      if (current.visual && current.visual.blobHash !== current.blobHash && current.visual.mimeType === "text/html") {
-        const visualHtml = (await ctx.client.downloadBlob(p.id, current.visual.blobHash)).toString("utf8");
-        const visualDeck = copyDeck(visualHtml).strings;
-        const same = visualDeck.length === deck.strings.length && visualDeck.every((s, i) => s.text === deck.strings[i]!.text && s.role === deck.strings[i]!.role);
-        if (!same) throw new Error(`"${label}" has a visual face whose words differ from its source — \`isocan edit\` it instead`);
-        const at = new Map(deck.strings.map((s, i) => [s.address, visualDeck[i]!.address]));
-        const visualOut = applyCopyDeck(visualHtml, edits.map((e) => ({ ...e, address: at.get(e.address) ?? e.address })));
-        if (!visualOut.ok) throw new Error(`the visual face: ${visualOut.reason}`);
-        const filename = current.visual.filename ?? current.filename;
-        const up = await ctx.client.uploadBlob(p.id, Buffer.from(visualOut.html, "utf8"), "text/html", filename);
-        visualFace = { blobHash: up.blobHash, mimeType: "text/html", filename, size: up.size };
-      }
+      const visualFace = await rewordVisualFace(ctx, p.id, current, deck, edits, label);
       const upload = await ctx.client.uploadBlob(p.id, Buffer.from(out.html, "utf8"), "text/html", current.filename);
       const versionId = newVersionId();
       await sendOp(ctx, p.id, {
@@ -8357,6 +8344,144 @@ program
       });
       if (ctx.json) return printJson({ itemId: item.id, kind: deck.kind, changed: out.changed, versionId, by: opts.by });
       console.log(`${out.changed.length} string${out.changed.length === 1 ? "" : "s"} reworded on ${item.id} by ${opts.by}, words only — new version ${versionId} (${item.versions.length + 1} total); \`isocan undo\` takes it back`);
+    }),
+  );
+
+/**
+ * **The visual face, reworded with its source** (copy-edit phases 1 and 2).
+ * An HTML item whose current version has a visual face apart from its source
+ * (assets inlined at add/edit) carries the same words in the same order: the
+ * same edits land on it (`applyCopyDeckToFace`), or nothing lands. Returns
+ * the face the new version should carry — the old one when there is none to
+ * reword.
+ */
+async function rewordVisualFace(
+  ctx: Ctx,
+  canvasId: string,
+  current: ItemVersion,
+  deck: CopyDeck,
+  edits: readonly CopyEdit[],
+  label: string,
+): Promise<ItemVersion["visual"]> {
+  if (!current.visual || current.visual.blobHash === current.blobHash || current.visual.mimeType !== "text/html") return current.visual;
+  const { applyCopyDeckToFace } = await import("@isocan/core/copy-deck");
+  const visualHtml = (await ctx.client.downloadBlob(canvasId, current.visual.blobHash)).toString("utf8");
+  const visualOut = applyCopyDeckToFace(deck, visualHtml, edits);
+  if (!visualOut.ok) throw new Error(`"${label}": ${visualOut.reason}`);
+  const filename = current.visual.filename ?? current.filename;
+  const up = await ctx.client.uploadBlob(canvasId, Buffer.from(visualOut.html, "utf8"), "text/html", filename);
+  return { blobHash: up.blobHash, mimeType: "text/html", filename, size: up.size };
+}
+
+/**
+ * **N voices for a screen's words** — `isocan words vary <item>` (copy-edit
+ * phase 2, journey scenes 1 and 6).
+ *
+ * Each voice is a whole-screen set of string edits with a stance and a why,
+ * and lands as a `/variation` child: an `item.add` with `parent=<item>`,
+ * titled "<title> — <stance>", whose file is the screen with only those words
+ * changed (spliced here for plain HTML; rendered by the module that owns a
+ * wireframe). All N in one op group, so one undo takes them back, and
+ * `isocan choose <variant>` folds the winner home. `--from` takes voices an
+ * agent wrote itself, in the same shape, and generates nothing; otherwise ONE
+ * text-model call asks for all N (`copyVariantsRequest`), and without a key on
+ * this machine the voices are placeholder words, said as such. Either way the
+ * answer is held to `checkCopyVariants` before anything lands.
+ */
+wordsCommand
+  .command("vary <item>")
+  .description("N copy variants of a screen — each a parent= variation titled with its stance and carrying its why, words only; --from voices.json takes ones you wrote")
+  .option("--n <n>", "how many voices (default 3; with --from, the file's count)")
+  .option("--brief <text>", "what the voices are for — \"shorter, for a first-time buyer\"")
+  .option("--from <file>", "voices you wrote: { \"variants\": [{ \"stance\", \"why\", \"edits\": [{ \"address\", \"to\" }] }] } — nothing is generated")
+  .option("--by <name>", "who wrote the words, with --from (recorded on a wireframe's spec; default agent)")
+  .action(
+    run(async (ref: string, opts: { n?: string; brief?: string; from?: string; by?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      const current = item.versions.find((v) => v.id === item.currentVersionId);
+      if (!current || current.mimeType !== "text/html") {
+        throw new Error(`"${item.title || item.id}" is ${current ? current.mimeType : "empty"} — \`words vary\` varies HTML screens`);
+      }
+      const { applyCopyDeck, copyDeck } = await import("@isocan/core/copy-deck");
+      const { MAX_COPY_VARIANTS, checkCopyVariants, copyVariantOps, copyVariantsRequest, placeholderCopyVariants } = await import("@isocan/core/copy-variants");
+      const n = opts.n === undefined ? undefined : Number(opts.n);
+      if (n !== undefined && (!Number.isInteger(n) || n < 1 || n > MAX_COPY_VARIANTS)) throw new Error(`--n must be a whole number from 1 to ${MAX_COPY_VARIANTS} — got: ${opts.n}`);
+      const html = (await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8");
+      const deck = copyDeck(html);
+      const label = truncate(item.title || item.id, 24);
+      if (deck.unfleshed) throw new Error(`"${label}" is a wireframe drawing bars — \`isocan wire flesh ${item.id}\` gives it words first`);
+      if (deck.strings.length === 0) throw new Error(`"${label}" has no words to vary`);
+      const writer = deck.kind === "html" ? null : CLI_MODULES.find((m) => m.copy?.kind === deck.kind)?.copy?.variant;
+      if (deck.kind !== "html" && !writer) throw new Error(`"${label}" is a ${deck.kind} screen and no loaded module writes its variants`);
+
+      // The voices: an agent's own file, else ONE call for all N, else placeholder words said as such.
+      let raw: unknown;
+      // `words` has a `--by` of its own and commander hands it a `--by` written after `vary`.
+      let by = opts.by ?? (cmd.parent?.opts() as { by?: string } | undefined)?.by ?? "agent";
+      let placeholder = false;
+      if (opts.from) {
+        try {
+          raw = JSON.parse(await fs.readFile(opts.from, "utf8"));
+        } catch (error) {
+          throw new Error(`${opts.from}: ${(error as Error).message}`);
+        }
+      } else {
+        const asked = n ?? 3;
+        await narrate(ctx, p.id, { activity: { kind: "working", itemId: item.id }, cursor: itemCenter(item), status: `writing ${asked} voices for "${label}"…` });
+        // This machine's text key, read now: ISOCAN_TEXT_API_KEY, else keys.json's
+        // Anthropic, else its OpenAI key (keys phase 1; `isocan keys set anthropic`).
+        const { resolveTextKey } = await import("@isocan/core/keystore");
+        const text = resolveTextKey();
+        if (text) {
+          const { envTextGenerator } = await import("@isocan/core/jev");
+          const generator = envTextGenerator({ apiKey: text.key, provider: text.provider, ...(text.model ? { model: text.model } : {}) });
+          const { prompt, schema } = copyVariantsRequest(deck, asked, opts.brief);
+          raw = await generator.generateJson(prompt, schema);
+          by = generator.name;
+        } else {
+          raw = placeholderCopyVariants(deck, asked);
+          by = "placeholder words";
+          placeholder = true;
+          console.error("no text model on this machine (no ISOCAN_TEXT_API_KEY, and no key from `isocan keys set anthropic`) — these are PLACEHOLDER words, not written copy; write your own voices and pass --from voices.json");
+        }
+      }
+      const checked = checkCopyVariants(deck, raw, opts.from && n === undefined ? undefined : (n ?? 3));
+      if (!checked.ok) throw new Error(`${opts.from ?? "the text model's answer"}: ${checked.reason}`);
+
+      // Each voice's file — the screen with only its words changed — uploaded before anything is sent.
+      const made = [];
+      for (const variant of checked.variants) {
+        let file: { html: string; properties?: Record<string, string> };
+        let visual: ItemVersion["visual"];
+        if (writer) {
+          file = await writer(html, variant.edits, by, item.id);
+        } else {
+          const out = applyCopyDeck(html, variant.edits);
+          if (!out.ok) throw new Error(`"${variant.stance}": ${out.reason}`);
+          file = { html: out.html };
+          visual = await rewordVisualFace(ctx, p.id, current, deck, variant.edits, label);
+        }
+        const upload = await ctx.client.uploadBlob(p.id, Buffer.from(file.html, "utf8"), "text/html", current.filename);
+        made.push({
+          itemId: newItemId(),
+          variant,
+          version: { id: newVersionId(), blobHash: upload.blobHash, mimeType: "text/html", filename: current.filename, size: upload.size, ...(visual ? { visual } : {}) },
+          ...(file.properties ? { properties: file.properties } : {}),
+        });
+      }
+      const ops = copyVariantOps(snapshot.canvas, item, made);
+      const group = newGroupId();
+      for (const op of ops) await sendOp(ctx, p.id, op, group);
+
+      const rows = ops.map((op, i) => ({ itemId: op.itemId, title: op.title!, stance: checked.variants[i]!.stance, why: checked.variants[i]!.why, changed: checked.variants[i]!.edits.map((e) => e.address) }));
+      if (ctx.json) return printJson({ source: item.id, kind: deck.kind, by, placeholder, group, variants: rows });
+      for (const r of rows) console.log(`${r.itemId}  ${r.title} — ${r.why} (${r.changed.length} string${r.changed.length === 1 ? "" : "s"})`);
+      console.log(
+        `${rows.length} variant${rows.length === 1 ? "" : "s"} of "${label}" by ${by}${placeholder ? " (placeholder)" : ""}, words only — ` +
+          `\`isocan diff <variant> --source\` shows one, \`isocan choose <variant>\` folds the winner home, \`isocan undo\` takes all ${rows.length} back`,
+      );
     }),
   );
 
@@ -9291,6 +9416,9 @@ registerPersonalContext(context, ctxOf);
 // registry of agents. Its body is `bench.ts`, because this file is the list of
 // verbs and every verb that keeps its body here makes the list harder to read.
 registerBench(program, ctxOf);
+
+// ---------- model keys: `registerKeys`, in keys.ts (keys phase 1) ----------
+registerKeys(program);
 
 /**
  * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,

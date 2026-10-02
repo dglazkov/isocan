@@ -1514,6 +1514,97 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "copy-vary",
+    /**
+     * **Three voices for a screen, from the web** (copy-edit phase 2, journey
+     * scene 1). Right-click a screen, *Vary the copy…*, ask for three: three
+     * variations land under it, each `parent=` the screen and titled with its
+     * stance, words only. This run's daemon holds no text model, so they are
+     * placeholder voices and the notice bar says so — the path is the same.
+     * Then *Choose this variation* on one: the screen now says that voice's
+     * words, and the three are gone to the trash.
+     */
+    what: "Vary the copy… lands three parent= voices under a screen, and choosing one rewords the screen and clears the rest",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme copy vary");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-copy-journey", ISOCAN_HARNESS: "test", ISOCAN_TEXT_API_KEY: "" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Copy CLI");
+      const spot = await openSpot(rig, 300, 220);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 10 - world.left) / world.scale), wy = Math.round((spot.y + 10 - world.top) / world.scale);
+      const file = path.join(rig.home, "acme-checkout.html");
+      writeFileSync(file, `<!doctype html><html><head><title>Acme checkout</title></head><body><h1>Review your order</h1><p>Two items from Acme.</p><button>Pay now</button></body></html>`);
+      const source = runCli("--canvas", id, "add", file, "--title", "Acme checkout", "--at", `${wx},${wy}`, "--size", "220x140").itemId;
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      await until(b, `!!document.querySelector(${sel(source)})`, "the screen to arrive on the canvas");
+
+      const mouse = (type, x, y, button = "left") => b.send("Input.dispatchMouseEvent", { type, x, y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+      /** A real right-click on a card's own frame (its lower-left edge: the middle is the page it shows), then a real press on a row by its words. */
+      const fromMenu = async (itemId, label) => {
+        const at = await b.ev(`(() => { const r = document.querySelector(${sel(itemId)}).getBoundingClientRect(); return { x: Math.round(r.left + 3), y: Math.round(r.bottom - 3) }; })()`);
+        await mouse("mouseMoved", at.x, at.y, "none");
+        await mouse("mousePressed", at.x, at.y, "right");
+        await mouse("mouseReleased", at.x, at.y, "right");
+        const row = `[...document.querySelectorAll(".context-menu button")].find((el) => el.textContent.trim().startsWith(${JSON.stringify(label)}))`;
+        await until(b, `!!${row}`, `the item menu, offering "${label}"`, 4000);
+        const r = await b.ev(`(() => { const r = ${row}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        await mouse("mousePressed", r.x, r.y);
+        await mouse("mouseReleased", r.x, r.y);
+      };
+      const children = () => {
+        const all = runCli("--canvas", id, "ls");
+        return (Array.isArray(all) ? all : all.items ?? []).filter((i) => i.id !== source && String(i.title).startsWith("Acme checkout — "));
+      };
+
+      await fromMenu(source, "Vary the copy…");
+      await until(b, `!!document.querySelector(".vary-copy input[type=number]")`, "the Vary the copy dialog");
+      const asked = await b.ev(`document.querySelector(".vary-copy input[type=number]").value`);
+      if (asked !== "3") throw new Error(`the dialog asks for ${asked} voices by default, not 3`);
+      await rig.click(".vary-copy button[type=submit]", "the Write 3 voices button");
+      await until(b, `!document.querySelector(".vary-copy")`, "the dialog to close once the voices land", 15000);
+      let made = [];
+      const deadline = Date.now() + 10000;
+      while (made.length < 3 && Date.now() < deadline) { await sleep(200); made = children(); }
+      if (made.length !== 3) throw new Error(`expected 3 voices under the screen, found ${made.length}: ${JSON.stringify(made.map((i) => i.title))}`);
+      const shown = await b.ev(`document.querySelector(".notice, [role=status]")?.textContent ?? ""`);
+      for (const v of made) {
+        const item = runCli("--canvas", id, "show", v.id);
+        if (item.properties?.parent !== source) throw new Error(`"${v.title}" is not parent=${source}: ${JSON.stringify(item.properties)}`);
+        if (!item.properties?.copyStance) throw new Error(`"${v.title}" carries no stance`);
+      }
+      const original = runCli("--canvas", id, "words", source).strings.map((s) => s.text);
+      const pick = made[0];
+      const picked = runCli("--canvas", id, "words", pick.id).strings.map((s) => s.text);
+      if (JSON.stringify(picked) === JSON.stringify(original)) throw new Error(`"${pick.title}" says the same words as the screen`);
+      if (picked.length !== original.length) throw new Error(`"${pick.title}" has ${picked.length} strings, the screen ${original.length} — not words only`);
+
+      await until(b, `!!document.querySelector(${sel(pick.id)})`, `"${pick.title}" to be drawn`);
+      // The three arrive selected (a right-click inside a selection is a menu for all of it), so let them go first.
+      await rig.press("Escape");
+      await until(b, `document.querySelectorAll(".item.selected").length === 0`, "the new voices to be let go", 2000);
+      await b.ev(`document.querySelector(${sel(pick.id)}).scrollIntoView?.({ block: "nearest" }), true`);
+      await fromMenu(pick.id, "Choose this variation");
+      let now = original;
+      const folded = Date.now() + 10000;
+      while (JSON.stringify(now) !== JSON.stringify(picked) && Date.now() < folded) { await sleep(200); now = runCli("--canvas", id, "words", source).strings.map((s) => s.text); }
+      if (JSON.stringify(now) !== JSON.stringify(picked)) throw new Error(`choosing "${pick.title}" did not reword the screen: ${JSON.stringify(now)}`);
+      const left = children();
+      if (left.length !== 0) throw new Error(`the voices are still on the canvas after choosing: ${JSON.stringify(left.map((i) => i.title))}`);
+      return { voices: made.map((v) => v.title), chose: pick.title, words: now, notice: shown };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { Agent, fetch as undiciFetch } from "undici";
 import { afterAll, afterEach, beforeEach } from "vitest";
@@ -63,6 +66,19 @@ delete process.env.ISOCAN_HOME_URL;
  * else — which that file also does.
  */
 process.env.ISOCAN_DEFAULT_HOME = "";
+
+/**
+ * **No test spends the developer's own model keys** (keys phase 1). A CLI
+ * code path that resolves a key with no home of its own reads
+ * `~/.isocan/keys.json` — the person's real one, in an in-process test — so
+ * a developer who had run `isocan keys set typesafe` would watch the suite
+ * call the real Jev. `ISOCAN_KEYS_HOME` moves that default to an empty
+ * directory for this worker and every CLI it spawns. A test about keys sets
+ * its own.
+ */
+const noKeys = mkdtempSync(path.join(os.tmpdir(), "isocan-keys-none-"));
+process.env.ISOCAN_KEYS_HOME = noKeys;
+afterAll(() => rmSync(noKeys, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
 /**
  * And this worker dies when vitest does. Test files run in forked children, and

@@ -160,6 +160,12 @@ export const DEEP: readonly DeepFile[] = [
   // reads every import in it and spawns its bundled CLI and both scripts.
   // 12.4 s measured, nearly all of it the build before the first case.
   { file: "test/release-tree.test.ts", secs: 12.4 },
+  // Copy variants (copy-edit phase 2): landed from an agent's file and as
+  // placeholders, refused, chosen and undone — and, from keys phase 1, a key
+  // stored with `isocan keys set` spent by `words vary` against a fake
+  // provider. Three cases, sixteen spawns; 7.3 s with two, 10.6 s measured
+  // on 2 October with the third, so it left the fast lane.
+  { file: "packages/cli/test/words-vary.test.ts", secs: 10.6 },
 ];
 
 /**
@@ -195,6 +201,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/migration.test.ts", secs: 9.8, why: "left the deep lane on the measurement that built this list — recorded at 11s, measured at 9.4" },
   { file: "packages/cli/test/correspondence.test.ts", secs: 9.9, why: "two cases, two walks — and the closest file to the line, so the one to watch" },
   { file: "packages/cli/test/grid.test.ts", secs: 9.4, why: "a single case that walks once" },
+  { file: "packages/cli/test/keys.test.ts", secs: 6.9, why: "keys phase 1: a dozen short walks of `isocan keys` — no daemon knock — plus one in-process daemon for the no-restart proof; measured 2 October" },
   { file: "packages/cli/test/tools.test.ts", secs: 7.7, why: "three cases sharing one daemon" },
   { file: "packages/cli/test/panels.test.ts", secs: 9.3, why: "three cases, the tools file's shape; 18 September, and NOT measured on the run that built this list — it is 16.4s on the machine where tools.test.ts is 13.6s, scaled by that anchor to the 7.7 recorded there. The closest file to the line after correspondence, so it is one to re-measure rather than trust" },
   { file: "packages/web/test/choose.test.ts", secs: 5.4, why: "two cases on one daemon, nine spawns: the item menu's \"Choose this variation\" held equal to `isocan choose`, and one undo of it" },
@@ -203,6 +210,8 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/rehome.test.ts", secs: 7.3, why: "eight cases, one command each" },
   { file: "packages/cli/test/words.test.ts", secs: 3.9, why: "a single case, eight spawns: the copy deck read, applied, refused stale and undone on plain HTML; measured 2 October" },
   { file: "packages/modules/wireframe/test/words-cli.test.ts", secs: 3.4, why: "a single case, five spawns: the copy deck applied to a wireframe through its spec, refused stale and undone; measured 2 October" },
+  { file: "packages/web/test/varycopy.test.ts", secs: 4.3, why: "three cases, eight spawns: Vary the copy… held to the CLI's words vary, landed item for item and byte for byte; measured 2 October" },
+  { file: "packages/modules/wireframe/test/words-vary-cli.test.ts", secs: 4.0, why: "a single case, seven spawns: wire copy variants rendered through the spec, kept, chosen and undone; measured 2 October" },
   { file: "packages/cli/test/agentmark.test.ts", secs: 7.8, why: "three cases, a handful of spawns each: `agent mark` over the real binary, owner and stranger; measured 30 September" },
   { file: "packages/cli/test/runtimemodules.test.ts", secs: 6.0, why: "three cases" },
   { file: "packages/cli/test/heatmap.test.ts", secs: 5.9, why: "a single case" },

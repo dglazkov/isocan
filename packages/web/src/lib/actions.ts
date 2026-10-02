@@ -63,6 +63,11 @@ export interface Action {
 }
 
 const onCanvas = (ctx: ActionContext) => ctx.canvasId !== null;
+/** An item whose showing version is HTML — a screen whose words can be varied. */
+const isScreen = (id: string) => {
+  const item = useCanvasStore.getState().canvas?.items[id];
+  return item?.versions.find((v) => v.id === item.currentVersionId)?.mimeType === "text/html";
+};
 const withSelection = (ctx: ActionContext) => ctx.selection.length > 0;
 
 /** Everything the launcher can do, grouped in the order it shows them. */
@@ -312,6 +317,16 @@ export const ACTIONS: readonly Action[] = [
         setNotice(err.message),
       );
     },
+  },
+  {
+    // Copy-edit phase 2: N voices for one screen's words, as variations — `isocan words vary`'s door.
+    id: "vary-copy",
+    name: "Vary the copy…",
+    hint: "write voices for the selected screen's words, each a variation",
+    group: "Canvas",
+    writes: true,
+    available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1 && isScreen(ctx.selection[0]!),
+    run: (ctx) => void import("../components/VaryCopy.tsx").then((m) => m.openVaryCopy({ canvasId: ctx.canvasId!, actor: ctx.actor, itemId: ctx.selection[0]! })),
   },
   {
     id: "workbench",

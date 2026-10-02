@@ -22,7 +22,10 @@
     "./colour": "./src/colour.ts",
     "./jev": "./src/jev.ts",
     "./text": "./src/text.ts",
+    "./keys": "./src/keys.ts",
+    "./keystore": "./src/keystore.ts",
     "./copy-deck": "./src/copy-deck.ts",
+    "./copy-variants": "./src/copy-variants.ts",
     "./chatclean": "./src/chatclean.ts",
     "./diff": "./src/diff.ts",
     "./voice-dsp": "./src/voice-dsp.ts"

@@ -471,7 +471,9 @@ HOW MANY: the first argument if it is a number, otherwise three.
 
 HOW THEY SHOULD DIFFER: the rest of the argument. If it is empty, vary the
 thing that actually carries the design — layout and hierarchy — and not the
-palette, and say that is what you chose.
+palette, and say that is what you chose. If they asked for different WORDS
+only, use \`isocan words vary <item> --n <count>\` instead of rewriting files:
+it changes the words and nothing else, and makes the same parent= children.
 
 For each variation:
 - Build a REAL alternative, not a recolour. Two variations that differ by a

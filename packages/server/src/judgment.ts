@@ -1,4 +1,6 @@
 import { JUDGMENT_PER_MINUTE, JUDGMENT_UPSTREAM } from "@isocan/core";
+import { resolveKey } from "@isocan/core/keystore";
+import { warnRefusedKeys } from "./text.ts";
 
 /**
  * **The home's judge** — `POST /api/judgment`'s other half (`@isocan/core`'s
@@ -10,9 +12,11 @@ import { JUDGMENT_PER_MINUTE, JUDGMENT_UPSTREAM } from "@isocan/core";
  * home's key as a bearer token, and the judge's answer comes back unchanged.
  * No prompt of its own, no second vendor, no shaping of the answer — so what
  * the web composes through it is exactly what the CLI composes with a key of
- * its own. The key is read per call (a secret mounted into the environment
- * can be rotated without a restart) and is scrubbed from every word this
- * sends back, including the judge's own error bodies.
+ * its own. The key is read per call — `TYPESAFE_API_KEY`, else this
+ * machine's `keys.json` (`@isocan/core/keystore`), so a secret mounted into
+ * the environment can be rotated and a key set with `isocan keys set
+ * typesafe` is used, both without a restart — and is scrubbed from every word
+ * this sends back, including the judge's own error bodies.
  *
  * The rate limit is per badge and deliberately small: a flow is ~25 calls in
  * a few seconds, so sixty a minute lets a person compose and restyle, and
@@ -35,8 +39,10 @@ const JUDGE_MODEL = "jev-latest";
  * the real vendor, and must still prove the refusals that depend on all three.
  */
 export interface JudgmentOptions {
-  /** The key, read per call. Default: `TYPESAFE_API_KEY` from the environment. */
+  /** The key, read per call. Default: `resolveKey("typesafe")` — `TYPESAFE_API_KEY`, else `keys.json` under `keysHome`. */
   key?: () => string | undefined;
+  /** Whose `keys.json` the default key reads: the daemon's home. Default `ISOCAN_HOME`, else `~/.isocan`. */
+  keysHome?: string;
   fetch?: typeof fetch;
   url?: string;
   /** Judgments per badge per minute. Default `JUDGMENT_PER_MINUTE`. */
@@ -64,7 +70,7 @@ export class Judge {
   constructor(private readonly opts: JudgmentOptions = {}) {}
 
   private key(): string | undefined {
-    const raw = (this.opts.key ?? (() => process.env.TYPESAFE_API_KEY))();
+    const raw = (this.opts.key ?? (() => warnRefusedKeys(() => resolveKey("typesafe", this.opts.keysHome ? { home: this.opts.keysHome } : {})?.key)))();
     return raw?.trim() || undefined;
   }
 
@@ -87,9 +93,8 @@ export class Judge {
   }
 
   /** Words that may leave this home: the key, wherever it appears, is not among them. */
-  private scrub(text: string): string {
-    const key = this.key();
-    return key ? text.split(key).join("[key]") : text;
+  private scrub(text: string, key: string): string {
+    return text.split(key).join("[key]");
   }
 
   /**
@@ -112,7 +117,7 @@ export class Judge {
           body,
         });
       } catch (error) {
-        return { status: 502, body: { error: this.scrub(`the judge could not be reached: ${(error as Error).message}`), code: JUDGMENT_UPSTREAM } };
+        return { status: 502, body: { error: this.scrub(`the judge could not be reached: ${(error as Error).message}`, key), code: JUDGMENT_UPSTREAM } };
       }
       if ((res.status === 429 || res.status === 529) && attempt < backoff.length) {
         await new Promise((r) => setTimeout(r, backoff[attempt]));
@@ -127,13 +132,13 @@ export class Judge {
       }
       if (res.ok && parsed && typeof parsed === "object") {
         // The answer's own bytes, unchanged — unless they somehow carry the key.
-        return { status: 200, body: text.includes(key) ? JSON.parse(this.scrub(text)) : parsed };
+        return { status: 200, body: text.includes(key) ? JSON.parse(this.scrub(text, key)) : parsed };
       }
       const detail = (parsed as { detail?: unknown } | null)?.detail;
       const said = detail === undefined ? "" : `: ${typeof detail === "string" ? detail : JSON.stringify(detail)}`;
       return {
         status: 502,
-        body: { error: this.scrub(`the judge answered ${res.status}${said}`), code: JUDGMENT_UPSTREAM, status: res.status },
+        body: { error: this.scrub(`the judge answered ${res.status}${said}`, key), code: JUDGMENT_UPSTREAM, status: res.status },
       };
     }
   }

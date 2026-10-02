@@ -4,7 +4,7 @@ import { newGroupId, newVersionId } from "@isocan/core";
 import type { CanvasContents } from "@isocan/core";
 import { wireCopyFile } from "@isocan/core/copy-deck";
 import type { CliHost, CopyWriter } from "@isocan/cli/modulehost";
-import { cliAnswerer, cliPort } from "./cli-port.ts";
+import { cliAnswerer, cliPort, localTextKey } from "./cli-port.ts";
 import { PACKS } from "./content/packs.ts";
 import { applyCopy, copyOf, type CopyFile } from "./content/flesh-spec.ts";
 import { blockContentSchema, copyAiOnCanvas, nameFlowOnCanvas, resolveTextGenerator, validateCopyPayload } from "./copy-schema.ts";
@@ -47,7 +47,7 @@ async function screensFor(host: CliHost, snapshot: { canvas: unknown }, all: Scr
  * **The one writer of a wireframe's words**: validate a copy file against
  * the screen, apply it as `source: "copy"` by `by`, re-render, and land one
  * version plus any kept-flow prototype rebuilt — one op group, one undo.
- * `wire copy --apply` and `isocan copy <screen> --apply` (the copy deck,
+ * `wire copy --apply` and `isocan words <item> --apply` (the copy deck,
  * through `wireCopyWriter`) both come here.
  */
 export async function writeWireCopy(
@@ -73,7 +73,7 @@ export async function writeWireCopy(
 }
 
 /**
- * **`isocan copy <screen> --apply` on a wireframe** (copy-edit phase 1). The
+ * **`isocan words <item> --apply` on a wireframe** (copy-edit phase 1). The
  * deck's wire addresses are `wire copy`'s word paths, so the edits become a
  * copy file (`wireCopyFile`, which refuses a stale string by name) and go
  * through the same writer as `wire copy --apply`.
@@ -176,6 +176,7 @@ export function registerFlesh(host: CliHost, wire: Command): void {
           const gen = resolveTextGenerator({
             seed: Number(opts.seed ?? 1),
             useStub: opts.answerer === "stub",
+            text: localTextKey(),
           });
           const r = await copyAiOnCanvas(port, snapshot.canvas, all, screens, gen, {
             ...(opts.brief ? { brief: opts.brief } : {}),
@@ -255,6 +256,7 @@ export function registerFlesh(host: CliHost, wire: Command): void {
         const gen = resolveTextGenerator({
           seed: Number(opts.seed ?? 1),
           useStub: opts.answerer === "stub",
+          text: localTextKey(),
         });
         const r = await nameFlowOnCanvas(port, snapshot.canvas, all, screens, gen, {
           ...(opts.request ? { request: opts.request } : {}),

@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { CliHost } from "@isocan/cli/modulehost";
-import { cliAnswerer, cliPort } from "./cli-port.ts";
+import { cliAnswerer, cliPort, localTextKey } from "./cli-port.ts";
 import {
   EDIT_KINDS,
   editWireOnCanvas,
@@ -103,7 +103,7 @@ export function registerEditAndWhy(host: CliHost, wire: Command): void {
             ...(screenId ? { screenId } : {}),
             ...(explicitEdit ? { edit: explicitEdit } : {}),
             // A content edit's words come from the text generator, as `wire copy --ai`'s do: the home's key, or the stub.
-            generator: resolveTextGenerator({ seed, useStub: opts.answerer === "stub" }),
+            generator: resolveTextGenerator({ seed, useStub: opts.answerer === "stub", text: localTextKey() }),
           });
 
           if (ctx.json) {

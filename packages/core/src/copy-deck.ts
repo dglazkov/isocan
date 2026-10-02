@@ -419,7 +419,7 @@ export function checkCopyEdits(deck: CopyDeck, edits: readonly CopyEdit[]): { ok
  */
 export function applyCopyDeck(html: string, edits: readonly CopyEdit[]): CopyApplyOutcome {
   if (embeddedWire(html)) {
-    return { ok: false, reason: "this is a wireframe: its words live in its spec, and the wireframe module writes them (`isocan copy <screen> --apply` routes there)" };
+    return { ok: false, reason: "this is a wireframe: its words live in its spec, and the wireframe module writes them (`isocan words <item> --apply` routes there)" };
   }
   const located = locateHtml(html);
   const deck: CopyDeck = { kind: "html", strings: located };
@@ -434,6 +434,22 @@ export function applyCopyDeck(html: string, edits: readonly CopyEdit[]): CopyApp
   let out = html;
   for (const s of splices.sort((a, b) => b.start - a.start)) out = out.slice(0, s.start) + s.text + out.slice(s.end);
   return { ok: true, html: out, changed: checked.edits.map((e) => e.address) };
+}
+
+/**
+ * **The same edits on an item's visual face** — the inlined-assets HTML some
+ * versions carry beside their source. It must hold the same words in the same
+ * order (same text, same role, string by string), and then each edit lands on
+ * the face's string at the same place in the deck; otherwise it is refused
+ * rather than guessed. `isocan words --apply`, `words vary` and *Vary the
+ * copy…* all reword a face through here.
+ */
+export function applyCopyDeckToFace(deck: CopyDeck, faceHtml: string, edits: readonly CopyEdit[]): CopyApplyOutcome {
+  const face = copyDeck(faceHtml).strings;
+  const same = face.length === deck.strings.length && face.every((s, i) => s.text === deck.strings[i]!.text && s.role === deck.strings[i]!.role);
+  if (!same) return { ok: false, reason: "its visual face's words differ from its source — `isocan edit` it instead" };
+  const at = new Map(deck.strings.map((s, i) => [s.address, face[i]!.address]));
+  return applyCopyDeck(faceHtml, edits.map((e) => ({ ...e, address: at.get(e.address) ?? e.address })));
 }
 
 /** The `wire copy --apply` file a set of wire edits is: `{ title?, bar?, slots: { slot: { path: words } } }`. */
@@ -470,13 +486,13 @@ export function wireCopyFile(html: string, edits: readonly CopyEdit[]): { ok: tr
 }
 
 /**
- * Read an apply file: the deck as `isocan copy --json` printed it, with a
+ * Read an apply file: the deck as `isocan words <item> --json` printed it, with a
  * `to` beside each string that should change — or a bare array of
  * `{ address, text, to }`. Strings without a `to` are left alone.
  */
 export function parseCopyEdits(raw: unknown): CopyEdit[] {
   const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" && Array.isArray((raw as { strings?: unknown }).strings) ? (raw as { strings: unknown[] }).strings : null;
-  if (!list) throw new Error('a copy deck is { "strings": [{ "address", "text", "to" }] } — `isocan copy <item> --json` prints one to edit');
+  if (!list) throw new Error('a copy deck is { "strings": [{ "address", "text", "to" }] } — `isocan words <item> --json` prints one to edit');
   const out: CopyEdit[] = [];
   list.forEach((entry, i) => {
     if (!entry || typeof entry !== "object") throw new Error(`string ${i + 1} is not an object`);

@@ -122,3 +122,19 @@ export function collect(child: ChildProcess, timeoutMs?: number): Promise<Run> {
 export function runCli(args: readonly string[], options: CliOptions): Promise<Run> {
   return collect(spawnCli(args, options));
 }
+
+/**
+ * Run the binary to completion with `input` on its stdin — for a verb that
+ * reads what is piped to it and must never take it from argv (`isocan keys
+ * set`). The child's stdin is a pipe, so `process.stdin.isTTY` is false there,
+ * exactly as it is under `pbpaste | isocan …`.
+ */
+export function runCliWithInput(args: readonly string[], input: string, options: CliOptions): Promise<Run> {
+  const child = spawn(process.execPath, [cliBin, ...args], {
+    env: options.env,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stdin.end(input);
+  return collect(child);
+}

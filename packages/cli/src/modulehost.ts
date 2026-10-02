@@ -116,7 +116,7 @@ export interface CliModule {
  * **Who writes a screen's words, when the screen is not just HTML**
  * (copy-edit phase 1).
  *
- * `isocan copy <item> --apply` splices plain HTML itself (`applyCopyDeck`).
+ * `isocan words <item> --apply` splices plain HTML itself (`applyCopyDeck`).
  * A wireframe's words are its embedded spec's: the rendered text is a join
  * of several words, and the next re-render would undo a splice. So the
  * module that renders a kind writes its words — the same writer its own
@@ -128,6 +128,13 @@ export interface CopyWriter {
   /** The `CopyDeck.kind` this writes: `"wire"`. */
   kind: string;
   apply: (host: CliHost, ctx: Ctx, canvasId: string, itemId: string, edits: readonly CopyEdit[], by: string) => Promise<CopyWritten>;
+  /**
+   * A copy variant's file (`isocan words vary`, copy-edit phase 2): the
+   * screen's HTML with one voice's words, as this kind writes them, and the
+   * properties a screen of this kind carries. Nothing is sent — the CLI adds
+   * the variant beside every other one (`copyVariantOps`).
+   */
+  variant?: (html: string, edits: readonly CopyEdit[], by: string, sourceId: string) => Promise<{ html: string; properties: Record<string, string> }>;
 }
 
 export interface CopyWritten {

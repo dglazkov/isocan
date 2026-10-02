@@ -75,7 +75,7 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     // badge, and a canvas nobody holds has no editors to spend on.
     if (!home) await engine.getSnapshot(canvasId);
     if (!judge.available()) {
-      return reply.status(503).send({ error: "this home has no judge — nothing can be asked here (the innkeeper sets TYPESAFE_API_KEY)", code: JUDGMENT_UNAVAILABLE });
+      return reply.status(503).send({ error: "this home has no judge — nothing can be asked here (the innkeeper sets TYPESAFE_API_KEY, or `isocan keys set typesafe` on the machine it runs on)", code: JUDGMENT_UNAVAILABLE });
     }
     if (!judge.take(req.badge!.badgeId)) {
       return reply.status(429).send({ error: "this badge has asked for enough judgments this minute — wait a moment and ask again", code: JUDGMENT_RATE_LIMITED });
@@ -122,7 +122,7 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     // Nothing is written for a canvas that is not here.
     if (!home) await engine.getSnapshot(canvasId);
     if (!textModel.available()) {
-      return reply.status(503).send({ error: "this home has no text model — words can't be written here (the innkeeper sets ISOCAN_TEXT_API_KEY)", code: TEXT_UNAVAILABLE });
+      return reply.status(503).send({ error: "this home has no text model — words can't be written here (the innkeeper sets ISOCAN_TEXT_API_KEY, or `isocan keys set anthropic` on the machine it runs on)", code: TEXT_UNAVAILABLE });
     }
     if (!textModel.take(req.badge!.badgeId)) {
       return reply.status(429).send({ error: "this badge has asked for enough words this minute — wait a moment and ask again", code: TEXT_RATE_LIMITED });

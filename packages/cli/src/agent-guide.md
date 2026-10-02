@@ -145,6 +145,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `canvas new|ls|show|edit|background|archive|place|shot|rm` (rm ⚠), `use` — make, find, bind
 - `home`, `direct`, `setup`, `clone`, `open` — where canvases live, readying a directory
 - `teleport`, `export`, `import`, `blobs` — move, back up, restore, send missing bytes
+- `keys ls|set|rm|test` — model keys on this machine; never shown, env wins
 
 **Sharing** (`sharing`)
 - `share`, `space new|ls|add|remove|rm`, `group new|ls|add|remove|rm` — who may enter
@@ -156,7 +157,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `design workflow|start|brief|receipt|questions|ask|answer|reference|compare|respond|decide|review|craft` — a design request
 - `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
-- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else
+- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -1802,8 +1803,33 @@ version back.
   kept flow's prototype is rebuilt. `wf` names the element the words draw
   in.
 
+### Voices: copy variants
+
+`isocan words vary <item> --n 3 [--brief "<text>"]` writes N **voices** for
+the screen in one text-model call: whole-screen sets of words, each with a
+**stance** of at most five words ("Plain and direct", "Warm") and one line of
+**why**. Each lands as a variation of the screen — `parent=<item>`, titled
+"<title> — <stance>", the stance and why in its `copyStance` and `copyWhy`
+properties — whose file is the screen with only those words changed (a
+wireframe's voice is its spec with new words, rendered, and `wire keep` takes
+it like any variation). All N are one act, so one `undo` takes them back.
+`isocan diff <variant> --source` shows what a voice changed and
+`isocan choose <variant>` folds the winner home.
+
+To write the voices yourself, read the deck with `isocan --json words <item>`
+and pass `--from voices.json`:
+`{ "variants": [{ "stance", "why", "edits": [{ "address", "to" }] }] }`.
+Nothing is generated then; `--by <name>` says who wrote them. Either way the
+voices are checked before anything lands: N of them (`--n`, or the file's
+count), different stances, addresses the screen has, a button still one short
+line, nothing emptied. A refusal names the voice and the string. Without a
+text model on this machine (`ISOCAN_TEXT_API_KEY`), the voices are
+**placeholder words** under stances that say "Placeholder", and the CLI says
+so — write your own with `--from` instead of presenting those.
+
 `/variation 3 try different copy` still works, but it rewrites the file,
-which is how a copy pass drifts layout. For words, use `words`.
+which is how a copy pass drifts layout. For words, use `words` and
+`words vary`.
 
 ## Choosing between variations
 
@@ -3331,6 +3357,32 @@ is answering.
 
 Worth running whenever you have uploaded a lot to a canvas whose home is
 elsewhere, and any time somebody says a screen will not open.
+
+## Model keys on this machine
+
+The judge, the text model and the voice harness spend keys: Typesafe for the
+judge, Anthropic (else OpenAI) for the text model's words, Gemini for voice.
+They live in one file, `~/.isocan/keys.json`, mode 0600 — refused, in a
+sentence, if it is anything looser — and every spender reads it per call, so
+a key set now is used by a running daemon on its next call with no restart.
+
+```sh
+isocan keys                          # each provider: set or not, …abcd, added, what uses it
+pbpaste | isocan keys set anthropic  # from stdin; on a terminal, a hidden prompt
+isocan keys test anthropic           # one cheap call: accepted, or the provider's reason
+isocan keys rm gemini
+```
+
+**Never put a key on the command line** — `isocan keys set anthropic sk-…` is
+refused, because the shell already kept it in its history; rotate that key.
+Nothing prints a key: `ls` shows the last four, `test` scrubs the answer.
+
+**The environment wins.** `TYPESAFE_API_KEY`, `ISOCAN_TEXT_API_KEY` (with
+`ISOCAN_TEXT_PROVIDER`, `ISOCAN_TEXT_MODEL`) and `GEMINI_API_KEY` override
+the file, so CI and a hosted home are unchanged; `ls` says when one does.
+Without `ISOCAN_TEXT_API_KEY`, the text model uses the stored Anthropic key,
+else the stored OpenAI one. A hosted home's keys are its operator's, not
+yours — this file is this machine's only.
 
 <!-- topic: sharing | who may enter — `share`, spaces, groups of people, passes, embeds, badges, and the refusals -->
 

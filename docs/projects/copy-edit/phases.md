@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 2 Oct 2026: phases 0 and 1 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 2, copy variants.**
+**Where we are, 2 Oct 2026: phases 0, 1 and 2 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 3, compare and mix.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -91,7 +91,7 @@ refusal, markup byte-identical outside text); a CLI test of read and apply.
 
 ## Phase 2 — Copy variants
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** *Vary the copy…* and `isocan words vary` write N distinct voices in one generation call and land each as a `parent=` variation, words only — the `copy-vary` journey made three from the web and chose one, and the CLI test proved byte-identical markup, choose, and one undo.
 
 **Outcome:** `isocan words vary <item> --n 3 [--brief] [--from voices.json]`
 and *Vary the copy…* on a screen produce N variants, each a `parent=` variation
@@ -99,6 +99,13 @@ titled with its stance and carrying its reason; words only.
 
 **Proof:** CLI test with the stub generator and with `--from`; a journey that
 varies a screen from the web and chooses one (one undo).
+
+### Trajectory
+
+- **2026-10-02** — One generation call writes all N voices: the schema makes every edit's address an enum of the deck's own, and one validator (`checkCopyVariants`) judges a model's answer and an agent's `--from` file alike — distinct stances, real addresses, a role's shape kept, something changed.
+- **2026-10-02** — A wire variant's spec carries `variantOf`, so after `choose` folds it the source said `variantOf` itself; `wiresOn` now reads a self-reference as no variation rather than teaching `choose` about wires.
+- **2026-10-02** — A second lazy importer of `@isocan/core/jev` reached half the core barrel through one constant import and split the CLI's startup chunk (`--version` 39 → 40 modules); `jev.ts` now spells the code locally, a test holding it equal.
+- **2026-10-02** — With no text model the variants are placeholders, named and said once; `words vary` reads a key stored with `isocan keys` (keys phase 1).
 
 ## Phase 3 — Compare and mix
 

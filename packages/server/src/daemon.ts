@@ -208,10 +208,12 @@ export interface DaemonOptions {
    */
   refusalsNow?: () => number;
   /** The home's judge (`judgment.ts`) — tests hand it a key and a fake
-   * transport; a running home reads `TYPESAFE_API_KEY` per call. */
+   * transport; a running home reads `TYPESAFE_API_KEY`, else its
+   * `keys.json`, per call. */
   judgment?: JudgmentOptions;
   /** The home's text model (`text.ts`) — tests hand it a key and a fake
-   * transport; a running home reads `ISOCAN_TEXT_API_KEY` per call. */
+   * transport; a running home reads `ISOCAN_TEXT_API_KEY`, else its
+   * `keys.json`, per call. */
   text?: TextOptions;
 }
 
@@ -551,8 +553,10 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     servesWorld: options.servesWorld ?? !(host === "127.0.0.1" || host === "::1" || host === "localhost"),
     rc,
     ...(options.signingKeys ? { signingKeys: options.signingKeys } : {}),
-    ...(options.judgment ? { judgment: options.judgment } : {}),
-    ...(options.text ? { text: options.text } : {}),
+    // The two spenders read this daemon's `keys.json` (keys phase 1) — its
+    // home's, not the process's, for the reason `rosterHome` is.
+    judgment: { keysHome: home, ...options.judgment },
+    text: { keysHome: home, ...options.text },
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);
   /**

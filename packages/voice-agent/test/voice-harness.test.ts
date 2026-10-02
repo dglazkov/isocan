@@ -26,6 +26,7 @@ import {
   planVoice,
   enrolmentForVoice,
   notEnrolledLine,
+  forgetVoiceKey,
   readVoiceKey,
   readVoiceLog,
   resolveSpokenRef,
@@ -711,6 +712,19 @@ describe("the key belongs to the harness", () => {
 
     await fs.chmod(file, 0o644);
     await expect(readVoiceKey(home)).rejects.toThrow(/not 600/);
+  });
+
+  it("lives in the machine's keys.json now, and the old voice/key.json moves in on the first read and is removed (keys phase 1)", async () => {
+    const old = path.join(home, "voice", "key.json");
+    await fs.mkdir(path.dirname(old), { recursive: true });
+    await fs.writeFile(old, JSON.stringify({ provider: "gemini", key: "AIza-from-before" }), { mode: 0o600 });
+    await fs.chmod(old, 0o600);
+    expect(voiceKeyFile(home)).toBe(path.join(home, "keys.json"));
+    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-from-before" });
+    await expect(fs.stat(old)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(JSON.parse(await fs.readFile(voiceKeyFile(home), "utf8"))).toMatchObject({ gemini: { key: "AIza-from-before" } });
+    await forgetVoiceKey(home);
+    expect(await readVoiceKey(home)).toBeNull();
   });
 
   it("never refuses a key: any non-empty string is stored, and the provider judges", async () => {

@@ -9,6 +9,7 @@ import { readConfigFile, readMarker, updateConfigFile } from "@isocan/server";
 import { agentSessionOf, machineAgentKey } from "./agent-key.ts";
 import { readRcAgents, upsertRcAgent } from "./rc-rows.ts";
 import { statSync } from "node:fs";
+import { keysFile, migrateVoiceKey, removeKey, resolveKeyAsync, writeKey } from "@isocan/core/keystore";
 import { ApiError, connect, matchRef, type CanvasHandle, type ListedItem } from "@isocan/api";
 import {
   besideBox,
@@ -81,7 +82,8 @@ export {
  *   starts the same file with `--acp` and lets it start this one detached.
  *
  * The key is the harness's, not the page's: it is POSTed once over loopback,
- * stored `0600` under `~/.isocan/voice/key.json`, and never written by the
+ * stored `0600` as the `gemini` entry of `~/.isocan/keys.json` (keys phase 1;
+ * it was `voice/key.json` before, moved in once), and never written by the
  * page anywhere at all. Speech can also be transcribed by the browser's own
  * recogniser when no key is stored, and typed commands take the same path as
  * spoken ones — so the operation pipeline is provable with no key and no
@@ -189,8 +191,9 @@ export const STALE_HARNESS =
 export function voiceDir(home: string): string {
   return path.join(home, "voice");
 }
+/** Where the voice key lives: the machine's one `keys.json` (`@isocan/core/keystore`), under `gemini`. */
 export function voiceKeyFile(home: string): string {
-  return path.join(voiceDir(home), "key.json");
+  return keysFile(home);
 }
 export function voiceServerFile(home: string): string {
   return path.join(voiceDir(home), "server.json");
@@ -322,36 +325,26 @@ export interface VoiceKey {
  * words.
  */
 
-/** The stored key, or null. A file that is not 0600 is refused rather than
- * read: a key that leaked its own permissions is worth telling somebody
- * about, and reading it anyway would hide the one fact worth knowing. */
+/** The stored key, or null — read through the machine's one resolver
+ * (`GEMINI_API_KEY`, else `keys.json`'s `gemini`), after moving the old
+ * `voice/key.json` in once (`migrateVoiceKey`, which removes the old file). A
+ * file that is not 0600 is refused rather than read: a key that leaked its
+ * own permissions is worth telling somebody about, and reading it anyway
+ * would hide the one fact worth knowing. */
 export async function readVoiceKey(home: string): Promise<VoiceKey | null> {
-  const file = voiceKeyFile(home);
-  try {
-    const stat = await fs.stat(file);
-    if ((stat.mode & 0o777) !== 0o600) {
-      throw new Error(`${file} is mode ${(stat.mode & 0o777).toString(8)}, not 600 — refusing to read it`);
-    }
-    const parsed = JSON.parse(await fs.readFile(file, "utf8")) as VoiceKey;
-    if (!parsed?.key || !parsed.provider) return null;
-    return parsed;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw err;
-  }
+  await migrateVoiceKey(home);
+  const found = await resolveKeyAsync("gemini", { home });
+  return found ? { provider: "gemini", key: found.key } : null;
 }
 
+/** Store the voice key as `keys.json`'s `gemini` entry — the same entry `isocan keys set gemini` writes. */
 export async function writeVoiceKey(home: string, value: VoiceKey): Promise<string> {
-  const dir = voiceDir(home);
-  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
-  const file = voiceKeyFile(home);
-  await fs.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  await fs.chmod(file, 0o600); // an existing file keeps its old mode otherwise
-  return file;
+  return writeKey(home, "gemini", value.key);
 }
 
 export async function forgetVoiceKey(home: string): Promise<void> {
-  await fs.rm(voiceKeyFile(home), { force: true });
+  await removeKey(home, "gemini");
+  await fs.rm(path.join(voiceDir(home), "key.json"), { force: true });
 }
 
 /**

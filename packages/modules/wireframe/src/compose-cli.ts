@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Command } from "commander";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { JEV_INPUT_PRICE, type JevResponse } from "./answerer.ts";
-import { cliAnswerer, cliPort } from "./cli-port.ts";
+import { cliAnswerer, cliPort, localJevKey } from "./cli-port.ts";
 import { answeredResponse, pendingRound, requestBlueprint, roundCalls, type RoundCall, type RoundFile } from "./compose.ts";
 import { FlowCanvas, applyRound, composeFlow, costLine, flowsOn, pickFlow, startFlow, styleAt, type OnAsked } from "./flow.ts";
 import { StyleResolver } from "./restyle.ts";
@@ -106,8 +106,8 @@ export function registerCompose(host: CliHost, wire: Command): void {
           return;
         }
         const who = answerer.name === "stub"
-          ? `the stub (seed ${opts.seed})${process.env.TYPESAFE_API_KEY ? "" : " — no TYPESAFE_API_KEY here"}`
-          : answerer.name === "home" ? "Jev through the canvas's home — no TYPESAFE_API_KEY here, so the home's key answers" : "Jev";
+          ? `the stub (seed ${opts.seed})${localJevKey() ? "" : " — no TYPESAFE_API_KEY here, nor a stored typesafe key"}`
+          : answerer.name === "home" ? "Jev through the canvas's home — no TYPESAFE_API_KEY here, nor a stored typesafe key, so the home's key answers" : "Jev";
         const composed = await composeFlow(port, request, answerer, {
           ...(placement ? { placement } : {}),
           say,

@@ -47,6 +47,11 @@ export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never,
   }],
   // Right-click a wire → Style ▸ (style-menu.ts): each pick opens the dialog with `style <name>`.
   menu: styleMenu,
+  // *Vary the copy…* on a wire screen (copy-edit phase 2): its words are its spec's, so each voice is rendered here.
+  copy: {
+    kind: "wire",
+    variant: async (...args) => (await import("./copy-variant.ts")).wireCopyVariant(...args),
+  },
 };
 
 export default wireframeWeb;

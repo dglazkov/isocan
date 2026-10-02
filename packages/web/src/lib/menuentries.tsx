@@ -218,6 +218,10 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       disabled: !one || (one.versions.length < 2 && !parentOf(one)),
       run: () => one && void import("../components/VersionCompare.tsx").then((m) => m.openCompare({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
     },
+    // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary`; the dialog loads on the click.
+    ...(one && version?.mimeType === "text/html"
+      ? [{ label: "Vary the copy…", writes: true, run: () => void import("../components/VaryCopy.tsx").then((m) => m.openVaryCopy({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })) }]
+      : []),
     { separator: "" },
     {
       label: "Copy link",

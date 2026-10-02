@@ -22,8 +22,8 @@
  * that cannot be removed on its own. A subpath (`@isocan/core/jev`) rather
  * than the barrel, so nothing here can reach a first visit's bytes.
  */
-import { JUDGMENT_UNAVAILABLE } from "./judgment.ts";
 import type { TextRequest, TextResponse } from "./text.ts";
+import { textProviderFor } from "./keys.ts";
 
 /** Where Jev answers for a caller holding its own key — the CLI and the measurement scripts; the web never calls it (the home does). */
 export const JEV_URL = "https://api.typesafe.ai/v1/systemone";
@@ -275,8 +275,17 @@ export function jevAnswerer(opts: JevOptions): Answerer {
 
 // ---------- the home
 
-/** The refusal the home gives when it holds no key — `JUDGMENT_UNAVAILABLE`, under the name the composer knows it by. */
-const HOME_HAS_NO_JUDGE = JUDGMENT_UNAVAILABLE;
+/**
+ * The refusal the home gives when it holds no key — `JUDGMENT_UNAVAILABLE`,
+ * under the name the composer knows it by. Spelled here rather than imported
+ * from `judgment.ts`, on purpose: that file is in the barrel and re-exports
+ * `modules.ts`, so one value import made this subpath reach half the barrel,
+ * and a lazy `import("@isocan/core/jev")` (the CLI's `words vary`) split the
+ * barrel chunk in two — one more module for `isocan --version` to load
+ * (`test/cli-bundle.test.ts`). `isNoJudge`'s test holds the two spellings
+ * together.
+ */
+const HOME_HAS_NO_JUDGE = "judgment-unavailable";
 
 /** A question file, as the home's judgment route takes it: Jev's request shape, and the canvas it is for. */
 type HomeQuestion = JevRequest & { canvasId: string };
@@ -868,10 +877,7 @@ export type TextProvider = "anthropic" | "openai";
  * choice, so no existing setup changes meaning.
  */
 export function textProvider(apiKey: string | undefined = textEnv("ISOCAN_TEXT_API_KEY"), named: string | undefined = textEnv("ISOCAN_TEXT_PROVIDER")): TextProvider {
-  const said = named?.toLowerCase();
-  if (said === "anthropic" || said === "claude") return "anthropic";
-  if (said === "openai") return "openai";
-  return apiKey?.startsWith("sk-ant-") ? "anthropic" : "openai";
+  return textProviderFor(apiKey, named);
 }
 
 /** Options for `envTextGenerator`: each overrides the environment. */
@@ -882,7 +888,13 @@ interface EnvTextGeneratorOptions {
   fetch?: typeof globalThis.fetch;
 }
 
-/** The text generator the environment names — the CLI's with a key of its own, and the home's behind `/api/text`. */
+/**
+ * The text generator the environment names — the CLI's with a key of its own,
+ * and the home's behind `/api/text`. Core is isomorphic, so this reads only
+ * the environment; on a machine with stored keys (`~/.isocan/keys.json`) the
+ * node-side callers resolve the key first (`@isocan/core/keystore`'s
+ * `resolveTextKey`) and pass `apiKey`, `provider` and `model` in.
+ */
 export function envTextGenerator(opts: EnvTextGeneratorOptions = {}): TextGenerator {
   const apiKey = opts.apiKey ?? textEnv("ISOCAN_TEXT_API_KEY");
   const provider = opts.provider ?? textProvider(apiKey);

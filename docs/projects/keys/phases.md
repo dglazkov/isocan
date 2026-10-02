@@ -9,7 +9,7 @@ note: "the walk: close the voice harness door, the store and CLI, the settings a
 
 **2 October 2026.** Held to [design.md](design.md).
 
-**Where we are, 2 Oct 2026: phase 0 is CLOSED — the voice harness door refuses cross-site, rebound and non-JSON requests. Next: keys phase 1, the store and the CLI.**
+**Where we are, 2 Oct 2026: phases 0 and 1 are CLOSED — the harness door is shut, and keys live in `~/.isocan/keys.json` behind `isocan keys`. Next: keys phase 2, the settings area.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -39,7 +39,7 @@ requests still work.
 
 ## Phase 1 — The store and the CLI
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** `~/.isocan/keys.json` (0600, atomic, refused if loose) behind one resolver read per call by the judge, the text model, `words vary` and the voice harness; `isocan keys ls|set|rm|test` never shows or takes a key on the command line — proved by a key set on stdin reaching the same running daemon's `/api/text` with no restart, and every output scanned for the value.
 
 **Outcome:** `~/.isocan/keys.json` (0600, dir 0700, refused if not 0600), a
 core provider registry, one resolver (env, then file) used per call by the
@@ -50,6 +50,14 @@ harness's old `voice/key.json` migrated once.
 **Proof:** tests of modes, refusal, env precedence, migration, and that the
 value never appears in output; a real-daemon test that a key set with `isocan
 keys set` is used by `/api/text` with no restart.
+
+### Trajectory
+
+- **2026-10-02** — The resolver's default home gained a test seam (`ISOCAN_KEYS_HOME`, set per worker in test/setup.ts): without it an in-process test would read and spend the developer's real keys once they had run `isocan keys set`.
+- **2026-10-02** — Only the variables isocan already read override the file; an `ANTHROPIC_API_KEY` exported for another tool does not become the text model's key. The daemon reads its own home's keys (`keysHome`), as `rosterHome` does.
+- **2026-10-02** — `voice/key.json` is removed on migration, not renamed: a second copy of a secret is a second thing to leak.
+- **2026-10-02** — Open: `writeKey` is atomic per write but has no lock; two writers at once could lose one.
+- **2026-10-02** — Open: `GEMINI_API_KEY` in the env now overrides the voice key too, so *forget* removes the file entry while a key still resolves.
 
 ## Phase 2 — The settings area
 

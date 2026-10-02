@@ -1,4 +1,5 @@
 import type { CliHost, Ctx } from "@isocan/cli/modulehost";
+import { resolveKey, resolveTextKey } from "@isocan/core/keystore";
 import { homeAnswerer, homeOrStub, jevAnswerer, stubAnswerer, type Answerer } from "./answerer.ts";
 import type { WirePort } from "./port.ts";
 
@@ -34,6 +35,21 @@ export function cliPort(host: CliHost, ctx: Ctx, canvasId: string): WirePort {
   };
 }
 
+/**
+ * **This machine's Jev key** — `TYPESAFE_API_KEY`, else `~/.isocan/keys.json`
+ * (`isocan keys set typesafe`), read now (keys phase 1). A keys.json refused
+ * for its mode throws, in words that say so: on a terminal, the refusal is
+ * the useful answer.
+ */
+export function localJevKey(): string | undefined {
+  return resolveKey("typesafe")?.key;
+}
+
+/** This machine's text-model key, provider and model — `ISOCAN_TEXT_API_KEY`, else keys.json's Anthropic, else its OpenAI key. */
+export function localTextKey(): ReturnType<typeof resolveTextKey> {
+  return resolveTextKey();
+}
+
 /** Where the CLI says which answerer it is using, before it asks. */
 export type Say = (line: string) => void;
 
@@ -44,7 +60,7 @@ export type Say = (line: string) => void;
  * seeded stub, said out loud. An explicit `--answerer home` never falls back.
  */
 export function cliAnswerer(ctx: Ctx, canvasId: string, name: string | undefined, seed: number, say: Say): Answerer {
-  const key = process.env.TYPESAFE_API_KEY;
+  const key = localJevKey();
   const chosen = name ?? (key ? "jev" : "home");
   if (chosen === "stub") return stubAnswerer(seed);
   if (chosen === "jev") return jevAnswerer({ key });

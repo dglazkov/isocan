@@ -35,6 +35,15 @@ import { Modal } from "./Modal.tsx";
  * budget, and why a module cannot open one itself: `DialogFacts` hands it a
  * way to CLOSE, not to open.
  */
+/**
+ * **Ask the home's text model** (`TEXT_ROUTE`) — the one place the web posts
+ * there. The dialog host's `generate` is this, and *Vary the copy…*
+ * (`lib/varycopy.ts`) imports it from here rather than naming the route
+ * itself: a second importer of `@isocan/core/text` would carve that file into
+ * a chunk of its own that the entry must name (copy-edit phase 2, measured).
+ */
+export const postText = (words: unknown): Promise<unknown> => request("POST", TEXT_ROUTE, words);
+
 export function ModuleDialogs({ canvasId, actor }: { canvasId: string; actor: Actor }) {
   const open = useUiStore((s) => s.moduleDialog);
   const close = useUiStore((s) => s.closeModuleDialog);
@@ -55,7 +64,7 @@ export function ModuleDialogs({ canvasId, actor }: { canvasId: string; actor: Ac
     readText: (hash) => fetchBlobText(canvasId, hash),
     getCanvas: () => useCanvasStore.getState().canvas!,
     judge: (question) => request("POST", JUDGMENT_ROUTE, question),
-    generate: (words) => request("POST", TEXT_ROUTE, words),
+    generate: postText,
     notice: (text, problem) => (problem ? setNotice(text) : flashNotice(text, 6000)),
   }), [base, close, canvasId]);
   const bodyRef = useRef<HTMLDivElement>(null);
