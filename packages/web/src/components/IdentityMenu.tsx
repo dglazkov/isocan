@@ -1,5 +1,5 @@
 import { faceMark } from "@isocan/core";
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import {
   adoptIdentity,
@@ -26,6 +26,7 @@ import { YourBench } from "./YourBench.tsx";
 import { VerifyDialog } from "./VerifyDialog.tsx";
 import { canVerifyEmail, useAttestOffer } from "../lib/signin.ts";
 import { RefusalNote, type Refusal, refusalFor } from "./NameTaken.tsx";
+import { AgentsGlyph } from "./Glyphs.tsx";
 
 const THEME_OPTS: { value: ThemePref; label: string }[] = [
   { value: "light", label: "Light" },
@@ -345,6 +346,76 @@ export function IdentityMenu({
           </div>
         </>
       )}
+      {/**
+        * **The doors, above the settings, and drawn as doors** (2 Oct 2026).
+        *
+        * They sat at the foot of the menu as centred grey buttons under the
+        * preferences, and Dion asked whether they should "go more at the top
+        * and be clear they are actions". A centred label is how this app draws
+        * a CHOICE (Theme's segments, the Fold button); a door that opens a
+        * panel is a row in a menu, and the app already has that row: the
+        * context menu's, left-aligned, lit on hover, a glyph in front and a `›`
+        * at the far edge for "this opens something". Every one of these
+        * replaces the menu with a panel, so every one carries the chevron.
+        *
+        * Each row says why you would open it in one quiet line under the label
+        * — not only Prove, which got its line first (multi-identity phase 4)
+        * for the reason that now holds for all five: a label says what the
+        * gesture is, and nobody hovers a menu row to find out why.
+        *
+        * Grouped by whose they are. **You** is this person's own standing —
+        * proving an address is what CREATES a second surface, so it comes
+        * before the list of surfaces (the order it had). **Your agents** is the
+        * bench first, because it needs no canvas and is always here, then the
+        * two doors that mint a pass for this canvas — your own machine before
+        * the cloud, the order a person meets them, and both behind the canvas
+        * guard because a pass names exactly one canvas.
+        */}
+      <div className="identity-menu-head">You</div>
+      <div className="identity-actions">
+        <Action
+          icon={<AddressMark />}
+          label="Prove your address…"
+          note="So your other machines can be you, and so somebody can invite you by email."
+          title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
+          onClick={() => setVerify(true)}
+        />
+        <Action
+          icon={<SurfacesMark />}
+          label="Your surfaces…"
+          note="Every browser and machine that is you; end one from here."
+          title="Every surface that carries your identity — and end one that should not"
+          onClick={() => setSurfaces(true)}
+        />
+      </div>
+      <div className="identity-menu-head">Your agents</div>
+      <div className="identity-actions">
+        <Action
+          icon={<AgentsGlyph size={14} />}
+          label="Your bench…"
+          note="Agents you have, and which ones follow you."
+          title="The agents you have, and whether anything could answer for one right now"
+          onClick={() => setBench(true)}
+        />
+        {canvasId && (
+          <Action
+            icon={<MachineMark />}
+            label="Bring your own agent…"
+            note="Hand an agent on your machine a pass to this canvas."
+            title="Run your own agent on this canvas, from your own machine"
+            onClick={() => setTerminal(true)}
+          />
+        )}
+        {canvasId && (
+          <Action
+            icon={<CloudMark />}
+            label="Run an agent in the cloud…"
+            note="Start one that runs without your machine."
+            title="Run an agent somewhere that doesn't close when your laptop does"
+            onClick={() => setCloud(true)}
+          />
+        )}
+      </div>
       <div className="identity-menu-head">Your color</div>
       <div className="identity-colors" role="group" aria-label="Your color">
         {IDENTITY_COLORS.map((option) => {
@@ -459,87 +530,6 @@ export function IdentityMenu({
           </div>
         </>
       )}
-      {/* Escalation, one click from your own face — "the canvas teaches its
-          own escalation", so nobody is ever sent to documentation to find out
-          how to get their own agent working here. Named for what the person
-          came for (their agent on this canvas) and not for the surface they
-          pass through on the way (a terminal). */}
-      {canvasId && (
-        <button
-          className="btn identity-terminal"
-          title="Run your own agent on this canvas, from your own machine"
-          onClick={() => setTerminal(true)}
-        >
-          Bring your own agent…
-        </button>
-      )}
-      {/* Scene 6's sibling door, and it sits directly under Scene 5's because
-          the journey groups them by what they are: both are *extend my reach*,
-          minted from an admitted session. The order is the order a person
-          meets them — your own machine is the obvious answer, and the cloud is
-          what you reach for once you have watched a lid take your agent with
-          it. */}
-      {canvasId && (
-        <button
-          className="btn identity-terminal"
-          title="Run an agent somewhere that doesn't close when your laptop does"
-          onClick={() => setCloud(true)}
-        >
-          Run an agent in the cloud…
-        </button>
-      )}
-      {/* Proving an address — phase 9 stage 2, and it belongs on this menu for
-          the reason the whole menu exists: what this browser has proved is a
-          fact about how it is connected here. Above "Your surfaces…" because
-          it is the thing that CREATES a second surface of one person, and
-          reading a list of your surfaces makes more sense after you have one.
-
-          Shown unconditionally rather than only on a home that has borrowed an
-          attester: the panel behind it says, in one sentence, that this home
-          has borrowed nothing and that the link is how sharing works. Hiding
-          the entry would make a person hunt for a control that is deliberately
-          absent, which is a worse answer than being told.
-
-          The reason is written under the label, not only in the tooltip
-          (multi-identity phase 4). The label says what the gesture is and
-          nothing about why; a person on their first machine has no cause to
-          hover over it, and the why is what would make them do it before a
-          second machine needs it done. */}
-      <div className="identity-prove-entry">
-        <button
-          className="btn identity-terminal"
-          title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
-          onClick={() => setVerify(true)}
-        >
-          Prove your address…
-        </button>
-        <div className="share-link-note">
-          So your other machines can be you, and so somebody can invite you by email.
-        </div>
-      </div>
-      {/* Kill-a-badge, one click from your own face. It is above Leave on
-          purpose: both end something, and the one that ends a holder's
-          recognition everywhere should not sit under the one that only
-          forgets a persona in this browser. */}
-      <button
-        className="btn identity-terminal"
-        title="Every surface that carries your identity — and end one that should not"
-        onClick={() => setSurfaces(true)}
-      >
-        Your surfaces…
-      </button>
-      {/* Your bench, beside Your surfaces, and for the same reason: this menu
-          is *how I'm connected here*, and the agents that answer for you are
-          another way you are connected. A standing agent belongs to a canvas
-          and is drawn in the workbench; a bench belongs to a PERSON, so it
-          hangs off the face and needs no canvas to open. */}
-      <button
-        className="btn identity-terminal"
-        title="The agents you have, and whether anything could answer for one right now"
-        onClick={() => setBench(true)}
-      >
-        Your bench…
-      </button>
       <button
         className="btn identity-leave"
         onClick={() => {
@@ -553,3 +543,83 @@ export function IdentityMenu({
     </div>
   );
 }
+
+/**
+ * One door in the menu: a context-menu row (`.context-item`, so "the row you
+ * are pointing at" has one look in this app), a glyph, the label, the one line
+ * that says why, and the `›` that says it opens a panel.
+ */
+function Action({
+  icon,
+  label,
+  note,
+  title,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  note: string;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="context-item identity-action" title={title} onClick={onClick}>
+      <span className="menu-icon">{icon}</span>
+      <span className="identity-action-words">
+        {label}
+        <span className="share-link-note">{note}</span>
+      </span>
+      <span className="menu-more" aria-hidden>
+        ›
+      </span>
+    </button>
+  );
+}
+
+/**
+ * **The marks for the doors**, drawn to `Glyphs.tsx`'s rules — 16 grid,
+ * `currentColor`, round joins, 1.5 stroke at 14 — and kept HERE rather than
+ * there on purpose: `Glyphs.tsx` is in the entry chunk (the toolbar wears it),
+ * so a mark only this lazy menu uses would be bytes every first visit pays
+ * for. The bench reuses the agents' spark, which is already paid for.
+ */
+function Mark({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 16 16" width={14} height={14} aria-hidden fill="none" stroke="currentColor"
+      strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round">
+      {children}
+    </svg>
+  );
+}
+
+/** An envelope: the address you prove. */
+const AddressMark = () => (
+  <Mark>
+    <rect x="1.8" y="3.4" width="12.4" height="9.2" rx="1.4" />
+    <path d="M2.4 4.4 8 8.6l5.6-4.2" />
+  </Mark>
+);
+
+/** A screen and a phone: the surfaces that are you. */
+const SurfacesMark = () => (
+  <Mark>
+    <rect x="1.6" y="2.6" width="9" height="6.6" rx="1.2" />
+    <path d="M6.1 9.2v3.4M4.2 12.6h3.8" />
+    <rect x="11.6" y="5.8" width="3" height="7.6" rx="0.9" />
+  </Mark>
+);
+
+/** A prompt: an agent on your own machine. */
+const MachineMark = () => (
+  <Mark>
+    <rect x="1.8" y="2.6" width="12.4" height="10.8" rx="1.4" />
+    <path d="M4.6 6.2 6.8 8.2 4.6 10.2M8.6 10.2h2.8" />
+  </Mark>
+);
+
+/** A cloud: an agent that is not on your machine. */
+const CloudMark = () => (
+  <Mark>
+    <path d="M4.5 12.4h7a2.8 2.8 0 0 0 .3-5.6 3.9 3.9 0 0 0-7.5-.7 3.2 3.2 0 0 0 .2 6.3z" />
+  </Mark>
+);

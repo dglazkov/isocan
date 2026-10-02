@@ -157,8 +157,10 @@ describe("the identity menu's entry", () => {
     expect(visible).toContain(`>${REASON}<`);
     // And it sits under the entry it explains.
     expect(visible.indexOf("Prove your address…")).toBeLessThan(visible.indexOf(REASON));
+    // Inside the row itself (2 Oct 2026: every door carries its line now),
+    // directly under the label, in the note's own span.
     expect(html).toMatch(
-      /<div class="identity-prove-entry"><button [^>]*>Prove your address…<\/button><div class="share-link-note">/,
+      /<button [^>]*class="context-item identity-action"[^>]*>(?:(?!<\/button>).)*Prove your address…<span class="share-link-note">So your other machines/,
     );
   });
 });

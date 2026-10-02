@@ -625,7 +625,15 @@ img { height: auto; }
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--ink-soft); border-top: 1px solid var(--line-soft); padding-top: 10px;
 }
-.identity-known { display: flex; flex-direction: column; gap: 4px; }
+/* **The doors** (2 Oct 2026): rows that open a panel, so they wear the
+   context menu's row (`.context-item`, its hover and its `.menu-icon` /
+   `.menu-more`) rather than a centred button, which is how this app draws a
+   choice. The reason sits under each label as a `.share-link-note`, the line
+   Prove wore first. The list shares `.identity-known`'s column and the glyph
+   shares the context menu's hover, so the only new rule is the label stack —
+   this sheet is what a first visit waits for (`lazycss.test.ts`). */
+.identity-action-words { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.identity-known, .identity-actions { display: flex; flex-direction: column; gap: 4px; }
 .identity-known-row {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 5px 6px; border-radius: 6px; text-align: left; font-size: 13px;
@@ -747,11 +755,6 @@ img { height: auto; }
 .terminal-actions { display: flex; align-items: center; gap: 8px; }
 /* The clock, beside the button that copies the thing it is counting down. */
 .terminal-expiry { color: var(--ink-soft); font-size: 11px; }
-.identity-terminal { justify-content: center; font-size: 12.5px; }
-/* The "Prove your address…" entry with its reason under it. One flex column
-   holding both, so the menu's gap falls between entries and the smaller gap
-   ties the line to the button it explains (multi-identity phase 4). */
-.identity-prove-entry { display: flex; flex-direction: column; gap: 4px; }
 
 /* ---------- your surfaces (kill-a-badge, phase 9) ---------- */
 /* It reuses `.terminal-menu` for the shell — same popover takeover, same
@@ -2758,7 +2761,7 @@ button.mt-card:hover { border-color: var(--accent); }
   flex: none; display: inline-flex; width: 16px; justify-content: center;
   color: var(--ink-soft);
 }
-.context-menu button:hover .menu-icon { color: var(--accent-text); }
+.context-menu button:hover .menu-icon, .identity-action:hover .menu-icon { color: var(--accent-text); }
 .context-item kbd { margin-left: auto; }
 /* A key standing in for a mark: same column, same size as the glyphs beside
    it, in the mono the rest of the app spells keys in. */
