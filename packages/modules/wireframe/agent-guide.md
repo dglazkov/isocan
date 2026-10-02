@@ -355,9 +355,12 @@ bar, tab bar) stays.
   `polish_intensity` (`0 | 4 | 8 | 12` patch budget) and applies `WireSpec.polish`
   refinements guarded by `verifyWireContract`, which rejects any patch that drops
   a `data-sec`, `data-wf`, `data-hot`, or `data-intent` attribute.
-- **Checkable fidelity layers (`isocan wire layer`)**: selecting a wireframe screen
-  on the canvas reveals a floating **Layers** bar above it with checkable toggles
-  (`☑ System`, `☑ Copy`, `☑ Low-Fi`, `☑ High-Fi`) and right-clicking offers
+- **Checkable fidelity layers (`isocan wire layer`)**: hovering or selecting a
+  wireframe screen on the canvas shows a small tier pill under it (`◧ High-Fi ▾`,
+  beside *Full screen*); clicking it opens a popover with the checkable layers
+  (`☑ System`, `☑ Copy`, `☑ Low-Fi`, `☑ High-Fi`) and one row, *Apply to all N
+  screens in “flow”*, which sets every screen in the flow to those layers and
+  rebuilds its prototype — `--flow` from the terminal. Right-clicking offers
   **Layers ▸**. From the terminal, `isocan wire layer [directive] [<screens...>]
   [--flow <flow>] [--list]` (or `/wire layer <directive>` in the Chat) checks or
   unchecks individual layers (`+system`, `-system`, `+copy`, `-copy`, `+lofi`,

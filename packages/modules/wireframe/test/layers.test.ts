@@ -201,10 +201,17 @@ describe("Wireframe fidelity layers", () => {
     );
     expect(html).toContain('data-wire-layers="itm_1"');
     expect(html).toContain('style="left:195px;top:844px"');
-    expect(html).toContain("System");
-    expect(html).toContain("Copy");
-    expect(html).toContain("Low-Fi");
-    expect(html).toContain("High-Fi");
-    expect(html).toContain("Sync flow");
+    // Closed, it is one small pill naming the tier; the checkboxes and the flow row live in the popover, not the lane.
+    expect(html).toContain("wire-tier-pill");
+    expect(html).toContain(">High-Fi<");
+    expect(html).not.toContain("wire-layer-pop");
+    expect(html).not.toContain("Apply to all");
+  });
+
+  it("names what the flow row does, with the count and the flow", async () => {
+    const { applyToFlowLabel } = await import("../src/layers-bar.tsx");
+    expect(applyToFlowLabel(11, "Showcase")).toBe("Apply to all 11 screens in “Showcase”");
+    expect(applyToFlowLabel(2, null)).toBe("Apply to all 2 screens");
+    expect(applyToFlowLabel(1, null)).toBe("Apply to all 1 screen");
   });
 });
