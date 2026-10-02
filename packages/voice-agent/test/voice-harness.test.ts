@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import { spawn } from "node:child_process";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +30,8 @@ import {
   readVoiceLog,
   resolveSpokenRef,
   startVoiceServer,
+  doorRefusal,
+  parseHarnessBody,
   voiceKeyFile,
   writeVoiceKey,
   writeVoiceLog,
@@ -989,7 +992,7 @@ describe("the page", () => {
 
   it("does not report a provider session from a start request with no audio socket", async () => {
     const server = await serve();
-    await fetch(`${server.state.url}session/start`, { method: "POST" });
+    await fetch(`${server.state.url}session/start`, { method: "POST", headers: { "Content-Type": "application/json" } });
     const facts = await (await fetch(`${server.state.url}state`)).json();
     expect(facts).toMatchObject({ session: { state: "idle" } });
   });
@@ -1112,6 +1115,147 @@ describe("the page", () => {
     expect(saved).toMatchObject({ provider: "gemini" });
     expect(JSON.stringify(saved)).not.toContain("AIza-from-the-page");
     expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-from-the-page" });
+  });
+
+  /**
+   * **The door answers its own page** (keys phase 0). A page on any site this
+   * machine's browser shows can aim a "simple" POST at 127.0.0.1, and a
+   * rebound DNS name can make the browser call this door its own. Raw
+   * `node:http`, because fetch will not let a test choose the Host it sends.
+   */
+  function knock(
+    url: string,
+    init: { method?: string; headers?: Record<string, string>; body?: string },
+  ): Promise<{ status: number; text: string }> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(url, { method: init.method ?? "GET", headers: init.headers ?? {} }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString("utf8") }));
+      });
+      req.on("error", reject);
+      req.end(init.body);
+    });
+  }
+
+  it("refuses a cross-site text/plain POST /key, and the stored key is untouched", async () => {
+    const server = await serve();
+    await writeVoiceKey(home, { provider: "gemini", key: "AIza-the-persons-own" });
+    const before = await fs.readFile(voiceKeyFile(home), "utf8");
+    // What a page on evil.example can send without a preflight.
+    const set = await knock(`${server.state.url}key`, {
+      method: "POST",
+      headers: { Origin: "https://evil.example", "Content-Type": "text/plain" },
+      body: JSON.stringify({ key: "AIza-attacker" }),
+    });
+    expect(set.status).toBe(403);
+    expect(set.text).toMatch(/another site/);
+    const forget = await knock(`${server.state.url}harness/key`, {
+      method: "POST",
+      headers: { Origin: "https://evil.example", "Content-Type": "text/plain" },
+      body: JSON.stringify({ forget: true }),
+    });
+    expect(forget.status).toBe(403);
+    // Even a JSON-typed request from a foreign Origin (which a browser could
+    // only send after a preflight this door never grants) is refused.
+    const typed = await knock(`${server.state.url}key`, {
+      method: "POST",
+      headers: { Origin: "https://evil.example", "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "AIza-attacker" }),
+    });
+    expect(typed.status).toBe(403);
+    expect(await fs.readFile(voiceKeyFile(home), "utf8")).toBe(before);
+    expect(typed.text + set.text + forget.text).not.toContain("AIza");
+  });
+
+  it("refuses a request whose Host is not a loopback name — a rebound DNS name", async () => {
+    const server = await serve();
+    await writeVoiceKey(home, { provider: "gemini", key: "AIza-the-persons-own" });
+    const before = await fs.readFile(voiceKeyFile(home), "utf8");
+    // Rebinding: the browser thinks evil.example IS this door, so the request
+    // is same-origin to it — no Origin needed, any content type allowed. Host
+    // is the one thing it cannot hide.
+    const write = await knock(`${server.state.url}key`, {
+      method: "POST",
+      headers: { Host: "evil.example:7654", "Content-Type": "application/json" },
+      body: JSON.stringify({ forget: true }),
+    });
+    expect(write.status).toBe(403);
+    expect(write.text).toMatch(/loopback name/);
+    const read = await knock(`${server.state.url}connection`, { headers: { Host: "evil.example" } });
+    expect(read.status).toBe(403);
+    expect(await fs.readFile(voiceKeyFile(home), "utf8")).toBe(before);
+
+    // The audio socket is not covered by CORS at all; Host and Origin guard it.
+    const { WebSocket } = await import("ws");
+    for (const opts of [{ origin: "https://evil.example" }, { headers: { Host: "evil.example" } }]) {
+      const socket = new WebSocket(`${server.state.url.replace("http:", "ws:")}audio`, opts);
+      const status = await new Promise<number>((resolve) => {
+        socket.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0));
+        socket.on("open", () => { socket.close(); resolve(101); });
+        socket.on("error", () => resolve(-1));
+      });
+      expect(status).toBe(403);
+    }
+  });
+
+  it("does not parse a body that is not application/json", async () => {
+    // The old reader made any body that began with `{` a command.
+    expect(parseHarnessBody("text/plain", Buffer.from('{"key":"AIza-x"}'))).toEqual({});
+    expect(parseHarnessBody("text/plain;charset=UTF-8", Buffer.from('"AIza-x"'))).toEqual({});
+    expect(parseHarnessBody(undefined, Buffer.from('{"forget":true}'))).toEqual({});
+    expect(parseHarnessBody("application/json; charset=utf-8", Buffer.from('{"forget":true}'))).toEqual({ forget: true });
+    expect(parseHarnessBody("application/json", Buffer.from('"AIza-x"'))).toBe("AIza-x");
+    // And the door says so before any route runs: no Origin (a CLI's shape),
+    // a loopback Host, a text/plain body — refused, key unchanged.
+    const server = await serve();
+    await writeVoiceKey(home, { provider: "gemini", key: "AIza-the-persons-own" });
+    const plain = await knock(`${server.state.url}key`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ forget: true }),
+    });
+    expect(plain.status).toBe(403);
+    expect(plain.text).toMatch(/application\/json/);
+    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-the-persons-own" });
+  });
+
+  it("names the three rules in one pure check", () => {
+    const ok = { host: "127.0.0.1:7654", "content-type": "application/json" };
+    expect(doorRefusal({ method: "POST", headers: ok })).toBeNull();
+    expect(doorRefusal({ method: "POST", headers: { ...ok, host: "localhost:5199", origin: "http://localhost:5199" } })).toBeNull();
+    expect(doorRefusal({ method: "POST", headers: { ...ok, host: "[::1]", origin: "http://[::1]:7654" } })).toBeNull();
+    expect(doorRefusal({ method: "GET", headers: { host: "localhost" } })).toBeNull();
+    expect(doorRefusal({ method: "GET", headers: {} })).toMatch(/loopback name/);
+    expect(doorRefusal({ method: "GET", headers: { host: "127.0.0.1.evil.example" } })).toMatch(/loopback name/);
+    expect(doorRefusal({ method: "GET", headers: { host: "localhost", origin: "null" } })).toMatch(/another site/);
+    expect(doorRefusal({ method: "GET", headers: { host: "localhost", origin: "http://localhost.evil.example" } })).toMatch(/another site/);
+    expect(doorRefusal({ method: "POST", headers: { host: "localhost" } })).toMatch(/application\/json/);
+    expect(doorRefusal({ method: "POST", headers: { host: "localhost", "content-type": "application/x-www-form-urlencoded" } })).toMatch(/application\/json/);
+  });
+
+  it("still lets the page's own JSON, from a loopback Origin and Host, set and forget the key", async () => {
+    const server = await serve();
+    const port = new URL(server.state.url).port;
+    // The page served by this process, and the Vite dev page that proxies
+    // /harness here with its Origin intact and its Host rewritten.
+    for (const origin of [`http://127.0.0.1:${port}`, "http://localhost:5199"]) {
+      const set = await knock(`${server.state.url}harness/key`, {
+        method: "POST",
+        headers: { Origin: origin, Host: `127.0.0.1:${port}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "AIza-from-the-page", provider: "gemini" }),
+      });
+      expect(set.status, set.text).toBe(200);
+      expect(set.text).not.toContain("AIza-from-the-page");
+      expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-from-the-page" });
+      const forget = await knock(`${server.state.url}harness/key`, {
+        method: "POST",
+        headers: { Origin: origin, Host: `localhost:${port}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ forget: true }),
+      });
+      expect(forget.status, forget.text).toBe(200);
+      expect(await readVoiceKey(home)).toBeNull();
+    }
   });
 
   it("sends a typed utterance as the ENROLLED agent, and the canvas says so", async () => {
@@ -3842,19 +3986,19 @@ describe("the harness session & tool-call log API", () => {
     const state0 = await (await fetch(`${server.state.url}state`)).json();
     expect(state0).toMatchObject({ session: { state: "live" } });
 
-    const startRes = await (await fetch(`${server.state.url}session/start`, { method: "POST" })).json();
+    const startRes = await (await fetch(`${server.state.url}session/start`, { method: "POST", headers: { "Content-Type": "application/json" } })).json();
     expect(startRes).toEqual({ ok: true, state: "live" });
 
     const state1 = (await (await fetch(`${server.state.url}state`)).json()) as any;
     expect(state1.session.state).toBe("live");
 
-    const muteRes = await (await fetch(`${server.state.url}session/mute`, { method: "POST" })).json();
+    const muteRes = await (await fetch(`${server.state.url}session/mute`, { method: "POST", headers: { "Content-Type": "application/json" } })).json();
     expect(muteRes).toEqual({ ok: true, state: "muted" });
 
-    const unmuteRes = await (await fetch(`${server.state.url}session/unmute`, { method: "POST" })).json();
+    const unmuteRes = await (await fetch(`${server.state.url}session/unmute`, { method: "POST", headers: { "Content-Type": "application/json" } })).json();
     expect(unmuteRes).toEqual({ ok: true, state: "live" });
 
-    const endRes = await (await fetch(`${server.state.url}session/end`, { method: "POST" })).json();
+    const endRes = await (await fetch(`${server.state.url}session/end`, { method: "POST", headers: { "Content-Type": "application/json" } })).json();
     expect(endRes).toEqual({ ok: true, state: "ended" });
   });
 
@@ -3960,7 +4104,7 @@ describe("the harness session & tool-call log API", () => {
 
   it("records a session request without misreporting a session open", async () => {
     const server = await serve();
-    await fetch(`${server.state.url}session/start`, { method: "POST" });
+    await fetch(`${server.state.url}session/start`, { method: "POST", headers: { "Content-Type": "application/json" } });
     const logRes = (await (await fetch(`${server.state.url}log`)).json()) as any;
     expect(logRes.entries.some((e: any) => e.event === "harness restarted")).toBe(true);
     expect(logRes.entries.some((e: any) => e.event === "session requested; waiting for audio connection")).toBe(true);
@@ -4022,7 +4166,7 @@ describe("the harness session & tool-call log API", () => {
     expect(voiceSession0!.status).toBe("enrolled — nobody is listening right now");
 
     // A start request alone cannot claim listening.
-    await fetch(`${server.state.url}session/start`, { method: "POST" });
+    await fetch(`${server.state.url}session/start`, { method: "POST", headers: { "Content-Type": "application/json" } });
     await new Promise((r) => setTimeout(r, 50));
 
     const sessions1 = await (await fetch(`${base}/api/projects/prj_1/sessions`, { headers: badge.headers })).json() as any[];
@@ -4030,7 +4174,7 @@ describe("the harness session & tool-call log API", () => {
     expect(voiceSession1!.status).toBe("enrolled — nobody is listening right now");
 
     // End session -> drops back
-    await fetch(`${server.state.url}session/end`, { method: "POST" });
+    await fetch(`${server.state.url}session/end`, { method: "POST", headers: { "Content-Type": "application/json" } });
     await new Promise((r) => setTimeout(r, 50));
 
     const sessions2 = await (await fetch(`${base}/api/projects/prj_1/sessions`, { headers: badge.headers })).json() as any[];

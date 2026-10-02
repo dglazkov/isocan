@@ -108,10 +108,13 @@ export const testModel = (model: string) =>
     body: JSON.stringify({ model }),
   });
 export const log = () => json<LogReply>("/log");
-export const startSession = () => json<{ ok?: boolean; error?: string }>("/session/start", { method: "POST" });
-export const muteSession = () => json<{ ok?: boolean; error?: string }>("/session/mute", { method: "POST" });
-export const unmuteSession = () => json<{ ok?: boolean; error?: string }>("/session/unmute", { method: "POST" });
-export const endSession = () => json<{ ok?: boolean; error?: string }>("/session/end", { method: "POST" });
+/** A POST with nothing to say still says JSON: the harness refuses any other
+ * content type, because a foreign page can only send JSON after a preflight. */
+const EMPTY_POST: RequestInit = { method: "POST", headers: { "content-type": "application/json" } };
+export const startSession = () => json<{ ok?: boolean; error?: string }>("/session/start", EMPTY_POST);
+export const muteSession = () => json<{ ok?: boolean; error?: string }>("/session/mute", EMPTY_POST);
+export const unmuteSession = () => json<{ ok?: boolean; error?: string }>("/session/unmute", EMPTY_POST);
+export const endSession = () => json<{ ok?: boolean; error?: string }>("/session/end", EMPTY_POST);
 export const saveKey = (key: string, provider: string) =>
   json<{ ok?: boolean; error?: string }>("/key", {
     method: "POST",
@@ -119,7 +122,7 @@ export const saveKey = (key: string, provider: string) =>
     body: JSON.stringify({ key, provider }),
   });
 export const testKey = () =>
-  json<{ ok?: boolean; answer?: string; provider?: string }>("/key/test", { method: "POST" });
+  json<{ ok?: boolean; answer?: string; provider?: string }>("/key/test", EMPTY_POST);
 
 /** The entries in whatever shape the endpoint returns today. */
 /**

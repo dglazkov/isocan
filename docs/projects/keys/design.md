@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-02
 see: copy-edit, voice-agent, judge
 note: "Model keys in one place on your machine: ~/.isocan/keys.json (0600), set from a Model keys settings area or `isocan keys`, read per call by everything that spends a key — the judge, the text model, voice, the rc's agents — with env as an override. Write-only in the UI, machine-local routes only, owner-only spend by default. Phase 0 closes a hole the survey found: the voice harness's loopback door had no Origin or Host check."

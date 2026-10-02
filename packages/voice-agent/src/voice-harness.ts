@@ -91,6 +91,93 @@ export {
 export const VOICE_HARNESS = "voice";
 export const DEFAULT_VOICE_PORT = 7654;
 
+/**
+ * **The door answers its own machine, and only its own page's words.**
+ * (keys phase 0, 2 Oct 2026.)
+ *
+ * Binding to 127.0.0.1 keeps other machines out; it does not keep out a page
+ * on another site that this machine's browser is showing. That page can send
+ * a "simple" cross-site POST (`text/plain`, no preflight) at
+ * `http://127.0.0.1:7654/key`, and a rebound DNS name can make the browser
+ * treat this door as that site's own origin. Three checks close both:
+ *
+ * 1. **Host is a loopback name** — `localhost`, `127.0.0.1` or `[::1]`, any
+ *    port. A rebound name arrives carrying ITS name in Host, so it stops here.
+ * 2. **An Origin, when there is one, is a loopback origin** — this process's
+ *    own page, or the Vite dev page that proxies `/harness`. A browser always
+ *    sends Origin on a cross-site POST and on a WebSocket; a CLI or a test
+ *    sends none, and is not the threat.
+ * 3. **A state-changing request says `application/json`** — which a foreign
+ *    page can only send after a CORS preflight, and this door grants none.
+ *
+ * Every refusal is a 403 and one sentence; none of them echoes a body.
+ */
+const LOOPBACK_NAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** `localhost`, `127.0.0.1:7654`, `[::1]:5199` — a loopback name, with or
+ * without a port, and nothing else. */
+export function isLoopbackHost(host: string | undefined): boolean {
+  if (!host) return false;
+  const m = /^(localhost|127\.0\.0\.1|\[::1\])(?::(\d{1,5}))?$/i.exec(host.trim());
+  return m !== null;
+}
+
+/** An `http(s)://` origin on a loopback name. `null` (a sandboxed frame, a
+ * file) is not a loopback origin. */
+export function isLoopbackOrigin(origin: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  return LOOPBACK_NAMES.has(url.hostname.toLowerCase());
+}
+
+/** The media type of a Content-Type header, lowercased, without parameters. */
+function mediaType(contentType: string | undefined): string {
+  return (contentType ?? "").split(";")[0]!.trim().toLowerCase();
+}
+
+/**
+ * Why this request may not come in, or `null` when it may. Pure, so the three
+ * rules are testable without a socket; the server applies it to every request
+ * and every WebSocket upgrade before any route sees it.
+ */
+export function doorRefusal(request: {
+  method?: string | undefined;
+  headers: { host?: string | undefined; origin?: string | undefined; "content-type"?: string | undefined };
+}): string | null {
+  if (!isLoopbackHost(request.headers.host)) {
+    return "this door answers only to a loopback name (localhost, 127.0.0.1, [::1]) — that request named another host";
+  }
+  const origin = request.headers.origin;
+  if (origin !== undefined && !isLoopbackOrigin(origin)) {
+    return "this door answers only its own page — that request came from another site";
+  }
+  const method = (request.method ?? "GET").toUpperCase();
+  const reads = method === "GET" || method === "HEAD";
+  if (!reads && mediaType(request.headers["content-type"]) !== "application/json") {
+    return "this door takes only application/json — send the body as JSON with that Content-Type";
+  }
+  return null;
+}
+
+/**
+ * A request body, read only when it says it is JSON. Anything else is not
+ * parsed — the `{` that once made any body a command is no longer enough.
+ */
+export function parseHarnessBody(contentType: string | undefined, raw: Buffer): Record<string, unknown> | string {
+  if (raw.length === 0) return {};
+  if (mediaType(contentType) !== "application/json") return {};
+  const text = raw.toString("utf8");
+  const parsed = JSON.parse(text) as unknown;
+  if (typeof parsed === "string") return parsed;
+  if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+  return {};
+}
+
 /** The one sentence for a harness process that predates a pull: its routes
  * and daemon client are frozen at start while it serves the fresh dist page.
  * Spelled once, because three refusals answer with it (join, create, switch). */
@@ -3074,12 +3161,7 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         if (size > 32 * 1024 * 1024) throw new Error("that body is too big for this door");
         chunks.push(chunk as Buffer);
       }
-      const raw = Buffer.concat(chunks);
-      if (raw.length === 0) return {};
-      const text = raw.toString("utf8");
-      if (text.trimStart().startsWith("{")) return JSON.parse(text) as Record<string, unknown>;
-      if (text.trimStart().startsWith('"')) return JSON.parse(text) as string;
-      return { raw };
+      return parseHarnessBody(req.headers["content-type"], Buffer.concat(chunks));
     };
     /** A file out of the built page, when there is one there. False means
      * "not a page file", and the caller decides what that costs. */
@@ -3099,6 +3181,13 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
         return false;
       }
     };
+    // Before any route: the loopback Host, a loopback Origin, a JSON body.
+    const refused = doorRefusal(req);
+    if (refused) {
+      req.resume();
+      respond(403, { error: refused });
+      return;
+    }
     void (async () => {
       const url = new URL(req.url ?? "/", `http://127.0.0.1:${options.port || DEFAULT_VOICE_PORT}`);
       if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
@@ -3955,6 +4044,13 @@ export async function startVoiceServer(options: VoiceServerOptions): Promise<{
    */
   const live = new WebSocketServer({ noServer: true });
   server.on("upgrade", (request, socket, head) => {
+    // The audio socket carries the key's spend and the page's grants; a
+    // WebSocket is not covered by CORS, so the Host and Origin rules are the
+    // whole defence here. (An upgrade is a GET: no body rule applies.)
+    if (doorRefusal({ method: "GET", headers: request.headers }) !== null) {
+      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+      return;
+    }
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname.replace(/^\/harness(?=\/|$)/, "") || "/";
     if (pathname === "/live" || pathname === "/audio" || pathname === "/broker") {
       live.handleUpgrade(request, socket, head, (ws) => {
