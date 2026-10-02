@@ -282,3 +282,14 @@ export function facesFor(
   }
   return faces;
 }
+
+/**
+ * **The pile's order, left to right: other people, other agents, your pets,
+ * you** (2 Oct 2026). A pet is an agent whose owner `isMe` says is you — the
+ * caller passes the join-aware test, so an agent a folded identity enrolled is
+ * still yours. Stable within each group, so the order a group arrived in holds.
+ */
+export function pileOrder(faces: readonly Face[], isMe: (actorId: string) => boolean): Face[] {
+  const rank = (face: Face) => (face.self ? 3 : face.owner === null ? 0 : isMe(face.owner.id) ? 2 : 1);
+  return [...faces].sort((a, b) => rank(a) - rank(b));
+}

@@ -1,6 +1,6 @@
 import { describe as suite, expect, it } from "vitest";
 import type { Actor, PresenceSession } from "@isocan/core";
-import { facesFor, unreadByAuthor } from "../src/lib/facepile.ts";
+import { facesFor, pileOrder, unreadByAuthor, type Face } from "../src/lib/facepile.ts";
 import { unreadCount } from "../src/stores/unreadStore.ts";
 
 /**
@@ -210,5 +210,28 @@ suite("standing by is neither here nor away", () => {
     const [face] = facesFor([], unread, kenny, [sian]).filter((f) => f.actor.id === sian.id);
     expect(face?.presence).toBe("available");
     expect(face?.unread, "and it keeps what they left behind").toBe(2);
+  });
+});
+
+suite("the pile's order", () => {
+  // Dion, 2 Oct 2026: your own face on the far right, your pets next to it,
+  // then other agents, then other people on the far left.
+  const face = (id: string, owner: string | null, self = false) =>
+    ({ actor: { id, name: id }, owner: owner === null ? null : { id: owner, name: owner }, self }) as unknown as Face;
+  const me = "usr_acme_me";
+  const order = (faces: Face[]) => pileOrder(faces, (id) => id === me || id === "usr_acme_me_old").map((f) => f.actor.id);
+
+  it("reads other people, other agents, your pets, then you", () => {
+    expect(
+      order([face("me", null, true), face("scout", me), face("mira", null), face("bot", "usr_acme_mira"), face("theo", null)]),
+    ).toEqual(["mira", "theo", "bot", "scout", "me"]);
+  });
+
+  it("counts a pet enrolled by a folded identity of yours as yours", () => {
+    expect(order([face("me", null, true), face("old-pet", "usr_acme_me_old"), face("bot", "usr_acme_mira")])).toEqual([
+      "bot",
+      "old-pet",
+      "me",
+    ]);
   });
 });

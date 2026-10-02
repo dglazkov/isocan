@@ -7,7 +7,7 @@ import { unreadThreads, useUnreadStore } from "../stores/unreadStore.ts";
 import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
-import { facesFor, unreadByAuthor, type Face } from "../lib/facepile.ts";
+import { facesFor, pileOrder, unreadByAuthor, type Face } from "../lib/facepile.ts";
 import { centerOn, threadWorldPos } from "../lib/viewport.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
@@ -100,20 +100,24 @@ export function Presence({ actor }: { actor: Actor }) {
   // a rule and not a preference.
   const faces = facesFor(sessions, unreadBy, actor, standing, ownerOf, enrolled);
 
-  const shown = faces.length > MAX_FACES ? faces.slice(0, MAX_FACES - 1) : faces;
-  const overflow = faces.length - shown.length;
   /**
-   * **People first, agents after, a rule between them.** People first because
-   * a person scans for the humans they know; agents are read as a fleet.
+   * **Other people, other agents, your pets, you** — left to right (Dion,
+   * 2 Oct 2026: "it's weird not to have your OWN profile on the far right.
+   * pets should be next on the left... then other bots... then other people
+   * far left."). You are the anchor at the edge nearest your own controls;
+   * the agents you own stand beside you; everyone else reads outward.
    *
-   * The separator carries person-or-agent STRUCTURALLY, which is why no badge
-   * is needed on each face — one mark for a group rather than a decoration on
-   * every member. It is drawn only when both groups are present: a rule with
-   * nothing on one side of it is a line that means nothing.
+   * A pet is an agent whose owner is you through `actor.join`, so a pet a
+   * folded identity enrolled is still yours. Ranked before the cut, and the
+   * cut takes from the LEFT: you and your pets are never the ones hidden.
+   *
+   * A rule is drawn wherever the pile changes between person and agent — one
+   * mark for a group, not a badge on every face — so other people | agents
+   * and pets | you each get one.
    */
-  const people = shown.filter((face) => face.owner === null);
-  const agents = shown.filter((face) => face.owner !== null);
-  const ordered = [...people, ...agents];
+  const ordered = pileOrder(faces, (id) => sameActor(joined, id, actor.id));
+  const hidden = ordered.length > MAX_FACES ? ordered.splice(0, ordered.length - MAX_FACES + 1) : [];
+  const overflow = hidden.length;
 
   function goTo(face: Face) {
     // Your own face has nowhere to fly to — it is the handle for who you are
@@ -149,7 +153,7 @@ export function Presence({ actor }: { actor: Actor }) {
     ui.setFollow(ui.followSessionId === face.sessionId ? null : face.sessionId);
   }
 
-  const peeked = shown.find((face) => face.actor.id === peek) ?? null;
+  const peeked = ordered.find((face) => face.actor.id === peek) ?? null;
   /**
    * **What the card says about who may summon this agent — in core's words.**
    *
@@ -177,13 +181,18 @@ export function Presence({ actor }: { actor: Actor }) {
       }}
       onPointerLeave={() => setPeek(null)}
     >
+      {overflow > 0 && (
+        <span className="face" title={hidden.map((f) => tooltip(f, kinds)).join("\n")}>
+          <span className="face-mark face-more">+{overflow}</span>
+        </span>
+      )}
       {ordered.map((face, i) => (
         <Fragment key={face.actor.id}>
           {/* Drawn before the first agent, and only when somebody stands on
               each side of it. `aria-hidden` because the rule is a restatement
               for the eye: every face already SAYS which it is, in the label
               a reader is handed. */}
-          {i === people.length && people.length > 0 && agents.length > 0 && (
+          {i > 0 && (face.owner === null) !== (ordered[i - 1]!.owner === null) && (
             <span className="face-sep" aria-hidden="true" />
           )}
           <button
@@ -211,11 +220,6 @@ export function Presence({ actor }: { actor: Actor }) {
           </button>
         </Fragment>
       ))}
-      {overflow > 0 && (
-        <span className="face" title={faces.slice(shown.length).map((f) => tooltip(f, kinds)).join("\n")}>
-          <span className="face-mark face-more">+{overflow}</span>
-        </span>
-      )}
       {peeked && !identityOpen && (
         <FaceCard face={peeked} names={names} colors={colors} gate={gateOf(peeked)} onGo={goTo} />
       )}
