@@ -156,6 +156,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `design workflow|start|brief|receipt|questions|ask|answer|reference|compare|respond|decide|review|craft` — a design request
 - `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
+- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -1391,7 +1392,7 @@ fetches at runtime — no API calls); it is one file, so no local imports and
 no bundler; and there is no hot reload — every edit is a fresh version with
 fresh state.
 
-<!-- topic: design | design work — requests and questions, the design system, images, variations, compare, review and repair -->
+<!-- topic: design | design work — requests and questions, the design system, images, variations, compare, a screen's words, review and repair -->
 
 ## Design requests, questions and the design system
 
@@ -1772,6 +1773,37 @@ is primary" is a better reason to pick one than "it looks cleaner". A person
 gets the same diff from **Compare versions** in the item menu or the version
 fan. There, the changes are highlighted inside both renders and can be stepped
 through. Diffing only reads the item and never writes to it.
+
+## Changing a screen's words
+
+`isocan words <item>` prints the screen's **copy deck**: every string in
+reading order, each with a **role** (heading, body, button, link, label,
+placeholder, alt, error, empty, nav), an **address**, and a `budget` that
+stays null until fit is measured. `--json` prints it as a file to edit.
+
+To change words, do not rewrite the file. Add a `"to"` beside each string
+that should change, leave the rest as printed, and run
+`isocan words <item> --apply deck.json [--by <name>]`. That is one new
+version, and only those words' bytes change: markup, classes and layout
+stay byte for byte what they were. Each string keeps the `text` it read
+as a check. If the screen moved since you read the deck, the apply is
+refused and names the string ("t14 (heading) read … but now says …"). Read
+the deck again rather than editing the file by hand. `undo` takes the
+version back.
+
+- **Any HTML**: `t14` is a text node and `a3@placeholder` is an attribute
+  (placeholder, alt, aria-label, a submit button's value). Roles come from
+  the markup: `role="alert"` is an error, and `data-copy-role="empty"` marks
+  an empty state, since nothing else can.
+- **A wireframe**: the address is the `wire copy` word path (`title`,
+  `main.3/items.0.title`, `fab/actions.action`), because a wire's words live
+  in its spec and a row draws several of them joined. The apply goes through
+  the same writer as `wire copy --apply`, so the spec records `--by` and a
+  kept flow's prototype is rebuilt. `wf` names the element the words draw
+  in.
+
+`/variation 3 try different copy` still works, but it rewrites the file,
+which is how a copy pass drifts layout. For words, use `words`.
 
 ## Choosing between variations
 
