@@ -8,7 +8,7 @@ import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
 import { agentSessionOf, machineAgentKey } from "../src/agent-key.ts";
 import { readRcAgents } from "../src/rc-rows.ts";
-import { harnessVars } from "@isocan/api";
+import { claimSessionIdentity, DaemonClient, harnessVars } from "@isocan/api";
 import { shelvePatch, grantsRoute, passesRoute, passRoute, publicListingRoute, cloudAgentInstructions } from "@isocan/core";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 import {
@@ -107,56 +107,71 @@ async function identityFor(name = "Voice"): Promise<{ session: string; harness: 
 }
 
 let home: string;
-let daemon: Daemon;
 let base: string;
 let badge: TestBadge;
 
+// Disk-only cases get an isolated directory too, but no server or CLI.
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-voice-"));
   await fs.writeFile(
     path.join(home, "identity.json"),
     JSON.stringify({ ...person, createdAt: new Date().toISOString() }),
   );
-  daemon = await startDaemon({ port: 0, home });
-  const address = daemon.app.server.address();
-  base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  badge = await mintTestBadge(base);
-  await badge.speakAs(seeder);
-  await post("/api/ops", {
-    canvasId: null,
-    actor: seeder,
-    op: { type: "project.create", canvasId: "prj_1", title: "Voice test" },
-  });
-  // The enrolment, exercised the way a person does it: the CLI claims this
-  // machine's key for `agent:Voice` on THIS badge, which is the claim the rc
-  // makes before it spawns an adapter. Done through the CLI rather than by
-  // posting an op, because the badge a claim belongs to is the whole question —
-  // `startVoiceServer` resolves with the machine's own, exactly as the
-  // rc-spawned adapter does.
-  const claimed = await isocan(["identity", "--name", "Voice", "--session"], {
-    ISOCAN_SESSION_ID: await sessionFor("Voice"),
-    ISOCAN_HARNESS: "agent",
-  });
-  expect(claimed.code, claimed.stderr).toBe(0);
-  await post("/api/ops", {
-    canvasId: "prj_1",
-    actor: seeder,
-    op: {
-      type: "item.add",
-      itemId: "itm_1",
-      version: { id: "ver_1", blobHash: "h1", mimeType: "text/markdown", filename: "a.md", size: 3 },
-      width: 320,
-      height: 240,
-      placement: { x: 100, y: 100 },
-      title: "Checkout screen",
-    },
-  });
 });
 
 afterEach(async () => {
-  await daemon.close();
   await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
+
+/** A fresh daemon per integration case. Pure planning and broker suites do
+ * not register this fixture. No daemon, actor, or mutable home is shared. */
+function useDaemon({ cliIdentity = false } = {}): void {
+  let daemon: Daemon | undefined;
+  beforeEach(async () => {
+    daemon = undefined;
+    daemon = await startDaemon({ port: 0, home });
+    const address = daemon.app.server.address();
+    base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+    badge = await mintTestBadge(base);
+    await badge.speakAs(seeder);
+    await post("/api/ops", {
+      canvasId: null,
+      actor: seeder,
+      op: { type: "project.create", canvasId: "prj_1", title: "Voice test" },
+    });
+    // Both paths claim through the real machine badge, separate from the
+    // seeder. Only enrollment/restart scenarios need the CLI's directory
+    // handshake too; the other cases need an existing claim, not another
+    // process loading the same CLI before their own subject can run.
+    if (cliIdentity) {
+      const claimed = await isocan(["identity", "--name", "Voice", "--session"], {
+        ISOCAN_SESSION_ID: await sessionFor("Voice"),
+        ISOCAN_HARNESS: "agent",
+      });
+      expect(claimed.code, claimed.stderr).toBe(0);
+    } else {
+      await claimSessionIdentity(new DaemonClient(base, home), home, {
+        identity: await identityFor(), name: "Voice",
+      });
+    }
+    await post("/api/ops", {
+      canvasId: "prj_1",
+      actor: seeder,
+      op: {
+        type: "item.add",
+        itemId: "itm_1",
+        version: { id: "ver_1", blobHash: "h1", mimeType: "text/markdown", filename: "a.md", size: 3 },
+        width: 320,
+        height: 240,
+        placement: { x: 100, y: 100 },
+        title: "Checkout screen",
+      },
+    });
+  });
+  afterEach(async () => {
+    await daemon?.close();
+  });
+}
 
 async function post(url: string, body: unknown): Promise<any> {
   const res = await fetch(`${base}${url}`, {
@@ -937,6 +952,7 @@ describe("memory is the page's store, asked over the socket", () => {
 });
 
 describe("the page", () => {
+  useDaemon();
   let close: (() => Promise<void>) | null = null;
 
   afterEach(async () => {
@@ -955,6 +971,21 @@ describe("the page", () => {
     close = server.close;
     return server;
   }
+
+  it("the CLI and harness resume the fixture's claim on the same machine badge", async () => {
+    const client = new DaemonClient(base, home);
+    const session = await sessionFor("Voice");
+    const key = `agent:${session}`;
+    const before = (await client.actorBindings([key]))[0]!.actor;
+    const claimed = await isocan(["identity", "--name", "Voice", "--session"], {
+      ISOCAN_SESSION_ID: session, ISOCAN_HARNESS: "agent",
+    });
+    expect(claimed.code, claimed.stderr).toBe(0);
+    expect((await client.actorBindings([key]))[0]!.actor).toEqual(before);
+    const server = await serve();
+    const state = await (await fetch(`${server.state.url}state`)).json();
+    expect(state.agent).toMatchObject({ id: before.id, name: before.name });
+  });
 
   it("does not report a provider session from a start request with no audio socket", async () => {
     const server = await serve();
@@ -1312,6 +1343,7 @@ describe("the page", () => {
 });
 
 describe("the person's gate", () => {
+  useDaemon();
   let close: (() => Promise<void>) | null = null;
 
   afterEach(async () => {
@@ -1723,6 +1755,7 @@ describe("the person's gate", () => {
 });
 
 describe("what an agent is called", () => {
+  useDaemon();
 
 
   async function canvasNames(): Promise<Record<string, string>> {
@@ -1983,6 +2016,7 @@ describe("what an agent is called", () => {
 });
 
 describe("the projects this session can work on", () => {
+  useDaemon();
 
 
   it("makes a canvas the person asked for, and leaves the session where it was", async () => {
@@ -2294,6 +2328,7 @@ describe("the projects this session can work on", () => {
 });
 
 describe("the name the enrolment summons", () => {
+  useDaemon({ cliIdentity: true });
   /**
    * **The state both tests here start from**: the agent enrolled on prj_1, a
    * harness standing, and a rename to Nova that the person allowed at the
@@ -2608,6 +2643,7 @@ describe("the name the enrolment summons", () => {
 });
 
 describe("the harness's name across a restart", () => {
+  useDaemon({ cliIdentity: true });
   const enrollVoice = async () => {
     const enrolled = await isocan(["rc", "add", "Voice", "--harness", "voice", "--dir", home], {
       ISOCAN_SESSION_ID: await sessionFor("Voice"),
@@ -2751,6 +2787,7 @@ describe("the ACP face", () => {
 });
 
 describe("the Live API path", () => {
+  useDaemon();
   it("opens with the setup the API expects, on the model that is current", () => {
     const setup = liveSetup() as { setup: Record<string, unknown> };
     expect(LIVE_MODEL).toBe("models/gemini-3.8-live");
@@ -3685,6 +3722,7 @@ describe("the Live API path", () => {
 });
 
 describe("the harness as the rc's adapter", () => {
+  useDaemon({ cliIdentity: true });
   /**
    * **The declaration the rc resolves, written by the thing it names.**
    *
@@ -3777,6 +3815,7 @@ describe("the harness as the rc's adapter", () => {
 });
 
 describe("the harness session & tool-call log API", () => {
+  useDaemon();
   let close: (() => Promise<void>) | null = null;
 
   afterEach(async () => {

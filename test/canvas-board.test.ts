@@ -125,13 +125,22 @@ const runBoard = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) =
   }
 };
 
-/** Render a panel without touching a canvas, and hand back its HTML. */
+/** Render a panel without touching a canvas, and retain both observations. */
 const render = (only: string, env: NodeJS.ProcessEnv = ghSaying(allGreen())) => {
   const out = runBoard(only, env);
   const path = out.split("\n").find((l) => l.includes("would publish"))?.split("→ ")[1]?.trim();
   expect(path, `no panel rendered for --only ${only}`).toBeTruthy();
-  return readFileSync(path as string, "utf8");
+  return { stdout: out, html: readFileSync(path as string, "utf8") };
 };
+
+// These cases inspect the same immutable inputs: this checkout's history and
+// one synthetic CI reading. Render each scenario once, lazily so a filtered
+// source-only check starts no children. A different CI reading is a different
+// render; none of the real graders or the board script are mocked out.
+let recentReading: ReturnType<typeof render> | undefined;
+const recent = () => (recentReading ??= render("recent"));
+let greenReading: ReturnType<typeof render> | undefined;
+const greenBuild = () => (greenReading ??= render("build"));
 
 /**
  * The read half of `docs/research/2026-08-30-repo-admin-canvas.md`. Its own
@@ -162,7 +171,7 @@ describe("the board is derived, and says so", () => {
   });
 
   it("tells the reader every panel is regenerated", () => {
-    expect(render("recent")).toContain("Regenerated, never edited here");
+    expect(recent().html).toContain("Regenerated, never edited here");
   });
 });
 
@@ -198,14 +207,14 @@ describe("a run stacks a version, never a second item", () => {
  */
 describe("Recently reads the actual history", () => {
   it("names the commit at HEAD", () => {
-    const html = render("recent");
+    const html = recent().html;
     expect(html).toContain(git("rev-parse", "--short", "HEAD"));
   }, 120_000);
 
   it("counts more than one commit when git reports more than one", () => {
     const real = git("rev-list", "--count", "--since=14 days ago", "HEAD");
     if (Number(real) < 2) return; // a fortnight this quiet has nothing to guard
-    const html = render("recent");
+    const html = recent().html;
     expect(html).not.toContain("Nothing landed in the last 14 days");
     expect(Number(html.match(/(\d+) commits in the last 14 days/)![1])).toBeGreaterThan(1);
   }, 120_000);
@@ -221,7 +230,7 @@ describe("Recently reads the actual history", () => {
      */
     const known = new Set(git("log", "--since=14 days ago", "--format=%h").split("\n").filter(Boolean));
     if (known.size < 2) return;
-    const rendered = [...render("recent").matchAll(/<td class="num muted" style="width:64px">([^<]*)<\/td>/g)].map(
+    const rendered = [...recent().html.matchAll(/<td class="num muted" style="width:64px">([^<]*)<\/td>/g)].map(
       (m) => m[1] ?? "",
     );
     expect(rendered.length).toBeGreaterThan(1);
@@ -265,8 +274,8 @@ describe("measurement is taken once, and only when something asks", () => {
   });
 
   it("does not claim every goal is holding when it measured none", () => {
-    expect(render("recent")).toBeTruthy();
-    const out = runBoard("recent");
+    expect(recent().html).toBeTruthy();
+    const out = recent().stdout;
     expect(out).toContain("no goal measured this run");
     expect(out).not.toContain("every goal holding");
   }, 120_000);
@@ -280,7 +289,7 @@ describe("measurement is taken once, and only when something asks", () => {
 describe("the Build signal", () => {
   it("prints the rule it is following, on the panel", () => {
     // A light nobody knows the rule for is a light nobody trusts.
-    const html = render("build");
+    const html = greenBuild().html;
     for (const word of ["GREEN", "AMBER", "RED", "NO SIGNAL"]) expect(html).toContain(word);
   }, 120_000);
 
@@ -298,7 +307,7 @@ describe("the Build signal", () => {
      * would have coupled this test to board state on disk that no fixture
      * here controls.
      */
-    const html = render("build", ghSaying(allGreen()));
+    const html = greenBuild().html;
     expect(html, "a supplied reading is not an absent one").not.toContain("no signal");
     for (const workflow of ["release", "review"]) expect(html).toContain(workflow);
   }, 120_000);
@@ -321,7 +330,7 @@ describe("the Build signal", () => {
      * What the fixture does control is `gh`, and `c.unknown` alone drives the
      * CI line. That line is the fact under test.
      */
-    const html = render("build", ghSaying("not logged in", 1));
+    const html = render("build", ghSaying("not logged in", 1)).html;
     expect(html, "an unreachable CI must render as absent, not as passing").toContain(
       '<span class="pill grey">no signal</span>',
     );
