@@ -338,6 +338,12 @@ bar, tab bar) stays.
   [--flow <flow>] [--request "<words>"]` (or `/wire name` in the Chat) names the
   flow's brand, per-screen titles, and shared navigation bar labels coherently so
   tab bars, side navs, and headers match across every screen.
+  Who writes the words: on the CLI, `ISOCAN_TEXT_API_KEY` where it runs
+  (`ISOCAN_TEXT_PROVIDER=anthropic|openai`, else an `sk-ant-` key is Claude's —
+  `claude-opus-5-5` unless `ISOCAN_TEXT_MODEL` says otherwise), else the stub; in
+  the Chat, the home's text model (`POST /api/text`, the home's key), and when the
+  home has none the screens get placeholder words and the notice bar says so — the
+  version's `by` names which wrote them.
 - **Design system synthesis (`isocan wire ds`) and Jev-budgeted polish (`isocan wire polish`)**:
   `isocan wire ds [request...] [--flow <flow>] [--name "<name>"] [--surface flat|raised|glass|bold]`
   (or `/wire ds <request>` in the Chat) asks Jev to pick the best visual direction,

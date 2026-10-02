@@ -1,3 +1,4 @@
+import type { TextRequest } from "./text.js";
 /** Where Jev answers for a caller holding its own key — the CLI and the measurement scripts; the web never calls it (the home does). */
 export declare const JEV_URL = "https://api.typesafe.ai/v1/systemone";
 /** The vendor's moving alias, named in every request so an upgrade needs no deploy; the versioned model that answered comes back as `by`. */
@@ -253,7 +254,10 @@ export interface JsonSchema {
  *
  * Implementations:
  * - `stubTextGenerator(seed)`: deterministic offline generator that synthesizes valid JSON conforming to `schema`.
- * - `httpTextGenerator(opts)`: standard HTTPS JSON-schema completion (`ISOCAN_TEXT_API_KEY` / `ISOCAN_TEXT_MODEL`, zero SDK dependencies).
+ * - `httpTextGenerator(opts)`: an OpenAI-shaped HTTPS JSON-schema completion (zero SDK dependencies).
+ * - `claudeTextGenerator(opts)`: Claude's Messages API with structured outputs (zero SDK dependencies).
+ * - `envTextGenerator(opts)`: whichever of the two the environment names (`ISOCAN_TEXT_PROVIDER`, else the key's shape).
+ * - `homeTextGenerator(post, canvasId)`: the home's `/api/text`, with the home's key — what the web uses.
  */
 export interface TextGenerator {
     readonly name: string;
@@ -276,4 +280,82 @@ export declare function stubTextGenerator(seed?: number): TextGenerator;
  * Reads `ISOCAN_TEXT_API_KEY` and `ISOCAN_TEXT_MODEL` when not passed in `opts`.
  */
 export declare function httpTextGenerator(opts?: HttpTextGeneratorOptions): TextGenerator;
+/** Where Claude answers: the Messages API. `ISOCAN_TEXT_ENDPOINT` overrides it, as it does the OpenAI-shaped one. */
+export declare const CLAUDE_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+/**
+ * The Claude model a text request names when `ISOCAN_TEXT_MODEL` names none:
+ * Claude Opus 5.5, the current default model (the `claude-api` skill's
+ * recommendation, 2 Oct 2026). Its cost lever is `CLAUDE_TEXT_EFFORT`, not a
+ * smaller model: a screen's labels are short structured copy, which low effort
+ * writes well and fast.
+ */
+export declare const CLAUDE_TEXT_MODEL = "claude-opus-5-5";
+/**
+ * How hard Claude thinks before writing a screen's words. Low: the output is a
+ * few dozen labels held to a schema, the dialog is waiting on it, and the
+ * skill's guidance is `low` for simple, latency-sensitive work (Opus 5.5's
+ * own default is `medium`, so it is set explicitly).
+ */
+export declare const CLAUDE_TEXT_EFFORT = "low";
+/** Options for `claudeTextGenerator`. */
+interface ClaudeTextGeneratorOptions {
+    apiKey?: string;
+    model?: string;
+    endpoint?: string;
+    fetch?: typeof globalThis.fetch;
+}
+/**
+ * The schema as Claude's structured outputs accept it: every object closed
+ * (`additionalProperties: false` is required) and array lengths dropped
+ * (only `minItems` of 0 or 1 is supported). What is dropped is checked by the
+ * caller's own validation (`validateCopyPayload` and its kin), as it is for
+ * every generator.
+ */
+export declare function claudeSchema(schema: JsonSchema): JsonSchema;
+/**
+ * **Claude, writing to a schema** — the Messages API with structured outputs
+ * (`output_config.format`), over `fetch` with no SDK: core is isomorphic and
+ * loads in the browser, and the seam it implements is a `fetch` an injected
+ * test transport can stand in for. The key travels as `x-api-key` and never
+ * appears in an error this throws; a refusal and a truncated answer are
+ * errors in words, never half a schema.
+ */
+export declare function claudeTextGenerator(opts?: ClaudeTextGeneratorOptions): TextGenerator;
+/** The text-model vendors core can call. */
+export type TextProvider = "anthropic" | "openai";
+/**
+ * **Which provider a key is for.** `ISOCAN_TEXT_PROVIDER` says so when set
+ * (`anthropic` or `openai`); otherwise the key's own shape decides — an
+ * Anthropic key starts `sk-ant-` — and anything else is the OpenAI-shaped
+ * endpoint, which is what `ISOCAN_TEXT_API_KEY` meant before Claude was a
+ * choice, so no existing setup changes meaning.
+ */
+export declare function textProvider(apiKey?: string | undefined, named?: string | undefined): TextProvider;
+/** Options for `envTextGenerator`: each overrides the environment. */
+interface EnvTextGeneratorOptions {
+    apiKey?: string;
+    model?: string;
+    provider?: TextProvider;
+    fetch?: typeof globalThis.fetch;
+}
+/** The text generator the environment names — the CLI's with a key of its own, and the home's behind `/api/text`. */
+export declare function envTextGenerator(opts?: EnvTextGeneratorOptions): TextGenerator;
+/**
+ * **Words, through the home** — `POST /api/text` with the home's key, so the
+ * web writes copy with a real model and never holds a key. `post` is the
+ * surface's own authenticated call (the dialog host's `generate`); it throws
+ * on a refusal, with the refusal's `code` on the error. Says who wrote the
+ * words: the model the home named, via the home.
+ */
+export declare function homeTextGenerator(post: (request: TextRequest) => Promise<unknown>, canvasId: string): TextGenerator;
+/** The home's text route's refusal when it holds no text-model key (`text.ts` re-exports it with the route's other codes). */
+export declare const TEXT_UNAVAILABLE = "text-unavailable";
+/**
+ * **The home, else placeholder words — said out loud.** `homeOrStub`'s twin
+ * for words: the home's text model, and when the home has none (only that
+ * refusal; any other failure is a failure), the given stub, with `onFallback`
+ * told once. The stub's `name` is what the person reads, so name it as what
+ * it is.
+ */
+export declare function homeTextOrStub(home: TextGenerator, stub: TextGenerator, onFallback: (error: unknown) => void): TextGenerator;
 export {};

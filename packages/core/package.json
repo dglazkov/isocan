@@ -21,6 +21,7 @@
     "./design-use": "./src/design-use.ts",
     "./colour": "./src/colour.ts",
     "./jev": "./src/jev.ts",
+    "./text": "./src/text.ts",
     "./chatclean": "./src/chatclean.ts",
     "./diff": "./src/diff.ts",
     "./voice-dsp": "./src/voice-dsp.ts"

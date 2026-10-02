@@ -1,4 +1,5 @@
-import { type JudgmentOptions } from "./judgment.js";
+import type { JudgmentOptions } from "./judgment.js";
+import type { TextOptions } from "./text.js";
 import type { FastifyInstance } from "fastify";
 import type { Actor } from "../../core/src/index.js";
 import { Engine } from "./engine.js";
@@ -51,6 +52,9 @@ export interface RouteOptions {
     /** The home's judge (`judgment.ts`): its key, rate and transport. Absent,
      * the key is `TYPESAFE_API_KEY` from the environment, read per call. */
     judgment?: JudgmentOptions;
+    /** The home's text model (`text.ts`): its key, provider, rate and transport.
+     * Absent, the key is `ISOCAN_TEXT_API_KEY` from the environment, read per call. */
+    text?: TextOptions;
     /** Local setup persists its pass-returned person in the same process as
      * home badge writes. The route guards local custody before spending a pass. */
     adoptIdentity?: (actor: Actor) => Promise<{

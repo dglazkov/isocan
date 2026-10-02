@@ -2,6 +2,7 @@ import type { ContextPiece } from "./context.js";
 import type { Canvas, CanvasContents, Item } from "./model.js";
 import type { Operation } from "./ops.js";
 import type { JudgmentRequest } from "./judgment.js";
+import type { TextRequest } from "./text.js";
 import type { CommandMetadata, SlashCommand } from "./commands.js";
 /**
  * **The module registry** (`docs/projects/modules/design.md`).
@@ -545,6 +546,16 @@ export interface DialogHost extends WebHost {
      * (`judgment-unavailable` when the home holds no key).
      */
     judge: (question: JudgmentRequest) => Promise<unknown>;
+    /**
+     * **Ask the home's text model** (`TEXT_ROUTE`, module API 0.2.4): a prompt
+     * and the JSON Schema its answer must satisfy, written with the home's key
+     * — which never reaches the browser. Resolves to the route's
+     * `TextResponse` (`{ model, value }`); throws the home's refusal, with its
+     * `code` (`text-unavailable` when the home holds no text-model key). Absent
+     * on a host older than 0.2.4: a module falls back the way it would on that
+     * refusal.
+     */
+    generate?: (request: TextRequest) => Promise<unknown>;
     /** Say something in the canvas's notice bar — a problem stays until seen; anything else flashes. */
     notice: (text: string, problem?: boolean) => void;
 }
@@ -973,8 +984,13 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * **0.2.2 → 0.2.3 on 30 Sep 2026**, an addition: `WebHost.retract`, a member
  * a module is handed (under the existing `host` proposal), never one it must
  * provide. A module built for `^0.2.2` still loads.
+ *
+ * **0.2.3 → 0.2.4 on 2 Oct 2026**, an addition: `DialogHost.generate`, the
+ * home's text route (`TEXT_ROUTE`) handed to a dialog (under the existing
+ * `dialogs` proposal), optional so a module can tell an older host by its
+ * absence. A module built for `^0.2.3` still loads.
  */
-export declare const MODULE_API_VERSION = "0.2.3";
+export declare const MODULE_API_VERSION = "0.2.4";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.
