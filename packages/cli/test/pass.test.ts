@@ -12,6 +12,7 @@ import { harnessVars } from "@isocan/api";
 import { readBadge, writeBadge, type StoredBadge } from "../../server/src/badge-store.ts";
 import { reservePort } from "../../../test/ports.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { cliBin, sourceCliBin, collect, type Run } from "./cli.ts";
 
 /**
  * **Scene 5, from the terminal end.**
@@ -37,7 +38,6 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * The fixtures are synthetic: an Acme canvas, a Priya, a temp directory.
  */
 
-const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 const priya = { id: "usr_priya", name: "Priya" };
 
 let homeDir: string;
@@ -106,12 +106,6 @@ afterEach(async () => {
   );
 });
 
-interface Run {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 function cli(
   cwd: string,
   isocanHome: string,
@@ -136,19 +130,15 @@ function cli(
   for (const v of harnessVars) delete env[v];
   Object.assign(env, extra);
   const hook = identityHook ? ["--import", fileURLToPath(new URL("../../../node_modules/tsx/dist/loader.mjs", import.meta.url)), "--import", fileURLToPath(new URL(identityHookModule, import.meta.url))] : [];
-  const child = spawn(process.execPath, [...hook, cliBin, ...args], {
+  // The hooks patch source-module instances. A bundled copy would bypass
+  // that instrumentation and could make the lost-badge regression go blind.
+  const child = spawn(process.execPath, [...hook, identityHook ? sourceCliBin : cliBin, ...args], {
     cwd,
     env,
     stdio: identityHook ? ["ignore", "pipe", "pipe", "ipc"] : ["ignore", "pipe", "pipe"],
   });
   child.on("message", (message) => identityHook?.(message, () => { if (child.connected) child.send({ type: "continue" }); }));
-  let stdout = "";
-  let stderr = "";
-  child.stdout!.on("data", (c) => (stdout += c));
-  child.stderr!.on("data", (c) => (stderr += c));
-  return new Promise((resolve) =>
-    child.on("close", (code) => resolve({ code: code ?? 0, stdout, stderr })),
-  );
+  return collect(child);
 }
 
 const atHome = (...args: string[]) => cli(homeWork, homeDir, homePort, {}, ...args);

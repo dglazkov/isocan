@@ -23,10 +23,25 @@ async function isocan(...args: string[]): Promise<Run> {
   // is 61KB with em-dashes all through it, and on a loaded CI box one of them
   // was split across two chunks and came back as `���` — one mangled and
   // every other intact. `./cli.ts` keeps the rest of the story.
-  return runCli(args, { env: { ...process.env, ISOCAN_HOME: home } });
+  // Keep the source launcher and its workspace/Markdown loaders under test.
+  return runCli(args, { source: true, env: { ...process.env, ISOCAN_HOME: home } });
 }
 
 describe("isocan --agent-help", () => {
+  it("the test bundle agrees with the source launcher on version, guides and module registration", async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-cli-parity-"));
+    try {
+      for (const args of [["--version"], ["--agent-help", "all"], ["map", "--help"]]) {
+        const expected = await isocan(...args);
+        expect(expected.code, expected.stderr).toBe(0);
+        const bundled = await runCli(args, { env: { ...process.env, ISOCAN_HOME: home } });
+        expect(bundled).toEqual(expected);
+      }
+    } finally {
+      await fs.rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
   it("prints the cold start the CLI ships, and an index of the rest", async () => {
     // The cold start is the guide up to its first topic marker (#124).
     const guide = await fs.readFile(guideFile, "utf8");

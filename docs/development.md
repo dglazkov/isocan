@@ -465,6 +465,22 @@ a delay of roughly one CI run, and no deployment at all if CI fails. Check
 
 ### Test timings and shard balance
 
+Ordinary CLI integration tests run a fresh bundle made by the release builder
+once per Vitest run, shared by that run's workers. It lives in a unique
+`.isocan/test-cli-*` directory and is removed after the run, so another run
+and `test/cli-bundle.test.ts` cannot overwrite it. A build failure fails the
+run; an earlier bundle is never reused. Watch mode uses the source launcher
+so edits are visible on every rerun.
+
+Use `runCli` or `spawnCli` from `packages/cli/test/cli.ts`. Tests about the
+source loader or hooks that patch source-module instances must request
+`source: true`; `pass.test.ts` selects `sourceCliBin` for its IPC hooks. The
+agent-help checks still exercise the source launcher, and a parity check
+compares its version, full guide and module registration with the bundle.
+Both launch real processes against real daemons; the manifest still chooses
+the executable for daemon children, and the isolated-install bundle tests
+still exercise the release layout separately.
+
 `npm run timings` summarizes local runs; `npm run timings -- --ci 10` reports
 the last ten releases, separating initial queue time, elapsed execution and
 the completed `green` step. Per-step durations overlap and are not added to

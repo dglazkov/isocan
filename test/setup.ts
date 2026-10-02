@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isolateModelEnv } from "./model-env.ts";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { Agent, fetch as undiciFetch } from "undici";
 import { afterAll, afterEach, beforeEach } from "vitest";
@@ -73,9 +74,13 @@ process.env.ISOCAN_DEFAULT_HOME = "";
  * `~/.isocan/keys.json` — the person's real one, in an in-process test — so
  * a developer who had run `isocan keys set typesafe` would watch the suite
  * call the real Jev. `ISOCAN_KEYS_HOME` moves that default to an empty
- * directory for this worker and every CLI it spawns. A test about keys sets
- * its own.
+ * directory for this worker and every CLI it spawns. Environment keys win
+ * over that file, so clear those settings too: an ambient Gemini key made
+ * voice-model's two "no key" cases reach their provider stubs instead of
+ * refusing locally. A test about keys supplies its own synthetic settings
+ * after setup, including when it is testing environment precedence.
  */
+isolateModelEnv(process.env);
 const noKeys = mkdtempSync(path.join(os.tmpdir(), "isocan-keys-none-"));
 process.env.ISOCAN_KEYS_HOME = noKeys;
 afterAll(() => rmSync(noKeys, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));

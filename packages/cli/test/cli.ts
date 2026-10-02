@@ -2,6 +2,8 @@ import { spawn, type ChildProcess, type ChildProcessByStdio } from "node:child_p
 import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { harnessVars } from "@isocan/api";
+import { inject } from "vitest";
+import type {} from "../../../test/cli-build.ts";
 
 /**
  * **The one way a test starts the real binary** (cleanup phase 6, TR-13 /
@@ -27,8 +29,10 @@ import { harnessVars } from "@isocan/api";
  * reading finds.
  */
 
-/** The development binary, the one every test in this package drives. */
-export const cliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
+/** Built once from this run's source. No cached bundle or silent fallback. */
+export const cliBin = inject("isocanCli");
+if (!cliBin) throw new Error("test/cli-build.ts must provide the CLI before tests start");
+export const sourceCliBin = fileURLToPath(new URL("../bin/isocan.js", import.meta.url));
 
 export interface Run {
   code: number;
@@ -42,6 +46,8 @@ export interface CliOptions {
   /** Never the repo root by default: a directory identity there would outrank
    *  the home identity a test wrote (see `wait.test.ts`). */
   cwd?: string | undefined;
+  /** Loader checks and source-module hooks need the development launcher. */
+  source?: boolean;
 }
 
 /**
@@ -63,10 +69,14 @@ export function cliEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return { ...env, ...overrides };
 }
 
+function cliArgs(args: readonly string[], options: CliOptions): string[] {
+  return [options.source ? sourceCliBin : cliBin, ...args];
+}
+
 /** Start the binary with piped output, for a test that needs the process
  *  itself — to read it as it runs, or to kill it. `collect` finishes it. */
 export function spawnCli(args: readonly string[], options: CliOptions): ChildProcessByStdio<null, Readable, Readable> {
-  return spawn(process.execPath, [cliBin, ...args], {
+  return spawn(process.execPath, cliArgs(args, options), {
     env: options.env,
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     stdio: ["ignore", "pipe", "pipe"],
@@ -130,7 +140,7 @@ export function runCli(args: readonly string[], options: CliOptions): Promise<Ru
  * exactly as it is under `pbpaste | isocan …`.
  */
 export function runCliWithInput(args: readonly string[], input: string, options: CliOptions): Promise<Run> {
-  const child = spawn(process.execPath, [cliBin, ...args], {
+  const child = spawn(process.execPath, cliArgs(args, options), {
     env: options.env,
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     stdio: ["pipe", "pipe", "pipe"],

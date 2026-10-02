@@ -414,11 +414,11 @@ async function callTool(
 /** The CLI, with this test's temp home and daemon — the same launcher the acp
  * suite uses, so the machine badge and the identity resolution are the real
  * ones. */
-function isocan(args: string[], extraEnv: Record<string, string> = {}): Promise<Run> {
+function isocan(args: string[], extraEnv: Record<string, string> = {}, source = false): Promise<Run> {
   // EVERY harness variable, not just isocan's two: this suite runs inside pi,
   // so `PI_SESSION_ID` in the ambient environment made the spawned CLI read
   // itself as a harness session and refuse `rc turn` as an agent's verb.
-  return runCli(args, { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv }) });
+  return runCli(args, { source, cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: new URL(base).port, ...extraEnv }) });
 }
 
 describe("what a sentence means", () => {
@@ -996,7 +996,7 @@ describe("the page", () => {
     const before = (await client.actorBindings([key]))[0]!.actor;
     const claimed = await isocan(["identity", "--name", "Voice", "--session"], {
       ISOCAN_SESSION_ID: session, ISOCAN_HARNESS: "agent",
-    });
+    }, true);
     expect(claimed.code, claimed.stderr).toBe(0);
     expect((await client.actorBindings([key]))[0]!.actor).toEqual(before);
     const server = await serve();

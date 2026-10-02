@@ -104,6 +104,6 @@ export default defineConfig({
     // only place a Firestore emulator can be started and have every worker
     // inherit its address. See test/emulator.ts for the three tiers and for
     // what happens on a machine that has none.
-    globalSetup: ["test/emulator.ts", "test/deepgate.ts"],
+    globalSetup: ["test/emulator.ts", "test/deepgate.ts", "test/cli-build.ts"],
   },
 });
