@@ -301,8 +301,6 @@
     header .where[data-tip]::after {
       left: 0;
       right: auto;
-      max-width: 320px;
-      word-break: break-all;
     }
     [data-tip]:hover::after,
     [data-tip]:focus-visible::after {
@@ -315,9 +313,8 @@
   <header>
     <a class="where" id="where" target="_blank" rel="noopener"><span class="where-text" id="where-text">Waiting for Jetski to say which workspace this is…</span></a>
     <span class="spacer"></span>
-    <button id="inbox-toggle" type="button" hidden aria-expanded="false" title="Questions agents left on the canvas that nobody has answered" data-tip="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
-    <button id="agents-toggle" type="button" hidden aria-expanded="true" title="Hide the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine." data-tip="Hide the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.">Agents ▾</button>
-    <a id="open" href="#" target="_blank" rel="noopener" hidden title="Open this canvas in an external browser tab (with its own chat)" data-tip="Open this canvas in an external browser tab (with its own chat)">Open ↗</a>
+    <button id="inbox-toggle" type="button" hidden aria-expanded="false" data-tip="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
+    <button id="agents-toggle" type="button" hidden aria-expanded="true" data-tip="Hide the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.">Agents ▾</button>
   </header>
 
   <div class="bar" id="agents" hidden>
@@ -483,17 +480,16 @@
 
     function setWhere(label, url = "", fallbackTip = "") {
       $("where-text").textContent = label;
-      const tip = url || fallbackTip;
+      const tip = url ? "Open in browser ↗" : fallbackTip;
       if (url) {
         $("where").href = url;
       } else {
         $("where").removeAttribute("href");
       }
+      $("where").removeAttribute("title");
       if (tip) {
-        $("where").title = tip;
         $("where").setAttribute("data-tip", tip);
       } else {
-        $("where").title = "";
         $("where").removeAttribute("data-tip");
       }
     }
@@ -501,7 +497,6 @@
     function show(which) {
       for (const id of ["frame", "unbound", "nocli", "noworkspace"]) $(id).hidden = id !== which;
       const framing = which === "frame";
-      $("open").hidden = !framing;
       $("selection").hidden = !framing;
       if (!framing) {
         sayAsk("");
@@ -608,7 +603,6 @@
         framed = { canvasId: state.canvasId, origin: new URL(embed.address).origin, tab, ready: false };
         setSelection([]);
         $("frame").src = embed.address;
-        $("open").href = tab;
         setWhere(`${leaf(state.workspace)} · ${state.title || state.canvasId}`, tab);
         show("frame");
         const here = location.hostname;
@@ -632,7 +626,7 @@
       $("agents-toggle").setAttribute("aria-expanded", String(expanded));
       $("agents-toggle").textContent = expanded ? "Agents ▾" : "Agents ▸";
       const tip = `${expanded ? "Hide" : "Show"} the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.`;
-      $("agents-toggle").title = tip;
+      $("agents-toggle").removeAttribute("title");
       $("agents-toggle").setAttribute("data-tip", tip);
     }
 
