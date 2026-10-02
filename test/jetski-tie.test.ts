@@ -479,12 +479,15 @@ describe("the page and its server agree", () => {
     expect(page).toContain("Watch the chat column on the left for the reply.");
   });
 
-  it("turns the header title (#where) into a link with a URL popover when framed, drops the Reload button, and shows instant CSS [data-tip] popovers on Open, Agents, Asks, and the Agents: label", () => {
+  it("turns the header title (#where) into the open link with an 'Open in browser' popover when framed, drops the Reload and Open buttons, and shows instant CSS [data-tip] popovers (never a native title) on Agents, Asks, and the Agents: label", () => {
     expect(page).not.toContain('id="reload"');
     expect(page).toMatch(/<a class="where" id="where" target="_blank" rel="noopener"><span class="where-text" id="where-text">/);
     expect(page).toContain("header .where[data-tip]::after");
     expect(page).toContain('setWhere(`${leaf(state.workspace)} · ${state.title || state.canvasId}`, tab)');
-    expect(page).toMatch(/id="open"[^>]*data-tip="[^"]*external browser/);
+    expect(page).not.toContain('id="open"');
+    expect(page).toContain('const tip = url ? "Open in browser ↗" : fallbackTip;');
+    expect(page).toContain('$("where").removeAttribute("title")');
+    expect(page).not.toMatch(/id="(agents-toggle|inbox-toggle)"[^>]*\stitle="/);
     expect(page).toMatch(/id="agents-toggle"[^>]*data-tip="Hide the Agents bar/);
     expect(page).toMatch(/id="inbox-toggle"[^>]*data-tip="Questions agents left on the canvas/);
     expect(page).toMatch(/id="agents-note"[^>]*data-tip="They answer @mentions on the canvas while isocan rc runs on this machine\."/);
