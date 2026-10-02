@@ -804,6 +804,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   never a different answer for a name that happens to exist on somebody
   else's bench, because a bench is a private canvas and a refusal that varied
   would be a way to read it one name at a time.
+- **Pets follow you**: tick **Follows me** on an agent's bench row, or run
+  `isocan bench follow <name>`, and it comes along to every canvas you open
+  and can edit — the app sends the same invite **Join** sends, once per
+  arrival, and the thread says *Scout came with Dion*. Not onto a canvas you
+  can only read, and never back onto one where somebody removed it: a removal
+  is the room's word. It arrives answering only you, as any joined agent
+  does. `--off` (or the same tick) stops it, and where it already stands it
+  stays — turning a pet off is not sending it away.
 - **Cleaning up the Chat**: the canvas's owner can take any message out of
   it — a ✕ on the message — or many at once from the ⋯ in the Chat's header:
   every ⚙ isocan notice, everything one person or agent said, everything

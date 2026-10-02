@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
+import type { MetaPatch } from "./ops.ts";
 import type { PresenceSession } from "./protocol.ts";
 import { roster, type RowState } from "./roster.ts";
 
@@ -64,6 +65,17 @@ const AGENT_MODEL_PROP = "model";
  * reader may infer a working directory from it.
  */
 const AGENT_RUNS_AT_PROP = "runsAt";
+/**
+ * `follows=true` — this agent is the person's PET: it comes along to every
+ * canvas they open and can edit (`docs/projects/pets`, phase 2). Absent means
+ * off, and off is written by REMOVING the property rather than by a second
+ * spelling of no, so a row has exactly one way to say it follows.
+ *
+ * Still a record, like the rest of the row: it grants nothing by itself. What
+ * it asks for is an `agent.invite` the arriving person's own app sends, on a
+ * canvas that person could have joined it to by hand anyway.
+ */
+const AGENT_FOLLOWS_PROP = "follows";
 /** The blob a bench item carries. An item.add needs a version, and the honest
  * one here is the row written out — readable on the canvas itself, so the
  * registry is not a row of blank cards. */
@@ -128,6 +140,9 @@ export interface BenchAgent {
   model?: string | null | undefined;
   /** Where it runs, opaquely. Null when nobody said. */
   runsAt: string | null;
+  /** Comes along to every canvas its owner opens and can edit — a pet
+   * (`petsToBring`). False when the row never said. */
+  follows: boolean;
 }
 
 /** Is this item a bench row at all? The `kind` test, spelled once — and kept
@@ -152,7 +167,68 @@ export function benchAgentOf(item: Item): BenchAgent | null {
     harness: item.properties[AGENT_HARNESS_PROP] ?? null,
     model: item.properties[AGENT_MODEL_PROP] ?? null,
     runsAt: item.properties[AGENT_RUNS_AT_PROP] ?? null,
+    follows: item.properties[AGENT_FOLLOWS_PROP] === "true",
   };
+}
+
+/**
+ * **The one write that turns following on or off** — an `item.update` patch
+ * for the bench row, spelled here so `isocan bench follow` and the app's
+ * *Follows me* switch cannot write the field two ways. One op, so one undo.
+ */
+export function benchFollowPatch(on: boolean): MetaPatch {
+  return on
+    ? { properties: { [AGENT_FOLLOWS_PROP]: "true" } }
+    : { removeProperties: [AGENT_FOLLOWS_PROP] };
+}
+
+/**
+ * **The pets an arrival brings** (`docs/projects/pets`, phase 2, scene 3) —
+ * the following rows on this person's bench that should be invited to the
+ * canvas they just opened.
+ *
+ * Three exclusions, each a scene:
+ *
+ * - **Nothing at all when the person cannot edit.** A reader on a canvas
+ *   shared read-only could not have joined an agent by hand, and a pet is
+ *   not a way around that: the home would refuse the invite anyway, and a
+ *   refusal is not something to try once per arrival.
+ * - **Not one already standing here.** Inviting it again would change
+ *   nothing but put a second line in the thread.
+ * - **Not one somebody withdrew from here.** A removal is the room's word
+ *   (`CanvasContents.withdrawn`); a pet respects it. A person may
+ *   still join it again by hand, which is a person's word, not a pet's.
+ *
+ * Pure: the caller sends the invites, so the CLI and the app cannot disagree
+ * about which agents an arrival should bring.
+ */
+export function petsToBring(
+  bench: readonly BenchAgent[],
+  canvas: CanvasContents,
+  canEdit: boolean,
+): BenchAgent[] {
+  if (!canEdit) return [];
+  return bench.filter(
+    (row) =>
+      row.follows &&
+      canvas.agents?.[row.actorId] === undefined &&
+      canvas.withdrawn?.[row.actorId] === undefined,
+  );
+}
+
+/**
+ * The one line the thread gets when a pet arrives — the same kind of line
+ * `@Name join` posts (`benchJoinWords`), naming whose pet it is.
+ *
+ * It says the agent CAME, never that it is answering: the line lands the
+ * moment the home accepts the invite, and the agent's own machine notices
+ * the canvas up to `RC_DISCOVER_MS` later (pets phase 1). Lives here, in the
+ * lazy half, rather than beside `benchJoinWords` in the eager `benchjoin.ts`:
+ * the entry chunk has a hundred-odd bytes of room and only an arrival with a
+ * following bench ever needs these words.
+ */
+export function petCameWords(name: string, owner: string): string {
+  return `${name} came with ${owner}. It stands on this canvas now; no turn was started and no other canvas changed.`;
 }
 
 /** Everybody on this bench, by name. The canvas is the registry, so this is

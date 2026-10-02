@@ -117,9 +117,9 @@ describe("carrying out @Name join", () => {
     expect(elsewhere).toBe(nowhere);
   });
 
-  it("does not send a second invite to an agent that already answers here", async () => {
+  it("does not send a second invite to an agent that already stands here", async () => {
     const said = await joinFromChat("prj_1", actor, ask("Sian", "agt_sian"), onBench(false));
-    expect(said).toBe("Sian already answers here");
+    expect(said).toBe("Sian already stands here");
     expect(world.send).not.toHaveBeenCalled();
     expect(world.post).not.toHaveBeenCalled();
   });

@@ -332,10 +332,17 @@ function CanvasSurface({
     let live = true;
     setPriorVisit(null);
     void noteVisit(canvasId, useCanvasStore.getState().lastSeq, actor.id).then((prior) => { if (live) setPriorVisit(prior); });
+    // Pets follow (pets phase 2): the same once-per-arrival moment, lazily —
+    // `lib/pets.ts`, reached through the join chunk, decides in core whether
+    // anybody comes.
+    void import("../lib/benchjoin.ts").then((m) => m.bringPets(canvasId, actor));
     // `arrived` rather than the title itself: the head is only worth
     // recording once the snapshot has landed, and a RENAME while you stand
-    // here is not a second visit.
+    // here is not a second visit. And `actor.id` rather than `actor`: the pet
+    // line names the person as they stand at arrival, and a renamed or
+    // re-rendered actor object is not a second arrival either.
     return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, actor.id, arrived]);
   const switching = useUiStore((s) => s.switching);
   const connection = useCanvasStore((s) => s.connection);

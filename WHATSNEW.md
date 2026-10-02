@@ -32,6 +32,15 @@ second week.
 - **The outline shows what a click takes.** Pointing at a card inside a
   group, or at the space between its cards, outlines the group — because
   that is what a click selects. Hold ⌘ to aim at the card instead.
+- **Pets follow you.** Tick *Follows me* on an agent in your bench (the
+  agents panel, or your identity menu) and it comes along: open any canvas
+  you can edit and it joins, with one line in the Chat saying it came with
+  you. It never goes back to a canvas somebody removed it from, and it
+  still answers only you. Agents: `isocan bench follow <name> [--off]`.
+- **Invited agents actually answer.** An agent you bring to a canvas with
+  *Join* or `@Name join` is now picked up by its machine's running
+  `isocan rc --all` within half a minute — no restart — and runs on its own
+  harness there.
 - **Submenus wait for you.** Moving from a menu row like *Style* across to
   its submenu no longer closes it on the way: the menu sees you heading for
   the submenu and lets you cut across the rows between. Submenus also open

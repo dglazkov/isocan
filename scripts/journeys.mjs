@@ -1628,6 +1628,106 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "pet-follows",
+    /**
+     * **Pets follow — pets phase 2, scenes 2 to 4, walked.**
+     *
+     * A guard can prove `petsToBring` decides; only the running app proves an
+     * ARRIVAL acts on it: the page, after the snapshot, once, sending the
+     * invite and writing one line. So: Theo ticks *Follows me* on Scout in
+     * the agents panel, opens a second canvas, and Scout stands there with
+     * the thread saying so; a reload says nothing twice; a removal is
+     * respected; and with following off, a third canvas stays Scout-free.
+     * Every read-back is the terminal's — the other surface, asked
+     * independently.
+     */
+    what: "a pet comes along to a canvas its owner opens, once, and stops when following is off",
+    async run(rig) {
+      const runCli = (...args) =>
+        execFileSync(process.execPath, [cli, ...args], {
+          cwd: rig.home,
+          encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port },
+        });
+      const poll = async (read, what, ms = 10_000) => {
+        const deadline = Date.now() + ms;
+        for (;;) {
+          if (read()) return;
+          if (Date.now() > deadline) throw new Error(`never became true: ${what}`);
+          await sleep(250);
+        }
+      };
+      const standing = (canvasId) =>
+        (JSON.parse(runCli("--json", "--canvas", canvasId, "who")).standing ?? []).map((row) => row.actor.name);
+      const lines = (canvasId) =>
+        JSON.stringify(JSON.parse(runCli("--json", "--canvas", canvasId, "comment", "ls"))).split("Scout came with Theo").length - 1;
+      const open = async (canvasId, what) => {
+        await rig.b.send("Page.navigate", { url: `${rig.origin}/p/${canvasId}` });
+        await sleep(1500);
+        await until(rig.b, `!!document.querySelector(".world")`, what);
+      };
+
+      writeFileSync(
+        path.join(rig.home, "identity.json"),
+        JSON.stringify({ id: "usr_pet_theo", name: "Theo", createdAt: new Date().toISOString() }),
+      );
+      // Scout is a record — an actor nothing runs. A pet's arrival asks
+      // nothing of any machine, so none is needed to watch one arrive.
+      runCli("bench", "add", "Scout", "--actor", "usr_journey_scout", "--harness", "pi");
+      const [one, two, three] = ["Acme pets one", "Acme pets two", "Acme pets three"].map(
+        (title) => JSON.parse(runCli("--json", "canvas", "create", title)).canvasId,
+      );
+      const { address } = JSON.parse(runCli("--json", "--canvas", one, "pass"));
+      await rig.b.ev(`(() => { localStorage.clear(); return true; })()`);
+      await rig.b.send("Page.navigate", { url: address });
+      await sleep(2500);
+      await until(rig.b, `!!document.querySelector(".world")`, "the canvas to open for Theo");
+
+      // Scene 2: Follows me, in the agents panel — one fact on one row.
+      await rig.click('button[aria-label="More"]', "the ··· menu");
+      await rig.clickText(".menu-entry,[role=menuitem],.ctx-entry", "Agents", "the Agents entry");
+      await until(rig.b, `!!document.querySelector(".tray-bench .bench-follows input")`, "Follows me on Scout's row");
+      await rig.click(".tray-bench .bench-follows input", "Follows me");
+      await poll(() => JSON.parse(runCli("--json", "bench")).bench.find((row) => row.name === "Scout")?.follows === true, "the bench row to say Scout follows");
+      // Ticking it invites Scout nowhere — not even here.
+      if (standing(one).includes("Scout")) throw new Error("ticking Follows me brought Scout to the canvas it was ticked on");
+
+      // Scene 3: it follows, and the thread says so — once.
+      await open(two, "the second canvas to open");
+      await poll(() => standing(two).includes("Scout"), "Scout to stand on the second canvas");
+      await poll(() => lines(two) === 1, "the thread to say Scout came with Theo");
+      await rig.b.send("Page.reload", {});
+      await sleep(1500);
+      await until(rig.b, `!!document.querySelector(".world")`, "the second canvas to reopen");
+      await sleep(3000);
+      if (lines(two) !== 1) throw new Error(`a reload said it again: ${lines(two)} lines`);
+
+      // A removal is the room's word: withdrawn from the second canvas, Scout
+      // does not walk back on when Theo reopens it.
+      runCli("--canvas", two, "rc", "remove", "Scout");
+      await open(one, "the first canvas to reopen");
+      await open(two, "the second canvas, after the removal");
+      await sleep(3000);
+      if (standing(two).includes("Scout")) throw new Error("Scout came back onto a canvas it was removed from");
+
+      // The first canvas was opened again with following on: Scout came there
+      // too, which is the feature rather than a leak.
+      await poll(() => standing(one).includes("Scout"), "Scout to follow Theo back to the first canvas");
+
+      // Scene 4: off. A new canvas stays Scout-free, and where it stands it stays.
+      runCli("bench", "follow", "Scout", "--off");
+      await open(three, "the third canvas to open");
+      await sleep(3000);
+      if (standing(three).includes("Scout")) throw new Error("Scout followed with following off");
+      if (lines(three) !== 0) throw new Error("the third canvas was told Scout came");
+      if (!standing(one).includes("Scout")) throw new Error("turning following off sent Scout away");
+
+      const errors = rig.b.takeErrors();
+      if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+      return { lines: lines(two), standingOn: { one: standing(one), two: standing(two), three: standing(three) } };
+    },
+  },
+  {
     name: "summons-receipt",
     /**
      * **A summons you can see — #197 phase 1, walked.**

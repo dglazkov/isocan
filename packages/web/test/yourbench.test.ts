@@ -187,7 +187,19 @@ describe("the bench is behind a lazy boundary", () => {
     expect(
       readers,
       "a fourth reader of lib/bench.ts is a fourth door into the entry chunk — put it behind a lazy boundary and add it here",
-    ).toEqual(["components/BenchJoin.tsx", "components/YourBench.tsx", "lib/benchmentions.ts"]);
+    ).toEqual(["components/BenchJoin.tsx", "components/YourBench.tsx", "lib/benchmentions.ts", "lib/pets.ts"]);
+
+    /**
+     * `lib/pets.ts` (pets phase 2) is the fourth, and it is allowed for the
+     * reason `benchmentions.ts` is: nothing reaches it but an `import()`. The
+     * canvas page's arrival effect fetches the join chunk, which fetches this
+     * — so a plain `import … from "./pets.ts"` anywhere would be the door this
+     * guard exists to keep shut.
+     */
+    const petsStatically = sources()
+      .filter(([, text]) => /from\s*"\.{1,2}\/(?:\.\.\/)*(?:lib\/)?pets\.ts"/.test(text))
+      .map(([rel]) => rel);
+    expect(petsStatically, "lib/pets.ts imported without import() — it would carry the bench reader into its importer's chunk").toEqual([]);
 
     /**
      * And who imports the two panels with a plain `import`, which is what

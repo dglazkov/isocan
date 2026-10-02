@@ -96,6 +96,23 @@ describe("agent.enroll / agent.withdraw", () => {
     expect(after.canvas.items).toEqual(before.canvas.items);
   });
 
+  it("withdrawal keeps the room's word, and who said it (pets phase 2)", () => {
+    const enrolled = apply(seedState(), { type: "agent.enroll", agent: sian })!;
+    expect(enrolled.canvas).not.toHaveProperty("withdrawn");
+    const withdrawn = apply(enrolled, { type: "agent.withdraw", actorId: sian.id }, bob)!;
+    // What a following pet reads so it does not walk back onto a canvas it
+    // was removed from.
+    expect(withdrawn.canvas.withdrawn).toEqual({ usr_sian: bob });
+    // A person bringing it back by hand is not refused by it — the record
+    // decides nothing at the door — and a later withdrawal writes a newer word
+    // beside any other agent's.
+    const percy: Actor = { id: "usr_percy", name: "Percy" };
+    const again = apply(apply(withdrawn, { type: "agent.invite", agent: sian, from: "prj_bench" })!, { type: "agent.enroll", agent: percy })!;
+    expect(Object.keys(again.canvas.agents ?? {}).sort()).toEqual(["usr_percy", "usr_sian"]);
+    const both = apply(apply(again, { type: "agent.withdraw", actorId: sian.id })!, { type: "agent.withdraw", actorId: percy.id })!;
+    expect(both.canvas.withdrawn).toEqual({ usr_sian: alice, usr_percy: alice });
+  });
+
   it("withdrawing a stranger is refused", () => {
     expect(() => apply(seedState(), { type: "agent.withdraw", actorId: "usr_ghost" })).toThrow(
       OpValidationError,

@@ -1,5 +1,5 @@
 ---
-status: partial
+status: built
 since: 2026-10-01
 see: bench, standing-agents, agent-custody
 note: "A pet follows its owner: an agent from your bench, marked as your pet once, joins every canvas you open and can edit, says so in the thread, and answers only you unless you widen it. One switch on the bench row turns following off. First the rc must notice canvases it was invited to while running. The sheepdog note (docs/research/2026-09-04-sheepdog.md) is the ancestor; this is its stage 1 rebuilt on the bench."

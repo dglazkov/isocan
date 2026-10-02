@@ -3,6 +3,7 @@ import type { Command } from "commander";
 import {
   BENCH_ITEM_SIZE,
   benchAgents,
+  benchFollowPatch,
   benchItemOf,
   benchJoinRefusal,
   benchRows,
@@ -174,6 +175,7 @@ async function knownAgent(ctx: Ctx, name: string): Promise<BenchAgent | null> {
     harness,
     model: row.model ?? null,
     runsAt: thisMachine(),
+    follows: false,
   };
 }
 
@@ -317,7 +319,11 @@ summon it. Reachability is measured every time you look:
 It fills itself: enrolling an agent anywhere writes its row, so you rarely
 need \`bench add\`. Withdrawing one does not take it off — the bench is the
 agents you HAVE, so a row that stands nowhere stays, reading unreachable.
-\`bench rm\` is the only way one leaves.`,
+\`bench rm\` is the only way one leaves.
+
+\`bench follow <name>\` makes one your pet: when you open a canvas you can
+edit in the app, it is invited there and the thread says it came with you —
+never where somebody removed it. \`--off\` stops it; where it stands, it stays.`,
     );
 
   const act = (work: (ctx: Ctx, args: any[]) => Promise<void>) => withContext(contextOf, work);
@@ -338,6 +344,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
           harness: row.model ? `${row.harness ?? "—"} (${row.model})` : row.harness ?? "—",
           standing: benchStandingWords(row),
           reach: benchWords(row),
+          follows: row.follows ? "follows you" : "",
         })),
       );
     }),
@@ -421,7 +428,7 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
    */
   bench
     .command("join <name>")
-    .description("Bring an agent from your bench to this canvas — it answers here, and nothing else changes")
+    .description("Bring an agent from your bench to this canvas — it stands here, and nothing else changes")
     .action(
       act(async (ctx, args) => {
         const name = args[0] as string;
@@ -467,6 +474,51 @@ agents you HAVE, so a row that stands nowhere stays, reading unreachable.
           `${joined.name} stands on ${target.title} now — ${benchWords(joined)}, ${benchStandingWords(joined)}. ` +
             `A running \`isocan rc --all\` on its machine picks this up within ${Math.round(RC_DISCOVER_MS / 1000)} s; a plain \`isocan rc\` parked elsewhere does not. ` +
             "Nothing else moved: no turn was started, no summons rule was written, and no other canvas changed.",
+        );
+      }),
+    );
+
+  /**
+   * **`isocan bench follow <name> [--off]`** — make an agent your pet, or stop
+   * (`docs/projects/pets`, phase 2, scenes 2 and 4).
+   *
+   * One `item.update` on the bench row, the patch spelled by core's
+   * `benchFollowPatch` so the app's *Follows me* switch writes the same
+   * bytes. It invites the agent nowhere by itself: following is acted on by
+   * the person's app when they ARRIVE on a canvas they can edit, which a
+   * terminal never does. And off takes it off nothing — the canvases it
+   * already stands on keep it, because turning a pet off is not sending it
+   * away (`isocan rc remove` on that canvas is that).
+   */
+  bench
+    .command("follow <name>")
+    .description("Make an agent your pet: it comes along to every canvas you open and can edit (--off stops it)")
+    .option("--off", "stop following — the canvases it already stands on keep it")
+    .action(
+      act(async (ctx, args) => {
+        const name = args[0] as string;
+        const opts = args[1] as { off?: boolean };
+        const on = !opts.off;
+        const canvasId = await benchCanvasId(ctx);
+        if (!canvasId) throw new Error("you have no bench here — `isocan bench add <name>` puts an agent on one first");
+        const row = oneRow(benchAgents((await ctx.client.snapshot(canvasId)).canvas), name);
+        if (row.follows !== on) {
+          await ctx.client.sendOp(canvasId, ctx.actor, {
+            type: "item.update",
+            itemId: row.itemId,
+            patch: benchFollowPatch(on),
+          });
+        }
+        const agent = { ...row, follows: on };
+        if (ctx.json) return printJson({ canvasId, itemId: row.itemId, changed: row.follows !== on, agent });
+        if (row.follows === on) {
+          return console.log(on ? `${row.name} already follows you.` : `${row.name} does not follow you.`);
+        }
+        console.log(
+          on
+            ? `${row.name} follows you now: when you open a canvas you can edit in the app, it is invited there and the thread says it came with you. ` +
+                "Not where somebody removed it, and not on canvases you can only read. Nothing was invited just now."
+            : `${row.name} no longer follows you. The canvases it already stands on keep it — \`isocan rc remove\` on a canvas is how it leaves one.`,
         );
       }),
     );

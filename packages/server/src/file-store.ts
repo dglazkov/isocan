@@ -56,6 +56,8 @@ interface CanvasSnapshotFile {
    * before the field — those predate any `agent.enroll` op, so absent means
    * empty, never lost. */
   agents?: CanvasState["canvas"]["agents"];
+  /** Withdrawals a pet respects (pets phase 2). Absent when there are none. */
+  withdrawn?: CanvasState["canvas"]["withdrawn"];
 }
 
 export class FileStore implements Store {
@@ -214,7 +216,7 @@ export class FileStore implements Store {
     let state: CanvasState = {
       project: record,
       canvas: snapshot
-        ? { items: snapshot.items, threads: snapshot.threads, trash, agents: snapshot.agents ?? {}, ...(snapshot.groupCohorts ? { groupCohorts: snapshot.groupCohorts } : {}) }
+        ? { items: snapshot.items, threads: snapshot.threads, trash, agents: snapshot.agents ?? {}, ...(snapshot.groupCohorts ? { groupCohorts: snapshot.groupCohorts } : {}), ...(snapshot.withdrawn ? { withdrawn: snapshot.withdrawn } : {}) }
         : { ...emptyCanvas(), trash },
     };
     let lastSeq = snapshot?.lastSeq ?? 0;
@@ -288,6 +290,7 @@ export class FileStore implements Store {
       items: state.canvas.items,
       threads: state.canvas.threads,
       agents: state.canvas.agents ?? {},
+      ...(state.canvas.withdrawn ? { withdrawn: state.canvas.withdrawn } : {}),
     };
     await writeFileAtomic(p.canvasFile(this.home, id), pretty(snapshot));
     await writeFileAtomic(p.trashFile(this.home, id), pretty(state.canvas.trash));
