@@ -3384,6 +3384,14 @@ Without `ISOCAN_TEXT_API_KEY`, the text model uses the stored Anthropic key,
 else the stored OpenAI one. A hosted home's keys are its operator's, not
 yours — this file is this machine's only.
 
+**The same file has a settings area in the web app**: *Model keys…* in the
+identity menu, under *This machine*, on a page served by this machine's
+daemon. It is these four verbs over `GET|PUT|DELETE /api/keys[/<provider>]`
+and `POST /api/keys/<provider>/test` — answered only to a loopback peer with a
+loopback Host and Origin, 404 on a hosted home — and it is write-only too. A
+person can set a key there instead of in your terminal; `isocan keys` reads
+what they set.
+
 <!-- topic: sharing | who may enter — `share`, spaces, groups of people, passes, embeds, badges, and the refusals -->
 
 ## Sharing a canvas

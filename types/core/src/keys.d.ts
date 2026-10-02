@@ -90,4 +90,37 @@ export interface ResolvedTextKey extends ResolvedKey {
 export declare function chooseTextKey(env: KeyEnv, stored: (provider: TextKeyProvider) => StoredKey | undefined): ResolvedTextKey | undefined;
 /** **The only way a key is ever shown**: its last four characters, after an ellipsis. Short keys show nothing of themselves. */
 export declare function lastFour(key: string): string;
+/**
+ * **The machine-local key routes** (keys phase 2): `GET` lists the rows,
+ * `PUT /api/keys/:provider` takes `{ key }`, `DELETE` removes one, and
+ * `POST /api/keys/:provider/test` makes one cheap call. Served only by a
+ * daemon on this machine, to this machine (`key-routes.ts`); a hosted home
+ * answers 404 with `KEYS_NOT_HERE`.
+ */
+export declare const KEYS_ROUTE = "/api/keys";
+/** The refusal code a home that is not this machine's answers the key routes with. */
+export declare const KEYS_NOT_HERE = "keys-not-here";
+/**
+ * One provider's row — what `isocan keys ls` prints and `GET /api/keys`
+ * returns, from one function so the two cannot disagree. Never a value: the
+ * last four, when it was added, and whether the environment overrides it.
+ */
+export interface KeyRow {
+    provider: KeyProvider;
+    label: string;
+    stored: boolean;
+    lastFour: string | null;
+    addedAt: string | null;
+    model: string | null;
+    /** The environment variable that overrides the file, when one is set. */
+    env: {
+        variable: string;
+        lastFour: string;
+    } | null;
+    /** Which key a spender uses now: the environment's, the file's, or none. */
+    inUse: "env" | "file" | null;
+    usedFor: string[];
+}
+/** Every provider's row, from the stored keys and an environment. Pure. */
+export declare function keyRows(stored: Partial<Record<KeyProvider, StoredKey>>, env: KeyEnv): KeyRow[];
 export {};

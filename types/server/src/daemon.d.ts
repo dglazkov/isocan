@@ -7,6 +7,7 @@ import { PresenceHub } from "./presence.js";
 import { type AuthConfig, type SigningKeys } from "./attest.js";
 import { HomeLinks } from "./home-links.js";
 import type { JudgmentOptions } from "./judgment.js";
+import type { KeyRouteOptions } from "./key-routes.js";
 import type { TextOptions } from "./text.js";
 export interface DaemonOptions {
     port?: number;
@@ -193,6 +194,9 @@ export interface DaemonOptions {
      * transport; a running home reads `ISOCAN_TEXT_API_KEY`, else its
      * `keys.json`, per call. */
     text?: TextOptions;
+    /** The settings area's key routes (`key-routes.ts`) — tests hand them an
+     * environment and a fake provider; a running home reads its own. */
+    keys?: KeyRouteOptions;
 }
 export interface RunDaemonOptions extends DaemonOptions {
     /** Stop whatever daemon is already there and take the port. What `npm run

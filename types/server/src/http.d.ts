@@ -1,5 +1,6 @@
 import type { JudgmentOptions } from "./judgment.js";
 import type { TextOptions } from "./text.js";
+import { type KeyRouteOptions } from "./key-routes.js";
 import type { FastifyInstance } from "fastify";
 import type { Actor } from "../../core/src/index.js";
 import { Engine } from "./engine.js";
@@ -55,6 +56,9 @@ export interface RouteOptions {
     /** The home's text model (`text.ts`): its key, provider, rate and transport.
      * Absent, the key is `ISOCAN_TEXT_API_KEY`, else `keys.json`, read per call. */
     text?: TextOptions;
+    /** The machine-local key routes (`key-routes.ts`): the environment and the
+     * provider transport they read. Absent, `process.env` and `fetch`. */
+    keys?: KeyRouteOptions;
     /** Local setup persists its pass-returned person in the same process as
      * home badge writes. The route guards local custody before spending a pass. */
     adoptIdentity?: (actor: Actor) => Promise<{
