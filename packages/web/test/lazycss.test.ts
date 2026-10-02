@@ -50,8 +50,12 @@ import { classesOf, eagerWebFiles, namedBy, sources } from "./cssuse.ts";
  * against the new one, element for element. What is left is mostly small
  * sections whose chunk has no sheet yet, each worth ~40 bytes of entry JS the
  * bundle ceiling no longer has to spare.
+ *
+ * 318 became 317 on 2 Oct 2026: the identity menu's doors became menu rows,
+ * which dropped two of its rules and shared two more with eager or existing
+ * ones, adding back only `.identity-action-words`.
  */
-const CEILING = 318;
+const CEILING = 317;
 
 const eagerFiles = eagerWebFiles();
 const isLazyWeb = (file: string) => file.startsWith("packages/web/src/") && !eagerFiles.has(file);
