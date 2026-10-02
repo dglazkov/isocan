@@ -187,7 +187,8 @@ it("hands keyboard focus to submenu children only after their React commit", () 
   expect(menu).toContain('focused.dataset.menuIntent = "keyboard-open"');
   expect(submenu).toMatch(/useLayoutEffect\(\(\) => \{\s*if \(!open \|\| !focusChildren\) return;/);
   expect(submenu).toContain('first?.focus()');
-  expect(submenu).toContain('onPointerEnter={() => setOpen(true)}');
+  // Hover asks the menu's aim (lib/menuaim.ts) and never asks for focus.
+  expect(submenu).toContain('onPointerEnter={() => aim.want(entry.label)}');
   expect(menu).toContain('parent.dataset.menuIntent = "close"');
   expect(menu).not.toContain('queueMicrotask');
 });

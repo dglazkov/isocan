@@ -1414,6 +1414,106 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "submenu-diagonal",
+    /**
+     * **A submenu forgives a diagonal** (1 Oct 2026). Dion: right-click, hover
+     * Style ›, move toward its children — and they vanished, because the
+     * shortest path crosses the row below. Now a pointer heading into the open
+     * submenu keeps it (`lib/menuaim.ts`): this walks that diagonal in small
+     * real mouse steps, crossing the row below Align, and chooses the far item;
+     * then walks straight DOWN from Align and insists the menu does let go.
+     */
+    what: "a diagonal from Align › across the row below keeps the submenu and chooses its far item; straight down lets it go",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme menus");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-menu-journey", ISOCAN_HARNESS: "test" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Menu CLI");
+      const spot = await openSpot(rig, 400, 260);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 20 - world.left) / world.scale), wy = Math.round((spot.y + 20 - world.top) / world.scale);
+      const cards = [["Acme left", `${wx},${wy}`, "120x80"], ["Acme right", `${wx + 200},${wy + 40}`, "120x120"]]
+        .map(([words, at, size]) => runCli("--canvas", id, "text", words, "--at", at, "--size", size).itemId);
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      for (const itemId of cards) await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to arrive on the canvas`);
+      const centre = (selector) => b.ev(`(() => { const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r && { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      const mouse = (type, x, y, { button = "none", modifiers = 0 } = {}) => b.send("Input.dispatchMouseEvent", {
+        type, x, y, modifiers, button: type === "mouseMoved" ? "none" : button,
+        buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: type === "mouseMoved" ? 0 : 1,
+      });
+      const press = async (at, opts) => { await mouse("mousePressed", at.x, at.y, opts); await mouse("mouseReleased", at.x, at.y, opts); };
+      const walk = async (from, to, steps, each, pace = 16) => {
+        for (let s = 1; s <= steps; s++) {
+          const at = { x: Math.round(from.x + ((to.x - from.x) * s) / steps), y: Math.round(from.y + ((to.y - from.y) * s) / steps) };
+          await mouse("mouseMoved", at.x, at.y);
+          await sleep(pace);
+          if (each) await each(at);
+        }
+      };
+      // Both cards selected, so Align is offered; then the menu, by a real right-click.
+      const a = await centre(`.item[data-item-id="${cards[0]}"]`), c = await centre(`.item[data-item-id="${cards[1]}"]`);
+      await press(a, { button: "left" });
+      await press(c, { button: "left", modifiers: 8 });
+      const ROOT = `.context-menu:not(.context-submenu)`;
+      const ALIGN = `${ROOT} > .context-sub > button[aria-haspopup="menu"]`;
+      const findAlign = `[...document.querySelectorAll(${JSON.stringify(ALIGN)})].find((el) => el.textContent.trim().startsWith("Align"))`;
+      const openMenu = async () => {
+        await mouse("mouseMoved", c.x, c.y);
+        await press(c, { button: "right" });
+        await until(b, `!!${findAlign} && !${findAlign}.disabled`, "the item menu, with Align offered for two cards", 4000);
+        const row = await b.ev(`(() => { const r = ${findAlign}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), left: Math.round(r.left), h: Math.round(r.height) }; })()`);
+        // Onto Align from its left, the way a hand arrives, and wait out the beat.
+        await walk({ x: row.left + 4, y: row.y }, row, 4);
+        await until(b, `${findAlign}.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`, "hovering Align to open its submenu", 2000);
+        return row;
+      };
+      const subOpen = `${findAlign}?.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`;
+
+      // 1. The diagonal: Align's centre to the submenu's LAST row, crossing the rows below Align.
+      const row = await openMenu();
+      const far = await b.ev(`(() => { const all = [...document.querySelectorAll(".context-submenu button")]; const el = all[all.length - 1]; el.setAttribute("data-journey-far", ""); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
+      const crossed = new Set();
+      const diagonalAt = Date.now();
+      await walk(row, far, 24, async (at) => {
+        const over = await b.ev(`(() => { const el = document.elementFromPoint(${at.x}, ${at.y})?.closest("button"); return el && !el.closest(".context-submenu") && el !== ${findAlign} ? el.textContent.trim() : null; })()`);
+        if (over) crossed.add(over);
+        if (!(await b.ev(subOpen))) throw new Error(`the submenu closed on the way to "${far.label}", at ${at.x},${at.y}${over ? ` over "${over}"` : ""}`);
+      }, 50); // a hand's pace: ~1.3s, so the close grace (300ms) alone cannot carry it — only the aim can
+      const diagonalMs = Date.now() - diagonalAt;
+      if (crossed.size === 0) throw new Error("the diagonal never crossed another row — it proves nothing");
+      await sleep(400); // past every grace and pause: arriving settles it, nothing pending reopens or closes
+      if (!(await b.ev(subOpen))) throw new Error(`the submenu closed once the pointer reached "${far.label}"`);
+      const hovered = await b.ev(`document.querySelector("[data-journey-far]")?.matches(":hover")`);
+      if (!hovered) throw new Error(`"${far.label}" does not have the hover after the diagonal`);
+      await press(far, { button: "left" });
+      await until(b, `!document.querySelector(".context-menu")`, `choosing "${far.label}" to close the menu`, 2000);
+      const edges = async () => cards.map((itemId) => { const it = runCli("--canvas", id, "show", itemId); return it.y + it.height; });
+      const deadline = Date.now() + 6000;
+      let bottoms = await edges();
+      while (bottoms[0] !== bottoms[1] && Date.now() < deadline) { await sleep(200); bottoms = await edges(); }
+      if (far.label !== "Bottom" || bottoms[0] !== bottoms[1]) throw new Error(`choosing "${far.label}" did not align the bottoms: ${JSON.stringify(bottoms)}`);
+
+      // 2. Straight down from Align is choosing another row: the submenu lets go.
+      await openMenu();
+      const below = await b.ev(`(() => { const el = ${findAlign}.parentElement.nextElementSibling; const r = el.getBoundingClientRect(); return { x: ${row.x}, y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
+      const leftAt = Date.now();
+      await walk(row, below, 4);
+      await until(b, `!(${subOpen})`, `moving straight down onto "${below.label}" to close Align's submenu`, 1500);
+      const letGoMs = Date.now() - leftAt;
+      return { crossed: [...crossed], diagonalMs, chose: far.label, bottoms, straightDown: { onto: below.label, letGoMs } };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**

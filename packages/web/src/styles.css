@@ -4652,7 +4652,10 @@ button.mt-card:hover { border-color: var(--accent); }
   font: inherit; font-size: 12.5px; line-height: 1.2; text-align: left;
   cursor: pointer;
 }
-.context-item:hover:enabled { background: var(--chip-hover); }
+.context-item:hover:enabled, .context-item.open { background: var(--chip-hover); }
+/* A pointer on its way to an open submenu crosses rows it is not choosing
+   (`lib/menuaim.ts`); they do not light up, and the open row stays lit. */
+.context-menu[data-aim] .context-item:not(.open):hover { background: none; }
 /* Dimmed, not removed: a menu whose shape changes between one open and the
    next is a menu you cannot learn. */
 .context-item:disabled { opacity: 0.4; cursor: default; }

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keyFor, renderKeys } from "@isocan/core";
+import { menuAim } from "../lib/menuaim.ts";
 
 /**
  * **Right-click: the acts you can already do, where your hand already is.**
@@ -77,6 +78,11 @@ export function ContextMenu({
      right-click menu on an item — nothing is indented for a column that is
      not there. */
   const marks = entries.some((entry) => "icon" in entry && entry.icon !== undefined);
+  /* Which submenu is open lives HERE, not in each row: whether a crossed row
+     may take it is a question about the whole menu (`lib/menuaim.ts`). */
+  const [sub, setSub] = useState<string | null>(null);
+  const [aim] = useState(() => menuAim(setSub, () => box.current?.querySelector(".context-submenu")?.getBoundingClientRect()));
+  useEffect(() => aim.stop, [aim]);
 
   useEffect(() => {
     // Anything that is not a press inside the menu closes it — including a
@@ -152,6 +158,9 @@ export function ContextMenu({
       role="menu"
       style={{ left: at.x, top: at.y }}
       onContextMenu={(e) => e.preventDefault()}
+      onPointerMove={(e) => box.current?.toggleAttribute("data-aim", aim.move({ x: e.clientX, y: e.clientY }))}
+      // A finger lifting "leaves" too; only a mouse leaving means "not this".
+      onPointerLeave={(e) => e.pointerType === "mouse" && aim.want(null)}
     >
       {entries.map((entry, i) =>
         "separator" in entry ? (
@@ -159,7 +168,7 @@ export function ContextMenu({
             {entry.separator}
           </div>
         ) : entry.submenu ? (
-          <Submenu key={entry.label} entry={entry} marks={marks} onClose={onClose} />
+          <Submenu key={entry.label} entry={entry} marks={marks} onClose={onClose} open={sub === entry.label} aim={aim} />
         ) : (
           <button
             key={entry.label}
@@ -168,6 +177,7 @@ export function ContextMenu({
             className={`context-item${entry.danger ? " danger" : ""}${entry.checked === true ? " checked" : ""}`}
             disabled={entry.disabled === true}
             title={entry.value}
+            onPointerEnter={() => aim.want(null)}
             onClick={() => {
               onClose();
               entry.run();
@@ -198,8 +208,9 @@ export function ContextMenu({
  * The first nested menu in this app, and it is deliberately small. It opens on
  * hover AND on click, because those are two different people: a pointer that
  * drifts across the row expects it, and a person who has just tabbed to it
- * needs a key that works. It closes when the pointer leaves the pair, not the
- * row, or the children would vanish on the way to them.
+ * needs a key that works. Hover opens after a beat and closes after a grace,
+ * and a pointer on its way to the children keeps them (`lib/menuaim.ts`); a
+ * click or a key never waits.
  *
  * The parent shows the current member beside its own name (`value`), so the
  * answer to "what is it now" needs no opening — which is the whole reason this
@@ -210,12 +221,15 @@ function Submenu({
   entry,
   marks,
   onClose,
+  open,
+  aim,
 }: {
   entry: MenuAction;
   marks: boolean;
   onClose: () => void;
+  open: boolean;
+  aim: ReturnType<typeof menuAim>;
 }): ReactNode {
-  const [open, setOpen] = useState(false);
   const [focusChildren, setFocusChildren] = useState(false);
   const panel = useRef<HTMLDivElement | null>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
@@ -264,8 +278,7 @@ function Submenu({
   return (
     <div
       className="context-sub"
-      onPointerEnter={() => setOpen(true)}
-      onPointerLeave={() => setOpen(false)}
+      onPointerEnter={() => aim.want(entry.label)}
     >
       <button
         role="menuitem"
@@ -277,13 +290,12 @@ function Submenu({
         onClick={(event) => {
           const intent = event.currentTarget.dataset.menuIntent;
           delete event.currentTarget.dataset.menuIntent;
-          if (intent === "keyboard-open") { setFocusChildren(true); setOpen(true); }
-          else if (intent === "close") { setFocusChildren(false); setOpen(false); }
-          else setOpen((was) => !was);
+          if (intent === "keyboard-open") setFocusChildren(true);
+          aim.set(intent === "close" ? null : entry.label);
         }}
         onKeyDown={(e) => {
-          if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") { setFocusChildren(true); setOpen(true); }
-          if (e.key === "ArrowLeft") setOpen(false);
+          if (e.key === "ArrowRight" || e.key === "Enter" || e.key === " ") { setFocusChildren(true); aim.set(entry.label); }
+          if (e.key === "ArrowLeft") aim.set(null);
         }}
       >
         {marks && <span className="menu-icon">{entry.icon}</span>}
