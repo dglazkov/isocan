@@ -344,6 +344,23 @@ export interface CanvasContents {
     /** Standing agents by actor id. Optional because snapshots older than the
      * field exist on disk; read it through `?? {}`. */
     agents?: Record<string, EnrolledAgent>;
+    /**
+     * **Agents somebody took off this canvas, and who did it** (pets phase 2):
+     * actor id → the author of the last `agent.withdraw` for it.
+     *
+     * It exists because withdrawal deletes the row, and a pet that follows its
+     * owner must not walk back onto a canvas it was removed from (pets journey,
+     * scene 3): "withdrawn from here" has to be readable from the canvas, not
+     * reconstructed from an oplog that compaction may have archived. Nothing
+     * lifts it, and nothing needs to: it only matters while the agent stands
+     * nowhere here, and a person who brings the agent back by hand (`agent.
+     * enroll`, `agent.invite`) makes it stand again; a later withdrawal simply
+     * writes a newer word. A record of the room's decision, read by
+     * `petsToBring` and nothing else — it refuses nothing at the door, so a
+     * person may always join an agent by hand. Absent on canvases where nobody
+     * has withdrawn an agent since the field existed.
+     */
+    withdrawn?: Record<string, Actor>;
 }
 /**
  * Everything the reducer operates on for one canvas.

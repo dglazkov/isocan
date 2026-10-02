@@ -163,7 +163,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `evals corpus|converge|pairs` — what was asked for here, and what came of it
 
 **Agents and rooms** (`agents`, `present`)
-- `agent add|remove|rules|mark`, `rc add|listen|remove`, `bench add|join|rm`, `harness` — standing agents
+- `agent add|remove|rules|mark`, `rc add|listen|remove`, `bench add|join|follow|rm`, `harness` — standing agents
 - `persona ls|show|runs`, `docket ls|answer` — roles and their findings
 - `slides add|rm|show|export|note|notes`, `sprint show|phase|board|brief|desk|end|handin|tally`, `present` — running a room
 
@@ -2615,6 +2615,7 @@ them between machines instead of dying with the laptop it was made on.
 isocan bench                # every agent on your bench, with its reachability
 isocan bench add <name>     # put one on the bench, from what this machine knows
 isocan bench join <name>    # have it answer on THIS canvas too
+isocan bench follow <name>  # make it your pet (--off stops it)
 isocan bench rm <name>      # take it off — its standing is untouched
 ```
 
@@ -2690,6 +2691,22 @@ deliberate and it is a security property rather than a phrasing: a bench is a
 private canvas, and a refusal that read differently for a name that exists
 somewhere would let a stranger enumerate one name at a time. Do not "improve"
 it, and do not offer to look the name up.
+
+**A pet is a bench agent that follows its owner: `isocan bench follow
+<name>`** (the web's *Follows me*), and `--off` to stop. It is one fact on the
+bench row, and it invites the agent nowhere by itself: when its owner ARRIVES
+on a canvas in the app and can edit it, the app sends the same `agent.invite`
+a join sends — once per arrival, never onto a canvas the owner can only read,
+and never back onto one where somebody withdrew it (`isocan rc remove`, or an
+agent's own `isocan agent remove`: a removal is the room's word, and only a
+person joining or enrolling it again by hand brings it back). The thread then
+gets one line, *"Scout came with Dion"*. Like any
+join, the new row carries no `rules`, so it answers only its owner until
+somebody widens it. Turning following off takes the agent off nothing.
+
+If you ARE somebody's pet, that line is a record of your arrival, not a
+request — nothing is being asked of you. A running `isocan rc --all` on your
+machine parks on that canvas within 30 seconds; a plain `isocan rc` does not.
 
 ## The roles you can take on
 

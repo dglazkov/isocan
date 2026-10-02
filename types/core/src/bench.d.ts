@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.js";
+import type { MetaPatch } from "./ops.js";
 import type { PresenceSession } from "./protocol.js";
 /**
  * **Your bench: the agents you have, read from your own canvas**
@@ -72,11 +73,53 @@ export interface BenchAgent {
     model?: string | null | undefined;
     /** Where it runs, opaquely. Null when nobody said. */
     runsAt: string | null;
+    /** Comes along to every canvas its owner opens and can edit — a pet
+     * (`petsToBring`). False when the row never said. */
+    follows: boolean;
 }
 /** The agent an item records, or null when it is not a bench row. An item
  * with no `actorId` is not one either: a row that names no actor can be
  * measured against nothing, and a row nothing can measure is a claim. */
 export declare function benchAgentOf(item: Item): BenchAgent | null;
+/**
+ * **The one write that turns following on or off** — an `item.update` patch
+ * for the bench row, spelled here so `isocan bench follow` and the app's
+ * *Follows me* switch cannot write the field two ways. One op, so one undo.
+ */
+export declare function benchFollowPatch(on: boolean): MetaPatch;
+/**
+ * **The pets an arrival brings** (`docs/projects/pets`, phase 2, scene 3) —
+ * the following rows on this person's bench that should be invited to the
+ * canvas they just opened.
+ *
+ * Three exclusions, each a scene:
+ *
+ * - **Nothing at all when the person cannot edit.** A reader on a canvas
+ *   shared read-only could not have joined an agent by hand, and a pet is
+ *   not a way around that: the home would refuse the invite anyway, and a
+ *   refusal is not something to try once per arrival.
+ * - **Not one already standing here.** Inviting it again would change
+ *   nothing but put a second line in the thread.
+ * - **Not one somebody withdrew from here.** A removal is the room's word
+ *   (`CanvasContents.withdrawn`); a pet respects it. A person may
+ *   still join it again by hand, which is a person's word, not a pet's.
+ *
+ * Pure: the caller sends the invites, so the CLI and the app cannot disagree
+ * about which agents an arrival should bring.
+ */
+export declare function petsToBring(bench: readonly BenchAgent[], canvas: CanvasContents, canEdit: boolean): BenchAgent[];
+/**
+ * The one line the thread gets when a pet arrives — the same kind of line
+ * `@Name join` posts (`benchJoinWords`), naming whose pet it is.
+ *
+ * It says the agent CAME, never that it is answering: the line lands the
+ * moment the home accepts the invite, and the agent's own machine notices
+ * the canvas up to `RC_DISCOVER_MS` later (pets phase 1). Lives here, in the
+ * lazy half, rather than beside `benchJoinWords` in the eager `benchjoin.ts`:
+ * the entry chunk has a hundred-odd bytes of room and only an arrival with a
+ * following bench ever needs these words.
+ */
+export declare function petCameWords(name: string, owner: string): string;
 /** Everybody on this bench, by name. The canvas is the registry, so this is
  * the whole of the read — there is no second table to consult. */
 export declare function benchAgents(canvas: CanvasContents): BenchAgent[];
