@@ -87,6 +87,17 @@ export declare function groupDropTarget(canvas: CanvasContents, point: {
     x: number;
     y: number;
 }, movingIds: readonly string[]): Item | null;
+/**
+ * **A stacked group is drawn as one card** (groups-by-hand phase 4): where it
+ * is on the canvas — its footprint at its own origin — or null when it is
+ * spread. Its saved frame is untouched. The numbers are `GROUP_STACK`'s
+ * (`group-stack.ts`, which the web loads only with a stack): a 420×320 card
+ * under a 48 band, 28 of room on every side. Written out here so the first
+ * paint does not carry the pile to know where a stack is.
+ */
+export declare function groupStackBox(group: Item): GroupBox | null;
+/** Inside a stacked group at any depth: drawn in the pile, not at its own x/y. */
+export declare function groupUnderStack(canvas: CanvasContents, itemId: string): boolean;
 /** Header drops request a clear content slot; a content drop preserves the deliberate world position. */
 export declare function groupDropPolicy(group: Item, point: {
     x: number;

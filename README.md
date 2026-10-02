@@ -510,7 +510,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   add or remove members, and ungroup while preserving their positions.
   Membership is explicit: overlapping cards stay independent, nested groups
   keep their identity, and each structural act is one undo. The matching CLI
-  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|migrate`; mutations
+  family is `isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|stack|migrate`; mutations
   support an actual `--dry-run`, all commands support `--json`, and
   `mv <item> --in <group>` transfers membership and places the item atomically.
   The outline under the pointer is what a press would take — the group at the
@@ -523,7 +523,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Resize scales native frames and attached ink with a fixed anchor; Fit frame
   keeps the arrangement and adjusts its border. The group's layout form sets
   or clears its named grid; lowering a count drops the labels past it in the
-  same undoable save, exactly as `canvas group grid` does. CLI `mv`, `set --size`, `fit`,
+  same undoable save, exactly as `canvas group grid` does. *Stack* on the title
+  band (or `canvas group stack <group> [--spread]`) shows a group as a pile of
+  cards — the top one upright, the rest turned behind it by a hash of their
+  ids — for everyone, until *Spread*; members keep their positions throughout.
+  Pointing fans the pile into a hand, a click opens it into a grid (Esc
+  closes), and ⌘-dragging a card out of the grid takes it out. CLI `mv`, `set --size`, `fit`,
   `align`, `distribute` and `tidy` share these semantics. Text, files, sites,
   Google Docs and modules insert with explicit `--in` membership; `--cell r,c`
   honors protected label gutters. New sandbox transcripts inherit their

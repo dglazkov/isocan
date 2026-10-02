@@ -26,6 +26,7 @@ export * from "./area.js";
 export * from "./canvas-group-types.js";
 export * from "./canvas-groups.js";
 export * from "./group-aim.js";
+export * from "./group-stack.js";
 export * from "./canvas-scope.js";
 export * from "./canvas-group-create.js";
 export * from "./canvasitem.js";

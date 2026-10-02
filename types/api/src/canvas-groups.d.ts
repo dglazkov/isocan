@@ -38,6 +38,8 @@ export interface CanvasGroupView {
     outerBox: GroupBox;
     contentBox: GroupBox;
     layout: Item["groupLayout"];
+    /** Shown as a pile of cards (`layout.display`); members keep their spread x/y either way. */
+    stacked: boolean;
     members: Array<{
         id: string;
         title: string;
@@ -148,6 +150,10 @@ export declare class CanvasGroups {
     }): Promise<CanvasGroupResult>;
     layout(ref: string, layout: GroupLayout, options?: {
         tidy?: boolean;
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
+    /** Stack a group into a pile, or spread it back: the browser's act (`groupStackAction`), one undo, no member moved. */
+    stack(ref: string, stacked: boolean, options?: {
         dryRun?: boolean;
     }): Promise<CanvasGroupResult>;
     /** Grid counts and optional names use the same saved layout, and the same act, as the browser (`groupGridAction`). */

@@ -32,6 +32,13 @@ second week.
 - **The outline shows what a click takes.** Pointing at a card inside a
   group, or at the space between its cards, outlines the group — because
   that is what a click selects. Hold ⌘ to aim at the card instead.
+- **Stacks.** Press *Stack* on a group's title band and it becomes a pile
+  of cards — the first one upright on top, the rest turned and tucked
+  behind it in their own colours. Point at it and it fans out like a hand;
+  click to open it into a grid (Esc closes); *Spread* puts every card back
+  exactly where it was. Everyone sees the same pile, and it stays stacked
+  until somebody spreads it. Agents: `isocan canvas group stack <group>
+  [--spread]`.
 - **Watch a drag as it happens.** When someone drags a card, everyone else
   sees it travel with their cursor — lifted, edged in their colour — instead
   of sitting still and then jumping. It settles where they put it.
