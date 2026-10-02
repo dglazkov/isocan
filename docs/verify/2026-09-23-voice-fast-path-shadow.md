@@ -1,6 +1,10 @@
+---
+status: unverified
+since: 2026-09-23
+never: "Jev resolving REAL speech beside the live model, and the take-back label"
+needs: "a microphone, speech that mishears, and a person pressing undo on a wrong act"
+---
 # The fast path in shadow — Jev listens while you talk
-
-**Status: `unverified`.**
 
 **What you need:** everything [talking to the canvas](2026-09-20-talk-on-canvas.md)
 needs (a microphone, speakers, a Gemini API key), plus **a home with a judge**

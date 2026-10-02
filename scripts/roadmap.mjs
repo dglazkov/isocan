@@ -49,7 +49,7 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
  */
 register();
 registerLoader("../packages/cli/bin/workspace-loader.mjs", import.meta.url);
-const { docStatus, statusProblems } = await import("@isocan/core");
+const { docStatus, statusProblems, verifyStatus, verifyProblems } = await import("@isocan/core");
 
 function statusOf(file) {
   const status = docStatus(readFileSync(path.join(repo, file), "utf8"));
@@ -95,7 +95,30 @@ function titleOf(file) {
   return line ? line.slice(2).trim() : path.basename(file);
 }
 
+/**
+ * **What needs a person**, from `docs/verify/` — each walk's own front matter,
+ * through core's `verifyStatus`. It opens the page because it is the one list
+ * here that no commit can shorten: everything else on the roadmap is waiting
+ * on somebody building, and this is waiting on somebody *using*. A walk with
+ * front matter that says too little to start from fails `--check`, the way a
+ * stale roadmap does — a person handed a walk should not have to guess.
+ */
+function walks() {
+  const vdir = path.join(repo, "docs/verify");
+  return readdirSync(vdir)
+    .filter((f) => f.endsWith(".md") && f !== "README.md")
+    .sort()
+    .map((name) => {
+      const rel = `docs/verify/${name}`;
+      const walk = verifyStatus(readFileSync(path.join(repo, rel), "utf8"));
+      return { rel, title: titleOf(path.join(repo, rel)), ...walk, problems: verifyProblems(walk) };
+    });
+}
+
 const docs = collect();
+const queue = walks();
+const owed = queue.filter((w) => w.status !== "works");
+const done = queue.filter((w) => w.status === "works");
 const byState = {};
 for (const d of docs) (byState[d.status] ??= []).push(d);
 const count = (s) => (byState[s] ?? []).length;
@@ -135,6 +158,28 @@ const lines = [
   "",
 ];
 
+/*
+ * Four columns, like every other table here, so the board on the canvas
+ * (`scripts/canvas-board.mjs`) reads this section with the parser it already
+ * has. Broken first — a walk that found a bug outranks one nobody has run.
+ */
+lines.push(
+  `## What needs a person <sub>${owed.length}</sub>`,
+  "",
+  "Built and shipped, and never once exercised by a human being — the part no",
+  "commit can do. Each is a walk in [`verify/`](verify/README.md), written by",
+  "whoever built the thing for somebody who knows nothing about it.",
+  ...(done.length ? [`${done.length} more ${done.length === 1 ? "has" : "have"} been walked and worked.`] : []),
+  "",
+  "| | What has never been exercised | Since | What you need |",
+  "| --- | --- | --- | --- |",
+);
+for (const w of [...owed].sort((a, b) => (a.status === b.status ? a.rel.localeCompare(b.rel) : a.status === "broken" ? -1 : 1))) {
+  const issue = w.issue ? ` · [#${w.issue}](https://github.com/dglazkov/isocan/issues/${w.issue})` : "";
+  lines.push(`| **${w.status}** | [${w.title}](${href(w.rel)}) — ${w.never ?? ""} | ${w.since ?? "—"} | ${w.needs ?? ""}${issue} |`);
+}
+lines.push("");
+
 for (const state of ["blocked", "partial", "designed", "open", "built", "noted", "superseded"]) {
   const group = byState[state];
   if (!group || group.length === 0) continue;
@@ -156,6 +201,12 @@ for (const state of ["blocked", "partial", "designed", "open", "built", "noted",
 const page = lines.join("\n");
 const out = path.join(repo, "docs/ROADMAP.md");
 
+const vague = queue.filter((w) => w.problems.length);
+if (vague.length) {
+  for (const w of vague) console.error(`${w.rel}: ${w.problems.join("; ")}`);
+  process.exit(1);
+}
+
 if (process.argv.includes("--check")) {
   const current = existsSync(out) ? readFileSync(out, "utf8") : "";
   if (current !== page) {
@@ -167,4 +218,4 @@ if (process.argv.includes("--check")) {
 }
 
 writeFileSync(out, page);
-console.log(`docs/ROADMAP.md — ${docs.length} docs, ${count("built")} built, ${left} open`);
+console.log(`docs/ROADMAP.md — ${docs.length} docs, ${count("built")} built, ${left} open, ${owed.length} need a person`);

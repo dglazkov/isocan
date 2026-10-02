@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DOC_STATES, burnDown, docStatus, statusProblems } from "../src/docstatus.ts";
+import { DOC_STATES, burnDown, docStatus, statusProblems, verifyProblems, verifyStatus } from "../src/docstatus.ts";
 
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 const fm = (front: string) => `---\n${front}\n---\n# A doc\n\nwords\n`;
@@ -165,5 +165,43 @@ describe("the repo's own docs", () => {
         expect(DOC_STATES as readonly string[], `${rel} has status "${raw}"`).toContain(raw);
       }
     }
+  });
+});
+
+/**
+ * `docs/verify/` is what needs a person, and the roadmap opens with it. Its
+ * table used to be hand-kept in the README beside each walk's own status line
+ * — two copies — and the roadmap, where people look first, did not show it.
+ */
+describe("what a walk says needs a person", () => {
+  it("reads the status, what was never exercised, and what you need", () => {
+    const walk = verifyStatus(fm('status: broken\nsince: 2026-10-01\nissue: "#9"\nnever: "the mic"\nneeds: "a microphone"'));
+    expect(walk).toEqual({ status: "broken", since: "2026-10-01", issue: 9, never: "the mic", needs: "a microphone" });
+    expect(verifyProblems(walk)).toEqual([]);
+  });
+
+  it("a typo or no front matter never takes a walk off the list", () => {
+    expect(verifyStatus("# A walk\n").status).toBe("unverified");
+    expect(verifyStatus(fm("status: workz")).status).toBe("unverified");
+  });
+
+  it("names what a person about to run it would have to guess", () => {
+    const said = verifyProblems(verifyStatus(fm("status: broken"))).join(" ");
+    expect(said).toContain("never");
+    expect(said).toContain("needs");
+    expect(said).toContain("no date");
+    expect(said).toContain("no issue");
+  });
+
+  it("every walk in docs/verify says enough to start from", async () => {
+    const dir = path.join(repo, "docs/verify");
+    const names = (await fs.readdir(dir)).filter((f) => f.endsWith(".md") && f !== "README.md");
+    expect(names.length).toBeGreaterThan(0);
+    const vague: string[] = [];
+    for (const name of names) {
+      const problems = verifyProblems(verifyStatus(await fs.readFile(path.join(dir, name), "utf8")));
+      if (problems.length) vague.push(`${name}: ${problems.join("; ")}`);
+    }
+    expect(vague).toEqual([]);
   });
 });

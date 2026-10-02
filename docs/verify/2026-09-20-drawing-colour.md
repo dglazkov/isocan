@@ -1,6 +1,10 @@
+---
+status: unverified
+since: 2026-09-20
+never: "the Pen recording the ink colour it was drawn in"
+needs: "the web app, a mouse or trackpad, and eyes to agree the stroke is the colour the data claims — five minutes"
+---
 # A drawing's colour
-
-**Status: `unverified`.**
 
 **What you need:** the web app, a mouse or trackpad, five minutes.
 

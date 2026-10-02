@@ -1,6 +1,10 @@
+---
+status: unverified
+since: 2026-09-20
+never: "the mic ON the canvas — the surface a stranger meets first"
+needs: "a microphone, speakers or headphones, a Gemini API key; a judgement about whether the pause feels like a conversation"
+---
 # Talking to the canvas itself
-
-**Status: `unverified`.**
 
 **What you need:** a microphone, speakers or headphones, a Gemini API key, and
 about twenty minutes. A terminal for steps 1–3, then only the browser.

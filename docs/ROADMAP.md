@@ -19,6 +19,26 @@ read lately.
 8 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
+## What needs a person <sub>11</sub>
+
+Built and shipped, and never once exercised by a human being — the part no
+commit can do. Each is a walk in [`verify/`](verify/README.md), written by
+whoever built the thing for somebody who knows nothing about it.
+
+| | What has never been exercised | Since | What you need |
+| --- | --- | --- | --- |
+| **unverified** | [A drawing's colour](verify/2026-09-20-drawing-colour.md) — the Pen recording the ink colour it was drawn in | 2026-09-20 | the web app, a mouse or trackpad, and eyes to agree the stroke is the colour the data claims — five minutes |
+| **unverified** | [Talking to the canvas itself](verify/2026-09-20-talk-on-canvas.md) — the mic ON the canvas — the surface a stranger meets first | 2026-09-20 | a microphone, speakers or headphones, a Gemini API key; a judgement about whether the pause feels like a conversation |
+| **unverified** | [Undo, in both doorways](verify/2026-09-20-undo.md) — the harness retracting through the daemon, and the browser dialog's refusal | 2026-09-20 | the voice walk's setup plus the web app — ten minutes |
+| **unverified** | [Voice, out loud](verify/2026-09-20-voice.md) — the STANDALONE voice agent on its own port, the one `@mention` can summon | 2026-09-20 | a microphone, speakers or headphones, a Gemini API key; a judgement about whether the pause feels like a conversation |
+| **unverified** | [The fast path in shadow — Jev listens while you talk](verify/2026-09-23-voice-fast-path-shadow.md) — Jev resolving REAL speech beside the live model, and the take-back label | 2026-09-23 | a microphone, speech that mishears, and a person pressing undo on a wrong act |
+| **unverified** | [Run one sprint for real](verify/2026-10-01-a-real-sprint.md) — a design sprint run for real with `/sprint` — people who have not read the design, a real problem, the board from start to finish; sprint phase 6, owed since 2 Sep | 2026-10-01 | three people who have not read docs/projects/sprint, two agents on someone's rc, a real problem worth a day, and that day — on dev.isocan.io |
+| **unverified** | [Bring your own fighter](verify/2026-10-01-bring-your-own-fighter.md) — a teammate's own designer pack, published from their git repo, showing up as a tenth fighter and fighting — design-competition phase 6, owed since 13 Sep | 2026-10-01 | a second person with their own GitHub repo and a DESIGN.md they like; thirty minutes, both of you at a terminal · [#263](https://github.com/dglazkov/isocan/issues/263) |
+| **unverified** | [Can anyone tell whose entry is whose?](verify/2026-10-01-design-competition-bout.md) — whether a designer pack makes an agent's work recognisably that designer's — design-competition phase 0, owed since 13 Sep | 2026-10-01 | three people who know the Kare, Rams and Linear packs, about forty minutes each; someone (or an agent) to run three bouts beforehand · [#257](https://github.com/dglazkov/isocan/issues/257) |
+| **unverified** | [A real bout, from the Chat to the winner](verify/2026-10-01-design-competition-live.md) — a whole design competition with real model-built entries — picked from the Chat, fought, voted from two browsers, the winner taken — on dev.isocan.io; design-competition phases 3–5.5, owed since 13 Sep | 2026-10-01 | two people in two browsers, a laptop with the released CLI parked against dev.isocan.io, about forty minutes and some model spend · [#261](https://github.com/dglazkov/isocan/issues/261) |
+| **unverified** | [On a real phone](verify/2026-10-01-on-a-real-phone.md) — isocan on a physical phone — the on-screen keyboard over the Chat, Safari's toolbar coming and going, and whether pinch, pan and swipe feel right; mobile phases 0–2, owed since 13 Sep | 2026-10-01 | an iPhone with Safari (an Android phone too, if you have one), a canvas with a few cards and a short deck on it — twenty minutes · [#182](https://github.com/dglazkov/isocan/issues/182) |
+| **unverified** | [The operator, on the hosted home](verify/2026-10-01-operator-hosted.md) — the operator's six acts — look, take down, purge, end, revoke, refuse — done by a real operator on dev.isocan.io; operator phases 1–6, built 12–13 Sep and only proved locally | 2026-10-01 | an operator email on dev's ISOCAN_OPERATORS, a second owner account, a third browser profile, the owner's phone and laptop, and two networks — about two hours · [#77](https://github.com/dglazkov/isocan/issues/77) |
+
 ## Partly built <sub>43</sub>
 
 | | What | Since | |

@@ -113,4 +113,18 @@ describe("the roadmap is derived, not written", () => {
     const missing = links.filter((rel) => !existsSync(path.join(repo, "docs", rel)));
     expect(missing, "a roadmap row whose link does not resolve from docs/").toEqual([]);
   });
+
+  it("opens with what needs a person, every walk linked to a file that exists", () => {
+    /**
+     * The one list on the roadmap no commit can shorten. It comes first because
+     * "what do we need people to test?" had no answer anywhere a reader looked
+     * first — the queue lived in `docs/verify/README.md` and nowhere else.
+     */
+    const page = readFileSync(`${repo}/docs/ROADMAP.md`, "utf8");
+    const first = /^## (.+?) <sub>/m.exec(page);
+    expect(first?.[1]).toBe("What needs a person");
+    const links = [...page.matchAll(/^\| \*\*(?:unverified|broken)\*\* \| \[[^\]]*\]\(([^)]+)\)/gm)].map((m) => m[1]!);
+    const missing = links.filter((rel) => !existsSync(path.join(repo, "docs", rel)));
+    expect(missing, "a walk row whose link does not resolve from docs/").toEqual([]);
+  });
 });

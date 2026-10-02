@@ -36,6 +36,10 @@ it" into either `works` or an issue.
 
 ## Status words
 
+Each walk says its own status in front matter — `status`, `since`, `never`
+(what has never been exercised), `needs` (what the person needs in hand) and,
+when it has one, `issue`:
+
 - `unverified` — built, shipped, nobody has run it.
 - `works` — somebody ran it, on a date, and it did what the page said.
 - `broken` — somebody ran it and it did not. Say what happened and link the
@@ -43,17 +47,16 @@ it" into either `works` or an issue.
 
 ## The queue
 
-| Walk | What has never been exercised | Why a machine cannot | Status |
-| --- | --- | --- | --- |
-| [Talking to the canvas itself](2026-09-20-talk-on-canvas.md) | the mic ON the canvas — the surface a stranger meets first | needs a microphone, ears, and a judgement about whether the pause feels like a conversation | `unverified` |
-| [Voice, out loud](2026-09-20-voice.md) | the STANDALONE voice agent on its own port, the one `@mention` can summon | needs a microphone, ears, and a judgement about whether the pause feels like a conversation | `unverified` |
-| [A drawing's colour](2026-09-20-drawing-colour.md) | the Pen recording the ink colour it was drawn in | needs a hand drawing with a pointer, and eyes to agree the stroke is the colour the data now claims | `unverified` |
-| [The fast path in shadow](2026-09-23-voice-fast-path-shadow.md) | Jev resolving REAL speech beside the live model, and the take-back label | needs a microphone, speech that mishears, and a person pressing undo on a wrong act — plus the timing of words against the model's call | `unverified` |
-| [Undo, in both doorways](2026-09-20-undo.md) | the harness retracting through the daemon, and the browser dialog's refusal | the harness branch has never executed against a live daemon; the browser refusal has never rendered | `unverified` |
+**It is the first section of [the roadmap](../ROADMAP.md#what-needs-a-person)**,
+generated from each walk's front matter by `node scripts/roadmap.mjs`. It used
+to be a table here, a copy of what every page's status line already said; now
+there is one copy, and it is where somebody asking "what do we need people to
+test?" looks first. A walk whose front matter is missing `never`, `needs` or
+`since` — or is `broken` with no issue — fails the roadmap's check.
 
 ## Adding one
 
-Copy the shape of an existing page: what was built, why it is here, the
-numbered steps, what you should see at each, and what to do when it is wrong.
-Add a row above. Keep the queue short by running the walks rather than by
-lowering the bar for entering it.
+Copy the shape of an existing page: front matter, what was built, why it is
+here, the numbered steps, what you should see at each, and what to do when it
+is wrong. Then run `node scripts/roadmap.mjs`. Keep the queue short by running
+the walks rather than by lowering the bar for entering it.

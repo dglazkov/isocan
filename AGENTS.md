@@ -195,7 +195,11 @@ never once exercised by a human being — the voice agent talked to out loud,
 a colour agreed with by eyes, a pause judged to feel like a conversation.
 
 Each entry is a dated page with numbered steps, written by whoever built the
-thing for somebody who knows nothing about it. There is deliberately **no
+thing for somebody who knows nothing about it, and front matter saying what was
+never exercised and what the person needs (`never`, `needs`). The queue is the
+first section of `docs/ROADMAP.md`, generated from that front matter — so when
+a phase's acceptance is something only people can do, write the walk and it
+appears there; a phase that merely says "human walk owed" does not. There is deliberately **no
 gate**: answering a review finding costs a word, and running a walk costs
 twenty minutes and a microphone, so a hard stop would be switched off by the
 first person shipping at midnight. It is a list that can be read, not a bound

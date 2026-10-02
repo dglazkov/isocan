@@ -81,13 +81,8 @@ const isState = (s: string): s is DocState => (DOC_STATES as readonly string[]).
  * malformed — it is untriaged, which is `open`, and the roadmap counts it.
  */
 export function docStatus(text: string): DocStatus {
-  const split = splitFrontMatter(text);
-  if (!split) return { status: "open", see: [] };
-  const kv = new Map<string, string>();
-  for (const line of split.front.split(/\r?\n/)) {
-    const m = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(line);
-    if (m) kv.set(m[1]!, m[2]!.trim().replace(/^["']|["']$/g, ""));
-  }
+  const kv = frontFields(text);
+  if (!kv) return { status: "open", see: [] };
   const raw = kv.get("status") ?? "";
   const list = (kv.get("see") ?? "")
     .split(/\s*,\s*/)
@@ -102,10 +97,86 @@ export function docStatus(text: string): DocStatus {
     ...(kv.get("blockedBy") ? { blockedBy: kv.get("blockedBy")! } : {}),
     ...(kv.get("supersededBy") ? { supersededBy: kv.get("supersededBy")! } : {}),
     ...(kv.get("note") ? { note: kv.get("note")! } : {}),
-    // A number, or nothing: "#134" and "134" both mean issue 134, and a word
-    // there is not an issue.
-    ...(/^#?\d+$/.test(kv.get("issue") ?? "") ? { issue: Number(kv.get("issue")!.replace(/^#/, "")) } : {}),
+    ...issueOf(kv),
   };
+}
+
+/** The flat `key: value` lines of a front matter block, or null when there is none. */
+function frontFields(text: string): Map<string, string> | null {
+  const split = splitFrontMatter(text);
+  if (!split) return null;
+  const kv = new Map<string, string>();
+  for (const line of split.front.split(/\r?\n/)) {
+    const m = /^([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(line);
+    if (m) kv.set(m[1]!, m[2]!.trim().replace(/^["']|["']$/g, ""));
+  }
+  return kv;
+}
+
+// A number, or nothing: "#134" and "134" both mean issue 134, and a word there
+// is not an issue.
+const issueOf = (kv: Map<string, string>): { issue?: number } =>
+  /^#?\d+$/.test(kv.get("issue") ?? "") ? { issue: Number(kv.get("issue")!.replace(/^#/, "")) } : {};
+
+/**
+ * **What needs a person, said in the walk that needs one.**
+ *
+ * `docs/verify/` is the queue of things built and shipped that no human being
+ * has exercised. Its table used to be hand-kept in the README — a copy of what
+ * each walk's own `**Status:**` line already said — and the roadmap did not
+ * show it at all, so "what do we need people to test" had no answer anywhere a
+ * reader would look first. Each walk now carries this in front matter, read by
+ * the same reader as `docStatus`, and the roadmap opens with the result.
+ */
+const VERIFY_STATES = [
+  /** Built, shipped, nobody has run it. */
+  "unverified",
+  /** Somebody ran it, on a date, and it did what the page said. */
+  "works",
+  /** Somebody ran it and it did not; `issue` names the bug. */
+  "broken",
+] as const;
+
+type VerifyState = (typeof VERIFY_STATES)[number];
+
+interface VerifyStatus {
+  /** No front matter, or an unrecognised word, is `unverified` — a typo must
+   *  never take a walk off the list of things nobody has run. */
+  status: VerifyState;
+  /** When the status was last true. */
+  since?: string;
+  /** What the person needs in hand: a microphone, a phone, three people. */
+  needs?: string;
+  /** What has never been exercised, in one line. */
+  never?: string;
+  /** For `broken`, the bug; otherwise the work the walk belongs to. */
+  issue?: number;
+}
+
+const isVerifyState = (s: string): s is VerifyState => (VERIFY_STATES as readonly string[]).includes(s);
+
+/** Read a walk's front matter — through the same reader as `docStatus`. */
+export function verifyStatus(text: string): VerifyStatus {
+  const kv = frontFields(text);
+  if (!kv) return { status: "unverified" };
+  const raw = kv.get("status") ?? "";
+  return {
+    status: isVerifyState(raw) ? raw : "unverified",
+    ...(kv.get("since") ? { since: kv.get("since")! } : {}),
+    ...(kv.get("needs") ? { needs: kv.get("needs")! } : {}),
+    ...(kv.get("never") ? { never: kv.get("never")! } : {}),
+    ...issueOf(kv),
+  };
+}
+
+/** The ways a walk's front matter can fail the person about to run it. */
+export function verifyProblems(walk: VerifyStatus): string[] {
+  const out: string[] = [];
+  if (!walk.never) out.push("no `never:` — say what has never been exercised");
+  if (!walk.needs) out.push("no `needs:` — say what the person needs in hand before they start");
+  if (!walk.since) out.push("a status with no date is a status nobody can age");
+  if (walk.status === "broken" && !walk.issue) out.push("broken with no issue — a walk that found something links the bug");
+  return out;
 }
 
 /** What is left, and what is done — the only two numbers a burn-down needs. */
