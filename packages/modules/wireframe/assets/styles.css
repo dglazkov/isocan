@@ -257,7 +257,7 @@
 .wire-arrow-menu button { text-align: left; }
 .wire-arrow-menu button[aria-checked="true"] { font-weight: 700; }
 
-/* The screen's under-frame Layers bar (layers-bar.tsx), counter-scaled below its bottom edge in the .item-under lane. */
+/* The screen's under-frame tier pill (layers-bar.tsx), counter-scaled below its bottom edge in the .item-under lane; its popover opens below it. */
 .wire-layer-bar {
   position: absolute;
   z-index: 5;
@@ -265,52 +265,77 @@
   transform-origin: 50% 0;
   padding-top: 6px;
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
-.wire-layer-pill {
+.wire-layer-bar.open { z-index: 6; }
+.wire-tier-pill {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 5px;
+  gap: 4px;
+  padding: 3px 7px 3px 6px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 999px;
-  font: 500 10.5px/1 system-ui, -apple-system, sans-serif;
+  font: 600 10.5px/1 system-ui, -apple-system, sans-serif;
+  color: var(--accent-text);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.wire-tier-pill:hover,
+.wire-tier-pill:focus-visible,
+.wire-layer-bar.open .wire-tier-pill {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+.wire-tier-glyph { font-size: 11px; line-height: 1; }
+.wire-tier-caret { font-size: 8px; color: var(--ink-soft); }
+.wire-layer-bar[data-wire-tier="mixed"] .wire-tier-pill { color: var(--ink-soft); }
+.wire-layer-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+  font: 500 11px/1 system-ui, -apple-system, sans-serif;
   color: var(--ink);
   white-space: nowrap;
 }
-.wire-layer-bar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 2px; }
-.wire-layer-badge {
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--accent-text);
-  padding: 3px 6px;
-}
+.wire-layer-checks { display: flex; gap: 2px; }
 .wire-layer-check {
   font: inherit;
   color: inherit;
   background: none;
   border: 1px solid transparent;
   border-radius: 999px;
-  padding: 3px 6px;
+  padding: 4px 7px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   cursor: pointer;
 }
 .wire-layer-flow {
   font: inherit;
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--ink-soft);
   background: none;
   border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 3px 6px;
-  display: inline-flex;
+  border-top-color: var(--line);
+  border-radius: 0 0 6px 6px;
+  padding: 6px 7px 3px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   cursor: pointer;
+  text-align: left;
 }
+.wire-layer-flow:disabled { cursor: default; opacity: 0.6; }
 .wire-layer-check:hover:not(:disabled),
 .wire-layer-flow:hover:not(:disabled),
 .wire-layer-check:focus-visible,
