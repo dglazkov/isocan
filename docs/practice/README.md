@@ -9,6 +9,22 @@ is the argument, and its "Where it leaks" section is the list of rows.
 fix it, and commit. The next night's page shows whether the number moved. That
 loop is the point; the page is only where it starts.
 
+The lap, for whoever runs it (a person, `/goal`, or a scheduled session):
+
+> Read the newest page in `docs/practice/`. Take the worst row you can fix
+> without a person. Fix it at its cause rather than its count. Prove it with
+> `node scripts/practice.mjs --no-write` (the row moved) and the usual gates.
+> Commit with the row's key in the subject (`practice: research-unindexed 25 → 0`).
+> If the worst rows all need a person, list them for Dion instead.
+
+- **One row a lap.** A lap that fixes one row and holds it beats one that nudges five.
+- **Rows that need a person stay on the page.** Closing issues, editing
+  `.claude/`, moving a ceiling and deciding a Loop finding are Dion's. The
+  lap writes the proposal, not the act.
+- **A fix gets a guard where it can.** If the row can come back, the fix
+  ships with the test that stops it, as in `docs/reviews/lessons.md`. Phase 1
+  of [the walk](../projects/practice/phases.md) is mostly that.
+
 What a page holds:
 
 - **Front matter**: the date and every number, as `key: value`. Tomorrow's
