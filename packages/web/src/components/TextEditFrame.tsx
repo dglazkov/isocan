@@ -370,10 +370,15 @@ export function TextEditFrame({
           </button>
         )}
       </div>
-      {selected && (
-        /* The properties of the selected element: the class, and the inline
-           styles a person reaches for. Each field writes the frame live;
-           the bar above counts the edits; Save splices them by position. */
+      {/* The properties of the selected element: the class, and the inline
+          styles a person reaches for. Each field writes the frame live; the
+          bar above counts the edits; Save splices them by position. The row
+          is always there, one line high, so selecting cannot push the frame
+          down — a double-click's first click selects, and the second must
+          land on the same words. */}
+      {!selected ? (
+        <div className="props-panel props-empty">Click an element for its properties</div>
+      ) : (
         <div className="props-panel" role="group" aria-label={`Properties of <${selected.tag}>`}>
           <span className="props-tag">&lt;{selected.tag}&gt;</span>
           <label className="props-field props-class">

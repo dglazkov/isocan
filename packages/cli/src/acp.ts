@@ -138,11 +138,22 @@ function passes(name: string, extra: string[]): boolean {
  * enrolled actor. `agentSession` is the session half of the agent's key
  * (`agent:<session>`, `agent-key.ts`'s `agentSessionOf`). `pass` is
  * config.json's `adapterEnv` — names, or `PREFIX_*` — and `source` is a
- * parameter so a test can hand it a shell. */
+ * parameter so a test can hand it a shell.
+ *
+ * `keys` is this machine's keys.json, as `harnesses.ts`'s `storedAgentKeys`
+ * hands it over (keys phase 4, opt-in — empty unless the owner ran `isocan
+ * keys agents on`): handed the passed environment, it answers
+ * the stored keys that environment lacks, under the variable each
+ * provider's harness reads (core's `agentKeyEnv` — `ANTHROPIC_API_KEY`,
+ * `OPENAI_API_KEY`, `GEMINI_API_KEY`); one the environment sets wins. A
+ * function rather than the file so this module, loaded by every CLI start,
+ * does not load the keys vocabulary with it. The rc runs for the
+ * machine's own person, so these are that person's keys paying for that
+ * person's agents — phase 3's owner-only rule, held by construction. */
 export function adapterEnv(
   canvasId: string,
   agentSession: string,
-  options: { pass?: string[]; source?: NodeJS.ProcessEnv } = {},
+  options: { pass?: string[]; source?: NodeJS.ProcessEnv; keys?: (env: NodeJS.ProcessEnv) => Record<string, string> } = {},
 ): NodeJS.ProcessEnv {
   const source = options.source ?? process.env;
   const extra = options.pass ?? [];
@@ -151,6 +162,7 @@ export function adapterEnv(
     if (value !== undefined && passes(name, extra)) env[name] = value;
   }
   for (const name of [...harnessVars, "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]) delete env[name];
+  if (options.keys) Object.assign(env, options.keys(env));
   env["ISOCAN_HARNESS"] = "agent";
   env["ISOCAN_SESSION_ID"] = agentSession;
   // Which canvas this summons is FOR travels beside the identity, read by the

@@ -1723,6 +1723,116 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "copy-fit",
+    /**
+     * **The one that does not fit** (copy-edit phase 4, journey scene 3). A
+     * narrow screen gets two voices written by an agent (`words vary --from`):
+     * one keeps its words short, the other makes the heading a sentence. Open
+     * *Compare the copy…* from the screen's menu: each frame measures its own
+     * strings where it renders, core's rule judges them, and the long heading
+     * is marked — in its row's cell for that voice, in the column's caption,
+     * and outlined inside its frame — while the source's heading and the
+     * short voice are not. The mark is a fact, not a refusal: the long
+     * heading can still be picked.
+     */
+    what: "Compare the copy… marks a voice's heading that wraps past its two lines, in its row and inside its frame, and leaves the ones that fit alone",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme copy fit");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-copy-fit-journey", ISOCAN_HARNESS: "test", ISOCAN_TEXT_API_KEY: "" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Fit CLI");
+      const spot = await openSpot(rig, 300, 220);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 10 - world.left) / world.scale), wy = Math.round((spot.y + 10 - world.top) / world.scale);
+      const file = path.join(rig.home, "acme-fit.html");
+      const HTML = `<!doctype html><html><head><title>Acme checkout</title><style>body{margin:12px;font:16px/1.3 sans-serif}h1{font-size:24px;margin:0 0 8px}</style></head><body><h1>Review your order</h1><p>Two items from Acme.</p><button>Pay now</button></body></html>`;
+      writeFileSync(file, HTML);
+      const source = runCli("--canvas", id, "add", file, "--title", "Acme fit", "--at", `${wx},${wy}`, "--size", "240x160").itemId;
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      await until(b, `!!document.querySelector(${sel(source)})`, "the screen to arrive on the canvas");
+
+      // Two voices by an agent: a short one, and one whose heading is a sentence.
+      const deck = runCli("--canvas", id, "words", source).strings;
+      const heading = deck.find((s) => s.role === "heading"), button = deck.find((s) => s.role === "button");
+      const LONG = "Before you pay, take one more careful look at every item in your Acme order today";
+      const voicesFile = path.join(rig.home, "acme-fit-voices.json");
+      writeFileSync(voicesFile, JSON.stringify({ variants: [
+        { stance: "Short", why: "Fewer words.", edits: [{ address: heading.address, to: "Your order" }, { address: button.address, to: "Pay" }] },
+        { stance: "Thorough", why: "Asks for care.", edits: [{ address: heading.address, to: LONG }] },
+      ] }));
+      const made = runCli("--canvas", id, "words", "vary", source, "--from", voicesFile).variants;
+      const [short, long] = made.map((v) => v.itemId);
+      await until(b, `!!document.querySelector(${sel(long)})`, "the voices to arrive on the canvas");
+
+      // Compare the copy…, from the screen's menu: a real right-click, a real press.
+      const mouse = (type, x, y, button = "left") => b.send("Input.dispatchMouseEvent", { type, x, y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+      const at = await b.ev(`(() => { const r = document.querySelector(${sel(source)}).getBoundingClientRect(); return { x: Math.round(r.left + 3), y: Math.round(r.bottom - 3) }; })()`);
+      await mouse("mouseMoved", at.x, at.y, "none");
+      await mouse("mousePressed", at.x, at.y, "right");
+      await mouse("mouseReleased", at.x, at.y, "right");
+      const row = `[...document.querySelectorAll(".context-menu button")].find((el) => el.textContent.trim().startsWith("Compare the copy…"))`;
+      await until(b, `!!${row} && !${row}.disabled`, `the item menu, offering "Compare the copy…"`, 4000);
+      const r = await b.ev(`(() => { const r = ${row}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      await mouse("mousePressed", r.x, r.y);
+      await mouse("mouseReleased", r.x, r.y);
+      await until(b, `document.querySelectorAll("[data-copy-compare] .cc-col iframe").length === 3`, "the screen and its two voices drawn side by side", 15000);
+
+      // The long heading is marked in its row, in the long voice's cell — and nowhere else.
+      const cell = (itemId) => `document.querySelector('[data-copy-compare] .cc-row[data-copy-address="${heading.address}"] input[value="${itemId}"]')?.closest("label")`;
+      await until(b, `${cell(long)}?.dataset.fit === "over"`, "the long heading to be marked as not fitting", 15000);
+      const marked = await b.ev(`(() => {
+        const c = ${cell(long)};
+        return { note: c.querySelector(".cc-fit")?.textContent ?? "", others: [...document.querySelectorAll('[data-copy-compare] [data-fit="over"]')].map((el) => el.querySelector("input")?.value), captions: [...document.querySelectorAll("[data-copy-compare] .cc-col figcaption")].map((f) => f.textContent) };
+      })()`);
+      if (!/^Does not fit: \w+ lines in a two-line heading/.test(marked.note)) throw new Error(`the long heading's cell does not say why it does not fit: ${JSON.stringify(marked.note)}`);
+      if (JSON.stringify(marked.others) !== JSON.stringify([long])) throw new Error(`strings other than the long heading are marked: ${JSON.stringify(marked.others)}`);
+      if (!marked.captions[2]?.includes("1 string does not fit") || marked.captions[0]?.includes("not fit") || marked.captions[1]?.includes("not fit")) throw new Error(`the captions do not say which voice has a string that does not fit: ${JSON.stringify(marked.captions)}`);
+      if (await b.ev(`${cell(short)}?.dataset.fit ?? "fits"`) !== "fits") throw new Error("the short heading is marked as not fitting");
+
+      // Inside the frame: the long voice's heading is outlined in place. The
+      // compare's sandboxed srcdoc frames are out-of-process, so each is read
+      // through its own target: attached, asked, detached.
+      const { targetInfos } = await b.send("Target.getTargets");
+      const srcdocs = targetInfos.filter((t) => t.type === "iframe" && t.url === "about:srcdoc");
+      const inFrames = [];
+      let mid = 0;
+      for (const t of srcdocs) {
+        const { sessionId } = await b.send("Target.attachToTarget", { targetId: t.targetId, flatten: false });
+        const ask = ++mid;
+        const answer = new Promise((resolve) => {
+          const off = b.on("Target.receivedMessageFromTarget", (m) => {
+            const msg = JSON.parse(m.message);
+            if (m.sessionId === sessionId && msg.id === ask) { off(); resolve(msg.result?.result?.value ?? []); }
+          });
+        });
+        await b.send("Target.sendMessageToTarget", { sessionId, message: JSON.stringify({ id: ask, method: "Runtime.evaluate", params: { returnByValue: true, expression: `[...document.querySelectorAll("[data-isocan-fit=over]")].map((el) => ({ tag: el.tagName, why: el.getAttribute("data-isocan-fit-why"), words: el.textContent.trim() }))` } }) });
+        inFrames.push(...(await answer));
+        await b.send("Target.detachFromTarget", { sessionId });
+      }
+      if (srcdocs.length < 3) throw new Error(`expected the compare's three frames as their own targets, found ${srcdocs.length}`);
+      if (inFrames.length !== 1 || inFrames[0].words !== LONG || inFrames[0].tag !== "H1") throw new Error(`inside the frames, the marks are not the long heading alone: ${JSON.stringify(inFrames)}`);
+
+      // A fact, not a refusal: the long heading can still be picked.
+      const radio = `[data-copy-compare] .cc-row[data-copy-address="${heading.address}"] input[value="${long}"]`;
+      await b.ev(`document.querySelector(${JSON.stringify(radio)}).scrollIntoView({ block: "center" }), true`);
+      await rig.click(radio, "the long heading");
+      await until(b, `document.querySelector(${JSON.stringify(radio)}).checked`, "the long heading to be picked", 2000);
+      const screenshot = path.join(tmpdir(), `isocan-copy-fit-${Date.now()}.png`);
+      writeFileSync(screenshot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+      return { screenshot, heading: heading.address, note: marked.note, captions: marked.captions, inFrame: inFrames[0], voices: { short, long } };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**
@@ -2391,11 +2501,11 @@ export const JOURNEYS = [
         return null;
       })()`);
       /**
-       * A real double-click on the words. One click first, and the point
-       * measured again: a click selects the element and opens its properties
-       * strip above the frame, which moves everything in it down — so the
-       * second half of a double-click aimed before that lands on whatever
-       * slid under the pointer.
+       * A real double-click on the words, aimed once: the first click selects
+       * the element and fills the properties strip, and the strip's row is
+       * always there, so nothing slides under the pointer before the second
+       * click. The words are measured again between the clicks — a person's
+       * gap, inside the double-click window — and must not have moved.
        */
       const doubleClickOn = async (words, what, sec) => {
         const press = async (at, clickCount) => {
@@ -2407,10 +2517,13 @@ export const JOURNEYS = [
           if (!at || at.covered) throw new Error(`${what} is not drawn where a person could double-click it (${at?.covered ?? "not found"})`);
           return at;
         };
-        await press(await aim(), 1);
-        await sleep(300);
         const at = await aim();
         await press(at, 1);
+        await sleep(150);
+        const between = await pointAt(words, sec);
+        if (between && !between.covered && (between.x !== at.x || between.y !== at.y)) {
+          throw new Error(`${what} moved under the pointer between the clicks of a double-click: (${at.x},${at.y}) → (${between.x},${between.y})`);
+        }
         await press(at, 2);
         await sleep(300);
       };

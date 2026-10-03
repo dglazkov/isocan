@@ -360,6 +360,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   by side, live, with a choice per string; *Use this mix* writes those words
   into the screen as one version and clears the voices, one undo.
   `isocan words mix <item> --pick <address>=<voice>` does the same.
+- **Fit and voice**: *Compare the copy…* measures every string where the
+  screen renders and marks the ones that wrap past their role's lines or
+  overflow their box ("two lines in a one-line button"). A `## Voice`
+  section in DESIGN.md — tone, words to use and avoid, a glossary (*sign
+  in*, never *log in*) — goes into every voice's question and refuses a
+  voice that breaks it; `isocan words lint` checks a flow's words against
+  it, one name per thing across screens, and the copy tells.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking
@@ -507,7 +514,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   calibrated before anything acts on it. It writes to no canvas; `--out`
   puts the pairs on this machine, outside any repository. See
   [the design](docs/projects/judge/design.md).
-- **Model keys in one place**: `isocan keys ls|set|rm|test|share` keeps this
+- **Model keys in one place**: `isocan keys ls|set|rm|test|share|agents` keeps this
   machine's Anthropic, OpenAI, Gemini and Typesafe keys in
   `~/.isocan/keys.json` (0600, refused if looser). The judge, the text model,
   the CLI's own wireframe answers and the voice harness read it per call — a
@@ -518,7 +525,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   with them); a collaborator is refused by name until `isocan keys share on`.
   The web app has the same hands — *Model keys…* in the identity menu, under
   *This machine*, on a page this machine's daemon serves (set, replace, test,
-  remove; write-only; a hosted home says its keys are its operator's). See
+  remove; write-only; a hosted home says its keys are its operator's). Agents
+  an rc summons are handed the stored Anthropic, OpenAI and Gemini keys their
+  own environment lacks only after `isocan keys agents on` (off by default:
+  Claude Code, Codex and Gemini would switch from your login to the key,
+  billed per call), and *Talk to the canvas* keeps no key in the browser:
+  each session gets a one-use Gemini Live token from the home. See
   [the design](docs/projects/keys/design.md).
 - **Design competitions**: `/design-competition` or ⌘K opens a lazy picker
   with nine designer-inspired packs. Choose fighters and a brief to create
@@ -937,8 +949,9 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   and say so: adding a **file** (bytes are not queued) and **undo** (the
   stack is the home's, walked over the whole oplog).
 - **Talk to the canvas** (experiment, `modules.talk`): a floating mic that opens
-  a Gemini Live session from the browser with **your own key** — stored in that
-  browser only, never on the canvas or the daemon. Spoken requests become the
+  a Gemini Live session from the browser with a one-use token the home mints
+  from its Gemini key (*Model keys…*, or `isocan keys set gemini`) — no key is
+  kept in the browser. Spoken requests become the
   same operations a click sends, wearing your identity and undo; the captions
   and level bars float by the button and disappear with the turn. ⌘K →
   "Configure voice" is the settings door; `isocan voice` says where the button is.

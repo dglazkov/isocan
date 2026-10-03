@@ -2,20 +2,22 @@ import { promises as fs } from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { atLeast, sameActor, type ActorClaim, JUDGMENT_BAD_REQUEST, JUDGMENT_MAX_BYTES, JUDGMENT_RATE_LIMITED, JUDGMENT_ROUTE, JUDGMENT_TOO_LARGE, JUDGMENT_UNAVAILABLE, type JudgmentRequest } from "@isocan/core";
 import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextRequest } from "@isocan/core/text";
-import { JUDGMENT_OWNER_ONLY, ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
+import { JUDGMENT_OWNER_ONLY, LIVE_TOKEN_BAD_REQUEST, LIVE_TOKEN_OWNER_ONLY, LIVE_TOKEN_RATE_LIMITED, LIVE_TOKEN_ROUTE, LIVE_TOKEN_UNAVAILABLE, ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import { defaultKeysHome, readKeyFile } from "@isocan/core/keystore";
 import type { Engine } from "./engine.ts";
 import { capabilityIn, type ViewOnlyError } from "./grants.ts";
 import type { RouteOptions } from "./http.ts";
 import { Judge } from "./judgment.ts";
+import { LiveTokens } from "./live-token.ts";
 import { identityFile } from "./paths.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
 import { TextModel } from "./text.ts";
 
 /**
- * **The two routes that spend the home's keys** — `POST /api/judgment` (the
- * judge, wireframes phase 5) and `POST /api/text` (the text model, copy-edit
- * phase 0.5). Moved out of `registerRoutes` together on 2 Oct 2026 when the
+ * **The routes that spend the home's keys** — `POST /api/judgment` (the
+ * judge, wireframes phase 5), `POST /api/text` (the text model, copy-edit
+ * phase 0.5) and, since keys phase 4, `POST /api/voice/token` (a Gemini Live
+ * token for the talk module). Moved out of `registerRoutes` together on 2 Oct 2026 when the
  * second landed, so `registerRoutes` stays under its agreed length
  * (`register-routes.test.ts`) and the twins sit side by side. They read the
  * same closures — the takedown list, the admission, the view-only refusal —
@@ -176,5 +178,43 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     }
     const written = await textModel.write(asked);
     return reply.status(written.status).send(written.body);
+  });
+  /**
+   * **`POST /api/voice/token` — a short-lived Gemini Live token, minted with
+   * this home's key** (keys phase 4; `live-token.ts` holds the key and the
+   * rate). What the talk module asks once per session, so the browser opens
+   * the Live socket with a one-use token and never holds a key. The text
+   * route's door in the text route's order: the shape, the takedown and the
+   * refused badge, the admission and the edit rung (a voice session acts on
+   * the canvas), then — for a canvas homed elsewhere — that home's own token,
+   * then whose key it is, then the key and the badge's budget.
+   */
+  const liveTokens = new LiveTokens(options.liveToken ?? {});
+  app.post(LIVE_TOKEN_ROUTE, { bodyLimit: 4096 }, async (req, reply) => {
+    const body = req.body as { canvasId?: unknown } | null;
+    if (!body || typeof body !== "object" || typeof body.canvasId !== "string" || !body.canvasId) {
+      return reply.status(400).send({ error: "a voice token names the canvas it is for (`canvasId`)", code: LIVE_TOKEN_BAD_REQUEST });
+    }
+    const canvasId = body.canvasId;
+    const down = refusals.of(canvasId);
+    if (down) throw new TakenDownError(down);
+    const refusedBadge = refusals.refusingAttestation(req.badge?.attestations ?? []);
+    if (refusedBadge) throw new RefusedError(refusedBadge);
+    await admit(req, canvasId);
+    if (!atLeast(capabilityIn(req.badge!, canvasId) ?? "edit", "edit")) throw await viewOnly(canvasId);
+    const home = options.homes?.for(canvasId) ?? null;
+    const source = liveTokens.keySource();
+    const refused = source === "file" ? await notTheOwners(req, options.liveToken?.keysHome ?? defaultKeysHome()) : null;
+    if (home && (!source || refused)) return home.personalRequest("POST", LIVE_TOKEN_ROUTE, { canvasId });
+    if (!home) await engine.getSnapshot(canvasId);
+    if (refused) return reply.status(403).send({ error: ownerOnlySentence(refused.owner), code: LIVE_TOKEN_OWNER_ONLY });
+    if (!source) {
+      return reply.status(503).send({ error: "this home has no Gemini key — voice can't start here (`isocan keys set gemini`, or Model keys…, on the machine that holds this canvas)", code: LIVE_TOKEN_UNAVAILABLE });
+    }
+    if (!liveTokens.take(req.badge!.badgeId)) {
+      return reply.status(429).send({ error: "this badge has started enough voice sessions this minute — wait a moment and press again", code: LIVE_TOKEN_RATE_LIMITED });
+    }
+    const minted = await liveTokens.mint();
+    return reply.status(minted.status).send(minted.body);
   });
 }

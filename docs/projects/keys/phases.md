@@ -1,5 +1,5 @@
 ---
-status: partial
+status: built
 since: 2026-10-02
 see: copy-edit, voice-agent
 note: "the walk: close the voice harness door, the store and CLI, the settings area, owner-only spend, agents and the talk module."
@@ -9,7 +9,7 @@ note: "the walk: close the voice harness door, the store and CLI, the settings a
 
 **2 October 2026.** Held to [design.md](design.md).
 
-**Where we are, 2 Oct 2026: phases 0–3 are CLOSED — the harness door is shut, keys live in `~/.isocan/keys.json` behind `isocan keys` and the *Model keys…* area, and they pay only for this machine's person unless sharing is on. Next: keys phase 4, agents and the talk module.**
+**Where we are, 2 Oct 2026: all five phases are CLOSED. Keys live in `~/.isocan/keys.json` behind `isocan keys` and *Model keys…*, pay only for this machine's person unless sharing is on, reach summoned agents only when the person opts in, and the talk module asks the daemon for a one-use voice token instead of keeping a key in the browser. Owed: the first run against Google's real token endpoint, step 6 of [the talk walk](../../verify/2026-09-20-talk-on-canvas.md).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -101,10 +101,19 @@ collaborator allowed after the switch.
 
 ## Phase 4 — Agents and the talk module
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** With `isocan keys agents on` (or *Give my keys to agents I summon*), an agent the rc summons gets a stored Anthropic, OpenAI or Gemini key its env lacks; off by default, env wins. `POST /api/voice/token` mints a one-use Gemini Live token, gated like `/api/text` (owner-only, forwarded to the home, rate-limited), and the talk module asks for one per session and keeps no key: a key left in localStorage by an older build is removed and the panel says so. Proved by a real `rc turn` against a fake adapter, a real daemon against a fake Google, and the talk dialog mounted in jsdom; never yet against Google itself.
 
 **Outcome:** the rc injects stored keys into summoned agents; the talk module
 gets a short-lived Gemini token from the daemon instead of a localStorage key.
 
 **Proof:** an rc test that a summoned agent sees the stored key; a talk test
 that no key is in localStorage and a token is minted per session.
+
+### Trajectory
+
+- **2026-10-02** — Handing stored keys to agents is opt-in (`giveToAgents`, beside `shareWithCollaborators`, kept by every write): Claude Code, Codex and Gemini switch from a person's login to an API key they are handed and bill it per call, which must never happen without the person asking. The builder shipped it on; verify sent it back.
+- **2026-10-02** — Agents get stored keys through an argument to `adapterEnv`, not a file read inside `acp.ts`: `acp.ts` loads on every CLI start, and the keys vocabulary would have loaded for `--version`.
+- **2026-10-02** — The talk module spells `/api/voice/token` itself, a test holding it equal to core's: a second lazy importer of `@isocan/core/keys` split it into a chunk the entry had to name (+30 bytes against 15 of headroom).
+- **2026-10-02** — A token is one use, a minute to start, half an hour to run: a leaked token is one conversation, not a key. The old localStorage key is removed rather than migrated — the browser cannot write `keys.json` on a hosted page.
+- **2026-10-02** — Open: an agent whose listen policy admits collaborators spends the owner's keys on their mentions, outside the sharing switch (true of env keys and harness logins before this too).
+- **2026-10-02** — Open: the wire shapes come from `@google/genai` 2.23.0's source; whether `v1alpha/auth_tokens` and the constrained socket accept them is the talk walk's step 6.

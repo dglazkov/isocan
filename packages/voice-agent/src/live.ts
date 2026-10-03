@@ -129,6 +129,23 @@ export function liveUrl(key: string, host = "generativelanguage.googleapis.com")
   );
 }
 
+/* ---- liveTokenUrl ---- */
+/**
+ * **The Live socket opened with a one-use token instead of a key** (keys
+ * phase 4). A browser holds no key: the daemon mints an ephemeral token
+ * (`auth_tokens/…`, `POST /api/voice/token`) and the page presents it as
+ * `access_token` on the CONSTRAINED method, which ephemeral tokens are valid
+ * for only on `v1alpha` — the spelling `@google/genai`'s `live.connect` uses
+ * when its key starts `auth_tokens/`.
+ */
+export function liveTokenUrl(token: string, host = "generativelanguage.googleapis.com"): string {
+  return (
+    `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained` +
+    // Unencoded, as the SDK sends it: the name's own slash is part of it.
+    `?access_token=${token}`
+  );
+}
+
 /* ---- VIEW_ONLY ---- */
 /**
  * **The tools that change nobody's canvas** — a person's selection, their

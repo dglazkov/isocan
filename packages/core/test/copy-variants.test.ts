@@ -3,6 +3,7 @@ import { applyCopyDeck, applyCopyDeckToFace, copyDeck } from "../src/copy-deck.t
 import { PARENT_PROP } from "../src/lineage.ts";
 import { PLACEMENT_GAP } from "../src/placement.ts";
 import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_GAP, VARIANT_PARENT_PROP, checkCopyVariants, copyMixEdits, copyMixOps, copyMixRows, copyVariantOps, copyVariantsOf, copyVariantsRequest, placeholderCopyVariants } from "../src/copy-variants.ts";
+import { parseVoiceSection } from "../src/copy-voice.ts";
 import { stubTextGenerator } from "../src/jev.ts";
 import type { CanvasContents, Item } from "../src/model.ts";
 
@@ -43,7 +44,7 @@ const VOICES = {
 
 describe("copyVariantsRequest — one question for N voices", () => {
   it("names every string with its role and address, the brief and the voice, and asks for exactly n", () => {
-    const { prompt, schema } = copyVariantsRequest(deck, 3, "shorter, for a first-time buyer", "Calm, never shouting");
+    const { prompt, schema } = copyVariantsRequest(deck, 3, "shorter, for a first-time buyer", { tone: "Calm, never shouting", use: [], avoid: [], glossary: [], problems: [] });
     for (const s of deck.strings) expect(prompt).toContain(`${s.address}\t${s.role}\t${JSON.stringify(s.text)}`);
     expect(prompt).toContain("exactly 3 variants");
     expect(prompt).toContain("shorter, for a first-time buyer");
@@ -279,5 +280,27 @@ describe("compare and mix — per string, from several voices", () => {
       { type: "item.delete", itemId: warm },
       { type: "item.delete", itemId: benefit },
     ]);
+  });
+});
+
+describe("the product's voice — in the question, and in the check (copy-edit phase 4)", () => {
+  const voice = parseVoiceSection("Plain, second person.\n\nAvoid: seamless\n\nGlossary:\n- sign in — never log in");
+
+  it("reaches the prompt: tone, avoided words, glossary", () => {
+    const { prompt } = copyVariantsRequest(deck, 2, undefined, voice);
+    expect(prompt).toContain("The product's voice, from its DESIGN.md — keep to it in every variant:");
+    expect(prompt).toContain("Tone: Plain, second person.");
+    expect(prompt).toContain("Words to avoid — never write them: seamless.");
+    expect(prompt).toContain('Say "sign in", never "log in".');
+  });
+
+  it("refuses a variant that writes an avoided word or a banned form, naming the variant and the string", () => {
+    const avoided = { variants: [{ stance: "Smooth", why: "Feels easy.", edits: [{ address: addr("Pay now"), to: "Pay seamlessly" }, { address: addr("Review your order"), to: "A seamless checkout" }] }] };
+    const out = checkCopyVariants(deck, avoided, 1, voice);
+    expect(out).toEqual({ ok: false, reason: `variant 1 (Smooth) says "seamless" — the voice avoids it at ${addr("Review your order")} (heading) — DESIGN.md's Voice section` });
+    const banned = { variants: [{ stance: "Account", why: "Asks first.", edits: [{ address: addr("Pay now"), to: "Log in to pay" }] }] };
+    expect(checkCopyVariants(deck, banned, 1, voice)).toMatchObject({ ok: false, reason: expect.stringContaining('says "Log in" — the voice says "sign in", never "log in"') });
+    // Without a voice, the same answers pass: the voice is the product's, not a rule of its own.
+    expect(checkCopyVariants(deck, banned, 1).ok).toBe(true);
   });
 });

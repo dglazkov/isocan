@@ -23,30 +23,40 @@ import {
 import { VoiceBeam } from "voice-glow";
 import { LevelMeter } from "@isocan/core/voice-dsp";
 import { Playback, capture, fromBytes, type Capture } from "./audio.ts";
-import { LIVE_MODEL, LIVE_VOICES, canvasSnapshotText, commandsBrief, isLiveVoice, liveSetup, liveUrl, planForCall, toolScheduling, type SnapshotItem } from "./live.ts";
+import type { LiveTokenResponse } from "@isocan/core/keys";
+import { LIVE_MODEL, LIVE_VOICES, canvasSnapshotText, commandsBrief, isLiveVoice, liveSetup, liveTokenUrl, planForCall, toolScheduling, type SnapshotItem } from "./live.ts";
 import { voiceCore } from "./core.ts";
 
 /**
- * **Talk to the canvas** — a Gemini Live session from THIS browser, with
- * THIS person's key, in two doors that have settled into two jobs:
+ * **Talk to the canvas** — a Gemini Live session from THIS browser, in two
+ * doors that have settled into two jobs:
  *
- * - The floating mic is the TALKING: one press starts (a stored key makes
- *   the press the whole gesture), one press stops, and the feedback — the
- *   pulsing button, the level bars, the last words — floats by the button
- *   and is gone when the turn is. Nothing pops up, the way the voice-agent
- *   page's chrome disappears.
- * - The ⌘K dialog is the CONFIGURATION: the key, the model, and a test
- *   listen. It only needs to open on first run.
+ * - The floating mic is the TALKING: one press starts, one press stops, and
+ *   the feedback — the pulsing button, the level bars, the last words —
+ *   floats by the button and is gone when the turn is. Nothing pops up, the
+ *   way the voice-agent page's chrome disappears.
+ * - The ⌘K dialog is the CONFIGURATION: the model, and a test listen.
  *
- * The module rule is honoured to the letter: the key is a string in this
- * browser's storage (per-user, per-origin — never on the canvas, never in
- * the daemon), tool calls are ordinary operations, and removing the module
- * leaves nothing that is not already a file or a comment.
+ * **No key in the browser** (keys phase 4). Each session asks the home for a
+ * one-use Live token (`LIVE_TOKEN_ROUTE`), minted with the Gemini key the
+ * machine holding this canvas keeps in Model keys, and opens the socket with
+ * that. Tool calls are ordinary operations, and removing the module leaves
+ * nothing that is not already a file or a comment.
  */
 
-/** The key's shelf: this browser, this origin. A person's key, not the
- *  canvas's — the one scope a module may hold without a server route. */
-const KEY_SHELF = "isocan:voice:key";
+/**
+ * Where this module used to keep a Gemini key, in localStorage — the "no key
+ * in the browser" rule broken. It is never read now; a key still found there
+ * is removed once and the session says so (`forgetBrowserKey`).
+ */
+const OLD_KEY_SHELF = "isocan:voice:key";
+/**
+ * `@isocan/core/keys`'s `LIVE_TOKEN_ROUTE`, spelled here rather than imported:
+ * a second lazy importer of that file carves it into a chunk the web entry
+ * must then name, and the entry has no bytes to spare (measured, keys phase
+ * 4). `test/token.test.ts` holds the two spellings to one.
+ */
+const LIVE_TOKEN_ROUTE = "/api/voice/token";
 const MODEL_SHELF = "isocan:voice:model";
 const VOICE_SHELF = "isocan:voice:voice";
 /**
@@ -107,6 +117,7 @@ const METER_CSS = `
  */
 const FIELD_CSS = `
   .talk-field { display: grid; gap: 4px; font-size: 12px; color: var(--ink-muted); }
+  .talk-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
 `;
 
 /** One line of the conversation, for the caption the person reads. */
@@ -692,6 +703,36 @@ function Meter({ label, live, onReady }: { label: string; live: boolean; onReady
 }
 
 /**
+ * **The key this module used to keep, removed.** True when there was one —
+ * the caller says so once, and where the key goes now. Removed rather than
+ * left: a key nobody reads is still a key sitting in a browser.
+ */
+export function forgetBrowserKey(storage: Pick<Storage, "getItem" | "removeItem"> = localStorage): boolean {
+  if (storage.getItem(OLD_KEY_SHELF) === null) return false;
+  storage.removeItem(OLD_KEY_SHELF);
+  return true;
+}
+
+/**
+ * **A one-use Live token, asked for per session** (keys phase 4). The home
+ * mints it with its Gemini key (`POST /api/voice/token`, gated like the text
+ * route: an editor of this canvas, the owner's key only for the owner unless
+ * they share it); this page never sees the key. Throws the home's sentence.
+ */
+export async function requestLiveToken(canvasId: string, fetchImpl: typeof fetch = fetch): Promise<LiveTokenResponse> {
+  const res = await fetchImpl(LIVE_TOKEN_ROUTE, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ canvasId }),
+  });
+  const body = (await res.json().catch(() => null)) as (Partial<LiveTokenResponse> & { error?: string; code?: string }) | null;
+  if (!res.ok || typeof body?.token !== "string") {
+    throw Object.assign(new Error(body?.error ?? `the home answered ${res.status}`), { code: body?.code });
+  }
+  return body as LiveTokenResponse;
+}
+
+/**
  * **One live session, wherever it is mounted** — the socket, the capture,
  * the playback, the captions and the meters. Both doors share it; the mic
  * overlay and the config dialog differ only in what chrome they put around
@@ -699,7 +740,6 @@ function Meter({ label, live, onReady }: { label: string; live: boolean; onReady
  * session starts on open — one press, not two.
  */
 function useTalkSession(facts: PanelFacts, autoStart = false) {
-  const [key, setKey] = useState(() => localStorage.getItem(KEY_SHELF) ?? "");
   const [model, setModel] = useState(() => localStorage.getItem(MODEL_SHELF) ?? LIVE_MODEL);
   const [state, setState] = useState<SessionState>("idle");
   const [lines, setLines] = useState<Line[]>([]);
@@ -718,6 +758,8 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   const inPaintRef = useRef<(level: number) => void>(() => undefined);
   const outPaintRef = useRef<(level: number) => void>(() => undefined);
   const autoStartedRef = useRef(false);
+  /** Bumped by every stop: a start still waiting on its token sees it moved and opens nothing. */
+  const generationRef = useRef(0);
   // The page's own meter maths: dB gating, attack, release, a held peak.
   // Raw PCM RMS would read 0..32767, which is how the first bars pegged.
   const inMeter = useRef(new LevelMeter(METER_COUNT));
@@ -791,7 +833,15 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
     setLines((prev) => sealLines(prev));
   }, []);
 
+  /* The key this module used to keep is removed on first mount, and said. */
+  useEffect(() => {
+    if (forgetBrowserKey()) {
+      say("system", "the Gemini key this browser used to keep has been removed — voice now uses the one in Model keys on the machine that holds this canvas");
+    }
+  }, [say]);
+
   const stop = useCallback(() => {
+    generationRef.current++;
     void shadowRef.current?.flush();
     shadowRef.current = null;
     void fastRef.current?.flush();
@@ -816,14 +866,20 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   }, []);
 
   const start = useCallback(async () => {
-    if (!key.trim()) {
-      setState("refused");
-      say("system", "paste your Gemini API key first — it stays in this browser");
-      return;
-    }
-    localStorage.setItem(KEY_SHELF, key.trim());
     localStorage.setItem(MODEL_SHELF, model.trim());
     say("system", "opening the live session…");
+    const generation = generationRef.current;
+    let token: string;
+    try {
+      token = (await requestLiveToken(factsRef.current.canvasId)).token;
+    } catch (err) {
+      if (generationRef.current !== generation) return;
+      setState("refused");
+      say("system", `no voice session — ${(err as Error).message}`);
+      return;
+    }
+    // Stopped while the token was on its way: it goes unused and expires.
+    if (generationRef.current !== generation) return;
     const mode = fastPathMode();
     if (mode === "act" && !fastRef.current) {
       // Lazily, and only when switched on. The record and the judge are the
@@ -863,7 +919,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       });
       say("system", "fast path in shadow — Jev listens to each turn and never acts");
     }
-    const socket = new WebSocket(liveUrl(key.trim()));
+    const socket = new WebSocket(liveTokenUrl(token));
     socketRef.current = socket;
     /**
      * The provider's own acknowledgement that it is ready for audio. An OPEN
@@ -1045,12 +1101,11 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
       say("system", `microphone refused — ${String((err as Error).message ?? err)}`);
       socket.close();
     }
-  }, [key, model, say, seal]);
+  }, [model, say, seal]);
 
-  // The door was the press: with a key already in the shelf, open means
-  // listen.
+  // The door was the press: open means listen.
   useEffect(() => {
-    if (autoStart && !autoStartedRef.current && localStorage.getItem(KEY_SHELF)?.trim()) {
+    if (autoStart && !autoStartedRef.current) {
       autoStartedRef.current = true;
       void start();
     }
@@ -1073,9 +1128,7 @@ function useTalkSession(facts: PanelFacts, autoStart = false) {
   return {
     state,
     lines,
-    key,
     model,
-    setKey,
     setModel,
     start,
     stop,
@@ -1461,6 +1514,9 @@ function ShadowSwitch() {
   );
 }
 
+/** Where the key is, in one sentence both panels say. */
+const KEY_NOTE = "The Gemini key stays on the machine that holds this canvas — set it in Model keys there, or `isocan keys set gemini`. Each session gets a one-use token.";
+
 /**
  * **The key panel, in one spelling.** Both doors open it — the floating mic
  * and the composer's — and a second copy would be the one-string-two-spellings
@@ -1480,32 +1536,20 @@ function ConfigPop({
           ×
         </button>
         <label className="talk-field">
-          Gemini API key
-          <input
-            type="password"
-            value={session.key}
-            onChange={(e) => session.setKey(e.target.value)}
-            placeholder="stored in this browser only"
-            autoComplete="off"
-          />
-        </label>
-        <label className="talk-field">
           Model
           <input value={session.model} onChange={(e) => session.setModel(e.target.value)} autoComplete="off" />
         </label>
-        <p className="talk-note">Saved in this browser only — never on the canvas, never in the daemon.</p>
+        <p className="talk-note">{KEY_NOTE}</p>
         <ShadowSwitch />
         <button
           type="button"
           className="talk-save"
           onClick={() => {
-            localStorage.setItem(KEY_SHELF, session.key.trim());
             localStorage.setItem(MODEL_SHELF, session.model.trim());
             onClose();
             // Saving is the gesture: the session starts on the same press.
             void session.start();
           }}
-          disabled={!session.key.trim()}
         >
           Save and start
         </button>
@@ -1543,19 +1587,10 @@ function ConfigDialog(facts: DialogFacts) {
         </span>
       </div>
       <label className="talk-field">
-        Gemini API key
-        <input
-          type="password"
-          value={session.key}
-          onChange={(e) => session.setKey(e.target.value)}
-          placeholder="stored in this browser only"
-          autoComplete="off"
-        />
-      </label>
-      <label className="talk-field">
         Model
         <input value={session.model} onChange={(e) => session.setModel(e.target.value)} autoComplete="off" />
       </label>
+      <p className="talk-note">{KEY_NOTE}</p>
       <ShadowSwitch />
       {!facts.canEdit && <p>This canvas is read-only here, so the model can talk but not write.</p>}
       <ul className="talk-lines" aria-live="polite">
@@ -1613,7 +1648,6 @@ const COMPOSER_CSS = `
         color: var(--ink-muted); font-size: 18px; cursor: pointer;
       }
       ${FIELD_CSS}
-      .talk-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
       .talk-save { justify-self: start; }
       /* **28px and round.** The send button beside it measures 28 high and the
          form aligns its children to flex-END, so a 32px mic bottom-aligned
@@ -2006,7 +2040,7 @@ function ComposerMic({ canvasId, canvas, host, groupMode, theme, selection, acti
         type="button"
         className="talk-composer-mic"
         onClick={(event) => {
-          if (event.ctrlKey || event.metaKey || !session.key.trim()) {
+          if (event.ctrlKey || event.metaKey) {
             setConfigOpen((v) => !v);
             return;
           }
@@ -2053,7 +2087,7 @@ export const talkWeb: WebModule<never, never, never, never, never, typeof Config
     {
       id: "talk",
       name: "Configure voice",
-      hint: "your Gemini API key, the model, and a test listen",
+      hint: "the model, and a test listen",
       opens: "voice",
     },
   ],

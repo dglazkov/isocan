@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 2 Oct 2026: phases 0–3 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 4, fit and voice.**
+**Where we are, 2 Oct 2026: phases 0–4 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 5, a voice for the flow.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -128,7 +128,7 @@ removing the variants, one undo.
 
 ## Phase 4 — Fit and voice
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** *Compare the copy…* marks a string that does not fit its role — the frame measures its own line boxes and overflow, core's `copyFit` judges ("five lines in a two-line heading"), and the row cell and the frame both show it. A `## Voice` section in DESIGN.md (tone, use, avoid, glossary) reaches the generation prompt, and a variant that adds a banned form or avoided word is refused by name, on the web and in `words vary`. `isocan words lint [items…] [--flow]` reports glossary, one-name-per-thing, the slop tells (8 of `SLOP_RULES`' 9) and length by character count. The `copy-fit` journey marked exactly the long heading, in the cell and inside the frame.
 
 **Outcome:** a renderer-side fit check marking strings that overflow or wrap
 past their role's lines; a Voice section in DESIGN.md (tone, use, avoid,
@@ -137,6 +137,14 @@ across a flow and the slop tells on canvas screens.
 
 **Proof:** tests of the lint and the Voice section's parse; a journey showing a
 non-fitting variant marked.
+
+### Trajectory
+
+- **2026-10-02** — A frame measures its own strings and the panel judges them: the compare's sandboxed frames are out of process, so a probe posts line boxes and overflow up, core decides, and marks are posted back. The CLI has no renderer and says its fit is a character count.
+- **2026-10-02** — `copy-lint` takes `SLOP_RULES` as an argument: importing `slop.ts` split it into a chunk of its own and put `isocan --version` at 40 modules.
+- **2026-10-02** — A variant is refused only for a voice slip it adds (`newVoiceSlips`): keeping the source's "Log in" is not writing it; writing "Log in" over "Continue" is.
+- **2026-10-02** — The deck's `budget` is now the role's (`lines`, `chars`, `oneLine`); phase 2's `ROLE_SHAPE` folded into it — one table for the variant check, the count and the rendered fit.
+- **2026-10-02** — Open: a slip refuses the whole vary, with no retry; attribute strings and wire-screen fit are unmeasured in a browser; `design check` does not report Voice problems.
 
 ## Phase 5 — A voice for the flow
 

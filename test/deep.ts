@@ -214,6 +214,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/modules/wireframe/test/words-vary-cli.test.ts", secs: 5.4, why: "two cases, eleven spawns: wire copy variants rendered through the spec, kept, chosen and undone — and mixed per word path (phase 3); measured 2 October" },
   { file: "packages/cli/test/words-mix.test.ts", secs: 5.0, why: "a single case, eleven spawns: copy variants mixed per string into their source, refused, undone and mixed whole; measured 2 October" },
   { file: "packages/web/test/copymix.test.ts", secs: 4.0, why: "two cases, a handful of spawns: Use this mix held to the CLI's words mix byte for byte, and the menu row; measured 2 October" },
+  { file: "packages/cli/test/words-lint.test.ts", secs: 2.7, why: "two cases, sixteen spawns: DESIGN.md's Voice held by words vary (an agent's file and a fake text model) and read by words lint; measured 2 October" },
   { file: "packages/cli/test/agentmark.test.ts", secs: 7.8, why: "three cases, a handful of spawns each: `agent mark` over the real binary, owner and stranger; measured 30 September" },
   { file: "packages/cli/test/runtimemodules.test.ts", secs: 6.0, why: "three cases" },
   { file: "packages/cli/test/heatmap.test.ts", secs: 5.9, why: "a single case" },

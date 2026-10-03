@@ -2,11 +2,14 @@ import type { Actor, Operation, WebHost } from "@isocan/core";
 import { newGroupId, newItemId, newVersionId } from "@isocan/core";
 import { applyCopyDeck, applyCopyDeckToFace, copyDeck } from "@isocan/core/copy-deck";
 import { checkCopyVariants, copyVariantOps, copyVariantsRequest, placeholderCopyVariants } from "@isocan/core/copy-variants";
+import { voiceOf, type CopyVoice } from "@isocan/core/copy-voice";
 import { homeTextGenerator, homeTextOrStub, type TextGenerator } from "@isocan/core/jev";
+import { readDesignSystem } from "@isocan/api/design-system";
 import { postText } from "../components/ModuleDialogs.tsx";
 import { modules } from "../modules.ts";
 import { setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { fetchBlobText } from "./blobtext.ts";
+import { designSystemIO } from "./design-system.ts";
 import { webHostFor } from "./modulehost.ts";
 
 /**
@@ -26,6 +29,11 @@ import { webHostFor } from "./modulehost.ts";
  * placeholder words under stances that say "Placeholder", and the notice bar
  * says so once — the way `/wire copy` falls back. Any other refusal is a
  * failure, thrown in its own words. Loaded on the click, never on first paint.
+ *
+ * The product's voice (phase 4): the Voice section of the DESIGN.md that
+ * governs the screen — the same read `isocan words vary` makes — goes into
+ * the question and into the check, so a voice that writes a banned glossary
+ * form or an avoided word is refused, in words, before anything lands.
  */
 
 /** What the menu's dialog asks for. */
@@ -51,7 +59,7 @@ export async function varyCopy(
   itemId: string,
   ask: VaryAsk,
   /** The doors, swappable so a test can hold what this WOULD send: the text route, the blob read, and the host's send and upload. */
-  deps: { generate?: (body: unknown) => Promise<unknown>; readText?: (blobHash: string) => Promise<string>; host?: Pick<WebHost, "send" | "putBlob"> } = {},
+  deps: { generate?: (body: unknown) => Promise<unknown>; readText?: (blobHash: string) => Promise<string>; host?: Pick<WebHost, "send" | "putBlob">; voice?: () => Promise<CopyVoice | null> } = {},
 ): Promise<Varied> {
   const canvas = useCanvasStore.getState().canvas;
   const item = canvas?.items[itemId];
@@ -72,10 +80,11 @@ export async function varyCopy(
   const generator = homeTextOrStub(homeTextGenerator((words) => generate(words), canvasId), placeholder, () =>
     setNotice("This home has no text model (text-unavailable) — these voices are placeholder words, not written copy. Compare the copy… on the screen mixes them; one undo takes them back."),
   );
-  const { prompt, schema } = copyVariantsRequest(deck, ask.n, ask.brief);
+  const voice = await (deps.voice ?? (() => governingVoice(canvasId, actor, itemId)))();
+  const { prompt, schema } = copyVariantsRequest(deck, ask.n, ask.brief, voice);
   const raw = await generator.generateJson(prompt, schema);
   const by = generator.name;
-  const checked = checkCopyVariants(deck, raw, ask.n);
+  const checked = checkCopyVariants(deck, raw, ask.n, voice);
   if (!checked.ok) throw new Error(`the text model's voices were refused: ${checked.reason}`);
 
   // Each voice's file — the screen with only its words changed — uploaded before anything is sent.
@@ -111,4 +120,14 @@ export async function varyCopy(
   const ops: Operation[] = copyVariantOps(canvas, item, made);
   await host.send(ops, newGroupId());
   return { itemIds: ops.map((op) => (op as { itemId: string }).itemId), stances: checked.variants.map((v) => v.stance), by, placeholder: by === PLACEHOLDER };
+}
+
+/** The Voice section of the DESIGN.md governing a screen, or null — none governs it, it has no Voice, or the design read failed (the words go on without one). */
+async function governingVoice(canvasId: string, actor: Actor, itemId: string): Promise<CopyVoice | null> {
+  try {
+    const { governing } = await readDesignSystem(designSystemIO(actor), { canvasId, target: { kind: "item", itemId } });
+    return governing.status === "available" ? voiceOf(governing.document) : null;
+  } catch {
+    return null;
+  }
 }

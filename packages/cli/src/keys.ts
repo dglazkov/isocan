@@ -11,8 +11,9 @@ import { printJson, printTable } from "./output.ts";
  * `~/.isocan/keys.json` (0600) holds one key per provider; the daemon's judge
  * and text model, the CLI's own Jev and text generators and the voice harness
  * read it per call, with the environment winning. This verb is the file's
- * hands: `ls`, `set`, `rm`, `test`, and `share` (keys phase 3: whether
- * collaborators may spend them). It needs no daemon — the file is this
+ * hands: `ls`, `set`, `rm`, `test`, `share` (keys phase 3: whether
+ * collaborators may spend them) and `agents` (keys phase 4, opt-in: whether
+ * the agents an rc summons are handed them). It needs no daemon — the file is this
  * machine's, and a daemon that is running picks a change up on its next call.
  *
  * **Write-only.** Nothing here prints a key: `ls` shows the last four, `test`
@@ -83,11 +84,13 @@ function promptHidden(question: string): Promise<string> {
 
 const SHARING_OFF = "sharing off: the stored keys pay only for you (and identities joined with you) — `isocan keys share on` lets collaborators on canvases this machine holds use them";
 const SHARING_ON = "sharing on: collaborators who may edit a canvas this machine holds spend the stored keys too — `isocan keys share off` keeps them yours";
+const AGENTS_OFF = "agents off: agents an rc summons use their own logins — `isocan keys agents on` hands them the stored Anthropic, OpenAI and Gemini keys";
+const AGENTS_ON = "agents on: agents an rc summons get the stored Anthropic, OpenAI and Gemini keys their environment lacks — Claude Code, Codex and Gemini switch from your login to these keys, billed per call (`isocan keys agents off` stops it)";
 
 export function registerKeys(program: Command): void {
   const keys = program
     .command("keys")
-    .description("Model keys on this machine (~/.isocan/keys.json): ls, set, rm, test, share — never shown, env wins")
+    .description("Model keys on this machine (~/.isocan/keys.json): ls, set, rm, test, share, agents — never shown, env wins")
     .addHelpText(
       "after",
       `
@@ -104,6 +107,10 @@ Stored keys are yours: the daemon spends them only for you (and identities
 joined with you), and refuses a collaborator by name — unless you run
 \`isocan keys share on\`. An environment key serves every editor, as before.
 
+Agents an rc summons get the stored keys only after \`isocan keys agents on\`
+(off by default): a harness handed an API key — Claude Code, Codex, Gemini —
+switches from your login to that key, billed per call.
+
 A key is never printed: \`ls\` shows the last four characters. \`set\` reads
 the key from stdin when piped, or a hidden prompt — never from the command
 line, which your shell keeps in its history.
@@ -112,7 +119,8 @@ line, which your shell keeps in its history.
   pbpaste | isocan keys set anthropic          # or: isocan keys set anthropic, then paste
   isocan keys test anthropic                   # one cheap call: accepted, or why not
   isocan keys rm gemini
-  isocan keys share on                         # collaborators may spend them too (off by default)`,
+  isocan keys share on                         # collaborators may spend them too (off by default)
+  isocan keys agents on                        # summoned agents get them too (off by default; bills the keys)`,
     );
 
   keys
@@ -123,16 +131,17 @@ line, which your shell keeps in its history.
       const file = k.keysFile(home());
       let stored: KeyFile = {};
       let share = false;
+      let agents = false;
       let refused: string | null = null;
       try {
-        ({ keys: stored, share } = k.readKeyFileSync(home()));
+        ({ keys: stored, share, agents } = k.readKeyFileSync(home()));
       } catch (err) {
         refused = (err as Error).message;
       }
       // core's rows — the same ones `GET /api/keys` serves the settings area.
       const rows = k.keyRows(stored, process.env);
       if (cmd.optsWithGlobals().json) {
-        printJson({ file, ...(refused ? { refused } : {}), share, keys: rows });
+        printJson({ file, ...(refused ? { refused } : {}), share, agents, keys: rows });
       } else {
         printTable(
           rows.map((r) => ({
@@ -145,6 +154,7 @@ line, which your shell keeps in its history.
         );
         console.log(`\n${file}`);
         console.log(share ? SHARING_ON : SHARING_OFF);
+        console.log(agents ? AGENTS_ON : AGENTS_OFF);
       }
       if (refused) {
         console.error(refused);
@@ -200,6 +210,18 @@ line, which your shell keeps in its history.
       const file = await k.setKeySharing(home(), said === "on");
       if (cmd.optsWithGlobals().json) return printJson({ share: said === "on", file });
       console.log(said === "on" ? SHARING_ON : SHARING_OFF);
+    });
+
+  keys
+    .command("agents <on|off>")
+    .description("Whether agents an rc summons get the stored keys (default off: a harness handed a key bills it instead of your login)")
+    .action(async (raw: string, _opts: unknown, cmd: Command) => {
+      const said = raw.trim().toLowerCase();
+      if (said !== "on" && said !== "off") throw new Error(`\`isocan keys agents\` takes on or off — not "${raw}"`);
+      const k = await load();
+      const file = await k.setKeyAgents(home(), said === "on");
+      if (cmd.optsWithGlobals().json) return printJson({ agents: said === "on", file });
+      console.log(said === "on" ? AGENTS_ON : AGENTS_OFF);
     });
 
   keys

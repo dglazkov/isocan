@@ -4,6 +4,7 @@ import type { Actor } from "@isocan/core";
 import { compareVersions, type CompareFace } from "../lib/compare.ts";
 import { canEditNow } from "../lib/capability.ts";
 import { copySourceOf, mixCopy, readCopyMix, type CopyMixRead } from "../lib/copymix.ts";
+import { fitMeasuredOf, fitMisses, withFitProbe, type FitMiss } from "../lib/copyfit.ts";
 import { flashNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { Pane, Shell } from "./VersionCompare.tsx";
 import "./version-compare.css";
@@ -24,6 +25,12 @@ import "./copy-compare.css";
  * (`lib/copymix.ts`, the same core path as `isocan words mix`). *All its
  * words* on a voice picks every string it changed; *Choose this variation*
  * is still the item menu's, and Compare versions'.
+ *
+ * **Fit** (copy-edit phase 4, journey scene 3): each frame measures its own
+ * strings where it renders (`lib/copyfit.ts`), core's `copyFit` judges them
+ * against their roles, and a string that does not fit is marked in its frame
+ * and in its row's cell for that voice — "two lines in a one-line button".
+ * The mark is a fact, not a refusal: the string can still be picked.
  */
 interface CopyCompareRequest {
   canvasId: string;
@@ -79,7 +86,9 @@ function CopyCompare({ canvasId, actor, itemId, onClose }: CopyCompareRequest & 
         setRead(r);
         // Each screen's face: the source plain, each voice with what it changed marked.
         const drawn = await Promise.all([compareVersions(canvasId, r.version, r.version).then((c) => c.after), ...r.variants.map((v) => compareVersions(canvasId, r.version, v.version).then((c) => c.after))]);
-        if (live) setFaces(drawn);
+        // Each frame measures its own strings where it renders (fit, phase 4).
+        const decks = [r.deck, ...r.variants.map((v) => v.deck)];
+        if (live) setFaces(drawn.map((f, i) => (f.kind === "frame" ? { kind: "frame" as const, srcdoc: withFitProbe(f.srcdoc, decks[i]!) } : f)));
       })
       .catch((e: Error) => live && setFailed(e.message));
     return () => {
@@ -100,8 +109,24 @@ function CopyCompare({ canvasId, actor, itemId, onClose }: CopyCompareRequest & 
   // Each frame reports its document's size, so every screen is drawn at one scale.
   const frames = useRef<Array<HTMLIFrameElement | null>>([]);
   const [sizes, setSizes] = useState<Record<number, [number, number]>>({});
+  // What does not fit, per column (0: the source), as each frame reports what it measured.
+  const [misses, setMisses] = useState<Record<number, FitMiss[]>>({});
+  const readRef = useRef<CopyMixRead | null>(null);
+  readRef.current = read;
   useEffect(() => {
     const hear = (e: MessageEvent) => {
+      const measured = fitMeasuredOf(e.data);
+      if (measured) {
+        const at = frames.current.findIndex((f) => f?.contentWindow === e.source);
+        const r = readRef.current;
+        if (at < 0 || !r) return;
+        const deck = at === 0 ? r.deck : r.variants[at - 1]?.deck;
+        if (!deck) return;
+        const missed = fitMisses(deck, measured);
+        (e.source as Window).postMessage({ isocanCopyFitMark: missed.map((m) => ({ a: m.address, why: m.why })) }, "*");
+        setMisses((was) => (JSON.stringify(was[at]) === JSON.stringify(missed) ? was : { ...was, [at]: missed }));
+        return;
+      }
       const size = (e.data as { isocanDiffSize?: unknown } | null)?.isocanDiffSize;
       const at = frames.current.findIndex((f) => f?.contentWindow === e.source);
       if (at < 0 || !Array.isArray(size) || size.length !== 2 || !size.every((n) => typeof n === "number" && n > 0 && n < 100_000)) return;
@@ -167,7 +192,7 @@ function CopyCompare({ canvasId, actor, itemId, onClose }: CopyCompareRequest & 
             {columns.map((c, i) => (
               <div key={c.itemId} className="cc-col" data-copy-column={c.itemId}>
                 {faces?.[i] ? (
-                  <Pane caption={c.stance} face={faces[i]!} docW={docW} docH={docH} frame={(f) => (frames.current[i] = f)} />
+                  <Pane caption={misses[i]?.length ? `${c.stance} · ${misses[i]!.length} ${misses[i]!.length === 1 ? "string does" : "strings do"} not fit` : c.stance} face={faces[i]!} docW={docW} docH={docH} frame={(f) => (frames.current[i] = f)} />
                 ) : (
                   <figure className="vc-pane"><figcaption>{c.stance}</figcaption><div className="vc-stage" /></figure>
                 )}
@@ -189,8 +214,9 @@ function CopyCompare({ canvasId, actor, itemId, onClose }: CopyCompareRequest & 
                 {[{ itemId: sourceId, text: r.source }, ...r.variants].map((v, i) => {
                   const same = i > 0 && v.text === r.source;
                   const on = (picks[r.address] ?? sourceId) === v.itemId;
+                  const miss = same ? undefined : misses[i]?.find((m) => m.address === r.address);
                   return (
-                    <label key={v.itemId} role="cell" className={`cc-choice${on ? " on" : ""}${same ? " same" : ""}`}>
+                    <label key={v.itemId} role="cell" className={`cc-choice${on ? " on" : ""}${same ? " same" : ""}${miss ? " misfit" : ""}`} {...(miss ? { "data-fit": "over" } : {})}>
                       <input
                         type="radio"
                         name={`cc-${r.address}`}
@@ -204,7 +230,10 @@ function CopyCompare({ canvasId, actor, itemId, onClose }: CopyCompareRequest & 
                           return next;
                         })}
                       />
-                      <span>{same ? "(same as source)" : v.text}</span>
+                      <span>
+                        {same ? "(same as source)" : v.text}
+                        {miss && <small className="cc-fit">Does not fit: {miss.why}</small>}
+                      </span>
                     </label>
                   );
                 })}

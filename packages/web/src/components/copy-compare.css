@@ -19,3 +19,6 @@
 .cc-choice input { margin-top: 3px; flex: none; }
 .cc-choice input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .cc-error { color: var(--danger); }
+/* Fit (copy-edit phase 4): a string that does not fit its role in the rendered screen — a fact, not a refusal. */
+.cc-choice.misfit { border-style: dashed; border-color: var(--danger); }
+.cc-fit { display: block; margin-top: 2px; font-size: 12px; color: var(--danger); }

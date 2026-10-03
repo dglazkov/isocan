@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { KEYS_NOT_HERE, KEYS_ROUTE, KEYS_SHARING_ROUTE, type KeyProvider, type KeyRow, type KeysListing } from "@isocan/core/keys";
+import { KEYS_AGENTS_ROUTE, KEYS_NOT_HERE, KEYS_ROUTE, KEYS_SHARING_ROUTE, type KeyProvider, type KeyRow, type KeysListing } from "@isocan/core/keys";
 import { ApiError, request } from "../lib/api.ts";
 
 /**
@@ -19,7 +19,10 @@ import { ApiError, request } from "../lib/api.ts";
  *
  * Below the rows, owner-only spend's switch (keys phase 3): off by default,
  * the stored keys pay only for this machine's person; on, collaborators on
- * canvases it holds spend them too — `isocan keys share on|off`.
+ * canvases it holds spend them too — `isocan keys share on|off`. Under it,
+ * keys phase 4's opt-in: hand the stored keys to the agents this machine's rc
+ * summons — `isocan keys agents on|off` — off by default, because a harness
+ * handed a key bills it instead of the person's login.
  *
  * Lazy, like every panel this menu opens: the menu is already its own chunk,
  * and this is a second one, so a first visit pays for neither.
@@ -31,6 +34,8 @@ export function KeysDialog({ onClose }: { onClose: () => void }) {
   /** keys.json's sharing switch (keys phase 3): off, the stored keys pay only for this machine's person. */
   const [share, setShare] = useState<boolean | null>(null);
   const [sharing, setSharing] = useState(false);
+  /** keys.json's `giveToAgents` (keys phase 4, opt-in): the rc hands the stored keys to the agents it summons. */
+  const [agents, setAgents] = useState<boolean | null>(null);
   const [elsewhere, setElsewhere] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<KeyProvider | null>(null);
@@ -49,6 +54,7 @@ export function KeysDialog({ onClose }: { onClose: () => void }) {
       setFile(res.file);
       setRefused(res.refused ?? null);
       setShare(res.share === true);
+      setAgents(res.agents === true);
     } catch (err) {
       if (err instanceof ApiError && err.code === KEYS_NOT_HERE) setElsewhere(true);
       else setError((err as Error).message);
@@ -91,12 +97,14 @@ export function KeysDialog({ onClose }: { onClose: () => void }) {
     void act(provider, () => request("DELETE", `${KEYS_ROUTE}/${provider}`));
   };
 
-  const toggleShare = async (on: boolean) => {
+  /** One of the two switches beside the keys, flipped; the answer is the listing, so both read back from the file. */
+  const toggleShare = async (route: string, body: { share: boolean } | { agents: boolean }) => {
     setSharing(true);
     setError(null);
     try {
-      const res = await request<KeysListing>("PUT", KEYS_SHARING_ROUTE, { share: on });
+      const res = await request<KeysListing>("PUT", route, body);
       setShare(res.share === true);
+      setAgents(res.agents === true);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -216,13 +224,24 @@ export function KeysDialog({ onClose }: { onClose: () => void }) {
       </div>
       {share !== null && (
         <label className="surface-row keys-share">
-          <input type="checkbox" checked={share} disabled={sharing} onChange={(e) => void toggleShare(e.target.checked)} />
+          <input type="checkbox" checked={share} disabled={sharing} onChange={(e) => void toggleShare(KEYS_SHARING_ROUTE, { share: e.target.checked })} />
           <span className="surface-what">
             Let collaborators on canvases this machine holds use my keys
             <span className="share-roster-kind">
               {share
                 ? "On: anyone who may edit a canvas this machine holds spends these keys."
                 : "Off: these keys pay only for you; a collaborator is told to ask you or use their own."}
+            </span>
+          </span>
+        </label>
+      )}
+      {agents !== null && (
+        <label className="surface-row keys-agents">
+          <input type="checkbox" checked={agents} disabled={sharing} onChange={(e) => void toggleShare(KEYS_AGENTS_ROUTE, { agents: e.target.checked })} />
+          <span className="surface-what">
+            Give my keys to agents I summon
+            <span className="share-roster-kind">
+              Claude Code, Codex and Gemini switch from your login to these keys, billed per call.
             </span>
           </span>
         </label>

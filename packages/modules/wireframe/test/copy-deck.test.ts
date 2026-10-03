@@ -49,7 +49,9 @@ describe("copyDeck on a wireframe", () => {
     expect(at("main.2/labels.0")).toMatchObject({ role: "label", wf: "main.2" });
     expect(at("main.3/items.0.title")).toMatchObject({ role: "body", wf: "main.3" });
     expect(at("fab/actions.action")).toMatchObject({ role: "button", wf: "fab.action" });
-    expect(deck.strings.every((s) => s.budget === null)).toBe(true);
+    // Each word carries its role's budget (copy-edit phase 4): the FAB's action is a one-line button.
+    expect(at("fab/actions.action")!.budget).toMatchObject({ lines: 1 });
+    expect(deck.strings.every((s) => s.budget && typeof s.budget.chars === "number")).toBe(true);
   });
 
   it("is in reading order: the title, then slots as the screen draws them", () => {

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { InjectOptions } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { KEYS_ROUTE, type KeyRow } from "@isocan/core/keys";
+import { KEYS_AGENTS_FIELD, KEYS_AGENTS_ROUTE, KEYS_ROUTE, KEYS_SHARING_ROUTE, type KeyRow } from "@isocan/core/keys";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -140,6 +140,24 @@ describe("the key routes, from this machine", () => {
 
     for (const res of [empty, set, listed, tested, removed]) expect(res.text).not.toContain(SECRET);
     expect(written.join("")).not.toContain(SECRET);
+  });
+
+  it("reports the give-to-agents switch, off by default, and PUT /api/keys/agents flips it keeping the keys (keys phase 4)", async () => {
+    expect((await call("GET", KEYS_ROUTE)).json).toMatchObject({ share: false, agents: false });
+    await call("PUT", `${KEYS_ROUTE}/anthropic`, { body: { key: SECRET } });
+    const on = await call("PUT", KEYS_AGENTS_ROUTE, { body: { agents: true } });
+    expect(on.status, on.text).toBe(200);
+    expect(on.json).toMatchObject({ agents: true, share: false });
+    expect(rowFor(on.json, "anthropic").stored).toBe(true);
+    const onDisk = JSON.parse(await fs.readFile(path.join(home, "keys.json"), "utf8"));
+    expect(onDisk[KEYS_AGENTS_FIELD]).toBe(true);
+    expect(onDisk.anthropic.key).toBe(SECRET);
+    // The sharing switch is the other field: flipping it keeps this one.
+    expect((await call("PUT", KEYS_SHARING_ROUTE, { body: { share: true } })).json).toMatchObject({ agents: true, share: true });
+    expect((await call("PUT", KEYS_AGENTS_ROUTE, { body: { agents: "yes" } })).status).toBe(400);
+    expect((await call("PUT", KEYS_AGENTS_ROUTE, { body: { agents: false } })).json).toMatchObject({ agents: false, share: true });
+    expect(written.join("")).not.toContain(SECRET);
+    expect(on.text).not.toContain(SECRET);
   });
 
   it("says the provider's reason when the key is refused, with the key scrubbed out of it", async () => {

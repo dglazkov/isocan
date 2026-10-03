@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { envKeyFor, isKeyProvider, KEY_PROVIDERS, keyRows, KEYS_NOT_HERE, KEYS_ROUTE, KEYS_SHARING_ROUTE, lastFour, type KeyEnv, type KeyProvider, type KeysListing } from "@isocan/core/keys";
-import { checkKey, KeyFileRefused, keysFile, readKeyFile, removeKey, resolveKeyAsync, setKeySharing, writeKey, type KeyFileContents } from "@isocan/core/keystore";
+import { envKeyFor, isKeyProvider, KEY_PROVIDERS, keyRows, KEYS_AGENTS_ROUTE, KEYS_NOT_HERE, KEYS_ROUTE, KEYS_SHARING_ROUTE, lastFour, type KeyEnv, type KeyProvider, type KeysListing } from "@isocan/core/keys";
+import { checkKey, KeyFileRefused, keysFile, readKeyFile, removeKey, resolveKeyAsync, setKeyAgents, setKeySharing, writeKey, type KeyFileContents } from "@isocan/core/keystore";
 import { loopbackBound } from "./route-helpers.ts";
 
 /**
@@ -119,13 +119,13 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
     try {
       return await readKeyFile(home);
     } catch (err) {
-      return { keys: {}, share: false, refused: (err as Error).message };
+      return { keys: {}, share: false, agents: false, refused: (err as Error).message };
     }
   };
 
   const rowsNow = async (): Promise<KeysListing> => {
-    const { keys, share, refused } = await stored();
-    return { file: keysFile(home), ...(refused ? { refused } : {}), share, keys: keyRows(keys, env()) };
+    const { keys, share, agents, refused } = await stored();
+    return { file: keysFile(home), ...(refused ? { refused } : {}), share, agents, keys: keyRows(keys, env()) };
   };
 
   void app.register(async (keys) => {
@@ -154,6 +154,23 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
       if (typeof share !== "boolean") return reply.status(400).send({ error: 'send { "share": true } or { "share": false }', code: "bad-share" });
       try {
         await setKeySharing(home, share);
+      } catch (err) {
+        const refused = err instanceof KeyFileRefused;
+        return reply.status(refused ? 409 : 500).send({ error: (err as Error).message, code: refused ? "keys-file-refused" : "keys-write-failed" });
+      }
+      reply.header("Cache-Control", "no-store");
+      return rowsNow();
+    });
+
+    // Keys phase 4's switch, opt-in: `{ agents: true }` lets the rc hand the
+    // stored keys to the agents it summons — which may move a harness from
+    // the person's login to per-call billing, so it is never on by default.
+    keys.put(KEYS_AGENTS_ROUTE, async (req, reply) => {
+      if (!gate(req, reply)) return reply;
+      const agents = (req.body as { agents?: unknown } | undefined)?.agents;
+      if (typeof agents !== "boolean") return reply.status(400).send({ error: 'send { "agents": true } or { "agents": false }', code: "bad-agents" });
+      try {
+        await setKeyAgents(home, agents);
       } catch (err) {
         const refused = err instanceof KeyFileRefused;
         return reply.status(refused ? 409 : 500).send({ error: (err as Error).message, code: refused ? "keys-file-refused" : "keys-write-failed" });

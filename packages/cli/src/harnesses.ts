@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { builtinHarnesses } from "@isocan/api";
+import type { KeyEnv } from "@isocan/core/keys";
 import { readConfigFile, updateConfigFile } from "@isocan/server";
 
 /**
@@ -45,6 +46,28 @@ export async function passedEnv(home: string): Promise<string[]> {
   const raw = await readConfigFile<HarnessConfig>(home);
   const declared = Array.isArray(raw.adapterEnv) ? raw.adapterEnv : [];
   return declared.filter((rule): rule is string => typeof rule === "string" && /^[A-Za-z_][A-Za-z0-9_]*\*?$/.test(rule));
+}
+
+/**
+ * **This machine's stored model keys, for the agents an rc summons** (keys
+ * phase 4) — keys.json under `home`, read at every spawn like `passedEnv`, so
+ * a key set at noon reaches the 12:01 summons. **Opt-in**: nothing is handed
+ * over unless the owner turned on keys.json's `giveToAgents` (`isocan keys
+ * agents on`), because a harness given an API key may bill it instead of the
+ * person's login. The answer is `adapterEnv`'s `keys`: handed the agent's
+ * environment, the stored keys it lacks (core's `agentKeyEnv`), or nothing
+ * when the switch is off. A file refused for its mode, or not JSON, is said on
+ * stderr — its path and why, never a value — and the agent is summoned
+ * without stored keys rather than not at all.
+ */
+export async function storedAgentKeys(home: string): Promise<(env: KeyEnv) => Record<string, string>> {
+  const [{ readKeyFile }, { agentKeyEnv }] = await Promise.all([import("@isocan/core/keystore"), import("@isocan/core/keys")]);
+  const file = await readKeyFile(home).catch((err: Error) => {
+    console.error(`[isocan] stored model keys not handed to the agent: ${err.message}`);
+    return null;
+  });
+  const stored = file?.agents ? file.keys : {};
+  return (env) => agentKeyEnv(stored, env);
 }
 
 export interface AdapterSpec {

@@ -1,5 +1,6 @@
 import { parse, type DefaultTreeAdapterMap } from "parse5";
 import { embeddedWire } from "./diff.ts";
+import { copyBudget, type CopyBudget } from "./copy-fit.ts";
 import { wireWordsOf, type WireSpecWords } from "./wire-words.ts";
 
 /**
@@ -11,8 +12,9 @@ import { wireWordsOf, type WireSpecWords } from "./wire-words.ts";
  * new file, so a copy pass could and did drift layout, classes and markup.
  * The deck is the missing primitive. `copyDeck(html)` reads a screen and
  * returns its strings in reading order, each with a ROLE (what kind of words
- * these are), a stable ADDRESS, and a BUDGET (the room the layout gives it —
- * null until phase 4 measures it where screens render). `applyCopyDeck`
+ * these are), a stable ADDRESS, and a BUDGET (the room its role gives it —
+ * lines when rendered, characters before; `copy-fit.ts`, phase 4 — measured
+ * against where screens render). `applyCopyDeck`
  * writes edited strings back and touches nothing else: every byte outside the
  * addressed text is the byte that was there.
  *
@@ -65,9 +67,9 @@ interface CopyString {
   /** What it says now — leading and trailing whitespace trimmed (and kept
    *  in place on apply). This is also the check an edit carries back. */
   text: string;
-  /** The room the layout gives it. Null until it is measured where screens
-   *  render (copy-edit phase 4); the field is here so the shape does not change. */
-  budget: null;
+  /** The room its role gives it: line boxes when rendered, characters before
+   *  (`copy-fit.ts`). The renderer measures against it (copy-edit phase 4). */
+  budget: CopyBudget;
   /** The nearest `data-wf` element the string draws in, when the screen has one. */
   wf?: string;
 }
@@ -212,7 +214,7 @@ function locateHtml(html: string): Located[] {
       address: `t${ordinal}`,
       role: roleOf(ancestors),
       text,
-      budget: null,
+      budget: copyBudget(roleOf(ancestors)),
       ...(wf !== undefined ? { wf } : {}),
       at: loc.startOffset,
       start: loc.startOffset + lead,
@@ -243,7 +245,7 @@ function locateHtml(html: string): Located[] {
         address: `a${ordinal}@${name}`,
         role,
         text,
-        budget: null,
+        budget: copyBudget(role),
         ...(wf !== undefined ? { wf } : {}),
         at: loc.startTag.startOffset,
         start: span.start + rawLead,
@@ -313,8 +315,8 @@ function wireSections(html: string): Map<string, { at: number; region: string }>
 function wireDeck(html: string, spec: WireSpecWords): CopyDeck {
   if (!spec.content) return { kind: "wire", strings: [], unfleshed: true };
   const strings: CopyString[] = [];
-  strings.push({ address: "title", role: "heading", text: spec.content.title ?? spec.title ?? "", budget: null });
-  if (spec.content.bar !== undefined) strings.push({ address: "bar", role: "heading", text: spec.content.bar, budget: null, wf: "header" });
+  strings.push({ address: "title", role: "heading", text: spec.content.title ?? spec.title ?? "", budget: copyBudget("heading") });
+  if (spec.content.bar !== undefined) strings.push({ address: "bar", role: "heading", text: spec.content.bar, budget: copyBudget("heading"), wf: "header" });
   const sections = wireSections(html);
   const slots = [...(spec.slots ?? [])]
     .filter((s) => s.block && s.fill)
@@ -323,11 +325,12 @@ function wireDeck(html: string, spec: WireSpecWords): CopyDeck {
   for (const { s } of slots) {
     const region = sections.get(s.slot)?.region ?? s.slot.split(".")[0]!;
     for (const [path, text] of wireWordsOf(s.fill)) {
+      const role = wireRole(s.block!, region, path);
       strings.push({
         address: `${s.slot}/${path}`,
-        role: wireRole(s.block!, region, path),
+        role,
         text,
-        budget: null,
+        budget: copyBudget(role),
         wf: path.startsWith("actions.") ? `${s.slot}.${path.slice("actions.".length)}` : s.slot,
       });
     }

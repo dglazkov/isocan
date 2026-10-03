@@ -214,9 +214,17 @@ function handle(msg) {
           .then((read) => `read:${read.trim()}`)
           .catch((err) => `refused:${err.code ?? "?"}`);
       }
+      // Which model keys the adapter was handed (keys phase 4), said as the
+      // last four only — the turn's own text is printed, and a key is never.
+      const keys = (process.env.FAKE_ACP_KEYS ?? "")
+        .split(",")
+        .filter(Boolean)
+        .map((name) => `${name}=${process.env[name] ? process.env[name].slice(-4) : "-"}`)
+        .join(",");
       const text =
         `echo:${promptText} ` +
         (probe ? `probe:${probe} ` : "") +
+        (keys ? `keys:${keys} ` : "") +
         `env:${process.env.ISOCAN_HARNESS ?? ""}:${process.env.ISOCAN_SESSION_ID ?? ""} ` +
         (modelArg !== null || process.env.ISOCAN_MODEL ? `model:${modelArg ?? ""}:${process.env.ISOCAN_MODEL ?? ""} ` : "") +
         `resumed:${loaded.has(params.sessionId)} ` +

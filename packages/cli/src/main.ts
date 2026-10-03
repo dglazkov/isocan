@@ -4,6 +4,8 @@ import { registerPersonalContext } from "./personal-context.ts";
 import { noteOnBench, registerBench } from "./bench.ts";
 import { registerKeys } from "./keys.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
+// The copy lint's tells: slop.ts is eager already, so it is handed to the lazy lint rather than imported by it.
+import { SLOP_RULES } from "@isocan/core";
 import { CanvasGroups, insertedItemBox, resolveCanvasGroupRef } from "@isocan/api";
 import { registerAreaAliases, registerCanvasGroups, reportCanvasGroup } from "./canvas-groups.ts";
 import { registerContextReads, reportContext, contextReceipt } from "./context-reads.ts";
@@ -503,7 +505,7 @@ import { openInBrowser } from "./browser.ts";
 import { registerOperator, sweptLine } from "./operator.ts";
 import { run } from "./run.ts";
 import { runPackageScript } from "./package-script.ts";
-import { adapterFor, defaultLine, noDefaultLine, noNeedLine, passedEnv, scanHarnesses, setDefaultHarness, type AdapterSpec } from "./harnesses.ts";
+import { adapterFor, defaultLine, noDefaultLine, noNeedLine, passedEnv, scanHarnesses, setDefaultHarness, storedAgentKeys, type AdapterSpec } from "./harnesses.ts";
 import {
   noSandboxLine,
   policyFor,
@@ -8415,6 +8417,8 @@ wordsCommand
       if (deck.strings.length === 0) throw new Error(`"${label}" has no words to vary`);
       const writer = deck.kind === "html" ? null : CLI_MODULES.find((m) => m.copy?.kind === deck.kind)?.copy?.variant;
       if (deck.kind !== "html" && !writer) throw new Error(`"${label}" is a ${deck.kind} screen and no loaded module writes its variants`);
+      // The product's voice — the governing DESIGN.md's Voice section — in the question and in the check (phase 4).
+      const voice = await copyVoiceFor(ctx, p.id, item.id);
 
       // The voices: an agent's own file, else ONE call for all N, else placeholder words said as such.
       let raw: unknown;
@@ -8437,7 +8441,7 @@ wordsCommand
         if (text) {
           const { envTextGenerator } = await import("@isocan/core/jev");
           const generator = envTextGenerator({ apiKey: text.key, provider: text.provider, ...(text.model ? { model: text.model } : {}) });
-          const { prompt, schema } = copyVariantsRequest(deck, asked, opts.brief);
+          const { prompt, schema } = copyVariantsRequest(deck, asked, opts.brief, voice);
           raw = await generator.generateJson(prompt, schema);
           by = generator.name;
         } else {
@@ -8447,7 +8451,7 @@ wordsCommand
           console.error("no text model on this machine (no ISOCAN_TEXT_API_KEY, and no key from `isocan keys set anthropic`) — these are PLACEHOLDER words, not written copy; write your own voices and pass --from voices.json");
         }
       }
-      const checked = checkCopyVariants(deck, raw, opts.from && n === undefined ? undefined : (n ?? 3));
+      const checked = checkCopyVariants(deck, raw, opts.from && n === undefined ? undefined : (n ?? 3), voice);
       if (!checked.ok) throw new Error(`${opts.from ?? "the text model's answer"}: ${checked.reason}`);
 
       // Each voice's file — the screen with only its words changed — uploaded before anything is sent.
@@ -8476,12 +8480,88 @@ wordsCommand
       for (const op of ops) await sendOp(ctx, p.id, op, group);
 
       const rows = ops.map((op, i) => ({ itemId: op.itemId, title: op.title!, stance: checked.variants[i]!.stance, why: checked.variants[i]!.why, changed: checked.variants[i]!.edits.map((e) => e.address) }));
-      if (ctx.json) return printJson({ source: item.id, kind: deck.kind, by, placeholder, group, variants: rows });
+      if (ctx.json) return printJson({ source: item.id, kind: deck.kind, by, placeholder, group, voice: voice !== null, variants: rows });
       for (const r of rows) console.log(`${r.itemId}  ${r.title} — ${r.why} (${r.changed.length} string${r.changed.length === 1 ? "" : "s"})`);
       console.log(
-        `${rows.length} variant${rows.length === 1 ? "" : "s"} of "${label}" by ${by}${placeholder ? " (placeholder)" : ""}, words only — ` +
+        `${rows.length} variant${rows.length === 1 ? "" : "s"} of "${label}" by ${by}${placeholder ? " (placeholder)" : ""}, words only${voice ? ", held to DESIGN.md's Voice" : ""} — ` +
           `\`isocan diff <variant> --source\` shows one, \`isocan choose <variant>\` folds the winner home, \`isocan undo\` takes all ${rows.length} back`,
       );
+    }),
+  );
+
+/**
+ * **The product's voice for a screen** — the Voice section of the DESIGN.md
+ * that governs it (`readDesignSystem`, the read `isocan design show --in`
+ * makes), or null when nothing governs it or the section is absent. A design
+ * read that fails is said on stderr and the words go on without a voice
+ * rather than not at all.
+ */
+async function copyVoiceFor(ctx: Ctx, canvasId: string, itemId: string): Promise<import("@isocan/core/copy-voice").CopyVoice | null> {
+  const { voiceOf } = await import("@isocan/core/copy-voice");
+  const { governing } = await readDesignSystem(designSystemPort(ctx), { canvasId, target: { kind: "item", itemId } });
+  if (governing.status === "unavailable") console.error(`the design system could not be read (${governing.reason}) — going on without its Voice section`);
+  return governing.status === "available" ? voiceOf(governing.document) : null;
+}
+
+/**
+ * **A flow's words, checked** — `isocan words lint [items…] [--flow <flow>]`
+ * (copy-edit phase 4, journey scene 4). The copy lint (`@isocan/core/copy-lint`)
+ * over the screens named, a wireframe flow's screens, or — with neither —
+ * every HTML screen on the canvas that is not a copy variant: the governing
+ * DESIGN.md's Voice (glossary forms, avoided words), one name per thing
+ * across them, `slop.ts`'s copy tells, and each string's length against its
+ * role's budget — by CHARACTER COUNT, said as such: the rendered fit is
+ * measured where screens render (*Compare the copy…*), and the CLI has no
+ * renderer. Reads only. Exits 1 when it finds something, so a script can gate on it.
+ */
+wordsCommand
+  .command("lint [items...]")
+  .description("Check screens' words — DESIGN.md's Voice (glossary, avoided words), one name per thing across them, the copy tells, length by character count; --flow <flow> for a wire flow")
+  .option("--flow <flow>", "every screen of this wireframe flow, in its order")
+  .action(
+    run(async (refs: string[], opts: { flow?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const { copyDeck } = await import("@isocan/core/copy-deck");
+      const { embeddedWire } = await import("@isocan/core/diff");
+      const { lintCopy } = await import("@isocan/core/copy-lint");
+      const htmlOf = async (item: Item) => {
+        const v = item.versions.find((x) => x.id === item.currentVersionId);
+        return v && v.mimeType === "text/html" ? (await ctx.client.downloadBlob(p.id, v.blobHash)).toString("utf8") : null;
+      };
+      let items: Item[];
+      if (refs.length) items = refs.map((r) => resolveItem(snapshot, r));
+      // Every screen but the copy variants: a voice is a draft of its source, not a screen of the flow.
+      else items = Object.values(snapshot.canvas.items).filter((i) => i.properties.copyStance === undefined).sort((a, b) => a.y - b.y || a.x - b.x);
+      const screens = [];
+      const flows = new Set<string>();
+      for (const item of items) {
+        const html = await htmlOf(item);
+        if (html === null) {
+          if (refs.length) throw new Error(`"${item.title || item.id}" is not an HTML screen — \`words lint\` reads screens' words`);
+          continue;
+        }
+        if (opts.flow) {
+          const spec = embeddedWire(html) as { flow?: string; variantOf?: string } | null;
+          if (spec?.flow) flows.add(spec.flow);
+          if (spec?.flow !== opts.flow || (spec.variantOf && spec.variantOf !== item.id)) continue;
+        }
+        screens.push({ itemId: item.id, title: item.title || item.id, deck: copyDeck(html) });
+      }
+      if (opts.flow && screens.length === 0) throw new Error(`no wireframe flow "${opts.flow}" on this canvas${flows.size ? ` — its flows: ${[...flows].join(", ")}` : ""}`);
+      if (screens.length === 0) throw new Error("no HTML screens to lint");
+      const voice = await copyVoiceFor(ctx, p.id, screens[0]!.itemId);
+      const findings = lintCopy(screens, voice, SLOP_RULES);
+      await narrate(ctx, p.id, { status: `checking the words of ${screens.length} screen${screens.length === 1 ? "" : "s"}` });
+      if (ctx.json) {
+        printJson({ screens: screens.map((s) => s.itemId), voice: voice !== null, fit: "character count — Compare the copy… measures the rendered box", findings });
+      } else if (findings.length === 0) {
+        console.log(`${screens.length} screen${screens.length === 1 ? "" : "s"}: nothing to fix${voice ? " (held to DESIGN.md's Voice)" : " — no Voice section in DESIGN.md, so no glossary was checked"}`);
+      } else {
+        printTable(findings.map((f) => ({ kind: f.kind, where: f.itemId ? `${truncate(f.title ?? f.itemId, 18)}${f.address ? ` ${f.address}` : ""}` : "DESIGN.md", what: truncate(f.what, 70), fix: truncate(f.fix, 48) })));
+        console.log(`${findings.length} finding${findings.length === 1 ? "" : "s"} over ${screens.length} screen${screens.length === 1 ? "" : "s"}${voice ? ", held to DESIGN.md's Voice" : ""}; length is by character count — Compare the copy… measures the real box; \`isocan words <item> --apply\` fixes a string`);
+      }
+      if (findings.length) process.exitCode = 1;
     }),
   );
 
@@ -13758,7 +13838,7 @@ try a policy against one agent before starting an rc with it.`,
       );
       const agent = await AcpAgentProcess.spawn(fence.spec, {
         cwd: row.cwd,
-        env: adapterEnv(p.id, agentSessionOf(agentKey), { pass: await passedEnv(ctx.home) }),
+        env: adapterEnv(p.id, agentSessionOf(agentKey), { pass: await passedEnv(ctx.home), keys: await storedAgentKeys(ctx.home) }),
       });
       try {
         const session = await agent.ensureSession(row.cwd, row.sessionId);
@@ -14303,7 +14383,7 @@ async function openAdapter(
     turn.narrate(`${spec.harness}${fenceNote(fence)}`);
     agent = await AcpAgentProcess.spawn(fence.spec, {
       cwd: row.cwd,
-      env: adapterEnv(p.id, agentSessionOf(await machineAgentKey(ctx.home, row.name)), { pass: await passedEnv(ctx.home) }),
+      env: adapterEnv(p.id, agentSessionOf(await machineAgentKey(ctx.home, row.name)), { pass: await passedEnv(ctx.home), keys: await storedAgentKeys(ctx.home) }),
       narrate: turn.narrate,
     });
   } catch (err) {

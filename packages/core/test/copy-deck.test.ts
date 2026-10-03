@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyCopyDeck, checkCopyEdits, copyDeck, parseCopyEdits, wireCopyFile, type CopyEdit } from "../src/copy-deck.ts";
+import { copyBudget } from "../src/copy-fit.ts";
 
 /**
  * **The copy deck on plain HTML** (copy-edit phase 1). A screen's words as
@@ -57,7 +58,9 @@ describe("copyDeck — plain HTML", () => {
       ["link", "Forgot your password?"],
       ["empty", "No orders yet"],
     ]);
-    expect(deck.strings.every((s) => s.budget === null)).toBe(true);
+    // Each string carries its role's budget (copy-fit.ts): a button gets one line, body copy is unbounded.
+    expect(deck.strings.every((s) => JSON.stringify(s.budget) === JSON.stringify(copyBudget(s.role)))).toBe(true);
+    expect(deck.strings.find((s) => s.role === "button")!.budget).toMatchObject({ lines: 1, chars: 40 });
   });
 
   it("addresses a text node by its ordinal and an attribute by element and name, and names the data-wf it sits in", () => {

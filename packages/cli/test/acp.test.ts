@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
+import { readKeyFile, writeKey } from "@isocan/core/keystore";
+import { agentKeyEnv } from "@isocan/core/keys";
 import { AcpAgentProcess, adapterEnv } from "../src/acp.ts";
 import { adapterFor } from "../src/harnesses.ts";
 import { agentSessionOf, machineAgentKey } from "../src/agent-key.ts";
@@ -320,6 +322,60 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(again.code).toBe(0);
     expect(again.stderr).toContain("resumed");
   }, 40_000);
+
+  it("a summoned agent is handed this machine's stored keys only once the owner opts in, the environment's winning, and nothing prints one", async () => {
+    // Keys phase 4. Synthetic keys, each with distinct last four.
+    const gemini = "AIza-acme-STORED-DO-NOT-PRINT-g3m1";
+    const anthropic = "sk-ant-acme-STORED-DO-NOT-PRINT-an7h";
+    const envAnthropic = "sk-ant-acme-ENV-DO-NOT-PRINT-3nvk";
+    await writeKey(home, "gemini", gemini);
+    await writeKey(home, "anthropic", anthropic);
+    await isocan("rc", "add", "Sian", "--harness", "fake");
+    const shell = { FAKE_ACP_KEYS: "GEMINI_API_KEY,ANTHROPIC_API_KEY,OPENAI_API_KEY", GEMINI_API_KEY: "", ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "" };
+    // Off by default: a harness handed a key may bill it instead of the
+    // person's login, so nothing is handed over until they ask.
+    const off = await collect(spawnCli(["rc", "turn", "Sian", "first"], shell));
+    expect(off.code, off.stderr).toBe(0);
+    expect(off.stdout).toContain("keys:GEMINI_API_KEY=-,ANTHROPIC_API_KEY=-,OPENAI_API_KEY=- ");
+    const turnedOn = await isocan("keys", "agents", "on");
+    expect(turnedOn.code, turnedOn.stderr).toBe(0);
+    expect(turnedOn.stdout).toContain("billed per call");
+    // The keys are kept beside the switch.
+    expect(await readKeyFile(home)).toMatchObject({ agents: true, share: false, keys: { gemini: { key: gemini } } });
+    // Now the adapter that wants GEMINI_API_KEY to log in, with none in the
+    // rc's env: the stored key is what lets the turn start at all.
+    const run = await collect(spawnCli(["rc", "turn", "Sian", "hello"], { ...shell, FAKE_ACP_AUTH: "gemini-api-key" }));
+    expect(run.code, run.stderr).toBe(0);
+    expect(run.stdout).toContain("keys:GEMINI_API_KEY=g3m1,ANTHROPIC_API_KEY=an7h,OPENAI_API_KEY=- ");
+    // The environment wins where it sets the variable.
+    const again = await collect(spawnCli(["rc", "turn", "Sian", "again"], { ...shell, FAKE_ACP_AUTH: "gemini-api-key", ANTHROPIC_API_KEY: envAnthropic }));
+    expect(again.code, again.stderr).toBe(0);
+    expect(again.stdout).toContain("keys:GEMINI_API_KEY=g3m1,ANTHROPIC_API_KEY=3nvk,OPENAI_API_KEY=- ");
+    // A key set after the switch keeps it on; `ls --json` says so.
+    await writeKey(home, "openai", "sk-acme-STORED-DO-NOT-PRINT-0pen");
+    const listed = await isocan("keys", "ls", "--json");
+    expect(JSON.parse(listed.stdout)).toMatchObject({ agents: true, share: false });
+    for (const out of [off.stdout, off.stderr, run.stdout, run.stderr, again.stdout, again.stderr, listed.stdout, listed.stderr]) {
+      for (const secret of [gemini, anthropic, envAnthropic]) expect(out).not.toContain(secret);
+    }
+  }, 40_000);
+
+  it("adapterEnv adds a stored key only under its harness's variable, and only where the environment has none", () => {
+    const stored = {
+      anthropic: { key: "sk-ant-stored", addedAt: "" },
+      openai: { key: "sk-oai-stored", addedAt: "" },
+      gemini: { key: "g-stored", addedAt: "" },
+      typesafe: { key: "tsk-stored", addedAt: "" },
+    };
+    const env = adapterEnv("prj_1", "Sian", { source: { PATH: "/usr/bin", OPENAI_API_KEY: "sk-oai-env", GEMINI_API_KEY: "  " }, keys: (passed) => agentKeyEnv(stored, passed) });
+    expect(env.ANTHROPIC_API_KEY).toBe("sk-ant-stored");
+    expect(env.OPENAI_API_KEY).toBe("sk-oai-env");
+    // A blank variable is no key: the stored one fills it.
+    expect(env.GEMINI_API_KEY).toBe("g-stored");
+    // The judge's key is isocan's, never an agent's.
+    expect(Object.values(env)).not.toContain("tsk-stored");
+    expect(adapterEnv("prj_1", "Sian", { source: { PATH: "/usr/bin" } })).not.toHaveProperty("ANTHROPIC_API_KEY");
+  });
 
   it("an adapter's stderr reaches ours, minus absl's INFO and WARNING chatter", async () => {
     await isocan("rc", "add", "Sian", "--harness", "fake");

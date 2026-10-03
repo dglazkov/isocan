@@ -7,6 +7,8 @@ import { startDaemon } from "@isocan/server/daemon";
 import { DaemonClient } from "@isocan/api";
 import type { Operation } from "@isocan/core";
 import { copyDeck } from "@isocan/core/copy-deck";
+import { voiceOf } from "@isocan/core/copy-voice";
+import { parseDesign } from "@isocan/core";
 import { TEXT_ROUTE } from "@isocan/core/text";
 import { varyCopy } from "../src/lib/varycopy.ts";
 import { itemMenu } from "../src/lib/menuentries.tsx";
@@ -79,6 +81,8 @@ async function setUp(name: string) {
   useCanvasStore.setState({ canvasId: canvas, canvas: (await client.snapshot(canvas)).canvas, notice: null });
   const sent: Array<{ ops: Operation[]; group?: string }> = [];
   const deps = {
+    // No DESIGN.md governs these screens; the voice's own case swaps this for one.
+    voice: async () => null,
     readText: async (hash: string) => (await client.downloadBlob(canvas, hash)).toString("utf8"),
     host: {
       putBlob: async (blob: Blob, filename: string) => client.uploadBlob(canvas, Buffer.from(await blob.arrayBuffer()), "text/html", filename),
@@ -164,6 +168,23 @@ describe("Vary the copy… — the web's door to words vary", () => {
     expect(sent[0]!.ops.map((op) => (op as { title?: string }).title)).toEqual(["Acme checkout — Plain", "Acme checkout — Warm"]);
 
     await expect(varyCopy(canvas, acme, source, { n: 2 }, { ...deps, generate: async () => voices("plain") })).rejects.toThrow(/refused: .*is variant 1's too/);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("keeps to the governing DESIGN.md's Voice: it reaches the question, and a voice that writes an avoided word is refused (copy-edit phase 4)", async () => {
+    const { canvas, source, sent, deps } = await setUp("Acme voice");
+    const deck = copyDeck(CHECKOUT);
+    const pay = deck.strings.find((s) => s.text === "Pay now")!.address;
+    const voice = async () => voiceOf(parseDesign("## Voice\n\nPlain, second person.\n\nAvoid: seamless\n\nGlossary:\n- sign in — never log in\n"));
+    const prompts: string[] = [];
+    const answer = (to: string) => async (body: unknown) => (prompts.push((body as { prompt: string }).prompt), { model: "acme-text-1", value: { variants: [{ stance: "Smooth", why: "Easy.", edits: [{ address: pay, to }] }] } });
+    await expect(varyCopy(canvas, acme, source, { n: 1 }, { ...deps, voice, generate: answer("Pay, seamless") })).rejects.toThrow(/refused: variant 1 \(Smooth\) says "seamless" — the voice avoids it/);
+    expect(prompts[0]).toContain("Words to avoid — never write them: seamless.");
+    expect(prompts[0]).toContain('Say "sign in", never "log in".');
+    expect(sent).toHaveLength(0);
+    // The same voice, keeping to it, lands.
+    const done = await varyCopy(canvas, acme, source, { n: 1 }, { ...deps, voice, generate: answer("Pay") });
+    expect(done.stances).toEqual(["Smooth"]);
     expect(sent).toHaveLength(1);
   });
 });

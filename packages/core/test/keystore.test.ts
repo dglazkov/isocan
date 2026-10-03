@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { chooseTextKey, envKeyFor, KEY_PROVIDER_INFO, KEY_PROVIDERS, KEYS_SHARE_FIELD, lastFour, ownerOnlySentence, textProviderFor } from "../src/keys.ts";
+import { agentKeyEnv, chooseTextKey, envKeyFor, KEY_PROVIDER_INFO, KEY_PROVIDERS, KEYS_AGENTS_FIELD, KEYS_SHARE_FIELD, lastFour, ownerOnlySentence, textProviderFor } from "../src/keys.ts";
 import {
   checkKey,
   defaultKeysHome,
@@ -14,6 +14,7 @@ import {
   readKeys,
   readKeysSync,
   removeKey,
+  setKeyAgents,
   setKeySharing,
   resolveKey,
   resolveKeyAsync,
@@ -100,6 +101,30 @@ describe("the file", () => {
     expect(defaultKeysHome({ ISOCAN_KEYS_HOME: "/k", ISOCAN_HOME: "/h" })).toBe("/k");
     expect(defaultKeysHome({ ISOCAN_HOME: "/h" })).toBe("/h");
     expect(defaultKeysHome({})).toBe(path.join(os.homedir(), ".isocan"));
+  });
+});
+
+describe("the give-to-agents switch (keys phase 4, opt-in)", () => {
+  it("is off when absent, only `true` turns it on, and every write keeps it and the sharing switch", async () => {
+    await writeKey(home, "anthropic", ANTHROPIC);
+    expect(await readKeyFile(home)).toMatchObject({ agents: false, share: false });
+    await setKeyAgents(home, true);
+    await setKeySharing(home, true);
+    await writeKey(home, "typesafe", TYPESAFE);
+    await removeKey(home, "typesafe");
+    expect(await readKeyFile(home)).toMatchObject({ agents: true, share: true, keys: { anthropic: { key: ANTHROPIC } } });
+    await setKeySharing(home, false);
+    expect((await readKeyFile(home)).agents).toBe(true);
+    await setKeyAgents(home, false);
+    expect(JSON.parse(await fs.readFile(keysFile(home), "utf8"))).not.toHaveProperty(KEYS_AGENTS_FIELD);
+    await fs.writeFile(keysFile(home), JSON.stringify({ [KEYS_AGENTS_FIELD]: "yes" }), { mode: 0o600 });
+    expect((await readKeyFile(home)).agents).toBe(false);
+  });
+
+  it("agentKeyEnv hands a stored key under its harness's variable only where the environment has none, and never Typesafe's", () => {
+    const stored = { anthropic: { key: "a", addedAt: "" }, openai: { key: "o", addedAt: "" }, gemini: { key: "g", addedAt: "" }, typesafe: { key: "t", addedAt: "" } };
+    expect(agentKeyEnv(stored, { OPENAI_API_KEY: "env", GEMINI_API_KEY: " " })).toEqual({ ANTHROPIC_API_KEY: "a", GEMINI_API_KEY: "g" });
+    expect(agentKeyEnv({}, {})).toEqual({});
   });
 });
 

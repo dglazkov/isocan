@@ -1,4 +1,6 @@
 import type { CopyDeck, CopyEdit } from "./copy-deck.ts";
+import { copyBudget } from "./copy-fit.ts";
+import { newVoiceSlips, voicePrompt, voiceSlipText, type CopyVoice } from "./copy-voice.ts";
 import type { JsonSchema } from "./jev.ts";
 import type { CanvasContents, Item } from "./model.ts";
 import type { NewVersion, Operation } from "./ops.ts";
@@ -58,26 +60,6 @@ export const MAX_COPY_VARIANTS = 6;
 /** A stance is a label, not a paragraph. */
 const STANCE_WORDS = 5;
 
-/**
- * How long a string of each role may become, and whether it must stay on one
- * line. A button that grew into a sentence is a different control, and a
- * heading with a line break is markup the deck cannot write; the fit check
- * that measures the real box is phase 4 — these are the bounds a role has
- * before anything is rendered.
- */
-const ROLE_SHAPE: Record<string, { max: number; oneLine: boolean }> = {
-  button: { max: 40, oneLine: true },
-  nav: { max: 32, oneLine: true },
-  label: { max: 60, oneLine: true },
-  placeholder: { max: 80, oneLine: true },
-  link: { max: 80, oneLine: true },
-  heading: { max: 140, oneLine: true },
-  alt: { max: 240, oneLine: true },
-  error: { max: 240, oneLine: false },
-  empty: { max: 400, oneLine: false },
-  body: { max: 1200, oneLine: false },
-};
-
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 const show = (s: string) => JSON.stringify(s.length > 40 ? `${s.slice(0, 39)}…` : s);
 
@@ -85,10 +67,11 @@ const show = (s: string) => JSON.stringify(s.length > 40 ? `${s.slice(0, 39)}…
  * The one question N voices are: a prompt naming every string with its role
  * and address, and a schema that asks for exactly `n` variants whose edits
  * can only name addresses the deck has. `brief` is what the person asked for
- * ("shorter, for a first-time buyer"); `voice` is the product's own (a
- * DESIGN.md Voice section, phase 4) — both optional.
+ * ("shorter, for a first-time buyer"); `voice` is the product's own (the
+ * governing DESIGN.md's Voice section, `copy-voice.ts`) — both optional.
  */
-export function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, voice?: string): { prompt: string; schema: JsonSchema } {
+export function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, voice?: CopyVoice | null): { prompt: string; schema: JsonSchema } {
+  const said = voicePrompt(voice);
   const lines = deck.strings.map((s) => `${s.address}\t${s.role}\t${JSON.stringify(s.text)}`);
   const prompt = [
     `Rewrite the words of one screen in ${n} distinct voices. Words only: you are not redesigning the screen.`,
@@ -97,7 +80,7 @@ export function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, v
     ...lines,
     "",
     ...(brief?.trim() ? [`What the person asked for: ${brief.trim()}`, ""] : []),
-    ...(voice?.trim() ? [`The product's voice (keep to it in every variant): ${voice.trim()}`, ""] : []),
+    ...(said ? ["The product's voice, from its DESIGN.md — keep to it in every variant:", said, ""] : []),
     `Return exactly ${n} variants. Each has:`,
     `- "stance": what this voice is trying, in at most ${STANCE_WORDS} words (e.g. "Plain and direct", "Warm", "Benefit-first"). Every stance must be different from the others.`,
     '- "why": one sentence on why someone would pick this voice.',
@@ -147,11 +130,12 @@ export function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, v
  * `{ variants: [{ stance, why, edits: [{ address, to }] }] }`, exactly `n` of
  * them when `n` is given, distinct stances of at most five words, a why, and
  * edits that name strings the deck has, keep each string inside its role's
- * shape, and change at least one word. Refused in words, naming the variant
- * and the string. The edits come back as `CopyEdit`s carrying the deck's
+ * shape, and change at least one word — and, given the product's `voice`,
+ * write no banned glossary form or avoided word the string did not already
+ * say (phase 4). Refused in words, naming the variant and the string. The edits come back as `CopyEdit`s carrying the deck's
  * current text — the check `applyCopyDeck` refuses a moved screen by.
  */
-export function checkCopyVariants(deck: CopyDeck, raw: unknown, n?: number): { ok: true; variants: CopyVariant[] } | { ok: false; reason: string } {
+export function checkCopyVariants(deck: CopyDeck, raw: unknown, n?: number, voice?: CopyVoice | null): { ok: true; variants: CopyVariant[] } | { ok: false; reason: string } {
   const list = raw && typeof raw === "object" && Array.isArray((raw as { variants?: unknown }).variants) ? (raw as { variants: unknown[] }).variants : null;
   if (!list) return { ok: false, reason: 'variants are { "variants": [{ "stance", "why", "edits": [{ "address", "to" }] }] }' };
   if (list.length === 0) return { ok: false, reason: "no variants" };
@@ -184,9 +168,14 @@ export function checkCopyVariants(deck: CopyDeck, raw: unknown, n?: number): { o
       seen.add(edit.address);
       const to = edit.to.trim();
       if (!to) return { ok: false, reason: `${at} (${stance}) empties ${edit.address} (${string.role}) — a variant changes words, it does not remove them` };
-      const shape = ROLE_SHAPE[string.role] ?? ROLE_SHAPE.body!;
+      // How long a string of each role may become, and whether it must stay on
+      // one line: a button that grew into a sentence is a different control.
+      // The role's budget (`copy-fit.ts`); the rendered fit is measured apart.
+      const shape = copyBudget(string.role);
       if (shape.oneLine && /[\r\n]/.test(to)) return { ok: false, reason: `${at} (${stance}) breaks ${edit.address} (${string.role}) over lines — a ${string.role} stays one line` };
-      if (to.length > shape.max) return { ok: false, reason: `${at} (${stance}) makes ${edit.address} (${string.role}) ${to.length} characters — a ${string.role} stays under ${shape.max}` };
+      if (to.length > shape.chars) return { ok: false, reason: `${at} (${stance}) makes ${edit.address} (${string.role}) ${to.length} characters — a ${string.role} stays under ${shape.chars}` };
+      const slip = newVoiceSlips(voice, string.text, to)[0];
+      if (slip) return { ok: false, reason: `${at} (${stance}) ${voiceSlipText(slip)} at ${edit.address} (${string.role}) — DESIGN.md's Voice section` };
       if (to !== string.text) edits.push({ address: edit.address, text: string.text, to });
     }
     if (edits.length === 0) return { ok: false, reason: `${at} (${stance}) changes no words` };

@@ -146,12 +146,17 @@
 .text-edit-refusal { font-size: 11px; color: var(--accent-text); }
 /* Element properties (WYSIWYG stage 2): a strip under the bar for the
    selected element — its tag, its class, and the handful of inline styles a
-   person reaches for. Fields, not a tree: this is not an inspector. */
+   person reaches for. Fields, not a tree: this is not an inspector. One line
+   high whether or not anything is selected, scrolling sideways rather than
+   wrapping, so selecting never moves the frame under the pointer. */
 .props-panel {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
-  padding: 6px 10px; border-bottom: 1px solid var(--line-soft); background: var(--chip);
-  font-size: 11.5px;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 10px;
+  height: 32px; box-sizing: border-box; flex-shrink: 0; overflow-x: auto; overflow-y: hidden;
+  padding: 0 10px; border-bottom: 1px solid var(--line-soft); background: var(--chip);
+  font-size: 11.5px; white-space: nowrap;
 }
+.props-panel > * { flex-shrink: 0; }
+.props-empty { color: var(--ink-soft); }
 .props-tag { font-family: ui-monospace, Menlo, monospace; color: var(--ink-muted); }
 .props-field { display: inline-flex; align-items: center; gap: 5px; }
 .props-field span { color: var(--ink-soft); }

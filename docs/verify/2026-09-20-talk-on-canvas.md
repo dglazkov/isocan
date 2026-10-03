@@ -13,7 +13,7 @@ about twenty minutes. A terminal for steps 1–3, then only the browser.
 [voice walk](2026-09-20-voice.md) covers `@isocan/voice-agent` — a standalone
 page on its own port, with its key on disk, which `@mention` can summon. This
 one is `@isocan/talk`: a mic **on the canvas**, a Live session opened from your
-own browser with your own key. Same model, same tools, different door, and
+own browser with a one-use token the home mints from its key. Same model, same tools, different door, and
 nobody has spoken to either.
 
 It is the more discoverable of the two, so it is arguably the one a stranger
@@ -117,19 +117,23 @@ is fetched when you tick the box rather than shipped to everybody.
 **If no mic appears**, that is a finding — the module failed to load and the
 experiment lied about turning on.
 
-## 6. Give it your key
+## 6. Give the home your key, then press the mic
 
-Press the **mic**.
+*Changed 2 Oct 2026 (keys phase 4): the browser no longer keeps a key.* On the
+machine that holds the canvas, set the Gemini key once — *Model keys…* in the
+identity menu, under *This machine*, or `pbpaste | isocan keys set gemini`.
 
-**You should see:** a small panel — *Gemini API key* ("stored in this browser
-only"), *Model* (already `models/gemini-3.8-live`), and **Save and start**.
-The same panel is in ⌘K under **"Configure voice"**, if you prefer.
+Press the **mic**. Your browser will ask for microphone permission; allow it.
 
-Paste your key and press **Save and start**. Your browser will ask for
-microphone permission; allow it.
+**You should see:** "opening the live session…", then "listening". If the home
+has no Gemini key, the panel says so in a sentence (`voice-unavailable`) —
+that is the honest answer, not a fault. If you used an older build, the first
+line says the key this browser used to keep has been removed.
 
-**Your key stays in this browser** — never on the canvas, never in the daemon.
-A different browser, or a different port, will ask again.
+**The first real check of the token path** — never exercised against Google
+before this walk: if the socket closes at once with a provider error, note the
+code and reason it prints; the token request or the `v1alpha` constrained
+socket is what to suspect.
 
 ---
 

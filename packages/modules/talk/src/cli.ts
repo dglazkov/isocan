@@ -27,9 +27,9 @@ export const talkCli: CliModule = {
           const url = canvasUrl(ctx.client.base, canvas.id);
           console.log(
             `The browser holds the voice: open ${url} and press the floating mic ` +
-              `(bottom right). ⌘K → "Configure voice" is where the key and the model ` +
-              `live — the key stays in that browser's storage, never on the canvas, ` +
-              `never in the daemon.`,
+              `(bottom right). ⌘K → "Configure voice" is where the model lives. The ` +
+              `Gemini key stays on the machine that holds the canvas (\`isocan keys set gemini\`); ` +
+              `each session gets a one-use token from the home, never the key.`,
           );
         }),
       );

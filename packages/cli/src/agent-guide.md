@@ -145,7 +145,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `canvas new|ls|show|edit|background|archive|place|shot|rm` (rm ⚠), `use` — make, find, bind
 - `home`, `direct`, `setup`, `clone`, `open` — where canvases live, readying a directory
 - `teleport`, `export`, `import`, `blobs` — move, back up, restore, send missing bytes
-- `keys ls|set|rm|test|share` — model keys on this machine; never shown, env wins
+- `keys ls|set|rm|test|share|agents` — model keys on this machine; never shown, env wins
 
 **Sharing** (`sharing`)
 - `share`, `space new|ls|add|remove|rm`, `group new|ls|add|remove|rm` — who may enter
@@ -157,7 +157,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `design workflow|start|brief|receipt|questions|ask|answer|reference|compare|respond|decide|review|craft` — a design request
 - `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
-- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home
+- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -1779,8 +1779,9 @@ through. Diffing only reads the item and never writes to it.
 
 `isocan words <item>` prints the screen's **copy deck**: every string in
 reading order, each with a **role** (heading, body, button, link, label,
-placeholder, alt, error, empty, nav), an **address**, and a `budget` that
-stays null until fit is measured. `--json` prints it as a file to edit.
+placeholder, alt, error, empty, nav), an **address**, and its role's
+**budget** — `lines` when rendered (a button gets one, a heading two, body
+copy no limit) and `chars` before. `--json` prints it as a file to edit.
 
 To change words, do not rewrite the file. Add a `"to"` beside each string
 that should change, leave the rest as printed, and run
@@ -1841,6 +1842,32 @@ the source's words. A pick of a voice that kept that string, or a variant
 that no longer lines up with its source string for string, is refused by
 name. A person does the same from **Compare the copy…** in the item menu:
 every voice side by side, live, a choice per string, and *Use this mix*.
+
+### The product's voice, fit, and the copy lint
+
+A canvas's DESIGN.md can carry a `## Voice` section: tone in a sentence or
+two, then `Use:`, `Avoid:` and a `Glossary:` list, one line per term —
+`- sign in — never log in, login` (or `canvas, not board`, or
+`log in → sign in`). `words vary` reads the Voice of the DESIGN.md that
+governs the screen: it goes into the text model's question, and a voice —
+the model's or your `--from` file — that writes a banned form or an avoided
+word the string did not already say is refused, naming the voice and the
+string. Read the section with `isocan design show`; write it with
+`isocan design set`.
+
+`isocan words lint [items…] [--flow <flow>]` checks words without changing
+them: glossary forms and avoided words, one thing called two names across
+the screens ("Sign in" here, "Log in" next door), the copy tells from the
+design auditor's list (a CTA like "Get Started", "Oops!" with no next step,
+Title Case on everything), and each string's length against its role's
+`chars`. With no items it reads every screen on the canvas but the voices;
+`--flow` takes a wireframe flow's screens. It exits 1 when it finds
+something, and each finding names the screen and the string's address, so
+fix it with `words --apply`, not the file. Length here is a **character
+count**: the CLI has no renderer. Whether a string actually fits its box is
+measured where screens render — **Compare the copy…** marks a string that
+wraps past its role's lines or overflows ("two lines in a one-line button"),
+in its frame and in its row. The mark is a fact, not a refusal.
 
 `/variation 3 try different copy` still works, but it rewrites the file,
 which is how a copy pass drifts layout. For words, use `words` and
@@ -3375,8 +3402,9 @@ elsewhere, and any time somebody says a screen will not open.
 
 ## Model keys on this machine
 
-The judge, the text model and the voice harness spend keys: Typesafe for the
-judge, Anthropic (else OpenAI) for the text model's words, Gemini for voice.
+The judge, the text model, voice and the agents an rc summons spend keys:
+Typesafe for the judge, Anthropic (else OpenAI) for the text model's words,
+Gemini for voice.
 They live in one file, `~/.isocan/keys.json`, mode 0600 — refused, in a
 sentence, if it is anything looser — and every spender reads it per call, so
 a key set now is used by a running daemon on its next call with no restart.
@@ -3387,6 +3415,7 @@ pbpaste | isocan keys set anthropic  # from stdin; on a terminal, a hidden promp
 isocan keys test anthropic           # one cheap call: accepted, or the provider's reason
 isocan keys rm gemini
 isocan keys share on                 # let collaborators spend them too (off by default)
+isocan keys agents on                # hand them to agents an rc summons (off by default)
 ```
 
 **Never put a key on the command line** — `isocan keys set anthropic sk-…` is
@@ -3419,6 +3448,24 @@ spend them; `ls` says which it is. An environment key is the operator's and
 serves every editor, as it always did. If you are the collaborator, do not
 retry: ask the owner, or set a key on your own machine. A canvas homed
 elsewhere is asked at its home, under the home's rule.
+
+**Agents an rc summons get the stored keys only if the owner asks.** It is
+opt-in — `isocan keys agents on`, or *Give my keys to agents I summon* in
+*Model keys*, over `PUT /api/keys/agents` — because a harness handed an API
+key may stop using the person's own login: Claude Code, Codex and Gemini
+switch to the key and bill it per call, and that must never happen silently.
+When it is on, a provider key the rc's own environment lacks is handed to the
+agent under the variable its harness reads — `ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, `GEMINI_API_KEY` (never Typesafe's) — read at every
+summons; one the environment sets wins. `ls` and `--json` (`agents`) say
+which it is. Do not turn it on for a person; ask them. Nothing prints a key.
+
+**Talk to the canvas holds no key.** Each voice session asks
+`POST /api/voice/token` (`{ canvasId }`) for a one-use Gemini Live token
+minted with this home's Gemini key, under the text route's rules — an editor
+of the canvas, `voice-owner-only` for a collaborator while sharing is off,
+`voice-unavailable` when the home has no Gemini key. The token, not the key,
+reaches the browser.
 
 <!-- topic: sharing | who may enter — `share`, spaces, groups of people, passes, embeds, badges, and the refusals -->
 

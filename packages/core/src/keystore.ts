@@ -6,6 +6,7 @@ import {
   chooseTextKey,
   envKeyFor,
   isKeyProvider,
+  KEYS_AGENTS_FIELD,
   KEYS_SHARE_FIELD,
   type KeyEnv,
   type KeyProvider,
@@ -85,6 +86,12 @@ function refuseLoose(file: string, mode: number): void {
 export interface KeyFileContents {
   keys: KeyFile;
   share: boolean;
+  /**
+   * keys.json's `giveToAgents` (`KEYS_AGENTS_FIELD`, keys phase 4): the rc
+   * hands the stored keys to the agents it summons. Off unless turned on — a
+   * harness handed an API key may bill it instead of the person's login.
+   */
+  agents: boolean;
 }
 
 /** The parsed file, keeping only well-formed entries for known providers. A file that is not JSON says so without quoting it. */
@@ -96,8 +103,9 @@ function parseAll(file: string, text: string): KeyFileContents {
     throw new Error(`${file} is not JSON — fix or remove it, then set the keys again with \`isocan keys set\``);
   }
   const out: KeyFile = {};
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { keys: out, share: false };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { keys: out, share: false, agents: false };
   const share = (raw as Record<string, unknown>)[KEYS_SHARE_FIELD] === true;
+  const agents = (raw as Record<string, unknown>)[KEYS_AGENTS_FIELD] === true;
   for (const [provider, entry] of Object.entries(raw as Record<string, unknown>)) {
     if (!isKeyProvider(provider) || !entry || typeof entry !== "object") continue;
     const { key, model, addedAt } = entry as Record<string, unknown>;
@@ -108,7 +116,7 @@ function parseAll(file: string, text: string): KeyFileContents {
       addedAt: typeof addedAt === "string" ? addedAt : "",
     };
   }
-  return { keys: out, share };
+  return { keys: out, share, agents };
 }
 
 /** The whole file, read now — `readKeysSync` with the sharing switch. Missing file: no keys, not shared. */
@@ -118,7 +126,7 @@ export function readKeyFileSync(home: string = defaultKeysHome()): KeyFileConten
     refuseLoose(file, statSync(file).mode);
     return parseAll(file, readFileSync(file, "utf8"));
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { keys: {}, share: false };
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { keys: {}, share: false, agents: false };
     throw err;
   }
 }
@@ -130,7 +138,7 @@ export async function readKeyFile(home: string = defaultKeysHome()): Promise<Key
     refuseLoose(file, (await fs.stat(file)).mode);
     return parseAll(file, await fs.readFile(file, "utf8"));
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { keys: {}, share: false };
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { keys: {}, share: false, agents: false };
     throw err;
   }
 }
@@ -146,13 +154,13 @@ export async function readKeys(home: string = defaultKeysHome()): Promise<KeyFil
 }
 
 /** Write the whole file: 0600, atomically, in a 0700 directory. The sharing switch is written only when on. */
-async function writeAll(home: string, { keys, share }: KeyFileContents): Promise<string> {
+async function writeAll(home: string, { keys, share, agents }: KeyFileContents): Promise<string> {
   await fs.mkdir(home, { recursive: true, mode: 0o700 });
   if (modeChecked) await fs.chmod(home, 0o700);
   const file = keysFile(home);
   const tmp = path.join(home, `.${KEYS_FILE_NAME}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`);
   try {
-    await fs.writeFile(tmp, `${JSON.stringify(share ? { [KEYS_SHARE_FIELD]: true, ...keys } : keys, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+    await fs.writeFile(tmp, `${JSON.stringify({ ...(share ? { [KEYS_SHARE_FIELD]: true } : {}), ...(agents ? { [KEYS_AGENTS_FIELD]: true } : {}), ...keys }, null, 2)}\n`, { mode: 0o600, flag: "wx" });
     if (modeChecked) await fs.chmod(tmp, 0o600);
     await fs.rename(tmp, file);
   } catch (err) {
@@ -192,7 +200,17 @@ export async function removeKey(home: string, provider: KeyProvider): Promise<bo
  */
 export async function setKeySharing(home: string, share: boolean): Promise<string> {
   const all = await readKeyFile(home);
-  return writeAll(home, { keys: all.keys, share });
+  return writeAll(home, { ...all, share });
+}
+
+/**
+ * **Turn on or off handing the stored keys to summoned agents** (keys phase
+ * 4; opt-in). The keys and the sharing switch are kept as they are; a file
+ * refused for its mode is refused here too. Returns the file written.
+ */
+export async function setKeyAgents(home: string, agents: boolean): Promise<string> {
+  const all = await readKeyFile(home);
+  return writeAll(home, { ...all, agents });
 }
 
 /** Where to look: the environment and the home. Both default to this process's. */
