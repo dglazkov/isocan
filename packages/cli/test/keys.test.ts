@@ -20,8 +20,8 @@ import { cliEnv, runCli, runCliWithInput, type Run } from "./cli.ts";
  * show one. Fixtures are synthetic: Acme, Priya, made-up keys.
  */
 
-const ANTHROPIC = "sk-ant-acme_CLI_DO_NOT_PRINT_1234567890wxyz";
-const GEMINI = "AIza-acme_CLI_DO_NOT_PRINT_1234567890gemi";
+const ANTHROPIC = "sk-ant-fake_CLI_DO_NOT_PRINT_wxyz";
+const GEMINI = "fake-gemini-acme_CLI_DO_NOT_PRINT_1234567890gemi";
 const SECRETS = [ANTHROPIC, GEMINI];
 const priya = { id: "usr_priya", name: "Priya" };
 const CANVAS = "prj_acme_cli_keys";
@@ -181,10 +181,10 @@ describe("isocan keys", () => {
   });
 
   it("ls says when the environment overrides the stored key", async () => {
-    const run = await keys(["ls", "--json"], { GEMINI_API_KEY: "AIza-acme-env-override-9999" });
+    const run = await keys(["ls", "--json"], { GEMINI_API_KEY: "fake-gemini-acme-env-override-9999" });
     const parsed = JSON.parse(run.stdout) as { keys: Array<{ provider: string; env: { variable: string; lastFour: string } | null; inUse: string }> };
     expect(parsed.keys.find((k) => k.provider === "gemini")).toMatchObject({ env: { variable: "GEMINI_API_KEY", lastFour: "…9999" }, inUse: "env" });
-    expect(run.stdout).not.toContain("AIza-acme-env-override-9999");
+    expect(run.stdout).not.toContain("fake-gemini-acme-env-override-9999");
   });
 
   it("test with no key says how to set one", async () => {

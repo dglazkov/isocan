@@ -15,7 +15,7 @@ import { TEXT_UNAVAILABLE } from "../src/text.ts";
  * Synthetic throughout: Acme, a made-up key.
  */
 
-const KEY = "sk-ant-acme-test-key";
+const KEY = "sk-ant-fake-test-key";
 const SCHEMA: JsonSchema = {
   type: "object",
   properties: {
@@ -108,11 +108,11 @@ describe("which provider", () => {
   });
 
   it("is named by ISOCAN_TEXT_PROVIDER, else by the key's shape — and an existing key keeps meaning OpenAI", () => {
-    expect(textProvider("sk-ant-acme", undefined)).toBe("anthropic");
+    expect(textProvider("sk-ant-fake", undefined)).toBe("anthropic");
     expect(textProvider("sk-acme", undefined)).toBe("openai");
     expect(textProvider(undefined, undefined)).toBe("openai");
     expect(textProvider("sk-acme", "anthropic")).toBe("anthropic");
-    expect(textProvider("sk-ant-acme", "openai")).toBe("openai");
+    expect(textProvider("sk-ant-fake", "openai")).toBe("openai");
   });
 
   it("envTextGenerator reads the key, provider and model from the environment", async () => {

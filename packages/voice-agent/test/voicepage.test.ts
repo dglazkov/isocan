@@ -773,7 +773,7 @@ describe("devices, keys and the project link", () => {
     const key = element<HTMLInputElement>("key");
     const save = element<HTMLButtonElement>("save-key");
     expect(save.disabled).toBe(true);
-    key.value = "AIza-not-a-real-key";
+    key.value = "fake-gemini-not-a-real-key";
     key.dispatchEvent(new Event("input"));
     expect(save.disabled).toBe(false);
   });

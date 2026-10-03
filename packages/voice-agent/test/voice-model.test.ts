@@ -152,7 +152,7 @@ class FakeLive {
   }
 }
 
-const key = { provider: "gemini" as const, key: "AIza-synthetic-not-a-real-key" };
+const key = { provider: "gemini" as const, key: "fake-gemini-synthetic-not-a-real-key" };
 
 beforeEach(() => {
   FakeLive.latest = null;

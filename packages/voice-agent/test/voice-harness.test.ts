@@ -275,7 +275,7 @@ async function until<T>(read: () => T, ready: (value: T) => boolean, what: strin
  * the canvas.
  */
 async function liveServer() {
-  await writeVoiceKey(home, { provider: "gemini", key: "AIza-live-test" });
+  await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-live-test" });
   let providerSocket!: { emit: (message: unknown) => void; sent: string[] };
   class FakeLiveSocket {
     readyState = 1;
@@ -705,10 +705,10 @@ describe("what a sentence means", () => {
 
 describe("the key belongs to the harness", () => {
   it("stores it 0600, reads it back, and refuses one that leaked its own permissions", async () => {
-    const file = await writeVoiceKey(home, { provider: "gemini", key: "AIza-secret" });
+    const file = await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-secret" });
     expect(file).toBe(voiceKeyFile(home));
     expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
-    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-secret" });
+    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "fake-gemini-secret" });
 
     await fs.chmod(file, 0o644);
     await expect(readVoiceKey(home)).rejects.toThrow(/not 600/);
@@ -717,12 +717,12 @@ describe("the key belongs to the harness", () => {
   it("lives in the machine's keys.json now, and the old voice/key.json moves in on the first read and is removed (keys phase 1)", async () => {
     const old = path.join(home, "voice", "key.json");
     await fs.mkdir(path.dirname(old), { recursive: true });
-    await fs.writeFile(old, JSON.stringify({ provider: "gemini", key: "AIza-from-before" }), { mode: 0o600 });
+    await fs.writeFile(old, JSON.stringify({ provider: "gemini", key: "fake-gemini-from-before" }), { mode: 0o600 });
     await fs.chmod(old, 0o600);
     expect(voiceKeyFile(home)).toBe(path.join(home, "keys.json"));
-    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-from-before" });
+    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "fake-gemini-from-before" });
     await expect(fs.stat(old)).rejects.toMatchObject({ code: "ENOENT" });
-    expect(JSON.parse(await fs.readFile(voiceKeyFile(home), "utf8"))).toMatchObject({ gemini: { key: "AIza-from-before" } });
+    expect(JSON.parse(await fs.readFile(voiceKeyFile(home), "utf8"))).toMatchObject({ gemini: { key: "fake-gemini-from-before" } });
     await forgetVoiceKey(home);
     expect(await readVoiceKey(home)).toBeNull();
   });
@@ -1110,11 +1110,11 @@ describe("the page", () => {
     await fetch(`${server.state.url}key`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: "AIza-secret-value" }),
+      body: JSON.stringify({ key: "fake-gemini-secret-value" }),
     });
     const after = (await (await fetch(`${server.state.url}connection`)).json()) as Record<string, any>;
     expect(after.provider).toMatchObject({ name: "gemini", key: true });
-    expect(JSON.stringify(after)).not.toContain("AIza-secret-value");
+    expect(JSON.stringify(after)).not.toContain("fake-gemini-secret-value");
   });
 
   it("stores a key the page POSTs, and reports it without ever echoing it back", async () => {
@@ -1123,12 +1123,12 @@ describe("the page", () => {
       await fetch(`${server.state.url}key`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: "AIza-from-the-page" }),
+        body: JSON.stringify({ key: "fake-gemini-from-the-page" }),
       })
     ).json();
     expect(saved).toMatchObject({ provider: "gemini" });
-    expect(JSON.stringify(saved)).not.toContain("AIza-from-the-page");
-    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-from-the-page" });
+    expect(JSON.stringify(saved)).not.toContain("fake-gemini-from-the-page");
+    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "fake-gemini-from-the-page" });
   });
 
   /**
@@ -1154,13 +1154,13 @@ describe("the page", () => {
 
   it("refuses a cross-site text/plain POST /key, and the stored key is untouched", async () => {
     const server = await serve();
-    await writeVoiceKey(home, { provider: "gemini", key: "AIza-the-persons-own" });
+    await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-the-persons-own" });
     const before = await fs.readFile(voiceKeyFile(home), "utf8");
     // What a page on evil.example can send without a preflight.
     const set = await knock(`${server.state.url}key`, {
       method: "POST",
       headers: { Origin: "https://evil.example", "Content-Type": "text/plain" },
-      body: JSON.stringify({ key: "AIza-attacker" }),
+      body: JSON.stringify({ key: "fake-gemini-attacker" }),
     });
     expect(set.status).toBe(403);
     expect(set.text).toMatch(/another site/);
@@ -1175,16 +1175,16 @@ describe("the page", () => {
     const typed = await knock(`${server.state.url}key`, {
       method: "POST",
       headers: { Origin: "https://evil.example", "Content-Type": "application/json" },
-      body: JSON.stringify({ key: "AIza-attacker" }),
+      body: JSON.stringify({ key: "fake-gemini-attacker" }),
     });
     expect(typed.status).toBe(403);
     expect(await fs.readFile(voiceKeyFile(home), "utf8")).toBe(before);
-    expect(typed.text + set.text + forget.text).not.toContain("AIza");
+    expect(typed.text + set.text + forget.text).not.toContain("fake-gemini");
   });
 
   it("refuses a request whose Host is not a loopback name — a rebound DNS name", async () => {
     const server = await serve();
-    await writeVoiceKey(home, { provider: "gemini", key: "AIza-the-persons-own" });
+    await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-the-persons-own" });
     const before = await fs.readFile(voiceKeyFile(home), "utf8");
     // Rebinding: the browser thinks evil.example IS this door, so the request
     // is same-origin to it — no Origin needed, any content type allowed. Host
@@ -1215,15 +1215,15 @@ describe("the page", () => {
 
   it("does not parse a body that is not application/json", async () => {
     // The old reader made any body that began with `{` a command.
-    expect(parseHarnessBody("text/plain", Buffer.from('{"key":"AIza-x"}'))).toEqual({});
-    expect(parseHarnessBody("text/plain;charset=UTF-8", Buffer.from('"AIza-x"'))).toEqual({});
+    expect(parseHarnessBody("text/plain", Buffer.from('{"key":"fake-gemini-x"}'))).toEqual({});
+    expect(parseHarnessBody("text/plain;charset=UTF-8", Buffer.from('"fake-gemini-x"'))).toEqual({});
     expect(parseHarnessBody(undefined, Buffer.from('{"forget":true}'))).toEqual({});
     expect(parseHarnessBody("application/json; charset=utf-8", Buffer.from('{"forget":true}'))).toEqual({ forget: true });
-    expect(parseHarnessBody("application/json", Buffer.from('"AIza-x"'))).toBe("AIza-x");
+    expect(parseHarnessBody("application/json", Buffer.from('"fake-gemini-x"'))).toBe("fake-gemini-x");
     // And the door says so before any route runs: no Origin (a CLI's shape),
     // a loopback Host, a text/plain body — refused, key unchanged.
     const server = await serve();
-    await writeVoiceKey(home, { provider: "gemini", key: "AIza-the-persons-own" });
+    await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-the-persons-own" });
     const plain = await knock(`${server.state.url}key`, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
@@ -1231,7 +1231,7 @@ describe("the page", () => {
     });
     expect(plain.status).toBe(403);
     expect(plain.text).toMatch(/application\/json/);
-    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-the-persons-own" });
+    expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "fake-gemini-the-persons-own" });
   });
 
   it("names the three rules in one pure check", () => {
@@ -1257,11 +1257,11 @@ describe("the page", () => {
       const set = await knock(`${server.state.url}harness/key`, {
         method: "POST",
         headers: { Origin: origin, Host: `127.0.0.1:${port}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ key: "AIza-from-the-page", provider: "gemini" }),
+        body: JSON.stringify({ key: "fake-gemini-from-the-page", provider: "gemini" }),
       });
       expect(set.status, set.text).toBe(200);
-      expect(set.text).not.toContain("AIza-from-the-page");
-      expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "AIza-from-the-page" });
+      expect(set.text).not.toContain("fake-gemini-from-the-page");
+      expect(await readVoiceKey(home)).toEqual({ provider: "gemini", key: "fake-gemini-from-the-page" });
       const forget = await knock(`${server.state.url}harness/key`, {
         method: "POST",
         headers: { Origin: origin, Host: `localhost:${port}`, "Content-Type": "application/json" },
@@ -2529,7 +2529,7 @@ describe("the name the enrolment summons", () => {
     const beforeStanding = Object.values(beforeSnap.canvas.agents ?? {}).find((a) => a.actor.id === row.actorId)!;
     expect(beforeStanding.actor.name).toBe("Voice");
 
-    await writeVoiceKey(home, { provider: "gemini", key: "AIza-live-test" });
+    await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-live-test" });
     let providerSocket!: { emit: (m: unknown) => void; sent: string[] };
     class FakeLiveSocket {
       readyState = 1;
@@ -2958,7 +2958,7 @@ describe("the Live API path", () => {
     expect(names).toContain("move_item");
     expect(names).toContain("say");
     expect(names).not.toContain("trash_empty");
-    expect(liveUrl("AIza-x")).toContain("BidiGenerateContent?key=AIza-x");
+    expect(liveUrl("fake-gemini-x")).toContain("BidiGenerateContent?key=fake-gemini-x");
   });
 
   it("names the thinking depth for the extended-thinking model, and omits it for the plain one", () => {
@@ -3018,7 +3018,7 @@ describe("the Live API path", () => {
       }
     }
     const session = startLiveSession({
-      key: { provider: "gemini", key: "AIza-test" },
+      key: { provider: "gemini", key: "fake-gemini-test" },
       WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
       callbacks: {
         onToolCall: async (name, args) => {
@@ -3180,7 +3180,7 @@ describe("the Live API path", () => {
   });
 
   it("drives live tools end-to-end: read_canvas answers live state, add_item and rename_item land operations in oplog and /log", async () => {
-    await writeVoiceKey(home, { provider: "gemini", key: "AIza-live-test" });
+    await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-live-test" });
 
     let providerSocket!: {
       emit: (message: unknown) => void;
@@ -3372,7 +3372,7 @@ describe("the Live API path", () => {
   });
 
   it("exercises Paul's five tools: draw, react, comment, delete, and find — each landing on canvas and appearing in /log", async () => {
-    await writeVoiceKey(home, { provider: "gemini", key: "AIza-live-test" });
+    await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-live-test" });
 
     let providerSocket!: {
       emit: (message: unknown) => void;
@@ -3640,7 +3640,7 @@ describe("the Live API path", () => {
       }
     }
     const session = startLiveSession({
-      key: { provider: "gemini", key: "AIza-test" },
+      key: { provider: "gemini", key: "fake-gemini-test" },
       WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
     });
     await new Promise((r) => setTimeout(r, 0));
@@ -3686,7 +3686,7 @@ describe("the Live API path", () => {
       }
     }
     const session = startLiveSession({
-      key: { provider: "gemini", key: "AIza-test" },
+      key: { provider: "gemini", key: "fake-gemini-test" },
       WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
     });
     await new Promise((r) => setTimeout(r, 0));
@@ -3730,7 +3730,7 @@ describe("the Live API path", () => {
       }
     }
     const session = startLiveSession({
-      key: { provider: "gemini", key: "AIza-test" },
+      key: { provider: "gemini", key: "fake-gemini-test" },
       WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
     });
     await new Promise((r) => setTimeout(r, 0));
@@ -3776,7 +3776,7 @@ describe("the Live API path", () => {
       }
     }
     const session = startLiveSession({
-      key: { provider: "gemini", key: "AIza-test" },
+      key: { provider: "gemini", key: "fake-gemini-test" },
       WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
     });
     await new Promise((r) => setTimeout(r, 0));
@@ -3809,7 +3809,7 @@ describe("the Live API path", () => {
    * waits for one periodic line.
    */
   it("reports the audio it actually moved on the periodic line, not zeros", async () => {
-    await writeVoiceKey(home, { provider: "gemini", key: "AIza-live-test" });
+    await writeVoiceKey(home, { provider: "gemini", key: "fake-gemini-live-test" });
     const statsLines: string[] = [];
     let providerSocket!: { emit: (message: unknown) => void; sent: string[] };
     class FakeLiveSocket {

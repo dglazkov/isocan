@@ -28,9 +28,9 @@ import {
  * the key check's scrubbing. Fixtures are synthetic: made-up keys, a temp home.
  */
 
-const ANTHROPIC = "sk-ant-acme_STORED_DO_NOT_PRINT_0000aaaa";
+const ANTHROPIC = "sk-ant-fake_STORED_DO_NOT_PRINT_0000aaaa";
 const OPENAI = "sk-acme_OPENAI_DO_NOT_PRINT_0000bbbb";
-const GEMINI = "AIza-acme_GEMINI_DO_NOT_PRINT_0000cccc";
+const GEMINI = "fake-gemini-acme_GEMINI_DO_NOT_PRINT_0000cccc";
 const TYPESAFE = "ts-acme_JEV_DO_NOT_PRINT_0000dddd";
 const NO_ENV = {};
 
@@ -229,10 +229,10 @@ describe("the voice key moves in once", () => {
   });
 
   it("does not replace a gemini key already stored — the stored one wins, and the old copy still goes", async () => {
-    await writeKey(home, "gemini", "AIza-already-here-0000");
+    await writeKey(home, "gemini", "fake-gemini-already-here-0000");
     await writeOld({ provider: "gemini", key: GEMINI });
     expect(await migrateVoiceKey(home)).toBe(false);
-    expect(readKeysSync(home).gemini?.key).toBe("AIza-already-here-0000");
+    expect(readKeysSync(home).gemini?.key).toBe("fake-gemini-already-here-0000");
     await expect(fs.stat(oldFile())).rejects.toMatchObject({ code: "ENOENT" });
   });
 

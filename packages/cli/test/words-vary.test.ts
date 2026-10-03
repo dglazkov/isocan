@@ -136,7 +136,7 @@ describe("isocan words vary", () => {
   });
 
   it("spends a key stored with `isocan keys set anthropic` — no ISOCAN_TEXT_API_KEY, no restart (keys phase 1)", async () => {
-    const KEY = "sk-ant-acme_WORDS_DO_NOT_PRINT_1234567890";
+    const KEY = "sk-ant-fake_WORDS_DO_NOT_PRINT_";
     const canvas = JSON.parse(await ok("--json", "canvas", "create", "Acme stored key")).canvasId;
     const file = path.join(home, "checkout3.html");
     await fs.writeFile(file, CHECKOUT);

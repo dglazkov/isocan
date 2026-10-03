@@ -20,7 +20,7 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * Fixtures are synthetic: Acme, Priya, made-up keys.
  */
 
-const ANTHROPIC = "sk-ant-acme_STORED_DO_NOT_PRINT_1234567890";
+const ANTHROPIC = "sk-ant-fake_STORED_DO_NOT_PRINT_";
 const TYPESAFE = "tsk_acme_STORED_DO_NOT_PRINT_1234567890";
 const priya = { id: "usr_priya", name: "Priya" };
 const CANVAS = "prj_acme_keys";

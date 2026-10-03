@@ -18,8 +18,8 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * real bind.
  */
 
-const SECRET = "sk-ant-journeyfake-0123456789-abcd";
-const OTHER = "AIzaFakeGeminiKey-zzzz-9876";
+const SECRET = "sk-ant-fake-journey-abcd";
+const OTHER = "fake-gemini-zzzz-9876";
 
 let home: string;
 let daemon: Daemon;

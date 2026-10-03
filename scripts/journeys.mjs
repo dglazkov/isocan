@@ -2335,7 +2335,7 @@ export const JOURNEYS = [
      */
     what: "a model key set from the identity menu shows as …abcd, is nowhere in the page, shares on a tick, and removes",
     async run(rig) {
-      const key = "sk-ant-journeyfake-0123456789-abcd";
+      const key = "sk-ant-fake-journey-abcd";
       await rig.go("/");
       await until(rig.b, `!!document.querySelector(".who-btn")`, "your face on the canvas list");
       await rig.click(".who-btn", "your face");
