@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { KEYS_NOT_HERE, KEYS_ROUTE, type KeyProvider, type KeyRow } from "@isocan/core/keys";
+import { KEYS_NOT_HERE, KEYS_ROUTE, KEYS_SHARING_ROUTE, type KeyProvider, type KeyRow, type KeysListing } from "@isocan/core/keys";
 import { ApiError, request } from "../lib/api.ts";
 
 /**
@@ -17,6 +17,10 @@ import { ApiError, request } from "../lib/api.ts";
  * which outlives the field and is readable from devtools long after. Nothing
  * this panel draws came from the value except the `…abcd` the home computed.
  *
+ * Below the rows, owner-only spend's switch (keys phase 3): off by default,
+ * the stored keys pay only for this machine's person; on, collaborators on
+ * canvases it holds spend them too — `isocan keys share on|off`.
+ *
  * Lazy, like every panel this menu opens: the menu is already its own chunk,
  * and this is a second one, so a first visit pays for neither.
  */
@@ -24,6 +28,9 @@ export function KeysDialog({ onClose }: { onClose: () => void }) {
   const [rows, setRows] = useState<KeyRow[] | null>(null);
   const [file, setFile] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  /** keys.json's sharing switch (keys phase 3): off, the stored keys pay only for this machine's person. */
+  const [share, setShare] = useState<boolean | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [elsewhere, setElsewhere] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<KeyProvider | null>(null);
@@ -37,10 +44,11 @@ export function KeysDialog({ onClose }: { onClose: () => void }) {
 
   const load = async () => {
     try {
-      const res = await request<{ file: string; refused?: string; keys: KeyRow[] }>("GET", KEYS_ROUTE);
+      const res = await request<KeysListing>("GET", KEYS_ROUTE);
       setRows(res.keys);
       setFile(res.file);
       setRefused(res.refused ?? null);
+      setShare(res.share === true);
     } catch (err) {
       if (err instanceof ApiError && err.code === KEYS_NOT_HERE) setElsewhere(true);
       else setError((err as Error).message);
@@ -81,6 +89,19 @@ export function KeysDialog({ onClose }: { onClose: () => void }) {
     setArming(null);
     setTested((was) => ({ ...was, [provider]: undefined }));
     void act(provider, () => request("DELETE", `${KEYS_ROUTE}/${provider}`));
+  };
+
+  const toggleShare = async (on: boolean) => {
+    setSharing(true);
+    setError(null);
+    try {
+      const res = await request<KeysListing>("PUT", KEYS_SHARING_ROUTE, { share: on });
+      setShare(res.share === true);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSharing(false);
+    }
   };
 
   const test = (provider: KeyProvider) =>
@@ -193,6 +214,19 @@ export function KeysDialog({ onClose }: { onClose: () => void }) {
           );
         })}
       </div>
+      {share !== null && (
+        <label className="surface-row keys-share">
+          <input type="checkbox" checked={share} disabled={sharing} onChange={(e) => void toggleShare(e.target.checked)} />
+          <span className="surface-what">
+            Let collaborators on canvases this machine holds use my keys
+            <span className="share-roster-kind">
+              {share
+                ? "On: anyone who may edit a canvas this machine holds spends these keys."
+                : "Off: these keys pay only for you; a collaborator is told to ask you or use their own."}
+            </span>
+          </span>
+        </label>
+      )}
       {file && <div className="share-link-note">{file}</div>}
     </div>
   );

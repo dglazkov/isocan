@@ -103,4 +103,39 @@ describe("isocan words vary on a wireframe", () => {
     await ok("--canvas", canvas, "undo");
     expect(readWire(await textOf(canvas, source))!.content?.title).not.toBe("Your orders");
   });
+
+  it("mixes voices per word path into the source through the spec (copy-edit phase 3) — one version, the voices trashed, one undo", async () => {
+    const canvas = JSON.parse(await ok("--json", "canvas", "create", "Acme wire mix")).canvasId;
+    const file = path.join(home, "orders-mix.html");
+    const original = ensureFleshedForCopy(wireframe("list", { title: "Orders" }));
+    await fs.writeFile(file, renderWire(original));
+    const source = JSON.parse(await ok("--canvas", canvas, "--json", "add", file, "--title", "Acme orders", "--prop", "fidelity=wireframe")).itemId as string;
+    const voicesFile = path.join(home, "wire-mix-voices.json");
+    await fs.writeFile(voicesFile, JSON.stringify({
+      variants: [
+        { stance: "Plain", why: "Names the list.", edits: [{ address: "title", to: "Your orders" }, { address: "main.3/items.0.title", to: "Spring catalogue" }] },
+        { stance: "Warm", why: "Talks to the buyer.", edits: [{ address: "title", to: "Everything you ordered" }, { address: "main.3/items.0.title", to: "Your spring picks" }] },
+      ],
+    }));
+    const [plain, warm] = JSON.parse(await ok("--canvas", canvas, "--json", "words", "vary", source, "--from", voicesFile)).variants.map((v: { itemId: string }) => v.itemId) as [string, string];
+
+    const mixed = JSON.parse(await ok("--canvas", canvas, "--json", "words", "mix", source, "--pick", "title=Warm,main.3/items.0.title=Plain"));
+    expect(mixed).toMatchObject({ itemId: source, kind: "wire", trashed: [plain, warm] });
+    const spec = readWire(await textOf(canvas, source))!;
+    expect(spec.content?.title).toBe("Everything you ordered");
+    expect(spec.slots.find((s) => s.slot === "main.3")!.fill!.items![0]!.title).toBe("Spring catalogue");
+    // Words only: every slot's block and props as they were.
+    expect(spec.slots.map((s) => [s.slot, s.block, JSON.stringify(s.props ?? null)])).toEqual(original.slots.map((s) => [s.slot, s.block, JSON.stringify(s.props ?? null)]));
+    const after = await client.snapshot(canvas);
+    expect(after.canvas.items[source]!.versions).toHaveLength(2);
+    for (const id of [plain, warm]) expect(after.canvas.items[id]).toBeUndefined();
+    // The mixed file folds home as a screen, not a variation of itself — as `choose` leaves it.
+    const screens = await wiresOn({ readText: async (hash) => (await client.downloadBlob(canvas, hash)).toString("utf8") }, after.canvas);
+    expect(screens.map((s) => [s.item, s.spec.variantOf])).toEqual([[source, undefined]]);
+
+    await ok("--canvas", canvas, "undo");
+    expect(readWire(await textOf(canvas, source))!.content?.title).toBe(original.content?.title);
+    const undone = await client.snapshot(canvas);
+    for (const id of [plain, warm]) expect(undone.canvas.items[id]).toBeDefined();
+  });
 });

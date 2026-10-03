@@ -37,6 +37,15 @@ export function openVaryCopy(request: VaryRequest): void {
   root!.render(<VaryCopy key={request.itemId} {...request} onClose={closeVaryCopy} />);
 }
 
+/**
+ * *Compare the copy…* (copy-edit phase 3), through this file so the item menu
+ * names one lazy import for both copy rows; the panel itself is its own chunk,
+ * fetched on this call.
+ */
+export function openCopyCompare(request: VaryRequest): void {
+  void import("./CopyCompare.tsx").then((m) => m.openCopyCompare(request));
+}
+
 function closeVaryCopy(): void {
   root?.unmount();
   host?.remove();
@@ -63,7 +72,7 @@ function VaryCopy({ canvasId, actor, itemId, onClose }: VaryRequest & { onClose:
         onClose();
         selectCreatedItems(canvasId, done.itemIds);
         // Placeholder voices already said so in the notice bar, as a problem that stays until seen: not flashed over.
-        if (!done.placeholder) flashNotice(`${done.itemIds.length} voice${done.itemIds.length === 1 ? "" : "s"} under “${title}”: ${done.stances.join(", ")} (⌘Z takes them back)`, 6000);
+        if (!done.placeholder) flashNotice(`${done.itemIds.length} voice${done.itemIds.length === 1 ? "" : "s"} under “${title}”: ${done.stances.join(", ")} — Compare the copy… on it mixes them (⌘Z takes them back)`, 6000);
       })
       .catch((err: unknown) => {
         setBusy(false);

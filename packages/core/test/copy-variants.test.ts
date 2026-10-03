@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyCopyDeck, applyCopyDeckToFace, copyDeck } from "../src/copy-deck.ts";
 import { PARENT_PROP } from "../src/lineage.ts";
 import { PLACEMENT_GAP } from "../src/placement.ts";
-import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_GAP, VARIANT_PARENT_PROP, checkCopyVariants, copyVariantOps, copyVariantsRequest, placeholderCopyVariants } from "../src/copy-variants.ts";
+import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_GAP, VARIANT_PARENT_PROP, checkCopyVariants, copyMixEdits, copyMixOps, copyMixRows, copyVariantOps, copyVariantsOf, copyVariantsRequest, placeholderCopyVariants } from "../src/copy-variants.ts";
 import { stubTextGenerator } from "../src/jev.ts";
 import type { CanvasContents, Item } from "../src/model.ts";
 
@@ -184,5 +184,100 @@ describe("copyVariantOps — /variation children, stacked under the source", () 
     if (!r.ok) throw new Error(r.reason);
     const [op] = copyVariantOps(canvas, source, [{ itemId: "itm_a", variant: r.variants[0]!, version: version("ver_a") }]);
     expect(op).toMatchObject({ containerId: "itm_group", groupPlacement: "exact", placement: { x: 100, y: 540 } });
+  });
+});
+
+/**
+ * **Compare and mix** (copy-edit phase 3, journey scene 2): the rows where any
+ * voice differs, the picks made one edit set on the SOURCE, words only, and
+ * the ops — one version, every voice to the trash — that one group sends.
+ * The real-daemon walk (pick from two voices, one undo) is
+ * `packages/cli/test/words-mix.test.ts`; the web's is `copy-mix` in
+ * `scripts/journeys.mjs`.
+ */
+describe("compare and mix — per string, from several voices", () => {
+  const voiced = (v: (typeof VOICES.variants)[number]) => {
+    const out = applyCopyDeck(CHECKOUT, v.edits.map((e) => ({ address: e.address, text: deck.strings.find((s) => s.address === e.address)!.text, to: e.to })));
+    if (!out.ok) throw new Error(out.reason);
+    return out.html;
+  };
+  const variants = VOICES.variants.map((v, i) => ({ itemId: `itm_v${i}`, stance: v.stance, deck: copyDeck(voiced(v)) }));
+  const [plain, warm, benefit] = variants.map((v) => v.itemId) as [string, string, string];
+
+  it("finds a source's voices — stance-bearing parent= children, top to bottom — and leaves a layout variation out", () => {
+    const at = (id: string, y: number, properties: Record<string, string>) => ({ id, x: 0, y, properties }) as unknown as Item;
+    const canvas = {
+      items: {
+        itm_src: at("itm_src", 0, {}),
+        itm_b: at("itm_b", 900, { parent: "itm_src", [COPY_STANCE_PROP]: "Warm" }),
+        itm_a: at("itm_a", 500, { parent: "itm_src", [COPY_STANCE_PROP]: "Plain" }),
+        itm_layout: at("itm_layout", 700, { parent: "itm_src" }),
+        itm_other: at("itm_other", 100, { parent: "itm_else", [COPY_STANCE_PROP]: "Warm" }),
+      },
+    } as unknown as CanvasContents;
+    expect(copyVariantsOf(canvas, "itm_src").map((i) => i.id)).toEqual(["itm_a", "itm_b"]);
+  });
+
+  it("has one row per string any voice says differently, in reading order, with every voice's words", () => {
+    const r = copyMixRows(deck, variants);
+    if (!r.ok) throw new Error(r.reason);
+    expect(r.rows.map((row) => row.source)).toEqual(["Review your order", "1234 5678", "Pay now"]);
+    const heading = r.rows[0]!;
+    expect(heading).toMatchObject({ address: addr("Review your order"), role: "heading" });
+    expect(heading.variants).toEqual([
+      { itemId: plain, text: "Check your order" },
+      { itemId: warm, text: "Almost there — take a look" },
+      { itemId: benefit, text: "Review your order" },
+    ]);
+  });
+
+  it("refuses a voice that no longer lines up with its source string for string", () => {
+    const moved = copyDeck(CHECKOUT.replace("<p>Two items, shipped by Acme.</p>", ""));
+    const r = copyMixRows(moved, variants);
+    expect(r).toEqual({ ok: false, reason: expect.stringContaining('"Plain and direct" no longer lines up with its source') });
+  });
+
+  it("makes the picks one edit set on the source — the heading from one voice, the button from another — and changes only those words", () => {
+    const picks = { [addr("Pay now")]: benefit, [addr("Review your order")]: warm };
+    const r = copyMixEdits(deck, variants, picks, "itm_src");
+    if (!r.ok) throw new Error(r.reason);
+    // Reading order, whatever order the picks came in; each edit carries the source's text as its check.
+    expect(r.edits).toEqual([
+      { address: addr("Review your order"), text: "Review your order", to: "Almost there — take a look" },
+      { address: addr("Pay now"), text: "Pay now", to: "Get my order" },
+    ]);
+    const out = applyCopyDeck(CHECKOUT, r.edits);
+    if (!out.ok) throw new Error(out.reason);
+    expect(copyDeck(out.html).strings.map((s) => s.text)).toEqual(deck.strings.map((s) => (s.text === "Review your order" ? "Almost there — take a look" : s.text === "Pay now" ? "Get my order" : s.text)));
+    // Words only: the mixed file is the source byte for byte outside those two strings.
+    expect(out.html).toBe(CHECKOUT.replace("Review your order</h1>", "Almost there — take a look</h1>").replace(">Pay now<", ">Get my order<"));
+  });
+
+  it("is a whole voice when every row comes from it", () => {
+    const r = copyMixEdits(deck, variants, { [addr("Review your order")]: plain, [addr("Pay now")]: plain });
+    if (!r.ok) throw new Error(r.reason);
+    const out = applyCopyDeck(CHECKOUT, r.edits);
+    if (!out.ok) throw new Error(out.reason);
+    expect(out.html).toBe(voiced(VOICES.variants[0]!));
+  });
+
+  it("keeps the source's words where the pick is the source itself, and refuses in words what it cannot mix", () => {
+    expect(copyMixEdits(deck, variants, { [addr("Pay now")]: "itm_src", [addr("Review your order")]: plain }, "itm_src")).toMatchObject({ ok: true, edits: [{ to: "Check your order" }] });
+    expect(copyMixEdits(deck, variants, {}, "itm_src")).toEqual({ ok: false, reason: expect.stringContaining("the mix is the source's own words") });
+    expect(copyMixEdits(deck, variants, { [addr("Pay now")]: "itm_src" }, "itm_src")).toEqual({ ok: false, reason: expect.stringContaining("the mix is the source's own words") });
+    expect(copyMixEdits(deck, variants, { [addr("Pay now")]: "itm_nope" })).toEqual({ ok: false, reason: expect.stringContaining("itm_nope is not one of this screen's copy variants") });
+    expect(copyMixEdits(deck, variants, { t999: plain })).toEqual({ ok: false, reason: expect.stringContaining("no string at t999") });
+    expect(copyMixEdits(deck, variants, { [addr("Two items, shipped by Acme.")]: plain })).toEqual({ ok: false, reason: expect.stringContaining("no voice changed") });
+    expect(copyMixEdits(deck, variants, { [addr("Pay now")]: warm })).toEqual({ ok: false, reason: expect.stringContaining('"Warm" kept') });
+  });
+
+  it("sends one version of the source, then every voice to the trash — convergeOps's shape, for one group", () => {
+    const version = { id: "ver_mix", blobHash: "hash_mix", mimeType: "text/html", filename: "checkout.html", size: 10 };
+    expect(copyMixOps("itm_src", version, [plain, warm, benefit])).toEqual([
+      { type: "item.addVersion", itemId: "itm_src", version },
+      { type: "item.delete", itemId: plain },
+      { type: "item.delete", itemId: warm },
+      { type: "item.delete", itemId: benefit },
+    ]);
   });
 });

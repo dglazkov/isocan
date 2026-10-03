@@ -6,6 +6,7 @@ import {
   chooseTextKey,
   envKeyFor,
   isKeyProvider,
+  KEYS_SHARE_FIELD,
   type KeyEnv,
   type KeyProvider,
   type ResolvedKey,
@@ -73,8 +74,21 @@ function refuseLoose(file: string, mode: number): void {
   if (modeChecked && (mode & 0o777) !== 0o600) throw new KeyFileRefused(file, mode & 0o777);
 }
 
+/**
+ * **The whole file: the keys, and whether their owner shares them** (keys
+ * phase 3, owner-only spend). `share` is keys.json's top-level
+ * `shareWithCollaborators` (`KEYS_SHARE_FIELD`): off — absent, or anything but
+ * `true` — a stored key pays only for this machine's own person; on, for
+ * anybody who may edit a canvas this machine holds. It lives beside the keys
+ * because it is a fact about them, and every write keeps it.
+ */
+export interface KeyFileContents {
+  keys: KeyFile;
+  share: boolean;
+}
+
 /** The parsed file, keeping only well-formed entries for known providers. A file that is not JSON says so without quoting it. */
-function parse(file: string, text: string): KeyFile {
+function parseAll(file: string, text: string): KeyFileContents {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -82,7 +96,8 @@ function parse(file: string, text: string): KeyFile {
     throw new Error(`${file} is not JSON — fix or remove it, then set the keys again with \`isocan keys set\``);
   }
   const out: KeyFile = {};
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { keys: out, share: false };
+  const share = (raw as Record<string, unknown>)[KEYS_SHARE_FIELD] === true;
   for (const [provider, entry] of Object.entries(raw as Record<string, unknown>)) {
     if (!isKeyProvider(provider) || !entry || typeof entry !== "object") continue;
     const { key, model, addedAt } = entry as Record<string, unknown>;
@@ -93,41 +108,51 @@ function parse(file: string, text: string): KeyFile {
       addedAt: typeof addedAt === "string" ? addedAt : "",
     };
   }
-  return out;
+  return { keys: out, share };
+}
+
+/** The whole file, read now — `readKeysSync` with the sharing switch. Missing file: no keys, not shared. */
+export function readKeyFileSync(home: string = defaultKeysHome()): KeyFileContents {
+  const file = keysFile(home);
+  try {
+    refuseLoose(file, statSync(file).mode);
+    return parseAll(file, readFileSync(file, "utf8"));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { keys: {}, share: false };
+    throw err;
+  }
+}
+
+/** `readKeyFileSync`, asynchronously. */
+export async function readKeyFile(home: string = defaultKeysHome()): Promise<KeyFileContents> {
+  const file = keysFile(home);
+  try {
+    refuseLoose(file, (await fs.stat(file)).mode);
+    return parseAll(file, await fs.readFile(file, "utf8"));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { keys: {}, share: false };
+    throw err;
+  }
 }
 
 /** The stored keys, read now. Missing file: none. Loose mode: `KeyFileRefused`. */
 export function readKeysSync(home: string = defaultKeysHome()): KeyFile {
-  const file = keysFile(home);
-  try {
-    refuseLoose(file, statSync(file).mode);
-    return parse(file, readFileSync(file, "utf8"));
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
-    throw err;
-  }
+  return readKeyFileSync(home).keys;
 }
 
 /** `readKeysSync`, asynchronously — what a server that must not block reads. */
 export async function readKeys(home: string = defaultKeysHome()): Promise<KeyFile> {
-  const file = keysFile(home);
-  try {
-    refuseLoose(file, (await fs.stat(file)).mode);
-    return parse(file, await fs.readFile(file, "utf8"));
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
-    throw err;
-  }
+  return (await readKeyFile(home)).keys;
 }
 
-/** Write the whole file: 0600, atomically, in a 0700 directory. */
-async function writeAll(home: string, keys: KeyFile): Promise<string> {
+/** Write the whole file: 0600, atomically, in a 0700 directory. The sharing switch is written only when on. */
+async function writeAll(home: string, { keys, share }: KeyFileContents): Promise<string> {
   await fs.mkdir(home, { recursive: true, mode: 0o700 });
   if (modeChecked) await fs.chmod(home, 0o700);
   const file = keysFile(home);
   const tmp = path.join(home, `.${KEYS_FILE_NAME}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`);
   try {
-    await fs.writeFile(tmp, `${JSON.stringify(keys, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+    await fs.writeFile(tmp, `${JSON.stringify(share ? { [KEYS_SHARE_FIELD]: true, ...keys } : keys, null, 2)}\n`, { mode: 0o600, flag: "wx" });
     if (modeChecked) await fs.chmod(tmp, 0o600);
     await fs.rename(tmp, file);
   } catch (err) {
@@ -145,18 +170,29 @@ async function writeAll(home: string, keys: KeyFile): Promise<string> {
 export async function writeKey(home: string, provider: KeyProvider, key: string, model?: string, now: () => Date = () => new Date()): Promise<string> {
   const trimmed = key.trim();
   if (!trimmed) throw new Error(`no key given for ${provider}`);
-  const keys = await readKeys(home);
-  keys[provider] = { key: trimmed, ...(model?.trim() ? { model: model.trim() } : {}), addedAt: now().toISOString() };
-  return writeAll(home, keys);
+  const all = await readKeyFile(home);
+  all.keys[provider] = { key: trimmed, ...(model?.trim() ? { model: model.trim() } : {}), addedAt: now().toISOString() };
+  return writeAll(home, all);
 }
 
 /** Remove a provider's key. True when there was one. */
 export async function removeKey(home: string, provider: KeyProvider): Promise<boolean> {
-  const keys = await readKeys(home);
-  if (!keys[provider]) return false;
-  delete keys[provider];
-  await writeAll(home, keys);
+  const all = await readKeyFile(home);
+  if (!all.keys[provider]) return false;
+  delete all.keys[provider];
+  await writeAll(home, all);
   return true;
+}
+
+/**
+ * **Turn sharing on or off** (keys phase 3): whether this machine's stored keys
+ * pay for collaborators on canvases it holds, or only for its own person. The
+ * keys are kept as they are; a file refused for its mode is refused here too.
+ * Returns the file written.
+ */
+export async function setKeySharing(home: string, share: boolean): Promise<string> {
+  const all = await readKeyFile(home);
+  return writeAll(home, { keys: all.keys, share });
 }
 
 /** Where to look: the environment and the home. Both default to this process's. */
@@ -228,11 +264,11 @@ export async function migrateVoiceKey(home: string): Promise<boolean> {
   }
   // Not a key at all: left where it is, for a person to look at.
   if (!key) return false;
-  const keys = await readKeys(home);
+  const all = await readKeyFile(home);
   let moved = false;
-  if (!keys.gemini) {
-    keys.gemini = { key, addedAt: stat.mtime.toISOString() };
-    await writeAll(home, keys);
+  if (!all.keys.gemini) {
+    all.keys.gemini = { key, addedAt: stat.mtime.toISOString() };
+    await writeAll(home, all);
     moved = true;
   }
   await fs.rm(old, { force: true });

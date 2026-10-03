@@ -1942,7 +1942,7 @@ export function registerRoutes(
   });
 
   // `POST /api/judgment` and `POST /api/text`, the two routes that spend the home's keys — in `model-routes.ts`.
-  registerModelRoutes(app, { engine, options, refusals, admit, viewOnly });
+  registerModelRoutes(app, { engine, options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
   // `/api/keys`, the settings area's machine-local key routes — in `key-routes.ts`.
   registerKeyRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld, ...(options.keys ? { keys: options.keys } : {}) });
 

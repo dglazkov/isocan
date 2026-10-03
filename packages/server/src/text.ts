@@ -80,13 +80,23 @@ export class TextModel {
   constructor(private readonly opts: TextOptions = {}) {}
 
   /** The key, the provider it is for and the model to ask, read now. A test's own `key` keeps the old shape: provider and model from its own options, else the key's shape. */
-  private resolve(): { key: string; provider?: TextProvider; model?: string } | undefined {
+  private resolve(): { key: string; source: "env" | "file"; provider?: TextProvider; model?: string } | undefined {
     if (this.opts.key) {
       const key = this.opts.key()?.trim();
-      return key ? { key } : undefined;
+      // A key handed in by the daemon's options is the operator's, as the environment's is.
+      return key ? { key, source: "env" } : undefined;
     }
     const found = warnRefusedKeys(() => resolveTextKey(this.opts.keysHome ? { home: this.opts.keysHome } : {}));
-    return found ? { key: found.key, provider: found.provider, ...(found.model ? { model: found.model } : {}) } : undefined;
+    return found ? { key: found.key, source: found.source, provider: found.provider, ...(found.model ? { model: found.model } : {}) } : undefined;
+  }
+
+  /**
+   * Whose key a completion would spend now (keys phase 3): `file` is this
+   * machine's person's, stored in keys.json, and pays only for them unless
+   * they share it; `env` is the operator's and pays for every editor.
+   */
+  keySource(): "env" | "file" | undefined {
+    return this.resolve()?.source;
   }
 
   private key(): string | undefined {

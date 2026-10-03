@@ -49,6 +49,8 @@ beforeEach(async () => {
     delete process.env[name];
   }
   home = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-keys-spend-"));
+  // Priya is this machine's person: a stored key pays for her (owner-only spend, keys phase 3).
+  await fsp.writeFile(path.join(home, "identity.json"), JSON.stringify(priya));
   calls = [];
   const fake = (async (url: string, init: RequestInit) => {
     calls.push({ url, headers: new Headers(init.headers) });

@@ -27,11 +27,18 @@ second week.
   identity menu (on your own machine) lists Anthropic, OpenAI, Gemini and
   Jev with whether each is set, the last four characters, and what uses it —
   Set, Replace, Test, Remove. Keys live in `~/.isocan/keys.json`, readable
-  only by you, and are never shown back. Terminal: `isocan keys`.
+  only by you, and are never shown back. Terminal: `isocan keys`. Your keys
+  pay only for you: a collaborator on your canvas is told to ask you or use
+  their own, until you tick *Let collaborators … use my keys*
+  (`isocan keys share on`).
 - **Vary the copy.** On any screen, *Vary the copy…* writes three voices of
   its words — each a variation titled with its stance — and you choose one;
   only the words change. Agents: `isocan words vary`, and `isocan words` to
   read or change a screen's strings.
+- **Mix the copy.** *Compare the copy…* puts a screen and its voices side by
+  side, with a row for each string they say differently: take the heading
+  from one and the button from another, then *Use this mix* — one new
+  version, the voices tidied away, one undo. Agents: `isocan words mix`.
 - **The facepile reads other people, other agents, your pets, then you** on
   the far right.
 - **The identity menu's actions come first,** as rows that look like

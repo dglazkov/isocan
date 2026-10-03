@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 2 Oct 2026: phases 0, 1 and 2 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 3, compare and mix.**
+**Where we are, 2 Oct 2026: phases 0–3 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 4, fit and voice.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -109,13 +109,22 @@ varies a screen from the web and chooses one (one undo).
 
 ## Phase 3 — Compare and mix
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** *Compare the copy…* shows a screen and its voices side by side, live, with one row per string that any voice says differently; *Use this mix* (and `isocan words mix <source> --pick addr=variant`) writes one version of the source from the picked strings and trashes the voices in the same group — the `copy-mix` journey took the heading from one voice and the button from another, checked the words, and ⌘Z brought back the original and all three voices.
 
 **Outcome:** an N-up compare of a screen's copy variants, live, with a
 per-string picker and *Use this mix* folding one version of the source and
 removing the variants, one undo.
 
 **Proof:** a journey that mixes two variants and checks the source's words.
+
+### Trajectory
+
+- **2026-10-02** — A mix is `convergeOps`'s shape with a new file in place of the winner's: one `item.addVersion` of the source spliced from the picked strings, then each voice deleted, one group. No new op; the web and `words mix` land the same blob hash for the same picks (a test holds them equal).
+- **2026-10-02** — A wire screen's mix goes through the module's pure `copy.variant` writer, not `apply`: `apply` sends its own group and could not share an undo with the deletes, and the variant file folds home exactly as `choose` folds one.
+- **2026-10-02** — A mix trashes only stance-bearing voices, not every `parent=` child as `choose` does: a layout variation is not in the compare, so the mix leaves it alone.
+- **2026-10-02** — `copyMixRows` refuses, by name, a voice that no longer lines up with its source string for string — the guard against a source edited after it was varied; phase 5's flow-wide voice should reuse it.
+- **2026-10-02** — *Compare the copy…* shares *Vary the copy…*'s lazy import; the entry chunk stayed at 701,285. After a vary the offer is words in the notice, not a button (notices are strings).
+- **2026-10-02** — Open: the picks are preference evidence (which stance won each string) recorded nowhere yet — phase 6's. `words mix` records "agent" as the version's author and has no `--by`.
 
 ## Phase 4 — Fit and voice
 

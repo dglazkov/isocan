@@ -9,7 +9,7 @@ note: "the walk: close the voice harness door, the store and CLI, the settings a
 
 **2 October 2026.** Held to [design.md](design.md).
 
-**Where we are, 2 Oct 2026: phases 0–2 are CLOSED — the harness door is shut, keys live in `~/.isocan/keys.json` behind `isocan keys` and the *Model keys…* area. Next: keys phase 3, owner-only spend.**
+**Where we are, 2 Oct 2026: phases 0–3 are CLOSED — the harness door is shut, keys live in `~/.isocan/keys.json` behind `isocan keys` and the *Model keys…* area, and they pay only for this machine's person unless sharing is on. Next: keys phase 4, agents and the talk module.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -82,7 +82,7 @@ provider, and adding one for the journey was not worth a new env hook).
 
 ## Phase 3 — Owner-only spend
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** A key stored in `keys.json` is spent on `/api/judgment` and `/api/text` only for the machine's person (through joins); a collaborator is refused with `text-owner-only` / `judgment-owner-only` and a sentence naming the owner, and nothing reaches the provider. `isocan keys share on|off` and a box in *Model keys…* turn sharing on; a key from the environment serves everyone as before. Seven real-daemon tests prove owner, joined identity, collaborator refused, collaborator served after `share on`, and the env key; the `model-keys` journey ticks the box in Chrome and finds `shareWithCollaborators: true` in keys.json with the key kept.
 
 **Outcome:** `/api/judgment` and `/api/text` spend this machine's stored keys
 only for its own person (through joins) unless the owner turns on sharing; a
@@ -90,6 +90,14 @@ collaborator is refused in words naming the owner.
 
 **Proof:** real-daemon tests for owner, joined identity, collaborator refused,
 collaborator allowed after the switch.
+
+### Trajectory
+
+- **2026-10-02** — Sharing is keys.json's top-level `shareWithCollaborators`, and every write keeps it: before, `writeAll` wrote only the provider entries, so the first `keys set` after `share on` would quietly have turned sharing off.
+- **2026-10-02** — "The machine's person" is the `identity.json` beside the keys.json being spent, read per request as the key is; a machine with no `identity.json` spends its stored keys for nobody, and says so. A key handed in through the daemon's options counts as the environment's (the operator's).
+- **2026-10-02** — "The person" means any claim on the badge resolves to them, so agents claimed under the owner's own badge are served.
+- **2026-10-02** — A collaborator refused here on a canvas homed elsewhere is forwarded to the home, not refused: the home applies its own key and rule, and the owner's key is never spent.
+- **2026-10-02** — Open: the owner-only refusal is not a fallback case for `homeTextGenerator` or the judge client, so a refused collaborator's CLI fails loudly rather than writing placeholder words — on purpose, written down here first.
 
 ## Phase 4 — Agents and the talk module
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { chooseTextKey, envKeyFor, KEY_PROVIDER_INFO, KEY_PROVIDERS, lastFour, textProviderFor } from "../src/keys.ts";
+import { chooseTextKey, envKeyFor, KEY_PROVIDER_INFO, KEY_PROVIDERS, KEYS_SHARE_FIELD, lastFour, ownerOnlySentence, textProviderFor } from "../src/keys.ts";
 import {
   checkKey,
   defaultKeysHome,
@@ -10,9 +10,11 @@ import {
   KeyFileRefused,
   keysFile,
   migrateVoiceKey,
+  readKeyFile,
   readKeys,
   readKeysSync,
   removeKey,
+  setKeySharing,
   resolveKey,
   resolveKeyAsync,
   resolveTextKey,
@@ -98,6 +100,34 @@ describe("the file", () => {
     expect(defaultKeysHome({ ISOCAN_KEYS_HOME: "/k", ISOCAN_HOME: "/h" })).toBe("/k");
     expect(defaultKeysHome({ ISOCAN_HOME: "/h" })).toBe("/h");
     expect(defaultKeysHome({})).toBe(path.join(os.homedir(), ".isocan"));
+  });
+});
+
+describe("the sharing switch (owner-only spend, keys phase 3)", () => {
+  it("is off when absent, and every write keeps it where it was", async () => {
+    await writeKey(home, "anthropic", ANTHROPIC);
+    expect((await readKeyFile(home)).share).toBe(false);
+    await setKeySharing(home, true);
+    const raw = JSON.parse(await fs.readFile(keysFile(home), "utf8")) as Record<string, unknown>;
+    expect(raw[KEYS_SHARE_FIELD]).toBe(true);
+    expect(((await fs.stat(keysFile(home))).mode & 0o777)).toBe(0o600);
+    // A key set, and a key removed, keep the switch; the switch keeps the keys.
+    await writeKey(home, "typesafe", TYPESAFE);
+    await removeKey(home, "typesafe");
+    expect(await readKeyFile(home)).toMatchObject({ share: true, keys: { anthropic: { key: ANTHROPIC } } });
+    expect(Object.keys(readKeysSync(home))).toEqual(["anthropic"]);
+    await setKeySharing(home, false);
+    expect(JSON.parse(await fs.readFile(keysFile(home), "utf8"))).not.toHaveProperty(KEYS_SHARE_FIELD);
+  });
+
+  it("only `true` turns it on", async () => {
+    await fs.writeFile(keysFile(home), JSON.stringify({ [KEYS_SHARE_FIELD]: "yes" }), { mode: 0o600 });
+    expect((await readKeyFile(home)).share).toBe(false);
+  });
+
+  it("refuses a collaborator in words that name the owner", () => {
+    expect(ownerOnlySentence("Priya")).toBe("Priya's keys pay only for Priya here — ask them to turn on sharing in Model keys, or use your own");
+    expect(ownerOnlySentence(null)).toMatch(/has not said who that is/);
   });
 });
 

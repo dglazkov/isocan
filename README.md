@@ -356,6 +356,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   a line of why, with only the words changed. `--from voices.json` takes
   voices an agent wrote itself; *Choose this variation* folds the winner
   home, one undo.
+- **Mix the voices**: *Compare the copy…* shows a screen and every voice side
+  by side, live, with a choice per string; *Use this mix* writes those words
+  into the screen as one version and clears the voices, one undo.
+  `isocan words mix <item> --pick <address>=<voice>` does the same.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking
@@ -503,13 +507,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   calibrated before anything acts on it. It writes to no canvas; `--out`
   puts the pairs on this machine, outside any repository. See
   [the design](docs/projects/judge/design.md).
-- **Model keys in one place**: `isocan keys ls|set|rm|test` keeps this
+- **Model keys in one place**: `isocan keys ls|set|rm|test|share` keeps this
   machine's Anthropic, OpenAI, Gemini and Typesafe keys in
   `~/.isocan/keys.json` (0600, refused if looser). The judge, the text model,
   the CLI's own wireframe answers and the voice harness read it per call — a
   key set now is used without a restart — with `TYPESAFE_API_KEY`,
   `ISOCAN_TEXT_API_KEY` and `GEMINI_API_KEY` still winning. A key is never
   shown (`ls` gives the last four) and never taken from the command line.
+  A stored key pays only for this machine's own person (and identities joined
+  with them); a collaborator is refused by name until `isocan keys share on`.
   The web app has the same hands — *Model keys…* in the identity menu, under
   *This machine*, on a page this machine's daemon serves (set, replace, test,
   remove; write-only; a hosted home says its keys are its operator's). See
@@ -973,6 +979,7 @@ isocan home [<url>|--clear]        # where each canvas here lives; set where
                                    # NEW ones are born (nothing already here moves)
 isocan keys [ls]|set|rm|test <provider>  # model keys on this machine (~/.isocan/keys.json);
                                    # set reads stdin or a hidden prompt, never argv
+isocan keys share on|off           # may collaborators spend the stored keys (off: only you)
 isocan share [<email>] [--as own|edit|read|view] [--link on|off|edit|read|view]
              [--revoke <email> [--bar]] [--bar <email>] [--unbar <email>]
                                    # the address, and who may enter this canvas

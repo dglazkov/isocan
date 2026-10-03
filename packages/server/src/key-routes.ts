@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { envKeyFor, isKeyProvider, KEY_PROVIDERS, keyRows, KEYS_NOT_HERE, KEYS_ROUTE, lastFour, type KeyEnv, type KeyProvider } from "@isocan/core/keys";
-import { checkKey, KeyFileRefused, keysFile, readKeys, removeKey, resolveKeyAsync, writeKey, type KeyFile } from "@isocan/core/keystore";
+import { envKeyFor, isKeyProvider, KEY_PROVIDERS, keyRows, KEYS_NOT_HERE, KEYS_ROUTE, KEYS_SHARING_ROUTE, lastFour, type KeyEnv, type KeyProvider, type KeysListing } from "@isocan/core/keys";
+import { checkKey, KeyFileRefused, keysFile, readKeyFile, removeKey, resolveKeyAsync, setKeySharing, writeKey, type KeyFileContents } from "@isocan/core/keystore";
 import { loopbackBound } from "./route-helpers.ts";
 
 /**
@@ -10,7 +10,8 @@ import { loopbackBound } from "./route-helpers.ts";
  * `GET /api/keys` lists every provider — set or not, `…abcd`, when, what uses
  * it, whether the environment overrides it — and NEVER the value.
  * `PUT /api/keys/:provider` takes `{ key }` and answers with the row.
- * `DELETE` removes one. `POST /api/keys/:provider/test` makes the one cheap
+ * `DELETE` removes one. `PUT /api/keys/sharing` takes `{ share }` — owner-only
+ * spend's switch (keys phase 3). `POST /api/keys/:provider/test` makes the one cheap
  * call `isocan keys test` makes and answers with the provider's words, the
  * key scrubbed out of them. They are `isocan keys`, spoken by the web app, and
  * they read and write the same `keys.json` through the same `@isocan/core`
@@ -114,17 +115,17 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
   };
 
   /** The stored file, or the refusal it earned (a loose mode, unparseable JSON) — in words that never quote it. */
-  const stored = async (): Promise<{ keys: KeyFile; refused?: string }> => {
+  const stored = async (): Promise<KeyFileContents & { refused?: string }> => {
     try {
-      return { keys: await readKeys(home) };
+      return await readKeyFile(home);
     } catch (err) {
-      return { keys: {}, refused: (err as Error).message };
+      return { keys: {}, share: false, refused: (err as Error).message };
     }
   };
 
-  const rowsNow = async () => {
-    const { keys, refused } = await stored();
-    return { file: keysFile(home), ...(refused ? { refused } : {}), keys: keyRows(keys, env()) };
+  const rowsNow = async (): Promise<KeysListing> => {
+    const { keys, share, refused } = await stored();
+    return { file: keysFile(home), ...(refused ? { refused } : {}), share, keys: keyRows(keys, env()) };
   };
 
   void app.register(async (keys) => {
@@ -141,6 +142,22 @@ export function registerKeyRoutes(app: FastifyInstance, scope: KeyRouteScope): v
 
     keys.get(KEYS_ROUTE, async (req, reply) => {
       if (!gate(req, reply)) return reply;
+      reply.header("Cache-Control", "no-store");
+      return rowsNow();
+    });
+
+    // Owner-only spend's switch (keys phase 3): `{ share: true }` lets
+    // collaborators on canvases this machine holds spend the stored keys.
+    keys.put(KEYS_SHARING_ROUTE, async (req, reply) => {
+      if (!gate(req, reply)) return reply;
+      const share = (req.body as { share?: unknown } | undefined)?.share;
+      if (typeof share !== "boolean") return reply.status(400).send({ error: 'send { "share": true } or { "share": false }', code: "bad-share" });
+      try {
+        await setKeySharing(home, share);
+      } catch (err) {
+        const refused = err instanceof KeyFileRefused;
+        return reply.status(refused ? 409 : 500).send({ error: (err as Error).message, code: refused ? "keys-file-refused" : "keys-write-failed" });
+      }
       reply.header("Cache-Control", "no-store");
       return rowsNow();
     });

@@ -258,3 +258,104 @@ export function copyVariantOps(
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Compare and mix (copy-edit phase 3)
+
+/**
+ * **A source's copy variants**: its `parent=` children that carry a stance —
+ * what *Vary the copy…* and `words vary` made — top to bottom, as they stack
+ * under it. A layout variation made with `/variation` is a child too, but not
+ * a voice, and is left out: the mix is words, so only voices are offered.
+ */
+export function copyVariantsOf(canvas: CanvasContents, sourceId: string): Item[] {
+  return Object.values(canvas.items)
+    .filter((item) => item.properties[VARIANT_PARENT_PROP] === sourceId && item.properties[COPY_STANCE_PROP] !== undefined)
+    .sort((a, b) => a.y - b.y || a.x - b.x || a.id.localeCompare(b.id));
+}
+
+/** One variant, read: its item id, its stance, and its deck. */
+interface CopyMixVariant {
+  itemId: string;
+  stance: string;
+  deck: CopyDeck;
+}
+
+/** One string some voice says differently: the source's words, and each variant's (in the variants' order). */
+interface CopyMixRow {
+  address: string;
+  role: string;
+  source: string;
+  /** Each variant's words for this string — the source's when it kept them. */
+  variants: Array<{ itemId: string; text: string }>;
+}
+
+/**
+ * **The rows of a mix** — one per string that differs in any variant, in the
+ * source's reading order. A variant must still line up with the source string
+ * for string (same addresses, same roles, in order): one made from an older
+ * file, or edited by hand into a different screen, is refused by name rather
+ * than mixed by guesswork — the same rule `applyCopyDeck` holds an address to.
+ */
+export function copyMixRows(source: CopyDeck, variants: readonly CopyMixVariant[]): { ok: true; rows: CopyMixRow[] } | { ok: false; reason: string } {
+  for (const v of variants) {
+    const lined = v.deck.kind === source.kind && v.deck.strings.length === source.strings.length && v.deck.strings.every((s, i) => s.address === source.strings[i]!.address && s.role === source.strings[i]!.role);
+    if (!lined) return { ok: false, reason: `"${v.stance}" no longer lines up with its source string for string — the source changed since it was varied; vary it again` };
+  }
+  const rows: CopyMixRow[] = [];
+  source.strings.forEach((s, i) => {
+    const said = variants.map((v) => ({ itemId: v.itemId, text: v.deck.strings[i]!.text }));
+    if (said.some((v) => v.text !== s.text)) rows.push({ address: s.address, role: s.role, source: s.text, variants: said });
+  });
+  return { ok: true, rows };
+}
+
+/**
+ * **A mix, as one edit set on the source.** `picks` maps a string's address to
+ * the variant whose words it takes (a variant's item id); a string left out —
+ * or picked from the source itself — keeps the source's words. The edits carry
+ * the source's current text, so `applyCopyDeck` (or a module's writer) still
+ * refuses a screen that moved. Refused in words: an address no row has, a
+ * variant that is not one of these, a pick of a voice that kept that string,
+ * and a mix that changes nothing.
+ */
+export function copyMixEdits(
+  source: CopyDeck,
+  variants: readonly CopyMixVariant[],
+  picks: Readonly<Record<string, string>>,
+  sourceId?: string,
+): { ok: true; edits: CopyEdit[] } | { ok: false; reason: string } {
+  const read = copyMixRows(source, variants);
+  if (!read.ok) return read;
+  const rows = new Map(read.rows.map((r) => [r.address, r]));
+  const known = new Map(variants.map((v) => [v.itemId, v.stance]));
+  const edits: CopyEdit[] = [];
+  for (const [address, itemId] of Object.entries(picks)) {
+    if (itemId === sourceId) continue;
+    if (!known.has(itemId)) return { ok: false, reason: `${itemId} is not one of this screen's copy variants — \`isocan lineage <source>\` lists what was made from it` };
+    const row = rows.get(address);
+    if (!row) {
+      const here = source.strings.find((s) => s.address === address);
+      if (!here) return { ok: false, reason: `this screen has no string at ${address} — \`isocan words <source>\` lists the addresses` };
+      return { ok: false, reason: `no voice changed ${address} (${here.role}) — there is nothing to take from "${known.get(itemId)}"` };
+    }
+    const to = row.variants.find((v) => v.itemId === itemId)!.text;
+    if (to === row.source) return { ok: false, reason: `"${known.get(itemId)}" kept ${address} (${row.role}) as it was — pick a voice that changed it` };
+    edits.push({ address, text: row.source, to });
+  }
+  if (edits.length === 0) return { ok: false, reason: "the mix is the source's own words — pick at least one string from a variant" };
+  // In the source's reading order, whatever order the picks came in.
+  const order = new Map(source.strings.map((s, i) => [s.address, i]));
+  return { ok: true, edits: edits.sort((a, b) => order.get(a.address)! - order.get(b.address)!) };
+}
+
+/**
+ * **The ops a mix sends, in order** — `convergeOps`'s shape with a new file in
+ * place of the winner's: the mixed words as one new version of the source,
+ * then every variant to the trash. The caller sends them under ONE group, so
+ * one ⌘Z takes the version back and brings the variants out of the trash.
+ * Both surfaces send exactly these (`isocan words mix`, *Use this mix*).
+ */
+export function copyMixOps(sourceId: string, version: NewVersion, variantIds: readonly string[]): Operation[] {
+  return [{ type: "item.addVersion", itemId: sourceId, version }, ...variantIds.map((itemId): Operation => ({ type: "item.delete", itemId }))];
+}

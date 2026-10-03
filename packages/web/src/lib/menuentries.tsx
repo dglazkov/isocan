@@ -218,9 +218,16 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       disabled: !one || (one.versions.length < 2 && !parentOf(one)),
       run: () => one && void import("../components/VersionCompare.tsx").then((m) => m.openCompare({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
     },
-    // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary`; the dialog loads on the click.
+    // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary` — and, once
+    // it has voices (on the screen or on one of them), all of them side by side to mix (phase 3) — `isocan
+    // words mix`. Both load on the click, through the one lazy file.
     ...(one && version?.mimeType === "text/html"
-      ? [{ label: "Vary the copy…", writes: true, run: () => void import("../components/VaryCopy.tsx").then((m) => m.openVaryCopy({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })) }]
+      ? ["Vary the copy…", "Compare the copy…"].map((label, i) => ({
+          label,
+          writes: !i,
+          disabled: i > 0 && !Object.values(useCanvasStore.getState().canvas!.items).some((o) => o.properties.copyStance !== undefined && (o.id === one.id || o.properties.parent === one.id)),
+          run: () => void import("../components/VaryCopy.tsx").then((m) => (i ? m.openCopyCompare : m.openVaryCopy)({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
+        }))
       : []),
     { separator: "" },
     {

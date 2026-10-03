@@ -8486,6 +8486,117 @@ wordsCommand
   );
 
 /**
+ * **A mix of voices, folded home** — `isocan words mix <source> --pick
+ * <address>=<variant>` (copy-edit phase 3, journey scenes 2 and 6).
+ *
+ * The CLI twin of the compare's *Use this mix*: per string, which variant's
+ * words the source takes (`*=<variant>` takes every string that voice
+ * changed; a later pick overrides it). The picks become ONE edit set on the
+ * source (`copyMixEdits`), written words only — spliced here for plain HTML,
+ * through the module's variant writer for a wireframe, as `choose` lands a
+ * wire variant's file — and the source's copy variants go to the trash, all
+ * under one op group (`copyMixOps`): one undo restores the source's words and
+ * brings every variant back. Choosing a whole voice is `*=<variant>`;
+ * `isocan choose <variant>` still folds that voice's own file.
+ */
+wordsCommand
+  .command("mix <source>")
+  .description("Fold a mix of a screen's copy variants into it — per string, which voice's words — as one version, the variants to the trash, one undo")
+  .option("--pick <picks...>", "<address>=<variant> (an id or its stance), comma-separated or repeated; *=<variant> takes every string that voice changed")
+  .option("--from <file>", "the picks as JSON: { \"<address>\": \"<variant>\" } (or { \"picks\": { … } })")
+  .action(
+    run(async (ref: string, opts: { pick?: string[]; from?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      const label = truncate(item.title || item.id, 24);
+      const current = item.versions.find((v) => v.id === item.currentVersionId);
+      if (!current || current.mimeType !== "text/html") {
+        throw new Error(`"${item.title || item.id}" is ${current ? current.mimeType : "empty"} — \`words mix\` mixes HTML screens`);
+      }
+      const { applyCopyDeck, copyDeck } = await import("@isocan/core/copy-deck");
+      const { COPY_STANCE_PROP, copyMixEdits, copyMixOps, copyMixRows, copyVariantsOf } = await import("@isocan/core/copy-variants");
+      const variants = copyVariantsOf(snapshot.canvas, item.id);
+      if (variants.length === 0) throw new Error(`"${label}" has no copy variants — \`isocan words vary ${item.id}\` writes some`);
+
+      // The picks: --from's object, then each --pick, in the order given.
+      const pairs: Array<[string, string]> = [];
+      if (opts.from) {
+        let raw: unknown;
+        try {
+          raw = JSON.parse(await fs.readFile(opts.from, "utf8"));
+        } catch (error) {
+          throw new Error(`${opts.from}: ${(error as Error).message}`);
+        }
+        const obj = raw && typeof raw === "object" && "picks" in raw ? (raw as { picks: unknown }).picks : raw;
+        if (!obj || typeof obj !== "object" || Array.isArray(obj)) throw new Error(`${opts.from}: picks are { "<address>": "<variant>" }`);
+        for (const [address, v] of Object.entries(obj)) {
+          if (typeof v !== "string") throw new Error(`${opts.from}: ${address} must name a variant`);
+          pairs.push([address, v]);
+        }
+      }
+      for (const one of (opts.pick ?? []).flatMap((s) => s.split(",")).map((s) => s.trim()).filter(Boolean)) {
+        const eq = one.lastIndexOf("=");
+        if (eq <= 0 || eq === one.length - 1) throw new Error(`--pick ${one}: say <address>=<variant>, e.g. t4=${variants[0]!.id}`);
+        pairs.push([one.slice(0, eq), one.slice(eq + 1)]);
+      }
+      if (pairs.length === 0) throw new Error(`which words? --pick <address>=<variant> (\`isocan words ${item.id}\` lists the addresses; its variants: ${variants.map((v) => `${v.id} "${v.properties[COPY_STANCE_PROP]}"`).join(", ")})`);
+
+      // Every deck read before anything is sent.
+      const html = (await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8");
+      const deck = copyDeck(html);
+      const read = [];
+      for (const v of variants) {
+        const at = v.versions.find((x) => x.id === v.currentVersionId);
+        if (!at || at.mimeType !== "text/html") throw new Error(`"${v.title}" is not an HTML screen any more`);
+        read.push({ itemId: v.id, stance: v.properties[COPY_STANCE_PROP]!, deck: copyDeck((await ctx.client.downloadBlob(p.id, at.blobHash)).toString("utf8")) });
+      }
+      const rows = copyMixRows(deck, read);
+      if (!rows.ok) throw new Error(rows.reason);
+      const picks: Record<string, string> = {};
+      for (const [address, vref] of pairs) {
+        // A variant by id, id prefix or stance ("Warm"), among this source's voices first.
+        const v =
+          variants.find((x) => x.id === vref) ??
+          variants.find((x) => x.properties[COPY_STANCE_PROP]!.toLowerCase() === vref.toLowerCase()) ??
+          resolveItem(snapshot, vref);
+        if (address === "*") {
+          for (const row of rows.rows) if (row.variants.find((x) => x.itemId === v.id && x.text !== row.source)) picks[row.address] = v.id;
+        } else picks[address] = v.id;
+      }
+      const mixed = copyMixEdits(deck, read, picks, item.id);
+      if (!mixed.ok) throw new Error(mixed.reason);
+
+      await narrate(ctx, p.id, { activity: { kind: "working", itemId: item.id }, cursor: itemCenter(item), status: `mixing ${read.length} voices into "${label}"…` });
+      let file: string;
+      let visual: ItemVersion["visual"] = current.visual;
+      if (deck.kind === "html") {
+        const out = applyCopyDeck(html, mixed.edits);
+        if (!out.ok) throw new Error(out.reason);
+        file = out.html;
+        visual = await rewordVisualFace(ctx, p.id, current, deck, mixed.edits, label);
+      } else {
+        const writer = CLI_MODULES.find((m) => m.copy?.kind === deck.kind)?.copy?.variant;
+        if (!writer) throw new Error(`"${label}" is a ${deck.kind} screen and no loaded module writes its words`);
+        file = (await writer(html, mixed.edits, "agent", item.id)).html;
+      }
+      const upload = await ctx.client.uploadBlob(p.id, Buffer.from(file, "utf8"), "text/html", current.filename);
+      const versionId = newVersionId();
+      const ops = copyMixOps(item.id, { id: versionId, blobHash: upload.blobHash, mimeType: "text/html", filename: current.filename, size: upload.size, ...(visual ? { visual } : {}) }, read.map((v) => v.itemId));
+      const group = newGroupId();
+      for (const op of ops) await sendOp(ctx, p.id, op, group);
+
+      const took = mixed.edits.map((e) => ({ address: e.address, from: picks[e.address]!, to: e.to }));
+      if (ctx.json) return printJson({ itemId: item.id, kind: deck.kind, versionId, group, picked: took, trashed: read.map((v) => v.itemId) });
+      for (const t of took) console.log(`${t.address}  ← "${read.find((v) => v.itemId === t.from)!.stance}": ${truncate(t.to.replace(/\s+/g, " "), 60)}`);
+      console.log(
+        `${took.length} string${took.length === 1 ? "" : "s"} mixed into "${label}", words only — new version ${versionId} (${item.versions.length + 1} total); ` +
+          `${read.length} variant${read.length === 1 ? "" : "s"} to the trash; \`isocan undo\` takes it all back`,
+      );
+    }),
+  );
+
+/**
  * **An item's version stack, listed** — `version ls <item>`, beside the
  * family's other verbs (#124). `versions <item>` is the older spelling and
  * still works: one action, two doors, and the guide teaches the first.

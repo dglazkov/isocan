@@ -248,10 +248,11 @@ function VersionCompare({ canvasId, actor, itemId, from, to, source, onClose }: 
   );
 }
 
-function Shell({ title, onClose, children }: { title: React.ReactNode; onClose: () => void; children: React.ReactNode }) {
+/** The inspector's frame — also *Compare the copy…*'s (`CopyCompare.tsx`), which draws its screens with `Pane` below. */
+export function Shell({ title, label = "Compare versions", onClose, children }: { title: React.ReactNode; label?: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="modal-backdrop vc-backdrop" onPointerDown={onClose}>
-      <div className="modal-card vc-card" role="dialog" aria-label="Compare versions" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="modal-card vc-card" role="dialog" aria-label={label} onPointerDown={(e) => e.stopPropagation()}>
         <header>
           <b>{title}</b>
           <span className="spacer" />
@@ -279,7 +280,7 @@ function VersionSelect({ item, value, onChange, label }: { item: Item; value: st
 }
 
 /** One side, drawn at the scale that fits BOTH panes — measured, so the two are the same size. */
-function Pane({ caption, face, docW, docH, frame }: { caption: string; face: CompareFace; docW: number; docH: number; frame: (f: HTMLIFrameElement | null) => void }) {
+export function Pane({ caption, face, docW, docH, frame }: { caption: string; face: CompareFace; docW: number; docH: number; frame: (f: HTMLIFrameElement | null) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
   useLayoutEffect(() => {

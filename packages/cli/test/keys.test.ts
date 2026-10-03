@@ -55,6 +55,8 @@ beforeAll(async () => {
     delete process.env[name];
   }
   home = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-cli-keys-"));
+  // Priya is this machine's person: its stored keys pay for her (owner-only spend, keys phase 3).
+  await fsp.writeFile(path.join(home, "identity.json"), JSON.stringify(priya));
   const fake = (async (url: string, init: RequestInit) => {
     asked.push({ url, key: new Headers(init.headers).get("x-api-key") });
     return new Response(JSON.stringify({ id: "msg_acme", type: "message", role: "assistant", model: CLAUDE_TEXT_MODEL, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ heading: "Acme" }) }] }), { status: 200 });
@@ -127,6 +129,38 @@ describe("isocan keys", () => {
     expect(JSON.parse(body)).toEqual({ model: CLAUDE_TEXT_MODEL, value: { heading: "Acme" } });
     expect(asked.at(-1)!.key).toBe(ANTHROPIC);
     expect(body).not.toContain(ANTHROPIC);
+  });
+
+  it("share on lets a collaborator spend the stored key on the running daemon; off refuses them by the owner's name", async () => {
+    const ravi = await mintTestBadge(base);
+    await ravi.speakAs({ id: "usr_ravi", name: "Ravi" });
+    const ask = async () => {
+      const res = await fetch(`${base}${TEXT_ROUTE}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...ravi.headers },
+        body: JSON.stringify({ canvasId: CANVAS, prompt: "Acme's heading.", schema: { type: "object", properties: { heading: { type: "string" } }, required: ["heading"], additionalProperties: false } }),
+      });
+      return { status: res.status, body: (await res.json()) as { code?: string; error?: string } };
+    };
+    const askedBefore = asked.length;
+    const refused = await ask();
+    expect(refused.status).toBe(403);
+    expect(refused.body.code).toBe("text-owner-only");
+    expect(refused.body.error).toMatch(/^Priya's keys pay only for Priya here/);
+    expect(asked.length).toBe(askedBefore);
+
+    const on = await keys(["share", "on"]);
+    expect(on.code, on.stderr).toBe(0);
+    expect(on.stdout).toMatch(/^sharing on/);
+    expect((await ask()).status).toBe(200);
+    expect(asked.length).toBe(askedBefore + 1);
+    expect(JSON.parse((await keys(["ls", "--json"])).stdout)).toMatchObject({ share: true });
+
+    const off = await keys(["share", "off"]);
+    expect(off.stdout).toMatch(/^sharing off/);
+    expect((await ask()).status).toBe(403);
+    expect((await keys(["ls"])).stdout).toMatch(/sharing off/);
+    expect((await keys(["share", "maybe"])).code).toBe(1);
   });
 
   it("ls: set or not, the last four, what uses it — and never the value, in either output", async () => {

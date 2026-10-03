@@ -1605,6 +1605,124 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "copy-mix",
+    /**
+     * **Side by side, then a mix** (copy-edit phase 3, journey scene 2). Vary
+     * a screen into three voices from the web (placeholders: this run's
+     * daemon holds no text model), open *Compare the copy…* from the screen's
+     * menu — the screen and every voice, live, with a choice per string —
+     * take the heading from the second voice and the button from the third,
+     * and *Use this mix*: the screen says exactly those words as one new
+     * version, and the voices are gone. One ⌘Z puts the words back and
+     * brings all three voices back.
+     */
+    what: "Compare the copy… mixes the heading from one voice and the button from another into the screen, the voices cleared, and ⌘Z restores it all",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme copy mix");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-copy-mix-journey", ISOCAN_HARNESS: "test", ISOCAN_TEXT_API_KEY: "" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Mix CLI");
+      const spot = await openSpot(rig, 300, 220);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        return { left: r.left, top: r.top, scale: parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1 };
+      })()`);
+      const wx = Math.round((spot.x + 10 - world.left) / world.scale), wy = Math.round((spot.y + 10 - world.top) / world.scale);
+      const file = path.join(rig.home, "acme-mix.html");
+      const HTML = `<!doctype html><html><head><title>Acme checkout</title></head><body><h1>Review your order</h1><p>Two items from Acme.</p><button>Pay now</button></body></html>`;
+      writeFileSync(file, HTML);
+      const source = runCli("--canvas", id, "add", file, "--title", "Acme mix", "--at", `${wx},${wy}`, "--size", "220x140").itemId;
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      await until(b, `!!document.querySelector(${sel(source)})`, "the screen to arrive on the canvas");
+
+      const mouse = (type, x, y, button = "left") => b.send("Input.dispatchMouseEvent", { type, x, y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+      /** A real right-click on a card's own frame, then a real press on a row by its words. */
+      const fromMenu = async (itemId, label) => {
+        const at = await b.ev(`(() => { const r = document.querySelector(${sel(itemId)}).getBoundingClientRect(); return { x: Math.round(r.left + 3), y: Math.round(r.bottom - 3) }; })()`);
+        await mouse("mouseMoved", at.x, at.y, "none");
+        await mouse("mousePressed", at.x, at.y, "right");
+        await mouse("mouseReleased", at.x, at.y, "right");
+        const row = `[...document.querySelectorAll(".context-menu button")].find((el) => el.textContent.trim().startsWith(${JSON.stringify(label)}))`;
+        await until(b, `!!${row} && !${row}.disabled`, `the item menu, offering "${label}"`, 4000);
+        const r = await b.ev(`(() => { const r = ${row}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        await mouse("mousePressed", r.x, r.y);
+        await mouse("mouseReleased", r.x, r.y);
+      };
+      const voices = () => {
+        const all = runCli("--canvas", id, "ls");
+        return (Array.isArray(all) ? all : all.items ?? []).filter((i) => i.id !== source && String(i.title).startsWith("Acme mix — "));
+      };
+      const words = () => runCli("--canvas", id, "words", source).strings.map((s) => s.text);
+      const original = words();
+
+      // Three voices, from the web.
+      await fromMenu(source, "Vary the copy…");
+      await until(b, `!!document.querySelector(".vary-copy input[type=number]")`, "the Vary the copy dialog");
+      await rig.click(".vary-copy button[type=submit]", "the Write 3 voices button");
+      await until(b, `!document.querySelector(".vary-copy")`, "the dialog to close once the voices land", 15000);
+      let made = [];
+      const deadline = Date.now() + 10000;
+      while (made.length < 3 && Date.now() < deadline) { await sleep(200); made = voices(); }
+      if (made.length !== 3) throw new Error(`expected 3 voices under the screen, found ${made.length}`);
+      await rig.press("Escape");
+      await until(b, `document.querySelectorAll(".item.selected").length === 0`, "the new voices to be let go", 2000);
+
+      // The compare: the screen and all three, live, side by side.
+      await fromMenu(source, "Compare the copy…");
+      await until(b, `document.querySelectorAll("[data-copy-compare] .cc-col iframe").length === 4`, "the screen and its three voices drawn side by side", 15000);
+      const columns = await b.ev(`[...document.querySelectorAll("[data-copy-compare] .cc-col")].map((c) => ({ id: c.dataset.copyColumn, stance: c.querySelector("figcaption")?.textContent ?? "" }))`);
+      if (columns[0].id !== source || columns.length !== 4) throw new Error(`the compare's columns are not the screen then its three voices: ${JSON.stringify(columns)}`);
+      const rows = await b.ev(`[...document.querySelectorAll("[data-copy-compare] .cc-row[data-copy-address]")].map((r) => ({ address: r.dataset.copyAddress, role: r.querySelector(".cc-addr b").textContent }))`);
+      const heading = rows.find((r) => r.role === "heading"), button = rows.find((r) => r.role === "button");
+      if (!heading || !button) throw new Error(`the compare offers no heading and button rows: ${JSON.stringify(rows)}`);
+      // The second and third voices (B and C): neither is the first column a default could fall into.
+      const [, , second, third] = columns;
+      const pick = async (address, itemId, what) => {
+        const radio = `[data-copy-compare] .cc-row[data-copy-address="${address}"] input[value="${itemId}"]`;
+        await b.ev(`document.querySelector(${JSON.stringify(radio)}).scrollIntoView({ block: "center" }), true`);
+        await rig.click(radio, what);
+        await until(b, `document.querySelector(${JSON.stringify(radio)}).checked`, `${what} to be picked`, 2000);
+      };
+      // What the mix should say: the screen's words, with the second voice's heading and the third's button.
+      const said = (who, address) => runCli("--canvas", id, "words", who).strings.find((s) => s.address === address).text;
+      const srcDeck = runCli("--canvas", id, "words", source).strings;
+      const expected = srcDeck.map((s) => (s.address === heading.address ? said(second.id, heading.address) : s.address === button.address ? said(third.id, button.address) : s.text));
+      const versionsBefore = runCli("--canvas", id, "show", source).versions.length;
+      await pick(heading.address, second.id, `the heading from "${second.stance}"`);
+      await pick(button.address, third.id, `the button from "${third.stance}"`);
+      await rig.clickText("[data-copy-compare] .vc-bar button", "Use this mix", "the Use this mix button");
+      await until(b, `!document.querySelector("[data-copy-compare]")`, "the compare to close once the mix lands", 15000);
+
+      // The screen says exactly those words, as one new version; the voices are gone.
+      let now = original;
+      const settle = Date.now() + 10000;
+      while (JSON.stringify(now) !== JSON.stringify(expected) && Date.now() < settle) { await sleep(200); now = words(); }
+      if (JSON.stringify(now) !== JSON.stringify(expected)) throw new Error(`the mix did not land the picked words: ${JSON.stringify(now)}, wanted ${JSON.stringify(expected)}`);
+      const versionsAfter = runCli("--canvas", id, "show", source).versions.length;
+      if (versionsAfter !== versionsBefore + 1) throw new Error(`the mix is ${versionsAfter - versionsBefore} versions, not one`);
+      if (voices().length !== 0) throw new Error(`the voices are still on the canvas after the mix: ${JSON.stringify(voices().map((i) => i.title))}`);
+      const notice = await b.ev(`document.querySelector(".notice, [role=status]")?.textContent ?? ""`);
+
+      // One ⌘Z: the screen's own words, and all three voices back.
+      const MOD = process.platform === "darwin" ? 4 : 2;
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+      let back = now;
+      const undoBy = Date.now() + 10000;
+      while ((JSON.stringify(back) !== JSON.stringify(original) || voices().length !== 3) && Date.now() < undoBy) { await sleep(200); back = words(); }
+      if (JSON.stringify(back) !== JSON.stringify(original)) throw new Error(`⌘Z did not restore the screen's words: ${JSON.stringify(back)}`);
+      if (voices().length !== 3) throw new Error(`⌘Z brought back ${voices().length} voices, not 3`);
+      return { voices: columns.slice(1).map((c) => c.stance), heading: heading.address, button: button.address, mixed: now, notice, undone: back };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**
@@ -2105,7 +2223,7 @@ export const JOURNEYS = [
      * own refusals are `key-routes.test.ts`; this is that a person can reach
      * them, and that the page keeps the write-only promise the routes make.
      */
-    what: "a model key set from the identity menu shows as …abcd, is nowhere in the page, and removes",
+    what: "a model key set from the identity menu shows as …abcd, is nowhere in the page, shares on a tick, and removes",
     async run(rig) {
       const key = "sk-ant-journeyfake-0123456789-abcd";
       await rig.go("/");
@@ -2145,6 +2263,22 @@ export const JOURNEYS = [
       if (leaked) throw new Error("the key is still in the page after it was saved");
       const onDisk = JSON.parse(readFileSync(path.join(rig.home, "keys.json"), "utf8"));
       if (onDisk.anthropic?.key !== key) throw new Error("the panel said set, but this machine's keys.json does not hold the key");
+
+      // Owner-only spend (keys phase 3): sharing starts off, and the box is
+      // what turns it on — in keys.json, beside the key it governs.
+      const shareBox = ".keys-share input[type=checkbox]";
+      await until(rig.b, `!!document.querySelector(${JSON.stringify(shareBox)})`, "the sharing checkbox");
+      if (await rig.b.ev(`document.querySelector(${JSON.stringify(shareBox)}).checked`)) throw new Error("sharing starts on; it should start off");
+      await rig.b.ev(`(document.querySelector(${JSON.stringify(shareBox)}).scrollIntoView({ block: "center" }), true)`);
+      await rig.click(shareBox, "the sharing checkbox");
+      await until(
+        rig.b,
+        `document.querySelector(${JSON.stringify(shareBox)}).checked && /^On:/.test(document.querySelector(".keys-share .share-roster-kind")?.textContent ?? "")`,
+        "the box to read On",
+      );
+      const shared = JSON.parse(readFileSync(path.join(rig.home, "keys.json"), "utf8"));
+      if (shared.shareWithCollaborators !== true) throw new Error("the box says on, but keys.json does not share");
+      if (shared.anthropic?.key !== key) throw new Error("turning sharing on lost the stored key");
 
       await reach(`${row} button`, "Remove…");
       await rig.clickText(`${row} button`, "Remove…", "Anthropic's Remove…");

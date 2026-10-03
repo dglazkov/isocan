@@ -69,14 +69,33 @@ export class Judge {
 
   constructor(private readonly opts: JudgmentOptions = {}) {}
 
+  /** The key and where it came from. A key handed in by the daemon's options counts as the environment's: the operator's, not a person's. */
+  private resolve(): { key: string; source: "env" | "file" } | undefined {
+    if (this.opts.key) {
+      const key = this.opts.key()?.trim();
+      return key ? { key, source: "env" } : undefined;
+    }
+    const found = warnRefusedKeys(() => resolveKey("typesafe", this.opts.keysHome ? { home: this.opts.keysHome } : {}));
+    const key = found?.key.trim();
+    return key ? { key, source: found!.source } : undefined;
+  }
+
   private key(): string | undefined {
-    const raw = (this.opts.key ?? (() => warnRefusedKeys(() => resolveKey("typesafe", this.opts.keysHome ? { home: this.opts.keysHome } : {})?.key)))();
-    return raw?.trim() || undefined;
+    return this.resolve()?.key;
   }
 
   /** Does this home hold a key — can anything be asked here at all. */
   available(): boolean {
     return this.key() !== undefined;
+  }
+
+  /**
+   * Whose key a judgment would spend now (keys phase 3): `file` is this
+   * machine's person's, stored in keys.json, and pays only for them unless
+   * they share it; `env` is the operator's and pays for every editor.
+   */
+  keySource(): "env" | "file" | undefined {
+    return this.resolve()?.source;
   }
 
   /** Spend one of this badge's judgments for the minute, or say it has none left. */

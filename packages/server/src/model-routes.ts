@@ -1,10 +1,14 @@
+import { promises as fs } from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { atLeast, JUDGMENT_BAD_REQUEST, JUDGMENT_MAX_BYTES, JUDGMENT_RATE_LIMITED, JUDGMENT_ROUTE, JUDGMENT_TOO_LARGE, JUDGMENT_UNAVAILABLE, type JudgmentRequest } from "@isocan/core";
+import { atLeast, sameActor, type ActorClaim, JUDGMENT_BAD_REQUEST, JUDGMENT_MAX_BYTES, JUDGMENT_RATE_LIMITED, JUDGMENT_ROUTE, JUDGMENT_TOO_LARGE, JUDGMENT_UNAVAILABLE, type JudgmentRequest } from "@isocan/core";
 import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextRequest } from "@isocan/core/text";
+import { JUDGMENT_OWNER_ONLY, ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
+import { defaultKeysHome, readKeyFile } from "@isocan/core/keystore";
 import type { Engine } from "./engine.ts";
 import { capabilityIn, type ViewOnlyError } from "./grants.ts";
 import type { RouteOptions } from "./http.ts";
 import { Judge } from "./judgment.ts";
+import { identityFile } from "./paths.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
 import { TextModel } from "./text.ts";
 
@@ -24,11 +28,43 @@ interface ModelRouteScope {
   refusals: Refusals;
   admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;
   viewOnly: (canvasId: string) => Promise<ViewOnlyError>;
+  /** A badge's claim rows — the actors it speaks for, which owner-only spend compares with this machine's person. */
+  claimsOf: (badgeId: string) => Promise<ActorClaim[]>;
+}
+
+/** This machine's person: `identity.json` beside the keys.json being spent. Null when the machine has not said who it is. */
+async function personAt(home: string): Promise<{ id: string; name: string } | null> {
+  try {
+    const raw = JSON.parse(await fs.readFile(identityFile(home), "utf8")) as { id?: unknown; name?: unknown };
+    return typeof raw.id === "string" && raw.id && typeof raw.name === "string" ? { id: raw.id, name: raw.name } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The judgment and text routes, on `app`, at the point `registerRoutes` reaches them. */
 export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope): void {
-  const { engine, options, refusals, admit, viewOnly } = scope;
+  const { engine, options, refusals, admit, viewOnly, claimsOf } = scope;
+  /**
+   * **Owner-only spend** (keys phase 3; `docs/projects/keys/design.md`). A key
+   * from keys.json is this machine's person's own, and pays only for them:
+   * the request's badge must claim an actor that resolves, through
+   * `actor.join`, to the `identity.json` beside that keys.json — unless the
+   * owner turned sharing on (`isocan keys share on`, or the switch in *Model
+   * keys*). A key from the environment is the operator's and is not asked
+   * this: a hosted home and CI serve every editor, as before. Read per
+   * request, like the key, so turning sharing on needs no restart.
+   *
+   * The answer is the owner's name when the badge is not theirs, else null.
+   */
+  const notTheOwners = async (req: FastifyRequest, keysHome: string): Promise<{ owner: string | null } | null> => {
+    const shared = await readKeyFile(keysHome).then((file) => file.share, () => false);
+    if (shared) return null;
+    const person = await personAt(keysHome);
+    if (!person) return { owner: null };
+    const [joined, claims] = await Promise.all([engine.actorJoins(), claimsOf(req.badge!.badgeId)]);
+    return claims.some((row) => sameActor(joined, row.actorId, person.id)) ? null : { owner: person.name };
+  };
   /**
    * **`POST /api/judgment` — a typed question, answered with this home's key**
    * (`@isocan/core`'s `judgment.ts`; `judgment.ts` here holds the key and the
@@ -40,7 +76,8 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
    * judgment is spent on a canvas only by someone who may edit it. In order:
    * the size (a refusal that costs nothing), the shape, the takedown and the
    * refused badge, the admission and the edit rung, then — for a canvas homed
-   * elsewhere — that home's own judgment, then the key and the badge's budget.
+   * elsewhere — that home's own judgment, then whose key it is (owner-only
+   * spend), then the key and the badge's budget.
    */
   const judge = new Judge(options.judgment ?? {});
   app.post(JUDGMENT_ROUTE, { bodyLimit: 1024 * 1024 }, async (req, reply) => {
@@ -70,11 +107,17 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     // A canvas homed elsewhere is judged there — with that home's key, against
     // that home's budget — unless this machine holds a key of its own.
     const home = options.homes?.for(canvasId) ?? null;
-    if (home && !judge.available()) return home.personalRequest("POST", JUDGMENT_ROUTE, { canvasId, ...question });
+    const source = judge.keySource();
+    // The machine's person's own key, asked for by someone else with sharing
+    // off: theirs to spend, not this badge's (owner-only spend). A canvas
+    // homed elsewhere is asked there instead, under the home's own rule.
+    const refused = source === "file" ? await notTheOwners(req, options.judgment?.keysHome ?? defaultKeysHome()) : null;
+    if (home && (!source || refused)) return home.personalRequest("POST", JUDGMENT_ROUTE, { canvasId, ...question });
     // No judgment for a canvas that is not here: the door's test admits by
     // badge, and a canvas nobody holds has no editors to spend on.
     if (!home) await engine.getSnapshot(canvasId);
-    if (!judge.available()) {
+    if (refused) return reply.status(403).send({ error: ownerOnlySentence(refused.owner), code: JUDGMENT_OWNER_ONLY });
+    if (!source) {
       return reply.status(503).send({ error: "this home has no judge — nothing can be asked here (the innkeeper sets TYPESAFE_API_KEY, or `isocan keys set typesafe` on the machine it runs on)", code: JUDGMENT_UNAVAILABLE });
     }
     if (!judge.take(req.badge!.badgeId)) {
@@ -91,7 +134,7 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
    * a browser. The same door in the same order, for the same reasons: the
    * size, the shape, the takedown and the refused badge, the admission and
    * the edit rung, then — for a canvas homed elsewhere — that home's own text
-   * model, then the key and the badge's budget.
+   * model, then whose key it is, then the key and the badge's budget.
    */
   const textModel = new TextModel(options.text ?? {});
   app.post(TEXT_ROUTE, { bodyLimit: 1024 * 1024 }, async (req, reply) => {
@@ -118,10 +161,14 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     // A canvas homed elsewhere is written for there — with that home's key,
     // against that home's budget — unless this machine holds a key of its own.
     const home = options.homes?.for(canvasId) ?? null;
-    if (home && !textModel.available()) return home.personalRequest("POST", TEXT_ROUTE, { canvasId, ...asked });
+    const source = textModel.keySource();
+    // The judgment route's owner-only rule, for words.
+    const refused = source === "file" ? await notTheOwners(req, options.text?.keysHome ?? defaultKeysHome()) : null;
+    if (home && (!source || refused)) return home.personalRequest("POST", TEXT_ROUTE, { canvasId, ...asked });
     // Nothing is written for a canvas that is not here.
     if (!home) await engine.getSnapshot(canvasId);
-    if (!textModel.available()) {
+    if (refused) return reply.status(403).send({ error: ownerOnlySentence(refused.owner), code: TEXT_OWNER_ONLY });
+    if (!source) {
       return reply.status(503).send({ error: "this home has no text model — words can't be written here (the innkeeper sets ISOCAN_TEXT_API_KEY, or `isocan keys set anthropic` on the machine it runs on)", code: TEXT_UNAVAILABLE });
     }
     if (!textModel.take(req.badge!.badgeId)) {

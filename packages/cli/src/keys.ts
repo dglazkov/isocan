@@ -11,7 +11,8 @@ import { printJson, printTable } from "./output.ts";
  * `~/.isocan/keys.json` (0600) holds one key per provider; the daemon's judge
  * and text model, the CLI's own Jev and text generators and the voice harness
  * read it per call, with the environment winning. This verb is the file's
- * hands: `ls`, `set`, `rm`, `test`. It needs no daemon — the file is this
+ * hands: `ls`, `set`, `rm`, `test`, and `share` (keys phase 3: whether
+ * collaborators may spend them). It needs no daemon — the file is this
  * machine's, and a daemon that is running picks a change up on its next call.
  *
  * **Write-only.** Nothing here prints a key: `ls` shows the last four, `test`
@@ -80,10 +81,13 @@ function promptHidden(question: string): Promise<string> {
   });
 }
 
+const SHARING_OFF = "sharing off: the stored keys pay only for you (and identities joined with you) — `isocan keys share on` lets collaborators on canvases this machine holds use them";
+const SHARING_ON = "sharing on: collaborators who may edit a canvas this machine holds spend the stored keys too — `isocan keys share off` keeps them yours";
+
 export function registerKeys(program: Command): void {
   const keys = program
     .command("keys")
-    .description("Model keys on this machine (~/.isocan/keys.json): ls, set, rm, test — never shown, env wins")
+    .description("Model keys on this machine (~/.isocan/keys.json): ls, set, rm, test, share — never shown, env wins")
     .addHelpText(
       "after",
       `
@@ -96,6 +100,10 @@ The environment wins: TYPESAFE_API_KEY, ISOCAN_TEXT_API_KEY (with
 ISOCAN_TEXT_PROVIDER / ISOCAN_TEXT_MODEL) and GEMINI_API_KEY override the
 file, so CI and hosted homes are unchanged. \`ls\` says when one does.
 
+Stored keys are yours: the daemon spends them only for you (and identities
+joined with you), and refuses a collaborator by name — unless you run
+\`isocan keys share on\`. An environment key serves every editor, as before.
+
 A key is never printed: \`ls\` shows the last four characters. \`set\` reads
 the key from stdin when piped, or a hidden prompt — never from the command
 line, which your shell keeps in its history.
@@ -103,7 +111,8 @@ line, which your shell keeps in its history.
   isocan keys                                  # the same as ls
   pbpaste | isocan keys set anthropic          # or: isocan keys set anthropic, then paste
   isocan keys test anthropic                   # one cheap call: accepted, or why not
-  isocan keys rm gemini`,
+  isocan keys rm gemini
+  isocan keys share on                         # collaborators may spend them too (off by default)`,
     );
 
   keys
@@ -113,16 +122,17 @@ line, which your shell keeps in its history.
       const k = await load();
       const file = k.keysFile(home());
       let stored: KeyFile = {};
+      let share = false;
       let refused: string | null = null;
       try {
-        stored = k.readKeysSync(home());
+        ({ keys: stored, share } = k.readKeyFileSync(home()));
       } catch (err) {
         refused = (err as Error).message;
       }
       // core's rows — the same ones `GET /api/keys` serves the settings area.
       const rows = k.keyRows(stored, process.env);
       if (cmd.optsWithGlobals().json) {
-        printJson({ file, ...(refused ? { refused } : {}), keys: rows });
+        printJson({ file, ...(refused ? { refused } : {}), share, keys: rows });
       } else {
         printTable(
           rows.map((r) => ({
@@ -134,6 +144,7 @@ line, which your shell keeps in its history.
           })),
         );
         console.log(`\n${file}`);
+        console.log(share ? SHARING_ON : SHARING_OFF);
       }
       if (refused) {
         console.error(refused);
@@ -177,6 +188,18 @@ line, which your shell keeps in its history.
       console.log(removed ? `${provider}: removed` : `${provider}: no stored key — nothing to remove`);
       const env = k.envKeyFor(provider, process.env);
       if (env) console.log(`note: ${env.variable} is still set in this environment, so ${provider} still has a key here`);
+    });
+
+  keys
+    .command("share <on|off>")
+    .description("Whether collaborators on canvases this machine holds may spend its stored keys (default off: only you)")
+    .action(async (raw: string, _opts: unknown, cmd: Command) => {
+      const said = raw.trim().toLowerCase();
+      if (said !== "on" && said !== "off") throw new Error(`\`isocan keys share\` takes on or off — not "${raw}"`);
+      const k = await load();
+      const file = await k.setKeySharing(home(), said === "on");
+      if (cmd.optsWithGlobals().json) return printJson({ share: said === "on", file });
+      console.log(said === "on" ? SHARING_ON : SHARING_OFF);
     });
 
   keys

@@ -70,7 +70,7 @@ export async function varyCopy(
   const generate = deps.generate ?? postText;
   const placeholder: TextGenerator = { name: PLACEHOLDER, generateJson: async <T>() => placeholderCopyVariants(deck, ask.n) as T };
   const generator = homeTextOrStub(homeTextGenerator((words) => generate(words), canvasId), placeholder, () =>
-    setNotice("This home has no text model (text-unavailable) — these voices are placeholder words, not written copy. One undo takes them back."),
+    setNotice("This home has no text model (text-unavailable) — these voices are placeholder words, not written copy. Compare the copy… on the screen mixes them; one undo takes them back."),
   );
   const { prompt, schema } = copyVariantsRequest(deck, ask.n, ask.brief);
   const raw = await generator.generateJson(prompt, schema);
