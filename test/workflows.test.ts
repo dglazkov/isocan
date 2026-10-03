@@ -152,6 +152,26 @@ describe("the sharded gate covers the whole suite", () => {
     expect(publish).not.toMatch(/git push[^\n]*--force/);
   });
 
+  it("lets verification overlap across commits and serializes only publishers", () => {
+    const workflow = read("release.yml").split("\n").filter((line) => !/^\s*#/.test(line)).join("\n");
+    const [verification, publish] = workflow.split("  publish:");
+    expect(verification).not.toMatch(/concurrency:/);
+    expect(publish).toMatch(/needs: \[suite, checks\]/);
+    expect(publish).toContain("if: github.ref == 'refs/heads/main'");
+    expect(publish).toMatch(/concurrency:\s+group: release\s+cancel-in-progress: false\s+queue: max/);
+  });
+
+  it("checks fresh source ordering under the publish lock before either ref can move", () => {
+    const publish = read("release.yml").split("  publish:")[1]!;
+    const order = publish.indexOf('bash scripts/release-order.sh "$GITHUB_SHA" >> "$GITHUB_OUTPUT"');
+    expect(order).toBeGreaterThan(-1);
+    expect(publish.indexOf("- name: Advance `green`")).toBeGreaterThan(order);
+    expect(publish).toMatch(/name: Advance `green`[^\n]*\n\s+if: steps.order.outputs.promote == 'true'/);
+    expect(publish).toMatch(/uses: actions\/setup-node@[^\n]*\n\s+if: steps.order.outputs.publish == 'true'/);
+    expect(publish).toMatch(/run: npm ci --ignore-scripts\n\s+if: steps.order.outputs.publish == 'true'/);
+    expect(publish).toMatch(/name: Build and publish the release branch\n\s+if: steps.order.outputs.publish == 'true'/);
+  });
+
   it("keeps a profile from every shard, including failures", () => {
     for (const workflow of runsGate) {
       const text = read(workflow);

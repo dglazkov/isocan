@@ -19,8 +19,9 @@
  * `main` stays sources-only. Everything that hands out an install spec points
  * at `#release` (INSTALL_SPEC in packages/cli/src/main.ts).
  *
- * CI runs this on every commit pushed to main
- * (.github/workflows/release.yml), which is how the branch stays current.
+ * CI tests every commit pushed to main, then runs this under a publication
+ * lock unless a newer tested/released source has superseded it. The source
+ * ancestry check is scripts/release-order.sh (.github/workflows/release.yml).
  * By hand, when you want a release before CI gets there:
  *
  *   npm run release              # build, commit onto release, push

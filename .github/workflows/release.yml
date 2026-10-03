@@ -1,4 +1,4 @@
-# Every commit on main becomes a build on `release` — the branch installs come
+# Every commit on main is tested for `release` — the branch installs come
 # from (`github:dglazkov/isocan#release`). A change nobody releases is a change
 # nobody can install, and remembering to run `npm run release` by hand is a
 # thing to forget; scripts/release.mjs explains why the branch has to exist.
@@ -9,12 +9,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# The branch is pushed, never force-pushed, so two runs racing would leave the
-# second one non-fast-forward. Queue them rather than cancel: every commit gets
-# its release, in order.
-concurrency:
-  group: release
-  cancel-in-progress: false
+# Verification runs concurrently across commits. Only publication takes the
+# release lock below; a slow earlier suite must not hold up a newer gate.
 
 permissions:
   contents: write # push the release branch and advance `green`
@@ -162,7 +158,16 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: [suite, checks]
+    if: github.ref == 'refs/heads/main'
     timeout-minutes: 15
+    # Keep the old group name so an in-flight run of the former workflow also
+    # excludes this publisher during rollout. Never cancel a writer midway.
+    # Queue all ready publishers (up to GitHub's 100-job bound); arrival order
+    # is NOT source order, so release-order.sh rejects stale/divergent sources.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@v5
         with:
@@ -173,11 +178,9 @@ jobs:
       # Pure git, and it needs no toolchain — so it runs before the setup
       # rather than in the middle of it, which is what lets the setup be one
       # shared thing.
-      - name: Fetch the refs the release commit is built from
-        run: |
-          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          git fetch --no-tags origin +refs/heads/release:refs/remotes/origin/release \
-            || echo "no release branch yet — this run creates it"
+      - name: Check source ordering against the current remote refs
+        id: order
+        run: bash scripts/release-order.sh "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
       # ---- the gate the dev home deploys behind (phase 10.5) ----
       #
@@ -201,14 +204,11 @@ jobs:
       # independent by design, so a failure to publish the CLI must not also
       # stop the home from getting a fix.
       #
-      # `--ff-only` and non-fatal. Runs are queued in order by the concurrency
-      # group above, so the ordinary case fast-forwards. A refusal means green
-      # already points at something this commit is not an ancestor of, which is
-      # a re-run of an older commit — and quietly dragging the deployed home
-      # BACKWARDS is the one outcome worth failing to avoid. It logs and moves
-      # on rather than failing the run, because the release below is still
-      # owed.
+      # The ordering check skips a superseded commit or a rerun that is already
+      # green. A plain push is still the final guard if an external writer has
+      # moved the ref since that check; only an ordering refusal is non-fatal.
       - name: Advance `green` — what the dev home is allowed to deploy
+        if: steps.order.outputs.promote == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -243,12 +243,15 @@ jobs:
       # dependencies, but no emulator. release.mjs builds the web app itself;
       # skipping prepare here avoids building it twice on the publish runner.
       - uses: actions/setup-node@v5
+        if: steps.order.outputs.publish == 'true'
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
+        if: steps.order.outputs.publish == 'true'
 
       - name: Build and publish the release branch
+        if: steps.order.outputs.publish == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

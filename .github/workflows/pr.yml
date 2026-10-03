@@ -28,10 +28,10 @@ on:
 
 # **Cancel, do not queue — the opposite of `release.yml`, on purpose.**
 #
-# There, every commit gets its release in order, so runs queue. Here only the
-# newest commit on a branch is interesting: a run against a commit somebody has
-# already pushed past is spending eight minutes to answer a question nobody is
-# asking any more.
+# There, every commit is tested and only publishers queue, with stale builds
+# skipped. Here only the newest commit on a branch is interesting: a run
+# against a commit somebody has already pushed past answers a question nobody
+# is asking any more.
 concurrency:
   group: pr-${{ github.head_ref || github.ref }}
   cancel-in-progress: true

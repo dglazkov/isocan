@@ -437,6 +437,28 @@ and the typecheck/other checks in parallel. If all pass, it fast-forwards
 `green` to that commit before installing the CLI publication toolchain.
 Cloud Build deploys `dev.isocan.io` from `green`.
 
+Verification also runs concurrently **across commits**. Only the `publish`
+job holds the `release` concurrency group, after its own full gate passes.
+Ready publishers queue without canceling a running writer (GitHub's
+[`queue: max`](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
+up to 100 waiting jobs). The runner pool can still impose a
+capacity queue; this removes the workflow's own wait behind another commit's
+tests. It uses more runners concurrently rather than skipping older suites.
+
+Completion order is not commit order. Under the publication lock,
+[`release-order.sh`](../scripts/release-order.sh) fetches current `main`,
+`green` and `release` refs and compares source ancestry. An older passing run
+cannot replace a newer tested or released CLI. An already-green commit can
+retry failed CLI publication; an already-released commit can still advance
+`green` without rebuilding. A newer untested commit on `main` does not prevent
+the current passing commit from shipping. Divergent histories or unreadable
+remote refs fail the job. A missing optional ref bootstraps the first release.
+
+This needs more than the final plain pushes: each generated release has the
+previous release as its first parent and its source as its last parent, so a
+fast-forward can still ship an older source tree. Source ancestry is the
+guard against that rollback; the lock prevents two publishers racing it.
+
 `npm run test:ci` is `vitest run` with every anti-skip switch set — the list
 lives in [`scripts/switches.mjs`](../scripts/switches.mjs) and nowhere else, so
 `release.yml` and `pr.yml` cannot come to disagree about what CI tests. Three

@@ -512,7 +512,7 @@ describe("installable straight from git", () => {
     }
   });
 
-  it("releases from CI on every commit, with the history a push needs", async () => {
+  it("tests every commit for release, with the history and publication lock a push needs", async () => {
     // Nobody remembers to release by hand, and an unreleased commit is one
     // nobody can install. Two things the workflow cannot get wrong: full
     // history (the release commit names two parents by sha, and a shallow
