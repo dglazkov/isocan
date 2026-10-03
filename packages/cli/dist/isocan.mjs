@@ -10518,7 +10518,7 @@ var agent_guide_default10 = '## Wireframes\n\nA wireframe screen is **a spec dra
 // packages/modules/wireframe/src/cli.ts
 function dispatch(host, subcommand) {
   return host.run(async (...args) => {
-    const { executeWire } = await import("./cli-runtime-7ABIIQG5.mjs");
+    const { executeWire } = await import("./cli-runtime-BJRKSQCQ.mjs");
     await executeWire(host, subcommand, args);
   });
 }
@@ -10562,9 +10562,9 @@ var wireframeCli = {
   // so this module writes them — loaded only when somebody applies a deck.
   copy: {
     kind: "wire",
-    apply: async (...args) => (await import("./flesh-cli-CXPIJKA6.mjs")).wireCopyWriter.apply(...args),
+    apply: async (...args) => (await import("./flesh-cli-LKSWVOH3.mjs")).wireCopyWriter.apply(...args),
     // `isocan words vary <screen>`: each voice's file is the spec with its words, rendered (`copy-variant.ts`).
-    variant: async (...args) => (await import("./copy-variant-YE44ON3N.mjs")).wireCopyVariant(...args)
+    variant: async (...args) => (await import("./copy-variant-A7V4GKWC.mjs")).wireCopyVariant(...args)
   }
 };
 
@@ -17635,7 +17635,7 @@ var wordsCommand = program2.command("words <item>").description("A screen's word
     if (!current || current.mimeType !== "text/html") {
       throw new Error(`"${item.title || item.id}" is ${current ? current.mimeType : "empty"} \u2014 \`words\` reads HTML screens`);
     }
-    const { applyCopyDeck, copyDeck, parseCopyEdits } = await import("./copy-deck-3HTE6VU3.mjs");
+    const { applyCopyDeck, copyDeck, parseCopyEdits } = await import("./copy-deck-7FGPU6VY.mjs");
     const html = (await ctx.client.downloadBlob(p.id, current.blobHash)).toString("utf8");
     const deck = copyDeck(html);
     const label = truncate(item.title || item.id, 24);
@@ -17702,7 +17702,7 @@ var wordsCommand = program2.command("words <item>").description("A screen's word
 );
 async function rewordVisualFace(ctx, canvasId, current, deck, edits, label) {
   if (!current.visual || current.visual.blobHash === current.blobHash || current.visual.mimeType !== "text/html") return current.visual;
-  const { applyCopyDeckToFace } = await import("./copy-deck-3HTE6VU3.mjs");
+  const { applyCopyDeckToFace } = await import("./copy-deck-7FGPU6VY.mjs");
   const visualHtml = (await ctx.client.downloadBlob(canvasId, current.visual.blobHash)).toString("utf8");
   const visualOut = applyCopyDeckToFace(deck, visualHtml, edits);
   if (!visualOut.ok) throw new Error(`"${label}": ${visualOut.reason}`);
@@ -17719,7 +17719,7 @@ wordsCommand.command("vary <item>").description("N copy variants of a screen \u2
     if (!current || current.mimeType !== "text/html") {
       throw new Error(`"${item.title || item.id}" is ${current ? current.mimeType : "empty"} \u2014 \`words vary\` varies HTML screens`);
     }
-    const { applyCopyDeck, copyDeck } = await import("./copy-deck-3HTE6VU3.mjs");
+    const { applyCopyDeck, copyDeck } = await import("./copy-deck-7FGPU6VY.mjs");
     const { MAX_COPY_VARIANTS, checkCopyVariants, copyVariantOps, copyVariantsRequest, placeholderCopyVariants } = await import("./copy-variants-4QPTQVZS.mjs");
     const n = opts.n === void 0 ? void 0 : Number(opts.n);
     if (n !== void 0 && (!Number.isInteger(n) || n < 1 || n > MAX_COPY_VARIANTS)) throw new Error(`--n must be a whole number from 1 to ${MAX_COPY_VARIANTS} \u2014 got: ${opts.n}`);

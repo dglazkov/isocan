@@ -876,21 +876,61 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
     /** **Rows in an item's right-click menu** — only once the module's lazy half is loaded (`ModuleMenuFacts`). */
     menu?: (facts: ModuleMenuFacts) => readonly ModuleMenuRow[];
     /**
-     * **Who writes a copy variant of a screen this module draws** (copy-edit
-     * phase 2, module API 0.2.5). A screen whose copy deck has this `kind`
-     * (`"wire"`) keeps its words somewhere other than its HTML, so *Vary the
-     * copy…* hands this the screen's HTML and one voice's edits and gets back
-     * the variant's file and the properties a screen of this kind wears. Pure:
-     * nothing is sent — the shell adds every variant the same way
-     * (`copyVariantOps`). The CLI's twin is `CliModule.copy.variant`.
+     * **Who writes the words of a screen this module draws** (copy-edit
+     * phases 1–2, module API 0.2.5) — `WebCopyWriter`. A screen whose copy deck
+     * has this `kind` (`"wire"`) keeps its words somewhere other than its HTML.
+     * Read only once the lazy half is loaded.
      */
-    copy?: {
-        kind: string;
-        variant: (html: string, edits: readonly CopyEdit[], by: string, sourceId: string) => Promise<{
-            html: string;
-            properties: Record<string, string>;
-        }>;
-    };
+    copy?: WebCopyWriter;
+}
+/**
+ * **Who writes a screen's words from the browser, when the screen is not
+ * just HTML** — one member, two doors into the same words.
+ *
+ * - `variant` (copy-edit phase 2): *Vary the copy…* hands it the screen's
+ *   HTML and one voice's edits and gets back the variant's file and the
+ *   properties a screen of this kind wears. Pure: nothing is sent — the
+ *   shell adds every variant the same way (`copyVariantOps`). The CLI's twin
+ *   is `CliModule.copy.variant`.
+ * - `at` and `apply` (the stage's in-place text edit): the stage splices
+ *   plain HTML itself, but a wireframe's words are its embedded spec's and a
+ *   splice would be undone by the next re-render, so `at` names the word a
+ *   double-clicked node draws and `apply` writes the edits as one version in
+ *   one op group (one undo) — the twin of `CliModule.copy.apply`. Optional:
+ *   without them the stage refuses to edit that kind in place rather than
+ *   splice it. `html` is the screen with the person's edits already spliced
+ *   in: a module whose file is its own render draws from the new words; one
+ *   whose file was crafted by hand keeps those bytes and carries the new
+ *   words in its spec.
+ */
+export interface WebCopyWriter {
+    /** The `CopyDeck.kind` this writes: `"wire"`. */
+    kind: string;
+    /** One voice's file for *Vary the copy…*, and the properties a screen of this kind wears. */
+    variant: (html: string, edits: readonly CopyEdit[], by: string, sourceId: string) => Promise<{
+        html: string;
+        properties: Record<string, string>;
+    }>;
+    /** Which word a rendered text node of `html` draws — its section's `data-sec`, nearest `data-wf` and text — or why it is not one word of its own. Async so a module can fetch the reading half when asked. */
+    at?: (html: string, place: {
+        slot?: string;
+        wf?: string;
+        text: string;
+    }) => Promise<{
+        ok: true;
+        address: string;
+        text: string;
+    } | {
+        ok: false;
+        reason: string;
+    }>;
+    /** Write in-place edits to the screen's words as one version in one op group. */
+    apply?: (host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas"> & Partial<Pick<DialogHost, "viewer">>, canvasId: string, itemId: string, edits: readonly CopyEdit[], opts: {
+        by: string;
+        html?: string;
+    }) => Promise<{
+        changed: string[];
+    }>;
 }
 /**
  * **What a module's item-menu rows are handed** (wireframes, 24 Sep 2026:
@@ -1009,7 +1049,11 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  *
  * **0.2.4 → 0.2.5 on 2 Oct 2026**, an addition: `WebModule.copy`, a writer a
  * module MAY provide for its screens' copy variants (copy-edit phase 2),
- * read only by *Vary the copy…*. A module built for `^0.2.4` still loads.
+ * read by *Vary the copy…* — and, the same day under the same member, its
+ * optional `at`/`apply`, read by the stage's in-place text edit. Not a
+ * second bump: both landed before anything was built against 0.2.5, and
+ * both are optional parts a module provides, never one it is handed. A
+ * module built for `^0.2.4` still loads.
  */
 export declare const MODULE_API_VERSION = "0.2.5";
 /**

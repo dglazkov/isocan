@@ -36,8 +36,8 @@
  *   wire deck is written by the wireframe module (it re-renders), never
  *   spliced here.
  *
- * Core cannot import the wireframe module, so the word walk is repeated here
- * the way `diff.ts` repeats the marker; `packages/modules/wireframe/test/copy-deck.test.ts`
+ * Core cannot import the wireframe module, so the word walk is repeated (in
+ * `wire-words.ts`) the way `diff.ts` repeats the marker; `packages/modules/wireframe/test/copy-deck.test.ts`
  * holds this deck's paths equal to `wordsOf` on rendered screens.
  */
 type CopyRole = "heading" | "body" | "button" | "link" | "label" | "placeholder" | "alt" | "error" | "empty" | "nav";
