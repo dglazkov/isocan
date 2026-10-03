@@ -1,4 +1,5 @@
 import type { CopyDeck, CopyEdit } from "./copy-deck.js";
+import { type CopyVoice } from "./copy-voice.js";
 import type { JsonSchema } from "./jev.js";
 import type { CanvasContents, Item } from "./model.js";
 import type { NewVersion, Operation } from "./ops.js";
@@ -53,10 +54,10 @@ export declare const MAX_COPY_VARIANTS = 6;
  * The one question N voices are: a prompt naming every string with its role
  * and address, and a schema that asks for exactly `n` variants whose edits
  * can only name addresses the deck has. `brief` is what the person asked for
- * ("shorter, for a first-time buyer"); `voice` is the product's own (a
- * DESIGN.md Voice section, phase 4) — both optional.
+ * ("shorter, for a first-time buyer"); `voice` is the product's own (the
+ * governing DESIGN.md's Voice section, `copy-voice.ts`) — both optional.
  */
-export declare function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, voice?: string): {
+export declare function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, voice?: CopyVoice | null): {
     prompt: string;
     schema: JsonSchema;
 };
@@ -65,11 +66,12 @@ export declare function copyVariantsRequest(deck: CopyDeck, n: number, brief?: s
  * `{ variants: [{ stance, why, edits: [{ address, to }] }] }`, exactly `n` of
  * them when `n` is given, distinct stances of at most five words, a why, and
  * edits that name strings the deck has, keep each string inside its role's
- * shape, and change at least one word. Refused in words, naming the variant
- * and the string. The edits come back as `CopyEdit`s carrying the deck's
+ * shape, and change at least one word — and, given the product's `voice`,
+ * write no banned glossary form or avoided word the string did not already
+ * say (phase 4). Refused in words, naming the variant and the string. The edits come back as `CopyEdit`s carrying the deck's
  * current text — the check `applyCopyDeck` refuses a moved screen by.
  */
-export declare function checkCopyVariants(deck: CopyDeck, raw: unknown, n?: number): {
+export declare function checkCopyVariants(deck: CopyDeck, raw: unknown, n?: number, voice?: CopyVoice | null): {
     ok: true;
     variants: CopyVariant[];
 } | {

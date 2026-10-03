@@ -1,7 +1,8 @@
 # Talk to the canvas (`@isocan/talk`)
 
 A web module that puts a voice on the canvas: a **floating mic button** that
-opens a Gemini Live session from this browser with **your own API key**, and
+opens a Gemini Live session from this browser with a **one-use token** the
+home mints from its Gemini key, and
 turns spoken requests into the same operations a click sends — wearing your
 identity, your undo, and the same oplog everything else writes.
 
@@ -11,29 +12,31 @@ It is an experiment: off until you switch it on in **Settings → Experiments �
 ## The two doors
 
 - **The floating mic** (bottom right of the canvas) is the *talking*. One press
-  starts a session when a key is stored, one press ends it. While live, the
+  starts a session, one press ends it. While live, the
   button pulses, two level bars show your voice and the model's, and the last
   words float above it — and all of it is gone when the turn is. Nothing pops
   up.
-- **⌘K → "Configure voice"** is the *configuration*: the API key, the model
-  name, and a test listen with the full captions. It only needs to open on
-  first run, or when you want to change something.
+- **⌘K → "Configure voice"** is the *configuration*: the model name, and a
+  test listen with the full captions.
 
-**Ctrl-click** (or ⌘-click) on the floating mic opens the configuration even
-when a key is stored — the way to switch models without losing the key.
+**Ctrl-click** (or ⌘-click) on the floating mic opens the configuration — the
+way to switch models.
 
 `isocan voice` is the terminal half: it prints where the button is and where
 this canvas lives. It writes nothing and holds no key.
 
 ## How it works
 
-1. **The key lives in this browser** — `localStorage` under `isocan:voice:key`,
-   per origin. It is never sent to the daemon, never written to the canvas,
-   never logged. You are billed for what you say, and the key travels nowhere
-   you did not put it.
+1. **The key lives with the home, not the browser** (keys phase 4). The
+   Gemini key is the one in *Model keys…* (or `isocan keys set gemini`, or
+   `GEMINI_API_KEY`) on the machine that holds the canvas. Each session asks
+   `POST /api/voice/token` for a one-use Live token — an editor of the canvas
+   only, and a stored key pays only for its owner unless they share it — and
+   the browser never sees the key. A key an older build left in
+   `localStorage` (`isocan:voice:key`) is removed on first open, and said.
 2. **The browser opens the Live socket itself** — `wss://generativelanguage.
-   googleapis.com/…/BidiGenerateContent`, direct from the page. The dev server
-   and the daemon are not in the loop.
+   googleapis.com/…/BidiGenerateContentConstrained?access_token=…`, direct
+   from the page with that token. The daemon mints; it does not relay audio.
 3. **The session is handed the canvas it is standing on** — the setup message
    carries the snapshot ("items with their ids — echo them in tool calls")
    plus the 47 tool declarations, in the one wording the standing voice

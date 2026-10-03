@@ -30,8 +30,9 @@ interface KeyProviderInfo {
  * **The registry.** Features, not variables: "used for: copy, wireframe names"
  * rather than `ISOCAN_TEXT_API_KEY`. Agents an rc summons read their own
  * harness's variables (`ANTHROPIC_*`, `OPENAI_*`, `GEMINI_API_KEY`, passed
- * through by prefix in `cli/src/acp.ts`); handing them the stored keys is
- * phase 4, so the agents line is not here yet.
+ * through by prefix in `cli/src/acp.ts`); since phase 4, when the owner
+ * turns it on (`isocan keys agents on`), a stored key the rc's own
+ * environment lacks is handed to them under that variable (`agentKeyEnv`).
  */
 export declare const KEY_PROVIDER_INFO: Record<KeyProvider, KeyProviderInfo>;
 /** The text-model vendors. The same two `jev.ts`'s generators speak to. */
@@ -134,6 +135,16 @@ export declare function keyRows(stored: Partial<Record<KeyProvider, StoredKey>>,
 export declare const KEYS_SHARE_FIELD = "shareWithCollaborators";
 /** `PUT` `{ share: boolean }` here turns sharing on or off — `isocan keys share on|off`, in the settings area. */
 export declare const KEYS_SHARING_ROUTE = "/api/keys/sharing";
+/**
+ * **Give the stored keys to summoned agents** (keys phase 4) — keys.json's
+ * top-level switch, OFF unless the owner turns it on. Opt-in because a
+ * harness handed `ANTHROPIC_API_KEY` (Claude Code), `OPENAI_API_KEY` (Codex)
+ * or `GEMINI_API_KEY` (Gemini) may stop using the person's own login and bill
+ * the key per call instead; that must never happen without being asked for.
+ */
+export declare const KEYS_AGENTS_FIELD = "giveToAgents";
+/** `PUT` `{ agents: boolean }` here turns it on or off — `isocan keys agents on|off`, in the settings area. */
+export declare const KEYS_AGENTS_ROUTE = "/api/keys/agents";
 /** `/api/text` refused a collaborator: the key it would spend is the owner's, and sharing is off. */
 export declare const TEXT_OWNER_ONLY = "text-owner-only";
 /** `/api/judgment` refused a collaborator: the key it would spend is the owner's, and sharing is off. */
@@ -150,6 +161,46 @@ export interface KeysListing {
     refused?: string;
     /** keys.json's `shareWithCollaborators`: the stored keys pay for collaborators too. */
     share: boolean;
+    /** keys.json's `giveToAgents`: the rc hands the stored keys to the agents it summons. */
+    agents: boolean;
     keys: KeyRow[];
+}
+/**
+ * **What a summoned agent is handed from keys.json** (keys phase 4): for each
+ * agent provider, the stored key under its harness's variable — unless the
+ * environment the agent already has sets that variable, because env wins
+ * there as everywhere. Pure: the rc reads the file, this decides. The
+ * answer is values, so a caller puts it in an env and never prints it.
+ */
+export declare function agentKeyEnv(stored: Partial<Record<KeyProvider, StoredKey>>, env: KeyEnv): Record<string, string>;
+/**
+ * **`POST` here for a short-lived Gemini Live token** (keys phase 4) — what
+ * the talk module asks per session instead of keeping a key in the browser.
+ * Body `{ canvasId }`; the answer is `LiveTokenResponse`. Gated like
+ * `/api/text`: admission and the edit rung on the canvas, owner-only spend
+ * for a stored key, a per-badge rate, and a canvas homed elsewhere asked
+ * there.
+ */
+export declare const LIVE_TOKEN_ROUTE = "/api/voice/token";
+/** The route refused a collaborator: the Gemini key is the owner's, and sharing is off. */
+export declare const LIVE_TOKEN_OWNER_ONLY = "voice-owner-only";
+/** The home holds no Gemini key. */
+export declare const LIVE_TOKEN_UNAVAILABLE = "voice-unavailable";
+/** This badge has minted enough tokens this minute. */
+export declare const LIVE_TOKEN_RATE_LIMITED = "voice-rate-limited";
+/** The request did not name a canvas. */
+export declare const LIVE_TOKEN_BAD_REQUEST = "voice-bad-request";
+/** Google refused or could not be reached; the error carries its words, never the key. */
+export declare const LIVE_TOKEN_UPSTREAM = "voice-upstream";
+/**
+ * What the token route answers: Google's ephemeral token name
+ * (`auth_tokens/…`), good for ONE Live session started before
+ * `newSessionExpireTime` and lasting until `expireTime`. Not the key — a
+ * token cannot mint another token or call any other API.
+ */
+export interface LiveTokenResponse {
+    token: string;
+    expireTime: string;
+    newSessionExpireTime: string;
 }
 export {};

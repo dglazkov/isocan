@@ -1,3 +1,4 @@
+import { type CopyBudget } from "./copy-fit.js";
 /**
  * **The copy deck: a screen's words as data** (copy-edit phase 1 —
  * `docs/projects/copy-edit/phases.md`, design `docs/research/2026-10-02-copy-edit.md`
@@ -7,8 +8,9 @@
  * new file, so a copy pass could and did drift layout, classes and markup.
  * The deck is the missing primitive. `copyDeck(html)` reads a screen and
  * returns its strings in reading order, each with a ROLE (what kind of words
- * these are), a stable ADDRESS, and a BUDGET (the room the layout gives it —
- * null until phase 4 measures it where screens render). `applyCopyDeck`
+ * these are), a stable ADDRESS, and a BUDGET (the room its role gives it —
+ * lines when rendered, characters before; `copy-fit.ts`, phase 4 — measured
+ * against where screens render). `applyCopyDeck`
  * writes edited strings back and touches nothing else: every byte outside the
  * addressed text is the byte that was there.
  *
@@ -49,9 +51,9 @@ interface CopyString {
     /** What it says now — leading and trailing whitespace trimmed (and kept
      *  in place on apply). This is also the check an edit carries back. */
     text: string;
-    /** The room the layout gives it. Null until it is measured where screens
-     *  render (copy-edit phase 4); the field is here so the shape does not change. */
-    budget: null;
+    /** The room its role gives it: line boxes when rendered, characters before
+     *  (`copy-fit.ts`). The renderer measures against it (copy-edit phase 4). */
+    budget: CopyBudget;
     /** The nearest `data-wf` element the string draws in, when the screen has one. */
     wf?: string;
 }

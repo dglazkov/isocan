@@ -5,9 +5,10 @@ import { type ViewOnlyError } from "./grants.js";
 import type { RouteOptions } from "./http.js";
 import { type Refusals } from "./takedowns.js";
 /**
- * **The two routes that spend the home's keys** — `POST /api/judgment` (the
- * judge, wireframes phase 5) and `POST /api/text` (the text model, copy-edit
- * phase 0.5). Moved out of `registerRoutes` together on 2 Oct 2026 when the
+ * **The routes that spend the home's keys** — `POST /api/judgment` (the
+ * judge, wireframes phase 5), `POST /api/text` (the text model, copy-edit
+ * phase 0.5) and, since keys phase 4, `POST /api/voice/token` (a Gemini Live
+ * token for the talk module). Moved out of `registerRoutes` together on 2 Oct 2026 when the
  * second landed, so `registerRoutes` stays under its agreed length
  * (`register-routes.test.ts`) and the twins sit side by side. They read the
  * same closures — the takedown list, the admission, the view-only refusal —

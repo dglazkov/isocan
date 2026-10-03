@@ -52,6 +52,12 @@ export declare class KeyFileRefused extends Error {
 export interface KeyFileContents {
     keys: KeyFile;
     share: boolean;
+    /**
+     * keys.json's `giveToAgents` (`KEYS_AGENTS_FIELD`, keys phase 4): the rc
+     * hands the stored keys to the agents it summons. Off unless turned on — a
+     * harness handed an API key may bill it instead of the person's login.
+     */
+    agents: boolean;
 }
 /** The whole file, read now — `readKeysSync` with the sharing switch. Missing file: no keys, not shared. */
 export declare function readKeyFileSync(home?: string): KeyFileContents;
@@ -76,6 +82,12 @@ export declare function removeKey(home: string, provider: KeyProvider): Promise<
  * Returns the file written.
  */
 export declare function setKeySharing(home: string, share: boolean): Promise<string>;
+/**
+ * **Turn on or off handing the stored keys to summoned agents** (keys phase
+ * 4; opt-in). The keys and the sharing switch are kept as they are; a file
+ * refused for its mode is refused here too. Returns the file written.
+ */
+export declare function setKeyAgents(home: string, agents: boolean): Promise<string>;
 /** Where to look: the environment and the home. Both default to this process's. */
 export interface ResolveOptions {
     env?: KeyEnv;

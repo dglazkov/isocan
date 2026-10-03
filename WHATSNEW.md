@@ -39,6 +39,16 @@ second week.
   side, with a row for each string they say differently: take the heading
   from one and the button from another, then *Use this mix* — one new
   version, the voices tidied away, one undo. Agents: `isocan words mix`.
+  A string that does not fit its place is marked, and a `## Voice` section
+  in your DESIGN.md (tone, words to use and avoid, a glossary) keeps new
+  copy to your product's words. Agents: `isocan words lint`.
+- **Voice without a key in your browser.** Talk asks your machine for a
+  one-use token each time; a Gemini key an older build left in the browser
+  is removed. And if you want agents you summon to use your stored keys,
+  tick *Give my keys to agents I summon* (`isocan keys agents on`) — off
+  unless you ask, because it moves them from your login to per-call billing.
+- **Editing text in place no longer jumps.** The properties strip keeps its
+  row, so the second click of a double-click lands on the words you aimed at.
 - **The facepile reads other people, other agents, your pets, then you** on
   the far right.
 - **The identity menu's actions come first,** as rows that look like
