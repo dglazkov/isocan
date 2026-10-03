@@ -25,7 +25,7 @@ import { register as registerLoader } from "node:module";
 import { register } from "tsx/esm/api";
 import { CEILING } from "./bundle-ceiling.mjs";
 import { isAnswered, reviewPages } from "./reviews.mjs";
-import { assemble, ceilingIn, renderPage, summary, severity, worsened } from "./lib/practice.mjs";
+import { assemble, ceilingIn, renderPage, sortRows, summary, severity, worsened } from "./lib/practice.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 
@@ -271,7 +271,7 @@ if (argv.includes("--json")) {
   const leaks = rows.filter((r) => severity(r) > 0);
   console.log(`docs/practice/${day}.md — ${rows.length} rows, ${leaks.length} leaking, ${rows.filter(worsened).length} worse than ${previous ?? "(no earlier page)"}`);
   for (const s of skipped) console.log(`  not measured: ${s.group} — ${s.why}`);
-  for (const r of rows.filter((x) => severity(x) > 0).sort((a, b) => severity(b) - severity(a)).slice(0, 10)) {
+  for (const r of sortRows(rows).filter((x) => severity(x) > 0).slice(0, 10)) {
     console.log(`  ${String(r.count).padStart(6)}  ${r.key}${r.was !== null && r.was !== undefined ? ` (was ${r.was})` : ""}`);
   }
 }

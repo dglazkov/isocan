@@ -27,6 +27,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { drainPRs } from "./lib/drain.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const argv = process.argv.slice(2);
@@ -122,67 +123,11 @@ function checksOf(graded) {
  * Called from both `grade-night.mjs` (draining previous nights before today's
  * PR opens) and `reviews.mjs` (which `persona.yml` runs 20 minutes after
  * `grade.yml`, merging today's grades PR automatically without requiring a
- * workflow file edit).
+ * workflow file edit). The drain itself is `scripts/lib/drain.mjs`, shared
+ * with the practice page, which has the same shape.
  */
 export function drainGradePRs() {
-  let token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-  if (!token) {
-    try {
-      const header = execFileSync("git", ["config", "--get", "http.https://github.com/.extraheader"], {
-        encoding: "utf8",
-      }).trim();
-      const m = header.match(/basic\s+([A-Za-z0-9+/=]+)/i);
-      if (m) {
-        const decoded = Buffer.from(m[1], "base64").toString("utf8");
-        const extracted = decoded.replace(/^x-access-token:/i, "").trim();
-        if (extracted) token = extracted;
-      }
-    } catch {}
-  }
-  const env = token ? { ...process.env, GH_TOKEN: token } : process.env;
-  let prs = [];
-  try {
-    const out = execFileSync("gh", ["pr", "list", "--state", "open", "--json", "number,headRefName"], {
-      encoding: "utf8",
-      env,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    prs = JSON.parse(out)
-      .filter((p) => typeof p.headRefName === "string" && p.headRefName.startsWith("grades/"))
-      .sort((a, b) => a.number - b.number);
-  } catch {
-    return;
-  }
-  const runUrl =
-    process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
-      ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
-      : "nightly run";
-  for (const pr of prs) {
-    try {
-      const diff = execFileSync("gh", ["pr", "diff", "--name-only", String(pr.number)], {
-        encoding: "utf8",
-        env,
-      }).trim();
-      const files = diff.split("\n").filter(Boolean);
-      if (files.length === 0 || files.some((f) => !f.startsWith("docs/grades/"))) {
-        console.log(`PR #${pr.number} (${pr.headRefName}) touches outside docs/grades/ — left for a person`);
-        continue;
-      }
-      try {
-        execFileSync("gh", ["pr", "merge", "--squash", "--delete-branch", String(pr.number)], {
-          env,
-          stdio: "inherit",
-        });
-        console.log(`drained grades PR #${pr.number} (${pr.headRefName})`);
-      } catch {
-        const msg = `Closed as superseded (${runUrl}) after merge failed. The branch \`${pr.headRefName}\` was kept; to recover it: \`git fetch origin ${pr.headRefName} && git checkout ${pr.headRefName}\`.`;
-        execFileSync("gh", ["pr", "close", String(pr.number), "--comment", msg], {
-          env,
-          stdio: "inherit",
-        });
-      }
-    } catch {}
-  }
+  drainPRs({ prefix: "grades/", dir: "docs/grades/" });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

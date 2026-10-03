@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-02
 see: evals, personas
 note: "the walk: the nightly practice page, records that can't disagree, issues as the public ledger, queues with ages, gates that tell the truth, evals of the product, evals of the build loop, prune."
@@ -9,7 +9,7 @@ note: "the walk: the nightly practice page, records that can't disagree, issues 
 
 **2 October 2026.** Held to [design.md](design.md).
 
-**Where we are, 2 Oct 2026: designed. Next: practice phase 0, the page.**
+**Where we are, 2 Oct 2026: phase 0 is CLOSED — `node scripts/practice.mjs` writes [today's page](../../practice/2026-10-02.md) (22 of 29 rows leaking), and `practice.yml` writes the next one each night. Next: practice phase 1, records that can't disagree.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -25,7 +25,7 @@ Rules for every phase, on top of `AGENTS.md`:
 
 ## Phase 0 — The page
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 2 October 2026.** `scripts/practice.mjs` (checks pure in `scripts/lib/practice.mjs`) writes `docs/practice/YYYY-MM-DD.md`: 29 rows in six groups, each with *was*, worst first, each naming its top offender. `--json`, `--offline`, `--day`, `--no-write`. `practice.yml` runs at 09:33 UTC on the grades pattern, through a drain now shared with grades (`scripts/lib/drain.mjs`). 24 fixture tests; the workflow test holds its bounds; the first real page matches the audit on 18 rows and explains the rest.
 
 **Outcome:** `node scripts/practice.mjs` writes `docs/practice/YYYY-MM-DD.md`.
 Each leak in design.md's "Where it leaks" is a counted row with yesterday's
@@ -39,6 +39,13 @@ drains older practice PRs.
 positive and negative case and the *was* column. One real run whose numbers
 match the audit in design.md (or explain why they differ). The workflow test
 holds `practice.yml` to the night shift's bounds.
+
+### Trajectory
+
+- **2026-10-02** — The first page reads 4 issues of finished work still open, not the audit's 6: wireframes' front matter names #369, and sheep-harness has no `status:`. The page reads front matter; the audit was a judgement, and the page is what holds.
+- **2026-10-02** — The index-vs-front-matter row is a heuristic that reads only a cell's lead: it catches anatomy, standing-agents and inception, and misses mindmap. Phase 1 replaces it with a check, not a guess.
+- **2026-10-02** — Two targets are placeholders for sorting, not policy: bundle headroom 5,000 bytes and grades ≥2 pages. Both are Dion's decisions on design.md's list.
+- **2026-10-02** — The conductor's commit of keys and copy phase 4 swept in this phase's half-built script without its lib: staging "everything but" while a builder works in the tree. Stage an explicit list. The left-behind row counts this shape.
 
 ## Phase 1 — Records that can't disagree
 

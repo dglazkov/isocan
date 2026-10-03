@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-02
 see: evals, personas, judge
 note: "How isocan is built, measured and improved, audited end to end: nine instruments that each work and do not add up. The plan is one deterministic page a night (docs/practice/) that reads all of them, a daily lap that fixes one leak it names, and evals of two things: the product (the oplog's undo and preference signal, golden tasks) and the loop that builds it (builder claims vs proof, rework, red main, time to green)."

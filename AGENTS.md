@@ -79,8 +79,8 @@ there — and the workflow finds nothing to do when you have.
 
 ## The night shift's pull requests
 
-Four workflows open a pull request on a schedule — `changelog.yml`,
-`grade.yml`, `persona.yml`, `loop.yml` — and until this section existed, nothing said what
+Five workflows open a pull request on a schedule — `changelog.yml`,
+`grade.yml`, `persona.yml`, `loop.yml`, `practice.yml` — and until this section existed, nothing said what
 happens to yesterday's machine PR when today's lands. What that cost: five
 open machine PRs at once on 9 Sep 2026 (three grades, two changelogs), each
 waiting on a person remembering — the same failure as the hand-kept review
@@ -106,6 +106,15 @@ longer does, with a comment naming the run that closed it. Merging is the
 default because the pages are a time series — yesterday's readings are
 yesterday's, not stale — and a conflict can only mean somebody hand-edited a
 generated page, which is what supersede is for.
+
+**The practice page is the grades case again** (2 Oct 2026).
+`practice.yml` runs `scripts/practice.mjs`, which counts where the repo's own
+instruments leak, each number beside yesterday's, and writes one dated page
+under `docs/practice/` — no model, nothing outside that directory. The run
+merges its own PR only when the diff is `docs/practice/` and `npm test` passes
+on the branch, then drains older `practice/` PRs oldest first with
+`scripts/lib/drain.mjs`, the drain grades uses too. Closing issues and moving
+ceilings are proposed on the page, never done by the run.
 
 **Loop pulls prove, propose, and merge themselves — and only the findings.**
 `loop.yml` reads Stitch Loop, files new insights in `docs/loop/`, and (when
@@ -160,7 +169,7 @@ one place to see what is pending.
 Three bounds hold all of them:
 
 - **A workflow touches only its own branches** (`changelog/`, `grades/`, `renovate/`,
-  `personas/`) — never another workflow's PRs, never a person's.
+  `personas/`, `loop/`, `practice/`) — never another workflow's PRs, never a person's.
 - **A merge is checked, not trusted — and the check has to be run, not
   awaited.** A PR opened by `GITHUB_TOKEN` never runs `pr.yml`, so no machine
   PR has ever carried a suite check — including the persona PRs that merge
