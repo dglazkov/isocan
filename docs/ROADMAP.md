@@ -15,7 +15,7 @@ built, 10 designed, 0 blocked, and
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
 read lately.
 
-10 more are `noted` — read, absorbed, owing nothing — and
+11 more are `noted` — read, absorbed, owing nothing — and
 8 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
@@ -167,7 +167,7 @@ whoever built the thing for somebody who knows nothing about it.
 | **project** | [workbench](projects/workbench/design.md) | 2026-08-29 |  · see workbench |
 | research | [WYSIWYG on the stage](research/2026-08-26-wysiwyg.md) | 2026-08-29 | the text stage built 26–27 Aug (the V0, then the parse5 upgrade — edits name a node by ordinal and splice by source range); element properties built 4 Sep — click an element in the frozen frame, edit its class and inline styles, saved as attribute splices by the same rule · see atlas |
 
-## Noted — read, owing nothing <sub>10</sub>
+## Noted — read, owing nothing <sub>11</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -179,6 +179,7 @@ whoever built the thing for somebody who knows nothing about it.
 | research | [Mobile web: a phone talks to the canvas](research/2026-09-05-mobile-web.md) | 2026-09-13 | measured touch and layout debt on 5 Sep; Chat-first decided 11 Sep; the 13 Sep node-walk design supplies directional navigation and the revised stage-1 ladder. Current implementation and acceptance live in docs/projects/mobile · see multi-identity, workbench, on-demand, ui-refresh · [#182](https://github.com/dglazkov/isocan/issues/182) |
 | research | [React Flow and tldraw, measured rather than remembered](research/2026-08-31-react-flow-and-tldraw.md) | 2026-08-31 | measured both libraries; React Flow is a real option for the map only, tldraw collides with the oplog · see mindmap, ui-refresh |
 | research | [Skills worth stealing: what the ecosystem has built](research/agent-skills.md) | 2026-08-30 | import/read/skip verdicts recorded per repo |
+| research | [What /conduct costs, and where it went](research/2026-10-02-conduct-cost.md) | 2026-10-02 | An audit of the /conduct skill's cost from one session's 32 subagent transcripts (1–2 Oct 2026). The verify-yourself core earns its keep; the waste was 53 whole-suite runs inside builders (2.8 hours, a quarter of all subagent wall time) that the conductor's deep run repeated anyway, briefs that pasted what agents already read, a status-script path on another person's machine, and two builders in one checkout breaking each other's measurements. The skill now has builders test by file, one deep run per verification, briefs that point instead of paste, and an explicit staging list. · see practice |
 | research | [What a second Jev wireframe builder got right, and how it fits in `/wire`](research/2026-09-30-jev-isocan-synthesis.md) | 2026-09-30 | compared a three-process Python/Go/React Jev design prototype (42 blocks, 7 responsive layout templates, entropy-gated /ask, surgical single-section edits, schema-driven AI copy, concurrent two-stage design-system swap, Jev-budgeted class polish) against @isocan/module-wireframe (18 Enrico archetypes, 28 blocks, 49 typed intents, embedded WireSpec, uncertainty variations, true flow arrows, clickable prototype). Designed the pure-TypeScript synthesis as wireframes phases 9–13 (#369) with zero external sidecars or non-standard dependencies. · see wireframes, judge · [#369](https://github.com/dglazkov/isocan/issues/369) |
 | research | [What Headlong knows](research/2026-08-24-headlong.md) | 2026-08-30 | its three asks are owned elsewhere: backoff by the night shift, convergence by atlas · see atlas |
 

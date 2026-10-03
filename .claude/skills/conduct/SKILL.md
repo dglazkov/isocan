@@ -72,7 +72,7 @@ every phase's status, the next phase's proof and ⚑ steps, the Open
 roster, and a lint of the docs' own rules.
 
 ```sh
-/Users/dimitriglazkov/Documents/code/isocan/.claude/skills/conduct/status.sh <project>
+.claude/skills/conduct/status.sh <project>    # from the repo root
 ```
 
 Then read, in this order: the phase's section in `phases.md`; every
@@ -81,14 +81,22 @@ cite; the Trajectory (or Findings) of the phases before it (they are the
 things the design did not know); `AGENTS.md`. Note the wall clock; the
 commit message records what a phase cost.
 
-For a long run, keep a compact handoff with the current commit, owned paths,
-settled decisions, open failures and exact evidence paths. Update it at phase
-boundaries; read historical logs only when the next decision needs them. Record
-build-ready, first proof, gate/retry and CI times separately so parallel work
-is not counted twice. Prefer command summaries and log paths to full output.
-For quality studies, identify the smallest useful comparison and its access,
-spending and reviewer needs early, while independent implementation proceeds.
-Preparation is not outcome evidence, and these needs do not imply permission.
+Keep the conductor's own context lean; it outlives every builder:
+
+- Send long output to a file and read the lines that matter (`grep -E "FAIL|Tests "`).
+- Do not re-read what a builder already summarised unless verification needs it.
+- For a long run, keep a short handoff file: current commit, owned paths, decisions, open failures.
+
+The cost of a phase is builder minutes plus the one deep run. In one
+conducted session (1–2 Oct 2026), builders ran the whole suite 53 times:
+
+- 2.8 hours, a quarter of all subagent wall time;
+- 3 minutes a run under load, against about 1.5 minutes alone;
+- 56 typechecks besides.
+
+The conductor's deep run then repeated all of it. That is why builders test
+by file. `node scripts/subagent-time.mjs <tasks dir>` measures a session the
+same way ([the audit](../../../docs/research/2026-10-02-conduct-cost.md)).
 
 **Three gates before any code:**
 
@@ -114,20 +122,25 @@ Preparation is not outcome evidence, and these needs do not imply permission.
 ## 1. Brief
 
 Write the brief to a file in the scratchpad so it can be reread, reused
-if the subagent must be restarted, and quoted in the commit. The brief
-is the phase's section verbatim plus what the subagent needs to not
-guess:
+if the subagent must be restarted, and quoted in the commit. **Point,
+don't paste.** The subagent can read the repo, and `AGENTS.md` is already
+in every agent's context. Copying the phase, the journeys, the design and
+the house rules into the brief makes the conductor read them once and the
+subagent read them twice. Name them by path and heading. What the brief
+carries in words is what the docs do *not* say: decisions taken in this
+session, which files are whose, who else is working in the tree, and where
+to stop. Aim for under 600 words.
 
 ```
 # <project> phase <N>: <title>
 
-## The phase                       (phases.md section, verbatim)
-## The journeys it closes          (journey.md sections, verbatim)
-## The mechanism                   (the design parts they cite; paths, not paraphrase)
-## Trajectory so far that binds you (from earlier phases: each a one-liner and why it matters here)
-## House rules                     (AGENTS.md "House rules" and "Done means done on both
-                                    surfaces", verbatim; the project's own rules paragraph, verbatim)
+Contract: docs/projects/<p>/phases.md "## Phase N"; journey.md <scenes>;
+<design doc> <sections>. Trajectory that binds you: <one line each, only
+the ones that change what you build>.
+Decided here, not in the docs: <…>
 
+## Who else is in the tree         (another builder's paths, and which red
+                                    checks will be theirs, not yours)
 ## What you own
 Files under <paths the phase names>. Nothing under docs/projects/: the
 conductor writes the record. Nothing in WHATSNEW.md or docs/changelog/:
@@ -142,11 +155,21 @@ the conductor writes those too. No other project's code.
 - When the design turns out wrong: stop, say what you found and what
   you would change. The conductor changes the design, not you.
 
-## What you return
+## How you test
+The files you touched and wrote, by path (`npx vitest run <files>`), as
+often as you like; `npm run typecheck` once at the end; the phase's
+journey, alone, after one `npm run build`. Do NOT run the whole suite
+(`npm test`, `test:deep`): the conductor runs the deep lane once on the
+integrated tree, which covers it. Before `npm run build` or a journey,
+make sure no other build or journey is running
+(`pgrep -f "vite build|journeys.mjs"`); two at once write one `dist`, and
+a loaded machine produces failures that are not yours.
+
+## What you return (under 600 words)
 1. What was built: files, and one paragraph of how it works.
-2. The proof, as exact commands from the repo root, with the output you
-   saw, exit codes included. Not "tests pass": the command and the line
-   that says so.
+2. The proof, as exact commands from the repo root, each with its exit
+   code and the one line that says so. Not "tests pass", and not the
+   whole output.
 3. The "Done means done on both surfaces" list: which of its six lines
    you touched and which you deliberately did not.
 4. What you could not do and why, and where you stopped.
@@ -156,10 +179,18 @@ the conductor writes those too. No other project's code.
 6. Anything a later phase should know that the docs do not say.
 ```
 
-Spawn with the Agent tool (`general-purpose`). Parallel subagents belong
-inside a phase, splitting its Work list by file ownership, never across
-phases. A subagent's final report is not shown to the user; you relay
-what matters.
+Spawn with the Agent tool (`general-purpose`), in the background. Parallel
+subagents belong inside a phase, splitting its Work list by file
+ownership, or in different projects. Never run two phases of one project at
+once. Two builders in one checkout see each other's half-done files:
+- the export ratchets count the neighbour's new exports;
+- the bundle measures the neighbour's bytes;
+- the suite runs at half speed.
+
+Name each builder's paths in the other's brief, and tell it which reds to
+expect from the neighbour. If the phases touch the same package, run them
+one after the other. A subagent's final report is not shown to the user;
+you relay what matters.
 
 ## 2. Verify
 
@@ -174,12 +205,13 @@ The checklist, every phase:
 - `git status --short`: only the phase's files changed, no leftovers,
   no `.env` or `prod.env` in the diff, nothing under `docs/projects/`,
   nothing under `.isocan/`.
-- Stage this phase's intended paths, including new files, before the full
-  gate. Inspect `git diff --cached --stat` for scope; never stage another
-  agent's work. Git-driven measures use `git ls-files`, so an untracked source
-  file can be invisible locally and fail the same guard after the commit in
-  CI. Keep the verified files unchanged until landing; update the staged
-  paths and rerun affected checks after a fix. See lessons.md #70.
+- Integrate `origin/main` **first** (`git pull --ff-only`). Then mark the
+  phase's new files intent-to-add (`git add -N <new files>`). Git-driven
+  measures use `git ls-files`, so an untracked source file is invisible
+  locally and fails the same guard after the commit in CI (lessons.md #70).
+  `-N` makes the file visible without staging content. Never stage before
+  an autostash pull: the pull hands staged changes back unstaged. Keep the
+  verified files unchanged until landing.
 - Before expensive gates, run the existing cheap checks relevant to the staged
   change: exports, CLI surface, documentation, dependency boundaries and bundle
   limits. Check downstream consumers when a shared contract changes. Reuse
@@ -189,12 +221,15 @@ The checklist, every phase:
   parallel, without changing the frozen source. Resolve a known failure before
   launching the next expensive gate; contention is not grounds to raise a
   timeout. These ordering rules do not remove any required proof.
-- The whole suite and typecheck, not just the new tests: `npm test`
-  (vitest, from the root, every workspace) and `npm run typecheck`. The
+- The whole suite and typecheck, **once**, on the integrated tree:
+  `npm run test:deep` (it runs everything `npm test` runs and the spawning
+  files besides, so running both is running the fast lane twice) and
+  `npm run typecheck`. Start it detached and do the reading below while it
+  runs. Re-run only what failed, alone, before calling it a flake. The
   surface guard in `packages/cli/test/surface.test.ts` is part of the
   suite: a new verb without its agent-guide line fails it, and that is
-  the phase's failure, not a nuisance. If you ran a subset, say which
-  subset and why in the report, or run it whole.
+  the phase's failure, not a nuisance. Two phases verified together, in
+  different projects, share one deep run.
 - The named proof, command by command.
 - The walk, when the phase has one: against a real daemon (`isocan
   restart` first; the local daemon is usually stale), a real browser, a
@@ -272,8 +307,13 @@ can follow. End with the session trailer the harness gives you.
 Land on `main`, no pull request. Fetch and integrate `origin/main` before
 freezing the phase for its final gates; other sessions push all day and
 `WHATSNEW.md` and `docs/ROADMAP.md` conflict routinely (after resolving,
-`node scripts/roadmap.mjs` regenerates the roadmap). `npm test` and
-`npm run typecheck` must pass on the resulting tree. A changed integration
+`node scripts/roadmap.mjs` regenerates the roadmap). The deep lane and
+`npm run typecheck` must pass on the resulting tree. Stage an explicit
+list of the phase's files, taken from the builder's report and
+`git diff --stat`, never `git add -A` and never a filtered `git status`.
+A builder still writing in the tree creates files between your read and
+your stage (`625fb9fa` shipped a script without its lib that way). Read
+`git show --stat HEAD` before pushing. A changed integration
 requires renewed validation; an unchanged, already-verified tree does not need
 a duplicate run solely because it is time to commit. Push each phase and track
 CI against its exact commit while doing independent useful preparation.
