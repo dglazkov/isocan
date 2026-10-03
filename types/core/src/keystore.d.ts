@@ -41,6 +41,22 @@ export declare class KeyFileRefused extends Error {
     readonly mode: number;
     constructor(file: string, mode: number);
 }
+/**
+ * **The whole file: the keys, and whether their owner shares them** (keys
+ * phase 3, owner-only spend). `share` is keys.json's top-level
+ * `shareWithCollaborators` (`KEYS_SHARE_FIELD`): off — absent, or anything but
+ * `true` — a stored key pays only for this machine's own person; on, for
+ * anybody who may edit a canvas this machine holds. It lives beside the keys
+ * because it is a fact about them, and every write keeps it.
+ */
+export interface KeyFileContents {
+    keys: KeyFile;
+    share: boolean;
+}
+/** The whole file, read now — `readKeysSync` with the sharing switch. Missing file: no keys, not shared. */
+export declare function readKeyFileSync(home?: string): KeyFileContents;
+/** `readKeyFileSync`, asynchronously. */
+export declare function readKeyFile(home?: string): Promise<KeyFileContents>;
 /** The stored keys, read now. Missing file: none. Loose mode: `KeyFileRefused`. */
 export declare function readKeysSync(home?: string): KeyFile;
 /** `readKeysSync`, asynchronously — what a server that must not block reads. */
@@ -53,6 +69,13 @@ export declare function readKeys(home?: string): Promise<KeyFile>;
 export declare function writeKey(home: string, provider: KeyProvider, key: string, model?: string, now?: () => Date): Promise<string>;
 /** Remove a provider's key. True when there was one. */
 export declare function removeKey(home: string, provider: KeyProvider): Promise<boolean>;
+/**
+ * **Turn sharing on or off** (keys phase 3): whether this machine's stored keys
+ * pay for collaborators on canvases it holds, or only for its own person. The
+ * keys are kept as they are; a file refused for its mode is refused here too.
+ * Returns the file written.
+ */
+export declare function setKeySharing(home: string, share: boolean): Promise<string>;
 /** Where to look: the environment and the home. Both default to this process's. */
 export interface ResolveOptions {
     env?: KeyEnv;

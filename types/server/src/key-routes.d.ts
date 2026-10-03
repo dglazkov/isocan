@@ -7,7 +7,8 @@ import { type KeyEnv } from "../../core/src/keys.js";
  * `GET /api/keys` lists every provider — set or not, `…abcd`, when, what uses
  * it, whether the environment overrides it — and NEVER the value.
  * `PUT /api/keys/:provider` takes `{ key }` and answers with the row.
- * `DELETE` removes one. `POST /api/keys/:provider/test` makes the one cheap
+ * `DELETE` removes one. `PUT /api/keys/sharing` takes `{ share }` — owner-only
+ * spend's switch (keys phase 3). `POST /api/keys/:provider/test` makes the one cheap
  * call `isocan keys test` makes and answers with the provider's words, the
  * key scrubbed out of them. They are `isocan keys`, spoken by the web app, and
  * they read and write the same `keys.json` through the same `@isocan/core`

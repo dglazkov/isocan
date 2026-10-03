@@ -56,9 +56,17 @@ export declare class Judge {
     private readonly opts;
     private asked;
     constructor(opts?: JudgmentOptions);
+    /** The key and where it came from. A key handed in by the daemon's options counts as the environment's: the operator's, not a person's. */
+    private resolve;
     private key;
     /** Does this home hold a key — can anything be asked here at all. */
     available(): boolean;
+    /**
+     * Whose key a judgment would spend now (keys phase 3): `file` is this
+     * machine's person's, stored in keys.json, and pays only for them unless
+     * they share it; `env` is the operator's and pays for every editor.
+     */
+    keySource(): "env" | "file" | undefined;
     /** Spend one of this badge's judgments for the minute, or say it has none left. */
     take(badgeId: string): boolean;
     /** Words that may leave this home: the key, wherever it appears, is not among them. */

@@ -145,7 +145,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `canvas new|ls|show|edit|background|archive|place|shot|rm` (rm ⚠), `use` — make, find, bind
 - `home`, `direct`, `setup`, `clone`, `open` — where canvases live, readying a directory
 - `teleport`, `export`, `import`, `blobs` — move, back up, restore, send missing bytes
-- `keys ls|set|rm|test` — model keys on this machine; never shown, env wins
+- `keys ls|set|rm|test|share` — model keys on this machine; never shown, env wins
 
 **Sharing** (`sharing`)
 - `share`, `space new|ls|add|remove|rm`, `group new|ls|add|remove|rm` — who may enter
@@ -157,7 +157,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `design workflow|start|brief|receipt|questions|ask|answer|reference|compare|respond|decide|review|craft` — a design request
 - `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
-- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations
+- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -1827,6 +1827,21 @@ text model on this machine (`ISOCAN_TEXT_API_KEY`), the voices are
 **placeholder words** under stances that say "Placeholder", and the CLI says
 so — write your own with `--from` instead of presenting those.
 
+### Mixing voices
+
+When no one voice is right, take strings from several:
+`isocan words mix <item> --pick <address>=<variant>[,…]`. A variant is its
+id or its stance (`t4=Warm`); `*=<variant>` takes every string that voice
+changed, and a later pick overrides it. `--from picks.json` takes
+`{ "<address>": "<variant>" }`. The picks become one edit set on the SOURCE:
+one new version with exactly those words, markup untouched, and every copy
+variant of it goes to the trash, all as one act, so one `undo` restores the
+source's words and brings the variants back. Strings you do not pick keep
+the source's words. A pick of a voice that kept that string, or a variant
+that no longer lines up with its source string for string, is refused by
+name. A person does the same from **Compare the copy…** in the item menu:
+every voice side by side, live, a choice per string, and *Use this mix*.
+
 `/variation 3 try different copy` still works, but it rewrites the file,
 which is how a copy pass drifts layout. For words, use `words` and
 `words vary`.
@@ -3371,6 +3386,7 @@ isocan keys                          # each provider: set or not, …abcd, added
 pbpaste | isocan keys set anthropic  # from stdin; on a terminal, a hidden prompt
 isocan keys test anthropic           # one cheap call: accepted, or the provider's reason
 isocan keys rm gemini
+isocan keys share on                 # let collaborators spend them too (off by default)
 ```
 
 **Never put a key on the command line** — `isocan keys set anthropic sk-…` is
@@ -3391,6 +3407,18 @@ and `POST /api/keys/<provider>/test` — answered only to a loopback peer with a
 loopback Host and Origin, 404 on a hosted home — and it is write-only too. A
 person can set a key there instead of in your terminal; `isocan keys` reads
 what they set.
+
+**A stored key pays only for its owner.** The daemon's judge and text model
+spend a keys.json key only when the request's badge speaks for this machine's
+person (`identity.json`), or an identity joined with them — so their own web
+page and agents are served, and a collaborator editing a canvas this machine
+holds is refused with `judgment-owner-only` / `text-owner-only` and a sentence
+naming the owner. Nothing is sent to the provider. `isocan keys share on` (or
+the switch in *Model keys*, over `PUT /api/keys/sharing`) lets collaborators
+spend them; `ls` says which it is. An environment key is the operator's and
+serves every editor, as it always did. If you are the collaborator, do not
+retry: ask the owner, or set a key on your own machine. A canvas homed
+elsewhere is asked at its home, under the home's rule.
 
 <!-- topic: sharing | who may enter — `share`, spaces, groups of people, passes, embeds, badges, and the refusals -->
 

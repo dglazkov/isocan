@@ -123,4 +123,33 @@ export interface KeyRow {
 }
 /** Every provider's row, from the stored keys and an environment. Pure. */
 export declare function keyRows(stored: Partial<Record<KeyProvider, StoredKey>>, env: KeyEnv): KeyRow[];
+/**
+ * **Owner-only spend** (keys phase 3; `docs/projects/keys/design.md`). A key
+ * this machine's person stored in keys.json pays only for that person —
+ * any badge whose claims resolve, through `actor.join`, to the
+ * `identity.json` beside it — unless they turn sharing on. A key from the
+ * environment is the innkeeper's (a hosted home, CI) and keeps serving every
+ * editor, as before. This is keys.json's top-level field for the switch.
+ */
+export declare const KEYS_SHARE_FIELD = "shareWithCollaborators";
+/** `PUT` `{ share: boolean }` here turns sharing on or off — `isocan keys share on|off`, in the settings area. */
+export declare const KEYS_SHARING_ROUTE = "/api/keys/sharing";
+/** `/api/text` refused a collaborator: the key it would spend is the owner's, and sharing is off. */
+export declare const TEXT_OWNER_ONLY = "text-owner-only";
+/** `/api/judgment` refused a collaborator: the key it would spend is the owner's, and sharing is off. */
+export declare const JUDGMENT_OWNER_ONLY = "judgment-owner-only";
+/**
+ * The refusal's sentence, naming whose keys they are. `owner` is the
+ * machine's person's name, or null when this machine has not said who it is
+ * (no `identity.json`) — then nobody is the owner, and the sentence says so.
+ */
+export declare function ownerOnlySentence(owner: string | null): string;
+/** What `GET /api/keys` answers: the rows, the file, and whether the stored keys are shared. */
+export interface KeysListing {
+    file: string;
+    refused?: string;
+    /** keys.json's `shareWithCollaborators`: the stored keys pay for collaborators too. */
+    share: boolean;
+    keys: KeyRow[];
+}
 export {};

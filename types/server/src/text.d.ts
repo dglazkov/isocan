@@ -32,6 +32,12 @@ export declare class TextModel {
     constructor(opts?: TextOptions);
     /** The key, the provider it is for and the model to ask, read now. A test's own `key` keeps the old shape: provider and model from its own options, else the key's shape. */
     private resolve;
+    /**
+     * Whose key a completion would spend now (keys phase 3): `file` is this
+     * machine's person's, stored in keys.json, and pays only for them unless
+     * they share it; `env` is the operator's and pays for every editor.
+     */
+    keySource(): "env" | "file" | undefined;
     private key;
     /** Does this home hold a key — can anything be written here at all. */
     available(): boolean;

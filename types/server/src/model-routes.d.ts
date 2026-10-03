@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { type ActorClaim } from "../../core/src/index.js";
 import type { Engine } from "./engine.js";
 import { type ViewOnlyError } from "./grants.js";
 import type { RouteOptions } from "./http.js";
@@ -19,6 +20,8 @@ interface ModelRouteScope {
     refusals: Refusals;
     admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;
     viewOnly: (canvasId: string) => Promise<ViewOnlyError>;
+    /** A badge's claim rows — the actors it speaks for, which owner-only spend compares with this machine's person. */
+    claimsOf: (badgeId: string) => Promise<ActorClaim[]>;
 }
 /** The judgment and text routes, on `app`, at the point `registerRoutes` reaches them. */
 export declare function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope): void;
