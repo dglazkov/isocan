@@ -2,7 +2,7 @@
 title: "Lack of structured design decision rationale documentation"
 loop: b68db583-9b29-4647-a625-e252534d45f5
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: RESOLVED
 loop_goal: "What canvas tools teach us"
 decision: untriaged
 ---
