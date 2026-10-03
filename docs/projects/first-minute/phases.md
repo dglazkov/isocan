@@ -14,7 +14,7 @@ push.
 
 ## Phase 0 — A sandbox on the laptop, and the numbers
 
-**Status: DONE, 18 Sep 2026.** `scripts/first-minute.mjs` with
+**Status: CLOSED, 18 Sep 2026.** `scripts/first-minute.mjs` with
 `scripts/lib/first-minute-sandbox.sh`. Today's `release`: install 14.2 s / 227
 packages / 115 MB, `isocan --version` 1.12 s cold and 1.07 s warm against a
 0.04 s node floor, 4397 `openat` calls of which 1396 found a file. Recorded in
@@ -43,7 +43,7 @@ charges for those too.
 
 ## Phase 1 — The release CLI is a bundle
 
-**Status: DONE, 18 Sep 2026.** `buildCliBundle()` in `scripts/release.mjs`;
+**Status: CLOSED, 18 Sep 2026.** `buildCliBundle()` in `scripts/release.mjs`;
 `packageRoot()` / `packagePath()` / `packageBin()` in
 `@isocan/core/packageroot`; guides imported as text, with the rule spelled
 once in `md.d.ts` and adapted in four places. Proof in
@@ -86,7 +86,7 @@ such file; `packageBin()` reads the tree's own manifest instead.
 
 ## Phase 2 — The install resolves nothing
 
-**Status: DONE, 18 Sep 2026.** `RELEASE_DEPENDENCIES` and `RELEASE_DROPS` in
+**Status: CLOSED, 18 Sep 2026.** `RELEASE_DEPENDENCIES` and `RELEASE_DROPS` in
 `scripts/release.mjs`; the two module entries built beside the CLI. In phase
 0's sandbox: **install 3.9 s for 3 packages and 22 MB**, against 14.2 s for
 227 and 115 MB. `--version` is 0.12 s and opens 49 files. Proof in
@@ -124,7 +124,7 @@ package's `src` and would be broken files on a branch that ships none.
 
 ## Phase 3 — Lazy loading
 
-**Status: DONE, 18 Sep 2026.** `@isocan/server/daemon` is its own entry and the
+**Status: CLOSED, 18 Sep 2026.** `@isocan/server/daemon` is its own entry and the
 barrel no longer re-exports it. In phase 0's sandbox: `--version` **0.10 s
 cold, 0.09 s warm**, 35 modules, 4.5 MB of JavaScript read. Budgets in
 `test/cli-bundle.test.ts`.
@@ -163,7 +163,7 @@ build-time text constants, which is the same end by a different means.
 
 ## Phase 4 — The guide in tiers, the summons with its context
 
-**Status: DONE, 30 Sep 2026.** The tiered guide (`isocan --agent-help` cold
+**Status: CLOSED, 30 Sep 2026.** The tiered guide (`isocan --agent-help` cold
 start under 3,500 tokens + topic index, `packages/cli/test/agent-guide.test.ts`
 and `packages/cli/test/surface.test.ts`) and `SummonsContext` in
 `packages/rc/src/helpers.ts` + `packages/rc/src/room.ts` carrying the thread's
@@ -187,7 +187,7 @@ item's title.
 
 ## Phase 5 — An agent that holds no secret
 
-**Status: DONE, 30 Sep 2026.** Shape 1 (`ISOCAN_BADGE_UPSTREAM=1` with
+**Status: CLOSED, 30 Sep 2026.** Shape 1 (`ISOCAN_BADGE_UPSTREAM=1` with
 `ISOCAN_ACTOR_ID` and `ISOCAN_ACTOR_NAME`) in `packages/api/src/identity.ts`,
 `packages/api/src/client.ts`, `packages/api/src/routes.ts`, and
 `packages/cli/src/main.ts`, plus `EnvHttpProxyAgent` and `proxyForBase` in
