@@ -72,8 +72,12 @@ beforeEach(async () => {
   document.body.appendChild(host);
   root = createRoot(host);
   await act(async () => root.render(h(MemoryRouter, null, h(Suspense, { fallback: null }, h(MainThreadBody, { canvasId: "prj_acme", actor: acme })))));
-  // The markdown chunk is lazy: let it land and the messages parse.
-  for (let i = 0; i < 20 && parses.n < MESSAGES; i++) await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+  // The markdown chunk is lazy: let it land and the messages parse. Wait on
+  // the parses, not on a count of short sleeps — twenty 5 ms ticks was 100 ms,
+  // and a loaded CI runner took longer than that to import the chunk, so the
+  // test began at 0 parses (release run 37179059320, 4 Oct 2026).
+  const deadline = Date.now() + 10_000;
+  while (parses.n < MESSAGES && Date.now() < deadline) await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
 });
 afterEach(() => {
   act(() => root.unmount());
