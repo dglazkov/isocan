@@ -325,9 +325,9 @@ describe("a turn in a named agent (phase 3)", () => {
 
   it("a summoned agent is handed this machine's stored keys only once the owner opts in, the environment's winning, and nothing prints one", async () => {
     // Keys phase 4. Synthetic keys, each with distinct last four.
-    const gemini = "AIza-acme-STORED-DO-NOT-PRINT-g3m1";
-    const anthropic = "sk-ant-acme-STORED-DO-NOT-PRINT-an7h";
-    const envAnthropic = "sk-ant-acme-ENV-DO-NOT-PRINT-3nvk";
+    const gemini = "fake-gemini-acme-STORED-DO-NOT-PRINT-g3m1";
+    const anthropic = "sk-ant-fake-STORED-DO-NOT-PRINT-an7h";
+    const envAnthropic = "sk-ant-fake-ENV-DO-NOT-PRINT-3nvk";
     await writeKey(home, "gemini", gemini);
     await writeKey(home, "anthropic", anthropic);
     await isocan("rc", "add", "Sian", "--harness", "fake");

@@ -24,9 +24,9 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * Fixtures are synthetic: Acme, Priya, Ravi, made-up keys.
  */
 
-const ANTHROPIC = "sk-ant-acme_OWNER_DO_NOT_PRINT_1234567890";
+const ANTHROPIC = "sk-ant-fake_OWNER_DO_NOT_PRINT_";
 const TYPESAFE = "tsk_acme_OWNER_DO_NOT_PRINT_1234567890";
-const ENV_TEXT = "sk-ant-acme_ENV_DO_NOT_PRINT_0987654321";
+const ENV_TEXT = "sk-ant-fake_ENV_DO_NOT_PRINT_0987654321";
 const SECRETS = [ANTHROPIC, TYPESAFE, ENV_TEXT];
 const priya = { id: "usr_priya", name: "Priya" };
 const tablet = { id: "usr_priya_tablet", name: "Priya Tablet" };

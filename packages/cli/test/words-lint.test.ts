@@ -119,7 +119,7 @@ describe("isocan words — the product's voice and the copy lint", () => {
     const address = fake.address();
     try {
       const endpoint = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}/v1/messages`;
-      const asked = await isocan(["--canvas", canvas, "words", "vary", welcome, "--n", "1"], { ISOCAN_TEXT_API_KEY: "sk-ant-acme_test_key_0000000000", ISOCAN_TEXT_ENDPOINT: endpoint });
+      const asked = await isocan(["--canvas", canvas, "words", "vary", welcome, "--n", "1"], { ISOCAN_TEXT_API_KEY: "sk-ant-fake_test_key_0000000000", ISOCAN_TEXT_ENDPOINT: endpoint });
       expect(asked.code).not.toBe(0);
       expect(asked.stderr).toContain(`the text model's answer: variant 1 (Smooth) says "seamless" — the voice avoids it`);
       expect(prompts).toHaveLength(1);

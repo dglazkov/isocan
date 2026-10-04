@@ -47,7 +47,7 @@ class FakeSocket {
   }
 }
 
-const OLD_KEY = "AIza-acme-OLD-BROWSER-KEY-DO-NOT-KEEP";
+const OLD_KEY = "fake-gemini-acme-OLD-BROWSER-KEY-DO-NOT-KEEP";
 let asked: { url: string; body: unknown }[];
 let answer: () => Response;
 let written: [string, string][];
@@ -84,9 +84,9 @@ afterEach(() => {
   // The rule: at no point did this browser store a key.
   for (const [k, v] of written) {
     expect(k).not.toBe("isocan:voice:key");
-    expect(v).not.toContain("AIza");
+    expect(v).not.toContain("fake-gemini");
   }
-  for (let i = 0; i < localStorage.length; i++) expect(localStorage.getItem(localStorage.key(i)!)).not.toContain("AIza");
+  for (let i = 0; i < localStorage.length; i++) expect(localStorage.getItem(localStorage.key(i)!)).not.toContain("fake-gemini");
 });
 
 const flush = async () => {

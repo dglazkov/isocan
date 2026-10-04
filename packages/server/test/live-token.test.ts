@@ -23,8 +23,8 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * Priya, Ravi, made-up keys.
  */
 
-const GEMINI = "AIza-acme_OWNER_DO_NOT_PRINT_1234567890";
-const ENV_GEMINI = "AIza-acme_ENV_DO_NOT_PRINT_0987654321";
+const GEMINI = "fake-gemini-acme_OWNER_DO_NOT_PRINT_1234567890";
+const ENV_GEMINI = "fake-gemini-acme_ENV_DO_NOT_PRINT_0987654321";
 const SECRETS = [GEMINI, ENV_GEMINI];
 const priya = { id: "usr_priya", name: "Priya" };
 const ravi = { id: "usr_ravi", name: "Ravi" };
