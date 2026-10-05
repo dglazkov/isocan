@@ -3,6 +3,7 @@
   "tagline": "An isomorphic canvas: an infinite 2.5D canvas you can drive from a web app",
   "repo": "dglazkov/isocan",
   "check": "npm test && npm run typecheck",
+  "gateWorkflow": "release",
   "lessons": "docs/reviews/lessons.md",
   "phases": {
     "shape": "projects"
