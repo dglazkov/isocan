@@ -462,7 +462,8 @@ export async function editWireOnCanvas(
   let prototype: { itemId: string; title: string } | undefined;
   if (affectedFlow) {
     const written = await writePrototype(port, afterCanvas, affectedFlow, group);
-    prototype = { itemId: written.itemId, title: written.title };
+    // An edit the prototype does not show (identical bytes) rebuilds nothing — say nothing (wave 2 walk, 5 Oct 2026).
+    if (written.what !== "unchanged") prototype = { itemId: written.itemId, title: written.title };
   }
 
   return {

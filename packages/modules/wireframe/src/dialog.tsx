@@ -85,7 +85,8 @@ export function modeOf(args: string): Mode {
     return req ? { kind: "name", request: req } : { kind: "name" };
   }
   if (first === "ds") {
-    return { kind: "ds", request: rest.join(" ").trim() };
+    // `/wire ds "warm cafe, generous"` — the Chat splits on spaces, so the quotes arrive as characters; drop a matched pair.
+    return { kind: "ds", request: rest.join(" ").trim().replace(/^(["'“”‘’])([\s\S]*)(["'“”‘’])$/, "$2").trim() };
   }
   if (first === "polish") {
     const clear = rest.includes("--clear") || rest.includes("clear");
