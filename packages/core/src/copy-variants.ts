@@ -70,13 +70,19 @@ const show = (s: string) => JSON.stringify(s.length > 40 ? `${s.slice(0, 39)}…
  * ("shorter, for a first-time buyer"); `voice` is the product's own (the
  * governing DESIGN.md's Voice section, `copy-voice.ts`) — both optional.
  */
-export function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, voice?: CopyVoice | null): { prompt: string; schema: JsonSchema } {
+export function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, voice?: CopyVoice | null, scope?: FlowScope): { prompt: string; schema: JsonSchema } {
   const said = voicePrompt(voice);
   const lines = deck.strings.map((s) => `${s.address}\t${s.role}\t${JSON.stringify(s.text)}`);
+  const subject = scope ? `a flow of ${scope.screens} screens` : "one screen";
   const prompt = [
-    `Rewrite the words of one screen in ${n} distinct voices. Words only: you are not redesigning the screen.`,
+    `Rewrite the words of ${subject} in ${n} distinct voices. Words only: you are not redesigning the screen${scope ? "s" : ""}.`,
     "",
-    "The screen's strings, in reading order (address, role, current words):",
+    ...(scope
+      ? [
+          `The flow's strings, screen by screen in reading order (address, role, current words). An address is \`<screen>${FLOW_ADDRESS_SEP}<string>\`; the screens are: ${scope.titles.map((t) => JSON.stringify(t)).join(", ")}.`,
+          "One voice means ONE voice across every screen: the same tone, and one name per thing — a button that goes to the same place says the same words on every screen.",
+        ]
+      : ["The screen's strings, in reading order (address, role, current words):"]),
     ...lines,
     "",
     ...(brief?.trim() ? [`What the person asked for: ${brief.trim()}`, ""] : []),
@@ -182,6 +188,51 @@ export function checkCopyVariants(deck: CopyDeck, raw: unknown, n?: number, voic
     out.push({ stance, why, edits });
   }
   return { ok: true, variants: out };
+}
+
+/**
+ * **A whole flow as one deck** (copy-edit phase 5, journey scene 5). N voices
+ * for a flow are asked for in ONE call, as a screen's are, and for the same
+ * reason — asked per screen, a model writes six slightly different voices
+ * and the flow stops sounding like one product. Each screen's strings keep
+ * their own addresses behind the screen's id, so the one validator
+ * (`checkCopyVariants`) and the one request shape hold a flow's voices to
+ * exactly a screen's rules, and `splitFlowEdits` hands each screen back its
+ * share. The separator is one no item id and no address contains.
+ */
+const FLOW_ADDRESS_SEP = "::";
+
+/** What `copyVariantsRequest` says differently when the deck is a flow's. */
+interface FlowScope {
+  screens: number;
+  titles: string[];
+}
+
+/** One screen's share of a flow deck: its id, its title, and its own deck. */
+export interface FlowDeckScreen {
+  itemId: string;
+  title: string;
+  deck: CopyDeck;
+}
+
+/** The flow's strings as one deck, each address `<itemId>::<address>`, screens in the order given. */
+export function flowCopyDeck(screens: ReadonlyArray<FlowDeckScreen>): CopyDeck {
+  const strings = screens.flatMap((s) => s.deck.strings.map((str) => ({ ...str, address: `${s.itemId}${FLOW_ADDRESS_SEP}${str.address}` })));
+  return { kind: screens[0]?.deck.kind ?? "html", strings };
+}
+
+/** A flow voice's edits, each screen's own again, keyed by item id; a screen the voice leaves alone has no entry. */
+export function splitFlowEdits(edits: readonly CopyEdit[]): Map<string, CopyEdit[]> {
+  const out = new Map<string, CopyEdit[]>();
+  for (const e of edits) {
+    const at = e.address.indexOf(FLOW_ADDRESS_SEP);
+    if (at < 0) throw new Error(`${e.address} is not a flow address (<screen>${FLOW_ADDRESS_SEP}<string>)`);
+    const itemId = e.address.slice(0, at);
+    const list = out.get(itemId) ?? [];
+    list.push({ ...e, address: e.address.slice(at + FLOW_ADDRESS_SEP.length) });
+    out.set(itemId, list);
+  }
+  return out;
 }
 
 /**

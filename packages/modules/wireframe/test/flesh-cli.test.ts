@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -381,5 +381,68 @@ describe("isocan wire copy", () => {
     await h.cli("wire", "copy", target.id, "--apply", file);
     expect(h.errors.at(-1)).toMatch(/no word at "items\.999\.title"/);
     expect(h.sent.length).toBe(n);
+  });
+});
+
+/**
+ * **`isocan wire voice` — a voice for the flow** (copy-edit phase 5): without
+ * a text model, N placeholder voices for the whole flow said as such and
+ * saved to a file; `--from --pick` applies one to every screen as ONE op
+ * group with the prototype rebuilt once; intents are untouched; and an
+ * agent's own voices file, in flow addresses, is held to the same check.
+ */
+describe("isocan wire voice", () => {
+  it("previews N voices for the whole flow, applies one as one op group with the prototype, and refuses a voice that is not words", async () => {
+    const h = harness();
+    await h.cli("wire", REQUEST, "--answerer", "stub", "--seed", "4", "--basic");
+    await h.cli("wire", "flesh", "--pack", "deliveries");
+    const screens = h.wires().filter((w) => !h.specOf(w.id).variantOf);
+    await h.cli("wire", "keep", screens[0]!.id, screens[1]!.id);
+    await h.cli("wire", "prototype");
+    expect(h.errors).toEqual([]);
+    const proto = [...h.items.values()].find((i) => i.properties[PROTOTYPE_PROP])!;
+
+    // Preview: nothing written to the canvas, the voices saved to a file.
+    const file = `${tmpdir()}/voices-${Date.now()}.json`;
+    const before = h.sent.length;
+    await h.cli("wire", "voice", screens[0]!.id, "--answerer", "stub", "--n", "2", "--save", file);
+    expect(h.errors).toEqual([]);
+    expect(h.sent.length).toBe(before);
+    const saved = JSON.parse(await readFile(file, "utf8")) as { flow: string; screens: string[]; variants: Array<{ stance: string; edits: Array<{ address: string; to: string }> }> };
+    expect(saved.variants).toHaveLength(2);
+    expect(saved.screens.length).toBeGreaterThan(1);
+    expect(saved.variants[0]!.stance).toMatch(/placeholder/i);
+    for (const e of saved.variants[0]!.edits) expect(e.address).toMatch(/^itm_\S+::/);
+
+    // A pick that names no voice is refused in words, before anything is written.
+    await h.cli("wire", "voice", "--from", file, "--pick", "9");
+    expect(h.errors.at(-1)).toMatch(/names no voice/);
+    h.errors.length = 0;
+
+    // Pick: one version per screen the voice touches, the prototype rebuilt, all one group.
+    const n = h.sent.length;
+    await h.cli("wire", "voice", "--from", file, "--pick", "1", "--by", "agent-acme");
+    expect(h.errors).toEqual([]);
+    const ops = h.sent.slice(n);
+    expect(ops.length).toBeGreaterThan(0);
+    expect(new Set(ops.map((o) => o.group)).size).toBe(1);
+    const touched = new Set(saved.variants[0]!.edits.map((e) => e.address.split("::")[0]!));
+    const versions = ops.filter((o) => o.op.type === "item.addVersion").map((o) => (o.op as { itemId: string }).itemId);
+    for (const id of touched) {
+      expect(versions).toContain(id);
+      expect(h.specOf(id).content).toMatchObject({ source: "copy", by: "agent-acme" });
+      expect(h.htmlOf(id)).toMatch(/Placeholder/);
+    }
+    if ([...touched].some((id) => id === screens[0]!.id || id === screens[1]!.id)) expect(versions).toContain(proto.id);
+
+    // Applied, the file is stale for that voice: it is refused rather than written twice.
+    await h.cli("wire", "voice", "--from", file, "--pick", "1");
+    expect(h.errors.at(-1)).toMatch(/changes no words/);
+
+    // A voice naming a string no screen has is refused in words.
+    const bad = `${tmpdir()}/voices-bad-${Date.now()}.json`;
+    await writeFile(bad, JSON.stringify({ variants: [{ stance: "Nowhere", why: "no such string", edits: [{ address: `${screens[0]!.id}::no.such.path`, to: "x" }] }] }));
+    await h.cli("wire", "voice", "--from", bad, "--pick", "1");
+    expect(h.errors.at(-1)).toMatch(/does not have/);
   });
 });

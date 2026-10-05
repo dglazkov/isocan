@@ -13,6 +13,7 @@ import { registerStyle } from "./style-cli.ts";
 import { registerFlesh } from "./flesh-cli.ts";
 import { registerPlay } from "./play-cli.ts";
 import { registerEditAndWhy } from "./edit-cli.ts";
+import { registerVoice } from "./voice-cli.ts";
 import { cliPort } from "./cli-port.ts";
 import { wiresOn } from "./flow.ts";
 import { rerender, rerenderLines, rerenderSummary } from "./rerender.ts";
@@ -36,6 +37,7 @@ function registerRuntime(host: CliHost, wire: Command): void {
   registerFlesh(host, wire);
   registerPlay(host, wire);
   registerEditAndWhy(host, wire);
+  registerVoice(host, wire);
 
   wire
     .command("use <screens...>")

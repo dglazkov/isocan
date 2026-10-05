@@ -165,6 +165,19 @@ function register(host: CliHost): void {
     .action(dispatch(host, "name"));
 
   wire
+    .command("voice [screens...]")
+    .description("N voices for a whole flow's words, previewed on its first two screens and saved to a file; --from <file> --pick <k> applies one voice to every screen as one op group, prototype rebuilt. Words only; intents untouched")
+    .option("--canvas <canvas>")
+    .option("--flow <flow>", "this flow's screens (default: the flow the named screen is in, or the canvas's only flow)")
+    .option("--n <n>", "how many voices (default 3)")
+    .option("--brief <text>", "what the voices are for — \"warmer, for first-time buyers\"")
+    .option("--from <file>", "voices already written — this command's own file, or an agent's: { \"variants\": [{ \"stance\", \"why\", \"edits\": [{ \"address\": \"<screen>::<string>\", \"to\" }] }] }")
+    .option("--pick <k>", "apply this voice — its number (1-based) or its stance — to every screen of the flow")
+    .option("--save <file>", "where to write the voices (default: a file under the temp directory, named in the receipt)")
+    .option("--by <name>", "who wrote the words, with --from (recorded on each screen's spec; default agent)")
+    .action(dispatch(host, "voice"));
+
+  wire
     .command("play <screen> [element]")
     .description("Print the address that opens the flow's prototype full screen AT this screen of it — with [element], its hotspot pointed out. What an arrow's Play from here opens")
     .option("--canvas <canvas>")

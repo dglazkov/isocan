@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 2 Oct 2026: phases 0–4 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's). Next: copy-edit phase 5, a voice for the flow.**
+**Where we are, 5 Oct 2026: phases 0–4 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's; the key is on his machine since 5 Oct, so `wire voice`, `words vary` and `wire copy --ai` write real copy from the terminal). Phase 5 is PART-DONE — `isocan wire voice` is built and proved against a real model; the web's *Choose a voice* is next. Then phase 6, evidence.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -148,14 +148,44 @@ non-fitting variant marked.
 
 ## Phase 5 — A voice for the flow
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 5 October 2026.** The terminal half is built and proved
+against a real model: `isocan wire voice` on an 11-screen stub flow asked
+Claude once (22 s) and got three distinct voices — "Warm and unhurried",
+"Plain and quiet", "Neighbourly, a little chatty" — previewed on the first two
+screens; `--pick "Warm and unhurried"` wrote 8 screens and the prototype as one
+group, and one `isocan undo` put every word back. The web's *Choose a voice*
+is not built: a flow-wide preview on the canvas wants phase 3's compare at
+flow scale, which is its own piece of work.
 
 **Outcome:** after `wire flesh`, *Choose a voice* / `isocan wire voice <flow>
---n 3` writes N voices for the whole flow (one generation per voice), previews
-them, and applies the chosen one to every screen in one group; intents
-untouched.
+--n 3` writes N voices for the whole flow, previews them, and applies the
+chosen one to every screen in one group; intents untouched.
 
-**Proof:** CLI test with the stub; a journey choosing a voice for a flow.
+**Proof:** CLI test with the stub (`flesh-cli.test.ts`, "isocan wire voice");
+a journey choosing a voice for a flow — owed with the web half.
+
+### Trajectory
+
+- **2026-10-05** — ONE call for the whole flow, not one per voice as the
+  outcome first said: the flow's screens become one deck (`flowCopyDeck`,
+  addresses `<screen>::<address>`), so phase 2's argument holds at flow scale
+  — asked per screen a model writes eleven slightly different voices — and
+  the one validator (`checkCopyVariants`) and one request shape serve a flow
+  exactly as they serve a screen. The prompt adds one sentence: one voice is
+  one voice on every screen, and a button that goes to the same place says
+  the same words everywhere.
+- **2026-10-05** — Two steps, because a model's answer is not reproducible:
+  the preview saves the voices to a file named in the receipt, and
+  `--from <file> --pick <k|stance>` applies one. The file records who wrote
+  them, so the pick's versions name the model, not "agent". Applied, the file
+  is stale for that voice and the next pick of it is refused ("changes no
+  words") rather than written twice.
+- **2026-10-05** — `writeWireCopy` gained `{ group, rebuild }` so eleven
+  screens land in one group with the prototype rebuilt once, not eleven
+  times; nothing else about the writer changed.
+- **2026-10-05** — Open: *Choose a voice* on the canvas; the journey;
+  `--brief` is the only steer and the product's Voice section is read but a
+  slip still refuses the whole answer with no retry (phase 4's open item).
 
 ## Phase 6 — Evidence
 

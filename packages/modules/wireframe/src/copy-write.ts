@@ -29,6 +29,7 @@ export async function writeWireCopy(
   raw: unknown,
   by: string,
   render: (next: WireSpec) => string = renderWire,
+  opts: { group?: string; rebuild?: boolean } = {},
 ): Promise<{ changed: false } | { changed: true; next: WireSpec; group: string; versionId: string; prototypes: Awaited<ReturnType<typeof rebuildPrototypes>> }> {
   const spec = screen.spec;
   const validated = validateCopyPayload(spec, raw);
@@ -36,10 +37,11 @@ export async function writeWireCopy(
   if (JSON.stringify(next) === JSON.stringify(spec)) return { changed: false };
   const item = canvas.items[screen.item]!;
   const filename = currentVersionOf(item)?.filename ?? "wireframe.html";
-  const group = newGroupId();
+  // A caller writing several screens as one act (`wire voice`) passes its group and rebuilds the prototype once itself.
+  const group = opts.group ?? newGroupId();
   const versionId = newVersionId();
   const upload = await port.put(render(next), "text/html", filename);
   await port.send({ type: "item.addVersion", itemId: item.id, version: { id: versionId, blobHash: upload.blobHash, mimeType: "text/html", filename, size: upload.size } }, group);
-  const prototypes = await rebuildPrototypes(port, canvas, all, [{ item: item.id, spec: next }], group);
+  const prototypes = opts.rebuild === false ? [] : await rebuildPrototypes(port, canvas, all, [{ item: item.id, spec: next }], group);
   return { changed: true, next, group, versionId, prototypes };
 }
