@@ -2,7 +2,7 @@
 status: partial
 since: 2026-09-30
 see: wireframes, judge
-note: the walk. Phases 0–8 closed 23–24 Sep 2026 and were walked on isocan.io (#350). Wave 2 (#369, phases 9–13, designed 30 Sep 2026) ports the standalone Jev design prototype's best mechanisms into pure TypeScript: Phase 9 is multi-region @container layout templates, density, and data-wf paths; Phase 10 is PriorityGate and entropy-gated /ask in @isocan/core/jev; Phase 11 is surgical single-slot edits (wire edit) and decision Q&A (wire why); Phase 12 is schema-driven AI copy (wire copy --ai) and flow naming (wire name); Phase 13 is concurrent design system synthesis (wire ds) and Jev-budgeted polish (wire polish).
+note: the walk. Phases 0–8 closed 23–24 Sep 2026 and were walked on isocan.io (#350); phase 14 (fidelity layers and the tier pill under the screen) closed 2 Oct 2026, live on isocan.io. Wave 2 (#369, phases 9–13, designed 30 Sep 2026) ports the standalone Jev design prototype's best mechanisms into pure TypeScript: Phase 9 is multi-region @container layout templates, density, and data-wf paths; Phase 10 is PriorityGate and entropy-gated /ask in @isocan/core/jev; Phase 11 is surgical single-slot edits (wire edit) and decision Q&A (wire why); Phase 12 is schema-driven AI copy (wire copy --ai) and flow naming (wire name); Phase 13 is concurrent design system synthesis (wire ds) and Jev-budgeted polish (wire polish).
 issue: 369
 ---
 
@@ -23,7 +23,7 @@ Two rules for every phase, on top of `AGENTS.md`:
   it is local, with `TYPESAFE_API_KEY` loaded (`~/.config/secrets.env` on
   Dion's machine). The stub answerer stands in everywhere else, including CI.
 
-**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–13 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) — built and unit-tested, browser walk next.** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 built (`wire edit` surgical single-section edits + prototype rebuild in one op group, and `wire why` decision Q&A over embedded `WireSpec.decisions`), phase 12 built (`TextGenerator` seam in `@isocan/core/jev`, `blockContentSchema`, `wire copy --ai`, `sanitizeFlowTitle`, and `wire name`), and phase 13 built (`proposeThenPick`, `repairContrast`, `wire ds`, `polishIntensityBudget`, `verifyWireContract`, and `wire polish`).
+**Where we are: phases 0–8 are CLOSED (23–24 Sep 2026, walked on isocan.io, [#350](https://github.com/dglazkov/isocan/issues/350)); wave 2 phases 9–13 are PART-DONE (30 Sep 2026, [#369](https://github.com/dglazkov/isocan/issues/369)) — built and unit-tested, browser walk next; phase 14 (fidelity layers and the tier pill) is CLOSED (2 Oct 2026, live on isocan.io).** Terminal and canvas both: `isocan wire` / `/wire` compose a flow skeleton-first with Jev, variations sit where it was unsure, 📐 keeps, arrows show the flow, a prototype assembles itself, and every wire restyles into the governing design system; phase 6 measured Jev honestly. Wave 2 ports the standalone Jev design prototype's best mechanisms into pure TypeScript (`@isocan/core/jev` and `@isocan/module-wireframe`) with zero external sidecars: phase 9 built (7 multi-region `@container` layout templates, `density`, and `data-wf`/`data-sec` paths), phase 10 built (`PriorityGate`, `entropyBits`, `gatedChoice`, and entropy-gated `/ask` + `--pin`/`--no-ask`), phase 11 built (`wire edit` surgical single-section edits + prototype rebuild in one op group, and `wire why` decision Q&A over embedded `WireSpec.decisions`), phase 12 built (`TextGenerator` seam in `@isocan/core/jev`, `blockContentSchema`, `wire copy --ai`, `sanitizeFlowTitle`, and `wire name`), and phase 13 built (`proposeThenPick`, `repairContrast`, `wire ds`, `polishIntensityBudget`, `verifyWireContract`, and `wire polish`).
 
 ## Phase 0 — The catalog, drawn
 
@@ -530,3 +530,69 @@ button labels bound to their typed `Intent`.
 - **2026-09-30** — `repairContrast` checks foreground role tokens (`ink`, `ink-muted`, `primary`) against both `ground` and `surface` simultaneously (`ensurePairContrast` against the worst of the two backgrounds), and `on-primary` against `primary`, nudging sRGB lightness in 2% steps so synthesized `DESIGN.md` items always pass `checkDesign` with zero AA contrast warnings.
 - **2026-09-30** — `verifyWireContract` gates both `WireSpec.polish` patches and **Swap 2** custom primitive overrides by asserting that every `data-sec`, `data-wf`, `data-hot`, and `data-intent` attribute from the unpolished baseline HTML survives in the candidate HTML and every design-system token pair stays $\ge 4.5:1$ before writing a version.
 
+---
+
+## Phase 14 — Fidelity layers, and the tier pill under the screen
+
+**Status: CLOSED, 2 October 2026.** Built, unit-tested
+(`packages/modules/wireframe/test/layers.test.ts`), walked in headless Chrome
+at 11% and 67% zoom, and promoted to isocan.io the same day (`b63c2f8a`,
+`966cf697`). The in-frame overlay that the first cut drew inside every screen
+was stripped from the eleven screens it had been stamped on.
+
+**Outcome:** a wireframe screen carries four layers over its wires — `System`
+(design-system tokens and domain copy), `Copy`, `Low-Fi` (fluid cards and real
+controls) and `High-Fi` (art-directed visual craft) — resolved per item
+(`layers.ts`: `resolveItemLayers`, `tierFromLayers`) and switched
+non-destructively: each tier's version pointer is kept on the item
+(`wireLayer:wire|system|lofi|hifi`), so going back to the wires is a pointer
+move, not a regeneration, and one op group. From the terminal,
+`isocan wire layer [directive] [<screens…>] [--flow <flow>] [--list]`
+(`+system`, `-hifi`, `toggle:copy`, or a tier name); on the canvas, a tier pill
+under the screen.
+
+The pill is the part that took three tries, and the reason is written here so
+nobody tries the first two again:
+
+1. **A HUD inside the frame** covered the bottom of the design and needed a
+   double click (the frame takes the first). Rejected on sight.
+2. **A five-pill bar under the screen** — `Wires · ☑System · ☑Copy · ☑Low-Fi ·
+   ☑High-Fi · Sync flow` — sat in the right lane, but the lane is
+   counter-scaled: zoomed out it was wider than the screen and lay across
+   *Full screen* and the size pill. And "Sync flow" said nothing about what it
+   did.
+3. **One pill, a popover for the rest** (`layers-bar.tsx`): `◧ High-Fi ▾`, the
+   size of the size pill beside it, on hover and on selection. Clicking it
+   selects the screen and opens a popover with the four checkboxes and one row
+   that says what it does — *Apply to all 11 screens in “Showcase”* — the
+   flow's name from its group, the count from its screens; disabled for a
+   screen that stands alone. It stays open while toggling, closes on Escape or
+   a click outside, and belongs to the screen it opened on rather than
+   following the pointer. Several selected screens at different tiers read
+   `Mixed`. Under 300 on-screen pixels of screen width the pill waits for a
+   zoom with room, unless it is already open.
+
+**Proof:**
+1. Unit tests (`layers.test.ts`): layer flags render without erasing spec
+   style or copy; a `WireSpec` embedded in bespoke High-Fi HTML reads back;
+   `applyLayersOnCanvas` switches between saved version pointers; the bar
+   renders closed as one pill anchored at `y + height`; `applyToFlowLabel`
+   says the count and the flow.
+2. Browser walk (headless Chrome against a scratch daemon, 2 Oct): at 11% the
+   pill waits; after ⇧2 the pill shows on hover without a popover and does not
+   overlap the screen; one click selects the screen and opens the popover with
+   four unchecked layers and *Apply to all 10 screens →*; Escape closes it.
+3. `tokens.test.ts` (the popover's shadow is `--shadow-pop`),
+   `oneblock.test.ts`, `surface.test.ts`, `npm run typecheck`, the web build.
+
+### Trajectory
+
+- **2026-10-02** — The lane under a screen is shared and counter-scaled, so
+  anything placed there has to be the size of what is already there; detail
+  goes one click away, not beside. The same will hold for any future
+  per-screen control.
+- **2026-10-02** — A flow's name is its group's title when the flow id names a
+  group on the canvas; a bare `grp_…` id is never shown.
+- **2026-10-02** — `grid.test.ts` and `place.test.ts` run at their 30/40 s
+  budget on a loaded machine and time out whenever the deep lane runs beside
+  anything else; green alone and on CI. Not this phase's, but found by it.
