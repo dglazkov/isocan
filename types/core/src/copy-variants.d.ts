@@ -57,7 +57,7 @@ export declare const MAX_COPY_VARIANTS = 6;
  * ("shorter, for a first-time buyer"); `voice` is the product's own (the
  * governing DESIGN.md's Voice section, `copy-voice.ts`) — both optional.
  */
-export declare function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, voice?: CopyVoice | null): {
+export declare function copyVariantsRequest(deck: CopyDeck, n: number, brief?: string, voice?: CopyVoice | null, scope?: FlowScope): {
     prompt: string;
     schema: JsonSchema;
 };
@@ -78,6 +78,21 @@ export declare function checkCopyVariants(deck: CopyDeck, raw: unknown, n?: numb
     ok: false;
     reason: string;
 };
+/** What `copyVariantsRequest` says differently when the deck is a flow's. */
+interface FlowScope {
+    screens: number;
+    titles: string[];
+}
+/** One screen's share of a flow deck: its id, its title, and its own deck. */
+export interface FlowDeckScreen {
+    itemId: string;
+    title: string;
+    deck: CopyDeck;
+}
+/** The flow's strings as one deck, each address `<itemId>::<address>`, screens in the order given. */
+export declare function flowCopyDeck(screens: ReadonlyArray<FlowDeckScreen>): CopyDeck;
+/** A flow voice's edits, each screen's own again, keyed by item id; a screen the voice leaves alone has no entry. */
+export declare function splitFlowEdits(edits: readonly CopyEdit[]): Map<string, CopyEdit[]>;
 /**
  * **Placeholder voices, said as what they are** — what lands when no text
  * model was reachable (no key on this machine, `text-unavailable` from the

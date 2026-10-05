@@ -284,6 +284,18 @@ bar, tab bar) stays.
   `--by <name>` recorded; a path the slot does not hold is refused, so copy
   changes words, never the screen's shape. `"title"` sets the heading.
   `wire flesh` leaves a copied screen alone unless `--pack` or `--bars`.
+- `isocan wire voice [<screen>] [--flow <flow>] [--n 3] [--brief <text>]` asks
+  for N voices for the WHOLE flow in one call — the flow's screens as one
+  deck, so one voice is one voice on every screen and a button that goes to
+  the same place says the same words everywhere — previews each on the first
+  two screens, and saves them to a file named in the receipt. Then
+  `isocan wire voice --from <file> --pick <k|stance>` applies one voice to
+  every screen as one op group, prototype rebuilt once, `isocan undo` taking
+  it all back. Words only, through the same writer as `wire copy --apply`, so
+  an edit that touches a hotspot is refused. `--from` also takes voices you
+  wrote yourself — `words vary --from`'s shape, with addresses
+  `<screen>::<address>` (`isocan words <screen>` lists a screen's). Without a
+  text key (`isocan keys set anthropic`) the voices are placeholders, said so.
 - `isocan wire questions` prints the pending round of a flow (`--flow <id>`,
   default the newest waiting) as a file of calls, each a request in Jev's
   shape (`state` and named questions, of type `noul` — yes/no — `choice` or
