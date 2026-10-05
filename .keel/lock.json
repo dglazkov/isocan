@@ -1,0 +1,25 @@
+{
+  "practice": "0.6.7",
+  "files": {
+    ".agents/skills/keel/SKILL.md": {
+      "practice": "agents-md",
+      "sha256": "f81895464b8a27d113a57d12febf5eb752b3eec96006f34eb690e0ae07ada663"
+    },
+    ".claude/skills/keel": {
+      "practice": "agents-md",
+      "sha256": "fc2ca840d70a4aed22edaa7c95ff46e2f3098c2f4bd3d3b606d14fa4a2b5305d"
+    },
+    "AGENTS.md#agents-md": {
+      "practice": "agents-md",
+      "sha256": "58ca21f52379d2bf8c85a08bbf96e935421c2bd4537b47c20f1218c6a60c7806"
+    },
+    "AGENTS.md#lessons": {
+      "practice": "lessons",
+      "sha256": "470f687938fd261173e737b39601cc77b6c31db066b7313dbc5a868810eaf590"
+    },
+    "CLAUDE.md": {
+      "practice": "agents-md",
+      "sha256": "afc2da8653649abeb8ecce9a8792e12e755e69986b27659462e790c7d410708a"
+    }
+  }
+}
