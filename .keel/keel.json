@@ -1,0 +1,26 @@
+{
+  "name": "isocan",
+  "tagline": "An isomorphic canvas: an infinite 2.5D canvas you can drive from a web app",
+  "repo": "dglazkov/isocan",
+  "check": "npm test && npm run typecheck",
+  "lessons": "docs/reviews/lessons.md",
+  "phases": {
+    "shape": "projects"
+  },
+  "practice": "0.6.7",
+  "practices": [
+    "base",
+    "agents-md",
+    "lessons"
+  ],
+  "local": {
+    "phases": "phases live in docs/projects/<project>/phases.md (37 projects) with **Status:** lines; keel reads them read-only (keel next --project <p>, keel status) and never writes them or a roadmap; keel's docs/phases/ is not installed; scripts/roadmap.mjs is the project's own (differs from keel's); proposal: keep yours (eject), take keel's, or send yours upstream as a lesson",
+    "evidence": "phases are in the projects shape: each phase's **Status:** line carries its proof; keel's evidence files serve docs/phases/",
+    "conduct": "this repo is conduct's upstream source (dglazkov/isocan .claude/skills/conduct/SKILL.md); keel never seeds a copy of it here, and never installs .agents/skills/conduct/SKILL.md or .claude/skills/conduct beside it",
+    "ci": "the project has workflows (changelog.yml, grade.yml, journeys.yml, loop.yml, persona.yml, pr.yml, practice.yml, release.yml, review.yml); keel's check.yml is not added beside them, since that would run the gate twice; proposal: point the workflow that gates pushes at `npm test && npm run typecheck`, or replace it with keel's check.yml",
+    "night": "the project runs its own night shift (scripts/night.mjs, npm run night); keel's keel-night.yml and scripts/keel/ are not added beside it; proposal: keep yours, or compare its measures with keel's improve and retire one",
+    "claude": "changelog.yml already runs anthropics/claude-code-action; keel's claude.yml is not added beside it, so one mention gets one answer; proposal: keep it, or let keel manage it as claude.yml",
+    "renovate": "renovate.json is the project's own (differs from keel's); proposal: keep yours (eject), take keel's, or send yours upstream as a lesson",
+    "loop": "the project triages Loop with its own scripts/loop.mjs; proposal: render docs/LOOP.md with keel's scripts/loop.mjs in a copy and compare it with yours (only the generated-by line should differ), keep your wording with .keel/keel.json \"loop\" {run, insights}, then retire yours for keel's; scripts/loop.mjs is the project's own (differs from keel's); proposal: keep yours (eject), take keel's, or send yours upstream as a lesson"
+  }
+}

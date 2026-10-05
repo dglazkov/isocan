@@ -353,3 +353,22 @@ The forcing function is `packages/cli/test/surface.test.ts`: it reads the
 commands the CLI actually registers and fails when one is missing from the
 cold start and from every topic it points to. Adding a verb without telling agents about it
 breaks the build.
+
+## The keel practice
+
+The regions between keel markers are rendered by keel; the rest of this file is the project's own.
+
+<!-- keel:begin agents-md -->
+**⚑ steps are asked, with the price.** Creating repos, setting secrets,
+enabling Pages, filing issues on another repo, scheduling model spend: each
+one waits for the owner's yes.
+
+keel's files are listed in `.keel/lock.json`; `keel doctor` says if you
+changed one. Everything else is yours.
+<!-- keel:end agents-md -->
+
+<!-- keel:begin lessons -->
+**Lessons are shapes, not incidents.** Add a row when a bug turns out to have
+a shape, and say where it was paid for. Read the table
+(`docs/reviews/lessons.md`) before adding a guard.
+<!-- keel:end lessons -->
