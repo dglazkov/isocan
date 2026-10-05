@@ -76,6 +76,8 @@ So, for every phase below:
 
 ## Phase 0 — Answered, 28 Aug 2026
 
+**Status: CLOSED.** 28 August 2026 — the three questions answered (below).
+
 1. **The rail stays on the left**, where the Chat is today.
 2. **Draw only.** The lane draws the link and moves nothing. `/format` does
    not grow a lane rule, and no `items.move` is written on anybody's behalf —
@@ -92,6 +94,8 @@ slab over a pale canvas is the harder of the two to get right, so it is the
 one to look at first in phase 1 — not the one to check afterwards.
 
 ## Phase 1 — The rail becomes a floating slab
+
+**Status: CLOSED.** 29 August 2026 — this file's front matter: built, phases 1–6, all acceptances closed.
 
 Spec §1 and §6. Purely presentational; the markup does not change.
 
@@ -151,6 +155,8 @@ it reads as a staging decision rather than an oversight.
 
 ## Phase 2 — Opening the rail pans the canvas
 
+**Status: CLOSED.** 29 August 2026 — this file's front matter: built, phases 1–6, all acceptances closed.
+
 Spec §2. Pure mechanic, no pixels change. The riskiest logic in the whole
 refresh, because it moves the camera on the person's behalf.
 
@@ -206,6 +212,8 @@ has reported it — but a canvas that does not come back exactly where it was
 left is worth its own look.
 
 ## Phase 3 — Closed: the 48px strip
+
+**Status: CLOSED.** 29 August 2026 — this file's front matter: built, phases 1–6, all acceptances closed.
 
 Spec §3. A new persistent surface, and the first place the redesign REPLACES
 something rather than restyling it.
@@ -284,6 +292,8 @@ numbers agree — both read the Chat through `mainThread` + `unreadCount`, which
 is also how the duplication was confirmed harmless rather than assumed to be.
 
 ## Phase 4 — The lane
+
+**Status: CLOSED.** 29 August 2026 — this file's front matter: built, phases 1–6, all acceptances closed.
 
 Spec §4, and the reason the refresh exists: **isocan already records which
 item a message produced and has never drawn it.**
@@ -384,6 +394,8 @@ there had been one.
 
 ## Phase 5 — Item chrome sheds its box
 
+**Status: CLOSED.** 29 August 2026 — this file's front matter: built, phases 1–6, all acceptances closed.
+
 Spec §5. Last, as the spec says, and for the reason it gives: it touches the
 most-tested file in the package and it is the least important change here.
 
@@ -423,6 +435,8 @@ important. Doing it carelessly would reintroduce the overlap the ladder exists
 to prevent — a name once drawn straight through the star.
 
 ## Phase 6 and beyond — the rest of the redesign, not in the spec
+
+**Status: CLOSED.** 29 August 2026 — this file's front matter: built, phases 1–6, all acceptances closed.
 
 The rationale describes six moves; the spec implements parts of three. Naming
 the rest keeps anybody from thinking the refresh is finished when §1–5 are
