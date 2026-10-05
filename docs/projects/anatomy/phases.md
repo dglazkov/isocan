@@ -14,6 +14,8 @@ semantic editing, graph update previews and transactional updates remain follow-
 
 ## 1. Built — File model and portable graph
 
+**Status: CLOSED.** 12 September 2026 — built, as this file's *Where we are* says (phases 1–8); acceptance evidence is in [verification.md](verification.md).
+
 Build the module package, strict import/body validation, canonical field
 mapping, graph reconstruction, deterministic non-overlapping layout, native
 edge contribution and core context. Support fresh projects and prototype JSON
@@ -25,6 +27,8 @@ graphs are rejected before writes; two imports cannot cross-link; unrelated
 canvas items survive. Native rename/move and removal fallback work.
 
 ## 2. Built — Workspace API and native Blueprint
+
+**Status: CLOSED.** 12 September 2026 — built, as this file's *Where we are* says (phases 1–8); acceptance evidence is in [verification.md](verification.md).
 
 Add proposed workspace registration, routing/launcher integration, host read
 and navigation capabilities, native selection facts, optional item renderer
@@ -38,6 +42,8 @@ module pages/renderers remain compatible. Runtime build declares proposals.
 
 ## 3. Built — Exploration lenses and edits
 
+**Status: CLOSED.** 12 September 2026 — built, as this file's *Where we are* says (phases 1–8); acceptance evidence is in [verification.md](verification.md).
+
 Build Overview, Open Decisions and Coverage; goal/brief editing, concept
 creation/editing, resolution options, evidence preview and explicit source
 attachment. Add matching CLI verbs and shared write helpers. Unknown discipline
@@ -49,6 +55,8 @@ one Undo reverses each edit; coverage does not invent reviews; user-provided
 text is escaped and arbitrary source URIs do not execute.
 
 ## 4. Built — Evolution and proposals
+
+**Status: CLOSED.** 12 September 2026 — built, as this file's *Where we are* says (phases 1–8); acceptance evidence is in [verification.md](verification.md).
 
 Checkpoint save, preview/export and explicit project-scoped restore. Mock
 proposal, sandboxed preview, promotion to an ordinary source item. Native
@@ -62,6 +70,8 @@ no imported activity is shown as current agent presence.
 
 ## 5. Verified — Integration and handoff
 
+**Status: CLOSED.** 12 September 2026 — built, as this file's *Where we are* says (phases 1–8); acceptance evidence is in [verification.md](verification.md).
+
 Run meaningful reducer/round-trip and CLI integration tests, runtime module
 build, the complete `npm test` and `npm run typecheck`, production web build,
 and a real-browser journey on a disposable canvas using synthetic data. Check
@@ -72,6 +82,8 @@ Gate: report the commands and browser interactions actually verified; leave a
 reviewable branch and working preview, with limitations stated precisely.
 
 ## 6. Built and verified — Navigation and a project's own analysis
+
+**Status: CLOSED.** 12 September 2026 — built, as this file's *Where we are* says (phases 1–8); acceptance evidence is in [verification.md](verification.md).
 
 Port the prototype's selection-versus-neighborhood navigation, clickable links
 and hierarchy breadcrumbs. Make the inspector resizable in both orientations,
@@ -89,12 +101,16 @@ local canvas, keeping fixtures synthetic.
 
 ## 7. Fluid exploration and edit preservation
 
+**Status: CLOSED.** 12 September 2026 — built, as this file's *Where we are* says (phases 1–8); acceptance evidence is in [verification.md](verification.md).
+
 The [step-by-step implementation and acceptance record](fluid-exploration.md)
 covers guarded drafts, temporary native geometry, focus-dependent detail,
 addressable navigation, local camera/pane continuity and scale verification.
 
 
 ## 8. Recoverable reads and targeted analysis requests
+
+**Status: CLOSED.** 12 September 2026 — built, as this file's *Where we are* says (phases 1–8); acceptance evidence is in [verification.md](verification.md).
 
 [Recovery and request design](recovery-and-requests.md) covers item-scoped
 read failures, version preview/recovery, consistent analysis/repository targets,

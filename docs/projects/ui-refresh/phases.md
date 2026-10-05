@@ -2,7 +2,7 @@
 status: built
 since: 2026-08-29
 see: ui-refresh
-note: phases 1-6, all acceptances closed
+note: phases 0-4 closed (the last three acceptances by hand, 29 Aug); phase 5 partial (the version count stays put, a spec conflict); phase 6's composer question not designed
 ---
 # The UI refresh — the walk
 
@@ -11,10 +11,14 @@ screens, a rationale (`The thinking`), and an implementation spec for two of
 them. This is the order to build it in, and what each step has to be true
 before the next one starts.
 
-**Where we are: phase 0 answered and phase 1 landed (28 Aug 2026), with one
-acceptance item outstanding — see phase 1.** The three
-questions took an afternoon and would have cost a week if answered by
-building.
+**Where we are: phases 0–4 built and verified (28–29 Aug 2026); 5 and 6
+partly.** Phases 1–4 landed on 28 Aug, and the three acceptances a harness
+could not take (⌘J, the blur under a pan, follow's flight) were closed by
+hand on 29 Aug. Phase 5 landed partially: the version count did not move
+beside the name, a real conflict in the spec, left for its own design pass.
+Phase 6 names the rest of the redesign: three moves are done, the composer
+question is not designed yet. Phase 0's three questions took an afternoon and
+would have cost a week if answered by building.
 
 ## What was verified before planning
 
@@ -76,6 +80,8 @@ So, for every phase below:
 
 ## Phase 0 — Answered, 28 Aug 2026
 
+**Status: CLOSED.** 28 August 2026 — the three questions answered (below).
+
 1. **The rail stays on the left**, where the Chat is today.
 2. **Draw only.** The lane draws the link and moves nothing. `/format` does
    not grow a lane rule, and no `items.move` is written on anybody's behalf —
@@ -92,6 +98,8 @@ slab over a pale canvas is the harder of the two to get right, so it is the
 one to look at first in phase 1 — not the one to check afterwards.
 
 ## Phase 1 — The rail becomes a floating slab
+
+**Status: CLOSED.** 29 August 2026 — landed 28 Aug; the blur under a pan was closed by hand on 29 Aug.
 
 Spec §1 and §6. Purely presentational; the markup does not change.
 
@@ -151,6 +159,8 @@ it reads as a staging decision rather than an oversight.
 
 ## Phase 2 — Opening the rail pans the canvas
 
+**Status: CLOSED.** 29 August 2026 — landed 28 Aug; follow's flight verified by hand on 29 Aug.
+
 Spec §2. Pure mechanic, no pixels change. The riskiest logic in the whole
 refresh, because it moves the camera on the person's behalf.
 
@@ -206,6 +216,8 @@ has reported it — but a canvas that does not come back exactly where it was
 left is worth its own look.
 
 ## Phase 3 — Closed: the 48px strip
+
+**Status: CLOSED.** 29 August 2026 — landed 28 Aug; ⌘J verified in a real browser on 29 Aug.
 
 Spec §3. A new persistent surface, and the first place the redesign REPLACES
 something rather than restyling it.
@@ -284,6 +296,8 @@ numbers agree — both read the Chat through `mainThread` + `unreadCount`, which
 is also how the duplication was confirmed harmless rather than assumed to be.
 
 ## Phase 4 — The lane
+
+**Status: CLOSED.** 28 August 2026 — 4a (the lane), 4b (the tether) and follow all landed.
 
 Spec §4, and the reason the refresh exists: **isocan already records which
 item a message produced and has never drawn it.**
@@ -384,6 +398,8 @@ there had been one.
 
 ## Phase 5 — Item chrome sheds its box
 
+**Status: PART-DONE.** 28 August 2026 — the work chip counter-scales; the version count did not move beside the name, a conflict in the spec left for its own design pass (below).
+
 Spec §5. Last, as the spec says, and for the reason it gives: it touches the
 most-tested file in the package and it is the least important change here.
 
@@ -423,6 +439,8 @@ important. Doing it carelessly would reintroduce the overlap the ladder exists
 to prevent — a name once drawn straight through the star.
 
 ## Phase 6 and beyond — the rest of the redesign, not in the spec
+
+**Status: PART-DONE.** 28 August 2026 — the agent tray, one handle and the dissolved header are done; the composer question is not designed yet.
 
 The rationale describes six moves; the spec implements parts of three. Naming
 the rest keeps anybody from thinking the refresh is finished when §1–5 are

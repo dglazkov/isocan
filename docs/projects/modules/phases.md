@@ -13,6 +13,8 @@ half stays gated behind extensions stages 3–4 and a CSP line. See
 
 ## Phase 1 — the registries, and the mind map as the first internal module ✅
 
+**Status: CLOSED.** 4–9 September 2026 — built, as this file's *Where we are* says (phases 1–4.5).
+
 *Built 4 Sep 2026.*
 
 - `core/modules.ts`: `registerModule`, `modules()`, and the two readers core
@@ -45,6 +47,8 @@ this phase adds slots, not panels.
 
 ## Phase 2 — Mermaid, the first node-type module ✅
 
+**Status: CLOSED.** 4–9 September 2026 — built, as this file's *Where we are* says (phases 1–4.5).
+
 *Built 4 Sep 2026.*
 
 `packages/modules/mermaid/`: kind `diagram`, mime `text/vnd.mermaid`,
@@ -71,6 +75,8 @@ to the far side of the boundary. What stays a hand check until phase 3's
 runtime removal: the picture on a card at isocan.io once this promotes.
 
 ## Phase 3 — runtime loading, for self-hosted homes ✅
+
+**Status: CLOSED.** 4–9 September 2026 — built, as this file's *Where we are* says (phases 1–4.5).
 
 *Built 5 Sep 2026.*
 
@@ -117,6 +123,8 @@ export loads nothing (default exports, and a guard).
 
 ## Phase 4 — documents: the inspector slot, the page slot, module commands ✅
 
+**Status: CLOSED.** 4–9 September 2026 — built, as this file's *Where we are* says (phases 1–4.5).
+
 *Built 5 Sep 2026.*
 
 Three slots the earlier phases had no customer for, and the module that
@@ -156,6 +164,8 @@ the mime does not carry the name, and inventing a registry of departed
 modules is a second copy of a fact.
 
 ## Phase 4.5 — writing from a component, and saying how early this is ✅
+
+**Status: CLOSED.** 4–9 September 2026 — built, as this file's *Where we are* says (phases 1–4.5).
 
 *Built 9 Sep 2026, from [#156's field report](https://github.com/dglazkov/isocan/issues/156#issuecomment-5603055567).*
 
@@ -225,6 +235,8 @@ lint, typecheck, 3,936 tests and two byte checks. Neither was findable without
 building the built thing and looking at it.
 
 ## Phase 5 — sandboxes
+
+**Status: PART-DONE.** 12 September 2026 — the agent-side half is built (below); the browser-frame half stays gated behind extensions stages 3–4 and a CSP line.
 
 Gated, and the gates are named: the content origin, extension actors, and the
 compute-consent question agent-custody left open. Not before all three.
@@ -327,6 +339,8 @@ the CSP line, and the module built here deliberately has no frame, no
 `postMessage` surface and no route.
 
 ## Phase 5 — sandboxes, the agent-side half ✅
+
+**Status: CLOSED.** 12 September 2026 — built after the gate check above.
 
 *Built 12 Sep 2026, after the gate check above.*
 
