@@ -46,6 +46,14 @@ export function openCopyCompare(request: VaryRequest): void {
   void import("./CopyCompare.tsx").then((m) => m.openCopyCompare(request));
 }
 
+/**
+ * *Choose a voice…* (copy-edit phase 5), through this file for the same
+ * reason: one lazy import for every copy row; the panel is its own chunk.
+ */
+export function openChooseVoice(request: VaryRequest): void {
+  void import("./ChooseVoice.tsx").then((m) => m.openChooseVoice(request));
+}
+
 function closeVaryCopy(): void {
   root?.unmount();
   host?.remove();

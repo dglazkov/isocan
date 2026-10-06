@@ -3,6 +3,7 @@ import type { ComponentType } from "react";
 import type { DialogFacts, UnderlayFacts, WebModule } from "@isocan/core";
 import { WireArrows } from "./arrows.tsx";
 import { WireBehind } from "./behind-marks.tsx";
+import { offersFlowVoice } from "./flow-voice-offers.ts";
 import { cachedSpec } from "./spec-cache.ts";
 import { PrototypeLight } from "./prototype-light.tsx";
 import { wireframeCore } from "./command.ts";
@@ -55,6 +56,12 @@ export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never,
     variant: async (...args) => (await import("./copy-variant.ts")).wireCopyVariant(...args),
     at: wireWebCopy.at,
     apply: wireWebCopy.apply,
+    // *Choose a voice…* (copy-edit phase 5): a whole flow's words, one voice landed on every screen as one group.
+    flow: {
+      offers: (canvas, item) => offersFlowVoice(canvas, item, cachedSpec),
+      read: async (...args) => (await import("./web-flow-voice.ts")).read(...args),
+      apply: async (...args) => (await import("./web-flow-voice.ts")).apply(...args),
+    },
   },
 };
 

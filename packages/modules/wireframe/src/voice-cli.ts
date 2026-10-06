@@ -3,29 +3,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Command } from "commander";
 import type { CliHost } from "@isocan/cli/modulehost";
-import { newGroupId } from "@isocan/core";
 import type { CanvasContents } from "@isocan/core";
-import { copyDeck, wireCopyFile, type CopyDeck, type CopyEdit } from "@isocan/core/copy-deck";
-import {
-  MAX_COPY_VARIANTS,
-  checkCopyVariants,
-  copyVariantsRequest,
-  flowCopyDeck,
-  placeholderCopyVariants,
-  splitFlowEdits,
-  type FlowDeckScreen,
-} from "@isocan/core/copy-variants";
-import { voiceOf, type CopyVoice } from "@isocan/core/copy-voice";
-import { readSystemDoc } from "./behind.ts";
+import type { CopyEdit } from "@isocan/core/copy-deck";
+import { MAX_COPY_VARIANTS, checkCopyVariants, copyVariantsRequest, placeholderCopyVariants, splitFlowEdits, type FlowDeckScreen } from "@isocan/core/copy-variants";
 import { cliPort, localTextKey } from "./cli-port.ts";
-import { writeWireCopy } from "./copy-write.ts";
 import { resolveTextGenerator } from "./copy-schema.ts";
+import { applyFlowVoice, flowScreensOf, readFlowVoice } from "./flow-voice.ts";
 import { wiresOn, type Screen } from "./flow.ts";
-import { rebuildPrototypes } from "./kept-flows.ts";
-import { currentVersionOf, type WirePort } from "./port.ts";
-import { flowScreens } from "./presets.ts";
-import { governingSystem } from "./restyle.ts";
-import { wireTitle } from "./spec.ts";
 
 /**
  * **A voice for the flow** — `isocan wire voice` (copy-edit phase 5, journey
@@ -44,6 +28,9 @@ import { wireTitle } from "./spec.ts";
  * `words vary --from` takes, with flow addresses `<screen>::<address>`.
  * Without a text key the voices are placeholder words, said as such — the
  * whole path can be walked and nobody mistakes the filler for copy.
+ *
+ * Reading the flow and landing a voice are `flow-voice.ts`'s, which the
+ * canvas's *Choose a voice…* calls too: this file is the flags and the receipt.
  */
 
 interface Voice {
@@ -53,7 +40,7 @@ interface Voice {
 }
 
 /** The flow a reference names: every fleshed screen of it, in flow order, variations left out. */
-async function flowOf(host: CliHost, port: WirePort, canvas: CanvasContents, all: Screen[], refs: string[], flow: string | undefined): Promise<{ screens: Screen[]; flow: string }> {
+function flowOf(host: CliHost, canvas: CanvasContents, all: Screen[], refs: string[], flow: string | undefined): { screens: Screen[]; flow: string } {
   let seed: Screen[];
   if (refs.length > 0) {
     seed = refs.map((ref) => {
@@ -70,18 +57,7 @@ async function flowOf(host: CliHost, port: WirePort, canvas: CanvasContents, all
     if (flows.size !== 1) throw new Error(all.length === 0 ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `${flows.size} flows on this canvas — name a screen of one, or --flow <flow>`);
     seed = all;
   }
-  const screens = flowScreens(all, seed.map((s) => s.item)).filter((s) => !s.spec.variantOf || s.spec.variantOf === s.item);
-  void port;
-  return { screens, flow: screens[0]?.spec.flow || screens[0]?.item || "" };
-}
-
-/** The product's voice: the governing DESIGN.md's Voice section, or null. */
-async function productVoice(port: WirePort, canvas: CanvasContents, screen: Screen): Promise<CopyVoice | null> {
-  const item = canvas.items[screen.item];
-  const system = item ? governingSystem(canvas, item) : null;
-  if (!system) return null;
-  const doc = await readSystemDoc(system, (hash) => port.readText(hash));
-  return doc ? voiceOf(doc) : null;
+  return flowScreensOf(all, seed.map((s) => s.item));
 }
 
 /** What one voice changes on the first two screens — the preview the scene asks for. */
@@ -130,27 +106,13 @@ export function registerVoice(host: CliHost, wire: Command): void {
         const port = cliPort(host, ctx, p.id);
         const canvas = await port.canvas();
         const all = await wiresOn(port, canvas);
-        const { screens, flow } = await flowOf(host, port, canvas, all, refs, opts.flow);
+        const { screens, flow } = flowOf(host, canvas, all, refs, opts.flow);
 
         const n = opts.n === undefined ? undefined : Number(opts.n);
         if (n !== undefined && (!Number.isInteger(n) || n < 1 || n > MAX_COPY_VARIANTS)) throw new Error(`--n must be a whole number from 1 to ${MAX_COPY_VARIANTS} — got: ${opts.n}`);
 
-        // Each screen's deck from its file; a screen still drawing bars has no words and is left out.
-        const decks: FlowDeckScreen[] = [];
-        const htmlOf = new Map<string, string>();
-        for (const s of screens) {
-          const item = canvas.items[s.item];
-          const v = item ? currentVersionOf(item) : undefined;
-          if (!v) continue;
-          const html = await port.readText(v.blobHash);
-          const deck: CopyDeck = copyDeck(html);
-          if (deck.unfleshed || deck.strings.length === 0) continue;
-          htmlOf.set(s.item, html);
-          decks.push({ itemId: s.item, title: wireTitle(s.spec), deck });
-        }
-        if (decks.length === 0) throw new Error(`the flow's ${screens.length} screen${screens.length === 1 ? "" : "s"} draw bars — \`isocan wire flesh --flow ${flow}\` gives them words first`);
-        const deck = flowCopyDeck(decks);
-        const voice = await productVoice(port, canvas, screens.find((s) => s.item === decks[0]!.itemId)!);
+        const read = await readFlowVoice(port, canvas, screens, flow);
+        const { decks, deck, voice } = read;
 
         // The voices: a file, else one call for all N, else placeholders said as such.
         let raw: unknown;
@@ -203,19 +165,7 @@ export function registerVoice(host: CliHost, wire: Command): void {
 
         // A pick: every screen's share of that voice, one version each, one group, the prototype once.
         const chosen = pickVoice(voices, opts.pick);
-        const byScreen = splitFlowEdits(chosen.edits);
-        const group = newGroupId();
-        const changed: Array<{ item: string; title: string; spec: Screen["spec"]; strings: number }> = [];
-        for (const s of screens) {
-          const edits = byScreen.get(s.item);
-          const html = htmlOf.get(s.item);
-          if (!edits || !html) continue;
-          const file = wireCopyFile(html, edits);
-          if (!file.ok) throw new Error(`"${wireTitle(s.spec)}": ${file.reason}`);
-          const r = await writeWireCopy(port, canvas, all, s, file.file, by, undefined, { group, rebuild: false });
-          if (r.changed) changed.push({ item: s.item, title: wireTitle(r.next), spec: r.next, strings: file.changed.length });
-        }
-        const prototypes = changed.length ? await rebuildPrototypes(port, canvas, all, changed.map((c) => ({ item: c.item, spec: c.spec })), group) : [];
+        const { group, changed, prototypes } = await applyFlowVoice(port, canvas, all, read, chosen.edits, by);
         if (ctx.json) return printJson({ flow, stance: chosen.stance, by, placeholder, group, changed: changed.map((c) => ({ itemId: c.item, title: c.title, strings: c.strings })), prototypes });
         if (changed.length === 0) return void console.log(`the flow already speaks in "${chosen.stance}" — nothing written`);
         for (const c of changed) console.log(`${c.item}  ${c.title} — ${c.strings} string${c.strings === 1 ? "" : "s"}`);

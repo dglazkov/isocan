@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 5 Oct 2026: phases 0–4 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's; the key is on his machine since 5 Oct, so `wire voice`, `words vary` and `wire copy --ai` write real copy from the terminal). Phase 5 is PART-DONE — `isocan wire voice` is built and proved against a real model; the web's *Choose a voice* is next. Then phase 6, evidence.**
+**Where we are, 5 Oct 2026: phases 0–5 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's; the key is on his machine since 5 Oct, so `wire voice`, `words vary`, `wire copy --ai` and *Choose a voice…* on his own daemon write real copy). Next: copy-edit phase 6, evidence.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -148,14 +148,15 @@ non-fitting variant marked.
 
 ## Phase 5 — A voice for the flow
 
-**Status: PART-DONE, 5 October 2026.** The terminal half is built and proved
-against a real model: `isocan wire voice` on an 11-screen stub flow asked
-Claude once (22 s) and got three distinct voices — "Warm and unhurried",
-"Plain and quiet", "Neighbourly, a little chatty" — previewed on the first two
-screens; `--pick "Warm and unhurried"` wrote 8 screens and the prototype as one
-group, and one `isocan undo` put every word back. The web's *Choose a voice*
-is not built: a flow-wide preview on the canvas wants phase 3's compare at
-flow scale, which is its own piece of work.
+**Status: CLOSED, 5 October 2026.** Both halves. `isocan wire voice` was
+proved against a real model the same morning (three voices for an 11-screen
+flow from one call, one undo restoring every word). *Choose a voice…* on a
+fleshed flow's screen or prototype asks for N voices in the same one call,
+previews each on the flow's first two screens with the compare's marks, and
+*Use this voice* lands every screen and the prototype rebuild as one group:
+the `copy-voice` journey chose voice 2 on a 14-screen stub flow, saw every
+screen's words change, and one ⌘Z restored all 14. A web test holds the web's
+landing equal, op for op and file for file, to `wire voice --from --pick`.
 
 **Outcome:** after `wire flesh`, *Choose a voice* / `isocan wire voice <flow>
 --n 3` writes N voices for the whole flow, previews them, and applies the
@@ -183,9 +184,18 @@ a journey choosing a voice for a flow — owed with the web half.
 - **2026-10-05** — `writeWireCopy` gained `{ group, rebuild }` so eleven
   screens land in one group with the prototype rebuilt once, not eleven
   times; nothing else about the writer changed.
-- **2026-10-05** — Open: *Choose a voice* on the canvas; the journey;
-  `--brief` is the only steer and the product's Voice section is read but a
-  slip still refuses the whole answer with no retry (phase 4's open item).
+- **2026-10-05** — The web reaches the module through `WebCopyWriter.flow`
+  (module API 0.2.6); both surfaces call `flow-voice.ts`'s `readFlowVoice`
+  and `applyFlowVoice`, so the CLI's own copy of that logic is gone. The
+  preview draws each voice with the pure `copy.variant`; *Use this voice*
+  lands through the writer, never through the preview's files.
+- **2026-10-05** — Placeholder voices on a flow deck now change two loud
+  strings on every screen: changing only the first four strings of the flow
+  would have been a stub that lied about the whole-flow path.
+- **2026-10-05** — Open: no ⌘K action, only the item-menu row; the panel has
+  been checked by the journey's DOM assertions, not by eye; `--brief` is the
+  only steer, and a Voice slip still refuses the whole answer with no retry
+  (phase 4's open item).
 
 ## Phase 6 — Evidence
 

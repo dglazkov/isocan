@@ -22,3 +22,9 @@
 /* Fit (copy-edit phase 4): a string that does not fit its role in the rendered screen — a fact, not a refusal. */
 .cc-choice.misfit { border-style: dashed; border-color: var(--danger); }
 .cc-fit { display: block; margin-top: 2px; font-size: 12px; color: var(--danger); }
+/* Choose a voice… (copy-edit phase 5): the ask in the bar, and each voice's column two screens tall. */
+.cv-bar label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-muted); }
+.cv-bar input { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.cv-bar input[type="number"] { width: 56px; }
+.cv-brief input { width: min(260px, 40vw); }
+.cv-panes { height: 68vh; }

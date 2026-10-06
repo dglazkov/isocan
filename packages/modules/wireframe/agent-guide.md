@@ -296,6 +296,9 @@ bar, tab bar) stays.
   wrote yourself — `words vary --from`'s shape, with addresses
   `<screen>::<address>` (`isocan words <screen>` lists a screen's). Without a
   text key (`isocan keys set anthropic`) the voices are placeholders, said so.
+  A person does the same from **Choose a voice…** on the item menu of any
+  screen of a fleshed flow, or its prototype: the voices side by side on the
+  first two screens, *Use this voice* landing one as the same one group.
 - `isocan wire questions` prints the pending round of a flow (`--flow <id>`,
   default the newest waiting) as a file of calls, each a request in Jev's
   shape (`state` and named questions, of type `noul` — yes/no — `choice` or

@@ -239,14 +239,26 @@ export function splitFlowEdits(edits: readonly CopyEdit[]): Map<string, CopyEdit
  * **Placeholder voices, said as what they are** — what lands when no text
  * model was reachable (no key on this machine, `text-unavailable` from the
  * home). The screen's headings, buttons and links (else its first string)
- * read "Placeholder heading B", under a stance that says "Placeholder": the
- * whole path — variants, compare, choose, undo — can be walked, and nobody
+ * — on a flow's deck, two of them on every screen — read "Placeholder
+ * heading B", under a stance that says "Placeholder": the whole path — variants, compare, choose, undo — can be walked, and nobody
  * mistakes the filler for written copy. In the variant shape, so it passes
  * the same check a model's answer does.
  */
 export function placeholderCopyVariants(deck: CopyDeck, n: number): { variants: Array<{ stance: string; why: string; edits: Array<{ address: string; to: string }> }> } {
-  const loud = deck.strings.filter((s) => s.role === "heading" || s.role === "button" || s.role === "link").slice(0, 4);
-  const targets = loud.length ? loud : deck.strings.slice(0, 1);
+  const isLoud = (s: CopyDeck["strings"][number]) => s.role === "heading" || s.role === "button" || s.role === "link";
+  const pick = (strings: CopyDeck["strings"], most: number) => {
+    const loud = strings.filter(isLoud).slice(0, most);
+    return loud.length ? loud : strings.slice(0, 1);
+  };
+  // A flow's deck (phase 5): a voice is the whole flow's, so its placeholder says so on every screen, not the first two.
+  const screens = new Map<string, CopyDeck["strings"]>();
+  for (const s of deck.strings) {
+    const at = s.address.indexOf(FLOW_ADDRESS_SEP);
+    if (at < 0) continue;
+    const key = s.address.slice(0, at);
+    screens.set(key, [...(screens.get(key) ?? []), s]);
+  }
+  const targets = screens.size > 0 ? [...screens.values()].flatMap((strings) => pick(strings, 2)) : pick(deck.strings, 4);
   return {
     variants: Array.from({ length: n }, (_, i) => {
       const letter = String.fromCharCode(65 + i);

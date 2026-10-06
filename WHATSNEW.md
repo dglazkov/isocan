@@ -21,6 +21,14 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 5 October 2026
+
+- **One voice for a whole flow.** On a fleshed wireframe flow, *Choose a
+  voice…* (a screen's or the prototype's menu) writes three voices for every
+  screen at once, shows each on the first two screens, and *Use this voice*
+  rewrites the whole flow's words in one step — one undo puts every word
+  back. Agents: `isocan wire voice`.
+
 ## 2 October 2026
 
 - **Model keys, in one place.** *Model keys…* under *This machine* in your

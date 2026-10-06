@@ -229,6 +229,15 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
           run: () => void import("../components/VaryCopy.tsx").then((m) => (i ? m.openCopyCompare : m.openVaryCopy)({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
         }))
       : []),
+    // A voice for a whole wire flow (copy-edit phase 5) — `isocan wire voice` — on any screen of a fleshed flow or
+    // its prototype, as the module that draws flows says (`WebCopyWriter.flow.offers`). Loads on the click.
+    ...(one && shellModules().some((m) => m.copy?.flow?.offers(useCanvasStore.getState().canvas!, one))
+      ? [{
+          label: "Choose a voice…",
+          writes: true,
+          run: () => void import("../components/VaryCopy.tsx").then((m) => m.openChooseVoice({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
+        }]
+      : []),
     { separator: "" },
     {
       label: "Copy link",

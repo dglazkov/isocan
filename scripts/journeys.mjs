@@ -1833,6 +1833,96 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "copy-voice",
+    /**
+     * **A voice for the whole flow, from the web** (copy-edit phase 5,
+     * journey scene 5). A stub flow, fleshed, with its prototype; right-click
+     * a screen, *Choose a voice…*, write three (placeholders: this run's
+     * daemon holds no text model), each previewed on the flow's first two
+     * screens beside the flow as it reads now; *Use this voice* on the second:
+     * every screen of the flow says that voice's words, landed as one group.
+     * One ⌘Z puts every word back.
+     */
+    what: "Choose a voice… on a fleshed flow previews three voices on its first two screens, the second lands on every screen, and one ⌘Z restores every word",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme copy voice");
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+          cwd: rig.home, encoding: "utf8",
+          env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "acme-copy-voice-journey", ISOCAN_HARNESS: "test", ISOCAN_TEXT_API_KEY: "" },
+        });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Voice CLI");
+      runCli("--canvas", id, "wire", "a delivery app for Acme couriers — sign in, see today's parcels, open one", "--answerer", "stub", "--seed", "4", "--no-ask");
+      // The flow's screens with words, read the CLI's way without writing anything (a preview).
+      const flow = runCli("--canvas", id, "wire", "voice", "--answerer", "stub", "--n", "1", "--save", path.join(rig.home, "acme-voice-probe.json"));
+      const screens = flow.screens;
+      if (!Array.isArray(screens) || screens.length < 2) throw new Error(`the stub flow has ${screens?.length} screens with words, not a flow: ${JSON.stringify(flow)}`);
+      const words = () => Object.fromEntries(screens.map((s) => [s, runCli("--canvas", id, "words", s).strings.map((x) => x.text)]));
+      const original = words();
+      const sel = (itemId) => JSON.stringify(`.item[data-item-id="${itemId}"]`);
+      await until(b, `${JSON.stringify(screens)}.every((s) => !!document.querySelector(\`.item[data-item-id="\${s}"]\`))`, "the flow's screens to arrive on the canvas", 15000);
+      // Zoom to fit (⇧1), so the first screen is on screen to right-click.
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 8, key: "!", code: "Digit1", windowsVirtualKeyCode: 49 });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 8, key: "!", code: "Digit1", windowsVirtualKeyCode: 49 });
+      await sleep(800);
+
+      const mouse = (type, x, y, button = "left") => b.send("Input.dispatchMouseEvent", { type, x, y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+      const fromMenu = async (itemId, label) => {
+        const at = await b.ev(`(() => { const r = document.querySelector(${sel(itemId)}).getBoundingClientRect(); return { x: Math.round(r.left + 3), y: Math.round(r.bottom - 3) }; })()`);
+        await mouse("mouseMoved", at.x, at.y, "none");
+        await mouse("mousePressed", at.x, at.y, "right");
+        await mouse("mouseReleased", at.x, at.y, "right");
+        const row = `[...document.querySelectorAll(".context-menu button")].find((el) => el.textContent.trim().startsWith(${JSON.stringify(label)}))`;
+        await until(b, `!!${row} && !${row}.disabled`, `the item menu, offering "${label}"`, 6000);
+        const r = await b.ev(`(() => { const r = ${row}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        await mouse("mousePressed", r.x, r.y);
+        await mouse("mouseReleased", r.x, r.y);
+      };
+
+      await fromMenu(screens[0], "Choose a voice…");
+      await until(b, `!!document.querySelector("[data-choose-voice] .cv-bar input[type=number]")`, "the Choose a voice panel");
+      const asked = await b.ev(`document.querySelector("[data-choose-voice] .cv-bar input[type=number]").value`);
+      if (asked !== "3") throw new Error(`the panel asks for ${asked} voices by default, not 3`);
+      await rig.click("[data-choose-voice] .cv-bar button[type=submit]", "the Write 3 voices button");
+      // Three voices and the flow as it reads now, each two screens tall.
+      await until(b, `document.querySelectorAll("[data-choose-voice] .cc-col").length === 4 && document.querySelectorAll("[data-choose-voice] .cc-col iframe").length === 8`, "the flow now and three voices, each on two screens", 15000);
+      const columns = await b.ev(`[...document.querySelectorAll("[data-choose-voice] .cc-col")].map((c) => ({ k: c.dataset.voiceColumn, captions: [...c.querySelectorAll("figcaption")].map((f) => f.textContent), why: c.querySelector(".cc-why")?.textContent ?? "" }))`);
+      if (columns[0].k !== "now") throw new Error(`the first column is not the flow now: ${JSON.stringify(columns)}`);
+      for (const c of columns.slice(1)) if (!/^Placeholder [ABC] · /.test(c.captions[0] ?? "") || !c.why) throw new Error(`a voice's column does not say its stance and why: ${JSON.stringify(c)}`);
+      const notice = await b.ev(`document.querySelector(".notice, [role=status]")?.textContent ?? ""`);
+      const versionsBefore = Object.fromEntries(screens.map((s) => [s, runCli("--canvas", id, "show", s).versions.length]));
+
+      await rig.click(`[data-choose-voice] [data-voice-column="2"] button`, "voice 2's Use this voice");
+      await until(b, `!document.querySelector("[data-choose-voice]")`, "the panel to close once the voice lands", 15000);
+      // Every screen of the flow says voice 2's words, one new version each.
+      let now = original;
+      const settle = Date.now() + 10000;
+      const allChanged = (w) => screens.every((s) => JSON.stringify(w[s]) !== JSON.stringify(original[s]));
+      while (!allChanged(now) && Date.now() < settle) { await sleep(200); now = words(); }
+      const same = screens.filter((s) => JSON.stringify(now[s]) === JSON.stringify(original[s]));
+      if (same.length) throw new Error(`${same.length} of ${screens.length} screens still say their old words after the voice landed: ${JSON.stringify(same)}`);
+      for (const s of screens) if (!now[s].some((t) => /Placeholder .* B$/.test(t))) throw new Error(`screen ${s} does not say voice 2's words: ${JSON.stringify(now[s])}`);
+      for (const s of screens) {
+        const n = runCli("--canvas", id, "show", s).versions.length;
+        if (n !== versionsBefore[s] + 1) throw new Error(`screen ${s} took ${n - versionsBefore[s]} versions, not one`);
+      }
+
+      // One ⌘Z: every word of every screen back.
+      const MOD = process.platform === "darwin" ? 4 : 2;
+      await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+      await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+      let back = now;
+      const undoBy = Date.now() + 10000;
+      while (JSON.stringify(back) !== JSON.stringify(original) && Date.now() < undoBy) { await sleep(200); back = words(); }
+      if (JSON.stringify(back) !== JSON.stringify(original)) throw new Error(`one ⌘Z did not restore every screen's words: ${JSON.stringify(back)}`);
+      return { screens: screens.length, voices: columns.slice(1).map((c) => c.captions[0]), notice, chose: columns[2].captions[0] };
+    },
+  },
+  {
     name: "bench-join",
     /**
      * **The bench, phase 1 — journey 2, walked.**

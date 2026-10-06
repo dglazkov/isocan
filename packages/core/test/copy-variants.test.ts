@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyCopyDeck, applyCopyDeckToFace, copyDeck } from "../src/copy-deck.ts";
 import { PARENT_PROP } from "../src/lineage.ts";
 import { PLACEMENT_GAP } from "../src/placement.ts";
-import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_GAP, VARIANT_PARENT_PROP, checkCopyVariants, copyMixEdits, copyMixOps, copyMixRows, copyVariantOps, copyVariantsOf, copyVariantsRequest, placeholderCopyVariants } from "../src/copy-variants.ts";
+import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_GAP, VARIANT_PARENT_PROP, checkCopyVariants, copyMixEdits, copyMixOps, copyMixRows, copyVariantOps, copyVariantsOf, copyVariantsRequest, flowCopyDeck, placeholderCopyVariants, splitFlowEdits } from "../src/copy-variants.ts";
 import { parseVoiceSection } from "../src/copy-voice.ts";
 import { stubTextGenerator } from "../src/jev.ts";
 import type { CanvasContents, Item } from "../src/model.ts";
@@ -125,6 +125,17 @@ describe("placeholderCopyVariants — said as what they are", () => {
     expect(r.variants.map((v) => v.stance)).toEqual(["Placeholder A", "Placeholder B", "Placeholder C"]);
     expect(r.variants[1]!.edits.map((e) => e.to)).toEqual(["Placeholder heading B", "Placeholder button B"]);
     expect(r.variants[0]!.why).toContain("not written copy");
+  });
+
+  it("on a flow's deck, says so on every screen — a flow's voice is the whole flow's (copy-edit phase 5)", () => {
+    const screens = ["itm_a", "itm_b", "itm_c"].map((itemId) => ({ itemId, title: itemId, deck }));
+    const flow = flowCopyDeck(screens);
+    const r = checkCopyVariants(flow, placeholderCopyVariants(flow, 2), 2);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const byScreen = splitFlowEdits(r.variants[1]!.edits);
+    expect([...byScreen.keys()]).toEqual(["itm_a", "itm_b", "itm_c"]);
+    for (const edits of byScreen.values()) expect(edits.map((e) => e.to)).toEqual(["Placeholder heading B", "Placeholder button B"]);
   });
 });
 
