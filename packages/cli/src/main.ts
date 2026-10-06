@@ -7325,8 +7325,8 @@ program
   );
 
 program
-  .command("mv <item> [x] [y]")
-  .description("Move an item — to x y, by a delta with --by, or next to another with --beside")
+  .command("mv <item> [x] [y] [more...]")
+  .description("Move an item — to x y, by a delta with --by, or next to another with --beside; several at once as item x y item x y …")
   .option("--by <dx,dy>", "move relative to where it is now, e.g. --by 0,-40")
   .option("--beside <item>", "put it next to this item, clear of it by the standard gap")
   .option("--side <side>", "with --beside: left | right | above | below (default: right)")
@@ -7342,11 +7342,40 @@ program
         ref: string,
         x: string | undefined,
         y: string | undefined,
+        more: string[],
         opts: { by?: string; in?: string; out?: boolean; toRoot?: boolean; cell?: string; dryRun?: boolean; beside?: string; side?: string },
         cmd: Command,
       ) => {
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+        /**
+         * **Several items, one act.** Separate `mv` calls on one group each
+         * plan against the group as they read it, so the second to land finds
+         * its plan stale ("canvas group changed since planning"), and each
+         * call pays a process start. Triples are the same absolute moves sent
+         * as one transform: one plan, one undo.
+         */
+        if (more.length > 0) {
+          if (more.length % 3 !== 0 || opts.by !== undefined || opts.beside !== undefined || opts.in !== undefined || opts.cell !== undefined || opts.out || opts.toRoot) {
+            throw new Error("several items move as item x y triples and nothing else, e.g. `isocan mv itm_a 0 0 itm_b 400 0`");
+          }
+          const triples = [[ref, x, y], ...Array.from({ length: more.length / 3 }, (_, i) => more.slice(i * 3, i * 3 + 3))];
+          const targets = triples.map(([one, tx, ty]) => ({ ref: one!, at: positionalXY(tx, ty) }));
+          if (snapshot.project.groupMode === "groups") {
+            return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).moveMany(targets, opts));
+          }
+          if (opts.dryRun) throw new Error("mv --dry-run requires a group-enabled canvas");
+          const moves = targets.flatMap(({ ref: one, at }) => {
+            const item = resolveItem(snapshot, one);
+            return [
+              { itemId: item.id, ...at },
+              ...annotationsOf(snapshot.canvas, item.id).map((mark) => ({ itemId: mark.id, x: mark.x + at.x - item.x, y: mark.y + at.y - item.y })),
+            ];
+          });
+          await sendOp(ctx, p.id, { type: "items.move", moves });
+          console.log(`moved ${targets.length} items`);
+          return;
+        }
         /**
          * **"Next to", from the terminal** — the same second referent the
          * voice tool got in #337, resolved here the same way.
@@ -7441,23 +7470,7 @@ program
                 if (x === undefined || y === undefined) {
                   throw new Error("give x and y, or a delta with --by");
                 }
-                // `allowUnknownOption` is what lets `mv itm -80 420` through
-                // with a negative x — and the same permission hands us the
-                // FLAG as an operand when somebody writes `mv itm --to 300,200`
-                // (an invention: the coordinates are positional). Unchecked,
-                // `Number("--to")` is NaN, and NaN serializes to null, so the
-                // item's position was permanently `null,null`. Say what was
-                // wrong with what they typed.
-                const at = { x: Number(x), y: Number(y) };
-                if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) {
-                  const bad = [!Number.isFinite(at.x) ? x : null, !Number.isFinite(at.y) ? y : null]
-                    .filter((one) => one !== null)
-                    .join(" ");
-                  throw new Error(
-                    `x and y are positional numbers, e.g. \`isocan mv <item> 300 200\` — got: ${bad}`,
-                  );
-                }
-                return at;
+                return positionalXY(x, y);
               })();
         // What is drawn on a thing travels with it — the same rule the web app's
         // drag follows, so a move from either side keeps the marks in place.
@@ -7494,6 +7507,25 @@ program
       },
     ),
   );
+
+/**
+ * `allowUnknownOption` is what lets `mv itm -80 420` through with a negative
+ * x — and the same permission hands us the FLAG as an operand when somebody
+ * writes `mv itm --to 300,200` (an invention: the coordinates are
+ * positional). Unchecked, `Number("--to")` is NaN, and NaN serializes to
+ * null, so the item's position was permanently `null,null`. Say what was
+ * wrong with what they typed.
+ */
+function positionalXY(x: string | undefined, y: string | undefined): { x: number; y: number } {
+  const at = { x: Number(x), y: Number(y) };
+  if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) {
+    const bad = [!Number.isFinite(at.x) ? x : null, !Number.isFinite(at.y) ? y : null]
+      .filter((one) => one !== null)
+      .join(" ");
+    throw new Error(`x and y are positional numbers, e.g. \`isocan mv <item> 300 200\` — got: ${bad}`);
+  }
+  return at;
+}
 
 /** Send a tidy as ONE op, so undo takes the whole gesture back. */
 async function applyMoves(

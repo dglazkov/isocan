@@ -774,7 +774,10 @@ isocan fit <items...>                  # grow items to the size their content wa
   left|hcenter|right|top|vcenter|bottom` and `isocan distribute <items…>
   --axis h|v`. Both are one op, so one undo, and both are no-ops when things
   are already in place. `isocan mv <item> --by 0,-40` nudges without doing the
-  arithmetic yourself.
+  arithmetic yourself. To place several items, give `mv` one triple per item —
+  `isocan mv itm_a 0 0 itm_b 420 0 itm_c 840 0` — one op and one undo. Parallel
+  `mv` calls in one group refuse each other ("canvas group changed since
+  planning").
 - **Renaming moves the file too.** `isocan set <item> --title "Bass tab v2"`
   also renames the blob to `bass-tab-v2.png`, stepping aside from any name the
   canvas already uses — the same act the web app performs, so the two never
