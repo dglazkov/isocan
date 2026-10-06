@@ -367,6 +367,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   in*, never *log in*) — goes into every voice's question and refuses a
   voice that breaks it; `isocan words lint` checks a flow's words against
   it, one name per thing across screens, and the copy tells.
+- **A voice for the flow**: `isocan wire voice <screen> --n 3` and *Choose a
+  voice…* on a fleshed wire flow write N voices for the WHOLE flow in one
+  call — one voice is one voice on every screen — previewed side by side on
+  its first two screens. The one you pick lands on every screen as one op
+  group with the prototype rebuilt; one undo takes every word back.
 - **Your color**: the color you wear — cursor, face in the pile, comment pins,
   the outline on an item you are holding, and your Pen's default ink. It is
   derived from your actor id so a new actor has one immediately, and picking

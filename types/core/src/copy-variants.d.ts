@@ -97,8 +97,8 @@ export declare function splitFlowEdits(edits: readonly CopyEdit[]): Map<string, 
  * **Placeholder voices, said as what they are** — what lands when no text
  * model was reachable (no key on this machine, `text-unavailable` from the
  * home). The screen's headings, buttons and links (else its first string)
- * read "Placeholder heading B", under a stance that says "Placeholder": the
- * whole path — variants, compare, choose, undo — can be walked, and nobody
+ * — on a flow's deck, two of them on every screen — read "Placeholder
+ * heading B", under a stance that says "Placeholder": the whole path — variants, compare, choose, undo — can be walked, and nobody
  * mistakes the filler for written copy. In the variant shape, so it passes
  * the same check a model's answer does.
  */

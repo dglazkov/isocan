@@ -3,7 +3,8 @@ import type { Canvas, CanvasContents, Item } from "./model.js";
 import type { Operation } from "./ops.js";
 import type { JudgmentRequest } from "./judgment.js";
 import type { TextRequest } from "./text.js";
-import type { CopyEdit } from "./copy-deck.js";
+import type { CopyDeck, CopyEdit } from "./copy-deck.js";
+import type { CopyVoice } from "./copy-voice.js";
 import type { CommandMetadata, SlashCommand } from "./commands.js";
 /**
  * **The module registry** (`docs/projects/modules/design.md`).
@@ -902,6 +903,10 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
  *   in: a module whose file is its own render draws from the new words; one
  *   whose file was crafted by hand keeps those bytes and carries the new
  *   words in its spec.
+ * - `flow` (copy-edit phase 5, module API 0.2.6): *Choose a voice…* — a
+ *   whole flow's words as one deck, and one voice landed on every screen as
+ *   one op group with the prototype rebuilt once. The twin of `isocan wire
+ *   voice`; both call the module's one reading and one landing.
  */
 export interface WebCopyWriter {
     /** The `CopyDeck.kind` this writes: `"wire"`. */
@@ -930,6 +935,37 @@ export interface WebCopyWriter {
         html?: string;
     }) => Promise<{
         changed: string[];
+    }>;
+    /** A flow's voice: whether an item offers it, the flow's words read, and one voice landed. Optional: a module with no flows has none. */
+    flow?: WebFlowVoice;
+}
+/** What one screen of a flow says, for *Choose a voice…*: its id, its title, its own deck and its current file. */
+interface FlowVoiceScreen {
+    itemId: string;
+    title: string;
+    deck: CopyDeck;
+    html: string;
+}
+/** **A whole flow's words, from the browser** (copy-edit phase 5) — `WebCopyWriter.flow`. */
+export interface WebFlowVoice {
+    /** Whether *Choose a voice…* is offered on this item: a screen of a fleshed flow, or its prototype. Synchronous — a menu cannot wait. */
+    offers: (canvas: CanvasContents, item: Item) => boolean;
+    /** The flow this item is in, read: its fleshed screens in flow order, the flow as one deck (addresses `<screen>::<address>`), and the product's Voice. */
+    read: (host: Pick<DialogHost, "readText" | "getCanvas">, canvasId: string, itemId: string) => Promise<{
+        flow: string;
+        screens: FlowVoiceScreen[];
+        deck: CopyDeck;
+        voice: CopyVoice | null;
+    }>;
+    /** One voice's edits (flow addresses) on every screen they touch, as ONE op group, the prototype rebuilt once. */
+    apply: (host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas"> & Partial<Pick<DialogHost, "viewer">>, canvasId: string, itemId: string, edits: readonly CopyEdit[], by: string) => Promise<{
+        group: string;
+        changed: Array<{
+            itemId: string;
+            title: string;
+            strings: number;
+        }>;
+        prototypes: number;
     }>;
 }
 /**
@@ -1054,8 +1090,13 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * second bump: both landed before anything was built against 0.2.5, and
  * both are optional parts a module provides, never one it is handed. A
  * module built for `^0.2.4` still loads.
+ *
+ * **0.2.5 → 0.2.6 on 5 Oct 2026**, an addition: `WebCopyWriter.flow`, a
+ * flow's voice a module MAY provide (copy-edit phase 5), read by *Choose a
+ * voice…*. Optional and provided, never handed: a module built for `^0.2.5`
+ * still loads.
  */
-export declare const MODULE_API_VERSION = "0.2.5";
+export declare const MODULE_API_VERSION = "0.2.6";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.
