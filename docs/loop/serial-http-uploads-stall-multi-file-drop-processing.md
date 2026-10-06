@@ -1,9 +1,10 @@
 ---
-title: "Serial HTTP uploads stall multi-file drop processing"
-loop: f6d2b4c2-1e5c-4171-be94-b8323780b77e
+title: Serial HTTP uploads stall multi-file drop processing
+loop:
+  - f6d2b4c2-1e5c-4171-be94-b8323780b77e
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: declined
 rank: never
 project: new

@@ -1,9 +1,10 @@
 ---
-title: "Lack of spatial task assignment nodes"
-loop: 4a6fa57d-7938-4722-b1c1-ff8699f86970
+title: Lack of spatial task assignment nodes
+loop:
+  - 4a6fa57d-7938-4722-b1c1-ff8699f86970
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

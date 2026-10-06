@@ -1,9 +1,10 @@
 ---
-title: "Evaluation scripts depend on unpinned external CLIs"
-loop: df9a031e-f9fc-4f20-a896-1f206e88e872
+title: Evaluation scripts depend on unpinned external CLIs
+loop:
+  - df9a031e-f9fc-4f20-a896-1f206e88e872
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: untriaged
 ---
 

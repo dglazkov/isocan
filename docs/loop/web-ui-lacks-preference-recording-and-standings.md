@@ -1,9 +1,10 @@
 ---
-title: "Web UI lacks preference recording and standings"
-loop: cdfb5645-acde-40de-ad0c-91c6cffaaf50
+title: Web UI lacks preference recording and standings
+loop:
+  - cdfb5645-acde-40de-ad0c-91c6cffaaf50
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: untriaged
 ---
 

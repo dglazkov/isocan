@@ -1,9 +1,10 @@
 ---
-title: "Context pin copying awaits synchronous blob uploads"
-loop: 606aa4d9-4fa4-4a6b-94b8-173e234fffe8
+title: Context pin copying awaits synchronous blob uploads
+loop:
+  - 606aa4d9-4fa4-4a6b-94b8-173e234fffe8
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

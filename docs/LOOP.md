@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 42 not yet read.**
+**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 50 not yet read.**
 
 ## Accepted, by project
 
@@ -89,7 +89,9 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 
 ## Not yet read
 
+- [Absence of canvas brand media asset libraries](loop/absence-of-canvas-brand-media-asset-libraries.md) — Loop P2
 - [Absence of canvas design directives for AI](loop/absence-of-canvas-design-directives-for-ai.md) — Loop P2
+- [Absence of spatial canvas history diffing](loop/absence-of-spatial-canvas-history-diffing.md) — Loop P2
 - [Absence of spatial comment thread lifecycle status](loop/absence-of-spatial-comment-thread-lifecycle-status.md) — Loop P2
 - [Absence of structured canvas handoff spec cards](loop/absence-of-structured-canvas-handoff-spec-cards.md) — Loop P2
 - [Agent operations directly mutate active canvas state](loop/agent-operations-directly-mutate-active-canvas-state.md) — Loop P2
@@ -101,6 +103,7 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 - [Design briefs lack structured prompt templates](loop/design-briefs-lack-structured-prompt-templates.md) — Loop P2
 - [Design competition arena creation awaits network uploads](loop/design-competition-arena-creation-awaits-network-uploads.md) — Loop P2
 - [Design recipe addition blocks on remote blob upload](loop/design-recipe-addition-blocks-on-remote-blob-upload.md) — Loop P2
+- [Design system dialog polling triggers network traffic](loop/design-system-dialog-polling-triggers-network-traffic.md) — Loop P2
 - [Evaluation scripts depend on unpinned external CLIs](loop/evaluation-scripts-depend-on-unpinned-external-clis.md) — Loop P2
 - [Group brief creation waits for blob upload](loop/group-brief-creation-waits-for-blob-upload.md) — Loop P2
 - [Jetski plugin relies on unmanaged sidecar SDK](loop/jetski-plugin-relies-on-unmanaged-sidecar-sdk.md) — Loop P2
@@ -108,12 +111,17 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 - [Lack of component interface prop-table canvas documentation](loop/lack-of-component-interface-prop-table-canvas-documentation.md) — Loop P2
 - [Lack of multi-screen user flow canvas scaffolding](loop/lack-of-multi-screen-user-flow-canvas-scaffolding.md) — Loop P2
 - [Lack of spatial canvas semantic query indexing](loop/lack-of-spatial-canvas-semantic-query-indexing.md) — Loop P2
+- [Lack of spatial design system theme variants](loop/lack-of-spatial-design-system-theme-variants.md) — Loop P2
 - [Lack of spatial task assignment nodes](loop/lack-of-spatial-task-assignment-nodes.md) — Loop P2
 - [Lack of structured design decision rationale documentation](loop/lack-of-structured-design-decision-rationale-documentation.md) — Loop P2
 - [Missing cross canvas component library sync](loop/missing-cross-canvas-component-library-sync.md) — Loop P2
+- [Missing spatial canvas viewport camera bookmarks](loop/missing-spatial-canvas-viewport-camera-bookmarks.md) — Loop P2
 - [Model key management lacks optimistic UI updates](loop/model-key-management-lacks-optimistic-ui-updates.md) — Loop P2
 - [Scripts hardcode relative node module paths](loop/scripts-hardcode-relative-node-module-paths.md) — Loop P2
+- [Serial blob downloads stall canvas exports](loop/serial-blob-downloads-stall-canvas-exports.md) — Loop P2
 - [Serial blob uploads stall copy variant generation](loop/serial-blob-uploads-stall-copy-variant-generation.md) — Loop P2
+- [Serial Google Doc sync stalls canvas updates](loop/serial-google-doc-sync-stalls-canvas-updates.md) — Loop P2
+- [Spatial canvas lacks design decision record nodes](loop/spatial-canvas-lacks-design-decision-record-nodes.md) — Loop P2
 - [Speaker note creation blocks on network upload](loop/speaker-note-creation-blocks-on-network-upload.md) — Loop P2
 - [Sprint desk hand-in executes serial network roundtrips](loop/sprint-desk-hand-in-executes-serial-network-roundtrips.md) — Loop P2
 - [Stage editor blocks save on network upload](loop/stage-editor-blocks-save-on-network-upload.md) — Loop P2

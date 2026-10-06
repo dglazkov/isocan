@@ -1,9 +1,10 @@
 ---
-title: "Lack of reusable component symbol library instantiation"
-loop: 3a860a15-2233-4032-aeb1-31a26c857bb1
+title: Lack of reusable component symbol library instantiation
+loop:
+  - 3a860a15-2233-4032-aeb1-31a26c857bb1
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: accepted
 rank: later
 project: new

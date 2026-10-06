@@ -1,9 +1,10 @@
 ---
-title: "Duplicated and misclassified monorepo package dependencies"
-loop: e7d98d1b-6c1f-430a-a3f9-7f695544b104
+title: Duplicated and misclassified monorepo package dependencies
+loop:
+  - e7d98d1b-6c1f-430a-a3f9-7f695544b104
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: declined
 rank: never
 project: auto-upgrade

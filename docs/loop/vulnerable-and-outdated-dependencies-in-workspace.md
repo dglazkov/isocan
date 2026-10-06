@@ -1,9 +1,10 @@
 ---
-title: "Vulnerable and outdated dependencies in workspace"
-loop: 40437536-1c73-4210-80ec-83648e228170
+title: Vulnerable and outdated dependencies in workspace
+loop:
+  - 40437536-1c73-4210-80ec-83648e228170
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: done
 rank: next
 project: new

@@ -1,9 +1,10 @@
 ---
-title: "Arrival and viewer gates block initial render"
-loop: e42ed041-a7d9-466d-b15c-743c706dcf46
+title: Arrival and viewer gates block initial render
+loop:
+  - e42ed041-a7d9-466d-b15c-743c706dcf46
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: declined
 rank: never
 project: first-minute

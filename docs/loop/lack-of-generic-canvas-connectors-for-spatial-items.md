@@ -1,14 +1,15 @@
 ---
-title: "Lack of generic canvas connectors for spatial items"
-loop: dd810989-d114-4d04-b4a0-c4b1a4725e96
+title: Lack of generic canvas connectors for spatial items
+loop:
+  - dd810989-d114-4d04-b4a0-c4b1a4725e96
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: mindmap
 since: 2026-09-29
-note: "Real arrows exist in the mindmap and wireframe modules only. Worth scheduling only if a use beyond maps and flows appears; none has. Reopen with a named one."
+note: Real arrows exist in the mindmap and wireframe modules only. Worth scheduling only if a use beyond maps and flows appears; none has. Reopen with a named one.
 ---
 
 # Lack of generic canvas connectors for spatial items

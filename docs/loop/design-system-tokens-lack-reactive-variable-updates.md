@@ -1,9 +1,10 @@
 ---
-title: "Design system tokens lack reactive variable updates"
-loop: a29dc7c5-341b-4827-bf23-65e014456313
+title: Design system tokens lack reactive variable updates
+loop:
+  - a29dc7c5-341b-4827-bf23-65e014456313
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: design-lint

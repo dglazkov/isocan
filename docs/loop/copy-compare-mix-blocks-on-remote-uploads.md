@@ -1,9 +1,10 @@
 ---
-title: "Copy compare mix blocks on remote uploads"
-loop: 809969c5-3a4a-4565-9c38-a31544a46bc0
+title: Copy compare mix blocks on remote uploads
+loop:
+  - 809969c5-3a4a-4565-9c38-a31544a46bc0
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

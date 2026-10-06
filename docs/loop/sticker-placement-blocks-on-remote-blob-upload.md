@@ -1,9 +1,10 @@
 ---
-title: "Sticker placement blocks on remote blob upload"
-loop: f9687e4a-bd86-4b2e-987c-b383806c1a62
+title: Sticker placement blocks on remote blob upload
+loop:
+  - f9687e4a-bd86-4b2e-987c-b383806c1a62
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

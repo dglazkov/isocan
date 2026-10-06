@@ -1,9 +1,10 @@
 ---
-title: "Group brief creation waits for blob upload"
-loop: ba83261f-6b70-485f-8c89-27e6f8ac5de9
+title: Group brief creation waits for blob upload
+loop:
+  - ba83261f-6b70-485f-8c89-27e6f8ac5de9
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

@@ -1,9 +1,10 @@
 ---
-title: "Web UI lacks design sprint facilitation controls"
-loop: d07aea36-1262-4014-b0e7-4856d0002054
+title: Web UI lacks design sprint facilitation controls
+loop:
+  - d07aea36-1262-4014-b0e7-4856d0002054
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: untriaged
 ---
 

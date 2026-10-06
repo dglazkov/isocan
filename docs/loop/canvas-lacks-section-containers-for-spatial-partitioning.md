@@ -1,9 +1,10 @@
 ---
-title: "Canvas lacks section containers for spatial partitioning"
-loop: b5d5c349-3169-49db-b09d-f910324ccb7c
+title: Canvas lacks section containers for spatial partitioning
+loop:
+  - b5d5c349-3169-49db-b09d-f910324ccb7c
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

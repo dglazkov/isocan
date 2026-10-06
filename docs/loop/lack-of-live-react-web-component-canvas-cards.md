@@ -1,9 +1,10 @@
 ---
-title: "Lack of live React web component canvas cards"
-loop: 07856fbb-83d4-409d-89b9-11580be332dc
+title: Lack of live React web component canvas cards
+loop:
+  - 07856fbb-83d4-409d-89b9-11580be332dc
 loop_rank: P1
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: extensions

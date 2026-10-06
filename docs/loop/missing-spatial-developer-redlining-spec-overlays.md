@@ -1,9 +1,10 @@
 ---
-title: "Missing spatial developer redlining spec overlays"
-loop: a2b675a0-16ad-41a5-869e-5b749a465187
+title: Missing spatial developer redlining spec overlays
+loop:
+  - a2b675a0-16ad-41a5-869e-5b749a465187
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: wireframes

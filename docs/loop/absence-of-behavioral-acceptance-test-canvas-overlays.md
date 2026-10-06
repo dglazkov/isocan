@@ -1,9 +1,10 @@
 ---
-title: "Absence of behavioral acceptance test canvas overlays"
-loop: 197738b3-fc9d-4c85-954c-b320737c1f91
+title: Absence of behavioral acceptance test canvas overlays
+loop:
+  - 197738b3-fc9d-4c85-954c-b320737c1f91
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: design-lint

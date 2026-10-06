@@ -1,9 +1,10 @@
 ---
-title: "Absence of reactive auto-layout and item nesting"
-loop: 92ab20cc-7f2c-4a3f-a4f7-69103e1c89a3
+title: Absence of reactive auto-layout and item nesting
+loop:
+  - 92ab20cc-7f2c-4a3f-a4f7-69103e1c89a3
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: stale
 rank: never
 project: canvas-groups

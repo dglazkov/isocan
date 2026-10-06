@@ -1,9 +1,10 @@
 ---
-title: "Web UI lacks persona docket review interface"
-loop: 2d2c57cd-6b98-4073-8b3a-49951eaf231e
+title: Web UI lacks persona docket review interface
+loop:
+  - 2d2c57cd-6b98-4073-8b3a-49951eaf231e
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: untriaged
 ---
 

@@ -1,9 +1,10 @@
 ---
-title: "Sprint desk hand-in executes serial network roundtrips"
-loop: 7142ae7d-be22-4779-847c-59e001468c9e
+title: Sprint desk hand-in executes serial network roundtrips
+loop:
+  - 7142ae7d-be22-4779-847c-59e001468c9e
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

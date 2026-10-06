@@ -1,9 +1,10 @@
 ---
-title: "Wireframe slots lack design token palette bindings"
-loop: 93812b83-9d4c-4244-ba6c-f9028e6d047f
+title: Wireframe slots lack design token palette bindings
+loop:
+  - 93812b83-9d4c-4244-ba6c-f9028e6d047f
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

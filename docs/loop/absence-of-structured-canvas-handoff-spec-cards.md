@@ -1,9 +1,10 @@
 ---
-title: "Absence of structured canvas handoff spec cards"
-loop: ffa2d1f8-082e-4c16-b00f-38ba798fb4de
+title: Absence of structured canvas handoff spec cards
+loop:
+  - ffa2d1f8-082e-4c16-b00f-38ba798fb4de
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

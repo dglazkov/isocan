@@ -1,9 +1,10 @@
 ---
-title: "Heavy parser dependencies bloat web entry chunk"
-loop: 3ae25c04-e537-43f4-b3e4-b1672de10d50
+title: Heavy parser dependencies bloat web entry chunk
+loop:
+  - 3ae25c04-e537-43f4-b3e4-b1672de10d50
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: done
 rank: next
 project: design-partner

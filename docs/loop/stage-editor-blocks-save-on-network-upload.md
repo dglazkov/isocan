@@ -1,9 +1,10 @@
 ---
-title: "Stage editor blocks save on network upload"
-loop: cbeee0ba-c45b-4dec-9224-f77b96d3e705
+title: Stage editor blocks save on network upload
+loop:
+  - cbeee0ba-c45b-4dec-9224-f77b96d3e705
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

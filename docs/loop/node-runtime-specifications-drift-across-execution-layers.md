@@ -1,9 +1,10 @@
 ---
-title: "Node runtime specifications drift across execution layers"
-loop: 28e7b57d-7fd9-4c9b-9b38-3deeb6cf5aa5
+title: Node runtime specifications drift across execution layers
+loop:
+  - 28e7b57d-7fd9-4c9b-9b38-3deeb6cf5aa5
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: declined
 rank: never
 project: new

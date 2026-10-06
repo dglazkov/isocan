@@ -1,9 +1,10 @@
 ---
-title: "Lack of multi-screen user flow canvas scaffolding"
-loop: 6bddc804-0cfd-4686-9e07-ebd2ef9a69a9
+title: Lack of multi-screen user flow canvas scaffolding
+loop:
+  - 6bddc804-0cfd-4686-9e07-ebd2ef9a69a9
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

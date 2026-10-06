@@ -1,9 +1,10 @@
 ---
-title: "Absence of spatial comment thread lifecycle status"
-loop: 3c77a03b-4f46-4cfb-966a-455789a21e9b
+title: Absence of spatial comment thread lifecycle status
+loop:
+  - 3c77a03b-4f46-4cfb-966a-455789a21e9b
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

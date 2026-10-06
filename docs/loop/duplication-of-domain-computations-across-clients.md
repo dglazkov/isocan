@@ -1,9 +1,10 @@
 ---
-title: "Duplication of domain computations across clients"
-loop: 08f51c0f-d98f-4206-a460-b3824a3b7dbc
+title: Duplication of domain computations across clients
+loop:
+  - 08f51c0f-d98f-4206-a460-b3824a3b7dbc
 loop_rank: P2
 loop_state: RESOLVED
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: done
 rank: next
 project: cleanup

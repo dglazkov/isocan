@@ -1,9 +1,10 @@
 ---
-title: "Lack of spatial canvas semantic query indexing"
-loop: b81d2688-c8a1-433b-a9bf-47a51dc40527
+title: Lack of spatial canvas semantic query indexing
+loop:
+  - b81d2688-c8a1-433b-a9bf-47a51dc40527
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

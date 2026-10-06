@@ -1,9 +1,10 @@
 ---
-title: "Spatial diffing missing for agent design edits"
-loop: ba981125-0632-4320-91c1-70d02ac7d6d3
+title: Spatial diffing missing for agent design edits
+loop:
+  - ba981125-0632-4320-91c1-70d02ac7d6d3
 loop_rank: P2
 loop_state: RESOLVED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: done
 rank: next
 project: version-diff

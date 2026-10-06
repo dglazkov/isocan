@@ -1,9 +1,10 @@
 ---
-title: "CLI lacks interactive questionnaire authoring commands"
-loop: 55c3f502-e58f-416f-8023-c43b420f5fb4
+title: CLI lacks interactive questionnaire authoring commands
+loop:
+  - 55c3f502-e58f-416f-8023-c43b420f5fb4
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: untriaged
 ---
 

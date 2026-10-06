@@ -1,9 +1,10 @@
 ---
-title: "Serial blob uploads stall copy variant generation"
-loop: 78c25c4e-a2fe-4939-b38f-50980cce5e34
+title: Serial blob uploads stall copy variant generation
+loop:
+  - 78c25c4e-a2fe-4939-b38f-50980cce5e34
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 
