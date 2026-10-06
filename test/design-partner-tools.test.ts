@@ -76,7 +76,12 @@ it("delivers exact image blocks and real CLI/browser actions through an actual s
     const forbidden = await client.callTool({ name: "read_file", arguments: { path: "../config.json" } }); expect(forbidden.isError).toBe(true);
     const trace = await fs.readFile(path.join(directory, "evidence/tools.jsonl"), "utf8"); expect(trace).toContain('"deliveredAs":"MCP image content"'); expect(trace).not.toContain(png.toString("base64"));
   } finally { await client.close(); await transport.close(); await fixture.close(); }
-});
+  // Its own budget, measured (6 Oct 2026): ~3 s alone on a laptop, ~10 s with
+  // eight copies and every core busy, and past the 30 s default twice on 4-vCPU
+  // runners (release 1f752477, keel-loop 37407406845), each time it spawns an
+  // MCP child, Chrome and several CLI processes. Lesson 101 says a longer limit
+  // can hide the next timeout; this one is the test's real cost, not a guess.
+}, 90_000);
 
 it("binds all workflow file options and preserves only supplied inaccessible URL metadata", async () => {
   const directory = await temporary(), config: any = { workspace: directory, base: "http://127.0.0.1:1234", canvasId: "prj_acme", condition: "B", mapping: { unavailableReferences: [{ url: "https://supplied.invalid/reference", state: "inaccessible" }] } };
