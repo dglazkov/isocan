@@ -117,11 +117,11 @@ on the branch, then drains older `practice/` PRs oldest first with
 ceilings are proposed on the page, never done by the run.
 
 **Loop pulls prove, propose, and merge themselves — and only the findings.**
-`loop.yml` reads Stitch Loop, files new insights in `docs/loop/`, and (when
-`ANTHROPIC_API_KEY` is set) proves every untriaged claim against the codebase
-and records a proposal via `loop.mjs propose` (`decision: proposed`). It never
-decides, pushes or mines, because a decision dismisses an insight for everyone
-in the workspace. A newer run closes an older `loop/` PR as superseded, and the
+`loop.yml` reads Stitch Loop and files new insights in `docs/loop/` as
+untriaged findings. Proving a claim against the code and recording a proposal
+(`loop.mjs propose`, `decision: proposed`) is an agent's step, run by hand; the
+workflow does not do it. It never decides, pushes or mines, because a decision
+dismisses an insight for everyone in the workspace. A newer run closes an older `loop/` PR as superseded, and the
 run merges its own only when the diff is the findings and their two views *and*
 the checks (`render --check`, which rejects unverified reads, plus the Loop and
 roadmap suites) pass on the branch. It skips with a notice, rather than

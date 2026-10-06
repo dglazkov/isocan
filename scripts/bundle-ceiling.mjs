@@ -470,11 +470,27 @@
  * past 730,100, which nobody has itemised. They are paid for by a reclaim
  * twenty-two times their size rather than accepted as a raise, and are named
  * here so that "somebody agreed to them" is not claimed for them.
+ *
+ * **701,300 → 706,300 on 5 Oct 2026: room, raised by Dion's decision.** The
+ * entry sat at 701,285 for a week, 15 bytes under. Every web change in that
+ * week turned into a byte hunt, even when it added nothing to the first
+ * paint:
+ *
+ * - keys phase 4 moved a route string out of a shared import to save 30 bytes;
+ * - copy-edit phase 4's builder rebuilt with its own changes reverted to
+ *   prove another builder's bytes were not its own.
+ *
+ * The practice audit (`docs/projects/practice/design.md`, "Bundle headroom")
+ * put the decision to Dion: real room, or a reduction project first. He chose
+ * room: "raise the ceiling". The new number is the measured entry, 701,285,
+ * plus 5,000 of headroom, rounded to the hundred. Nothing grew to fill it.
+ * GOAL still says where this should go, and JUMP still catches a single
+ * change that spends the room at once.
  */
 
 /** The last number somebody agreed to. Raised in the ANSWER to a finding, with
  *  the reason in that answer — not quietly in a diff. */
-export const CEILING = 701_300;
+export const CEILING = 706_300;
 
 /**
  * **Run as a program it prints that number**, so the performance persona's
