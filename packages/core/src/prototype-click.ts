@@ -30,7 +30,7 @@ export interface PrototypeClick {
 }
 
 /** The `type` a page posts to its parent window. */
-export const CLICK_MESSAGE = "isocan:click";
+const CLICK_MESSAGE = "isocan:click";
 
 /**
  * A second press on the same control by the same person inside this window
