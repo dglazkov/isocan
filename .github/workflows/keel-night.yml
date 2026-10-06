@@ -1,6 +1,7 @@
 # The night shift (keel practice `night`; managed: keel render rewrites it).
 #
-# Each night: measure the practice (scripts/keel/improve.mjs --report), put
+# Each night: gather the test ledger's history (CI's keel-test-runs
+# artifacts), measure the practice (scripts/keel/improve.mjs --report), put
 # the dated health page on a branch of its own, open one pull request, and
 # drain the queue (scripts/keel/drain.mjs) so it never holds more than one
 # open `keel-night/` PR. Both scripts are managed files of this practice, in
@@ -131,16 +132,97 @@ jobs:
         if: steps.self.outputs.self == 'true'
         run: node bin/keel.mjs learn || echo "::warning::keel learn did not finish; see its output above."
 
-      # Before the drain, so machine_prs counts last night's PR.
+      # The test ledger's history (scripts/keel/test-ledger.mjs): the newest
+      # keel-test-runs artifacts on the default branch (check.yml's, and past
+      # nights'), read-only, by name, into .keel/test-runs. The gate improve
+      # runs adds tonight's run to them, so flaky_tests and slow_tests read
+      # more than one night; fewer runs than the window is n/a, never a zero.
+      # Nothing found, or no listing, is a warning, not red.
+      - name: Gather the test ledger
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          mkdir -p .keel/test-runs
+          if ! gh api "repos/$REPO/actions/artifacts?name=keel-test-runs&per_page=100" \
+            --jq "[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == \"$BASE\")] | sort_by(.created_at) | reverse | .[:30][] | .id" > "$RUNNER_TEMP/ledger.txt"; then
+            echo "::warning::The test ledger's artifacts could not be listed; tonight reads its own run alone."
+            exit 0
+          fi
+          n=0
+          while read -r id; do
+            [ -n "$id" ] || continue
+            if gh api "repos/$REPO/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ledger-$id.zip"; then
+              unzip -o -q "$RUNNER_TEMP/ledger-$id.zip" -d .keel/test-runs && n=$((n + 1))
+            fi
+          done < "$RUNNER_TEMP/ledger.txt"
+          echo "test ledger: $n artifacts read; $(find .keel/test-runs -name '*.json' | wc -l | tr -d ' ') runs"
+
+      # The newest climb night's record (the climb practice's keel-climb
+      # artifact), read-only, by name, from the default branch only, into
+      # .keel/climb, before improve writes its line on the health page. None
+      # (climb off, or never run), or no listing, is no line: never red.
+      - name: Gather the climb's record
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! gh api "repos/$REPO/actions/artifacts?name=keel-climb&per_page=100" \
+            --jq "[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == \"$BASE\")] | sort_by(.created_at) | reverse | .[:1][] | .id" > "$RUNNER_TEMP/climb.txt"; then
+            echo "::warning::The keel-climb artifacts could not be listed; the health page has no climb line tonight."
+            exit 0
+          fi
+          id=$(head -n 1 "$RUNNER_TEMP/climb.txt")
+          if [ -z "$id" ]; then
+            echo "climb: no keel-climb record on $BASE"
+            exit 0
+          fi
+          mkdir -p .keel/climb
+          if gh api "repos/$REPO/actions/artifacts/$id/zip" > "$RUNNER_TEMP/climb-$id.zip"; then
+            unzip -o -q "$RUNNER_TEMP/climb-$id.zip" -d .keel/climb
+            echo "climb: record $id read"
+          else
+            echo "::warning::The keel-climb record $id could not be read; the health page has no climb line tonight."
+          fi
+
+      # The newest tend pass's record (the climb practice's keel-tend
+      # artifact), read the same way into .keel/tend: improve writes its Tend
+      # line, naming each finding the pass left. None is no line: never red.
+      - name: Gather the tend record
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! gh api "repos/$REPO/actions/artifacts?name=keel-tend&per_page=100" \
+            --jq "[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == \"$BASE\")] | sort_by(.created_at) | reverse | .[:1][] | .id" > "$RUNNER_TEMP/tend.txt"; then
+            echo "::warning::The keel-tend artifacts could not be listed; the health page has no tend line tonight."
+            exit 0
+          fi
+          id=$(head -n 1 "$RUNNER_TEMP/tend.txt")
+          if [ -z "$id" ]; then
+            echo "tend: no keel-tend record on $BASE"
+            exit 0
+          fi
+          mkdir -p .keel/tend
+          if gh api "repos/$REPO/actions/artifacts/$id/zip" > "$RUNNER_TEMP/tend-$id.zip"; then
+            unzip -o -q "$RUNNER_TEMP/tend-$id.zip" -d .keel/tend
+            echo "tend: record $id read"
+          else
+            echo "::warning::The keel-tend record $id could not be read; the health page has no tend line tonight."
+          fi
+
+      # Before the drain, so machine_prs counts last night's PR. improve also
+      # writes the PR body's input (--pr-input); scripts/keel/pr-body.mjs
+      # turns it into the body below, so no body is built in inline JS.
       - name: Measure
         id: improve
         run: |
           code=0
-          node scripts/keel/improve.mjs --report --json > "$RUNNER_TEMP/improve.json" || code=$?
+          node scripts/keel/improve.mjs --report --json --pr-input "$RUNNER_TEMP/pr.json" > "$RUNNER_TEMP/improve.json" || code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           node -e '
             const fs = require("fs");
-            const [file, out, body] = process.argv.slice(1);
+            const [file, out] = process.argv.slice(1);
             let r = {};
             try { r = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
             const gate = (r.measures ?? []).find(m => m.id === "gate");
@@ -148,13 +230,19 @@ jobs:
             fs.appendFileSync(out, `gate=${gate?.state ?? "missing"}\nday=${day}\n`);
             for (const m of r.measures ?? []) console.log(`${m.id.padEnd(22)} ${String(m.value ?? "-").padStart(6)}  ${m.state.padEnd(8)} ${m.detail}`);
             if (r.error) console.log(`improve: ${r.error}`);
-            fs.writeFileSync(body, [
-              `The night shift measured the practice on ${day}: \`node scripts/keel/improve.mjs --report\`.`, "",
-              r.proposal ? `**Proposal (\`${r.proposal.id}\`, ${r.proposal.state}):** ${r.proposal.text}` : "**Proposal:** none; every measure is within its bound.", "",
-              "```keel-impact", JSON.stringify({version:1, phases:[], decisions:[], supersedes:[], evidence:[], reconciliation:"none", reason:"Health observations and bounds only; no working record correction is applied."}), "```", "",
-              `The page is \`${r.report ?? "docs/health/"}\`. This PR holds data only. scripts/keel/drain.mjs merges it tonight if the gate passed on this tree; otherwise the next night merges it with the series, or supersedes it if it no longer merges.`,
-            ].join("\n"));
-          ' "$RUNNER_TEMP/improve.json" "$GITHUB_OUTPUT" "$RUNNER_TEMP/body.md"
+          ' "$RUNNER_TEMP/improve.json" "$GITHUB_OUTPUT"
+
+      # Tonight's history, gate run included, for tomorrow night: the ledger
+      # persists between nights only as this artifact (it is never committed).
+      - name: Keep the test ledger
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: keel-test-runs
+          path: .keel/test-runs/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
 
       # Porcelain, never `git diff --quiet`: a file created for the first time
       # is not in the index, so diff reads it as no change (ledger's audit
@@ -162,6 +250,9 @@ jobs:
       # the configured health directory, the inbox and the bounds. A health
       # directory the project ignores is red: its page would never be
       # committed (ledger lost its pages that way). The push names its own branch.
+      # The body is scripts/keel/pr-body.mjs's (Summary: the commit's files;
+      # Evidence: the gate and the measures outside; Merge danger: two-way,
+      # data only), from improve's --pr-input.
       - name: Open the night's pull request
         env:
           DAY: ${{ steps.improve.outputs.day }}
@@ -190,6 +281,8 @@ jobs:
           git checkout -q -b "$BRANCH"
           git add -A -- "${PATHS[@]}"
           git commit -q -m "keel night: $DAY"
+          git show --name-only --format= HEAD > "$RUNNER_TEMP/files.txt"
+          node scripts/keel/pr-body.mjs --input "$RUNNER_TEMP/pr.json" --files "$RUNNER_TEMP/files.txt" > "$RUNNER_TEMP/body.md"
           # The branch is this workflow's alone; a re-run the same day replaces
           # its own reading, so force is safe here and nowhere else.
           git push --force origin "HEAD:refs/heads/keel-night/$DAY"
