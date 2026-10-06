@@ -29,6 +29,11 @@ second week.
   screen builds what comes next. Pressing it twice counts once. Pages opt in
   with one `postMessage`; agents: `isocan --agent-help`, *When a person clicks
   in your prototype*.
+- **Stay on your screen while the agent works.** When an agent pushes a new
+  version of a prototype you are clicking through, it opens on the screen you
+  were on instead of the first one — on the canvas and in full screen. Pages
+  opt in with one `postMessage`; agents: `isocan --agent-help`, *Keeping a
+  person's screen across your versions*.
 
 ## 5 October 2026
 
