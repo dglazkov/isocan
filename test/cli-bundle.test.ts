@@ -1,3 +1,4 @@
+import net from "node:net";
 import { beforeAll, describe, expect, it } from "vitest";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
@@ -42,6 +43,22 @@ const repo = fileURLToPath(new URL("..", import.meta.url));
 const bundle = path.join(repo, CLI_BUNDLE);
 
 /** Poll until it answers, or give up — a daemon takes a moment to bind. */
+/**
+ * A port nobody holds, from the OS. `34000 + pid % 1000` was a guess, and a
+ * guess that lands on somebody's listener that accepts and never answers made
+ * an unbounded `fetch` wait out the whole 120 s (release on 95c83125, 6 Oct).
+ */
+async function freePort(): Promise<number> {
+  const server = net.createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as net.AddressInfo;
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+/** Every request in here gets a deadline: a silent listener is a failure, not a hang. */
+const ask = (url: string) => fetch(url, { signal: AbortSignal.timeout(5_000) });
+
 async function until<T>(ask: () => Promise<T | null>, tries = 60): Promise<T | null> {
   for (let i = 0; i < tries; i++) {
     const got = await ask();
@@ -127,7 +144,7 @@ describe("the release CLI is a bundle", () => {
       // the web app, none of which an install resolves any more. A port
       // nobody holds, a scratch home, and the two things a browser asks for.
       const home = mkdtempSync(path.join(os.tmpdir(), "isocan-installed-home-"));
-      const port = 34000 + (process.pid % 1000);
+      const port = await freePort();
       const daemon = spawn(process.execPath, [installed, "serve", "--foreground", "--force"], {
         env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
         stdio: ["ignore", "pipe", "pipe"],
@@ -135,11 +152,11 @@ describe("the release CLI is a bundle", () => {
       try {
         const base = `http://127.0.0.1:${port}`;
         const health = await until(async () => {
-          const reply = await fetch(`${base}/healthz`).catch(() => null);
+          const reply = await ask(`${base}/healthz`).catch(() => null);
           return reply?.ok ? ((await reply.json()) as { root?: string }) : null;
         });
         expect(health?.root, "the daemon knows which copy it is").toBe(tree);
-        const page = await fetch(base).then((r) => r.text());
+        const page = await ask(base).then((r) => r.text());
         expect(page, "an installed copy serves the app, not a not-built page").toContain("<div id=\"root\">");
       } finally {
         daemon.kill("SIGKILL");
