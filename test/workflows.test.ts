@@ -247,7 +247,9 @@ describe("renovate.json keeps its lanes", () => {
   const config = JSON.parse(readFileSync(`${root}/renovate.json`, "utf8"));
 
   it("leaves the test fixtures alone", () => {
-    expect(config.ignorePaths).toContain("test/fixtures/**");
+    // keel's renovate.json (5 Oct 2026) ignores every fixtures directory,
+    // which covers test/fixtures/.
+    expect(config.ignorePaths.some((p: string) => p === "test/fixtures/**" || p === "**/fixtures/**")).toBe(true);
   });
 
   it("moves .nvmrc and the image's Node together", () => {
@@ -362,58 +364,5 @@ describe("the persona run's self-merge", () => {
     expect(admits(["docs/decisionsXmd"])).toBe(false);
     expect(admits(["docs/projects/acme/decisions.md"])).toBe(false);
     expect(admits([".agents/personas/acme.md"])).toBe(false);
-  });
-});
-
-/**
- * **The practice page keeps the night shift's bounds** (practice phase 0,
- * 2 Oct 2026; AGENTS.md, "The night shift's pull requests").
- *
- * It is the grades case: one dated page a night in its own directory. So it
- * touches only `practice/` branches and `docs/practice/`, merges its own PR
- * only after the suite has run on the branch — a PR opened with GITHUB_TOKEN
- * runs no `pr.yml`, so nothing else will have — and drains its older PRs with
- * the shared drain. The scope is run through the same `grep` the workflow
- * runs, as the persona case above does.
- */
-describe("the practice run", () => {
-  const workflow = read("practice.yml");
-  const code = workflow.replace(/^\s*#.*$/gm, "");
-
-  it("writes the page, then commits only docs/practice on a practice/ branch", () => {
-    expect(code.indexOf("node scripts/practice.mjs")).toBeGreaterThan(-1);
-    expect(code).toMatch(/git checkout -b "practice\/\$DAY"/);
-    expect(code).toMatch(/^\s*git add docs\/practice\s*$/m);
-    expect(code.match(/git add/g)).toHaveLength(1);
-  });
-
-  it("merges itself only after the suite passes on the branch", () => {
-    const suite = code.indexOf("if npm test; then");
-    const merge = code.indexOf("gh pr merge");
-    expect(suite, "the merge step runs no suite").toBeGreaterThan(-1);
-    expect(merge).toBeGreaterThan(suite);
-  });
-
-  it("drains only its own older PRs, after its own merge", () => {
-    expect(code).toMatch(/node scripts\/lib\/drain\.mjs practice\/ docs\/practice\/ --except "practice\/\$DAY"/);
-    expect(code.indexOf("scripts/lib/drain.mjs")).toBeGreaterThan(code.indexOf("gh pr merge"));
-    // Never another workflow's branches.
-    for (const other of ["grades/", "changelog/", "personas/", "loop/", "renovate/"]) expect(code).not.toContain(other);
-  });
-
-  const scope = /^\s*SCOPE='([^']+)'\s*$/m.exec(code)?.[1];
-  const admits = (paths: string[]): boolean =>
-    spawnSync("bash", ["-c", 'printf "%s\\n" "$CHANGED" | grep -Eqv "$SCOPE"'], {
-      env: { ...process.env, CHANGED: paths.join("\n"), SCOPE: scope ?? "" },
-    }).status !== 0;
-
-  it("admits exactly docs/practice/", () => {
-    expect(scope, "practice.yml declares no SCOPE for the self-merge").toBeTruthy();
-    expect(code).toMatch(/grep -Eqv "\$SCOPE"/);
-    expect(admits(["docs/practice/2026-10-02.md"])).toBe(true);
-    expect(admits(["docs/practice/2026-10-02.md", "docs/practice/README.md"])).toBe(true);
-    expect(admits(["docs/practice/2026-10-02.md", "scripts/practice.mjs"])).toBe(false);
-    expect(admits(["docs/practicex/acme.md"])).toBe(false);
-    expect(admits(["docs/grades/2026-10-02.md"])).toBe(false);
   });
 });

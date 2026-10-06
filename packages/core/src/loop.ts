@@ -35,7 +35,7 @@ import { splitFrontMatter } from "./persona.ts";
  *   true). Dismissed in Loop, with the evidence in `note`.
  * - `done`      — accepted and then fixed.
  */
-export const LOOP_DECISIONS = ["untriaged", "proposed", "accepted", "declined", "stale", "done"] as const;
+const LOOP_DECISIONS = ["untriaged", "proposed", "accepted", "declined", "stale", "done"] as const;
 type LoopDecision = (typeof LOOP_DECISIONS)[number];
 
 /** Decisions that end a finding's life in Loop: they are sent as dismissals. */
@@ -45,7 +45,7 @@ export const DISMISSED_BY_US: readonly LoopDecision[] = ["declined", "stale"];
  * Our priority, deliberately not Loop's P0–P3 vocabulary, so the two can never
  * be confused in a diff. `never` on a proposal is a recommendation to decline.
  */
-export const LOOP_RANKS = ["now", "next", "later", "never"] as const;
+const LOOP_RANKS = ["now", "next", "later", "never"] as const;
 type LoopRank = (typeof LOOP_RANKS)[number];
 
 type LoopState = "ACTIVE" | "RESOLVED" | "DISMISSED";

@@ -9,7 +9,7 @@ note: "the walk: the nightly practice page, records that can't disagree, issues 
 
 **2 October 2026.** Held to [design.md](design.md).
 
-**Where we are, 2 Oct 2026: phase 0 is CLOSED — `node scripts/practice.mjs` writes [today's page](../../practice/2026-10-02.md) (22 of 29 rows leaking), and `practice.yml` writes the next one each night. Next: practice phase 1, records that can't disagree.**
+**Where we are, 5 Oct 2026: phase 0 is CLOSED, and its page now comes from keel — isocan's `practice.mjs` taught keel 0.7.0 its measures (keel phase 27), and `keel-night.yml` writes the nightly health page into `docs/practice/`. Next: practice phase 1, records that can't disagree.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -46,6 +46,7 @@ holds `practice.yml` to the night shift's bounds.
 - **2026-10-02** — The index-vs-front-matter row is a heuristic that reads only a cell's lead: it catches anatomy, standing-agents and inception, and misses mindmap. Phase 1 replaces it with a check, not a guess.
 - **2026-10-02** — Two targets are placeholders for sorting, not policy: bundle headroom 5,000 bytes and grades ≥2 pages. Both are Dion's decisions on design.md's list.
 - **2026-10-02** — The conductor's commit of keys and copy phase 4 swept in this phase's half-built script without its lib: staging "everything but" while a builder works in the tree. Stage an explicit list. The left-behind row counts this shape.
+- **2026-10-05** — The page moved into keel. isocan adopted keel (practice 0.6.7); Dion's rule is that what isocan does better goes upstream, so `scripts/practice.mjs`'s general measures became keel 0.7.0's (records_disagree, changelog_gaps, research_unindexed, verify_owed, issues_unnamed, issues_done_open, prs_stale, and the projects shape read), and `practice.yml` gave way to keel's `keel-night.yml`, writing to the same directory. The isocan-only rows (bundle headroom, export ratchets) were already isocan's own tests. `grade.yml` was retired with it: it graded one unchanging page for 34 nights.
 
 ## Phase 1 — Records that can't disagree
 

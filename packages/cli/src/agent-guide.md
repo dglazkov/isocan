@@ -2454,7 +2454,7 @@ lives.
     node scripts/loop.mjs render --check   # CI: LOOP.md is current, every finding says why
 
 **`propose` is yours, `decide` is a person's.** When asked to look at Loop (or
-in `loop.yml`'s nightly prove pass): pull, then for each untriaged finding
+in a prove pass, `node scripts/loop.mjs prove`): pull, then for each untriaged finding
 **prove every sub-claim against the code** — open every cited file and line,
 check surrounding callers and tests, and run non-destructive checks (`vitest`,
 `npm audit`, `npm run build`) when a claim is about runtime or build output.

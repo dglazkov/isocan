@@ -1,0 +1,240 @@
+# The night shift (keel practice `night`; managed: keel render rewrites it).
+#
+# Each night: measure the practice (scripts/keel/improve.mjs --report), put
+# the dated health page on a branch of its own, open one pull request, and
+# drain the queue (scripts/keel/drain.mjs) so it never holds more than one
+# open `keel-night/` PR. Both scripts are managed files of this practice, in
+# this repo: the night never fetches anything, and needs no secret of its own. The rules, each
+# paid for once (keel docs/design.md §6, from isocan's "night shift's pull
+# requests"):
+#
+#   - Measure first. Nothing here fixes anything; the page proposes one change.
+#   - A bot writes a pull request, never to main. The only push names
+#     refs/heads/keel-night/<date>.
+#   - One open PR per queue, the newest; drain.mjs enforces it, not a person.
+#   - A merge is checked, not trusted. A GITHUB_TOKEN PR never runs CI, so the
+#     gate that improve.mjs runs here, on this tree, is the check; the
+#     newest PR merges only when it passed and the PR holds nothing but data
+#     (the health directory, docs/inbox/, docs/INBOX.md, .keel/bounds.json).
+#     The health directory is .keel/keel.json "health" (default docs/health),
+#     read at run time; one the project git-ignores makes the run red, since
+#     its page would never be committed.
+#   - A guard fires into a room someone is in. A broken instrument (improve
+#     exit 2) or a failing gate makes this run red, and GitHub emails. A
+#     measure outside its bound (exit 1) is news: it is on the page, not red.
+#
+# No secret of its own. A project whose `setup` must clone a private repo names
+# a secret in .keel/keel.json "setupToken"; the Install step alone gets it, as
+# GH_TOKEN. Repo setting: Actions must be allowed to create pull requests;
+# until they are, the branch is pushed and the run ends green with a notice.
+name: keel-night
+
+on:
+  schedule:
+    # 07:23 UTC, off the hour, so it does not queue behind every other cron.
+    - cron: "23 7 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: keel-night
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  issues: read
+
+jobs:
+  night:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # The whole history: some measures read it.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      # The project's install, read from .keel/keel.json at run time (so a
+      # config change never needs a re-render): `setup` when it has one, else
+      # npm ci when a lockfile exists. Its `env` goes to every later step
+      # (scripts/keel/improve.mjs applies it to the gate too), so a gate that
+      # must not sync or push is told so before anything runs.
+      - name: Read the config
+        id: config
+        run: |
+          node -e '
+            const fs = require("fs");
+            const c = JSON.parse(fs.readFileSync(".keel/keel.json", "utf8"));
+            const env = c.env ?? {};
+            if (!env || typeof env !== "object" || Array.isArray(env)) throw new Error(".keel/keel.json: \"env\" must be an object of NAME: \"value\"");
+            if (c.setup !== undefined && (typeof c.setup !== "string" || !c.setup.trim())) throw new Error(".keel/keel.json: \"setup\" must be a non-empty shell command");
+            const tok = c.setupToken;
+            if (tok !== undefined && (typeof tok !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(tok) || tok.startsWith("GITHUB_") || c.setup === undefined)) throw new Error(".keel/keel.json: \"setupToken\" must name a repo secret (not GITHUB_*) and needs a \"setup\"");
+            const eof = `KEEL_EOF_${Date.now()}`;
+            const lines = [];
+            for (const [k, v] of Object.entries(env)) {
+              if (!/^[A-Z_][A-Z0-9_]*$/.test(k) || typeof v !== "string") throw new Error(`.keel/keel.json: "env" ${k} must be NAME: "value"`);
+              lines.push(`${k}<<${eof}`, v, eof);
+              console.log(`env: ${k}`);
+            }
+            if (lines.length) fs.appendFileSync(process.env.GITHUB_ENV, `${lines.join("\n")}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup<<${eof}\n${c.setup ?? ""}\n${eof}\n`);
+            // Only the secret NAME, never its value: the Install step looks it up.
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup_token=${tok ?? ""}\n`);
+            if (tok) console.log(`setupToken: ${tok} (a repo secret, for the Install step only)`);
+          '
+      # Where improve writes the health page and what the PR commits: the
+      # project's own scripts/keel/lib.mjs reads .keel/keel.json "health"
+      # (default docs/health), so improve, this workflow and drain agree.
+      - name: Where the health page goes
+        id: health
+        run: |
+          node --input-type=module -e '
+            import { readFileSync, appendFileSync } from "node:fs";
+            import { healthDirOf } from "./scripts/keel/lib.mjs";
+            const dir = healthDirOf(JSON.parse(readFileSync(".keel/keel.json", "utf8")));
+            console.log(`health: ${dir}`);
+            appendFileSync(process.env.GITHUB_OUTPUT, `dir=${dir}\n`);
+          '
+      - name: Install
+        # setupToken (a secret's name in .keel/keel.json) becomes GH_TOKEN here
+        # and in no other step, so setup can clone a private repo with gh
+        # (ledger's data). Absent or unset, the job's own token. Never echoed.
+        env:
+          SETUP: ${{ steps.config.outputs.setup }}
+          GH_TOKEN: ${{ secrets[steps.config.outputs.setup_token] || github.token }}
+        run: |
+          if [ -n "$SETUP" ]; then
+            echo "setup (.keel/keel.json): $SETUP"
+            bash -e -c "$SETUP"
+          elif [ -f package-lock.json ]; then
+            npm ci
+          fi
+
+      # On keel itself only (its .keel/keel.json says "keel": "self"): lesson
+      # issues and moved sources become inbox proposals. It reads and writes
+      # files and decides nothing, so it runs before the measure that counts
+      # the inbox. A project has no learn step: lessons go home from a person's
+      # keel (keel lessons), never from a workflow.
+      - name: Is this keel?
+        id: self
+        run: |
+          if node -e "process.exit(JSON.parse(require('fs').readFileSync('.keel/keel.json', 'utf8')).keel === 'self' ? 0 : 1)"; then
+            echo "self=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Gather what came home
+        if: steps.self.outputs.self == 'true'
+        run: node bin/keel.mjs learn || echo "::warning::keel learn did not finish; see its output above."
+
+      # Before the drain, so machine_prs counts last night's PR.
+      - name: Measure
+        id: improve
+        run: |
+          code=0
+          node scripts/keel/improve.mjs --report --json > "$RUNNER_TEMP/improve.json" || code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          node -e '
+            const fs = require("fs");
+            const [file, out, body] = process.argv.slice(1);
+            let r = {};
+            try { r = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
+            const gate = (r.measures ?? []).find(m => m.id === "gate");
+            const day = r.date ?? new Date().toISOString().slice(0, 10);
+            fs.appendFileSync(out, `gate=${gate?.state ?? "missing"}\nday=${day}\n`);
+            for (const m of r.measures ?? []) console.log(`${m.id.padEnd(22)} ${String(m.value ?? "-").padStart(6)}  ${m.state.padEnd(8)} ${m.detail}`);
+            if (r.error) console.log(`improve: ${r.error}`);
+            fs.writeFileSync(body, [
+              `The night shift measured the practice on ${day}: \`node scripts/keel/improve.mjs --report\`.`, "",
+              r.proposal ? `**Proposal (\`${r.proposal.id}\`, ${r.proposal.state}):** ${r.proposal.text}` : "**Proposal:** none; every measure is within its bound.", "",
+              "```keel-impact", JSON.stringify({version:1, phases:[], decisions:[], supersedes:[], evidence:[], reconciliation:"none", reason:"Health observations and bounds only; no working record correction is applied."}), "```", "",
+              `The page is \`${r.report ?? "docs/health/"}\`. This PR holds data only. scripts/keel/drain.mjs merges it tonight if the gate passed on this tree; otherwise the next night merges it with the series, or supersedes it if it no longer merges.`,
+            ].join("\n"));
+          ' "$RUNNER_TEMP/improve.json" "$GITHUB_OUTPUT" "$RUNNER_TEMP/body.md"
+
+      # Porcelain, never `git diff --quiet`: a file created for the first time
+      # is not in the index, so diff reads it as no change (ledger's audit
+      # agent lost every report to that). Only the night's data is committed:
+      # the configured health directory, the inbox and the bounds. A health
+      # directory the project ignores is red: its page would never be
+      # committed (ledger lost its pages that way). The push names its own branch.
+      - name: Open the night's pull request
+        env:
+          DAY: ${{ steps.improve.outputs.day }}
+          BASE: ${{ github.event.repository.default_branch }}
+          HEALTH: ${{ steps.health.outputs.dir }}
+        run: |
+          if [ -z "$HEALTH" ]; then
+            echo "::error::No health directory was read from .keel/keel.json."
+            exit 1
+          fi
+          if git check-ignore -q -- "$HEALTH/x.md"; then
+            echo "::error::$HEALTH is git-ignored, so its health page is never committed: set \"health\" in .keel/keel.json to a directory that is not ignored (keel doctor: health-ignored)."
+            exit 1
+          fi
+          PATHS=()
+          for p in "$HEALTH" docs/inbox docs/INBOX.md .keel/bounds.json; do
+            if [ -e "$p" ]; then PATHS+=("$p"); fi
+          done
+          if [ "${#PATHS[@]}" = 0 ] || [ -z "$(git status --porcelain -- "${PATHS[@]}")" ]; then
+            echo "Nothing changed."
+            exit 0
+          fi
+          BRANCH="keel-night/$DAY"
+          git config user.name "keel-night"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b "$BRANCH"
+          git add -A -- "${PATHS[@]}"
+          git commit -q -m "keel night: $DAY"
+          # The branch is this workflow's alone; a re-run the same day replaces
+          # its own reading, so force is safe here and nowhere else.
+          git push --force origin "HEAD:refs/heads/keel-night/$DAY"
+          if ! gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number' | grep -q .; then
+            # A repo that has not allowed Actions to open PRs is unconfigured,
+            # not broken: a notice, like a missing secret. Any other failure is red.
+            code=0
+            out=$(gh pr create --base "$BASE" --head "$BRANCH" --title "keel night: $DAY" --body-file "$RUNNER_TEMP/body.md" 2>&1) || code=$?
+            echo "$out"
+            if [ "$code" != 0 ]; then
+              if printf '%s' "$out" | grep -qi 'not permitted to create or approve pull requests'; then
+                echo "::notice::$BRANCH is pushed, but no PR was opened: allow it in Settings → Actions → General → Workflow permissions → \"Allow GitHub Actions to create and approve pull requests\"."
+              else
+                exit "$code"
+              fi
+            fi
+          fi
+
+      # Older keel-night PRs: merged when they are data and still merge,
+      # closed as superseded (branch kept) otherwise. The newest merges only
+      # after a gate that passed on this tree.
+      - name: Drain the queue
+        env:
+          GATE: ${{ steps.improve.outputs.gate }}
+        run: |
+          if [ "$GATE" = ok ]; then
+            node scripts/keel/drain.mjs keel-night/ --yes --gate-passed
+          else
+            node scripts/keel/drain.mjs keel-night/ --yes
+          fi
+
+      - name: Verdict
+        if: always()
+        env:
+          CODE: ${{ steps.improve.outputs.code }}
+          GATE: ${{ steps.improve.outputs.gate }}
+        run: |
+          if [ "$CODE" = 2 ] || [ -z "$CODE" ]; then
+            echo "::error::An instrument is broken (improve.mjs exit ${CODE:-none}); the health page says which."
+            exit 1
+          fi
+          if [ "$GATE" != ok ]; then
+            echo "::error::The project's gate did not pass (gate: $GATE)."
+            exit 1
+          fi
+          if [ "$CODE" = 1 ]; then
+            echo "::notice::A measure is outside its bound; it is on the health page and in the PR's proposal."
+          fi

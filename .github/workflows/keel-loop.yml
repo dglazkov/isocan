@@ -1,0 +1,237 @@
+# Stitch Loop's insights, pulled nightly (keel practice `loop`; managed: keel
+# render rewrites it).
+#
+# READS LOOP AND WRITES FILES; DECIDES NOTHING AND SENDS NOTHING. A pull files
+# new insights as `untriaged` findings in docs/loop/, refreshes what Loop says
+# about the ones already there, and rebuilds docs/LOOP.md. It never runs
+# decide, push, mine or propose: a decision dismisses an insight for everyone
+# in the workspace, and that is a person's act; proposing with a model here is
+# a later, priced decision. The rules (keel docs/design.md §6, from isocan's
+# loop.yml and its "night shift's pull requests"):
+#
+#   - A bot writes a pull request, never to main. The only push names
+#     refs/heads/keel-loop/<date>.
+#   - One open PR per queue, the newest; the night practice's
+#     scripts/keel/drain.mjs keel-loop/ enforces it, from this repo. Without
+#     the night practice there is no drain, and the run says so (a notice).
+#   - A merge is checked, not trusted. A GITHUB_TOKEN PR runs no CI, so this
+#     run's gate (render --check, then the project's own) is the check; the
+#     newest merges only when it passed and the PR holds only docs/loop/,
+#     docs/LOOP.md and what .keel/keel.json "loop" "afterRenderWrites" names.
+#   - The PR is the tree the gate passed on. A pull also runs the project's
+#     afterRender (ledger's roadmap counts findings); a file it rewrites but
+#     the PR leaves out passes the gate here and is stale on main (keel
+#     lesson: a gate that checks a tree it does not commit).
+#   - A guard fires into a room someone is in: a pull that cannot reach Loop,
+#     or a gate that fails, makes this run red, and GitHub emails.
+#
+# SECRET, and until it exists the run ends green with a notice (an
+# unconfigured repo is not a broken one):
+#   STITCH_API_KEY  the Loop key the official stitch CLI (@google/stitch on
+#                   npm) reads
+# A project whose `setup` must clone a private repo names a secret in
+# .keel/keel.json "setupToken"; the Install step alone gets it, as GH_TOKEN.
+# The workspace is .stitch.json's "workspace" (STITCH_WORKSPACE overrides it).
+# Repo setting: Actions must be allowed to create pull requests.
+name: keel-loop
+
+on:
+  schedule:
+    # 09:43 UTC: after keel-night (07:23), off the hour.
+    - cron: "43 9 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: keel-loop
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STITCH_API_KEY: ${{ secrets.STITCH_API_KEY }}
+      # No base URL override: the CLI's default endpoint; the first real cycle confirms it.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Configured?
+        id: configured
+        run: |
+          if [ -z "$STITCH_API_KEY" ]; then
+            echo "::notice::Skipped: add the STITCH_API_KEY secret to run the nightly Loop pull."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The project's install, read from .keel/keel.json at run time (so a
+      # config change never needs a re-render): `setup` when it has one, else
+      # npm ci when a lockfile exists. Its `env` goes to every later step
+      # (scripts/keel/improve.mjs applies it to the gate too), so a gate that
+      # must not sync or push is told so before anything runs.
+      - name: Read the config
+        id: config
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          node -e '
+            const fs = require("fs");
+            const c = JSON.parse(fs.readFileSync(".keel/keel.json", "utf8"));
+            const env = c.env ?? {};
+            if (!env || typeof env !== "object" || Array.isArray(env)) throw new Error(".keel/keel.json: \"env\" must be an object of NAME: \"value\"");
+            if (c.setup !== undefined && (typeof c.setup !== "string" || !c.setup.trim())) throw new Error(".keel/keel.json: \"setup\" must be a non-empty shell command");
+            const tok = c.setupToken;
+            if (tok !== undefined && (typeof tok !== "string" || !/^[A-Z_][A-Z0-9_]*$/.test(tok) || tok.startsWith("GITHUB_") || c.setup === undefined)) throw new Error(".keel/keel.json: \"setupToken\" must name a repo secret (not GITHUB_*) and needs a \"setup\"");
+            const eof = `KEEL_EOF_${Date.now()}`;
+            const lines = [];
+            for (const [k, v] of Object.entries(env)) {
+              if (!/^[A-Z_][A-Z0-9_]*$/.test(k) || typeof v !== "string") throw new Error(`.keel/keel.json: "env" ${k} must be NAME: "value"`);
+              lines.push(`${k}<<${eof}`, v, eof);
+              console.log(`env: ${k}`);
+            }
+            if (lines.length) fs.appendFileSync(process.env.GITHUB_ENV, `${lines.join("\n")}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup<<${eof}\n${c.setup ?? ""}\n${eof}\n`);
+            // Only the secret NAME, never its value: the Install step looks it up.
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `setup_token=${tok ?? ""}\n`);
+            if (tok) console.log(`setupToken: ${tok} (a repo secret, for the Install step only)`);
+            // What a pull writes: the findings, their page, and the files the
+            // afterRender rewrites of the project. Same rule as scripts/loop.mjs.
+            const plain = p => typeof p === "string" && p.trim() === p && p !== "" && !p.startsWith("/") && !p.endsWith("/") &&
+              !p.split("/").some(s => s === ".." || s === "." || s === "") && !p.startsWith(".github/") && !/[*?[\]\\\s]/.test(p);
+            const writes = Array.isArray(c.loop?.afterRenderWrites) ? c.loop.afterRenderWrites : [];
+            for (const p of writes) if (!plain(p)) throw new Error(`.keel/keel.json: "loop" "afterRenderWrites" ${JSON.stringify(p)} must be a repo-relative file path`);
+            const paths = ["docs/loop", "docs/LOOP.md", ...writes].join(" ");
+            console.log(`a pull writes: ${paths}`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `paths=${paths}\n`);
+          '
+      - name: Install
+        if: steps.configured.outputs.ready == 'true'
+        # setupToken (a secret's name in .keel/keel.json) becomes GH_TOKEN here
+        # and in no other step, so setup can clone a private repo with gh
+        # (ledger's data). Absent or unset, the job's own token. Never echoed.
+        env:
+          SETUP: ${{ steps.config.outputs.setup }}
+          GH_TOKEN: ${{ secrets[steps.config.outputs.setup_token] || github.token }}
+        run: |
+          if [ -n "$SETUP" ]; then
+            echo "setup (.keel/keel.json): $SETUP"
+            bash -e -c "$SETUP"
+          elif [ -f package-lock.json ]; then
+            npm ci
+          fi
+
+      # The official CLI, from npm. Pinned to major 0: 0.x is what this script
+      # was checked against (0.11.0), and a 1.0 may rename verbs, so a nightly
+      # never moves to it unseen. Loop is experimental, so even a 0.x minor can
+      # change it; a pull that breaks is red, and GitHub emails.
+      - name: Install the stitch CLI
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          npm install -g @google/stitch@0
+          stitch --version
+
+      # Loop is off in a fresh CLI until it is switched on, per runner (isocan's
+      # nightlies of 29 Sep to 1 Oct all died on this). Failing is red.
+      - name: Turn Loop on in the CLI
+        if: steps.configured.outputs.ready == 'true'
+        run: stitch enable loop
+
+      # A pull that cannot reach Loop fails here, loudly.
+      - name: Pull Loop's insights
+        if: steps.configured.outputs.ready == 'true'
+        run: node scripts/loop.mjs pull
+
+      - name: Gate
+        id: gate
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          if node scripts/loop.mjs render --check && npm test && npm run typecheck && node --test tests/loop.test.mjs; then
+            echo "gate=ok" >> "$GITHUB_OUTPUT"
+          else
+            echo "gate=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Porcelain, never `git diff --quiet`: a finding filed for the first time
+      # is not in the index. The push names its own branch. PATHS is every file
+      # a pull writes, afterRender's included, so the PR is the gated tree.
+      - name: Open the pull request
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
+          PATHS: ${{ steps.config.outputs.paths }}
+        run: |
+          # Word-split on purpose: PATHS is plain paths, checked when read.
+          # shellcheck disable=SC2086
+          if [ -z "$(git status --porcelain -- $PATHS)" ]; then
+            echo "Nothing changed: Loop has said nothing new since the last pull."
+            exit 0
+          fi
+          DAY=$(date -u +%Y-%m-%d)
+          BRANCH="keel-loop/$DAY"
+          git config user.name "keel-loop"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b "$BRANCH"
+          # shellcheck disable=SC2086
+          git add -- $PATHS
+          git commit -q -m "Loop: findings pulled $DAY"
+          git push --force origin "HEAD:refs/heads/keel-loop/$DAY"
+          if ! gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number' | grep -q .; then
+            cat > "$RUNNER_TEMP/loop-body.md" <<'KEEL_BODY'
+          Stitch Loop insights, pulled as untriaged findings in docs/loop/ and generated views. No acceptance or architecture decision is made. An agent proposes; a person decides.
+
+          If a custom afterRender step changes phase or decision records, review those edits and replace the declaration with their actual impact before merging. The impact check examines the diff.
+
+          ```keel-impact
+          {"version":1,"phases":[],"decisions":[],"supersedes":[],"evidence":[],"reconciliation":"none","reason":"Imports untriaged Loop findings and refreshes generated views only; no phase acceptance, next action, or architecture decision is changed."}
+          ```
+          KEEL_BODY
+            code=0
+            out=$(gh pr create --base "$BASE" --head "$BRANCH" --title "Loop: findings pulled $DAY" \
+              --body-file "$RUNNER_TEMP/loop-body.md" 2>&1) || code=$?
+            echo "$out"
+            if [ "$code" != 0 ]; then
+              if printf '%s' "$out" | grep -qi 'not permitted to create or approve pull requests'; then
+                echo "::notice::$BRANCH is pushed, but no PR was opened: allow it in Settings → Actions → General → Workflow permissions."
+              else
+                exit "$code"
+              fi
+            fi
+          fi
+
+      # Older keel-loop PRs: merged when they hold only findings and still
+      # merge, closed as superseded (branch kept) otherwise. The newest merges
+      # only after the gate passed on this tree.
+      - name: Drain the queue
+        if: steps.configured.outputs.ready == 'true'
+        env:
+          GATE: ${{ steps.gate.outputs.gate }}
+        run: |
+          if [ ! -f scripts/keel/drain.mjs ]; then
+            echo "::notice::No drain: scripts/keel/drain.mjs comes with keel's night practice; switch it on to keep the keel-loop/ queue at one PR."
+            exit 0
+          fi
+          if [ "$GATE" = ok ]; then
+            node scripts/keel/drain.mjs keel-loop/ --yes --gate-passed
+          else
+            node scripts/keel/drain.mjs keel-loop/ --yes
+          fi
+
+      - name: Verdict
+        if: always() && steps.configured.outputs.ready == 'true'
+        env:
+          GATE: ${{ steps.gate.outputs.gate }}
+        run: |
+          if [ "$GATE" != ok ]; then
+            echo "::error::The gate did not pass on the pulled findings (gate: ${GATE:-not run}); the PR is left for a person."
+            exit 1
+          fi

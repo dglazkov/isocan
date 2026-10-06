@@ -80,9 +80,6 @@ describe("the graders are actionable, and right", () => {
 
   it("says which element failed, not just how many", () => {
     expect(grader).toContain("smallTargetDetail");
-    // And the nightly's page prints them, or the detail is collected for
-    // nobody — which is how `worstContrast` sat at three for weeks.
-    expect(read("../scripts/grade-night.mjs")).toContain("smallTargetDetail");
   });
 });
 
@@ -113,23 +110,6 @@ describe("the selftest is a gate", () => {
     const yml = read("../.github/workflows/release.yml");
     const step = yml.slice(yml.indexOf("The graders still measure something"));
     expect(step.slice(0, 400)).not.toContain("continue-on-error");
-  });
-
-  it("the nightly runs it before it grades anything", () => {
-    const night = read("../scripts/grade-night.mjs");
-    expect(night).toContain("--selftest");
-    // And reports NOTHING when it fails, rather than a page of zeroes.
-    expect(night).toContain("did not pass their own selftest");
-  });
-
-  it("the nightly writes to no canvas", () => {
-    // Step 1 of the night shift measures; it does not repair. A grader with an
-    // interest in what it finds is a grader nobody can read.
-    const night = read("../scripts/grade-night.mjs");
-    const code = night.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    for (const write of ['"comment"', '"item"', "sendOp", '"add"', '"save"']) {
-      expect(code).not.toContain(write);
-    }
   });
 });
 

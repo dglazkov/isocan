@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Why each rule is shaped this way: AGENTS.md, 'The night shift's pull requests' \u2192 Renovate.",
+  "description": "Managed by keel (practice renovate): four lanes, so the queue never holds more than one PR per lane. Why each lane is shaped this way: the practice's README.",
   "extends": [
     "config:recommended"
   ],
@@ -14,6 +14,9 @@
     "before 6am"
   ],
   "dependencyDashboard": true,
+  "git-submodules": {
+    "enabled": true
+  },
   "rangeStrategy": "bump",
   "labels": [
     "dependencies"
@@ -21,7 +24,7 @@
   "prConcurrentLimit": 4,
   "ignorePaths": [
     "**/node_modules/**",
-    "test/fixtures/**"
+    "**/fixtures/**"
   ],
   "lockFileMaintenance": {
     "enabled": true,
@@ -40,7 +43,7 @@
   },
   "packageRules": [
     {
-      "description": "The workspace's own packages are source, not dependencies.",
+      "description": "The project's own workspace packages (package.json workspaces and name) are source, not dependencies. First, so no lane below turns them back on.",
       "matchPackageNames": [
         "@isocan/**",
         "isocan"
@@ -48,7 +51,7 @@
       "enabled": false
     },
     {
-      "description": "Daily lane: every patch and minor update, npm and Actions alike, in ONE pull request that merges itself when the suite is green.",
+      "description": "Daily lane: every patch and minor update, npm and Actions alike, in ONE pull request that merges itself when the checks are green.",
       "matchUpdateTypes": [
         "patch",
         "minor",
@@ -73,15 +76,27 @@
       "automerge": false
     },
     {
-      "description": "Node is one version across .nvmrc and the image (test/workflows.test.ts holds them to one major), so it moves in its own pull request, weekly, read by a person. This rule comes last so it wins over the two lanes above.",
+      "description": "Vendored git submodules (skills, references) join the weekly lane: someone else's code arriving whole, so a person reads it. A project with no submodules has nothing here.",
+      "matchManagers": [
+        "git-submodules"
+      ],
+      "groupName": "major updates",
+      "groupSlug": "weekly",
+      "schedule": [
+        "before 6am on monday"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Node moves on its own, weekly, read by a person: .nvmrc, a Dockerfile's FROM node: image and @types/node in ONE pull request, since a project that holds them to one major fails a split one. Last, so it wins over the lanes above.",
       "matchDepNames": [
         "node",
         "@types/node"
       ],
       "matchManagers": [
         "nvm",
-        "dockerfile",
-        "npm"
+        "npm",
+        "dockerfile"
       ],
       "groupName": "Node",
       "groupSlug": "node",
@@ -91,5 +106,8 @@
       "automerge": false,
       "separateMajorMinor": false
     }
+  ],
+  "prBodyNotes": [
+    "Review any dependency change that alters a recorded architecture choice or acceptance claim, update its records, and replace this declaration with the actual impact. The check validates the diff regardless of author.\n\n```keel-impact\n{\"version\":1,\"phases\":[],\"decisions\":[],\"supersedes\":[],\"evidence\":[],\"reconciliation\":\"none\",\"reason\":\"Dependency versions, lockfiles, or runtime pins only; this update makes no phase acceptance, next-action, or architecture-decision claim.\"}\n```"
   ]
 }

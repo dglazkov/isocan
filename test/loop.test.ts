@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,23 +42,6 @@ describe("the Loop findings are derived, not written", () => {
     if (any) expect(roadmap).toContain("[Loop findings](LOOP.md)");
   });
 
-  it("never sends a decision it was not asked to — decide is not what a pull or prove calls", () => {
-    /* `decide` pushes to a workspace other people read. The script's pull,
-       prove and propose paths must not reach it; this holds the line in the
-       source, where an edit would cross it. */
-    const script = readFileSync(`${repo}/scripts/loop.mjs`, "utf8");
-    const proveFn = script.slice(script.indexOf("function proveUntriaged"), script.indexOf("// ── commands"));
-    const pull = script.slice(script.indexOf('case "pull"'), script.indexOf('case "list"'));
-    const propose = script.slice(script.indexOf('case "propose"'), script.indexOf('case "decide"'));
-    const proveCmd = script.slice(script.indexOf('case "prove"'), script.indexOf('case "render"'));
-    expect(pull, "pull runs proveUntriaged over new findings unless --no-prove is set").toContain("proveUntriaged()");
-    for (const body of [proveFn, pull, propose, proveCmd]) {
-      expect(body, "these commands only read Loop, prove against the code, and write files").not.toMatch(
-        /await push\(|upsertContext|stitch\(\[\s*"(dismiss|create|delete|edit)"/,
-      );
-    }
-  });
-
   it("keeps the installer's address out of the repository — it is a read token, and this repo is public", () => {
     /* The installer URL carries a token for a bucket that does not allow public
        reads, so it lives in a secret. This walks what is committed under
@@ -75,25 +58,14 @@ describe("the Loop findings are derived, not written", () => {
     expect(offenders, "a download token is committed here; move it to a secret and rotate it").toEqual([]);
   });
 
-  it("the nightly pull reads Loop and files findings, and nothing else", () => {
-    const yml = readFileSync(`${repo}/.github/workflows/loop.yml`, "utf8");
-    expect(yml, "a pull that could decide would dismiss insights for the whole workspace").not.toMatch(
-      /loop\.mjs (decide|push|mine|propose)/,
-    );
-    expect(yml).toContain("scripts/loop.mjs pull");
-    expect(yml, "Loop is off in a fresh CLI until it is enabled; the 29 Sep to 1 Oct nightlies all died on this").toMatch(
-      /stitch enable loop \|\| stitch yolo --enable loop[\s\S]*scripts\/loop\.mjs pull/,
-    );
-    expect(yml, "an unconfigured repository skips; it does not fail").toContain("enabled=false");
-    expect(yml).toContain("secrets.LOOP_API_KEY");
-    expect(yml, "the Linux build reads STITCH_API_KEY, not LOOP_API_KEY: the 1 Oct run failed 'Missing authentication' with the secret set").toMatch(
-      /STITCH_API_KEY: \$\{\{ secrets\.LOOP_API_KEY \}\}/,
-    );
-    expect(yml).toContain("secrets.STITCH_INSTALLER_URL");
-    expect(yml, "the Loop key goes to Loop's host, not the Canvas API the Linux build defaults to").toContain(
-      "STITCH_BASE_URL: https://jules.googleapis.com/v2alpha",
-    );
-    expect(yml, "the merge is checked on the branch, not trusted").toMatch(/render --check[\s\S]*vitest run/);
+  it("keel's own loop test passes — keel ships it, and CI runs vitest, not node --test", () => {
+    /* keel-loop.yml (keel practice `loop`) replaced isocan's loop.yml on
+       5 Oct 2026; the guards that lived here (pull never decides, Loop is
+       enabled in a fresh CLI, the key reaches the CLI as STITCH_API_KEY) are
+       keel's now, held by its tests/loop.test.mjs and its own workflow
+       tests. This runs that file so isocan's gate still reads it. */
+    const out = spawnSync(process.execPath, ["--test", `${repo}/tests/loop.test.mjs`], { cwd: repo, encoding: "utf8" });
+    expect(out.status, out.stdout + out.stderr).toBe(0);
   });
 });
 
