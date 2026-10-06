@@ -39,5 +39,5 @@ npm install -g <dir>
 ## Before you change anything
 
 Read `AGENTS.md`; it is this project's working guide. Never edit
-`docs/ROADMAP.md`, which is generated. `npm test && npm run typecheck` is the gate. Outward steps
+`docs/ROADMAP.md`, which is generated. `npm test && npm run typecheck && node --test tests/loop.test.mjs` is the gate. Outward steps
 (repos, secrets, issues on another repo, model spend) wait for the owner's yes.

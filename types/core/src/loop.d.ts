@@ -30,7 +30,7 @@
  *   true). Dismissed in Loop, with the evidence in `note`.
  * - `done`      — accepted and then fixed.
  */
-export declare const LOOP_DECISIONS: readonly ["untriaged", "proposed", "accepted", "declined", "stale", "done"];
+declare const LOOP_DECISIONS: readonly ["untriaged", "proposed", "accepted", "declined", "stale", "done"];
 type LoopDecision = (typeof LOOP_DECISIONS)[number];
 /** Decisions that end a finding's life in Loop: they are sent as dismissals. */
 export declare const DISMISSED_BY_US: readonly LoopDecision[];
@@ -38,7 +38,7 @@ export declare const DISMISSED_BY_US: readonly LoopDecision[];
  * Our priority, deliberately not Loop's P0–P3 vocabulary, so the two can never
  * be confused in a diff. `never` on a proposal is a recommendation to decline.
  */
-export declare const LOOP_RANKS: readonly ["now", "next", "later", "never"];
+declare const LOOP_RANKS: readonly ["now", "next", "later", "never"];
 type LoopRank = (typeof LOOP_RANKS)[number];
 type LoopState = "ACTIVE" | "RESOLVED" | "DISMISSED";
 /** One insight as Loop reports it, reduced to what triage uses. */

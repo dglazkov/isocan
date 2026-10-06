@@ -1,13 +1,21 @@
 {
-  "practice": "0.6.7",
+  "practice": "0.7.0",
   "files": {
     ".agents/skills/keel/SKILL.md": {
       "practice": "agents-md",
-      "sha256": "f81895464b8a27d113a57d12febf5eb752b3eec96006f34eb690e0ae07ada663"
+      "sha256": "bdf0bd06081b23a0fde69b63b8c0d7d63a0abaabf0105e079402123e67350b60"
     },
     ".claude/skills/keel": {
       "practice": "agents-md",
       "sha256": "fc2ca840d70a4aed22edaa7c95ff46e2f3098c2f4bd3d3b606d14fa4a2b5305d"
+    },
+    ".github/workflows/keel-loop.yml": {
+      "practice": "loop",
+      "sha256": "28c4e7c8ef4afcef6c22c27e42c7d835c1a603272ba6f5c7b017911f9bd57721"
+    },
+    ".github/workflows/keel-night.yml": {
+      "practice": "night",
+      "sha256": "91d99b02eb332ae1ca275672f63530ca5825cdca7f8a671051f6478b0329b168"
     },
     "AGENTS.md#agents-md": {
       "practice": "agents-md",
@@ -17,9 +25,37 @@
       "practice": "lessons",
       "sha256": "470f687938fd261173e737b39601cc77b6c31db066b7313dbc5a868810eaf590"
     },
+    "AGENTS.md#loop": {
+      "practice": "loop",
+      "sha256": "8a0af4f420b4f371ed52b76c6854428e44b035562b81f78e5d488b90301b6b2e"
+    },
     "CLAUDE.md": {
       "practice": "agents-md",
       "sha256": "afc2da8653649abeb8ecce9a8792e12e755e69986b27659462e790c7d410708a"
+    },
+    "renovate.json": {
+      "practice": "renovate",
+      "sha256": "da0f4ff37fe8862c2c34516fbdcf57492bef2643d05156d953c01bf0f472896d"
+    },
+    "scripts/keel/drain.mjs": {
+      "practice": "night",
+      "sha256": "1e20c77ebecaa8c76737675f01073dfe0297a524cdc0dc64c920b6b8c823614b"
+    },
+    "scripts/keel/improve.mjs": {
+      "practice": "night",
+      "sha256": "1a613145f92a3b1de4004d72c6e8251f210510d406730f8938d1ba6500b2843c"
+    },
+    "scripts/keel/lib.mjs": {
+      "practice": "night",
+      "sha256": "3afcdb2767b3f818c65d4a195deea5a5877eee4167a5e44fafc4fbc2c9c2f0d4"
+    },
+    "scripts/loop.mjs": {
+      "practice": "loop",
+      "sha256": "e84b31fef7cab5b1742c1929a2a9965d89e669b7fb67f06db5a8751fe96c7421"
+    },
+    "tests/loop.test.mjs": {
+      "practice": "loop",
+      "sha256": "8c6a1efde5163f63d6e20c32a43effa8999a245bc75740a68ad61efb5fa8a0ee"
     }
   }
 }
