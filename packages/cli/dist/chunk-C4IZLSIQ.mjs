@@ -53,7 +53,7 @@ import {
   wireTitle,
   writePrototype,
   writeWire
-} from "./chunk-BBOG2OA6.mjs";
+} from "./chunk-C3QWQUPD.mjs";
 import {
   wireCopyFile
 } from "./chunk-RBQUYPUY.mjs";

@@ -1,6 +1,12 @@
 import { createRequire as __isocanCreateRequire } from "node:module";
 const require = __isocanCreateRequire(import.meta.url);
 import {
+  WIRE_COMMAND,
+  WIRE_PROPERTY_KEYS,
+  designUse,
+  ownDesignSystemAt
+} from "./chunk-GIEYCM66.mjs";
+import {
   DEFAULT_VARIATIONS,
   FlowCanvas,
   StyleResolver,
@@ -28,7 +34,7 @@ import {
   styleAt,
   wiresOn,
   writeWireCopy
-} from "./chunk-QMZDMV4F.mjs";
+} from "./chunk-C4IZLSIQ.mjs";
 import {
   MAX_COPY_VARIANTS,
   checkCopyVariants,
@@ -100,7 +106,10 @@ import {
   wireframe,
   writePrototype,
   writeWire
-} from "./chunk-BBOG2OA6.mjs";
+} from "./chunk-C3QWQUPD.mjs";
+import {
+  wireframeModule
+} from "./chunk-XBCICSRJ.mjs";
 import {
   copyDeck,
   wireCopyFile
@@ -117,15 +126,6 @@ import {
   stubTextGenerator
 } from "./chunk-ET6O7H6Z.mjs";
 import "./chunk-KQ3WEYIK.mjs";
-import {
-  WIRE_COMMAND,
-  WIRE_PROPERTY_KEYS,
-  designUse,
-  ownDesignSystemAt
-} from "./chunk-GIEYCM66.mjs";
-import {
-  wireframeModule
-} from "./chunk-XBCICSRJ.mjs";
 import "./chunk-XSMUJNBI.mjs";
 import {
   FIDELITY_PROP,

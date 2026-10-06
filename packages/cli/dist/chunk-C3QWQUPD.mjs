@@ -1,15 +1,15 @@
 import { createRequire as __isocanCreateRequire } from "node:module";
 const require = __isocanCreateRequire(import.meta.url);
 import {
+  wireframeModule
+} from "./chunk-XBCICSRJ.mjs";
+import {
   JEV_MODEL,
   chosenOption,
   envTextGenerator,
   readResponse,
   stubTextGenerator
 } from "./chunk-ET6O7H6Z.mjs";
-import {
-  wireframeModule
-} from "./chunk-XBCICSRJ.mjs";
 import {
   FIDELITY_PROP,
   markOffered,

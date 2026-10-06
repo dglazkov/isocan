@@ -21,6 +21,10 @@ import {
   require_validation_error
 } from "./chunk-DM252HUB.mjs";
 import {
+  mayRemoveComment,
+  removableComment
+} from "./chunk-CEFJ6B76.mjs";
+import {
   KeyFileRefused,
   checkKey,
   defaultKeysHome,
@@ -59,10 +63,6 @@ import {
   lastFour,
   ownerOnlySentence
 } from "./chunk-KQ3WEYIK.mjs";
-import {
-  mayRemoveComment,
-  removableComment
-} from "./chunk-CEFJ6B76.mjs";
 import {
   BLOBS_PRESENT_LIMIT,
   BLOBS_PRESENT_ROUTE,

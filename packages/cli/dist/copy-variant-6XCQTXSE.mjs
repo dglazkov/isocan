@@ -5,7 +5,8 @@ import {
   readWire,
   renderWire,
   validateCopyPayload
-} from "./chunk-BBOG2OA6.mjs";
+} from "./chunk-C3QWQUPD.mjs";
+import "./chunk-XBCICSRJ.mjs";
 import {
   wireCopyFile
 } from "./chunk-RBQUYPUY.mjs";
@@ -13,7 +14,6 @@ import "./chunk-NE45VMO5.mjs";
 import "./chunk-SGXD6ULG.mjs";
 import "./chunk-ET6O7H6Z.mjs";
 import "./chunk-KQ3WEYIK.mjs";
-import "./chunk-XBCICSRJ.mjs";
 import "./chunk-XSMUJNBI.mjs";
 import {
   FIDELITY_PROP
