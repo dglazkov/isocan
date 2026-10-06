@@ -270,6 +270,8 @@ export interface Comment {
    * the one value the next arrival reads to know what this agent last said.
    */
   record?: true | import("./roll.ts").RollKind;
+  /** A person pressed a control in a prototype; see `prototype-click.ts`. */
+  click?: import("./prototype-click.ts").PrototypeClick;
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];
