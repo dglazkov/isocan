@@ -7,8 +7,9 @@
 //   lockDrift(root)          managed files whose bytes are not what keel wrote
 //                            (.keel/lock.json); `behind` needs keel's templates
 //                            and is keel-side only (keel doctor)
-//   phaseLints(root, parse)  a phase the roadmap parser rejects, a duplicate
-//                            phase number, a goal no phase serves
+//   phaseLints(root, parse, specProblems)  a phase the roadmap parser rejects
+//                            or its --check refuses, a duplicate phase
+//                            number, a goal no phase serves
 //   claudeMdLint(text)       a CLAUDE.md that is more than a pointer
 //   lessonsTableShapes(text, path)  prose between numbered rows, a second
 //                            header row, a stranded row (keel doctor reads
@@ -17,7 +18,8 @@
 //                            the numbered rows after it render as text
 //   parseLessons(text)       the lesson rows of a lessons table, and which
 //                            column is the guard (keel lessons, fleet, learn
-//                            and improve all read the table with this one)
+//                            and improve all read the table with this one);
+//                            keel's catalogue's fifth column, Where, too
 //   lessonFingerprint(project, row)  a row's identity in .keel/sent.json, the
 //                            one keel lessons files under and improve counts by
 //   unsentLessons(root, config)  the rows of the lessons table not yet sent home
@@ -31,7 +33,8 @@
 //                            read it; one reader)
 //   healthLints(root, config)  a bad `health` (health-config), or a health
 //                            directory git ignores (health-ignored): the night
-//                            writes its page and never commits it
+//                            writes its page and never commits it (a promise:
+//                            git answers while the caller reads on)
 //   readProjectRecords(root) the projects shape, read only: docs/projects/<p>/
 //                            with its primary doc's status and issue, and its
 //                            phases.md's sections (phaseSections); with
@@ -40,7 +43,7 @@
 //   gateWorkflowOf(config)   the gate workflow a project names (gateWorkflow)
 //   main(meta, fn)           run a script: --json or text, and its exit code
 import { createHash } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { readFile, readdir, lstat, readlink } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -244,8 +247,12 @@ const isSeparator = line => /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.tes
  * column. The guard column is the header cell containing "guard", in any
  * case and position (ledger's `Guard`, cajones' `Guard / status`); `guard`
  * is its index, -1 when the table has none, and each row's guard is then
- * the last column. Returns { numbered, guard, rows: [{ n, line, shape, cost,
- * guard }] }; `line` is 1-based, for permalinks.
+ * the last column. A header cell `Where` (keel's catalogue only: the stacks a
+ * lesson applies to, empty for every stack) is `where`, its index, -1 when
+ * the table has none; each row's `where` is that cell, '' without one. The
+ * shape alone makes a fingerprint, so the column moves none. Returns
+ * { numbered, guard, where, rows: [{ n, line, shape, cost, guard, where }] };
+ * `line` is 1-based, for permalinks.
  */
 export function parseLessons(text) {
   const lines = (text ?? '').split('\n');
@@ -257,18 +264,22 @@ export function parseLessons(text) {
     if (!numbered && head.length !== 3 && guard < 0) continue;
     const from = numbered ? 1 : 0; // the shape's column
     const at = guard >= 0 ? guard : from + 2;
+    const where = head.findIndex(c => /^where$/i.test(c));
     const rows = [];
     for (let j = i + 2; j < lines.length && lines[j].trim().startsWith('|'); j++) {
       const c = cells(lines[j]);
       if (numbered && !/^\d+$/.test(c[0])) continue;
       if (c.length < Math.max(at, from + 2) + 1 || (!numbered && !c[from])) continue;
-      // An unescaped pipe in the last column splits it; the guard keeps the rest.
-      const g = at === head.length - 1 ? c.slice(at).join(' | ') : c[at];
-      rows.push({ n: numbered ? Number(c[0]) : rows.length + 1, line: j + 1, shape: c[from], cost: c[from + 1], guard: g });
+      // An unescaped pipe in the last column splits it; the guard keeps the
+      // rest. A Where column after the guard stays the row's last cell.
+      const last = where === head.length - 1 && at === head.length - 2;
+      const g = at === head.length - 1 ? c.slice(at).join(' | ') : last ? c.slice(at, Math.max(at + 1, c.length - 1)).join(' | ') : c[at];
+      const w = where < 0 ? '' : last ? (c.length > at + 1 ? c[c.length - 1] : '') : c[where] ?? '';
+      rows.push({ n: numbered ? Number(c[0]) : rows.length + 1, line: j + 1, shape: c[from], cost: c[from + 1], guard: g, where: w });
     }
-    return { numbered, guard, rows };
+    return { numbered, guard, where, rows };
   }
-  return { numbered: false, guard: -1, rows: [] };
+  return { numbered: false, guard: -1, where: -1, rows: [] };
 }
 
 /** What keel lessons has sent home: { "<fingerprint>": { issue, at } }. */
@@ -307,15 +318,21 @@ export async function unsentLessons(root, config) {
   return { path, project, rows: rows.length, unsent };
 }
 
-/** Phases the roadmap's parser rejects, duplicate numbers, and goals with no phase. */
-export async function phaseLints(root, parsePhase) {
+/**
+ * Phases the roadmap's parser rejects, or its --check refuses as a spec
+ * (specProblems, when the project's roadmap.mjs has it: template text, a
+ * spec: 2 box naming no check), duplicate numbers, and goals with no phase.
+ */
+export async function phaseLints(root, parsePhase, specProblems) {
   const lint = [];
   const dir = join(root, 'docs', 'phases');
   const names = (await readdir(dir).catch(() => [])).filter(n => n.endsWith('.md') && n !== 'README.md').sort();
   const phases = [];
   for (const file of names) {
-    try { phases.push(parsePhase(file, await read(join(dir, file)))); }
-    catch (e) { lint.push({ rule: 'phase', path: `docs/phases/${file}`, message: e.message }); }
+    const raw = await read(join(dir, file));
+    try { phases.push(parsePhase(file, raw)); }
+    catch (e) { lint.push({ rule: 'phase', path: `docs/phases/${file}`, message: e.message }); continue; }
+    for (const message of specProblems?.(file, raw) ?? []) lint.push({ rule: 'phase', path: `docs/phases/${file}`, message });
   }
   let goals = [];
   try { goals = JSON.parse((await read(join(root, 'docs', 'goals.json'))) ?? '[]'); } catch { goals = []; }
@@ -545,14 +562,106 @@ export function healthDirOf(config) {
  * so the night writes the page and its PR never carries it (ledger, phase 33).
  * Outside a git repository there is nothing to ignore.
  */
-export function healthLints(root, config) {
+export async function healthLints(root, config) {
   if (!(config?.practices ?? []).includes('night') && config?.health === undefined) return [];
   const problems = healthProblems(config);
   if (problems.length) return problems.map(message => ({ rule: 'health-config', path: '.keel/keel.json', message }));
   const dir = healthDirOf(config);
-  const r = spawnSync('git', ['check-ignore', '-q', '--', `${dir}/x.md`], { cwd: root, encoding: 'utf8' });
-  if (r.status !== 0) return [];
+  const ignored = await new Promise(done => execFile('git', ['check-ignore', '-q', '--', `${dir}/x.md`], { cwd: root, encoding: 'utf8' }, e => done(!e)));
+  if (!ignored) return [];
   return [{ rule: 'health-ignored', path: dir, message: `${dir} is git-ignored here, so the night writes its health page and never commits it; set "health" in .keel/keel.json to a directory that is not ignored (like ".keel/health")` }];
+}
+
+// ---- the climb's night ---------------------------------------------------------
+
+/**
+ * The newest climb night's record (the climb practice's scripts/keel/climb.mjs
+ * writes it; the night's workflow fetches the newest `keel-climb` artifact
+ * from the default branch into this path before improve runs).
+ */
+export const CLIMB_NIGHT = '.keel/climb/night.json';
+
+/**
+ * The health page's one line about the newest climb night, or null when
+ * climb is off (no "climb" in .keel/keel.json) or never ran (no record). Not a
+ * measure: no bound, nothing to ratchet. `night` is the parsed record, or
+ * undefined when the file is absent, or the string 'unreadable'.
+ */
+export function climbLine(config, night) {
+  if (config?.climb === undefined || night === undefined || night === null) return null;
+  if (typeof night !== 'object' || !Array.isArray(night.tried) || typeof night.job !== 'string' || typeof night.date !== 'string') return `Climb: the newest record (${CLIMB_NIGHT}) is unreadable; see the last keel-climb run.`;
+  const kept = night.tried.filter(a => a?.verdict === 'keep').length;
+  if (kept) return `Climb: ${night.date} ${night.job}: kept ${kept}, ${Number.isInteger(night.pr) ? `PR #${night.pr}` : `no PR opened${night.gate ? '' : ' (the guard did not pass)'}`}.`;
+  const none = night.job === 'hygiene' ? 'none proven steady' : `none beat the noise${Number.isFinite(night.margin) ? ` (margin ${Math.round(night.margin * 100)}%)` : ''}`;
+  const why = night.tried.length ? `${night.tried.length} tried, ${none}` : 'nothing was tried';
+  return `Climb: ${night.date} ${night.job}: kept nothing (${why}).`;
+}
+
+/** A climb job's PR branch prefix. */
+export const CLIMB_PREFIX = 'keel-climb/';
+/** Closed-unmerged PRs in a row that make a climb job propose its own retirement (phase 36). */
+export const RETIRE_AFTER = 3;
+
+/**
+ * The climb jobs whose last RETIRE_AFTER `keel-climb/<job>/` PRs (newest by
+ * createdAt, from gh's closed list) were all closed unmerged: [{ job, prs }].
+ * A person reading three and merging none is the verdict; reopening one, or
+ * merging the next, lifts it. `prs`: [{ headRefName, number, createdAt, mergedAt }].
+ */
+export function climbRetiring(prs, jobs) {
+  const out = [];
+  for (const job of jobs) {
+    const mine = prs.filter(p => typeof p?.headRefName === 'string' && p.headRefName.startsWith(`${CLIMB_PREFIX}${job}/`))
+      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+      .slice(0, RETIRE_AFTER);
+    if (mine.length === RETIRE_AFTER && mine.every(p => !p.mergedAt)) out.push({ job, prs: mine.map(p => p.number) });
+  }
+  return out;
+}
+
+/** The health page's line for a job that proposes its own retirement. */
+export const retireLine = ({ job, prs }) => `Climb: \`${job}\` proposes its own retirement: its last ${RETIRE_AFTER} ${CLIMB_PREFIX}${job}/ PRs (${prs.map(n => `#${n}`).join(', ')}) were closed unmerged. Remove it from "climb".jobs, or reopen one; until then climb nights skip it.`;
+
+/** The climb night's record under root: the object, undefined when absent, 'unreadable' otherwise. */
+export async function readClimbNight(root) {
+  const text = await read(join(root, CLIMB_NIGHT));
+  if (text === null) return undefined;
+  try { return JSON.parse(text); } catch { return 'unreadable'; }
+}
+
+// ---- the tend pass ------------------------------------------------------------
+
+/**
+ * The newest tend pass's record (the climb practice's scripts/keel/tend.mjs
+ * writes it; the night's workflow fetches the newest `keel-tend` artifact
+ * from the default branch into this path before improve runs).
+ */
+export const TEND_PASS = '.keel/tend/pass.json';
+
+/**
+ * The health page's one line about the newest tend pass, or null when tend is
+ * off (no "tend" in .keel/keel.json) or never ran. What it resolved, its PR,
+ * and each finding it left unresolved, named, with what it tried. `pass` is
+ * the parsed record, undefined when absent, or the string 'unreadable'.
+ */
+export function tendLine(config, pass) {
+  if (config?.tend === undefined || pass === undefined || pass === null) return null;
+  const w = pass?.worksheet;
+  if (typeof pass !== 'object' || typeof pass.date !== 'string' || !Array.isArray(w?.findings)) return `Tend: the newest record (${TEND_PASS}) is unreadable; see the last keel-tend run.`;
+  if (typeof pass.line !== 'string') return `Tend: ${pass.date}: ${w.findings.length} finding${w.findings.length === 1 ? '' : 's'} on the worksheet; the pass did not finish (${pass.gate ? 'no report' : 'the tend guard or the gate did not pass'}); see the last keel-tend run.`;
+  const resolved = Array.isArray(pass.resolved) ? pass.resolved.length : 0;
+  const proposed = Array.isArray(pass.proposed) ? pass.proposed.length : 0;
+  const left = Array.isArray(pass.unresolved) ? pass.unresolved : [];
+  const pr = Number.isInteger(pass.pr) ? `PR #${pass.pr}` : resolved ? 'no PR opened' : 'nothing to merge';
+  const named = left.slice(0, 5).map(u => `\`${u.id}\`${u.tried ? ` (tried: ${String(u.tried).replace(/\s+/g, ' ').slice(0, 120)})` : ' (not tried)'}`);
+  return `Tend: ${pass.date}: resolved ${resolved} of ${w.findings.length}, ${proposed} proposed for the owner, ${pr}${left.length ? `; unresolved: ${named.join(', ')}${left.length > 5 ? `, and ${left.length - 5} more` : ''}` : ''}.`;
+}
+
+/** The tend pass's record under root: the object, undefined when absent, 'unreadable' otherwise. */
+export async function readTendPass(root) {
+  const text = await read(join(root, TEND_PASS));
+  if (text === null) return undefined;
+  try { return JSON.parse(text); } catch { return 'unreadable'; }
 }
 
 // ---- the gate's environment -------------------------------------------------
