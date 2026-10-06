@@ -1,7 +1,7 @@
 import net from "node:net";
 import { beforeAll, describe, expect, it } from "vitest";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -167,7 +167,7 @@ describe("the release CLI is a bundle", () => {
     }
   }, 120_000);
 
-  it("loads under 40 modules to print a version, and none of them through tsx", () => {
+  it("loads under 41 modules to print a version, and none of them through tsx", () => {
     const loaded = modulesLoadedBy(bundle, ["--version"]);
     const ours = loaded.filter((url) => url.endsWith(".ts"));
     const tsx = loaded.filter((url) => url.includes("/tsx/"));
@@ -177,7 +177,23 @@ describe("the release CLI is a bundle", () => {
     // 456 when this project started and 437 measured here the same day; 35
     // now, half of them node's own builtins. A chunk is only loaded when
     // something reaches it, so this counts what the command actually needed.
-    expect(loaded.length, `${loaded.length} modules for --version`).toBeLessThan(40);
+    // 40 since the entry became a stub that turns the compile cache on before
+    // main's chunk is compiled: one more file, 60 ms less.
+    expect(loaded.length, `${loaded.length} modules for --version`).toBeLessThan(41);
+  }, 120_000);
+
+  it("keeps a compile cache, so the next command skips compiling the chunks", () => {
+    // 249 ms → 187 ms for `--version` on Node 24, measured 6 Oct 2026.
+    const tmp = mkdtempSync(path.join(os.tmpdir(), "isocan-compile-cache-"));
+    try {
+      const { NODE_COMPILE_CACHE: _set, NODE_DISABLE_COMPILE_CACHE: _off, ...env } = process.env;
+      const done = spawnSync(process.execPath, [bundle, "--version"], { encoding: "utf8", env: { ...env, TMPDIR: tmp } });
+      expect(done.status, done.stderr).toBe(0);
+      const cache = path.join(tmp, "node-compile-cache");
+      expect(existsSync(cache) && readdirSync(cache, { recursive: true }).length > 0, "no compile cache written").toBe(true);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   }, 120_000);
 
   it("reads under 5 MB of JavaScript to print a version", () => {

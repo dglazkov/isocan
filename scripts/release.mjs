@@ -455,8 +455,10 @@ export async function buildCliBundle(out = root) {
     ...common,
     // Named, so the entry is `isocan.mjs` and not `main.mjs` — the manifest's
     // `bin` points at it and a person reading `ps` should see the CLI's name.
+    // `entry.ts`, not `main.ts`: it turns the compile cache on before main's
+    // chunks are compiled.
     entryPoints: [
-      { in: path.join(root, "packages/cli/src/main.ts"), out: "isocan" },
+      { in: path.join(root, "packages/cli/src/entry.ts"), out: "isocan" },
       ...Object.values(RELEASE_NODE_ENTRIES).map(({ entry, out: name }) => ({
         in: path.join(root, entry),
         out: name,
