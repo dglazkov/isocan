@@ -39,7 +39,7 @@
     },
     "docs/keel-lessons.md": {
       "practice": "lessons",
-      "sha256": "0458f4f2a3dc1687b0f2aa16d59f1d061756dbd568766583fc94700328e4aa20"
+      "sha256": "28d1170f58d1905e564f413669704ac475f627732feb4b4657ad1d31711b09e7"
     },
     "renovate.json": {
       "practice": "renovate",
