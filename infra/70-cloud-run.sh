@@ -168,6 +168,23 @@ if gcloud services list --project="${PROJECT_ID}" --enabled \
   fi
 fi
 
+# The home's text model (`POST /api/text`, `packages/server/src/text.ts`):
+# the browser's /wire copy and the CLI's `wire copy --ai` / `wire voice` write
+# words through it, so the key stays on the home. The secret `text-api-key`
+# was created in isocan-io-prod on 6 Oct 2026 (copy-edit phase 0.5) and
+# attached by hand; stating it here is what makes a re-provision keep it, and
+# ISOCAN_TEXT_PROVIDER has to ride in ENV_VARS because --set-env-vars below
+# replaces the whole environment. Conditional on the secret, so a project
+# without one (dev, today) deploys as before and the route says
+# `text-unavailable` rather than the deploy failing on a missing secret.
+TEXT_SECRETS=""
+if gcloud secrets describe text-api-key --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  TEXT_SECRETS=",ISOCAN_TEXT_API_KEY=text-api-key:latest"
+  ENV_VARS="${ENV_VARS};ISOCAN_TEXT_PROVIDER=${ISOCAN_TEXT_PROVIDER:-anthropic}"
+else
+  note "no text-api-key secret in ${PROJECT_ID} — deploying with no text model (/api/text answers text-unavailable)"
+fi
+
 step "deploying ${SERVICE}"
 note "min=${MIN_INSTANCES} max=${MAX_INSTANCES} cpu=${CPU} memory=${MEMORY} concurrency=${CONCURRENCY} timeout=${REQUEST_TIMEOUT}s"
 
@@ -236,12 +253,10 @@ fi
 # `--update-` rather than `--set-`, so a secret attached out of band for an
 # experiment is not silently dropped by the next deploy.
 #
-# NOT attached yet: the home's text-model key (`POST /api/text`,
-# `packages/server/src/text.ts`) — `ISOCAN_TEXT_API_KEY`, with
-# `ISOCAN_TEXT_PROVIDER` (`anthropic` or `openai`; absent, an `sk-ant-` key is
-# Claude's) and optionally `ISOCAN_TEXT_MODEL`. Which provider and key is
-# Dion's decision (copy-edit phase 0.5's provision); until a secret is added
-# beside the judge's, the route refuses with `text-unavailable` and the
+# The text-model key rides beside it when the project has one (TEXT_SECRETS,
+# decided above): `ISOCAN_TEXT_API_KEY` with `ISOCAN_TEXT_PROVIDER` in
+# ENV_VARS (`anthropic` or `openai`), and optionally `ISOCAN_TEXT_MODEL`.
+# Without the secret the route refuses with `text-unavailable` and the
 # browser's /wire copy fills placeholder words, said as such.
 gcloud run deploy "${SERVICE}" \
   --project="${PROJECT_ID}" \
@@ -259,7 +274,7 @@ gcloud run deploy "${SERVICE}" \
   --execution-environment=gen2 \
   --ingress="${INGRESS}" \
   --set-env-vars="^;^${ENV_VARS}" \
-  --update-secrets="TYPESAFE_API_KEY=typesafe-api-key:latest" \
+  --update-secrets="TYPESAFE_API_KEY=typesafe-api-key:latest${TEXT_SECRETS}" \
   --quiet
 
 made "revision deployed from ${IMAGE}"

@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 5 Oct 2026: phases 0–5 are CLOSED; phase 0.5 is PART-DONE — the route is built and refuses in words until isocan.io has a text-model key (Dion's; the key is on his machine since 5 Oct, so `wire voice`, `words vary`, `wire copy --ai` and *Choose a voice…* on his own daemon write real copy). Next: copy-edit phase 6, evidence.**
+**Where we are, 6 Oct 2026: phases 0–5 are CLOSED; phase 0.5 is PART-DONE — the route is built and isocan.io has had a text-model key since 6 Oct (`text-api-key`, Anthropic); what closes it is one `/wire copy` in the browser writing real words (`wire voice`, `words vary`, `wire copy --ai` and *Choose a voice…* already write real copy on Dion's own daemon). Next: copy-edit phase 6, evidence.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -41,7 +41,7 @@ greedy answer is refused; `npm test`, typecheck.
 
 ## Phase 0.5 — A generator the browser can reach
 
-**Status: PART-DONE, 2 October 2026.** `POST /api/text` is built on the daemon and the home with Claude and OpenAI-shaped providers, every refusal and the key-never-leaks rule proved against a real daemon; it waits on a text-model key on isocan.io, which is Dion's decision.
+**Status: PART-DONE, 6 October 2026 — provisioned, proof in the browser owed.** `POST /api/text` is built on the daemon and the home with Claude and OpenAI-shaped providers, every refusal and the key-never-leaks rule proved against a real daemon. On 6 Oct Dion put an Anthropic key in isocan-io-prod's Secret Manager (`text-api-key`) from Cloud Shell and the service took it as `ISOCAN_TEXT_API_KEY` with `ISOCAN_TEXT_PROVIDER=anthropic` (revision `isocan-00197-ncd`); `infra/70-cloud-run.sh` now carries both when the secret exists, so a re-provision keeps them. What closes it: `/wire copy` on an isocan.io canvas writing real words signed `claude-… via the home` — the first paste may have been the key's id rather than the key, so the first run says.
 
 **Outcome:** `POST /api/text` on the daemon and the home (`TEXT_ROUTE` in
 core beside `JUDGMENT_ROUTE`): a JSON-schema text completion for a badge that
@@ -56,9 +56,7 @@ the lazy dialog chunk.
 non-editor refused, the key never in a response or error); a dialog test that a
 configured `host.generate` is called; `npm test`, typecheck.
 
-⚑ **Provision:** a text-model key on isocan.io (`ISOCAN_TEXT_API_KEY`, and
-which provider) is Dion's decision; until then the route refuses in words and
-the browser keeps the stub.
+⚑ **Provision:** done 6 Oct 2026 — `text-api-key` in isocan-io-prod, Anthropic. Dev has none yet and deploys as before.
 
 ### Trajectory
 
@@ -66,6 +64,7 @@ the browser keeps the stub.
 - **2026-10-02** — `/api/judgment` moved beside `/api/text` in `model-routes.ts`: one more registration line put `registerRoutes` past its agreed size, and the two routes that spend the home's keys belong together.
 - **2026-10-02** — Claude is the default when the key is `sk-ant-…` (model `claude-opus-5-5`, `effort: low`, per the claude-api guidance), raw `fetch` rather than the SDK because core loads in the browser and the lockfile is someone else's.
 - **2026-10-02** — Open: a text-model key on isocan.io (`ISOCAN_TEXT_API_KEY`, and the provider) — Dion's. Until then the browser fills placeholder words and says so once.
+- **2026-10-06** — Provisioned from Cloud Shell: this machine's `gcloud` is behind Context-Aware Access and cannot reach the project at all, which is also why the agent could not do it. `70-cloud-run.sh` attaches the secret only when `gcloud secrets describe text-api-key` finds one, and puts `ISOCAN_TEXT_PROVIDER` in `ENV_VARS` because `--set-env-vars` replaces the whole environment — a hand-attached variable would not have survived the next deploy.
 - **2026-10-02** — Open: 30 completions per badge per minute will bind phase 2 (N voices × M screens); batch or raise it with a stated reason there.
 
 ## Phase 1 — The copy deck
