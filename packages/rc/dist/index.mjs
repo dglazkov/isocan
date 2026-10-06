@@ -105,6 +105,26 @@ function actorNameIn(names, actor) {
 // packages/core/src/questionnaire.ts
 var questionnaireActorsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/questionnaire/actors`;
 
+// node_modules/nanoid/url-alphabet/index.js
+var urlAlphabet = "useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict";
+
+// node_modules/nanoid/index.browser.js
+var nanoid = (size = 21) => {
+  let id = "";
+  let bytes = crypto.getRandomValues(new Uint8Array(size |= 0));
+  while (size--) {
+    id += urlAlphabet[bytes[size] & 63];
+  }
+  return id;
+};
+
+// packages/core/src/ids.ts
+function newId(prefix) {
+  return `${prefix}_${nanoid(10)}`;
+}
+var newThreadId = () => newId("thr");
+var newCommentId = () => newId("cmt");
+
 // packages/core/src/browseritem.ts
 var BROWSER_MIME = "text/uri-list";
 
@@ -1234,26 +1254,6 @@ function collectCanvasNames(canvas) {
   }
   return [...seen.values()];
 }
-
-// node_modules/nanoid/url-alphabet/index.js
-var urlAlphabet = "useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict";
-
-// node_modules/nanoid/index.browser.js
-var nanoid = (size = 21) => {
-  let id = "";
-  let bytes = crypto.getRandomValues(new Uint8Array(size |= 0));
-  while (size--) {
-    id += urlAlphabet[bytes[size] & 63];
-  }
-  return id;
-};
-
-// packages/core/src/ids.ts
-function newId(prefix) {
-  return `${prefix}_${nanoid(10)}`;
-}
-var newThreadId = () => newId("thr");
-var newCommentId = () => newId("cmt");
 
 // packages/core/src/claims.ts
 var CLAIM_STANDS_MS = 30 * 60 * 1e3;
