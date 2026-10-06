@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 6 Oct 2026: phases 0–5 are CLOSED; phase 0.5 is PART-DONE — the route is built and isocan.io has had a text-model key since 6 Oct (`text-api-key`, Anthropic); what closes it is one `/wire copy` in the browser writing real words (`wire voice`, `words vary`, `wire copy --ai` and *Choose a voice…* already write real copy on Dion's own daemon). Next: copy-edit phase 6, evidence.**
+**Where we are, 6 Oct 2026: phases 0–5 are CLOSED, phase 0.5 CLOSED 6 Oct — isocan.io has a text-model key (`text-api-key`, Anthropic) and `/wire copy` in the browser writes real words through the home. Next: copy-edit phase 6, evidence.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -41,7 +41,7 @@ greedy answer is refused; `npm test`, typecheck.
 
 ## Phase 0.5 — A generator the browser can reach
 
-**Status: PART-DONE, 6 October 2026 — provisioned, proof in the browser owed.** `POST /api/text` is built on the daemon and the home with Claude and OpenAI-shaped providers, every refusal and the key-never-leaks rule proved against a real daemon. On 6 Oct Dion put an Anthropic key in isocan-io-prod's Secret Manager (`text-api-key`) from Cloud Shell and the service took it as `ISOCAN_TEXT_API_KEY` with `ISOCAN_TEXT_PROVIDER=anthropic` (revision `isocan-00197-ncd`); `infra/70-cloud-run.sh` now carries both when the secret exists, so a re-provision keeps them. What closes it: `/wire copy` on an isocan.io canvas writing real words signed `claude-… via the home` — the first paste may have been the key's id rather than the key, so the first run says.
+**Status: CLOSED, 6 October 2026.** `POST /api/text` is built on the daemon and the home with Claude and OpenAI-shaped providers, every refusal and the key-never-leaks rule proved against a real daemon. On 6 Oct Dion put an Anthropic key in isocan-io-prod's Secret Manager (`text-api-key`) from Cloud Shell — the first paste was the key's id, version 2 is the key, version 1 disabled — and the service took it as `ISOCAN_TEXT_API_KEY` with `ISOCAN_TEXT_PROVIDER=anthropic` (revision `isocan-00198-55d`); `infra/70-cloud-run.sh` carries both when the secret exists, so a re-provision keeps them. Dion ran `/wire copy` on an isocan.io canvas and it wrote real words through the home.
 
 **Outcome:** `POST /api/text` on the daemon and the home (`TEXT_ROUTE` in
 core beside `JUDGMENT_ROUTE`): a JSON-schema text completion for a badge that
