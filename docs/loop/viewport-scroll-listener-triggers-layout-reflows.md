@@ -1,9 +1,10 @@
 ---
-title: "Viewport scroll listener triggers layout reflows"
-loop: b663dbb7-5bd5-4f4d-8761-99a2fa98d8bc
+title: Viewport scroll listener triggers layout reflows
+loop:
+  - b663dbb7-5bd5-4f4d-8761-99a2fa98d8bc
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: declined
 rank: never
 project: new

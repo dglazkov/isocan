@@ -1,9 +1,10 @@
 ---
-title: "Web UI lacks design evaluation metrics interface"
-loop: 0ca6bdca-0c81-4076-9835-8555889a9e77
+title: Web UI lacks design evaluation metrics interface
+loop:
+  - 0ca6bdca-0c81-4076-9835-8555889a9e77
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: untriaged
 ---
 

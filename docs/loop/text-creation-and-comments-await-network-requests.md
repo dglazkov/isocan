@@ -1,9 +1,10 @@
 ---
-title: "Text creation and comments await network requests"
-loop: c4ce7a8c-c0b0-47e7-8e6a-7fe7d568e6d9
+title: Text creation and comments await network requests
+loop:
+  - c4ce7a8c-c0b0-47e7-8e6a-7fe7d568e6d9
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: done
 rank: next
 project: multiuser

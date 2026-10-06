@@ -1,9 +1,10 @@
 ---
-title: "Design briefs lack structured prompt templates"
-loop: 1d6d1671-8ef4-4ee2-8f72-cc7a4636aaf9
+title: Design briefs lack structured prompt templates
+loop:
+  - 1d6d1671-8ef4-4ee2-8f72-cc7a4636aaf9
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

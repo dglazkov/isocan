@@ -1,9 +1,10 @@
 ---
-title: "Missing spatial audio walkthrough voice pins"
-loop: b9fc06b4-34e8-405b-baa6-ba32bf195ac5
+title: Missing spatial audio walkthrough voice pins
+loop:
+  - b9fc06b4-34e8-405b-baa6-ba32bf195ac5
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: voice-agent

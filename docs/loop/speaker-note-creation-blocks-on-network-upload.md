@@ -1,9 +1,10 @@
 ---
-title: "Speaker note creation blocks on network upload"
-loop: 3d625656-57c6-41e1-b9f7-060572a57225
+title: Speaker note creation blocks on network upload
+loop:
+  - 3d625656-57c6-41e1-b9f7-060572a57225
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

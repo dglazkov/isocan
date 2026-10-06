@@ -1,9 +1,10 @@
 ---
-title: "Scripts hardcode relative node module paths"
-loop: 9030b3a9-c66c-4623-a305-293d13571bb8
+title: Scripts hardcode relative node module paths
+loop:
+  - 9030b3a9-c66c-4623-a305-293d13571bb8
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: untriaged
 ---
 

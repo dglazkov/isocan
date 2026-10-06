@@ -1,9 +1,10 @@
 ---
-title: "Media rendering bypasses local replica cache"
-loop: b58408f2-f60e-4a13-ac00-3c23ad9599c1
+title: Media rendering bypasses local replica cache
+loop:
+  - b58408f2-f60e-4a13-ac00-3c23ad9599c1
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: declined
 rank: never
 project: multiuser

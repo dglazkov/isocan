@@ -1,9 +1,10 @@
 ---
-title: "Global store subscriptions cause full viewport re-renders"
-loop: f658a23e-5512-4405-9d65-7bb34b895b36
+title: Global store subscriptions cause full viewport re-renders
+loop:
+  - f658a23e-5512-4405-9d65-7bb34b895b36
 loop_rank: P2
 loop_state: RESOLVED
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: done
 rank: next
 project: cleanup

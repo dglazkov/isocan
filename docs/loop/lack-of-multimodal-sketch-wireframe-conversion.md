@@ -1,9 +1,10 @@
 ---
-title: "Lack of multimodal sketch wireframe conversion"
-loop: d81bb9b4-12f2-4599-b1cc-4dec3916dbd2
+title: Lack of multimodal sketch wireframe conversion
+loop:
+  - d81bb9b4-12f2-4599-b1cc-4dec3916dbd2
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: accepted
 rank: later
 project: wireframes

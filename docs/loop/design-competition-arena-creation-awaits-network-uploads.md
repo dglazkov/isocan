@@ -1,9 +1,10 @@
 ---
-title: "Design competition arena creation awaits network uploads"
-loop: 5ac400aa-1c19-4937-9180-998e150cd830
+title: Design competition arena creation awaits network uploads
+loop:
+  - 5ac400aa-1c19-4937-9180-998e150cd830
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

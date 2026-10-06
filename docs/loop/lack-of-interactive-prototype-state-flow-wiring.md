@@ -1,9 +1,10 @@
 ---
-title: "Lack of interactive prototype state flow wiring"
-loop: 1d703e35-2101-43eb-abf4-0ef306bf1782
+title: Lack of interactive prototype state flow wiring
+loop:
+  - 1d703e35-2101-43eb-abf4-0ef306bf1782
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: stale
 rank: never
 project: wireframes

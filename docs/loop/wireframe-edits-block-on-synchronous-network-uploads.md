@@ -1,9 +1,10 @@
 ---
-title: "Wireframe edits block on synchronous network uploads"
-loop: 74fe6f8b-8c0b-476b-ad81-a4662dcf5fa8
+title: Wireframe edits block on synchronous network uploads
+loop:
+  - 74fe6f8b-8c0b-476b-ad81-a4662dcf5fa8
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

@@ -1,9 +1,10 @@
 ---
-title: "Asymmetry between CLI verbs and Web UI doors"
-loop: 9f135820-b34a-40fa-b3b1-8df028bc5b1a
+title: Asymmetry between CLI verbs and Web UI doors
+loop:
+  - 9f135820-b34a-40fa-b3b1-8df028bc5b1a
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: stale
 rank: never
 project: design-partner

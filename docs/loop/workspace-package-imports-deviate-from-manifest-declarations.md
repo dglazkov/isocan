@@ -1,9 +1,10 @@
 ---
-title: "Workspace package imports deviate from manifest declarations"
-loop: 2d4b6d0c-af7c-4cc2-9e1c-c85783821d7f
+title: Workspace package imports deviate from manifest declarations
+loop:
+  - 2d4b6d0c-af7c-4cc2-9e1c-c85783821d7f
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: done
 rank: next
 project: modules

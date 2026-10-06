@@ -1,9 +1,10 @@
 ---
-title: "Web UI lacks canvas home teleportation interface"
-loop: 41a4ba45-b636-474b-b64f-e25a1fdb15ca
+title: Web UI lacks canvas home teleportation interface
+loop:
+  - 41a4ba45-b636-474b-b64f-e25a1fdb15ca
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: untriaged
 ---
 

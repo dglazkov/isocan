@@ -1,9 +1,10 @@
 ---
-title: "Area creation awaits network blob upload"
-loop: ea2b0f51-b6c8-4f0c-851d-11544ff656bb
+title: Area creation awaits network blob upload
+loop:
+  - ea2b0f51-b6c8-4f0c-851d-11544ff656bb
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

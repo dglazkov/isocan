@@ -1,9 +1,10 @@
 ---
-title: "Limited real-time spatial presence during agent co-design"
-loop: ed7526eb-76b8-4fdc-805e-b5dacb8cd5fb
+title: Limited real-time spatial presence during agent co-design
+loop:
+  - ed7526eb-76b8-4fdc-805e-b5dacb8cd5fb
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: stale
 rank: never
 project: design-competition

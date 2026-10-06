@@ -1,9 +1,10 @@
 ---
-title: "Toolbar background image upload blocks canvas patch"
-loop: 8c5cf4b7-71b7-439d-adf4-407dbd7b7d07
+title: Toolbar background image upload blocks canvas patch
+loop:
+  - 8c5cf4b7-71b7-439d-adf4-407dbd7b7d07
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

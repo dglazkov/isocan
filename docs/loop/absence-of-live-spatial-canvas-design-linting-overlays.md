@@ -1,9 +1,10 @@
 ---
-title: "Absence of live spatial canvas design linting overlays"
-loop: 3ae90f47-6896-4251-8ed4-77019f98ea89
+title: Absence of live spatial canvas design linting overlays
+loop:
+  - 3ae90f47-6896-4251-8ed4-77019f98ea89
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: design-lint

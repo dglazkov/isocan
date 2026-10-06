@@ -1,9 +1,10 @@
 ---
-title: "Web UI lacks canvas group layout controls"
-loop: df9d4756-90d4-40d9-bc87-dce11a72152b
+title: Web UI lacks canvas group layout controls
+loop:
+  - df9d4756-90d4-40d9-bc87-dce11a72152b
 loop_rank: P2
 loop_state: RESOLVED
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: done
 rank: next
 project: canvas-groups

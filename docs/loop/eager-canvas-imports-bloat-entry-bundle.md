@@ -1,9 +1,10 @@
 ---
-title: "Eager canvas imports bloat entry bundle"
-loop: 9291f52b-7826-4552-8481-1ebc999a449e
+title: Eager canvas imports bloat entry bundle
+loop:
+  - 9291f52b-7826-4552-8481-1ebc999a449e
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: stale
 rank: never
 project: ui-refresh

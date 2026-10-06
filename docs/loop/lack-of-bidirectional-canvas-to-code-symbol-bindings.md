@@ -1,9 +1,10 @@
 ---
-title: "Lack of bidirectional canvas to code symbol bindings"
-loop: a2ff575b-869f-4aeb-b8ff-f65dbe68f0b7
+title: Lack of bidirectional canvas to code symbol bindings
+loop:
+  - a2ff575b-869f-4aeb-b8ff-f65dbe68f0b7
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

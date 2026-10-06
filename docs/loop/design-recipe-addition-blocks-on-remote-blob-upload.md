@@ -1,9 +1,10 @@
 ---
-title: "Design recipe addition blocks on remote blob upload"
-loop: ba9ebfe4-cd8e-4d8d-8e84-66eff1a7abc6
+title: Design recipe addition blocks on remote blob upload
+loop:
+  - ba9ebfe4-cd8e-4d8d-8e84-66eff1a7abc6
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

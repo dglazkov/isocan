@@ -1,9 +1,10 @@
 ---
-title: "Missing cross canvas component library sync"
-loop: b9cc02d1-1b3a-4b0b-8c51-cfc57f6f7969
+title: Missing cross canvas component library sync
+loop:
+  - b9cc02d1-1b3a-4b0b-8c51-cfc57f6f7969
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: untriaged
 ---
 

@@ -1,9 +1,10 @@
 ---
-title: "Renovate configuration gaps miss unhandled update paths"
-loop: 171fb064-e617-4664-a784-1d836889d5fd
+title: Renovate configuration gaps miss unhandled update paths
+loop:
+  - 171fb064-e617-4664-a784-1d836889d5fd
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: done
 rank: later
 project: new

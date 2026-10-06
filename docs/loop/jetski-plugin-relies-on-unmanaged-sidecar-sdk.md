@@ -1,9 +1,10 @@
 ---
-title: "Jetski plugin relies on unmanaged sidecar SDK"
-loop: ef4c72d0-5395-470a-b9e6-e2aeaf335d5f
+title: Jetski plugin relies on unmanaged sidecar SDK
+loop:
+  - ef4c72d0-5395-470a-b9e6-e2aeaf335d5f
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: untriaged
 ---
 

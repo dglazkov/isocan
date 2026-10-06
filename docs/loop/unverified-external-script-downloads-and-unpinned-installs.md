@@ -1,9 +1,10 @@
 ---
-title: "Unverified external script downloads and unpinned installs"
-loop: 8a6bc809-e860-4076-9ee3-cad90810aba5
+title: Unverified external script downloads and unpinned installs
+loop:
+  - 8a6bc809-e860-4076-9ee3-cad90810aba5
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Dependencies healthy"
+loop_goal: Dependencies healthy
 decision: untriaged
 ---
 

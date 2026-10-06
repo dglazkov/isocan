@@ -1,9 +1,10 @@
 ---
-title: "Model key management lacks optimistic UI updates"
-loop: 7fdf1dbb-8a02-471e-9d77-dc852d9fee10
+title: Model key management lacks optimistic UI updates
+loop:
+  - 7fdf1dbb-8a02-471e-9d77-dc852d9fee10
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: untriaged
 ---
 

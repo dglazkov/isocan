@@ -1,9 +1,10 @@
 ---
-title: "Lack of structured design variant branching matrices"
-loop: 93b3cfe5-ef3c-41f0-b86e-31c46e5153a8
+title: Lack of structured design variant branching matrices
+loop:
+  - 93b3cfe5-ef3c-41f0-b86e-31c46e5153a8
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: version-diff

@@ -1,9 +1,10 @@
 ---
-title: "Agent guide documentation omits daemon operation verbs"
-loop: 90a12963-968d-4549-9518-7021f57836f5
+title: Agent guide documentation omits daemon operation verbs
+loop:
+  - 90a12963-968d-4549-9518-7021f57836f5
 loop_rank: P1
 loop_state: DISMISSED
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: stale
 rank: never
 project: iso-api

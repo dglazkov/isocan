@@ -1,9 +1,10 @@
 ---
-title: "Lack of design-to-code JSX Tailwind export pipeline"
-loop: 205dcad2-68cc-46f6-8e42-231b524b5c16
+title: Lack of design-to-code JSX Tailwind export pipeline
+loop:
+  - 205dcad2-68cc-46f6-8e42-231b524b5c16
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: design-partner

@@ -1,9 +1,10 @@
 ---
-title: "Drawing creation awaits network blob upload"
-loop: b37633ef-b339-4f9d-ab62-c60294ded964
+title: Drawing creation awaits network blob upload
+loop:
+  - b37633ef-b339-4f9d-ab62-c60294ded964
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Fast everywhere, local-first"
+loop_goal: Fast everywhere, local-first
 decision: done
 rank: next
 project: multiuser

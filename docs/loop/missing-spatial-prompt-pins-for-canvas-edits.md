@@ -1,9 +1,10 @@
 ---
-title: "Missing spatial prompt pins for canvas edits"
-loop: 9aeadb5e-0786-46cf-91ef-c1463133c27e
+title: Missing spatial prompt pins for canvas edits
+loop:
+  - 9aeadb5e-0786-46cf-91ef-c1463133c27e
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: stale
 rank: never
 project: design-partner

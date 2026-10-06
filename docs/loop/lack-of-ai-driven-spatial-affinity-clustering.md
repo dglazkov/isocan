@@ -1,9 +1,10 @@
 ---
-title: "Lack of AI-driven spatial affinity clustering"
-loop: 7d15680b-6934-4a03-ba45-9a1e314c14cb
+title: Lack of AI-driven spatial affinity clustering
+loop:
+  - 7d15680b-6934-4a03-ba45-9a1e314c14cb
 loop_rank: P2
 loop_state: DISMISSED
-loop_goal: "What canvas tools teach us"
+loop_goal: What canvas tools teach us
 decision: declined
 rank: never
 project: canvas-groups

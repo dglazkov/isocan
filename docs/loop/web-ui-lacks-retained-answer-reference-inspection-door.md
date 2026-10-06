@@ -1,9 +1,10 @@
 ---
-title: "Web UI lacks retained answer reference inspection door"
-loop: 69a435b3-3e6c-44d0-ab54-bca52c7fa77d
+title: Web UI lacks retained answer reference inspection door
+loop:
+  - 69a435b3-3e6c-44d0-ab54-bca52c7fa77d
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: untriaged
 ---
 

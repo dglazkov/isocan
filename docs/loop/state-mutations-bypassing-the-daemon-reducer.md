@@ -1,9 +1,10 @@
 ---
-title: "State mutations bypassing the daemon reducer"
-loop: 72ac202c-2856-4f62-bb9d-f1dac1041715
+title: State mutations bypassing the daemon reducer
+loop:
+  - 72ac202c-2856-4f62-bb9d-f1dac1041715
 loop_rank: P1
 loop_state: DISMISSED
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: declined
 rank: never
 since: 2026-09-29

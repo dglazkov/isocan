@@ -1,9 +1,10 @@
 ---
-title: "Web UI lacks questionnaire response supersedes capability"
-loop: 00a2a9b7-2765-4e5f-84f8-38ca7a9279b9
+title: Web UI lacks questionnaire response supersedes capability
+loop:
+  - 00a2a9b7-2765-4e5f-84f8-38ca7a9279b9
 loop_rank: P2
 loop_state: ACTIVE
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: untriaged
 ---
 

@@ -1,9 +1,10 @@
 ---
-title: "Canonical opwords mapping omits actor domain operations"
-loop: a565bcff-a787-4707-935e-b133cfd61bc0
+title: Canonical opwords mapping omits actor domain operations
+loop:
+  - a565bcff-a787-4707-935e-b133cfd61bc0
 loop_rank: P3
 loop_state: RESOLVED
-loop_goal: "Always isomorphic"
+loop_goal: Always isomorphic
 decision: stale
 rank: never
 project: iso-api
