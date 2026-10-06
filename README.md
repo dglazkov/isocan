@@ -153,7 +153,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   markdown, images, video, and HTML rendered live in sandboxed iframes
   (`allow-scripts` without `allow-same-origin`). "Double-click to interact"
   hangs under the item while you point at it, rather than lying across the
-  bottom of the document it is describing.
+  bottom of the document it is describing. A page can post
+  `{ type: "isocan:click", element, label }` to its parent when a person
+  presses a control that goes nowhere yet; it lands as a comment on the item's
+  thread and wakes the agent that published it (`isocan --agent-help`).
 - **Inherited Recent work**: Context shows recent activity beside a linked
   canvas's design and pins, with its source and covered range. CLI
   `isocan context` and MCP summaries show the same bounded reading and say

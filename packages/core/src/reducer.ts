@@ -19,6 +19,7 @@ import { designResponseMarkdown } from "./design-partner-plan.ts";
 import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
 import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
 import { validateDesignRecordState, validateDesignRecordEffect } from "./design-record.ts";
+import { validateClick } from "./prototype-click.ts";
 import { DesignRestoreConflict, designDecisionMarkdown, designTargetMatches, rejectDesignDecisionMetadata, sameDesignValue, validateDesignDecisionComment } from "./design-decision-state.ts";
 
 /**
@@ -715,6 +716,7 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
   const comment: Comment = { id: c.id, author: actor, body: c.body, createdAt: ts };
   if (c.mentions?.length) comment.mentions = [...c.mentions];
   if (c.record) comment.record = c.record;
+  if (c.click) comment.click = validateClick(c.click);
   if (c.items?.length) comment.items = [...c.items];
   const context = c.context;
   if (context) {

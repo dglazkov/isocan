@@ -4,6 +4,7 @@ import { DesignDecisionClientError, designDecisionOperation } from "./design-dec
 import { supportsDesignDecisions } from "@isocan/core";
 import { Readable } from "node:stream";
 import { mayRemoveComment, removableComment } from "@isocan/core/chatclean";
+import { coalescedClick, validateClick } from "@isocan/core";
 import { PersonalService, PersonalError } from "./personal.ts";
 import { SOURCE_POLICY_HEADER, parseSourcePolicyHeader, SOURCE_ACCESS_ROUTE, type SourceRequestContext, type SourceAccessRequest, type PersonalLinkRequest, type PersonalUnlinkRequest, type PersonalReadRequest } from "@isocan/core";
 import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type SetPublicListingRequest } from "@isocan/core";
@@ -1908,6 +1909,25 @@ export function registerRoutes(
             code: NOT_OWNER,
           });
         }
+      }
+    }
+    /**
+     * **A prototype click is a person's, and once per press** (`prototype-click.ts`).
+     * An agent driving a page it published must not page itself or another
+     * agent through the click channel, and a control pressed twice in a
+     * breath is one request. Both are refused here, where the actor's kind
+     * and the canvas are known, so a misbehaving client cannot get round
+     * them.
+     */
+    const clickComment = body.op?.type === "thread.create" || body.op?.type === "thread.reply" ? body.op.comment.click : undefined;
+    if (body.canvasId && clickComment && !options.homes?.for(body.canvasId)) {
+      const kinds = await engine.actorKinds();
+      if (kinds[resolveActor(await engine.actorJoins(), body.actor.id)] === "agent") {
+        return reply.status(403).send({ error: "prototype clicks come from people — an agent reads them, it does not send them", code: "agent-click" });
+      }
+      const snapshot = await engine.getSnapshot(body.canvasId);
+      if (coalescedClick(snapshot.canvas, validateClick(clickComment), body.actor.id, Date.now())) {
+        return reply.status(429).send({ error: "the same control was clicked a moment ago — that click already went through", code: "click-coalesced" });
       }
     }
     let bornInto: Space | null = null;

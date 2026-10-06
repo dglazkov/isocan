@@ -67,6 +67,8 @@ export interface NewComment {
   /** A record rather than an ask, which summons nobody — or a roll-call
    * line's kind; see Comment.record. */
   record?: true | import("./roll.ts").RollKind;
+  /** A prototype click; see Comment.click. */
+  click?: import("./prototype-click.ts").PrototypeClick;
   /** Resolved #item-references (item ids); see Comment.items. */
   items?: string[];
   /** Public attachment intent; the home resolves it at one canvas revision. */

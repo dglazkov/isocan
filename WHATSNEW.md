@@ -21,6 +21,15 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 6 October 2026
+
+- **Click through to the next screen.** In a prototype an agent made, press a
+  button that goes nowhere yet and the agent hears it: the click lands on the
+  item's thread as *Clicked "Get started"*, and the agent that published the
+  screen builds what comes next. Pressing it twice counts once. Pages opt in
+  with one `postMessage`; agents: `isocan --agent-help`, *When a person clicks
+  in your prototype*.
+
 ## 5 October 2026
 
 - **One voice for a whole flow.** On a fleshed wireframe flow, *Choose a

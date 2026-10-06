@@ -45,12 +45,14 @@ import {
   titleRoom,
   paperOf,
   visualFaceOf,
+  clickFromMessage,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { loadTextFont } from "../lib/textfont.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
+import { sendPrototypeClick } from "../lib/prototypeclick.ts";
 import { FrameAnchor, anchored } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
@@ -1673,7 +1675,7 @@ function VersionFace({
   }
   if (mimeType === "text/html") {
     return (
-      <HtmlItemView canvasId={canvasId} blobHash={blobHash} filename={filename} warm={warm ?? []} />
+      <HtmlItemView canvasId={canvasId} blobHash={blobHash} filename={filename} warm={warm ?? []} itemId={itemId} actor={actor} />
     );
   }
   return (
@@ -1767,13 +1769,31 @@ function HtmlItemView({
   blobHash,
   filename,
   warm,
+  itemId,
+  actor,
 }: {
   canvasId: string;
   blobHash: string;
   filename: string;
   warm: readonly string[];
+  /** Both present only where a person can press things in the page: an
+   *  entered item or full screen. Then a prototype click is delivered. */
+  itemId?: string | undefined;
+  actor?: Actor | undefined;
 }) {
   const origin = useContentOrigin(canvasId, [blobHash, ...warm]);
+  const stack = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!itemId || !actor) return;
+    const hear = (e: MessageEvent) => {
+      const frames = stack.current?.querySelectorAll("iframe") ?? [];
+      if (![...frames].some((frame) => frame.contentWindow === e.source)) return;
+      const click = clickFromMessage(e.data, itemId);
+      if (click) sendPrototypeClick(canvasId, actor, click);
+    };
+    window.addEventListener("message", hear);
+    return () => window.removeEventListener("message", hear);
+  }, [canvasId, itemId, actor]);
   // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
   // loaded with. A renewed signature is for the same bytes, and swapping it
   // in would reload the document for nothing — see `frame.ts`.
@@ -1783,6 +1803,7 @@ function HtmlItemView({
   if (!frame) return <div className="html-view" />;
   return (
     <HtmlView
+      stackRef={stack}
       src={anchored(frame.src, anchor)}
       sandbox={frame.sandbox}
       title={filename}
@@ -1794,11 +1815,13 @@ function HtmlItemView({
 }
 
 function HtmlView({
+  stackRef,
   src,
   sandbox,
   title,
   warm = [],
 }: {
+  stackRef?: React.Ref<HTMLDivElement>;
   src: string;
   sandbox: string;
   title: string;
@@ -1842,7 +1865,7 @@ function HtmlView({
   }, [src, loaded]);
 
   return (
-    <div className="html-view-stack">
+    <div className="html-view-stack" ref={stackRef}>
       {mounted.map((one) => (
         <iframe
           key={one}
