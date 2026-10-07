@@ -10,6 +10,7 @@
  * the model's, when nobody took it back). Pure — the script does the I/O.
  */
 import { JEV_INPUT_PRICE } from "@isocan/core/jev";
+import { reliability, thresholdFor } from "@isocan/core/threshold";
 import { FAST_ACT_NAMES, sameAct, type ActKind, type CanonicalAct, type FastAct } from "./fastpath.ts";
 import type { ShadowTurn } from "./shadow.ts";
 
@@ -48,37 +49,12 @@ export function actionOf(kind: ActKind): FastAct | "none" {
   return kind;
 }
 
-export interface Bin { lo: number; hi: number; n: number; meanP: number; accuracy: number }
-
-/** Ten equal-width bins of `p` against how often it was right, and the count-weighted gap (ECE) — calibrate.ts's reading, over this question. */
-export function reliability(points: Array<{ p: number; right: boolean }>, bins = 10): { bins: Bin[]; ece: number } {
-  const acc = Array.from({ length: bins }, (_, i) => ({ lo: i / bins, hi: (i + 1) / bins, n: 0, sumP: 0, right: 0 }));
-  for (const pt of points) {
-    const b = acc[Math.min(bins - 1, Math.max(0, Math.floor(pt.p * bins)))]!;
-    b.n++;
-    b.sumP += pt.p;
-    if (pt.right) b.right++;
-  }
-  const out = acc.map((b) => ({ lo: b.lo, hi: b.hi, n: b.n, meanP: b.n ? b.sumP / b.n : 0, accuracy: b.n ? b.right / b.n : 0 }));
-  const total = points.length || 1;
-  return { bins: out, ece: out.reduce((s, b) => s + (b.n / total) * Math.abs(b.accuracy - b.meanP), 0) };
-}
-
 /**
- * **The lowest cut at which what is kept agrees ≥ `target` of the time on
- * ≥ `minN` commands** (fast-path.md, *The threshold is measured*). Cuts are
- * tried at every observed p, so the answer is a p that occurred; null when no
- * cut qualifies — the action stays with the model.
+ * The reliability curve and the threshold rule are core's now
+ * (`@isocan/core/threshold`): the local judge is their second caller.
+ * Re-exported so this report's readers keep one import.
  */
-export function thresholdFor(points: Array<{ p: number; right: boolean }>, target = 0.95, minN = 30): { cut: number; n: number; accuracy: number } | null {
-  const ps = [...new Set(points.map((x) => x.p))].sort((a, b) => a - b);
-  for (const cut of ps) {
-    const kept = points.filter((x) => x.p >= cut);
-    const accuracy = kept.filter((x) => x.right).length / kept.length;
-    if (kept.length >= minN && accuracy >= target) return { cut, n: kept.length, accuracy };
-  }
-  return null;
-}
+export { reliability, thresholdFor, type Bin } from "@isocan/core/threshold";
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 

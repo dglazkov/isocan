@@ -22,6 +22,8 @@
     "./colour": "./src/colour.ts",
     "./jev": "./src/jev.ts",
     "./local-judge": "./src/local-judge.ts",
+    "./intent-route": "./src/intent-route.ts",
+    "./threshold": "./src/threshold.ts",
     "./modelstore": "./src/modelstore.ts",
     "./text": "./src/text.ts",
     "./keys": "./src/keys.ts",

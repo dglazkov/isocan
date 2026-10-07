@@ -327,12 +327,44 @@ function policyRecord(judge: local.LocalJudge, init: { fetchGuard: boolean } | n
   };
 }
 
+/**
+ * **One question over many texts** (local-judge phase 1's judge B): the
+ * harness (`scripts/local-judge/harness.mjs`) hands a question and the state
+ * texts, and gets each text's whole distribution back, with MediaPipe's count
+ * of the tokens it read. Nothing is timed here and nothing leaves the page:
+ * the texts arrive over the debugging protocol on this machine and go only
+ * to the Worker.
+ */
+async function route(opts: { backend: Backend; question: JevQuestion; texts: string[]; countTokens?: boolean; maxNumTokens?: number }) {
+  out.textContent = "";
+  const probe = await local.probe();
+  if (!probe.ok) return { probe, error: probe.words };
+  if (opts.backend === "gpu" && !probe.webgpu) return { probe, error: "no WebGPU adapter in this browser" };
+  const judge = local.localJudge({ backend: opts.backend, ...(opts.maxNumTokens ? { maxNumTokens: opts.maxNumTokens } : {}) });
+  const readiness = await judge.ready([opts.question]);
+  const answers: Array<{ probabilities: Record<string, number>; choice: string; tokens: number | null; ms: number } | { error: string }> = [];
+  for (const [i, text] of opts.texts.entries()) {
+    if (i % 25 === 0) progress(`${i} of ${opts.texts.length}`);
+    try {
+      const r = await judge.evaluate({ model: "local", state: text, questions: { q: opts.question } }, { countTokens: opts.countTokens === true });
+      const a = r.answered.response.answers.q as { choice: string; probabilities: Record<string, number> };
+      answers.push({ probabilities: a.probabilities, choice: a.choice, tokens: r.tokens, ms: r2(r.workerMs) });
+    } catch (err) {
+      answers.push({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  const init = judge.init;
+  await judge.close();
+  progress(`done: ${opts.texts.length}`);
+  return { backend: readiness.backend, model: local.LOCAL_MODEL, runtime: local.MEDIAPIPE_VERSION, contextWindow: init?.contextWindow ?? null, answers, ...policyRecord(judge, init) };
+}
+
 declare global {
   interface Window {
-    __lab: { run: typeof run };
+    __lab: { run: typeof run; route: typeof route };
   }
 }
-window.__lab = { run };
+window.__lab = { run, route };
 
 const params = new URLSearchParams(location.search);
 const fileInput = document.getElementById("model-file") as HTMLInputElement;

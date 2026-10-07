@@ -39,9 +39,10 @@ and regex, "calibrated against hand labels and reported with its agreement
 rather than trusted" — it agrees with them on **84%**
 ([what people ask agents for](../../research/2026-09-03-what-people-ask-agents-for.md)).
 That is approach A in the test plan, already built and already scored, and
-the hand-labelled asks are the labelled set. The router's seven routes are a
-coarser cut of the same fifteen categories, so the labels map rather than
-needing to be redone.
+the hand-labelled asks are the labelled set. The router's seven routes are
+mostly a coarser cut of the same fifteen categories, but not entirely: none
+of the fifteen reaches `find` or `clarify` (phase 1 found this), so those two
+routes need labels of their own.
 
 **Where it appears.** A suggestion line under the composer (Scene 1): the
 command it would become, or a clarifying chip when it is unsure. Today a slash

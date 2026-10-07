@@ -13,12 +13,15 @@ use cases, each in shadow before it shows anybody anything.
 **Phase citations name their project**: `local-judge phase 2`, never a bare
 "phase 2".
 
-**Where we are, 7 Oct 2026:** phase 0 is CLOSED. The instrument is built and
-measured ([the numbers](../../research/2026-10-07-embeddinggemma-in-the-browser.md))
-and passes the warm-median bar: 33–35 ms on an M3 Max and 32–42 ms on an
-iPhone up to 128 tokens. **local-judge phase 1 is next**, and is being built:
-the harness and drafted labels need no person, and the locked-set verdict
-waits on Dion reviewing the labels.
+**Where we are, 7 Oct 2026:** phase 0 is CLOSED. Phase 1 is PART-DONE. The
+harness ran on 143 synthetic cases: zero-shot EmbeddingGemma (B) answered
+40–65% across the splits, about the regex's 44–57%, and qualified no
+threshold, while Jev answered 91–100%. The real-set verdict waits on Dion:
+this machine's CLI reaches no canvas with human asks, so either a person
+identity is claimed or the home that holds them is named, and then the drafted
+labels are reviewed. Judge C waits on an embedding API that MediaPipe 1.1.0
+does not have. **local-judge phase 2 does not start** until phase 1 says the
+local judge is worth more phases.
 
 **One rule for every phase.** No phase may show a person a suggestion before
 a phase has reported that use case's accuracy among accepted answers, its
@@ -91,7 +94,7 @@ remain open.
 
 ## Phase 1 — Three judges, one set of asks, no UI
 
-**Status: NOT STARTED.**
+**Status: PART-DONE.** 2026-10-07 — the harness, the local review page, the routes, policy, splits and threshold rule in core, and a 143-case synthetic set are built and ran end to end; zero-shot EmbeddingGemma matched the regex there and qualified no threshold, while Jev answered 91–100%; the real-set verdict waits on a person, and judge C on an embedding API MediaPipe does not have.
 
 The Chat intent router ([idea 1](ideas.md#1-the-chat-intent-router-start-here)),
 offline, with the state capped at 128 tokens (phase 0's bar holds there and
@@ -186,6 +189,23 @@ where the picture should change the answer.
 
 ## Trajectory
 
+- **2026-10-07** — On 143 synthetic Acme cases, zero-shot EmbeddingGemma
+  through MediaPipe's decision layer matched the regex (dev 57% / calibration
+  40% / locked 65%, against 57 / 44 / 50%). Jev scored 96 / 91 / 100%, but no
+  judge qualified a 98% cut on 43 calibration cases. The weak link is the
+  zero-shot decision layer, not speed.
+- **2026-10-07** — Judge C cannot be built on MediaPipe 1.1.0: it returns
+  only finished decisions, and its wasm has no embed function. A linear head
+  needs a second runtime for the same model, which is a design call, not a
+  substitution.
+- **2026-10-07** — None of `categoriseAsk`'s fifteen categories reaches `find`
+  or `clarify`, so the September labels would not have mapped onto the routes
+  whole (ideas.md corrected).
+- **2026-10-07 — Open:** the real corpus. From this machine the CLI reaches 4
+  canvases with 0 human asks, and no person identity is configured (Dion:
+  claim an identity, or name the home). The synthetic set has too few
+  `ask-agent` and `clarify` scenarios for the locked split to hold any.
+  Multi-provider decision models (Clef, Kev) are proposed, and wait on Dion.
 - **2026-10-07** — Desktop warm p95 fails phase 0's 100 ms bar. The median is
   33–35 ms up to 128 tokens, but streaks of 170–220 ms answers put p95 at
   170–200, headed and headless; 512 tokens reaches 580–810. The project stops
