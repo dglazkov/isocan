@@ -9,7 +9,7 @@ note: "the walk: the nightly practice page, records that can't disagree, issues 
 
 **2 October 2026.** Held to [design.md](design.md).
 
-**Where we are, 5 Oct 2026: phase 0 is CLOSED, and its page now comes from keel — isocan's `practice.mjs` taught keel 0.7.0 its measures (keel phase 27), and `keel-night.yml` writes the nightly health page into `docs/practice/`. Next: practice phase 1, records that can't disagree.**
+**Where we are, 7 Oct 2026: phases 0 and 1 are CLOSED. Next: practice phase 2, issues as the public ledger.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -50,7 +50,7 @@ holds `practice.yml` to the night shift's bounds.
 
 ## Phase 1 — Records that can't disagree
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 7 October 2026.** `scripts/lib/records.mjs` (called by `scripts/roadmap.mjs` via core's `docStatus`) checks research index completeness, phase Status vocabulary and completeness, front matter against `phases.md`, and `docs/projects/README.md` against front matter and `phases.md`; `.claude/skills/conduct/status.sh` closes the `NST == 0` loophole and rejects `DONE`; all 25 unindexed research notes and 9 project-record disagreements are reconciled; `test/records.test.ts` (fast lane) proves zero live disagreements and fails for each kind of disagreement.
 
 **Outcome:** the index cell is checked against front matter. `status.sh`'s
 loophole is closed and DONE is rejected. Front matter and phases are checked
@@ -59,6 +59,11 @@ against each other. The research index is complete. All of these run in
 
 **Proof:** the section 1 rows read 0, and a test fails for each kind of
 disagreement.
+
+### Trajectory
+
+- **2026-10-07** — Repo-record checks live in `scripts/lib/records.mjs` rather than `@isocan/core` so browser bundle budgets and export ratchets stay untouched while front matter is still read through core's `docStatus`.
+- **2026-10-07** — Both `scripts/roadmap.mjs` and `.claude/skills/conduct/status.sh` accept `ISOCAN_REPO_ROOT` so fast-lane unit tests exercise failure cases on synthetic temp trees without spawning the CLI binary.
 
 ## Phase 2 — Issues as the public ledger
 

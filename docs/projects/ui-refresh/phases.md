@@ -1,5 +1,5 @@
 ---
-status: built
+status: partial
 since: 2026-08-29
 see: ui-refresh
 note: phases 0-4 closed (the last three acceptances by hand, 29 Aug); phase 5 partial (the version count stays put, a spec conflict); phase 6's composer question not designed

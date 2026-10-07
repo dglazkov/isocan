@@ -26,8 +26,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register as registerLoader } from "node:module";
 import { register } from "tsx/esm/api";
+import { checkRepoRecords } from "./lib/records.mjs";
 
-const repo = fileURLToPath(new URL("..", import.meta.url));
+const repo = process.env.ISOCAN_REPO_ROOT ?? fileURLToPath(new URL("..", import.meta.url));
 
 /** The roadmap's own canvas on isocan.io — the one the README and the guides link. */
 const ROADMAP_CANVAS = "prj_OE-AuGl119";
@@ -245,6 +246,12 @@ const out = path.join(repo, "docs/ROADMAP.md");
 const vague = queue.filter((w) => w.problems.length);
 if (vague.length) {
   for (const w of vague) console.error(`${w.rel}: ${w.problems.join("; ")}`);
+  process.exit(1);
+}
+
+const recordProblems = checkRepoRecords(repo, docStatus);
+if (recordProblems.length) {
+  for (const p of recordProblems) console.error(p.detail);
   process.exit(1);
 }
 

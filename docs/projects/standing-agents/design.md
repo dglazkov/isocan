@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-09-01
 see: standing-agents, on-demand, agent-custody
-note: phases 1–2 built — one name on one machine stands on many canvases (1 Sep), and on 3 Sep `isocan rc --all` parks one process on every canvas the machine's enrolments name, with the ceiling, the cycle guard and the session handle per agent across them; the facepile shows an answerable agent as standing by, in words as well as a ring; `isocan history <actor>` leads with where they stand — a row per canvas, the strongest true state, replies against acts. All four phases closed 3 Sep; the actor credential for a second machine is the piece deliberately left
+note: all four phases closed 3 Sep 2026 — one name on one machine stands on many canvases (1 Sep), and on 3 Sep `isocan rc --all` parks one process on every canvas the machine's enrolments name, with the ceiling, the cycle guard and the session handle per agent across them; the facepile shows an answerable agent as standing by, in words as well as a ring; `isocan history <actor>` leads with where they stand — a row per canvas, the strongest true state, replies against acts; the actor credential for a second machine is the piece deliberately left
 ---
 # Standing agents
 
