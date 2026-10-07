@@ -181,12 +181,14 @@ the honest gap, so the checklist is answered now rather than at the end:
 
 ## Open
 
-- **Where the model is served from.** Self-hosted is required for the privacy
-  proof. The content origin, a bucket, or the home — each costs something
-  different, and the hosted image is the one place it should not be.
-- **The licence.** EmbeddingGemma ships under Gemma's terms. Somebody reads
-  them for redistribution from isocan's own origin before phase 0 ships a
-  byte; this document does not claim it is fine.
+- **Where a hosted home serves the model from.** Locally it is decided (7
+  Oct 2026): the daemon serves it from `~/.isocan/models/`, fetched once by
+  `isocan model fetch`. For isocan.io the content origin, a bucket, or the
+  home each costs something different, and the hosted image is the one place
+  it should not be.
+- **The licence.** The LiteRT community bundle's card says Apache-2.0, and
+  Dion accepted that for local use on 7 Oct 2026. Serving it from a hosted
+  origin is the same question asked again when that origin is chosen.
 - **Mobile.** 165 MB on a phone, and WebGPU on mobile Safari, are both
   measurements nobody has made here. [Mobile](../mobile/phases.md)'s
   Chat-first face is where Scene 1 matters most and where it may not fit.

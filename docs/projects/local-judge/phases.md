@@ -27,32 +27,56 @@ judge project's *calibration before use*, applied per use case.
 
 **Status: NOT STARTED.**
 
-*No product surface.* A `local` `Answerer` in a lazy Worker, and a scratch page
-that drives it.
+*No product surface.* A `local` `Answerer` in a lazy Worker, the local
+daemon serving the model and runtime from its own origin, a verb that puts
+the model on disk, and a lab page that drives it.
 
-- MediaPipe Decision Maker with **EmbeddingGemma 2 Text 270M** from the
-  supplied LiteRT bundle — not converted, not FP16. Record the SDK version,
-  the model revision and the sample commit it started from.
+- **The model on disk: `isocan model fetch embeddinggemma-2-text-270m`.**
+  Downloads `embeddinggemma-2-text-270m.litertlm` (164,626,432 bytes) from
+  `huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm`,
+  checks it against the pinned SHA-256
+  `2d079ee2f6f066b1f368e8d7c819f55214eaef1d0513b312321901f30ab286fb`,
+  refuses anything else, and writes it atomically to `~/.isocan/models/`
+  (`ISOCAN_HOME`, beside `keys.json`). `isocan model ls` says what is there.
+  A verb rather than a script because an agent's hands are the CLI.
+- **The daemon serves it, loopback only**: `GET /models/<name>` from that
+  directory, with a known-names allowlist (no path in, no listing out), and
+  the MediaPipe runtime's wasm built into `packages/web/dist/` and served like
+  any static asset. Vite's dev server proxies `/models` as it does `/api`.
+  After the first load the browser keeps the model in Cache Storage.
+- MediaPipe Decision Maker (`@mediapipe/tasks-decision` 1.1.0) with that
+  bundle — not converted, not FP16. Record the SDK version, the model's hash
+  and the sample commit the worker started from.
 - The `local` `Answerer` speaks the existing `JevRequest`; a `JevQuestion`
   becomes a `ChoiceQuestion` in one pure function in core, tested.
-- **Measured separately**, on a real desktop browser and one real phone, GPU
-  and CPU reported apart: download bytes and time; init (load, compile,
-  prewarm); first answer; warm p50/p95/p99 over at least 1,000 answers at 32,
-  128 and 512 tokens and with 7 and 30 options; input to displayed result;
-  memory; and the canvas's frame census with the Worker busy.
-- **The privacy proof**: assets self-hosted, the network disconnected, the
-  page reloaded, the suite run again, and the network log shows no request,
-  state, embedding or answer leaving.
+- **A lab page** (its own Vite entry, not a route in the app, so the entry
+  chunk cannot move) that loads the Worker and runs the measurements below.
+- **Measured separately**, GPU and CPU reported apart: download bytes and
+  time; init (load, compile, prewarm); first answer; warm p50/p95/p99 over at
+  least 1,000 answers at 32, 128 and 512 tokens and with 7 and 30 options;
+  input to displayed result; memory; and the canvas's frame census with the
+  Worker busy. **The desktop numbers are measured here**, in a real Chrome
+  driven by `scripts/lib/browser.mjs`. **The phone's are a person's walk**,
+  written in `docs/verify/` for whoever holds the phone.
+- **The privacy proof**: the model on disk, outbound network unavailable, the
+  page reloaded, the measurements run again, and the browser's request log
+  shows every request went to the daemon's own origin and none carried the
+  state text, an embedding or an answer.
 - The entry chunk's bytes unchanged.
 
 **Acceptance:** `docs/research/` gains a page with those numbers and the
 machine, browser, backend and token count beside each, and the offline run
-recorded. **If warm p95 is over 100 ms on the desktop or 250 ms on the phone,
-the page says so and the project stops at this phase** until something
-changes.
+recorded. **If warm p95 is over 100 ms on the desktop, the page says so and
+the project stops at this phase** until something changes. The phone's
+number closes the phase when the walk is run; over 250 ms there stops the
+project the same way.
 
-⚑ Before any byte is served from isocan's own origin: a person reads the
-Gemma terms for redistribution, and decides where the bundle is hosted.
+⚑ ~~Before any byte is served from isocan's own origin: a person reads the
+terms, and decides where the bundle is hosted.~~ **Answered 7 Oct 2026 by
+Dion**: the community LiteRT repo is ungated and its card says Apache-2.0,
+which is accepted for now; the local daemon serves it from
+`~/.isocan/models/`, fetched by the verb above. Hosted homes (isocan.io)
+remain open.
 
 ## Phase 1 — Three judges, one set of asks, no UI
 
@@ -155,6 +179,10 @@ where the picture should change the answer.
   turned out to exist already (`categoriseAsk`, 84%), and its "learned
   classifier" approach has labelled data waiting in three places — the evals
   hand labels, the voice shadow log and the judge corpus.
-- **2026-10-06 — Open:** where the model is served from; the Gemma licence
-  for redistribution; whether mobile can carry it; whether the CLI gets the
-  model or an honest absence.
+- **2026-10-07** — The licence and local hosting were decided before phase
+  0: the LiteRT community repo is Apache-2.0 and ungated, and a person's own
+  daemon serves the model from `~/.isocan/models/`, put there by `isocan
+  model fetch`.
+- **2026-10-07 — Open:** where a hosted home serves the model from; whether
+  mobile can carry it; whether the CLI gets the model for `find --like` or an
+  honest absence. The first waits on a person; the rest on phases 0 and 2.
