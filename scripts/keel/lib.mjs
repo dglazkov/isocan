@@ -1282,9 +1282,30 @@ export function reviewerOf({ config, head, has, agents = AGENTS }) {
   const other = others.find(available);
   const wrote = `written by ${author} (${agents[author].branch})`;
   if (other) return { author, reviewer: other, self: false, why: `${wrote}: reviewed by ${other}, the first other provider "agents" lists${others[0] !== other ? ` with its secret set (${others.slice(0, others.indexOf(other)).join(', ')} has none)` : ''}` };
-  if (listed.includes(author) && available(author)) return { author, reviewer: author, self: true, why: `${wrote}: reviewed by ${author}, its own provider: no other is configured` };
+  if (listed.includes(author) && available(author)) {
+    const reason = selfReason({ author, listed, has, agents });
+    return { author, reviewer: author, self: true, reason, why: `${wrote}: reviewed by ${author}, its own provider: ${reason}` };
+  }
   const reviewer = others[0] ?? (listed.includes(author) ? author : null);
   return { author, reviewer, self: reviewer === author, why: reviewer ? `${wrote}: reviewed by ${reviewer}, but no provider listed has its secret set` : `${wrote}, and "agents" lists no provider to review it` };
+}
+
+/** A provider's secret, as a person sets it: CLAUDE_CODE_OAUTH_TOKEN (or ANTHROPIC_API_KEY). */
+export const secretText = (name, agents = AGENTS) => {
+  const [first, ...rest] = agents[name]?.secrets ?? [];
+  return first ? `${first}${rest.length ? ` (or ${rest.join(', ')})` : ''}` : '(no secret)';
+};
+
+/**
+ * Why a PR's own provider reviews it, said exactly: no other provider is
+ * listed, or each other listed one is named with the secret it lacks
+ * ("codex is listed but its secret OPENAI_API_KEY is not set"). Pure.
+ */
+export function selfReason({ author, listed, has, agents = AGENTS }) {
+  const others = listed.filter(n => n !== author && agents[n]?.passes.includes('crossReview'));
+  if (!others.length) return 'no other provider is listed';
+  const missing = others.filter(n => has && has[n] === false);
+  return missing.map(n => `${n} is listed but its secret ${secretText(n, agents)} is not set`).join('; ') || 'no other is available';
 }
 
 /** The agent a pass names, or the default. Unvalidated: passAgentProblems says what is wrong with it. */
@@ -1313,9 +1334,11 @@ export function passAgentProblems(config, key) {
 
 /**
  * What is wrong with who reviews cross-review's PRs: [string]. A prefix
- * whose author has no other provider listed is not wrong: its author reviews
- * it (the fallback). "agent" (for PRs no provider's branch names: a prefix
- * that may match one, prefixAuthors) is listed and can review, and is never
+ * that matches a provider's branches and branches no provider names
+ * ("claude", "c": prefixAuthors) is refused, since it cannot say who wrote
+ * a PR. A prefix whose author has no other provider listed is not wrong: its
+ * author reviews it (the fallback). "agent" (for PRs no provider's branch
+ * names) is listed and can review, and is never
  * the author of a prefix in "for" while another provider is listed to
  * review it. `agent` known is checked by the caller. Pure; `agents` is the
  * adapter list (a test passes its own).
@@ -1328,12 +1351,16 @@ export function crossReviewerProblems(config, { agents = AGENTS } = {}) {
   const reviewers = listed.filter(n => agents[n]?.passes.includes('crossReview'));
   const prefixes = Array.isArray(c.for) ? c.for.filter(p => typeof p === 'string') : [];
   const of = new Map(prefixes.map(p => [p, prefixAuthors(p, agents)]));
+  // A prefix that matches a provider's branches and branches no provider names ("claude", "c") cannot say who wrote a PR: refused.
+  for (const [p, { authors, unknown }] of of) if (authors.length && unknown) {
+    out.push(`"crossReview".for has ${p}: ${p} matches ${authors.map(n => `${n}'s branches`).join(' and ')} and others (e.g. ${p}-fix); name the provider's branch exactly (${authors.map(n => agents[n].branch).join(', ')}) or a prefix no provider's branch shares`);
+  }
   const agent = agentOf(config, 'crossReview');
   const named = c.agent !== undefined;
   // "agent" reviews only PRs no provider's branch names; naming a prefix's author is self-review by choice,
   // wrong when another provider is listed to review them (alone, the author is the fallback anyway).
-  for (const [p, { authors }] of of) if (named && authors.includes(agent) && reviewers.some(n => n !== agent)) out.push(`"crossReview".agent is ${agent}, who writes the ${p} PRs "for" names, and another provider is listed to review them: a PR is reviewed by its own provider only when no other is available ("agent" is only for PRs no provider's branch names)`);
-  const unknown = [...of].filter(([, a]) => a.unknown).map(([p]) => p);
+  for (const [p, { authors, unknown }] of of) if (named && !unknown && authors.includes(agent) && reviewers.some(n => n !== agent)) out.push(`"crossReview".agent is ${agent}, who writes the ${p} PRs "for" names, and another provider is listed to review them: a PR is reviewed by its own provider only when no other is available ("agent" is only for PRs no provider's branch names)`);
+  const unknown = [...of].filter(([, a]) => a.unknown && !a.authors.length).map(([p]) => p);
   if (named || unknown.length) {
     const why = unknown.length ? ` (it reviews ${unknown.join(', ')}, which no provider's branch names)` : '';
     if (!listed.includes(agent)) out.push(named ? `"crossReview".agent is ${agent}, which "agents" does not list (${listed.join(', ')})${why}` : `"crossReview" reviews ${unknown.join(', ')} with ${agent} (the default: no provider's branch names them), which "agents" does not list (${listed.join(', ')}); list it, or name "crossReview".agent`);
