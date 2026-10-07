@@ -826,7 +826,8 @@ export const MEASURES = [
         };
       }
       const { DONE } = await roadmapModule(ctx);
-      const stuck = (await roadmapData(ctx)).phases.filter(p => unfinished(p, DONE) && days(p.since, ctx.date) > STUCK_DAYS)
+      // A partial phase that owes only a walk waits on the world, not on the work (keel phase 44).
+      const stuck = (await roadmapData(ctx)).phases.filter(p => unfinished(p, DONE) && !(p.status === 'partial' && p.owes === 'walk') && days(p.since, ctx.date) > STUCK_DAYS)
         .map(p => ({ id: p.id, status: p.status, since: p.since, days: days(p.since, ctx.date) }));
       return {
         value: stuck.length,
