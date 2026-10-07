@@ -61,7 +61,8 @@
 //                            which agent runs a pass (.keel/keel.json "agents",
 //                            and "agent" on crossReview, climb and tend):
 //                            each provider an adapter, keel's rules its own
-//                            (phase 45)
+//                            (phase 45); authorOf(head), reviewerOf(…): a PR
+//                            is reviewed by a provider other than its author
 //   main(meta, fn)           run a script: --json or text, and its exit code
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -1192,6 +1193,8 @@ const CODEX_NO_COMMIT = 'Codex cannot run a climb or a tend pass yet: its worksp
 export const AGENTS = Object.freeze({
   claude: Object.freeze({
     name: 'Claude',
+    // The head-branch prefix of the PRs it writes: claude-code-action's branch_prefix default.
+    branch: 'claude/',
     action: 'anthropics/claude-code-action', major: 'v1',
     // Either one: a subscription's token or an API key.
     secrets: Object.freeze(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']),
@@ -1205,6 +1208,8 @@ export const AGENTS = Object.freeze({
   }),
   codex: Object.freeze({
     name: 'Codex',
+    // Codex's cloud names every PR branch codex/<slug>; it is not configurable.
+    branch: 'codex/',
     action: 'openai/codex-action', major: 'v1',
     secrets: Object.freeze(['OPENAI_API_KEY']),
     // drop-sudo keeps the key out of the agent's reach; read-only: no write, no network.
@@ -1234,6 +1239,54 @@ export function agentsProblems(config) {
   return out;
 }
 
+/** The providers a project lists, in its order: "agents"' keys, or claude alone with no "agents". */
+export const listedAgents = config => (isObject(config?.agents) ? Object.keys(config.agents) : [DEFAULT_AGENT]);
+
+/** Who wrote a PR: the provider whose `branch` its head ref starts with, else null. */
+export const authorOf = (head, agents = AGENTS) => Object.keys(agents).find(n => agents[n].branch && String(head ?? '').startsWith(agents[n].branch)) ?? null;
+
+/**
+ * Every provider a "for" prefix's PRs can be written by: a prefix that
+ * starts with a provider's branch ("claude/x-"), or that a branch starts
+ * with ("claude", "c": it matches claude/ heads, and codex/ too). `unknown`:
+ * it can also match a head no provider's branch names. Pure.
+ */
+export function prefixAuthors(prefix, agents = AGENTS) {
+  const p = String(prefix ?? '');
+  const authors = Object.keys(agents).filter(n => agents[n].branch && (p.startsWith(agents[n].branch) || agents[n].branch.startsWith(p)));
+  return { authors, unknown: !Object.keys(agents).some(n => agents[n].branch && p.startsWith(agents[n].branch)) };
+}
+
+/**
+ * Who reviews a PR (the owner's rule, phase 45): another provider than the
+ * one that wrote it, whenever one is available. The author is the provider
+ * whose branch its head starts with; the reviewer is the first provider
+ * "agents" lists (in order) that is not the author, can review, and has its
+ * secret (`has`: { claude: true, codex: false }; not given, every listed
+ * one counts as having it). Only when none is available does the author
+ * review its own PR (`self`: true), and only when it is listed and has its
+ * secret. With nobody available, the first other listed (or the author)
+ * is named, and the caller says its secret is missing. A PR no provider's
+ * branch names is reviewed by "crossReview".agent, default claude.
+ * { author, reviewer, self, why }: reviewer null when none can. Pure.
+ */
+export function reviewerOf({ config, head, has, agents = AGENTS }) {
+  const author = authorOf(head, agents);
+  const listed = listedAgents(config).filter(n => agents[n]?.passes.includes('crossReview'));
+  const available = n => !has || has[n] !== false;
+  if (!author) {
+    const reviewer = agentOf(config, 'crossReview');
+    return { author, reviewer, self: false, why: `no provider's branch names ${head}: reviewed by ${reviewer} (${config?.crossReview?.agent !== undefined ? '"crossReview".agent' : 'the default'})` };
+  }
+  const others = listed.filter(n => n !== author);
+  const other = others.find(available);
+  const wrote = `written by ${author} (${agents[author].branch})`;
+  if (other) return { author, reviewer: other, self: false, why: `${wrote}: reviewed by ${other}, the first other provider "agents" lists${others[0] !== other ? ` with its secret set (${others.slice(0, others.indexOf(other)).join(', ')} has none)` : ''}` };
+  if (listed.includes(author) && available(author)) return { author, reviewer: author, self: true, why: `${wrote}: reviewed by ${author}, its own provider: no other is configured` };
+  const reviewer = others[0] ?? (listed.includes(author) ? author : null);
+  return { author, reviewer, self: reviewer === author, why: reviewer ? `${wrote}: reviewed by ${reviewer}, but no provider listed has its secret set` : `${wrote}, and "agents" lists no provider to review it` };
+}
+
 /** The agent a pass names, or the default. Unvalidated: passAgentProblems says what is wrong with it. */
 export const agentOf = (config, key) => (isObject(config?.[key]) && config[key].agent !== undefined ? config[key].agent : DEFAULT_AGENT);
 
@@ -1251,9 +1304,41 @@ export function passAgentProblems(config, key) {
   const named = c.agent !== undefined;
   const agent = agentOf(config, key);
   if (typeof agent !== 'string' || !Object.hasOwn(AGENTS, agent)) return [...out, `"${key}".agent must be one of ${Object.keys(AGENTS).join(', ')} (got ${JSON.stringify(agent)})`];
-  const listed = isObject(config.agents) ? Object.keys(config.agents) : [DEFAULT_AGENT];
+  const listed = listedAgents(config);
+  if (key === 'crossReview') return [...out, ...crossReviewerProblems(config, { agents: AGENTS })];
   if (!listed.includes(agent)) out.push(named ? `"${key}".agent is ${agent}, which "agents" does not list (${listed.join(', ')})` : `"${key}" runs ${agent} (no "agent" names another), which "agents" does not list (${listed.join(', ')}); list it, or name the pass's agent`);
   if (!AGENTS[agent].passes.includes(key)) out.push(`"${key}".agent is ${agent}: ${AGENTS[agent].refused[key] ?? `${agent} does not run ${key}`}`);
+  return out;
+}
+
+/**
+ * What is wrong with who reviews cross-review's PRs: [string]. A prefix
+ * whose author has no other provider listed is not wrong: its author reviews
+ * it (the fallback). "agent" (for PRs no provider's branch names: a prefix
+ * that may match one, prefixAuthors) is listed and can review, and is never
+ * the author of a prefix in "for" while another provider is listed to
+ * review it. `agent` known is checked by the caller. Pure; `agents` is the
+ * adapter list (a test passes its own).
+ */
+export function crossReviewerProblems(config, { agents = AGENTS } = {}) {
+  const c = config?.crossReview;
+  if (!isObject(c)) return [];
+  const out = [];
+  const listed = listedAgents(config);
+  const reviewers = listed.filter(n => agents[n]?.passes.includes('crossReview'));
+  const prefixes = Array.isArray(c.for) ? c.for.filter(p => typeof p === 'string') : [];
+  const of = new Map(prefixes.map(p => [p, prefixAuthors(p, agents)]));
+  const agent = agentOf(config, 'crossReview');
+  const named = c.agent !== undefined;
+  // "agent" reviews only PRs no provider's branch names; naming a prefix's author is self-review by choice,
+  // wrong when another provider is listed to review them (alone, the author is the fallback anyway).
+  for (const [p, { authors }] of of) if (named && authors.includes(agent) && reviewers.some(n => n !== agent)) out.push(`"crossReview".agent is ${agent}, who writes the ${p} PRs "for" names, and another provider is listed to review them: a PR is reviewed by its own provider only when no other is available ("agent" is only for PRs no provider's branch names)`);
+  const unknown = [...of].filter(([, a]) => a.unknown).map(([p]) => p);
+  if (named || unknown.length) {
+    const why = unknown.length ? ` (it reviews ${unknown.join(', ')}, which no provider's branch names)` : '';
+    if (!listed.includes(agent)) out.push(named ? `"crossReview".agent is ${agent}, which "agents" does not list (${listed.join(', ')})${why}` : `"crossReview" reviews ${unknown.join(', ')} with ${agent} (the default: no provider's branch names them), which "agents" does not list (${listed.join(', ')}); list it, or name "crossReview".agent`);
+    else if (!agents[agent]?.passes.includes('crossReview')) out.push(`"crossReview".agent is ${agent}, which does not review`);
+  }
   return out;
 }
 
@@ -1262,14 +1347,15 @@ export function passAgentProblems(config, key) {
  * writes no execution log keel can read, so its outcome and its final message
  * (the output-file) are the evidence: a step that failed, or ended with no
  * final message, before its budget ran out never ran (red, one line: lesson
- * 29); running out the budget is not red. The final message is never
+ * 29); running out the budget is not red (past the larger of the budget
+ * less a minute and nine tenths of it: agentVerdict's rule, duo#83). The final message is never
  * printed: keel's logs are public.
  */
 export function codexVerdict({ outcome, message, elapsedSec, minutes }) {
   const budget = minutes * 60;
   const said = typeof message === 'string' ? message.trim() : '';
   const took = Number.isFinite(elapsedSec) ? `${Math.round(elapsedSec)} s` : 'an unknown time';
-  if (outcome !== 'success' && Number.isFinite(elapsedSec) && Number.isFinite(budget) && elapsedSec >= budget - 60) return { ok: true, timedOut: true, line: `the agent ran out its budget (${minutes} min, ${Math.round(elapsedSec)} s elapsed): what it kept is judged` };
+  if (outcome !== 'success' && Number.isFinite(elapsedSec) && Number.isFinite(budget) && elapsedSec > 0 && elapsedSec >= Math.max(budget - 60, budget * 0.9)) return { ok: true, timedOut: true, line: `the agent ran out its budget (${minutes} min, ${Math.round(elapsedSec)} s elapsed): what it kept is judged` };
   if (outcome === 'success' && said) return { ok: true, line: `the agent ran: Codex wrote its final message (${said.length} chars) in ${took}` };
   const check = 'check OPENAI_API_KEY, the model, and that the run\'s actor has write access (codex-action refuses anyone else)';
   if (outcome === 'success') return { ok: false, line: `Codex did not start: the agent step succeeded after ${took} with no final message, before its ${minutes}-minute budget; ${check}. Nothing is judged or posted.` };
