@@ -151,6 +151,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `home`, `direct`, `setup`, `clone`, `open` — where canvases live, readying a directory
 - `teleport`, `export`, `import`, `blobs` — move, back up, restore, send missing bytes
 - `keys ls|set|rm|test|share|agents` — model keys on this machine; never shown, env wins
+- `model ls|fetch` — the local judge's model on disk, pinned by SHA-256
 
 **Sharing** (`sharing`)
 - `share`, `space new|ls|add|remove|rm`, `group new|ls|add|remove|rm` — who may enter
@@ -3569,6 +3570,26 @@ minted with this home's Gemini key, under the text route's rules — an editor
 of the canvas, `voice-owner-only` for a collaborator while sharing is off,
 `voice-unavailable` when the home has no Gemini key. The token, not the key,
 reaches the browser.
+
+## The local judge's model on this machine
+
+The judge in the tab (`docs/projects/local-judge/`) runs a small model in a
+person's browser — EmbeddingGemma 2 through MediaPipe — and the browser loads
+it from this machine's daemon, never from anywhere else. Putting it on disk is
+a verb:
+
+```sh
+isocan model                                    # what isocan knows, and whether this home has it
+isocan model fetch embeddinggemma-2-text-270m   # 164.6 MB from the one URL the manifest names
+```
+
+`fetch` checks the download against the pinned size and SHA-256 and moves it
+into `~/.isocan/models/` (`ISOCAN_HOME`, beside `keys.json`) only if both
+match; a mismatch is refused, the partial file deleted, and nothing installed.
+A file already there is verified, not downloaded again. The daemon serves it
+at `GET /models/<name>` — known names only, to this machine's own pages only
+(a hosted home answers 404). The download is big: fetch it when a person asks
+for the local judge, not on your own initiative.
 
 <!-- topic: sharing | who may enter — `share`, spaces, groups of people, passes, embeds, badges, and the refusals -->
 

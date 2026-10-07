@@ -68,19 +68,20 @@ async function throughTheDoor(b, origin, name, clientId = "browser") {
     return true;
   })()`);
 }
-async function browser({ proxyServer = null } = {}) {
+async function browser({ proxyServer = null, args = [], headless = true } = {}) {
   if (proxyServer !== null && !/^http:\/\/127\.0\.0\.1:\d+$/.test(proxyServer)) throw new Error("Browser proxy must be an owned loopback endpoint");
   const { default: WebSocket } = await import("./wrapper-WSTJGJ5M.mjs").catch(
     () => import(new URL("../../node_modules/ws/index.js", import.meta.url).href)
   );
   const dir = mkdtempSync(path.join(tmpdir(), "isocan-cdp-"));
   const proc = spawn(chromeOrDie(), [
-    "--headless=new",
+    ...headless ? ["--headless=new"] : [],
     "--remote-debugging-port=0",
     `--user-data-dir=${dir}`,
     "--no-first-run",
     "--hide-scrollbars",
     ...proxyServer ? [`--proxy-server=${proxyServer}`, "--proxy-bypass-list=<-loopback>", "--disable-quic", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] : [],
+    ...args,
     "about:blank"
   ], { stdio: "ignore" });
   const sockets = [];
@@ -142,7 +143,7 @@ async function drive(proc, dir, WebSocket, sockets) {
       pending.delete(m.id);
       return;
     }
-    for (const listener of listeners.get(m.method) ?? []) listener(m.params);
+    for (const listener of listeners.get(m.method) ?? []) listener(m.params, m.sessionId);
     if (m.method === "Runtime.exceptionThrown") errors.push((m.params.exceptionDetails?.exception?.description ?? "").split("\n")[0]);
     const w = waiters.get(m.method);
     if (w) {
@@ -150,9 +151,9 @@ async function drive(proc, dir, WebSocket, sockets) {
       w(m.params);
     }
   });
-  const send = (method, params = {}) => {
+  const send = (method, params = {}, sessionId) => {
     const mid = ++id;
-    ws.send(JSON.stringify({ id: mid, method, params }));
+    ws.send(JSON.stringify({ id: mid, method, params, ...sessionId ? { sessionId } : {} }));
     return new Promise((res, rej) => pending.set(mid, (m) => m.error ? rej(new Error(JSON.stringify(m.error))) : res(m.result)));
   };
   await send("Page.enable");
@@ -160,6 +161,8 @@ async function drive(proc, dir, WebSocket, sockets) {
   let closing;
   return {
     send,
+    /** The Chrome process, so a caller can read its process tree's memory. */
+    pid: proc.pid,
     /** Observe every occurrence, including requests for images and frames.
      * Return an unsubscribe function so a journey can bound its observation. */
     on: (method, listener) => {

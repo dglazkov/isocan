@@ -25,6 +25,11 @@ import {
   removableComment
 } from "./chunk-CEFJ6B76.mjs";
 import {
+  MODELS_ROUTE,
+  localModel,
+  modelPath
+} from "./chunk-UQNAMXMI.mjs";
+import {
   KeyFileRefused,
   checkKey,
   defaultKeysHome,
@@ -7497,7 +7502,7 @@ var require_atomic_sleep = __commonJS({
 var require_sonic_boom = __commonJS({
   "node_modules/sonic-boom/index.js"(exports, module) {
     "use strict";
-    var fs7 = __require("fs");
+    var fs8 = __require("fs");
     var EventEmitter = __require("events");
     var inherits = __require("util").inherits;
     var path4 = __require("path");
@@ -7554,20 +7559,20 @@ var require_sonic_boom = __commonJS({
       const mode = sonic.mode;
       if (sonic.sync) {
         try {
-          if (sonic.mkdir) fs7.mkdirSync(path4.dirname(file), { recursive: true });
-          const fd = fs7.openSync(file, flags, mode);
+          if (sonic.mkdir) fs8.mkdirSync(path4.dirname(file), { recursive: true });
+          const fd = fs8.openSync(file, flags, mode);
           fileOpened(null, fd);
         } catch (err) {
           fileOpened(err);
           throw err;
         }
       } else if (sonic.mkdir) {
-        fs7.mkdir(path4.dirname(file), { recursive: true }, (err) => {
+        fs8.mkdir(path4.dirname(file), { recursive: true }, (err) => {
           if (err) return fileOpened(err);
-          fs7.open(file, flags, mode, fileOpened);
+          fs8.open(file, flags, mode, fileOpened);
         });
       } else {
-        fs7.open(file, flags, mode, fileOpened);
+        fs8.open(file, flags, mode, fileOpened);
       }
     }
     function SonicBoom(opts) {
@@ -7608,8 +7613,8 @@ var require_sonic_boom = __commonJS({
         this.flush = flushBuffer;
         this.flushSync = flushBufferSync;
         this._actualWrite = actualWriteBuffer;
-        fsWriteSync = () => fs7.writeSync(this.fd, this._writingBuf);
-        fsWrite = () => fs7.write(this.fd, this._writingBuf, this.release);
+        fsWriteSync = () => fs8.writeSync(this.fd, this._writingBuf);
+        fsWrite = () => fs8.write(this.fd, this._writingBuf, this.release);
       } else if (contentMode === void 0 || contentMode === kContentModeUtf8) {
         this._writingBuf = "";
         this.write = write;
@@ -7618,15 +7623,15 @@ var require_sonic_boom = __commonJS({
         this._actualWrite = actualWrite;
         fsWriteSync = () => {
           if (Buffer.isBuffer(this._writingBuf)) {
-            return fs7.writeSync(this.fd, this._writingBuf);
+            return fs8.writeSync(this.fd, this._writingBuf);
           }
-          return fs7.writeSync(this.fd, this._writingBuf, "utf8");
+          return fs8.writeSync(this.fd, this._writingBuf, "utf8");
         };
         fsWrite = () => {
           if (Buffer.isBuffer(this._writingBuf)) {
-            return fs7.write(this.fd, this._writingBuf, this.release);
+            return fs8.write(this.fd, this._writingBuf, this.release);
           }
-          return fs7.write(this.fd, this._writingBuf, "utf8", this.release);
+          return fs8.write(this.fd, this._writingBuf, "utf8", this.release);
         };
       } else {
         throw new Error(`SonicBoom supports "${kContentModeUtf8}" and "${kContentModeBuffer}", but passed ${contentMode}`);
@@ -7683,7 +7688,7 @@ var require_sonic_boom = __commonJS({
           }
         }
         if (this._fsync) {
-          fs7.fsyncSync(this.fd);
+          fs8.fsyncSync(this.fd);
         }
         const len = this._len;
         if (this._reopening) {
@@ -7797,7 +7802,7 @@ var require_sonic_boom = __commonJS({
       const onDrain = () => {
         if (!this._fsync) {
           try {
-            fs7.fsync(this.fd, (err) => {
+            fs8.fsync(this.fd, (err) => {
               this._flushPending = false;
               cb(err);
             });
@@ -7899,7 +7904,7 @@ var require_sonic_boom = __commonJS({
       const fd = this.fd;
       this.once("ready", () => {
         if (fd !== this.fd) {
-          fs7.close(fd, (err) => {
+          fs8.close(fd, (err) => {
             if (err) {
               return this.emit("error", err);
             }
@@ -7948,7 +7953,7 @@ var require_sonic_boom = __commonJS({
           buf = this._bufs[0];
         }
         try {
-          const n = Buffer.isBuffer(buf) ? fs7.writeSync(this.fd, buf) : fs7.writeSync(this.fd, buf, "utf8");
+          const n = Buffer.isBuffer(buf) ? fs8.writeSync(this.fd, buf) : fs8.writeSync(this.fd, buf, "utf8");
           const releasedBufObj = releaseWritingBuf(buf, this._len, n);
           buf = releasedBufObj.writingBuf;
           this._len = releasedBufObj.len;
@@ -7964,7 +7969,7 @@ var require_sonic_boom = __commonJS({
         }
       }
       try {
-        fs7.fsyncSync(this.fd);
+        fs8.fsyncSync(this.fd);
       } catch {
       }
     }
@@ -7985,7 +7990,7 @@ var require_sonic_boom = __commonJS({
           buf = mergeBuf(this._bufs[0], this._lens[0]);
         }
         try {
-          const n = fs7.writeSync(this.fd, buf);
+          const n = fs8.writeSync(this.fd, buf);
           buf = buf.subarray(n);
           this._len = Math.max(this._len - n, 0);
           if (buf.length <= 0) {
@@ -8013,13 +8018,13 @@ var require_sonic_boom = __commonJS({
       this._writingBuf = this._writingBuf.length ? this._writingBuf : this._bufs.shift() || "";
       if (this.sync) {
         try {
-          const written = Buffer.isBuffer(this._writingBuf) ? fs7.writeSync(this.fd, this._writingBuf) : fs7.writeSync(this.fd, this._writingBuf, "utf8");
+          const written = Buffer.isBuffer(this._writingBuf) ? fs8.writeSync(this.fd, this._writingBuf) : fs8.writeSync(this.fd, this._writingBuf, "utf8");
           release(null, written);
         } catch (err) {
           release(err);
         }
       } else {
-        fs7.write(this.fd, this._writingBuf, release);
+        fs8.write(this.fd, this._writingBuf, release);
       }
     }
     function actualWriteBuffer() {
@@ -8028,7 +8033,7 @@ var require_sonic_boom = __commonJS({
       this._writingBuf = this._writingBuf.length ? this._writingBuf : mergeBuf(this._bufs.shift(), this._lens.shift());
       if (this.sync) {
         try {
-          const written = fs7.writeSync(this.fd, this._writingBuf);
+          const written = fs8.writeSync(this.fd, this._writingBuf);
           release(null, written);
         } catch (err) {
           release(err);
@@ -8037,7 +8042,7 @@ var require_sonic_boom = __commonJS({
         if (kCopyBuffer) {
           this._writingBuf = Buffer.from(this._writingBuf);
         }
-        fs7.write(this.fd, this._writingBuf, release);
+        fs8.write(this.fd, this._writingBuf, release);
       }
     }
     function actualClose(sonic) {
@@ -8053,12 +8058,12 @@ var require_sonic_boom = __commonJS({
       sonic._lens = [];
       assert(typeof sonic.fd === "number", `sonic.fd must be a number, got ${typeof sonic.fd}`);
       try {
-        fs7.fsync(sonic.fd, closeWrapped);
+        fs8.fsync(sonic.fd, closeWrapped);
       } catch {
       }
       function closeWrapped() {
         if (sonic.fd !== 1 && sonic.fd !== 2) {
-          fs7.close(sonic.fd, done);
+          fs8.close(sonic.fd, done);
         } else {
           done();
         }
@@ -30055,7 +30060,7 @@ ${body}`);
 
 // packages/server/src/daemon.ts
 var import_fastify = __toESM(require_fastify());
-import { promises as fs6 } from "node:fs";
+import { promises as fs7 } from "node:fs";
 import net from "node:net";
 
 // packages/server/src/http.ts
@@ -30658,14 +30663,45 @@ function registerKeyRoutes(app, scope) {
   });
 }
 
+// packages/server/src/model-files.ts
+import { createReadStream, promises as fs2 } from "node:fs";
+var JUDGE_WORKER_POLICY = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'";
+function judgeWorkerPolicy(file) {
+  const base = file.split(/[\\/]/).pop() ?? "";
+  return /^judge-worker-[A-Za-z0-9_-]+\.js$/.test(base) ? JUDGE_WORKER_POLICY : null;
+}
+var LOOPBACK_PEERS2 = /* @__PURE__ */ new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+var isLoopbackHost2 = (host) => !!host && /^(localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/i.test(host.trim());
+var MODEL_FILE_ROUTE = `${MODELS_ROUTE}/:name`;
+function registerModelFileRoutes(app, scope) {
+  app.get(MODEL_FILE_ROUTE, async (req, reply) => {
+    if (scope.servesWorld === true || !loopbackBound(app) || !LOOPBACK_PEERS2.has(req.ip) || !isLoopbackHost2(req.headers.host)) {
+      return reply.status(404).send({ error: "models are served only by a local daemon to this machine's own pages", code: "model-not-here" });
+    }
+    const name = req.params.name;
+    const model = localModel(name);
+    if (!model) return reply.status(404).send({ error: "no such model", code: "model-unknown" });
+    const file = modelPath(scope.home, model);
+    const size = await fs2.stat(file).then((s) => s.size, () => -1);
+    if (size !== model.bytes) {
+      return reply.status(404).send({ error: `${model.name} is not on this machine \u2014 \`isocan model fetch ${model.name}\` puts it there`, code: "model-not-fetched" });
+    }
+    reply.type("application/octet-stream");
+    reply.header("Content-Length", String(size));
+    reply.header("Cache-Control", "private, max-age=31536000, immutable");
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.send(createReadStream(file));
+  });
+}
+
 // packages/server/src/http.ts
-import { createReadStream, existsSync, statSync, promises as fs3 } from "node:fs";
+import { createReadStream as createReadStream2, existsSync, statSync, promises as fs4 } from "node:fs";
 import os from "node:os";
 import { createHash as createHash3 } from "node:crypto";
 import path2 from "node:path";
 
 // packages/server/src/tree.ts
-import { promises as fs2, readFileSync } from "node:fs";
+import { promises as fs3, readFileSync } from "node:fs";
 import path from "node:path";
 var SECRET_NAMES = [/\.pem$/i, /\.key$/i, /^id_rsa/i, /^id_ed25519/i, /credential/i, /\.p12$/i];
 var NOISE_DIRS = /* @__PURE__ */ new Set(["node_modules", "dist", "build", "out", "coverage", "__pycache__"]);
@@ -30688,7 +30724,7 @@ async function boundDirs(home, canvasId) {
     if (id !== canvasId) continue;
     try {
       const marker = JSON.parse(
-        await fs2.readFile(path.join(dir, ".isocan", "project.json"), "utf8")
+        await fs3.readFile(path.join(dir, ".isocan", "project.json"), "utf8")
       );
       if ((marker.canvasId ?? marker.projectId) === canvasId) dirs.push(path.resolve(dir));
     } catch {
@@ -30697,14 +30733,14 @@ async function boundDirs(home, canvasId) {
   return dirs;
 }
 async function readTree(root) {
-  const real = await fs2.realpath(root);
+  const real = await fs3.realpath(root);
   const entries = [];
   let truncated = false;
   async function walk(dir, rel) {
     if (truncated) return;
     let names;
     try {
-      names = await fs2.readdir(dir, { withFileTypes: true });
+      names = await fs3.readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
@@ -30726,7 +30762,7 @@ async function readTree(root) {
       } else {
         let size = 0;
         try {
-          size = (await fs2.lstat(path.join(dir, entry.name))).size;
+          size = (await fs3.lstat(path.join(dir, entry.name))).size;
         } catch {
           continue;
         }
@@ -30739,7 +30775,7 @@ async function readTree(root) {
 }
 var MAX_READ_BYTES = 20 * 1024 * 1024;
 async function readBound(root, rel) {
-  const real = await fs2.realpath(root);
+  const real = await fs3.realpath(root);
   const normal = path.normalize(rel);
   if (path.isAbsolute(normal) || normal.startsWith("..")) return null;
   const segments = normal.split(path.sep);
@@ -30750,10 +30786,10 @@ async function readBound(root, rel) {
   const target = path.join(real, normal);
   if (!(target === real || target.startsWith(real + path.sep))) return null;
   try {
-    const stat = await fs2.lstat(target);
+    const stat = await fs3.lstat(target);
     if (!stat.isFile()) return null;
     if (stat.size > MAX_READ_BYTES) return null;
-    return await fs2.readFile(target);
+    return await fs3.readFile(target);
   } catch {
     return null;
   }
@@ -30761,12 +30797,12 @@ async function readBound(root, rel) {
 var MAX_PICK_ENTRIES = 400;
 async function pickList(home, at) {
   const os2 = await import("node:os");
-  const ceiling = await fs2.realpath(os2.homedir()).catch(() => os2.homedir());
+  const ceiling = await fs3.realpath(os2.homedir()).catch(() => os2.homedir());
   const wanted = at ? path.resolve(at) : ceiling;
-  const real = await fs2.realpath(wanted).catch(() => null);
+  const real = await fs3.realpath(wanted).catch(() => null);
   if (real === null) return null;
   if (real !== ceiling && !real.startsWith(ceiling + path.sep)) return null;
-  const stat = await fs2.lstat(real).catch(() => null);
+  const stat = await fs3.lstat(real).catch(() => null);
   if (!stat?.isDirectory()) return null;
   let bound = {};
   try {
@@ -30774,7 +30810,7 @@ async function pickList(home, at) {
   } catch {
   }
   const entries = [];
-  for (const entry of await fs2.readdir(real, { withFileTypes: true }).catch(() => [])) {
+  for (const entry of await fs3.readdir(real, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory()) continue;
     if (!listable(entry.name, "dir")) continue;
     const full = path.join(real, entry.name);
@@ -30808,21 +30844,21 @@ async function writeBound(root, rel, bytes, ours, hashOf) {
   let walked = root;
   for (const segment of segments.slice(0, -1)) {
     walked = path.join(walked, segment);
-    const stat = await fs2.lstat(walked).catch(() => null);
+    const stat = await fs3.lstat(walked).catch(() => null);
     if (stat === null) continue;
     if (stat.isSymbolicLink()) return { ok: false, refusal: "symlink" };
     if (!stat.isDirectory()) return { ok: false, refusal: "unwritable" };
   }
-  const existing = await fs2.lstat(full).catch(() => null);
+  const existing = await fs3.lstat(full).catch(() => null);
   if (existing?.isSymbolicLink()) return { ok: false, refusal: "symlink" };
   if (existing && !existing.isFile()) return { ok: false, refusal: "unwritable" };
-  const found = existing ? hashOf(await fs2.readFile(full)) : null;
+  const found = existing ? hashOf(await fs3.readFile(full)) : null;
   if (found !== null && !ours.includes(found)) {
     return { ok: false, refusal: "drifted", found };
   }
   try {
-    await fs2.mkdir(path.dirname(full), { recursive: true });
-    await fs2.writeFile(full, bytes);
+    await fs3.mkdir(path.dirname(full), { recursive: true });
+    await fs3.writeFile(full, bytes);
   } catch {
     return { ok: false, refusal: "unwritable" };
   }
@@ -32942,7 +32978,12 @@ var STATIC_TYPES = {
   ".ico": "image/x-icon",
   // The handwriting face and the licence that has to travel with it.
   ".woff2": "font/woff2",
-  ".txt": "text/plain; charset=utf-8"
+  ".txt": "text/plain; charset=utf-8",
+  // The local judge's runtime (local-judge phase 0): MediaPipe's wasm, built
+  // into dist from the package rather than shipped in public/. As
+  // octet-stream it would still load through `WebAssembly.instantiate`, and
+  // fail the day anything used `instantiateStreaming`, which insists.
+  ".wasm": "application/wasm"
 };
 var CANVAS_API_ROUTE = /^\/api\/projects\/([^/?]+)/;
 var RECAP_HEAD_ROUTE = /^\/api\/projects\/[^/]+\/context\/recap\/?$/;
@@ -33655,6 +33696,7 @@ function registerRoutes(app, engine, store, desk, presence, options = {}) {
   });
   registerModelRoutes(app, { engine, options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
   registerKeyRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld, ...options.keys ? { keys: options.keys } : {} });
+  registerModelFileRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld });
   app.get("/api/actors", async (req) => {
     const { keys } = req.query;
     return engine.actorBindings(req.badge.badgeId, keys ? keys.split(",").filter(Boolean) : null);
@@ -33732,7 +33774,7 @@ function registerRoutes(app, engine, store, desk, presence, options = {}) {
     reply.type(STATIC_TYPES[path2.extname(file)] ?? "application/octet-stream");
     reply.header("Cache-Control", "no-cache");
     reply.header("X-Content-Type-Options", "nosniff");
-    return reply.send(createReadStream(file));
+    return reply.send(createReadStream2(file));
   });
   app.get("/api/commands", async () => engine.commands());
   app.put("/api/commands/:name", async (req, reply) => {
@@ -33842,7 +33884,7 @@ function registerRoutes(app, engine, store, desk, presence, options = {}) {
     return visible;
   });
   app.get(NEWS_ROUTE, async () => {
-    const text = await fs3.readFile(path2.join(buildRoot(), "WHATSNEW.md"), "utf8").catch(() => "");
+    const text = await fs4.readFile(path2.join(buildRoot(), "WHATSNEW.md"), "utf8").catch(() => "");
     return { days: news(text) };
   });
   app.get(PRESENCE_WHERE_ROUTE, async (req) => {
@@ -35355,7 +35397,7 @@ function registerRoutes(app, engine, store, desk, presence, options = {}) {
     const wanted = path2.resolve(
       typed.startsWith("~") ? path2.join(os.homedir(), typed.slice(1)) : typed
     );
-    const found = await fs3.stat(wanted).catch(() => null);
+    const found = await fs4.stat(wanted).catch(() => null);
     if (!found) {
       return reply.status(404).send({
         error: `there is nothing at ${wanted}`,
@@ -35621,13 +35663,15 @@ function registerPages(app, desk, store, options, meter) {
   const send = (reply, file) => {
     const types = STATIC_TYPES;
     reply.type(types[path2.extname(file)] ?? "application/octet-stream");
+    const policy = judgeWorkerPolicy(file);
+    if (policy) reply.header("Content-Security-Policy", policy);
     const hashed = file.startsWith(path2.join(dist, "assets") + path2.sep);
     const font = path2.extname(file) === ".woff2";
     reply.header(
       "Cache-Control",
       reply.getHeader("Cache-Control") === "no-store" ? "no-store" : hashed ? "public, max-age=31536000, immutable" : font ? "public, max-age=86400" : "no-cache"
     );
-    return reply.send(createReadStream(file));
+    return reply.send(createReadStream2(file));
   };
   app.get("/*", async (req, reply) => {
     const url = req.params["*"] ?? "";
@@ -35681,7 +35725,7 @@ function escapeHtml(value) {
 }
 
 // packages/server/src/park.ts
-import { promises as fs4 } from "node:fs";
+import { promises as fs5 } from "node:fs";
 import path3 from "node:path";
 import { randomBytes as randomBytes3 } from "node:crypto";
 var parkCursorsFile = (home) => path3.join(home, "park-cursors.json");
@@ -35697,7 +35741,7 @@ var ParkCursors = class {
   async load() {
     if (this.rows) return this.rows;
     try {
-      const raw = await fs4.readFile(parkCursorsFile(this.home), "utf8");
+      const raw = await fs5.readFile(parkCursorsFile(this.home), "utf8");
       this.rows = JSON.parse(raw);
     } catch {
       this.rows = {};
@@ -36292,7 +36336,7 @@ function parseCursor(raw) {
 }
 
 // packages/server/src/migrations.ts
-import { promises as fs5 } from "node:fs";
+import { promises as fs6 } from "node:fs";
 async function runMigrations(home, store, desk, configuredHome) {
   await migrateLegacyClaims(home, store, desk);
   await migrateLegacyAgents(home, store, desk);
@@ -36312,19 +36356,19 @@ async function recordWhereTheCanvasesAlreadyLive(home, store, configuredHome) {
 }
 async function grantTheLinkOnOldCanvases(home, store, desk) {
   const marker = linkGrantsMigratedFile(home);
-  if (await fs5.stat(marker).then(() => true, () => false)) return;
+  if (await fs6.stat(marker).then(() => true, () => false)) return;
   for (const canvas of await store.listCanvases()) {
     await ensureLinkGrant(desk, canvas.id, GRANTED_BY_MIGRATION);
   }
-  await fs5.mkdir(deskDir(home), { recursive: true }).catch(() => {
+  await fs6.mkdir(deskDir(home), { recursive: true }).catch(() => {
   });
-  await fs5.writeFile(marker, (/* @__PURE__ */ new Date()).toISOString()).catch(() => {
+  await fs6.writeFile(marker, (/* @__PURE__ */ new Date()).toISOString()).catch(() => {
   });
 }
 async function migrateLegacyClaims(home, store, desk) {
   let legacy;
   try {
-    legacy = JSON.parse(await fs5.readFile(actorsFile(home), "utf8"));
+    legacy = JSON.parse(await fs6.readFile(actorsFile(home), "utf8"));
   } catch {
     return;
   }
@@ -36343,7 +36387,7 @@ async function migrateLegacyClaims(home, store, desk) {
       ...binding.canvasId !== void 0 ? { canvasId: binding.canvasId } : {}
     };
   }
-  await fs5.rename(actorsFile(home), preBadgeActorsFile(home)).catch(() => {
+  await fs6.rename(actorsFile(home), preBadgeActorsFile(home)).catch(() => {
   });
   await store.saveActors({ names, colors: legacy.colors ?? {} }, legacy.lastSeq ?? 0);
   await desk.shelve(shelf);
@@ -36352,7 +36396,7 @@ async function migrateLegacyAgents(home, store, desk) {
   const file = agentsFile(home);
   let legacy;
   try {
-    legacy = JSON.parse(await fs5.readFile(file, "utf8"));
+    legacy = JSON.parse(await fs6.readFile(file, "utf8"));
   } catch {
     return;
   }
@@ -36393,7 +36437,7 @@ async function migrateLegacyAgents(home, store, desk) {
   }
   if (seq !== lastSeq) await store.saveActors(current, seq);
   await desk.shelve(shelf);
-  await fs5.rename(file, `${file}.migrated`).catch(() => {
+  await fs6.rename(file, `${file}.migrated`).catch(() => {
   });
 }
 
@@ -36634,7 +36678,7 @@ async function startDaemon(options = {}) {
     ...options.blobCheckFirstMs !== void 0 ? { firstSweepMs: options.blobCheckFirstMs } : {},
     log: (message2) => app.log.info(message2)
   });
-  await fs6.writeFile(
+  await fs7.writeFile(
     daemonFile(home),
     JSON.stringify({ pid: process.pid, port, startedAt: (/* @__PURE__ */ new Date()).toISOString() }, null, 2)
   );
@@ -36650,8 +36694,8 @@ async function startDaemon(options = {}) {
     await app.close();
     await engine.settled();
     try {
-      const current = JSON.parse(await fs6.readFile(daemonFile(home), "utf8"));
-      if (current.pid === process.pid) await fs6.rm(daemonFile(home), { force: true });
+      const current = JSON.parse(await fs7.readFile(daemonFile(home), "utf8"));
+      if (current.pid === process.pid) await fs7.rm(daemonFile(home), { force: true });
     } catch {
     }
     await desk.close();
@@ -36686,7 +36730,7 @@ async function daemonPidOn(port) {
 }
 async function readPidfile(home) {
   try {
-    const raw = JSON.parse(await fs6.readFile(daemonFile(home), "utf8"));
+    const raw = JSON.parse(await fs7.readFile(daemonFile(home), "utf8"));
     if (typeof raw.pid !== "number") return null;
     return { pid: raw.pid, port: typeof raw.port === "number" ? raw.port : DEFAULT_PORT };
   } catch {
@@ -36751,7 +36795,7 @@ async function stopDaemons(port, home, notify = () => {
   }
   const left = await readPidfile(home);
   if (left && (pids.includes(left.pid) || !isAlive(left.pid))) {
-    await fs6.rm(daemonFile(home), { force: true });
+    await fs7.rm(daemonFile(home), { force: true });
   }
   return pids;
 }

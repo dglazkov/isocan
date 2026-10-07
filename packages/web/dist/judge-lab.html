@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The page's policy, enforced by the browser: nothing leaves this origin.
+         The Worker carries its own (a meta tag cannot reach it) — the daemon
+         sends it with judge-worker-*.js. Inline style is the one widening;
+         there is no inline script. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'" />
+    <title>Judge lab</title>
+    <!-- local-judge phase 0: the lab that measures the judge in the tab. Its
+         own Vite entry, not a route in the app, so the app's entry chunk
+         cannot move. Served by the daemon at /judge-lab.html; it loads
+         nothing from anywhere but this origin. -->
+    <style>
+      :root { color-scheme: light dark; --bg: #fbfaf7; --fg: #1d1c1a; --muted: #6b675f; --line: #ddd8cc; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #1a1918; --fg: #ece8df; --muted: #a39e93; --line: #3a3833; } }
+      body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, sans-serif; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+      button { font: inherit; padding: 6px 12px; margin-right: 8px; }
+      #scene { position: relative; height: 220px; overflow: hidden; border: 1px solid var(--line); margin: 12px 0; }
+      #scene > div { position: absolute; width: 90px; height: 54px; border: 1px solid var(--line); background: var(--bg); font-size: 11px; padding: 4px; box-sizing: border-box; }
+      #answer { min-height: 1.5em; font-weight: 600; }
+      pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+    </style>
+    <script type="module" crossorigin src="/assets/judge-lab-C1s8t_MN.js"></script>
+  </head>
+  <body>
+    <h1>Judge lab</h1>
+    <p id="probe">Checking what this browser can run…</p>
+    <div>
+      <button id="run-gpu" type="button">Measure on GPU</button>
+      <button id="run-cpu" type="button">Measure on CPU</button>
+    </div>
+    <p id="file-row" hidden>
+      <label>Choose a model file… <input id="model-file" type="file" accept=".litertlm" /></label>
+    </p>
+    <p id="progress" role="status"></p>
+    <div id="answer" aria-live="polite"></div>
+    <div id="scene" aria-hidden="true"></div>
+    <button id="copy" type="button">Copy results</button>
+    <pre id="out"></pre>
+  </body>
+</html>

@@ -1,6 +1,10 @@
 import { createRequire as __isocanCreateRequire } from "node:module";
 const require = __isocanCreateRequire(import.meta.url);
 import {
+  ok,
+  unified
+} from "./chunk-3T5YQ7I2.mjs";
+import {
   asciiAlpha,
   asciiAlphanumeric,
   asciiControl,
@@ -19,10 +23,6 @@ import {
   unicodePunctuation,
   unicodeWhitespace
 } from "./chunk-ZO2JNYLK.mjs";
-import {
-  ok,
-  unified
-} from "./chunk-3T5YQ7I2.mjs";
 import "./chunk-KDJEKIA2.mjs";
 import "./chunk-JYOOXWJZ.mjs";
 

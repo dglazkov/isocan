@@ -543,6 +543,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   billed per call), and *Talk to the canvas* keeps no key in the browser:
   each session gets a one-use Gemini Live token from the home. See
   [the design](docs/projects/keys/design.md).
+- **The local judge's model on disk**: `isocan model fetch embeddinggemma-2-text-270m`
+  downloads the in-browser judge's model, verified against its pinned SHA-256, into
+  `~/.isocan/models/`, which the daemon serves to this machine's own pages only
+  (`isocan model ls` says what is there). See [local-judge](docs/projects/local-judge/design.md).
 - **Design competitions**: `/design-competition` or ⌘K opens a lazy picker
   with nine designer-inspired packs. Choose fighters and a brief to create
   explicit lanes in one undoable act. `isocan competition` casts them through

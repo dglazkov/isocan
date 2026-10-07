@@ -21,6 +21,8 @@
     "./design-use": "./src/design-use.ts",
     "./colour": "./src/colour.ts",
     "./jev": "./src/jev.ts",
+    "./local-judge": "./src/local-judge.ts",
+    "./modelstore": "./src/modelstore.ts",
     "./text": "./src/text.ts",
     "./keys": "./src/keys.ts",
     "./keystore": "./src/keystore.ts",

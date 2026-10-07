@@ -5,7 +5,7 @@ import {
   browser,
   throughTheDoor,
   until
-} from "./chunk-DLH3FVEG.mjs";
+} from "./chunk-NCPWVLPN.mjs";
 import "./chunk-JYOOXWJZ.mjs";
 
 // scripts/canvas-shot.mjs
