@@ -114,9 +114,15 @@ person's act → ordinary Operation → oplog
   `import()` at the moment the switch is turned on, the pattern
   `@isocan/core/jev` and the fast path's shadow already use.
   `test/bundle-budget.test.ts` is the guard; nothing here may move its number.
-- **Opt-in, per browser, three positions** — off, shadow, on — the fast
-  path's own switch shape (`isocan:voice:fastpath`). Shadow answers and logs
-  but changes nothing a person sees, which is how every use case starts.
+- **Behind an experiment first, then a switch.** It is an entry in
+  `packages/web/src/lib/experiments.ts` (`local-judge`), the mechanism
+  Stickers, Voice and Inbox already use: off until a person ticks it in
+  Experiments, per browser, and nothing of it — Worker, MediaPipe, model —
+  loads while it is off. Ticking it reveals the switch below; it does not
+  download anything by itself. Decided with Dion, 7 Oct 2026.
+- **Then three positions** — off, shadow, on — the fast path's own switch
+  shape (`isocan:voice:fastpath`). Shadow answers and logs but changes
+  nothing a person sees, which is how every use case starts.
 - **The download is the person's choice and is stated.** ~165 MB plus the
   runtime, cached for offline use. The switch says the size before it fetches
   anything, and a browser that cannot run it (no WebGPU and too little memory,

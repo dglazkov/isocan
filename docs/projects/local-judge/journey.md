@@ -116,5 +116,5 @@ The load-bearing minimum, which is what to read before building anything here:
 4. **Nothing leaves the tab.** Requests, context, embeddings and answers stay
    in the browser; an index of items is sensitive data, stored per browser
    and deletable. Proved with the network off, not asserted.
-5. **Absent by default.** Opt-in, lazy, outside the entry chunk, and a
-   browser that cannot run it is told so in words.
+5. **Absent by default.** Behind an experiment, lazy, outside the entry
+   chunk, and a browser that cannot run it is told so in words.
