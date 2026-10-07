@@ -311,7 +311,7 @@ one claim for concurrent reads and no replay by a cancelled waiter.
   reasoning. A lesson nobody obeys is a lesson that needs a smaller ask — so
   the ask is now literal: `git add <paths>`, never `-A`, while a task
   notification is still outstanding.
-
+| 109 | **A test rig built on one kernel's answer to overload is a test of that kernel.** The connect-deadline rigs staged "a full accept queue" by stopping a listener, on a macOS that silently dropped the overflow SYN. Darwin 27 answers the same overflow with a reset — instantly on connect, or a millisecond after reporting the connection made, as `EPIPE` on the first write — and a dependency (undici 7.x) then threw `setTypeOfService EINVAL` from inside its write path, uncaught. Nothing in the repo changed; the machine did. | `packages/api/test/connect-deadline.test.ts` failed on every run on a Mac updated to Darwin 27, and on `main` without the change being tested, after passing the same morning. The uncaught EINVAL could crash the CLI on any reset loopback connect, not only in the test. Fixed upstream in undici 8 only ([nodejs/undici#5544](https://github.com/nodejs/undici/issues/5544)); 7.30, the last 7.x, still throws. | undici `^8.11.2`. The bounded client and the suite's fetch also retry `connect ECONNRESET` and `write EPIPE` on loopback — both mean the daemon never held a whole request — with the reasoning in `packages/api/src/client.ts`. Both connect-deadline files pass five runs in a row on Darwin 27. |
 
 ## Adding to this file
 

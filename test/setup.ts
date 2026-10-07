@@ -3,8 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { isolateModelEnv } from "./model-env.ts";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import { Agent, buildConnector, fetch as undiciFetch } from "undici";
-import { guardTypeOfService } from "./tos-guard.ts";
+import { Agent, fetch as undiciFetch } from "undici";
 import { afterAll, afterEach, beforeEach } from "vitest";
 
 /**
@@ -454,13 +453,10 @@ async function describeListener(url: string): Promise<string> {
  */
 const CONNECT_BUDGET_MS = 3000;
 const CONNECT_ATTEMPT_MS = 1200;
-const connectWithin = buildConnector({ timeout: CONNECT_ATTEMPT_MS });
-const connectBounded = new Agent({
-  // The same bounded connect, and a type-of-service call that cannot hide
-  // what happened to the connection (`./tos-guard.ts`).
-  connect: (options, done) =>
-    connectWithin(options, (err, socket) => (err ? done(err, null) : done(null, guardTypeOfService(socket as never)))),
-});
+// undici 8 sets the type of service best-effort itself, so a socket the
+// kernel has already reset fails the request on its real state rather than
+// throwing EINVAL from inside the write (lessons.md #109).
+const connectBounded = new Agent({ connect: { timeout: CONNECT_ATTEMPT_MS } });
 const realFetch: typeof fetch = (input, init) =>
   undiciFetch(input as Parameters<typeof undiciFetch>[0], { ...(init as Parameters<typeof undiciFetch>[1]), dispatcher: connectBounded }) as unknown as Promise<Response>;
 globalThis.fetch = async function retryingFetch(input, init) {
@@ -475,7 +471,11 @@ globalThis.fetch = async function retryingFetch(input, init) {
         // written. The same guarantee `syscall === "connect"` gives below.
         cause?.code === "UND_ERR_CONNECT_TIMEOUT" ||
         (cause?.syscall === "connect" &&
-          (cause.code === "ETIMEDOUT" || cause.code === "ECONNREFUSED" || cause.code === "ECONNRESET"));
+          (cause.code === "ETIMEDOUT" || cause.code === "ECONNREFUSED" || cause.code === "ECONNRESET")) ||
+        // macOS 27 can report a full queue's connect as made and reset it
+        // before the first write; EPIPE is the kernel refusing the bytes, so
+        // nothing reached the server (packages/api/src/client.ts says why).
+        (cause?.syscall === "write" && cause.code === "EPIPE");
       /**
        * **When it gives up, it says what it gave up ON.**
        *

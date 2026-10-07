@@ -151,9 +151,25 @@ function neverLeftThisMachine(err: unknown): boolean {
   const cause = (err as { cause?: { syscall?: string; code?: string } }).cause;
   return (
     cause?.code === "UND_ERR_CONNECT_TIMEOUT" ||
-    (cause?.syscall === "connect" && cause.code === "ETIMEDOUT")
+    (cause?.syscall === "connect" && (cause.code === "ETIMEDOUT" || cause.code === "ECONNRESET")) ||
+    (cause?.syscall === "write" && cause.code === "EPIPE")
   );
 }
+
+/*
+ * **macOS 27 resets where macOS 26 dropped** (measured 6 Oct 2026, Darwin
+ * 27.0). A full accept queue on a stopped or busy listener used to swallow
+ * the SYN, which is the 7.8s ladder above. Darwin 27 answers it with a reset
+ * instead: most attempts fail at once with `connect ECONNRESET`, and some
+ * report connected and are reset a millisecond later, so the first write
+ * fails with `EPIPE`. Neither reached the daemon — a reset connect never
+ * completed, and an EPIPE is the kernel refusing the request's bytes, so the
+ * daemon never held a whole request to act on. Both are the same licence as
+ * the timeout, and without them the recovery this file exists for — a
+ * connect that becomes possible inside the budget — fails on the first
+ * attempt on every Mac that has updated. `read ECONNRESET` is deliberately
+ * NOT here: by then the request may have been read.
+ */
 
 /**
  * The loopback fetch: connect-bounded, retried inside a clock budget, and —
@@ -182,7 +198,8 @@ function boundedFetch(base: string): typeof fetch {
           if (neverLeftThisMachine(err)) {
             const cause = (err as { cause?: { code?: string } }).cause;
             (err as Error).message =
-              `could not reach the daemon at ${base} — the connection was never made ` +
+              `could not reach the daemon at ${base} — ` +
+              (cause?.code === "EPIPE" ? "the connection was reset before the request was written " : "the connection was never made ") +
               `(${cause?.code ?? "?"}, ${attempt + 1} attempt${attempt === 0 ? "" : "s"} in ` +
               `${(spent / 1000).toFixed(1)}s). Nothing was sent, so nothing landed twice; ` +
               `"isocan status" says whether a daemon is there.`;
