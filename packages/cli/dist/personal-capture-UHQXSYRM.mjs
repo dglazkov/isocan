@@ -1,12 +1,12 @@
 import { createRequire as __isocanCreateRequire } from "node:module";
 const require = __isocanCreateRequire(import.meta.url);
-import "./chunk-EHKJWFGS.mjs";
+import "./chunk-P6OP2SQ4.mjs";
 import "./chunk-TV66CE7M.mjs";
 import "./chunk-TZ37NZTQ.mjs";
 import "./chunk-7V2KMXP6.mjs";
 import {
   DaemonClient
-} from "./chunk-2TFVZNRC.mjs";
+} from "./chunk-DVTK7AMJ.mjs";
 import {
   readBadge
 } from "./chunk-3Q4ZQBZ5.mjs";
