@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPMwQ
-decision: untriaged
+decision: proposed
+rank: never
+project: canvas-groups
+since: 2026-10-07
+note: "True mechanism on legacy canvases, small optimisation: group-enabled canvases already batch fit resizes into one changeCanvasGroup call (fititem.ts:41-44); reopen if multi-item fit shows a measured stall."
 ---
 
 # Fit to content resizing executes serial network roundtrips
@@ -17,4 +21,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/web/src/lib/fititem.ts:27-62: on group-enabled canvases (`groupsEnabled()`, lines 41-44), all item resizes and frame adjustments already land in one batched `changeCanvasGroup` operation via `groupFitAction`. Only the per-item size measurement loop (lines 27-39) and the legacy-mode `item.resize` fallback (lines 54-56) run sequentially.

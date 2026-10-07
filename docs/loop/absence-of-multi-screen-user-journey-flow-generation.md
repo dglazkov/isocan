@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: untriaged
+decision: proposed
+rank: never
+project: wireframes
+since: 2026-10-07
+note: "Stale (duplicate of lack-of-multi-screen-user-flow-canvas-scaffolding): flow.ts:23-42 and compose.ts:73-98 compose multi-screen flows in three rounds, lay out screen rows horizontally, and build a playable prototype."
 ---
 
 # Absence of multi-screen user journey flow generation
@@ -19,4 +23,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/modules/wireframe/src/flow.ts:23-42 and packages/modules/wireframe/src/compose.ts:73-98: `isocan wire "<request>"` and `/wire` compose multi-screen journeys across shared chrome in three rounds, place screens horizontally with a GAP of 80 world units, wire cross-screen navigation in packages/modules/wireframe/src/links.ts:1-40, and assemble a clickable prototype in packages/modules/wireframe/src/kept-flows.ts:20, while DesignBrief.outputIds (packages/core/src/design-brief.ts:17) tracks multiple output screens.

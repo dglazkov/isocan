@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPMwQ
-decision: untriaged
+decision: proposed
+rank: never
+project: copy-edit
+since: 2026-10-07
+note: "True mechanism, small optimisation: applyFlowVoice (flow-voice.ts:95-110) uploads changed screen blobs sequentially and rebuilds the prototype once in one undo group; reopen if flow voice shows a measured upload stall."
 ---
 
 # Flow voice application executes serial blob uploads
@@ -17,4 +21,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/modules/wireframe/src/flow-voice.ts:95-110 and packages/web/src/lib/flowvoice.ts:127-132: `applyFlowVoice` iterates over screens in the flow calling `writeWireCopy` with `{ group, rebuild: false }` and calls `rebuildPrototypes` once at line 108 so all screens and the prototype land as one undo group (docs/projects/copy-edit/phases.md:183-185).

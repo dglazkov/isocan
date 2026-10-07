@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPPn4
-decision: untriaged
+decision: proposed
+rank: never
+project: copy-edit
+since: 2026-10-07
+note: "Stale: isocan words (main.ts:8310-8520) is the copy-edit deck/vary/mix/lint CLI, whose Web UI doors are Vary the copy, Compare the copy (CopyCompare.tsx), and Choose a voice; neither computes readability metrics."
 ---
 
 # Web UI lacks item word analysis door
@@ -17,4 +21,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/cli/src/main.ts:8310-8520 and packages/core/src/text.ts:1-69: `isocan words` does not compute vocabulary density or readability metrics (and packages/core/src/text.ts defines `POST /api/text` constants, while main.ts:3640-3652 is `linkLine`). `isocan words` extracts and edits screen copy decks via `@isocan/core/copy-deck`, paired in the Web UI with *Vary the copy…*, *Compare the copy…* (packages/web/src/components/CopyCompare.tsx:1-50), and *Choose a voice…* (docs/projects/copy-edit/phases.md:91-198).

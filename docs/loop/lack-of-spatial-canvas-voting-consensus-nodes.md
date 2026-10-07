@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: untriaged
+decision: proposed
+rank: never
+project: sprint
+since: 2026-10-07
+note: "Stale: spatial dot-voting on sketches with placed item.react coordinates, vote curtains, and tallies are already built in sprint.ts:30-35 and @isocan/design-competition."
 ---
 
 # Lack of spatial canvas voting consensus nodes
@@ -18,4 +22,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/core/src/sprint.ts:30-35 and packages/cli/src/agent-guide.md:176: dot-voting is already built on `item.react` carrying spatial `{ x, y }` coordinates on sketches, hidden by the vote curtain during voting phases and tallied by `isocan sprint tally`, alongside exhibition voting in `@isocan/design-competition` and structured option decisions in packages/core/src/design-decision.ts:13-69.

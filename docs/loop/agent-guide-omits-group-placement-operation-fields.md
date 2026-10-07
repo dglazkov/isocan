@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPPn4
-decision: untriaged
+decision: proposed
+rank: never
+project: canvas-groups
+since: 2026-10-07
+note: "Stale: groupMode, groupPlacement, containerId, and resizedArea (ops.ts:47-56) are internal reducer fields, while every CLI group and placement verb is documented in agent-guide.md:146 and enforced by surface.test.ts."
 ---
 
 # Agent guide omits group placement operation fields
@@ -18,4 +22,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/core/src/ops.ts:47-56 and packages/core/src/canvas-group-types.ts:1-50: groupMode, groupPlacement, containerId, and resizedArea are internal Operation fields sent to POST /api/ops, not CLI flags. Agents act through CLI verbs (`isocan canvas group new|wrap|ls|show|add|remove|ungroup|resize|frame|layout|grid|stack|migrate`, `isocan area`, and `--in`), all documented in packages/cli/src/agent-guide.md:146 and verified by packages/cli/test/surface.test.ts:1-50.

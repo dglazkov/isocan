@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPMwQ
-decision: untriaged
+decision: proposed
+rank: never
+project: wireframes
+since: 2026-10-07
+note: "Stale: sendPrototypeClick (prototypeclick.ts:10-14) dispatches via sendEchoed (canvasStore.ts:792-850), which immediately folds the click comment into the optimistic queue before the HTTP request resolves."
 ---
 
 # Prototype clicks lack optimistic UI updates
@@ -17,4 +21,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/web/src/lib/prototypeclick.ts:10-14 and packages/web/src/stores/canvasStore.ts:765-850: `sendPrototypeClick` calls `sendEchoed(canvasId, actor, clickOp(canvas, click, actor.id))`, which immediately enqueues an `inflight: true` write and updates the optimistic canvas state before the HTTP POST completes, allowing `coalescedClick` (prototypeclick.ts:12) to coalesce rapid double-clicks locally.
