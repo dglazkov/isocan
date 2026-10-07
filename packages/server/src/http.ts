@@ -15,6 +15,7 @@ import type { TextOptions } from "./text.ts";
 import type { LiveTokenOptions } from "./live-token.ts";
 import { registerModelRoutes } from "./model-routes.ts";
 import { registerKeyRoutes, type KeyRouteOptions } from "./key-routes.ts";
+import { judgeWorkerPolicy, registerModelFileRoutes } from "./model-files.ts";
 import { textAttention } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
@@ -338,6 +339,11 @@ export const STATIC_TYPES: Record<string, string> = {
   // The handwriting face and the licence that has to travel with it.
   ".woff2": "font/woff2",
   ".txt": "text/plain; charset=utf-8",
+  // The local judge's runtime (local-judge phase 0): MediaPipe's wasm, built
+  // into dist from the package rather than shipped in public/. As
+  // octet-stream it would still load through `WebAssembly.instantiate`, and
+  // fail the day anything used `instantiateStreaming`, which insists.
+  ".wasm": "application/wasm",
 };
 
 /** Every route that is ABOUT one canvas, by its shape rather than by a list —
@@ -1969,6 +1975,8 @@ export function registerRoutes(
   registerModelRoutes(app, { engine, options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
   // `/api/keys`, the settings area's machine-local key routes — in `key-routes.ts`.
   registerKeyRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld, ...(options.keys ? { keys: options.keys } : {}) });
+  // `GET /models/<name>`, the local judge's model to this machine's own pages — in `model-files.ts`.
+  registerModelFileRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld });
 
   // ---- the actor registry: who a session key speaks as (#57) ----
 
@@ -5598,6 +5606,9 @@ function registerPages(
      * somebody adds fails the build instead of shipping a cheerful default.
      */
     reply.type(types[path.extname(file)] ?? "application/octet-stream");
+    // The judge's Worker takes its Content-Security-Policy from this response (local-judge phase 0).
+    const policy = judgeWorkerPolicy(file);
+    if (policy) reply.header("Content-Security-Policy", policy);
     /**
      * **What may be remembered, and what must be asked for again.**
      *

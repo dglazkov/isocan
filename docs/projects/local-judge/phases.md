@@ -13,8 +13,16 @@ use cases, each in shadow before it shows anybody anything.
 **Phase citations name their project**: `local-judge phase 2`, never a bare
 "phase 2".
 
-**Where we are:** specified 6 Oct 2026; nothing is built.
-**local-judge phase 0 is next** — the instrument, measured.
+**Where we are, 7 Oct 2026: the project stops at phase 0, by its own
+rule.** Phase 0 is PART-DONE. The instrument is built: `isocan model fetch`,
+the daemon's loopback `/models` route, a Worker behind a browser-enforced
+policy, and a lab page. It was measured on the desktop
+([the numbers](../../research/2026-10-07-embeddinggemma-in-the-browser.md)),
+and its median answer is 33–35 ms. But warm p95 is 170–200 ms from
+unexplained streaks of slow answers, over the 100 ms bar.
+**local-judge phase 1 does not start** until the streaks are explained and
+removed, or Dion moves the bar. The phone's half is a [walk](../../verify/2026-10-07-local-judge-on-a-phone.md)
+for whoever holds the phone.
 
 **One rule for every phase.** No phase may show a person a suggestion before
 a phase has reported that use case's accuracy among accepted answers, its
@@ -25,7 +33,7 @@ judge project's *calibration before use*, applied per use case.
 
 ## Phase 0 — The instrument, measured
 
-**Status: NOT STARTED.**
+**Status: PART-DONE.** 2026-10-07 — built and measured on the desktop, and the privacy proof held offline with a browser-enforced policy; desktop warm p95 fails the bar and the phone walk is owed.
 
 *No product surface.* A `local` `Answerer` in a lazy Worker, the local
 daemon serving the model and runtime from its own origin, a verb that puts
@@ -174,6 +182,28 @@ where the picture should change the answer.
 
 ## Trajectory
 
+- **2026-10-07** — Desktop warm p95 fails phase 0's 100 ms bar. The median is
+  33–35 ms up to 128 tokens, but streaks of 170–220 ms answers put p95 at
+  170–200, headed and headless; 512 tokens reaches 580–810. The project stops
+  here by its own rule.
+- **2026-10-07** — MediaPipe 1.1.0 posts metrics to `odml.pa.googleapis.com`.
+  A `connect-src 'self'` policy enforced by the browser (the lab page's meta
+  tag, plus the Worker script's own response header) blocks it, proved with
+  the fetch guard off. Any host that serves the Worker must send that header.
+- **2026-10-07** — MediaPipe 1.1.0's CPU delegate throws on every evaluation
+  (its Asyncify build returns a plain value), so it is wrapped on CPU only.
+  CPU answers in 0.8–3 s, about 25 times the GPU: a fallback that can never
+  keep up with typing.
+- **2026-10-07** — The model costs 1.2–1.7 GB of resident memory once loaded,
+  and its runtime's 17.7 MB of wasm grows every `#release` install by about
+  18 MB, whether or not anyone turns the judge on.
+- **2026-10-07** — The phone cannot reach a laptop's loopback `/models`, and
+  WebGPU needs a secure context. So the lab also takes a chosen model file,
+  and the phone walk runs it from dev.isocan.io.
+- **2026-10-07 — Open:** the phone walk (a person with a phone). The cause of
+  the GPU streaks: a timed warm-up, MediaPipe's nightly, the adapter's power
+  preference and thermal state are untried. And whether the bar should be one
+  answer's p95, or the median plus how often a suggestion misses (Dion).
 - **2026-10-06** — Specified from Dion's EmbeddingGemma 2 test plan. The
   plan's six routes became isocan's own commands; its rules-only baseline
   turned out to exist already (`categoriseAsk`, 84%), and its "learned

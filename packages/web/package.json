@@ -20,6 +20,7 @@
     "@isocan/api": "*",
     "@isocan/core": "*",
     "@lezer/highlight": "^1.2.3",
+    "@mediapipe/tasks-decision": "1.1.0",
     "codemirror": "^6.0.2",
     "parse5": "^8.0.1",
     "react": "^18.3.1",

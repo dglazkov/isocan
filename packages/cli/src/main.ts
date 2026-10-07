@@ -3,6 +3,7 @@ import { contextPinPort, pinFromSource } from "@isocan/api";
 import { registerPersonalContext } from "./personal-context.ts";
 import { noteOnBench, registerBench } from "./bench.ts";
 import { registerKeys } from "./keys.ts";
+import { registerModel } from "./model.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 // The copy lint's tells: slop.ts is eager already, so it is handed to the lazy lint rather than imported by it.
 import { SLOP_RULES } from "@isocan/core";
@@ -9642,6 +9643,8 @@ registerBench(program, ctxOf);
 
 // ---------- model keys: `registerKeys`, in keys.ts (keys phase 1) ----------
 registerKeys(program);
+// ---------- the local judge's model: `registerModel`, in model.ts (local-judge phase 0) ----------
+registerModel(program);
 
 /**
  * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,

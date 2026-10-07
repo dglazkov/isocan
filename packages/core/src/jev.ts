@@ -69,8 +69,36 @@ export interface Answered {
 /** The seam every surface asks through — Jev with a key, the home, or the seeded stub — so a composer never knows which answered. */
 export interface Answerer {
   /** The agent answers through `wire questions` / `wire answer`, not through this interface. */
-  name: "jev" | "stub" | "home";
+  name: "jev" | "stub" | "home" | "local";
   answer(request: JevRequest): Promise<Answered>;
+}
+
+/** What getting a local judge ready cost, each part apart, and which backend it ended up on. */
+export interface Readiness {
+  /** `gpu` or `cpu` — the backend that actually ran, never the one asked for. */
+  backend: "gpu" | "cpu";
+  /** Model bytes fetched and how long that took; 0 bytes when Cache Storage already had it. */
+  download: { bytes: number; ms: number; cached: boolean };
+  /** The wasm runtime fetched, compiled and instantiated (MediaPipe's fileset and module). */
+  loadMs: number;
+  /** The model handed to the runtime and its engine created on the backend — weights uploaded, kernels compiled. */
+  compileMs: number;
+  /** `prewarm` over the questions' shared prefix. */
+  prewarmMs: number;
+}
+
+/**
+ * **The judge in the tab** (local-judge phase 0; design *The seam*): answers
+ * in this browser, in a Worker, with EmbeddingGemma 2 through MediaPipe
+ * Decision Maker. `by` names the model and the backend that actually ran,
+ * because a CPU fallback is a different instrument and is reported apart.
+ * The client is `packages/web/src/judge/local.ts`, behind a dynamic import;
+ * the mapping is `@isocan/core/local-judge`.
+ */
+export interface LocalAnswerer extends Answerer {
+  name: "local";
+  /** Load, compile and prewarm — separate from answering, so the cost of the first answer is never mistaken for the cost of every answer. */
+  ready(questions: JevQuestion[]): Promise<Readiness>;
 }
 
 /**

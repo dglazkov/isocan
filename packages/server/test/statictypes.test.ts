@@ -60,6 +60,18 @@ describe("what the static server calls the files it serves", () => {
     expect(unnamed).toEqual([]);
   });
 
+  it("names every extension the web build copies out of a package rather than public/", () => {
+    // The local judge's runtime (local-judge phase 0): MediaPipe's loader and
+    // wasm are imported with `?url` and land in dist/assets under hashed
+    // names, so the walk above never sees them. The package directory is the
+    // fixture, for the same reason the tree is above.
+    const runtime = path.resolve(here, "../../../node_modules/@mediapipe/tasks-decision/wasm");
+    const shipped = [...extensionsUnder(runtime)].sort();
+    expect(shipped).toContain(".wasm");
+    expect(shipped.filter((ext) => !(ext in STATIC_TYPES))).toEqual([]);
+    expect(STATIC_TYPES[".wasm"]).toBe("application/wasm");
+  });
+
   it("calls the front page's screenshot an image, not a stream of bytes", () => {
     // The specific regression, named, because it is the one that shipped. The
     // rule above is what generalises it; this is what it cost.

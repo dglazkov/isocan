@@ -156,7 +156,14 @@ export async function throughTheDoor(b, origin, name, clientId = "browser") {
   })()`);
 }
 
-export async function browser({ proxyServer = null } = {}) {
+/**
+ * `headless: false` omits `--headless=new`, so Chrome opens a visible window.
+ * `args` are extra Chrome switches for a caller that measures something the
+ * default browser cannot — `scripts/local-judge-measure.mjs` asks for WebGPU,
+ * a resolver that reaches nothing but loopback, and a net log. They are
+ * appended after the defaults and never replace them.
+ */
+export async function browser({ proxyServer = null, args = [], headless = true } = {}) {
   if (proxyServer !== null && !/^http:\/\/127\.0\.0\.1:\d+$/.test(proxyServer)) throw new Error("Browser proxy must be an owned loopback endpoint");
   // **`ws` before Chrome** (cleanup phase 4, DC-1, 27 Sep 2026). This import
   // came after the spawn, so on the release tree — which had no `ws` to give
@@ -173,9 +180,13 @@ export async function browser({ proxyServer = null } = {}) {
     import(new URL("../../node_modules/ws/index.js", import.meta.url).href),
   );
   const dir = mkdtempSync(path.join(tmpdir(), "isocan-cdp-"));
-  const proc = spawn(chromeOrDie(), ["--headless=new", "--remote-debugging-port=0",
+  // `headless: false` opens a real window — for a measurement that must not be
+  // taken in headless mode (the local judge's GPU timings). Every other caller
+  // keeps the default.
+  const proc = spawn(chromeOrDie(), [...(headless ? ["--headless=new"] : []), "--remote-debugging-port=0",
     `--user-data-dir=${dir}`, "--no-first-run", "--hide-scrollbars",
     ...(proxyServer ? [`--proxy-server=${proxyServer}`, "--proxy-bypass-list=<-loopback>", "--disable-quic", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"] : []),
+    ...args,
     "about:blank"], { stdio: "ignore" });
   // **Every failure from here to a working handle takes Chrome with it**
   // (DC-1). Only the DevTools wait had a cleanup; a socket that would not
@@ -226,19 +237,23 @@ async function drive(proc, dir, WebSocket, sockets) {
   ws.on("message", (d) => {
     const m = JSON.parse(d.toString());
     if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; }
-    for (const listener of listeners.get(m.method) ?? []) listener(m.params);
+    for (const listener of listeners.get(m.method) ?? []) listener(m.params, m.sessionId);
     if (m.method === "Runtime.exceptionThrown") errors.push((m.params.exceptionDetails?.exception?.description ?? "").split("\n")[0]);
     const w = waiters.get(m.method);
     if (w) { waiters.delete(m.method); w(m.params); }
   });
-  const send = (method, params = {}) => {
-    const mid = ++id; ws.send(JSON.stringify({ id: mid, method, params }));
+  // `sessionId` speaks to a target attached with `Target.setAutoAttach({ flatten: true })` —
+  // a Worker the page started — over this same socket.
+  const send = (method, params = {}, sessionId) => {
+    const mid = ++id; ws.send(JSON.stringify({ id: mid, method, params, ...(sessionId ? { sessionId } : {}) }));
     return new Promise((res, rej) => pending.set(mid, (m) => (m.error ? rej(new Error(JSON.stringify(m.error))) : res(m.result))));
   };
   await send("Page.enable"); await send("Runtime.enable");
   let closing;
   return {
     send,
+    /** The Chrome process, so a caller can read its process tree's memory. */
+    pid: proc.pid,
     /** Observe every occurrence, including requests for images and frames.
      * Return an unsubscribe function so a journey can bound its observation. */
     on: (method, listener) => {

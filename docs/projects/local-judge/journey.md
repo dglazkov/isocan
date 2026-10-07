@@ -1,8 +1,8 @@
 ---
-status: designed
-since: 2026-10-06
+status: partial
+since: 2026-10-07
 see: judge, voice-agent, wireframes, evals, copy-edit, mobile, keys
-note: specified 6 Oct 2026. A fourth backing for the judge seam, beside Jev, stub and home, that runs EmbeddingGemma 2 (text, 270M, ~165 MB) inside the person's browser through MediaPipe's Decision Maker, in a Web Worker, behind an opt-in switch. It answers the same typed choice questions Jev does, for nothing and without the canvas leaving the tab, and like every judge here it triages and never rules — a deterministic policy layer and an accepted act sit between its answer and any change. Nothing is built; phase 0 is the instrument, measured in a real browser, and the decisive result is accuracy among accepted answers, coverage, latency and a network log that stays empty — not that it runs.
+note: specified 6 Oct 2026; phase 0 PART-DONE 7 Oct 2026. A fourth backing for the judge seam, beside Jev, stub and home, that runs EmbeddingGemma 2 (text, 270M, 165 MB) in the person's browser through MediaPipe's Decision Maker, behind an experiment. It triages and never rules. Built: `isocan model fetch` and `model ls`, a loopback-only `/models` route on the local daemon, a Worker behind a browser-enforced `connect-src 'self'` policy (MediaPipe posts telemetry to Google, and the policy blocks it), and a lab page. On an M3 Max the median answer is 33–35 ms, but warm p95 is 170–200 ms from unexplained streaks, over phase 0's 100 ms bar, so the project stops there by its own rule until the tail is explained or the bar moves. The phone's half is a walk.
 ---
 
 # The judge in the tab
