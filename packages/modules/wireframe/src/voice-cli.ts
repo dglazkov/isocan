@@ -165,7 +165,8 @@ export function registerVoice(host: CliHost, wire: Command): void {
 
         // A pick: every screen's share of that voice, one version each, one group, the prototype once.
         const chosen = pickVoice(voices, opts.pick);
-        const { group, changed, prototypes } = await applyFlowVoice(port, canvas, all, read, chosen.edits, by);
+        const against = voices.filter((v) => v.stance !== chosen.stance).map((v) => v.stance);
+        const { group, changed, prototypes } = await applyFlowVoice(port, canvas, all, read, chosen.edits, by, { stance: chosen.stance, against });
         if (ctx.json) return printJson({ flow, stance: chosen.stance, by, placeholder, group, changed: changed.map((c) => ({ itemId: c.item, title: c.title, strings: c.strings })), prototypes });
         if (changed.length === 0) return void console.log(`the flow already speaks in "${chosen.stance}" — nothing written`);
         for (const c of changed) console.log(`${c.item}  ${c.title} — ${c.strings} string${c.strings === 1 ? "" : "s"}`);

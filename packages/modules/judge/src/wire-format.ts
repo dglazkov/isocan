@@ -26,6 +26,32 @@ export const KEEP_PROP = "wireKeep";
 export const KEEP_BY_PROP = `${KEEP_PROP}By`;
 
 /**
+ * The item property written onto a source screen when a copy variant is chosen,
+ * voices are mixed, or a flow voice is applied (`packages/core/src/preference.ts`).
+ */
+export const COPY_PREFERENCE_PROP = "copyPreference";
+export const COPY_HOWS = ["choose", "mix", "voice"] as const;
+export type CopyPickHow = (typeof COPY_HOWS)[number];
+
+export function readCopyPreference(raw: unknown): { how: CopyPickHow; stance: string; against: string[] } | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const rec = parsed as Record<string, unknown>;
+  if (typeof rec.how !== "string" || !(COPY_HOWS as readonly string[]).includes(rec.how)) return null;
+  if (typeof rec.stance !== "string" || !rec.stance.trim()) return null;
+  if (!Array.isArray(rec.against)) return null;
+  const against = rec.against.filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => s.trim());
+  if (against.length === 0) return null;
+  return { how: rec.how as CopyPickHow, stance: rec.stance.trim(), against };
+}
+
+/**
  * The names an answerer signs with, on `spec.by.answerer` and on a keep the
  * flow made by itself (`wireKeepBy`). A keep signed with one of these is the
  * judge's own output, never a person's label.

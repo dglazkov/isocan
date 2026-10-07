@@ -118,10 +118,14 @@ describe("isocan words mix", () => {
     const after = await client.snapshot(canvas);
     expect(after.canvas.items[source]!.versions).toHaveLength(2);
     for (const id of [plain, benefit, warm]) expect(after.canvas.items[id]).toBeUndefined();
+    expect(JSON.parse(await ok("--canvas", canvas, "--json", "evals", "pairs"))).toMatchObject([
+      { kind: "copy", how: "mix", stance: "Benefit-first + Warm", itemId: source, title: "Acme checkout", against: ["Plain and direct"] },
+    ]);
 
-    // One undo: the source's words, and all three voices back.
+    // One undo: the source's words, all three voices back, and the preference pair gone.
     await ok("--canvas", canvas, "undo");
     expect(await textOf(canvas, source)).toBe(CHECKOUT);
+    expect(JSON.parse(await ok("--canvas", canvas, "--json", "evals", "pairs"))).toEqual([]);
     const undone = await client.snapshot(canvas);
     for (const id of [plain, benefit, warm]) expect(undone.canvas.items[id]).toBeDefined();
 

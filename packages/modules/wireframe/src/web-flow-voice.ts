@@ -28,8 +28,8 @@ export const read: WebFlowVoice["read"] = async (host, canvasId, itemId) => {
   return { flow: read.flow, deck: read.deck, voice: read.voice, screens: read.decks.map((d) => ({ ...d, html: read.htmlOf.get(d.itemId)! })) };
 };
 
-export const apply: WebFlowVoice["apply"] = async (host, canvasId, itemId, edits, by) => {
+export const apply: WebFlowVoice["apply"] = async (host, canvasId, itemId, edits, by, choice) => {
   const { port, canvas, all, read } = await flowFor(host, canvasId, itemId);
-  const done = await applyFlowVoice(port, canvas, all, read, edits, by);
+  const done = await applyFlowVoice(port, canvas, all, read, edits, by, choice);
   return { group: done.group, changed: done.changed.map((c) => ({ itemId: c.item, title: c.title, strings: c.strings })), prototypes: done.prototypes.length };
 };

@@ -1,4 +1,4 @@
-import { newGroupId, type CanvasContents } from "@isocan/core";
+import { COPY_PREFERENCE_PROP, newGroupId, serializeCopyPreference, type CanvasContents } from "@isocan/core";
 import { copyDeck, wireCopyFile, type CopyDeck, type CopyEdit } from "@isocan/core/copy-deck";
 import { flowCopyDeck, splitFlowEdits, type FlowDeckScreen } from "@isocan/core/copy-variants";
 import { voiceOf, type CopyVoice } from "@isocan/core/copy-voice";
@@ -92,7 +92,15 @@ export interface FlowVoiceApplied {
 }
 
 /** One voice (flow addresses) on every screen it touches: one version each, one group, the prototype rebuilt once. */
-export async function applyFlowVoice(port: WirePort, canvas: CanvasContents, all: Screen[], read: FlowVoiceRead, edits: readonly CopyEdit[], by: string): Promise<FlowVoiceApplied> {
+export async function applyFlowVoice(
+  port: WirePort,
+  canvas: CanvasContents,
+  all: Screen[],
+  read: FlowVoiceRead,
+  edits: readonly CopyEdit[],
+  by: string,
+  choice?: { stance: string; against: readonly string[] },
+): Promise<FlowVoiceApplied> {
   const byScreen = splitFlowEdits(edits);
   const group = newGroupId();
   const changed: FlowVoiceApplied["changed"] = [];
@@ -104,6 +112,16 @@ export async function applyFlowVoice(port: WirePort, canvas: CanvasContents, all
     if (!file.ok) throw new Error(`"${wireTitle(s.spec)}": ${file.reason}`);
     const r = await writeWireCopy(port, canvas, all, s, file.file, by, undefined, { group, rebuild: false });
     if (r.changed) changed.push({ item: s.item, title: wireTitle(r.next), spec: r.next, strings: file.changed.length });
+  }
+  if (choice && choice.stance.trim() && choice.against.length > 0 && changed.length > 0) {
+    const pref = serializeCopyPreference({
+      how: "voice",
+      stance: choice.stance.trim(),
+      against: [...choice.against],
+    });
+    for (const c of changed) {
+      await port.send({ type: "item.update", itemId: c.item, patch: { properties: { [COPY_PREFERENCE_PROP]: pref } } }, group);
+    }
   }
   const prototypes = changed.length ? await rebuildPrototypes(port, canvas, all, changed.map((c) => ({ item: c.item, spec: c.spec })), group) : [];
   return { group, changed, prototypes };

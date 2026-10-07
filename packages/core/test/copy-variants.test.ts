@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { applyCopyDeck, applyCopyDeckToFace, copyDeck } from "../src/copy-deck.ts";
 import { PARENT_PROP } from "../src/lineage.ts";
 import { PLACEMENT_GAP } from "../src/placement.ts";
-import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_GAP, VARIANT_PARENT_PROP, checkCopyVariants, copyMixEdits, copyMixOps, copyMixRows, copyVariantOps, copyVariantsOf, copyVariantsRequest, flowCopyDeck, placeholderCopyVariants, splitFlowEdits } from "../src/copy-variants.ts";
+import { COPY_PREFERENCE_PROP, PREFERRED_OVER_PROP, parseCopyPreference } from "../src/preference.ts";
+import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_GAP, VARIANT_PARENT_PROP, VARIANT_PREFERENCE_PROP, VARIANT_PREFERRED_OVER_PROP, checkCopyVariants, copyMixEdits, copyMixOps, copyMixPreferencePatch, copyMixRows, copyVariantOps, copyVariantsOf, copyVariantsRequest, flowCopyDeck, placeholderCopyVariants, splitFlowEdits } from "../src/copy-variants.ts";
 import { parseVoiceSection } from "../src/copy-voice.ts";
 import { stubTextGenerator } from "../src/jev.ts";
 import type { CanvasContents, Item } from "../src/model.ts";
@@ -291,6 +292,37 @@ describe("compare and mix — per string, from several voices", () => {
       { type: "item.delete", itemId: warm },
       { type: "item.delete", itemId: benefit },
     ]);
+  });
+
+  it("records a copy preference pair in the same op group when mixing voices (copy-edit phase 6)", () => {
+    expect(VARIANT_PREFERRED_OVER_PROP).toBe(PREFERRED_OVER_PROP);
+    expect(VARIANT_PREFERENCE_PROP).toBe(COPY_PREFERENCE_PROP);
+    const source = { id: "itm_src", properties: {} } as unknown as Item;
+    const version = { id: "ver_mix", blobHash: "hash_mix", mimeType: "text/html", filename: "checkout.html", size: 10 };
+    const patch = copyMixPreferencePatch(source, variants, [warm, benefit]);
+    expect(patch).not.toBeNull();
+    expect(patch!.properties?.[PREFERRED_OVER_PROP]).toBe(plain);
+    expect(parseCopyPreference(patch!.properties?.[COPY_PREFERENCE_PROP])).toEqual({
+      how: "mix",
+      stance: "Warm + Benefit-first",
+      against: ["Plain and direct"],
+      againstIds: [plain],
+    });
+    expect(copyMixOps("itm_src", version, [plain, warm, benefit], patch)).toEqual([
+      { type: "item.addVersion", itemId: "itm_src", version },
+      { type: "item.update", itemId: "itm_src", patch },
+      { type: "item.delete", itemId: plain },
+      { type: "item.delete", itemId: warm },
+      { type: "item.delete", itemId: benefit },
+    ]);
+    // When every sibling is sampled, the mix still records a preference against taking any single voice whole.
+    const twoVoiceMix = copyMixPreferencePatch(source, variants.slice(0, 2), [plain, warm]);
+    expect(twoVoiceMix!.properties?.[PREFERRED_OVER_PROP]).toBeUndefined();
+    expect(parseCopyPreference(twoVoiceMix!.properties?.[COPY_PREFERENCE_PROP])).toEqual({
+      how: "mix",
+      stance: "Plain and direct + Warm",
+      against: ["Plain and direct", "Warm"],
+    });
   });
 });
 

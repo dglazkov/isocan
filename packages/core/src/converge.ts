@@ -1,6 +1,10 @@
 import type { CanvasContents, Item, ItemVersion } from "./model.ts";
 import { childrenOf, parentOf } from "./lineage.ts";
-import type { Operation } from "./ops.ts";
+import type { MetaPatch, Operation } from "./ops.ts";
+import { copyPreferencePatch } from "./preference.ts";
+
+/** `copy-variants.ts`'s `COPY_STANCE_PROP`, spelled here so core's barrel never imports the lazy copy-variants chunk. */
+const COPY_STANCE_PROP = "copyStance";
 
 /**
  * **This one won.**
@@ -38,9 +42,10 @@ import type { Operation } from "./ops.ts";
  * So what actually records the decision is what the canvas already keeps: the
  * winner's content is now the source's top version with its own author and
  * time, and every explored sibling sits in the trash under the name somebody
- * gave it, recoverable. `label` below is the sentence the CLI prints, not a
- * field anything stores — and calling it what it is beats implying a record
- * that does not exist.
+ * gave it, recoverable. When the winner is a copy variant with sibling voices,
+ * `preference` records the winning stance and `preferredOver` on the source in
+ * the same op group (copy-edit phase 6). `label` below is the sentence the CLI
+ * prints.
  */
 interface ConvergePlan {
   /** The item the winner folds into. */
@@ -51,6 +56,8 @@ interface ConvergePlan {
   trash: string[];
   /** The sentence a surface says about this decision. Not stored. */
   label: string;
+  /** On a copy variant with sibling voices: the preference patch for `parentId`. */
+  preference?: MetaPatch;
 }
 
 type ConvergeRefusal = { refused: string };
@@ -89,14 +96,29 @@ export function convergePlan(
   // Every sibling, the winner included. `childrenOf` is the same reader
   // `isocan lineage` prints from, so what converges is exactly what that
   // command says was made from this source.
-  const family = childrenOf(canvas, parentId).map((item: Item) => item.id);
+  const siblings = childrenOf(canvas, parentId);
+  const family = siblings.map((item: Item) => item.id);
   const trash = family.includes(chosenId) ? family : [chosenId, ...family];
+
+  const stance = chosen.properties[COPY_STANCE_PROP]?.trim();
+  const losingCopy = stance ? siblings.filter((s) => s.id !== chosenId && Boolean(s.properties[COPY_STANCE_PROP]?.trim())) : [];
+  const preference =
+    stance && losingCopy.length > 0
+      ? copyPreferencePatch(parent, {
+          how: "choose",
+          stance,
+          against: losingCopy.map((s) => s.properties[COPY_STANCE_PROP]!.trim()),
+          chosen: chosenId,
+          againstIds: losingCopy.map((s) => s.id),
+        })
+      : null;
 
   return {
     parentId,
     version,
     trash,
     label: `chose ${chosen.title}`,
+    ...(preference ? { preference } : {}),
   };
 }
 
@@ -106,6 +128,7 @@ export function isRefusal(plan: ConvergePlan | ConvergeRefusal): plan is Converg
 
 /**
  * **The ops a choice sends, in order**: the winner onto the parent's stack,
+ * the copy preference on the parent when choosing between copy variants,
  * then every child to the trash. The caller sends them under ONE group, so
  * one ⌘Z takes the version back and brings every child out of the trash.
  *
@@ -116,6 +139,8 @@ export function isRefusal(plan: ConvergePlan | ConvergeRefusal): plan is Converg
 export function convergeOps(plan: ConvergePlan): Operation[] {
   return [
     { type: "item.addVersion", itemId: plan.parentId, version: plan.version },
+    ...(plan.preference ? [{ type: "item.update" as const, itemId: plan.parentId, patch: plan.preference }] : []),
     ...plan.trash.map((itemId): Operation => ({ type: "item.delete", itemId })),
   ];
 }
+

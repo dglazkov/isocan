@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { moduleMarkPatch } from "@isocan/core";
-import { ANSWERERS, KEEP_BY_PROP, KEEP_PROP, WIRE_FIDELITY, WIRE_MARKER, WIRE_SCRIPT_ID } from "../src/wire-format.ts";
+import { COPY_PICK_HOWS, COPY_PREFERENCE_PROP as CORE_COPY_PREFERENCE_PROP, moduleMarkPatch } from "@isocan/core";
+import { ANSWERERS, COPY_HOWS, COPY_PREFERENCE_PROP, KEEP_BY_PROP, KEEP_PROP, WIRE_FIDELITY, WIRE_MARKER, WIRE_SCRIPT_ID } from "../src/wire-format.ts";
 
 /**
  * **The reader and the writer spell the stored format the same way.**
@@ -71,5 +71,13 @@ describe("the stored format, against its writer", () => {
     // The flow's picks ride that group too, signed with the answerer.
     expect(flow).toMatch(/keepPatch\(true, answerer\) \}, canvas\.group\)/);
     expect(source("compose-cli.ts")).toContain("new FlowCanvas(port, flow)");
+  });
+
+  it("spells the copy preference property and pick kinds the same way core and wireframe do (copy-edit phase 6)", () => {
+    expect(COPY_PREFERENCE_PROP).toBe(CORE_COPY_PREFERENCE_PROP);
+    expect([...COPY_HOWS]).toEqual([...COPY_PICK_HOWS]);
+    if (!present) return;
+    expect(source("flow-voice.ts")).toContain("COPY_PREFERENCE_PROP");
+    expect(source("flow-voice.ts")).toContain('how: "voice"');
   });
 });

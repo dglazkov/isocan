@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-10-02
 see: wireframes, version-diff, design-lint, judge
-note: "A deep copy edit, as scenes: ask a screen for N voices of its words, see them side by side in the real screen, take a headline from one and a button from another, see which ones do not fit, keep the product's voice and words, and at wire time choose one voice for a whole flow. The design and evidence are docs/research/2026-10-02-copy-edit.md (#377)."
+note: "A deep copy edit, as scenes — all seven phases (0, 0.5, 1–6) built 2–7 Oct 2026: ask a screen for N voices of its words, see them side by side in the real screen, take a headline from one and a button from another, see which ones do not fit, keep the product's voice and words, at wire time choose one voice for a whole flow, and record every copy pick as a stance-labelled preference pair for evals and the judge corpus. The design and evidence are docs/research/2026-10-02-copy-edit.md (#377)."
 issue: 377
 ---
 

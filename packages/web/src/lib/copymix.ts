@@ -1,7 +1,7 @@
 import type { Actor, CanvasContents, Item, ItemVersion, WebHost } from "@isocan/core";
 import { newGroupId, newVersionId } from "@isocan/core";
 import { applyCopyDeck, applyCopyDeckToFace, copyDeck, type CopyDeck } from "@isocan/core/copy-deck";
-import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_PARENT_PROP, copyMixEdits, copyMixOps, copyMixRows, copyVariantsOf } from "@isocan/core/copy-variants";
+import { COPY_STANCE_PROP, COPY_WHY_PROP, VARIANT_PARENT_PROP, copyMixEdits, copyMixOps, copyMixPreferencePatch, copyMixRows, copyVariantsOf } from "@isocan/core/copy-variants";
 
 /** core's mix shapes, read off the functions that use them. */
 type CopyMixVariant = Parameters<typeof copyMixRows>[1][number];
@@ -114,6 +114,7 @@ export async function mixCopy(
   const up = await host.putBlob(new Blob([file], { type: "text/html" }), version.filename);
   const versionId = newVersionId();
   const trashed = read.variants.map((v) => v.itemId);
-  await host.send(copyMixOps(sourceId, { id: versionId, blobHash: up.blobHash, mimeType: "text/html", filename: version.filename, size: up.size, ...(visual ? { visual } : {}) }, trashed), newGroupId());
+  const preferencePatch = copyMixPreferencePatch(read.source, read.variants, new Set(mixed.edits.map((e) => picks[e.address]!)));
+  await host.send(copyMixOps(sourceId, { id: versionId, blobHash: up.blobHash, mimeType: "text/html", filename: version.filename, size: up.size, ...(visual ? { visual } : {}) }, trashed, preferencePatch), newGroupId());
   return { changed: mixed.edits.map((e) => e.address), trashed, versionId };
 }

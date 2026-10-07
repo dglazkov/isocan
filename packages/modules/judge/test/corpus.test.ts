@@ -187,3 +187,58 @@ describe("the committed fixture", () => {
     }
   });
 });
+
+describe("copy preference pairs in the calibration corpus (copy-edit phase 6)", () => {
+  it("folds only the running person's un-undone copy picks, and keeps stances out of shapeOf", async () => {
+    const c = acmeCanvas();
+    const myChoose = c.push(
+      {
+        type: "item.update",
+        itemId: "itm_acme_list",
+        patch: { properties: { copyPreference: JSON.stringify({ how: "choose", stance: "Warm Acme Voice", against: ["Plain Acme", "Bold Acme"] }) } },
+      },
+      PERSON,
+      { group: "grp_copy_1" },
+    );
+    expect(myChoose).toBeGreaterThan(0);
+    const undoneMix = c.push(
+      {
+        type: "item.update",
+        itemId: "itm_acme_list",
+        patch: { properties: { copyPreference: JSON.stringify({ how: "mix", stance: "Plain Acme + Warm Acme Voice", against: ["Bold Acme"] }) } },
+      },
+      PERSON,
+      { group: "grp_copy_2" },
+    );
+    c.undo(undoneMix, { type: "item.update", itemId: "itm_acme_list", patch: { removeProperties: ["copyPreference"] } }, PERSON);
+    // Collaborator's copy pick is ignored when reading as PERSON.
+    c.push(
+      {
+        type: "item.update",
+        itemId: "itm_acme_detail",
+        patch: { properties: { copyPreference: JSON.stringify({ how: "voice", stance: "Collab Voice", against: ["Other Voice"] }) } },
+      },
+      COLLABORATOR,
+      { group: "grp_copy_3" },
+    );
+
+    const { pairs, copy } = await fold(c);
+    expect(copy).toHaveLength(1);
+    expect(copy[0]).toMatchObject({
+      kind: "copy",
+      canvasId: CANVAS,
+      itemId: "itm_acme_list",
+      title: "Acme List",
+      how: "choose",
+      stance: "Warm Acme Voice",
+      against: ["Plain Acme", "Bold Acme"],
+    });
+    const shape = shapeOf(pairs, copy);
+    expect(shape.copy).toEqual([{ kind: "copy", how: "choose", against: 2, split: splitOf(CANVAS, "itm_acme_list") }]);
+    expect(fixtureProblems(shape)).toEqual([]);
+    const shapeText = JSON.stringify(shape);
+    for (const s of ["Warm Acme Voice", "Plain Acme", "Bold Acme", "Acme List", "itm_acme_list"]) {
+      expect(shapeText).not.toContain(s);
+    }
+  });
+});

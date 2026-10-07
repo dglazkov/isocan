@@ -1,5 +1,5 @@
-import type { LogEntry, Operation } from "@isocan/core";
-import { FIDELITY_PROP, KEEP_BY_PROP, KEEP_PROP, WIRE_FIDELITY, isAnswerer, type WireFacts } from "./wire-format.ts";
+import { undoneSeqs, type LogEntry, type Operation } from "@isocan/core";
+import { COPY_HOWS, COPY_PREFERENCE_PROP, FIDELITY_PROP, KEEP_BY_PROP, KEEP_PROP, WIRE_FIDELITY, isAnswerer, readCopyPreference, type CopyPickHow, type WireFacts } from "./wire-format.ts";
 
 /**
  * **The calibration corpus, read back off the oplog** (judge phase 1).
@@ -48,6 +48,8 @@ export type Split = "tune" | "held-out";
 export const VERDICTS: readonly Verdict[] = ["kept", "taken-out", "none"];
 export const BANDS: readonly Band[] = ["sure", "maybe"];
 export const SPLITS: readonly Split[] = ["tune", "held-out"];
+export const CORPUS_KINDS = ["wire", "copy"] as const;
+export type CorpusKind = (typeof CORPUS_KINDS)[number];
 /** What `by.answerer` said, or `unknown` for a flow drawn on 24 Sep 2026 between `need` landing and `by` landing. */
 export const PAIR_ANSWERERS = ["jev", "stub", "agent", "unknown"] as const;
 export type PairAnswerer = (typeof PAIR_ANSWERERS)[number];
@@ -81,6 +83,21 @@ export interface Pair {
   decidedAt?: string;
 }
 
+/** One labelled copy preference pair (`choose` on a copy variant, `words mix`, or `wire voice --pick`). */
+export interface CopyPair {
+  kind: "copy";
+  canvasId: string;
+  itemId: string;
+  title: string;
+  how: CopyPickHow;
+  /** Real text: stays in the local labelled set (`labelled.json`), never in `shape.json`. */
+  stance: string;
+  /** Real text: losing stances, stays in `labelled.json`. */
+  against: string[];
+  split: Split;
+  decidedAt: string;
+}
+
 /** Rows the reader saw and did not fold, by why. */
 export interface Excluded {
   /** The row's screen has no `need`: a flow from before 24 Sep 2026, or a spec rendered by hand. */
@@ -93,6 +110,7 @@ export interface Excluded {
 
 export interface CanvasCorpus {
   pairs: Pair[];
+  copy: CopyPair[];
   excluded: Excluded;
 }
 
@@ -279,15 +297,46 @@ export function foldCorpus({ canvasId, entries, facts, me }: FoldInput): CanvasC
     states.set(e.itemId, { present: e.present ?? was.present, kept: e.kept ?? was.kept });
   };
 
+  const undone = undoneSeqs(log);
+  const initialTitles = new Map<string, string>();
+  const renamedTitles = new Map<string, string>();
+  const copy: CopyPair[] = [];
+
   for (const entry of log) {
-    for (const e of effects(entry.envelope.op)) {
+    const op = entry.envelope.op;
+    if (op.type === "item.add" && typeof op.title === "string") initialTitles.set(op.itemId, op.title);
+    if ((op.type === "item.update" || op.type === "item.edit") && typeof op.patch.title === "string") {
+      renamedTitles.set(op.itemId, op.patch.title);
+    }
+    if (
+      (op.type === "item.update" || op.type === "item.edit") &&
+      entry.cause === undefined &&
+      !undone.has(entry.seq) &&
+      entry.envelope.actor.id === me
+    ) {
+      const pref = readCopyPreference(op.patch.properties?.[COPY_PREFERENCE_PROP]);
+      if (pref !== null) {
+        copy.push({
+          kind: "copy",
+          canvasId,
+          itemId: op.itemId,
+          title: renamedTitles.get(op.itemId) ?? facts.get(op.itemId)?.title ?? initialTitles.get(op.itemId) ?? op.itemId,
+          how: pref.how,
+          stance: pref.stance,
+          against: pref.against,
+          split: splitOf(canvasId, op.itemId),
+          decidedAt: entry.envelope.ts,
+        });
+      }
+    }
+    for (const e of effects(op)) {
       const root = rowOf.get(e.itemId);
       if (root === undefined) continue;
       const hand = handOf(entry, facts.get(root)?.flow);
       if (hand === "other") continue;
       if (hand === "flow") {
         apply(flowState, e);
-        if (e.itemId === root && entry.envelope.op.type === "item.add") addedByFlow.add(root);
+        if (e.itemId === root && op.type === "item.add") addedByFlow.add(root);
       } else {
         touchedAt.set(root, entry.envelope.ts);
       }
@@ -333,7 +382,7 @@ export function foldCorpus({ canvasId, entries, facts, me }: FoldInput): CanvasC
       ...(decidedAt ? { decidedAt } : {}),
     };
   });
-  return { pairs, excluded };
+  return { pairs, copy, excluded };
 }
 
 // ---------- counts, and the shape that may be committed
@@ -345,9 +394,10 @@ export interface Counts {
   takenOut: number;
   none: number;
   heldOut: number;
+  copy: number;
 }
 
-export function countsOf(pairs: readonly Pair[]): Counts {
+export function countsOf(pairs: readonly Pair[], copy: readonly CopyPair[] = []): Counts {
   const kept = pairs.filter((p) => p.verdict === "kept").length;
   const takenOut = pairs.filter((p) => p.verdict === "taken-out").length;
   return {
@@ -357,6 +407,7 @@ export function countsOf(pairs: readonly Pair[]): Counts {
     takenOut,
     none: pairs.length - kept - takenOut,
     heldOut: pairs.filter((p) => p.split === "held-out").length,
+    copy: copy.length,
   };
 }
 
@@ -376,22 +427,33 @@ export interface ShapePair {
   flowPut: boolean;
 }
 
+/** A copy preference pair with every real stance/title string taken out. */
+export interface ShapeCopyPair {
+  kind: "copy";
+  how: CopyPickHow;
+  against: number;
+  split: Split;
+}
+
 export interface Shape {
   v: 2;
   pairs: ShapePair[];
+  copy: ShapeCopyPair[];
 }
 
 /** The committed half: numbers and closed vocabularies, in a stable order, and nothing anybody typed. */
-export function shapeOf(pairs: readonly Pair[]): Shape {
+export function shapeOf(pairs: readonly Pair[], copy: readonly CopyPair[] = []): Shape {
   const rows = pairs.map(({ p, verdict, band, split, answerer, engaged, flowPut }) => ({ p, verdict, band, split, answerer, engaged, flowPut }));
   rows.sort((a, b) => a.p - b.p || a.verdict.localeCompare(b.verdict) || a.band.localeCompare(b.band) || a.split.localeCompare(b.split) || a.answerer.localeCompare(b.answerer) || Number(a.engaged) - Number(b.engaged) || Number(a.flowPut) - Number(b.flowPut));
-  return { v: 2, pairs: rows };
+  const copyRows = copy.map(({ how, against, split }): ShapeCopyPair => ({ kind: "copy", how, against: against.length, split }));
+  copyRows.sort((a, b) => a.how.localeCompare(b.how) || a.against - b.against || a.split.localeCompare(b.split));
+  return { v: 2, pairs: rows, copy: copyRows };
 }
 
 /** The keys a shape may carry — any other key is a field somebody added, and may be carrying a real string. */
-const SHAPE_KEYS = new Set(["v", "pairs", "p", "verdict", "band", "split", "answerer", "engaged", "flowPut"]);
+const SHAPE_KEYS = new Set(["v", "pairs", "copy", "p", "verdict", "band", "split", "answerer", "engaged", "flowPut", "kind", "how", "against"]);
 /** Every string a shape may hold: the closed vocabularies, and nothing else. */
-const SHAPE_WORDS = new Set<string>([...VERDICTS, ...BANDS, ...SPLITS, ...PAIR_ANSWERERS]);
+const SHAPE_WORDS = new Set<string>([...VERDICTS, ...BANDS, ...SPLITS, ...PAIR_ANSWERERS, ...CORPUS_KINDS, ...COPY_HOWS]);
 
 /**
  * **The synthetic grammar**: every string in a committed fixture — key or

@@ -290,7 +290,8 @@ bar, tab bar) stays.
   the same place says the same words everywhere — previews each on the first
   two screens, and saves them to a file named in the receipt. Then
   `isocan wire voice --from <file> --pick <k|stance>` applies one voice to
-  every screen as one op group, prototype rebuilt once, `isocan undo` taking
+  every screen as one op group (recording a copy preference pair over the other
+  voices in the deck on each changed screen), prototype rebuilt once, `isocan undo` taking
   it all back. Words only, through the same writer as `wire copy --apply`, so
   an edit that touches a hotspot is refused. `--from` also takes voices you
   wrote yourself — `words vary --from`'s shape, with addresses

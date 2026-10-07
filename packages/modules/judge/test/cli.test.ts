@@ -77,7 +77,7 @@ function harness(opts: { actor?: Actor; harness?: string | null } = {}) {
     await program.parseAsync(["node", "isocan", ...args]);
     return { errors, logs, json };
   };
-  return { run, logs, errors, json };
+  return { run, logs, errors, json, canvases };
 }
 
 let log: ReturnType<typeof vi.spyOn>;
@@ -118,7 +118,7 @@ describe("isocan judge corpus", () => {
     const h = harness();
     await h.run("--json", "judge", "corpus");
     const text = JSON.stringify(h.json);
-    expect((h.json[0] as { counts: unknown }).counts).toMatchObject({ rows: 12, labelled: 4, kept: 2, takenOut: 2, none: 8 });
+    expect((h.json[0] as { counts: unknown }).counts).toMatchObject({ rows: 12, labelled: 4, kept: 2, takenOut: 2, none: 8, copy: 0 });
     for (const s of [...REAL_STRINGS, "Acme Desks"]) expect(text).not.toContain(s);
   });
 
@@ -127,14 +127,40 @@ describe("isocan judge corpus", () => {
     const out = outDir();
     const { errors } = await h.run("judge", "corpus", "--out", out);
     expect(errors).toEqual([]);
-    const labelled = JSON.parse(readFileSync(path.join(out, "labelled.json"), "utf8")) as { by: Actor; pairs: Array<Pair & { canvasTitle: string }> };
+    const labelled = JSON.parse(readFileSync(path.join(out, "labelled.json"), "utf8")) as { by: Actor; pairs: Array<Pair & { canvasTitle: string }>; copy: unknown[] };
     expect(labelled.by.id).toBe(PERSON.id);
     expect(labelled.pairs).toHaveLength(12);
+    expect(labelled.copy).toEqual([]);
     expect(labelled.pairs.find((p) => p.itemId === "itm_acme_detail")).toMatchObject({ verdict: "kept", p: 0.41, request: "An Acme app for booking a desk", title: "Acme Detail", canvasTitle: "Acme Desks" });
     const shape = JSON.parse(readFileSync(path.join(out, "shape.json"), "utf8")) as unknown;
     expect(shape).toEqual(shapeOf(labelled.pairs));
     expect(fixtureProblems(shape)).toEqual([]);
     expect(printed.join("\n")).toContain("stays on this machine");
+  });
+
+  it("folds copy preference pairs into --out alongside wire rows, keeping stance text out of stdout and shape.json (copy-edit phase 6)", async () => {
+    const h = harness();
+    h.canvases.get(CANVAS)!.canvas.push(
+      {
+        type: "item.update",
+        itemId: "itm_acme_list",
+        patch: { properties: { copyPreference: JSON.stringify({ how: "voice", stance: "Acme Direct Voice", against: ["Acme Soft Voice"] }) } },
+      },
+      PERSON,
+      { group: "grp_acme_voice" },
+    );
+    const out = outDir();
+    const { errors } = await h.run("judge", "corpus", "--out", out);
+    expect(errors).toEqual([]);
+    const text = printed.join("\n");
+    expect(text).toContain("· 1 copy");
+    expect(text).not.toContain("Acme Direct Voice");
+    const labelled = JSON.parse(readFileSync(path.join(out, "labelled.json"), "utf8")) as { copy: Array<{ kind: string; how: string; stance: string; against: string[]; canvasTitle: string }> };
+    expect(labelled.copy).toMatchObject([{ kind: "copy", how: "voice", stance: "Acme Direct Voice", against: ["Acme Soft Voice"], canvasTitle: "Acme Desks" }]);
+    const shape = JSON.parse(readFileSync(path.join(out, "shape.json"), "utf8")) as { copy: Array<{ kind: string; how: string; against: number; split: string }> };
+    expect(shape.copy).toHaveLength(1);
+    expect(shape.copy[0]).toMatchObject({ kind: "copy", how: "voice", against: 1 });
+    expect(fixtureProblems(shape)).toEqual([]);
   });
 
   it("refuses an --out inside a git work tree, and writes nothing there", async () => {

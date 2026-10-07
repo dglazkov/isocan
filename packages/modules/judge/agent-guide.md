@@ -12,11 +12,13 @@ then does is the label.
   prototype. **taken out**: they took out, or deleted, one the flow put in.
   **none**: they never touched it, or ended where the flow did — no label,
   not a yes. A keep the flow signed with its answerer's name is the judge's
-  own output, and a collaborator's act is not counted.
+  own output, and a collaborator's act is not counted. Alongside wire rows it
+  folds the person's **copy** picks (`choose` on a copy variant, `words mix`,
+  `wire voice --pick`), counting how many stances lost.
 - It prints counts and writes to no canvas. `--out <dir>` writes the pairs:
-  `labelled.json` carries requests, screen titles and canvas names and stays
-  on the machine — the verb refuses a directory inside a git work tree —
-  and `shape.json` is the same pairs with every string taken out.
+  `labelled.json` carries requests, screen titles, copy stances and canvas
+  names and stays on the machine — the verb refuses a directory inside a git
+  work tree — and `shape.json` is the same pairs with every string taken out.
 - **It reads a person's verdicts, so it refuses an agent session.** An agent
   asked for the count should hand the person the command rather than run it:
   its own keeps are not the labels. Quote the totals line, never the rows

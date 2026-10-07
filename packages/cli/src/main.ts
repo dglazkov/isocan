@@ -8628,7 +8628,7 @@ wordsCommand
         throw new Error(`"${item.title || item.id}" is ${current ? current.mimeType : "empty"} — \`words mix\` mixes HTML screens`);
       }
       const { applyCopyDeck, copyDeck } = await import("@isocan/core/copy-deck");
-      const { COPY_STANCE_PROP, copyMixEdits, copyMixOps, copyMixRows, copyVariantsOf } = await import("@isocan/core/copy-variants");
+      const { COPY_STANCE_PROP, copyMixEdits, copyMixOps, copyMixPreferencePatch, copyMixRows, copyVariantsOf } = await import("@isocan/core/copy-variants");
       const variants = copyVariantsOf(snapshot.canvas, item.id);
       if (variants.length === 0) throw new Error(`"${label}" has no copy variants — \`isocan words vary ${item.id}\` writes some`);
 
@@ -8695,7 +8695,8 @@ wordsCommand
       }
       const upload = await ctx.client.uploadBlob(p.id, Buffer.from(file, "utf8"), "text/html", current.filename);
       const versionId = newVersionId();
-      const ops = copyMixOps(item.id, { id: versionId, blobHash: upload.blobHash, mimeType: "text/html", filename: current.filename, size: upload.size, ...(visual ? { visual } : {}) }, read.map((v) => v.itemId));
+      const preferencePatch = copyMixPreferencePatch(item, read, new Set(mixed.edits.map((e) => picks[e.address]!)));
+      const ops = copyMixOps(item.id, { id: versionId, blobHash: upload.blobHash, mimeType: "text/html", filename: current.filename, size: upload.size, ...(visual ? { visual } : {}) }, read.map((v) => v.itemId), preferencePatch);
       const group = newGroupId();
       for (const op of ops) await sendOp(ctx, p.id, op, group);
 
@@ -15058,7 +15059,7 @@ evals
 
 evals
   .command("pairs")
-  .description("Version stacks where somebody kept an earlier take — the labels Stage 4 needs")
+  .description("Version stacks and copy picks where somebody chose between alternatives — the labels Stage 4 needs")
   .action(
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
@@ -15080,13 +15081,20 @@ evals
         // rather than just reporting nothing.
         return console.log(
           "no preference pairs here yet — a pair is somebody making an EARLIER version\n" +
-            "current again while later ones existed, which is what choosing between\n" +
-            "alternatives looks like in the log. Nothing generates them until somebody\n" +
-            "reaches for /variation and then keeps one.",
+            "current again while later ones existed, or picking a copy voice over its\n" +
+            "siblings (`choose`, `words mix`, `wire voice --pick`), which is what choosing\n" +
+            "between alternatives looks like in the log.",
         );
       }
       console.log(`${pairs.length} preference pairs`);
       for (const pair of pairs) {
+        if (pair.kind === "copy") {
+          console.log(
+            `${pair.chosenAt.slice(0, 16).replace("T", " ")}  ${pair.chosenBy}${pair.chosenByKind === "agent" ? " (an agent)" : ""} kept copy "${pair.stance ?? pair.chosen}" (${pair.how ?? "choose"}) ` +
+              `over ${pair.against.map((s) => JSON.stringify(s)).join(", ")} on ${pair.title}`,
+          );
+          continue;
+        }
         console.log(
           `${pair.chosenAt.slice(0, 16).replace("T", " ")}  ${pair.chosenBy}${pair.chosenByKind === "agent" ? " (an agent)" : ""} kept ${pair.chosen} ` +
             `over ${pair.against.length} on ${pair.title}`,

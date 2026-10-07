@@ -1,6 +1,7 @@
 import type { CanvasContents, Comment, CommentThread, Item } from "./model.ts";
 import type { LogEntry } from "./ops.ts";
 import { parseSlashCommand } from "./commands.ts";
+import { COPY_PREFERENCE_PROP, parseCopyPreference, type CopyPickHow } from "./preference.ts";
 import { undoneSeqs } from "./undone.ts";
 
 /**
@@ -545,9 +546,16 @@ export function harvestConverge(canvas: CanvasContents, now: number = Date.now()
  * problem is solved" when it is not.
  */
 interface PreferencePair {
+  /** Set to `"copy"` when the pair came from choosing a copy variant, mixing
+   *  voices, or landing a flow voice; omitted for version-stack pairs. */
+  kind?: "copy";
+  /** Which copy pick surface produced the pair (`choose`, `mix`, or `voice`). */
+  how?: CopyPickHow;
+  /** The winning copy stance (or joined stances for a mix). */
+  stance?: string;
   itemId: string;
   title: string;
-  /** The version made current. */
+  /** The version made current (or the winning copy stance when `kind === "copy"`). */
   chosen: string;
   chosenAt: string;
   chosenBy: string;
@@ -556,7 +564,7 @@ interface PreferencePair {
    *  over half the pairs at one home were an agent keeping its own earlier
    *  take, which is not the human label Stage 4 wants. */
   chosenById: string;
-  /** Every version that existed at that moment and was not chosen. */
+  /** Every version (or losing copy stance) that existed at that moment and was not chosen. */
   against: string[];
 }
 
@@ -565,10 +573,12 @@ export function harvestPreferences(
   log: LogEntry[],
 ): PreferencePair[] {
   const pairs: PreferencePair[] = [];
+  const undone = undoneSeqs(log);
   // Which versions existed by the time each promotion happened. Replaying the
   // log is what makes "and was not chosen" mean *at the time* rather than
   // *now* — a version added afterwards was never in the running.
   const seen = new Map<string, string[]>();
+  const titles = new Map<string, string>();
 
   for (const entry of log) {
     const op = entry.envelope.op;
@@ -587,7 +597,29 @@ export function harvestPreferences(
     }
     if (op.type === "item.add") {
       seen.set(op.itemId, [op.version.id]);
+      if (typeof op.title === "string") titles.set(op.itemId, op.title);
       continue;
+    }
+    if (op.type === "item.update" || op.type === "item.edit") {
+      if (typeof op.patch.title === "string") titles.set(op.itemId, op.patch.title);
+      if (entry.cause === undefined && !undone.has(entry.seq)) {
+        const pref = parseCopyPreference(op.patch.properties?.[COPY_PREFERENCE_PROP]);
+        if (pref !== null) {
+          pairs.push({
+            kind: "copy",
+            how: pref.how,
+            stance: pref.stance,
+            itemId: op.itemId,
+            title: canvas.items[op.itemId]?.title ?? titles.get(op.itemId) ?? op.itemId,
+            chosen: pref.stance,
+            chosenAt: entry.envelope.ts,
+            chosenBy: entry.envelope.actor.name,
+            chosenById: entry.envelope.actor.id,
+            against: pref.against,
+          });
+        }
+      }
+      if (op.type === "item.update") continue;
     }
     if (op.type === "item.addVersion" || op.type === "item.edit") {
       const stack = seen.get(op.itemId) ?? [];

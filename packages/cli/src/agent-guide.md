@@ -954,7 +954,9 @@ isocan fit <items...>                  # grow items to the size their content wa
   same history read as a question about the WORK rather than the ops: every
   ask, whether it was answered, cancelled or met with silence, and the ops
   attributed to it. `isocan evals pairs` is the other half — the version
-  stacks where somebody kept an earlier take over a later one. The corpus
+  stacks where somebody kept an earlier take over a later one, and the copy
+  voice picks (`choose` on a copy variant, `words mix`, `wire voice --pick`)
+  where a winning stance was kept over its siblings. The corpus
   also says what KIND each ask is — revise, create, orchestrate, question,
   arrange, restyle, document, critique, repair, variation, converge — by a
   classifier that agrees with a person about four times in five; the `kinds:`
@@ -1919,7 +1921,8 @@ properties — whose file is the screen with only those words changed (a
 wireframe's voice is its spec with new words, rendered, and `wire keep` takes
 it like any variation). All N are one act, so one `undo` takes them back.
 `isocan diff <variant> --source` shows what a voice changed and
-`isocan choose <variant>` folds the winner home.
+`isocan choose <variant>` folds the winner home (recording a copy preference
+pair for `evals pairs` in the same undo group).
 
 To write the voices yourself, read the deck with `isocan --json words <item>`
 and pass `--from voices.json`:
@@ -1939,9 +1942,10 @@ When no one voice is right, take strings from several:
 id or its stance (`t4=Warm`); `*=<variant>` takes every string that voice
 changed, and a later pick overrides it. `--from picks.json` takes
 `{ "<address>": "<variant>" }`. The picks become one edit set on the SOURCE:
-one new version with exactly those words, markup untouched, and every copy
+one new version with exactly those words, markup untouched, a copy preference
+pair naming the winning stance(s) over the unpicked siblings, and every copy
 variant of it goes to the trash, all as one act, so one `undo` restores the
-source's words and brings the variants back. Strings you do not pick keep
+source's words, takes the preference back, and brings the variants back. Strings you do not pick keep
 the source's words. A pick of a voice that kept that string, or a variant
 that no longer lines up with its source string for string, is refused by
 name. A person does the same from **Compare the copy…** in the item menu:

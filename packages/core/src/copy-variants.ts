@@ -3,7 +3,7 @@ import { copyBudget } from "./copy-fit.ts";
 import { newVoiceSlips, voicePrompt, voiceSlipText, type CopyVoice } from "./copy-voice.ts";
 import type { JsonSchema } from "./jev.ts";
 import type { CanvasContents, Item } from "./model.ts";
-import type { NewVersion, Operation } from "./ops.ts";
+import type { MetaPatch, NewVersion, Operation } from "./ops.ts";
 
 /**
  * **Copy variants: N voices for one screen's words** (copy-edit phase 2 —
@@ -41,18 +41,23 @@ export const COPY_STANCE_PROP = "copyStance";
 export const COPY_WHY_PROP = "copyWhy";
 
 /**
- * `lineage.ts`'s `parent` property and `placement.ts`'s `PLACEMENT_GAP`,
- * spelled here rather than imported — and the item ids come from the caller —
- * so this file imports no value from core's barrel. Both clients load it
- * lazily, and a barrel module shared with a lazy file is carved out of the
- * eager code into a chunk of its own: measured 2 Oct 2026, importing `ids`,
- * `lineage` and `placement` here put two more modules on `isocan --version`'s
- * load (`test/cli-bundle.test.ts` holds that under 40). `copy-variants.test.ts`
- * holds both equal to the originals.
+ * `lineage.ts`'s `parent` property, `placement.ts`'s `PLACEMENT_GAP`, and
+ * `preference.ts`'s `PREFERRED_OVER_PROP` / `COPY_PREFERENCE_PROP`, spelled
+ * here rather than imported — and the item ids come from the caller — so this
+ * file imports no value from core's barrel. Both clients load it lazily, and a
+ * barrel module shared with a lazy file is carved out of the eager code into a
+ * chunk of its own: measured 2 Oct 2026, importing `ids`, `lineage` and
+ * `placement` here put two more modules on `isocan --version`'s load
+ * (`test/cli-bundle.test.ts` holds that under 41). `copy-variants.test.ts`
+ * holds them equal to the originals.
  */
 export const VARIANT_PARENT_PROP = "parent";
 /** The space left between a source and the variants stacked under it. */
 export const VARIANT_GAP = 40;
+/** `preference.ts`'s `PREFERRED_OVER_PROP`, spelled here so this lazy chunk never pulls `preference.ts` into the CLI's eager startup. */
+export const VARIANT_PREFERRED_OVER_PROP = "preferredOver";
+/** `preference.ts`'s `COPY_PREFERENCE_PROP`, spelled here for the same bundle boundary and held equal in `copy-variants.test.ts`. */
+export const VARIANT_PREFERENCE_PROP = "copyPreference";
 
 /** At most this many voices in one ask: past six they stop being different. */
 export const MAX_COPY_VARIANTS = 6;
@@ -402,12 +407,53 @@ export function copyMixEdits(
 }
 
 /**
+ * **The preference patch a mix writes on its source** (copy-edit phase 6):
+ * the picked stance(s) won against the unpicked variants (and `preferredOver`
+ * records those unpicked variant ids). When every variant contributed at least
+ * one string (`unpicked` empty, `picked.length > 1`), the mix won against taking
+ * any of those single voices whole.
+ */
+export function copyMixPreferencePatch(
+  source: Pick<Item, "id" | "properties">,
+  variants: readonly { itemId: string; stance: string }[],
+  pickedIds: ReadonlySet<string> | readonly string[],
+): MetaPatch | null {
+  const pickedSet = pickedIds instanceof Set ? pickedIds : new Set(pickedIds);
+  const picked = variants.filter((v) => pickedSet.has(v.itemId));
+  const unpicked = variants.filter((v) => !pickedSet.has(v.itemId));
+  const against = unpicked.length > 0 ? unpicked.map((v) => v.stance) : picked.length > 1 ? picked.map((v) => v.stance) : [];
+  if (picked.length === 0 || against.length === 0) return null;
+  const stance = picked.map((v) => v.stance).join(" + ");
+  const againstIds = unpicked.map((v) => v.itemId);
+  const rawOver = source.properties[VARIANT_PREFERRED_OVER_PROP];
+  const already = typeof rawOver === "string" && rawOver !== "" ? rawOver.split(",").filter(Boolean) : [];
+  const fresh = againstIds.filter((id) => id !== source.id && !already.includes(id));
+  return {
+    properties: {
+      ...(fresh.length > 0 ? { [VARIANT_PREFERRED_OVER_PROP]: [...already, ...fresh].join(",") } : {}),
+      [VARIANT_PREFERENCE_PROP]: JSON.stringify({
+        how: "mix",
+        stance,
+        against,
+        ...(againstIds.length > 0 ? { againstIds } : {}),
+      }),
+    },
+  };
+}
+
+/**
  * **The ops a mix sends, in order** — `convergeOps`'s shape with a new file in
  * place of the winner's: the mixed words as one new version of the source,
- * then every variant to the trash. The caller sends them under ONE group, so
- * one ⌘Z takes the version back and brings the variants out of the trash.
- * Both surfaces send exactly these (`isocan words mix`, *Use this mix*).
+ * the copy preference on the source when choosing between voices, then every
+ * variant to the trash. The caller sends them under ONE group, so one ⌘Z takes
+ * the version back and brings the variants out of the trash. Both surfaces
+ * send exactly these (`isocan words mix`, *Use this mix*).
  */
-export function copyMixOps(sourceId: string, version: NewVersion, variantIds: readonly string[]): Operation[] {
-  return [{ type: "item.addVersion", itemId: sourceId, version }, ...variantIds.map((itemId): Operation => ({ type: "item.delete", itemId }))];
+export function copyMixOps(sourceId: string, version: NewVersion, variantIds: readonly string[], preferencePatch?: MetaPatch | null): Operation[] {
+  return [
+    { type: "item.addVersion", itemId: sourceId, version },
+    ...(preferencePatch ? [{ type: "item.update" as const, itemId: sourceId, patch: preferencePatch }] : []),
+    ...variantIds.map((itemId): Operation => ({ type: "item.delete", itemId })),
+  ];
 }
+

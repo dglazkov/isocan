@@ -118,16 +118,22 @@ describe("isocan words vary", () => {
     expect(await textOf(canvas, ids[2]!)).toBe(CHECKOUT.replace(">Pay now<", ">Get my order<").replace('placeholder="1234 5678"', 'placeholder="Card &amp; number"'));
     expect(await textOf(canvas, source)).toBe(CHECKOUT);
 
-    // This one won: the source's words become Warm's, and the three go to the trash.
+    // This one won: the source's words become Warm's, the three go to the trash, and evals pairs records the copy pick.
     await ok("--canvas", canvas, "choose", ids[1]!);
     const chosen = await client.snapshot(canvas);
     expect(await textOf(canvas, source)).toBe(CHECKOUT.replace(">Review your order<", ">Nearly there<"));
     expect(chosen.canvas.items[source]!.versions).toHaveLength(2);
     for (const id of ids) expect(chosen.canvas.items[id]).toBeUndefined();
+    const pairsHuman = await ok("--canvas", canvas, "evals", "pairs");
+    expect(pairsHuman).toContain('kept copy "Warm" (choose) over "Plain and direct", "Benefit-first" on Acme checkout');
+    expect(JSON.parse(await ok("--canvas", canvas, "--json", "evals", "pairs"))).toMatchObject([
+      { kind: "copy", how: "choose", stance: "Warm", itemId: source, title: "Acme checkout", chosen: "Warm", against: ["Plain and direct", "Benefit-first"] },
+    ]);
 
-    // One undo takes the decision back — the source's words and all three variants.
+    // One undo takes the decision back — the source's words, all three variants, and the preference pair.
     await ok("--canvas", canvas, "undo");
     expect(await textOf(canvas, source)).toBe(CHECKOUT);
+    expect(JSON.parse(await ok("--canvas", canvas, "--json", "evals", "pairs"))).toEqual([]);
     const undone = await client.snapshot(canvas);
     for (const id of ids) expect(undone.canvas.items[id]).toBeDefined();
     // And one more takes the three variants back: they landed as one act.

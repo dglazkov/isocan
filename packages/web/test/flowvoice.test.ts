@@ -106,7 +106,14 @@ describe("Choose a voice… — the web's door to wire voice", () => {
     expect(new Set(sent.map((s) => s.group)).size).toBe(1);
     const touched = new Set(voices.voices[1]!.edits.map((e) => e.address.split("::")[0]!));
     const versioned = web.filter((op) => op.type === "item.addVersion").map((op) => (op as { itemId: string }).itemId);
-    for (const id of touched) expect(versioned).toContain(id);
+    for (const id of touched) {
+      expect(versioned).toContain(id);
+      expect(JSON.parse(h.items.get(id)!.properties.copyPreference!)).toEqual({
+        how: "voice",
+        stance: "Placeholder B",
+        against: ["Placeholder A", "Placeholder C"],
+      });
+    }
     expect(versioned).toContain(proto.id);
     expect(done.prototypes).toBe(1);
     const filesOf = (ops: Operation[]) =>

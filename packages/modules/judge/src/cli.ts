@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import type { Canvas, LogEntry } from "@isocan/core";
 import type { CliHost, CliModule, Ctx } from "@isocan/cli/modulehost";
 import { judgeModule } from "./record.ts";
-import { countsOf, factsOf, foldCorpus, shapeOf, wireItems, type Counts, type Excluded, type Pair } from "./corpus.ts";
+import { countsOf, factsOf, foldCorpus, shapeOf, wireItems, type CopyPair, type Counts, type Excluded, type Pair } from "./corpus.ts";
 import { readWireFacts, type WireFacts } from "./wire-format.ts";
 
 /**
@@ -48,6 +48,7 @@ async function logOf(ctx: Ctx, canvasId: string): Promise<LogEntry[]> {
 interface CanvasReading {
   canvas: Pick<Canvas, "id" | "title">;
   pairs: Pair[];
+  copy: CopyPair[];
   counts: Counts;
   excluded: Excluded;
   /** Wire items none of whose files could be read as a wire. */
@@ -73,12 +74,12 @@ async function readCanvas(ctx: Ctx, canvas: Pick<Canvas, "id" | "title">, me: st
     if (found) facts.set(item.itemId, found);
     else unreadable++;
   }
-  const { pairs, excluded } = foldCorpus({ canvasId: canvas.id, entries, facts, me });
-  return { canvas, pairs, counts: countsOf(pairs), excluded, unreadable };
+  const { pairs, copy, excluded } = foldCorpus({ canvasId: canvas.id, entries, facts, me });
+  return { canvas, pairs, copy, counts: countsOf(pairs, copy), excluded, unreadable };
 }
 
 function sum(readings: readonly CanvasReading[]): { counts: Counts; excluded: Excluded; unreadable: number } {
-  const counts: Counts = { rows: 0, labelled: 0, kept: 0, takenOut: 0, none: 0, heldOut: 0 };
+  const counts: Counts = { rows: 0, labelled: 0, kept: 0, takenOut: 0, none: 0, heldOut: 0, copy: 0 };
   const excluded: Excluded = { noNeed: 0, notDrawnHere: 0, withdrawn: 0 };
   let unreadable = 0;
   for (const r of readings) {
@@ -90,7 +91,7 @@ function sum(readings: readonly CanvasReading[]): { counts: Counts; excluded: Ex
 }
 
 function countLine(c: Counts): string {
-  return `${c.rows} row${c.rows === 1 ? "" : "s"} drawn · ${c.labelled} labelled (${c.kept} kept, ${c.takenOut} taken out) · ${c.none} none · ${c.heldOut} held out`;
+  return `${c.rows} row${c.rows === 1 ? "" : "s"} drawn · ${c.labelled} labelled (${c.kept} kept, ${c.takenOut} taken out) · ${c.none} none · ${c.heldOut} held out${c.copy ? ` · ${c.copy} copy` : ""}`;
 }
 
 function excludedLine(e: Excluded, unreadable: number): string {
@@ -146,6 +147,7 @@ async function corpus(host: CliHost, refs: string[], opts: { all?: boolean; out?
   }
   const total = sum(readings);
   const pairs = readings.flatMap((r) => r.pairs);
+  const copy = readings.flatMap((r) => r.copy);
   const on = new Date().toISOString();
 
   let wrote: { labelled: string; shape: string } | undefined;
@@ -154,8 +156,22 @@ async function corpus(host: CliHost, refs: string[], opts: { all?: boolean; out?
     const titleOf = new Map(canvases.map((c) => [c.id, c.title]));
     const labelled = path.join(out, LABELLED_FILE);
     const shape = path.join(out, SHAPE_FILE);
-    await writeFile(labelled, `${JSON.stringify({ v: 1, readAt: on, by: { id: me.id, name: me.name }, counts: total.counts, pairs: pairs.map((p) => ({ ...p, canvasTitle: titleOf.get(p.canvasId) ?? "" })) }, null, 2)}\n`);
-    await writeFile(shape, `${JSON.stringify(shapeOf(pairs), null, 2)}\n`);
+    await writeFile(
+      labelled,
+      `${JSON.stringify(
+        {
+          v: 1,
+          readAt: on,
+          by: { id: me.id, name: me.name },
+          counts: total.counts,
+          pairs: pairs.map((p) => ({ ...p, canvasTitle: titleOf.get(p.canvasId) ?? "" })),
+          copy: copy.map((c) => ({ ...c, canvasTitle: titleOf.get(c.canvasId) ?? "" })),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await writeFile(shape, `${JSON.stringify(shapeOf(pairs, copy), null, 2)}\n`);
     wrote = { labelled, shape };
   }
 
@@ -174,12 +190,12 @@ async function corpus(host: CliHost, refs: string[], opts: { all?: boolean; out?
   console.log(`${on.slice(0, 10)} — ${readings.length} canvas${readings.length === 1 ? "" : "es"} read as ${me.name}: ${countLine(total.counts)}`);
   const why = excludedLine(total.excluded, total.unreadable);
   if (why) console.log(why);
-  for (const r of readings) if (r.counts.rows > 0) console.log(`  ${host.truncate(r.canvas.title, 40)} (${r.canvas.id}): ${countLine(r.counts)}`);
+  for (const r of readings) if (r.counts.rows > 0 || r.counts.copy > 0) console.log(`  ${host.truncate(r.canvas.title, 40)} (${r.canvas.id}): ${countLine(r.counts)}`);
   for (const f of failed) console.log(`  could not read ${host.truncate(f.canvas.title, 40)} (${f.canvas.id}): ${f.error}`);
   if (wrote) {
-    console.log(`wrote ${wrote.labelled} — ${pairs.length} pairs with their requests and titles; it stays on this machine`);
+    console.log(`wrote ${wrote.labelled} — ${pairs.length} pairs${copy.length ? ` and ${copy.length} copy` : ""} with their requests and titles; it stays on this machine`);
     console.log(`wrote ${wrote.shape} — the same pairs with every string taken out`);
-  } else if (total.counts.rows > 0) {
+  } else if (total.counts.rows > 0 || total.counts.copy > 0) {
     console.log("nothing written — `--out <dir>` (outside any repository) writes the pairs");
   }
 }

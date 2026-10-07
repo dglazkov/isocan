@@ -128,5 +128,6 @@ export async function previewFlowVoice(voices: FlowVoices, voice: FlowVoice, sou
 export async function landFlowVoice(canvasId: string, actor: Actor, itemId: string, voices: FlowVoices, voice: FlowVoice, deps: Deps = {}) {
   const writer = writerFor(itemId, deps);
   const host = deps.host ?? hostFor(canvasId, actor);
-  return writer.apply(host, canvasId, itemId, voice.edits, voices.by);
+  const against = voices.voices.filter((v) => v.stance !== voice.stance).map((v) => v.stance);
+  return writer.apply(host, canvasId, itemId, voice.edits, voices.by, { stance: voice.stance, against });
 }

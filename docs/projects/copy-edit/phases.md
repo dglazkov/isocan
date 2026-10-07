@@ -1,8 +1,8 @@
 ---
-status: partial
+status: built
 since: 2026-10-02
 see: wireframes, version-diff
-note: "the walk: two bugs, the copy deck, copy variants, compare and mix, fit and voice, wire-time voice, evidence."
+note: "the walk: two bugs, the copy deck, copy variants, compare and mix, fit and voice, wire-time voice, evidence — all seven phases closed 2–7 Oct 2026."
 issue: 377
 ---
 
@@ -11,7 +11,7 @@ issue: 377
 **2 October 2026.** Held to [journey.md](journey.md); the design is
 [the research note](../../research/2026-10-02-copy-edit.md).
 
-**Where we are, 6 Oct 2026: phases 0–5 are CLOSED, phase 0.5 CLOSED 6 Oct — isocan.io has a text-model key (`text-api-key`, Anthropic) and `/wire copy` in the browser writes real words through the home. Next: copy-edit phase 6, evidence.**
+**Where we are, 7 Oct 2026: every phase (0, 0.5, 1–6) is CLOSED.** Every copy pick records a stance-labelled preference pair and feeds `@isocan/judge`'s `copy` corpus kind; the remaining Open entries are optional polish items, not phases.
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -198,9 +198,15 @@ a journey choosing a voice for a flow — owed with the web half.
 
 ## Phase 6 — Evidence
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 7 October 2026.** Every copy pick — *Choose this variation* / `isocan choose` over copy variants, *Use this mix* / `isocan words mix`, and *Choose a voice…* / `isocan wire voice --pick` — records its winner, loser stances and per-string mix on `item.update` inside the pick's own group (`copyPreference` + `preferredOver`), read by `harvestPreferences` (`isocan evals pairs`) and by `isocan judge corpus` as a `copy` kind with synthetic shape rows (module API 0.2.7).
 
 **Outcome:** every copy pick records a labelled preference pair (stance as the
 label); the judge corpus gains a copy kind.
 
 **Proof:** tests that a pick writes the pair and that `evals pairs` lists it.
+
+### Trajectory
+
+- **2026-10-07** — Copy picks carry their stances on the existing `item.update` op inside the pick's own group (`copyPreference` + `preferredOver`), so no new `Operation` is added, one undo retracts the preference with the pick, and `harvestPreferences` reads stances without inspecting trashed variant blobs.
+- **2026-10-07** — A mix records one pairwise row per losing stance against the winning mix (`A + B`), with per-string winner stances preserved on `copyPreference` for `@isocan/judge`'s `copy` corpus kind.
+- **2026-10-07** — `WebFlowVoice["apply"]` gained an optional `choice` (`{ stance, against }`, module API 0.2.7) so *Use this voice* in the browser and `wire voice --pick` in the CLI write the identical `copyPreference` record on the flow's first changed screen.

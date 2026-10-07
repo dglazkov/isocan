@@ -1128,6 +1128,7 @@ export interface WebFlowVoice {
     itemId: string,
     edits: readonly CopyEdit[],
     by: string,
+    choice?: { stance: string; against: readonly string[] },
   ) => Promise<{ group: string; changed: Array<{ itemId: string; title: string; strings: number }>; prototypes: number }>;
 }
 
@@ -1253,8 +1254,13 @@ export function isDataOnly(manifest: ModuleManifest): boolean {
  * flow's voice a module MAY provide (copy-edit phase 5), read by *Choose a
  * voice…*. Optional and provided, never handed: a module built for `^0.2.5`
  * still loads.
+ *
+ * **0.2.6 → 0.2.7 on 7 Oct 2026**, an addition: `WebFlowVoice.apply` gained an
+ * optional `choice` `{ stance, against }` so *Choose a voice…* records the
+ * winning stance and losing stances in the same op group (copy-edit phase 6).
+ * A module built for `^0.2.6` still loads.
  */
-export const MODULE_API_VERSION = "0.2.6";
+export const MODULE_API_VERSION = "0.2.7";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it

@@ -306,6 +306,11 @@ describe("isocan wire voice", () => {
       expect(versions).toContain(id);
       expect(h.specOf(id).content).toMatchObject({ source: "copy", by: "agent-acme" });
       expect(h.htmlOf(id)).toMatch(/Placeholder/);
+      expect(JSON.parse(h.items.get(id)!.properties.copyPreference!)).toEqual({
+        how: "voice",
+        stance: saved.variants[0]!.stance,
+        against: [saved.variants[1]!.stance],
+      });
     }
     if ([...touched].some((id) => id === screens[0]!.id || id === screens[1]!.id)) expect(versions).toContain(proto.id);
 

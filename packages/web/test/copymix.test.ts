@@ -108,16 +108,19 @@ describe("Compare the copy… — the web's door to words mix", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]!.group).toMatch(/^grp_/);
     const web = sent[0]!.ops;
-    expect(web.map((op) => op.type)).toEqual(["item.addVersion", "item.delete", "item.delete"]);
-    expect(web.slice(1).map((op) => (op as { itemId: string }).itemId)).toEqual([plain, warm]);
+    expect(web.map((op) => op.type)).toEqual(["item.addVersion", "item.update", "item.delete", "item.delete"]);
+    const webPref = (web[1] as Extract<Operation, { type: "item.update" }>).patch.properties?.copyPreference;
+    expect(JSON.parse(webPref!)).toEqual({ how: "mix", stance: "Plain + Warm", against: ["Plain", "Warm"] });
+    expect(web.slice(2).map((op) => (op as { itemId: string }).itemId)).toEqual([plain, warm]);
     const webVersion = (web[0] as Extract<Operation, { type: "item.addVersion" }>).version;
     expect(await readText(webVersion.blobHash)).toBe(CHECKOUT.replace(">Review your order<", ">Nearly there<").replace(">Pay now<", ">Pay<"));
 
-    // The CLI, same picks: the same bytes on the source, the same two trashed.
+    // The CLI, same picks: the same bytes and copy preference on the source, the same two trashed.
     const cli = JSON.parse(await ok("--canvas", canvas, "--json", "words", "mix", source, "--pick", `${at("Review your order")}=${warm},${at("Pay now")}=${plain}`));
     expect(cli.trashed).toEqual([plain, warm]);
     const after = (await client.snapshot(canvas)).canvas.items[source]!;
     expect(after.versions.find((v) => v.id === cli.versionId)!.blobHash).toBe(webVersion.blobHash);
+    expect(after.properties.copyPreference).toBe(webPref);
   });
 
   it("refuses a mix that is the source's own words, and sends nothing", async () => {
