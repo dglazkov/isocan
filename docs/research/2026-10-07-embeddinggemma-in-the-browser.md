@@ -2,7 +2,7 @@
 status: noted
 since: 2026-10-07
 see: local-judge, judge, voice-agent
-note: "local-judge phase 0's measurement of EmbeddingGemma 2 Text 270M through MediaPipe Decision Maker 1.1.0 in a Web Worker, on an M3 Max running Chrome 154 on Darwin 27, with the model served by the local daemon. The median answer takes 33-35 ms up to 128 tokens on WebGPU, but warm p95 is 170-200 ms in most runs, from intermittent streaks of slow answers whose cause is not established, and 570-810 ms at 512 tokens over long runs. Dion then moved the phase's bar from p95 to the warm median, which the desktop passes up to 128 tokens. CPU is about 25 times slower. The runtime posts metrics to odml.pa.googleapis.com, and a Content-Security-Policy now blocks it in the browser. Loading the model adds 1.2-1.7 GB of resident memory. The privacy proof held: offline, every request went to the daemon. The phone's numbers are owed by a walk."
+note: "local-judge phase 0's measurement of EmbeddingGemma 2 Text 270M through MediaPipe Decision Maker 1.1.0 in a Web Worker, on an M3 Max running Chrome 154 on Darwin 27, with the model served by the local daemon. The median answer takes 33-35 ms up to 128 tokens on WebGPU, but warm p95 is 170-200 ms in most runs, from intermittent streaks of slow answers whose cause is not established, and 570-810 ms at 512 tokens over long runs. Dion then moved the phase's bar from p95 to the warm median, which the desktop passes up to 128 tokens. CPU is about 25 times slower. The runtime posts metrics to odml.pa.googleapis.com, and a Content-Security-Policy now blocks it in the browser. Loading the model adds 1.2-1.7 GB of resident memory. The privacy proof held: offline, every request went to the daemon. On an iPhone (Chrome for iOS, so WebKit's WebGPU) the median was 32-42 ms up to 128 tokens and 142-179 ms at 512, with no streaks — which points the desktop tail at Chrome's WebGPU on macOS."
 ---
 
 # EmbeddingGemma in the browser, measured
@@ -11,8 +11,9 @@ note: "local-judge phase 0's measurement of EmbeddingGemma 2 Text 270M through M
 phase 0's measurement. The project asks whether a small embedding model can
 make routine decisions inside the person's browser fast enough, and privately
 enough, to be worth building on. These are the numbers that answer the first
-half on one desktop. The phone is a person's walk,
-[`docs/verify/2026-10-07-local-judge-on-a-phone.md`](../verify/2026-10-07-local-judge-on-a-phone.md).
+half on one desktop. The phone was a person's walk,
+[`docs/verify/2026-10-07-local-judge-on-a-phone.md`](../verify/2026-10-07-local-judge-on-a-phone.md),
+and its numbers are under *Phone* below.
 
 ## What was measured
 
@@ -150,3 +151,36 @@ than by one answer's p95.
 the desktop and 250 ms on a phone, with p95 and the share of late answers
 reported beside it. The desktop passes up to 128 tokens and fails at 512
 tokens (median 130–147 ms), so the next phase caps the state at 128 tokens.
+
+## Phone
+
+Run by Dion on 7 Oct 2026: an iPhone, Chrome for iOS (which renders with
+WebKit, so this is Apple's WebGPU and not Chrome's), from
+`dev.isocan.io/judge-lab.html?file=1&n=200`, with the model loaded from a
+file. The probe reported WebGPU available (adapter `apple apple`). Not
+recorded: the iPhone model, the iOS version, memory, and the
+input-to-display and frame rows.
+
+| | |
+| --- | --- |
+| Ready on GPU | load 1,469 ms, compile 2,363 ms, prewarm 1,788 ms |
+| First answer | 35 ms |
+
+Warm answers, n=200 per row, round trip in ms:
+
+| Options | Tokens | p50 | p95 | p99 | Slow answers (over 2× median) |
+| --- | --- | --- | --- | --- | --- |
+| 7 | 32 | 32 | 36 | 36 | 0 |
+| 7 | 128 | 33 | 40 | 43 | 1 |
+| 7 | 512 | 142 | 153 | 155 | 0 |
+| 30 | 32 | 40 | 44 | 44 | 0 |
+| 30 | 128 | 42 | 46 | 47 | 0 |
+| 30 | 512 | 179 | 193 | 201 | 0 |
+
+**The phone passes its 250 ms median bar at every size**, 512 tokens
+included, and its desktop-sized 100 ms bar up to 128 tokens. **It has no
+streaks**: one slow answer in 1,200, where the M3 Max under Chrome for macOS
+had streaks covering about one answer in five. The model and the question
+were the same, and so was the median up to 128 tokens; what differed was the
+browser's WebGPU. That points the streaks at Chrome's WebGPU on macOS, not
+at the model or MediaPipe. It is a hint from one phone, not a finding.

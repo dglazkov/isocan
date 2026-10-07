@@ -13,13 +13,12 @@ use cases, each in shadow before it shows anybody anything.
 **Phase citations name their project**: `local-judge phase 2`, never a bare
 "phase 2".
 
-**Where we are, 7 Oct 2026:** phase 0 is PART-DONE. The instrument is built
-and measured on the desktop
-([the numbers](../../research/2026-10-07-embeddinggemma-in-the-browser.md)),
-and under the bar Dion set the same day (warm **median**, not p95) it passes
-there up to 128 tokens at 33–35 ms. The phone's half is a
-[walk](../../verify/2026-10-07-local-judge-on-a-phone.md) for whoever holds
-the phone. **local-judge phase 1 is next**, with state capped at 128 tokens.
+**Where we are, 7 Oct 2026:** phase 0 is CLOSED. The instrument is built and
+measured ([the numbers](../../research/2026-10-07-embeddinggemma-in-the-browser.md))
+and passes the warm-median bar: 33–35 ms on an M3 Max and 32–42 ms on an
+iPhone up to 128 tokens. **local-judge phase 1 is next**, and is being built:
+the harness and drafted labels need no person, and the locked-set verdict
+waits on Dion reviewing the labels.
 
 **One rule for every phase.** No phase may show a person a suggestion before
 a phase has reported that use case's accuracy among accepted answers, its
@@ -30,7 +29,7 @@ judge project's *calibration before use*, applied per use case.
 
 ## Phase 0 — The instrument, measured
 
-**Status: PART-DONE.** 2026-10-07 — built and measured; the desktop passes the median bar up to 128 tokens (33–35 ms) and the privacy proof held offline with a browser-enforced policy; the phone walk is owed.
+**Status: CLOSED.** 2026-10-07 — built and measured; the warm median passes on the desktop (33–35 ms up to 128 tokens) and on an iPhone (32–42 ms; 142–179 ms at 512, under its 250 ms bar), and the privacy proof held offline with a browser-enforced policy.
 
 *No product surface.* A `local` `Answerer` in a lazy Worker, the local
 daemon serving the model and runtime from its own origin, a verb that puts
@@ -209,10 +208,14 @@ where the picture should change the answer.
   ms desktop, 250 ms phone), with p95 and the share of late answers reported
   rather than gated on. The desktop passes up to 128 tokens and fails at 512
   (median 130–147 ms), so phase 1 caps the state at 128 tokens.
-- **2026-10-07 — Open:** the phone walk (a person with a phone). The cause of
-  the GPU streaks, which no longer gates but still costs about one answer in
-  five: a timed warm-up, MediaPipe's nightly, the adapter's power preference
-  and thermal state are untried.
+- **2026-10-07** — The phone walk (Dion's iPhone, Chrome for iOS, so WebKit's
+  WebGPU) answered in 32–42 ms up to 128 tokens with no streaks: one slow
+  answer in 1,200. The desktop's streaks point at Chrome's WebGPU on macOS,
+  not at the model or MediaPipe.
+- **2026-10-07 — Open:** the desktop streaks, which no longer gate but cost
+  about one answer in five in Chrome on macOS. Untried: Safari on the Mac, a
+  timed warm-up, MediaPipe's nightly, and the adapter's power preference. The
+  phone run did not record its model, iOS version or memory.
 - **2026-10-06** — Specified from Dion's EmbeddingGemma 2 test plan. The
   plan's six routes became isocan's own commands; its rules-only baseline
   turned out to exist already (`categoriseAsk`, 84%), and its "learned

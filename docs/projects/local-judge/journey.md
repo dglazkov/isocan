@@ -2,7 +2,7 @@
 status: partial
 since: 2026-10-07
 see: judge, voice-agent, wireframes, evals, copy-edit, mobile, keys
-note: specified 6 Oct 2026; phase 0 PART-DONE 7 Oct 2026. A fourth backing for the judge seam, beside Jev, stub and home, that runs EmbeddingGemma 2 (text, 270M, 165 MB) in the person's browser through MediaPipe's Decision Maker, behind an experiment. It triages and never rules. Built: `isocan model fetch` and `model ls`, a loopback-only `/models` route on the local daemon, a Worker behind a browser-enforced `connect-src 'self'` policy (MediaPipe posts telemetry to Google, and the policy blocks it), and a lab page. On an M3 Max the median answer is 33–35 ms up to 128 tokens, inside the bar Dion set (warm median: 100 ms desktop, 250 ms phone), with p95 at 170–200 ms from unexplained streaks reported beside it. The phone's half is a walk; phase 1, the offline three-judge comparison, is next.
+note: specified 6 Oct 2026; phase 0 CLOSED 7 Oct 2026. A fourth backing for the judge seam, beside Jev, stub and home, that runs EmbeddingGemma 2 (text, 270M, 165 MB) in the person's browser through MediaPipe's Decision Maker, behind an experiment. It triages and never rules. Built: `isocan model fetch` and `model ls`, a loopback-only `/models` route on the local daemon, a Worker behind a browser-enforced `connect-src 'self'` policy (MediaPipe posts telemetry to Google, and the policy blocks it), and a lab page. The warm median, the bar Dion set, passes: 33–35 ms on an M3 Max and 32–42 ms on an iPhone up to 128 tokens (142–179 ms at 512 on the phone, under its 250 ms bar). Chrome on macOS adds streaks of slow answers (p95 170–200 ms) that the iPhone did not show. Phase 1, the offline three-judge comparison, is next.
 ---
 
 # The judge in the tab

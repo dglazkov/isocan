@@ -1,5 +1,5 @@
 ---
-status: unverified
+status: works
 since: 2026-10-07
 never: "the local judge (EmbeddingGemma 2 in a browser Worker) on a phone: whether it loads at all, how fast it answers, and what it costs in memory; local-judge phase 0's phone half"
 needs: "an iPhone (and an Android phone, if you have one) with about 400 MB free, Wi-Fi, and fifteen minutes; dev.isocan.io must be at or after the commit that added judge-lab.html"
