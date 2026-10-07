@@ -40,7 +40,7 @@ import {
   waitForFeedback,
   waitForResolvedFeedback,
   wholeLog
-} from "./chunk-6WDSRKYZ.mjs";
+} from "./chunk-NPR4TI7B.mjs";
 import {
   CanvasGroups,
   DaemonClient,
@@ -78,7 +78,7 @@ import {
   retireStrandedIdentities,
   shaOfRoot,
   writeIdentity
-} from "./chunk-LQ6UG67B.mjs";
+} from "./chunk-GD6Y7W2H.mjs";
 import {
   prepareDesignDecision,
   publishDesignComparison,

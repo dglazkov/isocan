@@ -27946,6 +27946,13 @@ var CanvasGroups = class {
     const by = "by" in destination ? destination.by : { x: destination.at.x - item.x, y: destination.at.y - item.y };
     return this.perform(state, { kind: "transform", itemIds: [item.id], by, expected: captureGroupExpectations(state, [item.id]) }, !!options.dryRun);
   }
+  /** Several roots to absolute positions in one act: one plan, one undo, and no
+   * sibling's move can make another's expectations stale. */
+  async moveMany(targets, options = {}) {
+    const state = await this.read(true);
+    const moves = targets.map(({ ref, at }) => ({ itemId: resolveCanvasGroupRef(state.canvas, ref).id, ...at }));
+    return this.perform(state, { kind: "transform", moves, expected: captureGroupExpectations(state, moves.map((move) => move.itemId)) }, !!options.dryRun);
+  }
   /** Scale the group's native frames and attached marks, keeping the named corner fixed. */
   async resize(ref, size, options = {}) {
     const state = await this.read(true);
@@ -28589,7 +28596,7 @@ async function readDesignAudit(ctx, canvasId, options = {}, captured) {
   });
 }
 async function repairDesignItem(ctx, request) {
-  const { designReviewPort: designReviewPort2 } = await import("./design-review-node-S4BYD7JM.mjs");
+  const { designReviewPort: designReviewPort2 } = await import("./design-review-node-WF4EJ2M4.mjs");
   return repairDesignScreen(designReviewPort2(ctx), request);
 }
 

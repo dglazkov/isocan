@@ -127,6 +127,17 @@ export declare class CanvasGroups {
     }, options?: {
         dryRun?: boolean;
     }): Promise<CanvasGroupResult>;
+    /** Several roots to absolute positions in one act: one plan, one undo, and no
+     * sibling's move can make another's expectations stale. */
+    moveMany(targets: Array<{
+        ref: string;
+        at: {
+            x: number;
+            y: number;
+        };
+    }>, options?: {
+        dryRun?: boolean;
+    }): Promise<CanvasGroupResult>;
     /** Scale the group's native frames and attached marks, keeping the named corner fixed. */
     resize(ref: string, size: {
         width: number;
