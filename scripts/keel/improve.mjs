@@ -58,6 +58,7 @@ import { pathToFileURL } from 'node:url';
 import {
   LOCK, read, readLock, lockDrift, phaseLints, claudeMdLint, secondCopies, lockedSkills, lessonsTableSplit, lessonsTableShapes, parseLessons, lessonsPathOf, unsentLessons, SENT, gateEnv, healthDirOf, healthLints, HEALTH_DIR, isMain, rootOf, main,
   shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
+  reviewConfigOf, repoReviewQuery, unansweredPrs, REVIEW_DAYS, REVIEW_PRS,
 } from './lib.mjs';
 import { RUNS, readRuns, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
 
@@ -70,6 +71,8 @@ export const STUCK_DAYS = 21;
 export const STALE_PR_DAYS = 14;
 /** The changelog window: days back from today, today itself not owed yet (changelog_gaps). */
 export const CHANGELOG_DAYS = 30;
+/** reviews_unanswered reads open PRs and those merged in the last REVIEW_DAYS days, REVIEW_PRS of each at most (lib.mjs). */
+export { REVIEW_DAYS, REVIEW_PRS };
 /**
  * Each machine queue's bound: the open PRs it may hold. keel's own queues
  * hold one, the newest (lesson 9; the drain keeps them there). Renovate keeps
@@ -1006,6 +1009,29 @@ export const MEASURES = [
     },
   },
   {
+    id: 'reviews_unanswered', what: `review comments with no answer, older than a day, on open PRs and PRs merged in the last ${REVIEW_DAYS} days`, unit: 'comments', bound: 0, better: 'lower',
+    // A rule, not a level: every comment is answered (keel phase 41). Never a gate: nothing refuses a merge.
+    ratchet: false,
+    async run(ctx) {
+      const ready = await ghReady(ctx);
+      if (ready.na) return { na: ready.na };
+      const rc = reviewConfigOf(ctx.config);
+      if (rc.problem) throw new Error(rc.problem);
+      const [owner, name] = String(ctx.config.repo).split('/');
+      const r = spawnSync(ready.gh, ['api', 'graphql', '-f', `query=${repoReviewQuery()}`, '-f', `owner=${owner}`, '-f', `name=${name}`], { env: ctx.env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      if (r.error) throw new Error(`gh api graphql: ${r.error.message}`);
+      if (r.status !== 0) throw new Error(`gh api graphql exited ${r.status}: ${(r.stderr || r.stdout).trim().split('\n')[0]}`);
+      let repository;
+      try { repository = JSON.parse(r.stdout)?.data?.repository; } catch { throw new Error('gh api graphql did not print JSON'); }
+      if (!repository) throw new Error(`gh api graphql: no repository ${ctx.config.repo}`);
+      const { prs, open, merged, more: partial } = unansweredPrs(repository, rc.reviewers, ctx.date);
+      const value = prs.reduce((n, p) => n + p.unanswered, 0);
+      const more = partial ? `; the newest ${REVIEW_PRS} open PRs read` : '';
+      const detail = prs.length ? `${list(prs.map(p => `#${p.number} ${p.unanswered} (${p.state}, since ${p.oldest})`), 6)}${more}` : `none on ${plural(open, 'open PR')} and ${merged} merged in ${REVIEW_DAYS} days${more}`;
+      return { value, detail, facts: { repo: ctx.config.repo, prs: prs.map(({ title, ...p }) => p) } };
+    },
+  },
+  {
     id: 'dependency_age', what: 'outdated packages (npm outdated)', unit: 'packages', bound: 0, better: 'lower',
     async run(ctx) {
       if (!await exists(join(ctx.root, 'package-lock.json'))) return { na: 'no package-lock.json' };
@@ -1110,6 +1136,10 @@ export function proposalText(r, config = {}) {
       return b === 1
         ? `Drain the ${f.worst} queue to its newest PR: close the ${over} older one${over === 1 ? '' : 's'} (lesson 9).`
         : `The ${f.worst} queue holds ${n} PRs against ${b} (one per lane): merge or close the ${over} oldest (lesson 9).`;
+    }
+    case 'reviews_unanswered': {
+      const [p] = f.prs;
+      return `Answer the review comments on ${list(f.prs.map(x => `#${x.number}`), 4)}: read them (\`keel review ${f.repo}#${p.number}\`), validate each against the code, then answer it fixed, tracked or not valid (\`--close <id> --fixed <commit> | --tracked <issue|version> | --not-valid "<why>"\`). Not a gate: nothing waits on it but the answer.`;
     }
     case 'dependency_age': return `Update ${list(f.names, 4)}, or let Renovate's lanes take them.`;
     case 'flaky_tests': {
