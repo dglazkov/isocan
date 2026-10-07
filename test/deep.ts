@@ -166,6 +166,9 @@ export const DEEP: readonly DeepFile[] = [
   // provider. Three cases, sixteen spawns; 7.3 s with two, 10.6 s measured
   // on 2 October with the third, so it left the fast lane.
   { file: "packages/cli/test/words-vary.test.ts", secs: 10.6 },
+  // 6 Oct: two cases, a daemon each, ~20 spawns — a group of three cards
+  // moved by one `mv` with triples and undone once, and the refusals.
+  { file: "packages/cli/test/mv-many.test.ts", secs: 11.9 },
 ];
 
 /**
