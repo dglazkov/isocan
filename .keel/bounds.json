@@ -1,10 +1,15 @@
 {
   "record_contradictions": 0,
   "gate": 0,
+  "flaky_tests": 0,
+  "slow_tests": 0,
+  "build_time": null,
   "roadmap_stale": 0,
   "phases_without_issue": 0,
   "phases_stuck": 0,
   "evidence_placeholders": 0,
+  "proofs_hold": 0,
+  "escapes": 1,
   "records_disagree": 0,
   "status_unknown": 0,
   "changelog_gaps": 0,
@@ -20,6 +25,7 @@
   "issues_unnamed": 0,
   "issues_done_open": 0,
   "prs_stale": 0,
+  "reviews_unanswered": 0,
   "dependency_age": 0,
   "conduct_cost": 0
 }
