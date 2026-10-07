@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 50 not yet read.**
+**0 to decide · 3 accepted · 21 declined · 8 stale · 11 done · 58 not yet read.**
 
 ## Accepted, by project
 
@@ -91,13 +91,16 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 
 - [Absence of canvas brand media asset libraries](loop/absence-of-canvas-brand-media-asset-libraries.md) — Loop P2
 - [Absence of canvas design directives for AI](loop/absence-of-canvas-design-directives-for-ai.md) — Loop P2
+- [Absence of multi-screen user journey flow generation](loop/absence-of-multi-screen-user-journey-flow-generation.md) — Loop P2
 - [Absence of spatial canvas history diffing](loop/absence-of-spatial-canvas-history-diffing.md) — Loop P2
 - [Absence of spatial comment thread lifecycle status](loop/absence-of-spatial-comment-thread-lifecycle-status.md) — Loop P2
 - [Absence of structured canvas handoff spec cards](loop/absence-of-structured-canvas-handoff-spec-cards.md) — Loop P2
+- [Agent guide omits group placement operation fields](loop/agent-guide-omits-group-placement-operation-fields.md) — Loop P2
 - [Agent operations directly mutate active canvas state](loop/agent-operations-directly-mutate-active-canvas-state.md) — Loop P2
 - [Area creation awaits network blob upload](loop/area-creation-awaits-network-blob-upload.md) — Loop P2
 - [Canvas lacks section containers for spatial partitioning](loop/canvas-lacks-section-containers-for-spatial-partitioning.md) — Loop P2
 - [CLI lacks interactive questionnaire authoring commands](loop/cli-lacks-interactive-questionnaire-authoring-commands.md) — Loop P2
+- [CLI lacks prototype click delivery command](loop/cli-lacks-prototype-click-delivery-command.md) — Loop P2
 - [Context pin copying awaits synchronous blob uploads](loop/context-pin-copying-awaits-synchronous-blob-uploads.md) — Loop P2
 - [Copy compare mix blocks on remote uploads](loop/copy-compare-mix-blocks-on-remote-uploads.md) — Loop P2
 - [Design briefs lack structured prompt templates](loop/design-briefs-lack-structured-prompt-templates.md) — Loop P2
@@ -105,18 +108,22 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 - [Design recipe addition blocks on remote blob upload](loop/design-recipe-addition-blocks-on-remote-blob-upload.md) — Loop P2
 - [Design system dialog polling triggers network traffic](loop/design-system-dialog-polling-triggers-network-traffic.md) — Loop P2
 - [Evaluation scripts depend on unpinned external CLIs](loop/evaluation-scripts-depend-on-unpinned-external-clis.md) — Loop P2
+- [Fit to content resizing executes serial network roundtrips](loop/fit-to-content-resizing-executes-serial-network-roundtrips.md) — Loop P2
+- [Flow voice application executes serial blob uploads](loop/flow-voice-application-executes-serial-blob-uploads.md) — Loop P2
 - [Group brief creation waits for blob upload](loop/group-brief-creation-waits-for-blob-upload.md) — Loop P2
 - [Jetski plugin relies on unmanaged sidecar SDK](loop/jetski-plugin-relies-on-unmanaged-sidecar-sdk.md) — Loop P2
 - [Lack of bidirectional canvas to code symbol bindings](loop/lack-of-bidirectional-canvas-to-code-symbol-bindings.md) — Loop P2
 - [Lack of component interface prop-table canvas documentation](loop/lack-of-component-interface-prop-table-canvas-documentation.md) — Loop P2
 - [Lack of multi-screen user flow canvas scaffolding](loop/lack-of-multi-screen-user-flow-canvas-scaffolding.md) — Loop P2
 - [Lack of spatial canvas semantic query indexing](loop/lack-of-spatial-canvas-semantic-query-indexing.md) — Loop P2
+- [Lack of spatial canvas voting consensus nodes](loop/lack-of-spatial-canvas-voting-consensus-nodes.md) — Loop P2
 - [Lack of spatial design system theme variants](loop/lack-of-spatial-design-system-theme-variants.md) — Loop P2
 - [Lack of spatial task assignment nodes](loop/lack-of-spatial-task-assignment-nodes.md) — Loop P2
 - [Lack of structured design decision rationale documentation](loop/lack-of-structured-design-decision-rationale-documentation.md) — Loop P2
 - [Missing cross canvas component library sync](loop/missing-cross-canvas-component-library-sync.md) — Loop P2
 - [Missing spatial canvas viewport camera bookmarks](loop/missing-spatial-canvas-viewport-camera-bookmarks.md) — Loop P2
 - [Model key management lacks optimistic UI updates](loop/model-key-management-lacks-optimistic-ui-updates.md) — Loop P2
+- [Prototype clicks lack optimistic UI updates](loop/prototype-clicks-lack-optimistic-ui-updates.md) — Loop P2
 - [Scripts hardcode relative node module paths](loop/scripts-hardcode-relative-node-module-paths.md) — Loop P2
 - [Serial blob downloads stall canvas exports](loop/serial-blob-downloads-stall-canvas-exports.md) — Loop P2
 - [Serial blob uploads stall copy variant generation](loop/serial-blob-uploads-stall-copy-variant-generation.md) — Loop P2
@@ -133,6 +140,7 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 - [Web UI lacks canvas seen mark synchronization](loop/web-ui-lacks-canvas-seen-mark-synchronization.md) — Loop P2
 - [Web UI lacks design evaluation metrics interface](loop/web-ui-lacks-design-evaluation-metrics-interface.md) — Loop P2
 - [Web UI lacks design sprint facilitation controls](loop/web-ui-lacks-design-sprint-facilitation-controls.md) — Loop P2
+- [Web UI lacks item word analysis door](loop/web-ui-lacks-item-word-analysis-door.md) — Loop P2
 - [Web UI lacks persona docket review interface](loop/web-ui-lacks-persona-docket-review-interface.md) — Loop P2
 - [Web UI lacks preference recording and standings](loop/web-ui-lacks-preference-recording-and-standings.md) — Loop P2
 - [Web UI lacks questionnaire response supersedes capability](loop/web-ui-lacks-questionnaire-response-supersedes-capability.md) — Loop P2
