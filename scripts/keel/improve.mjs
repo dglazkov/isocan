@@ -59,7 +59,7 @@ import {
   LOCK, read, readLock, lockDrift, phaseLints, claudeMdLint, secondCopies, lockedSkills, lessonsTableSplit, lessonsTableShapes, parseLessons, lessonsPathOf, unsentLessons, SENT, gateEnv, healthDirOf, healthLints, HEALTH_DIR, isMain, rootOf, main,
   shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
 } from './lib.mjs';
-import { RUNS, readRuns, testsConfigOf, flaky, slower, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
+import { RUNS, readRuns, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
 
 export const BOUNDS = '.keel/bounds.json';
 /** The default health directory; a project's own is .keel/keel.json `health` (healthDirOf). */
@@ -613,22 +613,23 @@ export const MEASURES = [
       return {
         value: found.length,
         detail: `${found.length ? list(found.map(t => `${named(t)} (passed ${t.passed}, failed ${t.failed})`), 3) : 'none'}; the newest ${opts.window} of ${plural(runs.length, 'run')}, ${plural(trees, 'clean tree')}${skipped ? `, ${skipped} unreadable` : ''}${nightNote(runs)}`,
-        facts: { flaky: found.map(({ file, name, tree, passed, failed }) => ({ file, name, tree, passed, failed })), runs: runs.length, window: opts.window },
+        facts: { flaky: found.map(({ file, name, tree, passed, failed, dir, config, setting }) => ({ file, name, tree, passed, failed, dir, config, setting })), runs: runs.length, window: opts.window },
       };
     },
   },
   {
-    id: 'slow_tests', what: 'tests in the newest recorded run above factor × their median over the last window passing runs on the same machine class, and above the floor (the test ledger)', unit: 'tests', bound: 0, better: 'lower', ratchet: false,
+    id: 'slow_tests', what: 'tests in the newest recorded run above factor × their median over the last window passing runs on the same machine class and config, and above the floor (the test ledger)', unit: 'tests', bound: 0, better: 'lower', ratchet: false,
     async run(ctx) {
       const { opts, runs } = await ledgerHistory(ctx);
       if (runs.length < opts.window) return { na: `${tooFew(runs.length, opts.window)}${nightNote(runs)}` };
       const newest = runs.at(-1), machine = machineClass(newest.machine);
-      const same = runs.filter(r => r !== newest && machineClass(r.machine) === machine).length;
-      if (same < opts.window) return { na: `${tooFew(same, opts.window, `earlier recorded runs on ${machine}`)}${nightNote(runs)}` };
+      // The baseline slower() judges against: the same machine class AND config. Fewer is n/a, never a zero.
+      const same = comparable(runs, newest).length;
+      if (same < opts.window) return { na: `${tooFew(same, opts.window, `earlier recorded runs on ${machine} under config ${newest.config ?? 'none'}`)}${nightNote(runs)}` };
       const found = slower(runs, opts, newest);
       return {
         value: found.length,
-        detail: `${found.length ? list(found.map(t => `${named(t)} ${Math.round(t.ms)} ms against ${t.median} ms`), 3) : 'none'}; the newest run (${newest.date}) against ${opts.window} before it on ${machine}; ×${opts.factor} and +${opts.floorMs} ms${nightNote(runs)}`,
+        detail: `${found.length ? list(found.map(t => `${named(t)} ${Math.round(t.ms)} ms against ${t.median} ms`), 3) : 'none'}; the newest run (${newest.date}) against ${opts.window} before it on ${machine} under config ${newest.config ?? 'none'}; ×${opts.factor} and +${opts.floorMs} ms${nightNote(runs)}`,
         facts: { slower: found, factor: opts.factor, floorMs: opts.floorMs, window: opts.window, machine },
       };
     },

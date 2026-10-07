@@ -12,7 +12,8 @@
 // `node --test`, run from web/ say, lands beside the root's runs; outside git,
 // the working directory), a directory that ignores itself (it holds a
 // .gitignore of `*`), and keeps the
-// newest KEEP runs, and yields one thing to stdout, at the end: the hygiene
+// newest runs of each lane (a suite's folder and config: KEEP, or the window
+// and ten more when that is larger; TOTAL in all), and yields one thing to stdout, at the end: the hygiene
 // block. A clean run is one line. It never changes the other reporter's
 // output, and whatever goes wrong here is a line, never a throw. It changes
 // the run's exit code in one case only: a run that executed no test (none
@@ -22,13 +23,17 @@
 // pass anything (keel's lessons 14 and 38). A project with no tests yet
 // says so in .keel/keel.json: "tests": { "allowEmpty": true }.
 //
-// A record: { commit, tree, dirty, machine: { os, arch, cpus }, node, config,
-// filtered?, date, tests: [{ file, name, outcome, ms }] } for each top-level
-// test. `dirty` ignores git-ignored files and keel's machine directories
+// A record: { commit, tree, dirty, machine: { os, arch, cpus }, node, dir,
+// config, setting: { env, preload }, filtered?, date, tests: [{ file, name,
+// outcome, ms }] } for each top-level test. `dir` is the folder `node --test`
+// ran in, relative to the repo's root ('.' at the root); a test's `file` is
+// root-relative wherever it ran. `dirty` ignores git-ignored files and keel's machine directories
 // (.keel/test-runs, .keel/climb, .keel/tend: the night writes or gathers them).
 // `config` is a short stable hash of what makes two runs of one tree differ
 // on purpose: NODE_OPTIONS, the run's preloads (--import, --require), and each
-// variable .keel/keel.json names in "tests": { "configEnv": [..] }. `filtered`
+// variable .keel/keel.json names in "tests": { "configEnv": [..] }; `setting`
+// is what it hashes (each variable's value, null when unset, and the
+// preloads), so a finding's run-alone command reproduces it. `filtered`
 // is true when the run was narrowed (--test-name-pattern, --test-skip-pattern,
 // --test-only): a test absent from it was not run, not renamed. `workflow`
 // is the GitHub Actions workflow that ran it (none outside Actions), so the
@@ -50,12 +55,14 @@ import { readFile, readdir, writeFile, mkdir, rm } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep, posix } from 'node:path';
 import { platform, arch, availableParallelism } from 'node:os';
 
 export const RUNS = '.keel/test-runs';
-/** Runs kept on disk; older ones are pruned. */
+/** Runs kept on disk per lane (a suite's folder and config), at least; older ones are pruned. */
 export const KEEP = 50;
+/** Runs kept on disk in all, whatever the lanes: a safety bound. */
+export const TOTAL = 400;
 export const DEFAULTS = Object.freeze({ window: 20, factor: 2, floorMs: 200 });
 export const LABEL = 'keel test ledger';
 /** keel's machine directories: the night writes or gathers them, so they never make a tree dirty. */
@@ -117,13 +124,19 @@ export const machineClass = m => m ? `${m.os}-${m.arch}-${m.cpus}cpu` : 'unknown
 const key = t => `${t.file ?? ''}\u0000${t.name}`;
 /** A run's config identity; a record from before configs is its own (null) class. */
 const configOf = r => r?.config ?? null;
+/** The folder a run's `node --test` ran in, relative to the repo's root; a record from before folders ran at the root. */
+const dirOf = r => r?.dir ?? '.';
+/** A run's lane: its suite's folder and its config. Retention keeps each lane's own newest runs. */
+export const laneOf = r => `${dirOf(r)}\u0000${configOf(r)}`;
+/** What a finding carries of the run it was seen in, so its run-alone command reproduces that run. */
+const seenUnder = r => ({ dir: dirOf(r), config: configOf(r), setting: r?.setting ?? null });
 const median = xs => { const s = [...xs].sort((a, b) => a - b), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
 
 /**
  * Flaky: a test with both a pass and a fail on one clean tree under one
  * config. A dirty tree, or a mix across different trees, is not flaky: the
  * code moved. A mix across configs is not either: the setting moved.
- * [{ file, name, tree, passed, failed, runs }]
+ * [{ file, name, tree, passed, failed, dir, config, setting, runs }]
  */
 export function flaky(runs) {
   const seen = new Map();
@@ -132,7 +145,7 @@ export function flaky(runs) {
     for (const t of r.tests ?? []) {
       if (!['pass', 'fail'].includes(t.outcome)) continue;
       const k = `${r.tree}\u0000${configOf(r)}\u0000${key(t)}`;
-      const s = seen.get(k) ?? { file: t.file ?? null, name: t.name, tree: r.tree, passed: 0, failed: 0 };
+      const s = seen.get(k) ?? { file: t.file ?? null, name: t.name, tree: r.tree, passed: 0, failed: 0, ...seenUnder(r) };
       s[t.outcome === 'pass' ? 'passed' : 'failed']++;
       seen.set(k, s);
     }
@@ -146,12 +159,12 @@ export function flaky(runs) {
  * factor × the median of its last `window` passing runs before it on the
  * same machine class, and more than floorMs above that median. A test with
  * fewer than `window` such runs is not judged yet.
- * [{ file, name, ms, median, over, window, machine }]
+ * [{ file, name, ms, median, over, window, machine, dir, config, setting }]
  */
 export function slower(runs, { window = DEFAULTS.window, factor = DEFAULTS.factor, floorMs = DEFAULTS.floorMs } = {}, current = runs.at(-1)) {
   if (!current) return [];
   const machine = machineClass(current.machine);
-  const before = runs.filter(r => r !== current && r.date <= current.date && machineClass(r.machine) === machine && configOf(r) === configOf(current));
+  const before = comparable(runs, current);
   const out = [];
   for (const t of current.tests ?? []) {
     if (t.outcome !== 'pass' || !Number.isFinite(t.ms)) continue;
@@ -162,9 +175,15 @@ export function slower(runs, { window = DEFAULTS.window, factor = DEFAULTS.facto
     }
     if (past.length < window) continue;
     const m = median(past);
-    if (t.ms > factor * m && t.ms - m > floorMs) out.push({ file: t.file ?? null, name: t.name, ms: t.ms, median: Math.round(m), over: Math.round(t.ms - m), window, machine });
+    if (t.ms > factor * m && t.ms - m > floorMs) out.push({ file: t.file ?? null, name: t.name, ms: t.ms, median: Math.round(m), over: Math.round(t.ms - m), window, machine, ...seenUnder(current) });
   }
   return out.sort((a, b) => b.over - a.over);
+}
+
+/** The runs before `current` that its times are judged against: the same machine class and the same config. */
+export function comparable(runs, current) {
+  const machine = machineClass(current.machine);
+  return runs.filter(r => r !== current && r.date <= current.date && machineClass(r.machine) === machine && configOf(r) === configOf(current));
 }
 
 /**
@@ -196,10 +215,22 @@ export function lastOutcome(runs, file, name) {
 const RE_SPECIAL = /[.*+?^${}()|[\]\\]/g;
 const quote = s => `'${s.replaceAll("'", "'\\''")}'`;
 
-/** The command that runs one test alone, with the run's own --import/--require (keel's hermetic helper, say). */
-export function aloneCommand(test, preload = []) {
+/**
+ * The command that runs one test alone as it ran when it was seen: the
+ * finding's own setting (each config variable that was set, then its
+ * --import/--require preloads; `preload` is for a finding that carries none),
+ * from the folder its suite ran in. `here` is where the command is printed,
+ * relative to the repo's root: from anywhere else it first changes to that
+ * folder (git's top level, then the suite's folder), and the file is said
+ * relative to it.
+ */
+export function aloneCommand(test, preload = [], { here = '.' } = {}) {
   const pattern = `^${test.name.replace(RE_SPECIAL, '\\$&')}$`;
-  return ['node', ...preload, '--test', `--test-name-pattern=${quote(pattern)}`, test.file ?? ''].filter(Boolean).join(' ');
+  const dir = test.dir ?? '.';
+  const env = Object.entries(test.setting?.env ?? {}).filter(([, v]) => typeof v === 'string').map(([k, v]) => `${k}=${quote(v)}`);
+  const file = test.file ? posix.relative(dir === '.' ? '' : dir, test.file) || test.file : '';
+  const command = [...env, 'node', ...(test.setting?.preload ?? preload), '--test', `--test-name-pattern=${quote(pattern)}`, file].filter(Boolean).join(' ');
+  return dir === here ? command : `cd "$(git rev-parse --show-toplevel)"${dir === '.' ? '' : `/${quote(dir)}`} && ${command}`;
 }
 
 /** The run's preload flags (--import x, --require x), so a test runs alone as it ran here. */
@@ -217,7 +248,7 @@ const shortTree = t => String(t ?? '').slice(0, 7);
 const named = t => `${t.file ?? '(no file)'} "${t.name}"`;
 
 /** The block printed at the end of a run: [line]. One line when clean. */
-export function hygiene(runs, opts = DEFAULTS, { preload = [], skipped = 0 } = {}) {
+export function hygiene(runs, opts = DEFAULTS, { preload = [], skipped = 0, here = '.' } = {}) {
   const recent = runs.slice(-opts.window);
   const f = flaky(recent), s = slower(runs, opts);
   const of = `${runs.length} run${runs.length === 1 ? '' : 's'} in ${RUNS}${skipped ? `, ${skipped} unreadable` : ''}`;
@@ -227,11 +258,11 @@ export function hygiene(runs, opts = DEFAULTS, { preload = [], skipped = 0 } = {
     `${LABEL}: ${items} hygiene item${items === 1 ? '' : 's'} (${of}). Each is work: fix it or file it; never rerun until green.`,
     ...f.flatMap(t => [
       `  flaky   ${named(t)}: passed ${t.passed}, failed ${t.failed} on one clean tree (${shortTree(t.tree)}) in the last ${recent.length} runs`,
-      `          ${aloneCommand(t, preload)}`,
+      `          ${aloneCommand(t, preload, { here })}`,
     ]),
     ...s.flatMap(t => [
       `  slower  ${named(t)}: ${Math.round(t.ms)} ms against a median of ${t.median} ms over its last ${t.window} passing runs (${t.machine}), +${t.over} ms`,
-      `          ${aloneCommand(t, preload)}`,
+      `          ${aloneCommand(t, preload, { here })}`,
     ]),
   ];
 }
@@ -264,15 +295,29 @@ export function where(cwd = process.cwd()) {
   };
 }
 
-/** Write one run, keep the newest `keep`, and make the directory ignore itself. Returns the file name. */
-export async function record(root, run, { keep = KEEP } = {}) {
+/**
+ * Write one run, keep the newest `keep` of each lane (a suite's folder and
+ * config: one pass of a project with four lanes writes four runs, and each
+ * lane needs its own window of history) and the newest `total` in all, and
+ * make the directory ignore itself. Returns the file name.
+ */
+export async function record(root, run, { window = DEFAULTS.window, keep = Math.max(KEEP, window + 10), total = TOTAL } = {}) {
   const dir = join(root, RUNS);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, '.gitignore'), '*\n');
   const name = `${run.date.replaceAll(':', '-').replace('.', '-')}-${process.pid}.json`;
   await writeFile(join(dir, name), `${JSON.stringify(run)}\n`);
   const names = (await readdir(dir)).filter(n => n.endsWith('.json')).sort();
-  for (const old of names.slice(0, Math.max(0, names.length - keep))) await rm(join(dir, old), { force: true });
+  const lanes = new Map(), drop = new Set();
+  for (const n of names) {
+    let lane;
+    try { lane = laneOf(JSON.parse(await readFile(join(dir, n), 'utf8'))); } catch { continue; } // unreadable: only the total prunes it
+    lanes.set(lane, [...(lanes.get(lane) ?? []), n]);
+  }
+  for (const ns of lanes.values()) for (const n of ns.slice(0, Math.max(0, ns.length - keep))) drop.add(n);
+  const kept = names.filter(n => !drop.has(n));
+  for (const n of kept.slice(0, Math.max(0, kept.length - total))) drop.add(n);
+  for (const old of drop) await rm(join(dir, old), { force: true });
   return name;
 }
 
@@ -286,9 +331,14 @@ async function projectConfig(root) {
  * differ). Two runs under different configs never make a test flaky or slower.
  */
 export function configHash({ env = process.env, preload = preloads(), configEnv = [] } = {}) {
-  const names = [...new Set(['NODE_OPTIONS', ...configEnv])].sort();
-  const vars = Object.fromEntries(names.map(n => [n, env[n] ?? null]));
+  const { env: vars } = settingOf({ env, preload, configEnv });
   return createHash('sha256').update(JSON.stringify({ vars, preload })).digest('hex').slice(0, 12);
+}
+
+/** What the config hash is a hash of, recorded beside it: { env: { NAME: value or null }, preload }. */
+export function settingOf({ env = process.env, preload = preloads(), configEnv = [] } = {}) {
+  const names = [...new Set(['NODE_OPTIONS', ...configEnv])].sort();
+  return { env: Object.fromEntries(names.map(n => [n, env[n] ?? null])), preload };
 }
 
 /** Whether a run was narrowed to some of its tests (node's execArgv). */
@@ -347,13 +397,15 @@ export default async function* ledger(source) {
   try {
     const configEnv = Array.isArray(config?.tests?.configEnv) ? config.tests.configEnv.filter(v => typeof v === 'string') : [];
     const workflow = process.env.GITHUB_ACTIONS === 'true' && process.env.GITHUB_WORKFLOW ? { workflow: process.env.GITHUB_WORKFLOW } : {};
-    const run = { ...where(root), config: configHash({ configEnv }), ...(narrowed() ? { filtered: true } : {}), ...workflow, date: new Date().toISOString(), tests };
-    await record(root, run);
+    const here = relative(root, real(cwd)).split(sep).join('/') || '.';
+    const run = { ...where(root), dir: here, config: configHash({ configEnv }), setting: settingOf({ configEnv }), ...(narrowed() ? { filtered: true } : {}), ...workflow, date: new Date().toISOString(), tests };
+    const w = config?.tests?.window;
+    await record(root, run, { window: Number.isInteger(w) && w >= 2 ? w : DEFAULTS.window });
     let opts;
     try { opts = testsConfigOf(config); }
     catch (e) { yield `${LABEL}: recorded; not judged: ${e.message}\n`; return; }
     const { runs, skipped } = await readRuns(root);
-    yield `${hygiene(runs, opts, { preload: preloads(), skipped }).join('\n')}\n`;
+    yield `${hygiene(runs, opts, { preload: preloads(), skipped, here }).join('\n')}\n`;
   } catch (e) {
     yield `${LABEL}: could not record this run (${String(e?.message ?? e).split('\n')[0]}).\n`;
   } finally {
