@@ -41,6 +41,11 @@
 //                            recordsDisagree, statusUnknown, changelogGaps,
 //                            issuesNamed, the record measures' rules
 //   gateWorkflowOf(config)   the gate workflow a project names (gateWorkflow)
+//   reviewConfigOf(config), reviewFragment, reviewComments(pr, reviewers)
+//                            a PR's review comments and which are answered
+//                            (keel review and reviews_unanswered: one rule);
+//                            repoReviewQuery, unansweredPrs: the repo-wide read
+//                            (the night and keel loose-ends)
 //   main(meta, fn)           run a script: --json or text, and its exit code
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -672,6 +677,118 @@ export async function readTendPass(root) {
   const text = await read(join(root, TEND_PASS));
   if (text === null) return undefined;
   try { return JSON.parse(text); } catch { return 'unreadable'; }
+}
+
+// ---- review comments (keel phase 41) -------------------------------------------
+//
+// A review thread is answered when it is resolved, or someone other than the
+// author of its first comment replied in it. A named reviewer's conversation
+// comment is answered when someone else (not a named reviewer) commented on
+// the PR after it. A reviewer's status board (a conversation
+// comment opening with a hidden <!-- marker -->, which the bot edits in place,
+// as Codex's review summary does) is listed and owes no answer: the findings
+// are its threads. keel review and the night's reviews_unanswered read this
+// one rule. Reading is deterministic; whether a comment is right is the
+// answerer's judgement, recorded in the reply.
+
+export const REVIEW_WAIT = 10;
+export const REVIEW_LABEL = 'keel:wait-for-review';
+const LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?$/;
+
+/** .keel/keel.json "review": { reviewers, wait } with defaults (none named, 10 minutes), or { problem }. */
+export function reviewConfigOf(config) {
+  const r = config?.review;
+  if (r === undefined) return { reviewers: [], wait: REVIEW_WAIT };
+  const bad = why => ({ problem: `.keel/keel.json "review" ${why}` });
+  if (!r || typeof r !== 'object' || Array.isArray(r)) return bad('must be an object: {"reviewers": ["<login>"], "wait": <minutes>}');
+  const extra = Object.keys(r).find(k => !['reviewers', 'wait'].includes(k));
+  if (extra) return bad(`has an unknown key "${extra}" (reviewers, wait)`);
+  const reviewers = r.reviewers ?? [];
+  if (!Array.isArray(reviewers) || reviewers.some(x => typeof x !== 'string' || !LOGIN.test(x))) return bad('"reviewers" must be a list of GitHub logins');
+  const wait = r.wait ?? REVIEW_WAIT;
+  if (typeof wait !== 'number' || !Number.isFinite(wait) || wait <= 0 || wait > 120) return bad('"wait" must be minutes, more than 0 and at most 120');
+  return { reviewers, wait };
+}
+
+/** A login as both APIs agree on it: REST says `codex[bot]`, GraphQL `codex`. */
+export const sameLogin = (a, b) => normLogin(a) === normLogin(b) && normLogin(a) !== '';
+const normLogin = s => String(s ?? '').replace(/\[bot\]$/i, '').toLowerCase();
+
+/** The PullRequest fields the review read needs, as a GraphQL fragment; `replies` caps each thread's comments. */
+export const reviewFragment = ({ replies = 50 } = {}) => `fragment KeelReview on PullRequest {
+  number title url state mergedAt headRefOid
+  reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { id isResolved path line
+    comments(first: ${replies}) { nodes { databaseId author { login } body createdAt url } } } }
+  comments(first: 100) { pageInfo { hasNextPage } nodes { id databaseId author { login } body createdAt url } }
+}`;
+
+const firstLine = body => String(body ?? '').replace(/<!--[\s\S]*?-->/g, '').split('\n')
+  .map(l => l.replace(/<[^>]*>/g, ' ').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`#>|]/g, '').replace(/\s+/g, ' ').trim()).find(Boolean)?.slice(0, 140) ?? '';
+/** A bot's status board (a sticky comment it edits in place, opened by a hidden <!-- marker -->): listed, never owed an answer. */
+const isStatus = body => /^\s*<!--/.test(String(body ?? ''));
+
+/**
+ * Every review comment on one PR (GraphQL, through reviewFragment), with
+ * whether it is answered: [{ kind: 'thread'|'comment', id, databaseId,
+ * author, at, path, line, text, url, answered, resolved }]. Throws when the
+ * read is incomplete (more threads, or more conversation comments, than one
+ * page), because a comment not read is never counted as answered.
+ */
+export function reviewComments(pr, reviewers = []) {
+  if (!pr || typeof pr !== 'object' || !pr.reviewThreads || !Array.isArray(pr.reviewThreads.nodes)) throw new Error('the pull request came back without its review threads');
+  if (pr.reviewThreads.pageInfo?.hasNextPage) throw new Error(`#${pr.number} has more than 100 review threads; the read is incomplete`);
+  const out = [];
+  for (const t of pr.reviewThreads.nodes) {
+    const comments = t?.comments?.nodes ?? [];
+    const first = comments[0];
+    if (!first) continue;
+    const by = first.author?.login ?? 'ghost';
+    const replied = comments.slice(1).some(c => !sameLogin(c.author?.login ?? 'ghost', by));
+    out.push({ kind: 'thread', id: t.id, databaseId: first.databaseId, author: by, at: first.createdAt, path: t.path ?? null, line: t.line ?? null,
+      text: firstLine(first.body), url: first.url, resolved: !!t.isResolved, answered: !!t.isResolved || replied });
+  }
+  if (reviewers.length) {
+    const comments = pr.comments?.nodes;
+    if (!Array.isArray(comments)) throw new Error('the pull request came back without its conversation comments');
+    if (pr.comments.pageInfo?.hasNextPage) throw new Error(`#${pr.number} has more than 100 conversation comments; the read is incomplete`);
+    const isReviewer = login => reviewers.some(r => sameLogin(r, login));
+    for (const c of comments) {
+      const by = c.author?.login ?? 'ghost';
+      if (!isReviewer(by)) continue;
+      const after = Date.parse(c.createdAt);
+      const replied = comments.some(o => Date.parse(o.createdAt) > after && !isReviewer(o.author?.login ?? 'ghost'));
+      const status = isStatus(c.body);
+      out.push({ kind: 'comment', id: c.id, databaseId: c.databaseId, author: by, at: c.createdAt, path: null, line: null,
+        text: firstLine(c.body), url: c.url, resolved: false, status, answered: status || replied });
+    }
+  }
+  return out;
+}
+
+/** The repo-wide read (reviews_unanswered, loose-ends): open PRs and recently merged ones, REVIEW_PRS of each. */
+export const REVIEW_DAYS = 7;
+export const REVIEW_PRS = 50;
+export const repoReviewQuery = () => `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
+  open: pullRequests(states: OPEN, first: ${REVIEW_PRS}, orderBy: { field: UPDATED_AT, direction: DESC }) { pageInfo { hasNextPage } nodes { ...KeelReview } }
+  merged: pullRequests(states: MERGED, first: ${REVIEW_PRS}, orderBy: { field: UPDATED_AT, direction: DESC }) { nodes { ...KeelReview } } } }
+${reviewFragment({ replies: 10 })}`;
+
+/**
+ * From the repo-wide read's `data.repository`: each PR (open, or merged in
+ * the last REVIEW_DAYS days) with comments unanswered for a day or more, by
+ * calendar day against `date` (YYYY-MM-DD). Throws on a malformed or
+ * incomplete read, never a zero.
+ */
+export function unansweredPrs(repository, reviewers, date) {
+  if (!repository || !Array.isArray(repository.open?.nodes) || !Array.isArray(repository.merged?.nodes)) throw new Error('the read came back without the repository\'s pull requests');
+  const since = addDays(date, -REVIEW_DAYS);
+  const merged = repository.merged.nodes.filter(p => typeof p?.mergedAt === 'string' && p.mergedAt.slice(0, 10) >= since);
+  const prs = [];
+  for (const pr of [...repository.open.nodes, ...merged]) {
+    const left = reviewComments(pr, reviewers).filter(c => !c.answered && /^\d{4}-\d{2}-\d{2}/.test(c.at ?? '') && c.at.slice(0, 10) <= addDays(date, -1));
+    if (left.length) prs.push({ number: pr.number, title: pr.title, state: pr.state === 'MERGED' ? 'merged' : 'open', url: pr.url, unanswered: left.length, oldest: left.map(c => c.at.slice(0, 10)).sort()[0] });
+  }
+  return { prs, open: repository.open.nodes.length, merged: merged.length, more: !!repository.open.pageInfo?.hasNextPage };
 }
 
 // ---- the gate's environment -------------------------------------------------

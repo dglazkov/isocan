@@ -32,8 +32,12 @@
 // `config` is a short stable hash of what makes two runs of one tree differ
 // on purpose: NODE_OPTIONS, the run's preloads (--import, --require), and each
 // variable .keel/keel.json names in "tests": { "configEnv": [..] }; `setting`
-// is what it hashes (each variable's value, null when unset, and the
-// preloads), so a finding's run-alone command reproduces it. `filtered`
+// is what it hashes, never a configEnv value (records are uploaded): each
+// configEnv variable as { name, set, hash } (a short sha256 of its value),
+// NODE_OPTIONS's value (null when unset; hashed the same way when it looks
+// secret: token=, secret=, key=, password=), and the preloads, so a finding's
+// run-alone command reproduces it (a set variable as NAME=<as in the run>,
+// an unset one as env -u NAME). `filtered`
 // is true when the run was narrowed (--test-name-pattern, --test-skip-pattern,
 // --test-only): a test absent from it was not run, not renamed. `workflow`
 // is the GitHub Actions workflow that ran it (none outside Actions), so the
@@ -41,10 +45,10 @@
 //
 // The analysis is here too, so the reporter and the night's improve.mjs
 // (flaky_tests, slow_tests, proofs_hold) read history one way:
-//   flaky   a test that both passed and failed on the same clean tree under
-//           the same config, among the newest `window` runs. A fact, no threshold.
+//   flaky   a test that both passed and failed on the same clean tree in
+//           the same lane (suite folder and config), among the newest `window` runs. A fact, no threshold.
 //   slower  a passing test whose time is above factor × the median of its
-//           last `window` passing runs on the same machine class and config,
+//           last `window` passing runs on the same machine class and lane,
 //           AND more than floorMs above it, so noise on a fast test is not news.
 // window 20, factor 2, floorMs 200; .keel/keel.json "tests" overrides each
 // (and "allowEmpty", above, and "configEnv").
@@ -63,6 +67,8 @@ export const RUNS = '.keel/test-runs';
 export const KEEP = 50;
 /** Runs kept on disk in all, whatever the lanes: a safety bound. */
 export const TOTAL = 400;
+/** The largest window: the total grows with lanes × (window + 10), so it is bounded. */
+export const MAX_WINDOW = 200;
 export const DEFAULTS = Object.freeze({ window: 20, factor: 2, floorMs: 200 });
 export const LABEL = 'keel test ledger';
 /** keel's machine directories: the night writes or gathers them, so they never make a tree dirty. */
@@ -79,7 +85,7 @@ export function testsConfigProblems(config) {
   for (const k of Object.keys(t)) if (!Object.hasOwn(DEFAULTS, k) && k !== 'allowEmpty' && k !== 'configEnv') out.push(`"tests" has an unknown key ${k} (window, factor, floorMs, allowEmpty, configEnv)`);
   if (t.configEnv !== undefined && !(Array.isArray(t.configEnv) && t.configEnv.every(v => typeof v === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(v)))) out.push('"tests".configEnv must be a list of environment variable names');
   if (t.allowEmpty !== undefined && typeof t.allowEmpty !== 'boolean') out.push('"tests".allowEmpty must be true or false');
-  if (t.window !== undefined && !(Number.isInteger(t.window) && t.window >= 2)) out.push('"tests".window must be a whole number of runs, 2 or more');
+  if (t.window !== undefined && !(Number.isInteger(t.window) && t.window >= 2 && t.window <= MAX_WINDOW)) out.push(`"tests".window must be a whole number of runs, 2 to ${MAX_WINDOW}`);
   if (t.factor !== undefined && !(Number.isFinite(t.factor) && t.factor > 1)) out.push('"tests".factor must be a number above 1');
   if (t.floorMs !== undefined && !(Number.isFinite(t.floorMs) && t.floorMs >= 0)) out.push('"tests".floorMs must be a number of milliseconds, 0 or more');
   return out;
@@ -133,9 +139,10 @@ const seenUnder = r => ({ dir: dirOf(r), config: configOf(r), setting: r?.settin
 const median = xs => { const s = [...xs].sort((a, b) => a - b), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
 
 /**
- * Flaky: a test with both a pass and a fail on one clean tree under one
- * config. A dirty tree, or a mix across different trees, is not flaky: the
- * code moved. A mix across configs is not either: the setting moved.
+ * Flaky: a test with both a pass and a fail on one clean tree in one lane
+ * (suite folder and config). A dirty tree, or a mix across different trees,
+ * is not flaky: the code moved. A mix across lanes is not either: the
+ * setting moved.
  * [{ file, name, tree, passed, failed, dir, config, setting, runs }]
  */
 export function flaky(runs) {
@@ -144,7 +151,7 @@ export function flaky(runs) {
     if (r.dirty !== false || !r.tree) continue;
     for (const t of r.tests ?? []) {
       if (!['pass', 'fail'].includes(t.outcome)) continue;
-      const k = `${r.tree}\u0000${configOf(r)}\u0000${key(t)}`;
+      const k = `${r.tree}\u0000${laneOf(r)}\u0000${key(t)}`;
       const s = seen.get(k) ?? { file: t.file ?? null, name: t.name, tree: r.tree, passed: 0, failed: 0, ...seenUnder(r) };
       s[t.outcome === 'pass' ? 'passed' : 'failed']++;
       seen.set(k, s);
@@ -180,10 +187,10 @@ export function slower(runs, { window = DEFAULTS.window, factor = DEFAULTS.facto
   return out.sort((a, b) => b.over - a.over);
 }
 
-/** The runs before `current` that its times are judged against: the same machine class and the same config. */
+/** The runs before `current` that its times are judged against: the same machine class and the same lane (suite folder and config). */
 export function comparable(runs, current) {
   const machine = machineClass(current.machine);
-  return runs.filter(r => r !== current && r.date <= current.date && machineClass(r.machine) === machine && configOf(r) === configOf(current));
+  return runs.filter(r => r !== current && r.date <= current.date && machineClass(r.machine) === machine && laneOf(r) === laneOf(current));
 }
 
 /**
@@ -217,19 +224,28 @@ const quote = s => `'${s.replaceAll("'", "'\\''")}'`;
 
 /**
  * The command that runs one test alone as it ran when it was seen: the
- * finding's own setting (each config variable that was set, then its
+ * finding's own setting (each config variable that was set, as
+ * `NAME=<as in the run>` since its value is never recorded, NODE_OPTIONS's
+ * own value; each that was unset as `env -u NAME`; then its
  * --import/--require preloads; `preload` is for a finding that carries none),
  * from the folder its suite ran in. `here` is where the command is printed,
  * relative to the repo's root: from anywhere else it first changes to that
  * folder (git's top level, then the suite's folder), and the file is said
  * relative to it.
  */
+/** Whether a recorded variable was set: a value (NODE_OPTIONS, or a record from before hashes) or { set: true }. */
+const isSet = v => typeof v === 'string' || (v !== null && typeof v === 'object' && v.set === true);
+
 export function aloneCommand(test, preload = [], { here = '.' } = {}) {
   const pattern = `^${test.name.replace(RE_SPECIAL, '\\$&')}$`;
   const dir = test.dir ?? '.';
-  const env = Object.entries(test.setting?.env ?? {}).filter(([, v]) => typeof v === 'string').map(([k, v]) => `${k}=${quote(v)}`);
+  const vars = Object.entries(test.setting?.env ?? {});
+  // A value is printed for NODE_OPTIONS only (never a secret: one that looks like one is recorded as a hash);
+  // any other set variable is a placeholder, so a configEnv value never reaches a printed command.
+  const env = vars.filter(([, v]) => isSet(v)).map(([k, v]) => k === 'NODE_OPTIONS' && typeof v === 'string' ? `${k}=${quote(v)}` : `${k}=<as in the run>`);
+  const unset = vars.filter(([, v]) => !isSet(v)).map(([k]) => `-u ${k}`);
   const file = test.file ? posix.relative(dir === '.' ? '' : dir, test.file) || test.file : '';
-  const command = [...env, 'node', ...(test.setting?.preload ?? preload), '--test', `--test-name-pattern=${quote(pattern)}`, file].filter(Boolean).join(' ');
+  const command = [...env, ...(unset.length ? ['env', ...unset] : []), 'node', ...(test.setting?.preload ?? preload), '--test', `--test-name-pattern=${quote(pattern)}`, file].filter(Boolean).join(' ');
   return dir === here ? command : `cd "$(git rev-parse --show-toplevel)"${dir === '.' ? '' : `/${quote(dir)}`} && ${command}`;
 }
 
@@ -298,10 +314,11 @@ export function where(cwd = process.cwd()) {
 /**
  * Write one run, keep the newest `keep` of each lane (a suite's folder and
  * config: one pass of a project with four lanes writes four runs, and each
- * lane needs its own window of history) and the newest `total` in all, and
+ * lane needs its own window of history) and the newest `total` in all
+ * (TOTAL, or lanes × (window + 10) when that is larger), and
  * make the directory ignore itself. Returns the file name.
  */
-export async function record(root, run, { window = DEFAULTS.window, keep = Math.max(KEEP, window + 10), total = TOTAL } = {}) {
+export async function record(root, run, { window = DEFAULTS.window, keep = Math.max(KEEP, window + 10), total } = {}) {
   const dir = join(root, RUNS);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, '.gitignore'), '*\n');
@@ -316,7 +333,9 @@ export async function record(root, run, { window = DEFAULTS.window, keep = Math.
   }
   for (const ns of lanes.values()) for (const n of ns.slice(0, Math.max(0, ns.length - keep))) drop.add(n);
   const kept = names.filter(n => !drop.has(n));
-  for (const n of kept.slice(0, Math.max(0, kept.length - total))) drop.add(n);
+  // The total never undercuts a lane's own window: it grows with the lanes.
+  const cap = total ?? Math.max(TOTAL, lanes.size * (window + 10));
+  for (const n of kept.slice(0, Math.max(0, kept.length - cap))) drop.add(n);
   for (const old of drop) await rm(join(dir, old), { force: true });
   return name;
 }
@@ -331,14 +350,32 @@ async function projectConfig(root) {
  * differ). Two runs under different configs never make a test flaky or slower.
  */
 export function configHash({ env = process.env, preload = preloads(), configEnv = [] } = {}) {
-  const { env: vars } = settingOf({ env, preload, configEnv });
+  const vars = Object.fromEntries(settingNames(configEnv).map(n => [n, env[n] ?? null]));
   return createHash('sha256').update(JSON.stringify({ vars, preload })).digest('hex').slice(0, 12);
 }
 
-/** What the config hash is a hash of, recorded beside it: { env: { NAME: value or null }, preload }. */
+const settingNames = configEnv => [...new Set(['NODE_OPTIONS', ...configEnv])].sort();
+/** A NODE_OPTIONS that carries something secret-looking (token=, secret=, key=, password=) is hashed like a configEnv variable. */
+const SECRETISH = /(token|secret|key|password)=/i;
+const sha12 = v => createHash('sha256').update(v).digest('hex').slice(0, 12);
+/** A variable recorded without its value: { name, set, hash } (hash null when unset). */
+const hidden = (name, v) => ({ name, set: v !== undefined, hash: v === undefined ? null : sha12(v) });
+
+/**
+ * What the config hash is a hash of, recorded beside it, never a configEnv
+ * value (records are uploaded, and findings print): { env: { NODE_OPTIONS:
+ * value or null (or hidden, when it looks secret), NAME: { name, set, hash } },
+ * preload }.
+ */
 export function settingOf({ env = process.env, preload = preloads(), configEnv = [] } = {}) {
-  const names = [...new Set(['NODE_OPTIONS', ...configEnv])].sort();
-  return { env: Object.fromEntries(names.map(n => [n, env[n] ?? null])), preload };
+  return {
+    env: Object.fromEntries(settingNames(configEnv).map(n => {
+      const v = env[n];
+      if (n === 'NODE_OPTIONS' && !configEnv.includes(n)) return [n, v === undefined ? null : SECRETISH.test(v) ? hidden(n, v) : v];
+      return [n, hidden(n, v)];
+    })),
+    preload,
+  };
 }
 
 /** Whether a run was narrowed to some of its tests (node's execArgv). */
@@ -400,7 +437,7 @@ export default async function* ledger(source) {
     const here = relative(root, real(cwd)).split(sep).join('/') || '.';
     const run = { ...where(root), dir: here, config: configHash({ configEnv }), setting: settingOf({ configEnv }), ...(narrowed() ? { filtered: true } : {}), ...workflow, date: new Date().toISOString(), tests };
     const w = config?.tests?.window;
-    await record(root, run, { window: Number.isInteger(w) && w >= 2 ? w : DEFAULTS.window });
+    await record(root, run, { window: Number.isInteger(w) && w >= 2 && w <= MAX_WINDOW ? w : DEFAULTS.window });
     let opts;
     try { opts = testsConfigOf(config); }
     catch (e) { yield `${LABEL}: recorded; not judged: ${e.message}\n`; return; }
