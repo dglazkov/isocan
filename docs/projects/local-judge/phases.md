@@ -13,16 +13,13 @@ use cases, each in shadow before it shows anybody anything.
 **Phase citations name their project**: `local-judge phase 2`, never a bare
 "phase 2".
 
-**Where we are, 7 Oct 2026: the project stops at phase 0, by its own
-rule.** Phase 0 is PART-DONE. The instrument is built: `isocan model fetch`,
-the daemon's loopback `/models` route, a Worker behind a browser-enforced
-policy, and a lab page. It was measured on the desktop
+**Where we are, 7 Oct 2026:** phase 0 is PART-DONE. The instrument is built
+and measured on the desktop
 ([the numbers](../../research/2026-10-07-embeddinggemma-in-the-browser.md)),
-and its median answer is 33–35 ms. But warm p95 is 170–200 ms from
-unexplained streaks of slow answers, over the 100 ms bar.
-**local-judge phase 1 does not start** until the streaks are explained and
-removed, or Dion moves the bar. The phone's half is a [walk](../../verify/2026-10-07-local-judge-on-a-phone.md)
-for whoever holds the phone.
+and under the bar Dion set the same day (warm **median**, not p95) it passes
+there up to 128 tokens at 33–35 ms. The phone's half is a
+[walk](../../verify/2026-10-07-local-judge-on-a-phone.md) for whoever holds
+the phone. **local-judge phase 1 is next**, with state capped at 128 tokens.
 
 **One rule for every phase.** No phase may show a person a suggestion before
 a phase has reported that use case's accuracy among accepted answers, its
@@ -33,7 +30,7 @@ judge project's *calibration before use*, applied per use case.
 
 ## Phase 0 — The instrument, measured
 
-**Status: PART-DONE.** 2026-10-07 — built and measured on the desktop, and the privacy proof held offline with a browser-enforced policy; desktop warm p95 fails the bar and the phone walk is owed.
+**Status: PART-DONE.** 2026-10-07 — built and measured; the desktop passes the median bar up to 128 tokens (33–35 ms) and the privacy proof held offline with a browser-enforced policy; the phone walk is owed.
 
 *No product surface.* A `local` `Answerer` in a lazy Worker, the local
 daemon serving the model and runtime from its own origin, a verb that puts
@@ -74,10 +71,17 @@ the model on disk, and a lab page that drives it.
 
 **Acceptance:** `docs/research/` gains a page with those numbers and the
 machine, browser, backend and token count beside each, and the offline run
-recorded. **If warm p95 is over 100 ms on the desktop, the page says so and
-the project stops at this phase** until something changes. The phone's
-number closes the phase when the walk is run; over 250 ms there stops the
-project the same way.
+recorded. **If the warm median is over 100 ms on the desktop, the page says
+so and the project stops at this phase** until something changes. p95 and
+the share of answers over the bar are reported beside it, not gated on. The
+phone's median closes the phase when the walk is run; over 250 ms there stops
+the project the same way.
+
+**Formerly** the bar was warm p95, as the test plan proposed. Dion moved it
+to the median on 7 Oct 2026, after phase 0 measured a 33–35 ms median beside
+a 170–200 ms p95 caused by intermittent streaks. A suggestion that appears
+while somebody types is judged by how fast it usually is, and how often it is
+late is reported rather than gated on.
 
 ⚑ ~~Before any byte is served from isocan's own origin: a person reads the
 terms, and decides where the bundle is hosted.~~ **Answered 7 Oct 2026 by
@@ -91,7 +95,8 @@ remain open.
 **Status: NOT STARTED.**
 
 The Chat intent router ([idea 1](ideas.md#1-the-chat-intent-router-start-here)),
-offline. The hand-labelled asks, mapped onto seven routes and split
+offline, with the state capped at 128 tokens (phase 0's bar holds there and
+not at 512; a longer ask is recorded as truncated). The hand-labelled asks, mapped onto seven routes and split
 development / calibration / locked test, with paraphrases of one scenario kept
 in one split. Synthetic paired cases added for what the corpus lacks: negation
 (*change* / *don't change*), with and without a selection, a request quoted
@@ -200,10 +205,14 @@ where the picture should change the answer.
 - **2026-10-07** — The phone cannot reach a laptop's loopback `/models`, and
   WebGPU needs a secure context. So the lab also takes a chosen model file,
   and the phone walk runs it from dev.isocan.io.
+- **2026-10-07** — Dion moved the bar from warm p95 to the warm median (100
+  ms desktop, 250 ms phone), with p95 and the share of late answers reported
+  rather than gated on. The desktop passes up to 128 tokens and fails at 512
+  (median 130–147 ms), so phase 1 caps the state at 128 tokens.
 - **2026-10-07 — Open:** the phone walk (a person with a phone). The cause of
-  the GPU streaks: a timed warm-up, MediaPipe's nightly, the adapter's power
-  preference and thermal state are untried. And whether the bar should be one
-  answer's p95, or the median plus how often a suggestion misses (Dion).
+  the GPU streaks, which no longer gates but still costs about one answer in
+  five: a timed warm-up, MediaPipe's nightly, the adapter's power preference
+  and thermal state are untried.
 - **2026-10-06** — Specified from Dion's EmbeddingGemma 2 test plan. The
   plan's six routes became isocan's own commands; its rules-only baseline
   turned out to exist already (`categoriseAsk`, 84%), and its "learned

@@ -2,7 +2,7 @@
 status: noted
 since: 2026-10-07
 see: local-judge, judge, voice-agent
-note: "local-judge phase 0's measurement of EmbeddingGemma 2 Text 270M through MediaPipe Decision Maker 1.1.0 in a Web Worker, on an M3 Max running Chrome 154 on Darwin 27, with the model served by the local daemon. The median answer takes 33-35 ms up to 128 tokens on WebGPU, but warm p95 is 170-200 ms in most runs, from intermittent streaks of slow answers whose cause is not established, and 570-810 ms at 512 tokens over long runs. Under the phase's own rule (p95 over 100 ms on the desktop) the project stops here until the tail is explained or a person moves the bar. CPU is about 25 times slower. The runtime posts metrics to odml.pa.googleapis.com, and a Content-Security-Policy now blocks it in the browser. Loading the model adds 1.2-1.7 GB of resident memory. The privacy proof held: offline, every request went to the daemon. The phone's numbers are owed by a walk."
+note: "local-judge phase 0's measurement of EmbeddingGemma 2 Text 270M through MediaPipe Decision Maker 1.1.0 in a Web Worker, on an M3 Max running Chrome 154 on Darwin 27, with the model served by the local daemon. The median answer takes 33-35 ms up to 128 tokens on WebGPU, but warm p95 is 170-200 ms in most runs, from intermittent streaks of slow answers whose cause is not established, and 570-810 ms at 512 tokens over long runs. Dion then moved the phase's bar from p95 to the warm median, which the desktop passes up to 128 tokens. CPU is about 25 times slower. The runtime posts metrics to odml.pa.googleapis.com, and a Content-Security-Policy now blocks it in the browser. Loading the model adds 1.2-1.7 GB of resident memory. The privacy proof held: offline, every request went to the daemon. The phone's numbers are owed by a walk."
 ---
 
 # EmbeddingGemma in the browser, measured
@@ -145,3 +145,8 @@ streaks would leave a desktop judge that answers in about 34 ms at p95 up to
 was drawn on the wrong number. A suggestion line that appears while somebody
 types (Scene 1) may be judged by its median and how often it misses, rather
 than by one answer's p95.
+
+**Decided the same day.** Dion moved the bar to the warm median: 100 ms on
+the desktop and 250 ms on a phone, with p95 and the share of late answers
+reported beside it. The desktop passes up to 128 tokens and fails at 512
+tokens (median 130–147 ms), so the next phase caps the state at 128 tokens.
