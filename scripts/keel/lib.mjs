@@ -50,9 +50,11 @@
 //                            repoReviewArgs, readRepoReviews, windowPrs, unansweredPrs:
 //                            the repo-wide read, page by page (the night and
 //                            keel loose-ends); IncompleteRead: never a count
-//   budgetPasses(config), budgetUse(runs, pass), budgetLine(entries)
-//                            each budgeted pass's agent-step minutes in its
-//                            last runs, which ran out, and a suggestion
+//   budgetPasses(config), budgetSince(history, …), budgetUse(runs, pass,
+//                            { since }), budgetLine(entries): each budgeted
+//                            pass's agent-step minutes in its last runs
+//                            since its budget became today's, which ran
+//                            out, and a suggestion
 //                            (BUDGET_STEPS: workflow → its agent step's name
 //                            and its "Did the agent run?" check's)
 //   main(meta, fn)           run a script: --json or text, and its exit code
@@ -771,14 +773,39 @@ export const BUDGET_RUNS = 8;
 export const BUDGET_MIN = 4;
 /** Runs examined per pass before the read stops looking for more with the step. */
 export const BUDGET_EXAMINE = 20;
+/** Past configs (.keel/keel.json at a commit) read per night to find since when each budget is today's. */
+export const BUDGET_HISTORY = 10;
 
 /** The budgeted passes that are on: [{ pass, workflow, step, check, minutes, branch }], with today's budget. */
 export function budgetPasses(config) {
   return BUDGET_PASSES.filter(p => config?.[p.key] !== undefined && config[p.key] !== null)
-    .map(p => {
-      const m = config[p.key]?.budget?.minutes;
-      return { pass: p.pass, workflow: p.workflow, step: BUDGET_STEPS[p.workflow].agent, check: BUDGET_STEPS[p.workflow].check, minutes: Number.isFinite(m) && m > 0 ? m : p.minutes, branch: p.branch };
-    });
+    .map(p => ({ pass: p.pass, key: p.key, workflow: p.workflow, step: BUDGET_STEPS[p.workflow].agent, check: BUDGET_STEPS[p.workflow].check, minutes: budgetOf(config, p), branch: p.branch }));
+}
+
+/** A pass's budget in a config: its budget.minutes, else its default (a missing key too). `pass`: a BUDGET_PASSES entry (or one with its key). */
+export function budgetOf(config, pass) {
+  const def = BUDGET_PASSES.find(p => p.key === pass.key) ?? pass;
+  const m = config?.[def.key]?.budget?.minutes;
+  return Number.isFinite(m) && m > 0 ? m : def.minutes;
+}
+
+/**
+ * Since when the budget has been today's (phase 43): a run under an older
+ * budget is not judged against today's. `history` is the config at each
+ * commit that touched .keel/keel.json on the default branch, newest first:
+ * [{ date, config }]. The since is the date of the oldest commit in the
+ * unbroken run of commits with today's budget; null when none read differs
+ * (no cutoff: every run read was under it). When the newest commit already
+ * differs (today's budget is not committed yet), the since is now: no run is
+ * under it.
+ */
+export function budgetSince(history, pass, minutes, now = new Date().toISOString()) {
+  let since = null;
+  for (const h of history) {
+    if (budgetOf(h.config, pass) !== minutes) return since ?? now;
+    since = h.date;
+  }
+  return null;
 }
 
 const stamp = (s, a, b) => Date.parse(s?.[a] ?? s?.[b] ?? '');
@@ -811,12 +838,16 @@ export function stepUse(jobs, { step, check, minutes }) {
  * last BUDGET_RUNS that reached it, and the suggestion. extend when half or
  * more ran out; shorten to N when none used more than half the budget (N the
  * most used, rounded up to 5, at least 5, and below the budget); hold
- * otherwise; too few to say below BUDGET_MIN.
+ * otherwise; too few to say below BUDGET_MIN. `since` (budgetSince): runs
+ * created before it were under an older budget and are not counted.
  * { used: [{ minutes, ranOut }], ranOut, suggestion }.
  */
-export function budgetUse(runs, { step, check, minutes }) {
+export function budgetUse(runs, { step, check, minutes }, { since = null } = {}) {
   const uses = [];
+  const from = since ? Date.parse(since) : -Infinity;
   for (const r of Array.isArray(runs) ? runs : []) {
+    // A run under an older budget (created before today's) is not judged against it.
+    if (since && !(Date.parse(r?.created_at ?? '') >= from)) continue;
     const u = stepUse(r?.jobs, { step, check, minutes });
     if (u) uses.push(u);
     if (uses.length === BUDGET_RUNS) break;
@@ -834,12 +865,13 @@ export function budgetUse(runs, { step, check, minutes }) {
 }
 
 /** One pass's entry on the Budget line: its use, or n/a with why (`na`). */
-export function budgetEntry({ pass, minutes, na, use }) {
+export function budgetEntry({ pass, minutes, na, use, since = null }) {
   if (na) return `${pass} n/a (${na}) of ${minutes} min`;
   const { used, ranOut, suggestion } = use;
-  if (!used.length) return `${pass}: no runs yet of ${minutes} min (too few to say)`;
+  const of = `of ${minutes} min${since ? ` since ${String(since).slice(0, 10)}` : ''}`;
+  if (!used.length) return `${pass}: no runs yet ${of} (too few to say)`;
   const shown = used.map(u => `${u.minutes}${u.ranOut ? '⏱' : ''}`).join(', ');
-  return `${pass} ${shown} of ${minutes} min (${suggestion === 'too few to say' ? `last ${used.length} run${used.length === 1 ? '' : 's'}; ${suggestion}` : `last ${used.length}: ${ranOut || 'none'} ran out; ${suggestion}`})`;
+  return `${pass} ${shown} ${of} (${suggestion === 'too few to say' ? `last ${used.length} run${used.length === 1 ? '' : 's'}; ${suggestion}` : `last ${used.length}: ${ranOut || 'none'} ran out; ${suggestion}`})`;
 }
 
 /** The health page's Budget line from each on pass's entry, or null with no pass on. */

@@ -61,7 +61,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   LOCK, read, readLock, lockDrift, phaseLints, claudeMdLint, secondCopies, lockedSkills, lessonsTableSplit, lessonsTableShapes, parseLessons, lessonsPathOf, unsentLessons, SENT, gateEnv, healthDirOf, healthDirIn, healthPage, healthLints, HEALTH_DIR, isMain, rootOf, main,
-  shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, budgetPasses, budgetUse, budgetLine, BUDGET_RUNS, BUDGET_EXAMINE, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
+  shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, budgetPasses, budgetUse, budgetLine, budgetOf, budgetSince, BUDGET_RUNS, BUDGET_EXAMINE, BUDGET_HISTORY, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
   reviewConfigOf, repoReviewArgs, readRepoReviews, unansweredPrs, windowPrs, sameLogin, IncompleteRead, REVIEW_DAYS, REVIEW_PRS, REVIEW_PAGES,
 } from './lib.mjs';
 import { RUNS, readRuns, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
@@ -1375,9 +1375,13 @@ export function climbRetireLines(config, env = process.env) {
  * The Budget line (phase 43): for each budgeted pass that is on, its
  * workflow's completed runs (on the default branch, but cross-review's, which
  * run on their PR's), newest first, and each run's jobs until BUDGET_RUNS
- * reached the agent step or BUDGET_EXAMINE runs were examined. A read gh cannot
- * give is that pass's n/a with why, never an empty line and never red. Null
- * with no pass on.
+ * reached the agent step or BUDGET_EXAMINE runs were examined. Only runs since
+ * the budget became today's count: the default branch's commits touching
+ * .keel/keel.json, read once, and the config at each (cached by sha, shared
+ * across passes, at most BUDGET_HISTORY read), newest first, until one has
+ * another budget for the pass (budgetSince). A read gh cannot give, the
+ * history's too, is that pass's n/a with why, never an empty line, never
+ * silently every run, and never red. Null with no pass on.
  */
 export function readBudget(config, env = process.env) {
   const passes = budgetPasses(config);
@@ -1398,19 +1402,48 @@ export function readBudget(config, env = process.env) {
     }
     return branch;
   };
+  let commits = null;
+  const configs = new Map();
+  const configAt = sha => {
+    if (!configs.has(sha)) {
+      const file = api(`repos/${config.repo}/contents/.keel/keel.json?ref=${sha}`);
+      if (typeof file?.content !== 'string') throw new Error(`gh api: .keel/keel.json at ${sha.slice(0, 7)} came back without its content`);
+      try { configs.set(sha, JSON.parse(Buffer.from(file.content, file.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8'))); } catch { throw new Error(`.keel/keel.json at ${sha.slice(0, 7)} is not JSON`); }
+    }
+    return configs.get(sha);
+  };
+  const sinceOf = p => {
+    if (commits === null) {
+      commits = api(`repos/${config.repo}/commits?path=.keel/keel.json&sha=${encodeURIComponent(defaultBranch())}&per_page=30`);
+      if (!Array.isArray(commits)) throw new Error('gh api: the commits touching .keel/keel.json did not come back as a list');
+    }
+    const history = [];
+    for (const c of commits) {
+      if (!configs.has(c?.sha) && configs.size >= BUDGET_HISTORY) break;
+      const date = c?.commit?.committer?.date ?? c?.commit?.author?.date;
+      if (typeof c?.sha !== 'string' || typeof date !== 'string') throw new Error('gh api: a commit touching .keel/keel.json came back without its sha or date');
+      const at = configAt(c.sha);
+      history.push({ date, config: at });
+      if (budgetOf(at, p) !== p.minutes) break;
+    }
+    return budgetSince(history, p, p.minutes);
+  };
   return budgetLine(passes.map(p => {
     try {
+      const since = sinceOf(p);
       const list = api(`repos/${config.repo}/actions/workflows/${p.workflow}/runs?status=completed&per_page=${BUDGET_EXAMINE}${p.branch ? `&branch=${encodeURIComponent(defaultBranch())}` : ''}`)?.workflow_runs;
       if (!Array.isArray(list)) throw new Error(`gh api: the ${p.workflow} runs came back without workflow_runs`);
       const runs = [];
       let reached = 0;
       for (const run of list.slice(0, BUDGET_EXAMINE)) {
+        // Newest first: a run before the since, and every one after it, was under an older budget.
+        if (since && Date.parse(run.created_at ?? '') < Date.parse(since)) break;
         const jobs = api(`repos/${config.repo}/actions/runs/${run.id}/jobs?per_page=100`)?.jobs;
         if (!Array.isArray(jobs)) throw new Error(`gh api: run ${run.id} came back without its jobs`);
-        runs.push({ jobs });
+        runs.push({ created_at: run.created_at, jobs });
         if (budgetUse([{ jobs }], p).used.length && ++reached === BUDGET_RUNS) break;
       }
-      return { ...p, use: budgetUse(runs, p) };
+      return { ...p, since, use: budgetUse(runs, p, { since }) };
     } catch (e) {
       return { ...p, na: e.message };
     }
