@@ -11,8 +11,8 @@
 // repo (a fork's PR is never a machine PR, whatever its branch is called).
 // The newest by createdAt is kept. Each older one, oldest first:
 //   - it holds only data (DATA: docs/health/, docs/inbox/, docs/INBOX.md,
-//     .keel/bounds.json, and the health directory .keel/keel.json "health"
-//     names, when it names one; for keel-loop/ instead docs/loop/ and docs/LOOP.md,
+//     .keel/bounds.json, and the dated pages (<dir>/YYYY-MM-DD.md) in the
+//     health directory .keel/keel.json "health" names, when it names one; for keel-loop/ instead docs/loop/ and docs/LOOP.md,
 //     DATA_BY_PREFIX, plus the files .keel/keel.json "loop" "afterRenderWrites"
 //     names) and GitHub says MERGEABLE → squash-merged, branch kept;
 //   - otherwise, or if that merge fails → closed as superseded by the newest,
@@ -31,7 +31,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isMain, rootOf, main, healthDirOf, HEALTH_DIR } from './lib.mjs';
 
-export const DATA_DIRS = [`${HEALTH_DIR}/`, 'docs/inbox/'];
+export const DATA_DIRS = ['docs/inbox/'];
+/** A health directory's dated pages: the night's data there, never its other files (an index, a shared script). */
+export const datedPages = dir => new RegExp(`^${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\d{4}-\\d{2}-\\d{2}\\.md$`);
+export const DATA_PAGES = [datedPages(HEALTH_DIR)];
 export const DATA_FILES = ['docs/INBOX.md', '.keel/bounds.json'];
 /**
  * A queue whose data is something else: its own paths, instead of the
@@ -52,22 +55,24 @@ export class DrainError extends Error {
  * paths the project says its own step writes beside that data — for
  * keel-loop/, what "afterRenderWrites" names (a roadmap that counts findings
  * is rewritten by every pull, so a PR without it leaves main stale); for the
- * night's queues, its configured health directory. An entry ending in / is a
- * directory.
+ * night's queues, the dated pages in its configured health directory. An
+ * entry ending in / is a directory; a RegExp matches whole paths.
  */
 export const isData = (path, prefix, extra = []) => {
   if (/^docs\/(?:phases|projects|decisions|research|evidence|records)(?:\/|$)/.test(path) || path === 'docs/design.md') return false;
-  const { dirs, files } = DATA_BY_PREFIX[prefix] ?? { dirs: DATA_DIRS, files: DATA_FILES };
-  return files.includes(path) || dirs.some(d => path.startsWith(d)) ||
-    extra.some(e => e.endsWith('/') ? path.startsWith(e) : e === path);
+  const { dirs, files, pages = [] } = DATA_BY_PREFIX[prefix] ?? { dirs: DATA_DIRS, files: DATA_FILES, pages: DATA_PAGES };
+  return files.includes(path) || dirs.some(d => path.startsWith(d)) || pages.some(r => r.test(path)) ||
+    extra.some(e => e instanceof RegExp ? e.test(path) : e.endsWith('/') ? path.startsWith(e) : e === path);
 };
 const dataOnly = (pr, prefix, extra) => Array.isArray(pr.files) && pr.files.length > 0 && pr.files.every(f => isData(f.path, prefix, extra));
 
 /**
  * The paths beyond a queue's own data that it may carry, from the project's
  * .keel/keel.json: for keel-loop/, "loop" "afterRenderWrites"; for the night's
- * queues, the "health" directory (healthDirOf), beside the default. Anything
- * that is not a plain repo-relative path is dropped, never trusted.
+ * queues, the dated pages in the "health" directory (healthDirOf), beside the
+ * default: never the whole directory, since "health" may be a shared one
+ * (docs, scripts) whose other files are not the night's. Anything that is
+ * not a plain repo-relative path is dropped, never trusted.
  */
 export function extraData(keel, prefix) {
   if (prefix === 'keel-loop/') {
@@ -77,7 +82,8 @@ export function extraData(keel, prefix) {
   if (DATA_BY_PREFIX[prefix] || keel?.health === undefined) return [];
   let dir;
   try { dir = healthDirOf(keel); } catch { return []; }
-  return isPlainPath(dir) && dir !== HEALTH_DIR ? [`${dir}/`] : [];
+  if (!isPlainPath(dir) || dir === HEALTH_DIR) return [];
+  return [datedPages(dir)];
 }
 
 /** A repo-relative file path: no leading slash, no `..`, no `.github/`, no glob, no whitespace (the workflow hands it to a shell). */

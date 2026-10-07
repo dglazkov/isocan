@@ -16,10 +16,11 @@
 #   - A merge is checked, not trusted. A GITHUB_TOKEN PR never runs CI, so the
 #     gate that improve.mjs runs here, on this tree, is the check; the
 #     newest PR merges only when it passed and the PR holds nothing but data
-#     (the health directory, docs/inbox/, docs/INBOX.md, .keel/bounds.json).
-#     The health directory is .keel/keel.json "health" (default docs/health),
-#     read at run time; one the project git-ignores makes the run red, since
-#     its page would never be committed.
+#     (tonight's dated health page, docs/inbox/, docs/INBOX.md,
+#     .keel/bounds.json; never the rest of the health directory, which may be
+#     shared). The health directory is .keel/keel.json "health" (default
+#     docs/health), read at run time; one the project git-ignores, or one
+#     that resolves outside the repo (a symlink), makes the run red.
 #   - A guard fires into a room someone is in. A broken instrument (improve
 #     exit 2) or a failing gate makes this run red, and GitHub emails. A
 #     measure outside its bound (exit 1) is news: it is on the page, not red.
@@ -97,8 +98,8 @@ jobs:
         run: |
           node --input-type=module -e '
             import { readFileSync, appendFileSync } from "node:fs";
-            import { healthDirOf } from "./scripts/keel/lib.mjs";
-            const dir = healthDirOf(JSON.parse(readFileSync(".keel/keel.json", "utf8")));
+            import { healthDirIn } from "./scripts/keel/lib.mjs";
+            const dir = healthDirIn(".", JSON.parse(readFileSync(".keel/keel.json", "utf8")));
             console.log(`health: ${dir}`);
             appendFileSync(process.env.GITHUB_OUTPUT, `dir=${dir}\n`);
           '
@@ -247,9 +248,12 @@ jobs:
       # Porcelain, never `git diff --quiet`: a file created for the first time
       # is not in the index, so diff reads it as no change (ledger's audit
       # agent lost every report to that). Only the night's data is committed:
-      # the configured health directory, the inbox and the bounds. A health
-      # directory the project ignores is red: its page would never be
-      # committed (ledger lost its pages that way). The push names its own branch.
+      # tonight's page in the configured health directory (never the rest of
+      # it), the inbox and the bounds, a tracked one that is gone staged as
+      # its deletion. Paths are literal (GIT_LITERAL_PATHSPECS), never
+      # pathspec magic. A page the project ignores is red: it would never be
+      # committed (ledger lost its pages that way), so the probe is a dated
+      # name, as improve writes. The push names its own branch.
       # The body is scripts/keel/pr-body.mjs's (Summary: the commit's files;
       # Evidence: the gate and the measures outside; Merge danger: two-way,
       # data only), from improve's --pr-input.
@@ -263,13 +267,23 @@ jobs:
             echo "::error::No health directory was read from .keel/keel.json."
             exit 1
           fi
-          if git check-ignore -q -- "$HEALTH/x.md"; then
-            echo "::error::$HEALTH is git-ignored, so its health page is never committed: set \"health\" in .keel/keel.json to a directory that is not ignored (keel doctor: health-ignored)."
+          PAGE="$HEALTH/$DAY.md"
+          case "$PAGE" in :*) echo "::error::\"health\" starts with \":\" (git pathspec magic)."; exit 1 ;; esac
+          ignored=0
+          git check-ignore -q -- "$PAGE" || ignored=$?
+          if [ "$ignored" = 0 ]; then
+            echo "::error::$HEALTH is git-ignored ($PAGE), so its health page is never committed: set \"health\" in .keel/keel.json to a directory that is not ignored (keel doctor: health-ignored)."
             exit 1
           fi
+          if [ "$ignored" != 1 ]; then
+            echo "::error::git check-ignore could not read $PAGE (exit $ignored)."
+            exit 1
+          fi
+          # check-ignore refuses literal pathspecs; every git call after it reads paths literally.
+          export GIT_LITERAL_PATHSPECS=1
           PATHS=()
-          for p in "$HEALTH" docs/inbox docs/INBOX.md .keel/bounds.json; do
-            if [ -e "$p" ]; then PATHS+=("$p"); fi
+          for p in "$PAGE" docs/inbox docs/INBOX.md .keel/bounds.json; do
+            if [ -e "$p" ] || [ -n "$(git ls-files -- "$p")" ]; then PATHS+=("$p"); fi
           done
           if [ "${#PATHS[@]}" = 0 ] || [ -z "$(git status --porcelain -- "${PATHS[@]}")" ]; then
             echo "Nothing changed."
