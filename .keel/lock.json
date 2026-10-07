@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.5",
+  "practice": "0.8.6",
   "files": {
     ".agents/skills/keel/SKILL.md": {
       "practice": "agents-md",
@@ -51,11 +51,11 @@
     },
     "scripts/keel/improve.mjs": {
       "practice": "night",
-      "sha256": "f7943829cd8bd3c11db8fb186174b88cf9de8f4c9d71131274b65ac6bb2117e8"
+      "sha256": "95e3f2a80688b5b4ffe91a5374cda1408c8517c0bb9ee84c45d13d81bb8890fe"
     },
     "scripts/keel/lib.mjs": {
       "practice": "night",
-      "sha256": "37769130d6c72c0147f43ebfaeac70276cdfc54d4ccacde62b88b77e17295a11"
+      "sha256": "dfb87b396a163ff2ee243b0b50919884006c1f864d4953b48550e70f7b7f0e7c"
     },
     "scripts/keel/pr-body.mjs": {
       "practice": "night",
