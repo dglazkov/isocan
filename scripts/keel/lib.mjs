@@ -50,6 +50,11 @@
 //                            repoReviewArgs, readRepoReviews, windowPrs, unansweredPrs:
 //                            the repo-wide read, page by page (the night and
 //                            keel loose-ends); IncompleteRead: never a count
+//   budgetPasses(config), budgetUse(runs, pass), budgetLine(entries)
+//                            each budgeted pass's agent-step minutes in its
+//                            last runs, which ran out, and a suggestion
+//                            (BUDGET_STEPS: workflow → its agent step's name
+//                            and its "Did the agent run?" check's)
 //   main(meta, fn)           run a script: --json or text, and its exit code
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -727,6 +732,118 @@ export async function readTendPass(root) {
   if (text === null) return undefined;
   try { return JSON.parse(text); } catch { return 'unreadable'; }
 }
+
+// ---- budget use (keel phase 43) -----------------------------------------------
+//
+// Each budgeted pass that is on (its key in .keel/keel.json) shows the minutes
+// its agent step used in its last runs, from GitHub's own record of the runs
+// (the step's startedAt to completedAt), which ran out, and a suggestion. A
+// line, never a measure (a budget used fully is not unhealthy: lesson 6), and
+// never a change: the budget is money, and a person sets it.
+
+/**
+ * Each workflow's agent step (the one that uses claude-code-action) and the
+ * step right after it that says whether the agent ran, by name. The agent
+ * step is continue-on-error, so it says success even when the agent never
+ * started; its check step's failure says that. tests/workflows.test.mjs
+ * holds this equal to the shipped workflows.
+ */
+const AGENT_CHECK = 'Did the agent run?';
+export const BUDGET_STEPS = Object.freeze({
+  'keel-tend.yml': Object.freeze({ agent: 'Tend', check: AGENT_CHECK }),
+  'keel-climb.yml': Object.freeze({ agent: 'Climb', check: AGENT_CHECK }),
+  'keel-cross-review.yml': Object.freeze({ agent: 'Review', check: AGENT_CHECK }),
+});
+/**
+ * The budgeted passes, in the line's order: the config key that turns each on,
+ * its workflow, the default minutes (tend.mjs TEND_DEFAULTS, climb.mjs DEFAULTS,
+ * cross-review.mjs DEFAULTS), and whether its runs are on the default branch
+ * (cross-review runs on its PR's branch).
+ */
+export const BUDGET_PASSES = Object.freeze([
+  { pass: 'tend', key: 'tend', workflow: 'keel-tend.yml', minutes: 30, branch: true },
+  { pass: 'climb', key: 'climb', workflow: 'keel-climb.yml', minutes: 45, branch: true },
+  { pass: 'cross-review', key: 'crossReview', workflow: 'keel-cross-review.yml', minutes: 15, branch: false },
+]);
+/** The window: at most this many runs with the agent step. */
+export const BUDGET_RUNS = 8;
+/** Fewer runs than this is too few to say. */
+export const BUDGET_MIN = 4;
+/** Runs examined per pass before the read stops looking for more with the step. */
+export const BUDGET_EXAMINE = 20;
+
+/** The budgeted passes that are on: [{ pass, workflow, step, check, minutes, branch }], with today's budget. */
+export function budgetPasses(config) {
+  return BUDGET_PASSES.filter(p => config?.[p.key] !== undefined && config[p.key] !== null)
+    .map(p => {
+      const m = config[p.key]?.budget?.minutes;
+      return { pass: p.pass, workflow: p.workflow, step: BUDGET_STEPS[p.workflow].agent, check: BUDGET_STEPS[p.workflow].check, minutes: Number.isFinite(m) && m > 0 ? m : p.minutes, branch: p.branch };
+    });
+}
+
+const stamp = (s, a, b) => Date.parse(s?.[a] ?? s?.[b] ?? '');
+
+/**
+ * One run's agent step: { seconds, ranOut } or null when the run never reached
+ * it (no such step, skipped, or no times) or the agent never started (its
+ * check step, `check`, concluded failure; a run without that step, from
+ * before it existed, is counted). `jobs` is the run's jobs as the API gives
+ * them (steps with name, started_at/startedAt, completed_at/completedAt,
+ * conclusion). Ran out: cancelled or timed out, or used the budget less one minute.
+ */
+export function stepUse(jobs, { step, check, minutes }) {
+  for (const job of Array.isArray(jobs) ? jobs : []) {
+    const steps = Array.isArray(job?.steps) ? job.steps : [];
+    if (check && steps.some(s => s?.name === check && s.conclusion === 'failure')) return null;
+    for (const s of steps) {
+      if (s?.name !== step || s.conclusion === 'skipped') continue;
+      const from = stamp(s, 'started_at', 'startedAt'), to = stamp(s, 'completed_at', 'completedAt');
+      if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) continue;
+      const seconds = (to - from) / 1000;
+      return { seconds, ranOut: s.conclusion === 'cancelled' || s.conclusion === 'timed_out' || seconds >= (minutes - 1) * 60 };
+    }
+  }
+  return null;
+}
+
+/**
+ * From the runs, newest first (each { jobs }): the agent step's use in the
+ * last BUDGET_RUNS that reached it, and the suggestion. extend when half or
+ * more ran out; shorten to N when none used more than half the budget (N the
+ * most used, rounded up to 5, at least 5, and below the budget); hold
+ * otherwise; too few to say below BUDGET_MIN.
+ * { used: [{ minutes, ranOut }], ranOut, suggestion }.
+ */
+export function budgetUse(runs, { step, check, minutes }) {
+  const uses = [];
+  for (const r of Array.isArray(runs) ? runs : []) {
+    const u = stepUse(r?.jobs, { step, check, minutes });
+    if (u) uses.push(u);
+    if (uses.length === BUDGET_RUNS) break;
+  }
+  const ranOut = uses.filter(u => u.ranOut).length;
+  let suggestion;
+  if (uses.length < BUDGET_MIN) suggestion = 'too few to say';
+  else if (ranOut * 2 >= uses.length) suggestion = 'extend';
+  else {
+    const most = Math.max(...uses.map(u => u.seconds)) / 60;
+    const n = Math.max(5, Math.ceil(most / 5) * 5);
+    suggestion = most <= minutes / 2 && n < minutes ? `shorten to ${n}` : 'hold';
+  }
+  return { used: uses.map(u => ({ minutes: Math.round(u.seconds / 60), ranOut: u.ranOut })), ranOut, suggestion };
+}
+
+/** One pass's entry on the Budget line: its use, or n/a with why (`na`). */
+export function budgetEntry({ pass, minutes, na, use }) {
+  if (na) return `${pass} n/a (${na}) of ${minutes} min`;
+  const { used, ranOut, suggestion } = use;
+  if (!used.length) return `${pass}: no runs yet of ${minutes} min (too few to say)`;
+  const shown = used.map(u => `${u.minutes}${u.ranOut ? '⏱' : ''}`).join(', ');
+  return `${pass} ${shown} of ${minutes} min (${suggestion === 'too few to say' ? `last ${used.length} run${used.length === 1 ? '' : 's'}; ${suggestion}` : `last ${used.length}: ${ranOut || 'none'} ran out; ${suggestion}`})`;
+}
+
+/** The health page's Budget line from each on pass's entry, or null with no pass on. */
+export const budgetLine = entries => entries.length ? `Budget: ${entries.map(budgetEntry).join(' · ')}` : null;
 
 // ---- review comments (keel phase 41) -------------------------------------------
 //
