@@ -156,7 +156,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   bottom of the document it is describing. A page can post
   `{ type: "isocan:click", element, label }` to its parent when a person
   presses a control that goes nowhere yet; it lands as a comment on the item's
-  thread and wakes the agent that published it (`isocan --agent-help`).
+  thread and wakes the agent that published it (`isocan --agent-help`). A page
+  that posts `{ type: "isocan:anchor", anchor }` as it changes screen opens its
+  next version at that fragment, so an agent's edit does not send the person
+  back to the first screen.
 - **Inherited Recent work**: Context shows recent activity beside a linked
   canvas's design and pins, with its source and covered range. CLI
   `isocan context` and MCP summaries show the same bounded reading and say

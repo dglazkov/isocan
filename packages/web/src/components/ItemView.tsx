@@ -53,7 +53,7 @@ import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
 import { sendPrototypeClick } from "../lib/prototypeclick.ts";
-import { FrameAnchor, anchored } from "../lib/frameanchor.ts";
+import { FrameAnchor, anchored, anchorFromMessage, nextSpot, type FrameSpot } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
 import { useUiStore } from "../stores/uiStore.ts";
@@ -1783,28 +1783,39 @@ function HtmlItemView({
 }) {
   const origin = useContentOrigin(canvasId, [blobHash, ...warm]);
   const stack = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!itemId || !actor) return;
-    const hear = (e: MessageEvent) => {
-      const frames = stack.current?.querySelectorAll("iframe") ?? [];
-      if (![...frames].some((frame) => frame.contentWindow === e.source)) return;
-      const click = clickFromMessage(e.data, itemId);
-      if (click) sendPrototypeClick(canvasId, actor, click);
-    };
-    window.addEventListener("message", hear);
-    return () => window.removeEventListener("message", hear);
-  }, [canvasId, itemId, actor]);
   // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
   // loaded with. A renewed signature is for the same bytes, and swapping it
   // in would reload the document for nothing — see `frame.ts`.
   const frame = useFrameSrc(origin, canvasId, blobHash);
   // Full screen's `#…`, for a document that opens somewhere inside itself (lib/frameanchor.ts).
   const anchor = useContext(FrameAnchor);
-  if (!frame) return <div className="html-view" />;
+  const [heldSpot, setSpot] = useState<FrameSpot>({ itemId, blobHash, reported: null, carried: null });
+  const spot = nextSpot(heldSpot, itemId, blobHash);
+  if (spot !== heldSpot) setSpot(spot);
+  const src = frame ? anchored(frame.src, spot.carried ?? anchor) : null;
+  useEffect(() => {
+    if (!itemId || !actor) return;
+    const hear = (e: MessageEvent) => {
+      const frames = stack.current?.querySelectorAll("iframe") ?? [];
+      const from = [...frames].find((frame) => frame.contentWindow === e.source);
+      if (!from) return;
+      const click = clickFromMessage(e.data, itemId);
+      if (click) sendPrototypeClick(canvasId, actor, click);
+      // Only the frame of the version on screen says where this item is: the
+      // pool also holds the slides either side and the version just replaced.
+      const at = anchorFromMessage(e.data);
+      if (at !== null && from.getAttribute("src") === src) {
+        setSpot((was) => (was.itemId === itemId ? { ...was, reported: at } : was));
+      }
+    };
+    window.addEventListener("message", hear);
+    return () => window.removeEventListener("message", hear);
+  }, [canvasId, itemId, actor, src]);
+  if (!src || !frame) return <div className="html-view" />;
   return (
     <HtmlView
       stackRef={stack}
-      src={anchored(frame.src, anchor)}
+      src={src}
       sandbox={frame.sandbox}
       title={filename}
       warm={warm

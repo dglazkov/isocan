@@ -650,6 +650,39 @@ Three rules hold it to what a person meant:
 There is no verb for sending a click: it is a person's gesture, and an agent
 has nothing to click.
 
+## Keeping a person's screen across your versions
+
+Every `isocan edit` of a prototype is a new document, and a new document starts
+at its first screen. A person four screens into your prototype would be sent
+back to the start each time you push a version. The frame cannot remember for
+you: it is sandboxed to an opaque origin with no storage, and the canvas cannot
+read its `location.hash`. So the page says where it is:
+
+```js
+// each time the router shows a screen
+parent.postMessage({ type: "isocan:anchor", anchor: "checkout" }, "*");
+```
+
+When the next version of the **same item** replaces the frame — on the canvas
+or in full screen — the canvas opens it at `#checkout`. So your router must:
+
+- open at `location.hash` when it loads (strip the `#`), and fall back to its
+  first screen when there is none or it names no screen;
+- post `isocan:anchor` each time it shows a screen, with the same string it
+  reads from `location.hash`.
+
+The rules:
+
+- Only the frame of the version on screen is heard, and only while a person can
+  use it: on the canvas once they have entered the item, or in full screen.
+- An anchor longer than 200 characters is ignored. A leading `#` is dropped.
+- Nothing carries to a different item, and nothing outlives the frame: leave
+  full screen, reload, or pan the item out of view, and it next opens where it
+  always did — or where full screen's `?at=` says (*Play from here*). A
+  reported anchor wins over `?at=` for the next version.
+- It is a fragment, not a request: no fetch, no comment, nothing for anybody
+  else. Each person's tab keeps its own.
+
 ## When you need a person
 
 `isocan ask "…"` asks and stops. It posts your question to the Chat — or to a
