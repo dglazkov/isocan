@@ -461,15 +461,19 @@ export function recordsDisagree(projects) {
 
 /**
  * Status lines no reader understands: a word outside PHASE_WORDS (one per
- * phase), and a phases.md with phase headings and not one Status line (one
- * per file: its phases are invisible).
+ * phase), a phase with no Status line while others in its file have one (one
+ * per phase: that phase is invisible), and a phases.md with phase headings and
+ * not one Status line (one per file, the whole file's phases invisible).
  */
 export function statusUnknown(projects) {
   const out = [];
   for (const p of projects) {
     if (!p.phases?.length) continue;
     if (p.phases.every(x => x.word === null)) { out.push({ path: p.phasesPath, detail: `${p.phasesPath}: ${p.phases.length} phase${p.phases.length === 1 ? '' : 's'}, no Status line` }); continue; }
-    for (const x of p.phases) if (x.word !== null && !PHASE_WORDS[x.word]) out.push({ path: `${p.phasesPath}:${x.line}`, detail: `${p.name} phase ${x.id} says ${x.word}` });
+    for (const x of p.phases) {
+      if (x.word === null) out.push({ path: `${p.phasesPath}:${x.line}`, detail: `${p.name} phase ${x.id} has no Status line` });
+      else if (!PHASE_WORDS[x.word]) out.push({ path: `${p.phasesPath}:${x.line}`, detail: `${p.name} phase ${x.id} says ${x.word}` });
+    }
   }
   return out;
 }
@@ -604,17 +608,23 @@ export const RETIRE_AFTER = 3;
 
 /**
  * The climb jobs whose last RETIRE_AFTER `keel-climb/<job>/` PRs (newest by
- * createdAt, from gh's closed list) were all closed unmerged: [{ job, prs }].
- * A person reading three and merging none is the verdict; reopening one, or
- * merging the next, lifts it. `prs`: [{ headRefName, number, createdAt, mergedAt }].
+ * createdAt, from gh's list of EVERY state: `--state all`) were all closed
+ * unmerged: [{ job, prs }]. A merged or an open PR among the newest three
+ * breaks the streak; a closed-only list never shows an open one, so it would
+ * reach past it to older closed PRs. A person reading three and merging none is the
+ * verdict; reopening one, or merging the next, lifts it.
+ * `prs`: [{ headRefName, number, createdAt, mergedAt, state }].
  */
+/** gh's state when it is given (CLOSED, not MERGED or OPEN); without one, no merge time. */
+const closedUnmerged = p => (p.state === undefined ? !p.mergedAt : String(p.state).toUpperCase() === 'CLOSED' && !p.mergedAt);
+
 export function climbRetiring(prs, jobs) {
   const out = [];
   for (const job of jobs) {
     const mine = prs.filter(p => typeof p?.headRefName === 'string' && p.headRefName.startsWith(`${CLIMB_PREFIX}${job}/`))
       .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
       .slice(0, RETIRE_AFTER);
-    if (mine.length === RETIRE_AFTER && mine.every(p => !p.mergedAt)) out.push({ job, prs: mine.map(p => p.number) });
+    if (mine.length === RETIRE_AFTER && mine.every(closedUnmerged)) out.push({ job, prs: mine.map(p => p.number) });
   }
   return out;
 }
