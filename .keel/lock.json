@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.0",
+  "practice": "0.8.1",
   "files": {
     ".agents/skills/keel/SKILL.md": {
       "practice": "agents-md",
@@ -51,11 +51,11 @@
     },
     "scripts/keel/improve.mjs": {
       "practice": "night",
-      "sha256": "abdd9911552fdf1bdaa4557fc9231bd1eb1e453d0b848f6f7e518cd4f59f59a3"
+      "sha256": "cb29a125543c254390f692c39f519c2933c3f8af8bf2caa9b3c82f20563ca8a8"
     },
     "scripts/keel/lib.mjs": {
       "practice": "night",
-      "sha256": "c165ba0f1f5a929fcef4f7abf5133d4a4c3993870c2056582f9e702a93f2abc7"
+      "sha256": "22357ceded829716dbf7bccfeeb9c1f2dcf74712e78b7fcbc2d285be49cde3ec"
     },
     "scripts/keel/pr-body.mjs": {
       "practice": "night",
@@ -63,11 +63,11 @@
     },
     "scripts/keel/test-ledger.mjs": {
       "practice": "night",
-      "sha256": "2ad01318263684d00d7babd7be70a98a7a412ca74a0b9eb04eb3fdf2f7670bf0"
+      "sha256": "074011638cea59897951d6a8e0cb2068015e1b935790ff9739e3f7c0299e7f32"
     },
     "scripts/loop.mjs": {
       "practice": "loop",
-      "sha256": "e84b31fef7cab5b1742c1929a2a9965d89e669b7fb67f06db5a8751fe96c7421"
+      "sha256": "be60b49d62c1fa5c34cbaaf1e5027899e3e436b8fe422023739496fa3dea517f"
     },
     "tests/loop.test.mjs": {
       "practice": "loop",

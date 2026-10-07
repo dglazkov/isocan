@@ -39,7 +39,7 @@
 // With the climb practice on, the page also carries one line about the newest
 // climb night (.keel/climb/night.json, which the night fetches): kept N and its
 // PR, or kept nothing and why, and a line for each climb job whose last three
-// PRs were closed unmerged (it proposes its own retirement; gh's closed list).
+// PRs were closed unmerged (it proposes its own retirement; gh's list of every state).
 // build_time times "climb".build once, when the project names one: bound
 // "climb".buildBudgetMs, else the value is recorded only (no bound, never outside).
 // With "tend" set, one line about the newest tend pass (.keel/tend/pass.json,
@@ -59,7 +59,7 @@ import {
   LOCK, read, readLock, lockDrift, phaseLints, claudeMdLint, secondCopies, lockedSkills, lessonsTableSplit, lessonsTableShapes, parseLessons, lessonsPathOf, unsentLessons, SENT, gateEnv, healthDirOf, healthLints, HEALTH_DIR, isMain, rootOf, main,
   shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
 } from './lib.mjs';
-import { RUNS, readRuns, testsConfigOf, flaky, slower, machineClass, lastOutcome, aloneCommand } from './test-ledger.mjs';
+import { RUNS, readRuns, testsConfigOf, flaky, slower, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
 
 export const BOUNDS = '.keel/bounds.json';
 /** The default health directory; a project's own is .keel/keel.json `health` (healthDirOf). */
@@ -295,6 +295,8 @@ async function gateWorkflow(ctx) {
 const ledgerHistory = ctx => once(ctx, 'ledger', async () => ({ opts: testsConfigOf(ctx.config), ...await readRuns(ctx.root) }));
 const tooFew = (n, window, what = `recorded runs in ${RUNS}`) => `${what}: ${n}, fewer than the window of ${window}; n/a until there are ${window} (the gate's own runs and CI's keel-test-runs artifacts fill it), never a zero`;
 const named = t => `${t.file} "${t.name}"`;
+/** The ledger measures' note when the history is the nights' own: CI's check does not keep its runs. */
+const nightNote = runs => nightOnly(runs) ? `; ${NIGHT_ONLY} (add its upload step: keel-test-runs, path .keel/test-runs/)` : '';
 
 /** A built phase's cited tests with a name: [{ file, name }] from its Acceptance (`tests/<file>: "<name>"`). */
 export function citedNames(raw) {
@@ -604,13 +606,13 @@ export const MEASURES = [
     id: 'flaky_tests', what: 'tests that both passed and failed on one clean tree, in the newest window of recorded runs (the test ledger)', unit: 'tests', bound: 0, better: 'lower', ratchet: false,
     async run(ctx) {
       const { opts, runs, skipped } = await ledgerHistory(ctx);
-      if (runs.length < opts.window) return { na: tooFew(runs.length, opts.window) };
+      if (runs.length < opts.window) return { na: `${tooFew(runs.length, opts.window)}${nightNote(runs)}` };
       const recent = runs.slice(-opts.window);
       const found = flaky(recent);
       const trees = new Set(recent.filter(r => r.dirty === false && r.tree).map(r => r.tree)).size;
       return {
         value: found.length,
-        detail: `${found.length ? list(found.map(t => `${named(t)} (passed ${t.passed}, failed ${t.failed})`), 3) : 'none'}; the newest ${opts.window} of ${plural(runs.length, 'run')}, ${plural(trees, 'clean tree')}${skipped ? `, ${skipped} unreadable` : ''}`,
+        detail: `${found.length ? list(found.map(t => `${named(t)} (passed ${t.passed}, failed ${t.failed})`), 3) : 'none'}; the newest ${opts.window} of ${plural(runs.length, 'run')}, ${plural(trees, 'clean tree')}${skipped ? `, ${skipped} unreadable` : ''}${nightNote(runs)}`,
         facts: { flaky: found.map(({ file, name, tree, passed, failed }) => ({ file, name, tree, passed, failed })), runs: runs.length, window: opts.window },
       };
     },
@@ -619,14 +621,14 @@ export const MEASURES = [
     id: 'slow_tests', what: 'tests in the newest recorded run above factor × their median over the last window passing runs on the same machine class, and above the floor (the test ledger)', unit: 'tests', bound: 0, better: 'lower', ratchet: false,
     async run(ctx) {
       const { opts, runs } = await ledgerHistory(ctx);
-      if (runs.length < opts.window) return { na: tooFew(runs.length, opts.window) };
+      if (runs.length < opts.window) return { na: `${tooFew(runs.length, opts.window)}${nightNote(runs)}` };
       const newest = runs.at(-1), machine = machineClass(newest.machine);
       const same = runs.filter(r => r !== newest && machineClass(r.machine) === machine).length;
-      if (same < opts.window) return { na: tooFew(same, opts.window, `earlier recorded runs on ${machine}`) };
+      if (same < opts.window) return { na: `${tooFew(same, opts.window, `earlier recorded runs on ${machine}`)}${nightNote(runs)}` };
       const found = slower(runs, opts, newest);
       return {
         value: found.length,
-        detail: `${found.length ? list(found.map(t => `${named(t)} ${Math.round(t.ms)} ms against ${t.median} ms`), 3) : 'none'}; the newest run (${newest.date}) against ${opts.window} before it on ${machine}; ×${opts.factor} and +${opts.floorMs} ms`,
+        detail: `${found.length ? list(found.map(t => `${named(t)} ${Math.round(t.ms)} ms against ${t.median} ms`), 3) : 'none'}; the newest run (${newest.date}) against ${opts.window} before it on ${machine}; ×${opts.factor} and +${opts.floorMs} ms${nightNote(runs)}`,
         facts: { slower: found, factor: opts.factor, floorMs: opts.floorMs, window: opts.window, machine },
       };
     },
@@ -1193,17 +1195,18 @@ export function page({ config, date, results, proposal, tightened, by = COMMAND,
 
 /**
  * The retirement lines (phase 36): a climb job whose last three keel-climb/<job>/
- * PRs were closed unmerged, read from gh's closed list. None when climb is off
+ * PRs were closed unmerged, read from gh's list of every state (a merged or
+ * open one breaks the streak). None when climb is off
  * or there is no repo; a list gh cannot give is one line saying so, never red.
  */
 export function climbRetireLines(config, env = process.env) {
   const jobs = config?.climb?.jobs;
   if (!Array.isArray(jobs) || !jobs.length || !config.repo) return [];
   const gh = env.KEEL_GH || 'gh';
-  const r = spawnSync(gh, ['pr', 'list', '--repo', config.repo, '--state', 'closed', '--json', 'headRefName,number,createdAt,mergedAt', '--limit', '200'], { env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnSync(gh, ['pr', 'list', '--repo', config.repo, '--state', 'all', '--json', 'headRefName,number,createdAt,mergedAt,state', '--limit', '200'], { env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   let prs = null;
   if (!r.error && r.status === 0) try { prs = JSON.parse(r.stdout); } catch {}
-  if (!Array.isArray(prs)) return [`Climb: whether a job should retire is unread tonight (gh pr list --state closed: ${r.error?.message ?? (r.status !== 0 ? `exit ${r.status}` : 'not a JSON list')}).`];
+  if (!Array.isArray(prs)) return [`Climb: whether a job should retire is unread tonight (gh pr list --state all: ${r.error?.message ?? (r.status !== 0 ? `exit ${r.status}` : 'not a JSON list')}).`];
   return climbRetiring(prs, jobs).map(retireLine);
 }
 
