@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: untriaged
+decision: proposed
+rank: never
+project: wireframes
+since: 2026-10-07
+note: "By design: wireframes deliberately separate structural slot props (choice, flag, count, index) from visual token theming so one spec renders cleanly in default IDEO greys or any governing design system via --w-* CSS variables."
 ---
 
 # Wireframe slots lack design token palette bindings
@@ -20,4 +24,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+The separation is explicit by design in packages/modules/wireframe/src/theme.ts:5-47, packages/modules/wireframe/src/catalog/types.ts:4-28, and docs/projects/wireframes/design.md:238-272. WireSlot (packages/modules/wireframe/src/spec.ts:249-268) restricts slot props to structural Jev-askable primitives (choice, flag, count, index), while themeCss (packages/modules/wireframe/src/theme.ts:23-28) maps a governing design system's tokens onto 11 --w-* CSS variables at the document level so blocks never carry per-slot color overrides.

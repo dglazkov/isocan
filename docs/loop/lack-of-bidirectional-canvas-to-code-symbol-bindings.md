@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: untriaged
+decision: proposed
+rank: never
+project: design-partner
+since: 2026-10-07
+note: "By design: canvas items bind to workspace files via backingOf (canvasStore.ts:242-250) and designWorkflowProcedure (design-workflow.ts:13-22, 68-90) directs coding agents to inspect repository source directly rather than maintaining brittle AST symbol pointers on canvas items."
 ---
 
 # Lack of bidirectional canvas to code symbol bindings
@@ -19,4 +23,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/core/src/canvasitem.ts:25-103 (which defines canvas-on-canvas inception items wearing kind='canvas' and source=<url>), packages/core/src/address.ts:27-411 (HTTP/URL route parsers for canvases, items, decks, module pages, and workbenches), packages/modules/wireframe/src/catalog/index.ts:17-23 (the wireframe primitive/block lookup), and packages/api/src/design-workflow.ts:13-98. Isocan binds items to on-disk files through per-machine workspace backing (packages/web/src/stores/canvasStore.ts:242-250, docs/projects/workbench/files-on-disk.md) and hands off design context via 'isocan design craft <request> --out <dir>' and designWorkflowProcedure (design-workflow.ts:18-20, 88-90), where the coding agent in the repo inspects actual component source, token/CSS files, and package configuration directly. Storing AST node or code symbol pointers in core item schemas would go stale on every refactor across arbitrary languages and frameworks; same calibration as declined lack-of-design-to-code-jsx-tailwind-export-pipeline.

@@ -5,7 +5,10 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: untriaged
+decision: proposed
+rank: never
+since: 2026-10-07
+note: "By design: named spatial regions are groups and areas (area.ts:133-140), presentation frames are slide-marked items served at DECK_ROUTE (address.ts:81-91), and individual items have routes at ITEM_ROUTE (address.ts:34-69), while camera pan/zoom is per-viewer state (viewport.ts:4-165)."
 ---
 
 # Missing spatial canvas viewport camera bookmarks
@@ -19,4 +22,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+As explained in packages/core/src/address.ts:44-56, what a viewer is looking at is a route or local camera transform rather than a canvas operation in packages/core/src/model.ts:53-418: address.ts:29-168 provides addressable routes for the canvas (/p/:canvasId), a fullscreen item (/p/:canvasId/i/:itemId), the slide deck (/p/:canvasId/deck), a module page (/p/:canvasId/x/:segment), and the workbench (/p/:canvasId/w/:wbItemId), mounted over CanvasPage in packages/web/src/App.tsx:148-177. In packages/web/src/lib/viewport.ts:4-165, Viewport (tx, ty, scale) is per-viewer state with fitBounds (:148-165) and fitInto (:137-144) to frame any world box. Named spatial regions on a canvas are already represented as groups and areas (packages/core/src/area.ts:133-140) and presentation frames are slide-marked items rendered at DECK_ROUTE (packages/core/src/address.ts:81-91), so a separate persistent camera-bookmark model would duplicate groups, areas, and slides.

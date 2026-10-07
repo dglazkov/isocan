@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Always isomorphic
-decision: untriaged
+decision: proposed
+rank: never
+project: design-partner
+since: 2026-10-07
+note: "Superseded by DesignComparisonDialog: web users compare alternatives and record decisions with standing history through DesignComparisonDialog.tsx, while the raw prefer/standings metadata helper remains a CLI/evals primitive."
 ---
 
 # Web UI lacks preference recording and standings
@@ -18,4 +22,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+packages/cli/src/main.ts:8852-8900 and packages/core/src/preference.ts:5-126 implement 'isocan prefer' and 'isocan standings' over item metadata (prefer=<actor> / prefer-vs=<id>). In packages/web, side-by-side option trying, choice recording, and standing history are instead provided by packages/web/src/components/DesignComparisonDialog.tsx:71-115 and packages/web/src/components/DesignComparisonButton.tsx:10-22, so a second web eye-test picker for raw prefer metadata is unnecessary.

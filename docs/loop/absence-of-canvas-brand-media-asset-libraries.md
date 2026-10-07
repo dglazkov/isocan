@@ -5,7 +5,10 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: untriaged
+decision: proposed
+rank: never
+since: 2026-10-07
+note: "By design and unrequested: packages/core/src/media.ts:29-48 maps extensions to MIME types for content-addressed ItemVersion blobs (packages/core/src/model.ts:228), while wireframe glyphs and crossed-box placeholders in packages/modules/wireframe/src/catalog/draw.ts:42-71 are intentional IDEO-style low-fi marks."
 ---
 
 # Absence of canvas brand media asset libraries
@@ -18,4 +21,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Checked packages/core/src/media.ts:29-48, packages/core/src/model.ts:182-234, and packages/modules/wireframe/src/catalog/draw.ts:42-71. media.ts maps file extensions to MIME types and default dimensions; model.ts stores content-addressed blobHash entries on Item.versions; and draw.ts:42-71 deliberately renders greyscale Unicode glyphs (GLYPHS) and crossed-box img() placeholders so wireframes stay low-fi (draw.ts:4-16). Reusable component symbols are tracked separately in docs/loop/lack-of-reusable-component-symbol-library-instantiation.md:1-24, while a brand media/icon asset registry is unrequested.

@@ -5,7 +5,10 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: untriaged
+decision: proposed
+rank: never
+since: 2026-10-07
+note: "Stale: canvas groups in packages/core/src/canvas-groups.ts:12-17, 52-60 and packages/core/src/canvas-group-types.ts:5-22 are already bounded, titled spatial containers with markdown briefs, nested containerId membership (packages/core/src/model.ts:188-190), and labeled row/column grids, alongside area sheets in packages/core/src/area.ts:39-119."
 ---
 
 # Canvas lacks section containers for spatial partitioning
@@ -20,4 +23,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Checked packages/core/src/canvas-groups.ts:12-60, packages/core/src/canvas-group-types.ts:5-27, packages/core/src/group-stack.ts:72-75, packages/core/src/model.ts:186-198, packages/core/src/area.ts:39-119,packages/core/src/canvasitem.ts:25-36, and packages/web/src/components/Workbench.tsx:208-238. Group items (kind=group, canvas-groups.ts:12-16) are bounded spatial frames (1600x1000 default) with a title band, markdown brief band, explicit nested containerId membership (model.ts:188-190), and labeled 2D row/column grids (canvas-group-types.ts:5-22), while legacy canvases have titled bounded sheets in area.ts:39-119. groupStackAction (group-stack.ts:72-75) is merely an optional toggle between spread and stacked pile rendering.

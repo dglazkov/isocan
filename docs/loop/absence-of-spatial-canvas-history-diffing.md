@@ -5,7 +5,10 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: untriaged
+decision: proposed
+rank: never
+since: 2026-10-07
+note: "Unrequested: packages/core/src/timeline.ts:342-358 and packages/web/src/components/Scrubber.tsx:100-107 already provide interactive oplog scrubbing across sequence numbers, and packages/core/src/diff.ts:204-226 diffs item versions; a whole-canvas spatial diff overlay across two sequence numbers has no measured demand."
 ---
 
 # Absence of spatial canvas history diffing
@@ -20,4 +23,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Checked packages/core/src/ops.ts:94-599, packages/core/src/timeline.ts:342-358, packages/core/src/diff.ts:204-226, and packages/web/src/components/Scrubber.tsx:100-107. timeline.ts:342-358 (past) folds LogEntry records (ops.ts:565-599) up to any sequence number so Scrubber.tsx:100-107 and isocan at replay historical canvas states directly on the stage, while diffVersions (diff.ts:204-226) compares two versions of an item in VersionCompare.tsx. Computing a separate spatial bounding-box diff overlay between two arbitrary sequence numbers is an unrequested feature beyond scrubbing and item version diffing.

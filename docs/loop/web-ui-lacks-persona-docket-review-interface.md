@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Always isomorphic
-decision: untriaged
+decision: proposed
+rank: never
+project: personas
+since: 2026-10-07
+note: "By design: the board canvas itself is the web docket interface where each open finding is a card answered with checkmark or cross reactions, and isocan docket was built as its CLI counterpart."
 ---
 
 # Web UI lacks persona docket review interface
@@ -19,4 +23,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+As documented in packages/core/src/docket.ts:9-20, packages/cli/src/main.ts:9026-9037, and docs/research/2026-09-07-the-docket.md:249-302, scripts/docket.mjs places one item per open persona finding on the board canvas wearing docket=<slug> metadata. In the Web UI, a person answers findings directly on the canvas by clicking the checkmark or cross chips in packages/web/src/components/Reactions.tsx:116-160 or replying in the thread, and packages/cli/src/main.ts:9058-9154 provides the CLI twin for terminal triage.

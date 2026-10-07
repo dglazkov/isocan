@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Fast everywhere, local-first
-decision: untriaged
+decision: proposed
+rank: never
+project: multiuser
+since: 2026-10-07
+note: "By design: binary file uploads are explicitly not queued offline (api.ts:750-768), and Toolbar.tsx:245-273 uploads the chosen background image before sending project.update with its content hash."
 ---
 
 # Toolbar background image upload blocks canvas patch
@@ -16,4 +20,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/web/src/components/Toolbar.tsx:245-273 and packages/web/src/lib/api.ts:750-801: when a user picks a background image file (up to GROUND_MAX_BYTES = 5MB), Toolbar.tsx:261 awaits uploadBlob(canvas.id, file, file.name) and then dispatches sendEchoed(canvas.id, actor, { type: 'project.update', patch: groundPatch(up.blobHash) }) at lines 262-265. As documented in packages/web/src/lib/api.ts:750-768 ('Blobs are NOT queued offline, and the refusal is loud'), arbitrary binary files are not staged in IndexedDB to avoid quota/eviction failure modes and dangling blobHashes, and changing a canvas background image is a rare setup action.

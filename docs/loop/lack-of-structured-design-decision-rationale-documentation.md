@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: RESOLVED
 loop_goal: What canvas tools teach us
-decision: untriaged
+decision: proposed
+rank: never
+project: design-partner
+since: 2026-10-07
+note: "Stale (and resolved in Loop): design.compare and design.decide persist immutable DesignComparison and DesignDecisionRecord payloads with hypotheses, tradeoffs, authority, and rationale (design-decision.ts:13-69, ops.ts:235-238), rendered in DesignTaskCard.tsx:66."
 ---
 
 # Lack of structured design decision rationale documentation
@@ -19,4 +23,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+This claim is stale (and Loop's own state is RESOLVED). packages/core/src/ops.ts:235-238 defines design.compare, design.respond, and design.decide operations backed by packages/core/src/design-decision.ts:13-69: DesignComparison (:13-27) records structured alternatives with hypothesis and tradeoff plus recommendedAlternativeId and recommendation; DesignDecisionInput (:48-58) captures authority with explicit reason or rationale across human-choice, canvas-delegation, external-report, and agent-judgment branches; and DesignDecisionRecord (:60-69) stores the immutable adoption decision on the canonical comment via designDecisionPort (packages/api/src/design-decision.ts:7-15). DesignTaskPanel (packages/web/src/components/DesignTaskPanel.tsx:14-47) and DesignTaskCard (packages/web/src/components/DesignTaskCard.tsx:66) render these effectiveDecisions with their chosen alternative, author, and rationale.

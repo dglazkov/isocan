@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Always isomorphic
-decision: untriaged
+decision: proposed
+rank: never
+project: sprint
+since: 2026-10-07
+note: "By design and gated on Phase 6 human verification: web users start and advance sprints via /sprint in Chat while the enrolled facilitator agent lays the board and SprintChip shows the active phase's participant action."
 ---
 
 # Web UI lacks design sprint facilitation controls
@@ -19,4 +23,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+packages/cli/src/main.ts:10023-10365 defines the CLI sprint subcommands, while packages/web/src/components/SprintChip.tsx:49-222 and packages/web/src/lib/sprint.ts:113-203 render the active phase banner, timer, and single participant button. As designed in docs/projects/sprint/journey.md:38-65 and packages/cli/src/main.ts:10151-10153, sprint state is derived from '/sprint <phase> [duration]' messages in the Chat thread and facilitated by an enrolled agent, and docs/projects/sprint/phases.md:63-64 blocks new sprint surface until the first human sprint walk.

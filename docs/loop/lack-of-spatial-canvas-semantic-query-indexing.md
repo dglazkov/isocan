@@ -5,7 +5,10 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: untriaged
+decision: proposed
+rank: never
+since: 2026-10-07
+note: "By design: canvases hold tens to hundreds of items in memory where linear scans in area.ts:90-140, canvassort.ts:76-83, and canvasswitch.ts:63-98 are sub-millisecond, design requests match canonical IDs by policy (design-request-reader.ts:14,76-79), and agents scope reads by group or root item IDs (canvas-context.ts:9-15)."
 ---
 
 # Lack of spatial canvas semantic query indexing
@@ -19,4 +22,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+The cited functions perform in-memory linear scans by design: areasOf, inArea, itemsIn, areaOf, and findArea (packages/core/src/area.ts:90-140) iterate Object.values(canvas.items); filterCanvases (packages/core/src/canvassort.ts:76-83) checks case-insensitive space-separated terms across title and description; fuzzyMatch (packages/core/src/canvasswitch.ts:63-98) scores ordered character and word-start matches for the quick switcher; and matches (packages/api/src/design-request-reader.ts:76-79) filters design requests by canonical requestId, outputItemId, threadId, and commentId as stated at packages/api/src/design-request-reader.ts:14 ('Request selection uses canonical identities; neither client scans arbitrary JSON artifacts'). At canvas scale (tens to a few hundred items), in-memory linear iteration takes microseconds, and agents avoid full-canvas downloads by scoping context reads to a group or explicit root item IDs via ContextReadOptions (packages/api/src/canvas-context.ts:9-15).

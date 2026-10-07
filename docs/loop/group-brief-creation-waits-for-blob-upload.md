@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Fast everywhere, local-first
-decision: untriaged
+decision: proposed
+rank: never
+project: canvas-groups
+since: 2026-10-07
+note: "True mechanism, narrow by design: saveGroupBrief and createCanvasGroup (canvasgroups.ts:44-49, 56-70) upload group.md before sending the group operation via sendEchoedResult; staging offline blobs for group.change would require extending outbox blob staging beyond item.add/addVersion. Reopen if offline group creation is needed."
 ---
 
 # Group brief creation waits for blob upload
@@ -18,4 +22,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/web/src/lib/canvasgroups.ts:44-49 and 56-70: saveGroupBrief (line 47) and createCanvasGroup (line 62) await uploadBlob(canvasId, new Blob([brief || '\n'], { type: 'text/markdown' }), 'group.md') (packages/web/src/lib/api.ts:769-800) before calling changeGroupItem or changeCanvasGroup, which dispatch through sendEchoedResult (canvasgroups.ts:32, 39). While text nodes and drawings stage deterministic blobs offline via uploadOrStageTextBlob (packages/web/src/lib/upload.ts:440-457), createCanvasGroup dispatches a structural group.change (wrap or create) rather than item.add, and api.ts:755-768 explicitly documents the offline upload refusal message. Reopen if offline group creation or brief editing becomes a user requirement.

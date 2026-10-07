@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPMwQ
-decision: untriaged
+decision: proposed
+rank: never
+project: design-partner
+since: 2026-10-07
+note: "By design: DesignSystemsDialog.tsx:50-51 polls every 10s while visible via everyWhileVisible because governing design resolution includes inherited cross-canvas sources (design-system-reader.ts:61-69) that do not advance the local canvasStore.lastSeq."
 ---
 
 # Design system dialog polling triggers network traffic
@@ -16,4 +20,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+Verified in packages/web/src/components/DesignSystemsDialog.tsx:39-51: SystemScope subscribes to local canvasStore.lastSeq (line 39) and also registers everyWhileVisible(refresh, 10_000) (line 50, implemented in packages/web/src/lib/whilevisible.ts:29-60 to pause whenever document.visibilityState === 'hidden'). As packages/api/src/design-system-reader.ts:61-69 shows, readDesignSystem calls readInheritedCanvases (line 64) and readGoverningDesign (line 66), which can resolve an inherited DESIGN.md from a linked source canvas on another oplog whose edits never increment the open canvas's lastSeq. Furthermore, DesignSystemsDialog.tsx:78-80 notes that re-reads over an existing reading in hand do not set settling or disable controls (fixed in RH-5, 27 Sep 2026), and the timer only runs while the modal is open and the tab is visible.

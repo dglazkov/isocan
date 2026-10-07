@@ -5,7 +5,11 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Always isomorphic
-decision: untriaged
+decision: proposed
+rank: never
+project: inbox
+since: 2026-10-07
+note: "Stale: the Web UI already synchronizes canvas seen-marks with the home on every visit via fetchSeen/putSeen and noteVisit, while unreadStore.ts intentionally keeps only per-thread comment watermarks in localStorage."
 ---
 
 # Web UI lacks canvas seen mark synchronization
@@ -18,4 +22,4 @@ decision: untriaged
 
 ## Our read
 
-Not yet checked against the code.
+The claim is false. While packages/web/src/stores/unreadStore.ts:46-76 stores fine-grained per-thread comment watermarks in localStorage, home-synchronized canvas seen-marks are implemented in packages/web/src/lib/api.ts:589-597 (fetchSeen and putSeen targeting /api/seen) and packages/web/src/lib/seen.ts:141-150 (noteVisit), which packages/web/src/pages/CanvasPage.tsx:328-335 calls on every canvas arrival using the same endpoint as packages/cli/src/main.ts:9489-9509.
