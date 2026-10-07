@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -127,4 +128,47 @@ describe("the roadmap is derived, not written", () => {
     const missing = links.filter((rel) => !existsSync(path.join(repo, "docs", rel)));
     expect(missing, "a walk row whose link does not resolve from docs/").toEqual([]);
   });
+
+  it("publishes the canvas card only when asked, with links that resolve off the repo", () => {
+    /**
+     * The canvas copy was hand-kept and drifted (7 Oct 2026); now it is this
+     * page, published. On a canvas there is no `docs/` for a relative link to
+     * resolve from, so every one is rewritten to GitHub, and the card says
+     * which commit it came from.
+     */
+    expect(script).toMatch(/if \(process\.argv\.includes\("--publish"\)\) await publishToCanvas\(page\);/);
+    // --check exits before the publish line can run.
+    expect(script.indexOf('includes("--check")')).toBeLessThan(script.indexOf("await publishToCanvas(page)"));
+    const said = execFileSync("node", [`${repo}/scripts/roadmap.mjs`, "--publish", "--dry-run"], { cwd: repo, encoding: "utf8", timeout: 60_000 });
+    const file = /would publish "Roadmap" → (.+)$/m.exec(said)?.[1];
+    expect(file, said).toBeTruthy();
+    const card = readFileSync(file!.trim(), "utf8");
+    expect(card).toMatch(/^> Generated from `main` at \[`[0-9a-f]+`\]/);
+    expect(card).not.toMatch(/\]\((projects|research|verify|loop)\//);
+    expect(card).toContain("](https://github.com/dglazkov/isocan/blob/main/docs/");
+  }, 120_000);
+
+  it("cannot make anything red: a failing publish leaves the commit hook at exit 0, and says so in its log", () => {
+    // Run the real hook in a scratch repo whose roadmap.mjs fails the way an
+    // unreachable home would. The commit must not hear about it.
+    const dir = mkdtempSync(path.join(os.tmpdir(), "acme-roadmap-hook-"));
+    try {
+      const git = (...a: string[]) => execFileSync("git", a, { cwd: dir, encoding: "utf8", timeout: 30_000, env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" } });
+      git("init", "-q");
+      mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      mkdirSync(path.join(dir, ".isocan"), { recursive: true });
+      writeFileSync(path.join(dir, "scripts", "roadmap.mjs"), 'console.error("home unreachable"); process.exit(1);\n');
+      writeFileSync(path.join(dir, ".isocan", "roadmap.json"), '{"canvas":"prj_ACME"}');
+      const hook = path.join(repo, "scripts", "hooks", "post-commit");
+      const out = execFileSync("sh", [hook], { cwd: dir, encoding: "utf8", timeout: 30_000 });
+      expect(out).toContain("roadmap.log");
+      // The publish is detached; wait for its log line rather than a count of ticks.
+      const log = path.join(dir, ".isocan", "roadmap.log");
+      const until = Date.now() + 20_000;
+      while (Date.now() < until && !(existsSync(log) && /exit \d/.test(readFileSync(log, "utf8")))) execFileSync("sleep", ["0.1"], { timeout: 5_000 });
+      expect(readFileSync(log, "utf8")).toMatch(/home unreachable[\s\S]*exit 1/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  }, 60_000);
 });

@@ -19,13 +19,19 @@
  *   node scripts/roadmap.mjs           # write docs/ROADMAP.md
  *   node scripts/roadmap.mjs --check   # fail if it is out of date, for CI
  */
-import { readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync, writeFileSync, existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register as registerLoader } from "node:module";
 import { register } from "tsx/esm/api";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
+
+/** The roadmap's own canvas on isocan.io — the one the README and the guides link. */
+const ROADMAP_CANVAS = "prj_OE-AuGl119";
+const GITHUB_DOCS = "https://github.com/dglazkov/isocan/blob/main/docs/";
 
 /**
  * **One reader, and now one process.**
@@ -168,7 +174,10 @@ const lines = [
   "what it describes. Run `node scripts/roadmap.mjs` after changing one.",
   "",
   "The same board lives on a canvas, [\\[isocan\\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),",
-  "open to anyone with the address — it should say what `main` says.",
+  "open to anyone with the address. It is this page, published by",
+  "`node scripts/roadmap.mjs --publish` from the post-commit hook on any machine",
+  "that opted in with `.isocan/roadmap.json`; a publish that fails never fails a",
+  "commit or a build, and says so in `.isocan/roadmap.log`.",
   "",
   `**${count("built")} built · ${left} still open** — of which ${count("partial")} partly`,
   `built, ${count("designed")} designed, ${count("blocked")} blocked, and`,
@@ -251,3 +260,73 @@ if (process.argv.includes("--check")) {
 
 writeFileSync(out, page);
 console.log(`docs/ROADMAP.md — ${docs.length} docs, ${count("built")} built, ${left} open, ${owed.length} need a person`);
+
+if (process.argv.includes("--publish")) await publishToCanvas(page);
+
+/**
+ * **The canvas copy, generated like the file** (7 Oct 2026). The roadmap's
+ * canvas, [isocan] Roadmap, was a hand-kept copy that said it "should say
+ * what `main` says" with nothing making it — the same second copy this
+ * script was written to end. `--publish` puts this page on that canvas as one
+ * card, edited in place and left alone when unchanged (`scripts/lib/panel.mjs`,
+ * the board's own mechanism), as the Board actor.
+ *
+ * **It can never make the build red.** It runs only when asked: from the
+ * post-commit hook on a machine that opted in (`.isocan/roadmap.json`), which
+ * exits 0 whatever happens, or by hand. `--check`, the tests and CI never
+ * reach it — CI cannot reach a canvas anyway — so an unreachable home or a
+ * canvas somebody else changed costs a line in `.isocan/roadmap.log`, not a
+ * red tick.
+ *
+ *   node scripts/roadmap.mjs --publish                 # write the file, then the card
+ *   node scripts/roadmap.mjs --publish --dry-run       # write the card to a temp file only
+ *   node scripts/roadmap.mjs --publish --canvas prj_…  # another canvas (default: the roadmap's)
+ *   node scripts/roadmap.mjs --publish --as-me         # as you, not as Board
+ */
+async function publishToCanvas(markdown) {
+  const argv = process.argv;
+  const arg = (name) => {
+    const i = argv.indexOf(name);
+    return i >= 0 ? argv[i + 1] : undefined;
+  };
+  const target =
+    arg("--canvas") ??
+    process.env.ISOCAN_ROADMAP_CANVAS ??
+    (() => {
+      const f = path.join(repo, ".isocan", "roadmap.json");
+      return existsSync(f) ? JSON.parse(readFileSync(f, "utf8")).canvas : undefined;
+    })() ??
+    ROADMAP_CANVAS;
+  const card = canvasCard(markdown, execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: repo, encoding: "utf8" }).trim());
+  const { panelPublisher } = await import("./lib/panel.mjs");
+  if (argv.includes("--dry-run")) {
+    const dir = mkdtempSync(path.join(tmpdir(), "isocan-roadmap-"));
+    const { publish } = await panelPublisher({ canvas: null, dryDir: dir, key: "roadmap" });
+    await publish("roadmap", "Roadmap", card, null, { mime: "text/markdown", ext: "md" });
+    return;
+  }
+  const { connect } = await import("@isocan/api");
+  const { BOARD_IDENTITY } = await import("./board-identity.mjs");
+  const home = await connect(argv.includes("--as-me") ? {} : { identity: BOARD_IDENTITY });
+  const canvas = await home.canvas(target);
+  const { publish, changed } = await panelPublisher({ canvas, keepVersions: 30, key: "roadmap" });
+  await publish("roadmap", "Roadmap", card, null, { mime: "text/markdown", ext: "md" });
+  console.log(changed.length ? `roadmap card ${changed[0].what} on ${target}` : `roadmap card unchanged on ${target}`);
+}
+
+/**
+ * The page as a card reads it: the generator's HTML comment becomes a line
+ * saying where it came from, and every relative link — written to resolve
+ * from `docs/` — points at the file on GitHub, because on a canvas there is
+ * no `docs/` to resolve from.
+ */
+function canvasCard(markdown, sha) {
+  const body = markdown
+    .replace(/^<!--[\s\S]*?-->\n/, "")
+    .replace(/\]\((?!https?:|#|mailto:)([^)\s]+)\)/g, (_, rel) => `](${GITHUB_DOCS}${rel})`);
+  return (
+    `> Generated from \`main\` at [\`${sha}\`](https://github.com/dglazkov/isocan/commit/${sha}) by ` +
+    "`scripts/roadmap.mjs --publish`. Edit a document's front matter, not this card.\n\n" +
+    body
+  );
+}

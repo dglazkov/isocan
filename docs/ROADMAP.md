@@ -7,7 +7,10 @@ status of a thing lives in that thing's front matter, so it cannot drift from
 what it describes. Run `node scripts/roadmap.mjs` after changing one.
 
 The same board lives on a canvas, [\[isocan\] Roadmap](https://isocan.io/p/prj_OE-AuGl119),
-open to anyone with the address — it should say what `main` says.
+open to anyone with the address. It is this page, published by
+`node scripts/roadmap.mjs --publish` from the post-commit hook on any machine
+that opted in with `.isocan/roadmap.json`; a publish that fails never fails a
+commit or a build, and says so in `.isocan/roadmap.log`.
 
 **47 built · 59 still open** — of which 49 partly
 built, 10 designed, 0 blocked, and

@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const board = readFileSync(fileURLToPath(new URL("../scripts/canvas-board.mjs", import.meta.url)), "utf8");
+/** The publish mechanism, shared with the roadmap since 7 Oct 2026. */
+const panel = readFileSync(fileURLToPath(new URL("../scripts/lib/panel.mjs", import.meta.url)), "utf8");
 const hook = readFileSync(fileURLToPath(new URL("../scripts/hooks/post-commit", import.meta.url)), "utf8");
 
 /**
@@ -184,18 +186,21 @@ describe("a run stacks a version, never a second item", () => {
     // Title matching means the first person to rename a panel on the canvas
     // gets a duplicate on the next run. The property survives a rename; the
     // title fallback exists only to adopt panels made before this rule.
-    expect(board).toContain("properties?.board === slug");
-    expect(board).toContain("properties: { board: slug");
+    expect(panel).toContain("properties?.[key] === slug");
+    expect(panel).toContain("properties: { [key]: slug");
+    // And the board publishes under the `board` key, through that one copy.
+    expect(board).toContain('key: "board"');
+    expect(board).toContain('from "./lib/panel.mjs"');
   });
 
   it("writes nothing when the rendered bytes have not changed", () => {
     // Otherwise the version stack is four hundred identical entries, which is
     // not a history of anything.
-    expect(board).toContain("if (current?.blobHash === hash) return;");
+    expect(panel).toContain("if (current?.blobHash === hash) return;");
   });
 
   it("stacks the version through the edit verb — the one the note wrongly said was missing", () => {
-    expect(board).toContain("board.edit(item.id");
+    expect(panel).toContain("canvas.edit(item.id");
   });
 });
 

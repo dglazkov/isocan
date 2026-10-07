@@ -21,6 +21,21 @@
 set -u
 root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 
+# **The roadmap's canvas card**, on a machine that opted in by writing
+# `.isocan/roadmap.json` (`{"canvas":"prj_OE-AuGl119"}`). Same two rules:
+# detached, logged, and never this commit's problem — `roadmap.mjs --publish`
+# leaves the card alone when its bytes have not changed, so most commits cost
+# a read. It runs before the board's checks below because it is not the
+# board's, and the watcher does not do it.
+if [ -f "$root/.isocan/roadmap.json" ]; then
+  {
+    printf '\n── %s  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(git -C "$root" rev-parse --short HEAD)"
+    node "$root/scripts/roadmap.mjs" --publish 2>&1
+    printf 'exit %s\n' "$?"
+  } >>"$root/.isocan/roadmap.log" 2>&1 &
+  echo "isocan: refreshing the roadmap's canvas card → .isocan/roadmap.log"
+fi
+
 # No board configured on this machine — nothing to tell, and nothing to say
 # about it. `.isocan/` is git-ignored, so this is per-machine by construction.
 [ -f "$root/.isocan/board.json" ] || exit 0

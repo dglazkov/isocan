@@ -32,14 +32,14 @@
  * for the same reason: "0 contrast failures" and "nothing could be measured"
  * must never render the same. Broken reads amber and says which command failed.
  */
-import { createHash } from "node:crypto";
 import { execSync, execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register } from "tsx/esm/api";
 import { BOARD_IDENTITY } from "./board-identity.mjs";
+import { panelPublisher } from "./lib/panel.mjs";
 
 // The bin's own trick: register tsx so the workspace's TypeScript sources
 // import directly, then load the API. Dynamic, because a static import would
@@ -104,7 +104,6 @@ const board = DRY || !CANVAS ? null : await (await homeOnce()).canvas(CANVAS);
 const git = (...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trimEnd();
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
 /* ── what the repo says about itself ─────────────────────────────────────── */
 
@@ -895,72 +894,14 @@ function briefPanel(commits, board, rm, f, now) {
 /** Only a dry run renders to disk — the write path hands the daemon the bytes
  *  as a value, so the temp directory the CLI's `add <file>` demanded is gone. */
 const out = DRY ? mkdtempSync(path.join(tmpdir(), "isocan-board-")) : null;
-let existing = DRY || !board ? [] : await board.items();
-const changed = [];
-
 /**
  * One panel onto the canvas: created once, then a new VERSION every time its
- * bytes change — and nothing at all when they have not.
- *
- * **Identity is a property, not the title.** A panel is found by
- * `properties.board === <slug>`, so renaming "Recently" on the canvas to
- * "This week" keeps it the same panel. Title matching is the fallback, used
- * once per panel to adopt one made before this rule existed — and it stamps the
- * property as it goes, so the fallback is needed exactly once.
- *
- * The bytes are compared against the current version's `blobHash`, which is the
- * sha256 of what the canvas is holding. So an unchanged run is genuinely a
- * no-op rather than an identical version stacked on an identical version, and
- * the stack that IS there is the history of the repo's health. The item the
- * comparison needs comes back from the call that created it — the re-list
- * after every create is gone.
+ * bytes change, and nothing at all when they have not — found by
+ * `properties.board`, and its stack bounded at `KEEP_VERSIONS` (every commit
+ * re-publishes these, and 149 versions of `Build` in a fortnight was silt).
+ * The mechanism is `scripts/lib/panel.mjs`, shared with the roadmap.
  */
-async function publish(slug, title, html, place) {
-  if (DRY) {
-    const file = path.join(out, `${slug}.html`);
-    writeFileSync(file, html);
-    console.log(`would publish "${title}" → ${file}`);
-    return;
-  }
-  const hash = sha256(Buffer.from(html));
-  const byProp = existing.find((i) => i.properties?.board === slug);
-  const item = byProp ?? existing.find((i) => i.title === title);
-
-  if (!item) {
-    const made = await board.add({
-      title,
-      content: html,
-      mime: "text/html",
-      filename: `${slug}.html`,
-      ...(place?.at ? { at: place.at } : {}),
-      ...(place?.size ? { size: place.size } : {}),
-      properties: { board: slug, ...(place?.props ?? {}) },
-    });
-    changed.push({ title, what: "created" });
-    existing.push(made);
-    return;
-  }
-  // Adopting a panel from before identity was a property: stamp it once, and
-  // never match this one by title again.
-  if (!byProp) await board.set(item.id, { properties: { board: slug } });
-
-  const current = item.versions.find((v) => v.id === item.currentVersionId);
-  if (current?.blobHash === hash) return;
-  await board.edit(item.id, { content: html, mime: "text/html", filename: `${slug}.html` });
-  changed.push({ title, what: `v${item.versions.length + 1}` });
-  /**
-   * **A regenerated panel is not a history worth keeping whole.** Every
-   * commit re-publishes these, so a stack grows by the repo's commit rate —
-   * 149 versions of `Build` in a fortnight, 7 MB of panels nobody would open
-   * twice, and every version's metadata riding on every load of the canvas.
-   * The design note called this silting and named a new ITEM per run as the
-   * way it happens; a new version per run is the same silt, slower. So the
-   * generator that makes the versions bounds them: the newest
-   * `KEEP_VERSIONS` stay (a fortnight of daily runs, enough to see a goal
-   * drift), the rest go, and `gc` sweeps their bytes on its next hour.
-   */
-  await board.pruneVersions(item.id, KEEP_VERSIONS);
-}
+const { publish, existing, changed } = await panelPublisher({ canvas: board, dryDir: out, keepVersions: KEEP_VERSIONS, key: "board" });
 
 /* ── the run ─────────────────────────────────────────────────────────────── */
 
