@@ -13,7 +13,8 @@
 // the working directory), a directory that ignores itself (it holds a
 // .gitignore of `*`), and keeps the
 // newest runs of each lane (a suite's folder and config: KEEP, or the window
-// and ten more when that is larger; TOTAL in all), and yields one thing to stdout, at the end: the hygiene
+// and ten more when that is larger, reserved first; TOTAL in all prunes only
+// the rest), and yields one thing to stdout, at the end: the hygiene
 // block. A clean run is one line. It never changes the other reporter's
 // output, and whatever goes wrong here is a line, never a throw. It changes
 // the run's exit code in one case only: a run that executed no test (none
@@ -36,8 +37,8 @@
 // configEnv variable as { name, set, hash } (a short sha256 of its value),
 // NODE_OPTIONS's value (null when unset; hashed the same way when it looks
 // secret: token=, secret=, key=, password=), and the preloads, so a finding's
-// run-alone command reproduces it (a set variable as NAME=<as in the run>,
-// an unset one as env -u NAME). `filtered`
+// run-alone command reproduces it (a set variable as
+// NAME="${NAME:?set NAME as it was in the run}", an unset one as env -u NAME). `filtered`
 // is true when the run was narrowed (--test-name-pattern, --test-skip-pattern,
 // --test-only): a test absent from it was not run, not renamed. `workflow`
 // is the GitHub Actions workflow that ran it (none outside Actions), so the
@@ -225,7 +226,9 @@ const quote = s => `'${s.replaceAll("'", "'\\''")}'`;
 /**
  * The command that runs one test alone as it ran when it was seen: the
  * finding's own setting (each config variable that was set, as
- * `NAME=<as in the run>` since its value is never recorded, NODE_OPTIONS's
+ * `NAME="${NAME:?set NAME as it was in the run}"` since its value is never
+ * recorded: it runs when the person's shell has it set, and stops with that
+ * message when not; NODE_OPTIONS's
  * own value; each that was unset as `env -u NAME`; then its
  * --import/--require preloads; `preload` is for a finding that carries none),
  * from the folder its suite ran in. `here` is where the command is printed,
@@ -241,8 +244,9 @@ export function aloneCommand(test, preload = [], { here = '.' } = {}) {
   const dir = test.dir ?? '.';
   const vars = Object.entries(test.setting?.env ?? {});
   // A value is printed for NODE_OPTIONS only (never a secret: one that looks like one is recorded as a hash);
-  // any other set variable is a placeholder, so a configEnv value never reaches a printed command.
-  const env = vars.filter(([, v]) => isSet(v)).map(([k, v]) => k === 'NODE_OPTIONS' && typeof v === 'string' ? `${k}=${quote(v)}` : `${k}=<as in the run>`);
+  // any other set variable is taken from the person's shell, or the command stops and says to set it,
+  // so a configEnv value never reaches a printed command and the command still runs as printed.
+  const env = vars.filter(([, v]) => isSet(v)).map(([k, v]) => k === 'NODE_OPTIONS' && typeof v === 'string' ? `${k}=${quote(v)}` : `${k}="\${${k}?set ${k} as it was in the run}"`);
   const unset = vars.filter(([, v]) => !isSet(v)).map(([k]) => `-u ${k}`);
   const file = test.file ? posix.relative(dir === '.' ? '' : dir, test.file) || test.file : '';
   const command = [...env, ...(unset.length ? ['env', ...unset] : []), 'node', ...(test.setting?.preload ?? preload), '--test', `--test-name-pattern=${quote(pattern)}`, file].filter(Boolean).join(' ');
@@ -314,9 +318,12 @@ export function where(cwd = process.cwd()) {
 /**
  * Write one run, keep the newest `keep` of each lane (a suite's folder and
  * config: one pass of a project with four lanes writes four runs, and each
- * lane needs its own window of history) and the newest `total` in all
- * (TOTAL, or lanes × (window + 10) when that is larger), and
- * make the directory ignore itself. Returns the file name.
+ * lane needs its own window of history), reserving each lane's newest
+ * max(KEEP, window + 10) first, then prune only the rest (unreadable records,
+ * and runs past the reserve when `keep` is larger) down to `total` in all
+ * (TOTAL, or lanes × (window + 10) when that is larger): many runs of one lane
+ * never evict another lane's baseline. Make the directory ignore itself.
+ * Returns the file name.
  */
 export async function record(root, run, { window = DEFAULTS.window, keep = Math.max(KEEP, window + 10), total } = {}) {
   const dir = join(root, RUNS);
@@ -331,11 +338,17 @@ export async function record(root, run, { window = DEFAULTS.window, keep = Math.
     try { lane = laneOf(JSON.parse(await readFile(join(dir, n), 'utf8'))); } catch { continue; } // unreadable: only the total prunes it
     lanes.set(lane, [...(lanes.get(lane) ?? []), n]);
   }
-  for (const ns of lanes.values()) for (const n of ns.slice(0, Math.max(0, ns.length - keep))) drop.add(n);
-  const kept = names.filter(n => !drop.has(n));
-  // The total never undercuts a lane's own window: it grows with the lanes.
+  // Each lane's newest max(KEEP, window + 10) are reserved first: no other lane's runs, however many, evict them.
+  const reserve = Math.min(keep, Math.max(KEEP, window + 10)), reserved = new Set();
+  for (const ns of lanes.values()) {
+    for (const n of ns.slice(0, Math.max(0, ns.length - keep))) drop.add(n);
+    for (const n of ns.slice(Math.max(0, ns.length - reserve))) reserved.add(n);
+  }
+  // The total prunes only the rest (oldest first): it grows with the lanes, and never reaches a reserved run.
   const cap = total ?? Math.max(TOTAL, lanes.size * (window + 10));
-  for (const n of kept.slice(0, Math.max(0, kept.length - cap))) drop.add(n);
+  const kept = names.filter(n => !drop.has(n));
+  const spare = kept.filter(n => !reserved.has(n));
+  for (const n of spare.slice(0, Math.max(0, Math.min(spare.length, kept.length - cap)))) drop.add(n);
   for (const old of drop) await rm(join(dir, old), { force: true });
   return name;
 }

@@ -31,6 +31,9 @@
 //                            `health`, default docs/health (improve writes,
 //                            the workflow commits, drain, fleet and loose-ends
 //                            read it; one reader)
+//   healthPage, healthOutside, healthDirIn(root, config)
+//                            the dated page's name; a health directory that
+//                            resolves outside the repo (a symlink) is refused
 //   healthLints(root, config)  a bad `health` (health-config), or a health
 //                            directory git ignores (health-ignored): the night
 //                            writes its page and never commits it (a promise:
@@ -44,14 +47,15 @@
 //   reviewConfigOf(config), reviewFragment, reviewComments(pr, reviewers)
 //                            a PR's review comments and which are answered
 //                            (keel review and reviews_unanswered: one rule);
-//                            repoReviewQuery, unansweredPrs: the repo-wide read
-//                            (the night and keel loose-ends)
+//                            repoReviewArgs, readRepoReviews, windowPrs, unansweredPrs:
+//                            the repo-wide read, page by page (the night and
+//                            keel loose-ends); IncompleteRead: never a count
 //   main(meta, fn)           run a script: --json or text, and its exit code
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { readFile, readdir, lstat, readlink } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const LOCK = '.keel/lock.json';
@@ -196,7 +200,8 @@ export function lessonsTableSplit(text, path = 'docs/lessons.md') {
  * The ways a lessons table ends before its last row, beyond a blank line
  * (lessonsTableSplit, above, covers that one): prose between numbered
  * rows, a second header row, and a numbered row stranded after the table's
- * section ends. Each is a lessons-table-split lint naming its line. The table
+ * section ends; and a row an unescaped `|` splits into more cells than the
+ * header has. Each is a lessons-table-split lint naming its line. The table
  * is the first one whose header's first cell is `#`, else the first table; a
  * second header is one whose first cell matches it. After a table of another
  * kind, a numbered row may be that table's kind of thing, and is left alone.
@@ -216,6 +221,13 @@ export function lessonsTableShapes(text, path = 'docs/lessons.md') {
   let e = h + 2;
   while (e < lines.length && row(lines[e])) e++;
   const lint = [], say = message => lint.push({ rule: 'lessons-table-split', path, message });
+  // A row wider than its header: an unescaped `|` in a cell (even inside backticks) splits it, and the
+  // cells past the header's are dropped when it renders, and shift what a reader parses (ledger's lesson 28).
+  const width = cells(lines[h]).length;
+  for (let i = h + 2; i < e; i++) {
+    const n = cells(lines[i]).length;
+    if (n > width) say(`row ${first(lines[i]) || '?'} (line ${i + 1}) has ${n} cells against the header's ${width}: an unescaped \`|\` splits a cell (backticks do not protect it), so its text shifts and the rest is dropped; escape each \`|\` inside a cell as \`\\|\``);
+  }
   let section = true, prose = null, foreign = false;
   for (let i = e; i < lines.length; i++) {
     const l = lines[i];
@@ -538,8 +550,9 @@ export const HEALTH_DIR = 'docs/health';
 /**
  * What is wrong with .keel/keel.json `health`: a directory inside the repo,
  * relative, with no `..`, `.` or empty segment, no backslash, glob or
- * whitespace (the workflow hands it to a shell), not under .git/ or
- * .github/, and not .keel itself. Absent is fine (the default). Returns a list of messages.
+ * whitespace (the workflow hands it to a shell), no leading `:` (git
+ * pathspec magic), not under .git/ or .github/, and not .keel itself. Absent
+ * is fine (the default). Returns a list of messages.
  */
 export function healthProblems(config) {
   const h = config?.health;
@@ -548,6 +561,8 @@ export function healthProblems(config) {
   if (typeof h !== 'string' || !h) return bad('must be a non-empty string');
   if (h.startsWith('/') || /^[A-Za-z]:/.test(h)) return bad('must be relative to the repo, not absolute');
   if (/[\\*?[\]\s]/.test(h)) return bad('cannot hold a backslash, glob or whitespace');
+  // git reads a leading `:` as pathspec magic (`:(top)`, `:!x`), even after `--`.
+  if (h.startsWith(':')) return bad('cannot start with `:` (git reads it as pathspec magic)');
   const segs = h.replace(/\/$/, '').split('/');
   if (segs.some(s => s === '..')) return bad('cannot leave the repo (`..`)');
   if (segs.some(s => s === '.' || s === '')) return bad('cannot hold an empty or `.` segment');
@@ -564,6 +579,37 @@ export function healthDirOf(config) {
   return config?.health === undefined ? HEALTH_DIR : config.health.replace(/\/$/, '');
 }
 
+/** A dated health page's name: the page improve writes, and the name every probe of the directory uses. */
+export const healthPage = (dir, date) => `${dir}/${date}.md`;
+
+/**
+ * Whether the health directory, as it stands on disk under `root`, resolves
+ * outside the repo: a symlinked component that points elsewhere. Reads the
+ * deepest part of the path that exists (what is not there yet is created
+ * inside it). Returns the message, or null.
+ */
+export function healthOutside(root, dir) {
+  let base;
+  try { base = realpathSync(root); } catch { return null; }
+  const segs = dir.split('/');
+  for (let n = segs.length; n > 0; n--) {
+    let real;
+    try { real = realpathSync(join(root, ...segs.slice(0, n))); } catch { continue; }
+    const rel = relative(base, real);
+    if (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel)) return null;
+    return `${dir} resolves outside the repo (${segs.slice(0, n).join('/')} → ${real}): the night writes its pages only inside it; make "health" a real directory in the repo`;
+  }
+  return null;
+}
+
+/** healthDirOf, and the directory must not resolve outside `root` (a symlink): either throws. */
+export function healthDirIn(root, config) {
+  const dir = healthDirOf(config);
+  const outside = healthOutside(root, dir);
+  if (outside) throw new Error(`.keel/keel.json: "health": ${outside}`);
+  return dir;
+}
+
 /**
  * The health directory's lints, for a project with the night practice or a
  * `health` setting: health-config when `health` is not a plain directory in
@@ -571,12 +617,15 @@ export function healthDirOf(config) {
  * so the night writes the page and its PR never carries it (ledger, phase 33).
  * Outside a git repository there is nothing to ignore.
  */
-export async function healthLints(root, config) {
+export async function healthLints(root, config, day = new Date().toISOString().slice(0, 10)) {
   if (!(config?.practices ?? []).includes('night') && config?.health === undefined) return [];
   const problems = healthProblems(config);
   if (problems.length) return problems.map(message => ({ rule: 'health-config', path: '.keel/keel.json', message }));
   const dir = healthDirOf(config);
-  const ignored = await new Promise(done => execFile('git', ['check-ignore', '-q', '--', `${dir}/x.md`], { cwd: root, encoding: 'utf8' }, e => done(!e)));
+  const outside = healthOutside(root, dir);
+  if (outside) return [{ rule: 'health-config', path: dir, message: outside }];
+  // The page this run writes (its date), as improve writes it: an ignore rule for pages (`2026-*.md`) is caught, not just one for the directory.
+  const ignored = await new Promise(done => execFile('git', ['check-ignore', '-q', '--', healthPage(dir, day)], { cwd: root, encoding: 'utf8' }, e => done(!e)));
   if (!ignored) return [];
   return [{ rule: 'health-ignored', path: dir, message: `${dir} is git-ignored here, so the night writes its health page and never commits it; set "health" in .keel/keel.json to a directory that is not ignored (like ".keel/health")` }];
 }
@@ -681,15 +730,18 @@ export async function readTendPass(root) {
 
 // ---- review comments (keel phase 41) -------------------------------------------
 //
-// A review thread is answered when it is resolved, or someone other than the
-// author of its first comment replied in it. A named reviewer's conversation
-// comment is answered when someone else (not a named reviewer) commented on
-// the PR after it. A reviewer's status board (a conversation
-// comment opening with a hidden <!-- marker -->, which the bot edits in place,
-// as Codex's review summary does) is listed and owes no answer: the findings
-// are its threads. keel review and the night's reviews_unanswered read this
-// one rule. Reading is deterministic; whether a comment is right is the
-// answerer's judgement, recorded in the reply.
+// A review thread is answered when its newest comment is by someone other
+// than the author of its first comment (or a named reviewer): resolving it is
+// not an answer, and a reviewer's follow-up reopens it. A named reviewer's
+// conversation comment, and any reviewer's review body (a review's top-level
+// text), is answered by a later conversation comment from someone else that
+// quotes a line of it (`> `), links its URL or names its id: a later unrelated
+// comment is not an answer. A status board (a comment or review body opening
+// with a hidden <!-- marker -->, which a bot edits in place, as Codex's review
+// summary does) is listed and owes no answer. A list longer than its page is
+// an incomplete read, never a count. keel review and the night's
+// reviews_unanswered read this one rule. Reading is deterministic; whether a
+// comment is right is the answerer's judgement, recorded in the reply.
 
 export const REVIEW_WAIT = 10;
 export const REVIEW_LABEL = 'keel:wait-for-review';
@@ -714,81 +766,154 @@ export function reviewConfigOf(config) {
 export const sameLogin = (a, b) => normLogin(a) === normLogin(b) && normLogin(a) !== '';
 const normLogin = s => String(s ?? '').replace(/\[bot\]$/i, '').toLowerCase();
 
-/** The PullRequest fields the review read needs, as a GraphQL fragment; `replies` caps each thread's comments. */
-export const reviewFragment = ({ replies = 50 } = {}) => `fragment KeelReview on PullRequest {
-  number title url state mergedAt headRefOid
+/** A read that came back short (a list longer than its page): never a count. keel review exits 2; the night is n/a. */
+export class IncompleteRead extends Error {
+  constructor(message) { super(message); this.incomplete = true; }
+}
+
+/** The PullRequest fields the review read needs, as a GraphQL fragment; `replies` is one page of each thread's comments. */
+export const reviewFragment = ({ replies = 100 } = {}) => `fragment KeelReview on PullRequest {
+  number title url state mergedAt updatedAt headRefName headRefOid author { login }
   reviewThreads(first: 100) { pageInfo { hasNextPage } nodes { id isResolved path line
-    comments(first: ${replies}) { nodes { databaseId author { login } body createdAt url } } } }
+    comments(first: ${replies}) { pageInfo { hasNextPage } nodes { databaseId author { login } body createdAt url } } } }
   comments(first: 100) { pageInfo { hasNextPage } nodes { id databaseId author { login } body createdAt url } }
+  reviews(first: 100) { pageInfo { hasNextPage } nodes { id databaseId author { login } body state submittedAt url } }
 }`;
 
-const firstLine = body => String(body ?? '').replace(/<!--[\s\S]*?-->/g, '').split('\n')
-  .map(l => l.replace(/<[^>]*>/g, ' ').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`#>|]/g, '').replace(/\s+/g, ' ').trim()).find(Boolean)?.slice(0, 140) ?? '';
+const plain = line => String(line).replace(/<[^>]*>/g, ' ').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`#>|]/g, '').replace(/\s+/g, ' ').trim();
+const plainLines = body => String(body ?? '').replace(/<!--[\s\S]*?-->/g, '').split('\n').map(plain).filter(Boolean);
+const firstLine = body => plainLines(body)[0]?.slice(0, 140) ?? '';
 /** A bot's status board (a sticky comment it edits in place, opened by a hidden <!-- marker -->): listed, never owed an answer. */
 const isStatus = body => /^\s*<!--/.test(String(body ?? ''));
+/** Whether `body` answers comment `c`: it names c's id, links c's URL, or quotes (`> `) a line of it. */
+export function references(body, c) {
+  const text = String(body ?? '');
+  if ((c.id && text.includes(c.id)) || (c.url && text.includes(c.url))) return true;
+  const lines = plainLines(c.body), all = lines.join(' ');
+  return text.split('\n').filter(l => /^\s*>/.test(l)).map(plain).some(q => q && (lines.includes(q) || (q.length >= 12 && all.includes(q))));
+}
+const loginOf = x => x?.author?.login ?? 'ghost';
+const page = (conn, what, pr) => {
+  if (conn?.pageInfo?.hasNextPage) throw new IncompleteRead(`#${pr.number} has more ${what} than one page; the read is incomplete`);
+  return conn?.nodes;
+};
 
 /**
  * Every review comment on one PR (GraphQL, through reviewFragment), with
- * whether it is answered: [{ kind: 'thread'|'comment', id, databaseId,
- * author, at, path, line, text, url, answered, resolved }]. Throws when the
- * read is incomplete (more threads, or more conversation comments, than one
- * page), because a comment not read is never counted as answered.
+ * whether it is answered: [{ kind: 'thread'|'comment'|'review', id,
+ * databaseId, author, at, path, line, text, url, answered, resolved, status }].
+ * A thread is answered when its newest comment is by someone other than its
+ * first author or a named reviewer (resolving it is not an answer). A named
+ * reviewer's conversation comment, and any reviewer's review body, is answered
+ * by a later conversation comment from someone else that quotes a line of it,
+ * links it, or names its id. Throws IncompleteRead when any list is longer
+ * than its page: a comment not read is never counted as answered.
  */
 export function reviewComments(pr, reviewers = []) {
   if (!pr || typeof pr !== 'object' || !pr.reviewThreads || !Array.isArray(pr.reviewThreads.nodes)) throw new Error('the pull request came back without its review threads');
-  if (pr.reviewThreads.pageInfo?.hasNextPage) throw new Error(`#${pr.number} has more than 100 review threads; the read is incomplete`);
+  const isNamed = login => reviewers.some(r => sameLogin(r, login));
   const out = [];
-  for (const t of pr.reviewThreads.nodes) {
-    const comments = t?.comments?.nodes ?? [];
+  for (const t of page(pr.reviewThreads, 'review threads', pr)) {
+    const comments = page(t?.comments, 'comments in a review thread', pr) ?? [];
     const first = comments[0];
     if (!first) continue;
-    const by = first.author?.login ?? 'ghost';
-    const replied = comments.slice(1).some(c => !sameLogin(c.author?.login ?? 'ghost', by));
-    out.push({ kind: 'thread', id: t.id, databaseId: first.databaseId, author: by, at: first.createdAt, path: t.path ?? null, line: t.line ?? null,
-      text: firstLine(first.body), url: first.url, resolved: !!t.isResolved, answered: !!t.isResolved || replied });
+    const by = loginOf(first);
+    // The newest comment decides: a reviewer's follow-up reopens it.
+    const last = loginOf(comments.at(-1));
+    const answered = comments.length > 1 && !sameLogin(last, by) && !isNamed(last);
+    // Reopened: aged from the first comment after the last answer, so a follow-up gets its own day.
+    const lastAnswer = comments.findLastIndex(c => !sameLogin(loginOf(c), by) && !isNamed(loginOf(c)));
+    const since = answered || lastAnswer < 0 ? first : comments[lastAnswer + 1];
+    out.push({ kind: 'thread', id: t.id, databaseId: first.databaseId, author: by, at: since.createdAt, path: t.path ?? null, line: t.line ?? null,
+      text: firstLine(first.body), url: first.url, resolved: !!t.isResolved, answered });
   }
-  if (reviewers.length) {
-    const comments = pr.comments?.nodes;
-    if (!Array.isArray(comments)) throw new Error('the pull request came back without its conversation comments');
-    if (pr.comments.pageInfo?.hasNextPage) throw new Error(`#${pr.number} has more than 100 conversation comments; the read is incomplete`);
-    const isReviewer = login => reviewers.some(r => sameLogin(r, login));
-    for (const c of comments) {
-      const by = c.author?.login ?? 'ghost';
-      if (!isReviewer(by)) continue;
-      const after = Date.parse(c.createdAt);
-      const replied = comments.some(o => Date.parse(o.createdAt) > after && !isReviewer(o.author?.login ?? 'ghost'));
-      const status = isStatus(c.body);
-      out.push({ kind: 'comment', id: c.id, databaseId: c.databaseId, author: by, at: c.createdAt, path: null, line: null,
-        text: firstLine(c.body), url: c.url, resolved: false, status, answered: status || replied });
-    }
-  }
+  const reviews = (page(pr.reviews, 'reviews', pr) ?? []).filter(r => String(r?.body ?? '').trim() && !(pr.author?.login && sameLogin(loginOf(r), pr.author.login)));
+  if (!reviewers.length && !reviews.length) return out;
+  const convo = page(pr.comments, 'conversation comments', pr);
+  if (!Array.isArray(convo)) throw new Error('the pull request came back without its conversation comments');
+  const entry = (kind, c, at) => {
+    const by = loginOf(c), status = isStatus(c.body), after = Date.parse(at);
+    const replied = convo.some(o => Date.parse(o.createdAt) > after && !sameLogin(loginOf(o), by) && !isNamed(loginOf(o)) && references(o.body, c));
+    return { kind, id: c.id, databaseId: c.databaseId, author: by, at, path: null, line: null, text: firstLine(c.body), url: c.url, resolved: false, status, answered: status || replied };
+  };
+  for (const r of reviews) out.push(entry('review', r, r.submittedAt));
+  for (const c of convo) if (isNamed(loginOf(c))) out.push(entry('comment', c, c.createdAt));
   return out;
 }
 
-/** The repo-wide read (reviews_unanswered, loose-ends): open PRs and recently merged ones, REVIEW_PRS of each. */
+/** The repo-wide read (reviews_unanswered, loose-ends): open PRs and recently merged ones, REVIEW_PRS a page, REVIEW_PAGES pages at most. */
 export const REVIEW_DAYS = 7;
 export const REVIEW_PRS = 50;
-export const repoReviewQuery = () => `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
-  open: pullRequests(states: OPEN, first: ${REVIEW_PRS}, orderBy: { field: UPDATED_AT, direction: DESC }) { pageInfo { hasNextPage } nodes { ...KeelReview } }
-  merged: pullRequests(states: MERGED, first: ${REVIEW_PRS}, orderBy: { field: UPDATED_AT, direction: DESC }) { nodes { ...KeelReview } } } }
+export const REVIEW_PAGES = 4;
+export const repoReviewQuery = () => `query($owner: String!, $name: String!, $open: Boolean!, $merged: Boolean!, $openAfter: String, $mergedAfter: String) { repository(owner: $owner, name: $name) {
+  open: pullRequests(states: OPEN, first: ${REVIEW_PRS}, after: $openAfter, orderBy: { field: UPDATED_AT, direction: DESC }) @include(if: $open) { pageInfo { hasNextPage endCursor } nodes { ...KeelReview } }
+  merged: pullRequests(states: MERGED, first: ${REVIEW_PRS}, after: $mergedAfter, orderBy: { field: UPDATED_AT, direction: DESC }) @include(if: $merged) { pageInfo { hasNextPage endCursor } nodes { ...KeelReview } } } }
 ${reviewFragment({ replies: 10 })}`;
+/** gh's arguments for one page of the repo-wide read. */
+export const repoReviewArgs = (repo, { open, merged, openAfter, mergedAfter }) => {
+  const [owner, name] = String(repo).split('/');
+  return ['api', 'graphql', '-f', `query=${repoReviewQuery()}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `open=${open}`, '-F', `merged=${merged}`,
+    ...(openAfter ? ['-f', `openAfter=${openAfter}`] : []), ...(mergedAfter ? ['-f', `mergedAfter=${mergedAfter}`] : [])];
+};
+/** Merged PRs come newest-updated first: past one updated before `since`, none was merged in the window. */
+const mergedMore = (merged, since) => {
+  if (!merged.pageInfo?.hasNextPage) return false;
+  const last = merged.nodes.at(-1)?.updatedAt;
+  return !(typeof last === 'string' && last < since);
+};
 
 /**
- * From the repo-wide read's `data.repository`: each PR (open, or merged in
- * the last REVIEW_DAYS days) with comments unanswered for a day or more, by
- * calendar day against `date` (YYYY-MM-DD). Throws on a malformed or
- * incomplete read, never a zero.
+ * The repo-wide read, page by page: `read(vars)` runs one page (repoReviewArgs)
+ * and returns its data.repository. Returns { open, merged } as one page would
+ * be, its pageInfo saying whether anything is left unread (unansweredPrs
+ * refuses that).
+ */
+export async function readRepoReviews(read, date) {
+  const since = addDays(date, -REVIEW_DAYS);
+  const lists = { open: { pageInfo: { hasNextPage: true }, nodes: [] }, merged: { pageInfo: { hasNextPage: true }, nodes: [] } };
+  for (let i = 0; i < REVIEW_PAGES; i++) {
+    const want = { open: !!lists.open.pageInfo.hasNextPage, merged: i === 0 || mergedMore(lists.merged, since) };
+    if (!want.open && !want.merged) break;
+    const repository = await read({ ...want, openAfter: lists.open.pageInfo.endCursor ?? null, mergedAfter: lists.merged.pageInfo.endCursor ?? null });
+    if (!repository) throw new Error('the read came back without the repository');
+    for (const k of ['open', 'merged']) {
+      if (!want[k]) continue;
+      const got = repository[k];
+      if (!Array.isArray(got?.nodes)) throw new Error('the read came back without the repository\'s pull requests');
+      lists[k] = { pageInfo: { hasNextPage: !!got.pageInfo?.hasNextPage, endCursor: got.pageInfo?.endCursor ?? null }, nodes: [...lists[k].nodes, ...got.nodes] };
+      if (got.pageInfo?.hasNextPage && !got.pageInfo?.endCursor) throw new IncompleteRead(`the ${k} pull requests came back with more pages and no cursor; the read is incomplete`);
+    }
+  }
+  return lists;
+}
+
+/**
+ * From the repo-wide read (readRepoReviews): each PR (open, or merged in the
+ * last REVIEW_DAYS days) with comments unanswered for a day or more, by
+ * calendar day against `date` (YYYY-MM-DD). Throws on a malformed read, and
+ * IncompleteRead on one with pull requests left unread: never a zero.
  */
 export function unansweredPrs(repository, reviewers, date) {
-  if (!repository || !Array.isArray(repository.open?.nodes) || !Array.isArray(repository.merged?.nodes)) throw new Error('the read came back without the repository\'s pull requests');
-  const since = addDays(date, -REVIEW_DAYS);
-  const merged = repository.merged.nodes.filter(p => typeof p?.mergedAt === 'string' && p.mergedAt.slice(0, 10) >= since);
+  const { open, merged } = windowPrs(repository, date);
   const prs = [];
-  for (const pr of [...repository.open.nodes, ...merged]) {
+  for (const pr of [...open, ...merged]) {
     const left = reviewComments(pr, reviewers).filter(c => !c.answered && /^\d{4}-\d{2}-\d{2}/.test(c.at ?? '') && c.at.slice(0, 10) <= addDays(date, -1));
     if (left.length) prs.push({ number: pr.number, title: pr.title, state: pr.state === 'MERGED' ? 'merged' : 'open', url: pr.url, unanswered: left.length, oldest: left.map(c => c.at.slice(0, 10)).sort()[0] });
   }
-  return { prs, open: repository.open.nodes.length, merged: merged.length, more: !!repository.open.pageInfo?.hasNextPage };
+  return { prs, open: open.length, merged: merged.length };
+}
+
+/**
+ * The PRs the repo-wide read covers (readRepoReviews): { open, merged }, the
+ * merged ones those merged in the last REVIEW_DAYS days. Throws on a malformed
+ * read, and IncompleteRead on one with pull requests left unread.
+ */
+export function windowPrs(repository, date) {
+  if (!repository || !Array.isArray(repository.open?.nodes) || !Array.isArray(repository.merged?.nodes)) throw new Error('the read came back without the repository\'s pull requests');
+  const since = addDays(date, -REVIEW_DAYS);
+  if (repository.open.pageInfo?.hasNextPage) throw new IncompleteRead(`more than ${repository.open.nodes.length} open pull requests; the read is incomplete`);
+  if (mergedMore(repository.merged, since)) throw new IncompleteRead(`more pull requests merged in ${REVIEW_DAYS} days than ${repository.merged.nodes.length} read; the read is incomplete`);
+  return { open: repository.open.nodes, merged: repository.merged.nodes.filter(p => typeof p?.mergedAt === 'string' && p.mergedAt.slice(0, 10) >= since) };
 }
 
 // ---- the gate's environment -------------------------------------------------
