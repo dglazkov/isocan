@@ -57,6 +57,11 @@
 //                            out, and a suggestion
 //                            (BUDGET_STEPS: workflow → its agent step's name
 //                            and its "Did the agent run?" check's)
+//   AGENTS, agentOf(config, key), passAgentProblems(config, key), codexVerdict
+//                            which agent runs a pass (.keel/keel.json "agents",
+//                            and "agent" on crossReview, climb and tend):
+//                            each provider an adapter, keel's rules its own
+//                            (phase 45)
 //   main(meta, fn)           run a script: --json or text, and its exit code
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -1154,4 +1159,119 @@ export async function main(fn, argv = process.argv.slice(2)) {
     else process.stderr.write(`${message}\n`);
     process.exitCode = error?.exitCode ?? 1;
   }
+}
+
+// ---- agents: providers behind keel's rules (phase 45) ---------------------------
+//
+// A provider is an adapter; the rules are keel's. .keel/keel.json names the
+// providers a project uses ("agents": { "claude": {}, "codex": {} }) and each
+// pass names which one runs it ("agent" on crossReview, climb and tend,
+// default claude). The adapter says what differs: the action and its major,
+// its secrets, how "read-only" and "may edit the tree" are said to it, where
+// its final message and its error are read, and who its comments carry.
+// What does not differ is tested once per provider (tests/workflows.test.mjs):
+// the agent's step is time-boxed, read-only where the pass reads, holds no
+// token that writes, and a script (never the agent) posts and pushes.
+// tests/agents.test.mjs holds these adapters to the shipped workflows.
+
+/** The passes an agent runs, by their .keel/keel.json key. */
+export const AGENT_PASSES = Object.freeze(['crossReview', 'climb', 'tend']);
+/** A pass that names no agent runs this one, as it did before phase 45. */
+export const DEFAULT_AGENT = 'claude';
+/** Who posts a cross-review's findings since phase 45: the workflow's own step, with the job's token, for every provider. */
+export const FINDINGS_POSTER = 'github-actions[bot]';
+
+const CODEX_NO_COMMIT = 'Codex cannot run a climb or a tend pass yet: its workspace-write sandbox keeps .git read-only, so it cannot commit, and the only sandbox that can (danger-full-access) is refused (keel phase 45)';
+
+/**
+ * The providers. `readOnly` and `editTree` are the inputs the agent step
+ * gives the action for a pass that only reads (cross-review) and for one that
+ * edits the checkout (climb, tend's agent job); null where the provider cannot
+ * hold that pass's rules, with `refused` saying why per pass.
+ */
+export const AGENTS = Object.freeze({
+  claude: Object.freeze({
+    name: 'Claude',
+    action: 'anthropics/claude-code-action', major: 'v1',
+    // Either one: a subscription's token or an API key.
+    secrets: Object.freeze(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']),
+    readOnly: Object.freeze({ allowedTools: Object.freeze(['Read', 'Grep', 'Glob', 'Bash(gh pr diff:*)', 'Bash(gh pr view:*)']) }),
+    editTree: Object.freeze({ github_token: '${{ github.token }}' }),
+    final: 'the execution file (the step\'s execution_file output): its last "result" message\'s text',
+    error: 'that result message: is_error, its turns and its result text',
+    login: 'claude[bot]',
+    passes: Object.freeze(['crossReview', 'climb', 'tend']),
+    refused: Object.freeze({}),
+  }),
+  codex: Object.freeze({
+    name: 'Codex',
+    action: 'openai/codex-action', major: 'v1',
+    secrets: Object.freeze(['OPENAI_API_KEY']),
+    // drop-sudo keeps the key out of the agent's reach; read-only: no write, no network.
+    readOnly: Object.freeze({ sandbox: 'read-only', 'safety-strategy': 'drop-sudo' }),
+    editTree: null,
+    final: 'the action\'s output-file ($RUNNER_TEMP/codex-final-message.md), its final message',
+    error: 'none is written: the step\'s outcome, and an empty or missing final message',
+    // codex-action posts nothing; keel's step posts what it says.
+    login: null,
+    passes: Object.freeze(['crossReview']),
+    refused: Object.freeze({ climb: CODEX_NO_COMMIT, tend: CODEX_NO_COMMIT }),
+  }),
+});
+
+const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/** What is wrong with .keel/keel.json "agents": [string]. Absent is fine: claude alone. */
+export function agentsProblems(config) {
+  const a = config?.agents;
+  if (a === undefined) return [];
+  if (!isObject(a) || !Object.keys(a).length) return [`"agents" must name the providers this project uses: { ${Object.keys(AGENTS).map(n => `"${n}": {}`).join(', ')} }`];
+  const out = [];
+  for (const [name, v] of Object.entries(a)) {
+    if (!Object.hasOwn(AGENTS, name)) out.push(`"agents" names an unknown provider ${JSON.stringify(name)} (known: ${Object.keys(AGENTS).join(', ')})`);
+    else if (!isObject(v) || Object.keys(v).length) out.push(`"agents".${name} must be {} (a provider takes no settings yet)`);
+  }
+  return out;
+}
+
+/** The agent a pass names, or the default. Unvalidated: passAgentProblems says what is wrong with it. */
+export const agentOf = (config, key) => (isObject(config?.[key]) && config[key].agent !== undefined ? config[key].agent : DEFAULT_AGENT);
+
+/**
+ * What is wrong with the agent pass `key` runs, "agents" included: [string].
+ * A pass that is off (no key) has none. The agent must be a known provider,
+ * listed in "agents" (with no "agents", claude alone is listed), and able to
+ * hold the pass's rules.
+ */
+export function passAgentProblems(config, key) {
+  if (!AGENT_PASSES.includes(key)) throw new Error(`passAgentProblems: ${key} is not a pass an agent runs`);
+  const out = agentsProblems(config);
+  const c = config?.[key];
+  if (!isObject(c)) return out;
+  const named = c.agent !== undefined;
+  const agent = agentOf(config, key);
+  if (typeof agent !== 'string' || !Object.hasOwn(AGENTS, agent)) return [...out, `"${key}".agent must be one of ${Object.keys(AGENTS).join(', ')} (got ${JSON.stringify(agent)})`];
+  const listed = isObject(config.agents) ? Object.keys(config.agents) : [DEFAULT_AGENT];
+  if (!listed.includes(agent)) out.push(named ? `"${key}".agent is ${agent}, which "agents" does not list (${listed.join(', ')})` : `"${key}" runs ${agent} (no "agent" names another), which "agents" does not list (${listed.join(', ')}); list it, or name the pass's agent`);
+  if (!AGENTS[agent].passes.includes(key)) out.push(`"${key}".agent is ${agent}: ${AGENTS[agent].refused[key] ?? `${agent} does not run ${key}`}`);
+  return out;
+}
+
+/**
+ * Whether a Codex agent step did its work, pure: { ok, line }. codex-action
+ * writes no execution log keel can read, so its outcome and its final message
+ * (the output-file) are the evidence: a step that failed, or ended with no
+ * final message, before its budget ran out never ran (red, one line: lesson
+ * 29); running out the budget is not red. The final message is never
+ * printed: keel's logs are public.
+ */
+export function codexVerdict({ outcome, message, elapsedSec, minutes }) {
+  const budget = minutes * 60;
+  const said = typeof message === 'string' ? message.trim() : '';
+  const took = Number.isFinite(elapsedSec) ? `${Math.round(elapsedSec)} s` : 'an unknown time';
+  if (outcome !== 'success' && Number.isFinite(elapsedSec) && Number.isFinite(budget) && elapsedSec >= budget - 60) return { ok: true, timedOut: true, line: `the agent ran out its budget (${minutes} min, ${Math.round(elapsedSec)} s elapsed): what it kept is judged` };
+  if (outcome === 'success' && said) return { ok: true, line: `the agent ran: Codex wrote its final message (${said.length} chars) in ${took}` };
+  const check = 'check OPENAI_API_KEY, the model, and that the run\'s actor has write access (codex-action refuses anyone else)';
+  if (outcome === 'success') return { ok: false, line: `Codex did not start: the agent step succeeded after ${took} with no final message, before its ${minutes}-minute budget; ${check}. Nothing is judged or posted.` };
+  return { ok: false, line: `Codex ${said ? 'stopped with an error' : 'did not start'}: the agent step ended ${outcome || 'without an outcome'} after ${took}, before its ${minutes}-minute budget, ${said ? 'with a final message' : 'with no final message'}; ${check}. Nothing is judged or posted.` };
 }

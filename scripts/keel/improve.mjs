@@ -315,8 +315,18 @@ const repoReviews = (ctx, gh) => once(ctx, 'repo-reviews', () => {
   return readRepoReviews(page, ctx.date);
 });
 
-/** The cross-review's author: the Claude GitHub App, through which claude-code-action posts (REST claude[bot], GraphQL claude). */
+/** The cross-review's author before phase 45: the Claude GitHub App, through which claude-code-action posted (REST claude[bot], GraphQL claude). */
 export const CROSS_REVIEWER = 'claude[bot]';
+/**
+ * Since phase 45 the workflow's own step posts the findings, for every
+ * provider, as the workflow's bot, each opening with this marker
+ * (cross-review.mjs FINDING_MARKER; tests/improve.test.mjs holds them equal).
+ */
+export const CROSS_REVIEW_POSTER = 'github-actions[bot]';
+export const CROSS_REVIEW_FINDING = '<!-- keel:cross-review finding -->';
+/** Whether a thread's first comment is a cross-review finding: the old author's, or the workflow's with the marker. */
+const crossReviewFinding = (c, reviewer) => sameLogin(c?.author?.login, reviewer)
+  || (reviewer === CROSS_REVIEWER && sameLogin(c?.author?.login, CROSS_REVIEW_POSTER) && String(c?.body ?? '').trimStart().startsWith(CROSS_REVIEW_FINDING));
 /** cross_review_valid is n/a until this many of its comments are answered. */
 export const CROSS_REVIEW_MIN = 10;
 /**
@@ -344,10 +354,11 @@ export function crossReviewTally(repository, { prefixes, date, reviewer = CROSS_
     let mine = 0;
     for (const th of threads.nodes) {
       const comments = th?.comments?.nodes ?? [];
-      if (!comments.length || !sameLogin(comments[0]?.author?.login, reviewer)) continue;
+      if (!comments.length || !crossReviewFinding(comments[0], reviewer)) continue;
       if (th.comments.pageInfo?.hasNextPage) throw new IncompleteRead(`#${pr.number} has more comments in a review thread than one page; the read is incomplete`);
       mine++;
-      const answer = comments.slice(1).filter(c => !sameLogin(c?.author?.login, reviewer))
+      const by = comments[0].author?.login;
+      const answer = comments.slice(1).filter(c => !sameLogin(c?.author?.login, by))
         .map(c => CROSS_REVIEW_ANSWERS.find(([, re]) => re.test(String(c?.body ?? '').trim()))?.[0]).find(Boolean);
       if (answer) t[answer]++;
       else t.unanswered++;
@@ -677,7 +688,7 @@ export const placeholderEvidence = text => /<phase>|<claim>/.test(text) || /^- (
  * a bound, or the selftest a rule for a recorded-only measure.
  */
 export const CROSS_REVIEW_VALID = Object.freeze({
-  id: 'cross_review_valid', what: `the cross-review's inline comments (${CROSS_REVIEWER}, on "crossReview".for branches) answered valid (fixed or tracked) among those answered, on open PRs and PRs merged in the last ${REVIEW_DAYS} days; n/a below ${CROSS_REVIEW_MIN} answered`, unit: '%', bound: null, better: 'higher', ratchet: false,
+  id: 'cross_review_valid', what: `the cross-review's inline comments (${CROSS_REVIEWER}, or ${CROSS_REVIEW_POSTER} since keel phase 45, on "crossReview".for branches) answered valid (fixed or tracked) among those answered, on open PRs and PRs merged in the last ${REVIEW_DAYS} days; n/a below ${CROSS_REVIEW_MIN} answered`, unit: '%', bound: null, better: 'higher', ratchet: false,
   async run(ctx) {
     const prefixes = ctx.config.crossReview?.for;
     if (ctx.config.crossReview === undefined) return { na: 'cross-review is off: .keel/keel.json has no "crossReview"' };
