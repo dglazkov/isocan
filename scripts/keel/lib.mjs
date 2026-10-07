@@ -779,7 +779,7 @@ export const BUDGET_HISTORY = 10;
 /** The budgeted passes that are on: [{ pass, workflow, step, check, minutes, branch }], with today's budget. */
 export function budgetPasses(config) {
   return BUDGET_PASSES.filter(p => config?.[p.key] !== undefined && config[p.key] !== null)
-    .map(p => ({ pass: p.pass, key: p.key, workflow: p.workflow, step: BUDGET_STEPS[p.workflow].agent, check: BUDGET_STEPS[p.workflow].check, minutes: budgetOf(config, p), branch: p.branch }));
+    .map(p => ({ pass: p.pass, key: p.key, workflow: p.workflow, step: BUDGET_STEPS[p.workflow].agent, check: BUDGET_STEPS[p.workflow].check, minutes: budgetOf(config, p), raw: budgetRaw(config, p), branch: p.branch }));
 }
 
 /** A pass's budget in a config: its budget.minutes, else its default (a missing key too). `pass`: a BUDGET_PASSES entry (or one with its key). */
@@ -789,23 +789,31 @@ export function budgetOf(config, pass) {
   return Number.isFinite(m) && m > 0 ? m : def.minutes;
 }
 
+/** A pass's budget as written: its budget.minutes, or null when it is left to the default of the keel that ran it (a default can change between releases, so two nulls are equal, a null and a number are not). */
+export function budgetRaw(config, pass) {
+  const m = config?.[pass.key]?.budget?.minutes;
+  return Number.isFinite(m) && m > 0 ? m : null;
+}
+
 /**
  * Since when the budget has been today's (phase 43): a run under an older
  * budget is not judged against today's. `history` is the config at each
  * commit that touched .keel/keel.json on the default branch, newest first:
  * [{ date, config }]. The since is the date of the oldest commit in the
- * unbroken run of commits with today's budget; null when none read differs
- * (no cutoff: every run read was under it). When the newest commit already
- * differs (today's budget is not committed yet), the since is now: no run is
- * under it.
+ * unbroken run of commits with today's budget as written (budgetRaw); null
+ * when the whole history was read and none differs (no cutoff). When the
+ * history read stopped short (`complete: false`: a cap, a full page), the
+ * oldest commit read is the since: older runs may be another budget. When
+ * the newest commit already differs (today's budget is not committed yet),
+ * the since is now: no run is under it.
  */
-export function budgetSince(history, pass, minutes, now = new Date().toISOString()) {
+export function budgetSince(history, pass, raw, { complete = true, now = new Date().toISOString() } = {}) {
   let since = null;
   for (const h of history) {
-    if (budgetOf(h.config, pass) !== minutes) return since ?? now;
+    if (budgetRaw(h.config, pass) !== raw) return since ?? now;
     since = h.date;
   }
-  return null;
+  return complete ? null : since ?? now;
 }
 
 const stamp = (s, a, b) => Date.parse(s?.[a] ?? s?.[b] ?? '');

@@ -61,7 +61,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   LOCK, read, readLock, lockDrift, phaseLints, claudeMdLint, secondCopies, lockedSkills, lessonsTableSplit, lessonsTableShapes, parseLessons, lessonsPathOf, unsentLessons, SENT, gateEnv, healthDirOf, healthDirIn, healthPage, healthLints, HEALTH_DIR, isMain, rootOf, main,
-  shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, budgetPasses, budgetUse, budgetLine, budgetOf, budgetSince, BUDGET_RUNS, BUDGET_EXAMINE, BUDGET_HISTORY, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
+  shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, budgetPasses, budgetUse, budgetLine, budgetOf, budgetRaw, budgetSince, BUDGET_RUNS, BUDGET_EXAMINE, BUDGET_HISTORY, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
   reviewConfigOf, repoReviewArgs, readRepoReviews, unansweredPrs, windowPrs, sameLogin, IncompleteRead, REVIEW_DAYS, REVIEW_PRS, REVIEW_PAGES,
 } from './lib.mjs';
 import { RUNS, readRuns, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
@@ -1418,15 +1418,17 @@ export function readBudget(config, env = process.env) {
       if (!Array.isArray(commits)) throw new Error('gh api: the commits touching .keel/keel.json did not come back as a list');
     }
     const history = [];
+    // Complete only when every commit was read: a capped read or a full page may stop short of the change.
+    let complete = commits.length < 30;
     for (const c of commits) {
-      if (!configs.has(c?.sha) && configs.size >= BUDGET_HISTORY) break;
+      if (!configs.has(c?.sha) && configs.size >= BUDGET_HISTORY) { complete = false; break; }
       const date = c?.commit?.committer?.date ?? c?.commit?.author?.date;
       if (typeof c?.sha !== 'string' || typeof date !== 'string') throw new Error('gh api: a commit touching .keel/keel.json came back without its sha or date');
       const at = configAt(c.sha);
       history.push({ date, config: at });
-      if (budgetOf(at, p) !== p.minutes) break;
+      if (budgetRaw(at, p) !== p.raw) break;
     }
-    return budgetSince(history, p, p.minutes);
+    return budgetSince(history, p, p.raw, { complete });
   };
   return budgetLine(passes.map(p => {
     try {
