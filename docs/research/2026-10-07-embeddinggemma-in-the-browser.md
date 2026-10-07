@@ -2,7 +2,7 @@
 status: noted
 since: 2026-10-07
 see: local-judge, judge, voice-agent
-note: "local-judge phase 0's measurement of EmbeddingGemma 2 Text 270M through MediaPipe Decision Maker 1.1.0 in a Web Worker, on an M3 Max running Chrome 154 on Darwin 27, with the model served by the local daemon. The median answer takes 33-35 ms up to 128 tokens on WebGPU, but warm p95 is 170-200 ms in most runs, from intermittent streaks of slow answers whose cause is not established, and 570-810 ms at 512 tokens over long runs. Dion then moved the phase's bar from p95 to the warm median, which the desktop passes up to 128 tokens. CPU is about 25 times slower. The runtime posts metrics to odml.pa.googleapis.com, and a Content-Security-Policy now blocks it in the browser. Loading the model adds 1.2-1.7 GB of resident memory. The privacy proof held: offline, every request went to the daemon. On an iPhone (Chrome for iOS, so WebKit's WebGPU) the median was 32-42 ms up to 128 tokens and 142-179 ms at 512, with no streaks — which points the desktop tail at Chrome's WebGPU on macOS."
+note: "local-judge phase 0's measurement of EmbeddingGemma 2 Text 270M through MediaPipe Decision Maker 1.1.0 in a Web Worker, on an M3 Max running Chrome 154 on Darwin 27, with the model served by the local daemon. The median answer takes 33-35 ms up to 128 tokens on WebGPU, but warm p95 is 170-200 ms in most runs, from intermittent streaks of slow answers whose cause is not established, and 570-810 ms at 512 tokens over long runs. Dion then moved the phase's bar from p95 to the warm median, which the desktop passes up to 128 tokens. CPU is about 25 times slower. The runtime posts metrics to odml.pa.googleapis.com, and a Content-Security-Policy now blocks it in the browser. Loading the model adds 1.2-1.7 GB of resident memory. The privacy proof held: offline, every request went to the daemon. On an iPhone 17 Pro (iOS 27.0.1, Chrome for iOS, so WebKit's WebGPU) the median was 32-42 ms up to 128 tokens and 142-179 ms at 512, with no streaks — which points the desktop tail at Chrome's WebGPU on macOS."
 ---
 
 # EmbeddingGemma in the browser, measured
@@ -154,12 +154,11 @@ tokens (median 130–147 ms), so the next phase caps the state at 128 tokens.
 
 ## Phone
 
-Run by Dion on 7 Oct 2026: an iPhone, Chrome for iOS (which renders with
-WebKit, so this is Apple's WebGPU and not Chrome's), from
-`dev.isocan.io/judge-lab.html?file=1&n=200`, with the model loaded from a
-file. The probe reported WebGPU available (adapter `apple apple`). Not
-recorded: the iPhone model, the iOS version, memory, and the
-input-to-display and frame rows.
+Run by Dion on 7 Oct 2026 on an **iPhone 17 Pro, iOS 27.0.1**, in Chrome for
+iOS (which renders with WebKit, so this is Apple's WebGPU and not Chrome's),
+from `dev.isocan.io/judge-lab.html?file=1&n=200`, with the model loaded from
+a file. The probe reported WebGPU available (adapter `apple apple`). Not
+recorded: memory, and the input-to-display and frame rows.
 
 | | |
 | --- | --- |

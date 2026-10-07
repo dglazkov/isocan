@@ -208,14 +208,14 @@ where the picture should change the answer.
   ms desktop, 250 ms phone), with p95 and the share of late answers reported
   rather than gated on. The desktop passes up to 128 tokens and fails at 512
   (median 130–147 ms), so phase 1 caps the state at 128 tokens.
-- **2026-10-07** — The phone walk (Dion's iPhone, Chrome for iOS, so WebKit's
-  WebGPU) answered in 32–42 ms up to 128 tokens with no streaks: one slow
+- **2026-10-07** — The phone walk (Dion's iPhone 17 Pro, iOS 27.0.1, Chrome
+  for iOS, so WebKit's WebGPU) answered in 32–42 ms up to 128 tokens with no streaks: one slow
   answer in 1,200. The desktop's streaks point at Chrome's WebGPU on macOS,
   not at the model or MediaPipe.
 - **2026-10-07 — Open:** the desktop streaks, which no longer gate but cost
   about one answer in five in Chrome on macOS. Untried: Safari on the Mac, a
   timed warm-up, MediaPipe's nightly, and the adapter's power preference. The
-  phone run did not record its model, iOS version or memory.
+  phone run did not record memory.
 - **2026-10-06** — Specified from Dion's EmbeddingGemma 2 test plan. The
   plan's six routes became isocan's own commands; its rules-only baseline
   turned out to exist already (`categoriseAsk`, 84%), and its "learned
