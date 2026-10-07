@@ -14,7 +14,7 @@
   "phases": {
     "shape": "projects"
   },
-  "practice": "0.8.17",
+  "practice": "0.8.18",
   "practices": [
     "base",
     "agents-md",
