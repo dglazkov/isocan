@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { isolateModelEnv } from "./model-env.ts";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import { Agent, fetch as undiciFetch } from "undici";
+import { Agent, buildConnector, fetch as undiciFetch } from "undici";
+import { guardTypeOfService } from "./tos-guard.ts";
 import { afterAll, afterEach, beforeEach } from "vitest";
 
 /**
@@ -453,7 +454,13 @@ async function describeListener(url: string): Promise<string> {
  */
 const CONNECT_BUDGET_MS = 3000;
 const CONNECT_ATTEMPT_MS = 1200;
-const connectBounded = new Agent({ connect: { timeout: CONNECT_ATTEMPT_MS } });
+const connectWithin = buildConnector({ timeout: CONNECT_ATTEMPT_MS });
+const connectBounded = new Agent({
+  // The same bounded connect, and a type-of-service call that cannot hide
+  // what happened to the connection (`./tos-guard.ts`).
+  connect: (options, done) =>
+    connectWithin(options, (err, socket) => (err ? done(err, null) : done(null, guardTypeOfService(socket as never)))),
+});
 const realFetch: typeof fetch = (input, init) =>
   undiciFetch(input as Parameters<typeof undiciFetch>[0], { ...(init as Parameters<typeof undiciFetch>[1]), dispatcher: connectBounded }) as unknown as Promise<Response>;
 globalThis.fetch = async function retryingFetch(input, init) {
