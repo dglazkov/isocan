@@ -763,10 +763,13 @@ export const BUDGET_STEPS = Object.freeze({
  * (cross-review runs on its PR's branch).
  */
 export const BUDGET_PASSES = Object.freeze([
-  { pass: 'tend', key: 'tend', workflow: 'keel-tend.yml', minutes: 30, branch: true },
-  { pass: 'climb', key: 'climb', workflow: 'keel-climb.yml', minutes: 45, branch: true },
-  { pass: 'cross-review', key: 'crossReview', workflow: 'keel-cross-review.yml', minutes: 15, branch: false },
+  { pass: 'tend', key: 'tend', workflow: 'keel-tend.yml', minutes: 30, branch: true, defaults: [['0.0.0', 30]] },
+  { pass: 'climb', key: 'climb', workflow: 'keel-climb.yml', minutes: 45, branch: true, defaults: [['0.0.0', 45]] },
+  { pass: 'cross-review', key: 'crossReview', workflow: 'keel-cross-review.yml', minutes: 15, branch: false, defaults: [['0.0.0', 15]] },
 ]);
+// `defaults`: [practice version, the default from it], oldest first. Changing a
+// pass's default appends an entry (a test holds the newest equal to `minutes`),
+// so a config left to the default is read with the default of its own version.
 /** The window: at most this many runs with the agent step. */
 export const BUDGET_RUNS = 8;
 /** Fewer runs than this is too few to say. */
@@ -789,10 +792,16 @@ export function budgetOf(config, pass) {
   return Number.isFinite(m) && m > 0 ? m : def.minutes;
 }
 
-/** A pass's budget as written: its budget.minutes, or null when it is left to the default of the keel that ran it (a default can change between releases, so two nulls are equal, a null and a number are not). */
+const versionParts = v => String(v ?? '').split('.').map(n => Number.parseInt(n, 10) || 0);
+const versionAtMost = (a, b) => { const x = versionParts(a), y = versionParts(b); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0); return true; };
+
+/** A pass's budget as that config ran it: its budget.minutes, else the default of the config's own practice version (a default can change between releases), never today's. */
 export function budgetRaw(config, pass) {
   const m = config?.[pass.key]?.budget?.minutes;
-  return Number.isFinite(m) && m > 0 ? m : null;
+  if (Number.isFinite(m) && m > 0) return m;
+  const def = pass.defaults ? pass : BUDGET_PASSES.find(p => p.key === pass.key) ?? pass;
+  const table = def.defaults ?? [['0.0.0', def.minutes]];
+  return (config?.practice ? table.filter(([v]) => versionAtMost(v, config.practice)).at(-1) : null)?.[1] ?? table[0][1];
 }
 
 /**
