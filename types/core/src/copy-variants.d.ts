@@ -2,7 +2,7 @@ import type { CopyDeck, CopyEdit } from "./copy-deck.js";
 import { type CopyVoice } from "./copy-voice.js";
 import type { JsonSchema } from "./jev.js";
 import type { CanvasContents, Item } from "./model.js";
-import type { NewVersion, Operation } from "./ops.js";
+import type { MetaPatch, NewVersion, Operation } from "./ops.js";
 /**
  * **Copy variants: N voices for one screen's words** (copy-edit phase 2 —
  * `docs/projects/copy-edit/phases.md`, design point 2 of
@@ -36,18 +36,23 @@ export declare const COPY_STANCE_PROP = "copyStance";
 /** The property a copy variant carries its one-line reason in. */
 export declare const COPY_WHY_PROP = "copyWhy";
 /**
- * `lineage.ts`'s `parent` property and `placement.ts`'s `PLACEMENT_GAP`,
- * spelled here rather than imported — and the item ids come from the caller —
- * so this file imports no value from core's barrel. Both clients load it
- * lazily, and a barrel module shared with a lazy file is carved out of the
- * eager code into a chunk of its own: measured 2 Oct 2026, importing `ids`,
- * `lineage` and `placement` here put two more modules on `isocan --version`'s
- * load (`test/cli-bundle.test.ts` holds that under 40). `copy-variants.test.ts`
- * holds both equal to the originals.
+ * `lineage.ts`'s `parent` property, `placement.ts`'s `PLACEMENT_GAP`, and
+ * `preference.ts`'s `PREFERRED_OVER_PROP` / `COPY_PREFERENCE_PROP`, spelled
+ * here rather than imported — and the item ids come from the caller — so this
+ * file imports no value from core's barrel. Both clients load it lazily, and a
+ * barrel module shared with a lazy file is carved out of the eager code into a
+ * chunk of its own: measured 2 Oct 2026, importing `ids`, `lineage` and
+ * `placement` here put two more modules on `isocan --version`'s load
+ * (`test/cli-bundle.test.ts` holds that under 41). `copy-variants.test.ts`
+ * holds them equal to the originals.
  */
 export declare const VARIANT_PARENT_PROP = "parent";
 /** The space left between a source and the variants stacked under it. */
 export declare const VARIANT_GAP = 40;
+/** `preference.ts`'s `PREFERRED_OVER_PROP`, spelled here so this lazy chunk never pulls `preference.ts` into the CLI's eager startup. */
+export declare const VARIANT_PREFERRED_OVER_PROP = "preferredOver";
+/** `preference.ts`'s `COPY_PREFERENCE_PROP`, spelled here for the same bundle boundary and held equal in `copy-variants.test.ts`. */
+export declare const VARIANT_PREFERENCE_PROP = "copyPreference";
 /** At most this many voices in one ask: past six they stop being different. */
 export declare const MAX_COPY_VARIANTS = 6;
 /**
@@ -185,11 +190,23 @@ export declare function copyMixEdits(source: CopyDeck, variants: readonly CopyMi
     reason: string;
 };
 /**
+ * **The preference patch a mix writes on its source** (copy-edit phase 6):
+ * the picked stance(s) won against the unpicked variants (and `preferredOver`
+ * records those unpicked variant ids). When every variant contributed at least
+ * one string (`unpicked` empty, `picked.length > 1`), the mix won against taking
+ * any of those single voices whole.
+ */
+export declare function copyMixPreferencePatch(source: Pick<Item, "id" | "properties">, variants: readonly {
+    itemId: string;
+    stance: string;
+}[], pickedIds: ReadonlySet<string> | readonly string[]): MetaPatch | null;
+/**
  * **The ops a mix sends, in order** — `convergeOps`'s shape with a new file in
  * place of the winner's: the mixed words as one new version of the source,
- * then every variant to the trash. The caller sends them under ONE group, so
- * one ⌘Z takes the version back and brings the variants out of the trash.
- * Both surfaces send exactly these (`isocan words mix`, *Use this mix*).
+ * the copy preference on the source when choosing between voices, then every
+ * variant to the trash. The caller sends them under ONE group, so one ⌘Z takes
+ * the version back and brings the variants out of the trash. Both surfaces
+ * send exactly these (`isocan words mix`, *Use this mix*).
  */
-export declare function copyMixOps(sourceId: string, version: NewVersion, variantIds: readonly string[]): Operation[];
+export declare function copyMixOps(sourceId: string, version: NewVersion, variantIds: readonly string[], preferencePatch?: MetaPatch | null): Operation[];
 export {};

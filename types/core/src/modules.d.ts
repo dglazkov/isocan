@@ -958,7 +958,10 @@ export interface WebFlowVoice {
         voice: CopyVoice | null;
     }>;
     /** One voice's edits (flow addresses) on every screen they touch, as ONE op group, the prototype rebuilt once. */
-    apply: (host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas"> & Partial<Pick<DialogHost, "viewer">>, canvasId: string, itemId: string, edits: readonly CopyEdit[], by: string) => Promise<{
+    apply: (host: Pick<DialogHost, "send" | "putBlob" | "readText" | "getCanvas"> & Partial<Pick<DialogHost, "viewer">>, canvasId: string, itemId: string, edits: readonly CopyEdit[], by: string, choice?: {
+        stance: string;
+        against: readonly string[];
+    }) => Promise<{
         group: string;
         changed: Array<{
             itemId: string;
@@ -1095,8 +1098,13 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * flow's voice a module MAY provide (copy-edit phase 5), read by *Choose a
  * voice…*. Optional and provided, never handed: a module built for `^0.2.5`
  * still loads.
+ *
+ * **0.2.6 → 0.2.7 on 7 Oct 2026**, an addition: `WebFlowVoice.apply` gained an
+ * optional `choice` `{ stance, against }` so *Choose a voice…* records the
+ * winning stance and losing stances in the same op group (copy-edit phase 6).
+ * A module built for `^0.2.6` still loads.
  */
-export declare const MODULE_API_VERSION = "0.2.6";
+export declare const MODULE_API_VERSION = "0.2.7";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.

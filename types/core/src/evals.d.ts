@@ -1,5 +1,6 @@
 import type { CanvasContents, Item } from "./model.js";
 import type { LogEntry } from "./ops.js";
+import { type CopyPickHow } from "./preference.js";
 /**
  * **The request corpus** — what people actually ask agents for, and what
  * happened next. Stage 1 of `docs/projects/evals/plan.md`.
@@ -276,9 +277,16 @@ export declare function harvestConverge(canvas: CanvasContents, now?: number): C
  * problem is solved" when it is not.
  */
 interface PreferencePair {
+    /** Set to `"copy"` when the pair came from choosing a copy variant, mixing
+     *  voices, or landing a flow voice; omitted for version-stack pairs. */
+    kind?: "copy";
+    /** Which copy pick surface produced the pair (`choose`, `mix`, or `voice`). */
+    how?: CopyPickHow;
+    /** The winning copy stance (or joined stances for a mix). */
+    stance?: string;
     itemId: string;
     title: string;
-    /** The version made current. */
+    /** The version made current (or the winning copy stance when `kind === "copy"`). */
     chosen: string;
     chosenAt: string;
     chosenBy: string;
@@ -287,7 +295,7 @@ interface PreferencePair {
      *  over half the pairs at one home were an agent keeping its own earlier
      *  take, which is not the human label Stage 4 wants. */
     chosenById: string;
-    /** Every version that existed at that moment and was not chosen. */
+    /** Every version (or losing copy stance) that existed at that moment and was not chosen. */
     against: string[];
 }
 export declare function harvestPreferences(canvas: CanvasContents, log: LogEntry[]): PreferencePair[];

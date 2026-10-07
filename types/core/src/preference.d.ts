@@ -93,3 +93,41 @@ export declare function standings(canvas: CanvasContents): {
     itemId: string;
     won: number;
 }[];
+/**
+ * **A copy pick, recorded in the pick's own op group** (copy-edit phase 6 —
+ * `docs/projects/copy-edit/phases.md`, design point 7 of
+ * `docs/research/2026-10-02-copy-edit.md`).
+ *
+ * Choosing a copy variant (`isocan choose`), mixing several (`isocan words
+ * mix`), or picking a flow's voice (`isocan wire voice --pick`) is a choice
+ * between stances. Recording it as one `item.update` on the screen in the
+ * pick's op group means one ⌘Z / `isocan undo` takes the preference back with
+ * the version and the trashed variants, and costs no new operation type.
+ */
+export declare const COPY_PREFERENCE_PROP = "copyPreference";
+/** The three copy-pick surfaces whose choices `harvestPreferences` and `judge corpus` fold into calibration pairs — a closed vocabulary so `shape.json` carries how a pick happened without any free text. */
+export declare const COPY_PICK_HOWS: readonly ["choose", "mix", "voice"];
+/** Which copy-pick act produced a preference pair: folding one variant home, mixing strings across siblings, or landing a flow voice. */
+export type CopyPickHow = (typeof COPY_PICK_HOWS)[number];
+interface CopyPreference {
+    how: CopyPickHow;
+    /** The winning stance label (or joined stances for a multi-voice mix). */
+    stance: string;
+    /** The stances that were not chosen. */
+    against: string[];
+    /** For `choose`: the chosen variant's item id. */
+    chosen?: string;
+    /** For `choose` and `mix`: the unpicked copy variant item ids. */
+    againstIds?: string[];
+}
+/** Encodes a copy preference as the single string value `properties.copyPreference` stores in an `item.update`, so one undo reverses the preference alongside the version. */
+export declare function serializeCopyPreference(pref: CopyPreference): string;
+/** Reads `properties.copyPreference` off an `item.update` when replaying the oplog, returning `null` for malformed or empty values so `harvestPreferences` ignores ordinary metadata edits. */
+export declare function parseCopyPreference(raw: unknown): CopyPreference | null;
+/**
+ * The `item.update` patch that records a copy preference on `winner` — plus
+ * `preferredOver` when there are losing variant item ids — or `null` when
+ * there was no choice between alternatives.
+ */
+export declare function copyPreferencePatch(winner: Item, pref: CopyPreference): MetaPatch | null;
+export {};

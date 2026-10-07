@@ -1,5 +1,5 @@
 import type { CanvasContents, ItemVersion } from "./model.js";
-import type { Operation } from "./ops.js";
+import type { MetaPatch, Operation } from "./ops.js";
 /**
  * **This one won.**
  *
@@ -36,9 +36,10 @@ import type { Operation } from "./ops.js";
  * So what actually records the decision is what the canvas already keeps: the
  * winner's content is now the source's top version with its own author and
  * time, and every explored sibling sits in the trash under the name somebody
- * gave it, recoverable. `label` below is the sentence the CLI prints, not a
- * field anything stores — and calling it what it is beats implying a record
- * that does not exist.
+ * gave it, recoverable. When the winner is a copy variant with sibling voices,
+ * `preference` records the winning stance and `preferredOver` on the source in
+ * the same op group (copy-edit phase 6). `label` below is the sentence the CLI
+ * prints.
  */
 interface ConvergePlan {
     /** The item the winner folds into. */
@@ -49,6 +50,8 @@ interface ConvergePlan {
     trash: string[];
     /** The sentence a surface says about this decision. Not stored. */
     label: string;
+    /** On a copy variant with sibling voices: the preference patch for `parentId`. */
+    preference?: MetaPatch;
 }
 type ConvergeRefusal = {
     refused: string;
@@ -64,6 +67,7 @@ export declare function convergePlan(canvas: CanvasContents, chosenId: string): 
 export declare function isRefusal(plan: ConvergePlan | ConvergeRefusal): plan is ConvergeRefusal;
 /**
  * **The ops a choice sends, in order**: the winner onto the parent's stack,
+ * the copy preference on the parent when choosing between copy variants,
  * then every child to the trash. The caller sends them under ONE group, so
  * one ⌘Z takes the version back and brings every child out of the trash.
  *
