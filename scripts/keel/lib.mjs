@@ -795,9 +795,10 @@ export function budgetOf(config, pass) {
 const versionParts = v => String(v ?? '').split('.').map(n => Number.parseInt(n, 10) || 0);
 const versionAtMost = (a, b) => { const x = versionParts(a), y = versionParts(b); for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0); return true; };
 
-/** A pass's budget as that config ran it: its budget.minutes, else the default of the config's own practice version (a default can change between releases), never today's. */
+/** A pass's budget as that config ran it: 'off' when the pass is not on there; its budget.minutes; else the default of the config's own practice version (a default can change between releases), never today's. */
 export function budgetRaw(config, pass) {
-  const m = config?.[pass.key]?.budget?.minutes;
+  if (config?.[pass.key] === undefined || config?.[pass.key] === null) return 'off';
+  const m = config[pass.key]?.budget?.minutes;
   if (Number.isFinite(m) && m > 0) return m;
   const def = pass.defaults ? pass : BUDGET_PASSES.find(p => p.key === pass.key) ?? pass;
   const table = def.defaults ?? [['0.0.0', def.minutes]];
