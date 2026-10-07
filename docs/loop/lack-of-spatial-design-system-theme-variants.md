@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: proposed
+decision: declined
 rank: never
 project: design-lint
 since: 2026-10-07

@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "Duplicate of accepted finding docs/loop/lack-of-agent-proposal-staging-overlays.md:1-29: packages/core/src/reducer.ts:34-66 applies agent operations as version-stack entries with per-item undo and VersionCompare diffing, and pre-commit trust-tier gating is already tracked under that accepted finding."

@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: proposed
+decision: stale
 rank: never
 since: 2026-10-07
 note: "Stale: canvas groups in packages/core/src/canvas-groups.ts:12-17, 52-60 and packages/core/src/canvas-group-types.ts:5-22 are already bounded, titled spatial containers with markdown briefs, nested containerId membership (packages/core/src/model.ts:188-190), and labeled row/column grids, alongside area sheets in packages/core/src/area.ts:39-119."

@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "By design and duplicate of declined handoff findings (docs/LOOP.md:47, 52): screens are already live HTML, wireframes embed a typed WireSpec (packages/modules/wireframe/src/spec.ts:23-128), and the coding handoff is the admitted design brief and DESIGN.md in packages/api/src/design-workflow.ts:24-32 rather than a separate canvas spec card."

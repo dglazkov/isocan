@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: proposed
+decision: stale
 rank: never
 since: 2026-10-07
 note: "Stale: packages/core/src/designsystem.ts:79-130 resolves canvas-wide and scoped DESIGN.md items (enforced by designStanding at packages/core/src/designsystem.ts:237-249), packages/modules/wireframe/src/theme.ts:69-92 maps DESIGN.md tokens onto WireSpec.style (packages/modules/wireframe/src/spec.ts:89), and packages/api/src/design-workflow.ts:13-17 mandates reading the governing design system."

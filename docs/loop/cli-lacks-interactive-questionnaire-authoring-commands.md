@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Always isomorphic
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "By design: packages/cli/src/questionnaire.ts:59-80 takes a DesignQuestionSet JSON file so non-interactive agent harnesses can publish multi-question batches and retry idempotently with stable payload-derived IDs (line 78), while human respondents already have flag-based authoring on isocan design answer at packages/cli/src/questionnaire.ts:82-94."

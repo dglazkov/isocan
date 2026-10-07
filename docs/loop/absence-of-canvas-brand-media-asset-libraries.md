@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "By design and unrequested: packages/core/src/media.ts:29-48 maps extensions to MIME types for content-addressed ItemVersion blobs (packages/core/src/model.ts:228), while wireframe glyphs and crossed-box placeholders in packages/modules/wireframe/src/catalog/draw.ts:42-71 are intentional IDEO-style low-fi marks."

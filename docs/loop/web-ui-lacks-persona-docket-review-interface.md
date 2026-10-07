@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Always isomorphic
-decision: proposed
+decision: declined
 rank: never
 project: personas
 since: 2026-10-07

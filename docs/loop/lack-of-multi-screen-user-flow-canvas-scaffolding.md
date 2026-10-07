@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: DISMISSED
 loop_goal: What canvas tools teach us
-decision: proposed
+decision: stale
 rank: never
 project: wireframes
 since: 2026-10-07

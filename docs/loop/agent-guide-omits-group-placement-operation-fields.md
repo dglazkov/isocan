@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPPn4
-decision: proposed
+decision: stale
 rank: never
 project: canvas-groups
 since: 2026-10-07

@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Dependencies healthy
-decision: proposed
+decision: stale
 rank: never
 since: 2026-10-07
 note: "Stale and by design: every cited script already handles missing or failing host CLIs gracefully (loop.mjs:779,815; first-minute.mjs:69-72; canvas-board.mjs:411-428; converge-night.mjs:118-121; calibrate.mjs:128-144), and host tools like docker, gh, claude, and stitch are environment binaries rather than npm-lockable packages."

@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Dependencies healthy
-decision: proposed
+decision: stale
 rank: never
 project: personas
 since: 2026-10-07

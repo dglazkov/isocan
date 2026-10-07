@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "By design: canvases hold tens to hundreds of items in memory where linear scans in area.ts:90-140, canvassort.ts:76-83, and canvasswitch.ts:63-98 are sub-millisecond, design requests match canonical IDs by policy (design-request-reader.ts:14,76-79), and agents scope reads by group or root item IDs (canvas-context.ts:9-15)."

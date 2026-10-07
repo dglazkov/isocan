@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Dependencies healthy
-decision: proposed
+decision: declined
 rank: never
 project: jetski
 since: 2026-10-07

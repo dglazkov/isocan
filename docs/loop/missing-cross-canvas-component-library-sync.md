@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "Covered by lack-of-reusable-component-symbol-library-instantiation (accepted for later) and otherwise by design: canvases are independent documents (cloud-store.ts:100-112, designsystem.ts:52-57), while cross-canvas design references already resolve by exact DesignArtifactRef (design-request-reader.ts:93-120)."

@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: What canvas tools teach us
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "By design: finished pins are removed from live canvas state with undoable thread.delete/thread.restore (packages/core/src/ops.ts:407, 457) or cleaned with comment.remove (packages/core/src/ops.ts:437), while structured design questions already track open/resolved status via questionnaireStates (packages/cli/src/questionnaire.ts:52)."

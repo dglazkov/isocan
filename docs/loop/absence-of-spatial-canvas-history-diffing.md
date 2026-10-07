@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "Unrequested: packages/core/src/timeline.ts:342-358 and packages/web/src/components/Scrubber.tsx:100-107 already provide interactive oplog scrubbing across sequence numbers, and packages/core/src/diff.ts:204-226 diffs item versions; a whole-canvas spatial diff overlay across two sequence numbers has no measured demand."

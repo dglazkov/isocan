@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Fast everywhere, local-first
-decision: proposed
+decision: accepted
 rank: later
 project: multiuser
 since: 2026-10-07

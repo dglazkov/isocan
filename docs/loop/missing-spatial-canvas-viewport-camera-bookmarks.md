@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "By design: named spatial regions are groups and areas (area.ts:133-140), presentation frames are slide-marked items served at DECK_ROUTE (address.ts:81-91), and individual items have routes at ITEM_ROUTE (address.ts:34-69), while camera pan/zoom is per-viewer state (viewport.ts:4-165)."

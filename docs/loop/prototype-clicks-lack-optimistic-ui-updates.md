@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPMwQ
-decision: proposed
+decision: stale
 rank: never
 project: wireframes
 since: 2026-10-07

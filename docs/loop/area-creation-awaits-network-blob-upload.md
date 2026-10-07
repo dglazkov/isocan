@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: Fast everywhere, local-first
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "By design: packages/web/src/lib/api.ts:750-768 refuses general offline blob queueing with a clear OfflineError, and on group-mode canvases packages/web/src/lib/upload.ts:259-262 routes through changeCanvasGroup (packages/web/src/lib/canvasgroups.ts:30-35) which requires the authoritative home."

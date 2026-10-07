@@ -5,7 +5,7 @@ loop:
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPMwQ
-decision: proposed
+decision: declined
 rank: never
 since: 2026-10-07
 note: "True mechanism, unmeasured: exportCanvases (export.ts:167-190) and exportItem (export.ts:246-259) await fetchBlob sequentially, though exportCanvases skips blobs already on disk by hash (export.ts:176-180); same ruling as serial-http-transfers-stall-cross-canvas-paste — reopen if a remote export shows a measured stall."
