@@ -61,13 +61,13 @@
    the other end is the card's own resting transform, so it lands where its
    inline style says. z-index rides with it, so the swing passes in front. */
 @keyframes stack-leave-right {
-  0% { transform: translate(0, 0) rotate(0deg); z-index: 50; }
-  45% { transform: translate(112%, -6%) rotate(11deg); z-index: 50; }
+  0% { transform: translate(0, 0) rotate(0deg); z-index: 9; }
+  45% { transform: translate(112%, -6%) rotate(11deg); z-index: 9; }
   46% { z-index: 0; }
 }
 @keyframes stack-arrive-left {
-  0% { transform: translate(-112%, -6%) rotate(-11deg); z-index: 50; }
-  100% { z-index: 50; }
+  0% { transform: translate(-112%, -6%) rotate(-11deg); z-index: 9; }
+  100% { z-index: 9; }
 }
 .stack-card.leave-right { animation: stack-leave-right 360ms cubic-bezier(0.3, 0.7, 0.2, 1); }
 .stack-card.arrive-left { animation: stack-arrive-left 300ms cubic-bezier(0.2, 0.7, 0.2, 1); }

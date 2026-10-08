@@ -32,7 +32,7 @@
 .chat-bar .main-panel form { border-top: 0; align-items: center; }
 /* Only the composer row makes room for the controls, by width rather than
    padding: the messages above run the bar's full width. */
-.chat-bar .main-panel form { width: calc(100% - var(--chat-bar-controls, 96px)); box-sizing: border-box; }
+.chat-bar .main-panel form { width: calc(100% - 96px); box-sizing: border-box; }
 .chat-bar .main-panel form .mention-field { flex: 1 1 200px; }
 .chat-bar-controls {
   /* Above the full-width Chat it shares the corner with, or the Chat's own
