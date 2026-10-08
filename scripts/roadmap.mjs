@@ -265,8 +265,12 @@ if (process.argv.includes("--check")) {
   process.exit(0);
 }
 
-writeFileSync(out, page);
-console.log(`docs/ROADMAP.md — ${docs.length} docs, ${count("built")} built, ${left} open, ${owed.length} need a person`);
+// A publish never writes the file: it runs detached from a commit hook, and a
+// tracked file rewritten under a rebase in progress is a rebase that stops.
+if (!process.argv.includes("--publish")) {
+  writeFileSync(out, page);
+  console.log(`docs/ROADMAP.md — ${docs.length} docs, ${count("built")} built, ${left} open, ${owed.length} need a person`);
+}
 
 if (process.argv.includes("--publish")) {
   // One line a person can act on, not a stack: this is what `.isocan/roadmap.log` shows.
@@ -291,7 +295,7 @@ if (process.argv.includes("--publish")) {
  * canvas somebody else changed costs a line in `.isocan/roadmap.log`, not a
  * red tick.
  *
- *   node scripts/roadmap.mjs --publish                 # write the file, then the card
+ *   node scripts/roadmap.mjs --publish                 # the card only; the file is left as it is
  *   node scripts/roadmap.mjs --publish --dry-run       # write the card to a temp file only
  *   node scripts/roadmap.mjs --publish --canvas prj_…  # another canvas (default: the roadmap's)
  *   node scripts/roadmap.mjs --publish --as-me         # as you, not as Board

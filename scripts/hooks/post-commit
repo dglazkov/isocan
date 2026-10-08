@@ -27,7 +27,11 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 # leaves the card alone when its bytes have not changed, so most commits cost
 # a read. It runs before the board's checks below because it is not the
 # board's, and the watcher does not do it.
-if [ -f "$root/.isocan/roadmap.json" ]; then
+# Not mid-rebase: git runs this hook for every replayed commit, and a publish
+# of each intermediate tree is noise. The commit after the rebase publishes.
+gitdir=$(git -C "$root" rev-parse --git-dir 2>/dev/null || echo "$root/.git")
+case "$gitdir" in /*) ;; *) gitdir="$root/$gitdir" ;; esac
+if [ -f "$root/.isocan/roadmap.json" ] && [ ! -d "$gitdir/rebase-merge" ] && [ ! -d "$gitdir/rebase-apply" ]; then
   {
     printf '\n── %s  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(git -C "$root" rev-parse --short HEAD)"
     node "$root/scripts/roadmap.mjs" --publish 2>&1

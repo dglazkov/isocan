@@ -129,6 +129,13 @@ describe("the roadmap is derived, not written", () => {
     expect(missing, "a walk row whose link does not resolve from docs/").toEqual([]);
   });
 
+  it("a publish leaves the file alone — it runs detached, where a rewrite could stop a rebase", () => {
+    const before = readFileSync(`${repo}/docs/ROADMAP.md`, "utf8");
+    execFileSync("node", [`${repo}/scripts/roadmap.mjs`, "--publish", "--dry-run"], { cwd: repo, encoding: "utf8", timeout: 60_000 });
+    expect(readFileSync(`${repo}/docs/ROADMAP.md`, "utf8")).toBe(before);
+    expect(script).toMatch(/if \(!process\.argv\.includes\("--publish"\)\) \{\n\s*writeFileSync\(out, page\)/);
+  }, 120_000);
+
   it("publishes the canvas card only when asked, with links that resolve off the repo", () => {
     /**
      * The canvas copy was hand-kept and drifted (7 Oct 2026); now it is this
@@ -167,6 +174,10 @@ describe("the roadmap is derived, not written", () => {
       const until = Date.now() + 20_000;
       while (Date.now() < until && !(existsSync(log) && /exit \d/.test(readFileSync(log, "utf8")))) execFileSync("sleep", ["0.1"], { timeout: 5_000 });
       expect(readFileSync(log, "utf8")).toMatch(/home unreachable[\s\S]*exit 1/);
+      // And never mid-rebase, when every replayed commit runs this hook.
+      mkdirSync(path.join(dir, ".git", "rebase-merge"));
+      const during = execFileSync("sh", [hook], { cwd: dir, encoding: "utf8", timeout: 30_000 });
+      expect(during).not.toContain("roadmap.log");
     } finally {
       rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
