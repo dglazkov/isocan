@@ -17,12 +17,14 @@ import "./GroupStack.css";
  * the group's own frame, at its own origin, one card's size
  * (`GROUP_STACK`, `groupStackBox`).
  *
- * The top member sits upright in the middle and renders its content; up to
- * six more sit behind it, each turned and nudged by a hash of its own id
- * (core `stackPile`), tinted with its own colour, and drawn as nothing more
- * than a title and a colour band — a 40-item stack costs one card's content
- * and six edges, not forty cards. Pointing fans it into a hand; a click opens
- * it into a grid in front of the canvas. Fanned and opened are this viewer's
+ * The top member sits upright in the middle; up to six more sit behind it,
+ * each turned and nudged by a hash of its own id (core `stackPile`) and
+ * tinted with its own colour. Every card in the pile shows its own picture
+ * (8 Oct 2026, Dion: "it should be showing all of the images, not grey
+ * blocks") — the pile is at most seven cards, so a 40-item stack still costs
+ * seven thumbnails, not forty. Pointing fans it into a hand. The first click
+ * selects the stack like any group, so ⇧S and the menu act on it; a click on
+ * a stack that is already selected opens it into a grid in front of the canvas. Fanned and opened are this viewer's
  * and this moment's, so they are React state here and never stored: a reload
  * or a close always comes back to the stack, which is the stored part.
  *
@@ -41,10 +43,12 @@ export default function GroupStack({ item, canvasId, actor, lifted }: { item: It
   const fan = fanned && !lifted;
 
   /*
-   * A click on the pile opens it. The press itself is `ItemView`'s — it
-   * selects the group and drags it like any group — and it captures the
+   * A click on a SELECTED pile opens it. The press itself is `ItemView`'s —
+   * it selects the group and drags it like any group — and it captures the
    * pointer on the frame, which retargets the click there; so the click is
-   * heard on the frame, and only when the pointer did not travel. A
+   * heard on the frame, and only when the pointer did not travel. Whether the
+   * stack was selected is read in the capture phase, before `ItemView`'s own
+   * handler selects it: the first click selects, the next one opens. A
    * double-click would enter the group, and a stack has no floor to stand on.
    */
   useEffect(() => {
@@ -55,7 +59,8 @@ export default function GroupStack({ item, canvasId, actor, lifted }: { item: It
     let down: { x: number; y: number } | null = null;
     frame.addEventListener("pointerdown", (e) => {
       const ui = useUiStore.getState();
-      down = e.button === 0 && !e.shiftKey && !e.altKey && !reachHeld(e) && ui.activeTool === "select" && !ui.commentMode ? { x: e.clientX, y: e.clientY } : null;
+      const selected = ui.selectedItemIds.length === 1 && ui.selectedItemIds[0] === item.id;
+      down = selected && e.button === 0 && !e.shiftKey && !e.altKey && !reachHeld(e) && ui.activeTool === "select" && !ui.commentMode ? { x: e.clientX, y: e.clientY } : null;
     }, { signal, capture: true });
     frame.addEventListener("click", (e) => {
       const from = down;
@@ -66,7 +71,7 @@ export default function GroupStack({ item, canvasId, actor, lifted }: { item: It
     }, { signal });
     frame.addEventListener("dblclick", (e) => e.stopPropagation(), { signal });
     return () => off.abort();
-  }, []);
+  }, [item.id]);
 
   const s = GROUP_STACK;
   const rest = (one: { x: number; y: number; rotate: number }) => `translate(${one.x}px, ${one.y}px) rotate(${one.rotate}deg)`;
@@ -96,9 +101,7 @@ export default function GroupStack({ item, canvasId, actor, lifted }: { item: It
               onPointerEnter={() => setHot(card.id)}
             >
               <span className="stack-card-title">{member.title}</span>
-              {card.depth === 0
-                ? <span className="stack-card-face"><ItemThumb canvasId={canvasId} itemId={member.id} item={member} width={s.width} height={s.height - 36} /></span>
-                : <span className="stack-card-band" />}
+              <span className="stack-card-face"><ItemThumb canvasId={canvasId} itemId={member.id} item={member} width={s.width} height={s.height - 36} /></span>
             </div>
           );
         })}

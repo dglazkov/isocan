@@ -27,6 +27,9 @@ second week.
   press ⇧S: a spread group stacks into a pile, a stacked one spreads back,
   every card exactly where it was. With nothing selected it acts on the group
   you are standing in. S on its own still shows an item's version stack.
+- **A stack shows its pictures.** Every card in a pile shows its own image,
+  not just the top one. And the first click on a stack now selects it, so ⇧S
+  and the menu act on it; click a selected stack to open it.
 - **Pinch-to-zoom moves faster.** A trackpad pinch zooms about twice as far
   as it did, closer to Figma, and stays smooth on busy canvases. A ⌃-held
   mouse wheel steps rather than leaps.

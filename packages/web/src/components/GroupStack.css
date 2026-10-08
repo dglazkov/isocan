@@ -23,7 +23,6 @@
 .stack-card.top .stack-card-title { color: var(--ink); }
 /* In the hand a card's title sits at its outer edge, so every title reads. */
 .stack-card.right .stack-card-title { text-align: right; }
-.stack-card-band { position: absolute; left: 14px; right: 14px; bottom: 16px; height: 96px; border-radius: 6px; background: var(--tint, var(--line)); opacity: 0.55; }
 .stack-card-face { position: absolute; left: 0; right: 0; bottom: 0; top: 36px; overflow: hidden; pointer-events: none; }
 .stack-card-face .item-thumb { display: block; border-radius: 0; }
 .stack-card.empty { display: flex; align-items: center; justify-content: center; border-style: dashed; box-shadow: none; }

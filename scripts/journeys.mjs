@@ -1289,7 +1289,7 @@ export const JOURNEYS = [
      * Asserted as STATE — classes in the DOM, what the home holds, and the
      * members' boxes before and after — never an animation having run.
      */
-    what: "Stack draws a pile that survives reload; hover fans, click opens, Esc closes; Spread puts every member back where it was; ⇧S stacks and spreads it again; ⌘-drag takes a card out of the opened stack",
+    what: "Stack draws a pile of pictures that survives reload; hover fans, a click selects and a second opens, Esc closes; Spread puts every member back where it was; ⇧S stacks and spreads it again; ⌘-drag takes a card out of the opened stack",
     async run(rig) {
       const { b } = rig;
       await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -1358,6 +1358,9 @@ export const JOURNEYS = [
       if (layers !== 3) throw new Error(`the pile should show three cards, it shows ${layers}`);
       const turns = await b.ev(`JSON.stringify([...document.querySelectorAll(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card:not(.top)`)})].map((el) => el.style.transform))`);
       if (!/rotate\(-?[3-9]/.test(turns)) throw new Error(`the cards behind the top are not turned: ${turns}`);
+      // Every card in the pile shows its own picture, not only the top one (8 Oct 2026).
+      const faces = await b.ev(`document.querySelectorAll(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card .stack-card-face .item-thumb`)}).length`);
+      if (faces !== layers) throw new Error(`only ${faces} of the pile's ${layers} cards show their picture`);
       await rig.type("v");
 
       // 3. Point at it: it fans.
@@ -1369,10 +1372,16 @@ export const JOURNEYS = [
       await until(b, `!!document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-pile.fanned`)})`, "pointing at the pile to fan it", 3000);
       if (stacked() !== true) throw new Error("fanning changed what the home holds");
 
-      // 4. Click: it opens into a grid of every member.
+      // 4. The first click selects the stack (so ⇧S and the menu act on it); a
+      //    click on the selected stack opens it into a grid of every member.
       await mouse("mousePressed", pile.x, pile.y, { buttons: 1 });
       await mouse("mouseReleased", pile.x, pile.y);
-      await until(b, `document.querySelectorAll(".stack-open .stack-open-card").length === 3`, "a click to open the stack into a grid of its three cards", 3000);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.selected[data-item-id="${group}"]`)})`, "the first click to select the stack", 3000);
+      await sleep(400);
+      if (await b.ev(`!!document.querySelector(".stack-open")`)) throw new Error("the first click on an unselected stack opened it; it should only select it");
+      await mouse("mousePressed", pile.x, pile.y, { buttons: 1 });
+      await mouse("mouseReleased", pile.x, pile.y);
+      await until(b, `document.querySelectorAll(".stack-open .stack-open-card").length === 3`, "a click on the selected stack to open it into a grid of its three cards", 3000);
 
       // 5. Esc closes it — and the stack is still a stack.
       await rig.press("Escape");
@@ -1408,6 +1417,13 @@ export const JOURNEYS = [
       runCli("--canvas", id, "canvas", "group", "stack", group);
       await until(b, `!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"] .stack-card.top`)})`, "the group to stack again from the terminal");
       const pile2 = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-pile`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), right: Math.round(r.right) }; })()`);
+      // Opening takes a selected stack: one click selects it if it is not already.
+      if (!(await b.ev(`!!document.querySelector(${JSON.stringify(`.item.selected[data-item-id="${group}"]`)})`))) {
+        await mouse("mousePressed", pile2.x, pile2.y, { buttons: 1 });
+        await mouse("mouseReleased", pile2.x, pile2.y);
+        await until(b, `!!document.querySelector(${JSON.stringify(`.item.selected[data-item-id="${group}"]`)})`, "a click to select the stack again", 3000);
+        await sleep(400);
+      }
       await mouse("mousePressed", pile2.x, pile2.y, { buttons: 1 });
       await mouse("mouseReleased", pile2.x, pile2.y);
       const taken = cards[2];
