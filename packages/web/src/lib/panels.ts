@@ -83,6 +83,15 @@ export function setRailWidth(width: number): void {
  */
 export function openPanel(canvasId: string, panel: Panel | null, pan = true, remember = true): void {
   const folded = panel === "main" && chatHiddenNow();
+  // The Chat kept as a bar at the bottom (`chatplace.ts`): "open the Chat"
+  // means show its messages there, and the dock — whatever it holds — is left
+  // exactly as it is. The mount restore (the one caller that does not
+  // remember) is not somebody asking: the dock comes back empty and the bar
+  // starts minimized.
+  if (panel === "main" && !folded && useUiStore.getState().chatAt === "bottom") {
+    if (remember) return useUiStore.setState({ chatBarOpen: true });
+    panel = null;
+  }
   const next = folded ? null : panel;
   if (remember && !folded) for (const which of ["main", "files", "agents", "context", "personas"] as const) {
     try {

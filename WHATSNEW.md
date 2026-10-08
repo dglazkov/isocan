@@ -33,6 +33,12 @@ second week.
 - **Pinch-to-zoom moves faster.** A trackpad pinch zooms about twice as far
   as it did, closer to Figma, and stays smooth on busy canvases. A ⌃-held
   mouse wheel steps rather than leaps.
+- **Chat at the bottom.** Drag the Chat by its header to the bottom centre
+  (or press its Move button) and it becomes a bar: just the message box, with
+  what came in while it was down as a count and one line. Click in, press ▴
+  or ⌘J and the messages open above it; Esc or ▾ puts it down again. Drag it
+  back, or press Dock on the left. It stays wherever you put it, on every
+  canvas.
 
 ## 6 October 2026
 

@@ -8,6 +8,7 @@ import type { MenuEntry } from "../components/ContextMenu.tsx";
 import type { Guide, SpacingGuide } from "../lib/snap.ts";
 import type { Viewport } from "../lib/viewport.ts";
 import { chooseMinimap, minimapShown, narrowNow, type MinimapFold } from "../lib/minimapfold.ts";
+import { readChatAt, type ChatAt } from "../lib/chatplace.ts";
 
 /** The pointer tools on the right rail. */
 export type Tool = "select" | "hand" | "comment" | "zoom" | "pen" | "text";
@@ -205,6 +206,13 @@ interface UiStore {
   /** The docked main-thread panel (pill when closed). Persisted per canvas
    * by openMainPanel in MainThreadPanel — set only through it. */
   mainPanelOpen: boolean;
+  /** Where this viewer keeps the Chat (`lib/chatplace.ts`). At the bottom the
+   *  dock never holds it, so `mainPanelOpen` stays false there. */
+  chatAt: ChatAt;
+  /** The bottom bar showing its messages, rather than just the composer.
+   *  Both are set with `setState`: a setter each is entry bytes for a
+   *  feature most visits never touch. */
+  chatBarOpen: boolean;
   /** Whether the minimap is drawn open NOW — what every control reads. The
    * choice behind it is remembered per browser (someone who put it away wants
    * it away tomorrow too), but below 460px the width folds it without
@@ -721,6 +729,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     identityOpen: false,
     shareOpen: false,
     mainPanelOpen: false,
+    chatAt: readChatAt(),
+    chatBarOpen: false,
     minimapOpen: minimapShown(minimapFold),
     minimapFold,
     cursorGlow: readFlag(GLOW_KEY, true),

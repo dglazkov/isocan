@@ -75,6 +75,10 @@ import { Viewer } from "../components/LazyViewer.tsx";
 import { usePhone } from "../lib/phone.ts";
 import type { PriorVisit } from "../lib/visitdigest.ts";
 import type { PhoneVisit } from "../components/PhoneFace.tsx";
+/** Where the Chat goes, and the way there (`lib/chatplace.ts`): the bar at the
+ *  bottom, or the docked Chat's Move button and header drag. Lazy — none of it
+ *  is needed to paint the Chat, only to move it. */
+const ChatPlace = lazy(() => import("../components/ChatBar.tsx"));
 const PhoneFace = lazy(() => import("../components/PhoneFace.tsx").then((m) => ({ default: m.PhoneFace })));
 const CanvasTools = lazy(() => import("../components/CanvasTools.tsx").then((m) => ({ default: m.CanvasTools })));
 /** Asked for by a keystroke and unmounted when closed, so it need not be in
@@ -1202,6 +1206,7 @@ function CanvasSurface({
           while a module owns the canvas chrome. */}
       <DesignComparisonHost canvasId={canvasId} actor={actor} />
       {!phone && <MainThreadPanel canvasId={canvasId} actor={actor} />}
+      {!phone && <Suspense fallback={null}><ChatPlace canvasId={canvasId} actor={actor} /></Suspense>}
       <FilesPanel canvasId={canvasId} actor={actor} />
       <AgentTray canvasId={canvasId} actor={actor} />
       <ContextPanel canvasId={canvasId} actor={actor} />

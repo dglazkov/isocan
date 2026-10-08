@@ -249,6 +249,7 @@ export function MainThreadPanel({ canvasId, actor }: { canvasId: string; actor: 
     // Never chosen here (undefined): open with the Chat, not remembered, so
     // the first real choice is still the person's (`openPanel` folds `"main"`
     // to `null` when `?embed=1` / `chatHiddenNow()` is active).
+    // (Kept at the bottom, `openPanel` leaves the dock empty and the bar shut.)
     openPanel(canvasId, stored === undefined ? "main" : stored, false, false);
   }, [canvasId]);
 

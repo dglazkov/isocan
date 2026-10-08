@@ -195,13 +195,24 @@ async function rig() {
      * than counting children.
      */
     clickText: async (selector, text, what = `"${text}"`) => {
-      const mark = await b.ev(`(() => {
-        const el = [...document.querySelectorAll(${JSON.stringify(selector)})]
-          .find(e => e.textContent.trim().startsWith(${JSON.stringify(text)}));
-        if (!el) return null;
-        el.setAttribute("data-journey-target", "1");
-        return true;
-      })()`);
+      /* Waited for, not looked up once: the ··· menu draws its rows after a
+         lazy chunk (`menuentries.tsx`) arrives, and on a cold fetch that is
+         later than the press's own 250ms settle. Three journeys pressed
+         "Agents" straight after opening it and failed whenever the fetch ran
+         long — found 8 Oct 2026, 1 run in 3. */
+      const deadline = Date.now() + 4000;
+      let mark = null;
+      for (;;) {
+        mark = await b.ev(`(() => {
+          const el = [...document.querySelectorAll(${JSON.stringify(selector)})]
+            .find(e => e.textContent.trim().startsWith(${JSON.stringify(text)}));
+          if (!el) return null;
+          el.setAttribute("data-journey-target", "1");
+          return true;
+        })()`);
+        if (mark || Date.now() > deadline) break;
+        await sleep(100);
+      }
       if (!mark) throw new Error(`no ${what} to press`);
       try {
         await rigClick("[data-journey-target]", what);
@@ -239,6 +250,7 @@ async function rig() {
         o: { windowsVirtualKeyCode: 79, key: "o", code: "KeyO" },
         Delete: { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" },
         Escape: { windowsVirtualKeyCode: 27, key: "Escape", code: "Escape" },
+        j: { windowsVirtualKeyCode: 74, key: "j", code: "KeyJ" },
       };
       const k = codes[key];
       if (!k) throw new Error(`journeys cannot press ${key} yet`);
@@ -2285,6 +2297,156 @@ export const JOURNEYS = [
         if (!(head.between > 0)) {
           throw new Error(`${name}'s glyph and title are touching (${head.between}px apart)`);
         }
+      }
+    },
+  },
+  {
+    name: "chat-bottom",
+    /**
+     * **The Chat moved to the bottom, and back** (8 Oct 2026).
+     *
+     * Dion: grab the left bar's Chat, move it to the centre bottom, where it
+     * pops its messages up above the input and minimizes to just the input.
+     * Every half of that is a pointer and a layout, which no source guard can
+     * see — so it is walked: a real drag by the header (CDP mouse events, with
+     * the drop zones checked mid-drag), a real send read back from the
+     * terminal, Esc and ⌘J, a reload, and a drag home that rail-pans as before.
+     *
+     * Screenshots of the three states land in `$CHAT_SHOTS` when it is set.
+     */
+    what: "drag the Chat to the bottom: a minimized bar that sends, expands above, survives reload, and drags home",
+    async run(rig) {
+      const { b } = rig;
+      const shots = process.env.CHAT_SHOTS;
+      const shot = async (name) => {
+        if (!shots) return;
+        await sleep(400);
+        const png = await b.send("Page.captureScreenshot", { format: "png" });
+        writeFileSync(path.join(shots, `chat-${name}.png`), Buffer.from(png.data, "base64"));
+      };
+      const env = { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: "chat-bottom-ada", ISOCAN_HARNESS: "test" };
+      const runCli = (...args) => execFileSync(process.execPath, [cli, ...args], { cwd: rig.home, encoding: "utf8", env });
+      const drag = async (from, to, check) => {
+        await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: from.x, y: from.y, button: "left", buttons: 1, clickCount: 1 });
+        // The drag module arrives on the press; give it the moment it takes.
+        await sleep(300);
+        for (let i = 1; i <= 12; i++) {
+          const x = Math.round(from.x + ((to.x - from.x) * i) / 12), y = Math.round(from.y + ((to.y - from.y) * i) / 12);
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1 });
+          await sleep(30);
+        }
+        await sleep(150);
+        if (check) await check();
+        await b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: to.x, y: to.y, button: "left", buttons: 0, clickCount: 1 });
+        await sleep(500);
+      };
+      // The docked Chat's header — the bar draws the same Chat, header hidden.
+      const tx = () => b.ev(`(() => { const m = /translate\\(\\s*(-?[\\d.]+)px/.exec(document.querySelector(".world")?.style.transform ?? ""); return m ? Number(m[1]) : null; })()`);
+      const center = (sel) => b.ev(`(() => { const r = document.querySelector(${JSON.stringify(sel)})?.getBoundingClientRect(); return r ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null; })()`);
+
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+      try {
+        await b.ev(`(() => { localStorage.removeItem("isocan.chatAt"); return true; })()`);
+        const id = await makeCanvas(rig, "Chat bar journey");
+        // Today's dock, exactly: a never-chosen canvas opens with the Chat on the left.
+        await until(b, `[...document.querySelectorAll(".main-panel > .panel-head")].some(h => !h.closest(".chat-bar")) && !document.querySelector(".chat-bar")`, "the Chat docked on the left");
+        await shot("left");
+        const leftTx = await tx();
+
+        // Drag it by its header to the bottom centre. The slots show, and the
+        // bottom one is the hot one before the release.
+        const head = await b.ev(`(() => { const r = document.querySelector(".main-panel > .panel-head b").getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        const vw = await b.ev(`innerWidth`), vh = await b.ev(`innerHeight`);
+        await drag(head, { x: Math.round(vw / 2), y: vh - 50 }, async () => {
+          const zones = await b.ev(`[...document.querySelectorAll(".chat-zone")].map(z => z.dataset.at + (z.classList.contains("hot") ? ":hot" : ""))`);
+          if (!zones.includes("left") || !zones.includes("bottom:hot")) throw new Error(`mid-drag the slots read ${JSON.stringify(zones)}, not the left dock and a hot bottom slot`);
+        });
+        await until(b, `!!document.querySelector(".chat-bar")`, "the Chat bar at the bottom");
+        const bar = await b.ev(`(() => {
+          const r = document.querySelector(".chat-bar").getBoundingClientRect();
+          return { mid: r.left + r.width / 2, gap: innerHeight - r.bottom, width: r.width, vw: innerWidth,
+                   list: !!document.querySelector(".chat-bar .main-scroll")?.getClientRects().length,
+                   input: !!document.querySelector(".chat-bar form textarea"),
+                   panels: document.querySelectorAll(".main-panel").length,
+                   inBar: !!document.querySelector(".chat-bar > .main-panel"),
+                   stored: localStorage.getItem("isocan.chatAt") };
+        })()`);
+        if (Math.abs(bar.mid - bar.vw / 2) > 2) throw new Error(`the bar is not centred: its middle is at ${bar.mid} of ${bar.vw}`);
+        if (bar.gap < 8 || bar.gap > 40) throw new Error(`the bar is not at the bottom edge: ${bar.gap}px above it`);
+        if (bar.width > 720) throw new Error(`the bar is ${bar.width}px wide, past its 720px`);
+        if (bar.list) throw new Error("the bar opened with its message list showing — it should start minimized");
+        if (!bar.input) throw new Error("the minimized bar has no input");
+        if (bar.panels !== 1 || !bar.inBar) throw new Error("the left dock still holds a Chat beside the bar");
+        if (bar.stored !== "bottom") throw new Error(`the placement was not remembered (${bar.stored})`);
+        const bottomTx = await tx();
+        if (!(bottomTx < leftTx - 100)) throw new Error(`the canvas did not pan back from under the dock (${leftTx} → ${bottomTx})`);
+        await shot("bottom-minimized");
+
+        // Type and send, from the bar. Focusing the input opens the list.
+        await rig.click(".chat-bar form textarea", "the bar's input");
+        await until(b, `!!document.querySelector(".chat-bar.open .main-scroll")`, "focusing the input to open the bar");
+        await rig.type("Acme bar hello");
+        await rig.press("Enter");
+        await until(b, `[...document.querySelectorAll(".chat-bar .main-msgs .comment")].some(c => c.textContent.includes("Acme bar hello"))`, "the message in the bar's list");
+        const order = await b.ev(`(() => { const l = document.querySelector(".chat-bar .main-scroll").getBoundingClientRect(), f = document.querySelector(".chat-bar form").getBoundingClientRect(); return l.bottom <= f.top + 1; })()`);
+        if (!order) throw new Error("the message list is not above the input");
+        // The terminal reads it back, as Ada — who speaks next.
+        runCli("identity", "--session", "--name", "Ada");
+        const posted = runCli("--json", "--canvas", id, "comment", "ls");
+        if (!posted.includes("Acme bar hello")) throw new Error("the terminal does not see the message the bar sent");
+
+        // Esc puts it down to the input alone.
+        await rig.press("Escape");
+        await until(b, `!document.querySelector(".chat-bar.open") && !document.querySelector(".chat-bar .main-scroll")?.getClientRects().length`, "Esc to minimize the bar");
+
+        // Somebody else speaks while it is down: a count and one line of it.
+        runCli("--canvas", id, "notify", "Acme header is ready to look at");
+        await until(b, `/Acme header is ready/.test(document.querySelector(".chat-bar-news .chat-bar-preview")?.textContent ?? "") && document.querySelector(".chat-bar-unread")?.textContent === "1"`, "the minimized bar to show one unread and its line", 10_000);
+
+        // ▴ opens it, above the input, showing both messages.
+        await rig.click(`.chat-bar-controls button[aria-label="Show the Chat's messages"]`, "the ▴");
+        await until(b, `!!document.querySelector(".chat-bar.open .main-scroll") && document.querySelector(".chat-bar .main-msgs")?.textContent.includes("Acme header is ready")`, "▴ to open the bar on the messages");
+        await until(b, `!document.querySelector(".chat-bar-news")`, "opening to read the unread");
+        await shot("bottom-expanded");
+        await rig.click('.chat-bar-controls button[aria-label="Minimize the Chat"]', "the ▾");
+        await until(b, `!document.querySelector(".chat-bar.open")`, "▾ to minimize the bar");
+
+        // ⌘J opens and shuts the bar, not the dock.
+        await rig.press("j", { meta: true });
+        await until(b, `!!document.querySelector(".chat-bar.open") && !!document.activeElement?.closest(".chat-bar")`, "⌘J to open the bar with the caret in it");
+        await rig.press("j", { meta: true });
+        await until(b, `!document.querySelector(".chat-bar.open")`, "⌘J to shut the bar again");
+        if (await b.ev(`[...document.querySelectorAll(".main-panel > .panel-head")].some(h => !h.closest(".chat-bar"))`)) throw new Error("⌘J opened the dock while the Chat lives at the bottom");
+
+        // Reload: still at the bottom, still minimized.
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".chat-bar")`, "the bar to come back after a reload");
+        if (await b.ev(`!!document.querySelector(".chat-bar.open") || [...document.querySelectorAll(".main-panel > .panel-head")].some(h => !h.closest(".chat-bar"))`)) {
+          throw new Error("after a reload the bar came back open, or the dock came back with it");
+        }
+
+        // Home again by its grip: today's dock, and the canvas rail-pans for it.
+        const before = await tx();
+        const grip = await center(".chat-bar-grip");
+        await drag(grip, { x: 160, y: 320 }, async () => {
+          const hot = await b.ev(`document.querySelector(".chat-zone.hot")?.dataset.at ?? ""`);
+          if (hot !== "left") throw new Error(`mid-drag home the hot slot is "${hot}", not the left dock`);
+        });
+        await until(b, `[...document.querySelectorAll(".main-panel > .panel-head")].some(h => !h.closest(".chat-bar")) && !document.querySelector(".chat-bar")`, "the Chat back in the left dock");
+        const after = await tx();
+        if (!(after > before + 100)) throw new Error(`the canvas did not rail-pan for the dock (${before} → ${after})`);
+        if ((await b.ev(`localStorage.getItem("isocan.chatAt")`)) !== "left") throw new Error("going home was not remembered");
+
+        // And the keyboard's way there and back: the header buttons.
+        await rig.click('.main-panel > .panel-head button[aria-label="Move the Chat to the bottom"]', "Move to bottom");
+        await until(b, `!!document.querySelector(".chat-bar") && ![...document.querySelectorAll(".main-panel > .panel-head")].some(h => !h.closest(".chat-bar"))`, "Move to bottom to move it");
+        await rig.click('.chat-bar-controls button[aria-label="Dock the Chat on the left"]', "Dock on the left");
+        await until(b, `[...document.querySelectorAll(".main-panel > .panel-head")].some(h => !h.closest(".chat-bar")) && !document.querySelector(".chat-bar")`, "Dock on the left to bring it home");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the Chat threw while moving: ${errors[0]}`);
+      } finally {
+        await b.ev(`(() => { localStorage.removeItem("isocan.chatAt"); return true; })()`);
+        await b.send("Emulation.clearDeviceMetricsOverride", {});
       }
     },
   },

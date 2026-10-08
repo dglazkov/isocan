@@ -116,7 +116,7 @@ export const SHORTCUTS: Shortcut[] = [
     keys: ["⌘J"],
     does: "Open or close the Chat",
     group: "Talking",
-    note: "Shut, the rail is a 48px strip: what you have not read, and which agents are working",
+    note: "Shut, the rail is a 48px strip: what you have not read, and which agents are working. Chat at the bottom: opens or minimizes its bar",
   },
   { keys: ["⏎"], does: "Send it", group: "Talking", note: "⇧⏎ makes a new line instead; the composer grows to hold it and drops back to one line once sent" },
   { keys: ["⌘⏎"], does: "Send the comment you are writing", group: "Talking", note: "Works from a reply box too, where ⏎ is a new line" },
