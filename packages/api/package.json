@@ -24,7 +24,7 @@
   "dependencies": {
     "@isocan/core": "*",
     "@isocan/server": "*",
-    "undici": "^8.11.2"
+    "undici": "^8.10.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.1"
