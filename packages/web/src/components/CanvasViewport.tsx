@@ -22,7 +22,7 @@ import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
-import { pan, pinch, screenToWorld, worldToScreen, zoomAt, type TwoPoints, type Viewport } from "../lib/viewport.ts";
+import { pan, pinch, pinchFactor, screenToWorld, worldToScreen, zoomAt, type TwoPoints, type Viewport } from "../lib/viewport.ts";
 import { moduleDropFor } from "../modules.ts";
 import { creationDestination, selectCreatedItems } from "../lib/groupplacement.ts";
 import { newGroupId } from "@isocan/core";
@@ -121,11 +121,6 @@ interface GestureEvent extends UIEvent {
   readonly clientY: number;
 }
 
-// How briskly a Chrome/Firefox trackpad pinch (a ctrlKey wheel) zooms: the
-// exponent on deltaY. Higher = snappier. 0.0022 felt sluggish next to Figma;
-// this is roughly 2.5× that. Safari's gesture path is already 1:1 with the
-// physical pinch (e.scale), so it needs no such constant.
-const PINCH_ZOOM_SENSITIVITY = 0.0055;
 
 // The Pen, in SCREEN pixels: how wide a stroke looks under the nib, and how
 // far the pointer must travel before another sample is kept. Both are divided
@@ -290,6 +285,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       return true;
     }
 
+    const wheelPinch = { factor: 1, x: 0, y: 0, frame: 0 };
     function onWheel(e: WheelEvent) {
       stopGlide();
       freezePresentation();
@@ -298,9 +294,22 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         // Pinch (or ctrl+wheel): always own it, wherever the cursor is, so the
         // browser never page-zooms. Zoom the canvas at the cursor instead.
         e.preventDefault();
-        const factor = Math.exp(-e.deltaY * PINCH_ZOOM_SENSITIVITY);
-        const ui = useUiStore.getState();
-        ui.setViewport(zoomAt(ui.viewport, e.clientX, e.clientY, factor));
+        // A trackpad sends several of these a frame; each would be a whole
+        // render of everything that reads the viewport. Gather them and zoom
+        // once a frame, at the latest cursor — the same total, one render.
+        // (Safari's gesture path is already 1:1 with the pinch, via e.scale.)
+        wheelPinch.factor *= pinchFactor(e.deltaY, e.deltaMode);
+        wheelPinch.x = e.clientX;
+        wheelPinch.y = e.clientY;
+        if (wheelPinch.frame === 0) {
+          wheelPinch.frame = requestAnimationFrame(() => {
+            const { factor, x, y } = wheelPinch;
+            wheelPinch.frame = 0;
+            wheelPinch.factor = 1;
+            const ui = useUiStore.getState();
+            ui.setViewport(zoomAt(ui.viewport, x, y, factor));
+          });
+        }
         return;
       }
       // Plain two-finger scroll pans the canvas — but only over the canvas
@@ -358,6 +367,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     window.addEventListener("gestureend", onGestureEnd as EventListener, opts);
 
     return () => {
+      if (wheelPinch.frame) cancelAnimationFrame(wheelPinch.frame);
       window.removeEventListener("wheel", onWheel, true);
       window.removeEventListener("gesturestart", onGestureStart as EventListener, true);
       window.removeEventListener("gesturechange", onGestureChange as EventListener, true);
