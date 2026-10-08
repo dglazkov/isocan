@@ -685,6 +685,13 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   wakes on comments landing there, no @-mention needed. Its toggle (wearing
   the unread count) lives on the Shelf; demote with "detach" (or
   `comment main --clear`) and the pin returns to where the thread was born.
+- **The Chat at the bottom**: drag the Chat by its header to the bottom centre
+  (or its Move button) and it becomes a bar there, minimized to the composer —
+  an unread count and the newest line show while it is down; focusing it, ▴
+  or ⌘J opens the same messages above the input, Esc or ▾ minimizes. Drag it
+  home, or Dock on the left. Where it lives is the viewer's own layout (one
+  browser setting, every canvas), so there is no op and no verb: an agent's
+  words land in the same thread either way.
 - **The Shelf**: every verb in one dock at bottom center, in grouped
   segments — create (`＋ File`) · converse (comment mode, main thread) ·
   history (undo/redo) · navigate (zoom, `⌖ Fit`). The top bar holds identity
