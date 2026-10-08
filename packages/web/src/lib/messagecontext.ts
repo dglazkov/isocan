@@ -28,21 +28,30 @@ export function useMessageContext(canvasId: string, roots: string[]) {
   const lastSeq = useCanvasStore((state) => state.lastSeq);
   const [includeExcluded, setIncludeExcluded] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [loaded, setLoaded] = useState<{ key: string; manifest: ContextManifest } | null>(null);
+  const [loaded, setLoaded] = useState<{ key: string; base: string; manifest: ContextManifest } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const enabled = mode === "groups" && roots.length > 0;
   const key = JSON.stringify([canvasId, roots, includeExcluded, revision]);
+  // The same selection and override, at any revision: a refresh of what is
+  // already shown, not a different question.
+  const base = JSON.stringify([canvasId, roots, includeExcluded]);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
     const [id, ids, override] = JSON.parse(key) as [string, string[], boolean, number];
     void fetchContextManifest(id, ids, override).then((manifest) => {
-      if (!cancelled) { setLoaded({ key, manifest }); setFailure(null); }
+      if (!cancelled) { setLoaded({ key, base: JSON.stringify([id, ids, override]), manifest }); setFailure(null); }
     }, (err: Error) => { if (!cancelled) setFailure({ key, message: err.message }); });
     return () => { cancelled = true; };
   }, [key, enabled]);
-  const manifest = enabled && loaded?.key === key ? loaded.manifest : null;
+  // **A refresh keeps the card it is refreshing** (8 Oct 2026). Stacking or
+  // spreading a selected group writes an op, the preview goes stale, and 600 ms
+  // later it rebuilds; dropping the manifest meanwhile swapped the card for a
+  // one-line "Loading…" and back, and everything above the composer jumped
+  // twice. The last manifest for the same roots and override stays until the
+  // new one lands; only a different question shows Loading.
+  const manifest = enabled && loaded && (loaded.key === key || loaded.base === base) ? loaded.manifest : null;
   const error = failure?.key === key ? failure.message : null;
   const request = manifest ? messageContextRequest(roots, includeExcluded) : undefined;
   const stale = Boolean(manifest && lastSeq > manifest.revision);

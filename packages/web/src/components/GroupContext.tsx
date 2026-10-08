@@ -100,7 +100,9 @@ export function MessageContextPreview({ context }: { context: ReturnType<typeof 
   return <div className="message-context" onKeyDown={(event) => { if (event.key !== "Escape") event.stopPropagation(); }}>
     {context.loading && <p role="status">Loading complete context…</p>}
     {context.error && <p role="alert">{context.error}</p>}
-    {context.manifest && <ContextManifestView key={`${context.manifest.revision}:${context.includeExcluded}:${context.manifest.rootIds.join(",")}`} manifest={context.manifest} />}
+    {/* Keyed by the question, not the revision: a quiet refresh updates the
+        card in place instead of rebuilding it (and closing its disclosure). */}
+    {context.manifest && <ContextManifestView key={`${context.includeExcluded}:${context.manifest.rootIds.join(",")}`} manifest={context.manifest} />}
     {/* Each control appears only when it can do something: the override when
         something is excluded, Try again when the preview failed to load.
         Both used to render always, as bare browser defaults, and read as noise
