@@ -52,4 +52,16 @@ export declare function stackFan(depth: number, card?: {
 export declare function groupStackAction(group: Item, stacked: boolean): Extract<GroupAction, {
     kind: "layout";
 }>;
+/**
+ * **⇧S: which groups, and which way** — stack what is spread, spread what is
+ * stacked. The groups are the selected ones; a selected member stands for
+ * its group; with nothing selected, the group you are standing in. When
+ * several disagree they are made to agree: all stacked spreads them, any
+ * spread stacks them all, so one press always moves every one the same way.
+ * `null` when there is no group to act on.
+ */
+export declare function stackToggle(canvas: CanvasContents, selection: readonly string[], scope: string | null): {
+    groups: Item[];
+    stacked: boolean;
+} | null;
 export {};
