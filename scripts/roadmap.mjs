@@ -268,7 +268,13 @@ if (process.argv.includes("--check")) {
 writeFileSync(out, page);
 console.log(`docs/ROADMAP.md — ${docs.length} docs, ${count("built")} built, ${left} open, ${owed.length} need a person`);
 
-if (process.argv.includes("--publish")) await publishToCanvas(page);
+if (process.argv.includes("--publish")) {
+  // One line a person can act on, not a stack: this is what `.isocan/roadmap.log` shows.
+  await publishToCanvas(page).catch((err) => {
+    console.error(`roadmap card not published: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  });
+}
 
 /**
  * **The canvas copy, generated like the file** (7 Oct 2026). The roadmap's

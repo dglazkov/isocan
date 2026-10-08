@@ -136,7 +136,7 @@ describe("the roadmap is derived, not written", () => {
      * resolve from, so every one is rewritten to GitHub, and the card says
      * which commit it came from.
      */
-    expect(script).toMatch(/if \(process\.argv\.includes\("--publish"\)\) await publishToCanvas\(page\);/);
+    expect(script).toMatch(/if \(process\.argv\.includes\("--publish"\)\) \{\n[^]*?await publishToCanvas\(page\)\.catch/);
     // --check exits before the publish line can run.
     expect(script.indexOf('includes("--check")')).toBeLessThan(script.indexOf("await publishToCanvas(page)"));
     const said = execFileSync("node", [`${repo}/scripts/roadmap.mjs`, "--publish", "--dry-run"], { cwd: repo, encoding: "utf8", timeout: 60_000 });
