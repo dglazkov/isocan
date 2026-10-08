@@ -31,10 +31,48 @@ import "./GroupStack.css";
  * Loaded lazily by `ItemView` for a stacked group only, so a canvas without a
  * stack never downloads any of it.
  */
+/**
+ * **Which card is in front**, per stack, for this viewer only — like fanned
+ * and opened, never stored: a reload comes back to the stack's own first
+ * card. Kept outside the component so a re-render or a remount mid-session
+ * keeps the card you flipped to.
+ */
+const fronts = new Map<string, number>();
+
+/** The event ← and → on a selected stack send (CanvasPage spells it, so the first paint carries none of this). */
+const STACK_FLIP = "isocan:stack-flip";
+
 export default function GroupStack({ item, canvasId, actor, lifted }: { item: Item; canvasId: string; actor: Actor; lifted: boolean }) {
   const canvas = useCanvasStore((s) => s.past?.canvas ?? s.canvas);
-  const members = useMemo(() => (canvas?.items[item.id] ? groupStackMembers(canvas, item.id) : []), [canvas, item.id]);
+  const all = useMemo(() => (canvas?.items[item.id] ? groupStackMembers(canvas, item.id) : []), [canvas, item.id]);
+  // ← and → flip which card is in front (8 Oct 2026): the members rotate,
+  // every card's own turn and nudge travel with it (they are hashed from its
+  // id), so the CSS transition carries each to its new place; the card that
+  // leaves the front (→) or arrives from the back (←) gets a keyframe that
+  // carries it over the pile, which is what makes it read as a flip.
+  const [front, setFront] = useState(() => fronts.get(item.id) ?? 0);
+  const [flipping, setFlipping] = useState<{ id: string; way: "leave-right" | "arrive-left" } | null>(null);
+  const members = useMemo(() => {
+    if (all.length === 0) return all;
+    const at = ((front % all.length) + all.length) % all.length;
+    return [...all.slice(at), ...all.slice(0, at)];
+  }, [all, front]);
   const pile = useMemo(() => stackPile(members.map((one) => one.id)), [members]);
+  useEffect(() => {
+    const flip = (e: Event) => {
+      const { groupId, step } = (e as CustomEvent<{ groupId: string; step: number }>).detail;
+      if (groupId !== item.id || all.length < 2) return;
+      setFanned(false);
+      const was = fronts.get(item.id) ?? 0;
+      const next = was + step;
+      fronts.set(item.id, next);
+      const at = (n: number) => all[((n % all.length) + all.length) % all.length]!.id;
+      setFlipping(step > 0 ? { id: at(was), way: "leave-right" } : { id: at(next), way: "arrive-left" });
+      setFront(next);
+    };
+    window.addEventListener(STACK_FLIP, flip);
+    return () => window.removeEventListener(STACK_FLIP, flip);
+  }, [item.id, all]);
   const canEdit = useCanEdit();
   const [fanned, setFanned] = useState(false);
   const [hot, setHot] = useState<string | null>(null);
@@ -94,7 +132,8 @@ export default function GroupStack({ item, canvasId, actor, lifted }: { item: It
           return (
             <div
               key={card.id}
-              className={`stack-card${card.depth === 0 ? " top" : ""}${side}${fan && hot === card.id ? " lifted" : ""}`}
+              className={`stack-card${card.depth === 0 ? " top" : ""}${side}${fan && hot === card.id ? " lifted" : ""}${flipping?.id === card.id ? ` ${flipping.way}` : ""}`}
+              onAnimationEnd={() => { if (flipping?.id === card.id) setFlipping(null); }}
               data-depth={card.depth}
               data-member-id={card.id}
               style={{ transform: rest(fan ? stackFan(card.depth) : card), ...({ "--tint": tintOf(member) } as React.CSSProperties) }}

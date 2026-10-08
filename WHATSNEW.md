@@ -30,6 +30,8 @@ second week.
 - **A stack shows its pictures.** Every card in a pile shows its own image,
   not just the top one. And the first click on a stack now selects it, so ⇧S
   and the menu act on it; click a selected stack to open it.
+- **Flip through a stack.** With a stacked group selected, ← and → bring the
+  next or previous card to the front, with a little card-flip.
 - **Pinch-to-zoom moves faster.** A trackpad pinch zooms about twice as far
   as it did, closer to Figma, and stays smooth on busy canvases. A ⌃-held
   mouse wheel steps rather than leaps.

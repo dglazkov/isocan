@@ -1301,7 +1301,7 @@ export const JOURNEYS = [
      * Asserted as STATE — classes in the DOM, what the home holds, and the
      * members' boxes before and after — never an animation having run.
      */
-    what: "Stack draws a pile of pictures that survives reload; hover fans, a click selects and a second opens, Esc closes; Spread puts every member back where it was; ⇧S stacks and spreads it again; ⌘-drag takes a card out of the opened stack",
+    what: "Stack draws a pile of pictures that survives reload; hover fans, a click selects and a second opens, Esc closes, ← → flip the front card; Spread puts every member back where it was; ⇧S stacks and spreads it again; ⌘-drag takes a card out of the opened stack",
     async run(rig) {
       const { b } = rig;
       await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -1400,6 +1400,32 @@ export const JOURNEYS = [
       await until(b, `!document.querySelector(".stack-open")`, "Esc to close the opened stack", 3000);
       if (!(await b.ev(`!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"]`)})`))) throw new Error("closing the opened stack spread the group");
       if (stacked() !== true) throw new Error("opening or closing the stack changed what the home holds");
+
+      // 5b. ← → on the selected stack flip which card is in front — this
+      //     viewer's view only: the group does not move and nothing is stored.
+      const topId = () => b.ev(`document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card.top`)})?.getAttribute("data-member-id") ?? null`);
+      const arrow = async (key, code, keyCode) => {
+        await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: keyCode });
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: keyCode });
+      };
+      if (!(await b.ev(`!!document.querySelector(${JSON.stringify(`.item.selected[data-item-id="${group}"]`)})`))) {
+        await mouse("mousePressed", pile.x, pile.y, { buttons: 1 });
+        await mouse("mouseReleased", pile.x, pile.y);
+        await until(b, `!!document.querySelector(${JSON.stringify(`.item.selected[data-item-id="${group}"]`)})`, "a click to select the stack for flipping", 3000);
+      }
+      const firstTop = await topId();
+      const groupBox = () => runCli("--canvas", id, "show", group);
+      const boxBefore = JSON.stringify((({ x, y }) => ({ x, y }))(groupBox()));
+      await arrow("ArrowRight", "ArrowRight", 39);
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card.leave-right`)})`, "→ to swing the front card out", 2000);
+      await until(b, `(document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card.top`)})?.getAttribute("data-member-id") ?? null) !== ${JSON.stringify(firstTop)}`, "→ to bring another card to the front", 2000);
+      await sleep(500);
+      await arrow("ArrowLeft", "ArrowLeft", 37);
+      await until(b, `document.querySelector(${JSON.stringify(`.item[data-item-id="${group}"] .stack-card.top`)})?.getAttribute("data-member-id") === ${JSON.stringify(firstTop)}`, "← to bring the first card back to the front", 2000);
+      await sleep(500);
+      const boxAfter = JSON.stringify((({ x, y }) => ({ x, y }))(groupBox()));
+      if (boxAfter !== boxBefore) throw new Error(`flipping moved the stack: ${boxAfter} (was ${boxBefore})`);
+      if (JSON.stringify(saved()) !== JSON.stringify(before)) throw new Error("flipping changed a member's stored box");
 
       // 6. Spread: every member where it was.
       await mouse("mouseMoved", 5, 5);

@@ -813,6 +813,11 @@ function CanvasSurface({
         // ⌘/Ctrl + arrow walks the selection to the next item that way.
         e.preventDefault();
         jump(e.key as Direction);
+      } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.shiftKey && !e.altKey && ui.selectedItemIds.length === 1 && useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!]?.groupLayout?.display === "stack") {
+        // ← → on a selected stack flip which card is in front (this viewer's
+        // view, never stored); ↑ ↓ and ⇧-arrows still move it.
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("isocan:stack-flip", { detail: { groupId: ui.selectedItemIds[0], step: e.key === "ArrowRight" ? 1 : -1 } }));
       } else if (NUDGES[e.key]) {
         // Arrows nudge the selection; with nothing selected they are the
         // browser's again (and scrolling a canvas page does nothing anyway).

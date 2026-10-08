@@ -77,6 +77,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["⇧-drag"], does: "Snap harder to the guides", group: "Items", note: "Blue says aligned; purple says the gaps match" },
   { keys: ["F2", "Double-click the name"], does: "Rename", note: "The file follows the title", group: "Items" },
   { keys: ["S"], does: "Show the version stack", group: "Items", note: "On an item with more than one version. Escape or S again closes it" },
+  { keys: ["←", "→"], does: "Flip through a stack", group: "Items", note: "With a stacked group selected: which card is in front, for you only — nothing moves and nothing is saved. ↑ ↓ and ⇧-arrows still move the stack" },
   { keys: ["⇧S"], does: "Stack or spread the group", group: "Items", note: "Stacks a spread group into a pile and spreads a stacked one. On a member, its group; with nothing selected, the group you are in. Several at once all go the same way" },
   { keys: ["⇧F"], does: "Fit the item to its content", group: "Items", note: "F fits the view to an item; ⇧F fits the item to what is in it. Several at once are settled so nothing overlaps" },
   { keys: ["⇧D"], does: "Download", group: "Items", note: "The item's current version, under the filename it carries — the one the version stack and a rename both follow" },
