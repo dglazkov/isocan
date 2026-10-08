@@ -2407,6 +2407,17 @@ export const JOURNEYS = [
         await rig.click(`.chat-bar-controls button[aria-label="Show the Chat's messages"]`, "the ▴");
         await until(b, `!!document.querySelector(".chat-bar.open .main-scroll") && document.querySelector(".chat-bar .main-msgs")?.textContent.includes("Acme header is ready")`, "▴ to open the bar on the messages");
         await until(b, `!document.querySelector(".chat-bar-news")`, "opening to read the unread");
+        // The messages run the bar's full width; only the composer row makes
+        // room for the controls (8 Oct 2026: "a lot of blank space on the right").
+        const span = await b.ev(`(() => {
+          const bar = document.querySelector(".chat-bar").getBoundingClientRect();
+          const list = document.querySelector(".chat-bar .main-scroll").getBoundingClientRect();
+          const input = document.querySelector(".chat-bar form").getBoundingClientRect();
+          const controls = document.querySelector(".chat-bar-controls").getBoundingClientRect();
+          return { gap: Math.round(bar.right - list.right), overlap: Math.round(input.right - controls.left) };
+        })()`);
+        if (span.gap > 2) throw new Error(`the open bar's messages stop ${span.gap}px short of its right edge`);
+        if (span.overlap > 0) throw new Error(`the composer runs ${span.overlap}px under the bar's controls`);
         await shot("bottom-expanded");
         await rig.click('.chat-bar-controls button[aria-label="Minimize the Chat"]', "the ▾");
         await until(b, `!document.querySelector(".chat-bar.open")`, "▾ to minimize the bar");

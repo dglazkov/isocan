@@ -7,16 +7,21 @@
   /* Over the canvas and its floating chrome, under menus and dialogs — and its
      own popovers (the mention menu is portalled) ride above it. */
   z-index: var(--z-bar);
-  /* The Chat on the left, the bar's own controls on the right at the foot —
-     beside the composer whether or not the messages are showing. */
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; font-size: 12px; overflow: hidden;
+  /* The Chat across the whole bar; the bar's own controls pinned to its
+     bottom-right corner, beside the composer whether or not the messages are
+     showing. (A two-column grid ran the controls' column the full height, so
+     the messages stopped a hand's width short of the right edge — Dion,
+     8 Oct 2026: "a lot of blank space on the right".) */
+  display: grid; grid-template-columns: minmax(0, 1fr); font-size: 12px; overflow: hidden;
 }
 /* No transform for the centring: the drag writes one, and a bar that also
    needed one to stand in the middle would jump by half its width. */
 
 /* The Chat itself, unframed: the bar is the frame. */
 .chat-bar > .main-panel {
-  grid-column: 1; position: static; width: auto; min-height: 0;
+  /* z-index back to auto: a grid item honours the dock's z-index even when
+     static, and would lift the whole Chat over the controls in its corner. */
+  grid-column: 1; position: static; z-index: auto; width: auto; min-height: 0;
   background: none; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none;
 }
 .chat-bar .main-scroll { flex: 0 1 auto; max-height: 55vh; }
@@ -25,11 +30,14 @@
 .chat-bar > .main-panel > .panel-head,
 .chat-bar:not(.open) > .main-panel > :not(form) { display: none; }
 .chat-bar .main-panel form { border-top: 0; align-items: center; }
-/* Open, the list ends where the composer begins; no rule, because a rule
-   across one column of a two-column bar stops short under the controls. */
+/* Only the composer row makes room for the controls, by width rather than
+   padding: the messages above run the bar's full width. */
+.chat-bar .main-panel form { width: calc(100% - var(--chat-bar-controls, 96px)); box-sizing: border-box; }
 .chat-bar .main-panel form .mention-field { flex: 1 1 200px; }
 .chat-bar-controls {
-  grid-column: 2; align-self: end;
+  /* Above the full-width Chat it shares the corner with, or the Chat's own
+     box takes the presses meant for ▴ ▾. */
+  position: absolute; right: 0; bottom: 0; z-index: 1;
   display: flex; align-items: center; padding: 10px;
 }
 
