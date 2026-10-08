@@ -334,13 +334,17 @@ export function applyStructure(spec: WireSpec, req: JevRequest, res: JevResponse
       ...(pickedRegion !== undefined ? { region: pickedRegion } : {}),
     });
   }
+  const mainSlots = slots.filter((s) => r.sections.find((sec) => sec.slot === s.slot)?.region === "main");
   if (chosenTemplate && chosenTemplate !== "single") {
     const tpl = template(chosenTemplate);
-    const mainSlots = slots.filter((s) => r.sections.find((sec) => sec.slot === s.slot)?.region === "main");
     mainSlots.forEach((s, idx) => {
       if (!s.region || !tpl.regions.includes(s.region)) {
         s.region = defaultSlotRegion(tpl.id, s, idx, mainSlots.length);
       }
+    });
+  } else {
+    mainSlots.forEach((s) => {
+      delete s.region;
     });
   }
   return {
@@ -552,7 +556,7 @@ export function roundCalls(round: 1 | 2 | 3, screens: ReadonlyArray<{ item: stri
     const requests = propsRequests(screens.map((s) => s.spec));
     return screens.map(({ item }, i) => ({ item, request: requests[i]! }));
   }
-  return screens.map(({ item, spec }) => ({ item, request: structureRequest(spec, titles) }));
+  return screens.map(({ item, spec }) => ({ item, request: structureRequest(spec, titles, { layout: spec.platform !== "app" }) }));
 }
 
 /** Check an answered call against the question it answers — the refusal an agent's file gets. */

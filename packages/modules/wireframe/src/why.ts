@@ -163,7 +163,8 @@ export function explainWireDecision(
     const formatted = Object.entries(dist)
       .map(([k, p]) => `${k} ${pct(p)}`)
       .join(", ");
-    const line = `  decision ${qId}: ${formatted}`;
+    const ent = round2(entropyBits(dist));
+    const line = `  decision ${qId}: ${formatted} [entropy ${ent.toFixed(2)} bits]`;
     if (matchesFilter(qId, line)) lines.push(line);
   }
 

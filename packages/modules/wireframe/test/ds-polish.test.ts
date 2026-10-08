@@ -21,6 +21,8 @@ import {
   readWire,
   renderWire,
   repairContrast,
+  requireScopedScreens,
+  scopeFlowScreens,
   stubAnswerer,
   synthesizeDesignSystem,
   validateWire,
@@ -28,6 +30,7 @@ import {
   wireDsOnCanvas,
   wireframe,
   wiresOn,
+  type Answerer,
   type ContrastRepair,
   type DsDirectionCandidate,
   type PickedDirection,
@@ -260,5 +263,44 @@ describe("concurrent design system synthesis and Jev-budgeted polish (Phase 13)"
       request: "high contrast industrial",
     });
     expect(modeOf("polish --clear")).toEqual({ kind: "polish", clear: true });
+  });
+
+  it("plans all screens in memory before emitting ops in polishWireOnCanvas and scopes ds/polish across multi-flow canvases", async () => {
+    const { port, sent } = memoryPort();
+    const f1 = await composeFlow(port, "Courier dispatch", stubAnswerer(2), { noAsk: true });
+    await composeFlow(port, "Warehouse inventory", stubAnswerer(3), { noAsk: true });
+    const canvas = await port.canvas();
+    const all = await wiresOn(port, canvas);
+
+    // Multi-flow canvas without --flow or itemIds refuses with flow list
+    expect(() =>
+      requireScopedScreens(scopeFlowScreens(canvas, all, { wholeFlow: true, excludeUnkeptVariants: true })),
+    ).toThrow(/2 wireframe flows/);
+
+    const scopedF1 = requireScopedScreens(
+      scopeFlowScreens(canvas, all, { flow: f1.flow, wholeFlow: true, excludeUnkeptVariants: true }),
+    );
+    expect(scopedF1.length).toBeGreaterThanOrEqual(2);
+    expect(scopedF1.every((s) => !s.spec.variantOf || canvas.items[s.item]?.properties?.wireKeep === "yes")).toBe(
+      true,
+    );
+
+    // Atomic in-memory planning: if screen 2 fails Jev planning, zero ops are written
+    const beforeOps = sent.length;
+    const baseStub = stubAnswerer(5);
+    let calls = 0;
+    const failingAnswerer: Answerer = {
+      name: "stub",
+      async answer(req) {
+        calls += 1;
+        if (calls === 2) throw new Error("Jev polish failed on screen 2");
+        return baseStub.answer(req);
+      },
+    };
+
+    await expect(
+      polishWireOnCanvas(port, canvas, all, scopedF1, failingAnswerer, { intensity: 0.7 }),
+    ).rejects.toThrow("Jev polish failed on screen 2");
+    expect(sent.length).toBe(beforeOps);
   });
 });

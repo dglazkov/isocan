@@ -377,4 +377,30 @@ describe("surgical section editing and decision Q&A (Phase 11)", () => {
       await expect(rewriteSlotCopy(spec, slot.slot, INSTRUCTION, intents)).rejects.toThrow(/only slot|intents/);
     });
   });
+
+  it("records Jev choice posteriors on spec.decisions across Rounds 1-3 in composeFlow and prints Shannon entropy bits in explainWireDecision", async () => {
+    const { port } = memoryPort();
+    const composed = await composeFlow(port, "Acme warehouse inventory console", stubAnswerer(4), {
+      noAsk: true,
+    });
+    expect(composed.screens.length).toBeGreaterThan(0);
+
+    for (const screen of composed.screens) {
+      expect(screen.spec.decisions).toBeDefined();
+      const decKeys = Object.keys(screen.spec.decisions ?? {});
+      // Round 1 records platform, Round 2 records slot block choices, Round 3 records prop choices
+      expect(decKeys).toContain("platform");
+      expect(decKeys.length).toBeGreaterThan(1);
+    }
+    expect(
+      composed.screens.some((s) =>
+        Object.keys(s.spec.decisions ?? {}).some((k) => k === "main" || k.startsWith("main.")),
+      ),
+    ).toBe(true);
+
+    const exp = explainWireDecision(composed.screens[0]!.spec);
+    const joined = exp.lines.join("\n");
+    expect(joined).toContain("decision platform:");
+    expect(joined).toMatch(/\[entropy \d+\.\d{2} bits\]/);
+  });
 });

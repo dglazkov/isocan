@@ -313,7 +313,8 @@ bar, tab bar) stays.
   `--json` adds every block's props and every intent.
 - `isocan wire spec <archetype>` prints a blueprint spec (every slot `null`);
   `--resolved` fills each slot with its first option at default props;
-  `--platform app|web|site` sizes it (390×844, 1280×800, 1280 wide).
+  `--platform app|web|site` sizes it (390×844, 1280×800, 1280 wide);
+  `--template <id>` sets a multi-region layout template (`split`, `master_detail`, `grid`, `bento`, `hero_then_grid`, `dashboard`).
 - `isocan wire render <spec.json>` draws a spec and adds it to the canvas —
   one `item.add`, so one `isocan undo` takes it back. `--title`, `--at x,y`,
   `--anchor`, `--in`/`--cell` place it like `isocan add`.

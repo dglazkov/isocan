@@ -437,11 +437,23 @@ export function surfaceCss(surfaces: Iterable<string>): string {
  * to the default vertical stack (`.main`'s `display:flex;flex-direction:column`).
  */
 const TEMPLATE_CSS = `
-.main[data-template]{container-type:inline-size}
+body.screen>.frame{max-width:100%}
+.frame:has(.main[data-template]),.main[data-template]{container-type:inline-size}
 .tpl-region{display:flex;flex-direction:column;gap:var(--w-space);min-width:0}
+@media (max-width: 639px){
+body.screen>.frame{width:100%!important;height:auto!important;min-height:100vh}
+.frame.web .body{flex-direction:column}
+.frame.web .body>.side{width:100%;border-right:0;border-bottom:1px solid var(--w-line)}
+.tabbar .item{min-width:0;padding:8px 6px;flex:1 1 0}
+}
+@container (max-width: 639px){
+.stats.c3,.stats.c4{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.table{overflow-x:auto;min-width:0}
+.chart{min-width:0;overflow:hidden}
+}
 @container (min-width: 640px){
-.main.tpl-split{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:calc(var(--w-space)*1.5);align-items:start}
-.main.tpl-master_detail{display:grid;grid-template-columns:minmax(220px,2fr) minmax(0,3fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.frame>.body>.main.tpl-split{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.frame>.body>.main.tpl-master_detail{display:grid;grid-template-columns:minmax(220px,2fr) minmax(0,3fr);gap:calc(var(--w-space)*1.5);align-items:start}
 .main.tpl-master_detail .tpl-r-master{border-right:1px solid var(--w-line);padding-right:var(--w-space)}
 .main.tpl-grid .tpl-r-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--w-space);align-items:start}
 .main.tpl-bento .tpl-r-bento{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--w-space);align-items:stretch}
@@ -449,7 +461,7 @@ const TEMPLATE_CSS = `
 .main.tpl-bento .tpl-r-bento>.slot:first-child{grid-column:span 4}
 .main.tpl-bento .tpl-r-bento>.slot:nth-child(2){grid-column:span 2}
 .main.tpl-hero_then_grid .tpl-r-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--w-space);align-items:start}
-.main.tpl-dashboard{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:calc(var(--w-space)*1.5);align-items:start}
+.frame>.body>.main.tpl-dashboard{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:calc(var(--w-space)*1.5);align-items:start}
 .main.tpl-dashboard .tpl-r-kpi{grid-column:1/-1}
 }
 `;

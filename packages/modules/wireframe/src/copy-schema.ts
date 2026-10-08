@@ -1,6 +1,7 @@
 import {
   newGroupId,
   type CanvasContents,
+  type Item,
 } from "@isocan/core";
 import {
   envTextGenerator,
@@ -235,14 +236,71 @@ export async function generateWireCopy(
   const base = ensureFleshedForCopy(spec, opts.key);
   const schema = blockContentSchema(base);
   const current = copyOf(base);
-  const promptLines = [
-    `Write realistic product UI copy for the "${base.title}" screen (archetype: ${base.archetype}).`,
-    `Flow request: ${base.request || base.title}`,
-    ...(opts.brief ? [`Copy brief: ${opts.brief}`] : []),
-    `Current slots and sample words: ${JSON.stringify(current.slots)}`,
-  ];
-  const raw = await generator.generateJson<CopyFile>(promptLines.join("\n"), schema);
-  const validated = validateCopyPayload(base, raw);
+  const slotSchemas = schema.properties?.slots?.properties ?? {};
+  const wordySlotIds = Object.keys(slotSchemas);
+  const totalWordPaths = current.slots.reduce((sum, s) => sum + Object.keys(s.words).length, 0);
+
+  if (totalWordPaths <= 20 || wordySlotIds.length <= 3) {
+    const promptLines = [
+      `Write realistic product UI copy for the "${base.title}" screen (archetype: ${base.archetype}).`,
+      `Flow request: ${base.request || base.title}`,
+      ...(opts.brief ? [`Copy brief: ${opts.brief}`] : []),
+      `Current slots and sample words: ${JSON.stringify(current.slots)}`,
+    ];
+    const raw = await generator.generateJson<CopyFile>(promptLines.join("\n"), schema);
+    const validated = validateCopyPayload(base, raw);
+    return applyCopy(base, validated, generator.name);
+  }
+
+  const mergedSlots: Record<string, Record<string, string> | string[]> = {};
+  let mergedTitle: string | undefined;
+  let mergedBar: string | undefined;
+
+  for (let i = 0; i < wordySlotIds.length; i += 3) {
+    const batchIds = wordySlotIds.slice(i, i + 3);
+    const batchProps: Record<string, JsonSchema> = {};
+    for (const id of batchIds) batchProps[id] = slotSchemas[id]!;
+    const includeTop = i === 0;
+    const batchSchema: JsonSchema = {
+      type: "object",
+      properties: {
+        ...(includeTop && schema.properties?.title ? { title: schema.properties.title } : {}),
+        ...(includeTop && schema.properties?.bar ? { bar: schema.properties.bar } : {}),
+        slots: {
+          type: "object",
+          properties: batchProps,
+          required: batchIds,
+          additionalProperties: false,
+        },
+      },
+      required: [
+        ...(includeTop && schema.properties?.title ? ["title"] : []),
+        ...(includeTop && schema.properties?.bar ? ["bar"] : []),
+        "slots",
+      ],
+      additionalProperties: false,
+    };
+    const batchSlots = current.slots.filter((s) => batchIds.includes(s.slot));
+    const batchPrompt = [
+      `Write realistic product UI copy for slots ${batchIds.join(", ")} on the "${base.title}" screen (archetype: ${base.archetype}).`,
+      `Flow request: ${base.request || base.title}`,
+      ...(opts.brief ? [`Copy brief: ${opts.brief}`] : []),
+      `Current slots and sample words: ${JSON.stringify(batchSlots)}`,
+    ].join("\n");
+    const part = await generator.generateJson<CopyFile>(batchPrompt, batchSchema);
+    if (includeTop) {
+      if (typeof part.title === "string") mergedTitle = part.title;
+      if (typeof part.bar === "string") mergedBar = part.bar;
+    }
+    Object.assign(mergedSlots, part.slots ?? {});
+  }
+
+  const mergedRaw: CopyFile = {
+    ...(mergedTitle !== undefined ? { title: mergedTitle } : {}),
+    ...(mergedBar !== undefined ? { bar: mergedBar } : {}),
+    slots: mergedSlots,
+  };
+  const validated = validateCopyPayload(base, mergedRaw);
   return applyCopy(base, validated, generator.name);
 }
 
@@ -519,19 +577,24 @@ export async function copyAiOnCanvas(
   opts: { brief?: string; group?: string } = {},
 ): Promise<CopyCanvasResult> {
   const group = opts.group ?? newGroupId();
-  const changed: Array<{ itemId: string; title: string; spec: WireSpec }> = [];
+  const planned: Array<{ screen: Screen; item: Item; next: WireSpec }> = [];
 
   for (const s of screens) {
     if (isBlueprint(s.spec)) continue;
+    const item = canvas.items[s.item];
+    if (!item) continue;
     const next = await generateWireCopy(s.spec, generator, {
       ...(opts.brief ? { brief: opts.brief } : {}),
       key: seedKey(s.spec, s.item),
     });
     if (JSON.stringify(next) === JSON.stringify(s.spec)) continue;
-    const item = canvas.items[s.item];
-    if (!item) continue;
-    if (await writeWire(port, item, next, group, s.spec)) {
-      changed.push({ itemId: s.item, title: wireTitle(next), spec: next });
+    planned.push({ screen: s, item, next });
+  }
+
+  const changed: Array<{ itemId: string; title: string; spec: WireSpec }> = [];
+  for (const { screen, item, next } of planned) {
+    if (await writeWire(port, item, next, group, screen.spec)) {
+      changed.push({ itemId: screen.item, title: wireTitle(next), spec: next });
     }
   }
 

@@ -1,4 +1,4 @@
-import { FIDELITY_PROP, groupContentBox, groupDescendants, newGroupId, newItemId, newVersionId, titleSlug, type CanvasContents, type Item, type Operation } from "@isocan/core";
+import { FIDELITY_PROP, groupContentBox, groupDescendants, isGroupItem, newGroupId, newItemId, newVersionId, titleSlug, type CanvasContents, type Item, type Operation } from "@isocan/core";
 import { RECIPES } from "./catalog/index.ts";
 import { JEV_INPUT_PRICE, PriorityGate, type Answerer, type JevResponse } from "./answerer.ts";
 import { applyPinnedToSpecs, formatAskComment, gateFlowDecision, type RootGateQuestion } from "./entropy-ask.ts";
@@ -7,6 +7,7 @@ import {
   type FlowDecision, type RoundCall,
 } from "./compose.ts";
 import { currentVersionOf, type WirePort } from "./port.ts";
+import { PROTOTYPE_PROP } from "./prototype.ts";
 import { readWire, renderWire } from "./render.ts";
 import { StyleResolver, governingSystem, mappingLines } from "./restyle.ts";
 import { wireBy, wireSize, wireTitle, type WireBy, type WireSpec } from "./spec.ts";
@@ -16,9 +17,10 @@ import { choosePack, flagPack, packLine, type PackChoice } from "./content/choos
 import { fleshSpec, seedKey } from "./content/flesh-spec.ts";
 import { packOf } from "./content/fill.ts";
 import { maybeProperties } from "./maybe.ts";
-import { firstChoices, keepPatch } from "./keep.ts";
+import { firstChoices, isKept, keepPatch } from "./keep.ts";
 import { PROTOTYPE_CLEAR, keptFlowsOf, writePrototype } from "./kept-flows.ts";
 import type { WireLink } from "./links.ts";
+import { recordDecisions } from "./why.ts";
 
 /**
  * **A flow, composed in rounds, drawn in place** — the composer both
@@ -277,7 +279,9 @@ export async function applyRound(
     const first = screens[0]!;
     const decision = decideFlow(calls[0]!.request, responses[0]!);
     say(describeFlow(decision));
-    const specs = decision.archetypes.map((a) => flowScreen(a.id, first.spec.request, first.spec.flow, decision));
+    const specs = decision.archetypes.map((a) =>
+      recordDecisions(flowScreen(a.id, first.spec.request, first.spec.flow, decision), calls[0]!.request, responses[0]!),
+    );
     const out: Screen[] = [await canvas.write(first, specs[0]!)];
     for (const spec of specs.slice(1)) {
       const prev = out[out.length - 1]!;
@@ -287,10 +291,15 @@ export async function applyRound(
     return out;
   }
   const specs = round === 2
-    ? screens.map((screen, i) => applyStructure(screen.spec, calls[i]!.request, responses[i]!))
+    ? screens.map((screen, i) =>
+        recordDecisions(applyStructure(screen.spec, calls[i]!.request, responses[i]!), calls[i]!.request, responses[i]!),
+      )
     // A screen with no honest alternative says so in the same version that draws it.
     : applyPropsRound(screens.map((s) => s.spec), calls.map((c) => c.request), responses)
-        .map((spec) => (honestFlips(spec).length === 0 ? { ...spec, varied: "none" as const } : spec));
+        .map((spec, i) => {
+          const withDec = recordDecisions(spec, calls[i]!.request, responses[i]!);
+          return honestFlips(withDec).length === 0 ? { ...withDec, varied: "none" as const } : withDec;
+        });
   const out: Screen[] = [];
   for (const [i, screen] of screens.entries()) out.push(await canvas.write(screen, specs[i]!));
   if (round === 3) {
@@ -435,6 +444,8 @@ export interface ComposeOptions {
    * to pin it before round 1 draws, or `undefined` to accept top-1.
    */
   onGateAsk?: (ask: RootGateQuestion, comment: string) => Promise<string | undefined> | string | undefined;
+  /** Called once Round 1's entropy gate check (and any `onGateAsk` prompts) settles. */
+  onGateSettled?: () => void | Promise<void>;
   /** Shared priority gate for concurrent Jev calls (design §12). */
   priorityGate?: PriorityGate;
 }
@@ -531,17 +542,18 @@ export async function composeFlow(port: WirePort, request: string, answerer: Ans
         pinned: activePinned,
         ...(opts.noAsk !== undefined ? { noAsk: opts.noAsk } : {}),
       });
-      if (gateResult.asks.length > 0) {
+      if (gateResult.asks.length > 0 && !opts.noAsk) {
         askedGates = gateResult.asks;
-        if (opts.onGateAsk) {
-          for (const q of gateResult.asks) {
-            const comment = formatAskComment(q);
-            say(comment);
+        for (const q of gateResult.asks) {
+          const comment = formatAskComment(q);
+          say(comment);
+          if (opts.onGateAsk) {
             const picked = await opts.onGateAsk(q, comment);
             if (picked) activePinned[q.key] = picked;
           }
         }
       }
+      await opts.onGateSettled?.();
       if (Object.keys(activePinned).length > 0) {
         canvas.pinned = { ...activePinned };
         const prevPlatform = asked.responses[0]?.answers.platform;
@@ -640,4 +652,171 @@ export function costLine(tallies: readonly RoundTally[], by: string, screens: nu
   const calls = tallies.reduce((s, t) => s + t.calls, 0);
   const rounds = tallies.map((t) => `round ${t.round} ${t.ms} ms`).join(" · ");
   return `${screens} screens${maybe ? ` (${maybe} maybe)` : ""}, one op group — answered by ${by} · ${rounds} · ${calls} calls · ${tokens.toLocaleString("en-US")} input tokens · $${(tokens * JEV_INPUT_PRICE).toFixed(6)}`;
+}
+
+/** Summary of one wireframe flow on a canvas, for flow-scoping refusals and pickers. */
+export interface ScopedFlow {
+  /** Flow identifier (`spec.flow`, or `""` for hand-drawn screens). */
+  flow: string;
+  /** Original prompt/request that composed the flow. */
+  request: string;
+  /** Primary (non-variation) screens belonging to this flow. */
+  screens: Screen[];
+}
+
+/** Options for `scopeFlowScreens`. */
+export interface ScopeFlowOptions {
+  /** Explicitly named or selected item IDs (wireframes, prototypes, or canvas groups). */
+  itemIds?: readonly string[];
+  /** Explicit `--flow <id>` filter. */
+  flow?: string;
+  /**
+   * When true (`name`, `ds`), naming any screen expands to its whole flow.
+   * When false (`copy --ai`, `polish`), naming explicit screen/variant IDs scopes
+   * only to those screens (while selecting a prototype or group still scopes to its flow).
+   */
+  wholeFlow?: boolean;
+  /**
+   * When true (`copy --ai`, `name`, `polish`), flow-scoped screens exclude unkept
+   * variations (`!s.spec.variantOf || isKept(item)`), while keeping any explicitly
+   * named variant IDs.
+   */
+  excludeUnkeptVariants?: boolean;
+}
+
+/** Result of `scopeFlowScreens`: either resolved target `screens`, or `ambiguousFlows` when > 1 flow exists and none was specified. */
+export interface ScopeFlowResult {
+  /** Resolved target screens (empty when `ambiguousFlows` is returned). */
+  screens: Screen[];
+  /** Present when > 1 distinct flows exist on the canvas and neither `itemIds` nor `flow` chose one. */
+  ambiguousFlows?: ScopedFlow[];
+}
+
+function flowsSummary(all: readonly Screen[]): ScopedFlow[] {
+  const byFlow = new Map<string, { request: string; screens: Screen[]; allInFlow: Screen[] }>();
+  for (const s of all) {
+    const key = s.spec.flow || "";
+    let entry = byFlow.get(key);
+    if (!entry) {
+      entry = { request: s.spec.request || "", screens: [], allInFlow: [] };
+      byFlow.set(key, entry);
+    }
+    if (!entry.request && s.spec.request) entry.request = s.spec.request;
+    entry.allInFlow.push(s);
+    if (!s.spec.variantOf) entry.screens.push(s);
+  }
+  return [...byFlow.entries()].map(([flow, entry]) => ({
+    flow,
+    request: entry.request,
+    screens: entry.screens.length > 0 ? entry.screens : entry.allInFlow,
+  }));
+}
+
+/**
+ * Scope a canvas's wireframes (`all`) to target screens for `copy --ai`, `name`,
+ * `ds`, or `polish`:
+ * - When explicit screens, prototypes, or groups are named (`itemIds`), scopes to
+ *   those screens (or their whole flow when `wholeFlow` is true or a prototype/group
+ *   is named).
+ * - When `flow` (`--flow <id>`) is passed, scopes to that flow.
+ * - When neither is given: if 1 flow exists on the canvas, scopes to it; if > 1
+ *   flows exist, returns `ambiguousFlows` so the CLI can refuse with `--flow <id>`
+ *   and the web dialog can present a flow picker.
+ * - When `excludeUnkeptVariants` is true, flow-scoped screens omit unkept variations
+ *   (`!s.spec.variantOf || isKept(item)`).
+ */
+export function scopeFlowScreens(
+  canvas: CanvasContents,
+  all: readonly Screen[],
+  opts: ScopeFlowOptions = {},
+): ScopeFlowResult {
+  if (all.length === 0) {
+    throw new Error("no wireframe on this canvas — `isocan wire \"<request>\"` composes some");
+  }
+  const filterVariants = (list: readonly Screen[], explicitIds: ReadonlySet<string>): Screen[] => {
+    if (!opts.excludeUnkeptVariants) return [...list];
+    return list.filter((s) => {
+      if (explicitIds.has(s.item)) return true;
+      if (!s.spec.variantOf) return true;
+      const item = canvas.items[s.item];
+      return item ? isKept(item) : false;
+    });
+  };
+
+  if (opts.flow !== undefined) {
+    const inFlow = all.filter((s) => s.spec.flow === opts.flow);
+    if (inFlow.length === 0) {
+      throw new Error(`no wireframe in flow "${opts.flow}" on this canvas`);
+    }
+    if (opts.itemIds && opts.itemIds.length > 0) {
+      const explicitSet = new Set(opts.itemIds.filter((id) => inFlow.some((s) => s.item === id)));
+      if (explicitSet.size > 0 && !opts.wholeFlow) {
+        return { screens: inFlow.filter((s) => explicitSet.has(s.item)) };
+      }
+      return { screens: filterVariants(inFlow, explicitSet) };
+    }
+    return { screens: filterVariants(inFlow, new Set()) };
+  }
+
+  if (opts.itemIds && opts.itemIds.length > 0) {
+    const explicitWireIds = new Set<string>();
+    const targetFlows = new Set<string>();
+    for (const id of opts.itemIds) {
+      const w = all.find((s) => s.item === id);
+      if (w) {
+        explicitWireIds.add(id);
+        if (opts.wholeFlow) targetFlows.add(w.spec.flow || w.item);
+        continue;
+      }
+      const item = canvas.items[id];
+      if (!item) continue;
+      const protoFlow = item.properties?.[PROTOTYPE_PROP];
+      if (protoFlow !== undefined) {
+        targetFlows.add(protoFlow);
+        continue;
+      }
+      if (isGroupItem(item)) {
+        const descIds = new Set(groupDescendants(canvas, item.id).map((d) => d.id));
+        for (const s of all) {
+          if (descIds.has(s.item)) targetFlows.add(s.spec.flow || s.item);
+        }
+      }
+    }
+    if (explicitWireIds.size > 0 || targetFlows.size > 0) {
+      if (opts.wholeFlow || targetFlows.size > 0) {
+        const matched = all.filter(
+          (s) => explicitWireIds.has(s.item) || targetFlows.has(s.spec.flow || s.item),
+        );
+        return { screens: filterVariants(matched, explicitWireIds) };
+      }
+      return { screens: all.filter((s) => explicitWireIds.has(s.item)) };
+    }
+  }
+
+  const flows = flowsSummary(all);
+  if (flows.length > 1) {
+    return { screens: [], ambiguousFlows: flows };
+  }
+  const onlyFlow = flows[0]!.flow;
+  const inFlow = all.filter((s) => (s.spec.flow || "") === onlyFlow);
+  return { screens: filterVariants(inFlow, new Set()) };
+}
+
+/**
+ * Return `result.screens`, or throw an actionable refusal listing every flow
+ * and `--flow <id>` when `result.ambiguousFlows` is present.
+ */
+export function requireScopedScreens(result: ScopeFlowResult, flag = "--flow"): Screen[] {
+  if (result.ambiguousFlows && result.ambiguousFlows.length > 1) {
+    throw new Error(
+      `this canvas has ${result.ambiguousFlows.length} wireframe flows — say which with ${flag}:\n  ` +
+        result.ambiguousFlows
+          .map(
+            (f) =>
+              `${flag} ${f.flow || '""'}  "${f.request || "hand-drawn screens"}" (${f.screens.length} screen${f.screens.length === 1 ? "" : "s"})`,
+          )
+          .join("\n  "),
+    );
+  }
+  return result.screens;
 }

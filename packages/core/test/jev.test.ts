@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  claudeSchema,
+  claudeTextGenerator,
   DEFAULT_CONFIDENCE_FLOOR,
   DEFAULT_ENTROPY_GATE,
   entropyBits,
@@ -13,13 +15,14 @@ import {
   type JevAnswer,
   type JevPriority,
   type JevQuestion,
+  type JsonSchema,
   type PriorityGateOptions,
 } from "../src/jev.ts";
 
 describe("entropyBits and gatedChoice", () => {
   it("computes Shannon entropy in bits across uniform, peaked, and skewed distributions", () => {
-    expect(DEFAULT_ENTROPY_GATE).toBe(1.0);
     expect(DEFAULT_CONFIDENCE_FLOOR).toBe(0.5);
+    expect(DEFAULT_ENTROPY_GATE).toBe(1.0);
     expect(entropyBits({ a: 1, b: 0, c: 0 })).toBeCloseTo(0, 6);
     expect(entropyBits({ a: 0.5, b: 0.5 })).toBeCloseTo(1, 6);
     expect(entropyBits({ a: 0.25, b: 0.25, c: 0.25, d: 0.25 })).toBeCloseTo(2, 6);
@@ -131,5 +134,72 @@ describe("PriorityGate", () => {
     });
     expect(ans.by).toBe("stub (seed 7)");
     expect(Object.keys(ans.response.answers.platform?.type === "choice" ? ans.response.answers.platform.probabilities : {})).toEqual(["app", "web"]);
+  });
+});
+
+describe("claudeSchema and claudeTextGenerator grammar budget fallback", () => {
+  it("strips schema node description fields while preserving properties literally named description", () => {
+    const raw: JsonSchema = {
+      type: "object",
+      description: "Screen copy payload",
+      properties: {
+        title: { type: "string", description: "Screen heading" },
+        description: { type: "string", description: "Subtitle text" },
+        items: {
+          type: "array",
+          description: "List rows",
+          minItems: 1,
+          maxItems: 5,
+          items: { type: "string", description: "Row label" },
+        },
+      },
+      required: ["title", "description", "items"],
+    };
+    const cleaned = claudeSchema(raw);
+    expect(cleaned.description).toBeUndefined();
+    expect(cleaned.additionalProperties).toBe(false);
+    expect(cleaned.properties?.title?.description).toBeUndefined();
+    expect(cleaned.properties?.description).toEqual({ type: "string" });
+    expect(cleaned.properties?.items?.description).toBeUndefined();
+    expect(cleaned.properties?.items?.minItems).toBe(1);
+    expect(cleaned.properties?.items?.maxItems).toBeUndefined();
+    expect(cleaned.properties?.items?.items?.description).toBeUndefined();
+  });
+
+  it("retries without output_config when Anthropic returns HTTP 400 grammar too large", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const opts: Parameters<typeof claudeTextGenerator>[0] = {
+      apiKey: "sk-ant-test",
+      model: "claude-sonnet-test",
+      fetch: (async (_url: string | URL | Request, init?: RequestInit) => {
+        const parsed = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        bodies.push(parsed);
+        if (bodies.length === 1) {
+          return new Response(
+            JSON.stringify({ error: { message: "Compiled grammar is too large for structured output" } }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: '```json\n{"title":"Dispatch Hub"}\n```' }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as typeof globalThis.fetch,
+    };
+    const gen = claudeTextGenerator(opts);
+    const out = await gen.generateJson<{ title: string }>("Write copy", {
+      type: "object",
+      description: "Copy schema",
+      properties: { title: { type: "string", description: "Heading" } },
+      required: ["title"],
+    });
+    expect(out).toEqual({ title: "Dispatch Hub" });
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]?.output_config).toBeDefined();
+    expect(bodies[1]?.output_config).toBeUndefined();
+    const secondPrompt = ((bodies[1]?.messages as Array<{ content: string }>)?.[0]?.content) ?? "";
+    expect(secondPrompt).toContain("Respond with a valid JSON object matching this schema");
   });
 });

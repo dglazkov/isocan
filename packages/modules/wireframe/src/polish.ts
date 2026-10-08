@@ -311,8 +311,15 @@ export async function polishWireOnCanvas(
   opts: { intensity?: number; clear?: boolean; group?: string } = {},
 ): Promise<PolishCanvasResult> {
   const group = opts.group ?? newGroupId();
-  const changed: PolishCanvasResult["changed"] = [];
   let by: string = answerer.name;
+  const plannedWrites: Array<{
+    screen: Screen;
+    item: CanvasContents["items"][string];
+    next: WireSpec;
+    intensity: number;
+    budget: PolishBudget;
+    patches: WirePolishPatch[];
+  }> = [];
 
   for (const s of screens) {
     if (isBlueprint(s.spec)) continue;
@@ -323,16 +330,14 @@ export async function polishWireOnCanvas(
       if (!s.spec.polish || s.spec.polish.length === 0) continue;
       const cleared: WireSpec = { ...s.spec };
       delete cleared.polish;
-      if (await writeWire(port, item, cleared, group, s.spec)) {
-        changed.push({
-          itemId: s.item,
-          title: wireTitle(cleared),
-          intensity: 0,
-          budget: 0,
-          patches: [],
-          spec: cleared,
-        });
-      }
+      plannedWrites.push({
+        screen: s,
+        item,
+        next: cleared,
+        intensity: 0,
+        budget: 0,
+        patches: [],
+      });
       continue;
     }
 
@@ -350,14 +355,26 @@ export async function polishWireOnCanvas(
       planned.patches,
     );
     if (JSON.stringify(polished) === JSON.stringify(s.spec)) continue;
-    if (await writeWire(port, item, polished, group, s.spec)) {
+    plannedWrites.push({
+      screen: s,
+      item,
+      next: polished,
+      intensity: planned.intensity,
+      budget: planned.budget,
+      patches: planned.patches,
+    });
+  }
+
+  const changed: PolishCanvasResult["changed"] = [];
+  for (const p of plannedWrites) {
+    if (await writeWire(port, p.item, p.next, group, p.screen.spec)) {
       changed.push({
-        itemId: s.item,
-        title: wireTitle(polished),
-        intensity: planned.intensity,
-        budget: planned.budget,
-        patches: planned.patches,
-        spec: polished,
+        itemId: p.screen.item,
+        title: wireTitle(p.next),
+        intensity: p.intensity,
+        budget: p.budget,
+        patches: p.patches,
+        spec: p.next,
       });
     }
   }

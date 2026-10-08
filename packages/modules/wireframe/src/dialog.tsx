@@ -4,11 +4,23 @@ import { chatRecordOp } from "./chat.ts";
 import { PROTOTYPE_PROP } from "./prototype.ts";
 import { rerender, rerenderSummary } from "./rerender.ts";
 import { isNoJudge } from "./answerer.ts";
-import { composeFlow, costLine, prototypeWords, screenTitles, wiresOn, type FlowPrototype } from "./flow.ts";
+import { composeFlow, costLine, prototypeWords, requireScopedScreens, scopeFlowScreens, screenTitles, wiresOn, type FlowPrototype, type ScopedFlow } from "./flow.ts";
+import type { RootGateQuestion } from "./entropy-ask.ts";
 import { keptFlowsOf, writePrototype, type KeptFlow } from "./kept-flows.ts";
 import { StyleResolver, restyle, restyleSummary } from "./restyle.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
-import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, currentPreset, flowScreens, presetById, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
+import {
+  HOUSE,
+  OWN_PRESETS,
+  PACK_PRESETS,
+  applyPreset,
+  currentPreset,
+  flowScreens,
+  presetById,
+  presetOrSay,
+  presetSummary,
+  type WirePreset,
+} from "./presets.ts";
 import { presetUrlText } from "./preset-urls.ts";
 import { PLACEHOLDER_WORDS, webAnswerer, webPort, webTextGenerator } from "./web-port.ts";
 import { editWireOnCanvas } from "./edit.ts";
@@ -39,7 +51,7 @@ import { WireLinks } from "./links-panel.tsx";
 
 type Mode =
   | { kind: "form" }
-  | { kind: "compose"; request: string; basic?: true }
+  | { kind: "compose"; request: string; basic?: true; noAsk?: true; pinned?: Record<string, string> }
   | { kind: "prototype" }
   // `screens`: only these wires' flows — the "behind" mark and Restyle to <system> (`behind.ts`), `wire style <screens…>`.
   | { kind: "style"; toDefault: boolean; screens?: string[] }
@@ -61,6 +73,42 @@ type Mode =
   | { kind: "ds"; request: string }
   | { kind: "polish"; clear?: boolean }
   | { kind: "layer"; directive: string; wholeFlow?: boolean };
+
+function parseComposeFlags(tokens: readonly string[]): { request: string; noAsk?: true; pinned?: Record<string, string> } {
+  const remaining: string[] = [];
+  let noAsk = false;
+  const pinned: Record<string, string> = {};
+  for (let i = 0; i < tokens.length; i += 1) {
+    const tok = tokens[i]!;
+    if (tok === "--no-ask") {
+      noAsk = true;
+    } else if (tok === "--pin" && i + 1 < tokens.length) {
+      const pair = tokens[i + 1]!;
+      const eq = pair.indexOf("=");
+      if (eq > 0) {
+        const key = pair.slice(0, eq).trim();
+        const val = pair.slice(eq + 1).trim();
+        if (key && val) pinned[key] = val;
+      }
+      i += 1;
+    } else if (tok.startsWith("--pin=")) {
+      const pair = tok.slice("--pin=".length);
+      const eq = pair.indexOf("=");
+      if (eq > 0) {
+        const key = pair.slice(0, eq).trim();
+        const val = pair.slice(eq + 1).trim();
+        if (key && val) pinned[key] = val;
+      }
+    } else {
+      remaining.push(tok);
+    }
+  }
+  return {
+    request: remaining.join(" "),
+    ...(noAsk ? { noAsk: true as const } : {}),
+    ...(Object.keys(pinned).length > 0 ? { pinned } : {}),
+  };
+}
 
 export function modeOf(args: string): Mode {
   const words = args.trim();
@@ -111,8 +159,8 @@ export function modeOf(args: string): Mode {
     if (rest.length === 0 || bars || pack !== undefined) return { kind: "flesh", bars, ...(pack !== undefined ? { pack } : {}) };
   }
   // A composed flow arrives fleshed; `/wire basic <request>` keeps it in plain grey wires, as `wire --basic` does.
-  if (first === "basic" && rest.length > 0) return { kind: "compose", request: rest.join(" "), basic: true };
-  return { kind: "compose", request: words };
+  if (first === "basic" && rest.length > 0) return { kind: "compose", ...parseComposeFlags(rest), basic: true };
+  return { kind: "compose", ...parseComposeFlags(words.split(/\s+/)) };
 }
 
 /** A refusal in words a person can act on. */
@@ -126,9 +174,28 @@ export function refusalWords(error: unknown): string {
  * CLI's. Resolves when the flow is drawn; `onBlueprint` fires once the first
  * frame is on the canvas, before any answer.
  */
-export async function composeOnWeb(canvasId: string, host: DialogHost, request: string, onBlueprint: (itemId: string) => void, opts: { basic?: boolean } = {}) {
+export async function composeOnWeb(
+  canvasId: string,
+  host: DialogHost,
+  request: string,
+  onBlueprint: (itemId: string) => void,
+  opts: {
+    basic?: boolean;
+    noAsk?: boolean;
+    pinned?: Record<string, string>;
+    onGateAsk?: (ask: RootGateQuestion) => Promise<string | undefined>;
+    onGateSettled?: () => void | Promise<void>;
+  } = {},
+) {
   const port = webPort(canvasId, host);
-  return composeFlow(port, request, webAnswerer(canvasId, host), { onBlueprint: (first) => onBlueprint(first.item), flesh: opts.basic ? false : {} });
+  return composeFlow(port, request, webAnswerer(canvasId, host), {
+    onBlueprint: (first) => onBlueprint(first.item),
+    flesh: opts.basic ? false : {},
+    ...(opts.noAsk !== undefined ? { noAsk: opts.noAsk } : {}),
+    ...(opts.pinned !== undefined ? { pinned: opts.pinned } : {}),
+    ...(opts.onGateAsk !== undefined ? { onGateAsk: opts.onGateAsk } : {}),
+    ...(opts.onGateSettled !== undefined ? { onGateSettled: opts.onGateSettled } : {}),
+  });
 }
 
 /** The Chat record's line for a composed flow's prototype: how many screens, whose first choices, and how to swap one. */
@@ -227,23 +294,37 @@ export async function fleshOnWeb(canvasId: string, host: DialogHost, opts: { pac
  * placeholder words said as such when the home has none. Exported so a test
  * can hold the web to asking the host.
  */
-export async function copyOnWeb(canvasId: string, host: DialogHost, selection: readonly string[], brief?: string) {
+export async function copyOnWeb(canvasId: string, host: DialogHost, selection: readonly string[], brief?: string, flow?: string) {
   const port = webPort(canvasId, host);
   const canvas = await port.canvas();
   const all = await wiresOn(port, canvas);
   if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
-  const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+  const screens = requireScopedScreens(
+    scopeFlowScreens(canvas, all, {
+      itemIds: selection,
+      ...(flow !== undefined ? { flow } : {}),
+      wholeFlow: selection.length === 0,
+      excludeUnkeptVariants: true,
+    }),
+  );
   const r = await copyAiOnCanvas(port, canvas, all, screens, webTextGenerator(canvasId, host), { ...(brief ? { brief } : {}) });
   return { r, screens };
 }
 
 /** `/wire name [request]` — the flow's brand, titles and nav labels, from the home's text model as `/wire copy` is. */
-export async function nameOnWeb(canvasId: string, host: DialogHost, selection: readonly string[], request?: string) {
+export async function nameOnWeb(canvasId: string, host: DialogHost, selection: readonly string[], request?: string, flow?: string) {
   const port = webPort(canvasId, host);
   const canvas = await port.canvas();
   const all = await wiresOn(port, canvas);
   if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
-  const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
+  const screens = requireScopedScreens(
+    scopeFlowScreens(canvas, all, {
+      itemIds: selection,
+      ...(flow !== undefined ? { flow } : {}),
+      wholeFlow: true,
+      excludeUnkeptVariants: true,
+    }),
+  );
   const r = await nameFlowOnCanvas(port, canvas, all, screens, webTextGenerator(canvasId, host), { ...(request ? { request } : {}) });
   return { r, screens };
 }
@@ -254,6 +335,8 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<KeptFlow[] | null>(null);
+  const [flowChoices, setFlowChoices] = useState<{ mode: Mode; flows: ScopedFlow[] } | null>(null);
+  const [gateAsk, setGateAsk] = useState<{ question: RootGateQuestion; resolve: (value: string | undefined) => void } | null>(null);
   const started = useRef(false);
   const open = useRef(true);
   useEffect(() => () => {
@@ -265,6 +348,7 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
     if (open.current) {
       setError(words);
       setStatus(null);
+      setGateAsk(null);
     } else host.notice(words, true);
   };
 
@@ -286,14 +370,56 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
     host.reveal([itemId]);
   };
 
-  const run = async (m: Mode) => {
+  const scopeOrPickFlow = async (m: Mode, wholeFlow: boolean, excludeUnkeptVariants: boolean, chosenFlow?: string) => {
+    const port = webPort(canvasId, host);
+    const canvas = await port.canvas();
+    const all = await wiresOn(port, canvas);
+    if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
+    const scoped = scopeFlowScreens(canvas, all, {
+      itemIds: selection,
+      ...(chosenFlow !== undefined ? { flow: chosenFlow } : {}),
+      wholeFlow,
+      excludeUnkeptVariants,
+    });
+    if (scoped.ambiguousFlows) {
+      setFlowChoices({ mode: m, flows: scoped.ambiguousFlows });
+      setStatus(null);
+      return null;
+    }
+    return { port, canvas, all, screens: requireScopedScreens(scoped) };
+  };
+
+  const run = async (m: Mode, chosenFlow?: string) => {
     setError(null);
     if (m.kind === "compose") {
       setStatus("Drawing the blueprint…");
-      const composed = await composeOnWeb(canvasId, host, m.request, (itemId) => {
-        host.reveal([itemId]);
-        host.close();
-      }, { basic: m.basic === true });
+      const composed = await composeOnWeb(
+        canvasId,
+        host,
+        m.request,
+        (itemId) => {
+          host.reveal([itemId]);
+          if (m.noAsk) host.close();
+        },
+        {
+          basic: m.basic === true,
+          ...(m.noAsk ? { noAsk: true } : {}),
+          ...(m.pinned ? { pinned: m.pinned } : {}),
+          ...(!m.noAsk
+            ? {
+                onGateAsk: (question) =>
+                  new Promise<string | undefined>((resolve) => {
+                    setStatus(null);
+                    setGateAsk({ question, resolve });
+                  }),
+                onGateSettled: () => {
+                  setGateAsk(null);
+                  host.close();
+                },
+              }
+            : {}),
+        },
+      );
       const maybe = composed.screens.filter((s) => s.spec.maybe).length;
       const cost = costLine(composed.tallies, composed.by, composed.screens.length, maybe);
       host.notice(`${cost} — one undo takes the whole flow back`);
@@ -362,7 +488,9 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       host.close();
     } else if (m.kind === "copy") {
       setStatus("Writing schema-validated copy…");
-      const { r, screens } = await copyOnWeb(canvasId, host, selection, m.brief);
+      const target = await scopeOrPickFlow(m, selection.length === 0, true, chosenFlow);
+      if (!target) return;
+      const { r, screens } = await copyOnWeb(canvasId, host, selection, m.brief, chosenFlow);
       const words = r.by === PLACEHOLDER_WORDS ? "placeholder words (this home has no text model)" : `AI copy (${r.by})`;
       const summary = `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} filled with ${words} — one undo takes it back`;
       host.notice(summary);
@@ -371,7 +499,9 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
     } else if (m.kind === "name") {
       setStatus("Naming the flow's screens and navigation…");
-      const { r } = await nameOnWeb(canvasId, host, selection, m.request);
+      const target = await scopeOrPickFlow(m, true, true, chosenFlow);
+      if (!target) return;
+      const { r } = await nameOnWeb(canvasId, host, selection, m.request, chosenFlow);
       const summary = `named ${r.changed.length} wire${r.changed.length === 1 ? "" : "s"} (${r.brand}) — one undo takes it back`;
       host.notice(summary);
       if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
@@ -379,12 +509,9 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       if (r.changed.length) host.reveal(r.changed.map((c) => c.itemId));
     } else if (m.kind === "ds") {
       setStatus("Synthesizing design system and restyling flow…");
-      const port = webPort(canvasId, host);
-      const canvas = await port.canvas();
-      const all = await wiresOn(port, canvas);
-      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
-      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
-      const r = await wireDsOnCanvas(port, all, screens, m.request, webAnswerer(canvasId, host));
+      const target = await scopeOrPickFlow(m, true, false, chosenFlow);
+      if (!target) return;
+      const r = await wireDsOnCanvas(target.port, target.all, target.screens, m.request, webAnswerer(canvasId, host));
       const summary = `synthesized ${r.synthesized.name} (${r.synthesized.direction.id}, surface:${r.synthesized.surface}) · ${r.restyled.changed.length} wire${r.restyled.changed.length === 1 ? "" : "s"} restyled — one undo takes it back`;
       host.notice(summary);
       record(host, r.group, [`${summary}.`], [r.dsItemId, ...r.restyled.changed.map((t) => t.item.id)]);
@@ -392,15 +519,12 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
       host.reveal([r.dsItemId]);
     } else if (m.kind === "polish") {
       setStatus("Applying Jev-budgeted visual polish…");
-      const port = webPort(canvasId, host);
-      const canvas = await port.canvas();
-      const all = await wiresOn(port, canvas);
-      if (all.length === 0) throw new Error("There are no wireframes on this canvas yet — `/wire <what the screens are for>` composes some.");
-      const screens = flowScreens(all, selection.filter((id) => all.some((s) => s.item === id)));
-      const r = await polishWireOnCanvas(port, canvas, all, screens, webAnswerer(canvasId, host), {
+      const target = await scopeOrPickFlow(m, selection.length === 0, true, chosenFlow);
+      if (!target) return;
+      const r = await polishWireOnCanvas(target.port, target.canvas, target.all, target.screens, webAnswerer(canvasId, host), {
         ...(m.clear ? { clear: true } : {}),
       });
-      const summary = `${r.changed.length} of ${screens.length} wire${screens.length === 1 ? "" : "s"} ${m.clear ? "unpolished" : "polished"} (${r.by}) — one undo takes it back`;
+      const summary = `${r.changed.length} of ${target.screens.length} wire${target.screens.length === 1 ? "" : "s"} ${m.clear ? "unpolished" : "polished"} (${r.by}) — one undo takes it back`;
       host.notice(summary);
       if (r.changed.length) record(host, r.group, [`${summary}.`], r.changed.map((c) => c.itemId));
       host.close();
@@ -475,6 +599,65 @@ export function WireDialog({ canvasId, args, canEdit, host, selection }: DialogF
         </form>
       )}
       {mode.kind === "styles" && !status && <StylePicker canvas={host.getCanvas()} selection={selection} onPick={go} />}
+      {gateAsk && (
+        <div className="wire-ask" data-testid="wire-ask" role="group" aria-label="Clarify direction">
+          <p className="wire-note">
+            <strong>{gateAsk.question.prompt}</strong>{" "}
+            <span>(entropy {gateAsk.question.entropy.toFixed(2)} bits)</span>
+          </p>
+          <div className="wire-actions">
+            {gateAsk.question.options.map((opt) => (
+              <button
+                key={opt.value}
+                className="btn"
+                type="button"
+                data-ask-option={opt.value}
+                onClick={() => {
+                  const r = gateAsk.resolve;
+                  setGateAsk(null);
+                  setStatus("Composing with your choice…");
+                  r(opt.value);
+                }}
+              >
+                {opt.value}{opt.p > 0 ? ` (${Math.round(opt.p * 100)}%)` : ""}
+              </button>
+            ))}
+            <button
+              className="btn"
+              type="button"
+              data-ask-skip="true"
+              onClick={() => {
+                const r = gateAsk.resolve;
+                setGateAsk(null);
+                setStatus("Composing with default…");
+                r(undefined);
+              }}
+            >
+              Skip (use {gateAsk.question.chosen})
+            </button>
+          </div>
+        </div>
+      )}
+      {flowChoices && (
+        <div className="wire-actions" role="group" aria-label="Which flow" data-testid="wire-flow-picker">
+          <p className="wire-note">This canvas has {flowChoices.flows.length} flows — which one should this apply to?</p>
+          {flowChoices.flows.map((f) => (
+            <button
+              key={f.flow}
+              className="btn"
+              type="button"
+              data-flow-choice={f.flow}
+              onClick={() => {
+                const m = flowChoices.mode;
+                setFlowChoices(null);
+                run(m, f.flow).catch(fail);
+              }}
+            >
+              {f.request || "hand-drawn screens"} ({f.screens.length} screens)
+            </button>
+          ))}
+        </div>
+      )}
       {choices && (
         <div className="wire-actions" role="group" aria-label="Which flow">
           <p className="wire-note">Screens in a prototype come from {choices.length} flows — which one should it play?</p>

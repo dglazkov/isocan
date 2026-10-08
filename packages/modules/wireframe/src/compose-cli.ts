@@ -8,7 +8,7 @@ import { answeredResponse, pendingRound, requestBlueprint, roundCalls, type Roun
 import { FlowCanvas, applyRound, composeFlow, costLine, flowsOn, pickFlow, startFlow, styleAt, type OnAsked } from "./flow.ts";
 import { StyleResolver } from "./restyle.ts";
 import { flagPack } from "./content/choose.ts";
-import { parsePinFlags } from "./entropy-ask.ts";
+import { parsePinFlags, type RootGateQuestion } from "./entropy-ask.ts";
 import { wireBy, wireSize, wireTitle } from "./spec.ts";
 
 /**
@@ -108,6 +108,25 @@ export function registerCompose(host: CliHost, wire: Command): void {
         const who = answerer.name === "stub"
           ? `the stub (seed ${opts.seed})${localJevKey() ? "" : " — no TYPESAFE_API_KEY here, nor a stored typesafe key"}`
           : answerer.name === "home" ? "Jev through the canvas's home — no TYPESAFE_API_KEY here, nor a stored typesafe key, so the home's key answers" : "Jev";
+        const onGateAsk = opts.ask !== false && process.stdin.isTTY && !ctx.json
+          ? async (askQ: RootGateQuestion) => {
+              const { createInterface } = await import("node:readline/promises");
+              const rl = createInterface({ input: process.stdin, output: process.stderr });
+              try {
+                const choices = askQ.options.map((o, idx) => `${idx + 1}=${o.value}`).join(", ");
+                const raw = (await rl.question(`  Choose (${choices}, or Enter for ${askQ.chosen}): `)).trim();
+                if (!raw) return undefined;
+                const byIndex = Number(raw);
+                if (Number.isInteger(byIndex) && byIndex >= 1 && byIndex <= askQ.options.length) {
+                  return askQ.options[byIndex - 1]!.value;
+                }
+                const byVal = askQ.options.find((o) => o.value.toLowerCase() === raw.toLowerCase());
+                return byVal ? byVal.value : raw;
+              } finally {
+                rl.close();
+              }
+            }
+          : undefined;
         const composed = await composeFlow(port, request, answerer, {
           ...(placement ? { placement } : {}),
           say,
@@ -119,6 +138,7 @@ export function registerCompose(host: CliHost, wire: Command): void {
           flesh: opts.basic ? false : opts.pack !== undefined ? { pack: opts.pack } : {},
           ...(Object.keys(pinned).length > 0 ? { pinned } : {}),
           ...(opts.ask === false ? { noAsk: true } : {}),
+          ...(onGateAsk ? { onGateAsk } : {}),
         });
         const { mapper, tallies } = composed;
         if (ctx.json) {

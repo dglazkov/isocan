@@ -2,12 +2,13 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Command } from "commander";
-import { moduleAsset, type CanvasContents, type DesignDoc, type Item } from "@isocan/core";
+import { isGroupItem, moduleAsset, type CanvasContents, type DesignDoc, type Item } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import { cliAnswerer, cliPort } from "./cli-port.ts";
 import { mappingSaver } from "./compose-cli.ts";
-import { wiresOn, type Screen } from "./flow.ts";
+import { requireScopedScreens, scopeFlowScreens, wiresOn, type Screen } from "./flow.ts";
 import { HOUSE, OWN_PRESETS, PACK_PRESETS, applyPreset, flowScreens, presetFile, presetOrSay, presetSummary, type WirePreset } from "./presets.ts";
+import { PROTOTYPE_PROP } from "./prototype.ts";
 import { wireframeModule } from "./record.ts";
 import { checkWire, checkWords, readSystemDoc, restyleLabel, specKey, systemsToRead, type DocOf } from "./behind.ts";
 import { wireDsOnCanvas } from "./ds.ts";
@@ -205,10 +206,12 @@ export function registerStyle(host: CliHost, wire: Command): void {
         const port = cliPort(host, ctx, p.id);
         const canvas = await port.canvas();
         const all = await wiresOn(port, canvas);
-        const screens = opts.flow === undefined ? all : all.filter((s) => s.spec.flow === opts.flow);
-        if (screens.length === 0) {
-          throw new Error(opts.flow === undefined ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `no wireframe in flow "${opts.flow}" on this canvas`);
-        }
+        const screens = requireScopedScreens(
+          scopeFlowScreens(canvas, all, {
+            ...(opts.flow !== undefined ? { flow: opts.flow } : {}),
+            wholeFlow: true,
+          }),
+        );
         const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? undefined : opts.answerer, Number(opts.seed ?? 1), say);
         const r = await wireDsOnCanvas(port, all, screens, words.join(" "), answerer, {
           ...(opts.name ? { name: opts.name } : {}),
@@ -259,16 +262,25 @@ export function registerStyle(host: CliHost, wire: Command): void {
         const port = cliPort(host, ctx, p.id);
         const canvas = await port.canvas();
         const all = await wiresOn(port, canvas);
-        const named = (refs ?? []).map((ref) => {
-          const item = host.resolveItem({ canvas } as never, ref) as { id: string; title: string };
-          const found = all.find((s) => s.item === item.id);
-          if (!found) throw new Error(`"${item.title}" is not a wireframe screen`);
-          return found;
+        const itemIds = (refs ?? []).map((ref) => {
+          const item = host.resolveItem({ canvas } as never, ref) as Item;
+          if (
+            !all.some((s) => s.item === item.id) &&
+            item.properties?.[PROTOTYPE_PROP] === undefined &&
+            !isGroupItem(item)
+          ) {
+            throw new Error(`"${item.title}" is not a wireframe screen`);
+          }
+          return item.id;
         });
-        const screens = named.length ? named : opts.flow === undefined ? all : all.filter((s) => s.spec.flow === opts.flow);
-        if (screens.length === 0) {
-          throw new Error("no wireframe on this canvas — `isocan wire \"<request>\"` composes some");
-        }
+        const screens = requireScopedScreens(
+          scopeFlowScreens(canvas, all, {
+            itemIds,
+            ...(opts.flow !== undefined ? { flow: opts.flow } : {}),
+            wholeFlow: false,
+            excludeUnkeptVariants: true,
+          }),
+        );
         const answerer = cliAnswerer(ctx, p.id, opts.answerer === "agent" ? undefined : opts.answerer, Number(opts.seed ?? 1), say);
         const r = await polishWireOnCanvas(port, canvas, all, screens, answerer, {
           ...(opts.intensity !== undefined ? { intensity: Number(opts.intensity) } : {}),

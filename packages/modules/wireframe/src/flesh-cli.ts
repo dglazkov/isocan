@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { Command } from "commander";
+import { isGroupItem, type CanvasContents, type Item } from "@isocan/core";
 import { wireCopyFile } from "@isocan/core/copy-deck";
 import type { CliHost, CopyWriter } from "@isocan/cli/modulehost";
 import { cliAnswerer, cliPort, localTextKey } from "./cli-port.ts";
@@ -8,8 +9,9 @@ import { copyOf, type CopyFile } from "./content/flesh-spec.ts";
 import { blockContentSchema, copyAiOnCanvas, nameFlowOnCanvas, resolveTextGenerator } from "./copy-schema.ts";
 import { writeWireCopy } from "./copy-write.ts";
 import { flesh, fleshLines, fleshSummary } from "./flesh.ts";
-import { wiresOn, type Screen } from "./flow.ts";
+import { requireScopedScreens, scopeFlowScreens, wiresOn, type Screen } from "./flow.ts";
 import { currentVersionOf } from "./port.ts";
+import { PROTOTYPE_PROP } from "./prototype.ts";
 import { wireTitle } from "./spec.ts";
 
 /**
@@ -37,6 +39,20 @@ async function screensFor(host: CliHost, snapshot: { canvas: unknown }, all: Scr
   const screens = flow === undefined ? all : all.filter((s) => s.spec.flow === flow);
   if (screens.length === 0) throw new Error(flow === undefined ? "no wireframe on this canvas — `isocan wire \"<request>\"` composes some" : `no wireframe in flow "${flow}" on this canvas`);
   return screens;
+}
+
+function resolveCliItemIds(host: CliHost, snapshot: { canvas: CanvasContents }, all: readonly Screen[], refs: readonly string[]): string[] {
+  return refs.map((ref) => {
+    const item = host.resolveItem(snapshot as never, ref) as Item;
+    if (
+      !all.some((s) => s.item === item.id) &&
+      item.properties?.[PROTOTYPE_PROP] === undefined &&
+      !isGroupItem(item)
+    ) {
+      throw new Error(`"${item.title}" is not a wireframe screen — \`isocan wire "<request>"\` composes some`);
+    }
+    return item.id;
+  });
 }
 
 /**
@@ -139,7 +155,15 @@ export function registerFlesh(host: CliHost, wire: Command): void {
         const all = await wiresOn(port, snapshot.canvas);
 
         if (opts.ai) {
-          const screens = await screensFor(host, snapshot, all, refs, opts.flow);
+          const itemIds = resolveCliItemIds(host, snapshot, all, refs);
+          const screens = requireScopedScreens(
+            scopeFlowScreens(snapshot.canvas, all, {
+              itemIds,
+              ...(opts.flow !== undefined ? { flow: opts.flow } : {}),
+              wholeFlow: false,
+              excludeUnkeptVariants: true,
+            }),
+          );
           const gen = resolveTextGenerator({
             seed: Number(opts.seed ?? 1),
             useStub: opts.answerer === "stub",
@@ -219,7 +243,15 @@ export function registerFlesh(host: CliHost, wire: Command): void {
         const port = cliPort(host, ctx, p.id);
         const snapshot = await ctx.client.snapshot(p.id);
         const all = await wiresOn(port, snapshot.canvas);
-        const screens = await screensFor(host, snapshot, all, refs, opts.flow);
+        const itemIds = resolveCliItemIds(host, snapshot, all, refs);
+        const screens = requireScopedScreens(
+          scopeFlowScreens(snapshot.canvas, all, {
+            itemIds,
+            ...(opts.flow !== undefined ? { flow: opts.flow } : {}),
+            wholeFlow: true,
+            excludeUnkeptVariants: true,
+          }),
+        );
         const gen = resolveTextGenerator({
           seed: Number(opts.seed ?? 1),
           useStub: opts.answerer === "stub",

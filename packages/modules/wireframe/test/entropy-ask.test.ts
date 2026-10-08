@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CanvasContents, Operation } from "@isocan/core";
+import type { CanvasContents, DialogHost, Operation } from "@isocan/core";
 import {
   applyPinnedToSpecs,
   composeFlow,
@@ -16,6 +16,7 @@ import {
   type WirePort,
   type WireSpec,
 } from "../src/core.ts";
+import { composeOnWeb, modeOf } from "../src/dialog.tsx";
 
 function memoryPort(): WirePort {
   const items = new Map<
@@ -192,5 +193,109 @@ describe("entropy-gated /ask on root flow decisions (Phase 10)", () => {
     if (askedQuestions.includes("platform")) {
       expect(composed.screens[0]?.spec.platform).toBe("web");
     }
+  });
+
+  it("emits /ask lines via say even without onGateAsk, invokes onGateSettled, and parses --no-ask/--pin in modeOf and composeOnWeb", async () => {
+    expect(modeOf("an ops dashboard --no-ask --pin platform=web --pin=density=compact")).toEqual({
+      kind: "compose",
+      request: "an ops dashboard",
+      noAsk: true,
+      pinned: { platform: "web", density: "compact" },
+    });
+    expect(modeOf("basic an ops dashboard --no-ask --pin platform=web")).toEqual({
+      kind: "compose",
+      request: "an ops dashboard",
+      basic: true,
+      noAsk: true,
+      pinned: { platform: "web" },
+    });
+
+    const baseStub = stubAnswerer(3);
+    const highEntropyAnswerer = {
+      name: "stub" as const,
+      async answer(req: JevRequest) {
+        const res = await baseStub.answer(req);
+        if (req.questions.platform) {
+          return {
+            ...res,
+            response: {
+              answers: {
+                ...res.response.answers,
+                platform: {
+                  type: "choice" as const,
+                  choice: "app",
+                  probabilities: { app: 0.36, web: 0.34, site: 0.3 },
+                },
+              },
+            },
+          };
+        }
+        return res;
+      },
+    };
+
+    const said: string[] = [];
+    let settled = false;
+    await composeFlow(memoryPort(), "Ambiguous portal", highEntropyAnswerer, {
+      flesh: false,
+      say: (line) => said.push(line),
+      onGateSettled: () => {
+        settled = true;
+      },
+    });
+    expect(settled).toBe(true);
+    expect(said.some((l) => l.startsWith("/ask Which platform should this flow target?"))).toBe(true);
+
+    // Web composeOnWeb forwards onGateAsk, onGateSettled, and pinned choices
+    const port = memoryPort();
+    let webSettled = false;
+    const webAsked: string[] = [];
+    const host = {
+      send: async (ops: readonly Operation[], group?: string) => {
+        for (const op of ops) await port.send(op, group ?? "grp");
+      },
+      putBlob: async (bytes: Blob) => port.put(await bytes.text(), "text/html", "wire.html"),
+      readText: async (hash: string) => port.readText(hash),
+      getCanvas: () => {
+        throw new Error("unused");
+      },
+      judge: async (q: { canvasId: string } & Record<string, unknown>) => {
+        const { canvasId: _c, ...request } = q;
+        return (await highEntropyAnswerer.answer(request as unknown as JevRequest)).response;
+      },
+      notice: () => {},
+      reveal: () => {},
+      close: () => {},
+    } as unknown as DialogHost;
+    host.getCanvas = () => ({ items: {} }) as unknown as CanvasContents;
+    const origCanvas = port.canvas.bind(port);
+    let latestCanvas: CanvasContents = { items: {} } as unknown as CanvasContents;
+    const origSend = host.send;
+    host.send = async (ops: readonly Operation[], group?: string) => {
+      await origSend(ops, group);
+      latestCanvas = await origCanvas();
+    };
+    host.getCanvas = () => latestCanvas;
+
+    const webRes = await composeOnWeb(
+      "c-test",
+      host,
+      "Ambiguous portal",
+      () => {},
+      {
+        basic: true,
+        onGateAsk: async (ask) => {
+          webAsked.push(ask.key);
+          return "web";
+        },
+        onGateSettled: () => {
+          webSettled = true;
+        },
+      },
+    );
+    expect(webAsked).toContain("platform");
+    expect(webSettled).toBe(true);
+    expect(webRes.screens[0]?.spec.platform).toBe("web");
+    expect(webRes.screens[0]?.spec.pinned?.platform).toBe("web");
   });
 });

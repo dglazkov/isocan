@@ -13,8 +13,10 @@ import {
   nameFlowOnCanvas,
   readWire,
   renderWire,
+  requireScopedScreens,
   resolveTextGenerator,
   sanitizeFlowTitle,
+  scopeFlowScreens,
   stubAnswerer,
   stubTextGenerator,
   validateCopyPayload,
@@ -26,6 +28,9 @@ import {
   type HttpTextGeneratorOptions,
   type JsonSchema,
   type NamedFlow,
+  type ScopedFlow,
+  type ScopeFlowOptions,
+  type ScopeFlowResult,
   type TextGenerator,
   type WirePort,
   type WireSpec,
@@ -255,5 +260,95 @@ describe("schema-driven AI copy and flow naming (Phase 12)", () => {
     });
     expect(out.brand).toBe("Atlas");
     expect(capturedBody).toContain("json_schema");
+  });
+
+  it("batches screens with > 20 word paths across > 3 wordy slots into <= 3-slot calls and merges validated payloads", async () => {
+    const base = wireframe("home", { platform: "web", request: "Enterprise fleet dispatch", flow: "f-batch" });
+    const heavySpec = ensureFleshedForCopy(
+      {
+        ...base,
+        slots: [
+          { slot: "header", block: "page-header", props: {} },
+          { slot: "main.1", block: "stats-row", props: { count: 4 } },
+          { slot: "main.2", block: "data-table", props: { rows: 5, columns: 4 } },
+          { slot: "main.3", block: "stacked-list", props: { rows: 4 } },
+          { slot: "main.4", block: "card-grid", props: { count: 4 } },
+        ],
+      },
+      "heavy-1",
+    );
+    const totalWordPaths = heavySpec.slots.reduce((sum, s) => sum + Object.keys(wordsOf(s.fill)).length, 0);
+    expect(totalWordPaths).toBeGreaterThan(20);
+
+    const inner = stubTextGenerator(9);
+    const batchSchemas: JsonSchema[] = [];
+    const trackingGen: TextGenerator = {
+      name: "batch-tracker",
+      async generateJson<T>(prompt: string, schema: JsonSchema): Promise<T> {
+        batchSchemas.push(schema);
+        return inner.generateJson<T>(prompt, schema);
+      },
+    };
+
+    const result = await generateWireCopy(heavySpec, trackingGen, { brief: "concise logistics tone" });
+    expect(batchSchemas.length).toBeGreaterThanOrEqual(2);
+    for (const s of batchSchemas) {
+      const slotCount = Object.keys(s.properties?.slots?.properties ?? {}).length;
+      expect(slotCount).toBeLessThanOrEqual(3);
+    }
+    expect(result.content?.source).toBe("copy");
+  });
+
+  it("completes all generateWireCopy calls in memory before emitting ops so a mid-flow error writes nothing", async () => {
+    const { port, sent } = memoryPort();
+    await composeFlow(port, "Warehouse parcel tracking", stubAnswerer(2), { noAsk: true });
+    const canvas = await port.canvas();
+    const all = await wiresOn(port, canvas);
+    expect(all.length).toBeGreaterThanOrEqual(2);
+
+    const beforeOps = sent.length;
+    const inner = stubTextGenerator(4);
+    let callCount = 0;
+    const failingGen: TextGenerator = {
+      name: "failing-second",
+      async generateJson<T>(prompt: string, schema: JsonSchema): Promise<T> {
+        callCount += 1;
+        if (callCount === 2) throw new Error("LLM failed on screen 2");
+        return inner.generateJson<T>(prompt, schema);
+      },
+    };
+
+    await expect(copyAiOnCanvas(port, canvas, all, all, failingGen)).rejects.toThrow("LLM failed on screen 2");
+    expect(sent.length).toBe(beforeOps);
+  });
+
+  it("scopes flows cleanly via scopeFlowScreens and requireScopedScreens, refusing ambiguous multi-flow canvases and excluding unkept variants", async () => {
+    const { port } = memoryPort();
+    const f1 = await composeFlow(port, "Courier dispatch", stubAnswerer(2), { noAsk: true });
+    const f2 = await composeFlow(port, "Warehouse inventory", stubAnswerer(3), { noAsk: true });
+    const canvas = await port.canvas();
+    const all = await wiresOn(port, canvas);
+
+    const optsAmbiguous: ScopeFlowOptions = { wholeFlow: true, excludeUnkeptVariants: true };
+    const resAmbiguous: ScopeFlowResult = scopeFlowScreens(canvas, all, optsAmbiguous);
+    expect(resAmbiguous.ambiguousFlows?.length).toBe(2);
+    const firstAmbiguous: ScopedFlow = resAmbiguous.ambiguousFlows![0]!;
+    expect(firstAmbiguous.flow).toBeDefined();
+    expect(() => requireScopedScreens(resAmbiguous)).toThrow(/2 wireframe flows/);
+
+    const scopedByFlow = requireScopedScreens(
+      scopeFlowScreens(canvas, all, { flow: f1.flow, wholeFlow: true, excludeUnkeptVariants: true }),
+    );
+    expect(scopedByFlow.every((s) => s.spec.flow === f1.flow)).toBe(true);
+    expect(scopedByFlow.every((s) => !s.spec.variantOf || canvas.items[s.item]?.properties?.wireKeep === "yes")).toBe(true);
+
+    const scopedBySelection = requireScopedScreens(
+      scopeFlowScreens(canvas, all, {
+        itemIds: [f2.screens[0]!.item],
+        wholeFlow: false,
+        excludeUnkeptVariants: true,
+      }),
+    );
+    expect(scopedBySelection.map((s) => s.item)).toEqual([f2.screens[0]!.item]);
   });
 });

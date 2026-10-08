@@ -1,8 +1,8 @@
 ---
-status: partial
-since: 2026-09-30
+status: built
+since: 2026-10-07
 see: wireframes, judge, design-partner, slides, modules
-note: the ideal, as scenes. Phases 0–8 closed 23–24 Sep 2026 and were walked on isocan.io: skeleton-first composition with Jev, sample content packs, maybe screens and uncertainty variations, clickable prototype above the row, true flow arrows, and DESIGN.md restyling (#350). Wave 2 (#369, phases 9–13, 30 Sep 2026) ports the best of the standalone Jev design pipeline into pure TypeScript and is live on isocan.io: 7 multi-region @container layout templates + density + data-wf/data-sec paths (phase 9), PriorityGate and entropy-gated /ask on root decisions (phase 10), surgical single-section edits wire edit and decision Q&A wire why (phase 11), schema-driven AI copy wire copy --ai and flow naming wire name (phase 12), and concurrent design system synthesis wire ds + Jev-budgeted wire polish (phase 13).
+note: the ideal, as scenes. Every phase (0–14) closed: phases 0–8 (23–24 Sep 2026, walked on isocan.io, #350), phase 14 (2 Oct 2026, fidelity layers and the tier pill under the screen), and wave 2 phases 9–13 (7 Oct 2026, #369 — 7 multi-region @container layout templates + narrow collapse, PriorityGate and live entropy-gated /ask on CLI and web, surgical single-section wire edit and decision Q&A wire why with recorded top-3/entropy, schema-driven atomic AI copy wire copy --ai and flow naming wire name, and concurrent design system synthesis wire ds + Jev-budgeted wire polish, all scoped to a single flow).
 issue: 369
 ---
 

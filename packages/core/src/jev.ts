@@ -804,18 +804,20 @@ interface ClaudeTextGeneratorOptions {
 
 /**
  * The schema as Claude's structured outputs accept it: every object closed
- * (`additionalProperties: false` is required) and array lengths dropped
- * (only `minItems` of 0 or 1 is supported). What is dropped is checked by the
- * caller's own validation (`validateCopyPayload` and its kin), as it is for
- * every generator.
+ * (`additionalProperties: false` is required), `description` stripped so nested
+ * copy schemas stay below Anthropic's grammar-size limit, and array lengths
+ * dropped (only `minItems` of 0 or 1 is supported). What is dropped is checked
+ * by the caller's own validation (`validateCopyPayload` and its kin), as it is
+ * for every generator.
  */
 export function claudeSchema(schema: JsonSchema): JsonSchema {
   const out: JsonSchema = { type: schema.type };
-  if (schema.description !== undefined) out.description = schema.description;
   if (schema.enum !== undefined) out.enum = schema.enum;
   if (schema.type === "object") {
     const properties: Record<string, JsonSchema> = {};
-    for (const [key, value] of Object.entries(schema.properties ?? {})) properties[key] = claudeSchema(value);
+    for (const [key, value] of Object.entries(schema.properties ?? {})) {
+      properties[key] = claudeSchema(value);
+    }
     out.properties = properties;
     if (schema.required !== undefined) out.required = schema.required;
     out.additionalProperties = false;
@@ -825,6 +827,16 @@ export function claudeSchema(schema: JsonSchema): JsonSchema {
     if (schema.minItems === 0 || schema.minItems === 1) out.minItems = schema.minItems;
   }
   return out;
+}
+
+function extractJsonText(raw: string): string {
+  const trimmed = raw.trim();
+  const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+  if (fence) return fence[1]!.trim();
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first >= 0 && last > first) return trimmed.slice(first, last + 1);
+  return trimmed;
 }
 
 /**
@@ -846,34 +858,59 @@ export function claudeTextGenerator(opts: ClaudeTextGeneratorOptions = {}): Text
     name: model,
     async generateJson<T = unknown>(prompt: string, schema: JsonSchema): Promise<T> {
       if (!apiKey) throw new Error("claudeTextGenerator requires apiKey or ISOCAN_TEXT_API_KEY");
-      let res: Response;
-      try {
-        res = await fetchFn(endpoint, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-beta": CLAUDE_FALLBACK_BETA,
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: 16000,
-            fallbacks: "default",
-            system: "You write the words on an app's screens: labels, headings, buttons, sample content. Answer with the JSON the schema asks for and nothing else.",
-            messages: [{ role: "user", content: prompt }],
-            output_config: {
-              effort: CLAUDE_TEXT_EFFORT,
-              format: { type: "json_schema", schema: claudeSchema(schema) },
+      const strictSchema = claudeSchema(schema);
+      const sendRequest = async (useOutputConfig: boolean): Promise<Response> => {
+        try {
+          return await fetchFn(endpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+              "anthropic-beta": CLAUDE_FALLBACK_BETA,
             },
-          }),
-        });
-      } catch (error) {
-        throw new Error(scrub(`Claude could not be reached: ${(error as Error).message}`));
-      }
+            body: JSON.stringify({
+              model,
+              max_tokens: 16000,
+              fallbacks: "default",
+              system: "You write the words on an app's screens: labels, headings, buttons, sample content. Answer with the JSON the schema asks for and nothing else.",
+              messages: [
+                {
+                  role: "user",
+                  content: useOutputConfig
+                    ? prompt
+                    : `${prompt}\n\nRespond with a valid JSON object matching this schema (no markdown fences or commentary):\n${JSON.stringify(strictSchema)}`,
+                },
+              ],
+              ...(useOutputConfig
+                ? {
+                    output_config: {
+                      effort: CLAUDE_TEXT_EFFORT,
+                      format: { type: "json_schema", schema: strictSchema },
+                    },
+                  }
+                : {}),
+            }),
+          });
+        } catch (error) {
+          throw new Error(scrub(`Claude could not be reached: ${(error as Error).message}`));
+        }
+      };
+
+      let res = await sendRequest(true);
+      let usedFallback = false;
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
-        throw new Error(scrub(`TextGenerator HTTP ${res.status}: ${errText.slice(0, 200)}`));
+        if (res.status === 400 && /grammar|too large/i.test(errText)) {
+          res = await sendRequest(false);
+          usedFallback = true;
+          if (!res.ok) {
+            const retryErrText = await res.text().catch(() => "");
+            throw new Error(scrub(`TextGenerator HTTP ${res.status}: ${retryErrText.slice(0, 200)}`));
+          }
+        } else {
+          throw new Error(scrub(`TextGenerator HTTP ${res.status}: ${errText.slice(0, 200)}`));
+        }
       }
       const body = (await res.json()) as {
         stop_reason?: string;
@@ -887,7 +924,7 @@ export function claudeTextGenerator(opts: ClaudeTextGeneratorOptions = {}): Text
       if (body.stop_reason === "max_tokens") throw new Error("Claude ran out of room before the words were finished");
       const text = (body.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
       if (!text) throw new Error("TextGenerator returned an empty response");
-      return JSON.parse(text) as T;
+      return JSON.parse(usedFallback ? extractJsonText(text) : text) as T;
     },
   };
 }

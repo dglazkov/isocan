@@ -17,6 +17,7 @@ import {
   readWire,
   renderFrame,
   renderWire,
+  roundCalls,
   stubAnswerer,
   structureRequest,
   template,
@@ -214,5 +215,48 @@ describe("Phase 9 — multi-region layout templates, density, and data-wf paths"
     const protoHtml = assemblePrototype(screens, inferLinks(screens));
     expect(protoHtml).toContain("@container (min-width: 640px)");
     expect(protoHtml).toContain(`data-template="dashboard"`);
+  });
+
+  it("wires layout: true into roundCalls Round 2 for non-app platforms and supports template on blueprint/wireframe", () => {
+    const webDash = wireframe("home", { template: "dashboard" });
+    expect(webDash.platform).toBe("web");
+    expect(webDash.template).toBe("dashboard");
+    expect(webDash.slots.some((s) => s.region === "kpi" || s.region === "primary" || s.region === "secondary")).toBe(true);
+
+    const bpDash = blueprint("home", { template: "dashboard" });
+    expect(bpDash.platform).toBe("web");
+    expect(bpDash.template).toBe("dashboard");
+
+    expect(() => wireframe("home", { template: "unknown" as TemplateId })).toThrow(/--template must be one of/);
+    expect(() => wireframe("home", { platform: "app", template: "dashboard" })).toThrow(/not available on platform "app"/);
+
+    // roundCalls Round 2 includes template + density questions on web, and omits them on app
+    const round2Web = roundCalls(2, [{ item: "it_1", spec: bpDash }]);
+    expect(round2Web[0]?.request.questions.density).toBeDefined();
+    expect(round2Web[0]?.request.questions["main.1:region"]).toBeDefined();
+
+    const round2WebAuto = roundCalls(2, [{ item: "it_1", spec: blueprint("home", { platform: "web" }) }]);
+    expect(round2WebAuto[0]?.request.questions.template).toBeDefined();
+    expect(round2WebAuto[0]?.request.questions.density).toBeDefined();
+
+    const round2App = roundCalls(2, [{ item: "it_1", spec: blueprint("home", { platform: "app" }) }]);
+    expect(round2App[0]?.request.questions.template).toBeUndefined();
+    expect(round2App[0]?.request.questions.density).toBeUndefined();
+  });
+
+  it("emits responsive narrow-viewport and narrow-container collapse rules in TEMPLATE_CSS while keeping single byte-identical", () => {
+    expect(templateCss(undefined)).toBe("");
+    expect(templateCss("single")).toBe("");
+
+    const css = templateCss("dashboard");
+    expect(css).toContain("body.screen>.frame{max-width:100%}");
+    expect(css).toContain("@media (max-width: 639px)");
+    expect(css).toContain(".frame.web .body{flex-direction:column}");
+    expect(css).toContain(".frame.web .body>.side{width:100%;border-right:0;border-bottom:1px solid var(--w-line)}");
+    expect(css).toContain("@container (max-width: 639px)");
+    expect(css).toContain(".stats.c3,.stats.c4{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}");
+    expect(css).toContain(".table{overflow-x:auto;min-width:0}");
+    expect(css).toContain(".chart{min-width:0;overflow:hidden}");
+    expect(css).toContain("var(--w-line)");
   });
 });

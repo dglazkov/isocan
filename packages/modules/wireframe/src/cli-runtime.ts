@@ -3,8 +3,8 @@ import type { Command } from "commander";
 import { FIDELITY_PROP, newItemId, newVersionId, titleSlug } from "@isocan/core";
 import type { CliHost } from "@isocan/cli/modulehost";
 import {
-  BLOCKS, INTENTS, PLATFORMS, PRIMITIVES, RECIPES, blueprint, renderWire, validateWire, wireSize, wireTitle, wireframe,
-  type Component, type Platform, type WireSpec,
+  BLOCKS, INTENTS, PLATFORMS, PRIMITIVES, RECIPES, TEMPLATE_BY_ID, TEMPLATE_IDS, blueprint, renderWire, validateWire, wireSize, wireTitle, wireframe,
+  type Component, type Platform, type TemplateId, type WireSpec,
 } from "./core.ts";
 import { answer, questions, registerCompose } from "./compose-cli.ts";
 import { markScreens, registerVary } from "./vary-cli.ts";
@@ -124,16 +124,23 @@ function registerRuntime(host: CliHost, wire: Command): void {
     .command("spec <archetype>")
     .description("Print a spec for an archetype — a blueprint (every slot undecided), or with --resolved each slot's first block at its defaults")
     .option("--platform <platform>", `one of ${PLATFORMS.join(", ")} (default: the archetype's first)`)
+    .option("--template <id>", `one of ${TEMPLATE_IDS.join(", ")}`)
     .option("--resolved", "choose each slot's first option, with default props and intents")
     .option("--title <title>")
     .option("--request <words>", "the words that asked for it")
     .action(
-      run(async (archetype: string, opts: { platform?: string; resolved?: boolean; title?: string; request?: string }) => {
+      run(async (archetype: string, opts: { platform?: string; template?: string; resolved?: boolean; title?: string; request?: string }) => {
         if (opts.platform !== undefined && !PLATFORMS.includes(opts.platform as Platform)) {
           throw new Error(`--platform must be one of ${PLATFORMS.join(", ")} — got: ${opts.platform}`);
         }
+        if (opts.template !== undefined && !TEMPLATE_BY_ID.has(opts.template as TemplateId)) {
+          throw new Error(`--template must be one of ${TEMPLATE_IDS.join(", ")} — got: ${opts.template}`);
+        }
+        const tpl = opts.template !== undefined ? TEMPLATE_BY_ID.get(opts.template as TemplateId) : undefined;
+        const platform = (opts.platform as Platform | undefined) ?? tpl?.platforms[0];
         const o = {
-          ...(opts.platform ? { platform: opts.platform as Platform } : {}),
+          ...(platform ? { platform } : {}),
+          ...(opts.template ? { template: opts.template as TemplateId } : {}),
           ...(opts.title ? { title: opts.title } : {}),
           ...(opts.request ? { request: opts.request } : {}),
         };

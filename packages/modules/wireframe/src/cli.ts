@@ -247,6 +247,7 @@ function register(host: CliHost): void {
     .command("spec <archetype>")
     .description("Print a spec for an archetype — a blueprint (every slot undecided), or with --resolved each slot's first block at its defaults")
     .option("--platform <platform>", "one of mobile, tablet, web (default: the archetype's first)")
+    .option("--template <id>", "layout template id (single, split, master_detail, grid, bento, hero_then_grid, dashboard)")
     .option("--resolved", "choose each slot's first option, with default props and intents")
     .option("--title <title>")
     .option("--request <words>", "the words that asked for it")

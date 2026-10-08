@@ -1,5 +1,5 @@
 import {
-  ARCHETYPE_IDS, COMPONENTS, DENSITY_LEVELS, INTENT_BY_ID, RECIPES, RECIPE_BY_ID, TEMPLATE_BY_ID, TEMPLATE_IDS, component,
+  ARCHETYPE_IDS, COMPONENTS, DENSITY_LEVELS, INTENT_BY_ID, RECIPES, RECIPE_BY_ID, TEMPLATE_BY_ID, TEMPLATE_IDS, component, defaultSlotRegion,
   type Component, type DensityLevel, type IntentId, type Platform, type PropDef, type Props, type Recipe, type Section, type TemplateId,
 } from "./catalog/index.ts";
 import { styleProblems, type WireStyle } from "./theme.ts";
@@ -324,16 +324,25 @@ export function defaultIntent(r: Recipe, c: Component, element: string): IntentI
 /** A blueprint: every section of the recipe, nothing chosen. */
 export function blueprint(
   archetype: string,
-  opts: { platform?: Platform; request?: string; flow?: string; title?: string } = {},
+  opts: { platform?: Platform; template?: TemplateId; request?: string; flow?: string; title?: string } = {},
 ): WireSpec {
   const r = recipe(archetype);
+  const tpl = opts.template !== undefined ? TEMPLATE_BY_ID.get(opts.template) : undefined;
+  if (opts.template !== undefined && !tpl) {
+    throw new Error(`--template must be one of ${TEMPLATE_IDS.join(", ")} — got: ${opts.template}`);
+  }
+  const platform = opts.platform ?? tpl?.platforms[0] ?? r.platforms[0]!;
+  if (tpl && !tpl.platforms.includes(platform)) {
+    throw new Error(`template "${tpl.id}" is not available on platform "${platform}" (allowed on ${tpl.platforms.join(", ")})`);
+  }
   return {
     v: 1,
     request: opts.request ?? "",
     flow: opts.flow ?? "",
     archetype: r.id,
     title: opts.title ?? r.title,
-    platform: opts.platform ?? r.platforms[0]!,
+    platform,
+    ...(opts.template ? { template: opts.template } : {}),
     slots: r.sections.map((s) => ({ slot: s.slot, block: null, props: {} })),
   };
 }
@@ -360,7 +369,7 @@ export function resolveSlot(archetype: string, slot: string, block: string, prop
  */
 export function wireframe(
   archetype: string,
-  opts: { platform?: Platform; request?: string; flow?: string; title?: string } = {},
+  opts: { platform?: Platform; template?: TemplateId; request?: string; flow?: string; title?: string } = {},
   pick: (section: Section, index: number) => string | null | "omit" = (s) => s.options[0]!,
 ): WireSpec {
   const spec = blueprint(archetype, opts);
@@ -374,6 +383,12 @@ export function wireframe(
     }
     slots.push(choice === null ? { slot: section.slot, block: null, props: {} } : resolveSlot(r.id, section.slot, choice));
   });
+  if (spec.template && spec.template !== "single") {
+    const mainSlots = slots.filter((s) => r.sections.find((sec) => sec.slot === s.slot)?.region === "main");
+    mainSlots.forEach((s, idx) => {
+      s.region = defaultSlotRegion(spec.template!, s, idx, mainSlots.length);
+    });
+  }
   return { ...spec, slots };
 }
 
