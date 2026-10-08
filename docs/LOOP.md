@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 0 not yet read.**
+**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 10 not yet read.**
 
 ## Accepted, by project
 
@@ -149,4 +149,17 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 | next | [Web UI lacks canvas group layout controls](loop/web-ui-lacks-canvas-group-layout-controls.md) | P2 | [canvas-groups](projects/canvas-groups/) | Built 30 Sep: one core rule (groupGridAction) trims labels past a lowered count in the same save for web and CLI, and the web has Clear grid. |
 | next | [Workspace package imports deviate from manifest declarations](loop/workspace-package-imports-deviate-from-manifest-declarations.md) | P2 | [modules](projects/modules/) | done 2026-09-29: aligned workspace package.json manifests (@isocan/web, @isocan/cli, @isocan/talk) and added workspace import/dependency guard in test/packaging.test.ts |
 | later | [Renovate configuration gaps miss unhandled update paths](loop/renovate-configuration-gaps-miss-unhandled-update-paths.md) | P2 | new project | Fixed on 29 Sep 2026: scripts/release.mjs now derives buildCliBundle's esbuild target from .nvmrc's major version, guarded by test/workflows.test.ts. |
+
+## Not yet read
+
+- [Absence of spatial section spec cards for agent generation](loop/absence-of-spatial-section-spec-cards-for-agent-generation.md) — Loop P2
+- [Absence of spatial user flow sitemap scaffolding](loop/absence-of-spatial-user-flow-sitemap-scaffolding.md) — Loop P2
+- [Agent guide omits comment restore and anchor operations](loop/agent-guide-omits-comment-restore-and-anchor-operations.md) — Loop P2
+- [CLI group migration preview lacks dedicated command](loop/cli-group-migration-preview-lacks-dedicated-command.md) — Loop P2
+- [CLI lacks voice token generation command](loop/cli-lacks-voice-token-generation-command.md) — Loop P2
+- [Lack of spatial component state variant matrices](loop/lack-of-spatial-component-state-variant-matrices.md) — Loop P2
+- [MediaPipe CPU evaluation throws exceptions and stalls](loop/mediapipe-cpu-evaluation-throws-exceptions-and-stalls.md) — Loop P2
+- [Serial blob reads stall design brief loading](loop/serial-blob-reads-stall-design-brief-loading.md) — Loop P2
+- [Web UI chat drafts bypass daemon reducer](loop/web-ui-chat-drafts-bypass-daemon-reducer.md) — Loop P2
+- [Web UI lacks agent key claim migration controls](loop/web-ui-lacks-agent-key-claim-migration-controls.md) — Loop P2
 

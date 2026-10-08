@@ -3,7 +3,7 @@ title: Prototype clicks lack optimistic UI updates
 loop:
   - de4dedfa-5b43-4a32-b8b1-5dd6a9f43bf0
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: RESOLVED
 loop_goal: pg_v67IPMwQ
 decision: stale
 rank: never
