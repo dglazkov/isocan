@@ -28,7 +28,7 @@ export function canvasGroupEntries(items: Item[], ctx: { canvasId: string; actor
       { label: "Fit frame to contents", writes: true, run: () => task({ kind: "frame", itemId: group.id, fit: true }) },
       { label: "Tidy contents", writes: true, run: () => task({ kind: "layout", itemId: group.id, layout: group.groupLayout ?? {}, tidy: true }) },
       // Stack or spread: the title band's toggle, and `canvas group stack` (phase 4).
-      { label: group.groupLayout?.display === "stack" ? "Spread" : "Stack", writes: true, run: () => stackGroup(ctx.canvasId, ctx.actor, group, group.groupLayout?.display !== "stack") },
+      { label: group.groupLayout?.display === "stack" ? "Spread" : "Stack", shortcutFor: "Stack or spread the group", writes: true, run: () => stackGroup(ctx.canvasId, ctx.actor, group, group.groupLayout?.display !== "stack") },
       { label: "Ungroup", shortcutFor: "Ungroup", writes: true, run: () => task({ kind: "ungroup", itemIds: [group.id] }) },
     ] : []),
     ...(!group && items.some(isGroupItem) ? [{ label: "Ungroup", shortcutFor: "Ungroup", writes: true, run: () => task({ kind: "ungroup", itemIds: items.filter(isGroupItem).map((item) => item.id) }) }] : []),

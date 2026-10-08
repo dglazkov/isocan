@@ -21,6 +21,13 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 8 October 2026
+
+- **⇧S stacks and spreads a group.** Select a group (or anything in it) and
+  press ⇧S: a spread group stacks into a pile, a stacked one spreads back,
+  every card exactly where it was. With nothing selected it acts on the group
+  you are standing in. S on its own still shows an item's version stack.
+
 ## 6 October 2026
 
 - **Click through to the next screen.** In a prototype an agent made, press a

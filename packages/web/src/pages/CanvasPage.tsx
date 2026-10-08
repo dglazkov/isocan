@@ -915,7 +915,14 @@ function CanvasSurface({
         e.preventDefault();
         if (ui.selectedItemIds.length > 0) zoomToSelection();
         else zoomToFit();
-      } else if (e.key.toLowerCase() === "s" && !e.metaKey && !e.ctrlKey) {
+      } else if (e.shiftKey && e.code === "KeyS" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // ⇧S stacks a spread group and spreads a stacked one (the selected
+        // groups, a member's group, or the group you are in). Loaded on the
+        // press, never in the first paint.
+        if (!canEditNow()) return;
+        e.preventDefault();
+        void import("../lib/groupstack.ts").then(({ toggleStack }) => toggleStack(canvasId!, actor));
+      } else if (e.key.toLowerCase() === "s" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
         // S fans out the version Stack — which is what the badge and the UI
         // have always called it. V went back to Select, where every canvas
         // tool puts it; a single letter beats a modified one for something

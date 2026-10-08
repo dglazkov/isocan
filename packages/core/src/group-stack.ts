@@ -1,6 +1,6 @@
 import type { CanvasContents, Item } from "./model.ts";
 import type { GroupAction } from "./canvas-group-types.ts";
-import { groupChildren } from "./canvas-groups.ts";
+import { groupChildren, isGroupItem } from "./canvas-groups.ts";
 import { isAnnotation } from "./annotation.ts";
 
 // Its own module, like `group-aim.ts`, so the web loads the pile with the
@@ -72,4 +72,28 @@ export function stackFan(depth: number, card: { width: number } = GROUP_STACK): 
 /** Stack or spread a group: the one act both surfaces send — a `layout` action, so one undo and no new op. */
 export function groupStackAction(group: Item, stacked: boolean): Extract<GroupAction, { kind: "layout" }> {
   return { kind: "layout", itemId: group.id, layout: { display: stacked ? "stack" : "spread" } };
+}
+
+/**
+ * **⇧S: which groups, and which way** — stack what is spread, spread what is
+ * stacked. The groups are the selected ones; a selected member stands for
+ * its group; with nothing selected, the group you are standing in. When
+ * several disagree they are made to agree: all stacked spreads them, any
+ * spread stacks them all, so one press always moves every one the same way.
+ * `null` when there is no group to act on.
+ */
+export function stackToggle(
+  canvas: CanvasContents,
+  selection: readonly string[],
+  scope: string | null,
+): { groups: Item[]; stacked: boolean } | null {
+  const ids = selection.length ? selection : scope ? [scope] : [];
+  const groups: Item[] = [];
+  for (const id of ids) {
+    const item = canvas.items[id];
+    const group = item && isGroupItem(item) ? item : item?.containerId ? canvas.items[item.containerId] : undefined;
+    if (group && isGroupItem(group) && !groups.includes(group)) groups.push(group);
+  }
+  if (!groups.length) return null;
+  return { groups, stacked: !groups.every((group) => group.groupLayout?.display === "stack") };
 }

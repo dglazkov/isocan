@@ -585,7 +585,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   same undoable save, exactly as `canvas group grid` does. *Stack* on the title
   band (or `canvas group stack <group> [--spread]`) shows a group as a pile of
   cards — the top one upright, the rest turned behind it by a hash of their
-  ids — for everyone, until *Spread*; members keep their positions throughout.
+  ids — for everyone, until *Spread*; ⇧S does whichever one the group needs. Members keep their positions throughout.
   Pointing fans the pile into a hand, a click opens it into a grid (Esc
   closes), and ⌘-dragging a card out of the grid takes it out. CLI `mv`, `set --size`, `fit`,
   `align`, `distribute` and `tidy` share these semantics. Text, files, sites,

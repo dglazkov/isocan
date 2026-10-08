@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyOperation, GROUP_STACK, groupAim, groupDropTarget, groupStackAction, groupStackBox, groupStackMembers, groupUnderStack, invertOperation, resolveGroupOperation, STACK_BEHIND, stackFan, stackPile } from "../src/index.ts";
+import { applyOperation, GROUP_STACK, groupAim, groupDropTarget, groupStackAction, groupStackBox, groupStackMembers, groupUnderStack, invertOperation, resolveGroupOperation, STACK_BEHIND, stackFan, stackPile, stackToggle } from "../src/index.ts";
 import type { CanvasState, GroupAction, GroupBox, Operation } from "../src/index.ts";
 
 /**
@@ -135,5 +135,41 @@ describe("a stack on the canvas", () => {
     expect(groupAim(state.canvas, { gapIn: "grp_archive" }, null, true)).toEqual({ itemId: "grp_archive", inside: null, among: null });
     // A spread frame's open space under ⌘ is still a selection among its members.
     expect(groupAim(archive().canvas, { gapIn: "grp_archive" }, null, true).among).toBe("grp_archive");
+  });
+});
+
+describe("⇧S: stack what is spread, spread what is stacked", () => {
+  it("stacks a spread group, and spreads it again once it is stacked", () => {
+    let state = archive();
+    const first = stackToggle(state.canvas, ["grp_archive"], null)!;
+    expect(first.groups.map((g) => g.id)).toEqual(["grp_archive"]);
+    expect(first.stacked).toBe(true);
+    state = change(state, groupStackAction(first.groups[0]!, first.stacked)).state;
+    const second = stackToggle(state.canvas, ["grp_archive"], null)!;
+    expect(second.stacked).toBe(false);
+  });
+
+  it("a selected member stands for its group, and nothing selected means the group you are in", () => {
+    const state = archive();
+    expect(stackToggle(state.canvas, ["three"], null)!.groups.map((g) => g.id)).toEqual(["grp_archive"]);
+    expect(stackToggle(state.canvas, ["inner"], null)!.groups.map((g) => g.id)).toEqual(["grp_inner"]);
+    expect(stackToggle(state.canvas, [], "grp_inner")!.groups.map((g) => g.id)).toEqual(["grp_inner"]);
+    // Two members of one group are one group, not two presses.
+    expect(stackToggle(state.canvas, ["one", "two", "grp_archive"], null)!.groups).toHaveLength(1);
+  });
+
+  it("several groups that disagree are made to agree: any spread stacks them all", () => {
+    let state = archive();
+    state = change(state, groupStackAction(state.canvas.items.grp_inner!, true)).state;
+    expect(stackToggle(state.canvas, ["grp_archive", "grp_inner"], null)!.stacked).toBe(true);
+    state = change(state, groupStackAction(state.canvas.items.grp_archive!, true)).state;
+    expect(stackToggle(state.canvas, ["grp_archive", "grp_inner"], null)!.stacked).toBe(false);
+  });
+
+  it("is nothing on a canvas item outside any group, or with nothing at all", () => {
+    let state = archive();
+    state = card(state, "loose", { x: 3000, y: 0, width: 100, height: 100 });
+    expect(stackToggle(state.canvas, ["loose"], null)).toBeNull();
+    expect(stackToggle(state.canvas, [], null)).toBeNull();
   });
 });

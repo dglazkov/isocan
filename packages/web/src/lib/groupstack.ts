@@ -1,4 +1,4 @@
-import { groupAncestors, groupStackAction, type Actor, type Item } from "@isocan/core";
+import { groupAncestors, groupStackAction, stackToggle, type Actor, type Item } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { changeCanvasGroup, groupTask } from "./canvasgroups.ts";
@@ -22,4 +22,20 @@ export function stackGroup(canvasId: string, actor: Actor, group: Item, stacked:
     useUiStore.getState().setSelection([group.id]);
   }
   groupTask(() => changeCanvasGroup(canvasId, actor, groupStackAction(group, stacked)));
+}
+
+/**
+ * **⇧S** (and the palette's *Stack or spread the group*): core's
+ * `stackToggle` picks the groups and the direction, and each goes through
+ * `stackGroup` above — the same act the menu and `canvas group stack` send.
+ * Several groups take the selection together afterwards.
+ */
+export function toggleStack(canvasId: string, actor: Actor): boolean {
+  const canvas = useCanvasStore.getState().canvas;
+  const ui = useUiStore.getState();
+  const plan = canvas ? stackToggle(canvas, ui.selectedItemIds, ui.activeGroupId) : null;
+  if (!plan) return false;
+  for (const group of plan.groups) stackGroup(canvasId, actor, group, plan.stacked);
+  if (plan.stacked && plan.groups.length > 1) useUiStore.getState().setSelection(plan.groups.map((group) => group.id));
+  return true;
 }

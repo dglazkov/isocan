@@ -1,4 +1,4 @@
-import { isGroupItem, keyFor } from "@isocan/core";
+import { isGroupItem, keyFor, stackToggle } from "@isocan/core";
 import { changeCanvasGroup, groupsEnabled, enterCanvasGroup, groupTask, openGroupCreation, openGroupMigration, openGroupAddition, selectParentGroup } from "./canvasgroups.ts";
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor, AlignEdge } from "@isocan/core";
@@ -79,6 +79,7 @@ export const ACTIONS: readonly Action[] = [
   { id: "enter-group", name: "Enter group", group: "Open", available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!] && isGroupItem(useCanvasStore.getState().canvas!.items[ctx.selection[0]!]!), run: (ctx) => enterCanvasGroup(ctx.selection[0]!) },
   { id: "parent-group", name: "Select parent group", group: "Open", available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!]?.containerId, run: (ctx) => selectParentGroup(ctx.selection[0]!) },
   { id: "add-to-group", name: "Add to group…", group: "Canvas", writes: true, available: (ctx) => onCanvas(ctx) && withSelection(ctx), run: (ctx) => openGroupAddition([...ctx.selection]) },
+  { id: "stack-group", name: "Stack or spread the group", keys: keyFor("Stack or spread the group") ?? "", group: "Canvas", writes: true, available: (ctx) => { const canvas = useCanvasStore.getState().canvas; return onCanvas(ctx) && !!canvas && stackToggle(canvas, ctx.selection, useUiStore.getState().activeGroupId) !== null; }, run: async (ctx) => (await import("./groupstack.ts")).toggleStack(ctx.canvasId!, ctx.actor) },
   { id: "fit-group", name: "Fit frame to contents", group: "Canvas", writes: true, available: (ctx) => ctx.selection.length === 1 && !!useCanvasStore.getState().canvas?.items[ctx.selection[0]!] && isGroupItem(useCanvasStore.getState().canvas!.items[ctx.selection[0]!]!), run: (ctx) => groupTask(() => changeCanvasGroup(ctx.canvasId!, ctx.actor, { kind: "frame", itemId: ctx.selection[0]!, fit: true })) },
 
   {

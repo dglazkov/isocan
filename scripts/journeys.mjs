@@ -1289,7 +1289,7 @@ export const JOURNEYS = [
      * Asserted as STATE — classes in the DOM, what the home holds, and the
      * members' boxes before and after — never an animation having run.
      */
-    what: "Stack draws a pile that survives reload; hover fans, click opens, Esc closes; Spread puts every member back where it was; ⌘-drag takes a card out of the opened stack",
+    what: "Stack draws a pile that survives reload; hover fans, click opens, Esc closes; Spread puts every member back where it was; ⇧S stacks and spreads it again; ⌘-drag takes a card out of the opened stack",
     async run(rig) {
       const { b } = rig;
       await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -1388,6 +1388,21 @@ export const JOURNEYS = [
       const after = saved();
       if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`Spread did not put every member back: ${JSON.stringify(after)} (was ${JSON.stringify(before)})`);
       const drawnAfter = await drawn();
+
+      // 6b. ⇧S: a card selected stands for its group — stack it, then ⇧S again spreads it.
+      const shiftS = async () => {
+        const k = { windowsVirtualKeyCode: 83, key: "S", code: "KeyS" };
+        await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: 8, ...k });
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 8, ...k });
+      };
+      await rig.click(`.item[data-item-id="${cards[0]}"]`, "a card of the group");
+      await shiftS();
+      await home(stacked, (on) => on === true, "⇧S to stack the group");
+      await until(b, `!!document.querySelector(${JSON.stringify(`.item.stacked[data-item-id="${group}"] .stack-card.top`)})`, "⇧S's stack to draw as a pile");
+      await shiftS();
+      await home(stacked, (on) => on === false, "⇧S again to spread the group");
+      for (const itemId of cards) await until(b, `!!document.querySelector(${sel(itemId)})`, `${itemId} to be drawn again after ⇧S spread it`);
+      if (JSON.stringify(saved()) !== JSON.stringify(before)) throw new Error(`⇧S stack-and-spread moved a member: ${JSON.stringify(saved())} (was ${JSON.stringify(before)})`);
 
       // 7. ⌘-drag a card out of the opened stack: it leaves the group, in one act.
       runCli("--canvas", id, "canvas", "group", "stack", group);
