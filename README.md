@@ -586,8 +586,8 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   band (or `canvas group stack <group> [--spread]`) shows a group as a pile of
   cards — the top one upright, the rest turned behind it by a hash of their
   ids — for everyone, until *Spread*; ⇧S does whichever one the group needs. Members keep their positions throughout.
-  Pointing fans the pile into a hand, a click opens it into a grid (Esc
-  closes), and ⌘-dragging a card out of the grid takes it out. CLI `mv`, `set --size`, `fit`,
+  Pointing fans the pile into a hand; a click selects the stack and a click on
+  a selected stack opens it into a grid (Esc closes), and ⌘-dragging a card out of the grid takes it out. CLI `mv`, `set --size`, `fit`,
   `align`, `distribute` and `tidy` share these semantics. Text, files, sites,
   Google Docs and modules insert with explicit `--in` membership; `--cell r,c`
   honors protected label gutters. New sandbox transcripts inherit their
