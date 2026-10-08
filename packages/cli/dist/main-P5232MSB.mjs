@@ -47,7 +47,7 @@ import {
   resolveCanvas,
   resolveCtx,
   resolveDeclared
-} from "./chunk-7S2Y727M.mjs";
+} from "./chunk-SUU4MLFN.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -107,7 +107,7 @@ import {
   retireStrandedIdentities,
   shaOfRoot,
   writeIdentity
-} from "./chunk-5GFSETM3.mjs";
+} from "./chunk-4POM2R33.mjs";
 import {
   bindableRoot,
   buildStamp,
@@ -13913,7 +13913,7 @@ program2.command("mcp").description(
   "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)"
 ).action(
   run(async () => {
-    const { serveStdio } = await import("./src-6DCLG5IQ.mjs");
+    const { serveStdio } = await import("./src-NH6O4UBP.mjs");
     await serveStdio({ version: buildStamp().version });
     await new Promise(() => {
     });
@@ -15774,7 +15774,7 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     let ownerInput;
     if (access.kind !== "ordinary") {
       if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
-      const { personalCaptureOwner } = await import("./personal-capture-LK474LL4.mjs");
+      const { personalCaptureOwner } = await import("./personal-capture-UT2Z5LGR.mjs");
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }

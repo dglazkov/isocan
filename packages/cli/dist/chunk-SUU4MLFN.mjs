@@ -27,7 +27,7 @@ import {
   resolveIdentity,
   retireStrandedIdentities,
   transferCopyFaces
-} from "./chunk-5GFSETM3.mjs";
+} from "./chunk-4POM2R33.mjs";
 import {
   bindableRoot,
   findBinding,
@@ -787,38 +787,38 @@ var CanvasHandle = class {
   /** Shared run history recovers consumed reservations across native entrances and refreshes. */
   async designReview(requestId, runId) {
     const { readDesignReviews } = await import("./design-review-reader-USUCWWSH.mjs");
-    const { designReviewPort } = await import("./design-review-node-WFVX4DLC.mjs");
+    const { designReviewPort } = await import("./design-review-node-CPFU6PEB.mjs");
     return readDesignReviews(designReviewPort(this.ctx), { canvasId: this.id, ...requestId ? { requestId } : {}, ...runId ? { runId } : {} });
   }
   /** Prepare initial review reservation; callers persist the returned immutable envelope before sending it. */
   async designReviewStart(options) {
     const { prepareDesignReviewStart } = await import("./design-review-write-5M5PCBV7.mjs");
-    const { designReviewPort } = await import("./design-review-node-WFVX4DLC.mjs");
+    const { designReviewPort } = await import("./design-review-node-CPFU6PEB.mjs");
     return prepareDesignReviewStart(designReviewPort(this.ctx), { ...options, canvasId: this.id });
   }
   /** Prepare one conditional record, repair reservation or finish append against the captured run version. */
   async designReviewStep(options) {
     const { prepareDesignReviewStep } = await import("./design-review-write-5M5PCBV7.mjs");
-    const { designReviewPort } = await import("./design-review-node-WFVX4DLC.mjs");
+    const { designReviewPort } = await import("./design-review-node-CPFU6PEB.mjs");
     return prepareDesignReviewStep(designReviewPort(this.ctx), { ...options, canvasId: this.id });
   }
   /** Submit a previously persisted ordinary review envelope without replacing its actor or identity. */
   async designReviewSubmit(prepared, retry = false) {
     const { submitDesignReviewWrite } = await import("./design-review-write-5M5PCBV7.mjs");
-    const { designReviewPort } = await import("./design-review-node-WFVX4DLC.mjs");
+    const { designReviewPort } = await import("./design-review-node-CPFU6PEB.mjs");
     if (prepared.canvasId !== this.id) throw new Error("The saved review belongs to a different canvas.");
     return submitDesignReviewWrite(designReviewPort(this.ctx), prepared, { retry });
   }
   /** Capture target metadata before editing an explicit standalone repair. */
   async designRepairBasis(itemId) {
     const { captureDesignRepair } = await import("./design-repair-reader-254W432L.mjs");
-    const { designReviewPort } = await import("./design-review-node-WFVX4DLC.mjs");
+    const { designReviewPort } = await import("./design-review-node-CPFU6PEB.mjs");
     return captureDesignRepair(designReviewPort(this.ctx), { canvasId: this.id, itemId });
   }
   /** Submit a stable prepared repair with full canonical acceptance and independent consistency. */
   async designRepairSubmit(prepared, retry = false) {
     const { submitDesignRepair } = await import("./design-repair-reader-254W432L.mjs");
-    const { designReviewPort } = await import("./design-review-node-WFVX4DLC.mjs");
+    const { designReviewPort } = await import("./design-review-node-CPFU6PEB.mjs");
     if (prepared.canvasId !== this.id) throw new Error("The saved repair belongs to a different canvas.");
     return submitDesignRepair(designReviewPort(this.ctx), prepared, { retry });
   }
@@ -864,7 +864,7 @@ var CanvasHandle = class {
   }
   /** One on-demand procedure and current next-step plan, using this canvas's shared rollout policy. */
   async designWorkflow(filter = {}) {
-    const { designReviewPort } = await import("./design-review-node-WFVX4DLC.mjs");
+    const { designReviewPort } = await import("./design-review-node-CPFU6PEB.mjs");
     return this.reach(() => readDesignWorkflow(designReviewPort(this.ctx), { canvasId: this.id, filter }));
   }
   /** Read optional adapted craft guidance around this canvas's exact admitted request. */
