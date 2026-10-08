@@ -360,10 +360,11 @@ interface ClaudeTextGeneratorOptions {
 }
 /**
  * The schema as Claude's structured outputs accept it: every object closed
- * (`additionalProperties: false` is required) and array lengths dropped
- * (only `minItems` of 0 or 1 is supported). What is dropped is checked by the
- * caller's own validation (`validateCopyPayload` and its kin), as it is for
- * every generator.
+ * (`additionalProperties: false` is required), `description` stripped so nested
+ * copy schemas stay below Anthropic's grammar-size limit, and array lengths
+ * dropped (only `minItems` of 0 or 1 is supported). What is dropped is checked
+ * by the caller's own validation (`validateCopyPayload` and its kin), as it is
+ * for every generator.
  */
 export declare function claudeSchema(schema: JsonSchema): JsonSchema;
 /**
