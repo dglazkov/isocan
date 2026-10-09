@@ -43,7 +43,8 @@ proves cost, not taste.
 ### Trajectory
 
 - **2026-10-09** — Measured on an M4 Pro, not the M1 the budget names; the M1 densities (Meadow ×0.5–1, Orbit ×1–2, Night ×0.5) are extrapolated until someone runs the bench on one. WebKit via playwright, not Safari.app.
-- **2026-10-09** — Open: scene 2's slow eddy around a still pointer conflicts with the sleep policy (a pointer held still is not input, so the eddy has only the settle window). Dion's call: drop the eddy, or let Orbit stay awake under a resting pointer.
+- **2026-10-09** — Decided (Dion, 9 Oct: "Slow swirl is kinda cool, right?"): the eddy stays. A pointer resting over Orbit keeps it awake for an eddy window of about 15 s after the last move, then it settles and sleeps as any ground does; any move restarts the window. An untouched canvas still sleeps, so `idle-at-rest` holds.
+- **2026-10-09** — Decided (Dion: "Orbit should replace Galaxy yah"): Orbit is how Galaxy is drawn. The stored theme stays `galaxy` and keeps its label, so every canvas wearing Galaxy becomes living with no migration; its still frame is Orbit at rest, which reads as today's Galaxy. The screen-space zoom drift is fixed before the swap.
 - **2026-10-09** — Open: Orbit's stars live in screen space (pan is parallax, zoom only mild), and repeated zoom-outs gather them toward the centre for a while; to fix or accept before Orbit replaces Galaxy.
 
 ## Phase 1 — The living layer, and Meadow
@@ -92,9 +93,10 @@ messages.
 
 **Status: NOT STARTED.**
 
-**Outcome:** both grounds with their stills and cursors. Orbit's held-button
-reversal. Night's woken fireflies and glow near items. Galaxy is replaced or
-kept as phase 0 decided.
+**Outcome:** both grounds with their stills and cursors. Orbit replaces
+Galaxy (the `galaxy` theme, its label kept), with the held-button reversal and
+the eddy window under a resting pointer. Night's woken fireflies and glow near
+items.
 
 **Proof:** journeys per ground (wake on move, settle to rest, still under
 reduced motion). Frame cost on the canvas at or under the bench numbers.
