@@ -99,6 +99,19 @@ describe("the ground a canvas stands on", () => {
     expect(await props()).toEqual({});
   });
 
+  it("wears a living ground through the same verb, and says it moves", async () => {
+    /* Living grounds phase 1: Meadow is a theme like any other — one
+       `project.update`, one undo — and the CLI is where an agent learns it
+       is a ground that answers cursors, its own included. */
+    const help = await isocan("canvas", "background", "--help");
+    expect(help.stdout).toContain("meadow");
+    expect(help.stdout).toMatch(/living ground/);
+    const set = await isocan("canvas", "background", "meadow", "--canvas", "Ground");
+    expect(set.code, set.stderr).toBe(0);
+    expect(set.stdout).toMatch(/wears meadow — a living ground/);
+    expect(await props()).toEqual({ [THEME_PROP]: "meadow" });
+  });
+
   it("stands on a picture, and says the weight it just added", async () => {
     const set = await isocan("canvas", "background", "--picture", picture, "--canvas", "Ground");
     expect(set.code, set.stderr).toBe(0);

@@ -160,6 +160,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   that posts `{ type: "isocan:anchor", anchor }` as it changes screen opens its
   next version at that fragment, so an agent's edit does not send the person
   back to the first screen.
+- **Grounds**: a canvas can stand on Space Galaxy, Ocean, Mountains,
+  Farmland, Desert, Meadow or a picture of your own (Background in the canvas
+  menu, or `isocan canvas background <name>`), and the ground names everyone's
+  cursor. Meadow is living: grass that parts under the cursor and springs back,
+  drawn by a lazy WebGL2 layer that sleeps when nothing moves, and a painted
+  still of the same field under reduced motion or without WebGL2.
 - **Inherited Recent work**: Context shows recent activity beside a linked
   canvas's design and pins, with its source and covered range. CLI
   `isocan context` and MCP summaries show the same bounded reading and say

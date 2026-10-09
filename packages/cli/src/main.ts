@@ -190,6 +190,8 @@ import {
   themeOf,
   themePatch,
   THEMES,
+  LIVING,
+  isLiving,
   isShelved,
   shelvePatch,
   shelvedAt,
@@ -5354,7 +5356,10 @@ canvas
 
 canvas
   .command("background [theme]")
-  .description(`The ground this canvas stands on — ${THEMES.join(", ")}, a picture with --picture, or \`none\``)
+  .description(
+    `The ground this canvas stands on — ${THEMES.join(", ")}, a picture with --picture, or \`none\`. ` +
+      `${LIVING.join(", ")} ${LIVING.length === 1 ? "is a living ground" : "are living grounds"}: it moves under every cursor on the canvas, agents' included, and settles when nothing moves`,
+  )
   .option("--moves", "the ground travels with the canvas, so a place stays under what stands on it (default)")
   .option("--pinned", "the ground stays behind the glass and items move across it")
   .option("--picture <file>", "an image of your own to stand the canvas on — pinned, and darkened so cards still read")
@@ -5471,7 +5476,12 @@ canvas
         type: "project.update",
         patch: theme === "none" ? noThemePatch() : themePatch(theme),
       });
-      console.log(theme === "none" ? `${p.id} is back to the dot grid` : `${p.id} wears ${theme}`);
+      console.log(
+        theme === "none"
+          ? `${p.id} is back to the dot grid`
+          : `${p.id} wears ${theme}` +
+              (isLiving(theme) ? " — a living ground: it moves under every cursor and settles when nothing moves (a still picture under reduced motion)" : ""),
+      );
     }),
   );
 

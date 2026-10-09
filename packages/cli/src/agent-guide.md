@@ -3925,9 +3925,13 @@ archived** in the app's ⌘O switcher, which otherwise leaves them out of its
 search as well as its list. Every other verb reaches an archived canvas by name
 with no flag at all, so a canvas somebody archives while you are parked on it
 is still the canvas you are standing on. `canvas background
-<galaxy|mountains|ocean|none>` sets the ground a canvas stands on, and
+<galaxy|ocean|mountains|farm|desert|meadow|none>` sets the ground a canvas stands on, and
 bare `canvas background` says what it is wearing — everybody on the canvas
 sees the same one, so it is a change to ask about rather than assume.
+`meadow` is a living ground: grass that parts under the cursor and settles
+when nothing moves, drawn in each viewer's browser and never stored or sent.
+Your cursor will touch it too once presence cursors feed it (living grounds
+phase 2), so on a living ground point with purpose rather than sweeping it.
 `canvas background --picture <file>` stands it on an image of your own
 instead: pinned so it cannot show a seam, and darkened so cards still read on
 it. `--cursor <name>` picks the pointer everyone on THAT canvas wears — a

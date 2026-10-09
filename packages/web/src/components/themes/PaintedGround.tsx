@@ -1,5 +1,6 @@
 import type { CanvasTheme, ThemeAnchor } from "@isocan/core";
 import { useUiStore } from "../../stores/uiStore.ts";
+import "./meadow.css";
 
 /**
  * **A ground somebody painted** (#195, art delivered 8 Sep 2026).
@@ -58,6 +59,12 @@ export const PAINTED: Partial<Record<CanvasTheme, { file: string; world: number 
   mountains: { file: "mountains", world: 2200 },
   farm: { file: "farm", world: 1600 },
   desert: { file: "desert", world: 900 },
+  /* Meadow's STILL frame (living grounds): the field at rest, rendered from
+     its own shader with a lattice that repeats every 896 units, so the still
+     tiles as seamlessly as the living field it stands in for. Drawn here under
+     reduced motion; `LivingGround` hands it over when WebGL2 is missing,
+     a shader fails, or the context is lost twice. */
+  meadow: { file: "meadow", world: 896 },
 };
 
 export function PaintedGround({ theme, anchor }: { theme: CanvasTheme; anchor: ThemeAnchor }) {

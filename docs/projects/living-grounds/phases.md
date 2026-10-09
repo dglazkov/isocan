@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-09
 see: groups-by-hand
 note: "the walk: a prototype bench that measures before anything ships, the living layer with Meadow, every cursor and every item touching the ground, Orbit and Night, motion settings and more grounds, evidence."
@@ -9,7 +9,7 @@ note: "the walk: a prototype bench that measures before anything ships, the livi
 
 **9 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 9 Oct 2026: designed. Next: living-grounds phase 0, the prototype bench.**
+**Where we are, 9 Oct 2026: phase 1 is CLOSED — Meadow lives in isocan (`isocan canvas background meadow`). Phase 0 is PART-DONE: the bench is built and measured ([prototype/](prototype/), published for Dion), and which grounds earn a place, Orbit-for-Galaxy, and the scene 2 eddy are Dion's to call. Next: living-grounds phase 2, every cursor and every item.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -24,7 +24,7 @@ Rules for every phase, on top of `AGENTS.md`:
 
 ## Phase 0 — The prototype bench
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 9 October 2026.** `prototype/index.html` draws Meadow, Orbit and Night in WebGL2 over six stand-in cards, with the real pointer and two scripted cursors (a person, an agent), Motion, density and a live cost panel. Measured at 2560×1440 on an M4 Pro, saturated GPU ms per frame at density ×1: Meadow 1.05 (32k blades), Orbit 0.69 (4,096 particles), Night 1.37; JS under 0.5 ms; every ground stops drawing 1.5 s after the input stops, in Chrome and WebKit alike (`prototype/README.md`). Waits on Dion: which grounds earn a place (published for him), Orbit replacing Galaxy, and the scene 2 eddy.
 
 **Outcome:** a standalone page, `docs/projects/living-grounds/prototype/index.html`,
 with Meadow, Orbit and Night drawn by WebGL2 over a fake canvas: a few
@@ -40,9 +40,15 @@ each settles to zero frames within 3 s of the input stopping. Dion looks at it
 and says which grounds earn a place. That last step is a person's: the bench
 proves cost, not taste.
 
+### Trajectory
+
+- **2026-10-09** — Measured on an M4 Pro, not the M1 the budget names; the M1 densities (Meadow ×0.5–1, Orbit ×1–2, Night ×0.5) are extrapolated until someone runs the bench on one. WebKit via playwright, not Safari.app.
+- **2026-10-09** — Open: scene 2's slow eddy around a still pointer conflicts with the sleep policy (a pointer held still is not input, so the eddy has only the settle window). Dion's call: drop the eddy, or let Orbit stay awake under a resting pointer.
+- **2026-10-09** — Open: Orbit's stars live in screen space (pan is parallax, zoom only mild), and repeated zoom-outs gather them toward the centre for a while; to fix or accept before Orbit replaces Galaxy.
+
 ## Phase 1 — The living layer, and Meadow
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 9 October 2026.** `GroundHost`, the input field (this viewer's pointer, item rectangles, a 256² trail) and the sleep policy run Meadow on a canvas that wears it: blades bend away and spring back, items press the grass flat, the field thins into a textured green zoomed out. The `meadow` journey: awake while the pointer moves (91 frames), the trail readback 0.69 at the crossed point, asleep 1.5 s after it stops and zero frames after; reduced motion and a forced no-WebGL2 both draw the still with no WebGL canvas and no living chunk fetched. `meadow-idle`: main thread 1% busy. Entry chunk +226 bytes; the host (12 KB) and Meadow (9 KB) are lazy chunks.
 
 **Outcome:**
 
@@ -55,6 +61,14 @@ proves cost, not taste.
 
 - Unit tests for the sleep policy (awake, settling, asleep transitions) and the
   input field (world transforms, item culling past 64).
+
+### Trajectory
+
+- **2026-10-09** — The sleep cap counts 3 s from the last input; "awake" ends 250 ms after it. design.md's "awake 2 s, then settle up to 3 s" was 5 s and could not meet this phase's own bound; the design now says so.
+- **2026-10-09** — Meadow's still frame is rendered from its own shader (`scripts/ground-still.mjs`), not painted: the blade lattice repeats every 896 world units, so the still is the living field at rest and tiles without a seam. Re-render when the shader changes.
+- **2026-10-09** — Items already press the grass (phase 2's half): the input field carried item rectangles from the start.
+- **2026-10-09** — Open: GPU cost and context-loss recovery are proved by the bench and by code, not by a journey on the canvas; headless WebGL2 on Linux CI is unchecked (the journey falls back to proving the still).
+
 - `idle-at-rest` on a Meadow canvas.
 - A `meadow` journey: the cursor moves over empty canvas, the trail texture
   shows a stamp at that world point, and the loop stops within 3 s of the

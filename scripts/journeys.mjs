@@ -364,6 +364,56 @@ async function makeCanvas(rig, title) {
  */
 const IDLE_BOUND = 15;
 
+/**
+ * **What share of `seconds` the page's main thread spent working**, from a
+ * CPU profile: every sample that is not `(idle)`. `idle-at-rest` proves this
+ * instrument can say no on every run; `meadow-idle` borrows it.
+ */
+async function mainThreadBusy(rig, seconds) {
+  await rig.b.send("Profiler.enable");
+  await rig.b.send("Profiler.setSamplingInterval", { interval: 200 });
+  await rig.b.send("Profiler.start");
+  await new Promise((r) => setTimeout(r, seconds * 1000));
+  const profile = (await rig.b.send("Profiler.stop"))?.profile;
+  if (!profile) throw new Error("the profiler handed back nothing — the instrument is broken");
+  let idle = 0;
+  let total = 0;
+  for (const node of profile.nodes) {
+    const hits = node.hitCount || 0;
+    total += hits;
+    if (node.callFrame.functionName === "(idle)") idle += hits;
+  }
+  if (total === 0) throw new Error("the profiler took no samples — the instrument is broken");
+  return Math.round(((total - idle) / total) * 100);
+}
+
+/** Run the CLI against the journey's own daemon, as a test agent. */
+function journeyCli(rig, session, ...args) {
+  const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+    cwd: rig.home, encoding: "utf8",
+    env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: session, ISOCAN_HARNESS: "test" },
+  });
+  return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+}
+
+/** The living ground's canvas, its state and its frame count, read off the page. */
+const groundNow = (b) => b.ev(`(() => {
+  const c = document.querySelector("canvas.ground-canvas");
+  if (!c) return null;
+  return { state: c.dataset.groundState ?? null, still: c.dataset.groundStill ?? null, frames: c.groundProbe ? c.groundProbe.frames() : null };
+})()`);
+
+/** Is there a WebGL2 context to be had in this browser at all? */
+const hasWebGL2 = (b) => b.ev(`!!document.createElement("canvas").getContext("webgl2")`);
+
+/** Put a canvas on Meadow from the CLI — the agent's half of scene 5 — and
+ *  wait for the ground to arrive, living or still. */
+async function wearMeadow(rig, id, session) {
+  journeyCli(rig, session, "identity", "--session", "--name", "Meadow Journey CLI");
+  journeyCli(rig, session, "--canvas", id, "canvas", "background", "meadow");
+  await until(rig.b, `!!document.querySelector("canvas.ground-canvas, .canvas-theme-painted.canvas-theme-meadow")`, "the meadow to arrive", 10_000);
+}
+
 export const JOURNEYS = [
   {
     name: "design-contract",
@@ -635,23 +685,7 @@ export const JOURNEYS = [
     async run(rig) {
       await makeCanvas(rig, "A quiet canvas");
 
-      const busy = async (seconds) => {
-        await rig.b.send("Profiler.enable");
-        await rig.b.send("Profiler.setSamplingInterval", { interval: 200 });
-        await rig.b.send("Profiler.start");
-        await new Promise((r) => setTimeout(r, seconds * 1000));
-        const profile = (await rig.b.send("Profiler.stop"))?.profile;
-        if (!profile) throw new Error("the profiler handed back nothing — the instrument is broken");
-        let idle = 0;
-        let total = 0;
-        for (const node of profile.nodes) {
-          const hits = node.hitCount || 0;
-          total += hits;
-          if (node.callFrame.functionName === "(idle)") idle += hits;
-        }
-        if (total === 0) throw new Error("the profiler took no samples — the instrument is broken");
-        return Math.round(((total - idle) / total) * 100);
-      };
+      const busy = (seconds) => mainThreadBusy(rig, seconds);
 
       const atRest = await busy(4);
       if (atRest > IDLE_BOUND) {
@@ -684,6 +718,149 @@ export const JOURNEYS = [
             `  The instrument cannot see, so the ${atRest}% above is not evidence of anything.`,
         );
       }
+    },
+  },
+  {
+    name: "meadow-idle",
+    /**
+     * **A living ground that cannot settle does not ship** (living grounds,
+     * phases.md's first rule). The same instrument as `idle-at-rest`, on a
+     * canvas wearing Meadow and left alone: the ground must fall asleep and
+     * the page must spend no more than the same 15% working.
+     */
+    what: "a Meadow canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet meadow");
+      await wearMeadow(rig, id, "meadow-idle-journey");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the meadow to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Meadow canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the meadow is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "meadow",
+    /**
+     * **Grass that parts, and then holds still** (living grounds phase 1,
+     * journey.md scenes 1 and 5).
+     *
+     * State, not animation — the runner's own rule. The ground's canvas says
+     * which state the sleep policy is in (`data-ground-state`) and how many
+     * frames it has drawn; the trail texture is read back from the GPU at a
+     * world point the cursor crossed. Moving over bare canvas must wake it
+     * and draw; stopping must put it to sleep within 3.5 s and then draw
+     * nothing at all. Reduced motion and a browser with no WebGL2 must both
+     * give the painted still, with no WebGL canvas on the page.
+     */
+    what: "the meadow wakes and parts under the cursor, sleeps within 3.5 s, and is a still picture under reduced motion or without WebGL2",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme meadow");
+      const session = "meadow-journey";
+      await wearMeadow(rig, id, session);
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the meadow fell back to its still with WebGL2 available: ${first.still}`);
+        // A card standing on the grass, for the picture and for the flattening.
+        const md = path.join(rig.home, "acme-meadow.md");
+        writeFileSync(md, "# Acme\n\nA card standing in the grass.\n");
+        const spot = await openSpot(rig, 300, 200);
+        const world = await b.ev(`(() => {
+          const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+          const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+          return { left: r.left, top: r.top, scale };
+        })()`);
+        const toWorld = (x, y) => ({ x: (x - world.left) / world.scale, y: (y - world.top) / world.scale });
+        const at = toWorld(spot.x + 200, spot.y + 20);
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme card", "--at", `${Math.round(at.x)},${Math.round(at.y)}`, "--size", "90x70");
+        await until(b, `!!document.querySelector(".item")`, "the card to arrive");
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the meadow to fall asleep before the walk", 6000);
+        const before = (await groundNow(b)).frames;
+
+        // Walk across bare canvas, left of the card, with no button held.
+        const y = spot.y + 190;
+        let awakeSeen = false;
+        let shot = null;
+        for (let i = 0; i <= 30; i++) {
+          const x = spot.x + 10 + i * 6;
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y: y - i * 3, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await groundNow(b)).state === "awake";
+          if (i === 24) {
+            shot = path.join(tmpdir(), `isocan-meadow-${Date.now()}.png`);
+            writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          }
+        }
+        const stoppedAt = Date.now();
+        const mid = toWorld(spot.x + 10 + 28 * 6, y - 28 * 3);
+        const pressed = await b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.trailAt(${mid.x}, ${mid.y})`);
+        const moving = await groundNow(b);
+        if (!awakeSeen) throw new Error("the meadow was not awake while the cursor walked over it");
+        if (!(moving.frames > before)) throw new Error(`no frames were drawn while the cursor moved (${before} → ${moving.frames})`);
+        if (!(pressed > 0.1)) throw new Error(`the trail holds ${pressed} at world (${mid.x.toFixed(0)}, ${mid.y.toFixed(0)}), where the cursor just walked`);
+        const untouched = await b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.trailAt(${mid.x + 4000}, ${mid.y + 4000})`);
+        if (untouched !== 0) throw new Error(`the trail holds ${untouched} far from anywhere the cursor went`);
+
+        // Stop. Asleep within 3.5 s, and then not one more frame.
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the meadow to fall asleep after the cursor stopped", 6000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter > 3500) throw new Error(`the meadow took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const asleep = (await groundNow(b)).frames;
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") {
+          throw new Error(`the meadow drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        }
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, trail: pressed, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot });
+      }
+
+      // Reduced motion: the still, and the living layer never fetched.
+      await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+      try {
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-meadow")`, "the still meadow under reduced motion", 10_000);
+        const reduced = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-meadow")).backgroundImage,
+          fetched: performance.getEntriesByType("resource").some((e) => /LivingGround|meadow-[^/]*\.js/.test(e.name)),
+        })`);
+        if (reduced.canvas) throw new Error("reduced motion still mounted the WebGL canvas");
+        if (!/meadow\.jpg/.test(reduced.tile)) throw new Error(`reduced motion shows no still frame: ${reduced.tile}`);
+        if (reduced.fetched) throw new Error("reduced motion downloaded the living layer anyway");
+        proof.reducedMotion = "still";
+      } finally {
+        await b.send("Emulation.setEmulatedMedia", { features: [] });
+      }
+
+      // No WebGL2: the host gives up at once and hands over the still.
+      const { identifier } = await b.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `(() => { const get = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return type === "webgl2" ? null : get.call(this, type, ...rest); }; })();`,
+      });
+      try {
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-meadow")`, "the still meadow without WebGL2", 10_000);
+        const none = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-meadow")).backgroundImage,
+        })`);
+        if (none.canvas) throw new Error("with no WebGL2 the ground canvas is still on the page");
+        if (!/meadow\.jpg/.test(none.tile)) throw new Error(`with no WebGL2 there is no still frame: ${none.tile}`);
+        proof.noWebGL2 = "still";
+      } finally {
+        await b.send("Page.removeScriptToEvaluateOnNewDocument", { identifier });
+        await rig.go(`/p/${id}`);
+      }
+      return proof;
     },
   },
   {

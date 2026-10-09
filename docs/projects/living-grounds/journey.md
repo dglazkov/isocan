@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-09
 see: groups-by-hand
 note: "Living grounds: canvas backgrounds that answer the cursor — grass that parts where you walk, a starfield whose gravity your cursor bends, a night meadow where your cursor is a firefly. Everyone's cursor touches the ground, agents' included, and items rest on it. Drawn by a lazy WebGL layer that sleeps when nothing moves, so an idle canvas stays idle. Scenes here; the mechanism is design.md; the walk is phases.md."

@@ -38,6 +38,7 @@ const TONE: Record<CanvasTheme, string> = {
   mountains: "--theme-rock",
   farm: "--theme-farm",
   desert: "--theme-sand",
+  meadow: "--theme-meadow",
 };
 
 /**

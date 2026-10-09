@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   CURSORS,
   CURSOR_PROP,
+  LIVING,
+  isLiving,
   canvasCursorName,
   cursorLabel,
   cursorOf,
@@ -303,5 +305,38 @@ describe("the pointer a canvas wears", () => {
        holds the silhouettes. */
     for (const c of CURSORS) expect(cursorLabel(c)).toMatch(/^[A-Z]/);
     expect(new Set(CURSORS.map(cursorLabel)).size, "no two cursors share a word").toBe(CURSORS.length);
+  });
+});
+
+/**
+ * **A living ground is a name like any other** (living grounds phase 1).
+ *
+ * The motion is the web app's business and loads only where a living ground
+ * is worn; what core owns is the vocabulary — which names exist, which of them
+ * move, and the cursor each one wears — so both surfaces agree on all three.
+ */
+describe("the grounds that move", () => {
+  it("knows meadow, and knows it moves", () => {
+    expect(isTheme("meadow")).toBe(true);
+    expect(isLiving("meadow")).toBe(true);
+    expect(themeLabel("meadow")).toBe("Meadow");
+    expect(themeCursorName("meadow")).toBe("ladybird");
+  });
+
+  it("says the painted and generated grounds do not move, and nothing is living by default", () => {
+    for (const theme of THEMES) expect(isLiving(theme)).toBe((LIVING as readonly string[]).includes(theme));
+    expect(isLiving("galaxy")).toBe(false);
+    expect(isLiving("farm")).toBe(false);
+    expect(isLiving(null)).toBe(false);
+  });
+
+  it("names only grounds this build can stand a canvas on", () => {
+    for (const name of LIVING) expect(THEMES as readonly string[]).toContain(name);
+  });
+
+  it("is worn through the same patch as every ground — one op, one undo", () => {
+    expect(themePatch("meadow")).toEqual({ properties: { [THEME_PROP]: "meadow" }, removeProperties: [GROUND_PROP] });
+    expect(themeOf({ properties: { [THEME_PROP]: "meadow" } })).toBe("meadow");
+    expect(groundIsPlace({ properties: { [THEME_PROP]: "meadow" } })).toBe(true);
   });
 });

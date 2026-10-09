@@ -50,6 +50,10 @@
   --theme-rock: #2f2e28;
   --theme-farm: #353423;
   --theme-sand: #ab703b;
+  /* Meadow (living grounds): the mean of its still frame, like the four
+     above, so the field behind a WebGL layer that has not drawn yet is the
+     field's own colour. */
+  --theme-meadow: #223112;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -311,6 +315,10 @@
   --theme-rock: #2f2e28;
   --theme-farm: #353423;
   --theme-sand: #ab703b;
+  /* Meadow (living grounds): the mean of its still frame, like the four
+     above, so the field behind a WebGL layer that has not drawn yet is the
+     field's own colour. */
+  --theme-meadow: #223112;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in

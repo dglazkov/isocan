@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { THEMES, themeLabel } from "@isocan/core";
 
 import { PAINTED } from "../src/components/themes/PaintedGround.tsx";
-import { rules, selectorsOf } from "./cssrules.ts";
+import { rules, selectorsOf, sheets } from "./cssrules.ts";
 
 /**
  * **A ground is a file now, and a name with no file is a blank canvas.**
@@ -78,7 +78,9 @@ describe("every ground this build offers can actually be drawn", () => {
        top fade from. Its own rule, not the shared one: the tile behaviour is
        `.canvas-theme-painted` and this is the half that differs. */
     for (const theme of Object.keys(PAINTED)) {
-      const rule = rules().find((r) => selectorsOf(r).includes(`.canvas-theme-${theme}`));
+      /* Every sheet, not only `styles.css`: a living ground's colour ships in
+         the sheet beside its lazy components (`themes/meadow.css`). */
+      const rule = sheets.flatMap((s) => rules(s.text)).find((r) => selectorsOf(r).includes(`.canvas-theme-${theme}`));
       expect(rule, `.canvas-theme-${theme} must have a rule`).toBeTruthy();
       expect(rule!.body, `${theme} must hold a colour while its picture loads`).toMatch(
         /background-color:\s*var\(--[a-z-]+\)/,

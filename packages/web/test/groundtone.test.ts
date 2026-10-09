@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { THEMES, groundPatch, themePatch } from "@isocan/core";
 
 import { TONED, groundTone } from "../src/lib/groundtone.ts";
-import { css, rules, selectorsOf } from "./cssrules.ts";
+import { css, rules, selectorsOf, sheets } from "./cssrules.ts";
 
 /**
  * **Chrome that washes the ground has to know what the ground is.**
@@ -49,7 +49,7 @@ describe("the wash over a canvas knows what it is washing", () => {
          share one rule for the tile and take a line each for their colour, so
          "the first rule matching" is a fact about source order rather than
          about what the ground paints with. */
-      const painting = rules()
+      const painting = sheets.flatMap((s) => rules(s.text))
         .filter((r) => selectorsOf(r).includes(`.canvas-theme-${theme}`))
         .map((r) => r.body)
         .join("\n");

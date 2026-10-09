@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-09
 see: groups-by-hand
 note: "The mechanism for living grounds: one lazy WebGL2 host behind the items, a shared input field (every visible cursor plus item rectangles), a ground as a small module (shaders plus a step function), a sleep policy that keeps an idle canvas idle, a still-frame fallback, and three first grounds — Meadow, Orbit, Night — with four more proposed."
@@ -95,10 +95,12 @@ lets the host sleep.
 more than 15% while untouched, and it has caught a render loop before (7 Sep
 2026). A living ground keeps to it:
 
-- **Awake** while any pointer moved in the last 2 s, any presence cursor moved,
-  the view panned or zoomed, or `step` returned `true`.
+- **Awake** while any pointer moved in the last 250 ms, any presence cursor
+  moved, or the view panned or zoomed.
 - **Settling:** after the inputs stop, the ground runs until `step` says it is
-  at rest, capped at 3 s, then draws one final frame and stops the loop.
+  at rest, and never more than 3 s after the last input, then draws one final
+  frame and stops the loop. (First written as "awake 2 s, then settle up to
+  3 s", which is 5 s and broke the phases' own bound; corrected 9 Oct 2026.)
 - **Asleep:** no rAF and no timers. The canvas holds its last frame. The next
   `pointermove`, presence update or viewport change wakes it.
 - **Ambient motion** (grass sway, star drift, firefly blink) runs only while
