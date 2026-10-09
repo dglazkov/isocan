@@ -30,6 +30,9 @@ second week.
 - **A stack shows its pictures.** Every card in a pile shows its own image,
   not just the top one. And the first click on a stack now selects it, so ⇧S
   and the menu act on it; click a selected stack to open it.
+- **Items float a little.** Screens and cards on the canvas sit on a soft,
+  even shadow instead of a tight line underneath, and a card you pick up
+  lifts clearly above the rest.
 - **Flip through a stack.** With a stacked group selected, ← and → bring the
   next or previous card to the front, with a little card-flip.
 - **Pinch-to-zoom moves faster.** A trackpad pinch zooms about twice as far

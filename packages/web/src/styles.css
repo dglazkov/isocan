@@ -155,11 +155,17 @@
   /* Dimmer behind a modal. */
   --overlay: rgba(35, 38, 43, 0.35);
   --shadow-card: 0 1px 2px rgba(30, 34, 40, 0.08), 0 10px 24px -14px rgba(30, 34, 40, 0.28);
+  /* **An item resting on the canvas** (8 Oct 2026, Dion: "I like the drop
+     shadow around the nodes/screens... mimicking that on our canvas"): a soft
+     halo on every side, so a screen reads as a sheet floating a little above
+     the board — not the tight under-shadow chrome keeps (--shadow-card). Low
+     enough that a packed board's gutters stay clean. */
+  --shadow-item: 0 1px 3px rgba(30, 34, 40, 0.06), 0 8px 24px rgba(30, 34, 40, 0.08), 0 24px 64px rgba(30, 34, 40, 0.13);
   /* **A card in the hand** (`.item.lifted`): the card's two shadows, the
      contact one tighter and the ambient one twice as deep and further down.
      Depth, never size — a lifted card does not grow, or you could not see
      where it will land (docs/research/2026-10-01-groups-stacks-lift.md §3). */
-  --shadow-lift: 0 2px 4px rgba(30, 34, 40, 0.1), 0 22px 44px -14px rgba(30, 34, 40, 0.38);
+  --shadow-lift: 0 2px 6px rgba(30, 34, 40, 0.1), 0 16px 36px rgba(30, 34, 40, 0.14), 0 40px 96px rgba(30, 34, 40, 0.24);
   --shadow-pop: 0 14px 30px -14px rgba(30, 34, 40, 0.35);
   /* **The same lift, drawn by `filter` instead of `box-shadow`.** A shadow
      from `filter` follows the rendered SILHOUETTE rather than the border box,
@@ -358,7 +364,10 @@
   --panel: rgba(23, 26, 31, 0.9);
   --overlay: rgba(0, 0, 0, 0.55);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
-  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 48px -12px rgba(0, 0, 0, 0.85);
+  /* On graphite a dark halo vanishes: a faint light rim draws the edge, and
+     the halo is deeper to show at all. */
+  --shadow-item: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.4), 0 24px 64px rgba(0, 0, 0, 0.55);
+  --shadow-lift: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 16px 36px rgba(0, 0, 0, 0.55), 0 40px 96px rgba(0, 0, 0, 0.8);
   --shadow-pop: 0 14px 30px -14px rgba(0, 0, 0, 0.75);
   /* Deeper on graphite: a shadow on a dark ground has less room to darken,
      so it earns its edge by being nearly opaque at the contact. */
@@ -1186,7 +1195,7 @@ img { height: auto; }
 .item {
   position: absolute; background: var(--card);
   border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-item);
   /* The lift's settle: see `.item.lifted`. */
   transition: box-shadow 160ms ease-out;
   display: flex; flex-direction: column;
@@ -1206,13 +1215,13 @@ img { height: auto; }
    thing that means "I am working on this right now". Selection still wins —
    `.item.selected` is declared after this and paints the accent over it. */
 .item.slide { border-color: var(--slide); }
-.item.slide:hover { box-shadow: var(--shadow-card), 0 0 0 1px var(--slide); }
+.item.slide:hover { box-shadow: var(--shadow-item), 0 0 0 1px var(--slide); }
 /* A doorway — a canvas card, a live site, a Google Doc: dashed, in its own
    colour, so a wall of cards says which ones lead away before you find the ↗.
    Dashed rather than a second solid hue: a dashed edge reads as "through
    here", which is what the item is. */
 .item.away { border-style: dashed; border-color: var(--away); }
-.item.away:hover { box-shadow: var(--shadow-card), 0 0 0 1px var(--away); }
+.item.away:hover { box-shadow: var(--shadow-item), 0 0 0 1px var(--away); }
 .item.selected { outline: calc(2px / var(--scale, 1)) solid var(--accent); z-index: 1; }
 /* An item whose render threw (`ItemBoundary`): its own box, drawn as a gap
    rather than a card, so the layout holds and nobody mistakes it for content.
@@ -4241,7 +4250,7 @@ button.mt-card:hover { border-color: var(--accent); }
 .item.textnode.paper {
   background: var(--paper);
   border-color: var(--paper-edge);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-item);
 }
 /* Paper is something you could pick up, so it lifts like a card. A bare
    caption and ink do not: they wear no card, and a lifted shadow would draw

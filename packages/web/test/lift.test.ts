@@ -26,8 +26,17 @@ describe("the lift", () => {
   it("has a shadow token in both themes", () => {
     const light = /:root,\s*:root\[data-theme="light"\]\s*\{(.*?)\n\}/s.exec(css)![1]!;
     const dark = /:root\[data-theme="dark"\]\s*\{(.*?)\n\}/s.exec(css)![1]!;
-    expect(light).toMatch(/--shadow-lift:\s*0 2px 4px [^;]+, 0 22px 44px -14px [^;]+;/);
-    expect(dark).toMatch(/--shadow-lift:\s*0 2px 4px [^;]+, 0 24px 48px -12px [^;]+;/);
+    // The resting halo (--shadow-item, 8 Oct 2026) and the lift, in both
+    // themes; a card in the hand must reach further than one at rest, or you
+    // cannot see what you are holding.
+    const reach = (block: string, token: string) => {
+      const value = new RegExp(`${token}:\\s*([^;]+);`).exec(block)?.[1] ?? "";
+      return Math.max(0, ...[...value.matchAll(/(\d+)px\s+rgba/g)].map((m) => Number(m[1])));
+    };
+    for (const block of [light, dark]) {
+      expect(reach(block, "--shadow-item")).toBeGreaterThan(0);
+      expect(reach(block, "--shadow-lift")).toBeGreaterThan(reach(block, "--shadow-item"));
+    }
   });
 
   it("leaves .item.dragging opaque and where it is", () => {

@@ -65,7 +65,7 @@ describe("items that lead away wear a dashed border in their own colour", () => 
 
   it("draws it from one token defined in both themes, dashed, and lit on hover like a slide", () => {
     expect(css).toContain(".item.away { border-style: dashed; border-color: var(--away); }");
-    expect(css).toContain(".item.away:hover { box-shadow: var(--shadow-card), 0 0 0 1px var(--away); }");
+    expect(css).toContain(".item.away:hover { box-shadow: var(--shadow-item), 0 0 0 1px var(--away); }");
     expect((css.match(/^  --away: #[0-9a-f]{6};$/gm) ?? []).length).toBe(2);
   });
 });
