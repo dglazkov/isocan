@@ -21,6 +21,14 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 9 October 2026
+
+- **A living ground: Meadow.** Pick **Meadow** as a canvas's background and
+  the canvas sits in a field of grass that parts where your cursor walks and
+  springs back behind it; items press the grass flat. It goes still a moment
+  after you stop, so an idle canvas costs nothing, and with *reduce motion* on
+  it is a still picture. Agents: `isocan canvas background meadow`.
+
 ## 8 October 2026
 
 - **⇧S stacks and spreads a group.** Select a group (or anything in it) and

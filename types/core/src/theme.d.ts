@@ -68,8 +68,14 @@ export declare const THEME_PROP = "theme";
  * The other four are pictures now (`packages/web/public/grounds/`). Ocean and
  * mountains had procedural stand-ins and this is the drop-in the stopgap was
  * written for; farm and desert never could have been generated at all.
+ *
+ * **Meadow (9 Oct 2026) is the first ground that moves** — grass that parts
+ * under every cursor and settles when nothing moves (`LIVING`, below). It is
+ * a name here like any other, and a painted still frame on disk like the four
+ * pictures, so a viewer whose browser cannot or should not animate it still
+ * stands on the same field.
  */
-export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert"];
+export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert", "meadow"];
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
 export type CanvasTheme = (typeof THEMES)[number];
@@ -88,6 +94,29 @@ export type CanvasTheme = (typeof THEMES)[number];
  * decode before you can choose.
  */
 export declare function themeLabel(theme: CanvasTheme): string;
+/**
+ * **The grounds that move** (living grounds, 9 Oct 2026).
+ *
+ * > "I really like this 'touching grass' effect. can we have dynamic
+ * > backgrounds like this where the cursor 'walks over' etc."
+ *
+ * A living ground is still one value of `THEME_PROP`, set by the same
+ * `themePatch` through the same `project.update` — choosing Meadow is one undo,
+ * exactly like choosing Galaxy, and there is no new op. What differs is only
+ * how a browser draws it: a WebGL2 program behind the items that answers the
+ * cursors on screen, sleeps when nothing moves, and falls back to a painted
+ * still frame (`public/grounds/<name>.jpg`) under reduced motion, without
+ * WebGL2, or after a lost context. The motion is each viewer's, computed from
+ * what their browser already sees; it is never stored and never sent.
+ *
+ * Only the names live here. Everything that draws one is a lazy chunk in the
+ * web app, so this list is the whole of what a living ground costs a first
+ * visit (`docs/projects/living-grounds/design.md` §7).
+ */
+export declare const LIVING: readonly ["meadow"];
+/** Does this ground move — the question the theme layer asks before it loads
+ *  a WebGL host, and the CLI asks before it says a ground answers the cursor. */
+export declare function isLiving(theme: CanvasTheme | null): boolean;
 /** Is this one of the grounds this build can draw — the parse both surfaces
  *  use, so the CLI refuses exactly what the app would not render. */
 export declare function isTheme(value: string): value is CanvasTheme;
@@ -404,7 +433,7 @@ export declare function groundIsPlace(canvas: {
 export declare const CURSOR_PROP = "cursor";
 /** The shapes this build can draw. Not a string, for `THEMES`' reason: a
  *  canvas wearing a name nothing can draw is a pointer that vanishes. */
-export declare const CURSORS: readonly ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep", "cricket"];
+export declare const CURSORS: readonly ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep", "cricket", "ladybird"];
 /** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
  *  reason: a name nothing can draw is a pointer that vanishes. */
 export type CanvasCursor = (typeof CURSORS)[number];
