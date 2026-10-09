@@ -3930,8 +3930,10 @@ bare `canvas background` says what it is wearing — everybody on the canvas
 sees the same one, so it is a change to ask about rather than assume.
 `meadow` is a living ground: grass that parts under the cursor and settles
 when nothing moves, drawn in each viewer's browser and never stored or sent.
-Your cursor will touch it too once presence cursors feed it (living grounds
-phase 2), so on a living ground point with purpose rather than sweeping it.
+Your cursor touches it too: every presence cursor, an agent's at full weight,
+bends the grass and leaves a trail in each viewer's browser, from the presence
+they already receive. Every `session move`, `point` and `work` wanders across
+it, so on a living ground point with purpose rather than sweeping it.
 `canvas background --picture <file>` stands it on an image of your own
 instead: pinned so it cannot show a seam, and darkened so cards still read on
 it. `--cursor <name>` picks the pointer everyone on THAT canvas wears — a
