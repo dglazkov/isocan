@@ -136,7 +136,7 @@ export default function GroupStack({ item, canvasId, actor, lifted }: { item: It
               onAnimationEnd={() => { if (flipping?.id === card.id) setFlipping(null); }}
               data-depth={card.depth}
               data-member-id={card.id}
-              style={{ transform: rest(fan ? stackFan(card.depth) : card), ...({ "--tint": tintOf(member) } as React.CSSProperties) }}
+              style={{ transform: rest(fan ? stackFan(card.depth, s, card.id) : card), ...({ "--tint": tintOf(member) } as React.CSSProperties) }}
               onPointerEnter={() => setHot(card.id)}
             >
               <span className="stack-card-title">{member.title}</span>

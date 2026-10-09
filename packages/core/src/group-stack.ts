@@ -60,13 +60,29 @@ export function stackPile(ids: readonly string[], card: { width: number; height:
 }
 
 /**
- * **The pile fanned into a hand**: an arc about its bottom centre, the top card
- * staying in the middle, the rest alternating left and right at 9° and about a
- * sixth of a card a step. Per-viewer and momentary — never stored.
+ * **The pile spread on a desk** — pointing at a stack lays its cards out
+ * around the top one, as a hand spreads photos on a table: two to the sides
+ * and four at the corners above and below, each moved far enough that most
+ * of it shows (8 Oct 2026, Dion: "use more of the height... so when spread
+ * out it's more like you spread them on a desk... and thus can see more of
+ * them vs. only seeing edges"). It was an arc, a hand of cards, and an arc
+ * shows edges. A small tilt per slot, nudged by the card's own id, keeps it
+ * from reading as a grid. Per-viewer and momentary — never stored.
  */
-export function stackFan(depth: number, card: { width: number } = GROUP_STACK): Omit<StackCard, "id" | "depth"> {
-  const slot = depth === 0 ? 0 : (depth % 2 ? -1 : 1) * Math.ceil(depth / 2);
-  return { x: slot * card.width * 0.173, y: Math.abs(slot) * card.width * 0.033 - card.width * 0.053, rotate: slot * 9 };
+const DESK: ReadonlyArray<{ x: number; y: number; rotate: number }> = [
+  { x: 0, y: 0, rotate: 0 },
+  { x: -0.88, y: 0.04, rotate: -6 },
+  { x: 0.88, y: -0.02, rotate: 5 },
+  { x: -0.48, y: -0.78, rotate: 4 },
+  { x: 0.5, y: -0.76, rotate: -5 },
+  { x: -0.46, y: 0.8, rotate: -3 },
+  { x: 0.48, y: 0.78, rotate: 6 },
+];
+export function stackFan(depth: number, card: { width: number; height: number } = GROUP_STACK, id = ""): Omit<StackCard, "id" | "depth"> {
+  const slot = DESK[Math.min(depth, DESK.length - 1)]!;
+  if (depth === 0) return { x: 0, y: 0, rotate: 0 };
+  const jitter = id ? { x: seed(id, "dx") * 0.06, y: seed(id, "dy") * 0.06, r: seed(id, "dr") * 4 } : { x: 0, y: 0, r: 0 };
+  return { x: (slot.x + jitter.x) * card.width, y: (slot.y + jitter.y) * card.height, rotate: slot.rotate + jitter.r };
 }
 
 /** Stack or spread a group: the one act both surfaces send — a `layout` action, so one undo and no new op. */

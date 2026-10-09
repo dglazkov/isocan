@@ -88,12 +88,21 @@ describe("the pile is a pure function of the member ids", () => {
     }
   });
 
-  it("fans with the top in the middle and the rest alternating left and right at 9° a step", () => {
-    expect(stackFan(0)).toMatchObject({ x: 0, rotate: 0 });
-    expect(stackFan(1).rotate).toBe(-9);
-    expect(stackFan(2).rotate).toBe(9);
-    expect(stackFan(3).rotate).toBe(-18);
-    expect(stackFan(1).x).toBeCloseTo(-stackFan(2).x);
+  it("spreads like a desk: the top in the middle, the rest above, below and beside it, mostly showing", () => {
+    expect(stackFan(0)).toEqual({ x: 0, y: 0, rotate: 0 });
+    const behind = Array.from({ length: STACK_BEHIND }, (_, i) => stackFan(i + 1, GROUP_STACK, `card_${i}`));
+    // It uses the height: some cards above the top one, some below.
+    expect(behind.some((c) => c.y < -GROUP_STACK.height * 0.4)).toBe(true);
+    expect(behind.some((c) => c.y > GROUP_STACK.height * 0.4)).toBe(true);
+    // Each card behind shows at least half of itself past the top card.
+    for (const c of behind) {
+      const overlapW = Math.max(0, GROUP_STACK.width - Math.abs(c.x));
+      const overlapH = Math.max(0, GROUP_STACK.height - Math.abs(c.y));
+      expect((overlapW * overlapH) / (GROUP_STACK.width * GROUP_STACK.height)).toBeLessThan(0.5);
+      expect(Math.abs(c.rotate)).toBeLessThanOrEqual(8);
+    }
+    // The same card always lands in the same place.
+    expect(stackFan(3, GROUP_STACK, "card_x")).toEqual(stackFan(3, GROUP_STACK, "card_x"));
   });
 });
 
