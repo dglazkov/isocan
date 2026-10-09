@@ -5,7 +5,7 @@
 # the dated health page on a branch of its own, open one pull request, and
 # drain the queue (scripts/keel/drain.mjs) so it never holds more than one
 # open `keel-night/` PR. Both scripts are managed files of this practice, in
-# this repo: the night never fetches anything, and needs no secret of its own. The rules, each
+# this repo. Optional canvas publishing needs owner-provisioned tools and identity. The rules, each
 # paid for once (keel docs/design.md §6, from isocan's "night shift's pull
 # requests"):
 #
@@ -315,6 +315,119 @@ jobs:
             fi
           fi
 
+      # After the machine commit: refuse any remaining dirty source files.
+      # Opt-in only. Install/setup must already provide pinned executables and
+      # a dedicated admitted isocan home; this step installs nothing. Never
+      # hand the raw report to isocan: keel projects allowlisted measurements.
+      - name: Project the night onto its canvas
+        id: canvas
+        continue-on-error: true
+        env:
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          enabled=$(node -e 'const c=JSON.parse(require("fs").readFileSync(".keel/keel.json","utf8")); console.log(c.canvas?.enabled === true && c.canvas?.cadence === "nightly" ? "yes" : "no")')
+          [ "$enabled" = yes ] || exit 0
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          # A preflight failure never reaches the canvas: it leaves a receipt
+          # saying so, and the next night recovers from the attempt before it.
+          preflight_fail() {
+            node -e 'const fs = require("node:fs"); fs.mkdirSync(require("node:path").dirname(process.argv[1]), { recursive: true }); fs.writeFileSync(process.argv[1], JSON.stringify({ neverRan: true, provenance: { repo: process.env.GITHUB_REPOSITORY, workflow: ".github/workflows/keel-night.yml", runId: String(process.env.GITHUB_RUN_ID), attempt: Number(process.env.GITHUB_RUN_ATTEMPT), headSha: process.env.GITHUB_SHA } }))' "$RUNNER_TEMP/keel-canvas-night/never-ran.json"
+            echo "::error::$1"
+            exit 1
+          }
+          for tool in keel isocan; do
+            command -v "$tool" >/dev/null 2>&1 || preflight_fail "Canvas night requires $tool explicitly installed and pinned by the project setup."
+          done
+          if [ -z "${KEEL_CANVAS_KEEL_VERSION:-}" ] || [ -z "${KEEL_CANVAS_ISOCAN_VERSION:-}" ]; then
+            preflight_fail "Canvas night requires owner-pinned KEEL_CANVAS_KEEL_VERSION and KEEL_CANVAS_ISOCAN_VERSION."
+          fi
+          if [ "$(keel --version)" != "$KEEL_CANVAS_KEEL_VERSION" ] || [ "$(isocan --version)" != "$KEEL_CANVAS_ISOCAN_VERSION" ]; then
+            preflight_fail "Canvas executable version does not match its owner-provisioned pin."
+          fi
+          if [ -z "${KEEL_CANVAS_ISOCAN_HOME:-}" ] || [ ! -d "$KEEL_CANVAS_ISOCAN_HOME" ]; then
+            preflight_fail "Canvas night requires a dedicated owner-provisioned admitted isocan home (KEEL_CANVAS_ISOCAN_HOME)."
+          fi
+          # Restore the latest canvas-enabled attempt, even when it failed:
+          # its pending receipt may describe a write whose answer was lost.
+          recovery=$(node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const { execFileSync } = require("node:child_process");
+            const repo = process.env.REPO, base = process.env.BASE;
+            const fail = message => { console.error(`::error::${message}`); process.exit(1); };
+            if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo ?? "") || !base) fail("Canvas recovery requires the current repository and default branch.");
+            if (!["schedule", "workflow_dispatch"].includes(process.env.GITHUB_EVENT_NAME) || process.env.GITHUB_REF_NAME !== base) fail("Canvas publication requires a default-branch night, never a PR or another branch.");
+            const api = endpoint => JSON.parse(execFileSync("gh", ["api", endpoint], { encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024 }));
+            const runs = api(`repos/${repo}/actions/workflows/keel-night.yml/runs?branch=${encodeURIComponent(base)}&per_page=100`).workflow_runs;
+            if (!Array.isArray(runs)) fail("Cannot establish canvas recovery run history.");
+            const previous = [];
+            for (const run of runs) {
+              // Never a night queued behind this one (it has no state yet); a rerun of an old night still sees the nights after it.
+              if (String(run.id) === String(process.env.GITHUB_RUN_ID)) { if (Number(process.env.GITHUB_RUN_ATTEMPT) > 1) previous.push(api(`repos/${repo}/actions/runs/${run.id}/attempts/${Number(process.env.GITHUB_RUN_ATTEMPT) - 1}`)); }
+              else if (run.status === "completed" || Number(run.id) < Number(process.env.GITHUB_RUN_ID)) previous.push(run);
+            }
+            const eligible = previous.filter(r => Number.isSafeInteger(r.id) && Number.isSafeInteger(r.run_attempt) && /^[a-f0-9]{40}$/.test(r.head_sha ?? "") && r.head_repository?.full_name === repo && r.repository?.full_name === repo && r.head_branch === base && r.path === ".github/workflows/keel-night.yml" && ["schedule", "workflow_dispatch"].includes(r.event) && Array.isArray(r.pull_requests) && r.pull_requests.length === 0)
+              // The attempt that ran last comes first: a rerun of an old night ran after the nights it follows by ID.
+              .sort((a, b) => (Date.parse(b.run_started_at ?? "") || 0) - (Date.parse(a.run_started_at ?? "") || 0) || b.id - a.id);
+            const bounded = file => fs.existsSync(file) && !fs.lstatSync(file).isSymbolicLink() && fs.lstatSync(file).isFile() && fs.statSync(file).size <= 64 * 1024 * 1024;
+            const provenanceOf = (file, run) => {
+              const p = JSON.parse(fs.readFileSync(file, "utf8")).provenance;
+              if (p?.repo !== repo || p.workflow !== ".github/workflows/keel-night.yml" || String(p.runId) !== String(run.id) || p.attempt !== run.run_attempt || p.headSha !== run.head_sha) fail("Recovery provenance does not match the selected attempt.");
+            };
+            let latest, file;
+            const queue = [...eligible];
+            while (queue.length) {
+              const run = queue.shift();
+              const committed = api(`repos/${repo}/contents/.keel/keel.json?ref=${run.head_sha}`);
+              if (committed.encoding !== "base64" || typeof committed.content !== "string" || committed.size > 1024 * 1024) fail("Cannot establish whether the previous night had canvas enabled.");
+              const config = JSON.parse(Buffer.from(committed.content, "base64").toString("utf8"));
+              if (config.canvas?.enabled !== true || config.canvas?.cadence !== "nightly") continue;
+              if (run.status !== "completed") fail("The latest canvas night is not completed; do not race or restore older state.");
+              const name = `keel-canvas-night-${run.run_attempt}`;
+              const list = api(`repos/${repo}/actions/runs/${run.id}/artifacts?per_page=100`).artifacts;
+              if (!Array.isArray(list)) fail("Cannot list the trusted night artifacts.");
+              const found = list.filter(a => a.name === name && !a.expired && a.workflow_run?.id === run.id && a.workflow_run?.head_sha === run.head_sha && a.size_in_bytes > 0 && a.size_in_bytes <= 64 * 1024 * 1024);
+              if (found.length !== 1) fail("Latest expected attempt recovery artifact missing, expired, oversized or ambiguous. Manual recovery required; refusing older state.");
+              const dir = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "canvas-recovery-"));
+              execFileSync("gh", ["run", "download", String(run.id), "--repo", repo, "--name", name, "--dir", dir], { timeout: 60000, maxBuffer: 1024 * 1024 });
+              file = path.join(dir, "recovery.json");
+              const never = path.join(dir, "never-ran.json");
+              // An attempt whose preflight failed never touched the canvas: recover from the attempt before it,
+              // in this run if it was a rerun, else the run before.
+              if (!fs.existsSync(file) && bounded(never)) {
+                provenanceOf(never, run);
+                if (run.run_attempt > 1) queue.unshift(api(`repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt - 1}`));
+                continue;
+              }
+              if (!bounded(file)) fail("The trusted artifact has no bounded recovery.json; snapshots alone cannot reconstruct ownership.");
+              provenanceOf(file, run);
+              latest = run;
+              break;
+            }
+            if (!latest) {
+              if (fs.existsSync(".keel/canvas/manifest.json")) process.exit(0); // explicit bootstrap; night validates it
+              fail("No prior canvas night journal exists. Provision the original connection manifest through setup; never reconnect automatically.");
+            }
+            console.log(file);
+          ') || preflight_fail "Canvas recovery stopped before the canvas was touched; this attempt is recorded as never run."
+          export KEEL_CANVAS_RECOVERY="$recovery"
+          export KEEL_CANVAS_PERSISTENCE=artifact-v1
+          export KEEL_ISOCAN="$(command -v isocan)"
+          export ISOCAN_HOME="$KEEL_CANVAS_ISOCAN_HOME"
+          export KEEL_CANVAS_OUTPUT="$RUNNER_TEMP/keel-canvas-night"
+          # The existing report is consumed once; no second improve or gate.
+          keel canvas night --report "$RUNNER_TEMP/improve.json" --yes --json
+
+      - name: Keep the canvas snapshot and receipt
+        if: always() && steps.canvas.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: keel-canvas-night-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/keel-canvas-night/
+          if-no-files-found: ignore
+          retention-days: 90
+
       # Older keel-night PRs: merged when they are data and still merge,
       # closed as superseded (branch kept) otherwise. The newest merges only
       # after a gate that passed on this tree.
@@ -331,9 +444,14 @@ jobs:
       - name: Verdict
         if: always()
         env:
+          CANVAS_OUTCOME: ${{ steps.canvas.outcome }}
           CODE: ${{ steps.improve.outputs.code }}
           GATE: ${{ steps.improve.outputs.gate }}
         run: |
+          if [ "$CANVAS_OUTCOME" = failure ]; then
+            echo "::error::Canvas projection failed; the health report and queue were still processed."
+            exit 1
+          fi
           if [ "$CODE" = 2 ] || [ -z "$CODE" ]; then
             echo "::error::An instrument is broken (improve.mjs exit ${CODE:-none}); the health page says which."
             exit 1
