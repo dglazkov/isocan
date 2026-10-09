@@ -129,10 +129,27 @@ export class GroundHost {
     this.wake();
   }
 
-  /** A pointer moved: `id` "self" for this viewer, a session id in phase 2. */
+  /** This viewer's pointer moved (`id` "self"). */
   pointer(id: string, x: number, y: number, screenDist: number, held: boolean): void {
     this.field.setPointer(id, x, y, screenDist, held, performance.now());
     this.wake();
+  }
+
+  /**
+   * A presence cursor moved — somebody else's, a person's or an agent's, at
+   * the ground-space point CursorLayer has eased it to. It wakes a sleeping
+   * ground exactly as this viewer's own pointer does (design.md §4's
+   * "presence cursor moved"), and when it stops the ground settles the same
+   * way. A hidden tab stays asleep: `wake` will not start the loop there.
+   */
+  presence(id: string, x: number, y: number, agent: boolean): void {
+    this.field.setPresence(id, x, y, this.view.scale, agent, performance.now());
+    this.wake();
+  }
+
+  /** A presence cursor is gone from the canvas. Nothing to draw, so no wake. */
+  forget(id: string): void {
+    this.field.removePointer(id);
   }
 
   /** The canvas changed size: re-fit the drawing buffer and draw again. */
@@ -338,7 +355,8 @@ export class GroundHost {
       const p = moved[i]!;
       seg.set([p.px, p.py, p.x, p.y], i * 4);
       // Faster is flatter: a slow drift bends the grass, a flick lays it down.
-      stamp.set([STAMP_PX / this.view.scale, Math.min(1, 0.6 + p.speed / 1500)], i * 2);
+      // An agent presses with its weight (`AGENT_WEIGHT`, 1 today).
+      stamp.set([STAMP_PX / this.view.scale, Math.min(1, 0.6 + p.speed / 1500) * p.weight], i * 2);
     }
     if (n > 0) {
       this.lastStamp = now;

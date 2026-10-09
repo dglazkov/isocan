@@ -864,6 +864,120 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "meadow-others",
+    /**
+     * **Somebody else walks by** (living grounds phase 2, journey.md scene 3).
+     *
+     * Two identities on one Meadow canvas: this page, idle and asleep, and an
+     * agent at the CLI moving its presence cursor with `isocan session move`.
+     * This page's own pointer never moves. Its ground must wake for the other
+     * cursor, its trail texture must hold the other cursor's path at the
+     * world points it crossed — including a point between two hops, which
+     * only the eased cursor CursorLayer draws ever passes through — and it
+     * must fall asleep within 3.5 s of the other cursor's last move. Nothing
+     * new is sent for any of it; `groundpresence.test.ts` reads the messages.
+     */
+    what: "another identity's cursor moving over a Meadow wakes this page's ground, leaves its path in the trail, and lets it sleep within 3.5 s — and a working agent's wander does not keep it awake",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme shared meadow");
+      const other = "meadow-others-journey";
+      await wearMeadow(rig, id, other);
+      if (!(await hasWebGL2(b))) return { webgl2: false };
+      await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+      const first = await groundNow(b);
+      if (first.still) throw new Error(`the meadow fell back to its still with WebGL2 available: ${first.still}`);
+
+      const spot = await openSpot(rig, 300, 200);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+        return { left: r.left, top: r.top, scale };
+      })()`);
+      const toWorld = (x, y) => ({ x: Math.round((x - world.left) / world.scale), y: Math.round((y - world.top) / world.scale) });
+      // The other identity arrives, parked at the walk's start.
+      const path0 = Array.from({ length: 7 }, (_, i) => toWorld(spot.x + 20 + i * 40, spot.y + 30 + i * 22));
+      journeyCli(rig, other, "--canvas", id, "session", "start", "--label", "Ravi's agent");
+      journeyCli(rig, other, "--canvas", id, "session", "move", String(path0[0].x), String(path0[0].y));
+      await until(b, `!!document.querySelector(".remote-cursor")`, "the other identity's cursor to appear", 10_000);
+      await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "this page's meadow to fall asleep before the other cursor walks", 8000);
+      const before = (await groundNow(b)).frames;
+
+      // The walk: hops from the CLI, eased into a path by CursorLayer.
+      let awakeSeen = false;
+      for (const at of path0.slice(1)) {
+        journeyCli(rig, other, "--canvas", id, "session", "move", String(at.x), String(at.y));
+        if (!awakeSeen) awakeSeen = (await groundNow(b)).state === "awake";
+      }
+      const stoppedAt = Date.now();
+      const last = path0[path0.length - 1];
+      const prev = path0[path0.length - 2];
+      const between = { x: (last.x + prev.x) / 2, y: (last.y + prev.y) / 2 };
+      // Read the trail as the eased cursor arrives; keep the strongest reading.
+      const read = (p) => b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.trailAt(${p.x}, ${p.y})`);
+      let atLast = 0;
+      let atBetween = 0;
+      let shot = null;
+      while (Date.now() - stoppedAt < 1500) {
+        if (!awakeSeen) awakeSeen = (await groundNow(b)).state === "awake";
+        atLast = Math.max(atLast, await read(last));
+        atBetween = Math.max(atBetween, await read(between));
+        if (!shot && atLast > 0.1) {
+          shot = path.join(tmpdir(), `isocan-meadow-others-${Date.now()}.png`);
+          writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        }
+        await sleep(50);
+      }
+      const moving = await groundNow(b);
+      if (!awakeSeen) throw new Error("this page's meadow never woke while the other cursor walked over it");
+      if (!(moving.frames > before)) throw new Error(`no frames were drawn for the other cursor (${before} → ${moving.frames})`);
+      if (!(atLast > 0.1)) throw new Error(`the trail holds ${atLast} at world (${last.x}, ${last.y}), where the other cursor stopped`);
+      if (!(atBetween > 0.1)) throw new Error(`the trail holds ${atBetween} at world (${between.x}, ${between.y}), on the other cursor's path between two hops`);
+      const untouched = await read({ x: last.x + 4000, y: last.y + 4000 });
+      if (untouched !== 0) throw new Error(`the trail holds ${untouched} far from anywhere any cursor went`);
+
+      // The other cursor has stopped: asleep within 3.5 s, then no frames.
+      await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "this page's meadow to fall asleep after the other cursor stopped", 6000);
+      const sleptAfter = Date.now() - stoppedAt;
+      if (sleptAfter > 3500) throw new Error(`the meadow took ${sleptAfter}ms to fall asleep after the other cursor stopped — the bound is 3500`);
+      const asleep = (await groundNow(b)).frames;
+      await sleep(1500);
+      const later = await groundNow(b);
+      if (later.frames !== asleep || later.state !== "asleep") {
+        throw new Error(`the meadow drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+      }
+
+      // Left working, the agent's cursor wanders on this screen for as long as
+      // it works — CursorLayer's own animation, which nobody sent. It is drawn
+      // and must not touch the grass: the page sleeps while the cursor wanders.
+      // Starting work moves the agent's REAL cursor to the work point — one
+      // honest press, and the ground may wake for it. Wait for that wake to
+      // arrive, so the sleep below is the one after it and not the old one.
+      const workAt = path0[3];
+      const preWork = (await groundNow(b)).frames;
+      journeyCli(rig, other, "--canvas", id, "session", "work", "--at", `${workAt.x},${workAt.y}`);
+      const workedAt = Date.now();
+      await until(b, `!!document.querySelector(".remote-cursor") && document.querySelector("canvas.ground-canvas").groundProbe.frames() > ${preWork}`, "the agent's move to its work point to reach this page", 4000);
+      const cursorAt = () => b.ev(`(() => { const c = document.querySelector(".remote-cursor"); return c ? c.style.left + "," + c.style.top : null; })()`);
+      await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "this page's meadow to fall asleep while the agent works", 6000);
+      const workSleptAfter = Date.now() - workedAt;
+      if (workSleptAfter > 3500) throw new Error(`with an agent working the meadow took ${workSleptAfter}ms to fall asleep — the bound is 3500`);
+      const workAsleep = (await groundNow(b)).frames;
+      const seen = new Set();
+      for (let i = 0; i < 15; i++) {
+        seen.add(await cursorAt());
+        await sleep(100);
+      }
+      const working = await groundNow(b);
+      if (seen.size < 2) throw new Error("the working agent's cursor did not wander, so this proves nothing about the wander");
+      if (working.frames !== workAsleep || working.state !== "asleep") {
+        throw new Error(`the meadow drew ${working.frames - workAsleep} frames while the agent's cursor only wandered (state ${working.state})`);
+      }
+      journeyCli(rig, other, "--canvas", id, "session", "end");
+      return { webgl2: true, awake: awakeSeen, frames: moving.frames - before, trailAtStop: atLast, trailBetweenHops: atBetween, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot, working: { sleptAfterMs: workSleptAfter, wanderPositions: seen.size, framesWhileWandering: 0 } };
+    },
+  },
+  {
     name: "make-a-canvas",
     /** The bug: `Create` looked like a button that did nothing, because the
      *  list sorted oldest-first and the new card landed off the bottom. */

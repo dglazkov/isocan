@@ -3,6 +3,8 @@ import type { CanvasTheme, ThemeAnchor } from "@isocan/core";
 import { useCanvasStore } from "../../stores/canvasStore.ts";
 import { useUiStore } from "../../stores/uiStore.ts";
 import { groundView, itemRects, toGround } from "../../lib/groundfield.ts";
+import { groundCursors } from "../../lib/groundcursors.ts";
+import { isAgentActor, useActorKinds } from "../../lib/actorkinds.ts";
 import type { LivingGround as Ground } from "./livingkit.ts";
 import { GroundHost } from "./GroundHost.ts";
 import "./meadow.css";
@@ -12,7 +14,8 @@ import "./meadow.css";
  *
  * The React half of the living layer, and deliberately thin: it mounts one
  * canvas, starts a `GroundHost` on it, and wires the host to what the browser
- * already knows — the viewport, the items, this viewer's pointer. None of
+ * already knows — the viewport, the items, this viewer's pointer and every
+ * presence cursor CursorLayer draws (people and agents, phase 2). None of
  * those reach React state; each is a subscription that writes into the host,
  * so panning a meadow re-renders nothing.
  *
@@ -40,6 +43,13 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
   const ref = useRef<HTMLCanvasElement>(null);
   const [isStill, setStill] = useState(false);
   const pinned = anchor === "window";
+  // Who is an agent, for `AGENT_WEIGHT` — the same recorded fact the cursor's
+  // mark reads. A ref, so a late answer does not restart the ground.
+  const kinds = useActorKinds();
+  const kindsRef = useRef(kinds);
+  useEffect(() => {
+    kindsRef.current = kinds;
+  }, [kinds]);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -102,6 +112,21 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
       };
       window.addEventListener("pointermove", move, { passive: true });
       off.push(() => window.removeEventListener("pointermove", move));
+
+      // Every presence cursor CursorLayer draws, at the world point it has
+      // eased to. Nothing new is sent: these are positions this tab already
+      // holds, from presence updates it already receives.
+      const feed = (sid: string, at: { x: number; y: number } | null) => {
+        if (!at) return h.forget(sid);
+        const vp = useUiStore.getState().viewport;
+        const g = toGround(h.currentView, at.x * vp.scale + vp.tx, at.y * vp.scale + vp.ty);
+        const session = useCanvasStore.getState().sessions.find((s) => s.sessionId === sid);
+        h.presence(sid, g.x, g.y, !!session && isAgentActor(kindsRef.current, session.actor.id));
+      };
+      groundCursors.feed = feed;
+      off.push(() => {
+        if (groundCursors.feed === feed) groundCursors.feed = null;
+      });
 
       const probe: GroundProbe = {
         frames: () => h.frames,

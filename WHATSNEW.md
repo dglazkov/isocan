@@ -27,7 +27,8 @@ second week.
   the canvas sits in a field of grass that parts where your cursor walks and
   springs back behind it; items press the grass flat. It goes still a moment
   after you stop, so an idle canvas costs nothing, and with *reduce motion* on
-  it is a still picture. Agents: `isocan canvas background meadow`.
+  it is a still picture. Everyone's cursor parts it, other people's and
+  agents' too. Agents: `isocan canvas background meadow`.
 
 ## 8 October 2026
 

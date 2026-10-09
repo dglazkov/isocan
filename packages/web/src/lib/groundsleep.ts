@@ -11,8 +11,9 @@
  * Three states:
  *
  * - **awake** — something touched the ground in the last `ACTIVE_MS`: the
- *   pointer moved, the view panned or zoomed, an item moved under it (and, in
- *   phase 2, a presence cursor moved). Ambient sway runs only here.
+ *   pointer moved, the view panned or zoomed, an item moved under it, or a
+ *   presence cursor — a person's or an agent's — moved (`GroundHost.presence`).
+ *   Ambient sway runs only here.
  * - **settling** — the inputs have stopped. The ground keeps drawing while its
  *   own `step` says something is still moving (a trail fading, the sway
  *   easing out), and never longer than `SETTLE_CAP_MS` after the last input.

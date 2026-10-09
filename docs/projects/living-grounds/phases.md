@@ -9,7 +9,7 @@ note: "the walk: a prototype bench that measures before anything ships, the livi
 
 **9 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 9 Oct 2026: phase 1 is CLOSED — Meadow lives in isocan (`isocan canvas background meadow`). Phase 0 is PART-DONE: the bench is built and measured ([prototype/](prototype/), published for Dion), and which grounds earn a place, Orbit-for-Galaxy, and the scene 2 eddy are Dion's to call. Next: living-grounds phase 2, every cursor and every item.**
+**Where we are, 9 Oct 2026: phases 1 and 2 are CLOSED — Meadow lives in isocan and parts under every cursor on the canvas, people's and agents'. Phase 0 is PART-DONE (the bench; Dion has settled Orbit-for-Galaxy and the eddy). Next: living-grounds phase 3, Orbit as Galaxy, and Night.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -79,7 +79,7 @@ proves cost, not taste.
 
 ## Phase 2 — Every cursor, every item
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 9 October 2026.** Every presence cursor CursorLayer draws, people's and agents', feeds the ground's field (≤16, newest win, agents weighted by one constant `AGENT_WEIGHT = 1`), from the presence the tab already receives. The `meadow-others` journey: page A asleep, a CLI agent identity walks across it with `session move`, A wakes (264 frames), the trail reads 0.65–0.75 along the agent's path and 0 far from it, and A sleeps 2.2 s after the last move. A test reads the presence message fields and the ground's files to prove nothing new is sent.
 
 **Outcome:** presence cursors (people and agents) feed the input field, and
 items press the ground: Meadow flattens grass under item footprints.
@@ -88,6 +88,11 @@ items press the ground: Meadow flattens grass under item footprints.
 or a second page: the first page's trail texture shows the other cursor's path,
 and its loop wakes for it. Nothing new is sent over presence; a test reads the
 messages.
+
+### Trajectory
+
+- **2026-10-09** — A working agent's wander is drawn by each browser from the bare fact that it is working; no positions arrive for it. It is drawn but does not touch the grass (`realMove` passes a working cursor's position only when the daemon really moves it), so a canvas with an agent at work sleeps between real moves: asleep 1.6 s into `session work`, zero frames through 14 wander positions; with the guard removed the journey fails.
+- **2026-10-09** — Entry chunk 705,842 after phases 1–2 (+458 from 705,384), 458 bytes under the ceiling: phase 3's grounds must stay wholly lazy.
 
 ## Phase 3 — Orbit and Night
 
