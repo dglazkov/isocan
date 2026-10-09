@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 10 not yet read.**
+**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 20 not yet read.**
 
 ## Accepted, by project
 
@@ -152,14 +152,24 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 
 ## Not yet read
 
+- [Absence of spatial API contract mock payload binding nodes](loop/absence-of-spatial-api-contract-mock-payload-binding-nodes.md) — Loop P2
+- [Absence of spatial component accessibility focus sequence nodes](loop/absence-of-spatial-component-accessibility-focus-sequence.md) — Loop P2
+- [Absence of spatial interactive form validation matrix nodes](loop/absence-of-spatial-interactive-form-validation-matrix-nodes.md) — Loop P2
 - [Absence of spatial section spec cards for agent generation](loop/absence-of-spatial-section-spec-cards-for-agent-generation.md) — Loop P2
 - [Absence of spatial user flow sitemap scaffolding](loop/absence-of-spatial-user-flow-sitemap-scaffolding.md) — Loop P2
 - [Agent guide omits comment restore and anchor operations](loop/agent-guide-omits-comment-restore-and-anchor-operations.md) — Loop P2
+- [Canvas viewport computations isolated in web client](loop/canvas-viewport-computations-isolated-in-web-client.md) — Loop P2
 - [CLI group migration preview lacks dedicated command](loop/cli-group-migration-preview-lacks-dedicated-command.md) — Loop P2
+- [CLI lacks group stack card flipping commands](loop/cli-lacks-group-stack-card-flipping-commands.md) — Loop P2
 - [CLI lacks voice token generation command](loop/cli-lacks-voice-token-generation-command.md) — Loop P2
 - [Lack of spatial component state variant matrices](loop/lack-of-spatial-component-state-variant-matrices.md) — Loop P2
 - [MediaPipe CPU evaluation throws exceptions and stalls](loop/mediapipe-cpu-evaluation-throws-exceptions-and-stalls.md) — Loop P2
+- [Minimized chat bar reconciles hidden message components](loop/minimized-chat-bar-reconciles-hidden-message-components.md) — Loop P2
+- [Occluded stack cards render live document thumbnails](loop/occluded-stack-cards-render-live-document-thumbnails.md) — Loop P2
 - [Serial blob reads stall design brief loading](loop/serial-blob-reads-stall-design-brief-loading.md) — Loop P2
+- [Serial model calls slow wireframe flow operations](loop/serial-model-calls-slow-wireframe-flow-operations.md) — Loop P2
+- [Unbatched gesture events trigger redundant viewport re-renders](loop/unbatched-gesture-events-trigger-redundant-viewport-re.md) — Loop P2
 - [Web UI chat drafts bypass daemon reducer](loop/web-ui-chat-drafts-bypass-daemon-reducer.md) — Loop P2
 - [Web UI lacks agent key claim migration controls](loop/web-ui-lacks-agent-key-claim-migration-controls.md) — Loop P2
+- [Web UI lacks design recipe inspection interface](loop/web-ui-lacks-design-recipe-inspection-interface.md) — Loop P2
 

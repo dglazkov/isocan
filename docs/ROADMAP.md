@@ -22,7 +22,7 @@ read lately.
 8 superseded. Neither counts as done: reading is not building,
 and the done column should not be flattered by either.
 
-**[Loop findings](LOOP.md): 0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 10 not yet read.** Stitch Loop mines the code; a
+**[Loop findings](LOOP.md): 0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 20 not yet read.** Stitch Loop mines the code; a
 finding is its claim, checked against the code, ranked by us. Each project row
 below counts the findings that name it.
 
