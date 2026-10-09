@@ -854,7 +854,7 @@ function workspace(root, env) {
  * drains, so anything past the first 64KB — most of a list of insights — is
  * cut off mid-JSON. A file descriptor is written synchronously.
  */
-async function stitch(args, { root, env, format = true }) {
+async function stitchOnce(args, { root, env, format = true }) {
   const bin = env.KEEL_STITCH || 'stitch';
   const dir = mkdtempSync(join(tmpdir(), 'keel-loop-'));
   const file = join(dir, 'out.json');
@@ -876,8 +876,40 @@ async function stitch(args, { root, env, format = true }) {
   rmSync(dir, { recursive: true, force: true });
   let out;
   try { out = JSON.parse(stdout); } catch { throw new LoopError(`stitch ${args.join(' ')} (exit ${code}): unreadable output\n${stdout.slice(0, 500)}`); }
-  if (out.success === false || out.error) throw new LoopError(`stitch ${args.slice(0, 2).join(' ')}: ${out.error?.message ?? JSON.stringify(out.error ?? {})}`);
+  if (code !== 0 || out.success === false || out.error) {
+    const error = new LoopError(`stitch ${args.slice(0, 2).join(' ')}: ${out.error?.message ?? JSON.stringify(out.error ?? {})}`);
+    error.retryable = retryableServiceError(out.error);
+    throw error;
+  }
   return out.data ?? out;
+}
+
+/** Numeric and canonical Google error statuses can coexist in one envelope. */
+export function retryableServiceError(error) {
+  const fields = [error?.status, error?.statusCode, error?.code];
+  const numbers = fields.map(Number);
+  const symbols = fields.map(value => String(value ?? '')).join(' ');
+  if (numbers.some(code => [400, 401, 403, 404].includes(code)) ||
+      /\b(INVALID_ARGUMENT|UNAUTHENTICATED|PERMISSION_DENIED|NOT_FOUND)\b/.test(symbols)) return false;
+  return numbers.some(code => [408, 429, 500, 502, 503, 504].includes(code)) ||
+    /\b(ECONNRESET|ETIMEDOUT|EAI_AGAIN|UNAVAILABLE|RESOURCE_EXHAUSTED)\b/.test(symbols + ' ' + String(error?.message ?? ''));
+}
+
+/** Retry read-only service calls, never mutations, parse failures or the project gate. */
+export async function retryRead(operation, { readOnly, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), warn = console.error } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try { return await operation(); }
+    catch (error) {
+      if (!readOnly || !error.retryable || attempt >= 3) throw error;
+      const delay = attempt * 2000;
+      warn(`Loop read: transient service failure; retry ${attempt}/2 in ${delay / 1000}s.`);
+      await sleep(delay);
+    }
+  }
+}
+
+async function stitch(args, options) {
+  return retryRead(() => stitchOnce(args, options), { readOnly: ['find', 'get'].includes(args[0]) });
 }
 
 // ── fields from flags ────────────────────────────────────────────────────

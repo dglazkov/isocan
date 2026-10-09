@@ -62,7 +62,7 @@ import { pathToFileURL } from 'node:url';
 import {
   LOCK, read, readLock, lockDrift, phaseLints, claudeMdLint, secondCopies, lockedSkills, lessonsTableSplit, lessonsTableShapes, parseLessons, lessonsPathOf, unsentLessons, SENT, gateEnv, healthDirOf, healthDirIn, healthPage, healthLints, HEALTH_DIR, isMain, rootOf, main,
   shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, budgetPasses, budgetUse, budgetLine, budgetOf, budgetRaw, budgetSince, BUDGET_RUNS, BUDGET_EXAMINE, BUDGET_HISTORY, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
-  reviewConfigOf, repoReviewArgs, readRepoReviews, unansweredPrs, windowPrs, sameLogin, IncompleteRead, REVIEW_DAYS, REVIEW_PRS, REVIEW_PAGES,
+  reviewConfigOf, repoReviewArgs, prReviewArgs, graphqlData, readRepoReviews, unansweredPrs, windowPrs, sameLogin, IncompleteRead, REVIEW_DAYS, REVIEW_PRS, REVIEW_PAGES,
 } from './lib.mjs';
 import { RUNS, readRuns, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
 
@@ -303,16 +303,18 @@ const ghReady = ctx => once(ctx, 'gh', () => {
  * reviews_unanswered and cross_review_valid read the same pages.
  */
 const repoReviews = (ctx, gh) => once(ctx, 'repo-reviews', () => {
-  const page = vars => {
-    const r = spawnSync(gh, repoReviewArgs(ctx.config.repo, vars), { env: ctx.env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const graphql = args => {
+    const r = spawnSync(gh, args, { env: ctx.env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     if (r.error) throw new Error(`gh api graphql: ${r.error.message}`);
     if (r.status !== 0) throw new Error(`gh api graphql exited ${r.status}: ${(r.stderr || r.stdout).trim().split('\n')[0]}`);
-    let repository;
-    try { repository = JSON.parse(r.stdout)?.data?.repository; } catch { throw new Error('gh api graphql did not print JSON'); }
+    const repository = graphqlData(r.stdout, ctx.spend)?.repository;
     if (!repository) throw new Error(`gh api graphql: no repository ${ctx.config.repo}`);
     return repository;
   };
-  return readRepoReviews(page, ctx.date);
+  const rc = reviewConfigOf(ctx.config);
+  // A PR the window does not cover whole is read alone, with the full fragment (lib.mjs readRepoReviews).
+  return readRepoReviews(vars => graphql(repoReviewArgs(ctx.config.repo, vars)), ctx.date,
+    { readPr: number => graphql(prReviewArgs(ctx.config.repo, number)).pullRequest, reviewers: rc.problem ? [] : rc.reviewers });
 });
 
 /** The cross-review's author before phase 45: the Claude GitHub App, through which claude-code-action posted (REST claude[bot], GraphQL claude). */
@@ -353,9 +355,10 @@ export function crossReviewTally(repository, { prefixes, date, reviewer = CROSS_
     if (threads.pageInfo?.hasNextPage) throw new IncompleteRead(`#${pr.number} has more review threads than one page; the read is incomplete`);
     let mine = 0;
     for (const th of threads.nodes) {
+      // A thread not read whole (the window's newest comments only) cannot say whose it is: never a count.
+      if (th?.comments?.pageInfo?.hasNextPage) throw new IncompleteRead(`#${pr.number} has more comments in a review thread than one page; the read is incomplete`);
       const comments = th?.comments?.nodes ?? [];
       if (!comments.length || !crossReviewFinding(comments[0], reviewer)) continue;
-      if (th.comments.pageInfo?.hasNextPage) throw new IncompleteRead(`#${pr.number} has more comments in a review thread than one page; the read is incomplete`);
       mine++;
       const by = comments[0].author?.login;
       const answer = comments.slice(1).filter(c => !sameLogin(c?.author?.login, by))
@@ -838,8 +841,10 @@ export const MEASURES = [
       }
       const { DONE } = await roadmapModule(ctx);
       // A partial phase that owes only a walk waits on the world, not on the work (keel phase 44).
-      const stuck = (await roadmapData(ctx)).phases.filter(p => unfinished(p, DONE) && !(p.status === 'partial' && p.owes === 'walk') && days(p.since, ctx.date) > STUCK_DAYS)
-        .map(p => ({ id: p.id, status: p.status, since: p.since, days: days(p.since, ctx.date) }));
+      // A phase dated `after:` is not buildable before then: it ages from that day, not from when it was planned.
+      const from = p => typeof p.after === 'string' && p.after > (p.since ?? '') ? p.after : p.since;
+      const stuck = (await roadmapData(ctx)).phases.filter(p => unfinished(p, DONE) && !(p.status === 'partial' && p.owes === 'walk') && days(from(p), ctx.date) > STUCK_DAYS)
+        .map(p => ({ id: p.id, status: p.status, since: from(p), days: days(from(p), ctx.date) }));
       return {
         value: stuck.length,
         detail: stuck.length ? list(stuck.map(p => `${p.id} ${p.status} since ${p.since} (${p.days}d)`), 4) : `none older than ${STUCK_DAYS} days`,
