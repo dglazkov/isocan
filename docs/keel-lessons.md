@@ -8,7 +8,7 @@ A row with an empty *Where* applies to every project; a tagged row only to
 projects with that stack. Read this beside the project's own table
 (`docs/reviews/lessons.md`) before adding a guard: the shape is usually already here.
 
-This project's stack (`stack` in `.keel/keel.json`): `node`, `web`, `gcp`, `github-actions`. 56 of keel's lessons apply: every universal one, and those tagged for this stack.
+This project's stack (`stack` in `.keel/keel.json`): `node`, `web`, `gcp`, `github-actions`. 57 of keel's lessons apply: every universal one, and those tagged for this stack.
 
 | # | The shape of it | What it cost | Guard | Where |
 | --- | --- | --- | --- | --- |
@@ -68,3 +68,4 @@ This project's stack (`stack` in `.keel/keel.json`): `node`, `web`, `gcp`, `gith
 | 54 | **A deliberate break made in the shared checkout.** A mutation or probe edited in the tree a builder or another session is using gets lost, committed, or tested by someone else. *(dglazkov/isocan)* | A builder's change dropped by a checkout; probes left behind in the working tree. | conduct: deliberate breaks run in a temp copy or a separate git worktree, never the shared checkout. | |
 | 55 | **A guard cell that names something nothing runs.** The lessons table claims protection that a habit or a person provides. *(dglazkov/isocan)* | Rows read as guarded that a later change could break with nothing going red. | lessons: a Guard names only something an automated run invokes; anything else is marked planned or habit. | |
 | 56 | **A test asserts what holds only for most random draws.** Its fixture draws something random (an id, a uuid, a port, a time) and the assertion is true for nearly every draw but not all: a fixed four-character prefix of a hash over random ids is usually unique. *(keel, 6 Oct)* | Passes locally hundreds of times, fails on CI once, does not reproduce, and reads as a flake in unrelated code; the product was right all along. | The test derives what it asserts from the same draw (the shortest prefix that is unique among this run's ids), and prints the draw when it fails. `tests/loose-ends.test.mjs` ("marks persist across runs"). | |
+| 57 | **A parallel suite waits for its longest file.** A runner that starts many test files at once but runs each file's tests one after another can finish no sooner than its slowest file, however many cores it has. One file of 29 tests took 96 s, about twice the rest of the suite. *(keel, 9 Oct)* | Every gate paid the one file's time: `npm test` ran 96 s where splitting the file gave 47–51 s; running files longest first gave nothing more. | Planned: phase 57's `critical_file` measure names a file whose own time sets the suite's, and proposes splitting it. | |

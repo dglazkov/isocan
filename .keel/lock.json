@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.25",
+  "practice": "0.8.26",
   "files": {
     ".agents/skills/keel/SKILL.md": {
       "practice": "agents-md",
@@ -39,7 +39,7 @@
     },
     "docs/keel-lessons.md": {
       "practice": "lessons",
-      "sha256": "28d1170f58d1905e564f413669704ac475f627732feb4b4657ad1d31711b09e7"
+      "sha256": "720ae211a33e89eda9426cac8160afb1fbdb1358caa884c52059ffbd5d035e96"
     },
     "renovate.json": {
       "practice": "renovate",
