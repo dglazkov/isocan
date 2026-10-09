@@ -40,14 +40,11 @@ export declare function stackPile(ids: readonly string[], card?: {
     width: number;
     height: number;
 }): StackCard[];
-/**
- * **The pile fanned into a hand**: an arc about its bottom centre, the top card
- * staying in the middle, the rest alternating left and right at 9° and about a
- * sixth of a card a step. Per-viewer and momentary — never stored.
- */
+/** Where card `depth` of a pointed-at stack lies on the desk, in pixels from the top card, with its tilt. */
 export declare function stackFan(depth: number, card?: {
     width: number;
-}): Omit<StackCard, "id" | "depth">;
+    height: number;
+}, id?: string): Omit<StackCard, "id" | "depth">;
 /** Stack or spread a group: the one act both surfaces send — a `layout` action, so one undo and no new op. */
 export declare function groupStackAction(group: Item, stacked: boolean): Extract<GroupAction, {
     kind: "layout";

@@ -33,6 +33,9 @@ second week.
 - **Items float a little.** Screens and cards on the canvas sit on a soft,
   even shadow instead of a tight line underneath, and a card you pick up
   lifts clearly above the rest.
+- **A stack spreads like photos on a desk.** Point at a stack and its cards
+  scatter above, below and beside the top one, so you see most of each card
+  instead of a fan of edges.
 - **Flip through a stack.** With a stacked group selected, ← and → bring the
   next or previous card to the front, with a little card-flip.
 - **Pinch-to-zoom moves faster.** A trackpad pinch zooms about twice as far
