@@ -55,7 +55,7 @@
      field's own colour. */
   --theme-meadow: #223112;
   /* Night (living grounds): the mean of its still frame, for the same reason. */
-  --theme-night: #080a0d;
+  --theme-night: #0a0d10;
   --firefly-glow: #ffba60; /* the warm light a firefly casts on a card (Night) */
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
@@ -323,7 +323,7 @@
      field's own colour. */
   --theme-meadow: #223112;
   /* Night (living grounds): the mean of its still frame, for the same reason. */
-  --theme-night: #080a0d;
+  --theme-night: #0a0d10;
   --firefly-glow: #ffba60; /* the warm light a firefly casts on a card (Night) */
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a

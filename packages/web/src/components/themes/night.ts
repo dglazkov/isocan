@@ -105,7 +105,7 @@ void main(){
   }
   float hill = hz + 4. - 16. * fbm(vec2((scr.x - uView.y * .12) * .006, 0.), 2) - 6. * vnoise(vec2((scr.x - uView.y * .25) * .05, 3.));
   if (scr.y > hill) {
-    c = mix(vec3(.008, .014, .016), vec3(.02, .036, .034), fbm(w * .006, 2));
+    c = mix(vec3(.013, .024, .024), vec3(.032, .055, .05), fbm(w * .006, 2));
     vec3 L = vec3(0.);
     for (int i = 0; i < 12; i++) { if (i >= uNL) break; vec2 d = scr - uLight[i].xy; float rr = uLight[i].w * 1.7; L += vec3(1., .72, .32) * uLight[i].z / (1. + dot(d, d) / (rr * rr)); }
     c += L * .16;
@@ -164,8 +164,9 @@ void main(){
   float wd = max(2.3 * (.7 + .6 * r4), .9 / uView.x) * mix(1., .14, t);
   vec2 s = (base + tip * t + nrm * side * wd) * uView.x + uView.yz;
   gl_Position = vec4(s.x / uRes.x * 2. - 1., 1. - s.y / uRes.y * 2., 0., 1.);
-  vec3 c = mix(vec3(.006, .016, .018), vec3(.05, .1, .1), t * (.7 + .4 * r2)) * (.82 + .32 * r3);
-  c = mix(c, vec3(.08, .13, .12), press * (.2 + .45 * t));
+  // Moonlit, not black (Dion, 9 Oct: "you should be able to tell it's grass when dark").
+  vec3 c = mix(vec3(.018, .042, .04), vec3(.13, .24, .2), t * (.7 + .4 * r2)) * (.82 + .32 * r3);
+  c = mix(c, vec3(.17, .27, .23), press * (.2 + .45 * t));
   vec3 L = vec3(0.);
   for (int i = 0; i < ${MAX_LIGHTS}; i++) { if (i >= uNL) break; vec2 d = s - uLight[i].xy; L += uLight[i].z / (1. + dot(d, d) / (uLight[i].w * uLight[i].w)); }
   c += vec3(1., .74, .34) * L * (.18 + .82 * t) * .85;
