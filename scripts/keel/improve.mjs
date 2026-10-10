@@ -30,6 +30,8 @@
 // read .keel/test-runs, the test ledger's history (scripts/keel/test-ledger.mjs):
 // the night downloads CI's keel-test-runs artifacts into it, and the gate run
 // here adds one more when the project's test script carries the reporter.
+// A bun or vitest run (the ledger's --junit, phase 59) is read as a node run
+// is; its runner is part of its lane, so it is only compared with its own.
 // Fewer runs than the window is n/a, never a zero.
 //
 // Exit codes: 0 every measure within its bound (or n/a), 1 one outside, 2 one
@@ -55,16 +57,22 @@
 // Apache-2.0): time each Bash call from tool_use to tool_result, by kind. The
 // ratchet follows isocan's scripts/ratchet.mjs (Apache-2.0): bounds that only
 // report the wrong way.
+import { readCiUsage, readCiGate, ciOptions } from './ci.mjs';
 import { readFile, readdir, writeFile, mkdir, stat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  LOCK, read, readLock, lockDrift, phaseLints, claudeMdLint, secondCopies, lockedSkills, lessonsTableSplit, lessonsTableShapes, parseLessons, lessonsPathOf, unsentLessons, SENT, gateEnv, healthDirOf, healthDirIn, healthPage, healthLints, HEALTH_DIR, isMain, rootOf, main,
+  LOCK, read, readLock, lockDrift, phaseLints, claudeMdLint, secondCopies, lockedSkills, lessonsTableSplit, lessonsTableShapes, parseLessons, lessonsPathOf, unsentLessons, SENT, gateEnv, healthDirOf, healthDirIn, healthPage, healthLints, platformLints, HEALTH_DIR, isMain, rootOf, main,
   shapeOf, readProjectRecords, climbLine, readClimbNight, tendLine, readTendPass, climbRetiring, retireLine, budgetPasses, budgetUse, budgetLine, budgetOf, budgetRaw, budgetSince, BUDGET_RUNS, BUDGET_EXAMINE, BUDGET_HISTORY, recordsDisagree, statusUnknown, changelogGaps, issuesNamed, frontMatter, addDays, walk, gateWorkflowOf,
   reviewConfigOf, repoReviewArgs, prReviewArgs, graphqlData, readRepoReviews, unansweredPrs, windowPrs, sameLogin, IncompleteRead, REVIEW_DAYS, REVIEW_PRS, REVIEW_PAGES,
 } from './lib.mjs';
-import { RUNS, readRuns, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
+import { RUNS, readRuns, readRetention, readStalls, timedCommand, busyState, busyCoverage, busyNote, testsConfigOf, flaky, slower, comparable, machineClass, lastOutcome, aloneCommand, nightOnly, NIGHT_ONLY } from './test-ledger.mjs';
+
+import { evaluateTimeEvidence, TIME_MEASURES } from './time-measures.mjs';
+import { makeTimeProposal, formatTimeProposal, readTimeProposals, selectableTimeProposal, writeHealthReport, withTimeProposal } from './time-proposals.mjs';
+import { remeasureTimeProposal } from './time-proposal-remeasurement.mjs';
+import { digest } from './time-receipts.mjs';
 
 export const BOUNDS = '.keel/bounds.json';
 /** The default health directory; a project's own is .keel/keel.json `health` (healthDirOf). */
@@ -203,9 +211,10 @@ const practiceReading = ctx => once(ctx, 'doctor', async () => {
     lint.push(...lessonsTableSplit(text, lessons), ...lessonsTableShapes(text, lessons));
   }
   lint.push(...await healthLints(ctx.root, ctx.config, ctx.date));
+  lint.push(...await platformLints(ctx.root, ctx.config));
   return { keel: false, drift, lint };
 });
-export const PROJECT_LINTS = ['phase', 'goal-without-phase', 'claude-md-pointer', 'second-copy', 'symlink-replaced', 'lessons-table-split', 'health-config', 'health-ignored'];
+export const PROJECT_LINTS = ['phase', 'goal-without-phase', 'claude-md-pointer', 'second-copy', 'symlink-replaced', 'lessons-table-split', 'health-config', 'health-ignored', 'platform-guard'];
 const projectSide = what => `; ${what} (keel doctor reads the rest)`;
 
 /** Every project under docs/projects with its phases (null with no docs/projects), read once. */
@@ -274,16 +283,24 @@ async function notes(ctx, dir) {
 }
 
 /** The project's gate, run once: { command, status, tests, ms }. */
-const gateRun = ctx => once(ctx, 'gate', () => {
+const gateRun = ctx => once(ctx, 'gate', async () => {
   const command = ctx.config.check ?? CHECK;
-  const started = Date.now();
+  const named = gateWorkflowOf(ctx.config);
+  if (named?.problem) throw new Error(named.problem);
+  let reuse = { reused: false, reason: 'no explicitly configured CI workflow' };
+  if (named && ctx.config.repo) {
+    let sha = '', clean = false;
+    try { sha = gitOut(ctx, ['rev-parse', 'HEAD']).trim(); clean = !gitOut(ctx, ['status', '--porcelain', '--untracked-files=all']).trim(); } catch { /* local gate remains available */ }
+    reuse = await readCiGate({ repo: ctx.config.repo, workflow: named.name, sha, clean, env: ctx.env, now: ctx.now });
+    if (reuse.reused) return { command, ...reuse };
+  }
   // Never a test runner's context (lesson 14); the project's .keel/keel.json `env` over it.
-  const r = spawnSync(command, { cwd: ctx.root, env: gateEnv(ctx.env, ctx.config), shell: true, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, timeout: 60 * 60_000 });
+  const r = await timedCommand(command, { cwd: ctx.root, env: gateEnv(ctx.env, ctx.config), preparedEnv: true, configured: true });
   if (r.error) throw new Error(`could not run \`${command}\`: ${r.error.message}`);
   if (r.status === null) throw new Error(`\`${command}\` was killed (${r.signal}) before it finished`);
   const out = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
   const counts = [...out.matchAll(/^(?:ℹ|#) tests (\d+)$/gm)].map(m => Number(m[1]));
-  return { command, status: r.status, tests: counts.length ? counts.reduce((a, b) => a + b, 0) : null, ms: Date.now() - started };
+  return { command, source: 'local-command', reused: false, reuseUnavailable: reuse.reason, status: r.status, tests: counts.length ? counts.reduce((a, b) => a + b, 0) : null, ms: r.ms };
 });
 
 /** gh, ready to read the project's repo, or a reason it is not. */
@@ -400,7 +417,7 @@ async function gateWorkflow(ctx) {
 }
 
 /** The test ledger's history and settings, read once; a bad .keel/keel.json "tests" is a broken instrument. */
-const ledgerHistory = ctx => once(ctx, 'ledger', async () => ({ opts: testsConfigOf(ctx.config), ...await readRuns(ctx.root) }));
+const ledgerHistory = ctx => once(ctx, 'ledger', async () => { const history = await readRuns(ctx.root); return { opts: testsConfigOf(ctx.config), ...history, runs: history.runs.filter(r => r.kind !== 'gate') }; });
 const tooFew = (n, window, what = `recorded runs in ${RUNS}`) => `${what}: ${n}, fewer than the window of ${window}; n/a until there are ${window} (the gate's own runs and CI's keel-test-runs artifacts fill it), never a zero`;
 const named = t => `${t.file} "${t.name}"`;
 /** The ledger measures' note when the history is the nights' own: CI's check does not keep its runs. */
@@ -528,6 +545,12 @@ export async function conductCost(dir, check, root) {
 
 /** A fix commit's subject: `fix:` or `fix(` at its very start. */
 export const isFixSubject = subject => /^fix[:(]/i.test(String(subject ?? ''));
+/**
+ * Whether a commit carries a `Proven-by:` trailer (phase 62: `keel prove --trailer`), from the
+ * values git itself parsed (`%(trailers:key=Proven-by,valueonly)`): a line in a prose
+ * paragraph is not a trailer, and only git knows where the trailer block is.
+ */
+export const hasProvenBy = trailers => String(trailers ?? '').trim() !== '';
 /** The Trajectory marker of an escape (docs/phases/README.md). */
 export const ESCAPE_ENTRY = /^- \*\*\d{4}-\d{2}-\d{2}\*\* — Escape:/;
 
@@ -578,11 +601,11 @@ function textAt(ctx, rev, path) {
 function escapesBetween(ctx, from, to) {
   const found = [];
   const range = from ? `${from}..${to}` : to;
-  for (const rec of gitOut(ctx, ['log', range, '--reverse', '--no-merges', `--format=%H${SEP}%s${SEP}%b${REC}`]).split(REC)) {
-    const [sha, subject, body = ''] = rec.replace(/^\n/, '').split(SEP);
+  for (const rec of gitOut(ctx, ['log', range, '--reverse', '--no-merges', `--format=%H${SEP}%s${SEP}%(trailers:key=Proven-by,valueonly)${SEP}%b${REC}`]).split(REC)) {
+    const [sha, subject, proof = '', body = ''] = rec.replace(/^\n/, '').split(SEP);
     if (!sha || !isFixSubject(subject)) continue;
     const lessons = [...`${subject}\n${body}`.matchAll(/\blesson (\d+)\b/gi)].map(m => Number(m[1]));
-    found.push({ kind: 'commit', ref: sha.slice(0, 7), phase: phaseOf(`${subject}\n${body}`), text: subject, lessons });
+    found.push({ kind: 'commit', ref: sha.slice(0, 7), phase: phaseOf(`${subject}\n${body}`), text: subject, lessons, proven: hasProvenBy(proof) });
   }
   const path = lessonsPathOf(ctx.config);
   const before = from ? textAt(ctx, from, path) : null, after = textAt(ctx, to, path);
@@ -596,6 +619,9 @@ function escapesBetween(ctx, from, to) {
       found.push({ kind: 'lesson', ref: `lesson ${row.n}`, n: row.n, phase: phaseOf(`${row.shape} ${row.cost}`), text: row.shape.replace(/\*\(([^)]*)\)\*/g, '').replace(/\*\*/g, '').trim().slice(0, 100) });
     }
   }
+  // Phase 62: every fix: commit without a Proven-by: trailer, kept before a lesson folds its commit in. A note, never counted.
+  const unproven = found.filter(e => e.kind === 'commit' && !e.proven).map(e => e.ref);
+  for (const e of found) delete e.proven;
   // One defect, one count: a fix commit naming a lesson counted here is that lesson's escape (the lesson keeps the commit).
   for (const c of found.filter(e => e.kind === 'commit')) {
     const lesson = found.find(e => e.kind === 'lesson' && c.lessons.includes(e.n));
@@ -606,6 +632,8 @@ function escapesBetween(ctx, from, to) {
   for (const e of escapeEntries(gitOut(ctx, ['diff', '--no-renames', '--no-color', '-U0', base, to, '--', 'docs/phases/']))) {
     found.push({ kind: 'trajectory', ref: e.file, phase: e.phase, text: e.text.replace(ESCAPE_ENTRY, '').trim().slice(0, 100) });
   }
+  // Not an element: the escapes stay one array, and the count stays theirs.
+  Object.defineProperty(found, 'unproven', { value: unproven });
   return found;
 }
 
@@ -695,6 +723,8 @@ export const CROSS_REVIEW_VALID = Object.freeze({
   async run(ctx) {
     const prefixes = ctx.config.crossReview?.for;
     if (ctx.config.crossReview === undefined) return { na: 'cross-review is off: .keel/keel.json has no "crossReview"' };
+    // Phase 60: a project that ships to main may review only its pushes; their findings live in issues, not PRs.
+    if (prefixes === undefined && ctx.config.crossReview?.after === 'push') return { na: 'cross-review reviews pushes only ("after": "push", no "for"): its findings are in keel:review-after issues, which this measure does not read' };
     if (!Array.isArray(prefixes) || !prefixes.length || prefixes.some(p => typeof p !== 'string' || !p)) throw new Error('"crossReview".for must list one branch prefix or more');
     const ready = await ghReady(ctx);
     if (ready.na) return { na: ready.na };
@@ -707,7 +737,41 @@ export const CROSS_REVIEW_VALID = Object.freeze({
   },
 });
 
+const timingEvidence = ctx => once(ctx, 'time-evidence', async () => {
+  if (ctx.timeEvidence) return ctx.timeEvidence;
+  const history = await readRuns(ctx.root, undefined, {gates:true});
+  const retention = await readRetention(ctx.root), stalls = await readStalls(ctx.root);
+  let recovery;
+  try { recovery = await (await import('./test-history.mjs')).readTestHistory(ctx.root); }
+  catch { recovery = {complete:false,gaps:[{detail:'artifact recovery coverage unavailable'}]}; }
+  const localWorkarounds = ctx.keel?.localWorkarounds ? await ctx.keel.localWorkarounds({root:ctx.root,env:ctx.env,since:ctx.now-7*86400000,now:ctx.now}) : null;
+  return {runs:history.runs,stallsReceipts:stalls.receipts,localWorkarounds,retention,recovery,
+    gaps:[...(history.skipped?[`${history.skipped} ledger records unreadable`]:[]),...stalls.gaps,...(retention.gaps??[]),...(recovery.gaps??[]).map(g=>typeof g==='string'?g:g.detail)]};
+});
 export const MEASURES = [
+  ...TIME_MEASURES.map(id => ({id,what:`${id.replaceAll('_',' ')} from comparable retained evidence`,unit:['gate_time','time_creep'].includes(id)?'ms':['critical_file','inconclusive_share'].includes(id)?'share':'observations',bound:null,better:'lower',ratchet:false,time:true,
+    async run(ctx) {
+      const evidence = await timingEvidence(ctx);
+      const result = evaluateTimeEvidence({measure:id,...evidence,at:ctx.now,gateBoundMs:ctx.bounds.gate_time});
+      const gaps = [...new Set([...result.coverage.gaps,...(evidence.gaps??[])])];
+      result.coverage = {...result.coverage,gaps,retention:evidence.retention??null,recovery:evidence.recovery??null};
+      for(const candidate of result.timeCandidates) candidate.coverage = {...candidate.coverage,gaps};
+      return {timeResult:result};
+    }})),
+  {
+    id: 'ci_minutes', what: 'last seven days of completed-job rounded weighted Actions minutes (estimate, not invoice)', unit: 'weighted minutes', bound: null, better: 'lower', ratchet: false,
+    async run(ctx) {
+      const options = ciOptions(ctx.config);
+      if (!ctx.config.repo) return { na: 'no repo for Actions usage', facts: { coverage: { complete: false, gaps: ['no repo'] } } };
+      const lock = await readLock(ctx.root);
+      const ownedWorkflows = Object.entries(lock?.files ?? {}).filter(([path, entry]) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(path) && typeof entry?.practice === 'string').map(([path]) => path);
+      const facts = await readCiUsage({ repo: ctx.config.repo, config: ctx.config, env: ctx.env, now: ctx.now, ownedWorkflows });
+      const observed = facts.observedWeightedMinutes;
+      const detail = `completed jobs only; ${facts.coverage.unfinishedJobs} queued/in-progress jobs excluded; ${facts.coverage.queuedAttemptsWithoutJobs} current queued attempts with no jobs excluded; unfinished usage not estimated; ${facts.workflows.map(w => `${w.keel ? 'keel-owned: ' : w.keelNamed ? 'keel-named: ' : ''}${w.path} ${w.weightedMinutes ?? 'unknown'} (${w.observedWeightedMinutes} observed)`).join('; ') || 'no jobs observed'}; ${facts.visibility} billing context; weights ${JSON.stringify(options.weights)} dated ${options.weightsDate}, not an invoice; ${facts.coverage.complete ? 'complete bounded read' : 'incomplete: ' + facts.coverage.gaps.join('; ')}`;
+      if (facts.weightedMinutes === null && !(options.weeklyMinutes !== null && observed > options.weeklyMinutes)) return { na: detail, facts };
+      return { value: facts.weightedMinutes ?? observed, bound: options.weeklyMinutes, detail, facts };
+    },
+  },
   {
     id: 'record_contradictions', what: 'working records contradict references or delivery facts', unit: 'findings', bound: 0, better: 'lower', ratchet: false,
     async run(ctx) {
@@ -729,7 +793,7 @@ export const MEASURES = [
       const empty = g.status === 0 && g.tests === 0;
       return {
         value: g.status !== 0 || empty ? 1 : 0,
-        detail: `\`${g.command}\` exit ${g.status}; ${g.tests === null ? 'no node test summary' : plural(g.tests, 'test')}${empty ? ' — passed while running nothing (lesson 14)' : ''}`,
+        detail: g.reused ? `reused CI ${g.workflow} on ${g.sha}: ${g.conclusion}, completed ${g.completedAt}, age ${Math.round(g.ageMs / 60000)} minutes; not run locally` : `\`${g.command}\` exit ${g.status}; ${g.tests === null ? 'no node test summary' : plural(g.tests, 'test')}${empty ? ' — passed while running nothing (lesson 14)' : ''}`,
         facts: { ...g, empty },
       };
     },
@@ -739,14 +803,15 @@ export const MEASURES = [
     id: 'flaky_tests', what: 'tests that both passed and failed on one clean tree, in the newest window of recorded runs (the test ledger)', unit: 'tests', bound: 0, better: 'lower', ratchet: false,
     async run(ctx) {
       const { opts, runs, skipped } = await ledgerHistory(ctx);
-      if (runs.length < opts.window) return { na: `${tooFew(runs.length, opts.window)}${nightNote(runs)}` };
-      const recent = runs.slice(-opts.window);
+      const recent = runs.filter(r => busyState(r) !== 'busy').slice(-opts.window);
       const found = flaky(recent);
+      if (!found.length && recent.length < opts.window) return { na: `${tooFew(recent.length, opts.window)} after busy filtering${nightNote(runs)}${busyNote(runs)}` };
       const trees = new Set(recent.filter(r => r.dirty === false && r.tree).map(r => r.tree)).size;
       return {
         value: found.length,
-        detail: `${found.length ? list(found.map(t => `${named(t)} (passed ${t.passed}, failed ${t.failed})`), 3) : 'none'}; the newest ${opts.window} of ${plural(runs.length, 'run')}, ${plural(trees, 'clean tree')}${skipped ? `, ${skipped} unreadable` : ''}${nightNote(runs)}`,
-        facts: { flaky: found.map(({ file, name, tree, passed, failed, dir, config, setting }) => ({ file, name, tree, passed, failed, dir, config, setting })), runs: runs.length, window: opts.window },
+        detail: `${found.length ? list(found.map(t => `${named(t)} (passed ${t.passed}, failed ${t.failed})`), 3) : 'none'}; the newest ${recent.length} eligible of ${plural(runs.length, 'run')}, ${plural(trees, 'clean tree')}${skipped ? `, ${skipped} unreadable` : ''}${nightNote(runs)}${busyNote(runs)}`,
+        // A bun or vitest finding carries its runner, so the run-alone command is that runner's (phase 59).
+        facts: { coverage: busyCoverage(runs), flaky: found.map(({ file, name, describe, tree, passed, failed, dir, config, setting, runner }) => ({ file, name, ...(describe ? { describe } : {}), tree, passed, failed, dir, config, setting, ...(runner ? { runner } : {}) })), runs: runs.length, window: opts.window },
       };
     },
   },
@@ -754,16 +819,17 @@ export const MEASURES = [
     id: 'slow_tests', what: 'tests in the newest recorded run above factor × their median over the last window passing runs on the same machine class and config, and above the floor (the test ledger)', unit: 'tests', bound: 0, better: 'lower', ratchet: false,
     async run(ctx) {
       const { opts, runs } = await ledgerHistory(ctx);
-      if (runs.length < opts.window) return { na: `${tooFew(runs.length, opts.window)}${nightNote(runs)}` };
+      if (runs.length < opts.window) return { na: `${tooFew(runs.length, opts.window)}${nightNote(runs)}${busyNote(runs)}` };
       const newest = runs.at(-1), machine = machineClass(newest.machine);
       // The baseline slower() judges against: the same machine class AND config. Fewer is n/a, never a zero.
-      const same = comparable(runs, newest).length;
-      if (same < opts.window) return { na: `${tooFew(same, opts.window, `earlier recorded runs on ${machine} under config ${newest.config ?? 'none'}`)}${nightNote(runs)}` };
+      if (busyState(newest) === 'busy') return { na: `newest run was busy${busyNote(runs)}` };
+      const same = comparable(runs, newest).filter(r => busyState(r) !== 'busy').length;
+      if (same < opts.window) return { na: `${tooFew(same, opts.window, `earlier recorded runs on ${machine} under config ${newest.config ?? 'none'}`)}${nightNote(runs)}${busyNote(runs)}` };
       const found = slower(runs, opts, newest);
       return {
         value: found.length,
-        detail: `${found.length ? list(found.map(t => `${named(t)} ${Math.round(t.ms)} ms against ${t.median} ms`), 3) : 'none'}; the newest run (${newest.date}) against ${opts.window} before it on ${machine} under config ${newest.config ?? 'none'}; ×${opts.factor} and +${opts.floorMs} ms${nightNote(runs)}`,
-        facts: { slower: found, factor: opts.factor, floorMs: opts.floorMs, window: opts.window, machine },
+        detail: `${found.length ? list(found.map(t => `${named(t)} ${Math.round(t.ms)} ms against ${t.median} ms`), 3) : 'none'}; the newest run (${newest.date}) against ${opts.window} before it on ${machine} under config ${newest.config ?? 'none'}; ×${opts.factor} and +${opts.floorMs} ms${nightNote(runs)}${busyNote(runs)}`,
+        facts: { coverage: busyCoverage(runs), slower: found, factor: opts.factor, floorMs: opts.floorMs, window: opts.window, machine },
       };
     },
   },
@@ -929,15 +995,19 @@ export const MEASURES = [
       const bound = r.before ? r.before.length : null;
       const window = r.tag ? `since ${r.tag}` : 'since the first commit (no release tag)';
       const prior = r.tag ? `; the release before (${r.prev ? `${r.prev}..` : 'up to '}${r.tag}) had ${r.before.length}` : '; no release before to compare';
+      // Phase 62: a note on the fix commits, not a bound: those without a Proven-by: trailer (keel prove --trailer).
+      const unproven = r.now.unproven ?? [];
+      const fixes = r.now.filter(e => e.kind === 'commit').length + r.now.reduce((n, e) => n + (e.commits?.length ?? 0), 0);
+      const proof = fixes ? `; ${unproven.length} of ${plural(fixes, 'fix: commit')} without a Proven-by: trailer${unproven.length ? ` (${list(unproven, 6)})` : ''}` : '';
       const ceremony = r.ceremony.length
         ? `ceremony, ${plural(r.ceremony.length, 'phase')} built ${r.tag ? `since ${r.tag}` : 'so far'}: ${list(r.ceremony.map(c => `${c.phase} ${c.days}d/${c.words ?? '?'}w`), 8)}`
         : `ceremony: no phase built ${r.tag ? `since ${r.tag}` : 'yet'}`;
       return {
         value: r.now.length, bound,
-        detail: `${r.now.length} ${window} (${kinds}); ${by.length ? `by phase: ${list(by.map(([p, es]) => `${p} ×${es.length}`), 6)}` : 'none names a phase'}${unattributed ? `; ${unattributed} unattributed` : ''}${prior}; ${ceremony}`,
+        detail: `${r.now.length} ${window} (${kinds}); ${by.length ? `by phase: ${list(by.map(([p, es]) => `${p} ×${es.length}`), 6)}` : 'none names a phase'}${unattributed ? `; ${unattributed} unattributed` : ''}${prior}${proof}; ${ceremony}`,
         facts: {
           since: r.tag, ref: r.ref, previous: r.tag ? { from: r.prev, to: r.tag, value: r.before.length } : null,
-          escapes: r.now, byPhase: Object.fromEntries(by.map(([p, es]) => [p, es.length])), unattributed, ceremony: r.ceremony,
+          escapes: r.now, byPhase: Object.fromEntries(by.map(([p, es]) => [p, es.length])), unattributed, unproven, ceremony: r.ceremony,
         },
       };
     },
@@ -1217,15 +1287,21 @@ const beats = (m, value, bound) => m.better === 'higher' ? value > bound : value
 const margin = r => (r.better === 'higher' ? r.bound - r.value : r.value - r.bound) / Math.max(Math.abs(r.bound), 1);
 
 /** Run every measure; never throws for a measure, which becomes `broken`. */
-export async function measure({ root, config, env = process.env, transcripts, date = today(), bounds = {}, measures = MEASURES, keel }) {
-  const ctx = { root, config, env, transcripts, date, keel, cache: new Map() };
+export async function measure({ root, config, env = process.env, transcripts, date = today(), bounds = {}, measures = MEASURES, keel, now = Date.now(), timeEvidence }) {
+  const ctx = { root, config, env, transcripts, date, keel, now, bounds, timeEvidence, cache: new Map() };
   const results = [];
   for (const m of measures) {
     const bound = Number.isFinite(bounds[m.id]) ? bounds[m.id] : m.bound;
     const base = { id: m.id, what: m.what, unit: m.unit, better: m.better, bound };
     try {
       const r = await m.run(ctx);
-      if (r?.na) { results.push({ ...base, state: 'n/a', value: null, detail: r.na }); continue; }
+      if (r?.timeResult) {
+        const t=r.timeResult;
+        results.push({...base,state:t.state==='unavailable'?'n/a':t.state==='inside'?'ok':t.state,value:t.value,
+          detail:`${t.coverage.eligible}/${t.coverage.retained} eligible retained observations; ${t.coverage.omitted} omitted; ${t.coverage.dates.length} dates; ${[...new Set([...t.reasons,...t.coverage.gaps])].join('; ')}`,
+          facts:t,timeCandidates:t.timeCandidates}); continue;
+      }
+      if (r?.na) { results.push({ ...base, state: 'n/a', value: null, detail: r.na, ...(r.facts ? { facts: r.facts } : {}) }); continue; }
       if (!Number.isFinite(r?.value)) throw new Error(`the instrument returned no number (${JSON.stringify(r?.value)})`);
       // A rule measure (ratchet: false) may name the bound its value is judged by (machine_prs: per queue).
       // A release measure (escapes) is judged by its own reading only: none when there is no release before.
@@ -1245,7 +1321,8 @@ export function proposalText(r, config = {}) {
   if (r.state === 'broken') return `Fix the ${r.id} instrument: ${r.detail}. A measure that cannot run is not a zero (lesson 6).`;
   switch (r.id) {
     case 'record_contradictions': return 'Review the reconciliation findings and manual proposals below. Refresh source observations before editing; never infer acceptance or production verification from a merge.';
-    case 'gate': return f.empty
+    case 'ci_minutes': return 'Review the workflows and runner coverage; reduce redundant CI work against the configured weekly weighted-minute bound. Estimates are not invoices.';
+    case 'gate': return f.reused ? `Fix ${f.workflow} on ${f.sha}: reused CI ${f.conclusion}, not a local check.` : f.empty
       ? `Make \`${f.command}\` run the project's tests: it passed while running none (lesson 14).`
       : `Make the gate pass: \`${f.command}\` exits ${f.status}. Start from its first failure.`;
     case 'roadmap_stale': return `Regenerate the roadmap (\`npm run roadmap\`) and commit it; the check says: ${f.message}`;
@@ -1308,13 +1385,27 @@ export function proposalText(r, config = {}) {
 }
 
 /** The one proposal: broken beats outside; then the largest relative margin; ties by measure order. */
-export function propose(results, config) {
+export function propose(results, config, {history=[],at=Date.now()} = {}) {
   const broken = results.find(r => r.state === 'broken');
-  let worst = broken;
-  if (!worst) {
-    for (const r of results) if (r.state === 'outside' && (!worst || margin(r) > margin(worst))) worst = r;
+  if (broken) return {id:broken.id,state:broken.state,text:proposalText(broken,config)};
+  let worst = null;
+  for (const r of results) if (r.state === 'outside') {
+    if (Array.isArray(r.timeCandidates)) {
+      for(const candidate of r.timeCandidates) {
+        if(!selectableTimeProposal({candidate,history,at}).allowed) continue;
+        // Explicit investigation rules have different units; keep deterministic
+        // measure order on ties, while considering every eligible target.
+        const metadata=makeTimeProposal({...candidate,at});
+        if(!metadata) { r.facts?.coverage?.gaps.push('candidate unavailable: frozen evidence exceeds proposal size bound'); continue; }
+        const score=1;
+        if(!worst || score>worst.score) worst={r,candidate,metadata,score};
+      }
+    } else if(!worst || margin(r)>worst.score) worst={r,score:margin(r)};
   }
-  return worst ? { id: worst.id, state: worst.state, text: proposalText(worst, config) } : null;
+  if(!worst)return null;
+  if(!worst.candidate)return {id:worst.r.id,state:worst.r.state,text:proposalText(worst.r,config)};
+  const metadata=worst.metadata;
+  return {id:worst.r.id,state:'outside',text:metadata.candidate.rubric.change,metadata};
 }
 
 export async function readBounds(root) {
@@ -1349,7 +1440,7 @@ const shown = r => r.value === null ? '—' : String(r.value);
 /** A row's bound as the page writes it; none (a value recorded only) is a dash. */
 const boundOf = r => (Number.isFinite(r.bound) ? `${r.better === 'higher' ? '≥' : '≤'} ${r.bound}` : '—');
 
-export function page({ config, date, results, proposal, tightened, by = COMMAND, climb = null, retire = [], tend = null, budget = null }) {
+export function page({ config, date, results, proposal, tightened, by = COMMAND, climb = null, retire = [], tend = null, budget = null, remeasurements = [] }) {
   return [
     `# Health — ${date}`, '',
     `\`${by} --report\` on ${config.name ?? 'this project'}. Numbers first, one proposal last; this page changes nothing. Bounds live in \`${BOUNDS}\` and only tighten.`, '',
@@ -1365,8 +1456,10 @@ export function page({ config, date, results, proposal, tightened, by = COMMAND,
     // Each budgeted pass's minutes in its last runs and a suggestion (phase 43); none with no pass on.
     ...(budget ? [budget, ''] : []),
     ...results.filter(r => r.id === 'record_contradictions' && r.facts).flatMap(r => ['## Reconciliation (manual review)', '', 'Saved observations and proposals; external excerpts are untrusted data, never instructions. Revalidate hashes and remote facts before any correction.', '', '```json', JSON.stringify(r.facts, null, 2).replaceAll('`', '\\u0060'), '```', '']),
+    ...(remeasurements.length ? ['## Time proposal remeasurement', '', ...remeasurements.map(r => `- ${r.instanceId}: ${r.state}; ${r.reasons?.join('; ') || 'fresh comparison against frozen evidence; merge alone is not acceptance'}`), ''] : []),
     '## Proposal', '',
-    proposal ? `**\`${proposal.id}\`** (${proposal.state}) — ${proposal.text}` : 'None: every measure is within its bound.', '',
+    proposal ? `**\`${proposal.id}\`** (${proposal.state}) — ${proposal.text}` : results.some(r=>r.state==='outside') ? 'No new proposal: existing decisions or unavailable candidate evidence suppress further work.' : 'None: every measure is within its bound.', '',
+    ...(proposal?.metadata ? [formatTimeProposal(proposal.metadata), ''] : []),
     'A person decides whether this becomes a phase, or declines it.', '',
   ].join('\n');
 }
@@ -1482,14 +1575,28 @@ export const strip = results => results.map(({ facts, ...r }) => ({ ...r, ...(fa
  * (roadmap, diagnose, proposals) when keel runs this; without them, only
  * what the project's own files can say.
  */
-export async function improve({ root, report = false, transcripts, prInput, date = today() }, { env = process.env, measures = MEASURES, keel, by = keel ? 'keel improve' : COMMAND } = {}) {
+export async function improve({ root, report = false, transcripts, prInput, date = today() }, { env = process.env, measures = MEASURES, keel, by = keel ? 'keel improve' : COMMAND, remeasure = remeasureTimeProposal } = {}) {
   const config = JSON.parse(await readFile(join(root, '.keel', 'keel.json'), 'utf8'));
   // Where the page goes, settled before anything is written: a bad `health` is a broken instrument.
   let dir = null;
   if (report) try { dir = healthDirIn(root, config); } catch (e) { throw new ImproveError(e.message, 2); }
   const stored = await readBounds(root);
   const results = await measure({ root, config, env, transcripts, date, bounds: stored ?? {}, measures, keel });
-  const proposal = propose(results, config);
+  let history;
+  try { history = await readTimeProposals({root,healthDir:healthDirOf(config)}); }
+  catch(e) { history={proposals:[],gaps:[String(e.message)]}; }
+  const remeasurements = [], changedHistoricalHealthPaths = [];
+  for(const p of history.proposals.filter(p=>p.lifecycle.state==='accepted')) {
+    const reading=await remeasure({root,proposal:p,at:new Date().toISOString()});
+    remeasurements.push({instanceId:p.instanceId,path:p.path,...reading});
+    if(report) await withTimeProposal({root,path:p.path,expectedInstance:p.instanceId}, async ({proposal:current,saveLifecycle}) => {
+      if(current.lifecycle.state!=='accepted' || digest(current.lifecycle.transition)!==digest(p.lifecycle.transition) || digest(current.lifecycle.issue)!==digest(p.lifecycle.issue)) return;
+      if(digest(current.lifecycle.remeasurement)===digest(reading)) return;
+      await saveLifecycle({...current.lifecycle,remeasurement:reading});
+      if(p.path!==healthPage(dir,date)) changedHistoricalHealthPaths.push(p.path);
+    });
+  }
+  const proposal = history.gaps.length ? propose(results.filter(r=>!r.timeCandidates),config) : propose(results, config,{history,at:Date.now()});
   let written = null, tightened = [], climb = null, retire = [], tend = null, budget = null;
   if (report) {
     climb = climbLine(config, await readClimbNight(root));
@@ -1501,13 +1608,14 @@ export async function improve({ root, report = false, transcripts, prInput, date
     await writeFile(join(root, BOUNDS), `${JSON.stringify(t.bounds, null, 2)}\n`);
     written = healthPage(dir, date);
     await mkdir(join(root, dir), { recursive: true });
-    await writeFile(join(root, written), page({ config, date, results, proposal, tightened, by, climb, retire, tend, budget }));
+    await writeHealthReport({root,path:written,generated:page({ config, date, results, proposal, tightened, by, climb, retire, tend, budget, remeasurements })});
   }
+  changedHistoricalHealthPaths.sort();
   const code = exitCode(results);
-  if (prInput) await writeFile(prInput, `${JSON.stringify(nightPr({ date, results, proposal, report: written ?? `${dir ?? HEALTH}/` }), null, 2)}\n`);
+  if (prInput) await writeFile(prInput, `${JSON.stringify({...nightPr({ date, results, proposal, report: written ?? `${dir ?? HEALTH}/` }), changedHistoricalHealthPaths}, null, 2)}\n`);
   const counts = ['ok', 'outside', 'n/a', 'broken'].map(s => `${results.filter(r => r.state === s).length} ${s}`).join(', ');
   return {
-    data: { root, date, ok: code === 0, measures: strip(results), proposal, report: written, bounds: report ? BOUNDS : stored ? BOUNDS : null, tightened, climb, retire, tend, budget },
+    data: { root, date, changedHistoricalHealthPaths, proposalCoverage: {gaps:history.gaps}, remeasurements, ok: code === 0, measures: strip(results), proposal, report: written, bounds: report ? BOUNDS : stored ? BOUNDS : null, tightened, climb, retire, tend, budget },
     text: [table(results), '', counts,
       ...(tightened.length ? [`Ratchet: ${tightened.map(t => `${t.id} ${t.from} → ${t.to}`).join(', ')} (${BOUNDS})`] : []),
       proposal ? `Proposal (${proposal.id}): ${proposal.text}` : 'No proposal: every measure is within its bound.',

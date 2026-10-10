@@ -13,9 +13,12 @@
 #   - A bot writes a pull request, never to main. The only push names
 #     refs/heads/keel-night/<date>.
 #   - One open PR per queue, the newest; drain.mjs enforces it, not a person.
-#   - A merge is checked, not trusted. A GITHUB_TOKEN PR never runs CI, so the
-#     gate that improve.mjs runs here, on this tree, is the check; the
-#     newest PR merges only when it passed and the PR holds nothing but data
+#   - A merge is checked, not trusted. improve.mjs's gate measure may reuse
+#     the latest eligible configured default-branch push CI result on the
+#     exact clean SHA, completed within 24 hours. Dirty trees or unavailable
+#     evidence fall back to the local gate. PR CI may require approval;
+#     the newest night PR merges only when the gate measure passed and the
+#     PR holds nothing but data
 #     (tonight's dated health page, docs/inbox/, docs/INBOX.md,
 #     .keel/bounds.json; never the rest of the health directory, which may be
 #     shared). The health directory is .keel/keel.json "health" (default
@@ -133,31 +136,13 @@ jobs:
         if: steps.self.outputs.self == 'true'
         run: node bin/keel.mjs learn || echo "::warning::keel learn did not finish; see its output above."
 
-      # The test ledger's history (scripts/keel/test-ledger.mjs): the newest
-      # keel-test-runs artifacts on the default branch (check.yml's, and past
-      # nights'), read-only, by name, into .keel/test-runs. The gate improve
-      # runs adds tonight's run to them, so flaky_tests and slow_tests read
-      # more than one night; fewer runs than the window is n/a, never a zero.
-      # Nothing found, or no listing, is a warning, not red.
+      # Recover bounded, identity-verified history; gaps remain visible to measures.
       - name: Gather the test ledger
         env:
           REPO: ${{ github.repository }}
           BASE: ${{ github.event.repository.default_branch }}
         run: |
-          mkdir -p .keel/test-runs
-          if ! gh api "repos/$REPO/actions/artifacts?name=keel-test-runs&per_page=100" \
-            --jq "[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == \"$BASE\")] | sort_by(.created_at) | reverse | .[:30][] | .id" > "$RUNNER_TEMP/ledger.txt"; then
-            echo "::warning::The test ledger's artifacts could not be listed; tonight reads its own run alone."
-            exit 0
-          fi
-          n=0
-          while read -r id; do
-            [ -n "$id" ] || continue
-            if gh api "repos/$REPO/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ledger-$id.zip"; then
-              unzip -o -q "$RUNNER_TEMP/ledger-$id.zip" -d .keel/test-runs && n=$((n + 1))
-            fi
-          done < "$RUNNER_TEMP/ledger.txt"
-          echo "test ledger: $n artifacts read; $(find .keel/test-runs -name '*.json' | wc -l | tr -d ' ') runs"
+          node scripts/keel/test-history.mjs --repo "$REPO" --branch "$BASE" --json
 
       # The newest climb night's record (the climb practice's keel-climb
       # artifact), read-only, by name, from the default branch only, into
@@ -240,16 +225,20 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: keel-test-runs
-          path: .keel/test-runs/
+          # Explicit telemetry paths only: never upload local workaround transcripts.
+          path: |
+            .keel/test-runs/*.json
+            .keel/test-runs/retention
+            .keel/test-runs/recovery/status.json
           include-hidden-files: true
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 56
 
       # Porcelain, never `git diff --quiet`: a file created for the first time
       # is not in the index, so diff reads it as no change (ledger's audit
       # agent lost every report to that). Only the night's data is committed:
-      # tonight's page in the configured health directory (never the rest of
-      # it), the inbox and the bounds, a tracked one that is gone staged as
+      # exact health pages written by improve (including earlier remeasurements,
+      # never the whole directory), the inbox and bounds; tracked deletions are
       # its deletion. Paths are literal (GIT_LITERAL_PATHSPECS), never
       # pathspec magic. A page the project ignores is red: it would never be
       # committed (ledger lost its pages that way), so the probe is a dated
@@ -269,20 +258,53 @@ jobs:
           fi
           PAGE="$HEALTH/$DAY.md"
           case "$PAGE" in :*) echo "::error::\"health\" starts with \":\" (git pathspec magic)."; exit 1 ;; esac
-          ignored=0
-          git check-ignore -q -- "$PAGE" || ignored=$?
-          if [ "$ignored" = 0 ]; then
-            echo "::error::$HEALTH is git-ignored ($PAGE), so its health page is never committed: set \"health\" in .keel/keel.json to a directory that is not ignored (keel doctor: health-ignored)."
-            exit 1
-          fi
-          if [ "$ignored" != 1 ]; then
-            echo "::error::git check-ignore could not read $PAGE (exit $ignored)."
-            exit 1
-          fi
+          # Consume only the writer-reported paths, not every discovered proposal.
+          # Validate before staging anything; NUL separation keeps paths literal.
+          node --input-type=module -e '
+            import { readFileSync, lstatSync, realpathSync } from "node:fs";
+            import { resolve, relative, isAbsolute } from "node:path";
+            import { healthDirIn } from "./scripts/keel/lib.mjs";
+            const fail = message => { throw new Error(`health staging: ${message}`); };
+            const root = realpathSync(".");
+            const health = healthDirIn(root, JSON.parse(readFileSync(".keel/keel.json", "utf8")));
+            const { DAY: day, HEALTH: expected } = process.env;
+            if (health !== expected || !/^\d{4}-\d{2}-\d{2}$/.test(day ?? "")) fail("report configuration/date mismatch");
+            if (realpathSync(resolve(root, health)) !== resolve(root, health)) fail("configured health alias cannot be staged: Git refuses paths beyond symbolic links");
+            const report = JSON.parse(readFileSync(process.argv[1], "utf8"));
+            const historical = report.changedHistoricalHealthPaths;
+            if (report.date !== day || report.report !== `${health}/${day}.md` || !Array.isArray(historical) || historical.length > 512 || new Set(historical).size !== historical.length || historical.includes(report.report)) fail("missing or malformed changedHistoricalHealthPaths");
+            const paths = [report.report, ...historical];
+            for (const path of paths) {
+              if (typeof path !== "string" || /[\x00-\x1f\x7f\\]/.test(path) || !path.startsWith(`${health}/`) || !/^\d{4}-\d{2}-\d{2}\.md$/.test(path.slice(health.length + 1))) fail("invalid health page path");
+              const absolute = resolve(root, path), rel = relative(root, absolute);
+              if (isAbsolute(path) || rel !== path || rel.startsWith("../")) fail("noncanonical health page path");
+              let current = root;
+              for (const [i, part] of path.split("/").entries()) {
+                current = resolve(current, part);
+                const stat = lstatSync(current);
+                if (stat.isSymbolicLink() || (i === path.split("/").length - 1 ? !stat.isFile() : !stat.isDirectory())) fail("health page is not a regular confined file");
+              }
+            }
+            process.stdout.write(paths.join("\0") + "\0");
+          ' "$RUNNER_TEMP/improve.json" > "$RUNNER_TEMP/health-paths.bin"
+          HEALTH_PATHS=()
+          while IFS= read -r -d '' p; do
+            ignored=0
+            git check-ignore -q -- "$p" || ignored=$?
+            if [ "$ignored" = 0 ]; then
+              echo "::error::$HEALTH is git-ignored ($p), so its health page is never committed: set \"health\" in .keel/keel.json to a directory that is not ignored (keel doctor: health-ignored)."
+              exit 1
+            fi
+            if [ "$ignored" != 1 ]; then
+              echo "::error::git check-ignore could not read $p (exit $ignored)."
+              exit 1
+            fi
+            HEALTH_PATHS+=("$p")
+          done < "$RUNNER_TEMP/health-paths.bin"
           # check-ignore refuses literal pathspecs; every git call after it reads paths literally.
           export GIT_LITERAL_PATHSPECS=1
-          PATHS=()
-          for p in "$PAGE" docs/inbox docs/INBOX.md .keel/bounds.json; do
+          PATHS=("${HEALTH_PATHS[@]}")
+          for p in docs/inbox docs/INBOX.md .keel/bounds.json; do
             if [ -e "$p" ] || [ -n "$(git ls-files -- "$p")" ]; then PATHS+=("$p"); fi
           done
           if [ "${#PATHS[@]}" = 0 ] || [ -z "$(git status --porcelain -- "${PATHS[@]}")" ]; then
@@ -294,7 +316,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -q -b "$BRANCH"
           git add -A -- "${PATHS[@]}"
-          git commit -q -m "keel night: $DAY"
+          git commit -q --only -m "keel night: $DAY" -- "${PATHS[@]}"
           git show --name-only --format= HEAD > "$RUNNER_TEMP/files.txt"
           node scripts/keel/pr-body.mjs --input "$RUNNER_TEMP/pr.json" --files "$RUNNER_TEMP/files.txt" > "$RUNNER_TEMP/body.md"
           # The branch is this workflow's alone; a re-run the same day replaces
@@ -367,9 +389,10 @@ jobs:
               if (String(run.id) === String(process.env.GITHUB_RUN_ID)) { if (Number(process.env.GITHUB_RUN_ATTEMPT) > 1) previous.push(api(`repos/${repo}/actions/runs/${run.id}/attempts/${Number(process.env.GITHUB_RUN_ATTEMPT) - 1}`)); }
               else if (run.status === "completed" || Number(run.id) < Number(process.env.GITHUB_RUN_ID)) previous.push(run);
             }
+            // The attempt that ran last comes first: a rerun of an old night ran after the nights it follows by ID.
+            const newestFirst = (a, b) => (Date.parse(b.run_started_at ?? "") || 0) - (Date.parse(a.run_started_at ?? "") || 0) || b.id - a.id || b.run_attempt - a.run_attempt;
             const eligible = previous.filter(r => Number.isSafeInteger(r.id) && Number.isSafeInteger(r.run_attempt) && /^[a-f0-9]{40}$/.test(r.head_sha ?? "") && r.head_repository?.full_name === repo && r.repository?.full_name === repo && r.head_branch === base && r.path === ".github/workflows/keel-night.yml" && ["schedule", "workflow_dispatch"].includes(r.event) && Array.isArray(r.pull_requests) && r.pull_requests.length === 0)
-              // The attempt that ran last comes first: a rerun of an old night ran after the nights it follows by ID.
-              .sort((a, b) => (Date.parse(b.run_started_at ?? "") || 0) - (Date.parse(a.run_started_at ?? "") || 0) || b.id - a.id);
+              .sort(newestFirst);
             const bounded = file => fs.existsSync(file) && !fs.lstatSync(file).isSymbolicLink() && fs.lstatSync(file).isFile() && fs.statSync(file).size <= 64 * 1024 * 1024;
             const provenanceOf = (file, run) => {
               const p = JSON.parse(fs.readFileSync(file, "utf8")).provenance;
@@ -397,7 +420,8 @@ jobs:
               // in this run if it was a rerun, else the run before.
               if (!fs.existsSync(file) && bounded(never)) {
                 provenanceOf(never, run);
-                if (run.run_attempt > 1) queue.unshift(api(`repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt - 1}`));
+                // Its earlier attempt takes its place in time order, never ahead of a night that ran after it.
+                if (run.run_attempt > 1) { queue.push(api(`repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt - 1}`)); queue.sort(newestFirst); }
                 continue;
               }
               if (!bounded(file)) fail("The trusted artifact has no bounded recovery.json; snapshots alone cannot reconstruct ownership.");
