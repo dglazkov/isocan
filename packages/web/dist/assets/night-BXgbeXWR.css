@@ -1,0 +1,1 @@
+.canvas-theme-night{background-color:var(--theme-night)}.item[style*=--ground-glow]{--ground-glow: 0;box-shadow:var(--shadow-item),0 0 calc(var(--ground-glow) * 36px) calc(var(--ground-glow) * 4px) color-mix(in srgb,var(--firefly-glow) calc(var(--ground-glow) * 90%),transparent)}

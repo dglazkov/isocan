@@ -29,6 +29,11 @@ second week.
   after you stop, so an idle canvas costs nothing, and with *reduce motion* on
   it is a still picture. Everyone's cursor parts it, other people's and
   agents' too. Agents: `isocan canvas background meadow`.
+- **Galaxy comes alive, and a Night ground.** Galaxy's stars now curve
+  toward your cursor, swirl slowly around it while it rests, and scatter while
+  you hold the button. **Night** is a dark meadow where every cursor is a
+  firefly that wakes more, and cards catch their light. Both go still when
+  nobody moves.
 
 ## 8 October 2026
 

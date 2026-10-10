@@ -69,13 +69,21 @@ export declare const THEME_PROP = "theme";
  * mountains had procedural stand-ins and this is the drop-in the stopgap was
  * written for; farm and desert never could have been generated at all.
  *
+ * **Galaxy moves too, since 9 Oct 2026**: it is drawn as Orbit — the same
+ * space, its stars bent by every cursor — under the same id and label, so
+ * every canvas wearing it became living with no migration. Its still frame
+ * is rendered from Orbit's own shader and has no seam either.
+ *
  * **Meadow (9 Oct 2026) is the first ground that moves** — grass that parts
  * under every cursor and settles when nothing moves (`LIVING`, below). It is
  * a name here like any other, and a painted still frame on disk like the four
  * pictures, so a viewer whose browser cannot or should not animate it still
  * stands on the same field.
+ *
+ * **Night (9 Oct 2026) is the second** — a dark meadow under a dim sky where
+ * every cursor is a firefly and its path wakes more out of the grass.
  */
-export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert", "meadow"];
+export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night"];
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
 export type CanvasTheme = (typeof THEMES)[number];
@@ -113,7 +121,7 @@ export declare function themeLabel(theme: CanvasTheme): string;
  * web app, so this list is the whole of what a living ground costs a first
  * visit (`docs/projects/living-grounds/design.md` §7).
  */
-export declare const LIVING: readonly ["meadow"];
+export declare const LIVING: readonly ["meadow", "night", "galaxy"];
 /** Does this ground move — the question the theme layer asks before it loads
  *  a WebGL host, and the CLI asks before it says a ground answers the cursor. */
 export declare function isLiving(theme: CanvasTheme | null): boolean;
@@ -433,7 +441,7 @@ export declare function groundIsPlace(canvas: {
 export declare const CURSOR_PROP = "cursor";
 /** The shapes this build can draw. Not a string, for `THEMES`' reason: a
  *  canvas wearing a name nothing can draw is a pointer that vanishes. */
-export declare const CURSORS: readonly ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep", "cricket", "ladybird"];
+export declare const CURSORS: readonly ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep", "cricket", "ladybird", "firefly"];
 /** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
  *  reason: a name nothing can draw is a pointer that vanishes. */
 export type CanvasCursor = (typeof CURSORS)[number];
