@@ -3,7 +3,7 @@ title: Web UI lacks canvas seen mark synchronization
 loop:
   - 29f09351-3265-4aff-8681-81eebd251433
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: RESOLVED
 loop_goal: Always isomorphic
 decision: stale
 rank: never
