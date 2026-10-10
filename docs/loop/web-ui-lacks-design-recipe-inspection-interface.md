@@ -3,7 +3,7 @@ title: Web UI lacks design recipe inspection interface
 loop:
   - 6d59be27-a527-4d72-94fd-5c4b3d57bcf1
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: RESOLVED
 loop_goal: pg_v67IPPn4
 decision: untriaged
 ---
