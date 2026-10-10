@@ -87,6 +87,52 @@ describe("the sleep policy keeps an idle canvas idle", () => {
     expect(r.again).toBe(false);
   });
 
+  describe("the eddy window: a pointer resting over a ground that declares one", () => {
+    const rest = { window: 15_000, resting: true };
+    /** Frames at 60fps from a touch at 0, with the pointer resting or not. */
+    function rested(r: { window: number; resting: boolean } | undefined, moving: (t: number) => boolean = () => true) {
+      let s = touch(ASLEEP, 0);
+      const seen: { t: number; state: string }[] = [];
+      for (let t = 0; t <= 60_000; t += 16) {
+        const x = advance(s, t, moving(t), false, r);
+        s = x.sleep;
+        seen.push({ t, state: s.state });
+        if (!x.again) break;
+      }
+      return seen;
+    }
+
+    it("keeps it awake for the window after the last move, then settles and sleeps", () => {
+      const seen = rested(rest);
+      expect(seen.find((f) => f.t >= 14_900)!.state).toBe("awake");
+      const settling = seen.find((f) => f.state === "settling")!;
+      expect(settling.t).toBeGreaterThanOrEqual(15_000);
+      const last = seen[seen.length - 1]!;
+      expect(last.state).toBe("asleep");
+      // The ordinary settle, after the window: never past window + cap.
+      expect(last.t).toBeLessThan(15_000 + SETTLE_CAP_MS);
+    });
+
+    it("sleeps once the ground is at rest after the window, not at the cap", () => {
+      const seen = rested(rest, (t) => t < 16_000);
+      expect(seen[seen.length - 1]!.t).toBeLessThan(16_000 + 32);
+    });
+
+    it("changes nothing when the pointer is not resting, or the ground declares no window", () => {
+      for (const r of [undefined, { window: 15_000, resting: false }, { window: 0, resting: true }]) {
+        const seen = rested(r);
+        const last = seen[seen.length - 1]!;
+        expect(last.state).toBe("asleep");
+        expect(last.t).toBeLessThan(SETTLE_CAP_MS + 32);
+        expect(seen.find((f) => f.state === "settling")!.t).toBeGreaterThanOrEqual(ACTIVE_MS);
+      }
+    });
+
+    it("never wakes a sleeping ground by itself — an untouched canvas stays asleep", () => {
+      expect(advance(ASLEEP, 1000, true, false, rest)).toEqual({ sleep: ASLEEP, draw: false, again: false });
+    });
+  });
+
   it("wakes again from sleep on the next touch", () => {
     const { sleep } = walk(touch(ASLEEP, 0), 0, 10_000, () => false);
     expect(sleep.state).toBe("asleep");

@@ -18,7 +18,7 @@ import { rules, selectorsOf, sheets } from "./cssrules.ts";
  * of them fails loudly on its own.
  *
  * So this is the check the old comment was doing by hand: every name in
- * `THEMES` can actually be drawn — by the starfield, or by a picture that
+ * `THEMES` can actually be drawn — by a picture (a living ground's still) that
  * exists on disk, is served with a type the server knows, and has a holding
  * colour behind it for the moment before it loads.
  *
@@ -30,14 +30,10 @@ import { rules, selectorsOf, sheets } from "./cssrules.ts";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 
-/** The ground drawn in code rather than painted. Its own guard is
- *  `galaxy.test.ts`; here it is the one name allowed to have no file. */
-const GENERATED = "galaxy";
 
 describe("every ground this build offers can actually be drawn", () => {
   it("has a picture on disk for every painted name", () => {
     for (const theme of THEMES) {
-      if (theme === GENERATED) continue;
       const art = PAINTED[theme];
       expect(art, `${theme} is offered in the picker and has no art`).toBeTruthy();
       const file = `${publicDir}grounds/${art!.file}.jpg`;
@@ -104,7 +100,7 @@ describe("every ground this build offers can actually be drawn", () => {
      * The whole point of a world-space ground: a field stays under whatever is
      * standing in it. A number small enough to be a pixel count would be a
      * ground that tiles dozens of times across one screen and slides under the
-     * items — the failure `Galaxy.tsx` describes as "nothing is ever *in* a
+     * items — the failure the first CSS Galaxy described as "nothing is ever *in* a
      * place". Every tile here is hundreds of canvas units on a side.
      */
     for (const [theme, art] of Object.entries(PAINTED)) {

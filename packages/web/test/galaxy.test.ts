@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { NEBULA, STARS } from "../src/components/themes/Galaxy.tsx";
-import { css, rules, selectorsOf } from "./cssrules.ts";
+import { NEBULA, SKY_CAP, SPACE, STAR_TINTS, TILE, layout } from "../src/components/themes/orbit.ts";
+import { PAINTED } from "../src/components/themes/PaintedGround.tsx";
+import { css } from "./cssrules.ts";
 
 /**
  * **A background somebody has to turn off to read the canvas is not a
@@ -9,30 +12,27 @@ import { css, rules, selectorsOf } from "./cssrules.ts";
  *
  * The sentence is the ocean theme's, and it is the whole reason this file
  * exists. On 8 Sep 2026 Dion asked for the space ground to be *"even more like
- * a galaxy"*, which is an invitation to spend exactly the thing that sentence
- * protects: every step towards a better picture — colour, glow, nebulae — is a
- * step towards a ground that competes with what is standing on it.
+ * a galaxy"*, and on 9 Oct it became Orbit — stars that answer every cursor.
+ * Each step towards a better picture is a step towards a ground that competes
+ * with what is standing on it, so the budget is measured from the ground's own
+ * tables (`orbit.ts`, the numbers its shader is written from), not a copy.
  *
- * So the budget is measured rather than eyeballed, and it is measured from the
- * component's own tables rather than a copy of them (lesson #5: a guard that
- * restates the rule can only test itself). Raise an alpha, add a fourth cloud,
- * pick a brighter hue, and this arithmetic moves with it — which is the point.
- * A later "spice it up" is welcome; a later "spice it up" that quietly costs a
- * pen stroke its contrast is what fails here.
- *
- * The stacking is asserted too, because it is the difference between a nebula
- * and fog: clouds under the stars, both under the world, neither catching a
- * pointer.
+ * And since 9 Oct, the thing Orbit's phase fixed: its stars are WORLD
+ * anchored. Where a star rests is a pure function of the view, so zooming out
+ * and back cannot gather them toward the centre (the bench's flaw).
  */
 
 type Rgb = [number, number, number];
 
-/** `--theme-space`, read from the sheet rather than pasted. */
+/** `--theme-space`, read from the sheet rather than pasted — and the shader's
+ *  own space colour must be the same one. */
 function space(): Rgb {
   const value = /--theme-space:\s*(#[0-9a-f]{6})/i.exec(css);
   expect(value, "--theme-space must be declared").toBeTruthy();
   const hex = value![1]!.replace("#", "");
-  return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)) as Rgb;
+  const sheet = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)) as Rgb;
+  expect(SPACE, "Orbit's space is the sheet's space").toEqual(sheet);
+  return sheet;
 }
 
 function over(rgb: Rgb, alpha: number, ground: Rgb): Rgb {
@@ -57,7 +57,7 @@ function ratio(a: Rgb, b: Rgb): number {
  *  full strength, composited in the order they are painted. */
 function brightestSky(): Rgb {
   return NEBULA.reduce<Rgb>(
-    (ground, cloud) => over(cloud.rgb.split(",").map(Number) as Rgb, cloud.alpha, ground),
+    (ground, cloud) => over(cloud.rgb, cloud.alpha, ground),
     space(),
   );
 }
@@ -81,74 +81,71 @@ describe("the galaxy is a picture the canvas can still be read on", () => {
     }
   });
 
-  it("keeps the faintest stars visible through the thickest cloud", () => {
-    /**
-     * The failure mode a brighter nebula actually has, and it is not the
-     * items — they sit on their own surfaces. It is the sky eating itself.
-     * The far dust is 34% of the way from the ground to white, so it brightens
-     * WITH the cloud under it: push the clouds far enough and the dust becomes
-     * a slightly paler cloud, the depth goes, and what is left is fog with a
-     * few bright stars in it. Measured on the brightest sky the tables can
-     * make, where the loss would happen first.
-     */
-    const sky = brightestSky();
-    const dust = STARS.reduce((faintest, f) => (f.alpha < faintest.alpha ? f : faintest), STARS[0]!);
-    const lit = over(dust.tint.split(",").map(Number) as Rgb, dust.alpha, sky);
-    expect(ratio(lit, sky), "the far dust has dissolved into the cloud").toBeGreaterThanOrEqual(2.2);
-  });
-
-  it("paints the clouds under the stars, and both under the world", () => {
-    /* A cloud over the stars is fog. `::before` paints before `::after` at the
-       same z, so the order is the pseudo-element rather than a z-index — and
-       that is exactly the sort of thing that emerges from stacking and is
-       silently reversed by a later edit. */
-    const before = rules().find((r) => selectorsOf(r).includes(".canvas-theme-galaxy::before"));
-    const after = rules().find((r) => selectorsOf(r).includes(".canvas-theme-galaxy::after"));
-    expect(before, "the clouds must have a layer").toBeTruthy();
-    expect(after, "the stars must have a layer").toBeTruthy();
-    expect(before!.body).toContain("var(--clouds)");
-    expect(after!.body).toContain("var(--stars)");
-    const layer = rules().find((r) => selectorsOf(r).includes(".canvas-theme"));
-    expect(layer!.body, "the whole ground stays under the world and out of the way").toContain(
-      "pointer-events: none",
-    );
-  });
-
-  it("declares every value its component writes, so a missing one is visible", () => {
-    /**
-     * The reason the star values are declared in the sheet as well as written
-     * by the component, stated in the stylesheet and now enforced: `var()`
-     * with no definition drops the whole declaration silently, so a component
-     * that stopped setting one would give a rule nobody could see was gone.
-     * The clouds arrived with the same three values and want the same net.
-     */
-    const rule = rules().find((r) => selectorsOf(r).includes(".canvas-theme-galaxy"));
-    for (const name of ["--stars", "--stars-size", "--stars-pos", "--clouds", "--clouds-size", "--clouds-pos"]) {
-      expect(rule!.body, `${name} needs a safe default`).toContain(`${name}:`);
+  it("caps the sky the shader draws at a colour that keeps every item legible", () => {
+    /* The shader clamps the composited sky at SKY_CAP whatever the noise does,
+       so the cap itself must pass the same floors. */
+    for (const [what, colour, floor] of STANDING) {
+      expect(ratio(colour, SKY_CAP), `${what} on the capped sky`).toBeGreaterThanOrEqual(floor);
     }
   });
 
-  it("fades the clouds with the stars rather than on a curve of their own", () => {
-    /* A 1,900-unit tile is 190px at a tenth zoom, so a nebula that outlived
-       the stars would be the one thing a person saw repeating. One value: the
-       ground going quiet when you stand back is one behaviour. */
-    const before = rules().find((r) => selectorsOf(r).includes(".canvas-theme-galaxy::before"));
-    expect(before!.body).toContain("opacity: var(--star-fade");
+  it("keeps the CSS Galaxy's three star temperatures", () => {
+    expect(STAR_TINTS).toHaveLength(3);
+    expect(new Set(STAR_TINTS.map((t) => t.join())).size).toBe(3);
   });
 
-  it("has a sky with a front and a back", () => {
-    /* The finding behind the change: identical dots at three densities is a
-       texture. Depth is more than one size AND more than one temperature, and
-       a halo only where a star is near enough to have one. */
-    expect(new Set(STARS.map((f) => f.dot)).size, "one dot size is a texture").toBeGreaterThan(3);
-    expect(new Set(STARS.map((f) => f.tint)).size, "one colour is a texture").toBeGreaterThan(1);
-    expect(STARS.filter((f) => f.halo > 0).length, "a halo on every star is a haze").toBeLessThan(
-      STARS.length / 2,
-    );
-    /* Sparser fields carry the halo: a glow on the dust is fog by another
-       name, and the dust is the layer that says "far". */
-    for (const field of STARS.filter((f) => f.halo > 0)) {
-      expect(field.size, "only the rare stars glow").toBeGreaterThan(500);
+  it("tiles its still at the period every hash wraps at", () => {
+    expect(PAINTED.galaxy?.world).toBe(TILE);
+    expect(PAINTED.galaxy?.fade, "the still fades with zoom, as the CSS Galaxy did").toBe(true);
+  });
+});
+
+describe("Orbit's stars live in the world", () => {
+  const W = 1440;
+  const H = 900;
+  /** Where each drawn level's window sits, as world rects — the stars a view
+   *  draws are exactly the lattice cells in these windows. */
+  const windows = (view: { scale: number; tx: number; ty: number }) =>
+    layout(view, W, H).regions.map((r) => ({ level: r.level, ox: r.ox, oy: r.oy, alpha: r.alpha.toFixed(9), k: r.k.toFixed(9) }));
+
+  it("gives the same view the same stars, whatever happened in between", () => {
+    const start = { scale: 1, tx: -120, ty: 40 };
+    const before = windows(start);
+    // Zoom out three times about the centre, and back.
+    let v = start;
+    for (let i = 0; i < 3; i++) {
+      const r = 1 / 3;
+      v = { scale: v.scale * r, tx: W / 2 - (W / 2 - v.tx) * r, ty: H / 2 - (H / 2 - v.ty) * r };
+      windows(v);
+      v = { scale: v.scale / r, tx: W / 2 - (W / 2 - v.tx) / r, ty: H / 2 - (H / 2 - v.ty) / r };
     }
+    expect(v.scale).toBeCloseTo(1, 9);
+    expect(windows(v)).toEqual(before);
+  });
+
+  it("holds the screen's star density across a zoom", () => {
+    /* Stars per screen, from the cell sizes: each level contributes
+       alpha × (screen area / cell² on screen). Within 20% from 5% to 800%. */
+    const density = (scale: number) =>
+      layout({ scale, tx: 0, ty: 0 }, W, H).regions.reduce((sum, r) => sum + (r.alpha * W * H) / (r.cell * scale) ** 2, 0);
+    const at1 = density(1);
+    for (const s of [0.05, 0.1, 0.33, 0.5, 0.71, 1.4, 2, 3, 8]) {
+      expect(Math.abs(density(s) / at1 - 1), `density at ${s}`).toBeLessThan(0.2);
+    }
+  });
+
+  it("moves the stars with a pan like the items, the far ones a little slower", () => {
+    const a = layout({ scale: 1, tx: 0, ty: 0 }, W, H).regions;
+    for (const r of a) {
+      expect(r.k).toBeGreaterThanOrEqual(0.86);
+      expect(r.k).toBeLessThanOrEqual(1);
+    }
+    expect(Math.max(...a.map((r) => r.k)) - Math.min(...a.map((r) => r.k))).toBeGreaterThan(0.05);
+  });
+
+  it("is loaded only by the living layer, never from the first paint", () => {
+    const living = readFileSync(fileURLToPath(new URL("../src/components/themes/LivingGround.tsx", import.meta.url)), "utf8");
+    expect(living).toMatch(/import\("\.\/orbit\.ts"\)/);
+    expect(living).not.toMatch(/^import .*orbit\.ts/m);
   });
 });

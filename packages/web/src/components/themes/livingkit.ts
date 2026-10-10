@@ -32,6 +32,9 @@ export interface Field {
   pointers: readonly Pointer[];
   /** Item rectangles in ground space, packed x, y, w, h. */
   items: Float32Array;
+  /** The id of the item under each rect in `items`, in the same order — for a
+   *  ground that answers back to the items themselves (Night's glow). */
+  itemIds?: readonly string[];
   /** The trail texture (R = how pressed, 0..1) and the ground rect it covers;
    *  `null` when nothing has ever been stamped (and in the still). */
   trail: WebGLTexture | null;
@@ -49,6 +52,15 @@ export interface LivingGround {
   step(dt: number, field: Field): boolean;
   draw(gl: WebGL2RenderingContext, field: Field): void;
   dispose(gl: WebGL2RenderingContext): void;
+  /** How long, in ms, this viewer's pointer RESTING over the ground keeps it
+   *  awake after its last move (the sleep policy's `Rest`). Orbit's eddy
+   *  window; absent means a still pointer is not an input (Meadow). */
+  restWindow?: number;
+  /** A journey's readback of what the ground holds near a screen point (CSS
+   *  px, relative to the canvas) — Orbit's stars within `r`: how many, and
+   *  their mean radial speed (px/s, + = away from the point). Nothing in the
+   *  app calls it. */
+  readback?(gl: WebGL2RenderingContext, sx: number, sy: number, r: number): { count: number; radial: number } | null;
 }
 
 /** Compile and link one program, or throw with the driver's own words. */

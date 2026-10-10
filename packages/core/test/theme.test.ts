@@ -321,11 +321,19 @@ describe("the grounds that move", () => {
     expect(isLiving("meadow")).toBe(true);
     expect(themeLabel("meadow")).toBe("Meadow");
     expect(themeCursorName("meadow")).toBe("ladybird");
+    expect(isLiving("night")).toBe(true);
+    expect(themeLabel("night")).toBe("Night");
+    expect(themeCursorName("night")).toBe("firefly");
   });
 
-  it("says the painted and generated grounds do not move, and nothing is living by default", () => {
+  it("knows galaxy moves now — Orbit is how it is drawn, under the same id, label and cursor", () => {
+    expect(isLiving("galaxy")).toBe(true);
+    expect(themeLabel("galaxy")).toBe("Space Galaxy");
+    expect(themeCursorName("galaxy")).toBe("sparkle");
+  });
+
+  it("says the painted grounds do not move, and nothing is living by default", () => {
     for (const theme of THEMES) expect(isLiving(theme)).toBe((LIVING as readonly string[]).includes(theme));
-    expect(isLiving("galaxy")).toBe(false);
     expect(isLiving("farm")).toBe(false);
     expect(isLiving(null)).toBe(false);
   });

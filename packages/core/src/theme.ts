@@ -71,13 +71,21 @@ export const THEME_PROP = "theme";
  * mountains had procedural stand-ins and this is the drop-in the stopgap was
  * written for; farm and desert never could have been generated at all.
  *
+ * **Galaxy moves too, since 9 Oct 2026**: it is drawn as Orbit — the same
+ * space, its stars bent by every cursor — under the same id and label, so
+ * every canvas wearing it became living with no migration. Its still frame
+ * is rendered from Orbit's own shader and has no seam either.
+ *
  * **Meadow (9 Oct 2026) is the first ground that moves** — grass that parts
  * under every cursor and settles when nothing moves (`LIVING`, below). It is
  * a name here like any other, and a painted still frame on disk like the four
  * pictures, so a viewer whose browser cannot or should not animate it still
  * stands on the same field.
+ *
+ * **Night (9 Oct 2026) is the second** — a dark meadow under a dim sky where
+ * every cursor is a firefly and its path wakes more out of the grass.
  */
-export const THEMES = ["galaxy", "ocean", "mountains", "farm", "desert", "meadow"] as const;
+export const THEMES = ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night"] as const;
 
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
@@ -111,6 +119,8 @@ export function themeLabel(theme: CanvasTheme): string {
       return "Desert";
     case "meadow":
       return "Meadow";
+    case "night":
+      return "Night";
   }
 }
 
@@ -133,7 +143,7 @@ export function themeLabel(theme: CanvasTheme): string {
  * web app, so this list is the whole of what a living ground costs a first
  * visit (`docs/projects/living-grounds/design.md` §7).
  */
-export const LIVING = ["meadow"] as const satisfies readonly CanvasTheme[];
+export const LIVING = ["meadow", "night", "galaxy"] as const satisfies readonly CanvasTheme[];
 
 /** Does this ground move — the question the theme layer asks before it loads
  *  a WebGL host, and the CLI asks before it says a ground answers the cursor. */
@@ -496,7 +506,7 @@ export const CURSOR_PROP = "cursor";
 
 /** The shapes this build can draw. Not a string, for `THEMES`' reason: a
  *  canvas wearing a name nothing can draw is a pointer that vanishes. */
-export const CURSORS = ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep", "cricket", "ladybird"] as const;
+export const CURSORS = ["arrow", "sparkle", "fish", "flag", "drop", "heart", "crescent", "sheep", "cricket", "ladybird", "firefly"] as const;
 
 /** One of the shapes this build can draw. Not a string, for `CanvasTheme`'s
  *  reason: a name nothing can draw is a pointer that vanishes. */
@@ -532,6 +542,8 @@ export function cursorLabel(cursor: CanvasCursor): string {
       return "Cricket bat";
     case "ladybird":
       return "Ladybird";
+    case "firefly":
+      return "Firefly";
   }
 }
 
@@ -609,6 +621,8 @@ export function canvasCursorName(canvas: { properties?: Record<string, string> }
  */
 export function themeCursorName(theme: CanvasTheme | null): CanvasCursor {
   switch (theme) {
+    // Orbit keeps Galaxy's sparkle rather than design.md's comet: the sparkle
+    // already reads as a star with a long ray, and a new shape is entry bytes.
     case "galaxy":
       return "sparkle";
     case "ocean":
@@ -622,6 +636,9 @@ export function themeCursorName(theme: CanvasTheme | null): CanvasCursor {
     // A ladybird walking on the grass, which is what a cursor on a meadow is.
     case "meadow":
       return "ladybird";
+    // Night's pointer IS a firefly: its lantern is a hole the ground glows through.
+    case "night":
+      return "firefly";
     default:
       // No ground, no costume.
       return "arrow";

@@ -31,12 +31,24 @@ import "./meadow.css";
 /** Each ground is its own chunk, fetched only by a canvas wearing it. */
 const GROUNDS: Partial<Record<CanvasTheme, () => Promise<Ground>>> = {
   meadow: () => import("./meadow.ts").then((m) => m.createMeadow()),
+  night: () => import("./night.ts").then((m) => m.createNight()),
+  // Orbit is how Galaxy is drawn (phases.md, 9 Oct): the stored theme stays
+  // `galaxy`, so every canvas wearing it became living with no migration.
+  galaxy: () => import("./orbit.ts").then((m) => m.createOrbit()),
 };
 
 /** What the `meadow` journey reads off the canvas element. */
 export interface GroundProbe {
   frames: () => number;
   trailAt: (worldX: number, worldY: number) => number;
+  /** Is this viewer's pointer resting over the ground, and is its button
+   *  held — the eddy window's and the reversal's inputs (the `orbit` journey). */
+  resting: () => boolean;
+  held: () => boolean;
+  /** The ground's own readback near a canvas-relative screen point. */
+  near: (sx: number, sy: number, r: number) => { count: number; radial: number } | null;
+  /** Night's woken fireflies right now (0 on any other ground). */
+  fireflies: () => number;
 }
 
 export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anchor: ThemeAnchor; still: ReactNode }) {
@@ -71,7 +83,9 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
         const s = useCanvasStore.getState();
         const contents = s.past?.canvas ?? s.canvas;
         const list = contents ? Object.values(contents.items) : [];
-        h.setItems(itemRects(list, useUiStore.getState().viewport, viewOf(), canvas.clientWidth, canvas.clientHeight));
+        const ids: string[] = [];
+        const rects = itemRects(list, useUiStore.getState().viewport, viewOf(), canvas.clientWidth, canvas.clientHeight, undefined, ids);
+        h.setItems(rects, ids);
       };
       h.setView(viewOf());
       items();
@@ -99,19 +113,48 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
 
       let lastX = NaN;
       let lastY = NaN;
+      let held = false;
       const move = (e: PointerEvent) => {
         const r = canvas.getBoundingClientRect();
         const sx = e.clientX - r.left;
         const sy = e.clientY - r.top;
-        if (sx < 0 || sy < 0 || sx > r.width || sy > r.height) return;
+        if (sx < 0 || sy < 0 || sx > r.width || sy > r.height) {
+          h.rest(false);
+          return;
+        }
         const dist = Number.isNaN(lastX) ? 0 : Math.hypot(sx - lastX, sy - lastY);
         lastX = sx;
         lastY = sy;
+        held = (e.buttons & 1) === 1;
         const at = toGround(h.currentView, sx, sy);
-        h.pointer("self", at.x, at.y, dist, (e.buttons & 1) === 1);
+        h.pointer("self", at.x, at.y, dist, held);
+        // Resting needs a real move first: the browser's own synthetic move
+        // after a layout (distance 0) is not a hand on the canvas.
+        if (dist > 0) h.rest(true);
       };
       window.addEventListener("pointermove", move, { passive: true });
       off.push(() => window.removeEventListener("pointermove", move));
+      // A press or release with no move still changes the pull (Orbit's held
+      // button reverses it), so both feed the pointer where it already is.
+      const press = (e: PointerEvent) => {
+        if (Number.isNaN(lastX)) return;
+        held = (e.buttons & 1) === 1;
+        const at = toGround(h.currentView, lastX, lastY);
+        h.pointer("self", at.x, at.y, 0, held);
+      };
+      window.addEventListener("pointerdown", press, { passive: true });
+      window.addEventListener("pointerup", press, { passive: true });
+      off.push(() => window.removeEventListener("pointerdown", press));
+      off.push(() => window.removeEventListener("pointerup", press));
+      // The pointer left the window, or the window lost focus: not resting.
+      const leave = (e: PointerEvent) => {
+        if (!e.relatedTarget) h.rest(false);
+      };
+      const blur = () => h.rest(false);
+      document.addEventListener("pointerout", leave, { passive: true });
+      window.addEventListener("blur", blur);
+      off.push(() => document.removeEventListener("pointerout", leave));
+      off.push(() => window.removeEventListener("blur", blur));
 
       // Every presence cursor CursorLayer draws, at the world point it has
       // eased to. Nothing new is sent: these are positions this tab already
@@ -135,6 +178,10 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
           const g = toGround(h.currentView, wx * vp.scale + vp.tx, wy * vp.scale + vp.ty);
           return h.trailValue(g.x, g.y);
         },
+        resting: () => h.isResting,
+        held: () => held,
+        near: (sx, sy, r) => h.readback(sx, sy, r),
+        fireflies: () => (ground as Ground & { flies?: () => number }).flies?.() ?? 0,
       };
       (canvas as HTMLCanvasElement & { groundProbe?: GroundProbe }).groundProbe = probe;
     }, () => {

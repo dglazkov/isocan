@@ -5358,7 +5358,7 @@ canvas
   .command("background [theme]")
   .description(
     `The ground this canvas stands on — ${THEMES.join(", ")}, a picture with --picture, or \`none\`. ` +
-      `${LIVING.join(", ")} ${LIVING.length === 1 ? "is a living ground" : "are living grounds"}: it moves under every cursor on the canvas, agents' included, and settles when nothing moves`,
+      `${LIVING.join(", ")} ${LIVING.length > 1 ? "are living grounds" : "is a living ground"}: each moves under every cursor on the canvas, agents' included, and settles when nothing moves`,
   )
   .option("--moves", "the ground travels with the canvas, so a place stays under what stands on it (default)")
   .option("--pinned", "the ground stays behind the glass and items move across it")

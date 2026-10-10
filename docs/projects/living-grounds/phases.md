@@ -9,7 +9,7 @@ note: "the walk: a prototype bench that measures before anything ships, the livi
 
 **9 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 9 Oct 2026: phases 1 and 2 are CLOSED — Meadow lives in isocan and parts under every cursor on the canvas, people's and agents'. Phase 0 is PART-DONE (the bench; Dion has settled Orbit-for-Galaxy and the eddy). Next: living-grounds phase 3, Orbit as Galaxy, and Night.**
+**Where we are, 9 Oct 2026: phases 1–3 are CLOSED — Meadow, Night, and Galaxy (now drawn by Orbit) are living grounds in isocan, touched by every cursor, asleep when nobody moves. Phase 0 is PART-DONE (the bench; the Orbit and eddy calls are made). Next: living-grounds phase 4, Motion settings, the menu's previews, more grounds.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -96,7 +96,7 @@ messages.
 
 ## Phase 3 — Orbit and Night
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 9 October 2026.** Galaxy is drawn by Orbit, and the CSS starfield is gone. Its stars are world-anchored in five levels that keep the on-screen density steady: three zoom-outs to 0.27 and back left the centre count at 166.2 → 166.2. A resting pointer keeps it awake for its 15 s eddy window: the `orbit` journey saw stars drawn inward at 24.8 px/s at rest and pushed outward at 153 px/s with the button held, and sleep at 15.8 s. An untouched galaxy sleeps (`orbit-idle` 1% busy). Night: a dark meadow under a dim sky with far bokeh; every cursor is a firefly (a new `firefly` cursor whose lantern is a hole the ground lights) whose trail wakes more; a card near a light catches a warm glow, written only when it changes. The `night` journey: awake while moving, a near card's glow 0.22 and a far card's none, asleep 1.6 s after the stop, the glow cleared. Reduced motion draws each ground's still with no WebGL canvas.
 
 **Outcome:** both grounds with their stills and cursors. Orbit replaces
 Galaxy (the `galaxy` theme, its label kept), with the held-button reversal and
@@ -104,8 +104,17 @@ the eddy window under a resting pointer. Night's woken fireflies and glow near
 items.
 
 **Proof:** journeys per ground (wake on move, settle to rest, still under
-reduced motion). Frame cost on the canvas at or under the bench numbers.
-`idle-at-rest` on each.
+reduced motion). `idle-at-rest` on each. (Amended 9 Oct: "frame cost on the
+canvas at or under the bench numbers" moves to phase 5, whose `frames.mjs`
+run is that measurement; phase 3 ships on the bench's numbers.)
+
+### Trajectory
+
+- **2026-10-09** — Orbit's stars are world-anchored, not the bench's screen-space particles: a star's resting place depends only on the view, so pan and zoom never gather them. The only per-frame state is each star's displacement from home.
+- **2026-10-09** — The eddy window is a ground-declared `restWindow` in the sleep policy (Orbit 15 s, Meadow none), and only a pointer that has really moved over the canvas can rest — leaving or losing focus counts as input — so an untouched galaxy still sleeps.
+- **2026-10-09** — Galaxy kept its sparkle cursor (it reads as a star with a ray; a comet is entry bytes). Night's sky and horizon are screen space, so its still is the whole scene pinned and covering, not a world tile.
+- **2026-10-09** — Item glow is `--ground-glow` on the lit items only, measured for items within 300 px of a light and written on a change over 0.02; the deep run caught the first cut's literal colour and undefined variable, now `--firefly-glow` and a default.
+- **2026-10-09** — Open: Night's grass reads nearly black unless a firefly lights it — darker than the bench; Night ships at density ×0.5 and Orbit at the bench's ×1, neither measured on an M1; entry 705,983, 317 bytes under the ceiling.
 
 ## Phase 4 — Motion settings, the menu, more grounds
 

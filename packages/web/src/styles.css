@@ -54,6 +54,9 @@
      above, so the field behind a WebGL layer that has not drawn yet is the
      field's own colour. */
   --theme-meadow: #223112;
+  /* Night (living grounds): the mean of its still frame, for the same reason. */
+  --theme-night: #080a0d;
+  --firefly-glow: #ffba60; /* the warm light a firefly casts on a card (Night) */
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -319,6 +322,9 @@
      above, so the field behind a WebGL layer that has not drawn yet is the
      field's own colour. */
   --theme-meadow: #223112;
+  /* Night (living grounds): the mean of its still frame, for the same reason. */
+  --theme-night: #080a0d;
+  --firefly-glow: #ffba60; /* the warm light a firefly casts on a card (Night) */
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -954,28 +960,11 @@ img { height: auto; }
 /* Space is dark whatever the app's theme is: a starfield on a white ground is
    not a compromise, it is a different picture. The items keep their own
    surfaces, which is what stops this costing legibility. */
-/* The star layer's four values are written by `Galaxy.tsx` on every pan and
-   zoom. Declared here too, and that is not belt-and-braces: `var()` with no
-   definition drops the whole declaration silently, so a component that failed
-   to set them would give a rule nobody could see was gone. The defaults are
-   the safe picture — deep space with no stars — rather than an empty ground. */
-.canvas-theme-galaxy {
-  background-color: var(--theme-space);
-  --stars: none; --stars-size: auto; --stars-pos: 0 0; --star-fade: 0;
-  --clouds: none; --clouds-size: auto; --clouds-pos: 0 0;
-}
-/* The nebulae, under the stars and over the ground. `::before` rather than a
-   fourth star gradient because they want their own tile sizes — thousands of
-   world units against the stars' hundreds — and because a cloud painted over
-   the stars is fog. They share `--star-fade`: the ground going quiet when you
-   stand back is one behaviour, not two curves. */
-.canvas-theme-galaxy::before {
-  content: ""; position: absolute; inset: 0;
-  background-image: var(--clouds); background-size: var(--clouds-size); background-position: var(--clouds-pos);
-  opacity: var(--star-fade, 1);
-}
-/* The stars fade with zoom; the ground does not. Painted as a second layer so
-   the fade is one composited opacity rather than three gradients redrawn. */
+/* Galaxy's space colour: under Orbit's WebGL layer before it draws, and
+   under the still tile (and showing through it as it fades with zoom). The
+   CSS starfield that lived here is gone — Orbit replaced it (living grounds
+   phase 3, 9 Oct 2026), and its still is a tile like any painted ground. */
+.canvas-theme-galaxy { background-color: var(--theme-space); }
 /**
  * **The painted grounds** (#195's art, 8 Sep 2026). Ocean, mountains, farm and
  * desert differ only in the picture and its world size, and both of those are
@@ -1007,11 +996,6 @@ img { height: auto; }
 .canvas-theme-mountains { background-color: var(--theme-rock); }
 .canvas-theme-farm { background-color: var(--theme-farm); }
 .canvas-theme-desert { background-color: var(--theme-sand); }
-.canvas-theme-galaxy::after {
-  content: ""; position: absolute; inset: 0;
-  background-image: var(--stars); background-size: var(--stars-size); background-position: var(--stars-pos);
-  opacity: var(--star-fade, 1);
-}
 /**
  * **A ground somebody supplied** (#204 phase 2). Two layers, and they are two
  * elements rather than one shorthand because they want different sizes: the

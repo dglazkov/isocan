@@ -16,7 +16,8 @@ import { FULL_LABEL_ROOM, hasRoomForChrome, underRowSpellsItOut } from "../src/l
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const chrome = read("../src/lib/chrome.ts");
 const itemView = read("../src/components/ItemView.tsx");
-const galaxy = read("../src/components/themes/Galaxy.tsx");
+const painted = read("../src/components/themes/PaintedGround.tsx");
+const orbit = read("../src/components/themes/orbit.ts");
 const textnode = read("../../core/src/textnode.ts");
 
 describe("the zoom thresholds read one rule", () => {
@@ -29,9 +30,11 @@ describe("the zoom thresholds read one rule", () => {
     expect(chrome).toMatch(/export function underRowSpellsItOut\([^)]*was\?: boolean\)[^{]*\{\s*return holdsAtZoom\(/);
   });
 
-  it("the galaxy's ground fades through zoomFade, not an inline curve", () => {
-    expect(galaxy).toContain("zoomFade(scale,");
-    expect(galaxy).not.toMatch(/\(scale - [\d.]+\) \/ [\d.]+/);
+  it("the galaxy's ground fades through zoomFade, not an inline curve — living and still alike", () => {
+    // Orbit's clouds (living grounds phase 3) and its still tile.
+    expect(orbit).toContain("zoomFade(f.view.scale,");
+    expect(painted).toContain("zoomFade(scale,");
+    for (const src of [orbit, painted]) expect(src).not.toMatch(/\(scale - [\d.]+\) \/ [\d.]+/);
   });
 
   it("ItemView hands each rule its last answer, so the memory is actually used", () => {

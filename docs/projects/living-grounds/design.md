@@ -9,7 +9,7 @@ note: "The mechanism for living grounds: one lazy WebGL2 host behind the items, 
 
 **The debt this discharges.** `journey.md` asks for grounds that move under the
 cursor. Today's grounds are CSS backgrounds (`CanvasThemeLayer.tsx` dispatching
-to `themes/Galaxy.tsx`, `PaintedGround.tsx`, `CustomGround.tsx`). They re-render
+to `themes/Galaxy.tsx` — since replaced by Orbit — `PaintedGround.tsx`, `CustomGround.tsx`). They re-render
 on pan and zoom, and animate nothing. This is the mechanism that lets a ground
 be a program without costing an idle canvas anything.
 

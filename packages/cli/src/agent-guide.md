@@ -3925,11 +3925,17 @@ archived** in the app's ⌘O switcher, which otherwise leaves them out of its
 search as well as its list. Every other verb reaches an archived canvas by name
 with no flag at all, so a canvas somebody archives while you are parked on it
 is still the canvas you are standing on. `canvas background
-<galaxy|ocean|mountains|farm|desert|meadow|none>` sets the ground a canvas stands on, and
+<galaxy|ocean|mountains|farm|desert|meadow|night|none>` sets the ground a canvas stands on, and
 bare `canvas background` says what it is wearing — everybody on the canvas
 sees the same one, so it is a change to ask about rather than assume.
 `meadow` is a living ground: grass that parts under the cursor and settles
 when nothing moves, drawn in each viewer's browser and never stored or sent.
+`night` is one too: a dark meadow under a dim sky where every cursor, yours
+included, is a firefly whose path wakes more out of the grass, and cards near
+one catch a faint warm light.
+`galaxy` moves now as well: it is drawn as Orbit, a starfield whose stars
+curve toward every cursor (a held button pushes them away), and a cursor that
+rests over it keeps a slow eddy turning for about 15 s before it settles.
 Your cursor touches it too: every presence cursor, an agent's at full weight,
 bends the grass and leaves a trail in each viewer's browser, from the presence
 they already receive. Every `session move`, `point` and `work` wanders across

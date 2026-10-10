@@ -79,11 +79,14 @@ export class GroundHost {
   private ambient = 0;
   private view: Viewport = { scale: 1, tx: 0, ty: 0 };
   private items: Float32Array = new Float32Array(0);
+  private itemIds: readonly string[] = [];
   readonly field = new PointerField();
   private lastStamp = -Infinity;
   private lastFrame = 0;
   private losses = 0;
   private dead = false;
+  /** Is this viewer's pointer resting over the ground (the eddy window)? */
+  private resting = false;
   /** Frames drawn since mount — read by the `meadow` journey to prove the
    *  loop ran while awake and stopped while asleep. */
   frames = 0;
@@ -121,8 +124,10 @@ export class GroundHost {
     return this.view;
   }
 
-  /** The items standing on the ground, packed x, y, w, h in ground space. */
-  setItems(items: Float32Array): void {
+  /** The items standing on the ground, packed x, y, w, h in ground space,
+   *  and (optionally) the id under each rect, in the same order. */
+  setItems(items: Float32Array, ids?: readonly string[]): void {
+    if (ids) this.itemIds = ids;
     const a = this.items;
     if (a.length === items.length && a.every((v, i) => v === items[i])) return;
     this.items = items;
@@ -145,6 +150,29 @@ export class GroundHost {
   presence(id: string, x: number, y: number, agent: boolean): void {
     this.field.setPresence(id, x, y, this.view.scale, agent, performance.now());
     this.wake();
+  }
+
+  /**
+   * This viewer's pointer is (or stops being) at rest over the ground, having
+   * moved there. Only a ground that declares a `restWindow` cares; leaving
+   * counts as an input, so a ground mid-eddy gets its ordinary settle rather
+   * than freezing on the spot.
+   */
+  rest(on: boolean): void {
+    if (on === this.resting) return;
+    this.resting = on;
+    if (!on && this.sleep.state !== "asleep" && this.ground.restWindow) this.wake();
+  }
+
+  get isResting(): boolean {
+    return this.resting;
+  }
+
+  /** The ground's own readback near a screen point, for a journey. */
+  readback(sx: number, sy: number, r: number): { count: number; radial: number } | null {
+    const gl = this.gl;
+    if (!gl || !this.ground.readback) return null;
+    return this.ground.readback(gl, sx, sy, r);
   }
 
   /** A presence cursor is gone from the canvas. Nothing to draw, so no wake. */
@@ -315,11 +343,13 @@ export class GroundHost {
       ambient: this.ambient,
       pointers: [...this.field.pointers.values()],
       items: this.items,
+      itemIds: this.itemIds,
       trail: this.trailEver ? this.trailTex[this.trailRead]! : null,
       trailRect: this.trailAt,
     };
     const moving = this.ground.step(dt, field) || trailLive;
-    const next = advance(this.sleep, now, moving, document.hidden);
+    const rest = this.ground.restWindow ? { window: this.ground.restWindow, resting: this.resting } : undefined;
+    const next = advance(this.sleep, now, moving, document.hidden, rest);
     this.sleep = next.sleep;
     if (next.draw) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);

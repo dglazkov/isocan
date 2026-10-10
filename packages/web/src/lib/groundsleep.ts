@@ -59,6 +59,22 @@ export function touch(sleep: Sleep, now: number): Sleep {
 }
 
 /**
+ * **The eddy window** (phases.md, 9 Oct: "the eddy stays"). A ground may
+ * declare that a pointer RESTING over it is still an input for `window` ms
+ * after its last move — Orbit does, so a slow eddy can form around a still
+ * cursor. Only this viewer's own pointer can rest, and only while it is over
+ * the canvas: an untouched canvas, with the pointer outside or absent, is not
+ * resting and sleeps exactly as before (`idle-at-rest`). A ground that
+ * declares no window (Meadow) is unaffected.
+ */
+export interface Rest {
+  /** How long after the last move a resting pointer keeps the ground awake. */
+  window: number;
+  /** Is this viewer's pointer over the ground right now, having moved there? */
+  resting: boolean;
+}
+
+/**
  * What one frame decides. `moving` is the ground's own `step` result — true
  * while anything it owns is still in motion. `draw` is whether to draw this
  * frame; `again` whether to ask for another. They differ exactly once: the
@@ -70,12 +86,18 @@ export function advance(
   now: number,
   moving: boolean,
   hidden = false,
+  rest?: Rest,
 ): { sleep: Sleep; draw: boolean; again: boolean } {
   if (hidden) return { sleep: { ...sleep, state: "asleep" }, draw: false, again: false };
   if (sleep.state === "asleep") return { sleep, draw: false, again: false };
   const quiet = now - sleep.lastInput;
-  if (quiet < ACTIVE_MS) return { sleep: { ...sleep, state: "awake" }, draw: true, again: true };
-  if (!moving || quiet >= SETTLE_CAP_MS) {
+  // A pointer resting over a ground that declares a rest window keeps it
+  // awake for that window; the settling cap moves out by the same amount, so
+  // the ground still gets its ordinary settle once the window closes.
+  const active = rest?.resting ? Math.max(ACTIVE_MS, rest.window) : ACTIVE_MS;
+  const cap = SETTLE_CAP_MS + (active - ACTIVE_MS);
+  if (quiet < active) return { sleep: { ...sleep, state: "awake" }, draw: true, again: true };
+  if (!moving || quiet >= cap) {
     return { sleep: { ...sleep, state: "asleep" }, draw: true, again: false };
   }
   return { sleep: { ...sleep, state: "settling" }, draw: true, again: true };

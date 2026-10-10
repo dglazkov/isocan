@@ -57,6 +57,8 @@ export interface Rect {
   y: number;
   width: number;
   height: number;
+  /** The item's id, when the caller wants `ids` filled in (Night's glow). */
+  id?: string;
 }
 
 /**
@@ -77,8 +79,9 @@ export function itemRects(
   screenW: number,
   screenH: number,
   max = MAX_ITEMS,
+  ids?: string[],
 ): Float32Array {
-  const seen: { area: number; x: number; y: number; w: number; h: number }[] = [];
+  const seen: { area: number; x: number; y: number; w: number; h: number; id: string }[] = [];
   for (const it of items) {
     if (!(it.width > 0 && it.height > 0)) continue;
     const sx = it.x * viewport.scale + viewport.tx;
@@ -89,14 +92,17 @@ export function itemRects(
     const vh = Math.min(sy + sh, screenH) - Math.max(sy, 0);
     if (vw <= 0 || vh <= 0) continue;
     const at = toGround(ground, sx, sy);
-    seen.push({ area: vw * vh, x: at.x, y: at.y, w: sw / ground.scale, h: sh / ground.scale });
+    seen.push({ area: vw * vh, x: at.x, y: at.y, w: sw / ground.scale, h: sh / ground.scale, id: it.id ?? "" });
   }
   seen.sort((a, b) => b.area - a.area);
   const n = Math.min(seen.length, max);
   const out = new Float32Array(n * 4);
+  if (ids) ids.length = 0;
   for (let i = 0; i < n; i++) {
     const r = seen[i]!;
     out.set([r.x, r.y, r.w, r.h], i * 4);
+    // Packed in the same order, so `ids[i]` is the item under rect `i`.
+    ids?.push(r.id);
   }
   return out;
 }
@@ -124,6 +130,9 @@ export function trailRect(view: Viewport, screenW: number, screenH: number): { x
 
 /** One thing touching the ground, as the shader sees it. */
 export interface Pointer {
+  /** `"self"` for this viewer's pointer, else the presence session id — so a
+   *  ground with memory of its own (Night's fireflies) can tell them apart. */
+  id: string;
   /** Ground-space position now, and where it was at the last frame — the
    *  stamp is a capsule between the two, so a fast flick leaves a line, not
    *  dots. */
@@ -157,7 +166,7 @@ export class PointerField {
     const speed = was ? (screenDist / dt) * 1000 : 0;
     // `px, py` stay where the last FRAME left them (`settle`), so several
     // events between two frames still stamp one unbroken capsule.
-    this.pointers.set(id, { x, y, px: was ? was.px : x, py: was ? was.py : y, speed, held, weight, at: now });
+    this.pointers.set(id, { id, x, y, px: was ? was.px : x, py: was ? was.py : y, speed, held, weight, at: now });
     if (this.pointers.size > MAX_POINTERS) {
       // The stalest goes: a cursor that has not moved for longest is the one
       // whose trail is already gone.

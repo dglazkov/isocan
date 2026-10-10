@@ -414,6 +414,21 @@ async function wearMeadow(rig, id, session) {
   await until(rig.b, `!!document.querySelector("canvas.ground-canvas, .canvas-theme-painted.canvas-theme-meadow")`, "the meadow to arrive", 10_000);
 }
 
+/** Put a canvas on Night from the CLI and wait for it, living or still. */
+async function wearNight(rig, id, session) {
+  journeyCli(rig, session, "identity", "--session", "--name", "Night Journey CLI");
+  journeyCli(rig, session, "--canvas", id, "canvas", "background", "night");
+  await until(rig.b, `!!document.querySelector("canvas.ground-canvas, .canvas-theme-painted.canvas-theme-night")`, "the night to arrive", 10_000);
+}
+
+/** Put a canvas on Galaxy — drawn by Orbit since living grounds phase 3 —
+ *  from the CLI, and wait for the ground to arrive, living or still. */
+async function wearGalaxy(rig, id, session) {
+  journeyCli(rig, session, "identity", "--session", "--name", "Orbit Journey CLI");
+  journeyCli(rig, session, "--canvas", id, "canvas", "background", "galaxy");
+  await until(rig.b, `!!document.querySelector("canvas.ground-canvas, .canvas-theme-galaxy-still")`, "the galaxy to arrive", 10_000);
+}
+
 export const JOURNEYS = [
   {
     name: "design-contract",
@@ -864,6 +879,175 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "orbit-idle",
+    /**
+     * **Space at rest is still space at rest** (living grounds phase 3). The
+     * `meadow-idle` instrument on a canvas wearing Galaxy — drawn by Orbit
+     * since 9 Oct 2026 — with nobody touching it and the pointer never over
+     * it: the eddy window is for a RESTING pointer, so an untouched galaxy
+     * must fall asleep like any ground and the page spend no more than 15%.
+     */
+    what: "a Galaxy (Orbit) canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet galaxy");
+      await wearGalaxy(rig, id, "orbit-idle-journey");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the galaxy to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Galaxy canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the galaxy is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "orbit",
+    /**
+     * **Gravity in space** (living grounds phase 3, journey.md scene 2): Orbit
+     * is how Galaxy is drawn now. State, not animation, read off the ground:
+     *
+     * - its stars are world-anchored — zoom out to a third and back, three
+     *   times, and the star count round the centre is within 20% of before
+     *   (the bench's stars gathered there);
+     * - the pointer moving wakes it and draws;
+     * - the pointer RESTING over it keeps it awake for the eddy window (~15 s
+     *   after the last move), then it settles and sleeps and draws nothing;
+     * - a held button reverses the pull: the stars near it move away (their
+     *   mean radial speed, read back from the GPU, is outward);
+     * - reduced motion gives the still tile, with no WebGL canvas and no
+     *   living chunk fetched.
+     */
+    what: "Galaxy is Orbit: world-anchored stars, awake on a move, the eddy window under a resting pointer, a held button reverses the pull, and a still under reduced motion",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme orbit");
+      const session = "orbit-journey";
+      await wearGalaxy(rig, id, session);
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      const state = async () => (await groundNow(b)).state;
+      const probe = (expr) => b.ev(`(() => { const p = document.querySelector("canvas.ground-canvas").groundProbe; return ${expr}; })()`);
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the galaxy fell back to its still with WebGL2 available: ${first.still}`);
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the galaxy to fall asleep before anything moves", 6000);
+        const cr = await b.ev(`(() => { const r = document.querySelector("canvas.ground-canvas").getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; })()`);
+        const near = (x, y, r) => probe(`p.near(${x - cr.left}, ${y - cr.top}, ${r})`);
+        const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
+
+        // 1. World-anchored: zoom out to a third and back, three times, about
+        //    a corner far from the centre (so no pointer pull reaches it).
+        const centre = { x: cr.left + cr.width / 2, y: cr.top + cr.height / 2 };
+        const before = await near(centre.x, centre.y, 220);
+        const s0 = await scale();
+        const corner = { x: cr.left + 12, y: cr.top + 12 };
+        const wheel = (deltaY) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: corner.x, y: corner.y, deltaX: 0, deltaY, modifiers: 2 });
+        const zooms = [];
+        for (let round = 0; round < 3; round++) {
+          let n = 0;
+          while ((await scale()) > s0 / 3 && n < 60) {
+            await wheel(60);
+            await sleep(40);
+            n++;
+          }
+          zooms.push(await scale());
+          for (let i = 0; i < n; i++) {
+            await wheel(-60);
+            await sleep(40);
+          }
+        }
+        const s1 = await scale();
+        if (Math.abs(s1 / s0 - 1) > 0.02) throw new Error(`the zoom did not come back: ${s0} → ${s1}`);
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the galaxy to settle after the zooms", 6000);
+        const after = await near(centre.x, centre.y, 220);
+        if (!(before && before.count > 10)) throw new Error(`too few stars round the centre to measure: ${JSON.stringify(before)}`);
+        const drift = after.count / before.count - 1;
+        if (Math.abs(drift) > 0.2) throw new Error(`star density at the centre moved ${(drift * 100).toFixed(0)}% after zooming out ×3 and back (${before.count.toFixed(1)} → ${after.count.toFixed(1)})`);
+        Object.assign(proof, { zoomedTo: zooms.map((z) => +z.toFixed(3)), centreStarsBefore: +before.count.toFixed(1), centreStarsAfter: +after.count.toFixed(1), densityDrift: +drift.toFixed(3) });
+
+        // 2. The pointer moves over bare canvas: awake, drawing.
+        const spot = await openSpot(rig, 300, 200);
+        const framesBefore = (await groundNow(b)).frames;
+        let awakeSeen = false;
+        let shot = null;
+        let last = null;
+        for (let i = 0; i <= 30; i++) {
+          last = { x: spot.x + 20 + i * 8, y: spot.y + 180 - i * 5 };
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: last.x, y: last.y, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await state()) === "awake";
+        }
+        const stoppedAt = Date.now();
+        if (!awakeSeen) throw new Error("the galaxy was not awake while the pointer moved over it");
+        const moved = await groundNow(b);
+        if (!(moved.frames > framesBefore)) throw new Error(`no frames were drawn while the pointer moved (${framesBefore} → ${moved.frames})`);
+
+        // 3. The pointer rests over it: the eddy window keeps it awake ~15 s.
+        await sleep(1200);
+        // A screenshot only when asked for ($GROUND_SHOTS), as chat-bottom does with $CHAT_SHOTS.
+        if (process.env.GROUND_SHOTS) {
+          shot = path.join(process.env.GROUND_SHOTS, "orbit.png");
+          writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        }
+        const resting = await near(last.x, last.y, 200);
+        if (!(await probe("p.resting()"))) throw new Error("the ground does not know the pointer is resting over it");
+        await sleep(5000 - (Date.now() - stoppedAt));
+        const at5 = await state();
+        await sleep(12_000 - (Date.now() - stoppedAt));
+        const at12 = await state();
+        if (at5 !== "awake" || at12 !== "awake") throw new Error(`a resting pointer should keep the galaxy awake for the eddy window: ${at5} at 5 s, ${at12} at 12 s`);
+        const framesAt12 = (await groundNow(b)).frames;
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the galaxy to fall asleep after the eddy window", 12_000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter < 14_000 || sleptAfter > 18_500) throw new Error(`under a resting pointer the galaxy slept ${sleptAfter}ms after the last move — the window is ~15 s, then a ≤3 s settle`);
+        const asleep = (await groundNow(b)).frames;
+        if (!(asleep > framesAt12)) throw new Error("the eddy drew nothing between 12 s and sleep");
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") throw new Error(`the galaxy drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        Object.assign(proof, { awake: awakeSeen, frames: moved.frames - framesBefore, restingAt5s: at5, restingAt12s: at12, sleptAfterRestMs: sleptAfter, framesAsleep: 0, radialWhileResting: +resting.radial.toFixed(1), screenshot: shot });
+
+        // 4. Hold the button: the pull reverses and the stars move away.
+        await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: last.x, y: last.y, button: "left", buttons: 1, clickCount: 1 });
+        await sleep(700);
+        const held = await probe("p.held()");
+        const fleeing = await near(last.x, last.y, 200);
+        const heldState = await state();
+        await b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: last.x, y: last.y, button: "left", buttons: 0, clickCount: 1 });
+        if (!held) throw new Error("the ground did not see the held button");
+        if (heldState !== "awake") throw new Error(`a press did not wake the galaxy (${heldState})`);
+        if (!(fleeing.radial > 5)) throw new Error(`with the button held the stars near the pointer should flee: mean radial speed ${fleeing.radial.toFixed(1)} px/s`);
+        if (!(fleeing.radial > resting.radial)) throw new Error(`holding did not reverse the pull: ${resting.radial.toFixed(1)} → ${fleeing.radial.toFixed(1)} px/s`);
+        Object.assign(proof, { held, radialWhileHeld: +fleeing.radial.toFixed(1) });
+        await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0, button: "none", buttons: 0 });
+      }
+
+      // 5. Reduced motion: the still, and the living layer never fetched.
+      await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+      try {
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-galaxy-still")`, "the still galaxy under reduced motion", 10_000);
+        const reduced = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-galaxy-still")).backgroundImage,
+          fetched: performance.getEntriesByType("resource").some((e) => /LivingGround|orbit-[^/]*\\.js/.test(e.name)),
+        })`);
+        if (reduced.canvas) throw new Error("reduced motion still mounted the WebGL canvas");
+        if (!/galaxy\.jpg/.test(reduced.tile)) throw new Error(`reduced motion shows no still frame: ${reduced.tile}`);
+        if (reduced.fetched) throw new Error("reduced motion downloaded the living layer anyway");
+        proof.reducedMotion = "still";
+      } finally {
+        await b.send("Emulation.setEmulatedMedia", { features: [] });
+      }
+      return proof;
+    },
+  },
+  {
     name: "meadow-others",
     /**
      * **Somebody else walks by** (living grounds phase 2, journey.md scene 3).
@@ -975,6 +1159,135 @@ export const JOURNEYS = [
       }
       journeyCli(rig, other, "--canvas", id, "session", "end");
       return { webgl2: true, awake: awakeSeen, frames: moving.frames - before, trailAtStop: atLast, trailBetweenHops: atBetween, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot, working: { sleptAfterMs: workSleptAfter, wanderPositions: seen.size, framesWhileWandering: 0 } };
+    },
+  },
+  {
+    name: "night-idle",
+    /** `idle-at-rest` on a Night canvas: left alone it settles, sleeps, and
+     *  the page spends no more than the same 15% working (phases.md rule 1). */
+    what: "a Night canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet night");
+      await wearNight(rig, id, "night-idle-journey");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the night to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Night canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the night is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "night",
+    /**
+     * **Fireflies at night** (living grounds phase 3, journey.md scene 4).
+     *
+     * The pointer walks over bare ground toward a card: the ground is awake
+     * and its path has woken fireflies; the card it walked up to carries a
+     * nonzero `--ground-glow` and a card far across the screen carries none.
+     * It stops: asleep within 3.5 s, then not one more frame, and the glow it
+     * left is cleared. Under reduced motion it is the still, with no WebGL
+     * canvas and no living chunk fetched.
+     */
+    what: "the pointer wakes fireflies and warms the card it nears, then the night sleeps within 3.5 s; still under reduced motion",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme night");
+      const session = "night-journey";
+      await wearNight(rig, id, session);
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the night fell back to its still with WebGL2 available: ${first.still}`);
+        const spot = await openSpot(rig, 300, 200);
+        const world = await b.ev(`(() => {
+          const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+          const v = document.querySelector(".canvas-viewport").getBoundingClientRect();
+          const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+          return { left: r.left, top: r.top, scale, right: v.right, bottom: v.bottom };
+        })()`);
+        const toWorld = (x, y) => ({ x: (x - world.left) / world.scale, y: (y - world.top) / world.scale });
+        const far = { x: world.right - 180, y: world.bottom - 140 };
+        if (Math.hypot(far.x - (spot.x + 190), far.y - (spot.y + 100)) < 500) {
+          throw new Error(`the screen is too small to hold a card out of a firefly's reach (spot ${JSON.stringify(spot)})`);
+        }
+        const md = path.join(rig.home, "acme-night.md");
+        writeFileSync(md, "# Acme\n\nA card in the dark field.\n");
+        const near = toWorld(spot.x + 200, spot.y + 20);
+        const away = toWorld(far.x, far.y);
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme near", "--at", `${Math.round(near.x)},${Math.round(near.y)}`, "--size", "90x70");
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme far", "--at", `${Math.round(away.x)},${Math.round(away.y)}`, "--size", "90x70");
+        await until(b, `document.querySelectorAll(".item").length >= 2`, "both cards to arrive");
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the night to fall asleep before the walk", 6000);
+        const before = (await groundNow(b)).frames;
+        const glowAt = (sx, sy) => b.ev(`(() => {
+          const el = [...document.querySelectorAll(".item")].find((e) => { const r = e.getBoundingClientRect(); return ${sx} >= r.left && ${sx} <= r.right && ${sy} >= r.top && ${sy} <= r.bottom; });
+          return el ? el.style.getPropertyValue("--ground-glow") : null;
+        })()`);
+
+        const y = spot.y + 190;
+        let awakeSeen = false;
+        let shot = null;
+        for (let i = 0; i <= 30; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: spot.x + 10 + i * 6, y: y - i * 3, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await groundNow(b)).state === "awake";
+          if (i === 26) {
+            shot = process.env.NIGHT_SHOT || path.join(tmpdir(), `isocan-night-${Date.now()}.png`);
+            writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          }
+        }
+        const stoppedAt = Date.now();
+        const flies = await b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.fireflies()`);
+        const nearGlow = await glowAt(spot.x + 245, spot.y + 55);
+        const farGlow = await glowAt(far.x + 45, far.y + 35);
+        const moving = await groundNow(b);
+        if (!awakeSeen) throw new Error("the night was not awake while the cursor walked over it");
+        if (!(moving.frames > before)) throw new Error(`no frames were drawn while the cursor moved (${before} → ${moving.frames})`);
+        if (!(flies > 0)) throw new Error(`the cursor's path woke no fireflies (${flies})`);
+        if (nearGlow === null || !(parseFloat(nearGlow) > 0)) throw new Error(`the card the firefly walked up to has no glow (${JSON.stringify(nearGlow)})`);
+        if (farGlow === null) throw new Error("the far card is not on the page");
+        if (farGlow !== "") throw new Error(`a card far from every firefly glows: ${farGlow}`);
+
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the night to fall asleep after the cursor stopped", 6000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter > 3500) throw new Error(`the night took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const asleep = (await groundNow(b)).frames;
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") {
+          throw new Error(`the night drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        }
+        const leftGlow = await glowAt(spot.x + 245, spot.y + 55);
+        if (leftGlow !== "") throw new Error(`the card still glows after the night slept: ${leftGlow}`);
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, fireflies: flies, nearGlow: parseFloat(nearGlow), farGlow: "none", sleptAfterMs: sleptAfter, framesAsleep: 0, glowCleared: true, screenshot: shot });
+      }
+
+      await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+      try {
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-night")`, "the still night under reduced motion", 10_000);
+        const reduced = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-night")).backgroundImage,
+          fetched: performance.getEntriesByType("resource").some((e) => /LivingGround|night-[^/]*\\.js/.test(e.name)),
+        })`);
+        if (reduced.canvas) throw new Error("reduced motion still mounted the WebGL canvas");
+        if (!/night\.jpg/.test(reduced.tile)) throw new Error(`reduced motion shows no still frame: ${reduced.tile}`);
+        if (reduced.fetched) throw new Error("reduced motion downloaded the living layer anyway");
+        proof.reducedMotion = "still";
+      } finally {
+        await b.send("Emulation.setEmulatedMedia", { features: [] });
+      }
+      return proof;
     },
   },
   {

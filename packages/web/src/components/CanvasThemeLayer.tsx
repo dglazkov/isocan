@@ -23,10 +23,10 @@ import { groundMode } from "../lib/groundmode.ts";
  * The painted themes #195 named — farm, mountains, ocean — arrived on 8 Sep
  * 2026, along with a desert nobody had asked for. Galaxy was generated first
  * because it proved the layer, the world-space alignment and the chunking
- * without waiting on artwork, and it is generated STILL because the space
- * tile that came back has a seam. A ground is now a file, not a component.
+ * without waiting on artwork; since living grounds phase 3 (9 Oct 2026) it is
+ * Orbit, a living ground, and its still is a tile rendered from Orbit's own
+ * shader, which cannot have a seam. A ground is now a file, not a component.
  */
-const Galaxy = lazy(() => import("./themes/Galaxy.tsx").then((m) => ({ default: m.Galaxy })));
 /**
  * **One chunk for every painted ground**, where there was one per procedural
  * theme. The art is not in the chunk — each tile is a file in `public/grounds/`
@@ -87,12 +87,10 @@ export function CanvasThemeLayer() {
   }
   if (theme === null) return null;
   /**
-   * **Generated, or painted.** Galaxy is the only ground still drawn in code,
-   * and it is not a leftover: the painted space tile has a visible seam and an
-   * infinite canvas finds a seam within one pan, while a generated sky cannot
-   * have one. Everything else is a picture, and one component draws all of
-   * them — the switch that used to be here grew a line per theme, which is the
-   * shape that made "farm waits for artwork" a code change rather than a file.
+   * **Living, or painted.** Every ground is a picture or a living ground with
+   * a picture for its still, and one component draws all the pictures — the
+   * switch that used to be here grew a line per theme, which is the shape
+   * that made "farm waits for artwork" a code change rather than a file.
    */
   /**
    * **Living, or its still.** A living ground's still frame is a painted tile
@@ -108,5 +106,5 @@ export function CanvasThemeLayer() {
       </Suspense>
     );
   }
-  return <Suspense fallback={null}>{theme === "galaxy" ? <Galaxy anchor={anchor} /> : painted}</Suspense>;
+  return <Suspense fallback={null}>{painted}</Suspense>;
 }
