@@ -9,7 +9,7 @@ note: "the walk: a prototype bench that measures before anything ships, the livi
 
 **9 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 10 Oct 2026: phases 1–4 are CLOSED — seven living grounds (Meadow, Night, Galaxy drawn by Orbit, Pond, Zen garden, Snow, Aurora), touched by every cursor, asleep when nobody moves, with a per-viewer Motion setting (Full · Calm · Still) and each ground's picture in the Background menu. Phase 0 is PART-DONE (the bench). Next: living-grounds phase 5, Evidence — frame cost per ground, a persona number, a verify walk.**
+**Where we are, 10 Oct 2026: phases 1–5 are CLOSED — seven living grounds (Meadow, Night, Galaxy drawn by Orbit, Pond, Zen garden, Snow, Aurora), touched by every cursor, asleep when nobody moves, with a per-viewer Motion setting and menu previews, and their frame cost measured and owned by the performance persona. Phase 0 is PART-DONE (the bench). What is left is a person's: the walk in `docs/verify/2026-10-10-living-grounds.md` waits on Dion, and nobody has measured on an M1.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -146,7 +146,7 @@ run is that measurement; phase 3 ships on the bench's numbers.)
 
 ## Phase 5 — Evidence
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 10 October 2026.** `node scripts/frames.mjs --grounds` walks a pointer over each of the seven living grounds on a scratch daemon at 2560×1440 under 4× CPU throttle. On an M4 Pro (not the M1 the budget names): every ground holds p95 16.7–16.8 ms with 0 dropped frames and 0 frames drawn asleep; main-thread time added per frame over the plain ground is Night 1.5 ms, Aurora 1.0, the other five 0.2–0.3. The performance persona owns `ground-frame-ms` (the costliest ground's added main-thread ms, at most 2, first reading 1.5), read from the recorded run in `scripts/ground-frames.json`; its page is `docs/reviews/2026-10-10-performance.md`. The walk for the parts only a person can judge is `docs/verify/2026-10-10-living-grounds.md`, seven steps, unverified.
 
 **Outcome:**
 
@@ -156,3 +156,11 @@ run is that measurement; phase 3 ships on the bench's numbers.)
   the grass feel like grass, does the motion distract while reading.
 
 **Proof:** the persona's first page with the number, and the walk written.
+
+### Trajectory
+
+- **2026-10-10** — The persona's number is main-thread time added per frame, not the frame gap: at 4× CPU on an M4 Pro every ground holds p95 16.7–16.8 ms, so the gap cannot move before a ground already stutters. The 2 ms bound is design.md's "JS under 0.5 ms" times the throttle; proposed by the builder, not yet agreed by Dion.
+- **2026-10-10** — The goal reads a recorded reading, not a live walk: a five-minute browser walk cannot run on every push and CI has no trustworthy WebGL2. It moves only when somebody re-runs `frames.mjs --grounds --record scripts/ground-frames.json`; `measure.mjs ground-frame-ms --names` says when, on what machine, and whether a ground's source changed since.
+- **2026-10-10** — `frames.mjs` reports no GPU time: it cannot bracket another program's draw calls from outside the page. Phase 3's deferred "at or under the bench numbers" is answered as zero dropped and zero asleep frames at 2560×1440, not as GPU milliseconds.
+- **2026-10-10** — Open: the M1 is unmeasured, on the bench and on the canvas; not measured under Calm or Still, or at more than six items. Waits on somebody with an M1 running `node scripts/frames.mjs --grounds`.
+- **2026-10-10** — Open: the ground canvas keeps the previous ground's probe and "asleep" state until the new ground's chunk mounts; a journey that switches grounds on one page must wait for a new probe (`frames.mjs` does). Product behaviour is unaffected.

@@ -55,7 +55,7 @@ any other harness reads the file directly.
 | `journeys` | Whether the app works when somebody opens it and uses it | failing journeys in `scripts/journeys.mjs` |
 | `librarian` | Whether the docs' links still lead somewhere — **the first small persona** (Haiku, $0.05 a run, hands off to `reviewer`) | dead relative links in tracked Markdown |
 | `market-researcher` | What else exists and what to take from it | **none, and it says so** |
-| `performance` | Whether it still feels fast | largest built chunk |
+| `performance` | Whether it still feels fast | entry chunk bytes, and the main-thread time the costliest living ground adds to a frame |
 | `qa-tester` | Whether the tests mean anything | eslint errors |
 | `reviewer` | Whether the code says true things about itself | unused exports, undocumented exports |
 

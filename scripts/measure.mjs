@@ -63,6 +63,11 @@ const CROWDED = [
   "packages/cli/src/agent-guide.md",
 ];
 
+/** The living grounds' last reading, written by `frames.mjs --grounds --record`. */
+const GROUND_FRAMES = "scripts/ground-frames.json";
+/** The directories a living ground is drawn from — what a reading goes stale against. */
+const GROUND_SOURCES = ["packages/web/src/components/themes", "packages/web/src/lib/groundfield.ts", "packages/web/src/lib/groundsleep.ts", "packages/web/src/lib/groundmotion.ts"];
+
 const lines = (file) => readFileSync(path.join(repo, file), "utf8").split("\n").length;
 
 const run = (cmd, args, opts = {}) =>
@@ -302,6 +307,36 @@ const METRICS = {
         return entryChunk();
       },
       apply: (t) => `${t}\n// selftest\n${"x".repeat(2_000_000)}\n`,
+    },
+  },
+  /**
+   * **What a living ground costs a frame** (living grounds phase 5, 10 Oct
+   * 2026) — and the one metric here that is a READING rather than a scan.
+   *
+   * A frame can only be timed by a browser drawing it, and `ratchet.mjs` takes
+   * every goal on every push: a five-minute walk across seven grounds there is
+   * the bill `test/journeys.test.ts` refuses by name. So the walk is
+   * `node scripts/frames.mjs --grounds --record scripts/ground-frames.json`,
+   * run by whoever changes a ground, and this reads what it wrote: the main
+   * thread's time per frame on the costliest ground, less the same walk on the
+   * plain ground, CPU throttled 4x. Not the frame gap — on the machine this is
+   * taken on every ground holds 16.7 ms at p95, and a number that cannot move
+   * until frames are already dropping is the M-series hiding everything short
+   * of a catastrophe.
+   *
+   * It moves only when somebody takes a new reading, and `--names` says when
+   * the last one was, on what machine, and whether the grounds' sources have
+   * changed since — a reading older than the code it describes is the way
+   * this number would lie.
+   */
+  "ground-frame-ms": {
+    what: "main-thread ms a frame the costliest living ground adds to a pointer walk, CPU 4x — the last recorded reading",
+    take: () => groundReading().worst,
+    names: () => groundReading().lines,
+    breakIt: {
+      file: GROUND_FRAMES,
+      // A ground whose frame got dearer, written the way a new reading would be.
+      apply: (t) => t.replace(/("night": \{[^}]*"mainMsPerFrame": )[0-9.]+/, (_, head) => `${head}60`),
     },
   },
   /**
@@ -704,6 +739,33 @@ function copiedRules() {
     }
   }
   return { copies, families: [...bodies.values()].filter((f) => f.repeats.length > 0) };
+}
+
+/**
+ * The reading as a number and as lines. The number is the dearest ground's
+ * main-thread time per frame less the plain ground's, to a tenth of a
+ * millisecond; a missing file throws, which every caller reads as a broken
+ * instrument and never as zero.
+ */
+function groundReading() {
+  const r = JSON.parse(readFileSync(path.join(repo, GROUND_FRAMES), "utf8"));
+  const added = (g) => Math.round(10 * (g.mainMsPerFrame - r.plain.mainMsPerFrame)) / 10;
+  const worst = Math.max(...Object.values(r.grounds).map(added));
+  let since;
+  try {
+    const changed = run("git", ["diff", "--name-only", r.commit, "--", ...GROUND_SOURCES]).trim().split("\n").filter(Boolean);
+    since = changed.length ? `STALE: ${changed.length} ground source file(s) changed since ${r.commit} — take it again` : `no ground source has changed since ${r.commit}`;
+  } catch {
+    since = `cannot tell whether the grounds changed since ${r.commit} (that commit is not in this clone)`;
+  }
+  const lines = [
+    `read ${r.at} at ${r.commit} on ${r.machine}; ${r.chrome}; GL ${r.gl}`,
+    `page ${r.page}, CPU throttled ${r.throttle}x (the GPU is not), ${r.items} notes, ${r.runs} walks — ${since}`,
+    `plain     main ${r.plain.mainMsPerFrame.toFixed(2)} ms/frame  p95 ${r.plain.p95} ms  dropped ${r.plain.dropped}`,
+    ...Object.entries(r.grounds).map(([name, g]) => `${name.padEnd(9)} main ${g.mainMsPerFrame.toFixed(2)} ms/frame (+${added(g).toFixed(1)})  p95 ${g.p95} ms  dropped ${g.dropped}  asleep frames ${g.asleepFrames}`),
+    `${worst} ms is what \`ground-frame-ms\` prints: the largest (+) above. Again: node scripts/frames.mjs --grounds --record ${GROUND_FRAMES}`,
+  ];
+  return { worst, lines };
 }
 
 /**

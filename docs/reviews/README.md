@@ -14,7 +14,7 @@ whose only job is that lens.
 | `journeys` | Whether it works when somebody actually uses it | **none at push time, deliberately** — it walks nightly, and a failing journey turns that run red |
 | `librarian` | Whether the docs' links still lead somewhere — the first **small** persona: Haiku, $0.05 a run, hands what it cannot settle to `reviewer` | dead relative links in tracked Markdown — a **ratchet** |
 | `market-researcher` | What else exists and what to take from it | **none, honestly** |
-| `performance` | Whether it still feels fast | the entry chunk, and bytes past the last agreed size |
+| `performance` | Whether it still feels fast | the entry chunk, bytes past the last agreed size, and what the costliest living ground adds to a frame (a recorded reading) |
 | `qa-tester` | Whether the tests mean anything | eslint errors |
 | `reviewer` | Whether the code says true things about itself | unused exports, undocumented exports — both **ratchets** |
 
@@ -157,7 +157,7 @@ differently. `open` is not a bad mark — it says something about the reader.
 | [2026-10-10](2026-10-10-journeys.md) | journeys | no standing number | — | — |
 | [2026-10-10](2026-10-10-librarian.md) | librarian | 1/1 held | — | — |
 | [2026-10-10](2026-10-10-market-researcher.md) | market-researcher | no standing number | — | — |
-| [2026-10-10](2026-10-10-performance.md) | performance | 2/2 held | — | — |
+| [2026-10-10](2026-10-10-performance.md) | performance | 3/3 held | — | — |
 | [2026-10-10](2026-10-10-qa-tester.md) | qa-tester | 1/1 held | — | — |
 | [2026-10-10](2026-10-10-reviewer.md) | reviewer | 3/3 held | — | — |
 | [2026-10-09](2026-10-09-accessibility.md) | accessibility | 2/2 held | — | — |

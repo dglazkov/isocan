@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — a plain .mjs script, imported for its two pure readers.
-import { frameStats, longFrames, selfTimeBySource } from "../scripts/frames.mjs";
+import { frameStats, groundCost, longFrames, selfTimeBySource } from "../scripts/frames.mjs";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { LIVING } from "@isocan/core";
 
 /**
  * **The frame census reads what it says it reads** — lesson 100's rule, applied
@@ -54,5 +57,51 @@ describe("longFrames", () => {
 
   it("says nothing when no frame was long", () => {
     expect(longFrames([])).toEqual({ count: 0, scriptMs: 0, renderMs: 0, worst: [] });
+  });
+});
+
+describe("groundCost", () => {
+  it("counts dropped frames against the refresh, not against a threshold", () => {
+    // Eighteen smooth frames, one that took two refreshes and one that took
+    // three: three frames a 60 Hz screen showed twice.
+    const c = groundCost([...Array(18).fill(16.7), 33.3, 50]);
+    expect(c.frames).toBe(20);
+    expect(c.p50).toBe(16.7);
+    expect(c.p95).toBe(50);
+    expect(c.worst).toBe(50);
+    expect(c.dropped).toBe(3);
+  });
+
+  it("drops nothing on a faster screen that kept up, and says nothing happened when nothing did", () => {
+    expect(groundCost([8.3, 8.4, 8.3], 120).dropped).toBe(0);
+    expect(groundCost([16.7, 16.7], 120).dropped).toBe(2);
+    expect(groundCost([])).toEqual({ frames: 0, p50: 0, p95: 0, worst: 0, dropped: 0 });
+  });
+});
+
+/**
+ * **The reading the performance persona's number is read from** (living
+ * grounds phase 5). `measure.mjs ground-frame-ms` takes the costliest ground
+ * in `scripts/ground-frames.json`; a ground added to `LIVING` and never walked
+ * would simply be absent from that maximum, and the number would go on
+ * reading as held.
+ */
+describe("the living grounds' recorded reading", () => {
+  const reading = JSON.parse(readFileSync(fileURLToPath(new URL("../scripts/ground-frames.json", import.meta.url)), "utf8"));
+
+  it("covers every living ground, and only those", () => {
+    expect(Object.keys(reading.grounds).sort()).toEqual([...LIVING].sort());
+  });
+
+  it("says what it was taken on", () => {
+    for (const key of ["at", "commit", "machine", "chrome", "gl", "page", "throttle"]) expect(reading[key], key).toBeTruthy();
+    expect(reading.gl, "a software rasteriser's numbers are not a GPU's").not.toMatch(/swiftshader|llvmpipe/i);
+  });
+
+  it("records no ground drawing while nothing moved", () => {
+    for (const [name, g] of Object.entries<{ asleepFrames: number; groundFrames: number }>(reading.grounds)) {
+      expect(g.asleepFrames, `${name} drew frames asleep`).toBe(0);
+      expect(g.groundFrames, `${name} was not awake for its walk`).toBeGreaterThan(100);
+    }
   });
 });

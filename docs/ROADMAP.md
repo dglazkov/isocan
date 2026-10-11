@@ -26,7 +26,7 @@ and the done column should not be flattered by either.
 finding is its claim, checked against the code, ranked by us. Each project row
 below counts the findings that name it.
 
-## What needs a person <sub>14</sub>
+## What needs a person <sub>15</sub>
 
 Built and shipped, and never once exercised by a human being — the part no
 commit can do. Each is a walk in [`verify/`](verify/README.md), written by
@@ -49,6 +49,7 @@ whoever built the thing for somebody who knows nothing about it.
 | **unverified** | [A real bout, from the Chat to the winner](verify/2026-10-01-design-competition-live.md) — a whole design competition with real model-built entries — picked from the Chat, fought, voted from two browsers, the winner taken — on dev.isocan.io; design-competition phases 3–5.5, owed since 13 Sep | 2026-10-01 | two people in two browsers, a laptop with the released CLI parked against dev.isocan.io, about forty minutes and some model spend · [#261](https://github.com/dglazkov/isocan/issues/261) |
 | **unverified** | [On a real phone](verify/2026-10-01-on-a-real-phone.md) — isocan on a physical phone — the on-screen keyboard over the Chat, Safari's toolbar coming and going, and whether pinch, pan and swipe feel right; mobile phases 0–2, owed since 13 Sep | 2026-10-01 | an iPhone with Safari (an Android phone too, if you have one), a canvas with a few cards and a short deck on it — twenty minutes · [#182](https://github.com/dglazkov/isocan/issues/182) |
 | **unverified** | [The operator, on the hosted home](verify/2026-10-01-operator-hosted.md) — the operator's six acts — look, take down, purge, end, revoke, refuse — done by a real operator on dev.isocan.io; operator phases 1–6, built 12–13 Sep and only proved locally | 2026-10-01 | an operator email on dev's ISOCAN_OPERATORS, a second owner account, a third browser profile, the owner's phone and laptop, and two networks — about two hours · [#77](https://github.com/dglazkov/isocan/issues/77) |
+| **unverified** | [The living grounds, by eye and hand](verify/2026-10-10-living-grounds.md) — Whether the seven living grounds feel like what they are named for, whether their motion distracts from reading a card, and whether Full, Calm and Still are the right three, judged by a person's eyes and hand. | 2026-10-10 | The web app in a desktop browser with a mouse or trackpad, a canvas with a few cards on it, and twenty minutes. Reduce motion must be off in the system settings. |
 
 ## Partly built <sub>48</sub>
 
