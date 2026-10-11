@@ -21,6 +21,21 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 10 October 2026
+
+- **Four more living grounds.** **Pond**: still water your cursor drags
+  ripples across, with koi that dart out of its way. **Zen garden**: sand you
+  rake lines into, which soften back over time; cards sit like stones in
+  raked rings. **Snow**: a fresh field every cursor leaves a trail in, slowly
+  snowed over. **Aurora**: ribbons of light that lean and brighten toward
+  you. All in ··· → Background, each asleep when nobody moves.
+- **How much the ground moves is yours to choose.** At the bottom of the
+  Background menu: **Full**, **Calm** (it answers a cursor and does nothing on
+  its own) or **Still** (a picture). The choice is yours alone and applies to
+  every canvas; nobody else's view changes.
+- **The Background menu shows each ground.** A small picture beside every
+  name, which drifts when you point at it.
+
 ## 9 October 2026
 
 - **A living ground: Meadow.** Pick **Meadow** as a canvas's background and

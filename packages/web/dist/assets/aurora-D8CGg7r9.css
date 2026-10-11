@@ -1,0 +1,1 @@
+.canvas-theme-aurora{background-color:var(--theme-aurora)}.item[style*=--aurora-glow]{--aurora-glow: 0;box-shadow:var(--shadow-item),0 0 calc(var(--aurora-glow) * 40px) calc(var(--aurora-glow) * 4px) color-mix(in srgb,var(--aurora-light) calc(var(--aurora-glow) * 90%),transparent)}

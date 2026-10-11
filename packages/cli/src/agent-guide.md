@@ -3925,7 +3925,7 @@ archived** in the app's ⌘O switcher, which otherwise leaves them out of its
 search as well as its list. Every other verb reaches an archived canvas by name
 with no flag at all, so a canvas somebody archives while you are parked on it
 is still the canvas you are standing on. `canvas background
-<galaxy|ocean|mountains|farm|desert|meadow|night|none>` sets the ground a canvas stands on, and
+<galaxy|ocean|mountains|farm|desert|meadow|night|snow|aurora|pond|zen|none>` sets the ground a canvas stands on, and
 bare `canvas background` says what it is wearing — everybody on the canvas
 sees the same one, so it is a change to ask about rather than assume.
 `meadow` is a living ground: grass that parts under the cursor and settles
@@ -3936,10 +3936,24 @@ one catch a faint warm light.
 `galaxy` moves now as well: it is drawn as Orbit, a starfield whose stars
 curve toward every cursor (a held button pushes them away), and a cursor that
 rests over it keeps a slow eddy turning for about 15 s before it settles.
+`snow` is a fresh snowfield: every cursor, yours included, treads a trail
+into it that stays after the cursor has gone and fills back in only while the
+ground is awake — in each viewer's own browser, never stored or sent.
+`aurora` is ribbons of light over a dark land that lean and brighten toward
+every cursor, and a card under a lit ribbon catches a faint cool light.
+`pond` is still water seen from above: every cursor, yours included, drags
+ripples that break round the items, and a few koi dart away from it.
+`zen` is a Zen garden of raked sand: every cursor rakes parallel lines along
+its path, which stay while the ground sleeps and soften back over about 20 s
+of it being awake; items sit like stones in raked rings.
 Your cursor touches it too: every presence cursor, an agent's at full weight,
 bends the grass and leaves a trail in each viewer's browser, from the presence
 they already receive. Every `session move`, `point` and `work` wanders across
 it, so on a living ground point with purpose rather than sweeping it.
+How much a living ground moves is each viewer's own choice, not the canvas's:
+a person picks Full, Calm or Still under Background ▸ Motion in the app, it is
+kept in their browser, and there is no verb for it — so never assume the
+person watching sees motion, only that they see the ground you set.
 `canvas background --picture <file>` stands it on an image of your own
 instead: pinned so it cannot show a seam, and darkened so cards still read on
 it. `--cursor <name>` picks the pointer everyone on THAT canvas wears — a

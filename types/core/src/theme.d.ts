@@ -82,8 +82,19 @@ export declare const THEME_PROP = "theme";
  *
  * **Night (9 Oct 2026) is the second** — a dark meadow under a dim sky where
  * every cursor is a firefly and its path wakes more out of the grass.
+ *
+ * **Snow and Aurora (phase 4, 10 Oct 2026)**: a fresh snowfield every cursor
+ * leaves a trodden trail in, which fills back in over the time the ground is
+ * awake; and ribbons of light over a dark land that lean and brighten toward
+ * every cursor. Both borrow a cursor rather than adding one (entry bytes).
+ *
+ * **Pond and Zen garden (phase 4, 10 Oct 2026)**: still water every cursor
+ * drags ripples across, with koi that dart away from it; and raked sand every
+ * cursor rakes lines in that soften back over the time the ground is awake,
+ * with items as stones in raked rings. They borrow Ocean's fish and Desert's
+ * crescent.
  */
-export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night"];
+export declare const THEMES: readonly ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night", "snow", "aurora", "pond", "zen"];
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
 export type CanvasTheme = (typeof THEMES)[number];
@@ -121,7 +132,7 @@ export declare function themeLabel(theme: CanvasTheme): string;
  * web app, so this list is the whole of what a living ground costs a first
  * visit (`docs/projects/living-grounds/design.md` §7).
  */
-export declare const LIVING: readonly ["meadow", "night", "galaxy"];
+export declare const LIVING: readonly ["meadow", "night", "galaxy", "snow", "aurora", "pond", "zen"];
 /** Does this ground move — the question the theme layer asks before it loads
  *  a WebGL host, and the CLI asks before it says a ground answers the cursor. */
 export declare function isLiving(theme: CanvasTheme | null): boolean;

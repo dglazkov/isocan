@@ -161,7 +161,7 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   next version at that fragment, so an agent's edit does not send the person
   back to the first screen.
 - **Grounds**: a canvas can stand on Space Galaxy, Ocean, Mountains,
-  Farmland, Desert, Meadow, Night or a picture of your own (Background in the canvas
+  Farmland, Desert, Meadow, Night, Snow, Aurora, Pond, Zen garden or a picture of your own (Background in the canvas
   menu, or `isocan canvas background <name>`), and the ground names everyone's
   cursor. Meadow is living: grass that parts under every cursor on the canvas
   (yours, other people's and agents') and springs back,
@@ -171,7 +171,20 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   and cards near one catch a warm glow. Space Galaxy is living as well, drawn
   as Orbit: its stars curve toward every cursor, a held button pushes them
   away, a resting pointer keeps a slow eddy turning for ~15 s, and its still
-  is the same sky at rest.
+  is the same sky at rest. Snow is a fresh field every cursor treads a trail
+  into; the trail outlives the moment and fills back in only while the ground
+  is awake, flakes swirl round a fast cursor, and items sit in soft drifts.
+  Aurora is ribbons of light over a dark land that lean and brighten toward
+  every cursor, and a card under a lit ribbon catches a faint cool light.
+  Pond is still water seen from above: every cursor drags ripples that break
+  round the items, and a few koi drift and dart away from it. Zen garden is
+  raked sand: every cursor rakes parallel lines along its path, which soften
+  back over about 20 s of the ground being awake, and items sit like stones
+  in raked rings.
+  Motion is each viewer's own (Background ▸ Motion, kept in the browser):
+  Full, Calm (grounds answer cursors but never move on their own, and an
+  untouched one draws nothing) or Still (the painted still, no WebGL);
+  reduced motion always gives Still. The menu shows each ground's picture.
 - **Inherited Recent work**: Context shows recent activity beside a linked
   canvas's design and pins, with its source and covered range. CLI
   `isocan context` and MCP summaries show the same bounded reading and say
