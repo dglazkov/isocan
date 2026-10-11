@@ -38,12 +38,18 @@
 //                            directory git ignores (health-ignored): the night
 //                            writes its page and never commits it (a promise:
 //                            git answers while the caller reads on)
+//   platformLints(root, config)  a tracked test file that runs a macOS-only
+//                            (or Windows-only) tool with no platform skip
+//                            (platform-guard, phase 65); .keel/keel.json
+//                            `platformTools` adds tools
 //   readProjectRecords(root) the projects shape, read only: docs/projects/<p>/
 //                            with its primary doc's status and issue, and its
 //                            phases.md's sections (phaseSections); with
 //                            recordsDisagree, statusUnknown, changelogGaps,
 //                            issuesNamed, the record measures' rules
 //   gateWorkflowOf(config)   the gate workflow a project names (gateWorkflow)
+//   gateWorkflowIn(root, config)  the workflow that runs the gate: the named
+//                            one, else check.yml, else one running the check
 //   reviewConfigOf(config), reviewFragment, reviewComments(pr, reviewers)
 //                            a PR's review comments and which are answered
 //                            (keel review and reviews_unanswered: one rule);
@@ -69,7 +75,9 @@
 //                            and "agent" on crossReview, climb and tend):
 //                            each provider an adapter, keel's rules its own
 //                            (phase 45); authorOf(head), reviewerOf(…): a PR
-//                            is reviewed by a provider other than its author
+//                            is reviewed by a provider other than its author;
+//                            commitAuthorOf, pushAuthorsOf, pushReviewerOf: so
+//                            is a push to main (phase 60), by its commits
 //   main(meta, fn)           run a script: --json or text, and its exit code
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -556,10 +564,35 @@ export function issuesNamed(text) {
  * fleet and improve both read it here.
  */
 export function gateWorkflowOf(config) {
-  const g = config?.gateWorkflow;
-  if (g === undefined) return null;
-  if (typeof g === 'string' && g.trim()) return { name: g.trim() };
-  return { problem: '.keel/keel.json "gateWorkflow" must be a workflow\'s name, as GitHub shows it' };
+  const top = config?.gateWorkflow, nested = config?.ci?.gateWorkflow;
+  if (top === undefined && nested === undefined) return null;
+  for (const value of [top, nested]) if (value !== undefined && (typeof value !== 'string' || !value.trim())) return { problem: `.keel/keel.json "gateWorkflow" must be a workflow's name (also accepted as "ci".gateWorkflow)` };
+  if (top !== undefined && nested !== undefined && top.trim() !== nested.trim()) return { problem: 'conflicting gateWorkflow and ci.gateWorkflow names' };
+  return { name: (nested ?? top).trim() };
+}
+
+/**
+ * The workflow that runs the gate on pushes: the one .keel/keel.json names
+ * (gateWorkflowOf: no guess beats the project saying), else check.yml, else
+ * one whose file runs the check command (a project that gates in its own
+ * pages.yml has no check.yml). { name } (a file, or the name GitHub shows when
+ * the config gives one), { problem }, or null when nothing runs the gate.
+ * improve's CI measures and the test history's recovery both read it here.
+ */
+export async function gateWorkflowIn(root, config, check = 'npm run check') {
+  const named = gateWorkflowOf(config);
+  if (named) return named;
+  const dir = join(root, '.github', 'workflows');
+  const names = (await readdir(dir).catch(() => [])).filter(n => /\.ya?ml$/.test(n)).sort();
+  if (names.includes('check.yml')) return { name: 'check.yml' };
+  const command = config?.check ?? check;
+  // The command as a whole word on a line that is not a comment (#92): `npm run check` is not `npm run check:deploy`.
+  const runs = new RegExp(`(^|[^\\w:.-])${command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w:.-])`);
+  for (const n of names) {
+    const lines = (await readFile(join(dir, n), 'utf8')).split('\n').filter(l => !l.trim().startsWith('#'));
+    if (lines.some(l => runs.test(l))) return { name: n };
+  }
+  return null;
 }
 
 // ---- the health pages' directory ---------------------------------------------
@@ -648,6 +681,446 @@ export async function healthLints(root, config, day = new Date().toISOString().s
   const ignored = await new Promise(done => execFile('git', ['check-ignore', '-q', '--', healthPage(dir, day)], { cwd: root, encoding: 'utf8' }, e => done(!e)));
   if (!ignored) return [];
   return [{ rule: 'health-ignored', path: dir, message: `${dir} is git-ignored here, so the night writes its health page and never commits it; set "health" in .keel/keel.json to a directory that is not ignored (like ".keel/health")` }];
+}
+
+// ---- the platform guard (phase 65) ---------------------------------------------
+//
+// The gate runs on the owner's Mac; CI runs on Linux. A test that calls a
+// macOS-only tool passes the one and fails the other, unless it says so with a
+// platform skip. The lint reads tracked test files (*.test.*, *.spec.*, and
+// anything under a test/, tests/ or __tests__/ directory) and counts a tool
+// only where it runs as a command: the first argument (or array) of a process
+// runner the file imports (child_process's spawn, exec, execFile, execa, zx's
+// $, a promisify of one), a shell's script (`sh -c`), at a command's position
+// outside the shell's quotes; or a line of a shell script. Prose, test names,
+// comments and a helper of the file's own never count. A command is cleared
+// only by a guard that covers it, in the right direction: its test's
+// `skip: process.platform !== 'darwin'`, an `if` on the platform, or an early
+// return; a guard elsewhere in the file clears nothing else.
+//
+// A word `%` in a tool stands for a format argument: BSD stat's
+// `stat -f %z` is macOS-only, GNU stat's `stat -f .` (file system status) is
+// not.
+
+/** Tools that run on one platform only, by process.platform's name. */
+export const PLATFORM_TOOLS = Object.freeze({
+  darwin: Object.freeze(['ditto', 'hdiutil', 'launchctl', 'codesign', 'osascript', 'mdls', 'stat -f %', 'defaults write', 'pbcopy', 'security']),
+  win32: Object.freeze(['powershell', 'reg.exe']),
+});
+export const PLATFORM_NAMES = Object.freeze({ darwin: 'macOS', win32: 'Windows', linux: 'Linux' });
+
+/** What is wrong with .keel/keel.json "platformTools": a tool name (macOS) or { tool, platform }. */
+export function platformToolProblems(list) {
+  if (list === undefined) return [];
+  const shape = `"platformTools" must be a list of tool names (macOS-only) or { "tool": "<name>", "platform": "${Object.keys(PLATFORM_NAMES).join('" | "')}" }`;
+  if (!Array.isArray(list)) return [shape];
+  return list.some(t => typeof t === 'string' ? !t.trim()
+    : !t || typeof t.tool !== 'string' || !t.tool.trim() || !Object.hasOwn(PLATFORM_NAMES, t.platform)) ? [shape] : [];
+}
+
+/** keel's tools and the project's ("platformTools"), by platform. */
+export function platformTools(config) {
+  const out = Object.fromEntries(Object.entries(PLATFORM_TOOLS).map(([p, tools]) => [p, [...tools]]));
+  if (platformToolProblems(config?.platformTools).length) return out;
+  for (const t of config?.platformTools ?? []) {
+    const [tool, platform] = typeof t === 'string' ? [t.trim(), 'darwin'] : [t.tool.trim(), t.platform];
+    if (!(out[platform] ??= []).includes(tool)) out[platform].push(tool);
+  }
+  return out;
+}
+
+/** A tracked file the platform guard reads: a test file, in a language that runs commands. */
+export const isTestFile = path => /(^|\/)(tests?|__tests__)\/|\.(test|spec)\.[^/]+$/.test(path) && /\.(?:[cm]?[jt]sx?|sh|bash|zsh)$/.test(path);
+
+/**
+ * A JS file's string literals, and its text with comments blanked (same
+ * length, so positions agree). A light scanner, not a parser: enough to tell
+ * a command from a comment.
+ */
+export function scanSource(text) {
+  const strings = [];
+  let code = '', i = 0;
+  const n = text.length;
+  while (i < n) {
+    const c = text[i], d = text[i + 1];
+    if (c === '/' && d === '/') { const e = text.indexOf('\n', i); const stop = e < 0 ? n : e; code += ' '.repeat(stop - i); i = stop; continue; }
+    if (c === '/' && d === '*') { const e = text.indexOf('*/', i + 2); const stop = e < 0 ? n : e + 2; code += text.slice(i, stop).replace(/[^\n]/g, ' '); i = stop; continue; }
+    if (c === '"' || c === "'" || c === '`') {
+      let j = i + 1, value = '';
+      while (j < n && text[j] !== c) {
+        if (text[j] === '\\') { value += text[j + 1] ?? ''; j += 2; continue; }
+        if (c !== '`' && text[j] === '\n') break;
+        if (c === '`' && text[j] === '$' && text[j + 1] === '{') {
+          let depth = 0, k = j + 1;
+          for (; k < n; k++) { if (text[k] === '{') depth++; else if (text[k] === '}' && --depth === 0) break; }
+          value += text.slice(j, k + 1); j = k + 1; continue;
+        }
+        value += text[j++];
+      }
+      const stop = Math.min(n, j + 1);
+      strings.push({ value, start: i, end: stop });
+      code += text.slice(i, stop);
+      i = stop; continue;
+    }
+    code += c; i++;
+  }
+  return { code, strings };
+}
+
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// ---- what runs a process -------------------------------------------------------
+
+const CHILD_PROCESS = /^(?:node:)?child_process$/;
+const CP_RUNNERS = ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync'];
+const EXECA_RUNNERS = ['execa', 'execaSync', 'execaCommand', 'execaCommandSync', '$'];
+
+/**
+ * The names in a file that run a process: what it imports or requires from
+ * child_process (spawn, exec, execFile and their Sync forms, under any local
+ * name, or the module's namespace), execa's runners, zx's $, and a
+ * promisify() of one of them. A helper of the file's own named `run` or `sh`
+ * runs nothing here.
+ */
+export function runnersOf(code) {
+  const names = new Set(), spaces = new Set(), tags = new Set();
+  const take = (module, list, sep) => {
+    for (const item of list.split(',').map(x => x.trim()).filter(Boolean)) {
+      const [from, to = from] = item.split(sep).map(x => x.trim());
+      if (CHILD_PROCESS.test(module) && CP_RUNNERS.includes(from)) names.add(to);
+      if (module === 'execa' && EXECA_RUNNERS.includes(from)) (from === '$' ? tags : names).add(to);
+      if (module === 'zx' && from === '$') tags.add(to);
+    }
+  };
+  for (const m of code.matchAll(/\bimport\s*(?:([\w$]+)\s*,?\s*)?(?:\*\s*as\s+([\w$]+)\s*)?(?:\{([^}]*)\}\s*)?from\s*['"]([^'"]+)['"]/g)) {
+    const [, def, star, list, module] = m;
+    if (CHILD_PROCESS.test(module)) { if (def) spaces.add(def); if (star) spaces.add(star); }
+    if (list) take(module, list, /\s+as\s+/);
+  }
+  if (/\bimport\s*['"]zx\/globals['"]/.test(code)) tags.add('$');
+  for (const [, list, module] of code.matchAll(/\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?(?:require|import)\(\s*['"]([^'"]+)['"]\s*\)/g)) take(module, list, ':');
+  for (const [, name, module] of code.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*(?:await\s+)?(?:require|import)\(\s*['"]([^'"]+)['"]\s*\)/g)) if (CHILD_PROCESS.test(module)) spaces.add(name);
+  const callee = () => [...[...names].map(n => `(?<![\\w$.])${escapeRe(n)}`), ...(spaces.size ? [`(?<![\\w$.])(?:${[...spaces].map(escapeRe).join('|')})\\.(?:${CP_RUNNERS.join('|')})`] : [])].join('|');
+  // const run = promisify(execFile): run runs a process too.
+  for (let round = 0; round < 2 && (names.size || spaces.size); round++) {
+    for (const [, name] of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s+([\\w$]+)\\s*=\\s*(?:util\\.)?promisify\\(\\s*(?:${callee()})\\s*\\)`, 'g'))) names.add(name);
+  }
+  return { names, spaces, tags, callee: names.size || spaces.size ? callee() : null };
+}
+
+/** The text before a string literal that makes it a command, for a file's runners; null when it has none. */
+function commandBefore({ callee, tags }) {
+  const alts = [];
+  if (callee) {
+    const call = `(?:${callee}|(?<![\\w$.])(?:util\\.)?promisify\\(\\s*(?:${callee})\\s*\\))`;
+    alts.push(`${call}\\s*\\(\\s*(?:\\[\\s*)?`);
+    // A shell's script: execFile('sh', ['-c', '<script>']).
+    alts.push(`${call}\\s*\\(\\s*['"][^'"\\n]*['"]\\s*,\\s*\\[\\s*['"](?:-\\w*c|/c|-Command)['"]\\s*,\\s*`);
+  }
+  if (tags.size) alts.push(`(?<![\\w$.])(?:${[...tags].map(escapeRe).join('|')})\\s*`);
+  return alts.length ? new RegExp(`(?:${alts.join('|')})$`) : null;
+}
+
+// ---- a tool at a command's position -----------------------------------------------
+
+/**
+ * A shell string with what its quotes hold blanked (same length): a `;` or
+ * `&&` inside quotes separates nothing. $(…) and `…` inside double quotes
+ * run, so they are kept.
+ */
+export function shellMask(s) {
+  let out = '', q = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q === "'") { out += c === "'" ? (q = null, c) : ' '; continue; }
+    if (c === '\\') { out += s[i + 1] === undefined ? ' ' : '  '; i++; continue; }
+    if (q === '"') {
+      if (c === '"') { q = null; out += c; continue; }
+      if ((c === '$' && s[i + 1] === '(') || c === '`') {
+        let k = i + 1;
+        if (c === '`') k = s.indexOf('`', i + 1);
+        else for (let depth = 0; k < s.length; k++) { if (s[k] === '(') depth++; else if (s[k] === ')' && --depth === 0) break; }
+        if (k < 0) k = s.length - 1;
+        out += s.slice(i, k + 1); i = k; continue;
+      }
+      out += c === '\n' ? c : ' '; continue;
+    }
+    if (c === "'" || c === '"') q = c;
+    out += c;
+  }
+  return out;
+}
+
+/**
+ * How a tool is recognised: its first word at a command's position in a
+ * shell string (outside quotes), then its other words; a word `%` stands for
+ * a format argument (`stat -f %z` is BSD stat; GNU's `stat -f .` is not).
+ */
+export function toolMatcher(tool, platform = 'darwin') {
+  const words = tool.trim().split(/\s+/);
+  const flags = platform === 'win32' ? 'i' : '';
+  const exe = platform === 'win32' && !/\.exe$/i.test(words[0]) ? '(?:\\.exe)?' : '';
+  const end = '(?=$|[\\s;&|)\'"`])';
+  const word = w => w === '%' ? '[\'"]?%' : `${escapeRe(w)}${end}`;
+  const head = new RegExp(`(?:^|[;&|(\\n]|\\$\\(|\\b(?:sudo|xcrun|env|exec|command|time|nohup|if|then|else|elif|do|while|until)\\s|!\\s)\\s*(?:[A-Za-z_]\\w*=(?:'[^']*'|"[^"]*"|[^\\s;&|]*)\\s+)*((?:[\\w.~-]*/)*)${escapeRe(words[0])}${exe}${end}`, `gd${flags}`);
+  const whole = new RegExp(`(?:[\\w.~-]*/)*${escapeRe(words[0])}${exe}${words.slice(1).map(w => `\\s+${word(w)}`).join('')}${words.length === 1 ? end : ''}`, `y${flags}`);
+  const first = new RegExp(`^(?:[\\w.~-]*/)*${escapeRe(words[0])}${exe}$`, flags);
+  return {
+    words,
+    /** Whether a shell string runs the tool. */
+    inShell(text) {
+      for (const m of shellMask(text).matchAll(head)) {
+        whole.lastIndex = m.indices[1][0];
+        if (whole.test(text)) return true;
+      }
+      return false;
+    },
+    /** Whether a literal is the tool's own name (the array form's first element). */
+    isName: value => first.test(value.trim()),
+    /** Whether a following array element is the tool's word `i`. */
+    isWord: (i, value) => words[i] === '%' ? value.startsWith('%') : flags ? value.toLowerCase() === words[i].toLowerCase() : value === words[i],
+  };
+}
+
+// ---- what a guard covers ----------------------------------------------------------
+
+const PLATFORM_EXPR = String.raw`(?:process\.platform|os\.platform\(\)|\bplatform\(\))`;
+const SHELL_PLATFORM = { darwin: 'Darwin', linux: 'Linux', win32: '(?:MINGW|MSYS|CYGWIN)\\w*' };
+
+/** Each bracket pair in code whose strings are blanked: [{ open, close, ch }]. */
+function bracketPairs(bare) {
+  const pairs = [], stack = [], match = { ')': '(', ']': '[', '}': '{' };
+  for (let i = 0; i < bare.length; i++) {
+    const c = bare[i];
+    if (c === '(' || c === '[' || c === '{') stack.push({ open: i, ch: c });
+    else if (match[c]) {
+      while (stack.length && stack.at(-1).ch !== match[c]) stack.pop();
+      const top = stack.pop();
+      if (top) pairs.push({ ...top, close: i });
+    }
+  }
+  return pairs;
+}
+
+/** An expression's top-level parts around `op` (&& or ||), outside brackets and quotes. */
+function splitTop(e, op) {
+  const parts = [];
+  let depth = 0, q = null, from = 0;
+  for (let i = 0; i < e.length; i++) {
+    const c = e[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = null; continue; }
+    if (c === '"' || c === "'" || c === '`') q = c;
+    else if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (!depth && e.startsWith(op, i)) { parts.push(e.slice(from, i)); from = i + op.length; i += op.length - 1; }
+  }
+  return [...parts, e.slice(from)].map(p => p.trim());
+}
+
+const balanced = e => { let d = 0; for (const c of e) { if (c === '(') d++; else if (c === ')' && --d < 0) return false; } return d === 0; };
+const isLiteral = e => /^(['"`])[^'"`]+\1$/.test(e.trim()) || /^true$/.test(e.trim());
+
+/**
+ * What an expression says about running on `platform`: 'on' (true only
+ * there), 'off' (false there), or null (it cannot tell). A comparison of
+ * process.platform with it, a negation, or a name assigned one (aliases).
+ * A comparison with another platform says nothing: `=== 'linux'` false
+ * still leaves Windows, so it never guards a darwin tool.
+ */
+function sense(expr, platform, aliases, depth = 0) {
+  let e = expr.trim();
+  while (e.startsWith('(') && e.endsWith(')') && balanced(e.slice(1, -1))) e = e.slice(1, -1).trim();
+  if (depth > 4 || !e) return null;
+  if (/^!(?!=)/.test(e)) { const s = sense(e.slice(1), platform, aliases, depth + 1); return s === 'on' ? 'off' : s === 'off' ? 'on' : null; }
+  const left = new RegExp(`^${PLATFORM_EXPR}\\s*([!=])==?\\s*(['"\`])(\\w+)\\2$`).exec(e);
+  const right = new RegExp(`^(['"\`])(\\w+)\\1\\s*([!=])==?\\s*${PLATFORM_EXPR}$`).exec(e);
+  const [op, name] = left ? [left[1], left[3]] : right ? [right[3], right[2]] : [];
+  if (op) return name === platform ? (op === '=' ? 'on' : 'off') : null;
+  if (/^[\w$]+$/.test(e) && aliases.has(e)) return sense(aliases.get(e), platform, aliases, depth + 1);
+  return null;
+}
+
+/** A skip's value as its condition: `cond && 'why'` and `cond ? 'why' : false` are cond. */
+function skipCondition(value) {
+  const ternary = /^([\s\S]*?)\?\s*(?:(['"`])[^'"`]*\2|true)\s*:\s*(?:false|undefined|null|0|''|"")$/.exec(value.trim());
+  const cond = ternary ? ternary[1] : value;
+  return splitTop(cond, '&&').filter(p => !isLiteral(p)).join(' && ');
+}
+
+/**
+ * True when cond holding means the code runs only on the platform. && binds
+ * tighter than ||, so cond is split on || first: every branch must hold only
+ * on the platform (one of its && parts is the platform's own test). In
+ * `darwin && ready || force`, force runs it anywhere: no guard.
+ */
+const onWhenTrue = (cond, platform, aliases) => sense(cond, platform, aliases) === 'on'
+  || splitTop(cond, '||').every(branch => sense(branch, platform, aliases) === 'on' || splitTop(branch, '&&').some(p => sense(p, platform, aliases) === 'on'));
+/** True when cond failing means the code runs only on the platform: one || branch is the platform's own test, ruled out. */
+const onWhenFalse = (cond, platform, aliases) => sense(cond, platform, aliases) === 'off' || splitTop(cond, '||').some(p => sense(p, platform, aliases) === 'off');
+
+/**
+ * The ranges of a JS file that run only on `platform`: [[start, end], …].
+ *   test('…', { skip: process.platform !== 'darwin' }, …)  the call
+ *   describe.skipIf(process.platform !== 'darwin')(…)      the call after it
+ *   it.runIf(process.platform === 'darwin')(…)             the same
+ *   if (process.platform === 'darwin') { … }               the branch
+ *   if (process.platform !== 'darwin') return;             the rest of the block
+ *     (or process.exit(), or a skip then return; at the top: the rest of the file)
+ * A skip whose direction runs the code elsewhere (skip: process.platform ===
+ * 'darwin') covers nothing; so does one for another platform.
+ */
+export function guardRanges(code, bare, platform) {
+  const pairs = bracketPairs(bare);
+  const closeOf = open => pairs.find(p => p.open === open)?.close ?? -1;
+  const enclosing = (pos, ch) => pairs.filter(p => p.ch === ch && p.open < pos && pos < p.close).sort((a, b) => b.open - a.open)[0];
+  const aliases = new Map();
+  for (const m of bare.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=\s*/g)) {
+    const from = m.index + m[0].length;
+    let to = from, depth = 0;
+    for (; to < bare.length; to++) { const c = bare[to]; if ('([{'.includes(c)) depth++; else if (')]}'.includes(c)) { if (--depth < 0) break; } else if (!depth && (c === ';' || c === '\n' || c === ',')) break; }
+    aliases.set(m[1], code.slice(from, to));
+  }
+  const exprEnd = from => { let depth = 0, i = from; for (; i < bare.length; i++) { const c = bare[i]; if ('([{'.includes(c)) depth++; else if (')]}'.includes(c)) { if (--depth < 0) break; } else if (!depth && c === ',') break; } return i; };
+  const ranges = [];
+  for (const m of bare.matchAll(/\bskip\s*:\s*/g)) {
+    const from = m.index + m[0].length, cond = skipCondition(code.slice(from, exprEnd(from)));
+    const call = enclosing(m.index, '(');
+    if (call && onWhenFalse(cond, platform, aliases)) ranges.push([call.open, call.close]);
+  }
+  for (const m of bare.matchAll(/\.(skipIf|runIf)\s*\(/g)) {
+    const open = m.index + m[0].length - 1, close = closeOf(open);
+    if (close < 0) continue;
+    const cond = code.slice(open + 1, close);
+    if (!(m[1] === 'skipIf' ? onWhenFalse(cond, platform, aliases) : onWhenTrue(cond, platform, aliases))) continue;
+    const next = /^\s*\(/.exec(bare.slice(close + 1));
+    if (next) { const o = close + 1 + next[0].length - 1; ranges.push([o, closeOf(o)]); }
+  }
+  for (const m of bare.matchAll(/\bif\s*\(/g)) {
+    const open = m.index + m[0].length - 1, close = closeOf(open);
+    if (close < 0) continue;
+    const cond = code.slice(open + 1, close);
+    const lead = /^\s*/.exec(bare.slice(close + 1))[0].length, start = close + 1 + lead;
+    let end;
+    if (bare[start] === '{') end = closeOf(start);
+    else { const semi = bare.indexOf(';', start), line = bare.indexOf('\n', start); end = [semi, line].filter(i => i >= 0).reduce((a, b) => Math.min(a, b), bare.length); }
+    if (end < 0) continue;
+    if (onWhenTrue(cond, platform, aliases)) { ranges.push([start, end]); continue; }
+    const body = code.slice(bare[start] === '{' ? start + 1 : start, end).trim();
+    // An exit stops the rest: return, process.exit(), or a skip followed by return. A bare
+    // t.skip() marks the test skipped and runs on (node's test runner), so it clears nothing.
+    if (onWhenFalse(cond, platform, aliases) && /^(?:return\b|process\.exit\s*\(|[\w$.]*\bskip\s*\([^()]*\)\s*;?\s*return\b)/.test(body)) {
+      const block = enclosing(m.index, '{');
+      ranges.push([end, block ? block.close : bare.length]);
+    }
+  }
+  return ranges;
+}
+
+/** The lines of a shell script that run only on `platform` (`[ "$(uname)" = Darwin ] || exit 0`, or inside `if [ … = Darwin ]; then … fi`): [[from, to], …] by line. */
+export function shellGuardRanges(lines, platform) {
+  const name = SHELL_PLATFORM[platform];
+  if (!name) return [];
+  const eq = new RegExp(`(?:^|[^!])==?\\s*["']?${name}["']?`), neq = new RegExp(`!=\\s*["']?${name}["']?`);
+  const fiOf = i => { let depth = 0; for (let k = i; k < lines.length; k++) { if (/^\s*if\b/.test(lines[k])) depth++; if (/(^|[\s;])fi\b/.test(lines[k]) && --depth === 0) return k; } return lines.length - 1; };
+  const elseOf = (i, fi) => {
+    let depth = 0;
+    for (let k = i; k < fi; k++) {
+      if (k > i && depth === 1 && /^\s*(?:else|elif)\b/.test(lines[k])) return k - 1;
+      if (/^\s*if\b/.test(lines[k])) depth++;
+      if (/(^|[\s;])fi\b/.test(lines[k])) depth--;
+    }
+    return fi;
+  };
+  const ranges = [];
+  lines.forEach((line, i) => {
+    if (!/uname/.test(line) || !new RegExp(name).test(line)) return;
+    const isEq = eq.test(line), isNeq = neq.test(line);
+    if ((isEq && /\|\|\s*exit\b/.test(line)) || (isNeq && /&&\s*exit\b/.test(line))) { ranges.push([i, lines.length - 1]); return; }
+    if (!/^\s*if\b/.test(line)) return;
+    const fi = fiOf(i);
+    // Only the then branch: an else (or elif) at this if's depth runs off the platform.
+    // A one-line if with its own else (or elif) holds both branches on one line: no range.
+    if (isEq && /\b(?:else|elif)\b/.test(line.slice(line.search(/\bthen\b/) + 1))) return;
+    if (isEq) ranges.push([i, elseOf(i, fi)]);
+    else if (isNeq && (/\bthen\s+exit\b/.test(line) || lines.slice(i + 1, fi).every(l => /^\s*(?:exit|return)\b/.test(l) || !l.trim()))) ranges.push([fi, lines.length - 1]);
+  });
+  return ranges;
+}
+
+/**
+ * The platform-only tools a test file's text runs as commands, by platform:
+ * { darwin: ['hdiutil'], … } (a platform with none is absent). A command a
+ * guard for its platform covers (guardRanges) is left out; a guard elsewhere
+ * in the file covers nothing else.
+ */
+export function platformCalls(text, path, tools = PLATFORM_TOOLS) {
+  const found = {};
+  const add = (platform, tool) => { if (!(found[platform] ??= []).includes(tool)) found[platform].push(tool); };
+  const matchers = Object.entries(tools).flatMap(([platform, list]) => list.map(tool => ({ platform, tool, m: toolMatcher(tool, platform) })));
+  if (/\.(?:sh|bash|zsh)$/.test(path)) {
+    const lines = text.split('\n').map(line => line.startsWith('#!') ? '' : line.replace(/(^|\s)#.*$/, '$1'));
+    const guards = {};
+    lines.forEach((line, i) => {
+      for (const { platform, tool, m } of matchers) {
+        if (!m.inShell(line.trim())) continue;
+        guards[platform] ??= shellGuardRanges(lines, platform);
+        if (!guards[platform].some(([a, b]) => a <= i && i <= b)) add(platform, tool);
+      }
+    });
+    return found;
+  }
+  const { code, strings } = scanSource(text);
+  const before = commandBefore(runnersOf(code));
+  if (!before) return found;
+  const chars = code.split('');
+  for (const s of strings) for (let k = s.start + 1; k < s.end - 1; k++) if (chars[k] !== '\n') chars[k] = ' ';
+  const bare = chars.join('');
+  const guards = {};
+  strings.forEach((s, at) => {
+    if (!before.test(code.slice(Math.max(0, s.start - 300), s.start))) return;
+    for (const { platform, tool, m } of matchers) {
+      let runs = m.inShell(s.value.trim());
+      // The array form: ('defaults', ['write', …]), ('stat', ['-f', '%z', …]).
+      if (!runs && m.words.length > 1 && m.isName(s.value)) {
+        runs = true;
+        for (let w = 1, prev = s; w < m.words.length && runs; w++) {
+          const next = strings[at + w];
+          runs = Boolean(next) && /^\s*,\s*\[?\s*$/.test(code.slice(prev.end, next.start)) && m.isWord(w, next.value);
+          prev = next;
+        }
+      }
+      if (!runs) continue;
+      guards[platform] ??= guardRanges(code, bare, platform);
+      if (!guards[platform].some(([a, b]) => a <= s.start && s.start <= b)) add(platform, tool);
+    }
+  });
+  return found;
+}
+
+/** The repo's tracked files: git ls-files, or every file (walk) outside a git repository. */
+export async function trackedFiles(root) {
+  const listed = await new Promise(done => execFile('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (e, out) => done(e ? null : out)));
+  return listed === null ? walk(root) : listed.split('\0').filter(Boolean);
+}
+
+/**
+ * platform-guard: a tracked test file that runs a platform-only tool with no
+ * skip for that platform, one lint per file and platform; a bad
+ * "platformTools" is one lint on .keel/keel.json.
+ */
+export async function platformLints(root, config) {
+  const problems = platformToolProblems(config?.platformTools);
+  const lint = problems.map(message => ({ rule: 'platform-guard', path: '.keel/keel.json', message }));
+  const tools = platformTools(config);
+  for (const path of (await trackedFiles(root)).filter(isTestFile).sort()) {
+    const text = await read(join(root, path)).catch(() => null);
+    if (text === null || text.length > 1_000_000) continue;
+    for (const [platform, used] of Object.entries(platformCalls(text, path, tools))) {
+      const name = PLATFORM_NAMES[platform] ?? platform;
+      lint.push({ rule: 'platform-guard', path, message: `runs ${used.map(t => t.replace(/ %$/, ' <format>')).join(', ')} (${name} only) with no ${platform} skip: it passes on a ${name} machine and fails on the others (a Linux CI). Say so: test('…', { skip: process.platform !== '${platform}' }, …)` });
+    }
+  }
+  return lint;
 }
 
 // ---- the climb's night ---------------------------------------------------------
@@ -958,11 +1431,11 @@ export class IncompleteRead extends Error {
  * smaller window first and this full one only when a list overflows it.
  */
 export const reviewFragment = ({ threads = 100, replies = 100, comments = 100, reviews = 100 } = {}) => `fragment KeelReview on PullRequest {
-  number title url state mergedAt updatedAt headRefName headRefOid author { __typename login }
+  number title url state mergedAt updatedAt headRefName headRefOid body repository { nameWithOwner } headRepository { nameWithOwner } author { __typename login }
   reviewThreads(first: ${threads}) { pageInfo { hasNextPage } nodes { id isResolved path line
     comments(first: ${replies}) { pageInfo { hasNextPage } nodes { databaseId author { login } body createdAt url } } } }
-  comments(first: ${comments}) { pageInfo { hasNextPage } nodes { id databaseId author { login } body createdAt url } }
-  reviews(first: ${reviews}) { pageInfo { hasNextPage } nodes { id databaseId author { login } body state submittedAt url } }
+  comments(first: ${comments}) { pageInfo { hasNextPage } nodes { id databaseId author { __typename login } body createdAt url } }
+  reviews(first: ${reviews}) { pageInfo { hasNextPage endCursor } nodes { id databaseId author { __typename login } commit { oid } body state submittedAt url } }
 }`;
 
 // ---- what a read costs (GitHub's GraphQL allowance) -----------------------------
@@ -1008,6 +1481,45 @@ const plainLines = body => String(body ?? '').replace(/<!--[\s\S]*?-->/g, '').sp
 const firstLine = body => plainLines(body)[0]?.slice(0, 140) ?? '';
 /** A bot's status board (a sticky comment it edits in place, opened by a hidden <!-- marker -->): listed, never owed an answer. */
 const isStatus = body => /^\s*<!--/.test(String(body ?? ''));
+// Robot author and reviewer share the Actions identity. Only the exact posted
+// envelope, tied to this PR's canonical delivery association, is an exception.
+function robotReview(pr, review) {
+  const bot = author => author?.__typename === 'Bot' && sameLogin(author.login, 'github-actions[bot]');
+  if (!bot(pr.author) || !bot(review.author)) return null;
+  if ((String(review.body ?? '').match(/<!-- keel:robot-review/g) ?? []).length !== 1) return null;
+  const envelope = /^<!-- keel:robot-review ((?:[a-f0-9]{40}|[a-f0-9]{64})) (claude|codex) -->\nReviewed by (claude|codex); built by (claude|codex)\.\n\n([\s\S]+)$/.exec(review.body ?? '');
+  if (!envelope || envelope[2] !== envelope[3] || envelope[2] === envelope[4] || review.commit?.oid !== envelope[1]) return null;
+  const marks = [...String(pr.body ?? '').matchAll(/^<!-- keel:robot-delivery (.+) -->$/gm)];
+  if (marks.length !== 1) return null;
+  let mark;
+  try { mark = JSON.parse(marks[0][1]); } catch { return null; }
+  const {version,repo,issueNumber,instanceId,author,headSha,cursor} = mark ?? {};
+  if (version !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(repo ?? '') || repo.split('/').some(part => part === '.' || part === '..') || !Number.isSafeInteger(pr.number) || pr.number < 1 || !Number.isSafeInteger(issueNumber) || issueNumber < 1 || !/^[A-Za-z0-9_-]{1,128}$/.test(instanceId ?? '') || !Number.isSafeInteger(cursor) || cursor < 0 || author !== envelope[4] || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(headSha ?? '') || pr.headRefName !== `keel/robot-${issueNumber}` || pr.repository?.nameWithOwner !== repo || pr.headRepository?.nameWithOwner !== repo || pr.url !== `https://github.com/${repo}/pull/${pr.number}`) return null;
+  if (marks[0][1] !== JSON.stringify({version,repo,issueNumber,instanceId,author,headSha,cursor})) return null;
+  if (headSha !== envelope[1]) {
+    // A later review must have its own immutable bot receipt. A short window
+    // cannot prove absence, uniqueness, or that nobody answered the finding.
+    if (!Array.isArray(pr.comments?.nodes) || pr.comments.pageInfo?.hasNextPage !== false || pr.comments.pageInfo?.hasPreviousPage) throw new IncompleteRead('robot continuation comments are incomplete');
+    const matches = new Set();
+    for (const c of pr.comments.nodes) {
+      if (!bot(c.author) || !String(c.body ?? '').includes('<!-- keel:robot-continuation')) continue;
+      const fail = () => { throw new Error('robot continuation metadata is malformed or inconsistent'); };
+      if (!Number.isSafeInteger(c.databaseId) || c.databaseId < 1 || c.url !== `${pr.url}#issuecomment-${c.databaseId}` || (c.body.match(/<!-- keel:robot-continuation/g) ?? []).length !== 1) fail();
+      const m = /^<!-- keel:robot-continuation (.+) -->\nTrusted robot continuation\.\n\n/.exec(c.body);
+      if (!m) fail();
+      let v;
+      try { v = JSON.parse(m[1]); } catch { fail(); }
+      const a = v?.authorization;
+      if (!v || !a || !Number.isSafeInteger(a.receiptId) || a.receiptId < 1 || !/^[a-f0-9]{64}$/.test(a.bodyHash ?? '') || !/^[a-f0-9]{64}$/.test(a.policyHash ?? '') || !/^[A-Za-z0-9-]+$/.test(a.writer ?? '')) fail();
+      const canonical = {version:1,repo,prNumber:pr.number,issueNumber,instanceId,author,headSha:v.headSha,cursor:v.cursor,authorization:{receiptId:a.receiptId,bodyHash:a.bodyHash,writer:a.writer,policyHash:a.policyHash}};
+      if (JSON.stringify(canonical) !== m[1] || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(v.headSha ?? '') || !Number.isSafeInteger(v.cursor) || v.cursor < cursor) fail();
+      if (v.headSha === envelope[1]) matches.add(m[1]);
+    }
+    if (matches.size !== 1) throw new Error('robot review exact-head continuation metadata is missing or conflicting');
+  }
+  const text = envelope[5].trim();
+  return { text, status: false };
+}
 /** Whether `body` answers comment `c`: it names c's id, links c's URL, or quotes (`> `) a line of it. */
 export function references(body, c) {
   const text = String(body ?? '');
@@ -1052,14 +1564,15 @@ export function reviewComments(pr, reviewers = []) {
     out.push({ kind: 'thread', id: t.id, databaseId: first.databaseId, author: by, at: since.createdAt, path: t.path ?? null, line: t.line ?? null,
       text: firstLine(first.body), url: first.url, resolved: !!t.isResolved, answered });
   }
-  const reviews = (page(pr.reviews, 'reviews', pr) ?? []).filter(r => String(r?.body ?? '').trim() && !(pr.author?.login && sameLogin(loginOf(r), pr.author.login)));
+  const reviews = (page(pr.reviews, 'reviews', pr) ?? []).filter(r => String(r?.body ?? '').trim() && (robotReview(pr, r) || !(pr.author?.login && sameLogin(loginOf(r), pr.author.login))));
   if (!reviewers.length && !reviews.length) return out;
   const convo = page(pr.comments, 'conversation comments', pr);
   if (!Array.isArray(convo)) throw new Error('the pull request came back without its conversation comments');
   const entry = (kind, c, at) => {
-    const by = loginOf(c), status = isStatus(c.body), after = Date.parse(at);
+    const robot = kind === 'review' ? robotReview(pr, c) : null;
+    const by = loginOf(c), status = robot ? robot.status : isStatus(c.body), after = Date.parse(at);
     const replied = convo.some(o => Date.parse(o.createdAt) > after && !sameLogin(loginOf(o), by) && !isNamed(loginOf(o)) && references(o.body, c));
-    return { kind, id: c.id, databaseId: c.databaseId, author: by, at, path: null, line: null, text: firstLine(c.body), url: c.url, resolved: false, status, answered: status || replied };
+    return { kind, id: c.id, databaseId: c.databaseId, author: by, at, path: null, line: null, text: firstLine(robot ? robot.text : c.body), url: c.url, resolved: false, status, answered: status || replied };
   };
   for (const r of reviews) out.push(entry('review', r, r.submittedAt));
   for (const c of convo) if (isNamed(loginOf(c))) out.push(entry('comment', c, c.createdAt));
@@ -1089,13 +1602,13 @@ export const WINDOW_CONVO = 20;
 export const WINDOW_BODIES = 10;
 /** At most this many PRs a repo are read alone; past it the read is incomplete. */
 export const SOLO_READS = 6;
-const NODE = 'databaseId author { login } body createdAt url';
+const NODE = 'databaseId author { __typename login } body createdAt url';
 export const windowFragment = () => `fragment KeelReviewWindow on PullRequest {
-  keelWindow: __typename number title url state mergedAt updatedAt headRefName headRefOid author { __typename login }
+  keelWindow: __typename number title url state mergedAt updatedAt headRefName headRefOid body repository { nameWithOwner } headRepository { nameWithOwner } author { __typename login }
   reviewThreads(first: ${WINDOW_THREADS}) { pageInfo { hasNextPage } nodes { id isResolved path line
     tail: comments(last: ${WINDOW_TAIL}) { totalCount nodes { ${NODE} } } } }
   comments(last: ${WINDOW_CONVO}) { pageInfo { hasPreviousPage } nodes { id ${NODE} } }
-  reviews(last: ${WINDOW_BODIES}) { pageInfo { hasPreviousPage } nodes { id databaseId author { login } body state submittedAt url } }
+  reviews(last: ${WINDOW_BODIES}) { pageInfo { hasPreviousPage } nodes { id databaseId author { __typename login } commit { oid } body state submittedAt url } }
 }`;
 export const repoReviewQuery = () => `query($owner: String!, $name: String!, $open: Boolean!, $merged: Boolean!, $openAfter: String, $mergedAfter: String) { ${RATE_LIMIT} repository(owner: $owner, name: $name) {
   open: pullRequests(states: OPEN, first: ${REVIEW_PRS}, after: $openAfter, orderBy: { field: UPDATED_AT, direction: DESC }) @include(if: $open) { pageInfo { hasNextPage endCursor } nodes { ...KeelReviewWindow } }
@@ -1111,6 +1624,17 @@ export const repoReviewArgs = (repo, { open, merged, openAfter, mergedAfter }) =
 export const prReviewQuery = (sizes = {}) => `query($owner: String!, $name: String!, $number: Int!) { ${RATE_LIMIT}
   repository(owner: $owner, name: $name) { pullRequest(number: $number) { ...KeelReview } } }
 ${reviewFragment(sizes)}`;
+/**
+ * gh's arguments for the PR's review bodies after `after` (a page's
+ * endCursor): a PR answered thread by thread passes 100 reviews, since each
+ * reply is one, and keel review reads every page rather than refuse.
+ */
+export const moreReviewsArgs = (repo, number, after) => {
+  const [owner, name] = String(repo).split('/');
+  const query = `query($owner: String!, $name: String!, $number: Int!, $after: String!) { ${RATE_LIMIT}
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { reviews(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { id databaseId author { __typename login } commit { oid } body state submittedAt url } } } } }`;
+  return ['api', 'graphql', '-f', `query=${query}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${number}`, '-f', `after=${after}`];
+};
 /** gh's arguments for one PR's full read. */
 export const prReviewArgs = (repo, number, sizes) => {
   const [owner, name] = String(repo).split('/');
@@ -1141,9 +1665,9 @@ export function fromWindow(pr, reviewers = []) {
   // A missing connection stays missing, so reviewComments refuses it.
   const list = conn => conn && Array.isArray(conn.nodes) ? { pageInfo: { hasNextPage: !!conn.pageInfo?.hasPreviousPage }, nodes: conn.nodes } : conn;
   const comments = list(rest.comments), reviews = list(rest.reviews);
-  const bodies = (reviews?.nodes ?? []).some(r => String(r?.body ?? '').trim() && !(rest.author?.login && sameLogin(r?.author?.login, rest.author.login)));
+  const bodies = (reviews?.nodes ?? []).some(r => String(r?.body ?? '').trim() && (String(r.body).startsWith('<!-- keel:robot-review ') || !(rest.author?.login && sameLogin(r?.author?.login, rest.author.login))));
   if (reviews?.pageInfo.hasNextPage) whole = false;
-  if (comments?.pageInfo.hasNextPage && (reviewers.length || bodies)) whole = false;
+  if ((reviewers.length || bodies) && (!comments || comments.pageInfo.hasNextPage)) whole = false;
   return { pr: { ...rest, reviewThreads: { pageInfo: { hasNextPage: !!rest.reviewThreads?.pageInfo?.hasNextPage }, nodes: threads }, comments, reviews }, whole };
 }
 
@@ -1359,6 +1883,10 @@ export const AGENTS = Object.freeze({
     final: 'the execution file (the step\'s execution_file output): its last "result" message\'s text',
     error: 'that result message: is_error, its turns and its result text',
     login: 'claude[bot]',
+    // Phase 60: a commit is Claude's when its author's or a Co-authored-by trailer's email is one of these
+    // (claude-code-action's commits; Claude Code's "Co-Authored-By: Claude … <noreply@anthropic.com>").
+    // An email, never a name: a person may be named Claude (keel#65).
+    commits: Object.freeze({ emails: /^(?:noreply@anthropic\.com|(?:\d+\+)?claude\[bot\]@users\.noreply\.github\.com)$/i }),
     passes: Object.freeze(['crossReview', 'climb', 'tend']),
     refused: Object.freeze({}),
   }),
@@ -1376,6 +1904,8 @@ export const AGENTS = Object.freeze({
     error: 'none is written: the step\'s outcome, and an empty or missing final message',
     // codex-action posts nothing; keel's step posts what it says.
     login: null,
+    // Phase 60: a commit is Codex's when its author or a Co-authored-by trailer is one of these (Codex cloud's connector, the Codex CLI).
+    commits: Object.freeze({ emails: /^(?:noreply@openai\.com|codex@openai\.com|(?:\d+\+)?(?:chatgpt-codex-connector|codex)\[bot\]@users\.noreply\.github\.com)$/i }),
     passes: Object.freeze(['crossReview', 'climb', 'tend']),
     refused: Object.freeze({}),
   }),
@@ -1446,6 +1976,107 @@ export function reviewerOf({ config, head, has, agents = AGENTS }) {
   const reviewer = others[0] ?? (listed.includes(author) ? author : null);
   return { author, reviewer, self: reviewer === author, why: reviewer ? `${wrote}: reviewed by ${reviewer}, but no provider listed has its secret set` : `${wrote}, and "agents" lists no provider to review it` };
 }
+
+// ---- who wrote a push (phase 60) -------------------------------------------------
+//
+// A project that ships to main opens no PR, so no branch says who wrote the
+// code. Its commits do: each one's author, and its Co-authored-by trailers.
+
+/** The Co-authored-by trailers of a commit message: [{ name, email }]. Pure. */
+export function coAuthorsOf(message) {
+  return trailerValues(trailerBlock(message), 'co-authored-by').map(personOf).filter(Boolean);
+}
+
+/**
+ * A commit message's trailer block, as git reads one (git interpret-trailers):
+ * its last paragraph, when every line of it is a `Key: value` trailer or a
+ * continuation of one. A `Co-authored-by:` line quoted in the body is not a
+ * trailer (keel#65). Pure.
+ */
+export function trailerBlock(message) {
+  const paras = String(message ?? '').replace(/\r\n/g, '\n').trim().split(/\n[ \t]*\n/);
+  if (paras.length < 2) return [];
+  const lines = paras.at(-1).split('\n');
+  return lines.every((l, i) => /^[A-Za-z0-9-]+:[ \t]*\S/.test(l) || (i > 0 && /^[ \t]+\S/.test(l))) ? lines : [];
+}
+/** The values of one trailer key (any case) in a trailer block. */
+const trailerValues = (lines, key) => lines.filter(l => l.toLowerCase().startsWith(`${key}:`)).map(l => l.slice(key.length + 1).trim());
+/** `Name <email>` → { name, email }, or null. */
+const personOf = v => { const m = /^(.*?)[ \t]*<([^>\n]*)>$/.exec(String(v ?? '').trim()); return m ? { name: m[1].trim(), email: m[2].trim() } : null; };
+
+/**
+ * Who wrote a commit: the providers whose identity its author's email, or a
+ * Co-authored-by trailer's, is (an adapter's `commits.emails`; a name alone
+ * is never evidence: a person may be named Claude), in the adapters' order;
+ * [] for a person's. `commit`: { name, email, coAuthors?, message }:
+ * `coAuthors` is git's own parse of the trailers (`%(trailers:key=Co-authored-by)`,
+ * gitOf's), else the message's trailer block is read here. Pure.
+ */
+export function commitAuthorOf(commit, agents = AGENTS) {
+  const trailers = Array.isArray(commit?.coAuthors) ? commit.coAuthors.map(personOf).filter(Boolean) : coAuthorsOf(commit?.message);
+  const emails = [commit?.email ?? '', ...trailers.map(p => p.email)];
+  return Object.keys(agents).filter(n => agents[n].commits && emails.some(e => agents[n].commits.emails.test(e)));
+}
+
+/** Every provider that wrote one of a push's commits, in the adapters' order; [] when people wrote them all. Pure. */
+export function pushAuthorsOf(commits, agents = AGENTS) {
+  const wrote = new Set((commits ?? []).flatMap(c => commitAuthorOf(c, agents)));
+  return Object.keys(agents).filter(n => wrote.has(n));
+}
+
+/**
+ * Who reviews a push to main (phase 60), by the owner's rule for a PR: a
+ * provider other than the ones that wrote its commits, whenever one is
+ * available. The reviewer is the first provider "agents" lists that wrote
+ * none of them, can review, and has its secret (`has`, as for reviewerOf).
+ * A person's push (no provider in its authors or trailers) is reviewed by
+ * the first listed. Only when no provider that wrote none of it is
+ * available does one review its own (`self`, with the reason). { authors,
+ * author, reviewer, self, reason?, why }: `author` is the one provider that
+ * wrote it (the reviewer itself when it reviews its own), else null. Pure.
+ */
+export function pushReviewerOf({ config, commits, has, agents = AGENTS }) {
+  const authors = pushAuthorsOf(commits, agents);
+  const listed = listedAgents(config).filter(n => agents[n]?.passes.includes('crossReview'));
+  const available = n => !has || has[n] !== false;
+  const author = authors.length === 1 ? authors[0] : null;
+  const wrote = authors.length ? `written by ${authors.join(' and ')} (its commits' authors and trailers)` : 'written by a person (no provider in its commits\' authors or trailers)';
+  const others = listed.filter(n => !authors.includes(n));
+  const other = others.find(available);
+  if (other) {
+    const skipped = others.slice(0, others.indexOf(other));
+    return { authors, author, reviewer: other, self: false, why: `${wrote}: reviewed by ${other}, the first ${authors.length ? 'other ' : ''}provider "agents" lists${skipped.length ? ` with its secret set (${skipped.join(', ')} has none)` : ''}` };
+  }
+  const own = listed.find(n => authors.includes(n) && available(n));
+  if (own) {
+    const alsoWrote = listed.filter(n => n !== own && authors.includes(n));
+    const reason = alsoWrote.length ? `every other provider listed wrote some of it too (${alsoWrote.join(', ')})` : selfReason({ author: own, listed, has, agents });
+    return { authors, author: own, reviewer: own, self: true, reason, why: `${wrote}: reviewed by ${own}, its own provider: ${reason}` };
+  }
+  const reviewer = others[0] ?? listed.find(n => authors.includes(n)) ?? null;
+  return { authors, author, reviewer, self: reviewer !== null && authors.includes(reviewer), why: reviewer ? `${wrote}: reviewed by ${reviewer}, but no provider listed has its secret set` : `${wrote}, and "agents" lists no provider to review it` };
+}
+
+/** The label on every push's tracking issue (cross-review.mjs opens them; keel review reads them). */
+export const PUSH_LABEL = 'keel:review-after';
+/** A push's tracking issue's title. */
+export const pushTitle = sha => `keel review after ${String(sha ?? '').slice(0, 7)}`;
+/**
+ * The record a push review leaves as its tracking issue's first line, a
+ * hidden comment: { from, to, alone, agent, findings: [{ id, severity, path,
+ * line, text, url? }] }. `<` and `>` are escaped, so nothing in it ends the
+ * comment. recordOf reads it back (null when absent or not a record). Pure.
+ */
+export const recordText = record => `<!-- ${PUSH_LABEL} ${JSON.stringify(record).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')} -->`;
+export function recordOf(body) {
+  // The body's first line alone (keel#65): the rest holds the agent's summary and findings, which could
+  // spell a marker of their own; a pending issue starts with its own marker, so it is never a record.
+  const m = new RegExp(`^<!-- ${PUSH_LABEL} (\\{[^\\n]*\\}) -->(?:\\r?\\n|$)`).exec(String(body ?? ''));
+  if (!m) return null;
+  try { const r = JSON.parse(m[1]); return r && typeof r === 'object' && /^[0-9a-f]{40}$/.test(r.to ?? '') ? r : null; } catch { return null; }
+}
+/** An issue the cross-review workflow opened (its token's bot), never a person's: only those are the record. */
+export const byWorkflow = issue => /^(?:app\/)?github-actions(?:\[bot\])?$/.test(String(issue?.author?.login ?? ''));
 
 /** A provider's secret, as a person sets it: CLAUDE_CODE_OAUTH_TOKEN (or ANTHROPIC_API_KEY). */
 export const secretText = (name, agents = AGENTS) => {
