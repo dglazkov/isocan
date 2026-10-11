@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.25",
+  "practice": "0.8.28",
   "files": {
     ".agents/skills/keel/SKILL.md": {
       "practice": "agents-md",
@@ -15,7 +15,7 @@
     },
     ".github/workflows/keel-night.yml": {
       "practice": "night",
-      "sha256": "ff1bd4535247caae59c2c931a054dd0fec2f27f299e7d3d4d85d8eed0ded418a"
+      "sha256": "14c99fa38b670a72b6e8a43bf8aede4399a42384d180b44e343bd44c847ece71"
     },
     "AGENTS.md#agents-md": {
       "practice": "agents-md",
@@ -39,11 +39,15 @@
     },
     "docs/keel-lessons.md": {
       "practice": "lessons",
-      "sha256": "28d1170f58d1905e564f413669704ac475f627732feb4b4657ad1d31711b09e7"
+      "sha256": "720ae211a33e89eda9426cac8160afb1fbdb1358caa884c52059ffbd5d035e96"
     },
     "renovate.json": {
       "practice": "renovate",
       "sha256": "da0f4ff37fe8862c2c34516fbdcf57492bef2643d05156d953c01bf0f472896d"
+    },
+    "scripts/keel/ci.mjs": {
+      "practice": "night",
+      "sha256": "0af4960574107b1424314d254ced19e5339f01a27d73db808ef84b8e65b79a48"
     },
     "scripts/keel/drain.mjs": {
       "practice": "night",
@@ -51,19 +55,51 @@
     },
     "scripts/keel/improve.mjs": {
       "practice": "night",
-      "sha256": "f1dedbede065b03835f0fe4e65ad3fc183d47eeb52850749e74ea9101bc28760"
+      "sha256": "d78d67e22cc3addf0e9d627402f57c3b9a09f80dbf31cea75e652ecd65e24aa1"
     },
     "scripts/keel/lib.mjs": {
       "practice": "night",
-      "sha256": "c96fcf9f35f160a51cbd39812acfadc8d1b40470c6ebf14ce54e80c04fde77a5"
+      "sha256": "e87a2e1c431618a59d8cc7f46e78d326018dbf332b8d72a7e16f5fc03fcacc6b"
     },
     "scripts/keel/pr-body.mjs": {
       "practice": "night",
       "sha256": "2e8e8f826bf95501d918c32fe29079c2d0702959a89257a015e73a10a0a84c53"
     },
+    "scripts/keel/robot-budget.mjs": {
+      "practice": "night",
+      "sha256": "bae6690cf3fb91927a2c1dc09189d295bddacb4f318fda527cb81b04946d61af"
+    },
+    "scripts/keel/robot-delivery.mjs": {
+      "practice": "night",
+      "sha256": "0ccf8a3ab63f1c5325ef63c98d0aa6eccefa252623ed1a573037d9d515433ccb"
+    },
+    "scripts/keel/stalls.mjs": {
+      "practice": "night",
+      "sha256": "dec60dadebef72f2e25cc91ae60f47adf869734a4c7ebdc4ca5c32d4e523cdcd"
+    },
+    "scripts/keel/test-history.mjs": {
+      "practice": "night",
+      "sha256": "2e2a873736f6c6235c8eb7356657b967ca2ca26e20d574208652c1d2c885615e"
+    },
     "scripts/keel/test-ledger.mjs": {
       "practice": "night",
-      "sha256": "aed05e37b5f54f5491899e1a5116fc298e33ef8660fc1bdfadb151d6e6c4f800"
+      "sha256": "d4ad925f33d676a360916d0f75b8594b68b5c3964d17ce7740f2c110d00730ce"
+    },
+    "scripts/keel/time-measures.mjs": {
+      "practice": "night",
+      "sha256": "1f0e895dd23a3e4be2abda15c23af7c6ea5337fd8ae553ec0a9528b6a1cddc4f"
+    },
+    "scripts/keel/time-proposal-remeasurement.mjs": {
+      "practice": "night",
+      "sha256": "fb2c5da1552e14915e03732ced69112898807abf059f0fb9a12d990fcce2d37b"
+    },
+    "scripts/keel/time-proposals.mjs": {
+      "practice": "night",
+      "sha256": "0baf3b0c2fe72ad31042a300e343d8114e50227fc7418290b9e28705ea4b8277"
+    },
+    "scripts/keel/time-receipts.mjs": {
+      "practice": "night",
+      "sha256": "705ad4b32f3df2c23f41ca5a7849421d1bb0a779445387909732aa0778310972"
     },
     "scripts/loop.mjs": {
       "practice": "loop",
