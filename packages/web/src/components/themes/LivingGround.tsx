@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { CanvasTheme, ThemeAnchor } from "@isocan/core";
 import { useCanvasStore } from "../../stores/canvasStore.ts";
 import { useUiStore } from "../../stores/uiStore.ts";
 import { groundView, itemRects, toGround } from "../../lib/groundfield.ts";
 import { groundCursors } from "../../lib/groundcursors.ts";
 import { isAgentActor, useActorKinds } from "../../lib/actorkinds.ts";
+import { currentMotion, onMotion } from "../../lib/groundmotion.ts";
 import type { LivingGround as Ground } from "./livingkit.ts";
 import { GroundHost } from "./GroundHost.ts";
 import "./meadow.css";
@@ -21,7 +22,10 @@ import "./meadow.css";
  *
  * Loaded only by `CanvasThemeLayer`, only for a living theme, and only when
  * reduced motion is off — so a canvas on any other ground, and a viewer who
- * asked for stillness, download none of this.
+ * asked for stillness, download none of this. A viewer who chose Motion ▸
+ * Still in the menu (phase 4) gets this module and its still, but never a
+ * WebGL context or a ground's chunk: the choice is read here, not in the
+ * entry chunk, so it costs a first visit nothing.
  *
  * When the host gives up (no WebGL2, a shader that will not compile, a context
  * lost twice) it says so once, and this renders `still` instead: the ground's
@@ -35,6 +39,10 @@ const GROUNDS: Partial<Record<CanvasTheme, () => Promise<Ground>>> = {
   // Orbit is how Galaxy is drawn (phases.md, 9 Oct): the stored theme stays
   // `galaxy`, so every canvas wearing it became living with no migration.
   galaxy: () => import("./orbit.ts").then((m) => m.createOrbit()),
+  snow: () => import("./snow.ts").then((m) => m.createSnow()),
+  aurora: () => import("./aurora.ts").then((m) => m.createAurora()),
+  pond: () => import("./pond.ts").then((m) => m.createPond()),
+  zen: () => import("./zen.ts").then((m) => m.createZen()),
 };
 
 /** What the `meadow` journey reads off the canvas element. */
@@ -49,12 +57,20 @@ export interface GroundProbe {
   near: (sx: number, sy: number, r: number) => { count: number; radial: number } | null;
   /** Night's woken fireflies right now (0 on any other ground). */
   fireflies: () => number;
+  /** Snow's pack at a world point, 0..1: how trodden, read back from its own
+   *  texture, which outlives the host's trail (0 on any other ground). */
+  trodden: (worldX: number, worldY: number) => number;
+  /** Aurora's lean over a canvas-relative screen column (0 on any other ground). */
+  lean: (sx: number) => number;
 }
 
 export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anchor: ThemeAnchor; still: ReactNode }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [isStill, setStill] = useState(false);
   const pinned = anchor === "window";
+  // This viewer's Motion (phase 4): Still is the painted still and no WebGL
+  // at all; Calm and Full differ only in what the host hands the ground.
+  const motion = useSyncExternalStore(onMotion, currentMotion);
   // Who is an agent, for `AGENT_WEIGHT` — the same recorded fact the cursor's
   // mark reads. A ref, so a late answer does not restart the ground.
   const kinds = useActorKinds();
@@ -64,6 +80,7 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
   }, [kinds]);
 
   useEffect(() => {
+    if (motion === "still") return;
     const canvas = ref.current;
     const load = GROUNDS[theme];
     if (!canvas || !load) {
@@ -76,7 +93,7 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
 
     void load().then((ground) => {
       if (gone) return;
-      host = new GroundHost(canvas, ground, { onStill: () => setStill(true) });
+      host = new GroundHost(canvas, ground, { onStill: () => setStill(true), motion });
       const h = host;
       const viewOf = () => groundView(useUiStore.getState().viewport, pinned);
       const items = () => {
@@ -125,7 +142,13 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
         const dist = Number.isNaN(lastX) ? 0 : Math.hypot(sx - lastX, sy - lastY);
         lastX = sx;
         lastY = sy;
+        const wasHeld = held;
         held = (e.buttons & 1) === 1;
+        // The browser's own move after a load or a layout goes nowhere: it
+        // says where the pointer is (kept above, for a press) but is not a
+        // hand on the canvas, so it wakes nothing — under Calm an untouched
+        // ground must draw nothing at all.
+        if (dist === 0 && held === wasHeld) return;
         const at = toGround(h.currentView, sx, sy);
         h.pointer("self", at.x, at.y, dist, held);
         // Resting needs a real move first: the browser's own synthetic move
@@ -182,6 +205,12 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
         held: () => held,
         near: (sx, sy, r) => h.readback(sx, sy, r),
         fireflies: () => (ground as Ground & { flies?: () => number }).flies?.() ?? 0,
+        trodden: (wx, wy) => {
+          const vp = useUiStore.getState().viewport;
+          const g = toGround(h.currentView, wx * vp.scale + vp.tx, wy * vp.scale + vp.ty);
+          return (ground as Ground & { trodden?: (x: number, y: number) => number }).trodden?.(g.x, g.y) ?? 0;
+        },
+        lean: (sx) => (ground as Ground & { lean?: (x: number) => number }).lean?.(sx) ?? 0,
       };
       (canvas as HTMLCanvasElement & { groundProbe?: GroundProbe }).groundProbe = probe;
     }, () => {
@@ -193,9 +222,9 @@ export function LivingGround({ theme, anchor, still }: { theme: CanvasTheme; anc
       for (const f of off) f();
       host?.dispose();
     };
-  }, [theme, pinned]);
+  }, [theme, pinned, motion]);
 
-  if (isStill) return <>{still}</>;
+  if (isStill || motion === "still") return <>{still}</>;
   return (
     <div className={`canvas-theme canvas-theme-${theme}`}>
       <canvas ref={ref} className="ground-canvas" aria-hidden="true" />

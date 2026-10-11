@@ -9,7 +9,7 @@ note: "the walk: a prototype bench that measures before anything ships, the livi
 
 **9 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 9 Oct 2026: phases 1–3 are CLOSED — Meadow, Night, and Galaxy (now drawn by Orbit) are living grounds in isocan, touched by every cursor, asleep when nobody moves. Phase 0 is PART-DONE (the bench; the Orbit and eddy calls are made). Next: living-grounds phase 4, Motion settings, the menu's previews, more grounds.**
+**Where we are, 10 Oct 2026: phases 1–4 are CLOSED — seven living grounds (Meadow, Night, Galaxy drawn by Orbit, Pond, Zen garden, Snow, Aurora), touched by every cursor, asleep when nobody moves, with a per-viewer Motion setting (Full · Calm · Still) and each ground's picture in the Background menu. Phase 0 is PART-DONE (the bench). Next: living-grounds phase 5, Evidence — frame cost per ground, a persona number, a verify walk.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -118,7 +118,7 @@ run is that measurement; phase 3 ships on the bench's numbers.)
 
 ## Phase 4 — Motion settings, the menu, more grounds
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 10 October 2026.** Motion is a per-viewer choice in the Background menu (localStorage, no op, no verb). The `ground-motion` journey: Full draws 33 frames at mount; Calm draws one (the mount paint) and none in the 3 s after, yet wakes for a pointer (49 frames, trail 0.70); Still mounts no WebGL canvas and fetches no ground chunk; a ground picked from the menu is one ⌘Z. Each menu row carries the ground's still as a thumbnail that drifts on hover. Four more grounds, each with its own journey, asleep inside 3 s with zero frames after, and a still under reduced motion: **Pond** (ripple height 1.32 at the crossed point, 0 far; koi that dart away), **Zen garden** (raked 0.97 where the cursor went; the line holds asleep at 0.94 and softens to 0.75 over ~3 s awake; items sit in raked rings), **Snow** (trodden 0.996 on the path; holds 0.92 asleep, fills to 0.77 with awake time), **Aurora** (ribbons lean 0.99 over the cursor's column, 0.0006 across the screen; a near card catches 0.44 of the light). Idle journeys 1% busy each. Entry chunk 706,269, 31 bytes under the ceiling.
 
 **Outcome:**
 
@@ -132,6 +132,17 @@ run is that measurement; phase 3 ships on the bench's numbers.)
 - Calm draws nothing while untouched.
 - The menu sets the shared `theme` in one undo.
 - Each new ground meets the same bounds as phase 3.
+
+### Trajectory
+
+- **2026-10-10** — `Field` gained `ease` (the awake envelope); `ambient` is `ease` under Full and 0 under Calm. A ground gates what a cursor causes on `ease` and what nobody caused on `ambient`.
+- **2026-10-10** — Calm paints rather than wakes for mount, pan and item changes: one frame, then none untouched. "Calm draws nothing while untouched" is true after that one paint, which the canvas needs to have a picture. A zero-distance pointermove (the browser's synthetic one) no longer wakes any ground.
+- **2026-10-10** — Still is decided in the lazy layer, not the entry: 0 entry bytes, at the cost of fetching the `LivingGround` chunk (reduced motion does not).
+- **2026-10-10** — The menu's preview is the still JPEG with a CSS drift, not the live shader: no script, no second WebGL context.
+- **2026-10-10** — Pond's ripples are a 768² half-float height field in ground space, stepped at 120 Hz; the pass stops 2.6 s after the last press. Zen's softening and Snow's fill are clocks that advance only while the ground is awake, so a mark outlives the host's 1.4 s trail and an asleep ground changes nothing.
+- **2026-10-10** — No new cursors: Snow wears the sparkle, Pond the fish, Aurora and Zen garden the crescent. The distinct-cursor test names each borrower.
+- **2026-10-10** — The entry chunk reached 706,465 with four names added (165 over). Paid back in core without touching the ceiling: plain labels are the id with a capital (three exceptions spelled out), the ground-to-cursor `switch` is a typed table, `groundtone` holds only exception rows. The menu-preview rules live in `context-menu.css` beside the menu (lazy-CSS ratchet stays 317).
+- **2026-10-10** — Open: Calm is not journeyed per ground for the four new ones; no frame cost measured for them (phase 5); the Background submenu is about twenty rows and scrolls on a short window; Snow's trail is lost when panned about 1.5 screens away; a pond's still has no koi.
 
 ## Phase 5 — Evidence
 

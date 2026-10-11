@@ -43,6 +43,10 @@ const modules = {
      2× device pixels) so it holds the stars a viewer at 100% sees, and at
      2048² so they stay crisp there. */
   galaxy: { file: "packages/web/src/components/themes/orbit.ts", create: "createOrbit", side: 2048, atZoom1: true },
+  snow: { file: "packages/web/src/components/themes/snow.ts", create: "createSnow" },
+  aurora: { file: "packages/web/src/components/themes/aurora.ts", create: "createAurora", pinned: { w: 1600, h: 1000 } },
+  pond: { file: "packages/web/src/components/themes/pond.ts", create: "createPond" },
+  zen: { file: "packages/web/src/components/themes/zen.ts", create: "createZen" },
 };
 const mod = modules[name];
 if (!mod) {
@@ -66,7 +70,7 @@ window.renderStill = (_side, quality) => {
   const ground = ${mod.create}();
   ground.setup(gl);
   const field = {
-    time: 0, view: { scale: 1, tx: 0, ty: 0 }, width: W, height: H, dpr: 2, ambient: 0,
+    time: 0, view: { scale: 1, tx: 0, ty: 0 }, width: W, height: H, dpr: 2, ease: 0, ambient: 0,
     pointers: [], items: new Float32Array(0), trail: null, trailRect: { x: 0, y: 0, size: 1 },
   };
   ground.step(0, field);
@@ -94,7 +98,7 @@ window.renderStill = (side, quality) => {
   ground.setup(gl);
   const scale = ${mod.atZoom1 ? "1" : "big / TILE"};
   ground.draw(gl, {
-    time: 0, view: { scale, tx: 0, ty: 0 }, ${mod.atZoom1 ? "width: TILE, height: TILE, dpr: big / TILE" : "width: big, height: big, dpr: 1"}, ambient: 0,
+    time: 0, view: { scale, tx: 0, ty: 0 }, ${mod.atZoom1 ? "width: TILE, height: TILE, dpr: big / TILE" : "width: big, height: big, dpr: 1"}, ease: 0, ambient: 0,
     pointers: [], items: new Float32Array(0), trail: null, trailRect: { x: 0, y: 0, size: 1 },
   });
   const out = document.createElement("canvas");

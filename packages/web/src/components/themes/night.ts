@@ -266,9 +266,12 @@ export function createNight(writeGlow: GlowWriter = domGlow): NightGround {
     },
     step(dt, f) {
       const { scale, tx, ty } = f.view;
-      const amb = f.ambient;
+      // `ease` gates what a cursor causes (its own firefly, the ones its path
+      // wakes); `ambient` only the clock the bokeh and the wind read, which
+      // Calm stops.
+      const amb = f.ease;
       const now = performance.now();
-      clock += dt * amb;
+      clock += dt * f.ambient;
 
       // Every pointer is a firefly, and its path wakes more out of the grass.
       const L: (Light & { r: number })[] = [];

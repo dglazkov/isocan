@@ -125,6 +125,7 @@ uniform ivec2 uPrevOrigin[${LEVELS}];
 uniform int uPrevLevel[${LEVELS}];
 uniform float uDt;
 uniform float uEase;
+uniform float uDrift;
 uniform float uClock;
 uniform vec4 uP[16];
 uniform int uNP;
@@ -174,7 +175,8 @@ void main() {
   acc -= off * 2.2 * (1.0 - 0.85 * near);
   // Ambient drift: each star wanders a small slow circle about its home.
   float ang = uClock * (0.15 + 0.25 * rnd(cell, s + 4u, P)) + 6.2832 * rnd(cell, s + 5u, P);
-  vec2 drift = vec2(cos(ang), sin(ang)) * 9.0 * d * uEase;
+  // The drift is ambient (none under Calm); the pull above is the cursor's.
+  vec2 drift = vec2(cos(ang), sin(ang)) * 9.0 * d * uDrift;
   v += acc * uDt * uEase;
   v += (drift - v) * (1.0 - exp(-uDt * 1.7));
   float vl = length(v); if (vl > 700.0) v *= 700.0 / vl;
@@ -364,7 +366,7 @@ export function createOrbit(): LivingGround {
   let prev: Layout | null = null;
   /** The step the host asked for, run at the head of the next `draw` — the
    *  one place this module is handed the context. */
-  let pending: { dt: number; ambient: number } | null = null;
+  let pending: { dt: number; ease: number; drift: number } | null = null;
   let last: { lay: Layout; view: Field["view"]; w: number; h: number } | null = null;
 
   const alloc = (gl: WebGL2RenderingContext, size: number) => {
@@ -448,10 +450,11 @@ export function createOrbit(): LivingGround {
     step(dt, f) {
       // `step` is handed no context, so the simulation pass runs at the head
       // of the `draw` that follows it; here only the stars' clock moves. At
-      // rest when the ambient has eased out: the stars have slowed to a stop.
+      // rest when the host's envelope has eased out: the stars have slowed to
+      // a stop. The clock is the drift's and twinkle's, so it is ambient's.
       clock += dt * f.ambient;
-      pending = { dt, ambient: f.ambient };
-      return f.ambient > 0.002;
+      pending = { dt, ease: f.ease, drift: f.ambient };
+      return f.ease > 0.002;
     },
     draw(gl, f) {
       if (!step || !star || !sky) return;
@@ -463,7 +466,7 @@ export function createOrbit(): LivingGround {
 
       // 1. The stars move (only on a frame the host stepped).
       if (pending) {
-        const { dt, ambient } = pending;
+        const { dt, ease, drift } = pending;
         pending = null;
         const next = 1 - cur;
         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo[next]!);
@@ -474,7 +477,8 @@ export function createOrbit(): LivingGround {
         gl.uniform2iv(su.uPrevOrigin!, new Int32Array(lay.regions.flatMap((_, i) => (pr ? [pr[i]!.ox, pr[i]!.oy] : [0, 0]))));
         gl.uniform1iv(su.uPrevLevel!, new Int32Array(lay.regions.map((_, i) => (pr ? pr[i]!.level : -9999))));
         gl.uniform1f(su.uDt!, dt);
-        gl.uniform1f(su.uEase!, ambient);
+        gl.uniform1f(su.uEase!, ease);
+        gl.uniform1f(su.uDrift!, drift);
         gl.uniform1f(su.uClock!, clock);
         const ptr = new Float32Array(64);
         let np = 0;

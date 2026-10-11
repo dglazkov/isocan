@@ -57,6 +57,13 @@
   /* Night (living grounds): the mean of its still frame, for the same reason. */
   --theme-night: #0a0d10;
   --firefly-glow: #ffba60; /* the warm light a firefly casts on a card (Night) */
+  /* Snow and Aurora (living grounds phase 4): the means of their stills. */
+  --theme-snow: #cdd7ec;
+  --theme-aurora: #071214;
+  --aurora-light: #5ef0c0; /* the cool light a lit ribbon casts on a card (Aurora) */
+  /* Pond and Zen garden (living grounds phase 4): the means of their stills. */
+  --theme-pond: #102625;
+  --theme-zen: #b5ac9a;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in
@@ -325,6 +332,13 @@
   /* Night (living grounds): the mean of its still frame, for the same reason. */
   --theme-night: #0a0d10;
   --firefly-glow: #ffba60; /* the warm light a firefly casts on a card (Night) */
+  /* Snow and Aurora (living grounds phase 4): the means of their stills. */
+  --theme-snow: #cdd7ec;
+  --theme-aurora: #071214;
+  --aurora-light: #5ef0c0; /* the cool light a lit ribbon casts on a card (Aurora) */
+  /* Pond and Zen garden (living grounds phase 4): the means of their stills. */
+  --theme-pond: #102625;
+  --theme-zen: #b5ac9a;
   /* Deep space (#195). The same value on either ground, deliberately: a
      starfield is a PICTURE, not a surface that follows the app's theme, and a
      white sky is a different picture rather than a light-mode one. Declared in

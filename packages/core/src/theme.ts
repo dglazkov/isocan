@@ -84,8 +84,19 @@ export const THEME_PROP = "theme";
  *
  * **Night (9 Oct 2026) is the second** — a dark meadow under a dim sky where
  * every cursor is a firefly and its path wakes more out of the grass.
+ *
+ * **Snow and Aurora (phase 4, 10 Oct 2026)**: a fresh snowfield every cursor
+ * leaves a trodden trail in, which fills back in over the time the ground is
+ * awake; and ribbons of light over a dark land that lean and brighten toward
+ * every cursor. Both borrow a cursor rather than adding one (entry bytes).
+ *
+ * **Pond and Zen garden (phase 4, 10 Oct 2026)**: still water every cursor
+ * drags ripples across, with koi that dart away from it; and raked sand every
+ * cursor rakes lines in that soften back over the time the ground is awake,
+ * with items as stones in raked rings. They borrow Ocean's fish and Desert's
+ * crescent.
  */
-export const THEMES = ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night"] as const;
+export const THEMES = ["galaxy", "ocean", "mountains", "farm", "desert", "meadow", "night", "snow", "aurora", "pond", "zen"] as const;
 
 /** One of the seeded grounds. Not a string: a canvas wearing a name nothing
  *  can draw is a blank screen with no way to explain itself. */
@@ -109,18 +120,15 @@ export function themeLabel(theme: CanvasTheme): string {
   switch (theme) {
     case "galaxy":
       return "Space Galaxy";
-    case "ocean":
-      return "Ocean";
-    case "mountains":
-      return "Mountains";
     case "farm":
       return "Farmland";
-    case "desert":
-      return "Desert";
-    case "meadow":
-      return "Meadow";
-    case "night":
-      return "Night";
+    case "zen":
+      return "Zen garden";
+    // The rest are their id with a capital — a plain word was the point, and
+    // eleven spelled-out rows were entry bytes (phase 4, 10 Oct 2026). A new
+    // ground whose label is not its id takes a case above.
+    default:
+      return theme[0]!.toUpperCase() + theme.slice(1);
   }
 }
 
@@ -143,7 +151,7 @@ export function themeLabel(theme: CanvasTheme): string {
  * web app, so this list is the whole of what a living ground costs a first
  * visit (`docs/projects/living-grounds/design.md` §7).
  */
-export const LIVING = ["meadow", "night", "galaxy"] as const satisfies readonly CanvasTheme[];
+export const LIVING = ["meadow", "night", "galaxy", "snow", "aurora", "pond", "zen"] as const satisfies readonly CanvasTheme[];
 
 /** Does this ground move — the question the theme layer asks before it loads
  *  a WebGL host, and the CLI asks before it says a ground answers the cursor. */
@@ -620,27 +628,32 @@ export function canvasCursorName(canvas: { properties?: Record<string, string> }
  * actually want is a shape somebody thinks of that nobody has yet.
  */
 export function themeCursorName(theme: CanvasTheme | null): CanvasCursor {
-  switch (theme) {
-    // Orbit keeps Galaxy's sparkle rather than design.md's comet: the sparkle
-    // already reads as a star with a long ray, and a new shape is entry bytes.
-    case "galaxy":
-      return "sparkle";
-    case "ocean":
-      return "fish";
-    case "mountains":
-      return "flag";
-    case "farm":
-      return "sheep";
-    case "desert":
-      return "crescent";
-    // A ladybird walking on the grass, which is what a cursor on a meadow is.
-    case "meadow":
-      return "ladybird";
-    // Night's pointer IS a firefly: its lantern is a hole the ground glows through.
-    case "night":
-      return "firefly";
-    default:
-      // No ground, no costume.
-      return "arrow";
-  }
+  // No ground, no costume.
+  return theme === null ? "arrow" : THEME_CURSOR[theme];
 }
+
+/** A row per ground rather than a `switch` (phase 4, 10 Oct 2026): the table
+ *  is some eighty bytes smaller in the entry chunk, and a ground with no row
+ *  does not compile. */
+const THEME_CURSOR: Record<CanvasTheme, CanvasCursor> = {
+  // Orbit keeps Galaxy's sparkle rather than design.md's comet: the sparkle
+  // already reads as a star with a long ray, and a new shape is entry bytes.
+  galaxy: "sparkle",
+  // Snow borrows it (phase 4: a new cursor is entry bytes): a glint on fresh
+  // snow is the closest shape the library has to a flake.
+  snow: "sparkle",
+  ocean: "fish",
+  // The Pond borrows the fish (phase 4: a new cursor is entry bytes): a koi.
+  pond: "fish",
+  mountains: "flag",
+  farm: "sheep",
+  desert: "crescent",
+  // Aurora borrows it too: a moon over the dark land under the ribbons.
+  aurora: "crescent",
+  // And the Zen garden: a moon over raked sand, as over the desert's.
+  zen: "crescent",
+  // A ladybird walking on the grass, which is what a cursor on a meadow is.
+  meadow: "ladybird",
+  // Night's pointer IS a firefly: its lantern is a hole the ground glows through.
+  night: "firefly",
+};

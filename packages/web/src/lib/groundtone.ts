@@ -31,15 +31,19 @@ import { type CanvasTheme, THEMES, groundOf, themeOf } from "@isocan/core";
  * which is the bug this fixes. `groundtone.test.ts` requires a row for every
  * name in `THEMES`. It earned that keep within a day: farm and desert
  * landed on 8 Sep and the guard is what said this table had to grow.
+ *
+ * **Only the exceptions are rows, since 10 Oct 2026.** Four more grounds
+ * arrived with the entry chunk 317 bytes under its ceiling, and each row is
+ * bytes a first visit downloads. Every ground since Ocean paints with
+ * `--theme-<its id>`, so that is the rule and the table holds the three that
+ * break it. The guard is unchanged and now carries the whole weight: it asks
+ * `groundTone` for every name in `THEMES` and requires the token to be
+ * declared and to be the one the ground's own rule paints with.
  */
-const TONE: Record<CanvasTheme, string> = {
+const TONE: Partial<Record<CanvasTheme, string>> = {
   galaxy: "--theme-space",
-  ocean: "--theme-ocean",
   mountains: "--theme-rock",
-  farm: "--theme-farm",
   desert: "--theme-sand",
-  meadow: "--theme-meadow",
-  night: "--theme-night",
 };
 
 /**
@@ -58,7 +62,7 @@ export function groundTone(canvas: { properties?: Record<string, string> } | nul
   if (canvas === null) return null;
   if (groundOf(canvas) !== null) return "--ground-under";
   const theme = themeOf(canvas);
-  return theme === null ? null : (TONE[theme] ?? null);
+  return theme === null ? null : (TONE[theme] ?? `--theme-${theme}`);
 }
 
 /** Every ground this build can stand a canvas on, for the guard. */

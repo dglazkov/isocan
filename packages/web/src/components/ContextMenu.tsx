@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keyFor, renderKeys } from "@isocan/core";
 import { menuAim } from "../lib/menuaim.ts";
+import "./context-menu.css";
 
 /**
  * **Right-click: the acts you can already do, where your hand already is.**
@@ -59,6 +60,14 @@ export interface MenuAction {
   /** What the parent row shows to the right of its label — the chosen one,
    *  where a submenu names a set with a current member. */
   value?: string;
+  /**
+   * **A small picture of what this row puts on** (living grounds phase 4): the
+   * URL of a ground's still frame, shown as a thumbnail in a submenu row. The
+   * still is the honest preview — a living ground at rest IS its still — and
+   * it costs one cached JPEG, fetched only when the submenu opens. It drifts
+   * on hover, in CSS, unless the viewer asked for reduced motion.
+   */
+  preview?: string;
 }
 
 export type MenuEntry = MenuAction | { separator: string };
@@ -324,6 +333,9 @@ function Submenu({
                   child.run();
                 }}
               >
+                {child.preview !== undefined && (
+                  <span className="menu-preview" aria-hidden style={{ backgroundImage: `url(${child.preview})` }} />
+                )}
                 <span>{child.label}</span>
                 {child.checked !== undefined && (
                   <span className="menu-check" aria-hidden>
