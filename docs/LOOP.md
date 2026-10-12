@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 36 not yet read.**
+**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 45 not yet read.**
 
 ## Accepted, by project
 
@@ -159,33 +159,42 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 - [Absence of spatial interactive form validation matrix nodes](loop/absence-of-spatial-interactive-form-validation-matrix-nodes.md) — Loop P2
 - [Absence of spatial persona critique cards on canvas](loop/absence-of-spatial-persona-critique-cards-on-canvas.md) — Loop P2
 - [Absence of spatial section spec cards for agent generation](loop/absence-of-spatial-section-spec-cards-for-agent-generation.md) — Loop P2
+- [Absence of spatial smart alignment engine](loop/absence-of-spatial-smart-alignment-engine.md) — Loop P2
+- [Absence of spatial timeboxed sprint timer nodes](loop/absence-of-spatial-timeboxed-sprint-timer-nodes.md) — Loop P2
 - [Absence of spatial user flow sitemap scaffolding](loop/absence-of-spatial-user-flow-sitemap-scaffolding.md) — Loop P2
 - [Absence of spatial web benchmark snapshot cards](loop/absence-of-spatial-web-benchmark-snapshot-cards.md) — Loop P2
 - [Agent guide omits comment restore and anchor operations](loop/agent-guide-omits-comment-restore-and-anchor-operations.md) — Loop P2
 - [Agent guide omits design lifecycle operation schemas](loop/agent-guide-omits-design-lifecycle-operation-schemas.md) — Loop P2
+- [Agent guide omits project lifecycle operation schemas](loop/agent-guide-omits-project-lifecycle-operation-schemas.md) — Loop P2
 - [Canvas viewport computations isolated in web client](loop/canvas-viewport-computations-isolated-in-web-client.md) — Loop P2
 - [CLI group migration preview lacks dedicated command](loop/cli-group-migration-preview-lacks-dedicated-command.md) — Loop P2
 - [CLI lacks group stack card flipping commands](loop/cli-lacks-group-stack-card-flipping-commands.md) — Loop P2
 - [CLI lacks voice token generation command](loop/cli-lacks-voice-token-generation-command.md) — Loop P2
 - [CLI presentation mode lacks live stepping control](loop/cli-presentation-mode-lacks-live-stepping-control.md) — Loop P2
 - [Group stack desk layout recalculates card transforms on pointer hover](loop/group-stack-desk-layout-recalculates-card-transforms-on.md) — Loop P2
+- [Lack of multi-selection bounding box transform anchors](loop/lack-of-multi-selection-bounding-box-transform-anchors.md) — Loop P2
 - [Lack of spatial canvas region permissions and edit locking](loop/lack-of-spatial-canvas-region-permissions-and-edit-locking.md) — Loop P2
 - [Lack of spatial canvas sticky note annotation clusters](loop/lack-of-spatial-canvas-sticky-note-annotation-clusters.md) — Loop P2
 - [Lack of spatial component governance lifecycle badges](loop/lack-of-spatial-component-governance-lifecycle-badges.md) — Loop P2
 - [Lack of spatial component state variant matrices](loop/lack-of-spatial-component-state-variant-matrices.md) — Loop P2
 - [Lack of spatial design token WCAG contrast audit nodes](loop/lack-of-spatial-design-token-wcag-contrast-audit-nodes.md) — Loop P2
+- [Lack of spatial viewport spotlight follow mode](loop/lack-of-spatial-viewport-spotlight-follow-mode.md) — Loop P2
 - [Living ground recomputes item bounds during viewport movement](loop/living-ground-recomputes-item-bounds-during-viewport.md) — Loop P2
 - [MediaPipe CPU evaluation throws exceptions and stalls](loop/mediapipe-cpu-evaluation-throws-exceptions-and-stalls.md) — Loop P2
 - [Minimized chat bar reconciles hidden message components](loop/minimized-chat-bar-reconciles-hidden-message-components.md) — Loop P2
 - [Occluded stack cards render live document thumbnails](loop/occluded-stack-cards-render-live-document-thumbnails.md) — Loop P2
 - [Personal canvas linking mutations bypass daemon reducer](loop/personal-canvas-linking-mutations-bypass-daemon-reducer.md) — Loop P2
+- [Personal canvas linking mutations bypass local replica](loop/personal-canvas-linking-mutations-bypass-local-replica.md) — Loop P2
 - [Presence cursor updates trigger unthrottled ground field mutations](loop/presence-cursor-updates-trigger-unthrottled-ground-field.md) — Loop P2
 - [Serial blob reads stall design brief loading](loop/serial-blob-reads-stall-design-brief-loading.md) — Loop P2
 - [Serial model calls slow wireframe flow operations](loop/serial-model-calls-slow-wireframe-flow-operations.md) — Loop P2
 - [Unbatched gesture events trigger redundant viewport re-renders](loop/unbatched-gesture-events-trigger-redundant-viewport-re.md) — Loop P2
 - [Version compare bypasses local replica for blob diffing](loop/version-compare-bypasses-local-replica-for-blob-diffing.md) — Loop P2
 - [Web UI chat drafts bypass daemon reducer](loop/web-ui-chat-drafts-bypass-daemon-reducer.md) — Loop P2
+- [Web UI chat drafts bypass local replica state](loop/web-ui-chat-drafts-bypass-local-replica-state.md) — Loop P2
+- [Web UI design reconciliation drafts bypass daemon reducer](loop/web-ui-design-reconciliation-drafts-bypass-daemon-reducer.md) — Loop P2
 - [Web UI lacks agent key claim migration controls](loop/web-ui-lacks-agent-key-claim-migration-controls.md) — Loop P2
 - [Web UI lacks design recipe inspection interface](loop/web-ui-lacks-design-recipe-inspection-interface.md) — Loop P2
 - [Web UI version inspector lacks pruning capability](loop/web-ui-version-inspector-lacks-pruning-capability.md) — Loop P2
+- [Wireframe slots lack contextual synthetic data filling](loop/wireframe-slots-lack-contextual-synthetic-data-filling.md) — Loop P2
 
