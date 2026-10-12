@@ -742,14 +742,18 @@ export async function assembleReleaseTree({ base, out, artifacts, sourceCommit =
       git("rm", "-r", "--cached", "--ignore-unmatch", "-q", ...spec, { env });
     }
     const generatedEntries = [
-      ...Object.entries(RELEASE_NODE_ENTRIES).map(([file, { out: name }]) => [file, nodeEntrySource(name)]),
-      ...Object.entries(RELEASE_SCRIPTS).map(([file, name]) => [file, scriptEntrySource(file, name)]),
+      ...Object.entries(RELEASE_NODE_ENTRIES).map(([file, { out: name }]) => [file, nodeEntrySource(name), "100644"]),
+      ...Object.entries(RELEASE_SCRIPTS).map(([file, name]) => [file, scriptEntrySource(file, name), "100644"]),
+      // Pre-bundle installs hardcode `<candidate>/packages/cli/bin/isocan.js` in
+      // their running `smokeTest` and global `PATH` symlinks; dropping `bin/`
+      // removes tsx + workspace-loader, and this stub bridges old upgrades cleanly.
+      ["packages/cli/bin/isocan.js", '#!/usr/bin/env node\nimport "../dist/isocan.mjs";\n', "100755"],
     ];
-    for (const [i, [file, source]] of generatedEntries.entries()) {
+    for (const [i, [file, source, mode]] of generatedEntries.entries()) {
       const generated = path.join(tmp, `entry-${i}.mjs`);
       await fs.writeFile(generated, source);
       const hash = git("hash-object", "-w", "--path", file, generated, { env });
-      git("update-index", "--add", "--cacheinfo", `100644,${hash},${file}`, { env });
+      git("update-index", "--add", "--cacheinfo", `${mode},${hash},${file}`, { env });
     }
 
     // From the base, not from disk: a release is of a commit, so nothing an

@@ -2392,7 +2392,7 @@ program
         );
         say(await adoptGlobal(home));
         if (opts.restart !== false) {
-          const bin = path.join(found.root, "packages", "cli", "bin", "isocan.js");
+          const bin = packageBin(found.root);
           spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
             stdio: "inherit",
           });
@@ -2446,9 +2446,7 @@ program
         // process is running the OLD build's code, and no symlink flip moves a
         // running process; the whole point of the flip is that the next
         // command resolves differently, and this is that next command.
-        const bin = moved
-          ? path.join(moved.root, "packages", "cli", "bin", "isocan.js")
-          : path.join(install.root, "packages", "cli", "bin", "isocan.js");
+        const bin = packageBin(moved ? moved.root : install.root);
         spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
           stdio: "inherit",
         });

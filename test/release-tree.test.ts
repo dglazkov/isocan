@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { accessSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -70,7 +70,32 @@ describe("the release tree", () => {
     const done = spawnSync(process.execPath, [path.join(tree, CLI_BUNDLE), "--version"], { encoding: "utf8", cwd: scratch });
     expect(done.status, done.stderr).toBe(0);
     expect(done.stdout).toContain("deadbee");
+
+    // Pre-bundle installs execute `<candidate>/packages/cli/bin/isocan.js` in
+    // their running smokeTest and global PATH symlinks when upgrading across the
+    // bundle boundary.
+    const bridge = path.join(tree, "packages", "cli", "bin", "isocan.js");
+    expect(() => accessSync(bridge, constants.X_OK)).not.toThrow();
+    const bridged = spawnSync(process.execPath, [bridge, "--version"], { encoding: "utf8", cwd: scratch });
+    expect(bridged.status, bridged.stderr).toBe(0);
+    expect(bridged.stdout).toContain("deadbee");
   }, 60_000);
+
+  it("never hardcodes the pre-bundle launcher path in package sources outside packageroot", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "..");
+    const grep = spawnSync(
+      "git",
+      ["grep", "-n", "isocan\\.js", "--", "packages/*/src/", "packages/*/*/src/"],
+      { encoding: "utf8", cwd: repoRoot },
+    );
+    const hits = (grep.stdout ?? "")
+      .split("\n")
+      .filter(Boolean)
+      .filter((line) => !line.startsWith("packages/core/src/packageroot.ts:"))
+      .filter((line) => !/^\s*\/\//.test(line.split(":").slice(2).join(":")))
+      .filter((line) => !line.includes("acpAdapters"));
+    expect(hits).toEqual([]);
+  });
 
   it("carries plugins/jetski and links it through isocan setup --jetski", async () => {
     const pluginInTree = path.join(tree, "plugins/jetski");

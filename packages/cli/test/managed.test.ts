@@ -301,7 +301,7 @@ describe("keeping three builds, and never one in use", () => {
   it("finds a running daemon's build through the pidfile and the health route", async () => {
     const root = await makeBuild(paths.buildDir(home, "aaaaaaa"), "aaaaaaa");
     const port = await reservePort();
-    const child = spawn(process.execPath, [path.join(root, "packages/cli/bin/isocan.js"), "serve"], {
+    const child = spawn(process.execPath, [path.join(root, "packages/cli/dist/isocan.mjs"), "serve"], {
       env: { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port) },
       stdio: "ignore",
     });
@@ -348,14 +348,14 @@ describe("adopting an existing install", () => {
     const adoption = await adoptGlobal(home, bin);
     expect(adoption).toMatchObject({ managed: true, moved: true });
     expect(await fs.readlink(bin)).toBe(
-      path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/bin/isocan.js"),
+      path.join(paths.currentLink(home), "node_modules/isocan/packages/cli/dist/isocan.mjs"),
     );
     // The link resolves all the way through `current` into the build — which is
     // what makes `rootOfBin` name the build root, and `stalenessOf` able to
     // compare two builds by their directories.
     expect(await fs.realpath(bin)).toBe(
       await fs.realpath(
-        path.join(paths.buildDir(home, "aaaaaaa"), "node_modules/isocan/packages/cli/bin/isocan.js"),
+        path.join(paths.buildDir(home, "aaaaaaa"), "node_modules/isocan/packages/cli/dist/isocan.mjs"),
       ),
     );
     // Untouched, and still uninstallable by npm.
