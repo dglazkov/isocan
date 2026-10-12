@@ -34,7 +34,7 @@
  * which keeps the branch fast-forwardable (no force pushes) and makes "which
  * commit is this build?" answerable by `git log`.
  */
-import { promises as fs, statSync } from "node:fs";
+import { promises as fs, realpathSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -830,6 +830,7 @@ export async function extractTree(tree, dir) {
  * Returns `[{ file, specifier }]`, paths relative to `dir`; empty is the pass.
  */
 export async function unresolvedImports(dir) {
+  dir = realpathSync(dir);
   const { build } = await import("esbuild");
   const { isBuiltin } = await import("node:module");
   const manifest = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8"));
