@@ -143,6 +143,9 @@ export declare class DaemonRoutes {
      * without a Node half keeps: one attempt, no deadline, exactly today.
      */
     protected fetcher: typeof fetch;
+    /** Transport fetcher used for unretried probes (`healthz`); matches `platformFetch` on loopback
+     * so probes never trigger retry budgets, while routing through configured proxies/gateways. */
+    protected probeFetcher: typeof fetch;
     /**
      * Every request carries the badge, and a refused one heals itself and comes
      * straight back. This is what makes neither the door nor the membership

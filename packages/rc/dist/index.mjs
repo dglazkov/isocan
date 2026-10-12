@@ -279,9 +279,9 @@ function formatBadgeToken(badgeId, secret) {
   return formatDotToken(badgeId, secret);
 }
 var DOOR_ROUTE = "/api/door";
-async function askTheDoor(base2, timeoutMs = 1e4, signal) {
+async function askTheDoor(base2, timeoutMs = 1e4, signal, fetchFn = fetch) {
   try {
-    const res = await fetch(`${base2}${DOOR_ROUTE}`, {
+    const res = await fetchFn(`${base2}${DOOR_ROUTE}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ carrier: "bearer" }),
@@ -1694,6 +1694,9 @@ var DaemonRoutes = class {
    * without a Node half keeps: one attempt, no deadline, exactly today.
    */
   fetcher = platformFetch;
+  /** Transport fetcher used for unretried probes (`healthz`); matches `platformFetch` on loopback
+   * so probes never trigger retry budgets, while routing through configured proxies/gateways. */
+  probeFetcher = platformFetch;
   /**
    * Every request carries the badge, and a refused one heals itself and comes
    * straight back. This is what makes neither the door nor the membership
@@ -1756,7 +1759,7 @@ var DaemonRoutes = class {
   async reBadge(signal = this.lifetime) {
     if (this.badgeStore.upstream) return false;
     signal?.throwIfAborted();
-    const answer = await askTheDoor(this.base, 1e4, signal);
+    const answer = await askTheDoor(this.base, 1e4, signal, this.fetcher);
     signal?.throwIfAborted();
     if ("refused" in answer) {
       if (answer.refused.status === 403 || answer.refused.status === 429) {
@@ -1840,7 +1843,7 @@ var DaemonRoutes = class {
   async healthz(timeoutMs = 300) {
     try {
       this.lifetime?.throwIfAborted();
-      const res = await fetch(`${this.base}${healthPath(this.base)}`, {
+      const res = await this.probeFetcher(`${this.base}${healthPath(this.base)}`, {
         signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...this.lifetime ? [this.lifetime] : []])
       });
       return res.ok ? await res.json() : null;

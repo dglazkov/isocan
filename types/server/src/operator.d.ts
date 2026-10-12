@@ -1,5 +1,6 @@
+import type { IncomingHttpHeaders } from "node:http";
 import { NO_OPERATOR, type OperatorProofRecord, type OperatorRefusalCode } from "../../core/src/index.js";
-import { type AuthConfig } from "./attest.js";
+import { type AuthConfig, type ProxyAuthConfig } from "./attest.js";
 import type { SigningKeys } from "./attest.js";
 /**
  * **Who runs this home, and what proves it** — the judging half of
@@ -67,7 +68,7 @@ export declare function resolveOperators(env?: NodeJS.ProcessEnv): string[];
  * the verb — and because a route added in phase 2 must not be able to forget
  * it.
  */
-export declare function operatorAbsence(auth: AuthConfig | null, operators: readonly string[]): string | null;
+export declare function operatorAbsence(auth: AuthConfig | null, operators: readonly string[], proxyAuth?: ProxyAuthConfig | null): string | null;
 /** Yes, with the row the ledger keeps — or no, with the code and the words. */
 type OperatorVerdict = {
     ok: true;
@@ -115,6 +116,16 @@ export declare function proveOperator(args: {
     now?: number;
     window?: number;
 }): Promise<OperatorVerdict>;
+/**
+ * Prove operator identity from a trusted reverse-proxy identity header on homes
+ * running with `proxyAuth` configured (`ISOCAN_PROXY_EMAIL_HEADER`).
+ */
+export declare function proveOperatorFromProxy(args: {
+    headers: IncomingHttpHeaders;
+    proxyAuth: ProxyAuthConfig;
+    operators: readonly string[];
+    now?: number;
+}): OperatorVerdict | null;
 /** The refusal for a request to an operator route that carried no proof. */
 export declare const NO_PROOF_PRESENTED: string;
 /** `no-operator`, re-exported so a route imports one module rather than two. */

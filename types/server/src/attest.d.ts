@@ -1,4 +1,6 @@
+import type { IncomingHttpHeaders } from "node:http";
 import { type AttestedKind, type Attestation, type GrantSubject } from "../../core/src/index.js";
+import type { BadgeRecord, Desk } from "./desk.js";
 /**
  * **The attesters this home has borrowed** — mechanism 3's "borrow, never
  * mint", arriving as code.
@@ -88,6 +90,31 @@ export interface AuthConfig {
  */
 export declare function resolveAuth(env?: NodeJS.ProcessEnv): AuthConfig | null;
 /**
+ * Configuration for trusting an authenticating reverse proxy standing directly
+ * in front of this home (`ISOCAN_PROXY_EMAIL_HEADER`).
+ */
+export interface ProxyAuthConfig {
+    /** Lowercased HTTP header names checked in order for the authenticated identity. */
+    headers: readonly string[];
+    /** Positive protobuf field number when headers carry base64url wire payloads instead of plain text. */
+    protoField: number | null;
+    /** Optional prefix pattern removed from the email local-part before normalizing. */
+    stripPrefix: RegExp | null;
+}
+/**
+ * Resolve reverse-proxy identity attestation configuration from environment:
+ * - `ISOCAN_PROXY_EMAIL_HEADER`: comma-separated header name(s), e.g. `"x-forwarded-email"`
+ * - `ISOCAN_PROXY_EMAIL_PROTO_FIELD`: optional protobuf string field number (e.g. `"2"`)
+ * - `ISOCAN_PROXY_EMAIL_STRIP_PREFIX`: optional prefix regex stripped from local-parts
+ */
+export declare function resolveProxyAuth(env?: NodeJS.ProcessEnv): ProxyAuthConfig | null;
+/** Extract the raw proxy identity header value configured in `proxyAuth`, or null. */
+export declare function rawProxyHeader(headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null): string | null;
+/** Build an `email:<addr>` attestation from configured reverse-proxy headers, or null. */
+export declare function attestationFromProxy(headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null, now?: number): Attestation | null;
+/** Ensure a trusted reverse-proxy email attestation is recorded on `badge` when `proxyAuth` is configured. */
+export declare function ensureProxyAttestation(desk: Desk, badge: BadgeRecord, headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null, now?: number): Promise<BadgeRecord>;
+/**
  * What a home with this configuration can verify.
  *
  * `email` when there is an attester, and that is the whole list today.
@@ -106,7 +133,7 @@ export declare function resolveAuth(env?: NodeJS.ProcessEnv): AuthConfig | null;
  * could be WRITTEN and admitted nobody would be a dialog that lies, and that
  * is worse than a refusal.
  */
-export declare function attestersOf(auth: AuthConfig | null): AttestedKind[];
+export declare function attestersOf(auth: AuthConfig | null, proxyAuth?: ProxyAuthConfig | null): AttestedKind[];
 /**
  * Why this home cannot take that grant, or null when it can.
  *

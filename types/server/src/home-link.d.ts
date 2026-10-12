@@ -351,6 +351,9 @@ export interface HomeLinkOptions {
      * key, the badge's key in `identity.json`, and the presence mirror's key,
      * and two spellings of one address would be two of each. */
     homeUrl: string;
+    /** Optional local authenticating gateway endpoint (e.g. `http://127.0.0.1:4442`)
+     * dialled on the wire while keeping `homeUrl` canonical everywhere else. */
+    gatewayUrl?: string;
     /** This machine's isocan home directory: where the badge is kept, beside
      * the CLI's own, in `identity.json`'s `auth` block. */
     home: string;
@@ -371,6 +374,7 @@ export interface HomeLinkOptions {
 }
 export declare class HomeLink implements HomeConnection {
     readonly homeUrl: string;
+    readonly dialUrl: string;
     private readonly home;
     private readonly engine;
     private readonly presence;

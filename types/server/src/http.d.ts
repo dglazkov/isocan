@@ -5,7 +5,7 @@ import { type KeyRouteOptions } from "./key-routes.js";
 import type { FastifyInstance } from "fastify";
 import type { Actor } from "../../core/src/index.js";
 import { Engine } from "./engine.js";
-import { type AuthConfig, type SigningKeys } from "./attest.js";
+import { type AuthConfig, type ProxyAuthConfig, type SigningKeys } from "./attest.js";
 import { Refusals } from "./takedowns.js";
 import type { SocketCensus } from "./ws.js";
 import { SweepHub } from "./sweep.js";
@@ -169,6 +169,8 @@ export interface RouteOptions {
      * boolean somebody could set wrongly.
      */
     auth?: AuthConfig | null;
+    /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+    proxyAuth?: ProxyAuthConfig | null;
     /**
      * **The addresses this home calls its operator** (operator phase 1), or
      * absent/empty for none — which is every daemon in this repo.

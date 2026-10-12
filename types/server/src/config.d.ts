@@ -46,7 +46,23 @@ export interface HomeConfig {
      * mean two spellings forever.
      */
     home?: string;
+    /**
+     * **Per-home transport gateways** — local endpoints (e.g. `"http://127.0.0.1:4442"`)
+     * dialled when speaking HTTP or WebSocket to a home whose canonical URL sits
+     * behind an authenticating proxy (`"https://canvas.acme.example"`).
+     *
+     * Canonical `homeUrl` values remain untouched everywhere in `.isocan/project.json`,
+     * `homes.json`, `identity.json`, and `expectedHome` checks; only outbound wire
+     * connections substitute the gateway origin.
+     */
+    gateways?: Record<string, string>;
 }
+/**
+ * Resolve the transport dial URL for a canonical `homeUrl`, or `null` when no
+ * gateway is configured (`ISOCAN_HOME_GATEWAYS` env JSON first, then `gateways`
+ * in `config.json`).
+ */
+export declare function gatewayBaseFor(homeUrl: string, home: string, env?: NodeJS.ProcessEnv): string | null;
 /**
  * The birth default: where a canvas born here goes, or null when it stays
  * here.

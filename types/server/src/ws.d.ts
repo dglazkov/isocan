@@ -1,6 +1,7 @@
 import type { Server } from "node:http";
 import { Engine } from "./engine.js";
 import type { Desk } from "./desk.js";
+import { type ProxyAuthConfig } from "./attest.js";
 import { PresenceHub } from "./presence.js";
 import { type RcHolds } from "./rc-holds.js";
 import type { SweepHub } from "./sweep.js";
@@ -69,6 +70,8 @@ interface WebSocketOptions {
      * nothing is down and nobody is refused, which is that test's truth.
      */
     refusals?: Refusals;
+    /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+    proxyAuth?: ProxyAuthConfig | null;
 }
 /**
  * **How many sockets are open on one canvas, at THIS instance.**

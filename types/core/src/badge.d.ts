@@ -185,7 +185,7 @@ export type DoorAnswer = {
  * Knock on the door at `base` for a bearer badge, and keep the refusal if there is one:
  * never throws, and an unreachable door is a refusal with status 0.
  */
-export declare function askTheDoor(base: string, timeoutMs?: number, signal?: AbortSignal): Promise<DoorAnswer>;
+export declare function askTheDoor(base: string, timeoutMs?: number, signal?: AbortSignal, fetchFn?: typeof fetch): Promise<DoorAnswer>;
 /** `Authorization: Bearer <badgeId>.<secret>` — the one place that spelling
  * is written, so a holder cannot get the separator wrong on its own. */
 export declare function bearerHeader(badge: StoredBadge): Record<string, string>;

@@ -4,7 +4,7 @@ import { SweepHub } from "./sweep.js";
 import type { Store } from "./store.js";
 import type { Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
-import { type AuthConfig, type SigningKeys } from "./attest.js";
+import { type AuthConfig, type ProxyAuthConfig, type SigningKeys } from "./attest.js";
 import { HomeLinks } from "./home-links.js";
 import type { JudgmentOptions } from "./judgment.js";
 import type { KeyRouteOptions } from "./key-routes.js";
@@ -120,6 +120,8 @@ export interface DaemonOptions {
      * which a test needs to be able to say on a machine whose environment has.
      */
     auth?: AuthConfig | null;
+    /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+    proxyAuth?: ProxyAuthConfig | null;
     /**
      * **The addresses this home calls its operator**, or `[]` for none — which
      * is every daemon in this repo, and is not a defect (operator phase 1).

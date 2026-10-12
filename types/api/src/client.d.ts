@@ -14,13 +14,6 @@ export declare class DaemonClient extends DaemonRoutes {
     readonly home: string;
     constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext);
     /**
-     * The Node half's one addition to how a request is MADE, rather than to
-     * what is in it: through the configured HTTP(S) proxy when one applies,
-     * else on this machine a bounded connect and a bounded retry, else the
-     * surface's own default.
-     */
-    protected fetcher: typeof fetch;
-    /**
      * **A blob, as the bytes Node code reads.** The route
      * surface answers a `Uint8Array`, because `isocan/rc` hands that surface to
      * hosts that have no `Buffer`; the CLI and the modules read what this

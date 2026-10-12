@@ -28,7 +28,7 @@ export { FileDesk } from "./file-desk.js";
  */
 export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.js";
 export { Refusals, TakenDownError, RefusedError } from "./takedowns.js";
-export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.js";
+export { gatewayBaseFor, readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.js";
 export { DocRefusal, clearGoogleToken, driveAccount, driveModifiedTime, fetchGoogleDoc, googleTokenFile, readGoogleToken, writeGoogleToken, type FetchedDoc, type GoogleToken, } from "./google.js";
 export type { HomeConfig } from "./config.js";
 export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityName } from "./badge-store.js";
