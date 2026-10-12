@@ -12685,7 +12685,7 @@ function strip(result2) {
 async function smokeAttempt(home3, root, expect, timeoutMs) {
   await fs14.mkdir(paths_exports.buildsDir(home3), { recursive: true });
   const scratch = await fs14.mkdtemp(path14.join(paths_exports.buildsDir(home3), ".smoke-"));
-  const bin = path14.join(root, "packages", "cli", "bin", "isocan.js");
+  const bin = packageBin(root);
   const logFile = path14.join(scratch, "smoke.log");
   const port = await freePort();
   const env = {
@@ -12920,15 +12920,7 @@ function binOfInstall(root) {
   return process.platform === "win32" ? path14.join(prefix, "isocan.cmd") : path14.join(prefix, "bin", "isocan");
 }
 async function adoptGlobal(home3, bin = findOnPath("isocan")) {
-  const target2 = path14.join(
-    paths_exports.currentLink(home3),
-    "node_modules",
-    "isocan",
-    "packages",
-    "cli",
-    "bin",
-    "isocan.js"
-  );
+  const target2 = packageBin(path14.join(paths_exports.currentLink(home3), "node_modules", "isocan"));
   if (!bin) {
     return {
       managed: false,
@@ -13063,8 +13055,19 @@ function isAlive(pid) {
   }
 }
 async function adopt(home3, install) {
-  if (install?.kind !== "global") return null;
-  return adoptGlobal(home3, binOfInstall(install.root));
+  if (install?.kind === "global") return adoptGlobal(home3, binOfInstall(install.root));
+  if (install?.kind === "managed") {
+    const current = `${path14.resolve(paths_exports.currentLink(home3))}${path14.sep}`;
+    for (const dir of (process.env.PATH ?? "").split(path14.delimiter)) {
+      if (!dir) continue;
+      const candidate = path14.join(dir, "isocan");
+      const linked = await fs14.readlink(candidate).catch(() => null);
+      if (linked && path14.resolve(dir, linked).startsWith(current)) {
+        return adoptGlobal(home3, candidate);
+      }
+    }
+  }
+  return null;
 }
 async function applySwap(options) {
   const { home: home3, spec, want } = options;
@@ -14460,7 +14463,7 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
       );
       say(await adoptGlobal(home3));
       if (opts.restart !== false) {
-        const bin = path17.join(found.root, "packages", "cli", "bin", "isocan.js");
+        const bin = packageBin(found.root);
         spawnSync5(process.execPath, [bin, "--port", String(port), "restart"], {
           stdio: "inherit"
         });
@@ -14496,7 +14499,7 @@ program2.command("upgrade").description("Fetch the newest isocan and restart the
           return;
         }
       }
-      const bin = moved ? path17.join(moved.root, "packages", "cli", "bin", "isocan.js") : path17.join(install.root, "packages", "cli", "bin", "isocan.js");
+      const bin = packageBin(moved ? moved.root : install.root);
       spawnSync5(process.execPath, [bin, "--port", String(port), "restart"], {
         stdio: "inherit"
       });
