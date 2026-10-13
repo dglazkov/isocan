@@ -1064,6 +1064,7 @@ isocan use <canvas> [--home]      # bind this dir to a canvas (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore
 isocan edit <item> [<file>]        # new version from a file or $EDITOR
+isocan edit <item> <file> --if-version <ver>   # only if nobody changed it first: exit 4 and nothing written otherwise
 isocan versions <item> · version promote <item> <version>
 isocan version prune <items...> --keep N --force   # bound a stack a generator
                                        # keeps growing (--all: every item; not undoable)

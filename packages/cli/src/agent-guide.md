@@ -111,7 +111,8 @@ or agent manager, offer `isocan embed` — the canvas in a pane beside you.
 ## Practices that matter from the first lap
 
 - **Versions are the medium.** "Change X on this item" means `edit` it; the
-  person compares versions, and `version promote` brings one back.
+  person compares versions, and `version promote` brings one back. A script
+  keeping one card current uses `edit --if-version` (topic `agents`).
 - **Confirm before anything destructive** — deleting, emptying the trash,
   anything far outside the ask. `undo` reverts only your own ops.
 - **A mark on an item is an instruction**; clear it once you have acted.
@@ -3065,6 +3066,53 @@ The reference is the types themselves: the package is TypeScript source, so
 your editor answers what `connect()` returns straight from the install, and
 there is no separate API document to go stale. The ops a script sends are the
 ops you would have typed — one op per user-visible act is still one undo.
+
+## Keeping one card current: `edit --if-version`
+
+A generator that updates the same card every run — a weekly report, a live
+pulse — must not stack its version over what a person did to the card since
+it last looked. `isocan edit <item> <file> --if-version <versionId>` is the
+edit that checks first: the new content lands only if `<versionId>` is still
+the item's current version, and otherwise nothing is written.
+
+```sh
+isocan --json edit "Pulse" pulse.md --if-version ver_abc --op-id op_week41pulse \
+  --if-meta '{"title":"Pulse","properties":{"kind":"pulse"}}' --prop week=41
+```
+
+- **One act.** `--title`, `--prop k=v` and `--rm-prop key` ride in the same
+  op as the content, so the card never shows new words under an old title,
+  and one `undo` takes all of it back.
+- **`--if-meta`** also refuses when the title or any property is not exactly
+  what you pass — which is how you find out a person renamed or re-tagged the
+  card. Pass back the `title` and `properties` the last `--json` answer
+  printed. Leave it out and only the version is checked.
+- **`--op-id op_…`** is this edit's own name (`op_` and 6–32 of
+  `A–Z a–z 0–9 _ -`). Use the same one on every retry of the same edit: if the
+  first send landed and you never saw the answer, the retry answers
+  `replayed` with the version that landed, and applies nothing twice. If it
+  never arrived, the retry simply applies. A *new* op id against a version
+  that has moved is refused like anybody else's late edit.
+
+What comes back, with `--json`:
+
+| `status` | exit | means |
+| --- | --- | --- |
+| `applied` | 0 | it landed; `versionId` is the new current version — keep it, with `title` and `properties`, for next time |
+| `replayed` | 0 | this op id had already landed; `versionId` is what it wrote |
+| `conflict` | 4 | the item changed; nothing was written; `currentVersionId`, `title` and `properties` say where it stands now |
+| `unsupported` | 5 | the home is older than conditional edits; nothing was written |
+
+It **never** falls back to an unconditional edit: a refusal is the answer.
+After a `conflict`, re-read the card (`isocan get`), decide whether your
+update still applies, and send a new edit against `currentVersionId` under a
+new op id. The condition is checked by the home in the same step that
+writes, so two writers racing cannot both win. isocan.io has understood the
+op since September 2026, so `unsupported` means a self-hosted home that has
+not been upgraded.
+
+To bound the stack a regenerated card grows: `isocan version prune <item>
+--keep 14 --force`.
 
 ## Codex native sandbox
 

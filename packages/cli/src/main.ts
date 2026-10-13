@@ -283,6 +283,7 @@ import {
   newCanvasId,
   newThreadId,
   newVersionId,
+  newOpId,
   // Core's is the pure, total computation; this file's `normalizeHomeUrl`
   // wraps it with the refusals a person typing an address has earned. Two
   // names because they answer two questions — see both doc comments.
@@ -495,6 +496,7 @@ import {
 } from "@isocan/api";
 import { agentHelp, type ModuleGuide } from "./agent-guide.ts";
 import { printDesignAudit } from "./design-audit.ts";
+import { EXIT_CONFLICT, EXIT_UNSUPPORTED, appliedResult, conditionalEditOp, conditionalEditSentence, conflictResult, parseExpectedMeta, parseOpId, staleBeforeSending, type ConditionalEditResult } from "./conditional-edit.ts";
 import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
@@ -8137,13 +8139,52 @@ program
 
 program
   .command("edit <item> [file]")
-  .description("Create a new version — from a file, or in $EDITOR")
+  .description("Create a new version — from a file, or in $EDITOR; with --if-version, only if nobody changed the item first")
   .option("--visual <file>", "companion visualizer file to render on the canvas")
+  .option("--if-version <versionId>", "edit only if this is still the item's current version — otherwise write nothing and exit 4")
+  .option("--if-meta <json>", `with --if-version: also require this exact {"title","properties"} — what the last --json answer printed`)
+  .option("--title <title>", "with --if-version: retitle in the same act")
+  .option("--prop <k=v>", "with --if-version: set a property in the same act (repeatable)", collectProp, {})
+  .option("--rm-prop <key>", "with --if-version: remove a property in the same act (repeatable)", (v: string, prev: string[]) => [...prev, v], [])
+  .option("--op-id <id>", "with --if-version: this edit's own id (op_…), the same on every retry — a repeat answers with what already landed")
+  .addHelpText(
+    "after",
+    `
+A conditional edit is one act: the new content and any --title/--prop land
+together, or nothing does.
+
+  isocan --json edit "Pulse" pulse.md --if-version ver_abc --op-id op_week41pulse
+  # → {"status":"applied","versionId":"ver_def","title":…,"properties":…}   exit 0
+  # → {"status":"replayed", …}  the same op id had already landed            exit 0
+  # → {"status":"conflict","currentVersionId":"ver_xyz", …}  nothing written  exit ${EXIT_CONFLICT}
+  # → {"status":"unsupported", …}  the home predates conditional edits       exit ${EXIT_UNSUPPORTED}
+
+Pass the last answer's title and properties back as --if-meta to also refuse
+when a person renamed or re-tagged the card. It never falls back to an
+unconditional edit.`,
+  )
   .action(
-    run(async (ref: string, file: string | undefined, opts: { visual?: string }, cmd: Command) => {
+    run(async (ref: string, file: string | undefined, opts: { visual?: string; ifVersion?: string; ifMeta?: string; title?: string; prop: Record<string, string>; rmProp: string[]; opId?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
+      const patch = metaPatch(opts);
+      if (!opts.ifVersion && (opts.ifMeta || opts.opId || Object.keys(patch).length > 0)) {
+        throw new Error("--if-meta, --op-id, --title, --prop and --rm-prop travel with a conditional edit — add --if-version <versionId> (`isocan --json versions <item>` prints the current one)");
+      }
+      const expectedMeta = opts.ifMeta ? parseExpectedMeta(opts.ifMeta) : undefined;
+      const callerOpId = opts.opId ? parseOpId(opts.opId) : undefined;
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
+      const settle = (result: ConditionalEditResult) => {
+        if (result.status === "conflict") process.exitCode = EXIT_CONFLICT;
+        if (result.status === "unsupported") process.exitCode = EXIT_UNSUPPORTED;
+        if (ctx.json) printJson(result);
+        else (result.status === "applied" || result.status === "replayed" ? console.log : console.error)(conditionalEditSentence(result));
+      };
+      // Stale already, and not a retry: say so before anything is uploaded.
+      if (opts.ifVersion && !callerOpId) {
+        const stale = staleBeforeSending(item, opts.ifVersion, expectedMeta);
+        if (stale) return settle(conflictResult(item, opts.ifVersion, stale));
+      }
       const current = item.versions.find((v) => v.id === item.currentVersionId)!;
       // Announce the edit BEFORE the slow part (upload, or a human in
       // $EDITOR) — the applied op will resolve this back into "done".
@@ -8267,18 +8308,29 @@ program
 
       const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
       const versionId = newVersionId();
-      await sendOp(ctx, p.id, {
-        type: "item.addVersion",
-        itemId: item.id,
-        version: {
-          id: versionId,
-          blobHash: upload.blobHash,
-          mimeType,
-          filename,
-          size: upload.size,
-          ...(visualFace ? { visual: visualFace } : {}),
-        },
-      });
+      const version = {
+        id: versionId,
+        blobHash: upload.blobHash,
+        mimeType,
+        filename,
+        size: upload.size,
+        ...(visualFace ? { visual: visualFace } : {}),
+      };
+      if (opts.ifVersion) {
+        // One op, sent once under its own id, and never an unconditional
+        // write behind it: the home's refusal is the answer.
+        const opId = callerOpId ?? newOpId();
+        const reread = async () => resolveItem(await ctx.client.snapshot(p.id), item.id);
+        try {
+          const response = await ctx.client.sendOp(p.id, ctx.actor, conditionalEditOp(item.id, version, opts.ifVersion, patch, expectedMeta), undefined, undefined, undefined, undefined, undefined, opId);
+          return settle(appliedResult(response, await reread(), versionId, opId));
+        } catch (err) {
+          if (err instanceof ApiError && err.code === "edit-conflict") return settle(conflictResult(await reread(), opts.ifVersion, "it changed while this edit was on its way"));
+          if (err instanceof ApiError && err.code === "unknown-op") return settle({ status: "unsupported", itemId: item.id, reason: "this home does not know conditional edits (`item.edit`) — it is older than the CLI" });
+          throw err;
+        }
+      }
+      await sendOp(ctx, p.id, { type: "item.addVersion", itemId: item.id, version });
       // New words in a caption's old box: grow it to hold them, the same
       // question `set` asks of a new look (core `textNodeRefit`). A short
       // label re-worded into a sentence otherwise shows its first line.

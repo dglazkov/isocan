@@ -65,6 +65,7 @@ function waitUntilCalm(delayMs: number): Promise<void> {
   });
 }
 
+/** An HTML document as a still SVG picture: scripts, frames, linked stylesheets and remote `url(…)` references removed, so drawing it fetches and runs nothing. */
 export function sanitizeDocumentToSvg(html: string, width: number, height: number): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
   for (const el of doc.querySelectorAll("script, noscript, iframe, object, embed, link[rel='stylesheet']")) {
@@ -170,6 +171,7 @@ async function renderHtmlBlobSnapshot(
   return task;
 }
 
+/** The cached still picture of an HTML item's blob, as an object URL — null until it has rendered, or while `enabled` is false. */
 export function useHtmlSnapshot(
   canvasId: string,
   blobHash: string,

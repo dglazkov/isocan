@@ -23,6 +23,12 @@ second week.
 
 ## 13 October 2026
 
+- **An edit that checks first.** `isocan edit <item> <file> --if-version
+  <versionId>` writes the new version only if nobody changed the item since
+  you read it. If somebody did, it writes nothing and says where the item
+  stands now. A title or property change can ride in the same edit, and a
+  retry after a dropped connection never applies twice. It is for scripts
+  that keep one card current, such as a weekly report.
 - **The faces overlap.** The people and agents on a canvas now sit as a pile,
   each tucked a little under the next, so a full room takes less of the bar.
   An unread badge and the face you point at still come to the front.
