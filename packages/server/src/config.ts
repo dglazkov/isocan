@@ -1,6 +1,6 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import path from "node:path";
-import { normalizeHomeUrl } from "@isocan/core";
+import { isLoopbackBase, normalizeHomeUrl } from "@isocan/core";
 import { configFile } from "./paths.ts";
 
 /**
@@ -67,6 +67,53 @@ export interface HomeConfig {
    * mean two spellings forever.
    */
   home?: string;
+  /**
+   * **Per-home transport gateways** — local endpoints (e.g. `"http://127.0.0.1:4442"`)
+   * dialled when speaking HTTP or WebSocket to a home whose canonical URL sits
+   * behind an authenticating proxy (`"https://canvas.acme.example"`).
+   *
+   * Canonical `homeUrl` values remain untouched everywhere in `.isocan/project.json`,
+   * `homes.json`, `identity.json`, and `expectedHome` checks; only outbound wire
+   * connections substitute the gateway origin.
+   */
+  gateways?: Record<string, string>;
+}
+
+/**
+ * Resolve the transport dial URL for a canonical `homeUrl`, or `null` when no
+ * gateway is configured (`ISOCAN_HOME_GATEWAYS` env JSON first, then `gateways`
+ * in `config.json`).
+ */
+export function gatewayBaseFor(
+  homeUrl: string,
+  home: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const canonical = normalizeHomeUrl(homeUrl);
+  const lookup = (map: unknown): string | null => {
+    if (!map || typeof map !== "object") return null;
+    for (const [k, v] of Object.entries(map as Record<string, unknown>)) {
+      if (typeof v !== "string" || !v.trim()) continue;
+      if (normalizeHomeUrl(k) === canonical) return normalizeHomeUrl(v.trim());
+    }
+    return null;
+  };
+  const fromEnv = env.ISOCAN_HOME_GATEWAYS?.trim();
+  if (fromEnv) {
+    try {
+      const hit = lookup(JSON.parse(fromEnv));
+      if (hit) return hit;
+    } catch {
+      // Malformed JSON falls back to config.json rather than crashing client construction.
+    }
+  }
+  if (isLoopbackBase(canonical)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(configFile(home), "utf8")) as HomeConfig | null;
+    return lookup(parsed?.gateways);
+  } catch {
+    return null;
+  }
 }
 
 /**

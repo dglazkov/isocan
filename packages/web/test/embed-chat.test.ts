@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 /**
- * **Chat-free embed and the host bridge** (`docs/projects/jetski/design.md`,
+ * **Chat-free embed and the host bridge** (`docs/projects/antigravity/design.md`,
  * phase 0). A canvas framed in an agent manager's pane beside a conversation
  * column (`?embed=1`) keeps its 320px Chat dock and the dock's rail button off
  * while the Agent Presence strip stays, and tells the pane — and only the

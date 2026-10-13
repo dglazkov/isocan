@@ -9,6 +9,8 @@
  *   node scripts/frames.mjs --profile out.json # also a sampling profile per gesture,
  *                                              #   grouped by source file when
  *                                              #   dist/ was built with sourcemaps
+ *   node scripts/frames.mjs --grounds          # each living ground instead: see below
+ *   node scripts/frames.mjs --grounds --record scripts/ground-frames.json
  *
  * `docs/research/2026-08-29-performance.md` measured the frame budget with a
  * harness that lived and died in one session, so nothing measured it again —
@@ -41,6 +43,29 @@
  * seven at 33 reads as smooth and feels like stutter). The CPU is throttled 4x
  * by default, because the machine this runs on is not the one the app is felt on.
  *
+ * **`--grounds` measures the living grounds instead** (living grounds phase 5,
+ * 10 Oct 2026): a handful of notes, and for every name in core's `LIVING` the
+ * canvas wears the ground and a pointer walks a figure across it, three times.
+ * Each ground reports the frame gaps of those walks (p50, p95, worst), the
+ * frames a 60 Hz screen would have dropped, the main thread's time per frame
+ * (every task: script, style, layout, paint — in throttled milliseconds),
+ * and how many frames the ground itself drew. The same walk on the plain
+ * ground is printed first, because a number with nothing beside it cannot say
+ * what the ground added. And it reports **the asleep state**: frames drawn
+ * while nothing moved, before and after each walk, which must be zero — a
+ * ground that cannot sleep is the regression this exists to show.
+ *
+ * What it does NOT report is GPU time. The bench
+ * (`docs/projects/living-grounds/prototype/`) takes that with a timer query
+ * inside its own draw; from outside the page there is no honest way to bracket
+ * another program's draw calls, and CDP's throttle slows the CPU only. A GPU
+ * that cannot keep up still shows here, as long frame gaps. The first line it
+ * prints is the machine, the GL renderer and the viewport, because the budget
+ * in design.md names an M1 at 1440p and a reading means nothing without them.
+ * `--record <file>` writes the reading as JSON; `measure.mjs ground-frame-ms`
+ * reads `scripts/ground-frames.json`, so the performance persona's number is
+ * the last reading somebody took, and says when and on what.
+ *
  * **It refuses rather than reports** — the lesson of the August run, where the
  * guard fired three times on pages that were not the app. A gesture whose
  * camera did not move is a wheel that reached nothing, and reading its frames
@@ -48,7 +73,7 @@
  */
 import { spawn, execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -58,6 +83,100 @@ export function frameStats(gaps) {
   if (s.length === 0) return { frames: 0, p50: 0, p90: 0, p99: 0, worst: 0, over16: 0, over32: 0 };
   const q = (p) => s[Math.min(s.length - 1, Math.floor(p * s.length))];
   return { frames: s.length, p50: q(0.5), p90: q(0.9), p99: q(0.99), worst: s[s.length - 1], over16: s.filter((x) => x > 16.7).length, over32: s.filter((x) => x > 32).length };
+}
+
+/**
+ * **What a walk across a living ground cost**, from its inter-frame gaps: the
+ * middle, the tail a person feels (p95), the worst, and how many frames a
+ * screen refreshing at `hz` would have shown twice — a gap of two refreshes is
+ * one dropped frame, three is two. Counted against the refresh rather than a
+ * fixed 16.7 ms threshold, so one gap of 50 ms reads as two dropped frames and
+ * not as one long one.
+ */
+export function groundCost(gaps, hz = 60) {
+  const s = [...gaps].sort((a, b) => a - b);
+  if (s.length === 0) return { frames: 0, p50: 0, p95: 0, worst: 0, dropped: 0 };
+  const q = (p) => s[Math.min(s.length - 1, Math.floor(p * s.length))];
+  const refresh = 1000 / hz;
+  return { frames: s.length, p50: q(0.5), p95: q(0.95), worst: s[s.length - 1], dropped: s.reduce((n, g) => n + Math.max(0, Math.round(g / refresh) - 1), 0) };
+}
+
+/**
+ * The `--grounds` census: the plain ground, then every living one, on a page
+ * that is already open on the canvas with the CPU throttled. Returns the
+ * reading; refuses (throws) when a ground did not draw, fell back to its
+ * still, or the page is not refreshing at 60 Hz.
+ */
+async function groundsCensus({ b, run, until, sleep, canvasId, living, runs, steps }) {
+  const round = (n) => Math.round(n * 10) / 10;
+  const view = await b.ev(`(() => { const r = document.querySelector(".canvas-viewport").getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`);
+  const gl = await b.ev(`(() => { const g = document.createElement("canvas").getContext("webgl2"); if (!g) return null; const e = g.getExtension("WEBGL_debug_renderer_info"); return String(e ? g.getParameter(e.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER)); })()`);
+  if (!gl) throw new Error("REFUSED: this browser has no WebGL2 — every living ground would be its still, and a still costs nothing to measure");
+  await b.send("Performance.enable");
+  const main = async () => { const m = Object.fromEntries((await b.send("Performance.getMetrics")).metrics.map((x) => [x.name, x.value])); return { task: m.TaskDuration * 1000, script: m.ScriptDuration * 1000 }; };
+  // Scoped to the ground's own layer: for a moment after a change of ground
+  // the page holds the old one's canvas too, and its frame count is not this one's.
+  const ground = (name) => b.ev(`(() => { const c = document.querySelector(".canvas-theme-${name} canvas.ground-canvas"); return c && c.groundProbe ? { state: c.dataset.groundState ?? null, frames: c.groundProbe.frames(), size: c.width + "x" + c.height } : null; })()`);
+  const asleep = (name, what, ms) => until(b, `document.querySelectorAll("canvas.ground-canvas").length === 1 && document.querySelector(".canvas-theme-${name} canvas.ground-canvas")?.dataset.groundState === "asleep"`, what, ms);
+  const probe = `(() => { window.__gaps = []; let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); return true; })()`;
+  const collect = `(() => { window.__on = false; return window.__gaps.slice(1); })()`;
+  // A figure that crosses bare ground and the notes alike, the way a hand
+  // wanders while reading: two loops across, three down, inside the viewport.
+  const walk = async () => {
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * 2 * Math.PI;
+      await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: Math.round(view.x + view.w * (0.5 + 0.36 * Math.sin(2 * t))), y: Math.round(view.y + view.h * (0.5 + 0.32 * Math.sin(3 * t + 1))), button: "none", buttons: 0 });
+      await sleep(16);
+    }
+  };
+  const measure = async (name) => {
+    const livingOne = name !== "plain";
+    if (livingOne) {
+      // The page reuses one <canvas> from ground to ground, and until the new
+      // ground's chunk has loaded it still carries the LAST one's probe and its
+      // "asleep" — which read as snow drawing minus 3,877 frames in its sleep.
+      // So the old probe is remembered, and the new ground is the one that is not it.
+      await b.ev(`(() => { window.__lastProbe = document.querySelector("canvas.ground-canvas")?.groundProbe ?? null; return true; })()`);
+      run("--canvas", canvasId, "canvas", "background", name);
+      await until(b, `(() => { const p = document.querySelector(".canvas-theme-${name} canvas.ground-canvas")?.groundProbe; return (!!p && p !== window.__lastProbe) || !!document.querySelector(".canvas-theme-painted.canvas-theme-${name}"); })()`, `the ${name} ground to arrive`, 30_000);
+      if (!(await ground(name))) throw new Error(`REFUSED: ${name} arrived as its still picture with WebGL2 available — there is no living ground here to measure`);
+      await sleep(500); // its mount paint is under way: "asleep" from here on is its own
+      await asleep(name, `${name} to fall asleep untouched`, 25_000);
+    } else await walk(); // the first walk on a fresh page pays for code no later one does, so it is not timed
+
+    const gaps = []; let drawn = 0, asleepFrames = 0, task = 0, script = 0, sleptAfter = 0, size = null;
+    for (let r = 0; r < runs; r++) {
+      const rest = livingOne ? await ground(name) : null;
+      if (rest) { await sleep(1500); asleepFrames += (await ground(name)).frames - rest.frames; }
+      const before = livingOne ? await ground(name) : null;
+      const m0 = await main();
+      await b.ev(probe);
+      await walk();
+      const got = await b.ev(collect);
+      const m1 = await main();
+      const stopped = Date.now();
+      if (got.length < steps / 4) throw new Error(`REFUSED: the ${name} walk saw only ${got.length} frames — the page is not drawing`);
+      gaps.push(...got); task += m1.task - m0.task; script += m1.script - m0.script;
+      if (livingOne) {
+        const after = await ground(name);
+        if (after.frames - before.frames < got.length / 4) throw new Error(`REFUSED: ${name} drew ${after.frames - before.frames} frames while the pointer walked ${got.length} — the pointer is not reaching the ground`);
+        drawn += after.frames - before.frames; size = after.size;
+        // The galaxy keeps a resting pointer's eddy for about 15 s; the rest are asleep inside 3.5.
+        await asleep(name, `${name} to fall asleep after walk ${r + 1}`, 25_000);
+        sleptAfter = Math.max(sleptAfter, Date.now() - stopped);
+        const settled = await ground(name);
+        await sleep(1500);
+        asleepFrames += (await ground(name)).frames - settled.frames;
+      } else await sleep(500);
+    }
+    const c = groundCost(gaps);
+    return { frames: c.frames, p50: round(c.p50), p95: round(c.p95), worst: round(c.worst), dropped: c.dropped, mainMsPerFrame: Math.round((100 * task) / c.frames) / 100, scriptMsPerFrame: Math.round((100 * script) / c.frames) / 100, ...(livingOne ? { groundFrames: drawn, asleepFrames, sleptAfterMs: sleptAfter, canvas: size } : {}) };
+  };
+  const plain = await measure("plain");
+  if (Math.abs(plain.p50 - 1000 / 60) > 1.5) throw new Error(`REFUSED: the plain ground's median frame is ${plain.p50} ms — this page is not refreshing at 60 Hz, and every dropped-frame count below would be wrong`);
+  const grounds = {};
+  for (const name of living) grounds[name] = await measure(name);
+  return { gl, viewport: `${Math.round(view.w)}x${Math.round(view.h)}`, plain, grounds };
 }
 
 /**
@@ -133,7 +252,13 @@ async function main() {
   const argv = process.argv.slice(2);
   const arg = (name, fallback) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : fallback; };
   const root = path.resolve(arg("--root", fileURLToPath(new URL("..", import.meta.url))));
-  const items = Number(arg("--items", "250"));
+  const grounds = argv.includes("--grounds");
+  const items = Number(arg("--items", grounds ? "6" : "250"));
+  // The grounds are measured at the size the budget names (1440p); the
+  // gestures keep the 1440x900 their wheel and drag coordinates assume.
+  const [width, height] = (grounds ? arg("--viewport", "2560x1440") : "1440x900").split("x").map(Number);
+  const runs = Number(arg("--runs", "3"));
+  const recordOut = arg("--record", null);
   const throttle = Number(arg("--throttle", "4"));
   const profileOut = arg("--profile", null);
   const assets = path.join(root, "packages/web/dist/assets");
@@ -172,7 +297,7 @@ async function main() {
     const b = await browser();
     let mover = null;
     try {
-      await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+      await b.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
       await b.send("Page.navigate", { url: origin });
       await throughTheDoor(b, origin, "Acme Viewer");
       await b.send("Page.navigate", { url: `${origin}/p/${canvasId}` });
@@ -182,6 +307,28 @@ async function main() {
       const rendered = await b.ev(`document.querySelectorAll("[data-item-id]").length`);
       if (rendered < need) throw new Error(`REFUSED: only ${rendered} items rendered`);
       await b.send("Emulation.setCPUThrottlingRate", { rate: throttle });
+      if (grounds) {
+        const { LIVING } = await import("@isocan/core");
+        const got = await groundsCensus({ b, run, until, sleep, canvasId, living: LIVING, runs, steps: 180 });
+        const chrome = await b.send("Browser.getVersion").then((v) => v.product, () => "Chrome (version not read)");
+        const cpu = os.cpus()[0]?.model ?? "unknown CPU";
+        const machine = `${cpu}, ${Math.round(os.totalmem() / 2 ** 30)} GB, ${os.platform()} ${os.arch()}`;
+        console.log(`machine  ${machine}; headless ${chrome}; GL ${got.gl}`);
+        console.log(`         page ${width}x${height} at 1x (canvas ${got.viewport}), CPU throttled ${throttle}x — the GPU is not throttled; ${items} notes; ${runs} walks of 180 pointer moves each`);
+        if (!/\bM1\b/.test(cpu)) console.log(`         NOT the M1 the budget names (design.md, "Frame cost"): read these as this machine's, not as the budget met`);
+        if (/swiftshader|llvmpipe|software/i.test(got.gl)) console.log(`         SOFTWARE GL: the shaders ran on the CPU, so these are not a GPU's numbers at all`);
+        const line = (name, r) => `${name.padEnd(8)} frames=${r.frames} p50=${r.p50.toFixed(1)} p95=${r.p95.toFixed(1)} worst=${r.worst.toFixed(1)} dropped=${r.dropped} main=${r.mainMsPerFrame.toFixed(2)}ms/frame (script ${r.scriptMsPerFrame.toFixed(2)})` + (r.groundFrames === undefined ? "" : ` ground-frames=${r.groundFrames} asleep-frames=${r.asleepFrames} slept-after=${(r.sleptAfterMs / 1000).toFixed(1)}s`);
+        console.log(line("plain", got.plain));
+        for (const [name, r] of Object.entries(got.grounds)) console.log(line(name, r));
+        const awake = Object.entries(got.grounds).filter(([, r]) => r.asleepFrames !== 0);
+        console.log(awake.length ? `NOT ASLEEP: ${awake.map(([n, r]) => `${n} drew ${r.asleepFrames} frames with nothing moving`).join("; ")}` : `asleep   every ground drew 0 frames with nothing moving, before and after each walk`);
+        const commit = (() => { try { return execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).trim(); } catch { return "unknown"; } })();
+        if (recordOut) writeFileSync(recordOut, `${JSON.stringify({ at: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()), commit, machine, chrome, gl: got.gl, page: `${width}x${height}`, throttle, items, runs, plain: got.plain, grounds: got.grounds }, null, 2)}\n`);
+        const errors = b.takeErrors();
+        if (errors.length) console.log(`page errors: ${JSON.stringify(errors).slice(0, 300)}`);
+        if (awake.length) process.exitCode = 1;
+        return;
+      }
       const probe = `(() => { window.__gaps = []; window.__cams = new Set(); window.__cursors = new Set(); window.__ghosts = new Set(); let last = performance.now(); const f = (t) => { window.__gaps.push(t - last); last = t; window.__cams.add(document.querySelector('.world')?.style.transform ?? ''); window.__cursors.add([...document.querySelectorAll('.remote-cursor')].map((c) => c.style.left).join()); window.__ghosts.add(document.querySelector('.item.ghosted')?.style.translate ?? ''); if (window.__on) requestAnimationFrame(f); }; window.__on = true; requestAnimationFrame(f); window.__loaf = []; if (!window.__loafOn) { window.__loafOn = true; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__loaf.push({ duration: e.duration, render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0, scripts: e.scripts.map((x) => ({ duration: x.duration, invoker: x.invoker })) }); }).observe({ type: 'long-animation-frame' }); } catch {} } return true; })()`;
       const collect = `(() => { window.__on = false; return { gaps: window.__gaps.slice(1), cams: window.__cams.size, cursors: window.__cursors.size, ghosts: window.__ghosts.size - 1, loaf: window.__loaf }; })()`;
       const wheel = (dx, dy, modifiers = 0) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: dx, deltaY: dy, modifiers });

@@ -1,5 +1,11 @@
-import type { CanvasTheme, ThemeAnchor } from "@isocan/core";
+import { zoomFade, type CanvasTheme, type ThemeAnchor } from "@isocan/core";
 import { useUiStore } from "../../stores/uiStore.ts";
+import "./meadow.css";
+import "./night.css";
+import "./snow.css";
+import "./aurora.css";
+import "./pond.css";
+import "./zen.css";
 
 /**
  * **A ground somebody painted** (#195, art delivered 8 Sep 2026).
@@ -13,8 +19,9 @@ import { useUiStore } from "../../stores/uiStore.ts";
  * generated today; that was a deliberate stopgap, and the switch was built to
  * take a painted tile without rework, so anything produced from these is a
  * drop-in replacement, not a migration"* — and this is the drop-in. `Ocean.tsx`
- * and `Mountains.tsx` are gone; `Galaxy.tsx` stays, because the painted space
- * tile has a seam and a generated sky cannot.
+ * and `Mountains.tsx` are gone; so, since 9 Oct 2026, is `Galaxy.tsx` (Orbit, a
+ * living ground, draws space now; the painted space tile #195 was offered had
+ * a seam, so Galaxy's still is rendered from Orbit's own shader instead).
  *
  * ## It aligns exactly the way the starfield does
  *
@@ -43,7 +50,9 @@ import { useUiStore } from "../../stores/uiStore.ts";
  * only thing a resample could have cost here.
  */
 
-/** Where each ground's picture lives, and how much world it covers.
+/** Which grounds have a picture, and how much world it covers. The picture
+ *  is `/grounds/<id>.jpg`: every row once spelled its id out a second time as
+ *  `file`, which was entry bytes saying nothing (10 Oct 2026).
  *
  *  `world` is the side of one tile in canvas units, and it is a composition
  *  decision per picture rather than one number: it sets both how big the
@@ -53,11 +62,43 @@ import { useUiStore } from "../../stores/uiStore.ts";
  *  so its tile is sized to put the repeat off the edge of a working viewport.
  *  Desert is the smallest because sand ripples are grain: a repeat nobody can
  *  pick out of a uniform field costs nothing. */
-export const PAINTED: Partial<Record<CanvasTheme, { file: string; world: number }>> = {
-  ocean: { file: "ocean", world: 1400 },
-  mountains: { file: "mountains", world: 2200 },
-  farm: { file: "farm", world: 1600 },
-  desert: { file: "desert", world: 900 },
+export const PAINTED: Partial<Record<CanvasTheme, { world: number; pinned?: true; fade?: true }>> = {
+  ocean: { world: 1400 },
+  mountains: { world: 2200 },
+  farm: { world: 1600 },
+  desert: { world: 900 },
+  /* Meadow's STILL frame (living grounds): the field at rest, rendered from
+     its own shader with a lattice that repeats every 896 units, so the still
+     tiles as seamlessly as the living field it stands in for. Drawn here under
+     reduced motion; `LivingGround` hands it over when WebGL2 is missing,
+     a shader fails, or the context is lost twice. */
+  meadow: { world: 896 },
+  /* Night's STILL frame: the whole scene at rest — sky, the town's lights,
+     the dark field — rendered from `night.ts` at 1600×1000. Its sky and
+     horizon live in screen space, so it cannot tile as a world ground: it is
+     `pinned`, covering the window, and `world` is only the width it was
+     rendered at. */
+  night: { world: 1600, pinned: true },
+  /* Snow's STILL frame (phase 4): the fresh field at rest, rendered from
+     `snow.ts`, whose hashes wrap every 1024 units (its `TILE`), so it tiles
+     like Meadow's. */
+  snow: { world: 1024 },
+  /* Aurora's STILL frame: the whole scene at rest, rendered from `aurora.ts`
+     at 1600×1000. Its sky and ridge are screen space, so it is `pinned`, as
+     Night's is. */
+  aurora: { world: 1600, pinned: true },
+  /* Pond's and the Zen garden's STILL frames (phase 4): the water flat and
+     the sand unraked, rendered from `pond.ts` and `zen.ts`, whose hashes and
+     waves wrap every 1024 units (their `TILE`), so they tile like Meadow's. */
+  pond: { world: 1024 },
+  zen: { world: 1024 },
+  /* Galaxy's STILL frame (living grounds phase 3): Orbit at rest, rendered
+     from `orbit.ts` with every hash wrapping at 2048 units (its `TILE`). It
+     replaced the CSS starfield as what reduced motion sees, and keeps that
+     starfield's one zoom rule: stars and clouds fade out between half zoom
+     and a tenth (`fade`) over the plain space colour, because a sky tiled at
+     a tenth is a texture competing with the map you zoomed out for. */
+  galaxy: { world: 2048, fade: true },
 };
 
 export function PaintedGround({ theme, anchor }: { theme: CanvasTheme; anchor: ThemeAnchor }) {
@@ -75,14 +116,34 @@ export function PaintedGround({ theme, anchor }: { theme: CanvasTheme; anchor: T
   if (art === undefined) return null;
 
   const side = pinned ? art.world / 3 : art.world * scale;
+  const cover = art.pinned === true;
+  if (art.fade) {
+    // The picture fades with zoom; the ground colour under it does not.
+    const fade = pinned ? 1 : zoomFade(scale, 0.1, 0.5);
+    return (
+      <div className={`canvas-theme canvas-theme-${theme}`}>
+        <div
+          className={`canvas-theme canvas-theme-painted canvas-theme-${theme}-still`}
+          style={
+            {
+              "--tile": `url(/grounds/${theme}.jpg)`,
+              "--tile-size": `${side}px ${side}px`,
+              "--tile-pos": pinned ? "0 0" : `${tx}px ${ty}px`,
+              opacity: fade,
+            } as React.CSSProperties
+          }
+        />
+      </div>
+    );
+  }
   return (
     <div
       className={`canvas-theme canvas-theme-painted canvas-theme-${theme}`}
       style={
         {
-          "--tile": `url(/grounds/${art.file}.jpg)`,
-          "--tile-size": `${side}px ${side}px`,
-          "--tile-pos": pinned ? "0 0" : `${tx}px ${ty}px`,
+          "--tile": `url(/grounds/${theme}.jpg)`,
+          "--tile-size": cover ? "cover" : `${side}px ${side}px`,
+          "--tile-pos": cover ? "center" : pinned ? "0 0" : `${tx}px ${ty}px`,
         } as React.CSSProperties
       }
     />

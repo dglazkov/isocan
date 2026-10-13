@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 10 not yet read.**
+**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 45 not yet read.**
 
 ## Accepted, by project
 
@@ -51,6 +51,7 @@ Real, and not doing it. Dismissed in Loop, with the reason sent back.
 | never | [Absence of spatial comment thread lifecycle status](loop/absence-of-spatial-comment-thread-lifecycle-status.md) | P2 | — | By design: finished pins are removed from live canvas state with undoable thread.delete/thread.restore (packages/core/src/ops.ts:407, 457) or cleaned with comment.remove (packages/core/src/ops.ts:437), while structured design questions already track open/resolved status via questionnaireStates (packages/cli/src/questionnaire.ts:52). |
 | never | [Absence of structured canvas handoff spec cards](loop/absence-of-structured-canvas-handoff-spec-cards.md) | P2 | — | By design and duplicate of declined handoff findings (docs/LOOP.md:47, 52): screens are already live HTML, wireframes embed a typed WireSpec (packages/modules/wireframe/src/spec.ts:23-128), and the coding handoff is the admitted design brief and DESIGN.md in packages/api/src/design-workflow.ts:24-32 rather than a separate canvas spec card. |
 | never | [Agent operations directly mutate active canvas state](loop/agent-operations-directly-mutate-active-canvas-state.md) | P2 | — | Duplicate of accepted finding docs/loop/lack-of-agent-proposal-staging-overlays.md:1-29: packages/core/src/reducer.ts:34-66 applies agent operations as version-stack entries with per-item undo and VersionCompare diffing, and pre-commit trust-tier gating is already tracked under that accepted finding. |
+| never | [Antigravity plugin relies on unmanaged sidecar SDK](loop/antigravity-plugin-relies-on-unmanaged-sidecar-sdk.md) | P2 | [antigravity](projects/antigravity/) | By design: sidecar_sdk is injected by the Antigravity host via NODE_PATH only when ANTIGRAVITY_LS_ADDRESS and ANTIGRAVITY_SIDECAR_WEB_PORT are set (plugins/antigravity/sidecars/canvas/main.mjs:552-556, scripts/release.mjs:892-895), and hooks.json:6 guards on node so non-Node environments never error. |
 | never | [Area creation awaits network blob upload](loop/area-creation-awaits-network-blob-upload.md) | P2 | — | By design: packages/web/src/lib/api.ts:750-768 refuses general offline blob queueing with a clear OfflineError, and on group-mode canvases packages/web/src/lib/upload.ts:259-262 routes through changeCanvasGroup (packages/web/src/lib/canvasgroups.ts:30-35) which requires the authoritative home. |
 | never | [Arrival and viewer gates block initial render](loop/arrival-and-viewer-gates-block-initial-render.md) | P2 | [first-minute](projects/first-minute/) | By design: App.tsx shows Letting you in for one REST call so a name prompt never flashes, and the comment says so. Reopen if first-visit latency is measured and the gate is a meaningful share of it. |
 | never | [Canvas frames lack multi-viewport responsive breakpoint matrices](loop/canvas-frames-lack-multi-viewport-responsive-breakpoint.md) | P2 | [wireframes](projects/wireframes/) | Real but unrequested: a wire renders at one width and PhoneFace covers mobile. Wireframes phase 8 comes from real use and lists no breakpoint matrix. Reopen if users ask. |
@@ -68,7 +69,6 @@ Real, and not doing it. Dismissed in Loop, with the reason sent back.
 | never | [Fit to content resizing executes serial network roundtrips](loop/fit-to-content-resizing-executes-serial-network-roundtrips.md) | P2 | [canvas-groups](projects/canvas-groups/) | True mechanism on legacy canvases, small optimisation: group-enabled canvases already batch fit resizes into one changeCanvasGroup call (fititem.ts:41-44); reopen if multi-item fit shows a measured stall. |
 | never | [Flow voice application executes serial blob uploads](loop/flow-voice-application-executes-serial-blob-uploads.md) | P2 | [copy-edit](projects/copy-edit/) | True mechanism, small optimisation: applyFlowVoice (flow-voice.ts:95-110) uploads changed screen blobs sequentially and rebuilds the prototype once in one undo group; reopen if flow voice shows a measured upload stall. |
 | never | [Group brief creation waits for blob upload](loop/group-brief-creation-waits-for-blob-upload.md) | P2 | [canvas-groups](projects/canvas-groups/) | True mechanism, narrow by design: saveGroupBrief and createCanvasGroup (canvasgroups.ts:44-49, 56-70) upload group.md before sending the group operation via sendEchoedResult; staging offline blobs for group.change would require extending outbox blob staging beyond item.add/addVersion. Reopen if offline group creation is needed. |
-| never | [Jetski plugin relies on unmanaged sidecar SDK](loop/jetski-plugin-relies-on-unmanaged-sidecar-sdk.md) | P2 | [jetski](projects/jetski/) | By design: sidecar_sdk is injected by the Jetski host via NODE_PATH only when ANTIGRAVITY_LS_ADDRESS and ANTIGRAVITY_SIDECAR_WEB_PORT are set (plugins/jetski/sidecars/canvas/main.mjs:552-556, scripts/release.mjs:892-895), and hooks.json:6 guards on node so non-Node environments never error. |
 | never | [Lack of AI-driven spatial affinity clustering](loop/lack-of-ai-driven-spatial-affinity-clustering.md) | P2 | [canvas-groups](projects/canvas-groups/) | A feature idea, not a defect, with no roadmap entry: nothing clusters by position or meaning today. Reopen as an agent-driven op once canvas-groups is settled and someone asks. |
 | never | [Lack of bidirectional canvas to code symbol bindings](loop/lack-of-bidirectional-canvas-to-code-symbol-bindings.md) | P2 | [design-partner](projects/design-partner/) | By design: canvas items bind to workspace files via backingOf (canvasStore.ts:242-250) and designWorkflowProcedure (design-workflow.ts:13-22, 68-90) directs coding agents to inspect repository source directly rather than maintaining brittle AST symbol pointers on canvas items. |
 | never | [Lack of component interface prop-table canvas documentation](loop/lack-of-component-interface-prop-table-canvas-documentation.md) | P2 | [wireframes](projects/wireframes/) | By design: wireframe catalog props (wireframe/src/catalog/types.ts:23-27) are Jev structural question shapes embedded in WireSpec HTML comments (wireframe/src/spec.ts:22-37), not React/developer component APIs; same calibration as declined missing-spatial-developer-redlining-spec-overlays. |
@@ -152,14 +152,49 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 
 ## Not yet read
 
+- [Absence of spatial agent activity feeds and status indicators](loop/absence-of-spatial-agent-activity-feeds-and-status.md) — Loop P2
+- [Absence of spatial API contract mock payload binding nodes](loop/absence-of-spatial-api-contract-mock-payload-binding-nodes.md) — Loop P2
+- [Absence of spatial component accessibility focus sequence nodes](loop/absence-of-spatial-component-accessibility-focus-sequence.md) — Loop P2
+- [Absence of spatial design review presentation mode pathways](loop/absence-of-spatial-design-review-presentation-mode-pathways.md) — Loop P2
+- [Absence of spatial interactive form validation matrix nodes](loop/absence-of-spatial-interactive-form-validation-matrix-nodes.md) — Loop P2
+- [Absence of spatial persona critique cards on canvas](loop/absence-of-spatial-persona-critique-cards-on-canvas.md) — Loop P2
 - [Absence of spatial section spec cards for agent generation](loop/absence-of-spatial-section-spec-cards-for-agent-generation.md) — Loop P2
+- [Absence of spatial smart alignment engine](loop/absence-of-spatial-smart-alignment-engine.md) — Loop P2
+- [Absence of spatial timeboxed sprint timer nodes](loop/absence-of-spatial-timeboxed-sprint-timer-nodes.md) — Loop P2
 - [Absence of spatial user flow sitemap scaffolding](loop/absence-of-spatial-user-flow-sitemap-scaffolding.md) — Loop P2
+- [Absence of spatial web benchmark snapshot cards](loop/absence-of-spatial-web-benchmark-snapshot-cards.md) — Loop P2
 - [Agent guide omits comment restore and anchor operations](loop/agent-guide-omits-comment-restore-and-anchor-operations.md) — Loop P2
+- [Agent guide omits design lifecycle operation schemas](loop/agent-guide-omits-design-lifecycle-operation-schemas.md) — Loop P2
+- [Agent guide omits project lifecycle operation schemas](loop/agent-guide-omits-project-lifecycle-operation-schemas.md) — Loop P2
+- [Canvas viewport computations isolated in web client](loop/canvas-viewport-computations-isolated-in-web-client.md) — Loop P2
 - [CLI group migration preview lacks dedicated command](loop/cli-group-migration-preview-lacks-dedicated-command.md) — Loop P2
+- [CLI lacks group stack card flipping commands](loop/cli-lacks-group-stack-card-flipping-commands.md) — Loop P2
 - [CLI lacks voice token generation command](loop/cli-lacks-voice-token-generation-command.md) — Loop P2
+- [CLI presentation mode lacks live stepping control](loop/cli-presentation-mode-lacks-live-stepping-control.md) — Loop P2
+- [Group stack desk layout recalculates card transforms on pointer hover](loop/group-stack-desk-layout-recalculates-card-transforms-on.md) — Loop P2
+- [Lack of multi-selection bounding box transform anchors](loop/lack-of-multi-selection-bounding-box-transform-anchors.md) — Loop P2
+- [Lack of spatial canvas region permissions and edit locking](loop/lack-of-spatial-canvas-region-permissions-and-edit-locking.md) — Loop P2
+- [Lack of spatial canvas sticky note annotation clusters](loop/lack-of-spatial-canvas-sticky-note-annotation-clusters.md) — Loop P2
+- [Lack of spatial component governance lifecycle badges](loop/lack-of-spatial-component-governance-lifecycle-badges.md) — Loop P2
 - [Lack of spatial component state variant matrices](loop/lack-of-spatial-component-state-variant-matrices.md) — Loop P2
+- [Lack of spatial design token WCAG contrast audit nodes](loop/lack-of-spatial-design-token-wcag-contrast-audit-nodes.md) — Loop P2
+- [Lack of spatial viewport spotlight follow mode](loop/lack-of-spatial-viewport-spotlight-follow-mode.md) — Loop P2
+- [Living ground recomputes item bounds during viewport movement](loop/living-ground-recomputes-item-bounds-during-viewport.md) — Loop P2
 - [MediaPipe CPU evaluation throws exceptions and stalls](loop/mediapipe-cpu-evaluation-throws-exceptions-and-stalls.md) — Loop P2
+- [Minimized chat bar reconciles hidden message components](loop/minimized-chat-bar-reconciles-hidden-message-components.md) — Loop P2
+- [Occluded stack cards render live document thumbnails](loop/occluded-stack-cards-render-live-document-thumbnails.md) — Loop P2
+- [Personal canvas linking mutations bypass daemon reducer](loop/personal-canvas-linking-mutations-bypass-daemon-reducer.md) — Loop P2
+- [Personal canvas linking mutations bypass local replica](loop/personal-canvas-linking-mutations-bypass-local-replica.md) — Loop P2
+- [Presence cursor updates trigger unthrottled ground field mutations](loop/presence-cursor-updates-trigger-unthrottled-ground-field.md) — Loop P2
 - [Serial blob reads stall design brief loading](loop/serial-blob-reads-stall-design-brief-loading.md) — Loop P2
+- [Serial model calls slow wireframe flow operations](loop/serial-model-calls-slow-wireframe-flow-operations.md) — Loop P2
+- [Unbatched gesture events trigger redundant viewport re-renders](loop/unbatched-gesture-events-trigger-redundant-viewport-re.md) — Loop P2
+- [Version compare bypasses local replica for blob diffing](loop/version-compare-bypasses-local-replica-for-blob-diffing.md) — Loop P2
 - [Web UI chat drafts bypass daemon reducer](loop/web-ui-chat-drafts-bypass-daemon-reducer.md) — Loop P2
+- [Web UI chat drafts bypass local replica state](loop/web-ui-chat-drafts-bypass-local-replica-state.md) — Loop P2
+- [Web UI design reconciliation drafts bypass daemon reducer](loop/web-ui-design-reconciliation-drafts-bypass-daemon-reducer.md) — Loop P2
 - [Web UI lacks agent key claim migration controls](loop/web-ui-lacks-agent-key-claim-migration-controls.md) — Loop P2
+- [Web UI lacks design recipe inspection interface](loop/web-ui-lacks-design-recipe-inspection-interface.md) — Loop P2
+- [Web UI version inspector lacks pruning capability](loop/web-ui-version-inspector-lacks-pruning-capability.md) — Loop P2
+- [Wireframe slots lack contextual synthetic data filling](loop/wireframe-slots-lack-contextual-synthetic-data-filling.md) — Loop P2
 

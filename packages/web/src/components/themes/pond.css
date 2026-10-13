@@ -1,0 +1,7 @@
+/* Pond's rules (living grounds phase 4), beside the ground that draws it, for
+   meadow.css's reason: only lazy chunks render this class, so it ships with
+   them. Imported by `pond.ts` and `PaintedGround` (the still frame). */
+
+/* The water's own colour, measured off its still, under the WebGL layer
+   before it draws and under the still before the JPEG arrives. */
+.canvas-theme-pond { background-color: var(--theme-pond); }

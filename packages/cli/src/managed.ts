@@ -3,6 +3,7 @@ import { spawn, type SpawnSyncReturns } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 import { healthPath, type UpgradeVerdict } from "@isocan/core";
+import { packageBin } from "@isocan/core/packageroot";
 import { buildStamp, paths, plausibleSha, readConfigFile } from "@isocan/server";
 import { shaOfRoot } from "@isocan/api";
 import { findOnPath, rootOfBin } from "./onpath.ts";
@@ -210,7 +211,7 @@ async function smokeAttempt(
 ): Promise<SmokeResult & { raced?: boolean }> {
   await fs.mkdir(paths.buildsDir(home), { recursive: true });
   const scratch = await fs.mkdtemp(path.join(paths.buildsDir(home), ".smoke-"));
-  const bin = path.join(root, "packages", "cli", "bin", "isocan.js");
+  const bin = packageBin(root);
   const logFile = path.join(scratch, "smoke.log");
   const port = await freePort();
   const env: NodeJS.ProcessEnv = {
@@ -657,15 +658,7 @@ export async function adoptGlobal(
   home: string,
   bin: string | null = findOnPath("isocan"),
 ): Promise<Adoption> {
-  const target = path.join(
-    paths.currentLink(home),
-    "node_modules",
-    "isocan",
-    "packages",
-    "cli",
-    "bin",
-    "isocan.js",
-  );
+  const target = packageBin(path.join(paths.currentLink(home), "node_modules", "isocan"));
   if (!bin) {
     return {
       managed: false,
@@ -932,8 +925,19 @@ function isAlive(pid: number): boolean {
  * shell would run.
  */
 async function adopt(home: string, install?: Install): Promise<Adoption | null> {
-  if (install?.kind !== "global") return null;
-  return adoptGlobal(home, binOfInstall(install.root));
+  if (install?.kind === "global") return adoptGlobal(home, binOfInstall(install.root));
+  if (install?.kind === "managed") {
+    const current = `${path.resolve(paths.currentLink(home))}${path.sep}`;
+    for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+      if (!dir) continue;
+      const candidate = path.join(dir, "isocan");
+      const linked = await fs.readlink(candidate).catch(() => null);
+      if (linked && path.resolve(dir, linked).startsWith(current)) {
+        return adoptGlobal(home, candidate);
+      }
+    }
+  }
+  return null;
 }
 
 /** Where a swap stopped, so a caller can say something true about it without

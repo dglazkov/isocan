@@ -3,7 +3,7 @@ title: Web UI lacks item word analysis door
 loop:
   - a75d081d-e45a-42df-af23-674fbba92037
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPPn4
 decision: stale
 rank: never

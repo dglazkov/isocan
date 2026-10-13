@@ -9,6 +9,7 @@ import { useActorMarks } from "../lib/marks.ts";
 import { isAgentActor, useActorKinds } from "../lib/actorkinds.ts";
 import { sessionName, useActorNames } from "../lib/names.ts";
 import { otherTabSessionIds, quietFor, spreadOverlaps, statusLine } from "../lib/presence.ts";
+import { groundCursors, realMove } from "../lib/groundcursors.ts";
 
 const LERP_HUMAN = 0.22; // real cursors track tightly
 const LERP_AGENT = 0.11; // CLI hops glide slower so they read as deliberate motion
@@ -22,6 +23,9 @@ interface Anim {
   ty: number;
   /** Next waypoint decision, ms timestamp (wander only). */
   nextAt: number;
+  /** The last real position a living ground was given while working. */
+  fx?: number;
+  fy?: number;
 }
 
 /**
@@ -140,6 +144,9 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
           rec.ty = home.y;
         }
 
+        const real = workingBounds && groundCursors.feed && realMove(rec, session.cursor);
+        if (real) groundCursors.feed!(session.sessionId, real);
+
         const rate = workingBounds ? WANDER_LERP : session.kind === "web" ? LERP_HUMAN : LERP_AGENT;
         const dx = rec.tx - rec.x;
         const dy = rec.ty - rec.y;
@@ -151,6 +158,9 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
             rec.x += (Math.random() - 0.5) * 0.9;
             rec.y += (Math.random() - 0.5) * 0.9;
           }
+          // A living ground feels the cursor you see — but not the wander,
+          // which nobody sent (living grounds phase 2, groundcursors.ts).
+          if (!workingBounds) groundCursors.feed?.(session.sessionId, rec);
           moving = true;
         } else if (workingBounds) {
           moving = true; // keep the loop alive through pauses
@@ -158,7 +168,10 @@ export function CursorLayer({ actor = null }: { actor?: Actor | null } = {}) {
       }
 
       for (const key of animated.current.keys()) {
-        if (!live.has(key)) animated.current.delete(key);
+        if (!live.has(key)) {
+          animated.current.delete(key);
+          groundCursors.feed?.(key, null);
+        }
       }
       if (moving) force((n) => n + 1);
       raf = requestAnimationFrame(step);

@@ -35,7 +35,7 @@ export { FileDesk } from "./file-desk.ts";
  */
 export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.ts";
 export { Refusals, TakenDownError, RefusedError } from "./takedowns.ts";
-export { readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
+export { gatewayBaseFor, readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.ts";
 export {
   DocRefusal,
   clearGoogleToken,

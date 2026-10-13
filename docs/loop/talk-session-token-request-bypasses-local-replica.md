@@ -3,7 +3,7 @@ title: Talk session token request bypasses local replica
 loop:
   - 5bf98155-ca32-4b86-94a7-ee2224a73162
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: Fast everywhere, local-first
 decision: declined
 rank: never

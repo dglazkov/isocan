@@ -190,6 +190,8 @@ import {
   themeOf,
   themePatch,
   THEMES,
+  LIVING,
+  isLiving,
   isShelved,
   shelvePatch,
   shelvedAt,
@@ -539,7 +541,7 @@ import {
   type Build,
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
-import { installJetskiPlugin } from "./jetski-plugin.ts";
+import { installAntigravityPlugin } from "./antigravity-plugin.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import { inlineHtmlAssets, inlineMarkdownAssets } from "./inline.ts";
 import {
@@ -2390,7 +2392,7 @@ program
         );
         say(await adoptGlobal(home));
         if (opts.restart !== false) {
-          const bin = path.join(found.root, "packages", "cli", "bin", "isocan.js");
+          const bin = packageBin(found.root);
           spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
             stdio: "inherit",
           });
@@ -2444,9 +2446,7 @@ program
         // process is running the OLD build's code, and no symlink flip moves a
         // running process; the whole point of the flip is that the next
         // command resolves differently, and this is that next command.
-        const bin = moved
-          ? path.join(moved.root, "packages", "cli", "bin", "isocan.js")
-          : path.join(install.root, "packages", "cli", "bin", "isocan.js");
+        const bin = packageBin(moved ? moved.root : install.root);
         spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
           stdio: "inherit",
         });
@@ -3847,7 +3847,7 @@ async function passForAgent(ctx: Ctx, canvas: Canvas, origin: string, name: stri
  * **`isocan embed` — the address to paste into somebody else's window**
  * (#220, phase 1).
  *
- * A canvas opened in an agent manager's pane — Jetski, an IDE webview, a
+ * A canvas opened in an agent manager's pane — Antigravity, an IDE webview, a
  * browser tab beside a conversation — arrives as a cross-site frame, and a
  * cross-site frame is a stranger. It cannot ride the badge cookie this
  * machine's browser holds, because that cookie lives in a jar keyed on the
@@ -4330,7 +4330,7 @@ program
   .option("--force", "refresh the skill even if this directory already has one")
   .option("--direct", "run no daemon here — speak to the home itself, keeping no local copy")
   .option("--daemon", "run a daemon here with a replica of its own, whatever this place looks like")
-  .option("--jetski", "link the Jetski plugin into ~/.gemini/config/plugins/isocan")
+  .option("--antigravity", "link the Antigravity plugin into ~/.gemini/config/plugins/isocan")
   .action(
     run(
       async (
@@ -4341,7 +4341,7 @@ program
           force?: boolean;
           direct?: boolean;
           daemon?: boolean;
-          jetski?: boolean;
+          antigravity?: boolean;
         },
         cmd: Command,
       ) => {
@@ -4486,13 +4486,13 @@ program
         // are the transient one, the installed copy is handed the daemon.
         const transient = (await whichInstall(path.resolve(myRoot()))).kind === "npx";
         const handOff = transient && !direct ? durableBin : null;
-        if (opts.jetski) {
+        if (opts.antigravity) {
           const pluginRoot = transient && durableBin ? rootOfBin(durableBin) : myRoot();
-          const said = installJetskiPlugin({
-            sourceDir: path.join(pluginRoot, "plugins", "jetski"),
+          const said = installAntigravityPlugin({
+            sourceDir: path.join(pluginRoot, "plugins", "antigravity"),
             force: opts.force ?? false,
           });
-          report.jetski = `${said} — restart Jetski so it loads hooks.json`;
+          report.antigravity = `${said} — restart Antigravity so it loads hooks.json`;
         }
         /**
          * **The whole daemon paragraph, skipped** — this is what direct mode
@@ -5354,7 +5354,10 @@ canvas
 
 canvas
   .command("background [theme]")
-  .description(`The ground this canvas stands on — ${THEMES.join(", ")}, a picture with --picture, or \`none\``)
+  .description(
+    `The ground this canvas stands on — ${THEMES.join(", ")}, a picture with --picture, or \`none\`. ` +
+      `${LIVING.join(", ")} ${LIVING.length > 1 ? "are living grounds" : "is a living ground"}: each moves under every cursor on the canvas, agents' included, and settles when nothing moves`,
+  )
   .option("--moves", "the ground travels with the canvas, so a place stays under what stands on it (default)")
   .option("--pinned", "the ground stays behind the glass and items move across it")
   .option("--picture <file>", "an image of your own to stand the canvas on — pinned, and darkened so cards still read")
@@ -5471,7 +5474,12 @@ canvas
         type: "project.update",
         patch: theme === "none" ? noThemePatch() : themePatch(theme),
       });
-      console.log(theme === "none" ? `${p.id} is back to the dot grid` : `${p.id} wears ${theme}`);
+      console.log(
+        theme === "none"
+          ? `${p.id} is back to the dot grid`
+          : `${p.id} wears ${theme}` +
+              (isLiving(theme) ? " — a living ground: it moves under every cursor and settles when nothing moves (a still picture under reduced motion)" : ""),
+      );
     }),
   );
 

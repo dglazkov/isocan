@@ -3,7 +3,7 @@ title: Remote calls bypass local canvas replicas
 loop:
   - 57e209c1-720c-4570-8370-e3b1b3da40aa
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: RESOLVED
 loop_goal: Fast everywhere, local-first
 decision: done
 rank: next

@@ -78,6 +78,8 @@ const DESK: ReadonlyArray<{ x: number; y: number; rotate: number }> = [
   { x: -0.46, y: 0.8, rotate: -3 },
   { x: 0.48, y: 0.78, rotate: 6 },
 ];
+
+/** Where card `depth` of a pointed-at stack lies on the desk, in pixels from the top card, with its tilt. */
 export function stackFan(depth: number, card: { width: number; height: number } = GROUP_STACK, id = ""): Omit<StackCard, "id" | "depth"> {
   const slot = DESK[Math.min(depth, DESK.length - 1)]!;
   if (depth === 0) return { x: 0, y: 0, rotate: 0 };

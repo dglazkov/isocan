@@ -364,6 +364,102 @@ async function makeCanvas(rig, title) {
  */
 const IDLE_BOUND = 15;
 
+/**
+ * **What share of `seconds` the page's main thread spent working**, from a
+ * CPU profile: every sample that is not `(idle)`. `idle-at-rest` proves this
+ * instrument can say no on every run; `meadow-idle` borrows it.
+ */
+async function mainThreadBusy(rig, seconds) {
+  await rig.b.send("Profiler.enable");
+  await rig.b.send("Profiler.setSamplingInterval", { interval: 200 });
+  await rig.b.send("Profiler.start");
+  await new Promise((r) => setTimeout(r, seconds * 1000));
+  const profile = (await rig.b.send("Profiler.stop"))?.profile;
+  if (!profile) throw new Error("the profiler handed back nothing — the instrument is broken");
+  let idle = 0;
+  let total = 0;
+  for (const node of profile.nodes) {
+    const hits = node.hitCount || 0;
+    total += hits;
+    if (node.callFrame.functionName === "(idle)") idle += hits;
+  }
+  if (total === 0) throw new Error("the profiler took no samples — the instrument is broken");
+  return Math.round(((total - idle) / total) * 100);
+}
+
+/** Run the CLI against the journey's own daemon, as a test agent. */
+function journeyCli(rig, session, ...args) {
+  const out = execFileSync(process.execPath, [cli, "--json", ...args], {
+    cwd: rig.home, encoding: "utf8",
+    env: { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port, ISOCAN_SESSION_ID: session, ISOCAN_HARNESS: "test" },
+  });
+  return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+}
+
+/** The living ground's canvas, its state and its frame count, read off the page. */
+const groundNow = (b) => b.ev(`(() => {
+  const c = document.querySelector("canvas.ground-canvas");
+  if (!c) return null;
+  return { state: c.dataset.groundState ?? null, still: c.dataset.groundStill ?? null, frames: c.groundProbe ? c.groundProbe.frames() : null };
+})()`);
+
+/** Is there a WebGL2 context to be had in this browser at all? */
+const hasWebGL2 = (b) => b.ev(`!!document.createElement("canvas").getContext("webgl2")`);
+
+/** Put a canvas on Meadow from the CLI — the agent's half of scene 5 — and
+ *  wait for the ground to arrive, living or still. */
+async function wearMeadow(rig, id, session) {
+  journeyCli(rig, session, "identity", "--session", "--name", "Meadow Journey CLI");
+  journeyCli(rig, session, "--canvas", id, "canvas", "background", "meadow");
+  await until(rig.b, `!!document.querySelector("canvas.ground-canvas, .canvas-theme-painted.canvas-theme-meadow")`, "the meadow to arrive", 10_000);
+}
+
+/** Put a canvas on Night from the CLI and wait for it, living or still. */
+async function wearNight(rig, id, session) {
+  journeyCli(rig, session, "identity", "--session", "--name", "Night Journey CLI");
+  journeyCli(rig, session, "--canvas", id, "canvas", "background", "night");
+  await until(rig.b, `!!document.querySelector("canvas.ground-canvas, .canvas-theme-painted.canvas-theme-night")`, "the night to arrive", 10_000);
+}
+
+/** Put a canvas on Galaxy — drawn by Orbit since living grounds phase 3 —
+ *  from the CLI, and wait for the ground to arrive, living or still. */
+async function wearGalaxy(rig, id, session) {
+  journeyCli(rig, session, "identity", "--session", "--name", "Orbit Journey CLI");
+  journeyCli(rig, session, "--canvas", id, "canvas", "background", "galaxy");
+  await until(rig.b, `!!document.querySelector("canvas.ground-canvas, .canvas-theme-galaxy-still")`, "the galaxy to arrive", 10_000);
+}
+
+/** Put a canvas on any living ground from the CLI and wait for it, living or
+ *  still (phase 4's Snow and Aurora). */
+async function wearGround(rig, id, session, theme) {
+  journeyCli(rig, session, "identity", "--session", "--name", `${theme} journey CLI`);
+  journeyCli(rig, session, "--canvas", id, "canvas", "background", theme);
+  await until(rig.b, `!!document.querySelector("canvas.ground-canvas, .canvas-theme-painted.canvas-theme-${theme}")`, `the ${theme} to arrive`, 10_000);
+}
+
+/** Under reduced motion a living ground is its still: the tile on the page,
+ *  no WebGL canvas, and neither the living layer nor the ground's chunk
+ *  fetched. Returns "still", or throws saying which half failed. */
+async function stillUnderReducedMotion(rig, id, theme) {
+  const { b } = rig;
+  await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+  try {
+    await rig.go(`/p/${id}`);
+    await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-${theme}")`, `the still ${theme} under reduced motion`, 10_000);
+    const reduced = await b.ev(`({
+      canvas: !!document.querySelector("canvas.ground-canvas"),
+      tile: getComputedStyle(document.querySelector(".canvas-theme-${theme}")).backgroundImage,
+      fetched: performance.getEntriesByType("resource").some((e) => /LivingGround|${theme}-[^/]*\\.js/.test(e.name)),
+    })`);
+    if (reduced.canvas) throw new Error("reduced motion still mounted the WebGL canvas");
+    if (!new RegExp(`${theme}\\.jpg`).test(reduced.tile)) throw new Error(`reduced motion shows no still frame: ${reduced.tile}`);
+    if (reduced.fetched) throw new Error("reduced motion downloaded the living layer anyway");
+    return "still";
+  } finally {
+    await b.send("Emulation.setEmulatedMedia", { features: [] });
+  }
+}
+
 export const JOURNEYS = [
   {
     name: "design-contract",
@@ -635,23 +731,7 @@ export const JOURNEYS = [
     async run(rig) {
       await makeCanvas(rig, "A quiet canvas");
 
-      const busy = async (seconds) => {
-        await rig.b.send("Profiler.enable");
-        await rig.b.send("Profiler.setSamplingInterval", { interval: 200 });
-        await rig.b.send("Profiler.start");
-        await new Promise((r) => setTimeout(r, seconds * 1000));
-        const profile = (await rig.b.send("Profiler.stop"))?.profile;
-        if (!profile) throw new Error("the profiler handed back nothing — the instrument is broken");
-        let idle = 0;
-        let total = 0;
-        for (const node of profile.nodes) {
-          const hits = node.hitCount || 0;
-          total += hits;
-          if (node.callFrame.functionName === "(idle)") idle += hits;
-        }
-        if (total === 0) throw new Error("the profiler took no samples — the instrument is broken");
-        return Math.round(((total - idle) / total) * 100);
-      };
+      const busy = (seconds) => mainThreadBusy(rig, seconds);
 
       const atRest = await busy(4);
       if (atRest > IDLE_BOUND) {
@@ -684,6 +764,1180 @@ export const JOURNEYS = [
             `  The instrument cannot see, so the ${atRest}% above is not evidence of anything.`,
         );
       }
+    },
+  },
+  {
+    name: "meadow-idle",
+    /**
+     * **A living ground that cannot settle does not ship** (living grounds,
+     * phases.md's first rule). The same instrument as `idle-at-rest`, on a
+     * canvas wearing Meadow and left alone: the ground must fall asleep and
+     * the page must spend no more than the same 15% working.
+     */
+    what: "a Meadow canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet meadow");
+      await wearMeadow(rig, id, "meadow-idle-journey");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the meadow to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Meadow canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the meadow is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "meadow",
+    /**
+     * **Grass that parts, and then holds still** (living grounds phase 1,
+     * journey.md scenes 1 and 5).
+     *
+     * State, not animation — the runner's own rule. The ground's canvas says
+     * which state the sleep policy is in (`data-ground-state`) and how many
+     * frames it has drawn; the trail texture is read back from the GPU at a
+     * world point the cursor crossed. Moving over bare canvas must wake it
+     * and draw; stopping must put it to sleep within 3.5 s and then draw
+     * nothing at all. Reduced motion and a browser with no WebGL2 must both
+     * give the painted still, with no WebGL canvas on the page.
+     */
+    what: "the meadow wakes and parts under the cursor, sleeps within 3.5 s, and is a still picture under reduced motion or without WebGL2",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme meadow");
+      const session = "meadow-journey";
+      await wearMeadow(rig, id, session);
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the meadow fell back to its still with WebGL2 available: ${first.still}`);
+        // A card standing on the grass, for the picture and for the flattening.
+        const md = path.join(rig.home, "acme-meadow.md");
+        writeFileSync(md, "# Acme\n\nA card standing in the grass.\n");
+        const spot = await openSpot(rig, 300, 200);
+        const world = await b.ev(`(() => {
+          const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+          const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+          return { left: r.left, top: r.top, scale };
+        })()`);
+        const toWorld = (x, y) => ({ x: (x - world.left) / world.scale, y: (y - world.top) / world.scale });
+        const at = toWorld(spot.x + 200, spot.y + 20);
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme card", "--at", `${Math.round(at.x)},${Math.round(at.y)}`, "--size", "90x70");
+        await until(b, `!!document.querySelector(".item")`, "the card to arrive");
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the meadow to fall asleep before the walk", 6000);
+        const before = (await groundNow(b)).frames;
+
+        // Walk across bare canvas, left of the card, with no button held.
+        const y = spot.y + 190;
+        let awakeSeen = false;
+        let shot = null;
+        for (let i = 0; i <= 30; i++) {
+          const x = spot.x + 10 + i * 6;
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y: y - i * 3, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await groundNow(b)).state === "awake";
+          if (i === 24) {
+            shot = path.join(tmpdir(), `isocan-meadow-${Date.now()}.png`);
+            writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          }
+        }
+        const stoppedAt = Date.now();
+        const mid = toWorld(spot.x + 10 + 28 * 6, y - 28 * 3);
+        const pressed = await b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.trailAt(${mid.x}, ${mid.y})`);
+        const moving = await groundNow(b);
+        if (!awakeSeen) throw new Error("the meadow was not awake while the cursor walked over it");
+        if (!(moving.frames > before)) throw new Error(`no frames were drawn while the cursor moved (${before} → ${moving.frames})`);
+        if (!(pressed > 0.1)) throw new Error(`the trail holds ${pressed} at world (${mid.x.toFixed(0)}, ${mid.y.toFixed(0)}), where the cursor just walked`);
+        const untouched = await b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.trailAt(${mid.x + 4000}, ${mid.y + 4000})`);
+        if (untouched !== 0) throw new Error(`the trail holds ${untouched} far from anywhere the cursor went`);
+
+        // Stop. Asleep within 3.5 s, and then not one more frame.
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the meadow to fall asleep after the cursor stopped", 6000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter > 3500) throw new Error(`the meadow took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const asleep = (await groundNow(b)).frames;
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") {
+          throw new Error(`the meadow drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        }
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, trail: pressed, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot });
+      }
+
+      // Reduced motion: the still, and the living layer never fetched.
+      await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+      try {
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-meadow")`, "the still meadow under reduced motion", 10_000);
+        const reduced = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-meadow")).backgroundImage,
+          fetched: performance.getEntriesByType("resource").some((e) => /LivingGround|meadow-[^/]*\.js/.test(e.name)),
+        })`);
+        if (reduced.canvas) throw new Error("reduced motion still mounted the WebGL canvas");
+        if (!/meadow\.jpg/.test(reduced.tile)) throw new Error(`reduced motion shows no still frame: ${reduced.tile}`);
+        if (reduced.fetched) throw new Error("reduced motion downloaded the living layer anyway");
+        proof.reducedMotion = "still";
+      } finally {
+        await b.send("Emulation.setEmulatedMedia", { features: [] });
+      }
+
+      // No WebGL2: the host gives up at once and hands over the still.
+      const { identifier } = await b.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `(() => { const get = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return type === "webgl2" ? null : get.call(this, type, ...rest); }; })();`,
+      });
+      try {
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-meadow")`, "the still meadow without WebGL2", 10_000);
+        const none = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-meadow")).backgroundImage,
+        })`);
+        if (none.canvas) throw new Error("with no WebGL2 the ground canvas is still on the page");
+        if (!/meadow\.jpg/.test(none.tile)) throw new Error(`with no WebGL2 there is no still frame: ${none.tile}`);
+        proof.noWebGL2 = "still";
+      } finally {
+        await b.send("Page.removeScriptToEvaluateOnNewDocument", { identifier });
+        await rig.go(`/p/${id}`);
+      }
+      return proof;
+    },
+  },
+  {
+    name: "ground-motion",
+    /**
+     * **Motion ▸ Calm, Still, and the menu that sets the ground** (living
+     * grounds phase 4, journey.md scene 5).
+     *
+     * On a meadow, through the background menu a person uses: Full wakes at
+     * mount and draws its settle (the contrast that proves the count can say
+     * yes); Calm, untouched, draws at most the one paint a mounted ground
+     * needs and never wakes — through the first seconds, and again after a
+     * reload, which keeps the choice — and still wakes and parts under a
+     * moving pointer; Still is the painted still with no WebGL canvas and no
+     * meadow chunk fetched. Then choosing Night from the same menu is one
+     * `project.update`, and one ⌘Z puts the meadow back.
+     */
+    what: "Calm draws nothing untouched and still wakes for a cursor, Still is the still with no WebGL, reload keeps the choice, and the menu's ground is one undo",
+    async run(rig) {
+      const { b } = rig;
+      const MOD = process.platform === "darwin" ? 4 : 2;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme calm meadow");
+      const session = "ground-motion-journey";
+      await wearMeadow(rig, id, session);
+      const proof = {};
+      const KEY = "isocan.groundMotion";
+      const stored = () => b.ev(`localStorage.getItem(${JSON.stringify(KEY)})`);
+      const openBackground = async () => {
+        await rig.click(".drawer-handle", "the ··· handle");
+        await rig.clickText(".context-menu .context-sub > button", "Background", "the Background row");
+        await until(b, `!!document.querySelector(".context-submenu")`, "the Background submenu to open", 3000);
+      };
+      const choose = async (label) => {
+        await openBackground();
+        // The submenu scrolls on a short window, as a person would scroll it.
+        const found = await b.ev(`(() => {
+          const el = [...document.querySelectorAll(".context-submenu button")].find((e) => e.textContent.trim().startsWith(${JSON.stringify(label)}));
+          if (!el) return false;
+          el.scrollIntoView({ block: "nearest" });
+          el.setAttribute("data-journey-pick", "");
+          return true;
+        })()`);
+        if (!found) throw new Error(`no Background ▸ ${label} row`);
+        await rig.click("[data-journey-pick]", `Background ▸ ${label}`);
+        await until(b, `!document.querySelector(".context-menu")`, `choosing ${label} to close the menu`, 2000);
+      };
+      /** Watch an untouched ground for `ms`: the most frames it drew, and
+       *  every state it was in. */
+      const untouched = async (ms) => {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const states = new Set();
+        let frames = 0;
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+          const g = await groundNow(b);
+          if (g) {
+            states.add(g.state);
+            frames = Math.max(frames, g.frames ?? 0);
+          }
+          await sleep(100);
+        }
+        return { frames, states: [...states] };
+      };
+      try {
+        const gl2 = await hasWebGL2(b);
+        proof.webgl2 = gl2;
+        if (gl2) {
+          // 1. Full, the contrast: a meadow mounting wakes and draws its settle.
+          await rig.go(`/p/${id}`);
+          const full = await untouched(1500);
+          if (!(full.frames > 2)) throw new Error(`under Full the meadow drew ${full.frames} frames as it mounted — the count cannot tell Calm from Full`);
+          proof.full = full;
+
+          // 2. Calm, from the menu: untouched, at most the one paint, never awake.
+          await choose("Calm");
+          if ((await stored()) !== "calm") throw new Error(`Calm was chosen and the setting holds ${await stored()}`);
+          const calm = await untouched(3000);
+          if (calm.frames > 1 || calm.states.some((s) => s !== "asleep")) {
+            throw new Error(`untouched under Calm the meadow drew ${calm.frames} frames, states ${calm.states.join(", ")}`);
+          }
+          // …and a reload keeps it, and still draws nothing more.
+          await rig.go(`/p/${id}`);
+          const reloaded = await untouched(3000);
+          if ((await stored()) !== "calm") throw new Error("a reload lost the Calm choice");
+          if (reloaded.frames > 1 || reloaded.states.some((s) => s !== "asleep")) {
+            throw new Error(`after a reload, untouched under Calm the meadow drew ${reloaded.frames} frames, states ${reloaded.states.join(", ")}`);
+          }
+          proof.calm = { menu: calm, reloaded };
+
+          // 3. Calm still answers a cursor: a walk over bare canvas wakes it and parts the grass.
+          const spot = await openSpot(rig, 220, 120);
+          const world = await b.ev(`(() => {
+            const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+            const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+            return { left: r.left, top: r.top, scale };
+          })()`);
+          const before = (await groundNow(b)).frames;
+          let awakeSeen = false;
+          for (let i = 0; i <= 24; i++) {
+            await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: spot.x + 10 + i * 8, y: spot.y + 60, button: "none", buttons: 0 });
+            await sleep(30);
+            if (i === 12) awakeSeen = (await groundNow(b)).state === "awake";
+          }
+          const mid = { x: (spot.x + 10 + 20 * 8 - world.left) / world.scale, y: (spot.y + 60 - world.top) / world.scale };
+          const pressed = await b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.trailAt(${mid.x}, ${mid.y})`);
+          const walked = await groundNow(b);
+          if (!awakeSeen) throw new Error("under Calm the meadow did not wake for a moving pointer");
+          if (!(walked.frames > before + 5)) throw new Error(`under Calm a moving pointer drew ${walked.frames - before} frames`);
+          if (!(pressed > 0.1)) throw new Error(`under Calm the trail holds ${pressed} where the pointer walked`);
+          await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the Calm meadow to sleep after the walk", 6000);
+          proof.calmWakes = { frames: walked.frames - before, trail: pressed };
+          if (process.env.GROUND_SHOTS) {
+            await openBackground();
+            await sleep(400); // the previews are cached JPEGs; let them paint
+            proof.menuShot = path.join(process.env.GROUND_SHOTS, "ground-motion-menu.png");
+            writeFileSync(proof.menuShot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+            await b.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+            await until(b, `!document.querySelector(".context-menu")`, "Escape to close the menu", 2000);
+          }
+        }
+
+        // 4. Still, from the menu: the painted still, no WebGL canvas — and after
+        // a reload, the meadow's chunk is never fetched.
+        await choose("Still");
+        await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-meadow") && !document.querySelector("canvas.ground-canvas")`, "the still meadow once Still is chosen", 6000);
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-meadow")`, "the still meadow after a reload", 10_000);
+        await sleep(800);
+        const still = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-meadow")).backgroundImage,
+          fetched: performance.getEntriesByType("resource").some((e) => /meadow-[^/]*\\.js/.test(e.name)),
+          stored: localStorage.getItem(${JSON.stringify(KEY)}),
+        })`);
+        if (still.canvas) throw new Error("Still mounted the WebGL canvas");
+        if (!/meadow\.jpg/.test(still.tile)) throw new Error(`Still shows no still frame: ${still.tile}`);
+        if (still.fetched) throw new Error("Still downloaded the meadow's shaders anyway");
+        if (still.stored !== "still") throw new Error(`a reload lost the Still choice (${still.stored})`);
+        proof.still = { canvas: false, tile: "meadow.jpg", fetched: false };
+
+        // 5. The ground itself is the canvas's: Night from the menu, then one ⌘Z.
+        const worn = () => String(journeyCli(rig, session, "--canvas", id, "canvas", "background")).trim();
+        await choose("Night");
+        let deadline = Date.now() + 6000;
+        while (!worn().startsWith("night") && Date.now() < deadline) await sleep(200);
+        if (!worn().startsWith("night")) throw new Error(`choosing Night from the menu left the canvas on ${worn()}`);
+        await b.send("Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: MOD, key: "z", code: "KeyZ", windowsVirtualKeyCode: 90 });
+        deadline = Date.now() + 6000;
+        while (!worn().startsWith("meadow") && Date.now() < deadline) await sleep(200);
+        if (!worn().startsWith("meadow")) throw new Error(`one ⌘Z after choosing Night left the canvas on ${worn()}`);
+        proof.undo = "night → ⌘Z → meadow";
+      } finally {
+        await b.ev(`(() => { localStorage.removeItem(${JSON.stringify(KEY)}); return true; })()`);
+      }
+      return proof;
+    },
+  },
+  {
+    name: "orbit-idle",
+    /**
+     * **Space at rest is still space at rest** (living grounds phase 3). The
+     * `meadow-idle` instrument on a canvas wearing Galaxy — drawn by Orbit
+     * since 9 Oct 2026 — with nobody touching it and the pointer never over
+     * it: the eddy window is for a RESTING pointer, so an untouched galaxy
+     * must fall asleep like any ground and the page spend no more than 15%.
+     */
+    what: "a Galaxy (Orbit) canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet galaxy");
+      await wearGalaxy(rig, id, "orbit-idle-journey");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the galaxy to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Galaxy canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the galaxy is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "orbit",
+    /**
+     * **Gravity in space** (living grounds phase 3, journey.md scene 2): Orbit
+     * is how Galaxy is drawn now. State, not animation, read off the ground:
+     *
+     * - its stars are world-anchored — zoom out to a third and back, three
+     *   times, and the star count round the centre is within 20% of before
+     *   (the bench's stars gathered there);
+     * - the pointer moving wakes it and draws;
+     * - the pointer RESTING over it keeps it awake for the eddy window (~15 s
+     *   after the last move), then it settles and sleeps and draws nothing;
+     * - a held button reverses the pull: the stars near it move away (their
+     *   mean radial speed, read back from the GPU, is outward);
+     * - reduced motion gives the still tile, with no WebGL canvas and no
+     *   living chunk fetched.
+     */
+    what: "Galaxy is Orbit: world-anchored stars, awake on a move, the eddy window under a resting pointer, a held button reverses the pull, and a still under reduced motion",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme orbit");
+      const session = "orbit-journey";
+      await wearGalaxy(rig, id, session);
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      const state = async () => (await groundNow(b)).state;
+      const probe = (expr) => b.ev(`(() => { const p = document.querySelector("canvas.ground-canvas").groundProbe; return ${expr}; })()`);
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the galaxy fell back to its still with WebGL2 available: ${first.still}`);
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the galaxy to fall asleep before anything moves", 6000);
+        const cr = await b.ev(`(() => { const r = document.querySelector("canvas.ground-canvas").getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; })()`);
+        const near = (x, y, r) => probe(`p.near(${x - cr.left}, ${y - cr.top}, ${r})`);
+        const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
+
+        // 1. World-anchored: zoom out to a third and back, three times, about
+        //    a corner far from the centre (so no pointer pull reaches it).
+        const centre = { x: cr.left + cr.width / 2, y: cr.top + cr.height / 2 };
+        const before = await near(centre.x, centre.y, 220);
+        const s0 = await scale();
+        const corner = { x: cr.left + 12, y: cr.top + 12 };
+        const wheel = (deltaY) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: corner.x, y: corner.y, deltaX: 0, deltaY, modifiers: 2 });
+        const zooms = [];
+        for (let round = 0; round < 3; round++) {
+          let n = 0;
+          while ((await scale()) > s0 / 3 && n < 60) {
+            await wheel(60);
+            await sleep(40);
+            n++;
+          }
+          zooms.push(await scale());
+          for (let i = 0; i < n; i++) {
+            await wheel(-60);
+            await sleep(40);
+          }
+        }
+        const s1 = await scale();
+        if (Math.abs(s1 / s0 - 1) > 0.02) throw new Error(`the zoom did not come back: ${s0} → ${s1}`);
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the galaxy to settle after the zooms", 6000);
+        const after = await near(centre.x, centre.y, 220);
+        if (!(before && before.count > 10)) throw new Error(`too few stars round the centre to measure: ${JSON.stringify(before)}`);
+        const drift = after.count / before.count - 1;
+        if (Math.abs(drift) > 0.2) throw new Error(`star density at the centre moved ${(drift * 100).toFixed(0)}% after zooming out ×3 and back (${before.count.toFixed(1)} → ${after.count.toFixed(1)})`);
+        Object.assign(proof, { zoomedTo: zooms.map((z) => +z.toFixed(3)), centreStarsBefore: +before.count.toFixed(1), centreStarsAfter: +after.count.toFixed(1), densityDrift: +drift.toFixed(3) });
+
+        // 2. The pointer moves over bare canvas: awake, drawing.
+        const spot = await openSpot(rig, 300, 200);
+        const framesBefore = (await groundNow(b)).frames;
+        let awakeSeen = false;
+        let shot = null;
+        let last = null;
+        for (let i = 0; i <= 30; i++) {
+          last = { x: spot.x + 20 + i * 8, y: spot.y + 180 - i * 5 };
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: last.x, y: last.y, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await state()) === "awake";
+        }
+        const stoppedAt = Date.now();
+        if (!awakeSeen) throw new Error("the galaxy was not awake while the pointer moved over it");
+        const moved = await groundNow(b);
+        if (!(moved.frames > framesBefore)) throw new Error(`no frames were drawn while the pointer moved (${framesBefore} → ${moved.frames})`);
+
+        // 3. The pointer rests over it: the eddy window keeps it awake ~15 s.
+        await sleep(1200);
+        // A screenshot only when asked for ($GROUND_SHOTS), as chat-bottom does with $CHAT_SHOTS.
+        if (process.env.GROUND_SHOTS) {
+          shot = path.join(process.env.GROUND_SHOTS, "orbit.png");
+          writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        }
+        const resting = await near(last.x, last.y, 200);
+        if (!(await probe("p.resting()"))) throw new Error("the ground does not know the pointer is resting over it");
+        await sleep(5000 - (Date.now() - stoppedAt));
+        const at5 = await state();
+        await sleep(12_000 - (Date.now() - stoppedAt));
+        const at12 = await state();
+        if (at5 !== "awake" || at12 !== "awake") throw new Error(`a resting pointer should keep the galaxy awake for the eddy window: ${at5} at 5 s, ${at12} at 12 s`);
+        const framesAt12 = (await groundNow(b)).frames;
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the galaxy to fall asleep after the eddy window", 12_000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter < 14_000 || sleptAfter > 18_500) throw new Error(`under a resting pointer the galaxy slept ${sleptAfter}ms after the last move — the window is ~15 s, then a ≤3 s settle`);
+        const asleep = (await groundNow(b)).frames;
+        if (!(asleep > framesAt12)) throw new Error("the eddy drew nothing between 12 s and sleep");
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") throw new Error(`the galaxy drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        Object.assign(proof, { awake: awakeSeen, frames: moved.frames - framesBefore, restingAt5s: at5, restingAt12s: at12, sleptAfterRestMs: sleptAfter, framesAsleep: 0, radialWhileResting: +resting.radial.toFixed(1), screenshot: shot });
+
+        // 4. Hold the button: the pull reverses and the stars move away.
+        await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: last.x, y: last.y, button: "left", buttons: 1, clickCount: 1 });
+        await sleep(700);
+        const held = await probe("p.held()");
+        const fleeing = await near(last.x, last.y, 200);
+        const heldState = await state();
+        await b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: last.x, y: last.y, button: "left", buttons: 0, clickCount: 1 });
+        if (!held) throw new Error("the ground did not see the held button");
+        if (heldState !== "awake") throw new Error(`a press did not wake the galaxy (${heldState})`);
+        if (!(fleeing.radial > 5)) throw new Error(`with the button held the stars near the pointer should flee: mean radial speed ${fleeing.radial.toFixed(1)} px/s`);
+        if (!(fleeing.radial > resting.radial)) throw new Error(`holding did not reverse the pull: ${resting.radial.toFixed(1)} → ${fleeing.radial.toFixed(1)} px/s`);
+        Object.assign(proof, { held, radialWhileHeld: +fleeing.radial.toFixed(1) });
+        await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0, button: "none", buttons: 0 });
+      }
+
+      // 5. Reduced motion: the still, and the living layer never fetched.
+      await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+      try {
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-galaxy-still")`, "the still galaxy under reduced motion", 10_000);
+        const reduced = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-galaxy-still")).backgroundImage,
+          fetched: performance.getEntriesByType("resource").some((e) => /LivingGround|orbit-[^/]*\\.js/.test(e.name)),
+        })`);
+        if (reduced.canvas) throw new Error("reduced motion still mounted the WebGL canvas");
+        if (!/galaxy\.jpg/.test(reduced.tile)) throw new Error(`reduced motion shows no still frame: ${reduced.tile}`);
+        if (reduced.fetched) throw new Error("reduced motion downloaded the living layer anyway");
+        proof.reducedMotion = "still";
+      } finally {
+        await b.send("Emulation.setEmulatedMedia", { features: [] });
+      }
+      return proof;
+    },
+  },
+  {
+    name: "meadow-others",
+    /**
+     * **Somebody else walks by** (living grounds phase 2, journey.md scene 3).
+     *
+     * Two identities on one Meadow canvas: this page, idle and asleep, and an
+     * agent at the CLI moving its presence cursor with `isocan session move`.
+     * This page's own pointer never moves. Its ground must wake for the other
+     * cursor, its trail texture must hold the other cursor's path at the
+     * world points it crossed — including a point between two hops, which
+     * only the eased cursor CursorLayer draws ever passes through — and it
+     * must fall asleep within 3.5 s of the other cursor's last move. Nothing
+     * new is sent for any of it; `groundpresence.test.ts` reads the messages.
+     */
+    what: "another identity's cursor moving over a Meadow wakes this page's ground, leaves its path in the trail, and lets it sleep within 3.5 s — and a working agent's wander does not keep it awake",
+    async run(rig) {
+      const { b } = rig;
+      const id = await makeCanvas(rig, "Acme shared meadow");
+      const other = "meadow-others-journey";
+      await wearMeadow(rig, id, other);
+      if (!(await hasWebGL2(b))) return { webgl2: false };
+      await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+      const first = await groundNow(b);
+      if (first.still) throw new Error(`the meadow fell back to its still with WebGL2 available: ${first.still}`);
+
+      const spot = await openSpot(rig, 300, 200);
+      const world = await b.ev(`(() => {
+        const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+        const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+        return { left: r.left, top: r.top, scale };
+      })()`);
+      const toWorld = (x, y) => ({ x: Math.round((x - world.left) / world.scale), y: Math.round((y - world.top) / world.scale) });
+      // The other identity arrives, parked at the walk's start.
+      const path0 = Array.from({ length: 7 }, (_, i) => toWorld(spot.x + 20 + i * 40, spot.y + 30 + i * 22));
+      journeyCli(rig, other, "--canvas", id, "session", "start", "--label", "Ravi's agent");
+      journeyCli(rig, other, "--canvas", id, "session", "move", String(path0[0].x), String(path0[0].y));
+      await until(b, `!!document.querySelector(".remote-cursor")`, "the other identity's cursor to appear", 10_000);
+      await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "this page's meadow to fall asleep before the other cursor walks", 8000);
+      const before = (await groundNow(b)).frames;
+
+      // The walk: hops from the CLI, eased into a path by CursorLayer.
+      let awakeSeen = false;
+      for (const at of path0.slice(1)) {
+        journeyCli(rig, other, "--canvas", id, "session", "move", String(at.x), String(at.y));
+        if (!awakeSeen) awakeSeen = (await groundNow(b)).state === "awake";
+      }
+      const stoppedAt = Date.now();
+      const last = path0[path0.length - 1];
+      const prev = path0[path0.length - 2];
+      const between = { x: (last.x + prev.x) / 2, y: (last.y + prev.y) / 2 };
+      // Read the trail as the eased cursor arrives; keep the strongest reading.
+      const read = (p) => b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.trailAt(${p.x}, ${p.y})`);
+      let atLast = 0;
+      let atBetween = 0;
+      let shot = null;
+      while (Date.now() - stoppedAt < 1500) {
+        if (!awakeSeen) awakeSeen = (await groundNow(b)).state === "awake";
+        atLast = Math.max(atLast, await read(last));
+        atBetween = Math.max(atBetween, await read(between));
+        if (!shot && atLast > 0.1) {
+          shot = path.join(tmpdir(), `isocan-meadow-others-${Date.now()}.png`);
+          writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        }
+        await sleep(50);
+      }
+      const moving = await groundNow(b);
+      if (!awakeSeen) throw new Error("this page's meadow never woke while the other cursor walked over it");
+      if (!(moving.frames > before)) throw new Error(`no frames were drawn for the other cursor (${before} → ${moving.frames})`);
+      if (!(atLast > 0.1)) throw new Error(`the trail holds ${atLast} at world (${last.x}, ${last.y}), where the other cursor stopped`);
+      if (!(atBetween > 0.1)) throw new Error(`the trail holds ${atBetween} at world (${between.x}, ${between.y}), on the other cursor's path between two hops`);
+      const untouched = await read({ x: last.x + 4000, y: last.y + 4000 });
+      if (untouched !== 0) throw new Error(`the trail holds ${untouched} far from anywhere any cursor went`);
+
+      // The other cursor has stopped: asleep within 3.5 s, then no frames.
+      await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "this page's meadow to fall asleep after the other cursor stopped", 6000);
+      const sleptAfter = Date.now() - stoppedAt;
+      if (sleptAfter > 3500) throw new Error(`the meadow took ${sleptAfter}ms to fall asleep after the other cursor stopped — the bound is 3500`);
+      const asleep = (await groundNow(b)).frames;
+      await sleep(1500);
+      const later = await groundNow(b);
+      if (later.frames !== asleep || later.state !== "asleep") {
+        throw new Error(`the meadow drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+      }
+
+      // Left working, the agent's cursor wanders on this screen for as long as
+      // it works — CursorLayer's own animation, which nobody sent. It is drawn
+      // and must not touch the grass: the page sleeps while the cursor wanders.
+      // Starting work moves the agent's REAL cursor to the work point — one
+      // honest press, and the ground may wake for it. Wait for that wake to
+      // arrive, so the sleep below is the one after it and not the old one.
+      const workAt = path0[3];
+      const preWork = (await groundNow(b)).frames;
+      journeyCli(rig, other, "--canvas", id, "session", "work", "--at", `${workAt.x},${workAt.y}`);
+      const workedAt = Date.now();
+      await until(b, `!!document.querySelector(".remote-cursor") && document.querySelector("canvas.ground-canvas").groundProbe.frames() > ${preWork}`, "the agent's move to its work point to reach this page", 4000);
+      const cursorAt = () => b.ev(`(() => { const c = document.querySelector(".remote-cursor"); return c ? c.style.left + "," + c.style.top : null; })()`);
+      await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "this page's meadow to fall asleep while the agent works", 6000);
+      const workSleptAfter = Date.now() - workedAt;
+      if (workSleptAfter > 3500) throw new Error(`with an agent working the meadow took ${workSleptAfter}ms to fall asleep — the bound is 3500`);
+      const workAsleep = (await groundNow(b)).frames;
+      const seen = new Set();
+      for (let i = 0; i < 15; i++) {
+        seen.add(await cursorAt());
+        await sleep(100);
+      }
+      const working = await groundNow(b);
+      if (seen.size < 2) throw new Error("the working agent's cursor did not wander, so this proves nothing about the wander");
+      if (working.frames !== workAsleep || working.state !== "asleep") {
+        throw new Error(`the meadow drew ${working.frames - workAsleep} frames while the agent's cursor only wandered (state ${working.state})`);
+      }
+      journeyCli(rig, other, "--canvas", id, "session", "end");
+      return { webgl2: true, awake: awakeSeen, frames: moving.frames - before, trailAtStop: atLast, trailBetweenHops: atBetween, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot, working: { sleptAfterMs: workSleptAfter, wanderPositions: seen.size, framesWhileWandering: 0 } };
+    },
+  },
+  {
+    name: "night-idle",
+    /** `idle-at-rest` on a Night canvas: left alone it settles, sleeps, and
+     *  the page spends no more than the same 15% working (phases.md rule 1). */
+    what: "a Night canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet night");
+      await wearNight(rig, id, "night-idle-journey");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the night to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Night canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the night is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "night",
+    /**
+     * **Fireflies at night** (living grounds phase 3, journey.md scene 4).
+     *
+     * The pointer walks over bare ground toward a card: the ground is awake
+     * and its path has woken fireflies; the card it walked up to carries a
+     * nonzero `--ground-glow` and a card far across the screen carries none.
+     * It stops: asleep within 3.5 s, then not one more frame, and the glow it
+     * left is cleared. Under reduced motion it is the still, with no WebGL
+     * canvas and no living chunk fetched.
+     */
+    what: "the pointer wakes fireflies and warms the card it nears, then the night sleeps within 3.5 s; still under reduced motion",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme night");
+      const session = "night-journey";
+      await wearNight(rig, id, session);
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the night fell back to its still with WebGL2 available: ${first.still}`);
+        const spot = await openSpot(rig, 300, 200);
+        const world = await b.ev(`(() => {
+          const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+          const v = document.querySelector(".canvas-viewport").getBoundingClientRect();
+          const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+          return { left: r.left, top: r.top, scale, right: v.right, bottom: v.bottom };
+        })()`);
+        const toWorld = (x, y) => ({ x: (x - world.left) / world.scale, y: (y - world.top) / world.scale });
+        const far = { x: world.right - 180, y: world.bottom - 140 };
+        if (Math.hypot(far.x - (spot.x + 190), far.y - (spot.y + 100)) < 500) {
+          throw new Error(`the screen is too small to hold a card out of a firefly's reach (spot ${JSON.stringify(spot)})`);
+        }
+        const md = path.join(rig.home, "acme-night.md");
+        writeFileSync(md, "# Acme\n\nA card in the dark field.\n");
+        const near = toWorld(spot.x + 200, spot.y + 20);
+        const away = toWorld(far.x, far.y);
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme near", "--at", `${Math.round(near.x)},${Math.round(near.y)}`, "--size", "90x70");
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme far", "--at", `${Math.round(away.x)},${Math.round(away.y)}`, "--size", "90x70");
+        await until(b, `document.querySelectorAll(".item").length >= 2`, "both cards to arrive");
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the night to fall asleep before the walk", 6000);
+        const before = (await groundNow(b)).frames;
+        const glowAt = (sx, sy) => b.ev(`(() => {
+          const el = [...document.querySelectorAll(".item")].find((e) => { const r = e.getBoundingClientRect(); return ${sx} >= r.left && ${sx} <= r.right && ${sy} >= r.top && ${sy} <= r.bottom; });
+          return el ? el.style.getPropertyValue("--ground-glow") : null;
+        })()`);
+
+        const y = spot.y + 190;
+        let awakeSeen = false;
+        let shot = null;
+        for (let i = 0; i <= 30; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: spot.x + 10 + i * 6, y: y - i * 3, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await groundNow(b)).state === "awake";
+          if (i === 26) {
+            shot = process.env.NIGHT_SHOT || path.join(tmpdir(), `isocan-night-${Date.now()}.png`);
+            writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          }
+        }
+        const stoppedAt = Date.now();
+        const flies = await b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.fireflies()`);
+        const nearGlow = await glowAt(spot.x + 245, spot.y + 55);
+        const farGlow = await glowAt(far.x + 45, far.y + 35);
+        const moving = await groundNow(b);
+        if (!awakeSeen) throw new Error("the night was not awake while the cursor walked over it");
+        if (!(moving.frames > before)) throw new Error(`no frames were drawn while the cursor moved (${before} → ${moving.frames})`);
+        if (!(flies > 0)) throw new Error(`the cursor's path woke no fireflies (${flies})`);
+        if (nearGlow === null || !(parseFloat(nearGlow) > 0)) throw new Error(`the card the firefly walked up to has no glow (${JSON.stringify(nearGlow)})`);
+        if (farGlow === null) throw new Error("the far card is not on the page");
+        if (farGlow !== "") throw new Error(`a card far from every firefly glows: ${farGlow}`);
+
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the night to fall asleep after the cursor stopped", 6000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter > 3500) throw new Error(`the night took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const asleep = (await groundNow(b)).frames;
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") {
+          throw new Error(`the night drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        }
+        const leftGlow = await glowAt(spot.x + 245, spot.y + 55);
+        if (leftGlow !== "") throw new Error(`the card still glows after the night slept: ${leftGlow}`);
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, fireflies: flies, nearGlow: parseFloat(nearGlow), farGlow: "none", sleptAfterMs: sleptAfter, framesAsleep: 0, glowCleared: true, screenshot: shot });
+      }
+
+      await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+      try {
+        await rig.go(`/p/${id}`);
+        await until(b, `!!document.querySelector(".canvas-theme-painted.canvas-theme-night")`, "the still night under reduced motion", 10_000);
+        const reduced = await b.ev(`({
+          canvas: !!document.querySelector("canvas.ground-canvas"),
+          tile: getComputedStyle(document.querySelector(".canvas-theme-night")).backgroundImage,
+          fetched: performance.getEntriesByType("resource").some((e) => /LivingGround|night-[^/]*\\.js/.test(e.name)),
+        })`);
+        if (reduced.canvas) throw new Error("reduced motion still mounted the WebGL canvas");
+        if (!/night\.jpg/.test(reduced.tile)) throw new Error(`reduced motion shows no still frame: ${reduced.tile}`);
+        if (reduced.fetched) throw new Error("reduced motion downloaded the living layer anyway");
+        proof.reducedMotion = "still";
+      } finally {
+        await b.send("Emulation.setEmulatedMedia", { features: [] });
+      }
+      return proof;
+    },
+  },
+  {
+    name: "snow-idle",
+    /** `idle-at-rest` on a Snow canvas: left alone it settles, sleeps, and
+     *  the page spends no more than the same 15% working (phases.md rule 1). */
+    what: "a Snow canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet snowfield");
+      await wearGround(rig, id, "snow-idle-journey", "snow");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the snow to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Snow canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the snow is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "snow",
+    /**
+     * **Footprints that stay** (living grounds phase 4).
+     *
+     * The pointer walks across bare snow: the ground is awake, and Snow's own
+     * pack — read back from its texture — is trodden at a world point the
+     * pointer crossed and untouched far away. It stops: asleep within 3.5 s,
+     * then not one more frame. Then the difference from Meadow: once the
+     * host's trail has faded to nothing, the snow still holds the print; and
+     * after the pointer moves elsewhere for a while (awake time), the print
+     * has partly filled back in. Under reduced motion it is the still, with
+     * no WebGL canvas and no living chunk fetched.
+     */
+    what: "the pointer treads a trail into the snow that outlives the host's trail and fills back in only while awake; asleep within 3.5 s; still under reduced motion",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme snowfield");
+      const session = "snow-journey";
+      await wearGround(rig, id, session, "snow");
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the snow fell back to its still with WebGL2 available: ${first.still}`);
+        const md = path.join(rig.home, "acme-snow.md");
+        writeFileSync(md, "# Acme\n\nA card standing in the snow.\n");
+        const spot = await openSpot(rig, 300, 200);
+        const world = await b.ev(`(() => {
+          const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+          const v = document.querySelector(".canvas-viewport").getBoundingClientRect();
+          const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+          return { left: r.left, top: r.top, scale, right: v.right, bottom: v.bottom };
+        })()`);
+        const toWorld = (x, y) => ({ x: (x - world.left) / world.scale, y: (y - world.top) / world.scale });
+        const at = toWorld(spot.x + 200, spot.y + 20);
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme card", "--at", `${Math.round(at.x)},${Math.round(at.y)}`, "--size", "90x70");
+        await until(b, `!!document.querySelector(".item")`, "the card to arrive");
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the snow to fall asleep before the walk", 6000);
+        const before = (await groundNow(b)).frames;
+        const probe = (expr) => b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.${expr}`);
+
+        const y = spot.y + 190;
+        let awakeSeen = false;
+        let shot = null;
+        for (let i = 0; i <= 30; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: spot.x + 10 + i * 6, y: y - i * 3, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await groundNow(b)).state === "awake";
+          // A screenshot only when asked for ($GROUND_SHOTS), as orbit does.
+          if (i === 24 && process.env.GROUND_SHOTS) {
+            shot = path.join(process.env.GROUND_SHOTS, "snow.png");
+            writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          }
+        }
+        const stoppedAt = Date.now();
+        const mid = toWorld(spot.x + 10 + 28 * 6, y - 28 * 3);
+        const trodden = await probe(`trodden(${mid.x}, ${mid.y})`);
+        const moving = await groundNow(b);
+        if (!awakeSeen) throw new Error("the snow was not awake while the cursor walked over it");
+        if (!(moving.frames > before)) throw new Error(`no frames were drawn while the cursor moved (${before} → ${moving.frames})`);
+        if (!(trodden > 0.3)) throw new Error(`the snow is trodden ${trodden} at world (${mid.x.toFixed(0)}, ${mid.y.toFixed(0)}), where the cursor just walked`);
+        const untouched = await probe(`trodden(${mid.x + 4000}, ${mid.y + 4000})`);
+        if (untouched !== 0) throw new Error(`the snow is trodden ${untouched} far from anywhere the cursor went`);
+
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the snow to fall asleep after the cursor stopped", 6000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter > 3500) throw new Error(`the snow took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const asleep = (await groundNow(b)).frames;
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") {
+          throw new Error(`the snow drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        }
+        // The host's trail is long gone; the snow still holds the print.
+        const hostTrail = await probe(`trailAt(${mid.x}, ${mid.y})`);
+        const kept = await probe(`trodden(${mid.x}, ${mid.y})`);
+        if (hostTrail > 0.05) throw new Error(`the host's trail still holds ${hostTrail} — the persistence check proves nothing yet`);
+        if (!(kept > 0.3)) throw new Error(`asleep, the print has gone from the snow (${kept}) — it should outlive the host's trail`);
+
+        // Awake time elsewhere: the print fills back in a little.
+        const far = { x: world.right - 220, y: world.bottom - 160 };
+        for (let i = 0; i < 80; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: far.x + (i % 2) * 8, y: far.y + ((i >> 1) % 2) * 8, button: "none", buttons: 0 });
+          await sleep(30);
+        }
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the snow to fall asleep after the second walk", 6000);
+        const filled = await probe(`trodden(${mid.x}, ${mid.y})`);
+        if (!(filled < kept - 0.05)) throw new Error(`after awake time elsewhere the print did not fill back in (${kept} → ${filled})`);
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, trodden, untouched, sleptAfterMs: sleptAfter, framesAsleep: 0, afterHostTrailFaded: { hostTrail, trodden: kept }, afterAwakeElsewhere: filled, screenshot: shot });
+      }
+      proof.reducedMotion = await stillUnderReducedMotion(rig, id, "snow");
+      return proof;
+    },
+  },
+  {
+    name: "aurora-idle",
+    /** `idle-at-rest` on an Aurora canvas (phases.md rule 1). */
+    what: "an Aurora canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet aurora");
+      await wearGround(rig, id, "aurora-idle-journey", "aurora");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the aurora to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`an Aurora canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the aurora is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "aurora",
+    /**
+     * **Ribbons that lean toward you** (living grounds phase 4).
+     *
+     * The pointer walks over bare ground: the ground is awake, the ribbons'
+     * lean (the energy the shader reads) is high over the column it crossed
+     * and nothing over a column far across the screen; the card under the
+     * lit column carries a nonzero `--aurora-glow` and a card far across
+     * carries none. It stops: asleep within 3.5 s, then not one more frame,
+     * the lean gone and the light cleared. Under reduced motion it is the
+     * still, with no WebGL canvas and no living chunk fetched.
+     */
+    what: "the pointer bends and brightens the ribbons over it and lights the card beneath, then the aurora sleeps within 3.5 s; still under reduced motion",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme aurora");
+      const session = "aurora-journey";
+      await wearGround(rig, id, session, "aurora");
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the aurora fell back to its still with WebGL2 available: ${first.still}`);
+        const spot = await openSpot(rig, 300, 200);
+        const world = await b.ev(`(() => {
+          const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+          const v = document.querySelector(".canvas-viewport").getBoundingClientRect();
+          const c = document.querySelector("canvas.ground-canvas").getBoundingClientRect();
+          const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+          return { left: r.left, top: r.top, scale, right: v.right, bottom: v.bottom, canvasLeft: c.left };
+        })()`);
+        const toWorld = (x, y) => ({ x: (x - world.left) / world.scale, y: (y - world.top) / world.scale });
+        const far = { x: world.right - 180, y: world.bottom - 140 };
+        if (far.x - (spot.x + 190) < 540) {
+          throw new Error(`the screen is too narrow to hold a card out of the ribbons' reach (spot ${JSON.stringify(spot)})`);
+        }
+        const md = path.join(rig.home, "acme-aurora.md");
+        writeFileSync(md, "# Acme\n\nA card under the northern lights.\n");
+        const near = toWorld(spot.x + 200, spot.y + 20);
+        const away = toWorld(far.x, far.y);
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme near", "--at", `${Math.round(near.x)},${Math.round(near.y)}`, "--size", "90x70");
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme far", "--at", `${Math.round(away.x)},${Math.round(away.y)}`, "--size", "90x70");
+        await until(b, `document.querySelectorAll(".item").length >= 2`, "both cards to arrive");
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the aurora to fall asleep before the walk", 6000);
+        const before = (await groundNow(b)).frames;
+        const lean = (sx) => b.ev(`document.querySelector("canvas.ground-canvas").groundProbe.lean(${sx - world.canvasLeft})`);
+        const lightAt = (sx, sy) => b.ev(`(() => {
+          const el = [...document.querySelectorAll(".item")].find((e) => { const r = e.getBoundingClientRect(); return ${sx} >= r.left && ${sx} <= r.right && ${sy} >= r.top && ${sy} <= r.bottom; });
+          return el ? el.style.getPropertyValue("--aurora-glow") : null;
+        })()`);
+
+        const y = spot.y + 190;
+        let awakeSeen = false;
+        let shot = null;
+        for (let i = 0; i <= 30; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: spot.x + 10 + i * 6, y: y - i * 3, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await groundNow(b)).state === "awake";
+          if (i === 26 && process.env.GROUND_SHOTS) {
+            shot = path.join(process.env.GROUND_SHOTS, "aurora.png");
+            writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          }
+        }
+        const stoppedAt = Date.now();
+        const over = await lean(spot.x + 190);
+        const across = await lean(far.x + 45);
+        const nearLight = await lightAt(spot.x + 245, spot.y + 55);
+        const farLight = await lightAt(far.x + 45, far.y + 35);
+        const moving = await groundNow(b);
+        if (!awakeSeen) throw new Error("the aurora was not awake while the cursor walked under it");
+        if (!(moving.frames > before)) throw new Error(`no frames were drawn while the cursor moved (${before} → ${moving.frames})`);
+        if (!(over > 0.3)) throw new Error(`the ribbons over the cursor's column lean ${over}`);
+        if (!(across < 0.02)) throw new Error(`the ribbons far across the screen lean ${across}`);
+        if (nearLight === null || !(parseFloat(nearLight) > 0)) throw new Error(`the card under the lit ribbons has no light (${JSON.stringify(nearLight)})`);
+        if (farLight === null) throw new Error("the far card is not on the page");
+        if (farLight !== "") throw new Error(`a card far from every lit ribbon is lit: ${farLight}`);
+
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the aurora to fall asleep after the cursor stopped", 6000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter > 3500) throw new Error(`the aurora took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const asleep = (await groundNow(b)).frames;
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") {
+          throw new Error(`the aurora drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        }
+        const leftLean = await lean(spot.x + 190);
+        const leftLight = await lightAt(spot.x + 245, spot.y + 55);
+        if (leftLean !== 0) throw new Error(`the ribbons still lean ${leftLean} after the aurora slept`);
+        if (leftLight !== "") throw new Error(`the card is still lit after the aurora slept: ${leftLight}`);
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, leanOver: over, leanAcross: across, nearLight: parseFloat(nearLight), farLight: "none", sleptAfterMs: sleptAfter, framesAsleep: 0, leanAfter: 0, lightCleared: true, screenshot: shot });
+      }
+      proof.reducedMotion = await stillUnderReducedMotion(rig, id, "aurora");
+      return proof;
+    },
+  },
+  {
+    name: "pond-idle",
+    /** `idle-at-rest` on a Pond canvas (phases.md rule 1). */
+    what: "a Pond canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet pond");
+      await wearGround(rig, id, "pond-idle-journey", "pond");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the pond to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Pond canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the pond is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "pond",
+    /**
+     * **Ripples on still water** (living grounds phase 4).
+     *
+     * The water is flat. The pointer walks across it: the ground is awake,
+     * and the Pond's own height field — read back from its texture — stands
+     * off zero where the pointer just crossed and is flat far away. It stops:
+     * asleep within 3.5 s, then not one more frame. Under reduced motion it
+     * is the still, with no WebGL canvas and no living chunk fetched.
+     */
+    what: "the pointer drags ripples across the pond, which sleeps within 3.5 s; still under reduced motion",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme pond");
+      const session = "pond-journey";
+      await wearGround(rig, id, session, "pond");
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the pond fell back to its still with WebGL2 available: ${first.still}`);
+        const md = path.join(rig.home, "acme-pond.md");
+        writeFileSync(md, "# Acme\n\nA stone standing in the pond.\n");
+        const spot = await openSpot(rig, 300, 200);
+        const world = await b.ev(`(() => {
+          const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+          const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+          return { left: r.left, top: r.top, scale };
+        })()`);
+        const at = { x: (spot.x + 200 - world.left) / world.scale, y: (spot.y + 20 - world.top) / world.scale };
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme stone", "--at", `${Math.round(at.x)},${Math.round(at.y)}`, "--size", "90x70");
+        await until(b, `!!document.querySelector(".item")`, "the card to arrive");
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the pond to fall asleep before the walk", 6000);
+        const before = (await groundNow(b)).frames;
+        // The ground's own readback near a page point: the tallest ripple there.
+        const ripple = (x, y) => b.ev(`(() => {
+          const c = document.querySelector("canvas.ground-canvas"), r = c.getBoundingClientRect();
+          return c.groundProbe.near(${x} - r.left, ${y} - r.top, 24)?.count ?? null;
+        })()`);
+        const y = spot.y + 190;
+        const end = { x: spot.x + 10 + 30 * 6, y: y - 30 * 3 };
+        const flat = await ripple(end.x, end.y);
+        if (flat !== 0) throw new Error(`the water is not flat before anything touched it (${flat})`);
+
+        let awakeSeen = false;
+        let shot = null;
+        for (let i = 0; i <= 30; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: spot.x + 10 + i * 6, y: y - i * 3, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await groundNow(b)).state === "awake";
+          // A screenshot only when asked for ($GROUND_SHOTS), as orbit does.
+          if (i === 26 && process.env.GROUND_SHOTS) {
+            shot = path.join(process.env.GROUND_SHOTS, "pond.png");
+            writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          }
+        }
+        const stoppedAt = Date.now();
+        const crossed = await ripple(end.x, end.y);
+        const far = await ripple(end.x + 500, end.y + 420);
+        const moving = await groundNow(b);
+        if (!awakeSeen) throw new Error("the pond was not awake while the cursor walked over it");
+        if (!(moving.frames > before)) throw new Error(`no frames were drawn while the cursor moved (${before} → ${moving.frames})`);
+        if (!(crossed > 0.02)) throw new Error(`the water is flat (${crossed}) where the cursor just crossed it`);
+        if (!(far < crossed / 4)) throw new Error(`the water far from the cursor stands ${far}, against ${crossed} under it`);
+
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the pond to fall asleep after the cursor stopped", 6000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter > 3500) throw new Error(`the pond took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const asleep = (await groundNow(b)).frames;
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") {
+          throw new Error(`the pond drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        }
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, rippleBefore: flat, rippleAtCrossed: crossed, rippleFar: far, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot });
+      }
+      proof.reducedMotion = await stillUnderReducedMotion(rig, id, "pond");
+      return proof;
+    },
+  },
+  {
+    name: "zen-idle",
+    /** `idle-at-rest` on a Zen garden canvas (phases.md rule 1). */
+    what: "a Zen garden canvas nobody is touching settles and burns no CPU",
+    async run(rig) {
+      const id = await makeCanvas(rig, "A quiet garden");
+      await wearGround(rig, id, "zen-idle-journey", "zen");
+      if (await rig.b.ev(`!!document.querySelector("canvas.ground-canvas")`)) {
+        await until(rig.b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the garden to fall asleep", 6000);
+      }
+      const atRest = await mainThreadBusy(rig, 4);
+      const ground = await groundNow(rig.b);
+      if (atRest > IDLE_BOUND) {
+        throw new Error(`a Zen garden canvas with nobody touching it spent ${atRest}% of 4s working, past ${IDLE_BOUND}% (ground: ${JSON.stringify(ground)})`);
+      }
+      if (ground && ground.state !== "asleep") throw new Error(`the garden is ${ground.state} after 4s untouched`);
+      return { busy: atRest, ground };
+    },
+  },
+  {
+    name: "zen",
+    /**
+     * **Raked sand that softens only while somebody is there** (living
+     * grounds phase 4).
+     *
+     * The pointer walks across the sand: the ground is awake, and the
+     * garden's own rake memory — read back from its texture — is freshly
+     * raked where the pointer crossed and unraked far away. It stops: asleep
+     * within 3.5 s, then not one more frame — and the line is still there, no
+     * softer 1.5 s later, because softening is not a reason to stay awake.
+     * Then the pointer moves elsewhere for a few seconds: the first line has
+     * softened by that awake time and no more. Under reduced motion it is the
+     * still, with no WebGL canvas and no living chunk fetched.
+     */
+    what: "the pointer rakes lines that hold while the garden sleeps (within 3.5 s) and soften only with awake time; still under reduced motion",
+    async run(rig) {
+      const { b } = rig;
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+      const id = await makeCanvas(rig, "Acme garden");
+      const session = "zen-journey";
+      await wearGround(rig, id, session, "zen");
+      const proof = {};
+      const gl2 = await hasWebGL2(b);
+      proof.webgl2 = gl2;
+      if (gl2) {
+        await until(b, `!!document.querySelector("canvas.ground-canvas")?.groundProbe`, "the living ground to start", 10_000);
+        const first = await groundNow(b);
+        if (first.still) throw new Error(`the garden fell back to its still with WebGL2 available: ${first.still}`);
+        const md = path.join(rig.home, "acme-zen.md");
+        writeFileSync(md, "# Acme\n\nA stone standing in the sand.\n");
+        const spot = await openSpot(rig, 300, 200);
+        const world = await b.ev(`(() => {
+          const w = document.querySelector(".world"), r = w.getBoundingClientRect();
+          const v = document.querySelector(".canvas-viewport").getBoundingClientRect();
+          const scale = parseFloat(getComputedStyle(w).getPropertyValue("--scale")) || 1;
+          return { left: r.left, top: r.top, scale, right: v.right, bottom: v.bottom };
+        })()`);
+        const at = { x: (spot.x + 200 - world.left) / world.scale, y: (spot.y + 20 - world.top) / world.scale };
+        journeyCli(rig, session, "--canvas", id, "add", md, "--title", "Acme stone", "--at", `${Math.round(at.x)},${Math.round(at.y)}`, "--size", "90x70");
+        await until(b, `!!document.querySelector(".item")`, "the card to arrive");
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the garden to fall asleep before the walk", 6000);
+        const before = (await groundNow(b)).frames;
+        // The ground's own readback near a page point: how raked (1 fresh → 0).
+        const raked = (x, y) => b.ev(`(() => {
+          const c = document.querySelector("canvas.ground-canvas"), r = c.getBoundingClientRect();
+          return c.groundProbe.near(${x} - r.left, ${y} - r.top, 6)?.count ?? null;
+        })()`);
+        const y = spot.y + 190;
+        const mid = { x: spot.x + 10 + 20 * 6, y: y - 20 * 3 };
+        const unraked = await raked(mid.x, mid.y);
+        if (unraked !== 0) throw new Error(`the sand is raked before anything touched it (${unraked})`);
+
+        let awakeSeen = false;
+        let shot = null;
+        for (let i = 0; i <= 30; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: spot.x + 10 + i * 6, y: y - i * 3, button: "none", buttons: 0 });
+          await sleep(30);
+          if (i === 15) awakeSeen = (await groundNow(b)).state === "awake";
+          // A screenshot only when asked for ($GROUND_SHOTS), as orbit does.
+          if (i === 26 && process.env.GROUND_SHOTS) {
+            shot = path.join(process.env.GROUND_SHOTS, "zen.png");
+            writeFileSync(shot, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          }
+        }
+        const stoppedAt = Date.now();
+        const crossed = await raked(mid.x, mid.y);
+        const far = { x: world.right - 220, y: world.bottom - 160 };
+        const farRaked = await raked(far.x, far.y);
+        const moving = await groundNow(b);
+        if (!awakeSeen) throw new Error("the garden was not awake while the cursor walked over it");
+        if (!(moving.frames > before)) throw new Error(`no frames were drawn while the cursor moved (${before} → ${moving.frames})`);
+        if (!(crossed > 0.8)) throw new Error(`the sand is raked ${crossed} where the cursor just crossed it`);
+        if (farRaked !== 0) throw new Error(`the sand is raked ${farRaked} far from anywhere the cursor went`);
+
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the garden to fall asleep after the cursor stopped", 6000);
+        const sleptAfter = Date.now() - stoppedAt;
+        if (sleptAfter > 3500) throw new Error(`the garden took ${sleptAfter}ms to fall asleep — the bound is 3500`);
+        const asleep = (await groundNow(b)).frames;
+        const held = await raked(mid.x, mid.y);
+        await sleep(1500);
+        const later = await groundNow(b);
+        if (later.frames !== asleep || later.state !== "asleep") {
+          throw new Error(`the garden drew ${later.frames - asleep} frames while asleep (state ${later.state})`);
+        }
+        const heldLater = await raked(mid.x, mid.y);
+        if (!(held > 0.8)) throw new Error(`asleep ${sleptAfter}ms after the walk, the line has already softened to ${held}`);
+        if (heldLater !== held) throw new Error(`the line softened while the garden slept (${held} → ${heldLater})`);
+
+        // Awake time elsewhere: about 3 s of it softens the line by about 3/20.
+        for (let i = 0; i < 100; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: far.x + (i % 2) * 8, y: far.y + ((i >> 1) % 2) * 8, button: "none", buttons: 0 });
+          await sleep(30);
+        }
+        await until(b, `document.querySelector("canvas.ground-canvas")?.dataset.groundState === "asleep"`, "the garden to fall asleep after the second walk", 6000);
+        const softened = await raked(mid.x, mid.y);
+        if (!(softened < held - 0.08 && softened > held - 0.4)) throw new Error(`after about 3 s awake elsewhere the line went ${held} → ${softened}; about ${(held - 0.17).toFixed(2)} was expected`);
+        Object.assign(proof, { awake: awakeSeen, frames: moving.frames - before, rakedBefore: unraked, rakedAtCrossed: crossed, rakedFar: farRaked, sleptAfterMs: sleptAfter, framesAsleep: 0, heldAsleep: heldLater, afterAwakeElsewhere: softened, screenshot: shot });
+      }
+      proof.reducedMotion = await stillUnderReducedMotion(rig, id, "zen");
+      return proof;
     },
   },
   {

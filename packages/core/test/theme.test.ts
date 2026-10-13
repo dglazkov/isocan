@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   CURSORS,
   CURSOR_PROP,
+  LIVING,
+  isLiving,
   canvasCursorName,
   cursorLabel,
   cursorOf,
@@ -126,8 +128,16 @@ describe("the cursor a ground gives everybody", () => {
        PATHS moved to `web/src/lib/cursorart.ts` on 9 Sep — a cursor is only
        fetched when a ground is worn — so what they look like is asserted
        there, and what a ground CHOOSES is asserted here. */
-    const worn = new Set(THEMES.map((t) => themeCursorName(t)));
-    expect(worn.size, "no two grounds share a cursor").toBe(THEMES.length);
+    /* Phase 4 (10 Oct 2026) amends it, on purpose and by name: a new cursor
+       is entry bytes the ceiling cannot hold, so these grounds borrow one, and
+       each says from whom. Any other pair sharing a pointer still fails. */
+    const borrows: Partial<Record<string, string>> = { snow: "galaxy", aurora: "desert", pond: "ocean", zen: "desert" };
+    for (const [ground, from] of Object.entries(borrows)) {
+      expect(themeCursorName(ground as (typeof THEMES)[number]), `${ground} borrows ${from}'s cursor`).toBe(themeCursorName(from as (typeof THEMES)[number]));
+    }
+    const own = THEMES.filter((t) => !(t in borrows));
+    const worn = new Set(own.map((t) => themeCursorName(t)));
+    expect(worn.size, "no two grounds share a cursor").toBe(own.length);
     for (const theme of THEMES) {
       expect(themeCursorName(theme), `${theme} is not the plain arrow`).not.toBe("arrow");
       expect(CURSORS, `${theme} names a shape this build can draw`).toContain(themeCursorName(theme));
@@ -303,5 +313,52 @@ describe("the pointer a canvas wears", () => {
        holds the silhouettes. */
     for (const c of CURSORS) expect(cursorLabel(c)).toMatch(/^[A-Z]/);
     expect(new Set(CURSORS.map(cursorLabel)).size, "no two cursors share a word").toBe(CURSORS.length);
+  });
+});
+
+/**
+ * **A living ground is a name like any other** (living grounds phase 1).
+ *
+ * The motion is the web app's business and loads only where a living ground
+ * is worn; what core owns is the vocabulary — which names exist, which of them
+ * move, and the cursor each one wears — so both surfaces agree on all three.
+ */
+describe("the grounds that move", () => {
+  it("knows meadow, and knows it moves", () => {
+    expect(isTheme("meadow")).toBe(true);
+    expect(isLiving("meadow")).toBe(true);
+    expect(themeLabel("meadow")).toBe("Meadow");
+    expect(themeCursorName("meadow")).toBe("ladybird");
+    expect(isLiving("night")).toBe(true);
+    expect(themeLabel("night")).toBe("Night");
+    expect(themeCursorName("night")).toBe("firefly");
+    expect(isLiving("pond")).toBe(true);
+    expect(themeLabel("pond")).toBe("Pond");
+    expect(themeCursorName("pond")).toBe("fish");
+    expect(isLiving("zen")).toBe(true);
+    expect(themeLabel("zen")).toBe("Zen garden");
+    expect(themeCursorName("zen")).toBe("crescent");
+  });
+
+  it("knows galaxy moves now — Orbit is how it is drawn, under the same id, label and cursor", () => {
+    expect(isLiving("galaxy")).toBe(true);
+    expect(themeLabel("galaxy")).toBe("Space Galaxy");
+    expect(themeCursorName("galaxy")).toBe("sparkle");
+  });
+
+  it("says the painted grounds do not move, and nothing is living by default", () => {
+    for (const theme of THEMES) expect(isLiving(theme)).toBe((LIVING as readonly string[]).includes(theme));
+    expect(isLiving("farm")).toBe(false);
+    expect(isLiving(null)).toBe(false);
+  });
+
+  it("names only grounds this build can stand a canvas on", () => {
+    for (const name of LIVING) expect(THEMES as readonly string[]).toContain(name);
+  });
+
+  it("is worn through the same patch as every ground — one op, one undo", () => {
+    expect(themePatch("meadow")).toEqual({ properties: { [THEME_PROP]: "meadow" }, removeProperties: [GROUND_PROP] });
+    expect(themeOf({ properties: { [THEME_PROP]: "meadow" } })).toBe("meadow");
+    expect(groundIsPlace({ properties: { [THEME_PROP]: "meadow" } })).toBe(true);
   });
 });

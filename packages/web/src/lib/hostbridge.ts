@@ -20,7 +20,7 @@ interface BridgedItem {
 }
 
 /**
- * **The host bridge** (`docs/projects/jetski/design.md`): a canvas framed by
+ * **The host bridge** (`docs/projects/antigravity/design.md`): a canvas framed by
  * an agent manager's pane tells the pane what is selected, so the
  * conversation beside it can be about those items, and lets the pane (and the
  * CLI behind it) drive the framed view — pointing at or zooming to items,

@@ -160,6 +160,31 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   that posts `{ type: "isocan:anchor", anchor }` as it changes screen opens its
   next version at that fragment, so an agent's edit does not send the person
   back to the first screen.
+- **Grounds**: a canvas can stand on Space Galaxy, Ocean, Mountains,
+  Farmland, Desert, Meadow, Night, Snow, Aurora, Pond, Zen garden or a picture of your own (Background in the canvas
+  menu, or `isocan canvas background <name>`), and the ground names everyone's
+  cursor. Meadow is living: grass that parts under every cursor on the canvas
+  (yours, other people's and agents') and springs back,
+  drawn by a lazy WebGL2 layer that sleeps when nothing moves, and a painted
+  still of the same field under reduced motion or without WebGL2. Night is
+  living too: every cursor is a firefly that wakes more out of dark grass,
+  and cards near one catch a warm glow. Space Galaxy is living as well, drawn
+  as Orbit: its stars curve toward every cursor, a held button pushes them
+  away, a resting pointer keeps a slow eddy turning for ~15 s, and its still
+  is the same sky at rest. Snow is a fresh field every cursor treads a trail
+  into; the trail outlives the moment and fills back in only while the ground
+  is awake, flakes swirl round a fast cursor, and items sit in soft drifts.
+  Aurora is ribbons of light over a dark land that lean and brighten toward
+  every cursor, and a card under a lit ribbon catches a faint cool light.
+  Pond is still water seen from above: every cursor drags ripples that break
+  round the items, and a few koi drift and dart away from it. Zen garden is
+  raked sand: every cursor rakes parallel lines along its path, which soften
+  back over about 20 s of the ground being awake, and items sit like stones
+  in raked rings.
+  Motion is each viewer's own (Background ▸ Motion, kept in the browser):
+  Full, Calm (grounds answer cursors but never move on their own, and an
+  untouched one draws nothing) or Still (the painted still, no WebGL);
+  reduced motion always gives Still. The menu shows each ground's picture.
 - **Inherited Recent work**: Context shows recent activity beside a linked
   canvas's design and pins, with its source and covered range. CLI
   `isocan context` and MCP summaries show the same bounded reading and say
@@ -1445,14 +1470,14 @@ five minutes away, *stepped away* on a deliberate stop. Off by default. The
 lines are records, so they summon nobody, and no agent answers another's
 hello.
 
-### Jetski plugin and model-pinned agents
+### Antigravity plugin and model-pinned agents
 
-[`plugins/jetski/`](plugins/jetski/) is isocan as a Jetski plugin: the canvas
-your workspace is bound to, in a pane beside the Jetski chat. Every part of it
+[`plugins/antigravity/`](plugins/antigravity/) is isocan as an Antigravity plugin: the canvas
+your workspace is bound to, in a pane beside the Antigravity chat. Every part of it
 is an `isocan` command, so the plugin can do nothing the CLI cannot. The
-`#release` install carries it alongside the CLI: `isocan setup --jetski` (or
-`node scripts/install-jetski-plugin.mjs` in a checkout) links it into
-`~/.gemini/config/plugins/isocan`. Restart Jetski after installing: it reads
+`#release` install carries it alongside the CLI: `isocan setup --antigravity` (or
+`node scripts/install-antigravity-plugin.mjs` in a checkout) links it into
+`~/.gemini/config/plugins/isocan`. Restart Antigravity after installing: it reads
 a plugin's hooks once, when the plugin loads.
 
 - **A canvas without its own Chat (`isocan embed`)**: the embed address opens
@@ -1465,7 +1490,7 @@ a plugin's hooks once, when the plugin loads.
 - **The pane** (`sidecars/canvas/`) opens the canvas that the workspace's
   `.isocan/project.json` names. An unbound folder can be bound to an existing
   canvas (by id, link or title) or to a new one. Selected items show as chips,
-  and **Ask** hands your question, with the item ids, to the Jetski
+  and **Ask** hands your question, with the item ids, to the Antigravity
   conversation. **Open ↗** opens the same canvas in a tab, with its Chat.
 - **Skills on both sides**: type `/` in the pane's box and the canvas's own
   skills drop down (`isocan command ls`, built in and added with `/skill
@@ -1476,16 +1501,16 @@ a plugin's hooks once, when the plugin loads.
   repo*, *Put what we did here on the canvas*, the design skills, and *Answer
   N open questions*.
 - **The canvas can reach the conversation**: while the pane runs, a mention
-  of a Jetski conversation on the canvas (or a reply in its thread) is
+  of an Antigravity conversation on the canvas (or a reply in its thread) is
   relayed into that conversation, which answers on the canvas.
-  `ISOCAN_JETSKI_RELAY=off` turns this off. **Asks N** in the header lists
-  the questions agents left for you. **Fan out** asks Jetski's `flash`,
+  `ISOCAN_ANTIGRAVITY_RELAY=off` turns this off. **Asks N** in the header lists
+  the questions agents left for you. **Fan out** asks Antigravity's `flash`,
   `pro` or `flash_lite` tiers the same thing in new conversations that join
   the canvas under their own names. 💬 beside a face opens that conversation.
 - **Arriving**: a SessionStart hook runs when a conversation starts in a
   bound workspace. It names the conversation (`isocan identity --session`,
   keyed to that conversation) and starts its session, so what it writes is
-  attributed to it rather than to you. With `ISOCAN_JETSKI_JOIN=off` the
+  attributed to it rather than to you. With `ISOCAN_ANTIGRAVITY_JOIN=off` the
   conversation still gets the note, but nothing joins.
 - **Model-pinned agents (`--model <id>`)**: `isocan agent add`,
   `isocan rc add` and `isocan bench add` take a model id, spelled the way its
@@ -1500,5 +1525,5 @@ a plugin's hooks once, when the plugin loads.
   They answer @mentions while your `isocan rc` runs.
 
 A canvas on this machine's own daemon (`http://127.0.0.1:…`) can only be
-framed by a browser on this machine. To use Jetski Web from anywhere else,
+framed by a browser on this machine. To use Antigravity Web from anywhere else,
 bind the folder to a canvas on a shared home such as isocan.io.

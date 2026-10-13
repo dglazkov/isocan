@@ -1,6 +1,7 @@
-import { Suspense, lazy } from "react";
-import { anchorOf, groundOf, themeOf } from "@isocan/core";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { anchorOf, groundOf, isLiving, themeOf } from "@isocan/core";
 import { useCanvasStore } from "../stores/canvasStore.ts";
+import { groundMode } from "../lib/groundmode.ts";
 
 /**
  * **The ground a canvas stands on** (#195).
@@ -22,10 +23,10 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
  * The painted themes #195 named — farm, mountains, ocean — arrived on 8 Sep
  * 2026, along with a desert nobody had asked for. Galaxy was generated first
  * because it proved the layer, the world-space alignment and the chunking
- * without waiting on artwork, and it is generated STILL because the space
- * tile that came back has a seam. A ground is now a file, not a component.
+ * without waiting on artwork; since living grounds phase 3 (9 Oct 2026) it is
+ * Orbit, a living ground, and its still is a tile rendered from Orbit's own
+ * shader, which cannot have a seam. A ground is now a file, not a component.
  */
-const Galaxy = lazy(() => import("./themes/Galaxy.tsx").then((m) => ({ default: m.Galaxy })));
 /**
  * **One chunk for every painted ground**, where there was one per procedural
  * theme. The art is not in the chunk — each tile is a file in `public/grounds/`
@@ -38,9 +39,35 @@ const Painted = lazy(() =>
 const CustomGround = lazy(() =>
   import("./themes/CustomGround.tsx").then((m) => ({ default: m.CustomGround })),
 );
+/**
+ * **A ground that moves** (living grounds phase 1): the WebGL host, its input
+ * field and its sleep policy, in a chunk of their own — and each ground's
+ * shaders in a chunk below that. Fetched only for a living theme with motion
+ * allowed; under reduced motion the same ground is its painted still frame,
+ * drawn by `Painted` like any other picture, and none of this is downloaded.
+ */
+const Living = lazy(() =>
+  import("./themes/LivingGround.tsx").then((m) => ({ default: m.LivingGround })),
+);
+
+/** `prefers-reduced-motion: reduce`, live — a viewer who turns it on mid-
+ *  session gets the still frame without a reload. */
+function useReducedMotion(): boolean {
+  const query = "(prefers-reduced-motion: reduce)";
+  const [reduced, setReduced] = useState(() => !!window.matchMedia?.(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = () => setReduced(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return reduced;
+}
 
 export function CanvasThemeLayer() {
   const project = useCanvasStore((s) => s.record);
+  const reducedMotion = useReducedMotion();
   const theme = project ? themeOf(project) : null;
   const anchor = project ? anchorOf(project) : "world";
   /**
@@ -60,16 +87,24 @@ export function CanvasThemeLayer() {
   }
   if (theme === null) return null;
   /**
-   * **Generated, or painted.** Galaxy is the only ground still drawn in code,
-   * and it is not a leftover: the painted space tile has a visible seam and an
-   * infinite canvas finds a seam within one pan, while a generated sky cannot
-   * have one. Everything else is a picture, and one component draws all of
-   * them — the switch that used to be here grew a line per theme, which is the
-   * shape that made "farm waits for artwork" a code change rather than a file.
+   * **Living, or painted.** Every ground is a picture or a living ground with
+   * a picture for its still, and one component draws all the pictures — the
+   * switch that used to be here grew a line per theme, which is the shape
+   * that made "farm waits for artwork" a code change rather than a file.
    */
-  return (
-    <Suspense fallback={null}>
-      {theme === "galaxy" ? <Galaxy anchor={anchor} /> : <Painted theme={theme} anchor={anchor} />}
-    </Suspense>
-  );
+  /**
+   * **Living, or its still.** A living ground's still frame is a painted tile
+   * like the four above, so "still" is not a second drawing path: it is
+   * `Painted`, handed to the living layer to fall back on (no WebGL2, a failed
+   * compile, a context lost twice) and drawn directly under reduced motion.
+   */
+  const painted = <Painted theme={theme} anchor={anchor} />;
+  if (isLiving(theme) && groundMode({ reducedMotion, webgl2: null, compiled: null, losses: 0 }) === "living") {
+    return (
+      <Suspense fallback={null}>
+        <Living theme={theme} anchor={anchor} still={painted} />
+      </Suspense>
+    );
+  }
+  return <Suspense fallback={null}>{painted}</Suspense>;
 }

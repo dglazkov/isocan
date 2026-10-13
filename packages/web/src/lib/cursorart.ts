@@ -88,4 +88,24 @@ export const CURSOR_ART: Record<CanvasCursor, string> = {
    */
   cricket:
     "M1.5 0.5 L1.0 1.4 L5.1 6.9 L4.7 9.2 L10.7 17.3 L11.4 17.5 L12.4 17.3 L13.6 16.6 L14.6 15.7 L15.1 14.7 L15.0 14.0 L9.0 6.0 L6.6 5.7 L2.5 0.2 Z M17.6 3.6 A2 2 0 1 1 13.6 3.6 A2 2 0 1 1 17.6 3.6 Z",
+  /**
+   * **A ladybird, for the Meadow** (living grounds, 9 Oct 2026): something
+   * small walking on the grass. The head is a wedge at the hotspot — the
+   * sheep's lesson, that a round body needs a front of its own to point — and
+   * the round shell behind it carries three spots that are HOLES, wound the
+   * other way, because a cursor brings no colour: the ground shows through
+   * them, which is what spots on a shell look like from above.
+   */
+  ladybird:
+    "M1.5 0.5 L7.4 4.4 L4.4 7.4 Z M17.5 10.5 A7 7 0 1 1 3.5 10.5 A7 7 0 1 1 17.5 10.5 Z M10.1 12.6 A1.6 1.6 0 1 0 6.9 12.6 A1.6 1.6 0 1 0 10.1 12.6 Z M14.1 8.6 A1.6 1.6 0 1 0 10.9 8.6 A1.6 1.6 0 1 0 14.1 8.6 Z M15.4 14.2 A1.3 1.3 0 1 0 12.8 14.2 A1.3 1.3 0 1 0 15.4 14.2 Z",
+  /**
+   * **A firefly, for Night** (living grounds phase 3, 9 Oct 2026). The
+   * ladybird's wedge head at the hotspot, a long body down the diagonal the
+   * pointer points along, and two wings off its shoulders. The lantern at the
+   * tail is a HOLE, wound the other way: a cursor brings no colour, so the
+   * glow is the ground's — Night draws a warm light under every cursor at
+   * exactly that spot (`LANTERN` in `night.ts`), and it shows through.
+   */
+  firefly:
+    "M1.5 0.5 L7.2 4.1 L4.1 7.2 Z M5 5 A8.77 4.2 45 1 1 17.4 17.4 A8.77 4.2 45 1 1 5 5 Z M7.58 5.95 A5.2 2.2 15 1 1 17.62 8.65 A5.2 2.2 15 1 1 7.58 5.95 Z M5.95 7.58 A5.2 2.2 75 1 1 8.65 17.62 A5.2 2.2 75 1 1 5.95 7.58 Z M16.5 14.2 A2.3 2.3 0 1 0 11.9 14.2 A2.3 2.3 0 1 0 16.5 14.2 Z",
 };

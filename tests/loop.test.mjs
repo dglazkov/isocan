@@ -15,6 +15,7 @@ test('docs/LOOP.md is current, and no finding is broken', () => {
 });
 
 test('docs/LOOP.md says it is generated, and where to edit instead', () => {
+  if (settings(ROOT).planningSource !== 'files') return; // archival page, inactive under milestones
   const page = join(ROOT, 'docs', 'LOOP.md');
   if (!existsSync(page)) return; // nothing pulled yet
   assert.ok(readFileSync(page, 'utf8').startsWith(LOOP_DOC_HEADER));

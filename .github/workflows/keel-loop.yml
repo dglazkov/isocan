@@ -148,6 +148,7 @@ jobs:
 
       # A pull that cannot reach Loop fails here, loudly.
       - name: Pull Loop's insights
+        id: insights
         if: steps.configured.outputs.ready == 'true'
         run: node scripts/loop.mjs pull
 
@@ -226,8 +227,9 @@ jobs:
             node scripts/keel/drain.mjs keel-loop/ --yes
           fi
 
-      - name: Verdict
-        if: always() && steps.configured.outputs.ready == 'true'
+      - name: Validation verdict
+        id: validation
+        if: always() && steps.insights.outcome == 'success'
         env:
           GATE: ${{ steps.gate.outputs.gate }}
         run: |
@@ -235,3 +237,21 @@ jobs:
             echo "::error::The gate did not pass on the pulled findings (gate: ${GATE:-not run}); the PR is left for a person."
             exit 1
           fi
+
+      # Keep collection and validation independent in the run summary. A pull
+      # can succeed while the build fails; neither implies accepted findings.
+      - name: Collection and validation summary
+        if: always()
+        env:
+          COLLECTION: ${{ steps.insights.outcome }}
+          VALIDATION: ${{ steps.gate.outputs.gate }}
+        run: |
+          {
+            echo '## Loop: collection and validation'
+            echo '| Stage | Result |'
+            echo '| --- | --- |'
+            echo "| Getting insights | ${COLLECTION:-not run} |"
+            echo "| Project validation | ${VALIDATION:-not run} |"
+            echo ''
+            echo 'Collection retries only recognized transient read failures, at most twice. Validation is never retried automatically. A fetched finding is not an accepted or verified fix.'
+          } >> "$GITHUB_STEP_SUMMARY"

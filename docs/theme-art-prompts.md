@@ -15,7 +15,7 @@ which is the argument for keeping them at the bottom of this file.
 | `mountains` | **Ships.** #2f2e28, matching the `rock` target almost exactly. It has the one recognisable landmark in the set — a radial massif — so its tile is sized at 2,200 world units to put the repeat off a working viewport. |
 | `ocean` | **Ships.** Chosen over `ocean2`, which tiles perfectly but reads as a woven lattice: the X-crossings sit on a findable grid. This one reads as sea. |
 | `dessert` | **Ships as `desert`.** Tiles cleanly. It is the one ground that fails the white-card check — #ab703b, where a green pen stroke reads 1.06:1 — and it ships bare anyway, on Dion's call, because a person who picks Desert has chosen a bright ground. |
-| `space` | **Rejected: it does not tile.** Laid 2×2 there is a visible brightness step down the join — edge gap 8 against an interior control of 0. An infinite canvas finds a seam within one pan. `Galaxy.tsx` keeps its generated starfield, which cannot have one. |
+| `space` | **Rejected: it does not tile.** Laid 2×2 there is a visible brightness step down the join — edge gap 8 against an interior control of 0. An infinite canvas finds a seam within one pan. Galaxy kept a generated starfield, which cannot have one — since 9 Oct 2026 it is Orbit (living grounds), and its still is rendered from Orbit's shader, seamless by construction. |
 | `ocean2` | Not shipped. See `ocean` above. |
 | `mountains2` | Not shipped. It tiles better — strong diagonal banding, no landmark — but at #5d5954 it is the second-brightest tile and reads as a pattern rather than terrain. A swap is one line in `PAINTED`. |
 

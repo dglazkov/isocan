@@ -460,7 +460,7 @@ describe("a turn in a named agent (phase 3)", () => {
     expect(inside.stdout).toContain("Percy");
   }, 30_000);
 
-  it("a model pinned at enrolment rides the row into the adapter, and an unpinned one gets no template (jetski phase 1)", async () => {
+  it("a model pinned at enrolment rides the row into the adapter, and an unpinned one gets no template (antigravity phase 1)", async () => {
     await fs.writeFile(
       path.join(home, "config.json"),
       JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { fake: [process.execPath, fakeAcp, "--model", "{model}"] } }),
