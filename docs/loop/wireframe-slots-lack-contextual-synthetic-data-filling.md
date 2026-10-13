@@ -3,7 +3,7 @@ title: Wireframe slots lack contextual synthetic data filling
 loop:
   - f28a8a75-fc38-4a53-8215-1efd2fa17fcf
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

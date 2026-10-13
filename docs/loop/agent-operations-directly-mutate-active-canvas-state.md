@@ -3,7 +3,7 @@ title: Agent operations directly mutate active canvas state
 loop:
   - afa49f92-4d47-43e7-a9b9-c8c1a6991c60
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: What canvas tools teach us
 decision: declined
 rank: never

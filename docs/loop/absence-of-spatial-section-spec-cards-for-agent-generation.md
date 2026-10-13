@@ -3,7 +3,7 @@ title: Absence of spatial section spec cards for agent generation
 loop:
   - 09cbb138-20fb-4c5e-8532-fdced2200713
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

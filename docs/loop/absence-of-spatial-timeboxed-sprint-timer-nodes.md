@@ -3,7 +3,7 @@ title: Absence of spatial timeboxed sprint timer nodes
 loop:
   - 75c704b3-a75f-4ec7-a011-ad3334268881
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

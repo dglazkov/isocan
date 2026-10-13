@@ -3,7 +3,7 @@ title: Absence of canvas brand media asset libraries
 loop:
   - 154d9797-8789-4f47-ad98-7ca8d5d53470
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: declined
 rank: never
