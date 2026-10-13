@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * **Install the Jetski plugin from a checkout** (`docs/projects/jetski/phases.md`,
+ * **Install the Antigravity plugin from a checkout** (`docs/projects/antigravity/phases.md`,
  * phase 2).
  *
- * The logic lives in `packages/cli/src/jetski-plugin.ts` and ships inside the
- * CLI as `isocan setup --jetski`, so an `npm i -g github:dglazkov/isocan#release`
+ * The logic lives in `packages/cli/src/antigravity-plugin.ts` and ships inside the
+ * CLI as `isocan setup --antigravity`, so an `npm i -g github:dglazkov/isocan#release`
  * install needs no clone of this repository. This script is the checkout
  * doorway to the same functions.
  */
@@ -17,8 +17,8 @@ import { register } from "tsx/esm/api";
 register();
 registerLoader("../packages/cli/bin/workspace-loader.mjs", import.meta.url);
 
-const { defaultTarget, installJetskiPlugin, uninstallJetskiPlugin } = await import("../packages/cli/src/jetski-plugin.ts");
-export { defaultTarget, installJetskiPlugin, uninstallJetskiPlugin };
+const { defaultTarget, installAntigravityPlugin, uninstallAntigravityPlugin } = await import("../packages/cli/src/antigravity-plugin.ts");
+export { defaultTarget, installAntigravityPlugin, uninstallAntigravityPlugin };
 
 const invoked = (() => {
   try {
@@ -38,14 +38,14 @@ if (invoked) {
   try {
     const options = target ? { target: path.resolve(target) } : {};
     if (args.includes("--uninstall")) {
-      console.log(uninstallJetskiPlugin(options));
+      console.log(uninstallAntigravityPlugin(options));
     } else {
-      const said = installJetskiPlugin({ ...options, force: args.includes("--force") });
+      const said = installAntigravityPlugin({ ...options, force: args.includes("--force") });
       console.log(said);
       console.log(
         said.startsWith("already installed")
-          ? "Nothing to do. If hooks.json changed since Jetski started, restart Jetski: it reads that file once, at load."
-          : "Restart Jetski to load it — and again after any change to hooks.json, which Jetski reads once, at load.",
+          ? "Nothing to do. If hooks.json changed since Antigravity started, restart Antigravity: it reads that file once, at load."
+          : "Restart Antigravity to load it — and again after any change to hooks.json, which Antigravity reads once, at load.",
       );
     }
   } catch (err) {

@@ -8,17 +8,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { harnessVars, harnessVarsFor } from "../packages/api/src/harness.ts";
 import { findBinding as daemonFindBinding } from "../packages/server/src/binding.ts";
 // @ts-expect-error — the plugin is plain .mjs with no types, on purpose (see below).
-import { agentEnv, findBinding, personEnv, resolveCli, workspacePaths } from "../plugins/jetski/lib/workspace.mjs";
+import { agentEnv, findBinding, personEnv, resolveCli, workspacePaths } from "../plugins/antigravity/lib/workspace.mjs";
 // @ts-expect-error — as above.
-import { claimedName, sessionStart } from "../plugins/jetski/scripts/session-start.mjs";
+import { claimedName, sessionStart } from "../plugins/antigravity/scripts/session-start.mjs";
 // @ts-expect-error — as above.
-import { canvasRef, createPane, createServer, hostRoutes, isLoopback, loadPresets, tabAddress } from "../plugins/jetski/sidecars/canvas/main.mjs";
-import { defaultTarget, installJetskiPlugin, uninstallJetskiPlugin } from "../packages/cli/src/jetski-plugin.ts";
+import { canvasRef, createPane, createServer, hostRoutes, isLoopback, loadPresets, tabAddress } from "../plugins/antigravity/sidecars/canvas/main.mjs";
+import { defaultTarget, installAntigravityPlugin, uninstallAntigravityPlugin } from "../packages/cli/src/antigravity-plugin.ts";
 
 /**
- * **The Jetski plugin** (`docs/projects/jetski/`, phases 2 and 3).
+ * **The Antigravity plugin** (`docs/projects/antigravity/`, phases 2 and 3).
  *
- * The plugin is plain ESM under `plugins/jetski/` — it runs under whatever
+ * The plugin is plain ESM under `plugins/antigravity/` — it runs under whatever
  * Node the host provides, from a directory that is usually a symlink into
  * this repo, so it cannot import the TypeScript it mirrors. This file is
  * where the mirror is held to the original: the marker walk against the
@@ -29,12 +29,12 @@ import { defaultTarget, installJetskiPlugin, uninstallJetskiPlugin } from "../pa
  */
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
-const plugin = path.join(repo, "plugins", "jetski");
+const plugin = path.join(repo, "plugins", "antigravity");
 const PILL = "[Isocan Canvas](sidecar://isocan/canvas/)";
 
 let tmp = "";
 beforeAll(() => {
-  tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "acme-jetski-")));
+  tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "acme-antigravity-")));
 });
 afterAll(() => {
   if (tmp) fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -156,7 +156,7 @@ describe("the plugin reads a folder's canvas exactly as the daemon does", () => 
 describe("the plugin's environments", () => {
   it("takes only absolute folders from the host, and never guesses at the rest", () => {
     const d = dir("acme-folder");
-    expect(workspacePaths([pathToFileURL(d).href, ` ${d} `, "plugins/jetski", "https://acme.example/x", "vscode-remote://acme/x", "", 3])).toEqual([d, d]);
+    expect(workspacePaths([pathToFileURL(d).href, ` ${d} `, "plugins/antigravity", "https://acme.example/x", "vscode-remote://acme/x", "", 3])).toEqual([d, d]);
     expect(workspacePaths(undefined)).toEqual([]);
     expect(workspacePaths("/acme")).toEqual([]);
   });
@@ -230,7 +230,7 @@ describe("SessionStart: a conversation in a bound folder arrives on its canvas",
       expect(call.env).not.toHaveProperty("CLAUDE_CODE_SESSION_ID");
       expect(call.env).not.toHaveProperty("ISOCAN_CANVAS");
     }
-    // Jetski parses the output strictly: one key, one step, one field.
+    // Antigravity parses the output strictly: one key, one step, one field.
     expect(Object.keys(out)).toEqual(["injectSteps"]);
     expect(out.injectSteps).toHaveLength(1);
     expect(Object.keys(out.injectSteps[0])).toEqual(["ephemeralMessage"]);
@@ -249,7 +249,7 @@ describe("SessionStart: a conversation in a bound folder arrives on its canvas",
     // The hook's cwd is this plugin's directory, and this test's is the repo:
     // both bound. Neither an absent folder nor a relative one may reach them.
     expect(await sessionStart({ conversationId: "conv-acme" }, { env, run })).toBeNull();
-    expect(await sessionStart({ conversationId: "conv-acme", workspacePaths: ["plugins/jetski", "."] }, { env, run })).toBeNull();
+    expect(await sessionStart({ conversationId: "conv-acme", workspacePaths: ["plugins/antigravity", "."] }, { env, run })).toBeNull();
     expect(calls).toEqual([]);
   });
 
@@ -262,15 +262,15 @@ describe("SessionStart: a conversation in a bound folder arrives on its canvas",
 
   it("keeps the message and skips the joining when switched off, or when the conversation is unnamed", async () => {
     const { run, calls } = fakeRun({ "identity --session": SAVED });
-    const off = await sessionStart({ conversationId: "conv-acme", workspacePaths: [acme] }, { env: { ...env, ISOCAN_JETSKI_JOIN: "off" }, run });
-    expect(off.injectSteps[0].ephemeralMessage).toContain("switched off here (ISOCAN_JETSKI_JOIN=off)");
+    const off = await sessionStart({ conversationId: "conv-acme", workspacePaths: [acme] }, { env: { ...env, ISOCAN_ANTIGRAVITY_JOIN: "off" }, run });
+    expect(off.injectSteps[0].ephemeralMessage).toContain("switched off here (ISOCAN_ANTIGRAVITY_JOIN=off)");
     expect(off.injectSteps[0].ephemeralMessage).toContain(PILL);
 
     const unnamed = await sessionStart({ workspacePaths: [acme] }, { env, run });
     expect(unnamed.injectSteps[0].ephemeralMessage).toContain("did not say which conversation this is");
     expect(calls).toEqual([]);
 
-    // The session variable Jetski exports is the fallback for the id.
+    // The session variable Antigravity exports is the fallback for the id.
     await sessionStart({ workspacePaths: [acme] }, { env: { ...env, ANTIGRAVITY_CONVERSATION_ID: "conv-fromenv" }, run });
     expect(calls.map((c) => c.env["ANTIGRAVITY_CONVERSATION_ID"])).toEqual(["conv-fromenv", "conv-fromenv"]);
   });
@@ -399,7 +399,7 @@ describe("the canvas pane's routes", () => {
 
     const broken = path.join(dir("presets"), "presets.json");
     fs.writeFileSync(broken, JSON.stringify({ presets: 3 }));
-    const mis = createPane({ env: paneEnv({ ISOCAN_JETSKI_PRESETS: broken }), run: fakeRun({ harness: JSON.stringify(SCAN) }).run });
+    const mis = createPane({ env: paneEnv({ ISOCAN_ANTIGRAVITY_PRESETS: broken }), run: fakeRun({ harness: JSON.stringify(SCAN) }).run });
     const said = await mis.routes["/api/workspace"](bindings());
     expect(said.presets).toEqual([]);
     expect(said.presetsError).toContain('expected a "presets" list');
@@ -486,7 +486,7 @@ describe("the canvas pane's routes", () => {
 
     const own = path.join(dir("presets"), "mine.json");
     fs.writeFileSync(own, JSON.stringify([{ name: "Ada", harness: "acme-agent" }, { label: "no name" }, { name: " " }]));
-    expect(loadPresets({ ISOCAN_JETSKI_PRESETS: own })).toEqual([{ id: "ada", name: "Ada", label: "Ada", harness: "acme-agent", model: null }]);
+    expect(loadPresets({ ISOCAN_ANTIGRAVITY_PRESETS: own })).toEqual([{ id: "ada", name: "Ada", label: "Ada", harness: "acme-agent", model: null }]);
   });
 });
 
@@ -527,7 +527,7 @@ describe("through real processes", () => {
 
   it("runs hooks.json's command from an installed (symlinked) plugin, and prints exactly the hook result", async () => {
     const link = path.join(dir("plugins"), "isocan");
-    expect(installJetskiPlugin({ target: link })).toContain("installed");
+    expect(installAntigravityPlugin({ target: link })).toContain("installed");
     const hooks = JSON.parse(fs.readFileSync(path.join(link, "hooks.json"), "utf8"));
     const command: string = hooks["isocan-session-start"].SessionStart[0].command;
     const acme = mark(dir("acme-app"), { projectId: "prj_acme", title: "Acme" });
@@ -654,7 +654,7 @@ describe("the bundle", () => {
     }
   });
 
-  it("styles its pane with Jetski's 17 host theme tokens in both light and dark mode", () => {
+  it("styles its pane with Antigravity's 17 host theme tokens in both light and dark mode", () => {
     const page = read("sidecars/canvas/public/index.html");
     const hostTokens = new Set([
       "--background",
@@ -677,10 +677,10 @@ describe("the bundle", () => {
     ]);
     for (const [, token] of page.matchAll(/var\((--[a-z0-9-]+)/g)) {
       if (!token || token.startsWith("--fallback-")) continue;
-      expect(hostTokens.has(token), `${token} is not a Jetski host theme token`).toBe(true);
+      expect(hostTokens.has(token), `${token} is not an Antigravity host theme token`).toBe(true);
     }
     expect(page).toContain("@media (prefers-color-scheme: dark)");
-    // `--accent` in Jetski is a solid brand blue, not a translucent tint;
+    // `--accent` in Antigravity is a solid brand blue, not a translucent tint;
     // painting a menu option's background with it directly puts dark/muted text
     // on solid blue.
     expect(page).not.toMatch(/\.menu\s+\.opt\[aria-selected="true"\]\s*\{\s*background:\s*var\(--accent/);
@@ -734,27 +734,27 @@ describe("the installer", () => {
   it("links, re-links idempotently, refuses a real directory unless forced, and removes only its own link", () => {
     const root = dir("plugins");
     const target = path.join(root, "isocan");
-    expect(installJetskiPlugin({ target })).toBe(`installed: ${target} → ${plugin}`);
+    expect(installAntigravityPlugin({ target })).toBe(`installed: ${target} → ${plugin}`);
     expect(fs.realpathSync(target)).toBe(fs.realpathSync(plugin));
-    expect(installJetskiPlugin({ target })).toContain("already installed");
+    expect(installAntigravityPlugin({ target })).toContain("already installed");
 
     const elsewhere = dir("elsewhere");
     fs.unlinkSync(target);
     fs.symlinkSync(elsewhere, target, "dir");
-    expect(() => uninstallJetskiPlugin({ target })).toThrow("not this script's to remove");
-    expect(installJetskiPlugin({ target })).toContain("installed");
+    expect(() => uninstallAntigravityPlugin({ target })).toThrow("not this script's to remove");
+    expect(installAntigravityPlugin({ target })).toContain("installed");
     expect(fs.realpathSync(target)).toBe(fs.realpathSync(plugin));
 
     fs.unlinkSync(target);
     fs.mkdirSync(target);
     fs.writeFileSync(path.join(target, "keep.txt"), "somebody's copy");
-    expect(() => installJetskiPlugin({ target })).toThrow("real directory");
+    expect(() => installAntigravityPlugin({ target })).toThrow("real directory");
     expect(fs.existsSync(path.join(target, "keep.txt"))).toBe(true);
-    expect(installJetskiPlugin({ target, force: true })).toContain("installed");
+    expect(installAntigravityPlugin({ target, force: true })).toContain("installed");
 
-    expect(uninstallJetskiPlugin({ target })).toContain("uninstalled");
+    expect(uninstallAntigravityPlugin({ target })).toContain("uninstalled");
     expect(fs.existsSync(target)).toBe(false);
-    expect(uninstallJetskiPlugin({ target })).toContain("nothing installed");
-    expect(defaultTarget({ ISOCAN_JETSKI_PLUGIN_DIR: target })).toBe(path.resolve(target));
+    expect(uninstallAntigravityPlugin({ target })).toContain("nothing installed");
+    expect(defaultTarget({ ISOCAN_ANTIGRAVITY_PLUGIN_DIR: target })).toBe(path.resolve(target));
   });
 });

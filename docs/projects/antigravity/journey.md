@@ -3,16 +3,16 @@ status: built
 since: 2026-09-29
 issue: 364
 see: embed, harnesses, bench, design-competition
-note: all five phases (0–4) built and closed 28–29 Sep 2026, walked inside real Jetski. `isocan embed` frames a canvas chat-free (`?embed=1`, every Chat entrance closed) and speaks the selection bridge; `--model` pins a standing agent's model through the doors its harness has (`ANTHROPIC_MODEL`, `CODEX_CONFIG`, `{model}` in `acpAdapters`); `plugins/jetski/` ships the SessionStart hook, the Isocan Canvas AuxPane with `/skill` menu, selection composer, model-pinned Agents bar, open-asks inbox, fan-out across Jetski tiers, `/isocan` and `/fan-out` chat skills, and the live canvas-to-chat relay.
+note: all five phases (0–4) built and closed 28–29 Sep 2026, walked inside real Antigravity. `isocan embed` frames a canvas chat-free (`?embed=1`, every Chat entrance closed) and speaks the selection bridge; `--model` pins a standing agent's model through the doors its harness has (`ANTHROPIC_MODEL`, `CODEX_CONFIG`, `{model}` in `acpAdapters`); `plugins/antigravity/` ships the SessionStart hook, the Isocan Canvas AuxPane with `/skill` menu, selection composer, model-pinned Agents bar, open-asks inbox, fan-out across Antigravity tiers, `/isocan` and `/fan-out` chat skills, and the live canvas-to-chat relay.
 ---
 
-# Jetski — the journey
+# Antigravity — the journey
 
 Asked for by Dion on 28 September 2026: *package isocan as a plugin for
-Jetski — open a pane with isocan running on the same project that is open in
-Jetski (locally or mapped to a canvas on isocan.io), have all the skills and
-tools loaded, hide the chat inside isocan since driving happens in the Jetski
-chat, fire off a session where Jetski joins the canvas, and provide a way to
+Antigravity — open a pane with isocan running on the same project that is open in
+Antigravity (locally or mapped to a canvas on isocan.io), have all the skills and
+tools loaded, hide the chat inside isocan since driving happens in the Antigravity
+chat, fire off a session where Antigravity joins the canvas, and provide a way to
 fire off multiple agents with models (Opus 5.5, Barium, Gemini) so they are
 available on the canvas.*
 
@@ -21,12 +21,12 @@ and [phases.md](phases.md) is the walk.
 
 ## 1. Opening a repo opens its canvas, without a second chat column
 
-Dion opens `~/code/acme` in Jetski. The `isocan` plugin is installed, and
+Dion opens `~/code/acme` in Antigravity. The `isocan` plugin is installed, and
 `~/code/acme/.isocan/project.json` binds the repo to a canvas. When he starts
 a conversation, the agent already knows which canvas this is and offers an
 **[Isocan Canvas](sidecar://isocan/canvas/)** link.
 
-Clicking it opens the pane beside the chat. Jetski's conversation is already
+Clicking it opens the pane beside the chat. Antigravity's conversation is already
 the column Dion talks in, so the canvas opens **with no Chat dock and no Chat
 button** — not on the rail, not behind ⌘J, not in the palette — and every
 pixel of the pane goes to the canvas and the faces of who is on it. Opening a
@@ -39,7 +39,7 @@ faces; `isocan embed` writing `?embed=1` by default (with `--chat` to opt
 back in); a pane that follows the conversation's workspace, mints a fresh
 address per load, and binds an unbound folder.
 
-## 2. The Jetski conversation is already on the canvas
+## 2. The Antigravity conversation is already on the canvas
 
 Before Dion types a word, the canvas shows the conversation's face — under
 its own name, not his. The agent has the `isocan mcp` tools and the
@@ -54,11 +54,11 @@ to it.
 its presence, and says so in one ephemeral message; silence in a folder that
 is not bound; `mcp_config.json` and the skill in the plugin.
 
-## 3. Pointing at the canvas speaks to Jetski chat
+## 3. Pointing at the canvas speaks to Antigravity chat
 
 Dion clicks two screens on the canvas in the pane, *Acme sign-in* and *Acme
 verify code*. Chips naming them appear under the pane's header, beside a box
-that says *Ask Jetski about this…*. He types *"which of these is closer to
+that says *Ask Antigravity about this…*. He types *"which of these is closer to
 the brief?"* and presses **Ask**: the question arrives in the conversation
 with the two items' ids and titles after it, and the agent answers about
 exactly those two. Clicking a chip brings its item back into view.
@@ -88,14 +88,14 @@ add` and `isocan bench add`; `model` on `RcAgentRow` and `BenchAgent`;
 ---
 
 *Added 29 September 2026, when Dion asked for the tie to be a killer one:
-"how can we teach the Jetski side what the user can do? how can we surface
+"how can we teach the Antigravity side what the user can do? how can we surface
 how skills work across both?" Scenes 1–4 put the two windows side by side.
 These four make them one place.*
 
 ## 5. The pane teaches by offering
 
-Dion opens the pane on a canvas he has never used from Jetski. Before he has
-selected anything, the box under the header says *Ask Jetski about the
+Dion opens the pane on a canvas he has never used from Antigravity. Before he has
+selected anything, the box under the header says *Ask Antigravity about the
 canvas, or / for a skill…*, and under it sit a few starters: *What's on this
 canvas?*, *Answer 1 open question*, *Put what we did here on the canvas*,
 `/tidy`, and `/ 7 skills`. He clicks *Acme sign-in* on the canvas and the
@@ -118,7 +118,7 @@ marked with where it came from. He takes `/variation`, adds *n=2 one dark,
 one playful*, and presses **Ask**. The conversation beside him receives
 exactly what a canvas comment would carry — `/variation n=2 …` first — with
 one sentence the canvas never needed: *`isocan command show variation` is
-your instructions*. The Jetski agent runs the canvas's skill as itself, and
+your instructions*. The Antigravity agent runs the canvas's skill as itself, and
 two screens land beside the selection.
 
 Tomorrow he wants the same audit from Orla, the Opus agent on his bench. He
@@ -131,24 +131,24 @@ points at, and the record is on the canvas either way.
 **What the scene forces:** the canvas's command catalogue (`isocan command
 ls`) in the pane, without the ones the web app answers itself; a skill sent
 to the conversation in the canvas's own grammar; and a hand-off that is an
-ordinary comment, so nothing about skills is Jetski-only.
+ordinary comment, so nothing about skills is Antigravity-only.
 
 ## 7. The canvas can reach the conversation
 
 Mara, in a browser tab on the same canvas, writes *"@Kit the header is
-too tall on mobile"* on the sign-in screen. Kit is Dion's Jetski
+too tall on mobile"* on the sign-in screen. Kit is Dion's Antigravity
 conversation; it arrived on the canvas when he opened it (scene 2) and it is
 not parked on `isocan wait`, because Dion talks to it in the chat. Until
 now Mara was writing to a face with no ear. Now, while the pane runs, her
 comment arrives in Dion's conversation — *"The isocan canvas "Acme" has
 something for you"*, her words as `isocan wait` prints them, and *answer it
 on the canvas*. The agent fixes the header and replies on Mara's thread.
-Dion saw it happen; Mara never had to know it was Jetski.
+Dion saw it happen; Mara never had to know it was Antigravity.
 
 When an agent on the canvas asks Dion something — Test Otter wants to know
 whether the Google button goes above the email field — the header grows an
 **Asks 1** button. He can *Show* it, which opens the thread in the frame, or
-*Answer with Jetski*, which hands the question to his conversation to think
+*Answer with Antigravity*, which hands the question to his conversation to think
 through together before anybody replies.
 
 **What the scene forces:** a record of which conversation became which
@@ -158,13 +158,13 @@ and an inbox of `isocan comment ls --open`.
 
 ## 8. Faces are conversations, and tiers are a button
 
-Dion wants to see how Jetski's own tiers read one brief. With two screens
+Dion wants to see how Antigravity's own tiers read one brief. With two screens
 selected he picks *Fan out: Flash + Pro* and asks *which is closer to the
-brief — and make a third that is?*. Two new Jetski conversations start, each
+brief — and make a third that is?*. Two new Antigravity conversations start, each
 titled with its tier and told it is one of two; each arrives on the canvas
 under its own name, and the Agents bar shows them as *● Nell · Chat · flash*
 and *● Rui · Chat · pro*. The takes land side by side. Clicking 💬 beside a
-face opens that conversation in Jetski, so reading *why* the pro take went
+face opens that conversation in Antigravity, so reading *why* the pro take went
 the way it did is one click from the take itself.
 
 **What the scene forces:** `agentapi new-conversation --model=<tier>

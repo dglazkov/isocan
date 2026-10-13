@@ -735,7 +735,7 @@ export async function assembleReleaseTree({ base, out, artifacts, sourceCommit =
      * a daemon serves), `packages/rc/dist` and `packages/cli/dist` (the
      * bundles), `types/` (what an editor resolves), the modules' `assets/`
      * and `agent-guide.md`, `.agents/skills` (which `isocan setup` copies out),
-     * `plugins/jetski` (which `isocan setup --jetski` links out), `WHATSNEW.md`,
+     * `plugins/antigravity` (which `isocan setup --antigravity` links out), `WHATSNEW.md`,
      * and the scripts a CLI verb can spawn.
      */
     for (const spec of RELEASE_DROPS) {
@@ -879,7 +879,7 @@ export async function unresolvedImports(dir) {
     }
   };
   const web = path.join(dir, "packages/web/dist");
-  const jetskiPlugin = path.join(dir, "plugins/jetski");
+  const antigravityPlugin = path.join(dir, "plugins/antigravity");
   const selfReference = (subpath) => {
     const entry = manifest.exports?.[subpath];
     const target = typeof entry === "string" ? entry : (entry?.import ?? entry?.default);
@@ -896,10 +896,10 @@ export async function unresolvedImports(dir) {
     const subpath = [".", ...parts.slice(bare.startsWith("@") ? 2 : 1)].join("/");
     if (name === manifest.name) return selfReference(subpath);
     if (CLI_BUNDLE_EXTERNAL.includes(name)) return true;
-    // The Jetski sidecar runs inside the Jetski host, which puts `sidecar_sdk`
-    // on NODE_PATH when spawning the pane; standalone (`ISOCAN_JETSKI_PORT`)
+    // The Antigravity sidecar runs inside the Antigravity host, which puts `sidecar_sdk`
+    // on NODE_PATH when spawning the pane; standalone (`ISOCAN_ANTIGRAVITY_PORT`)
     // that branch does not run.
-    if (name === "sidecar_sdk" && importer.startsWith(jetskiPlugin + path.sep)) return true;
+    if (name === "sidecar_sdk" && importer.startsWith(antigravityPlugin + path.sep)) return true;
     return Boolean(manifest.dependencies?.[name]);
   };
   const unresolved = new Map();

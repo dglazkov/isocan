@@ -4,17 +4,17 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_COMMAND_CATALOGUE } from "../packages/core/src/command-catalogue.ts";
-// @ts-expect-error — the plugin is plain .mjs with no types, on purpose (see jetski-plugin.test.ts).
-import * as jetski from "../plugins/jetski/lib/jetski.mjs";
+// @ts-expect-error — the plugin is plain .mjs with no types, on purpose (see antigravity-plugin.test.ts).
+import * as antigravity from "../plugins/antigravity/lib/antigravity.mjs";
 // @ts-expect-error — as above.
-import { createRelay, DISPLACED_BACKOFF_MS, MAX_PARKS, releaseLock, takeLock } from "../plugins/jetski/lib/relay.mjs";
+import { createRelay, DISPLACED_BACKOFF_MS, MAX_PARKS, releaseLock, takeLock } from "../plugins/antigravity/lib/relay.mjs";
 // @ts-expect-error — as above.
-import { sessionStart } from "../plugins/jetski/scripts/session-start.mjs";
+import { sessionStart } from "../plugins/antigravity/scripts/session-start.mjs";
 // @ts-expect-error — as above.
-import { createPane } from "../plugins/jetski/sidecars/canvas/main.mjs";
+import { createPane } from "../plugins/antigravity/sidecars/canvas/main.mjs";
 
 /**
- * **The tie between Jetski and the canvas** (`docs/projects/jetski/design.md`
+ * **The tie between Antigravity and the canvas** (`docs/projects/antigravity/design.md`
  * §9–§12): the conversations record, the sentences the pane hands a
  * conversation, the routes that send them, and the relay that carries the
  * canvas's mentions back. Every door — the CLI, `agentapi`, the wait — is
@@ -22,11 +22,11 @@ import { createPane } from "../plugins/jetski/sidecars/canvas/main.mjs";
  */
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
-const plugin = path.join(repo, "plugins", "jetski");
+const plugin = path.join(repo, "plugins", "antigravity");
 
 let tmp = "";
 beforeAll(() => {
-  tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "acme-jetski-tie-")));
+  tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "acme-antigravity-tie-")));
 });
 afterAll(() => {
   if (tmp) fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -85,83 +85,83 @@ describe("the conversations record", () => {
   it("keeps which conversation became which actor, merges rows, and sweeps the stale ones", () => {
     const home = dir("home");
     const t0 = 1_000_000;
-    jetski.recordConversation(home, "conv-a", { canvasId: "prj_acme", root: "/acme", actorId: "usr_a", name: "Acme Bot" }, t0);
-    jetski.recordConversation(home, "conv-b", { canvasId: "prj_acme", root: "/acme", tier: "pro" }, t0 + 10);
+    antigravity.recordConversation(home, "conv-a", { canvasId: "prj_acme", root: "/acme", actorId: "usr_a", name: "Acme Bot" }, t0);
+    antigravity.recordConversation(home, "conv-b", { canvasId: "prj_acme", root: "/acme", tier: "pro" }, t0 + 10);
     // The hook's write lands on the fan-out's and keeps its tier.
-    jetski.recordConversation(home, "conv-b", { canvasId: "prj_acme", root: "/acme", actorId: "usr_b", name: "Test Otter" }, t0 + 20);
-    jetski.recordConversation(home, "conv-c", { canvasId: "prj_other", root: "/other" }, t0 + 30);
+    antigravity.recordConversation(home, "conv-b", { canvasId: "prj_acme", root: "/acme", actorId: "usr_b", name: "Test Otter" }, t0 + 20);
+    antigravity.recordConversation(home, "conv-c", { canvasId: "prj_other", root: "/other" }, t0 + 30);
 
-    expect(jetski.conversationsOn(home, "prj_acme", t0 + 40).map((c: { conversationId: string }) => c.conversationId)).toEqual(["conv-b", "conv-a"]);
-    expect(jetski.readConversations(home)["conv-b"]).toMatchObject({ actorId: "usr_b", tier: "pro", name: "Test Otter" });
+    expect(antigravity.conversationsOn(home, "prj_acme", t0 + 40).map((c: { conversationId: string }) => c.conversationId)).toEqual(["conv-b", "conv-a"]);
+    expect(antigravity.readConversations(home)["conv-b"]).toMatchObject({ actorId: "usr_b", tier: "pro", name: "Test Otter" });
 
     // A day later, a write sweeps everything past the TTL.
-    const later = t0 + jetski.CONVERSATION_TTL_MS + 25;
-    jetski.recordConversation(home, "conv-d", { canvasId: "prj_acme", root: "/acme" }, later);
-    expect(Object.keys(jetski.readConversations(home)).sort()).toEqual(["conv-c", "conv-d"]);
-    jetski.recordConversation(home, "conv-d", null, later);
-    expect(Object.keys(jetski.readConversations(home))).toEqual(["conv-c"]);
+    const later = t0 + antigravity.CONVERSATION_TTL_MS + 25;
+    antigravity.recordConversation(home, "conv-d", { canvasId: "prj_acme", root: "/acme" }, later);
+    expect(Object.keys(antigravity.readConversations(home)).sort()).toEqual(["conv-c", "conv-d"]);
+    antigravity.recordConversation(home, "conv-d", null, later);
+    expect(Object.keys(antigravity.readConversations(home))).toEqual(["conv-c"]);
   });
 
   it("reads nothing from a missing or malformed file, and skips rows without a canvas or a folder", () => {
     const home = dir("home-bad");
-    expect(jetski.readConversations(home)).toEqual({});
-    fs.writeFileSync(path.join(home, jetski.CONVERSATIONS_FILE), "{not json");
-    expect(jetski.readConversations(home)).toEqual({});
-    fs.writeFileSync(path.join(home, jetski.CONVERSATIONS_FILE), JSON.stringify({ conversations: { a: { canvasId: "prj_acme" }, b: { root: "/x" }, c: { canvasId: "prj_acme", root: "/acme" } } }));
-    expect(Object.keys(jetski.readConversations(home))).toEqual(["c"]);
+    expect(antigravity.readConversations(home)).toEqual({});
+    fs.writeFileSync(path.join(home, antigravity.CONVERSATIONS_FILE), "{not json");
+    expect(antigravity.readConversations(home)).toEqual({});
+    fs.writeFileSync(path.join(home, antigravity.CONVERSATIONS_FILE), JSON.stringify({ conversations: { a: { canvasId: "prj_acme" }, b: { root: "/x" }, c: { canvasId: "prj_acme", root: "/acme" } } }));
+    expect(Object.keys(antigravity.readConversations(home))).toEqual(["c"]);
   });
 });
 
 describe("what the pane hands a conversation", () => {
   it("asks about the selection, or about the canvas when nothing is selected", () => {
-    const about = jetski.askMessage({ question: "which is closer to the brief?", items: ITEMS, canvas: CANVAS });
+    const about = antigravity.askMessage({ question: "which is closer to the brief?", items: ITEMS, canvas: CANVAS });
     expect(about).toContain("which is closer to the brief?");
     expect(about).toContain('`itm_signin` "Acme sign-in", `itm_verify` "Acme verify code"');
     expect(about).toContain('"Acme" (prj_acme)');
-    const bare = jetski.askMessage({ question: "", items: [], canvas: CANVAS });
+    const bare = antigravity.askMessage({ question: "", items: [], canvas: CANVAS });
     expect(bare).toContain("What is on the canvas right now?");
     expect(bare).toContain("nothing selected");
   });
 
   it("runs a canvas skill the way a comment would ask for it, and says where its instructions are", () => {
-    const said = jetski.skillMessage({ skill: "/variation", args: "n=2 one dark", items: ITEMS, canvas: CANVAS });
+    const said = antigravity.skillMessage({ skill: "/variation", args: "n=2 one dark", items: ITEMS, canvas: CANVAS });
     // `/name args` first: on the canvas, a message that starts with it IS the request.
     expect(said.split("\n")[0]).toBe("/variation n=2 one dark");
     expect(said).toContain("isocan command show variation");
     expect(said).toContain("outranks its defaults");
     expect(said).toContain("itm_verify");
-    expect(() => jetski.skillMessage({ skill: " ", items: [], canvas: CANVAS })).toThrow("which skill?");
+    expect(() => antigravity.skillMessage({ skill: " ", items: [], canvas: CANVAS })).toThrow("which skill?");
   });
 
   it("hands a skill or a question to a standing agent as a comment that starts with the command", () => {
-    expect(jetski.handoffComment({ skill: "design-audit", args: "spacing only", agent: "Orla" })).toBe("/design-audit @Orla spacing only");
-    expect(jetski.handoffComment({ question: "is this legible?", agent: "Orla" })).toBe("@Orla is this legible?");
-    expect(() => jetski.handoffComment({ skill: "tidy" })).toThrow("hand it to whom?");
+    expect(antigravity.handoffComment({ skill: "design-audit", args: "spacing only", agent: "Orla" })).toBe("/design-audit @Orla spacing only");
+    expect(antigravity.handoffComment({ question: "is this legible?", agent: "Orla" })).toBe("@Orla is this legible?");
+    expect(() => antigravity.handoffComment({ skill: "tidy" })).toThrow("hand it to whom?");
   });
 
   it("hands over an agent's open question with the thread and the reply command", () => {
-    const said = jetski.threadMessage({ thread: { threadId: "thr_1", askerName: "Test Otter", body: "Above or below?\nEither is fine." }, canvas: CANVAS });
+    const said = antigravity.threadMessage({ thread: { threadId: "thr_1", askerName: "Test Otter", body: "Above or below?\nEither is fine." }, canvas: CANVAS });
     expect(said).toContain("Test Otter is waiting on an answer");
     expect(said).toContain("> Above or below?\n> Either is fine.");
     expect(said).toContain('isocan comment reply thr_1 "…"');
-    expect(() => jetski.threadMessage({ thread: {}, canvas: CANVAS })).toThrow("which thread?");
+    expect(() => antigravity.threadMessage({ thread: {}, canvas: CANVAS })).toThrow("which thread?");
   });
 
   it("tells each fan-out conversation it is one of several, and which tier to own up to", () => {
-    const said = jetski.fanoutMessage({ skill: "variation", args: "n=1", items: ITEMS, canvas: CANVAS, tier: "pro", of: 2 });
-    expect(said).toContain("one of 2 Jetski conversations");
+    const said = antigravity.fanoutMessage({ skill: "variation", args: "n=1", items: ITEMS, canvas: CANVAS, tier: "pro", of: 2 });
+    expect(said).toContain("one of 2 Antigravity conversations");
     expect(said).toContain("you are on **pro**");
     expect(said).toContain("the pro take");
     expect(said).toContain("/variation n=1");
-    expect(jetski.newConversationArgs({ message: "m", tier: "flash_lite", title: "t · flash_lite" })).toEqual([
+    expect(antigravity.newConversationArgs({ message: "m", tier: "flash_lite", title: "t · flash_lite" })).toEqual([
       "new-conversation", "--model=flash_lite", "--title=t · flash_lite", "m",
     ]);
-    expect(() => jetski.newConversationArgs({ message: "m", tier: "ultra" })).toThrow("not a tier");
+    expect(() => antigravity.newConversationArgs({ message: "m", tier: "ultra" })).toThrow("not a tier");
   });
 
   it("relays a wake verbatim, and says to answer it on the canvas", () => {
     const woke = "Test Person · on \"Acme sign-in\": @Acme Bot tighten the header\n  reply: isocan comment reply thr_2 \"…\"";
-    const said = jetski.relayMessage({ woke, canvas: CANVAS, name: "Acme Bot" });
+    const said = antigravity.relayMessage({ woke, canvas: CANVAS, name: "Acme Bot" });
     expect(said).toContain(woke);
     expect(said).toContain("(Acme Bot)");
     expect(said).toContain("ON THE CANVAS");
@@ -170,13 +170,13 @@ describe("what the pane hands a conversation", () => {
 
   it("says who is asking and that it wants an answer, so a busy conversation does not fold it away", () => {
     for (const said of [
-      jetski.askMessage({ question: "How many screens are there?", items: [], canvas: CANVAS }),
-      jetski.threadMessage({ thread: { threadId: "thr_1", body: "?" }, canvas: CANVAS }),
-    ]) expect(said.startsWith(jetski.ASKED)).toBe(true);
+      antigravity.askMessage({ question: "How many screens are there?", items: [], canvas: CANVAS }),
+      antigravity.threadMessage({ thread: { threadId: "thr_1", body: "?" }, canvas: CANVAS }),
+    ]) expect(said.startsWith(antigravity.ASKED)).toBe(true);
     // A skill keeps `/name` first — that is the canvas's grammar — and says it next.
-    const skill = jetski.skillMessage({ skill: "tidy", items: [], canvas: CANVAS }).split("\n");
+    const skill = antigravity.skillMessage({ skill: "tidy", items: [], canvas: CANVAS }).split("\n");
     expect(skill[0]).toBe("/tidy");
-    expect(skill[2]).toBe(jetski.ASKED);
+    expect(skill[2]).toBe(antigravity.ASKED);
   });
 
   it("treats an agentapi answer that says error as a failure, though it exits 0", async () => {
@@ -189,19 +189,19 @@ describe("what the pane hands a conversation", () => {
     ].join("\n"));
     fs.chmodSync(fake, 0o755);
     const env = { ...process.env, ANTIGRAVITY_AGENTAPI_EXE: fake };
-    await expect(jetski.runAgentapi(["send-message", "nope", "hi"], { env })).rejects.toThrow("trajectory not found: nope");
-    await expect(jetski.runAgentapi(["get-conversation-metadata", "c1"], { env })).resolves.toEqual({ response: { ok: true } });
+    await expect(antigravity.runAgentapi(["send-message", "nope", "hi"], { env })).rejects.toThrow("trajectory not found: nope");
+    await expect(antigravity.runAgentapi(["get-conversation-metadata", "c1"], { env })).resolves.toEqual({ response: { ok: true } });
   });
 
   it("reads a conversation's project the way the host's own preload does", () => {
-    expect(jetski.projectIdOf({ response: { conversationMetadata: { metadata: { projectId: "p1" } } } })).toBe("p1");
-    expect(jetski.projectIdOf({ response: { conversation_metadata: { metadata: { project_id: "p2" } } } })).toBe("p2");
-    expect(jetski.projectIdOf(null)).toBe("");
+    expect(antigravity.projectIdOf({ response: { conversationMetadata: { metadata: { projectId: "p1" } } } })).toBe("p1");
+    expect(antigravity.projectIdOf({ response: { conversation_metadata: { metadata: { project_id: "p2" } } } })).toBe("p2");
+    expect(antigravity.projectIdOf(null)).toBe("");
   });
 
   it("runs agentapi through the executable the host names, as the SDK does", () => {
-    expect(jetski.agentapiCommand({ ANTIGRAVITY_AGENTAPI_EXE: "/jetski/ls" })).toEqual({ command: "/jetski/ls", prefix: ["agentapi"] });
-    expect(jetski.agentapiCommand({})).toEqual({ command: "agentapi", prefix: [] });
+    expect(antigravity.agentapiCommand({ ANTIGRAVITY_AGENTAPI_EXE: "/antigravity/ls" })).toEqual({ command: "/antigravity/ls", prefix: ["agentapi"] });
+    expect(antigravity.agentapiCommand({})).toEqual({ command: "agentapi", prefix: [] });
   });
 });
 
@@ -211,7 +211,7 @@ describe("the hook writes the record it arrives with", () => {
     const acme = mark(dir("acme-app"), { projectId: "prj_acme", title: "Acme" });
     const { run } = fakeRun({ "identity --session": "identity saved: Acme Bot (usr_acme1) → /acme/.isocan/actors.json (antigravity session)\n" });
     const out = await sessionStart({ conversationId: "conv-acme", workspacePaths: [acme] }, { env: { PATH: process.env["PATH"], ISOCAN_HOME: home }, run, now: () => 5 });
-    expect(jetski.readConversations(home)["conv-acme"]).toEqual({
+    expect(antigravity.readConversations(home)["conv-acme"]).toEqual({
       canvasId: "prj_acme", title: "Acme", root: acme, actorId: "usr_acme1", name: "Acme Bot", tier: null, at: 5,
     });
     const said: string = out.injectSteps[0].ephemeralMessage;
@@ -320,19 +320,19 @@ describe("the pane's routes for the tie", () => {
       ["new-conversation", "--model=pro", "--title=which is closer? · pro"],
     ]);
     expect(calls.every((c) => c.projectId === "proj_acme")).toBe(true);
-    expect(calls[1]!.args[3]).toContain("one of 2 Jetski conversations");
-    expect(jetski.readConversations(fanHome)["conv-pro"]).toMatchObject({ canvasId: "prj_acme", tier: "pro", root: acme });
+    expect(calls[1]!.args[3]).toContain("one of 2 Antigravity conversations");
+    expect(antigravity.readConversations(fanHome)["conv-pro"]).toMatchObject({ canvasId: "prj_acme", tier: "pro", root: acme });
 
     await expect(routes["/api/fanout"]({ ...bindings(), tiers: [] })).rejects.toThrow("pick at least one tier");
     await expect(routes["/api/fanout"]({ ...bindings(), tiers: ["ultra"] })).rejects.toThrow("pick at least one tier");
   });
 
-  it("says which faces are Jetski conversations, and which tier a fan-out one runs", async () => {
+  it("says which faces are Antigravity conversations, and which tier a fan-out one runs", async () => {
     const faceHome = dir("face-home");
     fs.mkdirSync(path.join(faceHome, "sessions"));
     fs.writeFileSync(path.join(faceHome, "actors.json"), JSON.stringify({ names: {}, harnesses: { usr_a: "antigravity", usr_b: "antigravity" } }));
     for (const id of ["usr_a", "usr_b"]) fs.writeFileSync(path.join(faceHome, "sessions", `${id}.json`), JSON.stringify({ canvasId: "prj_acme", sessionId: `ses_${id}`, label: `${id} 🤖` }));
-    jetski.recordConversation(faceHome, "conv-b", { canvasId: "prj_acme", root: acme, actorId: "usr_b", tier: "pro" });
+    antigravity.recordConversation(faceHome, "conv-b", { canvasId: "prj_acme", root: acme, actorId: "usr_b", tier: "pro" });
     const { routes } = createPane({ env: { ...env(), ISOCAN_HOME: faceHome }, run: fakeRun({ harness: { harnesses: [], default: null } }).run });
     const state = await routes["/api/workspace"](bindings());
     const faces = Object.fromEntries(state.sessions.map((s: { actorId: string }) => [s.actorId, s]));
@@ -347,10 +347,10 @@ describe("the pane's routes for the tie", () => {
   });
 });
 
-describe("the relay: the canvas reaches a Jetski conversation", () => {
+describe("the relay: the canvas reaches an Antigravity conversation", () => {
   function relayHome(rows: Record<string, Record<string, unknown>>) {
     const home = dir("relay-home");
-    fs.writeFileSync(path.join(home, jetski.CONVERSATIONS_FILE), JSON.stringify({ conversations: rows }));
+    fs.writeFileSync(path.join(home, antigravity.CONVERSATIONS_FILE), JSON.stringify({ conversations: rows }));
     return home;
   }
   const row = (extra: Record<string, unknown> = {}) => ({ canvasId: "prj_acme", title: "Acme", root: "/acme", actorId: "usr_a", name: "Acme Bot", at: 100, ...extra });
@@ -391,7 +391,7 @@ describe("the relay: the canvas reaches a Jetski conversation", () => {
     });
     await Promise.all(relay.tick());
     expect(relay.resting.get("conv-a")).toBe(200 + DISPLACED_BACKOFF_MS);
-    expect(Object.keys(jetski.readConversations(home))).toEqual(["conv-a"]);
+    expect(Object.keys(antigravity.readConversations(home))).toEqual(["conv-a"]);
     // Still resting: no new park.
     expect(relay.tick()).toHaveLength(0);
     clock += DISPLACED_BACKOFF_MS + 1;
@@ -419,7 +419,7 @@ describe("the relay: the canvas reaches a Jetski conversation", () => {
     expect(parked).toHaveLength(MAX_PARKS);
     expect(parked[0]).toBe(`conv-${MAX_PARKS + 1}`);
     expect(parked).not.toContain("conv-0");
-    expect(jetski.readConversations(home)[`conv-${MAX_PARKS + 1}`]).toBeUndefined();
+    expect(antigravity.readConversations(home)[`conv-${MAX_PARKS + 1}`]).toBeUndefined();
   });
 
   it("holds one relay per machine, and takes over a lock whose process is gone", () => {
@@ -429,10 +429,10 @@ describe("the relay: the canvas reaches a Jetski conversation", () => {
     expect(takeLock(home, process.ppid)).toBe(false);
     releaseLock(home, process.pid);
     // …and a lock left by a process that is gone is taken over.
-    fs.writeFileSync(path.join(home, "jetski-relay.lock"), "999999999");
+    fs.writeFileSync(path.join(home, "antigravity-relay.lock"), "999999999");
     expect(takeLock(home, process.pid)).toBe(true);
     releaseLock(home, process.pid);
-    expect(fs.existsSync(path.join(home, "jetski-relay.lock"))).toBe(false);
+    expect(fs.existsSync(path.join(home, "antigravity-relay.lock"))).toBe(false);
   });
 });
 
@@ -448,10 +448,10 @@ describe("the page and its server agree", () => {
 
   it("offers only the tiers agentapi takes", () => {
     for (const [, tiers] of page.matchAll(/value="?fan:([a-z_,]+)/g)) {
-      for (const tier of tiers!.split(",")) expect(jetski.TIERS).toContain(tier);
+      for (const tier of tiers!.split(",")) expect(antigravity.TIERS).toContain(tier);
     }
     for (const m of page.matchAll(/add\("fan:([a-z_,]+)"/g)) {
-      for (const tier of m[1]!.split(",")) expect(jetski.TIERS).toContain(tier);
+      for (const tier of m[1]!.split(",")) expect(antigravity.TIERS).toContain(tier);
     }
   });
 
@@ -462,15 +462,15 @@ describe("the page and its server agree", () => {
   });
 
   it("translates send, handoff and fanout failures into actionable guidance with retry and dismiss controls", () => {
-    expect(jetski.friendlyAskError("This pane is not attached to a conversation", "here")).toContain("send a message in the chat column on the left to attach it");
-    expect(jetski.friendlyAskError(new Error("select an item on the canvas first"), "agent:Orla")).toContain("Select an item on the canvas first");
-    expect(jetski.friendlyAskError(new Error("agentapi send-message: trajectory not found: nope"), "here")).toContain("Jetski couldn't find this chat's session");
-    expect(jetski.friendlyAskError(new Error("agentapi send-message: timed out"), "here")).toContain("Timed out waiting for Jetski");
-    expect(jetski.friendlyAskError(new Error("/api/send answered 401"), "here")).toContain("session token expired");
-    expect(jetski.friendlyAskError(new Error("Failed to fetch"), "here")).toContain("Couldn't reach the pane server");
-    expect(jetski.friendlyAskError(new Error("daemon offline"), "agent:Orla")).toContain("Couldn't post handoff comment on the canvas (daemon offline)");
-    expect(jetski.friendlyAskError(new Error("quota exceeded"), "fan:flash,pro")).toContain("Couldn't start fan-out conversations (quota exceeded)");
-    expect(jetski.friendlyAskError(new Error("unexpected"), "here")).toContain("Couldn't send to this chat (unexpected)");
+    expect(antigravity.friendlyAskError("This pane is not attached to a conversation", "here")).toContain("send a message in the chat column on the left to attach it");
+    expect(antigravity.friendlyAskError(new Error("select an item on the canvas first"), "agent:Orla")).toContain("Select an item on the canvas first");
+    expect(antigravity.friendlyAskError(new Error("agentapi send-message: trajectory not found: nope"), "here")).toContain("Antigravity couldn't find this chat's session");
+    expect(antigravity.friendlyAskError(new Error("agentapi send-message: timed out"), "here")).toContain("Timed out waiting for Antigravity");
+    expect(antigravity.friendlyAskError(new Error("/api/send answered 401"), "here")).toContain("session token expired");
+    expect(antigravity.friendlyAskError(new Error("Failed to fetch"), "here")).toContain("Couldn't reach the pane server");
+    expect(antigravity.friendlyAskError(new Error("daemon offline"), "agent:Orla")).toContain("Couldn't post handoff comment on the canvas (daemon offline)");
+    expect(antigravity.friendlyAskError(new Error("quota exceeded"), "fan:flash,pro")).toContain("Couldn't start fan-out conversations (quota exceeded)");
+    expect(antigravity.friendlyAskError(new Error("unexpected"), "here")).toContain("Couldn't send to this chat (unexpected)");
 
     expect(page).toContain('id="ask-notice"');
     expect(page).toContain('id="ask-retry"');

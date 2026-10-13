@@ -3,18 +3,18 @@ status: built
 since: 2026-09-29
 issue: 364
 see: embed, harnesses, bench, design-competition
-note: all five phases (0–4) built and closed 28–29 Sep 2026, walked inside real Jetski. `isocan embed` frames a canvas chat-free (`?embed=1`, every Chat entrance closed) and speaks the selection bridge; `--model` pins a standing agent's model through the doors its harness has (`ANTHROPIC_MODEL`, `CODEX_CONFIG`, `{model}` in `acpAdapters`); `plugins/jetski/` ships the SessionStart hook, the Isocan Canvas AuxPane with `/skill` menu, selection composer, model-pinned Agents bar, open-asks inbox, fan-out across Jetski tiers, `/isocan` and `/fan-out` chat skills, and the live canvas-to-chat relay.
+note: all five phases (0–4) built and closed 28–29 Sep 2026, walked inside real Antigravity. `isocan embed` frames a canvas chat-free (`?embed=1`, every Chat entrance closed) and speaks the selection bridge; `--model` pins a standing agent's model through the doors its harness has (`ANTHROPIC_MODEL`, `CODEX_CONFIG`, `{model}` in `acpAdapters`); `plugins/antigravity/` ships the SessionStart hook, the Isocan Canvas AuxPane with `/skill` menu, selection composer, model-pinned Agents bar, open-asks inbox, fan-out across Antigravity tiers, `/isocan` and `/fan-out` chat skills, and the live canvas-to-chat relay.
 ---
 
-# Jetski — the walk
+# Antigravity — the walk
 
 **28 September 2026.** The order of work for [design.md](design.md), held to
 [journey.md](journey.md). Each phase ends with **Trajectory**: only what the
 phase discovered that changes the project's course.
 
 **Where we are:** all five phases (0–4) are CLOSED as of 29 Sep 2026 — walked
-in headless Chrome and end to end inside real Jetski
-([`docs/verify/2026-09-28-jetski-plugin.md`](../../verify/2026-09-28-jetski-plugin.md)).
+in headless Chrome and end to end inside real Antigravity
+([`docs/verify/2026-09-28-antigravity-plugin.md`](../../verify/2026-09-28-antigravity-plugin.md)).
 
 ---
 
@@ -39,7 +39,7 @@ selection / focus-item handshake (design.md §3).
    that stores nothing, every Chat entrance gated (a new ungated one fails
    *"leaves no way in to a Chat that is not there"*), and the bridge's
    handshake and refusals.
-2. `npm run build && node scripts/journey-jetski-pane.mjs` — Chrome's own
+2. `npm run build && node scripts/journey-antigravity-pane.mjs` — Chrome's own
    input throughout: the frame has no Chat dock and no rail button and keeps
    the Agents door; ⌘J and the palette open no Chat while a tab of the same
    canvas offers *Open Chat*; pressing an item in the frame reaches the pane,
@@ -66,7 +66,7 @@ selection / focus-item handshake (design.md §3).
 
 **Status: CLOSED.** 2026-09-29 — a pin rides the row into the adapter's
 arguments and environment through the real binary, and a real turn on the
-`jetski` ACP adapter (`-model {model}`) ran the pinned model and recorded the
+`antigravity` ACP adapter (`-model {model}`) ran the pinned model and recorded the
 session.
 
 **Outcome:** `model` on `RcAgentRow` and `BenchAgent`; `--model <id>` on
@@ -87,10 +87,10 @@ harness only through a door it has — `ANTHROPIC_MODEL`, `model` in Codex's
    `--json`, `rc turn` hands it over as `{model}` and `ISOCAN_MODEL`, and an
    unpinned agent on the same declaration gets neither.
 3. `packages/cli/test/surface.test.ts` — every new flag is in the agent guide.
-4. Walked live (29 Sep): `acpAdapters.jetski` declared with `-model {model}`
-   reports `pinsModel: true`; `isocan rc add Fen --harness jetski --model flash`
+4. Walked live (29 Sep): `acpAdapters.antigravity` declared with `-model {model}`
+   reports `pinsModel: true`; `isocan rc add Fen --harness antigravity --model flash`
    followed by `isocan rc turn Fen "Reply with one short word: PONG"` spawned
-   `jetski_acp -model flash`, started session `2f635daa-b8ca-4114-8630-570fa9f20e28`,
+   the ACP adapter with `-model flash`, started session `2f635daa-b8ca-4114-8630-570fa9f20e28`,
    answered `PONG`, and ended `end_turn`.
 
 ### Trajectory
@@ -100,9 +100,9 @@ harness only through a door it has — `ANTHROPIC_MODEL`, `model` in Codex's
   guesses, and a guessed door is a pin that silently does nothing. They were
   dropped, and `pinsModel` makes an unpinned "pinned" agent visible before
   anyone compares it.
-- **2026-09-29** — `jetski_acp` accepts `-model <tier>`, so declaring
-  `[".../jetski_acp", "-model", "{model}"]` in `acpAdapters` gives the
-  default `jetski` harness `pinsModel: true` and passes the pinned tier on
+- **2026-09-29** — the ACP adapter accepts `-model <tier>`, so declaring
+  `["<adapter>", "-model", "{model}"]` in `acpAdapters` gives the
+  default `antigravity` harness `pinsModel: true` and passes the pinned tier on
   every turn.
 
 ---
@@ -110,23 +110,23 @@ harness only through a door it has — `ANTHROPIC_MODEL`, `model` in Codex's
 ## Phase 2 — The plugin bundle and the SessionStart hook
 
 **Status: CLOSED.** 2026-09-29 — the bundle is complete, its hook runs from a
-symlinked install in real Jetski, names the conversation on its bound canvas,
+symlinked install in real Antigravity, names the conversation on its bound canvas,
 and injects the orientation step.
 
-**Outcome:** `plugins/jetski/` — `plugin.json` (named `isocan`, so the pane's
+**Outcome:** `plugins/antigravity/` — `plugin.json` (named `isocan`, so the pane's
 pill is `sidecar://isocan/canvas/`), `mcp_config.json` (`isocan mcp`),
 `hooks.json` (SessionStart only, guarded on `node`), `scripts/session-start.mjs`,
 `rules/AGENTS.md`, the `canvas-builder` and `visual-arena` agents, the
 `isocan` and `fan-out` chat skills, and `skills/isocan-collab` as a relative
-symlink to the one skill. `isocan setup --jetski` (or
-`node scripts/install-jetski-plugin.mjs` in a checkout) links it into
-`~/.gemini/config/plugins/isocan`. `#release` carries `plugins/jetski/`
+symlink to the one skill. `isocan setup --antigravity` (or
+`node scripts/install-antigravity-plugin.mjs` in a checkout) links it into
+`~/.gemini/config/plugins/isocan`. `#release` carries `plugins/antigravity/`
 alongside the bundled CLI and daemon, and `unresolvedImports` allows
-`sidecar_sdk` inside `plugins/jetski/` because the Jetski host provides it on
+`sidecar_sdk` inside `plugins/antigravity/` because the Antigravity host provides it on
 `NODE_PATH`.
 
 **Proof:**
-1. `npx vitest run test/jetski-plugin.test.ts` — the marker is found exactly
+1. `npx vitest run test/antigravity-plugin.test.ts` — the marker is found exactly
    as `packages/server`'s `findBinding` finds it; the person's and the
    conversation's environments against `packages/api`'s own harness
    variables; every SessionStart branch (joined, switched off, unnamed,
@@ -134,15 +134,15 @@ alongside the bundled CLI and daemon, and `unresolvedImports` allows
    unbound or relative folder); `hooks.json`'s own command run through
    `sh -c` from a symlinked install, printing exactly the hook result; the
    bundle's invariants; the installer's link, re-link, refusal and removal.
-2. Walked in real Jetski (29 Sep): `SessionStart` named the conversation on
+2. Walked in real Antigravity (29 Sep): `SessionStart` named the conversation on
    its bound canvas (`Kenny 8`, `usr_2u2TRlSjwo`), started its presence
-   session, wrote `~/.isocan/jetski-conversations.json`, and injected
+   session, wrote `~/.isocan/antigravity-conversations.json`, and injected
    `EPHEMERAL_MESSAGE` in the session transcript.
 3. `npm test` and `npm run typecheck`.
 
 ### Trajectory
 
-- **2026-09-28** — `PreInvocation` fires before every model call, and Jetski
+- **2026-09-28** — `PreInvocation` fires before every model call, and Antigravity
    keeps the `hooks.json` it loaded until a restart: an early wiring re-joined
    per turn and put a conversation on this repository's own canvas unasked.
    The hook is SessionStart only, and ignores any call carrying
@@ -157,11 +157,11 @@ alongside the bundled CLI and daemon, and `unresolvedImports` allows
 ## Phase 3 — The Isocan Canvas pane and its Agents bar
 
 **Status: CLOSED.** 2026-09-29 — the pane binds, frames, bridges and enrols,
-walked standalone in headless Chrome and live inside Jetski's AuxPane under
+walked standalone in headless Chrome and live inside Antigravity's AuxPane under
 the Sidecar SDK.
 
-**Outcome:** `plugins/jetski/sidecars/canvas/` — `sidecar.json` (AuxPane),
-`main.mjs` (routes run as the person, on the SDK under Jetski and on a
+**Outcome:** `plugins/antigravity/sidecars/canvas/` — `sidecar.json` (AuxPane),
+`main.mjs` (routes run as the person, on the SDK under Antigravity and on a
 loopback fallback anywhere else) and `public/index.html`: the unbound card,
 the chat-free frame with a fresh pass per load, the clickable header title
 (`#where`) and *Open ↗* with instant CSS `[data-tip]` popovers, selection
@@ -169,14 +169,14 @@ chips and *Send to chat* into the conversation, and the collapsible Agents
 bar from `presets.json` with each preset's real reach.
 
 **Proof:**
-1. `npx vitest run test/jetski-plugin.test.ts` — the routes through an
+1. `npx vitest run test/antigravity-plugin.test.ts` — the routes through an
    injected CLI (the Agents bar as it would really run, a failed or too-old
    harness scan, the embed and tab addresses, binding by address, title or a
    new canvas and refusing a bound folder, enrolment from a preset or
    outright) and over a real loopback server with the SDK's token rule.
-2. `npm run build && node scripts/journey-jetski-pane.mjs` — the unbound card,
+2. `npm run build && node scripts/journey-antigravity-pane.mjs` — the unbound card,
    *Create*, the frame, and the bridge both ways (phase 0's proof 2).
-3. Walked inside Jetski's AuxPane (29 Sep): `[Isocan Canvas](sidecar://isocan/canvas/)`
+3. Walked inside Antigravity's AuxPane (29 Sep): `[Isocan Canvas](sidecar://isocan/canvas/)`
    opens the pane beside the chat, frames `[isocan] History` chat-free,
    lights up selection chips, sends questions to the active chat, and shows
    the conversation's own face (`this chat`) and presets in the Agents bar.
@@ -190,17 +190,17 @@ bar from `presets.json` with each preset's real reach.
 - **2026-09-28** — Model presets enrol standing agents (`rc add --model`)
   rather than launching agentapi conversations: one mechanism for every
   harness, answering @mentions while the person's `isocan rc` runs, instead
-  of a second, Jetski-only way to start an agent.
+  of a second, Antigravity-only way to start an agent.
 
 ---
 
 ## Phase 4 — The tie: skills, the relay, fan-out, the inbox
 
 **Status: CLOSED.** 2026-09-29 — built, walked in a real browser against the
-real routes, and verified live inside Jetski against a real daemon and real
+real routes, and verified live inside Antigravity against a real daemon and real
 conversation.
 
-**Outcome:** journey scenes 5–8. `plugins/jetski/lib/jetski.mjs` (the
+**Outcome:** journey scenes 5–8. `plugins/antigravity/lib/antigravity.mjs` (the
 conversations record, `agentapi`, every message the pane hands a
 conversation), `lib/relay.mjs` (the relay), the hook writing the record and
 telling the agent about skills and the relay, five routes in `main.mjs`
@@ -209,7 +209,7 @@ telling the agent about skills and the relay, five routes in `main.mjs`
 `/` menu, starters, target menu, inbox and 💬.
 
 **Proof:**
-1. `npx vitest run test/jetski-tie.test.ts` — the record (merge, sweep,
+1. `npx vitest run test/antigravity-tie.test.ts` — the record (merge, sweep,
    malformed), every message, the hook's record and its failure, each route
    through an injected CLI and `agentapi`, the relay lap by lap (deliver,
    stand back on 3, drop on 4 and on *not found*, never an unnamed
@@ -220,26 +220,26 @@ telling the agent about skills and the relay, five routes in `main.mjs`
    *Ask* sent `/variation n=2 …` with both selected ids to `send-message`;
    *@Orla* posted `/design-audit @Orla spacing only` on the first item and
    the frame received `isocan:open-thread`; *Fan out* started `flash` and
-   `pro` conversations with tier titles; *Answer with Jetski* sent the ask
+   `pro` conversations with tier titles; *Answer with Antigravity* sent the ask
    with its reply command; 💬 called `toggleConversation` for the other
    conversation and the own face read *this chat*; at 420 px nothing
    scrolled sideways.
-3. Walked live in Jetski (29 Sep): `isocan ask` surfaced **Asks 1** in
+3. Walked live in Antigravity (29 Sep): `isocan ask` surfaced **Asks 1** in
    `/api/asks`, and a canvas comment replying `@Kenny 8` on `thr_gzEc4b_2Zm`
-   woke the live sidecar relay (`~/.isocan/jetski-relay.lock`, parked at
-   `park_73ee5e8ce105dc9c`), which delivered the wake into the active Jetski
+   woke the live sidecar relay (`~/.isocan/antigravity-relay.lock`, parked at
+   `park_73ee5e8ce105dc9c`), which delivered the wake into the active Antigravity
    conversation via `agentapi send-message`.
 
 ### Trajectory
 
-- **2026-09-29** — A Jetski conversation on the canvas could not be reached
+- **2026-09-29** — An Antigravity conversation on the canvas could not be reached
   from it: told not to park, it had a face and no ear. The relay parks as
-  the conversation from the sidecar, which lives as long as Jetski does —
+  the conversation from the sidecar, which lives as long as Antigravity does —
   the daemon's wake rule and the conversation's own cursor, so it adds no
   vocabulary.
 - **2026-09-29** — Phase 3 chose standing agents over agentapi
   conversations for presets. Fan-out goes the other way on purpose and
-  stays narrow (design §12): Jetski's own tiers, now, without `rc`. If the
+  stays narrow (design §12): Antigravity's own tiers, now, without `rc`. If the
   two ever compete for the same button, the Agents bar wins.
 - **2026-09-29** — No `isocan comment show` exists; the thread message
   names `comment ls --open`, which lists exactly the questions it hands

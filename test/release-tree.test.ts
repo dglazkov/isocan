@@ -97,8 +97,8 @@ describe("the release tree", () => {
     expect(hits).toEqual([]);
   });
 
-  it("carries plugins/jetski and links it through isocan setup --jetski", async () => {
-    const pluginInTree = path.join(tree, "plugins/jetski");
+  it("carries plugins/antigravity and links it through isocan setup --antigravity", async () => {
+    const pluginInTree = path.join(tree, "plugins/antigravity");
     expect(existsSync(path.join(pluginInTree, "plugin.json"))).toBe(true);
     expect(existsSync(path.join(pluginInTree, "skills/isocan-collab/SKILL.md"))).toBe(true);
 
@@ -112,13 +112,13 @@ describe("the release tree", () => {
     const port = typeof addr === "object" && addr ? addr.port : 0;
 
     try {
-      const target = path.join(scratch, "jetski-plugin-link");
-      const work = path.join(scratch, "jetski-setup-work");
-      const home = path.join(scratch, "jetski-setup-home");
+      const target = path.join(scratch, "antigravity-plugin-link");
+      const work = path.join(scratch, "antigravity-setup-work");
+      const home = path.join(scratch, "antigravity-setup-home");
       mkdirSync(work, { recursive: true });
       const done = spawnSync(
         process.execPath,
-        [path.join(tree, CLI_BUNDLE), "setup", work, "--jetski", "--no-install", "--no-open", "--json"],
+        [path.join(tree, CLI_BUNDLE), "setup", work, "--antigravity", "--no-install", "--no-open", "--json"],
         {
           encoding: "utf8",
           cwd: scratch,
@@ -126,7 +126,7 @@ describe("the release tree", () => {
             ...process.env,
             ISOCAN_HOME: home,
             ISOCAN_DIRECT: `http://127.0.0.1:${port}`,
-            ISOCAN_JETSKI_PLUGIN_DIR: target,
+            ISOCAN_ANTIGRAVITY_PLUGIN_DIR: target,
           },
         },
       );

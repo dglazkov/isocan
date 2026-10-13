@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * **SessionStart: a new Jetski conversation in a bound workspace arrives on
- * its canvas.** (`docs/projects/jetski/design.md` §5, phase 2.)
+ * **SessionStart: a new Antigravity conversation in a bound workspace arrives on
+ * its canvas.** (`docs/projects/antigravity/design.md` §5, phase 2.)
  *
- * Jetski runs this once, before the first model call of a fresh
+ * Antigravity runs this once, before the first model call of a fresh
  * conversation, with the plugin directory as the cwd and a flat JSON object
  * on stdin (`conversationId`, `workspacePaths`, …). What it prints is parsed
  * strictly as a `SessionStartHookResult`: `{"injectSteps":[…]}` or nothing.
@@ -11,9 +11,9 @@
  * In a workspace bound to a canvas it does what the agent guide's first
  * steps say an arriving agent does — `isocan identity --session`, then
  * `isocan session start` — as the conversation itself (the session variable
- * Jetski exports into that conversation's shell), and then tells the
+ * Antigravity exports into that conversation's shell), and then tells the
  * conversation, in one ephemeral message, where it is and what it is called.
- * `ISOCAN_JETSKI_JOIN=off` keeps the message and skips the joining.
+ * `ISOCAN_ANTIGRAVITY_JOIN=off` keeps the message and skips the joining.
  *
  * In any other workspace it prints nothing: a plugin that talked in every
  * conversation would be a plugin people turn off.
@@ -24,7 +24,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { recordConversation } from "../lib/jetski.mjs";
+import { recordConversation } from "../lib/antigravity.mjs";
 import { agentEnv, bindingFor, isocanHome, runIsocan, workspacePaths } from "../lib/workspace.mjs";
 
 const PILL = "[Isocan Canvas](sidecar://isocan/canvas/)";
@@ -62,13 +62,13 @@ export async function sessionStart(input, { env = process.env, run = runIsocan, 
   const lines = [`isocan: this workspace is bound to the canvas ${canvas} by ${marker}.`];
 
   const conversationId = (typeof input?.conversationId === "string" && input.conversationId) || env.ANTIGRAVITY_CONVERSATION_ID || "";
-  if (env.ISOCAN_JETSKI_JOIN === "off") {
+  if (env.ISOCAN_ANTIGRAVITY_JOIN === "off") {
     lines.push(
-      "Joining it is switched off here (ISOCAN_JETSKI_JOIN=off). When the work turns to the canvas, " +
+      "Joining it is switched off here (ISOCAN_ANTIGRAVITY_JOIN=off). When the work turns to the canvas, " +
         "`isocan identity --session` names you and `isocan session start` puts you on it.",
     );
   } else if (!conversationId) {
-    lines.push("Jetski did not say which conversation this is, so nothing was joined; `isocan identity --session` names you.");
+    lines.push("Antigravity did not say which conversation this is, so nothing was joined; `isocan identity --session` names you.");
   } else {
     const opts = { cwd: binding.root, env: agentEnv(env, home, conversationId) };
     let named = false;

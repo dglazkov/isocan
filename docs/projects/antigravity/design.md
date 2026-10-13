@@ -1,7 +1,7 @@
-# Jetski — the mechanism
+# Antigravity — the mechanism
 
 This document discharges the mechanisms [journey.md](journey.md)'s four scenes
-force: the canvas beside the Jetski chat without a second chat column, the
+force: the canvas beside the Antigravity chat without a second chat column, the
 conversation already on the canvas under its own name, pointing at the canvas
 speaking to the chat, and a bench of model-pinned agents. It continues
 [embed](../embed/phases.md), which made `isocan embed` the address for a pane,
@@ -11,16 +11,16 @@ agent" unbuilt.
 ## 1. A plugin, not a per-IDE fork
 
 [Embed phase 4](../embed/phases.md) retired per-IDE extensions: a codebase per
-editor is a second client that drifts from the CLI. A Jetski plugin is a
+editor is a second client that drifts from the CLI. An Antigravity plugin is a
 directory of declarations — a manifest, an MCP server entry, one hook, a rule,
 two agents, a doorway to the one skill, and a sidecar pane — and every act in
 it is an `isocan` command. The pane can do nothing the CLI cannot.
 
-The two scripts share `plugins/jetski/lib/workspace.mjs`: plain ESM with no
-dependencies, because it runs under whatever Node Jetski provides, from a
+The two scripts share `plugins/antigravity/lib/workspace.mjs`: plain ESM with no
+dependencies, because it runs under whatever Node Antigravity provides, from a
 plugin directory that is usually a symlink into this repo. Where it mirrors
 TypeScript it cannot import — `findBinding` from `packages/server`, the
-harness session variables from `packages/api` — `test/jetski-plugin.test.ts`
+harness session variables from `packages/api` — `test/antigravity-plugin.test.ts`
 runs both on the same inputs.
 
 ## 2. `?embed=1`: one switch, read once
@@ -133,10 +133,10 @@ documented:
 - It parses stdout strictly: `{"injectSteps":[{"ephemeralMessage":"…"}]}` or
   nothing at all.
 - It reads `hooks.json` once, when the plugin loads. A changed hook takes a
-  Jetski restart, and until then the old wiring runs.
+  Antigravity restart, and until then the old wiring runs.
 
 The command is guarded — `if command -v node …; then exec node …; fi` — so a
-machine without `node` on Jetski's PATH gets silence rather than an error in
+machine without `node` on Antigravity's PATH gets silence rather than an error in
 every conversation. The script finds the canvas only from `workspacePaths`,
 taking absolute paths and `file:` URIs and dropping anything relative: read
 against the cwd, a relative path would be the plugin's own directory, inside
@@ -145,17 +145,17 @@ a repository that is itself bound. Outside a bound folder it prints nothing.
 Inside one it does what the agent guide says an arriving agent does —
 `isocan identity --session`, then `isocan session start --label "<name> 🤖"` —
 as the conversation (`agentEnv`: the person's environment with every harness
-variable removed and `ANTIGRAVITY_CONVERSATION_ID` put back, the one Jetski
+variable removed and `ANTIGRAVITY_CONVERSATION_ID` put back, the one Antigravity
 exports into that conversation's shell), and says in one ephemeral message
 where it is, what it is called, and that `[Isocan Canvas](sidecar://isocan/canvas/)`
 opens the pane. Naming and presence fail separately and are reported
 separately: an agent that could not be named is not put on the canvas, and
 one that was named but not made present is told its name anyway.
-`ISOCAN_JETSKI_JOIN=off` keeps the message and skips the joining. The exit
+`ISOCAN_ANTIGRAVITY_JOIN=off` keeps the message and skips the joining. The exit
 code is always 0.
 
 **The `invocationNum` guard.** An early version also wired `PreInvocation`,
-which fires before every model call, not once. A Jetski still holding that
+which fires before every model call, not once. An Antigravity still holding that
 cached `hooks.json` would run the script per turn, and it did: a
 conversation claimed an identity and started presence on the canvas bound to
 this very repository without anybody asking. `SessionStart`'s input never
@@ -164,7 +164,7 @@ does.
 
 ## 6. The pane: `sidecars/canvas/`
 
-`sidecar.json` runs `node main.mjs` with the AuxPane entrypoint. Under Jetski
+`sidecar.json` runs `node main.mjs` with the AuxPane entrypoint. Under Antigravity
 (`ANTIGRAVITY_LS_ADDRESS` and `ANTIGRAVITY_SIDECAR_WEB_PORT` set) the routes
 ride the host's Sidecar SDK, which serves `/preload.js` and enforces the UI
 token on every non-GET call. Anywhere else, the same route table is served by
@@ -183,7 +183,7 @@ the **person** (`personEnv`: every harness session variable and
 
 A pass is single-use and a local daemon's frame cannot keep a badge across
 reloads, so the page mints a fresh address per load (*Reload* does the same).
-A loopback daemon framed from another machine — Jetski Web on a laptop, the
+A loopback daemon framed from another machine — Antigravity Web on a laptop, the
 daemon on a workstation — cannot load, and the pane says so instead of
 showing a blank frame. Selected items appear as chips; a chip points the
 canvas at its item (`isocan:focus-item`), and *Ask* sends the typed question
@@ -191,7 +191,7 @@ with the items' ids and titles to the conversation through
 `window.sidecar.agent.sendMessage`.
 
 The Agents bar's buttons come from `presets.json` beside `main.mjs` (or the
-file `ISOCAN_JETSKI_PRESETS` names). Each is a standing agent — an agent's
+file `ISOCAN_ANTIGRAVITY_PRESETS` names). Each is a standing agent — an agent's
 name, never a model's or a vendor's — with a harness (null: this machine's
 default) and a model id. A button whose harness has no door for its model is
 marked ⚠ and says so on hover, and one whose harness cannot run here is
@@ -201,7 +201,7 @@ fails when the agent is first summoned, not when it is enrolled.
 
 ## 7. Whose name each part speaks in
 
-- The **hook** speaks as the conversation, so what the Jetski agent writes on
+- The **hook** speaks as the conversation, so what the Antigravity agent writes on
   the canvas is attributed to it, not to the person.
 - The **pane** speaks as the person: minting a pass, binding a folder and
   enrolling an agent are the person's acts.
@@ -213,25 +213,25 @@ fails when the agent is first summoned, not when it is enrolled.
 ## 8. Limits, on purpose or for now
 
 - A canvas on this machine's own daemon can only be framed by a browser on
-  this machine; from Jetski Web elsewhere, bind the folder to a canvas on a
+  this machine; from Antigravity Web elsewhere, bind the folder to a canvas on a
   shared home such as isocan.io.
 - Every new conversation in a bound workspace joins, subagent conversations
   included — they run the same hook.
-- The hook and the pane need `node` on Jetski's PATH; the MCP server needs
+- The hook and the pane need `node` on Antigravity's PATH; the MCP server needs
   `isocan`.
 - ~~The pane offers no slash commands~~ — it does now, by a different road
   than the Chat's (§11).
-- The walk that only a person can do — Jetski's own SDK, the AuxPane, the hook
+- The walk that only a person can do — Antigravity's own SDK, the AuxPane, the hook
   message in a real conversation — is
-  [`docs/verify/2026-09-28-jetski-plugin.md`](../../verify/2026-09-28-jetski-plugin.md).
+  [`docs/verify/2026-09-28-antigravity-plugin.md`](../../verify/2026-09-28-antigravity-plugin.md).
 
 ## 9. The conversations record
 
-`<isocan home>/jetski-conversations.json`, written by `plugins/jetski/lib/jetski.mjs`
+`<isocan home>/antigravity-conversations.json`, written by `plugins/antigravity/lib/antigravity.mjs`
 `recordConversation`: conversation id → `{ canvasId, title, root, actorId,
 name, tier, at }`. The desk keeps the conversation's claim as
 `antigravity:<conversationId>` and never hands it back, so without this file
-nothing on the machine can say which face on the canvas is which Jetski
+nothing on the machine can say which face on the canvas is which Antigravity
 conversation. Two writers, merged per row: the SessionStart hook (after
 `identity --session`, which prints the actor id beside the name) and a
 fan-out (§12, which knows the tier before the hook runs). Rows past a day are
@@ -240,8 +240,8 @@ costs the relay and the 💬 button, never the arrival.
 
 ## 10. The relay: the canvas can reach a conversation
 
-`plugins/jetski/lib/relay.mjs`, started by `main.mjs` under the host. The
-problem it closes: a Jetski conversation is on the canvas (§5) but told not
+`plugins/antigravity/lib/relay.mjs`, started by `main.mjs` under the host. The
+problem it closes: an Antigravity conversation is on the canvas (§5) but told not
 to park, because the person steers it in the chat — so a canvas comment
 mentioning it reached nobody.
 
@@ -257,9 +257,9 @@ send-message`. Exit 2 re-parks; exit 3 (the conversation parked itself)
 stands back five minutes; exit 4 (withdrawn, taken down) and a send the
 host answers with *not found* drop the row.
 
-One relay per machine (`jetski-relay.lock`, taken over from a dead pid),
+One relay per machine (`antigravity-relay.lock`, taken over from a dead pid),
 because two parks for one actor displace each other forever.
-`ISOCAN_JETSKI_RELAY=off` switches it off. While a relay park runs, the
+`ISOCAN_ANTIGRAVITY_RELAY=off` switches it off. While a relay park runs, the
 conversation's face says *waiting for you…* — which is true: the canvas can
 reach it.
 
@@ -279,10 +279,10 @@ Three routes, chosen by the target menu beside it, each one existing door:
 app answers itself (`local`), believed for a minute. Typing `/` opens them,
 filtered as you type, with where a non-built-in came from. A skill sent to
 the conversation is `skillMessage`: `/name args` first — on the canvas a
-message that starts with `/name` IS the request, and the Jetski agent
+message that starts with `/name` IS the request, and the Antigravity agent
 learns one grammar — then *`isocan command show <name>` is your
 instructions*, then the selection. Handed to a standing agent it is the
-same text as a comment, so skills are never Jetski-only: the canvas's
+same text as a comment, so skills are never Antigravity-only: the canvas's
 catalogue is the one catalogue, and where it runs is a choice of who.
 
 **Starters.** Under the box, before anything is typed: with a selection,
@@ -290,31 +290,31 @@ catalogue is the one catalogue, and where it runs is a choice of who.
 wrong with it?*; without one, *What's on this canvas?*, *Answer N open
 questions* when there are some, *Put what we did here on the canvas*, and
 `/ N skills`. A starter fills the box and sends nothing. They are the
-pane's way of teaching the Jetski side what a person can do, and the two
-cross-world acts are among them by name. `test/jetski-tie.test.ts` holds the
+pane's way of teaching the Antigravity side what a person can do, and the two
+cross-world acts are among them by name. `test/antigravity-tie.test.ts` holds the
 suggested skills to ones the canvas ships.
 
 **The inbox.** *Asks N* in the header is `isocan comment ls --open` — agents
 waiting on a person — every ten seconds. *Show* opens the thread in the
-frame (`isocan:open-thread`); *Answer with Jetski* hands the question to
+frame (`isocan:open-thread`); *Answer with Antigravity* hands the question to
 the conversation (`threadMessage`) to work out before anybody replies.
 
 ## 12. Fan-out and faces
 
-*Fan out* starts one new Jetski conversation per tier (`flash_lite`, `flash`,
+*Fan out* starts one new Antigravity conversation per tier (`flash_lite`, `flash`,
 `pro` — what `agentapi new-conversation --model` takes; at most three),
 titled `<ask> · <tier>`, in the conversation's own project, each told it is
 one of N and to own up to its tier (`fanoutMessage`). The record gets the
 tier at once; the hook adds the actor when the conversation arrives. So the
-Agents bar can say *● Nell · Chat · pro*, and a face that is a Jetski
+Agents bar can say *● Nell · Chat · pro*, and a face that is an Antigravity
 conversation gets 💬, which is `window.sidecar.ui.toggleConversation` — the
-canvas's faces and Jetski's conversations are the same things, reachable
+canvas's faces and Antigravity's conversations are the same things, reachable
 from either side. The face that is the pane's own conversation says *this
 chat*.
 
 This is deliberately narrower than the Agents bar (§6, phase 3's trajectory:
 presets are standing agents, not agentapi conversations). A preset is an
 agent that stays and answers later, on any harness, while `isocan rc` runs.
-A fan-out is Jetski's own tiers, now, once, with no `rc` — the comparison
-scene 8 asks for, which a standing agent on the `jetski` harness could only
+A fan-out is Antigravity's own tiers, now, once, with no `rc` — the comparison
+scene 8 asks for, which a standing agent on the `antigravity` harness could only
 give through a hand-built ACP bridge.

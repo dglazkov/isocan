@@ -197,7 +197,7 @@ isocan canvas ls              # the directory's canvas; --all for the home
 
 A directory nobody has readied yet takes one command: `isocan setup` puts
 this guide's skill where agents look, the CLI on PATH, and the daemon behind
-the app (`--jetski` also links the Jetski plugin into
+the app (`--antigravity` also links the Antigravity plugin into
 `~/.gemini/config/plugins/isocan`). On a machine that has never held a canvas it also writes **isocan.io**
 down as the birth default, so the first canvas somebody makes is at the hosted
 home rather than trapped on one laptop — it says so in its report, and `isocan

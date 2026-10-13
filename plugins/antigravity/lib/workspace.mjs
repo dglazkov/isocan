@@ -1,12 +1,12 @@
 /**
  * What the SessionStart hook and the canvas sidecar both need to know about
- * the workspace Jetski has open: which canvas it is bound to, how to reach
+ * the workspace Antigravity has open: which canvas it is bound to, how to reach
  * the `isocan` CLI, and whose name a command runs under.
  *
  * Plain ESM with no dependencies, on purpose. It runs under whatever Node
- * Jetski provides, from a plugin directory that is usually a symlink into
+ * Antigravity provides, from a plugin directory that is usually a symlink into
  * this repo — so it cannot import the TypeScript it mirrors. Where it
- * mirrors (`findBinding`, the harness variables), `test/jetski-plugin.test.ts`
+ * mirrors (`findBinding`, the harness variables), `test/antigravity-plugin.test.ts`
  * holds it to the original.
  */
 import { execFile } from "node:child_process";
@@ -127,7 +127,7 @@ function declaredHarnessVars(home) {
  * The environment for a command the PERSON is giving — minting the pane's
  * pass, enrolling an agent. Every harness session variable is removed, so
  * the CLI resolves this machine's person rather than whichever conversation
- * started Jetski; and `ISOCAN_CANVAS`, so the workspace's own marker decides
+ * started Antigravity; and `ISOCAN_CANVAS`, so the workspace's own marker decides
  * the canvas.
  */
 export function personEnv(env, home) {
@@ -136,8 +136,8 @@ export function personEnv(env, home) {
   return out;
 }
 
-/** The environment for a command the Jetski conversation gives as ITSELF:
- * the person's, plus exactly one session variable — the one Jetski exports
+/** The environment for a command the Antigravity conversation gives as ITSELF:
+ * the person's, plus exactly one session variable — the one Antigravity exports
  * into that conversation's own shell, so both resolve the same actor. */
 export function agentEnv(env, home, conversationId) {
   return { ...personEnv(env, home), ANTIGRAVITY_CONVERSATION_ID: conversationId };
@@ -163,7 +163,7 @@ function onPath(bin, env) {
  * `packages/cli/dist/isocan.mjs` in a `#release` install). Null when none of
  * those exist. A `.js`/`.mjs` file runs under the PATH's `node` — what the
  * `isocan` shim itself would use — and only without one under whatever node
- * is running this, which inside Jetski may be the host's bundled one.
+ * is running this, which inside Antigravity may be the host's bundled one.
  */
 export function resolveCli(env = process.env) {
   const viaNode = (file) => ({ command: onPath("node", env) ?? process.execPath, prefix: [file] });

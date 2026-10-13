@@ -372,10 +372,10 @@ describe("harnesses isocan has not met", () => {
   });
 
   it("ISOCAN_HARNESS is what it gets called", async () => {
-    const env = { ISOCAN_SESSION_ID: "own-1", ISOCAN_HARNESS: "jetski" };
+    const env = { ISOCAN_SESSION_ID: "own-1", ISOCAN_HARNESS: "antigravity" };
     const out = await asAgent(env, "identity", "--name", "Sonia", "--session");
-    expect(out.stdout).toContain("(jetski session)");
-    expect((await asAgent(env, "identity")).stdout).toContain("this agent session (jetski)");
+    expect(out.stdout).toContain("(antigravity session)");
+    expect((await asAgent(env, "identity")).stdout).toContain("this agent session (antigravity)");
   });
 
   it("deliberate beats ambient: the escape hatch is the session claimed", async () => {
@@ -392,13 +392,13 @@ describe("harnesses isocan has not met", () => {
   it("config.json adopts a harness isocan never shipped", async () => {
     await fs.writeFile(
       path.join(home, "config.json"),
-      JSON.stringify({ harnessVars: { jetski: "JETSKI_CONVO", bad: "not a var name" } }),
+      JSON.stringify({ harnessVars: { antigravity: "ANTIGRAVITY_CONVO", bad: "not a var name" } }),
     );
-    const out = await asAgent({ JETSKI_CONVO: "j-1" }, "identity", "--name", "Cana", "--session");
+    const out = await asAgent({ ANTIGRAVITY_CONVO: "j-1" }, "identity", "--name", "Cana", "--session");
     expect(out.code).toBe(0);
-    expect(out.stdout).toContain("(jetski session)"); // and the typo alongside it was ignored
-    expect(Object.keys((await registry()).claims)).toEqual(["jetski:j-1"]);
-    expect((await asAgent({ JETSKI_CONVO: "j-1" }, "whoami")).stdout).toContain("Cana");
+    expect(out.stdout).toContain("(antigravity session)"); // and the typo alongside it was ignored
+    expect(Object.keys((await registry()).claims)).toEqual(["antigravity:j-1"]);
+    expect((await asAgent({ ANTIGRAVITY_CONVO: "j-1" }, "whoami")).stdout).toContain("Cana");
   });
 });
 

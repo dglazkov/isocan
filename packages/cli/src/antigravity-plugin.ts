@@ -4,23 +4,23 @@ import path from "node:path";
 import { packagePath } from "@isocan/core/packageroot";
 
 /**
- * **Install the Jetski plugin from whichever copy of isocan is running**
- * (`docs/projects/jetski/phases.md`, phase 2).
+ * **Install the Antigravity plugin from whichever copy of isocan is running**
+ * (`docs/projects/antigravity/phases.md`, phase 2).
  *
- * Links `~/.gemini/config/plugins/isocan` to this copy's `plugins/jetski` — in
+ * Links `~/.gemini/config/plugins/isocan` to this copy's `plugins/antigravity` — in
  * a `#release` install (`INSTALL_SPEC`) or in a checkout — so
  * upgrading the CLI updates the plugin in place and nobody needs a clone of
  * the repository just to run the plugin.
  *
  * It replaces only what it would have made: a symlink, or nothing. A real
  * directory there is somebody's copy, perhaps edited, and deleting it is a
- * choice (`force: true`). `uninstallJetskiPlugin` removes the link only when
+ * choice (`force: true`). `uninstallAntigravityPlugin` removes the link only when
  * it points at `sourceDir`.
  */
 
-/** Where Jetski looks for the isocan plugin (`ISOCAN_JETSKI_PLUGIN_DIR` overrides for tests). */
+/** Where Antigravity looks for the isocan plugin (`ISOCAN_ANTIGRAVITY_PLUGIN_DIR` overrides for tests). */
 export function defaultTarget(env: NodeJS.ProcessEnv = process.env): string {
-  const override = env["ISOCAN_JETSKI_PLUGIN_DIR"]?.trim();
+  const override = env["ISOCAN_ANTIGRAVITY_PLUGIN_DIR"]?.trim();
   if (override) return path.resolve(override);
   return path.join(os.homedir(), ".gemini", "config", "plugins", "isocan");
 }
@@ -49,8 +49,8 @@ function pointsAt(target: string, source: string): boolean {
 }
 
 /** Link `target` to `sourceDir`. Returns what it did, in words. */
-export function installJetskiPlugin({
-  sourceDir = packagePath("plugins", "jetski"),
+export function installAntigravityPlugin({
+  sourceDir = packagePath("plugins", "antigravity"),
   target = defaultTarget(),
   force = false,
 }: {
@@ -80,8 +80,8 @@ export function installJetskiPlugin({
 }
 
 /** Remove the link, and only a link that points at `sourceDir`. */
-export function uninstallJetskiPlugin({
-  sourceDir = packagePath("plugins", "jetski"),
+export function uninstallAntigravityPlugin({
+  sourceDir = packagePath("plugins", "antigravity"),
   target = defaultTarget(),
 }: {
   sourceDir?: string;

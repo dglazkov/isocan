@@ -1,54 +1,54 @@
 ---
 status: works
 since: 2026-09-29
-never: The host integration required an actual Jetski session; it was walked on 29 September.
-needs: Jetski, Node, the isocan CLI and a signed-in harness for steps that run a model.
+never: The host integration required an actual Antigravity session; it was walked on 29 September.
+needs: Antigravity, Node, the isocan CLI and a signed-in harness for steps that run a model.
 ---
 
-# The isocan plugin, inside Jetski
+# The isocan plugin, inside Antigravity
 
-**Status: `works` (walked 2026-09-29 in Jetski).**
+**Status: `works` (walked 2026-09-29 in Antigravity).**
 
-**What you need:** Jetski on a machine with `node` and the `isocan` CLI on its
+**What you need:** Antigravity on a machine with `node` and the `isocan` CLI on its
 PATH (`npm i -g github:dglazkov/isocan#release`, or this repo's own
 `packages/cli/bin/isocan.js` on the PATH), and a throwaway folder. Fifteen
 minutes; steps 8–9 also need a harness signed in (Claude Code, Codex, or the
-`jetski` ACP adapter) and spend a few tokens.
+`antigravity` ACP adapter) and spend a few tokens.
 
 **Why this page exists.** Everything below has automated proof up to the
 host's edge: the hook runs from a symlinked install exactly as `hooks.json`
 says, the pane's routes run against the real CLI's shapes, and the pane was
-walked in headless Chrome against a real daemon (`scripts/journey-jetski-pane.mjs`).
-What no machine here can do is be Jetski: load the plugin, run the hook at
+walked in headless Chrome against a real daemon (`scripts/journey-antigravity-pane.mjs`).
+What no machine here can do is be Antigravity: load the plugin, run the hook at
 the start of a real conversation, serve the pane through its Sidecar SDK in
 the AuxPane, and carry *Send to chat* into the chat. Walked end to end on
-29 Sep 2026 inside real Jetski: `SessionStart` injected `EPHEMERAL_MESSAGE`
+29 Sep 2026 inside real Antigravity: `SessionStart` injected `EPHEMERAL_MESSAGE`
 and named the conversation on its bound canvas, the AuxPane framed the canvas
 chat-free with selection chips and `/skill` menu, `/isocan` and `/fan-out`
 worked from chat, `isocan ask` surfaced **Asks 1** in `/api/asks`, a canvas
-reply mentioning `@<name>` was delivered into the live Jetski conversation by
-the sidecar relay (`~/.isocan/jetski-relay.lock`), and `rc add --model flash`
-+ `rc turn` ran a real model-pinned turn through the `jetski` ACP adapter
+reply mentioning `@<name>` was delivered into the live Antigravity conversation by
+the sidecar relay (`~/.isocan/antigravity-relay.lock`), and `rc add --model flash`
++ `rc turn` ran a real model-pinned turn through the `antigravity` ACP adapter
 (`-model {model}`).
 
 ---
 
 ## Part one: install, and a conversation arrives
 
-1. Run `isocan setup --jetski` (or `node scripts/install-jetski-plugin.mjs`
-   from a checkout). **Then quit and reopen Jetski** — it reads a plugin's
+1. Run `isocan setup --antigravity` (or `node scripts/install-antigravity-plugin.mjs`
+   from a checkout). **Then quit and reopen Antigravity** — it reads a plugin's
    `hooks.json` and rule once, when the plugin loads, and an old copy keeps
    running until then.
 
    **You should see:** `~/.gemini/config/plugins/isocan` is a link to the
-   installed `plugins/jetski`, and *Isocan Canvas* appears among Jetski's
+   installed `plugins/antigravity`, and *Isocan Canvas* appears among Antigravity's
    plugins.
 
-2. Make a throwaway folder, bind it, and open it in Jetski:
-   `mkdir ~/acme-jetski && cd ~/acme-jetski && isocan canvas new "Acme Jetski" && isocan use "Acme Jetski"`.
+2. Make a throwaway folder, bind it, and open it in Antigravity:
+   `mkdir ~/acme-antigravity && cd ~/acme-antigravity && isocan canvas new "Acme Antigravity" && isocan use "Acme Antigravity"`.
    Start a **new** conversation in it and say anything.
 
-   **You should see:** the agent knows it is on the canvas *Acme Jetski*
+   **You should see:** the agent knows it is on the canvas *Acme Antigravity*
    before you mention it — the hook's message told it — and it offers an
    **Isocan Canvas** link.
 
@@ -101,11 +101,11 @@ the sidecar relay (`~/.isocan/jetski-relay.lock`), and `rc add --model flash`
 
 ## Part three: the tie (phase 4, added 29 Sep)
 
-Restart Jetski first — the hook's message and the rule changed.
+Restart Antigravity first — the hook's message and the rule changed.
 
 10. Open the pane on the step-2 canvas with nothing selected.
 
-    **You should see:** the box under the header saying *Ask Jetski about the
+    **You should see:** the box under the header saying *Ask Antigravity about the
     canvas, or / for a skill…*, and starters under it — *What's on this
     canvas?*, *Put what we did here on the canvas*, a couple of `/skills`, and
     `/ N skills`. Your own face in the Agents bar says *this chat*.
@@ -119,24 +119,24 @@ Restart Jetski first — the hook's message and the rule changed.
 
 12. In a **browser tab** on the same canvas (not the pane), comment on the
     note mentioning the agent by the name from step 3: *"@<name> make it
-    shorter"*. Leave Jetski alone.
+    shorter"*. Leave Antigravity alone.
 
-    **You should see:** within a few seconds, a message in the Jetski
+    **You should see:** within a few seconds, a message in the Antigravity
     conversation headed *The isocan canvas … has something for you*, with
     your comment in it — and the agent's reply appearing on your thread in the
-    tab. This is the relay; `~/.isocan/jetski-relay.lock` exists while it runs.
+    tab. This is the relay; `~/.isocan/antigravity-relay.lock` exists while it runs.
 
 13. Select the note, set the target menu to **Fan out: Flash + Pro**, type
     *make a friendlier version*, and press **Fan out**.
 
-    **You should see:** two new conversations in Jetski titled *make a
+    **You should see:** two new conversations in Antigravity titled *make a
     friendlier version · flash* and *… · pro*, each arriving on the canvas
     under its own name with its tier in the Agents bar, and a 💬 beside each
     that opens it.
 
 14. Ask the agent to `isocan ask "amber or teal?"` on the canvas.
 
-    **You should see:** **Asks 1** in the pane's header; *Answer with Jetski*
+    **You should see:** **Asks 1** in the pane's header; *Answer with Antigravity*
     hands the question back to the conversation.
 
 ---
@@ -144,16 +144,16 @@ Restart Jetski first — the hook's message and the rule changed.
 ## What to do when it is wrong
 
 - **Step 2 or 3 fails:** run the hook by hand from the plugin directory —
-  `cd ~/.gemini/config/plugins/isocan && echo '{"conversationId":"acme-test","workspacePaths":["'"$HOME"'/acme-jetski"]}' | node scripts/session-start.mjs`
+  `cd ~/.gemini/config/plugins/isocan && echo '{"conversationId":"acme-test","workspacePaths":["'"$HOME"'/acme-antigravity"]}' | node scripts/session-start.mjs`
   — and note what it prints. Nothing printed means it did not find the
   binding; a message saying *Naming you failed* carries the CLI's own reason.
 - **Step 5 shows a blank frame:** the pane's header says why when the daemon
-  is loopback and the browser is elsewhere (Jetski Web on another machine).
+  is loopback and the browser is elsewhere (Antigravity Web on another machine).
   Otherwise press **Reload** — a pass is single-use, and a local daemon's
   frame cannot keep its badge across reloads.
-- **Step 12 never arrives:** check `~/.isocan/jetski-conversations.json` has
+- **Step 12 never arrives:** check `~/.isocan/antigravity-conversations.json` has
   the conversation with an `actorId` (the hook writes it), and that
-  `ISOCAN_JETSKI_RELAY` is not `off`. If the agent parked itself on
+  `ISOCAN_ANTIGRAVITY_RELAY` is not `off`. If the agent parked itself on
   `isocan wait`, its own park wins and the relay stands back five minutes.
 - **A Chat appears in step 5:** that is a bug; `embed-chat.test.ts` names the
   entrances it guards. Note what opened it.
@@ -161,5 +161,5 @@ Restart Jetski first — the hook's message and the rule changed.
 ## What this walk does not cover
 
 Subagent conversations run the same hook and also join; that is by design and
-not walked here. Jetski Web against a canvas on isocan.io is the same pane
+not walked here. Antigravity Web against a canvas on isocan.io is the same pane
 with a remote frame — worth a run on its own when someone has it.

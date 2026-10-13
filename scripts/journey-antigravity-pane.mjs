@@ -1,5 +1,5 @@
-// Run after npm run build: node scripts/journey-jetski-pane.mjs
-// Jetski phases 0 and 3 (docs/projects/jetski/) in an ACTUAL browser.
+// Run after npm run build: node scripts/journey-antigravity-pane.mjs
+// Antigravity phases 0 and 3 (docs/projects/antigravity/) in an ACTUAL browser.
 //
 // The Isocan Canvas pane, served by its own loopback fallback, framing a
 // canvas on a daemon from this checkout — the half no source-reading test can
@@ -12,9 +12,9 @@
 //
 // Everything is synthetic ("Acme"), on a temp home, a daemon of its own and
 // ports of its own; it never touches the person's canvases. What it cannot
-// reach is the host: the pane runs standalone here, so Jetski's Sidecar SDK,
+// reach is the host: the pane runs standalone here, so Antigravity's Sidecar SDK,
 // the AuxPane and the conversation beside it are walked by a person
-// (docs/verify/2026-09-28-jetski-plugin.md).
+// (docs/verify/2026-09-28-antigravity-plugin.md).
 import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -24,7 +24,7 @@ import { browser, until } from "./lib/browser.mjs";
 
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const cli = path.join(repo, "packages", "cli", "bin", "isocan.js");
-const paneMain = path.join(repo, "plugins", "jetski", "sidecars", "canvas", "main.mjs");
+const paneMain = path.join(repo, "plugins", "antigravity", "sidecars", "canvas", "main.mjs");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 if (!fs.existsSync(path.join(repo, "packages", "web", "dist", "index.html"))) {
@@ -32,7 +32,7 @@ if (!fs.existsSync(path.join(repo, "packages", "web", "dist", "index.html"))) {
   process.exit(2);
 }
 
-const out = fs.mkdtempSync(path.join(os.tmpdir(), "isocan-jetski-pane-"));
+const out = fs.mkdtempSync(path.join(os.tmpdir(), "isocan-antigravity-pane-"));
 const home = path.join(out, "home");
 const app = path.join(out, "acme-app");
 fs.mkdirSync(home);
@@ -218,7 +218,7 @@ try {
 
   // 6. Pane → canvas: Escape clears the selection (and the pane hears it);
   // the pane pointing at the item selects it again. The chips that call
-  // focusItem show only inside Jetski — standalone there is nobody to Ask —
+  // focusItem show only inside Antigravity — standalone there is nobody to Ask —
   // so the journey calls the chip's own function.
   for (let i = 0; i < 3 && (await b.ev(`selection.length`)) > 0; i++) {
     await chord("Escape", "Escape", 27);

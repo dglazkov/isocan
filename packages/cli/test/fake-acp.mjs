@@ -31,7 +31,7 @@ let failedALoad = false;
 // server reads it. The Antigravity shape, scripted.
 const authMethod = process.env.FAKE_ACP_AUTH ?? null;
 let authenticated = authMethod === null;
-// A model pinned at enrolment (`--model`, docs/projects/jetski/design.md)
+// A model pinned at enrolment (`--model`, docs/projects/antigravity/design.md)
 // arrives two ways: `{model}` filled in a declared adapter's arguments, and
 // ISOCAN_MODEL, which every pinned spawn carries. The reply reports both, and
 // nothing at all when neither is there.

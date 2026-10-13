@@ -232,7 +232,7 @@ memory index would actually read.
 ## The original phase 2 plan, kept for the reasoning
 
 A pane is a surface for a **person**. It gives the manager's **agent**
-nothing: an agent in Jetski or Antigravity looking at a canvas in the next tab
+nothing: an agent in Antigravity looking at a canvas in the next tab
 cannot read it, and the only way it can today is to have `isocan` on its PATH
 and the skill in its context — which is the harness case, and requires isocan
 to have installed itself there.

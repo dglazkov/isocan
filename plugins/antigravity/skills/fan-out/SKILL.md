@@ -2,7 +2,7 @@
 name: fan-out
 description: >-
   Fan out a canvas question or canvas /skill across multiple model tiers
-  (flash + pro by default, or flash_lite, flash, and pro) in parallel Jetski
+  (flash + pro by default, or flash_lite, flash, and pro) in parallel Antigravity
   conversations that each join the bound isocan canvas under their own name and
   place their takes side by side. Triggered by /fan-out or when the person asks
   to fan out a canvas task across models.
@@ -13,7 +13,7 @@ description: >-
 Use this skill when the person types `/fan-out …` in chat (or asks to fan a
 canvas prompt or skill out across model tiers). It runs the exact same
 `/api/fanout` path as the **Isocan Canvas** pane's **Fan out** button, so each
-tier starts as a real Jetski conversation in this project, joins the canvas
+tier starts as a real Antigravity conversation in this project, joins the canvas
 under its own name, and shows its tier badge (`· flash`, `· pro`, `· flash_lite`)
 and `💬` link in the pane's **Agents** bar.
 
@@ -37,7 +37,7 @@ and `💬` link in the pane's **Agents** bar.
      import os from "node:os";
      import path from "node:path";
      import { pathToFileURL } from "node:url";
-     const pluginDir = process.env.ISOCAN_JETSKI_PLUGIN_DIR || path.join(os.homedir(), ".gemini", "config", "plugins", "isocan");
+     const pluginDir = process.env.ISOCAN_ANTIGRAVITY_PLUGIN_DIR || path.join(os.homedir(), ".gemini", "config", "plugins", "isocan");
      const { createPane } = await import(pathToFileURL(path.join(pluginDir, "sidecars", "canvas", "main.mjs")).href);
      const { routes } = createPane();
      const out = await routes["/api/fanout"]({

@@ -18,7 +18,7 @@ function searchAtLoad(): string {
 
 /**
  * Whether a host pane framed this window (`?embed=1`,
- * `docs/projects/jetski/design.md`) — the gate on the host bridge.
+ * `docs/projects/antigravity/design.md`) — the gate on the host bridge.
  */
 export function embeddedNow(search = searchAtLoad()): boolean {
   return isEmbedded(search);
