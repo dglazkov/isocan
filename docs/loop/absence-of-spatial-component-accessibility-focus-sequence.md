@@ -3,7 +3,7 @@ title: Absence of spatial component accessibility focus sequence nodes
 loop:
   - 2277e9d6-f455-4f46-84ae-72536d782307
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

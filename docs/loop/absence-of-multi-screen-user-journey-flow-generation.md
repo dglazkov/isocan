@@ -3,7 +3,7 @@ title: Absence of multi-screen user journey flow generation
 loop:
   - 67362299-9924-4d89-bcd2-b25eb581cae0
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: stale
 rank: never

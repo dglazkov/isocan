@@ -3,7 +3,7 @@ title: Absence of spatial smart alignment engine
 loop:
   - 54ed4fdb-82e6-40ec-855f-e4873dcfd4d7
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

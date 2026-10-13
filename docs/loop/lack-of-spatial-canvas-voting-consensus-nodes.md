@@ -3,7 +3,7 @@ title: Lack of spatial canvas voting consensus nodes
 loop:
   - 58fdb202-b81e-4120-bc06-0a12288f4c1e
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: stale
 rank: never

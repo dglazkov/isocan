@@ -3,7 +3,7 @@ title: Absence of spatial user flow sitemap scaffolding
 loop:
   - 9b5552a5-c0ea-4d32-853e-7a1be78253d5
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 45 not yet read.**
+**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 51 not yet read.**
 
 ## Accepted, by project
 
@@ -152,6 +152,7 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 
 ## Not yet read
 
+- [Absence of agent proposal staging overlays](loop/absence-of-agent-proposal-staging-overlays.md) — Loop P2
 - [Absence of spatial agent activity feeds and status indicators](loop/absence-of-spatial-agent-activity-feeds-and-status.md) — Loop P2
 - [Absence of spatial API contract mock payload binding nodes](loop/absence-of-spatial-api-contract-mock-payload-binding-nodes.md) — Loop P2
 - [Absence of spatial component accessibility focus sequence nodes](loop/absence-of-spatial-component-accessibility-focus-sequence.md) — Loop P2
@@ -163,15 +164,19 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 - [Absence of spatial timeboxed sprint timer nodes](loop/absence-of-spatial-timeboxed-sprint-timer-nodes.md) — Loop P2
 - [Absence of spatial user flow sitemap scaffolding](loop/absence-of-spatial-user-flow-sitemap-scaffolding.md) — Loop P2
 - [Absence of spatial web benchmark snapshot cards](loop/absence-of-spatial-web-benchmark-snapshot-cards.md) — Loop P2
+- [Agent guide omits actor identity operation schemas](loop/agent-guide-omits-actor-identity-operation-schemas.md) — Loop P2
+- [Agent guide omits agent enrollment operation schemas](loop/agent-guide-omits-agent-enrollment-operation-schemas.md) — Loop P2
 - [Agent guide omits comment restore and anchor operations](loop/agent-guide-omits-comment-restore-and-anchor-operations.md) — Loop P2
 - [Agent guide omits design lifecycle operation schemas](loop/agent-guide-omits-design-lifecycle-operation-schemas.md) — Loop P2
 - [Agent guide omits project lifecycle operation schemas](loop/agent-guide-omits-project-lifecycle-operation-schemas.md) — Loop P2
+- [Agent guide omits questionnaire operation schemas](loop/agent-guide-omits-questionnaire-operation-schemas.md) — Loop P2
 - [Canvas viewport computations isolated in web client](loop/canvas-viewport-computations-isolated-in-web-client.md) — Loop P2
 - [CLI group migration preview lacks dedicated command](loop/cli-group-migration-preview-lacks-dedicated-command.md) — Loop P2
 - [CLI lacks group stack card flipping commands](loop/cli-lacks-group-stack-card-flipping-commands.md) — Loop P2
 - [CLI lacks voice token generation command](loop/cli-lacks-voice-token-generation-command.md) — Loop P2
 - [CLI presentation mode lacks live stepping control](loop/cli-presentation-mode-lacks-live-stepping-control.md) — Loop P2
 - [Group stack desk layout recalculates card transforms on pointer hover](loop/group-stack-desk-layout-recalculates-card-transforms-on.md) — Loop P2
+- [Lack of design token reactive variable bindings](loop/lack-of-design-token-reactive-variable-bindings.md) — Loop P2
 - [Lack of multi-selection bounding box transform anchors](loop/lack-of-multi-selection-bounding-box-transform-anchors.md) — Loop P2
 - [Lack of spatial canvas region permissions and edit locking](loop/lack-of-spatial-canvas-region-permissions-and-edit-locking.md) — Loop P2
 - [Lack of spatial canvas sticky note annotation clusters](loop/lack-of-spatial-canvas-sticky-note-annotation-clusters.md) — Loop P2
@@ -195,6 +200,7 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 - [Web UI design reconciliation drafts bypass daemon reducer](loop/web-ui-design-reconciliation-drafts-bypass-daemon-reducer.md) — Loop P2
 - [Web UI lacks agent key claim migration controls](loop/web-ui-lacks-agent-key-claim-migration-controls.md) — Loop P2
 - [Web UI lacks design recipe inspection interface](loop/web-ui-lacks-design-recipe-inspection-interface.md) — Loop P2
+- [Web UI lacks git backup and remote sync controls](loop/web-ui-lacks-git-backup-and-remote-sync-controls.md) — Loop P2
 - [Web UI version inspector lacks pruning capability](loop/web-ui-version-inspector-lacks-pruning-capability.md) — Loop P2
 - [Wireframe slots lack contextual synthetic data filling](loop/wireframe-slots-lack-contextual-synthetic-data-filling.md) — Loop P2
 

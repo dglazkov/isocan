@@ -3,7 +3,7 @@ title: Absence of spatial API contract mock payload binding nodes
 loop:
   - bd178a41-4f90-44ba-ba7b-6d2ea3106ed4
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

@@ -3,7 +3,7 @@ title: Lack of spatial design system theme variants
 loop:
   - ecbd643b-a432-4c7e-987f-5d3e48f27f9c
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: declined
 rank: never

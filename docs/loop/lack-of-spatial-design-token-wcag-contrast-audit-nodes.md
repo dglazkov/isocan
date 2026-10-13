@@ -3,7 +3,7 @@ title: Lack of spatial design token WCAG contrast audit nodes
 loop:
   - 97ede8ef-0cf9-4310-81ec-a36db052a6a3
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

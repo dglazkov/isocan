@@ -3,7 +3,7 @@ title: Absence of spatial canvas history diffing
 loop:
   - b2553ad0-8567-44df-885b-31b801af713d
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: declined
 rank: never

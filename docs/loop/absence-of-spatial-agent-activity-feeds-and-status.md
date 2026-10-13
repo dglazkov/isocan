@@ -3,7 +3,7 @@ title: Absence of spatial agent activity feeds and status indicators
 loop:
   - 0711b9a0-1cc2-4713-ac60-f69860bb13a5
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---

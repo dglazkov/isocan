@@ -3,7 +3,7 @@ title: Spatial canvas lacks design decision record nodes
 loop:
   - 3a31e77a-2506-45aa-befd-8f94e946b687
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: declined
 rank: never

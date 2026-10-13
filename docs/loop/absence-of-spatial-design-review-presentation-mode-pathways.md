@@ -3,7 +3,7 @@ title: Absence of spatial design review presentation mode pathways
 loop:
   - 07322c6f-4b3a-4cda-8c2a-c65121140c3f
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: DISMISSED
 loop_goal: pg_v67IPNa4
 decision: untriaged
 ---
