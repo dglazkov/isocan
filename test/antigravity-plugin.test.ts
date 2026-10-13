@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
@@ -756,5 +756,22 @@ describe("the installer", () => {
     expect(fs.existsSync(target)).toBe(false);
     expect(uninstallAntigravityPlugin({ target })).toContain("nothing installed");
     expect(defaultTarget({ ISOCAN_ANTIGRAVITY_PLUGIN_DIR: target })).toBe(path.resolve(target));
+  });
+});
+
+describe("public naming guard", () => {
+  it("keeps the retired internal host codename out of tracked file paths and contents", () => {
+    const retired = String.fromCharCode(106, 101, 116, 115, 107, 105);
+    const re = new RegExp(retired, "i");
+    const paths = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8", timeout: 10_000 }).split("\n").filter(Boolean);
+    expect(paths.filter((p) => re.test(p))).toEqual([]);
+
+    let grepMatches = "";
+    try {
+      grepMatches = execFileSync("git", ["grep", "-i", "-n", retired], { cwd: repo, encoding: "utf8", timeout: 10_000 }).trim();
+    } catch (err: unknown) {
+      if ((err as { status?: number }).status !== 1) throw err;
+    }
+    expect(grepMatches).toBe("");
   });
 });
