@@ -21,6 +21,12 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 13 October 2026
+
+- **The faces overlap.** The people and agents on a canvas now sit as a pile,
+  each tucked a little under the next, so a full room takes less of the bar.
+  An unread badge and the face you point at still come to the front.
+
 ## 10 October 2026
 
 - **Four more living grounds.** **Pond**: still water your cursor drags
