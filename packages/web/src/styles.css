@@ -1147,7 +1147,6 @@ img { height: auto; }
    Optical, not arithmetic: the numbers now disagree so that the spaces look
    the same. */
 .presence-cluster { padding-left: 10px; padding-right: calc(var(--pill-inset) + 2px); gap: 5px; }
-.presence-cluster .face { margin: 0; }
 /* The word ends where the word ends: its dot already carries a 4px margin on
    the leading side, and a trailing space here would double the gap the faces
    are meant to sit against. */
@@ -2203,7 +2202,7 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
 
 /* ---------- facepile (who's on canvas) ---------- */
 .facepile {
-  display: flex; align-items: center; gap: 6px; margin-left: 6px; padding-left: 10px;
+  display: flex; align-items: center; margin-left: 6px; padding-left: 10px;
   border-left: 1px solid var(--line);
   /* The peek card hangs from here, so the pile is what it is measured against. */
   position: relative;
@@ -2269,12 +2268,21 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
   grid-column: 2 / 4; color: var(--ink-muted);
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
 }
-.face-card-foot { font-size: 10.5px; color: var(--ink-soft); }/* Faces sit side by side rather than overlapping Figma-style: at this size an
-   overlap buries the unread badge under the next person's disc. */
+.face-card-foot { font-size: 10.5px; color: var(--ink-soft); }/* Faces overlap, each tucked a third under the next (Dion, 13 Oct 2026), so
+   a full room reads as one pile and takes less of the bar. They sat side by
+   side before because an overlap buried the unread badge under the next
+   disc; `.badged` and `:hover` lift a face above its neighbours instead. The
+   disc's own card-coloured border is the gap between two faces. */
 .face {
   position: relative; flex: none; padding: 0;
-  background: none; border: none; line-height: 0;
+  /* A card-coloured disc of its own, so a dimmed face (away, enrolled) fades
+     toward the bar and not into the face it overlaps. */
+  background: var(--card); border: none; border-radius: 999px; line-height: 0;
 }
+/* A 6px tuck: enough to read as a pile, not so much that the next disc
+   covers an initial. The pile has no gap of its own; the hairline between
+   people and agents carries its own room. */
+.face + .face { margin-left: -6px; }
 /* Faces overlap, so a badge would slide under the next face — lift it. */
 .face.badged { z-index: 2; }
 .face:hover { z-index: 3; transform: translateY(-1px); }
@@ -2339,7 +2347,7 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
    the discs it separates, so it reads as a divider rather than a tally mark. */
 .face-sep {
   flex: none; align-self: center;
-  width: 1px; height: 16px; margin: 0 1px;
+  width: 1px; height: 16px; margin: 0 8px;
   background: var(--line);
 }
 /* max-height comes from the placement hook: the popover is clamped to the
