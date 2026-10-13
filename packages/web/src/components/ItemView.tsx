@@ -52,6 +52,7 @@ import { loadTextFont } from "../lib/textfont.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
+import { useHtmlSnapshot } from "../lib/htmlsnapshot.ts";
 import { sendPrototypeClick } from "../lib/prototypeclick.ts";
 import { FrameAnchor, anchored, anchorFromMessage, nextSpot, type FrameSpot } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
@@ -1675,7 +1676,16 @@ function VersionFace({
   }
   if (mimeType === "text/html") {
     return (
-      <HtmlItemView canvasId={canvasId} blobHash={blobHash} filename={filename} warm={warm ?? []} itemId={itemId} actor={actor} />
+      <HtmlItemView
+        canvasId={canvasId}
+        blobHash={blobHash}
+        filename={filename}
+        warm={warm ?? []}
+        itemId={itemId}
+        actor={actor}
+        width={size?.width}
+        height={size?.height}
+      />
     );
   }
   return (
@@ -1771,6 +1781,8 @@ function HtmlItemView({
   warm,
   itemId,
   actor,
+  width,
+  height,
 }: {
   canvasId: string;
   blobHash: string;
@@ -1780,6 +1792,8 @@ function HtmlItemView({
    *  entered item or full screen. Then a prototype click is delivered. */
   itemId?: string | undefined;
   actor?: Actor | undefined;
+  width?: number | undefined;
+  height?: number | undefined;
 }) {
   const origin = useContentOrigin(canvasId, [blobHash, ...warm]);
   const stack = useRef<HTMLDivElement>(null);
@@ -1793,6 +1807,17 @@ function HtmlItemView({
   const spot = nextSpot(heldSpot, itemId, blobHash);
   if (spot !== heldSpot) setSpot(spot);
   const src = frame ? anchored(frame.src, spot.carried ?? anchor) : null;
+  const snapshotUrl = useHtmlSnapshot(
+    canvasId,
+    blobHash,
+    width ?? 880,
+    height ?? 640,
+    Boolean(src),
+  );
+  const [proxyReady, setProxyReady] = useState(false);
+  useEffect(() => {
+    setProxyReady(false);
+  }, [blobHash]);
   useEffect(() => {
     if (!itemId || !actor) return;
     const hear = (e: MessageEvent) => {
@@ -1812,16 +1837,31 @@ function HtmlItemView({
     return () => window.removeEventListener("message", hear);
   }, [canvasId, itemId, actor, src]);
   if (!src || !frame) return <div className="html-view" />;
+  const keepLiveFrame = Boolean(actor) || warm.length > 0 || !proxyReady;
   return (
-    <HtmlView
-      stackRef={stack}
-      src={src}
-      sandbox={frame.sandbox}
-      title={filename}
-      warm={warm
-        .map((hash) => itemFrame(origin, canvasId, hash)?.src)
-        .filter((src): src is string => src !== undefined)}
-    />
+    <div className={`html-view-surface${proxyReady ? " has-snapshot" : ""}`}>
+      {snapshotUrl && (
+        <img
+          className="html-snapshot"
+          src={snapshotUrl}
+          alt=""
+          decoding="sync"
+          draggable={false}
+          onLoad={() => requestAnimationFrame(() => setProxyReady(true))}
+        />
+      )}
+      {keepLiveFrame && (
+        <HtmlView
+          stackRef={stack}
+          src={src}
+          sandbox={frame.sandbox}
+          title={filename}
+          warm={warm
+            .map((hash) => itemFrame(origin, canvasId, hash)?.src)
+            .filter((src): src is string => src !== undefined)}
+        />
+      )}
+    </div>
   );
 }
 

@@ -896,7 +896,15 @@ img { height: auto; }
   cursor: default;
 }
 .canvas-viewport.hand { cursor: grab; }
-.canvas-viewport.panning { cursor: grabbing; }
+.canvas-viewport.panning:active { cursor: grabbing; }
+.canvas-viewport.panning .world { pointer-events: none; }
+.canvas-viewport.panning .item.selected,
+.canvas-viewport.panning .item.entered,
+.canvas-viewport.panning .thread-popover { pointer-events: auto; }
+.canvas-viewport.panning .item {
+  contain: layout style paint;
+  box-shadow: none;
+}
 .canvas-viewport.comment-mode { cursor: crosshair; }
 /* Zoom tool: magnifier cursor, and the item under it lights up as the target. */
 .canvas-viewport.zoom { cursor: zoom-in; }
@@ -1559,6 +1567,9 @@ img { height: auto; }
    and is promoted when it is ready, so the white above is never seen through
    — see `HtmlView`. The stack fills its parent exactly as the lone frame used
    to, so nothing that embeds a screen has to know this happens. */
+.html-view-surface { position: relative; width: 100%; height: 100%; }
+.html-snapshot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; pointer-events: none; z-index: 0; }
+.canvas-viewport.panning .item:not(.entered) .html-view-surface.has-snapshot .html-view-stack { display: none; }
 .html-view-stack { position: relative; width: 100%; height: 100%; }
 .html-view-stack > .html-view { position: absolute; inset: 0; }
 /* Loading, not hidden: `visibility: hidden` and `display: none` both let a

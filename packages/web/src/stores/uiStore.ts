@@ -930,7 +930,7 @@ export const useUiStore = create<UiStore>((set, get) => {
      * because the reason generalises — anything outside the viewport that
      * reacts to the camera wants to know when a person is driving it.
      */
-    setPanning: (panning) => set({ panning }),
+    setPanning: (panning) => set((s) => (s.panning === panning ? s : { panning })),
     setRailPanning: (railPanning) => set({ railPanning }),
     setPanelWidth: (width) => {
       // Clamped HERE rather than at the drag, so every caller gets the same

@@ -1,4 +1,70 @@
 import { useEffect, useMemo, useState } from "react";
+import { useUiStore } from "../stores/uiStore.ts";
+
+const buckets = new Map<string, [IntersectionObserver, Map<Element, [boolean, Set<(hit: boolean) => void>]>]>();
+const vis = new Set<() => void>();
+const onVis = () => { for (const fn of vis) fn(); };
+const panSettled = new Set<() => void>();
+let stopPanSub: (() => void) | undefined;
+
+function watchPanSettled(fn: () => void): () => void {
+  if (!panSettled.size) {
+    stopPanSub = useUiStore.subscribe((s, prev) => {
+      if (!s.panning && prev.panning) {
+        for (const cb of panSettled) cb();
+      }
+    });
+  }
+  panSettled.add(fn);
+  return () => {
+    panSettled.delete(fn);
+    if (!panSettled.size && stopPanSub) {
+      stopPanSub();
+      stopPanSub = undefined;
+    }
+  };
+}
+
+function watchVisibility(fn: () => void): () => void {
+  if (!vis.size && typeof document !== "undefined") document.addEventListener("visibilitychange", onVis);
+  vis.add(fn);
+  return () => {
+    vis.delete(fn);
+    if (!vis.size && typeof document !== "undefined") document.removeEventListener("visibilitychange", onVis);
+  };
+}
+
+function observeElement(node: Element, margin: string, onHit: (hit: boolean) => void): () => void {
+  let bucket = buckets.get(margin);
+  if (!bucket) {
+    const map = new Map<Element, [boolean, Set<(hit: boolean) => void>]>();
+    bucket = [
+      new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          const w = map.get(e.target);
+          if (w) { w[0] = e.isIntersecting; for (const fn of w[1]) fn(e.isIntersecting); }
+        }
+      }, { rootMargin: margin }),
+      map,
+    ];
+    buckets.set(margin, bucket);
+  }
+  const [obs, map] = bucket;
+  const entry = map.get(node);
+  if (entry) { entry[1].add(onHit); onHit(entry[0]); }
+  else { map.set(node, [false, new Set([onHit])]); obs.observe(node); }
+  return () => {
+    const b = buckets.get(margin);
+    const w = b?.[1].get(node);
+    if (!b || !w) return;
+    w[1].delete(onHit);
+    if (!w[1].size) {
+      b[1].delete(node);
+      b[0].unobserve(node);
+      if (!b[1].size) { b[0].disconnect(); buckets.delete(margin); }
+    }
+  };
+}
 
 /**
  * **Is this element worth holding a live document for right now.**
@@ -75,6 +141,7 @@ export function useOnScreen<T extends Element>(
       return;
     }
 
+    let live = false;
     let leaving: ReturnType<typeof setTimeout> | undefined;
     const clear = () => {
       if (leaving === undefined) return;
@@ -82,19 +149,23 @@ export function useOnScreen<T extends Element>(
       leaving = undefined;
     };
     /**
-     * `want` is "on screen AND the tab is being looked at". Coming back is
-     * immediate; going away is on a timer, so a scroll that overshoots and
-     * corrects costs nothing.
+     * `want` is "on screen AND the tab is being looked at". Coming back to an
+     * already-mounted card is immediate; mounting a brand-new card waits until
+     * active camera panning settles so swiping past twenty webviews does not
+     * parse and composite twenty transient documents mid-gesture.
      */
     const settle = (want: boolean) => {
       if (want) {
         clear();
+        if (!live && useUiStore.getState().panning) return;
+        live = true;
         setOnScreen(true);
         return;
       }
       if (leaving !== undefined) return;
       leaving = setTimeout(() => {
         leaving = undefined;
+        live = false;
         setOnScreen(false);
       }, grace);
     };
@@ -102,20 +173,18 @@ export function useOnScreen<T extends Element>(
     let intersecting = false;
     const seen = () => settle(intersecting && document.visibilityState !== "hidden");
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) intersecting = entry.isIntersecting;
-        seen();
-      },
-      { rootMargin: margin },
-    );
-    observer.observe(node);
-    document.addEventListener("visibilitychange", seen);
+    const stopObserving = observeElement(node, margin, (nextIntersecting) => {
+      intersecting = nextIntersecting;
+      seen();
+    });
+    const stopVisibility = watchVisibility(seen);
+    const stopPan = watchPanSettled(seen);
 
     return () => {
       clear();
-      observer.disconnect();
-      document.removeEventListener("visibilitychange", seen);
+      stopObserving();
+      stopVisibility();
+      stopPan();
     };
   }, [node, margin, grace]);
 
