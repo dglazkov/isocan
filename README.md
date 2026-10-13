@@ -1470,14 +1470,14 @@ five minutes away, *stepped away* on a deliberate stop. Off by default. The
 lines are records, so they summon nobody, and no agent answers another's
 hello.
 
-### Jetski plugin and model-pinned agents
+### Antigravity plugin and model-pinned agents
 
-[`plugins/jetski/`](plugins/jetski/) is isocan as a Jetski plugin: the canvas
-your workspace is bound to, in a pane beside the Jetski chat. Every part of it
+[`plugins/antigravity/`](plugins/antigravity/) is isocan as an Antigravity plugin: the canvas
+your workspace is bound to, in a pane beside the Antigravity chat. Every part of it
 is an `isocan` command, so the plugin can do nothing the CLI cannot. The
-`#release` install carries it alongside the CLI: `isocan setup --jetski` (or
-`node scripts/install-jetski-plugin.mjs` in a checkout) links it into
-`~/.gemini/config/plugins/isocan`. Restart Jetski after installing: it reads
+`#release` install carries it alongside the CLI: `isocan setup --antigravity` (or
+`node scripts/install-antigravity-plugin.mjs` in a checkout) links it into
+`~/.gemini/config/plugins/isocan`. Restart Antigravity after installing: it reads
 a plugin's hooks once, when the plugin loads.
 
 - **A canvas without its own Chat (`isocan embed`)**: the embed address opens
@@ -1490,7 +1490,7 @@ a plugin's hooks once, when the plugin loads.
 - **The pane** (`sidecars/canvas/`) opens the canvas that the workspace's
   `.isocan/project.json` names. An unbound folder can be bound to an existing
   canvas (by id, link or title) or to a new one. Selected items show as chips,
-  and **Ask** hands your question, with the item ids, to the Jetski
+  and **Ask** hands your question, with the item ids, to the Antigravity
   conversation. **Open ↗** opens the same canvas in a tab, with its Chat.
 - **Skills on both sides**: type `/` in the pane's box and the canvas's own
   skills drop down (`isocan command ls`, built in and added with `/skill
@@ -1501,16 +1501,16 @@ a plugin's hooks once, when the plugin loads.
   repo*, *Put what we did here on the canvas*, the design skills, and *Answer
   N open questions*.
 - **The canvas can reach the conversation**: while the pane runs, a mention
-  of a Jetski conversation on the canvas (or a reply in its thread) is
+  of an Antigravity conversation on the canvas (or a reply in its thread) is
   relayed into that conversation, which answers on the canvas.
-  `ISOCAN_JETSKI_RELAY=off` turns this off. **Asks N** in the header lists
-  the questions agents left for you. **Fan out** asks Jetski's `flash`,
+  `ISOCAN_ANTIGRAVITY_RELAY=off` turns this off. **Asks N** in the header lists
+  the questions agents left for you. **Fan out** asks Antigravity's `flash`,
   `pro` or `flash_lite` tiers the same thing in new conversations that join
   the canvas under their own names. 💬 beside a face opens that conversation.
 - **Arriving**: a SessionStart hook runs when a conversation starts in a
   bound workspace. It names the conversation (`isocan identity --session`,
   keyed to that conversation) and starts its session, so what it writes is
-  attributed to it rather than to you. With `ISOCAN_JETSKI_JOIN=off` the
+  attributed to it rather than to you. With `ISOCAN_ANTIGRAVITY_JOIN=off` the
   conversation still gets the note, but nothing joins.
 - **Model-pinned agents (`--model <id>`)**: `isocan agent add`,
   `isocan rc add` and `isocan bench add` take a model id, spelled the way its
@@ -1525,5 +1525,5 @@ a plugin's hooks once, when the plugin loads.
   They answer @mentions while your `isocan rc` runs.
 
 A canvas on this machine's own daemon (`http://127.0.0.1:…`) can only be
-framed by a browser on this machine. To use Jetski Web from anywhere else,
+framed by a browser on this machine. To use Antigravity Web from anywhere else,
 bind the folder to a canvas on a shared home such as isocan.io.

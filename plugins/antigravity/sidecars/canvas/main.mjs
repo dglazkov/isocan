@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * **The Isocan Canvas pane** — a Jetski sidecar (`docs/projects/jetski/design.md`
+ * **The Isocan Canvas pane** — an Antigravity sidecar (`docs/projects/antigravity/design.md`
  * §6, phase 3).
  *
- * Jetski starts this with the sidecar's directory as the cwd, a loopback port,
+ * Antigravity starts this with the sidecar's directory as the cwd, a loopback port,
  * and a token every non-GET call must carry; the page it serves is framed in
  * the AuxPane beside the chat. It owns no canvas logic. Every route is one or
  * two `isocan` commands, run as the PERSON (`personEnv`) in the workspace
  * folder the host names — so the pane can do nothing the CLI cannot, and a
  * folder the host did not name is never guessed at.
  *
- * Under Jetski the routes ride the host's Sidecar SDK (`sidecar_sdk`, which
- * Jetski's loader resolves). Anywhere else — a test, somebody running it by
+ * Under Antigravity the routes ride the host's Sidecar SDK (`sidecar_sdk`, which
+ * Antigravity's loader resolves). Anywhere else — a test, somebody running it by
  * hand — the same table is served by a plain loopback server that keeps the
  * same token rule.
  */
@@ -33,7 +33,7 @@ import {
   runAgentapi,
   skillMessage,
   threadMessage,
-} from "../../lib/jetski.mjs";
+} from "../../lib/antigravity.mjs";
 import { startRelay } from "../../lib/relay.mjs";
 import { bindingFor, isocanHome, personEnv, resolveCli, runIsocan, workspacePaths } from "../../lib/workspace.mjs";
 
@@ -56,12 +56,12 @@ const messageOf = (err) => (err instanceof Error ? err.message : String(err));
 
 /**
  * The Agents bar's buttons: `presets.json` beside this file, or the file
- * `ISOCAN_JETSKI_PRESETS` names. Each is a standing agent to enrol — a name
+ * `ISOCAN_ANTIGRAVITY_PRESETS` names. Each is a standing agent to enrol — a name
  * (an agent's, never a model's), a harness (null: this machine's default), and
  * a model id spelled the way that harness spells it (null: its own default).
  */
 export function loadPresets(env = process.env) {
-  const file = env.ISOCAN_JETSKI_PRESETS || path.join(here, "presets.json");
+  const file = env.ISOCAN_ANTIGRAVITY_PRESETS || path.join(here, "presets.json");
   const raw = JSON.parse(fs.readFileSync(file, "utf8"));
   const list = Array.isArray(raw) ? raw : raw?.presets;
   if (!Array.isArray(list)) throw new Error(`${file}: expected a "presets" list`);
@@ -90,7 +90,7 @@ export function canvasRef(raw) {
 }
 
 /** Whether an address is this machine's own daemon — framed from anywhere
- * but this machine (Jetski Web on a laptop, the daemon on a workstation) it
+ * but this machine (Antigravity Web on a laptop, the daemon on a workstation) it
  * cannot load, and the pane says so rather than showing a blank frame. */
 export function isLoopback(address) {
   try {
@@ -257,7 +257,7 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
       }
     }
     const { sessions: live, enrolled } = canvasAgents(home, binding?.canvasId);
-    // Which faces are Jetski conversations, so a face can open its chat.
+    // Which faces are Antigravity conversations, so a face can open its chat.
     const conversations = binding ? conversationsOn(home, binding.canvasId, now()) : [];
     const sessions = live.map((sess) => {
       const convo = conversations.find((c) => c.actorId && c.actorId === sess.actorId);
@@ -310,7 +310,7 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
   async function bind(data) {
     const { paths, binding } = where(data);
     const folder = paths[0];
-    if (!folder) throw new Error("Jetski has not said which folder this workspace is");
+    if (!folder) throw new Error("Antigravity has not said which folder this workspace is");
     if (binding) throw new Error(`this workspace is already bound, by ${path.join(binding.root, ".isocan", "project.json")}`);
     let ref = canvasRef(data?.ref);
     if (!ref) ref = (await execJson(["canvas", "new", text(data?.title) ?? path.basename(folder)], folder)).canvasId;
@@ -422,7 +422,7 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
   }
 
   /**
-   * **Fan out:** the same ask in several new Jetski conversations, one per
+   * **Fan out:** the same ask in several new Antigravity conversations, one per
    * model tier. Each is a real conversation in this project; the SessionStart
    * hook names it and puts it on the canvas like any other, so the takes land
    * side by side under their own names. The record is written ahead of the
@@ -509,7 +509,7 @@ export function hostRoutes(app) {
 }
 
 /**
- * The same route table on one loopback server, inside Jetski and outside it:
+ * The same route table on one loopback server, inside Antigravity and outside it:
  * GET serves the page (and `/preload.js` when the host provides it),
  * everything else is POST, carries the token when one is set, and awaits the
  * handler before serialising its answer.
@@ -556,7 +556,7 @@ async function main() {
   }
   const port = Number(process.env.ANTIGRAVITY_SIDECAR_WEB_PORT || process.env.PORT || 0);
   const server = createServer({ ...extra, ...routes }, { preload });
-  // The ear: while Jetski runs this pane, the canvas can reach its
+  // The ear: while Antigravity runs this pane, the canvas can reach its
   // conversations (lib/relay.mjs). Only under the host — a pane opened by
   // hand has no conversations to hand anything to.
   if (process.env.ANTIGRAVITY_LS_ADDRESS) startRelay({ home: isocanHome() });

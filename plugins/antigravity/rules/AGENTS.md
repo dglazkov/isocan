@@ -1,4 +1,4 @@
-# Isocan in Jetski
+# Isocan in Antigravity
 
 This applies only in a workspace bound to an isocan canvas — a
 `.isocan/project.json` at or above the folder. Anywhere else, ignore it.

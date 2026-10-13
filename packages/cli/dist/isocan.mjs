@@ -5,4 +5,4 @@ const require = __isocanCreateRequire(import.meta.url);
 // packages/cli/src/entry.ts
 import { enableCompileCache } from "node:module";
 enableCompileCache();
-await import("./main-L3S7HHXI.mjs");
+await import("./main-GBF45HIC.mjs");

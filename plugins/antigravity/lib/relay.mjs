@@ -1,15 +1,15 @@
 /**
- * **The relay: the canvas can reach a Jetski conversation** (`docs/projects/
- * jetski/design.md` §10).
+ * **The relay: the canvas can reach an Antigravity conversation** (`docs/projects/
+ * antigravity/design.md` §10).
  *
- * A Jetski conversation arrives on its canvas under its own name (the
+ * An Antigravity conversation arrives on its canvas under its own name (the
  * SessionStart hook) and is told not to park — the person steers it in the
  * chat, and a conversation blocked on `isocan wait` cannot be talked to. So
  * until this, somebody on the canvas writing `@Kit can you tighten the
  * header?` was writing to nobody: the face was there and the ear was not.
  *
  * The relay is the ear. The pane's sidecar process — which runs for as long
- * as Jetski does — parks `isocan wait` AS each recent conversation (its own
+ * as Antigravity does — parks `isocan wait` AS each recent conversation (its own
  * `ANTIGRAVITY_CONVERSATION_ID`, so the daemon's cursor, the wake rules and
  * the "waiting for you…" presence are that conversation's), and when a wait
  * wakes it hands what `isocan wait` printed to the conversation with
@@ -19,19 +19,19 @@
  *
  * Its bounds, each for a reason:
  *
- * - **One relay per machine** (`jetski-relay.lock`): two parks for one actor
+ * - **One relay per machine** (`antigravity-relay.lock`): two parks for one actor
  *   displace each other (exit 3), so two sidecars would ping-pong forever.
  * - **The conversation's own park wins.** If the agent parks itself, the
  *   relay's wait exits 3 and the relay stands back for `DISPLACED_BACKOFF_MS`.
  * - **Only recent conversations** (`CONVERSATION_TTL_MS`), and at most
- *   `MAX_PARKS` of them, newest first. A conversation Jetski no longer knows,
+ *   `MAX_PARKS` of them, newest first. A conversation Antigravity no longer knows,
  *   or one the canvas withdrew (exit 4), is dropped from the record.
- * - **`ISOCAN_JETSKI_RELAY=off`** switches it off.
+ * - **`ISOCAN_ANTIGRAVITY_RELAY=off`** switches it off.
  */
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { CONVERSATION_TTL_MS, projectIdOf, readConversations, recordConversation, relayMessage, runAgentapi } from "./jetski.mjs";
+import { CONVERSATION_TTL_MS, projectIdOf, readConversations, recordConversation, relayMessage, runAgentapi } from "./antigravity.mjs";
 import { agentEnv, resolveCli } from "./workspace.mjs";
 
 export const MAX_PARKS = 6;
@@ -40,7 +40,7 @@ export const MAX_PARKS = 6;
 export const PARK_SECONDS = 1500;
 export const DISPLACED_BACKOFF_MS = 5 * 60_000;
 export const FAILURE_BACKOFF_MS = 60_000;
-export const LOCK_FILE = "jetski-relay.lock";
+export const LOCK_FILE = "antigravity-relay.lock";
 
 /** Run `isocan wait` and hand back its exit code and output, never throwing
  * for a non-zero exit: 2 (silence), 3 (displaced) and 4 (over) are answers. */
@@ -177,13 +177,13 @@ export function createRelay({
  * Returns a stop function.
  */
 export function startRelay({ home, env = process.env, log = (line) => console.log(`isocan relay: ${line}`), everyMs = 5_000 } = {}) {
-  if (env.ISOCAN_JETSKI_RELAY === "off") return () => {};
+  if (env.ISOCAN_ANTIGRAVITY_RELAY === "off") return () => {};
   let relay = null;
   const timer = setInterval(() => {
     if (!relay) {
       if (!takeLock(home)) return;
       relay = createRelay({ home, env, log });
-      log("listening for the canvas on behalf of this machine's Jetski conversations");
+      log("listening for the canvas on behalf of this machine's Antigravity conversations");
     }
     relay.tick();
   }, everyMs);

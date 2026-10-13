@@ -311,7 +311,7 @@
 </head>
 <body>
   <header>
-    <a class="where" id="where" target="_blank" rel="noopener"><span class="where-text" id="where-text">Waiting for Jetski to say which workspace this is…</span></a>
+    <a class="where" id="where" target="_blank" rel="noopener"><span class="where-text" id="where-text">Waiting for Antigravity to say which workspace this is…</span></a>
     <span class="spacer"></span>
     <button id="inbox-toggle" type="button" hidden aria-expanded="false" data-tip="Questions agents left on the canvas that nobody has answered">Asks<span class="badge" id="inbox-count"></span></button>
     <button id="agents-toggle" type="button" hidden aria-expanded="true" data-tip="Hide the Agents bar — they answer @mentions on the canvas while isocan rc runs on this machine.">Agents ▾</button>
@@ -335,7 +335,7 @@
   <div class="bar composer" id="selection" hidden>
     <span id="chips" class="row" style="flex-wrap: wrap"></span>
     <div class="field">
-      <input id="ask" type="text" autocomplete="off" placeholder="Run a /skill, or send canvas context to chat…" aria-label="Ask Jetski, or type / for a canvas skill" aria-autocomplete="list" aria-controls="slash" />
+      <input id="ask" type="text" autocomplete="off" placeholder="Run a /skill, or send canvas context to chat…" aria-label="Ask Antigravity, or type / for a canvas skill" aria-autocomplete="list" aria-controls="slash" />
       <div class="menu" id="slash" role="listbox" hidden></div>
     </div>
     <select id="target" aria-label="Who carries it out" title="Where this canvas action is sent">
@@ -436,10 +436,10 @@
         return "Select an item on the canvas first — handing off to an @agent posts a comment thread pinned to the selected item.";
       }
       if (lower.includes("trajectory not found") || lower.includes("conversation not found")) {
-        return "Jetski couldn't find this chat's session — send a message in the chat column on the left to wake it, or use Fan out to start a fresh conversation.";
+        return "Antigravity couldn't find this chat's session — send a message in the chat column on the left to wake it, or use Fan out to start a fresh conversation.";
       }
       if (lower.includes("timed out")) {
-        return "Timed out waiting for Jetski to accept the message — the host may be busy. Click Retry to send again.";
+        return "Timed out waiting for Antigravity to accept the message — the host may be busy. Click Retry to send again.";
       }
       if (lower.includes("unauthorized") || lower.includes("answered 401")) {
         return "This pane's session token expired — reopen the Isocan Canvas pane to refresh it.";
@@ -541,7 +541,7 @@
         renderPresets();
         setWhere("No workspace");
         $("noworkspace-why").textContent = standalone
-          ? "Opened outside Jetski: add ?workspace=/path/to/folder to this page's address."
+          ? "Opened outside Antigravity: add ?workspace=/path/to/folder to this page's address."
           : "This conversation has no workspace folder open, so there is no canvas to show.";
         return show("noworkspace");
       }
@@ -660,17 +660,17 @@
         }
         button.addEventListener("click", () => {
           followAgent(sess.sessionId, sess.actorId);
-          say(`Following ${sess.name} (${sess.harness === "antigravity" ? "Jetski chat" : (sess.harness || "CLI")} session) — the camera tracks its cursor until you pan or zoom.`);
+          say(`Following ${sess.name} (${sess.harness === "antigravity" ? "Antigravity chat" : (sess.harness || "CLI")} session) — the camera tracks its cursor until you pan or zoom.`);
         });
         list.append(button);
-        // A face that is a Jetski conversation opens that conversation: the
+        // A face that is an Antigravity conversation opens that conversation: the
         // canvas and the chats are one place, not two.
         if (sess.conversationId && host?.ui?.toggleConversation && sess.conversationId !== host.conversationId) {
           const open = document.createElement("button");
           open.type = "button";
           open.className = "small";
           open.textContent = "💬";
-          open.title = `Open ${sess.name}'s conversation in Jetski`;
+          open.title = `Open ${sess.name}'s conversation in Antigravity`;
           open.setAttribute("aria-label", open.title);
           open.addEventListener("click", () => host.ui.toggleConversation(sess.conversationId));
           list.append(open);
@@ -814,8 +814,8 @@
           : "This pane is not linked to an active conversation yet",
       );
       if (host) {
-        add("fan:flash,pro", "↗ Fan out: Flash + Pro", false, "Spawns two new Jetski conversations, one per model tier — each joins the canvas under its own name");
-        add("fan:flash_lite,flash,pro", "↗ Fan out: all three tiers", false, "Spawns three new Jetski conversations: flash_lite, flash and pro");
+        add("fan:flash,pro", "↗ Fan out: Flash + Pro", false, "Spawns two new Antigravity conversations, one per model tier — each joins the canvas under its own name");
+        add("fan:flash_lite,flash,pro", "↗ Fan out: all three tiers", false, "Spawns three new Antigravity conversations: flash_lite, flash and pro");
       }
       const agents = [
         ...(state?.enrolled ?? []).map((a) => a.name),
@@ -1033,7 +1033,7 @@
         const help = document.createElement("button");
         help.type = "button";
         help.className = "small";
-        help.textContent = "Answer with Jetski";
+        help.textContent = "Answer with Antigravity";
         help.title = "Hand the question to this chat to work out the answer together";
         help.disabled = !host?.conversationId;
         const sendThread = async () => {
@@ -1047,7 +1047,7 @@
             sayAsk(friendlyAskError(err, "here"), "error", sendThread);
           } finally {
             help.disabled = !host?.conversationId;
-            help.textContent = "Answer with Jetski";
+            help.textContent = "Answer with Antigravity";
           }
         };
         help.addEventListener("click", sendThread);
@@ -1171,7 +1171,7 @@
     }
 
     // Preserve host theme variables and workspace URIs across in-frame reloads,
-    // because the Jetski parent window only pushes `theme-change` and
+    // because the Antigravity parent window only pushes `theme-change` and
     // `workspace-change` when the host itself mounts the AuxPane.
     try {
       const savedTheme = JSON.parse(sessionStorage.getItem("isocan:themeVars") || "null");

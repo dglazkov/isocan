@@ -95,7 +95,7 @@ export declare class BadgeEndedError extends Error {
  * **`framed` is the embed's whole repair** (#220, phase 1).
  *
  * `Lax` was decided for a top-level navigation and an iframe is not one. A
- * canvas opened in an agent manager's pane — Jetski, an IDE webview, an MCP
+ * canvas opened in an agent manager's pane — Antigravity, an IDE webview, an MCP
  * App's frame — is a cross-site subresource, and its cookies live in a jar
  * keyed on the TOP-LEVEL site rather than on this one. Safari and Brave
  * refuse that jar outright; Firefox partitions it in ETP-Strict; Chrome still

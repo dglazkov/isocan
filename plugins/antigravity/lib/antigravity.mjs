@@ -1,5 +1,5 @@
 /**
- * **Jetski's half of the tie** (`docs/projects/jetski/design.md` §9–§12).
+ * **Antigravity's half of the tie** (`docs/projects/antigravity/design.md` §9–§12).
  *
  * `workspace.mjs` knows the canvas; this file knows the conversations. Three
  * things live here, all plain ESM for the same reason as its neighbour:
@@ -8,8 +8,8 @@
  *   Sidecar SDK shells out to (`ANTIGRAVITY_AGENTAPI_EXE agentapi …`), called
  *   directly because the SDK drops `--title` on a new conversation and a
  *   fan-out wants to say which tier each conversation is.
- * - **The conversations record**, `<isocan home>/jetski-conversations.json`:
- *   which Jetski conversation became which actor on which canvas. The desk
+ * - **The conversations record**, `<isocan home>/antigravity-conversations.json`:
+ *   which Antigravity conversation became which actor on which canvas. The desk
  *   keeps that claim as `antigravity:<conversationId>` and never hands it back,
  *   so the hook writes down what it named and the pane and the relay read it.
  * - **Every sentence the pane hands a conversation.** Composed here, not in
@@ -74,7 +74,7 @@ export function newConversationArgs({ message, tier, title }) {
 
 // ---------- the conversations record ----------
 
-export const CONVERSATIONS_FILE = "jetski-conversations.json";
+export const CONVERSATIONS_FILE = "antigravity-conversations.json";
 
 /** How long a conversation is believed to still be somebody's. Past this the
  * relay stops parking for it: a conversation from last week is not waiting. */
@@ -176,7 +176,7 @@ export const ASKED =
 /**
  * A canvas skill, run by this conversation. The same words a comment would
  * carry — `/name args` first, because on the canvas a message that starts
- * with `/name` IS the request — and then the one instruction a Jetski agent
+ * with `/name` IS the request — and then the one instruction an Antigravity agent
  * would not otherwise know: the skill's body is `isocan command show <name>`.
  */
 export function skillMessage({ skill, args, items, canvas }) {
@@ -232,7 +232,7 @@ export function threadMessage({ thread, canvas }) {
 export function fanoutMessage({ ask, skill, args, items, canvas, tier, of }) {
   const body = text(skill) ? skillMessage({ skill, args, items, canvas }) : askMessage({ question: ask, items, canvas });
   return [
-    `You are one of ${of} Jetski conversations given the same ask, each on a different model tier; you are on **${tier}**. ` +
+    `You are one of ${of} Antigravity conversations given the same ask, each on a different model tier; you are on **${tier}**. ` +
       "Work on the canvas as yourself and keep your result separate from the others' — put what you make beside the selection, not on top of it — " +
       `and title it or say in your reply that it is the ${tier} take, so a person can compare them.`,
     "",
@@ -272,10 +272,10 @@ export function friendlyAskError(err, target = "here") {
     return "Select an item on the canvas first — handing off to an @agent posts a comment thread pinned to the selected item.";
   }
   if (lower.includes("trajectory not found") || lower.includes("conversation not found")) {
-    return "Jetski couldn't find this chat's session — send a message in the chat column on the left to wake it, or use Fan out to start a fresh conversation.";
+    return "Antigravity couldn't find this chat's session — send a message in the chat column on the left to wake it, or use Fan out to start a fresh conversation.";
   }
   if (lower.includes("timed out")) {
-    return "Timed out waiting for Jetski to accept the message — the host may be busy. Click Retry to send again.";
+    return "Timed out waiting for Antigravity to accept the message — the host may be busy. Click Retry to send again.";
   }
   if (lower.includes("unauthorized") || lower.includes("answered 401")) {
     return "This pane's session token expired — reopen the Isocan Canvas pane to refresh it.";
