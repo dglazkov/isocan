@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { IncomingHttpHeaders } from "node:http";
 import {
   elapsedLabel,
   normalizeAttribute,
@@ -9,7 +10,13 @@ import {
   type OperatorProofRecord,
   type OperatorRefusalCode,
 } from "@isocan/core";
-import { verifyIdTokenClaims, type AuthConfig } from "./attest.ts";
+import {
+  attestationFromProxy,
+  rawProxyHeader,
+  verifyIdTokenClaims,
+  type AuthConfig,
+  type ProxyAuthConfig,
+} from "./attest.ts";
 import type { SigningKeys } from "./attest.ts";
 
 /**
@@ -89,8 +96,12 @@ export function resolveOperators(env: NodeJS.ProcessEnv = process.env): string[]
  * the verb — and because a route added in phase 2 must not be able to forget
  * it.
  */
-export function operatorAbsence(auth: AuthConfig | null, operators: readonly string[]): string | null {
-  if (!auth) {
+export function operatorAbsence(
+  auth: AuthConfig | null,
+  operators: readonly string[],
+  proxyAuth: ProxyAuthConfig | null = null,
+): string | null {
+  if (!auth && !proxyAuth) {
     return (
       "this home borrows no attester, so it has no way to check that anybody is its operator, " +
       "and therefore has no operator. Setting one up takes an identity project to verify " +
@@ -204,6 +215,38 @@ export async function proveOperator(args: {
         `you signed in ${spanLabel(age)} ago, ` +
         `and this home honours a proof for ${spanLabel(window)} — ` +
         "a proof is for an act, not for a day. Sign in again.",
+    };
+  }
+  return { ok: true, proof };
+}
+
+/**
+ * Prove operator identity from a trusted reverse-proxy identity header on homes
+ * running with `proxyAuth` configured (`ISOCAN_PROXY_EMAIL_HEADER`).
+ */
+export function proveOperatorFromProxy(args: {
+  headers: IncomingHttpHeaders;
+  proxyAuth: ProxyAuthConfig;
+  operators: readonly string[];
+  now?: number;
+}): OperatorVerdict | null {
+  const now = args.now ?? Date.now();
+  const raw = rawProxyHeader(args.headers, args.proxyAuth);
+  const attestation = attestationFromProxy(args.headers, args.proxyAuth, now);
+  if (!raw || !attestation) return null;
+  const proof: OperatorProofRecord = {
+    attribute: attestation.attribute,
+    authTime: attestation.at,
+    tokenHash: createHash("sha256").update(raw).digest("hex"),
+  };
+  if (!args.operators.includes(attestation.attribute)) {
+    return {
+      ok: false,
+      code: NOT_OPERATOR,
+      proof,
+      error:
+        `this home's operators are named in its configuration, and you proved ${attestation.attribute}, ` +
+        "which is not one of them.",
     };
   }
   return { ok: true, proof };

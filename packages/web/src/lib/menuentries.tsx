@@ -18,6 +18,8 @@ import {
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
 import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
+import { PAINTED } from "../components/themes/PaintedGround.tsx";
+import { MOTIONS, MOTION_LABELS, currentMotion, writeMotion } from "./groundmotion.ts";
 import { captureClipboard } from "./clipboard.ts";
 import { alignItems, distributeGroupItems, tidyItems } from "./actions.ts";
 import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
@@ -819,6 +821,8 @@ export function chromeMenu(ctx: {
           label: themeLabel(theme),
           checked: !ctx.ownGround && ctx.theme === theme,
           writes: true,
+          // Each ground shows itself: its tile, or a living ground's still.
+          ...(PAINTED[theme] ? { preview: `/grounds/${theme}.jpg` } : {}),
           run: () => void ctx.setTheme(theme),
         })),
         {
@@ -907,6 +911,20 @@ export function chromeMenu(ctx: {
           disabled: ctx.ownGround || ctx.theme === null,
           run: () => void ctx.toggleAnchor(),
         },
+        /**
+         * **Motion: this viewer's, not the canvas's** (living grounds phase 4,
+         * journey.md scene 5). Everything above changes what everybody on the
+         * canvas stands on; these three change only how much it moves on THIS
+         * screen — a localStorage key like the Chat's placement, no op, so no
+         * `writes` and no undo. Under reduced motion every choice draws the
+         * still, and the system setting wins.
+         */
+        { separator: "Motion" },
+        ...MOTIONS.map((motion) => ({
+          label: MOTION_LABELS[motion],
+          checked: currentMotion() === motion,
+          run: () => writeMotion(motion),
+        })),
       ],
     },
     /* **The cursor glow left this menu on 13 Sep** (#195 put it here). Its

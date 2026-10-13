@@ -1,5 +1,6 @@
 import { normalizeHomeUrl, type UpgradeVerdict } from "@isocan/core";
 import { upgradeVerdict } from "./build.ts";
+import { gatewayBaseFor } from "./config.ts";
 import type { Engine } from "./engine.ts";
 import type { PresenceHub } from "./presence.ts";
 import {
@@ -357,8 +358,10 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
     const key = normalizeHomeUrl(homeUrl);
     const existing = this.open.get(key);
     if (existing) return existing;
+    const gatewayUrl = gatewayBaseFor(key, this.options.home);
     const link = new HomeLink({
       homeUrl: key,
+      ...(gatewayUrl ? { gatewayUrl } : {}),
       home: this.options.home,
       engine: this.options.engine,
       presence: this.options.presence,

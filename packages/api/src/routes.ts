@@ -277,6 +277,10 @@ export class DaemonRoutes {
    */
   protected fetcher: typeof fetch = platformFetch;
 
+  /** Transport fetcher used for unretried probes (`healthz`); matches `platformFetch` on loopback
+   * so probes never trigger retry budgets, while routing through configured proxies/gateways. */
+  protected probeFetcher: typeof fetch = platformFetch;
+
   /**
    * Every request carries the badge, and a refused one heals itself and comes
    * straight back. This is what makes neither the door nor the membership
@@ -373,7 +377,7 @@ export class DaemonRoutes {
   private async reBadge(signal: AbortSignal | undefined = this.lifetime): Promise<boolean> {
     if (this.badgeStore.upstream) return false;
     signal?.throwIfAborted();
-    const answer = await askTheDoor(this.base, 10_000, signal);
+    const answer = await askTheDoor(this.base, 10_000, signal, this.fetcher);
     signal?.throwIfAborted();
     if ("refused" in answer) {
       if (answer.refused.status === 403 || answer.refused.status === 429) {
@@ -475,7 +479,7 @@ export class DaemonRoutes {
       // status` slower at answering the question it answers correctly now —
       // "nothing is there yet". The deadline is for the calls whose failure
       // reaches a person as an error.
-      const res = await fetch(`${this.base}${healthPath(this.base)}`, {
+      const res = await this.probeFetcher(`${this.base}${healthPath(this.base)}`, {
         signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(this.lifetime ? [this.lifetime] : [])]),
       });
       return res.ok ? ((await res.json()) as Health) : null;

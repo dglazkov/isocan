@@ -1,6 +1,7 @@
 import { ASLEEP, advance, touch, type GroundState, type Sleep } from "../../lib/groundsleep.ts";
 import { PointerField, TRAIL_SIZE, trailRect } from "../../lib/groundfield.ts";
 import { groundMode } from "../../lib/groundmode.ts";
+import { ambientOf, type Motion } from "../../lib/groundmotion.ts";
 import type { Viewport } from "../../lib/viewport.ts";
 import { FULLSCREEN_VS, program, uniforms, type Field, type LivingGround } from "./livingkit.ts";
 
@@ -65,6 +66,10 @@ export interface HostOptions {
   /** Called once the ground cannot be drawn live any more — no WebGL2, a
    *  program that will not compile, or a context lost `MAX_LOSSES` times. */
   onStill: (why: string) => void;
+  /** Full or Calm (`lib/groundmotion.ts`); Still never builds a host. Calm
+   *  hands the ground no ambient, and paints the ground once for a change it
+   *  did not cause (mount, a pan, an item moving) instead of waking it. */
+  motion?: Exclude<Motion, "still">;
 }
 
 export class GroundHost {
@@ -76,7 +81,11 @@ export class GroundHost {
   private sleep: Sleep = ASLEEP;
   private last = 0;
   private start = performance.now();
-  private ambient = 0;
+  /** The awake envelope, 0..1 (`Field.ease`). */
+  private ease = 0;
+  /** The next frame is a one-off paint under Calm: drawn, not stepped on in
+   *  time, and it leaves the sleep policy where it was. */
+  private painting = false;
   private view: Viewport = { scale: 1, tx: 0, ty: 0 };
   private items: Float32Array = new Float32Array(0);
   private itemIds: readonly string[] = [];
@@ -109,7 +118,24 @@ export class GroundHost {
     canvas.addEventListener("webglcontextrestored", this.onRestored);
     document.addEventListener("visibilitychange", this.onVisibility);
     this.setState("asleep");
-    if (this.build()) this.wake();
+    if (this.build()) this.nudge();
+  }
+
+  private get calm(): boolean {
+    return this.opts.motion === "calm";
+  }
+
+  /**
+   * Something changed that no cursor caused — the ground mounted, the view
+   * panned or zoomed, an item moved, the canvas resized. Full wakes for it
+   * (ambient sway runs while awake); Calm paints the one frame the change
+   * needs and stays asleep, so an untouched Calm ground draws nothing more.
+   */
+  private nudge(): void {
+    if (!this.calm) return this.wake();
+    if (this.dead || !this.gl || document.hidden || this.raf !== 0) return;
+    this.painting = true;
+    this.raf = requestAnimationFrame(this.frame);
   }
 
   /** The ground-space → screen transform. A uniform and a wake, nothing else. */
@@ -117,7 +143,7 @@ export class GroundHost {
     const v = this.view;
     if (v.scale === view.scale && v.tx === view.tx && v.ty === view.ty) return;
     this.view = view;
-    this.wake();
+    this.nudge();
   }
 
   get currentView(): Viewport {
@@ -131,7 +157,7 @@ export class GroundHost {
     const a = this.items;
     if (a.length === items.length && a.every((v, i) => v === items[i])) return;
     this.items = items;
-    this.wake();
+    this.nudge();
   }
 
   /** This viewer's pointer moved (`id` "self"). */
@@ -186,17 +212,21 @@ export class GroundHost {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.max(1, Math.round(this.canvas.clientWidth * dpr));
     const h = Math.max(1, Math.round(this.canvas.clientHeight * dpr));
+    // Only a real change redraws: the ResizeObserver's first call, after
+    // mount, finds the buffer already fitted, and under Calm that would be a
+    // second paint of an untouched ground.
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
+      this.nudge();
     }
-    this.wake();
   }
 
   /** Something touched the ground — start the loop if it was asleep. */
   wake(): void {
     if (this.dead || !this.gl || document.hidden) return;
     this.sleep = touch(this.sleep, performance.now());
+    this.painting = false;
     this.setState("awake");
     if (this.raf === 0) {
       this.last = performance.now();
@@ -324,12 +354,15 @@ export class GroundHost {
     this.raf = 0;
     const gl = this.gl;
     if (this.dead || !gl || gl.isContextLost()) return;
+    // A Calm paint is a picture of now, not a step in time.
+    const paint = this.painting;
+    this.painting = false;
     // A long gap is a wake from sleep, not a frame that took a second.
-    const dt = Math.min(Math.max((now - this.last) / 1000, 0), 0.1);
+    const dt = paint ? 0 : Math.min(Math.max((now - this.last) / 1000, 0), 0.1);
     this.last = now;
 
     const awake = this.sleep.state === "awake";
-    this.ambient = Math.max(0, Math.min(1, this.ambient + (awake ? 1 : -1) * dt * 1.4));
+    this.ease = Math.max(0, Math.min(1, this.ease + (awake ? 1 : -1) * dt * 1.4));
     const css = { w: this.canvas.clientWidth, h: this.canvas.clientHeight };
     const trailLive = now - this.lastStamp < TRAIL_LIFE_MS;
 
@@ -340,7 +373,8 @@ export class GroundHost {
       width: css.w,
       height: css.h,
       dpr: Math.min(window.devicePixelRatio || 1, 2),
-      ambient: this.ambient,
+      ease: this.ease,
+      ambient: ambientOf(this.ease, this.opts.motion ?? "full"),
       pointers: [...this.field.pointers.values()],
       items: this.items,
       itemIds: this.itemIds,
@@ -348,6 +382,12 @@ export class GroundHost {
       trailRect: this.trailAt,
     };
     const moving = this.ground.step(dt, field) || trailLive;
+    if (paint) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      this.ground.draw(gl, field);
+      this.frames++;
+      return;
+    }
     const rest = this.ground.restWindow ? { window: this.ground.restWindow, resting: this.resting } : undefined;
     const next = advance(this.sleep, now, moving, document.hidden, rest);
     this.sleep = next.sleep;
@@ -443,7 +483,7 @@ export class GroundHost {
       this.fail(err instanceof Error ? err.message : String(err));
       return;
     }
-    this.wake();
+    this.nudge();
   };
 
   private onVisibility = (): void => {

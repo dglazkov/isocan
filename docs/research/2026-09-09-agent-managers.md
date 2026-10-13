@@ -20,13 +20,13 @@ already is, the person by default. The write verbs, step 3 (MCP Apps) and the
 standing "no per-IDE extension" of step 4 are the embed project's phases 2–4.
 
 Asked by Dion: *what is the best way to integrate isocan
-into Jetski, Antigravity, or any other agent manager or IDE?* Measured on this
+into Antigravity or any other agent manager or IDE?* Measured on this
 machine and against the live home, on the day dated. External facts were read
 the same day and are dated where they matter.
 
 The prompt came with a screenshot, and the screenshot is the finding that
 reorders everything below: **isocan was already running inside an agent
-manager.** A Jetski pane, a canvas at `prj_wLkE8WbRYK`, Hiro parked on it and
+manager.** An Antigravity pane, a canvas at `prj_wLkE8WbRYK`, Hiro parked on it and
 saying so in the Chat, a human typing in the pane beside their conversation
 with the agent that built it. Nobody wrote an integration. Somebody pasted a
 URL into a browser tab.
@@ -58,7 +58,7 @@ set-cookie: isocan_badge=bdg_…; Path=/; HttpOnly; SameSite=Lax; Max-Age=315360
 ```
 
 **No `X-Frame-Options`. No CSP `frame-ancestors`.** Any page anywhere may put
-isocan in an iframe, which is why the Jetski pane worked with no arrangement.
+isocan in an iframe, which is why the Antigravity pane worked with no arrangement.
 Note in passing that this is the opposite posture from the one isocan takes
 about *other* people's sites: `/api/frameable` exists because most of the web
 refuses exactly this, and refuses it silently.
@@ -87,7 +87,7 @@ recorded on this machine: a silent 401 and a door that just stays shut.
 
 **Which browsers partition** (read 9 Sep, and this is the inference-heavy
 part): Google reversed the third-party-cookie deprecation in April 2025 and
-Chrome still sends them by default, so *the Jetski pane works today because it
+Chrome still sends them by default, so *the Antigravity pane works today because it
 is Chrome*. Safari and Brave block them; Firefox partitions all of them in
 ETP-Strict. CHIPS (`Partitioned`) and the Storage Access API are the two
 sanctioned ways to hold a cookie in a cross-site frame. So door A is not
@@ -96,7 +96,7 @@ once**, in an app whose only credential carrier is the one that default
 governs.
 
 What was **not** measured: the framed app was not driven through a full
-session in a partitioning browser, and the Jetski pane's own proxy was not
+session in a partitioning browser, and the Antigravity pane's own proxy was not
 tested — it is internal, and its behaviour is not mine to assert. The three
 facts above are read from the code and the wire; the consequence is reasoned
 from them.
@@ -120,7 +120,7 @@ of the embed problem, and neither half is new mechanism.
 ## Doors B and C: what an embed cannot do, and MCP can
 
 A pane is a surface for a *person*. It gives the manager's **agent** nothing:
-an agent in Jetski or Antigravity looking at a canvas in the next tab cannot
+an agent in Antigravity looking at a canvas in the next tab cannot
 read it, and today the only way it can is to have `isocan` on its PATH and the
 skill in its context — which is the harness case, already solved, and requires
 the agent to be running somewhere isocan installed itself.

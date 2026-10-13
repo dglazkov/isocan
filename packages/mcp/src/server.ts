@@ -15,7 +15,7 @@ import type { Actor } from "@isocan/core";
  * **Why this exists at all, given the CLI already does everything.** The CLI
  * requires an agent to be running on a machine where isocan is on the PATH
  * and the skill is in context. That is the harness case and it is solved. An
- * agent in Jetski or Antigravity looking at a canvas in the next tab has
+ * agent in Antigravity looking at a canvas in the next tab has
  * neither, and today cannot read the canvas at all. Two designs asked for
  * this surface before the agent-manager question did — the context project's
  * stage 3 (*"point Hindsight at the canvas and let it index the record it

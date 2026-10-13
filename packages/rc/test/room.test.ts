@@ -521,7 +521,7 @@ describe("the room over in-memory deps", () => {
     const { deps, lines, rows } = roomOver(home, clock, {
       rows: [
         elsewhere("prj_old", "claude-code", "/acme/old"),
-        elsewhere("prj_bridge", "jetski", "/acme/scout", "acme-model-1"),
+        elsewhere("prj_bridge", "antigravity", "/acme/scout", "acme-model-1"),
         elsewhere("prj_web", null, "/acme"),
       ],
     });
@@ -533,12 +533,12 @@ describe("the room over in-memory deps", () => {
       canvasId: CANVAS.id,
       actorId: SCOUT.id,
       name: "Scout",
-      harness: "jetski",
+      harness: "antigravity",
       model: "acme-model-1",
       cwd: "/acme/scout",
       sessionId: null,
     });
-    expect(lines).toContain("Scout · where and how supplied — /acme/scout · jetski (acme-model-1)");
+    expect(lines).toContain("Scout · where and how supplied — /acme/scout · antigravity (acme-model-1)");
     await room.stop();
     await room.done;
   });

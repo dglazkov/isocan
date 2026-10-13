@@ -25,8 +25,14 @@ export interface Field {
   width: number;
   height: number;
   dpr: number;
-  /** 0 → 1: how much ambient motion (sway) to draw. Eases in while awake and
-   *  out while settling, so a ground asleep is a ground at rest. */
+  /** 0 → 1: the host's awake envelope. Eases in while awake and out while
+   *  settling, so a ground asleep is a ground at rest. Gate what a CURSOR
+   *  causes on this (Orbit's pull, Night's woken fireflies): it holds under
+   *  every Motion setting. */
+  ease: number;
+  /** 0 → 1: how much ambient motion (sway, drift, blink) to draw — `ease`
+   *  under Full, and 0 under Calm (`lib/groundmotion.ts`), so gate only what
+   *  nobody caused on this. A ground at rest is moving while `ease` is. */
   ambient: number;
   /** Every pointer touching the ground, in ground space. */
   pointers: readonly Pointer[];

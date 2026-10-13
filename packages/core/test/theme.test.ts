@@ -128,8 +128,16 @@ describe("the cursor a ground gives everybody", () => {
        PATHS moved to `web/src/lib/cursorart.ts` on 9 Sep — a cursor is only
        fetched when a ground is worn — so what they look like is asserted
        there, and what a ground CHOOSES is asserted here. */
-    const worn = new Set(THEMES.map((t) => themeCursorName(t)));
-    expect(worn.size, "no two grounds share a cursor").toBe(THEMES.length);
+    /* Phase 4 (10 Oct 2026) amends it, on purpose and by name: a new cursor
+       is entry bytes the ceiling cannot hold, so these grounds borrow one, and
+       each says from whom. Any other pair sharing a pointer still fails. */
+    const borrows: Partial<Record<string, string>> = { snow: "galaxy", aurora: "desert", pond: "ocean", zen: "desert" };
+    for (const [ground, from] of Object.entries(borrows)) {
+      expect(themeCursorName(ground as (typeof THEMES)[number]), `${ground} borrows ${from}'s cursor`).toBe(themeCursorName(from as (typeof THEMES)[number]));
+    }
+    const own = THEMES.filter((t) => !(t in borrows));
+    const worn = new Set(own.map((t) => themeCursorName(t)));
+    expect(worn.size, "no two grounds share a cursor").toBe(own.length);
     for (const theme of THEMES) {
       expect(themeCursorName(theme), `${theme} is not the plain arrow`).not.toBe("arrow");
       expect(CURSORS, `${theme} names a shape this build can draw`).toContain(themeCursorName(theme));
@@ -324,6 +332,12 @@ describe("the grounds that move", () => {
     expect(isLiving("night")).toBe(true);
     expect(themeLabel("night")).toBe("Night");
     expect(themeCursorName("night")).toBe("firefly");
+    expect(isLiving("pond")).toBe(true);
+    expect(themeLabel("pond")).toBe("Pond");
+    expect(themeCursorName("pond")).toBe("fish");
+    expect(isLiving("zen")).toBe(true);
+    expect(themeLabel("zen")).toBe("Zen garden");
+    expect(themeCursorName("zen")).toBe("crescent");
   });
 
   it("knows galaxy moves now — Orbit is how it is drawn, under the same id, label and cursor", () => {

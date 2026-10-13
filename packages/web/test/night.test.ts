@@ -46,7 +46,7 @@ describe("Night is a living ground", () => {
   });
 
   it("has a still that covers the window rather than tiling, since its sky is screen space", () => {
-    expect(PAINTED.night).toEqual({ file: "night", world: 1600, pinned: true });
+    expect(PAINTED.night).toEqual({ world: 1600, pinned: true });
   });
 
   it("is loaded only through import()", () => {

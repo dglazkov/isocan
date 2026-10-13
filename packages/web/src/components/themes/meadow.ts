@@ -247,8 +247,9 @@ export function createMeadow(): LivingGround {
     step(_dt, f) {
       // The grass itself holds no state between frames: everything it shows
       // is the trail (which the host fades) and the sway (which the host
-      // eases). So the meadow is moving exactly while the sway is.
-      return f.ambient > 0.002;
+      // eases). So the meadow is moving exactly while the host's envelope is
+      // — `ease`, not `ambient`, which is 0 under Calm while the trail fades.
+      return f.ease > 0.002;
     },
     draw(gl, f) {
       if (!blade || !field) return;

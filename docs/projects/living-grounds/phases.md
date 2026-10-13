@@ -9,7 +9,7 @@ note: "the walk: a prototype bench that measures before anything ships, the livi
 
 **9 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 9 Oct 2026: phases 1–3 are CLOSED — Meadow, Night, and Galaxy (now drawn by Orbit) are living grounds in isocan, touched by every cursor, asleep when nobody moves. Phase 0 is PART-DONE (the bench; the Orbit and eddy calls are made). Next: living-grounds phase 4, Motion settings, the menu's previews, more grounds.**
+**Where we are, 10 Oct 2026: phases 1–5 are CLOSED — seven living grounds (Meadow, Night, Galaxy drawn by Orbit, Pond, Zen garden, Snow, Aurora), touched by every cursor, asleep when nobody moves, with a per-viewer Motion setting and menu previews, and their frame cost measured and owned by the performance persona. Phase 0 is PART-DONE (the bench). What is left is a person's: the walk in `docs/verify/2026-10-10-living-grounds.md` waits on Dion, and nobody has measured on an M1.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -118,7 +118,7 @@ run is that measurement; phase 3 ships on the bench's numbers.)
 
 ## Phase 4 — Motion settings, the menu, more grounds
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 10 October 2026.** Motion is a per-viewer choice in the Background menu (localStorage, no op, no verb). The `ground-motion` journey: Full draws 33 frames at mount; Calm draws one (the mount paint) and none in the 3 s after, yet wakes for a pointer (49 frames, trail 0.70); Still mounts no WebGL canvas and fetches no ground chunk; a ground picked from the menu is one ⌘Z. Each menu row carries the ground's still as a thumbnail that drifts on hover. Four more grounds, each with its own journey, asleep inside 3 s with zero frames after, and a still under reduced motion: **Pond** (ripple height 1.32 at the crossed point, 0 far; koi that dart away), **Zen garden** (raked 0.97 where the cursor went; the line holds asleep at 0.94 and softens to 0.75 over ~3 s awake; items sit in raked rings), **Snow** (trodden 0.996 on the path; holds 0.92 asleep, fills to 0.77 with awake time), **Aurora** (ribbons lean 0.99 over the cursor's column, 0.0006 across the screen; a near card catches 0.44 of the light). Idle journeys 1% busy each. Entry chunk 706,269, 31 bytes under the ceiling.
 
 **Outcome:**
 
@@ -133,9 +133,20 @@ run is that measurement; phase 3 ships on the bench's numbers.)
 - The menu sets the shared `theme` in one undo.
 - Each new ground meets the same bounds as phase 3.
 
+### Trajectory
+
+- **2026-10-10** — `Field` gained `ease` (the awake envelope); `ambient` is `ease` under Full and 0 under Calm. A ground gates what a cursor causes on `ease` and what nobody caused on `ambient`.
+- **2026-10-10** — Calm paints rather than wakes for mount, pan and item changes: one frame, then none untouched. "Calm draws nothing while untouched" is true after that one paint, which the canvas needs to have a picture. A zero-distance pointermove (the browser's synthetic one) no longer wakes any ground.
+- **2026-10-10** — Still is decided in the lazy layer, not the entry: 0 entry bytes, at the cost of fetching the `LivingGround` chunk (reduced motion does not).
+- **2026-10-10** — The menu's preview is the still JPEG with a CSS drift, not the live shader: no script, no second WebGL context.
+- **2026-10-10** — Pond's ripples are a 768² half-float height field in ground space, stepped at 120 Hz; the pass stops 2.6 s after the last press. Zen's softening and Snow's fill are clocks that advance only while the ground is awake, so a mark outlives the host's 1.4 s trail and an asleep ground changes nothing.
+- **2026-10-10** — No new cursors: Snow wears the sparkle, Pond the fish, Aurora and Zen garden the crescent. The distinct-cursor test names each borrower.
+- **2026-10-10** — The entry chunk reached 706,465 with four names added (165 over). Paid back in core without touching the ceiling: plain labels are the id with a capital (three exceptions spelled out), the ground-to-cursor `switch` is a typed table, `groundtone` holds only exception rows. The menu-preview rules live in `context-menu.css` beside the menu (lazy-CSS ratchet stays 317).
+- **2026-10-10** — Open: Calm is not journeyed per ground for the four new ones; no frame cost measured for them (phase 5); the Background submenu is about twenty rows and scrolls on a short window; Snow's trail is lost when panned about 1.5 screens away; a pond's still has no koi.
+
 ## Phase 5 — Evidence
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 10 October 2026.** `node scripts/frames.mjs --grounds` walks a pointer over each of the seven living grounds on a scratch daemon at 2560×1440 under 4× CPU throttle. On an M4 Pro (not the M1 the budget names): every ground holds p95 16.7–16.8 ms with 0 dropped frames and 0 frames drawn asleep; main-thread time added per frame over the plain ground is Night 1.5 ms, Aurora 1.0, the other five 0.2–0.3. The performance persona owns `ground-frame-ms` (the costliest ground's added main-thread ms, at most 2, first reading 1.5), read from the recorded run in `scripts/ground-frames.json`; its page is `docs/reviews/2026-10-10-performance.md`. The walk for the parts only a person can judge is `docs/verify/2026-10-10-living-grounds.md`, seven steps, unverified.
 
 **Outcome:**
 
@@ -145,3 +156,11 @@ run is that measurement; phase 3 ships on the bench's numbers.)
   the grass feel like grass, does the motion distract while reading.
 
 **Proof:** the persona's first page with the number, and the walk written.
+
+### Trajectory
+
+- **2026-10-10** — The persona's number is main-thread time added per frame, not the frame gap: at 4× CPU on an M4 Pro every ground holds p95 16.7–16.8 ms, so the gap cannot move before a ground already stutters. The 2 ms bound is design.md's "JS under 0.5 ms" times the throttle; proposed by the builder, not yet agreed by Dion.
+- **2026-10-10** — The goal reads a recorded reading, not a live walk: a five-minute browser walk cannot run on every push and CI has no trustworthy WebGL2. It moves only when somebody re-runs `frames.mjs --grounds --record scripts/ground-frames.json`; `measure.mjs ground-frame-ms --names` says when, on what machine, and whether a ground's source changed since.
+- **2026-10-10** — `frames.mjs` reports no GPU time: it cannot bracket another program's draw calls from outside the page. Phase 3's deferred "at or under the bench numbers" is answered as zero dropped and zero asleep frames at 2560×1440, not as GPU milliseconds.
+- **2026-10-10** — Open: the M1 is unmeasured, on the bench and on the canvas; not measured under Calm or Still, or at more than six items. Waits on somebody with an M1 running `node scripts/frames.mjs --grounds`.
+- **2026-10-10** — Open: the ground canvas keeps the previous ground's probe and "asleep" state until the new ground's chunk mounts; a journey that switches grounds on one page must wait for a new probe (`frames.mjs` does). Product behaviour is unaffected.

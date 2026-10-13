@@ -75,7 +75,7 @@ export interface AdapterSpec {
   command: string;
   args: string[];
   /** Pin this adapter spawn to a specific model identifier when the enrolled
-   * agent row carries one (`docs/projects/jetski/design.md`). */
+   * agent row carries one (`docs/projects/antigravity/design.md`). */
   model?: string | null | undefined;
   /** Variables the bridge itself needs, laid over the person's environment
    * at spawn — a builtin's knowledge of its own harness, never a person's
@@ -130,7 +130,7 @@ const BUILTIN_ENV: Record<string, Record<string, string>> = {
   codex: { INITIAL_AGENT_MODE: "agent-full-access", NO_BROWSER: "1" },
 };
 
-/** How a pinned model (`--model <id>`, `docs/projects/jetski/design.md`)
+/** How a pinned model (`--model <id>`, `docs/projects/antigravity/design.md`)
  * reaches a harness that is known to read one — laid beside `ISOCAN_MODEL`,
  * which every spawn gets. Only variables the harness itself documents belong
  * here: a guessed name is a pin that silently does nothing. Codex is not a

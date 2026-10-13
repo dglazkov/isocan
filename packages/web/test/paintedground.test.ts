@@ -36,8 +36,8 @@ describe("every ground this build offers can actually be drawn", () => {
     for (const theme of THEMES) {
       const art = PAINTED[theme];
       expect(art, `${theme} is offered in the picker and has no art`).toBeTruthy();
-      const file = `${publicDir}grounds/${art!.file}.jpg`;
-      expect(existsSync(file), `${theme} names ${art!.file}.jpg, which is not in public/grounds/`).toBe(
+      const file = `${publicDir}grounds/${theme}.jpg`;
+      expect(existsSync(file), `${theme} names ${theme}.jpg, which is not in public/grounds/`).toBe(
         true,
       );
     }
@@ -63,8 +63,8 @@ describe("every ground this build offers can actually be drawn", () => {
      *
      * As delivered, two of the four were over: 5.3MB and 4.7MB at 2048².
      */
-    for (const [theme, art] of Object.entries(PAINTED)) {
-      const bytes = statSync(`${publicDir}grounds/${art.file}.jpg`).size;
+    for (const theme of Object.keys(PAINTED)) {
+      const bytes = statSync(`${publicDir}grounds/${theme}.jpg`).size;
       expect(bytes, `${theme} is ${(bytes / 1024 / 1024).toFixed(1)}MB`).toBeLessThan(2 * 1024 * 1024);
     }
   });

@@ -566,6 +566,9 @@ export interface HomeLinkOptions {
    * key, the badge's key in `identity.json`, and the presence mirror's key,
    * and two spellings of one address would be two of each. */
   homeUrl: string;
+  /** Optional local authenticating gateway endpoint (e.g. `http://127.0.0.1:4442`)
+   * dialled on the wire while keeping `homeUrl` canonical everywhere else. */
+  gatewayUrl?: string;
   /** This machine's isocan home directory: where the badge is kept, beside
    * the CLI's own, in `identity.json`'s `auth` block. */
   home: string;
@@ -675,6 +678,7 @@ interface CanvasHealth {
 
 export class HomeLink implements HomeConnection {
   readonly homeUrl: string;
+  readonly dialUrl: string;
   private readonly home: string;
   private readonly engine: Engine;
   private readonly presence: PresenceHub;
@@ -758,6 +762,7 @@ export class HomeLink implements HomeConnection {
 
   constructor(options: HomeLinkOptions) {
     this.homeUrl = normalizeHomeUrl(options.homeUrl);
+    this.dialUrl = options.gatewayUrl ? normalizeHomeUrl(options.gatewayUrl) : this.homeUrl;
     this.home = options.home;
     this.engine = options.engine;
     this.presence = options.presence;
@@ -1142,7 +1147,7 @@ export class HomeLink implements HomeConnection {
     try { await this.classifyReplica(link.canvasId); } catch (error) { return gaveUp((error as Error).message); }
     const since = await this.localSeq(link.canvasId);
     if (link.dialSeq !== attempt) return;
-    const wsBase = this.homeUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+    const wsBase = this.dialUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
     const url = `${wsBase}/ws?canvasId=${encodeURIComponent(link.canvasId)}&since=${since}&${CLIENT_FEATURES_PARAM}=${CURRENT_CLIENT_FEATURES}`;
     let socket: WebSocket;
     try {
@@ -1757,7 +1762,7 @@ export class HomeLink implements HomeConnection {
   }
 
   private async reBadge(): Promise<StoredBadge | null> {
-    const badge = await knockOnDoor(this.homeUrl);
+    const badge = await knockOnDoor(this.dialUrl);
     if (!badge) return null;
     this.badge = badge;
     await writeBadge(this.home, this.homeUrl, badge);
@@ -2479,7 +2484,7 @@ export class HomeLink implements HomeConnection {
    */
   private async fetchHome(path: string, init: RequestInit): Promise<Response> {
     try {
-      return await fetch(`${this.homeUrl}${path}`, {
+      return await fetch(`${this.dialUrl}${path}`, {
         ...init,
         signal: AbortSignal.any([this.aborter.signal, AbortSignal.timeout(30_000), ...(init.signal ? [init.signal] : [])]),
       });
@@ -2507,7 +2512,7 @@ export class HomeLink implements HomeConnection {
   private async askBuild(): Promise<void> {
     if (this.stopped) return;
     try {
-      const res = await fetch(`${this.homeUrl}${healthPath(this.homeUrl)}`, {
+      const res = await fetch(`${this.dialUrl}${healthPath(this.homeUrl)}`, {
         signal: AbortSignal.any([
           this.aborter.signal,
           AbortSignal.timeout(BUILD_PROBE_TIMEOUT_MS),
@@ -2545,7 +2550,7 @@ export class HomeLink implements HomeConnection {
    * live home reads as dead (phase 5's finding). */
   async reachable(timeoutMs = 2000): Promise<boolean> {
     try {
-      const res = await fetch(`${this.homeUrl}${healthPath(this.homeUrl)}`, {
+      const res = await fetch(`${this.dialUrl}${healthPath(this.homeUrl)}`, {
         signal: AbortSignal.timeout(timeoutMs),
       });
       return res.ok;

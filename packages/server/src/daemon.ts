@@ -19,7 +19,13 @@ import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
 import { readGoogleToken } from "./google.ts";
-import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
+import {
+  resolveAuth,
+  resolveProxyAuth,
+  type AuthConfig,
+  type ProxyAuthConfig,
+  type SigningKeys,
+} from "./attest.ts";
 import { resolveOperators } from "./operator.ts";
 import { startBlobKeeper } from "./blobkeeper.ts";
 import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
@@ -142,6 +148,8 @@ export interface DaemonOptions {
    * which a test needs to be able to say on a machine whose environment has.
    */
   auth?: AuthConfig | null;
+  /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+  proxyAuth?: ProxyAuthConfig | null;
   /**
    * **The addresses this home calls its operator**, or `[]` for none — which
    * is every daemon in this repo, and is not a defect (operator phase 1).
@@ -389,6 +397,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // and an explicit value is a caller (a test) saying so on a machine whose
   // environment says otherwise.
   const auth = options.auth !== undefined ? options.auth : resolveAuth();
+  const proxyAuth = options.proxyAuth !== undefined ? options.proxyAuth : resolveProxyAuth();
   /**
    * **Who runs this home**, read beside the attester and at the same moment,
    * because they are two halves of one capability: a list with no attester
@@ -535,6 +544,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     birthHome,
     homes,
     auth,
+    proxyAuth,
     operators,
     sockets,
     sweeps,
@@ -660,6 +670,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // from a badge that proved a refused address is refused `refused` — both
     // before an admitted member short-circuits past the door.
     refusals,
+    proxyAuth,
     // The content origin has no socket either — the upgrade is hijacked off
     // the raw server and never sees the door hook that refuses it everything
     // but blob bytes.
