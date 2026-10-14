@@ -38,9 +38,9 @@ export declare const SUMMARY_QUIET = "summary-quiet";
 export declare const SUMMARY_BAD_ANSWER = "summary-bad-answer";
 /** The source is excluded from context (itself or a group above it), so it is never sent to a model. */
 export declare const SUMMARY_EXCLUDED = "summary-excluded";
-/** There is no text node by that id on this canvas. */
+/** There is no text node, group or area of that kind by that id on this canvas. */
 export declare const SUMMARY_NO_SOURCE = "summary-no-source";
-/** What a summary is of. Phase 1 makes `text`; groups and areas are phase 2's. */
+/** What a summary is of: one text node, a group's members, or what sits inside an area. */
 type SummaryKind = "text" | "group" | "area";
 /**
  * **One cached summary** — `<home>/summaries/<canvasId>/<key>.json` (design
@@ -78,7 +78,20 @@ export interface SummaryMake {
     kind: SummaryKind;
     sourceId: string;
 }
-/** One source as the prompt shows it: a note's words; a group's or an area's members. */
+/**
+ * One member of a group or an area as the prompt shows it: a note's or a
+ * card's words, and only the title of a screen or a picture — what a picture
+ * shows is vision's, phase 3b.
+ */
+export interface SummaryMember {
+    kind: "note" | "card" | "screen" | "picture";
+    title: string;
+    body?: string;
+}
+/**
+ * One source as the prompt shows it: a note's words; a group's or an area's
+ * members, and `left`, how many of them had their words left out for length.
+ */
 type SummarySource = {
     kind: "text";
     title: string;
@@ -86,18 +99,16 @@ type SummarySource = {
 } | {
     kind: "group" | "area";
     title: string;
-    members: Array<{
-        kind: "note" | "screen" | "card";
-        title: string;
-        body?: string;
-        text?: string;
-    }>;
+    members: SummaryMember[];
+    left?: number;
 };
 /**
  * **The prompt for one thing** (design §7), the bench's words unchanged: a
  * framing line per kind, one shared instruction, and the content inside a
- * fence that says it is data — a note can hold "ignore the above". Vision
- * (§11) and a screen alone are phase 3b's and are not here yet.
+ * fence that says it is data — a note can hold "ignore the above". When a
+ * group's or an area's words were too long to send whole, a line before the
+ * fence says how many members are given by their title only. Vision (§11)
+ * and a screen alone are phase 3b's and are not here yet.
  */
 export declare function semanticZoomPrompt(source: SummarySource): string;
 /** Words as the answer rule and the 40-word line count them. */
@@ -118,6 +129,38 @@ export declare function checkSummary(text: unknown): string[];
  */
 export declare function summarisableText(canvas: CanvasContents, itemId: string): Item | "excluded" | null;
 /**
+ * **What a group or an area holds, for its summary** (design §4), or why
+ * not. A group holds its descendants (`groupDescendants`); an area holds
+ * what sits inside it by geometry (`itemsIn`), so moving a card in or out
+ * changes what it holds. Either way, minus anything excluded from context —
+ * itself or by a group above it (`excludedInAmbient`) — and minus what has
+ * no words or name of its own to give: other groups and areas (their members
+ * are counted instead), ink and annotations. In a fixed order, by id, so a
+ * move inside a group or an area changes neither the key nor the prompt.
+ * `"excluded"` when the group or area itself is; null when there is no group
+ * or area of that kind by that id.
+ */
+export declare function summaryMembers(canvas: CanvasContents, kind: "group" | "area", id: string): {
+    container: Item;
+    members: Item[];
+} | "excluded" | null;
+/**
+ * How a member shows in a prompt: a text node is a note and a text file a
+ * card, both with their words (which the home reads); a screen and a picture
+ * give their title only; anything else is a card by its title.
+ */
+export declare function summaryMemberKind(item: Item): SummaryMember["kind"];
+/** Does the home read this member's words for the prompt? A note's and a text card's, nobody else's. */
+export declare function summaryReadsWords(item: Item): boolean;
+/**
+ * **How big a group's or an area's words are**, in world units: the median
+ * member's type size — a text node's drawn size, anything else taken to be
+ * set at body size (`TEXT_SIZE`). Below the legible line on screen
+ * (`textIsLegible`), the members cannot be read and the summary card shows
+ * (design §3, `Z_GIST`). Undefined for an empty one: nothing to summarise.
+ */
+export declare function memberTypeSize(members: Item[]): number | undefined;
+/**
  * **The content key** (design §4): SHA-256 over the prompt version, the kind,
  * and for each source its item id, its current version id and its title.
  * An edit is a new version and so a new key; a move changes none of them and
@@ -129,4 +172,17 @@ export declare function summarisableText(canvas: CanvasContents, itemId: string)
  * home compute the same key from the same item.
  */
 export declare function textSummaryKey(item: Pick<Item, "id" | "currentVersionId" | "title">): Promise<string>;
+/**
+ * **The content key of any summary**: the prompt version, the kind, then
+ * each source's id, current version id and title, in the order given — for a
+ * text node its one item (`textSummaryKey`, the same bytes), for a group or
+ * an area the container first and then `summaryMembers`' members, by id.
+ *
+ * Not an area member's x, y, w and h, though design §4 first said so: the
+ * prompt never carries a position, so a key that did would re-summarise a
+ * board every time a card was nudged inside its column and say nothing new.
+ * What the key must see of geometry is membership, and it does — a card
+ * moved in or out of an area is an id added to or gone from the list.
+ */
+export declare function summaryKey(kind: SummaryKind, sources: Array<Pick<Item, "id" | "currentVersionId" | "title">>): Promise<string>;
 export {};

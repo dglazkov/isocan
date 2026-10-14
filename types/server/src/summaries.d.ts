@@ -7,7 +7,7 @@ import { type Refusals } from "./takedowns.js";
 import type { TextModel } from "./text.js";
 /**
  * **Semantic Zoom's summaries, at the home** (`docs/projects/semantic-zoom/`,
- * design §5 and §6; phase 1: text nodes).
+ * design §5 and §6; text nodes since phase 1, groups and areas since phase 2).
  *
  * A summary is derived, regenerable and nobody's act, so it is not an op: it
  * lives in a cache beside the snapshots, `<home>/summaries/<canvasId>/<key>.json`,
@@ -26,7 +26,10 @@ import type { TextModel } from "./text.js";
  *   then passes `/api/text`'s guards in-process — edit capability, owner-only
  *   spend unless shared, the badge's rate, the size — and asks the text model
  *   with its own system line and its own model (the cheap tier), so what
- *   `/api/text`'s callers get is unchanged.
+ *   `/api/text`'s callers get is unchanged. A group or an area is collected
+ *   here too (`summaryMembers`): a client names the container, never its
+ *   members, and over the size bound the longest members' words are left
+ *   out first, their titles kept, and the prompt says so.
  *
  * A source changed in the last 30 s is not summarised yet (202,
  * `summary-quiet`, with how long to wait); one make per key is in flight at a time, and a second
