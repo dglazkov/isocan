@@ -1718,6 +1718,8 @@ function VersionFace({
  *  through a run of slides never reloads one, small enough that a long deck
  *  does not keep a hundred live documents in memory. */
 const KEEP_FRAMES = 6;
+/** How long a frame over its picture may stay unseen waiting for `load`. */
+const ARRIVE_BY_MS = 1200;
 /** One frozen empty set, so the initial state is not a new object per render. */
 const EMPTY: ReadonlySet<string> = new Set();
 
@@ -1953,6 +1955,16 @@ function HtmlView({
         : trimmed;
     });
   }, [src, visible, warmKey]);
+
+  // A frame's `load` waits for every image and font in it, and a slide of
+  // full-size photographs can take long enough that the page under the picture
+  // looked like it was never coming (Dion, 14 Oct 2026). Past this, the frame
+  // is shown loading — its words are there long before its last photograph.
+  useEffect(() => {
+    if (!overPicture) return;
+    const late = setTimeout(() => setLoaded((was) => (was.has(src) ? was : new Set(was).add(src))), ARRIVE_BY_MS);
+    return () => clearTimeout(late);
+  }, [src, overPicture]);
 
   useEffect(() => {
     if (!loaded.has(src)) return;

@@ -130,6 +130,19 @@ describe("which surface an HTML screen on the canvas mounts", () => {
     expect(frames()[0]!.className).not.toContain("arriving");
   });
 
+  // Dion, 14 Oct 2026: a deck of full-size photographs stayed its picture at a
+  // readable zoom — its frame waited, unseen, for a `load` that every photo
+  // must finish first. It is shown loading after a deadline instead.
+  it("shows a page over its picture once a deadline passes, though its last image is still loading", async () => {
+    show();
+    await pictureLoads();
+    zoom(0.1);
+    zoom(0.6, false);
+    expect(frames()[0]!.className).toContain("arriving");
+    await act(async () => { await new Promise((r) => setTimeout(r, 1300)); });
+    expect(frames()[0]!.className).not.toContain("arriving");
+  });
+
   it("is the live page when entered, however far away", async () => {
     show();
     await pictureLoads();
