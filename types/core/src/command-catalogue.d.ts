@@ -62,6 +62,11 @@ export declare const DEFAULT_COMMAND_CATALOGUE: readonly [{
     readonly usage: "[what you want to build]";
     readonly source: "built-in";
 }, {
+    readonly name: "goodnight";
+    readonly description: "Stopping for the day: agree what the lead agent works on overnight";
+    readonly usage: "[what is on your mind]";
+    readonly source: "built-in";
+}, {
     readonly name: "sprint";
     readonly description: "Run a design sprint here — you facilitate, people and agents sketch, one person decides";
     readonly usage: "[what we are designing] | <phase> [8m] [note]";

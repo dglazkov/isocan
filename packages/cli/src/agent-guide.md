@@ -165,6 +165,8 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
 - `propose`, `taste` — work left beneath an item with its trigger and why; what deletes taught (`proactive`)
+- `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
+- `explain <item>` — how an item got here: the versions that mattered and why, the roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
 - `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
@@ -3986,7 +3988,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, and the taste note a delete asks you to write -->
+<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note a delete asks you to write, the night watch (`/goodnight`), the morning review, and Explain's critique -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4037,6 +4039,108 @@ isocan taste                       # read it
 The taste note ("What your deletes taught") is pinned into context, so
 `isocan context` hands it to every agent: **read it before you propose.** The
 person edits or clears it like any note; do not argue with a line they removed.
+
+## The night watch: `/goodnight`
+
+A person stopping for the day types `/goodnight` in the Chat (or runs
+`isocan goodnight`). That opens a **conversation** with the canvas's lead
+agent — the one the canvas names with `proactive=<name>` (`isocan canvas edit
+--prop proactive=Kit`), else its standing agent something answers for. Nothing
+else starts a night: not a closed tab, not an idle pointer.
+
+If you are woken by one, `isocan command show goodnight` is the procedure. The
+short version:
+
+1. `isocan goodnight read --json` — whether you lead, whether anything can
+   answer overnight, your free room under the cap (promised frames count),
+   what they **settled today** and what is **left open** (each cited), what
+   they have named so far, and what another person's goodnight has named.
+   Not the lead: say nothing.
+2. Open in the Chat with settled today, left open, and two or three things you
+   could try, each with why. They steer; restate the plan each time. **Never
+   write the note before they say "That's the plan"** (a comment carrying
+   `goodnight: plan`; `isocan goodnight plan` from a terminal).
+3. Then write it from what was agreed, and nothing else:
+
+```sh
+isocan goodnight note --promise "Basket | three takes on the empty basket, one a sketch | three takes" \
+  --edit "Checkout | pickup first | one new version" \
+  --open "comment:cmt_abc | not sure about the red" --ready 08:00
+```
+
+Each `--promise` hangs an empty dashed frame (`proposal=promised`) beneath its
+item. `--edit` changes an original, as a new version — **only an item the
+person named in the conversation**, and never the design system or what was
+settled today. Nothing touches an item another person's goodnight named. The
+note's **Will not touch** always lists what was settled today, the design
+system and every original nobody named; `--wont` may add, never remove. If
+nothing can answer, or your five are already waiting, the note still lands and
+says so — it promises nothing.
+
+4. The night's work, in the same turn, line by line:
+
+```sh
+isocan goodnight fill <frame> take.html --why "Proximity: …" [--hunch]
+isocan goodnight fill <named original> rework.html
+isocan goodnight fill <frame> --failed "every take broke the list's scan line" [the-take.html]
+isocan goodnight done "Two takes I'm sure of, one hunch. Left Ravi's delivery note alone: a business call."
+```
+
+A line the person unticked (`isocan goodnight untick <n>`, or the box on the
+note) is refused — skip it. An empty frame never stays empty without a reason:
+`done` waits until every ticked line is filled or failed, and posts the brief
+as a record the morning review reads. `isocan goodnight show` prints the note.
+Say what you saw and did not act on with `--left "<what> | <why>"` on `done`
+(repeatable), so the morning lists it under **Left alone**. An item the person
+changed in the hour before `/goodnight` is off limits unless a ticked line
+names it: `note` refuses a line on it they did not name, and `propose` refuses
+a proposal beside it while the note is open.
+
+## The morning review
+
+When the person comes back after their own `/goodnight` — their seen mark older
+than the note's ready-by — the "While you were away" panel (desktop and phone)
+leads with your brief: one plain line first if the night failed or made
+nothing, then your words, then at most five proposals, highest confidence
+first (sure, hunch, then the promises that did not work, each with its
+reason), then **Left alone**, then each original you edited because they named
+it, with the version before. `isocan goodnight review [--for <who>]` prints the
+same thing (`--json` says whether it is `due`). Seeing it closes the note
+(`handoffReviewed`), so it no longer holds other people's goodnights off the
+items it named. The cap does not grow with time away: nothing new until what
+is there is kept or deleted.
+
+## Explain this item, and the critique you are asked for
+
+`isocan explain <item> [--depth plain|designer|deep] [--json]` prints how an
+item got here — the same story the Explain panel draws, derived from the
+canvas and never generated: the versions that mattered (a run of edits by one
+hand is one move; a `choose`, a kept proposal and an adopted decision stand
+alone), each with who made it and the reason given at the time (the comment
+that made it, the chosen variation's own comment); the roads not taken (the
+variations a `choose` trashed, deleted proposals, options nobody adopted);
+what moved around it since (a newer DESIGN.md, newer versions of its
+relatives); and *speak design*, phrases typed about it beside a designer's
+term. Read it before you change an item somebody else shaped.
+
+When a person presses **Critique**, you (the canvas's lead) get a Chat message
+"Critique, please: …" naming the item. Read `isocan explain <item> --depth
+deep`, then answer in one command — what is working, one risk, one thing to
+try — and make the thing to try a proposal beneath it:
+
+```sh
+isocan explain <item> --critique --working "The pickup slot leads." \
+  --risk "The total sits below the fold on small phones." \
+  --try "Proximity: pin the total beside the button." \
+  --speak "make the total pop => raise the total's contrast" --propose try.html [--hunch]
+```
+
+The critique posts as a record (it wakes nobody); `--propose` makes the
+proposal citing `explain:<that comment>`, with `--try` as its why (two
+sentences at most), under the cap like any other. `--speak` pairs the
+person's own words with a designer's (repeatable). Nothing else in Explain
+writes: `--rationale` (Copy as rationale) puts the explanation beside the item
+as a note, and only when somebody asks for it.
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

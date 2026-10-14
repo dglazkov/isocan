@@ -32,4 +32,15 @@ type WordSpan = {
  * the sentence back exactly.
  */
 export declare function designWordSpans(text: string): WordSpan[];
+/**
+ * **The plain phrases a sentence uses, each beside the term that means it**
+ * — Explain's *speak design* (proactive-agent phase 4): "make it more
+ * obvious" → *visual hierarchy*. Case-insensitive, whole words, the phrase
+ * as it was typed; one reading per phrase, in the order they appear.
+ */
+export declare function plainReadings(text: string): {
+    said: string;
+    term: string;
+    means: string;
+}[];
 export {};

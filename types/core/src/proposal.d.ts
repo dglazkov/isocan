@@ -24,7 +24,12 @@ import type { CanvasContents, Item } from "./model.js";
  * and the web — which never mints a proposal — is refused by the same reducer
  * if it ever sends one.
  */
-/** `proposal=sure|hunch`: the agent's own word for how hard to look. */
+/**
+ * `proposal=sure|hunch`: the agent's own word for how hard to look. Two more
+ * states belong to the night watch (phase 2, `goodnight.ts`): `promised`, an
+ * empty frame a goodnight note promised, and `failed`, a promise that did not
+ * work, carrying its reason as the why.
+ */
 export declare const PROPOSAL_PROP = "proposal";
 /** `proposalCites=<JSON list of {kind, ref}>`: what prompted it — at least one. */
 export declare const PROPOSAL_CITES_PROP = "proposalCites";
@@ -46,10 +51,11 @@ export declare const PROPOSAL_CAP = 5;
 export type ProposalConfidence = "sure" | "hunch";
 /**
  * What can prompt a proposal (design §2.3): a comment, an op by seq, an item
- * version, a DESIGN.md version, a brief fact, a promise, a docket finding or
- * a critic's note. The kind is checked; the ref is the kind's own id.
+ * version, a DESIGN.md version, a brief fact, a promise, a docket finding,
+ * a critic's note, or an Explain critique (`explain:<comment>`, phase 4).
+ * The kind is checked; the ref is the kind's own id.
  */
-export declare const CITE_KINDS: readonly ["comment", "op", "version", "design", "brief", "promise", "docket", "critic"];
+export declare const CITE_KINDS: readonly ["comment", "op", "version", "design", "brief", "promise", "docket", "critic", "explain"];
 /** One trigger a proposal cites. */
 export interface ProposalCite {
     kind: (typeof CITE_KINDS)[number];
@@ -57,7 +63,12 @@ export interface ProposalCite {
 }
 /** The cites an item carries, or none — a bad value reads as none, which is what the refusal checks. */
 export declare function proposalCites(item: Pick<Item, "properties">): ProposalCite[];
-/** Whether the canvas marks this item as a proposal: it says how sure it is and what it came from. */
+/**
+ * Whether the canvas marks this item as a proposal: it says how sure it is
+ * (or that it is a night's promise) and what it came from. A promised frame
+ * and a failed promise are marked too, so both count toward the cap — five
+ * is everything of the agent's still waiting on the person.
+ */
 export declare function proposalMarked(item: Pick<Item, "properties">): boolean;
 /** The open proposals on a canvas — of one source when named — oldest first. */
 export declare function proposalsOf(canvas: CanvasContents, sourceId?: string): Item[];

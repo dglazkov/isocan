@@ -23,6 +23,30 @@ second week.
 
 ## 14 October 2026
 
+- **Explain this item.** Choose **Explain** from an item's menu (or ⌘K) and
+  a panel beside the canvas tells you how it got here: the few versions that
+  mattered and why, the roads not taken, what has changed around it since,
+  and how a designer would say what people typed about it. Plain, Designer
+  or Deep dive. **Critique** asks the canvas's agent what works, one risk
+  and one thing to try, which arrives as a proposal. **Copy as rationale**
+  puts the story on the canvas. `isocan explain <item>`.
+
+- **The night's work is waiting in the morning.** If you said `/goodnight`,
+  the "While you were away" panel, now on desktop too, opens with your
+  agent's brief: at most five proposals, the surest first, each with why;
+  any promise that did not work and why; what it left alone; and every
+  screen it changed because you named it, with the version before one click
+  away. `isocan goodnight review` prints the same.
+
+- **Goodnight.** Type `/goodnight` in the Chat when you stop for the day.
+  The canvas's agent tells you what you settled, what is still open, and a
+  few things it could try overnight. Steer it, then press **That's the
+  plan**: it leaves a note with tonight's list and an empty dashed frame
+  under each screen it will work on, and you can untick anything. It only
+  reworks a screen you named, never what you settled today or your design
+  system, and never what a teammate's goodnight claimed. If no agent can
+  work tonight, the note says so. From a terminal: `isocan goodnight`.
+
 - **Agents can propose instead of edit.** An agent with an idea about your
   screen leaves it beside the screen: a dashed copy hanging beneath it, a
   chip saying what prompted it, and a short why whose design terms you can
