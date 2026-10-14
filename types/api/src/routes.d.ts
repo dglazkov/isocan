@@ -204,6 +204,16 @@ export declare class DaemonRoutes {
      * becomes two daemons fighting for a port.
      */
     awaitHealth(deadlineMs?: number): Promise<boolean>;
+    /** Probe the health route through `probeFetcher`, returning either the
+     * verified `Health` body (`ok: true`) or why the address did not answer as a
+     * home (non-2xx status, HTML login redirect / non-JSON body, or timeout). */
+    probeHealth(timeoutMs?: number): Promise<{
+        ok: true;
+        health: Health;
+    } | {
+        ok: false;
+        why: string;
+    }>;
     /** The daemon's own account of itself — pid, when it started, and which
      * copy of isocan it is running. Null when nothing answers.
      *

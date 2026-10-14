@@ -272,6 +272,32 @@ var DaemonRoutes = class {
       await new Promise((resolve) => setTimeout(resolve, 150));
     }
   }
+  /** Probe the health route through `probeFetcher`, returning either the
+   * verified `Health` body (`ok: true`) or why the address did not answer as a
+   * home (non-2xx status, HTML login redirect / non-JSON body, or timeout). */
+  async probeHealth(timeoutMs = 5e3) {
+    try {
+      this.lifetime?.throwIfAborted();
+      const res = await this.probeFetcher(`${this.base}${healthPath(this.base)}`, {
+        signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...this.lifetime ? [this.lifetime] : []])
+      });
+      if (!res.ok) {
+        return { ok: false, why: `it answered ${res.status} \u2014 is that address a home?` };
+      }
+      const body = await res.json().catch(() => null);
+      if (body?.ok !== true) {
+        return {
+          ok: false,
+          why: "it answered 200 without a health payload \u2014 is that address behind a login page or not a home?"
+        };
+      }
+      return { ok: true, health: body };
+    } catch (err) {
+      this.lifetime?.throwIfAborted();
+      const why = err.name === "TimeoutError" ? `no answer in ${Math.round(timeoutMs / 1e3)}s` : err.message;
+      return { ok: false, why };
+    }
+  }
   /** The daemon's own account of itself — pid, when it started, and which
    * copy of isocan it is running. Null when nothing answers.
    *
@@ -282,16 +308,8 @@ var DaemonRoutes = class {
    * `warnIfStale` — all three of which would otherwise report a live home as
    * dead. See `healthPath`. */
   async healthz(timeoutMs = 300) {
-    try {
-      this.lifetime?.throwIfAborted();
-      const res = await this.probeFetcher(`${this.base}${healthPath(this.base)}`, {
-        signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...this.lifetime ? [this.lifetime] : []])
-      });
-      return res.ok ? await res.json() : null;
-    } catch {
-      this.lifetime?.throwIfAborted();
-      return null;
-    }
+    const res = await this.probeHealth(timeoutMs);
+    return res.ok ? res.health : null;
   }
   /** Name (or resume) the actor behind a session key — the one op sent
    * without an actor: the response envelope says who you are. */
