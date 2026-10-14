@@ -2,6 +2,7 @@ import { Suspense, createElement, lazy, type ComponentType, type ReactNode } fro
 import {
   moduleSlug,
   registerModule,
+  rendererClaims,
   unregisterModule,
   type ComposerFacts,
   type DialogFacts,
@@ -82,6 +83,7 @@ const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb, j
  * module that home installed.
  */
 const BEHIND_EXPERIMENT: Record<string, string> = {
+  critique: "critique",
   stickers: "modules.stickers",
   talk: "modules.talk",
   anatomy: "modules.anatomy",
@@ -100,6 +102,7 @@ const BEHIND_EXPERIMENT: Record<string, string> = {
  * because the terminal has no first paint and no byte budget.
  */
 const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>> = {
+  critique: () => import("@isocan/critique/web") as Promise<{ default: ShellModule }>,
   "modules.stickers": () => import("@isocan/stickers/web") as Promise<{ default: ShellModule }>,
   "modules.talk": () => import("@isocan/talk/web") as Promise<{ default: ShellModule }>,
   "modules.anatomy": () => import("@isocan/anatomy/web") as Promise<{ default: ShellModule }>,
@@ -238,10 +241,11 @@ export function noteRegistryChanged(): void {
   useUiStore.getState().bumpModules();
 }
 
-/** The renderer a loaded module claims for a mime, ahead of the built-in chain. */
-export function moduleRendererFor(mimeType: string): ComponentType<RendererFacts> | null {
+/** The renderer a loaded module claims for a mime — and, when the renderer
+ *  names a property, for an item carrying it — ahead of the built-in chain. */
+export function moduleRendererFor(mimeType: string, item?: { properties: Record<string, string> } | null): ComponentType<RendererFacts> | null {
   for (const m of live()) {
-    const hit = (m.renderers ?? []).find((r) => r.mimes.includes(mimeType));
+    const hit = (m.renderers ?? []).find((r) => rendererClaims(r, mimeType, item));
     if (hit) return hit.component;
   }
   return null;

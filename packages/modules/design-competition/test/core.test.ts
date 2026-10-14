@@ -44,6 +44,12 @@ describe("the nine default fighters", () => {
     expect(fighters().every((f) => f.module === "@isocan/design-competition")).toBe(true);
   });
 
+  it("are offered to critique's roster too, as the same records", () => {
+    // Data only, named by the point's id: critique validates them when it is
+    // loaded, and with it gone they sit orphaned rather than failing.
+    expect(competitionCore.contributes?.["critique.critics"]).toBe(DEFAULT_PACKS);
+  });
+
   it("lead with the principle and never wear the person's name (decided 11 Sep)", () => {
     for (const pack of DEFAULT_PACKS) {
       const surname = pack.name.split(/[\s&]+/).filter((w) => w.length >= 3 && !/^(and|design)$/i.test(w));

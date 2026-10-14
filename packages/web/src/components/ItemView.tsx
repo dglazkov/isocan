@@ -1240,7 +1240,7 @@ function ItemViewInner({
          * size is still `textMarkSize`, so the words never claim more room
          * than the node they stand for.
          */}
-        {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
+        {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType, item) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
           gist ?? <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
             {item.title}
           </span>
@@ -1626,7 +1626,7 @@ function VersionFace({
   // the mimes its kind claims, and is handed facts rather than a blob path
   // (`core/modules.ts`, `RendererFacts`). With the module gone the same
   // version falls through to the chain below — a diagram reads as text.
-  const ModuleRenderer = moduleRendererFor(mimeType);
+  const ModuleRenderer = moduleRendererFor(mimeType, moduleItem);
   if (ModuleRenderer) {
     return (
       <Suspense fallback={null}><ModuleRenderer

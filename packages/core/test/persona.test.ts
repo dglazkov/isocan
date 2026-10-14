@@ -49,6 +49,8 @@ describe("reading a persona", () => {
     // drop it.
     const p = parsePersona(file("name: p\ndescription: d\ncolor: cyan\nfuture_thing: 7"), "p.md")!;
     expect(p.extra["future_thing"]).toBe("7");
+    // `color` is known, so it is read rather than kept raw — and read it is.
+    expect(p.color).toBe("cyan");
   });
 });
 

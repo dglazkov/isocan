@@ -82,6 +82,11 @@ export const EXPERIMENTS: readonly Experiment[] = [
     what: "Explore a codebase as a map of concepts, files and evidence on the canvas. The workspace slot and its four lenses are still taking shape.",
   },
   {
+    id: "critique",
+    name: "Critique",
+    what: "Critics on the canvas: a critic card shows its name, credit line, colour and three questions. Asking one to critique a screen, and the web's doors to add and write critics, are not built yet — `isocan critic` adds them today.",
+  },
+  {
     id: "semantic.zoom",
     name: "Semantic Zoom",
     what: "Far away, a long note, a group or an area shows a short model-written summary instead of words too small to read, marked ≈.",

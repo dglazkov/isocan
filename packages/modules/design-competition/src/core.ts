@@ -33,9 +33,18 @@ export const FIGHTERS: ContributionPoint = {
 };
 
 /**
+ * **critique's roster** (`docs/projects/critique/design.md` §1) — named as a
+ * string, never imported: critique declares the point and validates what
+ * lands on it, and with critique absent the nine sit there orphaned, which is
+ * data and not an error. The same records, so a critic added from a pack
+ * reads the same `critique.md` its fighter judges rivals with.
+ */
+const CRITICS_POINT = "critique.critics";
+
+/**
  * The record. `contributes` offers the module's own nine to its own point —
  * so the roster has ONE reader (`contributions`) whether a fighter came from
- * here or from a data-only module somebody added later.
+ * here or from a data-only module somebody added later — and to critique's.
  */
 export const competitionCore: CoreModule = {
   name: "@isocan/design-competition",
@@ -43,7 +52,7 @@ export const competitionCore: CoreModule = {
   kinds: [FIGHTER_KIND],
   commands: [COMPETITION_COMMAND],
   points: [FIGHTERS],
-  contributes: { [FIGHTERS_POINT]: DEFAULT_PACKS },
+  contributes: { [FIGHTERS_POINT]: DEFAULT_PACKS, [CRITICS_POINT]: DEFAULT_PACKS },
   rounds: boutRounds,
 };
 

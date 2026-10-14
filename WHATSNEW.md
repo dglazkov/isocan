@@ -23,6 +23,13 @@ second week.
 
 ## 14 October 2026
 
+- **Critics, as cards on your canvas (an experiment).** Turn on **Critique**
+  in Experiments, then `isocan critic add inevitable` puts a critic on the
+  canvas as a card: its three questions, what it looks for, and a credit
+  line. Nine come with isocan, each named for a principle (*Less but
+  Better*, *Form Follows Emotion*), and `isocan critic new "<name>"` writes
+  your own. Edit a card and the critic changes. Asking one for a critique
+  comes next.
 - **Semantic Zoom, an experiment.** Turn it on in Settings → Experiments.
   Zoomed out past where a long note can be read, it shows a short summary,
   marked ≈, instead of only its first line. When the note changes, the old

@@ -13,14 +13,17 @@ Then two critics and the read, then the web's doors.
 **Phase citations name their project**: `critique phase 2`, never a bare
 "phase 2".
 
-**Where we are:** specified 14 Oct 2026; nothing is built.
-**critique phase 0 is next** — critics on the canvas.
+**Where we are, 14 Oct 2026:** phase 0 is CLOSED — critics live on the
+canvas as persona items, added from the nine packs or written by hand, named
+by the shared homage rules, and drawn as cards behind the `critique`
+experiment. **critique phase 1 is next**: one critic, asked and answering,
+which spends model tokens and waits on Dion's yes to the budget.
 
 ---
 
 ## Phase 0 — Critics on the canvas
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 2026-10-14 — `critic add|new|ls` on a scratch canvas: a pack becomes an editable persona item read back through `parsePersona`, an edit changes what `critic ls` reports, and a duplicate, a person's name and a first-word clash are refused in words; works with design-competition absent.
 
 - Core: `critic: true` persona items parsed by `parsePersona`; the naming
   check (`packProblems`' rules) on every critic; the `critique.critics`
@@ -113,6 +116,20 @@ canvas, driven by a journey in `scripts/journeys.mjs`, and walked once by a
 person.
 
 ## Trajectory
+
+- **2026-10-14** — The naming rules left design-competition for core
+  (`packages/core/src/homage.ts`), so critique uses them without depending
+  on competitions; `packProblems` and `rosterClashes` call them unchanged.
+- **2026-10-14** — A module renderer could only claim an item by mime, and
+  claiming `text/markdown` would have taken every note. Renderers may now
+  also require a property (module API 0.2.8).
+- **2026-10-14** — `parsePersona` listed `color` as a known key and then
+  dropped it, despite its own test's warning. It is read now.
+- **2026-10-14 — Open:** the browser has no roster: design-competition's web
+  activation does not carry its contributions, so the critique phase 4
+  Critics panel needs the roster from the CLI side or the daemon. And the
+  entry chunk was already 4,663 bytes past its agreed ceiling before this
+  phase; critique added 277 to it, and its own chunk is 3 KB.
 
 - **2026-10-14** — Specified, from proactive's *Two critics* and a survey of
   the code. It found that no grant can comment without editing, and that

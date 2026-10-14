@@ -107,6 +107,7 @@ export * from "./converge.ts";
 export * from "./itemthread.ts";
 export * from "./claim.ts";
 export * from "./persona.ts";
+export * from "./homage.ts";
 export * from "./inbox.ts";
 export * from "./roll.ts";
 export * from "./prototype-click.ts";

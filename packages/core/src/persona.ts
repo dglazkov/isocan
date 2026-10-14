@@ -129,6 +129,14 @@ export interface Persona {
   escalate?: string;
   /** Where its runs are filed. */
   runs?: string;
+  /**
+   * The vendor's `color` (Claude Code tints a subagent with it), and a
+   * critic's pin colour. It was in the known-keys list and read into nothing,
+   * so a persona's colour was dropped while the test beside this said a key
+   * this build did not understand must never be — found when critics needed
+   * theirs (critique phase 0, 14 Oct 2026).
+   */
+  color?: string;
   /** Everything after the front matter — the lens itself, in prose, which is
    *  the part a model actually reads. Kept verbatim. */
   body: string;
@@ -343,6 +351,7 @@ export function parsePersona(text: string, filename: string): Persona | null {
     ...(budget ? { budget } : {}),
     ...(escalate ? { escalate } : {}),
     ...(one("runs") !== undefined ? { runs: one("runs")! } : {}),
+    ...(one("color") !== undefined ? { color: unquote(one("color")!) } : {}),
     body: split.body,
     extra,
   };

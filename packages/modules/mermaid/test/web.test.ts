@@ -34,7 +34,9 @@ describe("the diagram renderer", () => {
 
   it("is asked before the built-in chain, with the facts and never a blob path", () => {
     const head = itemView.slice(itemView.indexOf("function VersionContent("), itemView.indexOf('if (designSystem && (mimeType === "text/markdown"'));
-    expect(head).toContain("moduleRendererFor(mimeType)");
+    // Asked with the item too, so a renderer that claims only items carrying
+    // a property (critique's critic cards) can say whether this one is theirs.
+    expect(head).toContain("moduleRendererFor(mimeType, moduleItem)");
     expect(head).toContain("useCallback(() => readBlobText(canvasId, blobHash), [canvasId, blobHash])");
     expect(head).toContain("readText={readText}");
     expect(diagram).not.toMatch(/["'`]\/api\//);

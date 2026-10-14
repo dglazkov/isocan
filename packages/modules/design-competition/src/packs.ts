@@ -1,4 +1,4 @@
-import { contributions, type Contribution } from "@isocan/core";
+import { contributions, firstWordClashes, homageNameProblems, type Contribution } from "@isocan/core";
 
 /**
  * **A fighter pack** (`docs/projects/design-competition/packs.md`).
@@ -70,9 +70,6 @@ export function packPath(pack: FighterPack, file: PackFile): string {
  *  CC BY-SA may not — share-alike cannot be relicensed — so it is linked. */
 export const TRAVELLING_LICENCES = ["CC0-1.0", "public-domain", "CC-BY-4.0", "CC-BY-3.0", "CC-BY-2.0"] as const;
 
-/** Words of a credit that are not a name — never counted against an agent's. */
-const NOT_A_NAME = new Set(["and", "the", "design", "studio", "after"]);
-
 const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
 /**
@@ -94,20 +91,11 @@ export function packProblems(value: unknown): string[] {
     const list = p[key];
     if (!Array.isArray(list) || list.length !== 3 || !list.every(nonEmpty)) problems.push(`${key} is three lines`);
   }
-  // The first word is how a mention finds the agent (`@Less` is *Less but
-  // Better*), so it must be a word: letters, digits and spaces only.
-  if (!/^[A-Za-z0-9][A-Za-z0-9 ]{0,40}$/.test(p.agentName!)) {
-    problems.push(`agentName "${p.agentName}" must be words — letters, digits and spaces`);
-  }
-  if (!p.self) {
-    const nameWords = p.name!.toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter((w) => w.length >= 3 && !NOT_A_NAME.has(w));
-    const agentWords = p.agentName!.toLowerCase().split(/\s+/);
-    const shared = agentWords.filter((w) => nameWords.includes(w));
-    if (shared.length > 0) {
-      problems.push(`agentName "${p.agentName}" carries "${shared.join(" ")}" from "${p.name}" — a fighter is named for its principle, never its person`);
-    }
-    if (!/not affiliated/i.test(p.homage!)) problems.push("the homage line must say the pack is not affiliated with or endorsed by its person");
-  }
+  // The naming rules are core's, shared with critique's critics.
+  problems.push(...homageNameProblems(
+    { agentName: p.agentName!, person: p.name!, affiliation: p.homage!, ...(p.self ? { self: true } : {}) },
+    { noun: "fighter", subject: "the pack", line: "the homage line" },
+  ));
   if (!Array.isArray(p.references) || p.references.length === 0) {
     problems.push("a pack studies at least one reference");
   } else {
@@ -149,15 +137,7 @@ export function fighters(): Fighter[] {
  * mean one agent — the second pack is the one refused, and says so.
  */
 export function rosterClashes(list: readonly Fighter[]): { id: string; problem: string }[] {
-  const seen = new Map<string, string>();
-  const out: { id: string; problem: string }[] = [];
-  for (const { pack } of list) {
-    const first = pack.agentName.split(/\s+/)[0]!.toLowerCase();
-    const holder = seen.get(first);
-    if (holder && holder !== pack.id) out.push({ id: pack.id, problem: `"${pack.agentName}" starts with the same word as ${holder}'s agent — @${first} would be ambiguous` });
-    else seen.set(first, pack.id);
-  }
-  return out;
+  return firstWordClashes(list.map(({ pack }) => ({ id: pack.id, agentName: pack.agentName })));
 }
 
 /** A fighter by what somebody types: id, agent name, title, or a word of the
