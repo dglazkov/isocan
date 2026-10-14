@@ -59,9 +59,18 @@ function member(m) {
 export function semanticZoomPrompt(source, { vision = false } = {}) {
   const frame = FRAME[source.kind];
   if (!frame) throw new Error(`no semantic zoom prompt for kind ${source.kind}`);
-  const content =
-    source.kind === "text" ? source.body : source.kind === "screen" ? (source.text || "(no text)") : source.members.map(member).join("\n");
-  return [frame(source), INSTRUCTION, ...(vision ? [VISION_LINE] : []), "<<<", content, ">>>"].join("\n");
+  return [frame(source), INSTRUCTION, ...(vision ? [VISION_LINE] : []), "<<<", promptContent(source), ">>>"].join("\n");
+}
+
+/**
+ * What goes between the fences: exactly the words the summariser was given,
+ * so the faithfulness eval (`eval.mjs`) judges a summary against what its
+ * model saw and nothing more.
+ */
+export function promptContent(source) {
+  if (source.kind === "text") return source.body;
+  if (source.kind === "screen") return source.text || "(no text)";
+  return source.members.map(member).join("\n");
 }
 
 /** Words as the answer rule counts them. */

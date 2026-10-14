@@ -40,6 +40,7 @@ import {
 // rather than retyped, so a raised `ANSWER_DAYS` cannot leave every page
 // promising the old number.
 import { ANSWER_DAYS } from "./reviews.mjs";
+import { unreadOf } from "./lib/reading.mjs";
 /**
  * **The personas are read through the CLI, not parsed again here.**
  *
@@ -106,6 +107,9 @@ function take(goal) {
   try {
     out = execSync(goal.measuredBy, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   } catch (err) {
+    // A recorded reading nobody has taken yet is said as such, never as a number or a broken instrument.
+    const line = unreadOf(err);
+    if (line) return { unread: line };
     return { broken: `the command failed: ${String(err.stderr ?? err.message).trim().slice(0, 200)}` };
   }
   const value = Number(out.trim().split(/\s+/).pop());
@@ -187,10 +191,10 @@ const money = (usd) => (usd === null ? "unknown" : `$${usd.toFixed(4)}`);
 function runOne(persona) {
   const readings = persona.goals.map((goal) => {
     const reading = { goal, ...take(goal) };
-    return reading.broken ? reading : { ...reading, ...basisOf(goal) };
+    return reading.broken || reading.unread ? reading : { ...reading, ...basisOf(goal) };
   });
   const broken = readings.filter((r) => r.broken);
-  const missed = readings.filter((r) => !r.broken && !met(r.goal, r.value));
+  const missed = readings.filter((r) => !r.broken && !r.unread && !met(r.goal, r.value));
   for (const r of missed) r.missed = true;
 
   // The cheap tier, when this persona is one: see `scripts/lib/persona-tier.mjs`.
@@ -226,6 +230,8 @@ function runOne(persona) {
         (r.basis === undefined ? "" : ` of ${r.basis}${unit}`);
       if (r.broken) {
         lines.push(`| ${r.goal.name} | ${target} | — | **instrument broken** |`);
+      } else if (r.unread) {
+        lines.push(`| ${r.goal.name} | ${target} | — | no reading yet |`);
       } else {
         const ok = met(r.goal, r.value);
         // Against the BASELINE as well as the bound: a number inside its bound
@@ -240,6 +246,7 @@ function runOne(persona) {
     }
     lines.push("");
     for (const r of broken) lines.push(`- \`${r.goal.measuredBy}\` — ${r.broken}`);
+    for (const r of readings.filter((x) => x.unread)) lines.push(`- \`${r.goal.measuredBy}\` — ${r.unread}`);
     if (broken.length) lines.push("");
   }
 

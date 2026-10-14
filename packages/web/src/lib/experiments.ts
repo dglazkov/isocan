@@ -45,6 +45,13 @@ interface Experiment {
   name: string;
   /** One sentence: what turning it on gets you, and what is unfinished. */
   what: string;
+  /** Shown only while this other experiment is on: a refinement meaningless without it. */
+  under?: string;
+  /**
+   * Offered only where the home's text model looks at pictures
+   * (`TEXT_PICTURES_ROUTE`); elsewhere the row says why, and stays off.
+   */
+  needsPictures?: true;
 }
 
 /** Every experiment this build offers, in the order Settings lists them. */
@@ -77,7 +84,14 @@ export const EXPERIMENTS: readonly Experiment[] = [
   {
     id: "semantic.zoom",
     name: "Semantic Zoom",
-    what: "Far away, a long note shows a short model-written summary instead of words too small to read, marked ≈. Text notes only so far; groups and areas are next.",
+    what: "Far away, a long note, a group or an area shows a short model-written summary instead of words too small to read, marked ≈.",
+  },
+  {
+    id: "semantic.zoom.vision",
+    name: "Semantic Zoom: look at pictures",
+    what: "Screens and pictures — alone, or in a group or an area — are summarised from what they show, not only their titles. One costs about ten text summaries, so a canvas makes at most 15 an hour.",
+    under: "semantic.zoom",
+    needsPictures: true,
   },
 ];
 

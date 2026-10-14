@@ -796,6 +796,17 @@ export const CLAUDE_TEXT_EFFORT = "low";
  */
 const CLAUDE_FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
+/**
+ * **A picture sent with a prompt** — base64 bytes and their format, as
+ * Claude's image blocks take them. Semantic Zoom's summaries that look at
+ * pictures (design §11) are the one caller; only Claude's generator takes
+ * them.
+ */
+export interface TextImage {
+  mediaType: string;
+  data: string;
+}
+
 /** Options for `claudeTextGenerator`. */
 interface ClaudeTextGeneratorOptions {
   apiKey?: string;
@@ -814,6 +825,8 @@ interface ClaudeTextGeneratorOptions {
    * fallback (the cheap tier a summary asks for) turns it off.
    */
   fallbacks?: boolean;
+  /** Pictures sent before the prompt, in order, as image blocks in the one user turn. Absent, the turn is the prompt alone, as it always was. */
+  images?: readonly TextImage[];
 }
 
 /**
@@ -868,6 +881,9 @@ export function claudeTextGenerator(opts: ClaudeTextGeneratorOptions = {}): Text
   const fetchFn = opts.fetch ?? globalThis.fetch;
   const fallbacks = opts.fallbacks ?? true;
   const scrub = (text: string) => (apiKey ? text.split(apiKey).join("[key]") : text);
+  // With pictures, the turn is their image blocks and then the words; without, the words alone, byte for byte as before.
+  const withImages = (text: string) =>
+    opts.images?.length ? [...opts.images.map((image) => ({ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } })), { type: "text", text }] : text;
 
   return {
     name: model,
@@ -892,9 +908,11 @@ export function claudeTextGenerator(opts: ClaudeTextGeneratorOptions = {}): Text
               messages: [
                 {
                   role: "user",
-                  content: useOutputConfig
-                    ? prompt
-                    : `${prompt}\n\nRespond with a valid JSON object matching this schema (no markdown fences or commentary):\n${JSON.stringify(strictSchema)}`,
+                  content: withImages(
+                    useOutputConfig
+                      ? prompt
+                      : `${prompt}\n\nRespond with a valid JSON object matching this schema (no markdown fences or commentary):\n${JSON.stringify(strictSchema)}`,
+                  ),
                 },
               ],
               ...(useOutputConfig
@@ -970,6 +988,8 @@ interface EnvTextGeneratorOptions {
   system?: string;
   /** Claude's `fallbacks: "default"`; absent, on, as it always was. */
   fallbacks?: boolean;
+  /** Pictures sent with the prompt — Claude's only; asking the OpenAI-shaped endpoint with any throws, rather than dropping them unsaid. */
+  images?: readonly TextImage[];
 }
 
 /**
@@ -983,7 +1003,9 @@ export function envTextGenerator(opts: EnvTextGeneratorOptions = {}): TextGenera
   const apiKey = opts.apiKey ?? textEnv("ISOCAN_TEXT_API_KEY");
   const provider = opts.provider ?? textProvider(apiKey);
   const shared = { ...(apiKey !== undefined ? { apiKey } : {}), ...(opts.model !== undefined ? { model: opts.model } : {}), ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.system !== undefined ? { system: opts.system } : {}) };
-  return provider === "anthropic" ? claudeTextGenerator({ ...shared, ...(opts.fallbacks !== undefined ? { fallbacks: opts.fallbacks } : {}) }) : httpTextGenerator(shared);
+  if (provider === "anthropic") return claudeTextGenerator({ ...shared, ...(opts.fallbacks !== undefined ? { fallbacks: opts.fallbacks } : {}), ...(opts.images?.length ? { images: opts.images } : {}) });
+  if (opts.images?.length) throw new Error("this text model is not asked about pictures here — only Claude's is");
+  return httpTextGenerator(shared);
 }
 
 // ---------- the home's text model

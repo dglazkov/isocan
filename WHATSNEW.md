@@ -28,7 +28,9 @@ second week.
   marked ≈, instead of only its first line. When the note changes, the old
   summary stays, marked as updating, until the new one arrives. Summaries
   are made with the canvas owner's model key and never change the canvas.
-  Groups get one too: zoomed out, a group says what is in it.
+  Groups get one too: zoomed out, a group says what is in it. A second
+  setting, **look at pictures**, lets summaries describe screens and images
+  too, where the canvas's model can see them.
 
 ## 13 October 2026
 

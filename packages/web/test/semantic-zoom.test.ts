@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { TEXT_PICTURES_ROUTE } from "@isocan/core/text";
 import { EXPERIMENTS } from "../src/lib/experiments.ts";
 
 /**
@@ -30,6 +31,24 @@ describe("the experiment", () => {
     const row = EXPERIMENTS.find((one) => one.id === "semantic.zoom");
     expect(row?.name).toBe("Semantic Zoom");
     expect(row?.what).toMatch(/summary/);
+  });
+
+  it("looking at pictures is a second row, shown only under Semantic Zoom, offered only where the home's model takes pictures", () => {
+    const row = EXPERIMENTS.find((one) => one.id === "semantic.zoom.vision");
+    expect(row).toMatchObject({ name: "Semantic Zoom: look at pictures", under: "semantic.zoom", needsPictures: true });
+    const menu = read("components/IdentityMenu.tsx");
+    expect(menu).toContain("EXPERIMENTS.filter((entry) => !entry.under || experiments.includes(entry.under))");
+    expect(menu).toContain("fetchTextPictures()");
+    expect(read("lib/api.ts")).toContain(`request<TextPictures>("GET", ${JSON.stringify(TEXT_PICTURES_ROUTE)})`);
+    expect(menu).toMatch(/checked=\{!refused && experiments\.includes\(entry\.id\)\}/);
+    expect(menu).toContain("disabled={refused}");
+  });
+
+  it("with the setting off the chunk never asks for a vision summary nor reads one: vision rides only on looking()", () => {
+    const zoom = read("components/SemanticZoom.tsx");
+    expect(zoom).toContain(`const looking = () => !visionRefused && useUiStore.getState().experiments.includes(VISION);`);
+    expect(zoom).toContain(`const vision = looking() ? "&vision=1" : "";`);
+    expect(zoom).toContain("...(looks && !plainOnly ? { vision: true } : {})");
   });
 });
 

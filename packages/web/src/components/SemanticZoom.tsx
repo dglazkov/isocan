@@ -1,7 +1,10 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
-import { AREA_TITLE_HEIGHT, groupStackBox, isArea, isGroupItem, isTextItem, textDrawSize, textIsLegible, type Item } from "@isocan/core";
+import { AREA_TITLE_HEIGHT, groupStackBox, isArea, isGroupItem, isTextItem, textDrawSize, textIsLegible, TEXT_SIZE, type Item } from "@isocan/core";
 import { TEXT_OWNER_ONLY } from "@isocan/core/keys";
-import { memberTypeSize, summarisableText, summariesRoute, summaryKey, summaryMembers, SUMMARY_OVER_BUDGET, SUMMARY_QUIET, type SummaryEntry, type SummaryRead, type SummaryWait } from "@isocan/core/semantic-zoom";
+import {
+  memberTypeSize, summarisablePicture, summarisableText, summariesRoute, summaryKey, summaryMembers, summaryPicture, SUMMARY_NO_PICTURES, SUMMARY_OVER_BUDGET, SUMMARY_QUIET, SUMMARY_VISION_OVER_BUDGET,
+  type SummaryEntry, type SummaryMake, type SummaryRead, type SummaryWait,
+} from "@isocan/core/semantic-zoom";
 import { TEXT_RATE_LIMITED, TEXT_UNAVAILABLE } from "@isocan/core/text";
 import { ApiError, request } from "../lib/api.ts";
 import { TEXT_MARK_CSS } from "../lib/chrome.ts";
@@ -42,6 +45,18 @@ import "./semantic-zoom.css";
  * long to wait. When the badge's minute or the canvas's hour is spent
  * (`summary-budget`, phase 3) it pauses, still reading — a stale summary
  * keeps showing, a missing one keeps its fallback — and asks again after.
+ *
+ * **Looking at pictures** (phase 3b, design §11), only while this person
+ * also has `semantic.zoom.vision` on: a group or an area holding a screen or
+ * a picture with a picture to send is asked for under its vision key, and a
+ * screen or a picture standing alone gets a card of its own once body-size
+ * words on it could not be read. The text-only summary is read meanwhile and
+ * shown until the vision one exists, and is what this view asks for while
+ * the canvas's picture budget is spent. With the setting off, no key it asks
+ * about is a vision key and no read says `vision=1`, so it never causes or
+ * sees a summary made from pictures; turning it off clears what it showed.
+ * A home whose model takes no pictures refuses once
+ * (`summary-no-pictures`) and this view goes on text-only.
  */
 export default function SemanticZoom({ canvasId }: { canvasId: string }) {
   useEffect(() => watch(canvasId), [canvasId]);
@@ -59,13 +74,20 @@ const PAUSE_MS = 60_000;
 
 /** A frame with less room than this on screen (px) has no room for a summary line: it keeps its title only (design §3, the mark band). */
 const CARD_MIN = { w: 96, h: 28 };
+/** The experiment that adds pictures to what is summarised (design §11); meaningless without `semantic.zoom`. */
+const VISION = "semantic.zoom.vision";
 
 interface Seen {
   item: Item;
-  kind: "text" | "group" | "area";
+  kind: SummaryMake["kind"];
+  /** The key whose summary this view shows: the vision key when it looks at pictures, else the text-only one. */
   key: string;
+  /** Looking at pictures, a group's or an area's text-only key: read, and shown, until the vision summary exists. */
+  fallback?: string;
+  /** The key is a vision key: asked for with `vision: true`. */
+  looks: boolean;
   distance: number;
-  /** A group's or an area's members' median type size, in world units. */
+  /** A group's or an area's members' median type size, in world units; a screen's, body size. */
   px?: number;
 }
 
@@ -86,7 +108,8 @@ function gist(title: string, summary: string, stale: boolean): ReactNode {
  * left of it (`semantic-zoom.css`). "≈" and "Summary of …", like a note's.
  */
 function card(item: Item, summary: string, stale: boolean): ReactNode {
-  const top = isGroupItem(item) ? (item.groupLayout?.titleHeight ?? AREA_TITLE_HEIGHT) : AREA_TITLE_HEIGHT;
+  // A screen or a picture alone has no title strip inside it: its card starts at its top.
+  const top = isGroupItem(item) ? (item.groupLayout?.titleHeight ?? AREA_TITLE_HEIGHT) : isArea(item) ? AREA_TITLE_HEIGHT : 0;
   return (
     <div className="sz-gist sz-card" style={{ "--sz-top": top } as CSSProperties} role="note" aria-label={`Summary of ${item.title}${stale ? ", being brought up to date" : ""}`} data-stale={stale ? "" : undefined}>
       <span className="sz-sign" aria-hidden="true">≈ </span>
@@ -109,14 +132,20 @@ function watch(canvasId: string): () => void {
   const keys = new Map<string, Promise<string>>();
   let mayAsk = true;
   let pausedUntil = 0;
+  /** The home said its model takes no pictures: text-only from now on. */
+  let visionRefused = false;
+  /** The canvas's picture budget is spent: text-only makes until then. */
+  let visionPausedUntil = 0;
+  let visionResume: ReturnType<typeof setTimeout> | undefined;
+  const looking = () => !visionRefused && useUiStore.getState().experiments.includes(VISION);
   let seen: Seen[] = [];
   let settle: ReturnType<typeof setTimeout> | undefined;
   let resume: ReturnType<typeof setTimeout> | undefined;
 
-  const keyOf = (kind: Seen["kind"], sources: Item[]) => {
-    const at = [kind, ...sources.map((one) => `${one.id}\n${one.currentVersionId}\n${one.title}`)].join("\n");
+  const keyOf = (kind: Seen["kind"], sources: Item[], vision: boolean) => {
+    const at = [kind, String(vision), ...sources.map((one) => `${one.id}\n${one.currentVersionId}\n${one.title}`)].join("\n");
     let key = keys.get(at);
-    if (!key) keys.set(at, (key = summaryKey(kind, sources)));
+    if (!key) keys.set(at, (key = summaryKey(kind, sources, vision)));
     return key;
   };
 
@@ -131,26 +160,40 @@ function watch(canvasId: string): () => void {
     const { tx, ty, scale } = useUiStore.getState().viewport;
     if (!canvas) return [];
     const w = window.innerWidth, h = window.innerHeight;
-    const found: Array<Omit<Seen, "key"> & { sources: Item[] }> = [];
+    const vision = looking();
+    const found: Array<Omit<Seen, "key" | "fallback"> & { sources: Item[] }> = [];
     for (const item of Object.values(canvas.items)) {
-      const kind = isTextItem(item) ? "text" : isGroupItem(item) ? "group" : isArea(item) ? "area" : null;
+      // A screen or a picture is summarised alone only when looking at pictures, and only standing alone: in a group, its group's card says it.
+      const kind = isTextItem(item) ? "text" : isGroupItem(item) ? "group" : isArea(item) ? "area" : vision && !item.containerId && summaryPicture(item) ? "screen" : null;
       if (!kind) continue;
       const left = item.x * scale + tx, top = item.y * scale + ty, right = left + item.width * scale, bottom = top + item.height * scale;
       if (right < 0 || bottom < 0 || left > w || top > h) continue;
       const distance = Math.hypot((left + right) / 2 - w / 2, (top + bottom) / 2 - h / 2);
       if (kind === "text") {
         if (textIsLegible(textDrawSize(item), scale) || summarisableText(canvas, item.id) !== item) continue;
-        found.push({ item, kind, distance, sources: [item] });
+        found.push({ item, kind, distance, sources: [item], looks: false });
+        continue;
+      }
+      if (kind === "screen") {
+        if (right - left < CARD_MIN.w || bottom - top < CARD_MIN.h || textIsLegible(TEXT_SIZE, scale, false) || summarisablePicture(canvas, item.id) !== item) continue;
+        found.push({ item, kind, distance, px: TEXT_SIZE, sources: [item], looks: true });
         continue;
       }
       if (groupStackBox(item) || right - left < CARD_MIN.w || bottom - top - AREA_TITLE_HEIGHT * scale < CARD_MIN.h) continue;
       const held = summaryMembers(canvas, kind, item.id);
       const px = typeof held === "object" && held ? memberTypeSize(held.members) : undefined;
       if (!px || textIsLegible(px, scale, false)) continue;
-      found.push({ item, kind, distance, px, sources: [item, ...(held as { members: Item[] }).members] });
+      const members = (held as { members: Item[] }).members;
+      found.push({ item, kind, distance, px, sources: [item, ...members], looks: vision && members.some((m) => summaryPicture(m) !== null) });
     }
     found.sort((a, b) => a.distance - b.distance);
-    return Promise.all(found.map(async ({ sources, ...one }) => ({ ...one, key: await keyOf(one.kind, sources) })));
+    return Promise.all(
+      found.map(async ({ sources, ...one }) => ({
+        ...one,
+        key: await keyOf(one.kind, sources, one.looks),
+        ...(one.looks && one.kind !== "screen" ? { fallback: await keyOf(one.kind, sources, false) } : {}),
+      })),
+    );
   };
 
   /** One set of gists for what is on screen, in one store write — never an empty frame between two summaries. */
@@ -158,15 +201,18 @@ function watch(canvasId: string): () => void {
     const next: Record<string, { node: ReactNode; px?: number }> = {};
     const put = (item: Item, px: number | undefined, summary: string, stale: boolean) =>
       (next[item.id] = px ? { node: card(item, summary, stale), px } : { node: gist(item.title, summary, stale) });
-    for (const { item, key, px } of seen) {
+    for (const { item, key, fallback, px } of seen) {
       const entry = byKey.get(key);
       if (entry?.short) {
         shown.delete(item.id);
         continue;
       }
-      if (entry?.summary && !entry.stale) {
-        shown.set(item.id, { title: item.title, summary: entry.summary });
-        put(item, px, entry.summary, false);
+      // Looking at pictures: the vision summary when there is one, the text-only one of the same content meanwhile.
+      const plain = fallback ? byKey.get(fallback) : undefined;
+      const now = entry?.summary && !entry.stale ? entry.summary : plain?.summary && !plain.stale ? plain.summary : null;
+      if (now) {
+        shown.set(item.id, { title: item.title, summary: now });
+        put(item, px, now, false);
         continue;
       }
       const before = entry?.summary ?? shown.get(item.id)?.summary;
@@ -182,20 +228,28 @@ function watch(canvasId: string): () => void {
       resume ??= setTimeout(() => ((resume = undefined), schedule(0)), pausedUntil - Date.now() + 250);
       return;
     }
-    for (const { item, kind, key } of seen) {
+    const visionWaits = Date.now() < visionPausedUntil;
+    if (visionWaits) visionResume ??= setTimeout(() => ((visionResume = undefined), schedule(0)), visionPausedUntil - Date.now() + 250);
+    for (const { item, kind, key, fallback, looks } of seen) {
       if (making.size >= AT_ONCE) return;
       const entry = byKey.get(key);
-      if ((entry && !entry.stale) || failed.has(key) || making.has(key) || timers.has(key)) continue;
-      making.add(key);
-      void request<SummaryEntry | SummaryWait>("POST", summariesRoute(canvasId), { kind, sourceId: item.id }).then(
+      if (entry && !entry.stale) continue;
+      // While the canvas's pictures are spent for the hour, the text-only summary is the one to make.
+      const plainOnly = looks && visionWaits;
+      if (plainOnly && (!fallback || (byKey.get(fallback) && !byKey.get(fallback)!.stale))) continue;
+      const ask = plainOnly ? fallback! : key;
+      if (failed.has(ask) || making.has(ask) || timers.has(ask)) continue;
+      making.add(ask);
+      const body: SummaryMake = { kind, sourceId: item.id, ...(looks && !plainOnly ? { vision: true } : {}) };
+      void request<SummaryEntry | SummaryWait>("POST", summariesRoute(canvasId), body).then(
         (answer) => {
           if (!live) return;
           if ("retryAfterMs" in answer && answer.code === SUMMARY_QUIET) {
-            timers.set(key, setTimeout(() => (timers.delete(key), schedule(0)), answer.retryAfterMs + 250));
+            timers.set(ask, setTimeout(() => (timers.delete(ask), schedule(0)), answer.retryAfterMs + 250));
           } else {
             const entry = answer as SummaryEntry;
             byKey.set(entry.key, entry);
-            if (entry.key !== key) failed.add(key);
+            if (entry.key !== ask) failed.add(ask);
           }
         },
         (error: unknown) => {
@@ -204,10 +258,15 @@ function watch(canvasId: string): () => void {
           if (code === TEXT_OWNER_ONLY || code === TEXT_UNAVAILABLE || code === "view-only" || code === "not-admitted") mayAsk = false;
           // The badge's minute or the canvas's hour is spent: read only for a while, then ask again.
           else if (code === TEXT_RATE_LIMITED || code === SUMMARY_OVER_BUDGET) pausedUntil = Date.now() + PAUSE_MS;
-          else failed.add(key);
+          // The canvas's pictures are spent for the hour: text-only makes meanwhile, then pictures again.
+          else if (code === SUMMARY_VISION_OVER_BUDGET) visionPausedUntil = Date.now() + PAUSE_MS;
+          // This home's model takes no pictures: from now on this view asks and reads as if the setting were off.
+          else if (code === SUMMARY_NO_PICTURES) visionRefused = true;
+          else failed.add(ask);
+          if (code === SUMMARY_VISION_OVER_BUDGET || code === SUMMARY_NO_PICTURES) schedule(0);
         },
       ).finally(() => {
-        making.delete(key);
+        making.delete(ask);
         if (!live) return;
         paint();
         pump();
@@ -219,10 +278,12 @@ function watch(canvasId: string): () => void {
     const now = await onScreen();
     if (!live) return;
     seen = now;
-    const unread = seen.filter((one) => !read.has(one.key));
+    // Each key with the source a stale stand-in is looked up by; a fallback key wants none (the vision key's stand-in covers the item).
+    const unread = seen.flatMap((one) => [{ key: one.key, source: one.item.id }, ...(one.fallback ? [{ key: one.fallback, source: "" }] : [])]).filter((one) => !read.has(one.key));
+    const vision = looking() ? "&vision=1" : "";
     for (let i = 0; i < unread.length; i += PER_READ) {
       const batch = unread.slice(i, i + PER_READ);
-      const query = `keys=${batch.map((one) => one.key).join(",")}&for=${batch.map((one) => encodeURIComponent(one.item.id)).join(",")}`;
+      const query = `keys=${batch.map((one) => one.key).join(",")}&for=${batch.map((one) => encodeURIComponent(one.source)).join(",")}${vision}`;
       const answer = await request<SummaryRead>("GET", `${summariesRoute(canvasId)}?${query}`).catch(() => null);
       if (!live) return;
       if (!answer) continue;
@@ -244,6 +305,15 @@ function watch(canvasId: string): () => void {
 
   const offView = useUiStore.subscribe((s, before) => {
     if (s.viewport !== before.viewport) schedule();
+    if (s.experiments.includes(VISION) !== before.experiments.includes(VISION)) {
+      // Looking at pictures turned on or off: nothing read or shown under the other setting carries over, and with it off nothing made from pictures stays on screen.
+      byKey.clear();
+      read.clear();
+      shown.clear();
+      failed.clear();
+      useGistStore.setState({}, true);
+      schedule(0);
+    }
   });
   const offCanvas = useCanvasStore.subscribe((s, before) => {
     if (s.canvas !== before.canvas) schedule();
@@ -253,6 +323,7 @@ function watch(canvasId: string): () => void {
     live = false;
     clearTimeout(settle);
     clearTimeout(resume);
+    clearTimeout(visionResume);
     for (const timer of timers.values()) clearTimeout(timer);
     offView();
     offCanvas();

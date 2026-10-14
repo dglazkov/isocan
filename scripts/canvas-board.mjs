@@ -40,6 +40,7 @@ import { fileURLToPath } from "node:url";
 import { register } from "tsx/esm/api";
 import { BOARD_IDENTITY } from "./board-identity.mjs";
 import { panelPublisher } from "./lib/panel.mjs";
+import { unreadOf } from "./lib/reading.mjs";
 
 // The bin's own trick: register tsx so the workspace's TypeScript sources
 // import directly, then load the API. Dynamic, because a static import would
@@ -146,6 +147,9 @@ function take(goal) {
   try {
     out = execSync(goal.measuredBy, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   } catch (err) {
+    // A recorded reading nobody has taken yet (`scripts/lib/reading.mjs`): said, never a number, never broken.
+    const line = unreadOf(err);
+    if (line) return { unread: line };
     return { broken: `the command failed: ${String(err.stderr ?? err.message).trim().slice(0, 240)}` };
   }
   const value = Number(out.trim().split(/\s+/).pop());
@@ -161,7 +165,7 @@ const met = (goal, value) =>
 function verdictOf(readings, goals) {
   if (goals.length === 0) return "grey";
   if (readings.some((r) => r.broken)) return "amber";
-  return readings.every((r) => met(r.goal, r.value)) ? "green" : "red";
+  return readings.every((r) => r.unread || met(r.goal, r.value)) ? "green" : "red";
 }
 
 /** `43 8 * * *` → `daily 08:43`. Anything cleverer than this belongs in a
@@ -357,6 +361,11 @@ function personaPanel(p, readings, verdict, run) {
               <tr><td colspan="4" class="muted" style="font-size:11.5px;padding-top:0;border-bottom:0">
               <span class="mono">${esc(r.goal.measuredBy)}</span> — ${esc(r.broken)}</td></tr>`;
           }
+          if (r.unread) {
+            return `<tr><td>${esc(r.goal.name)}</td><td class="num muted">${esc(target)}</td>
+              <td class="num">—</td><td><span class="pill grey">no reading yet</span></td></tr>
+              <tr><td colspan="4" class="muted" style="font-size:11.5px;padding-top:0;border-bottom:0">${esc(r.unread)}</td></tr>`;
+          }
           const ok = met(r.goal, r.value);
           const was = r.goal.baseline?.value;
           // Against the BASELINE as well as the bound: a number inside its
@@ -460,7 +469,7 @@ function ci() {
  */
 function signal(c, board) {
   const broken = board.some((b) => b.readings.some((r) => r.broken));
-  const missed = board.some((b) => b.readings.some((r) => !r.broken && !met(r.goal, r.value)));
+  const missed = board.some((b) => b.readings.some((r) => !r.broken && !r.unread && !met(r.goal, r.value)));
   if (c.unknown) return { word: broken ? "RED" : "NO SIGNAL", tone: broken ? "red" : "grey" };
   if (c.failed.length || broken) return { word: "RED", tone: "red" };
   if (c.running.length || missed) return { word: "AMBER", tone: "amber" };
@@ -470,7 +479,7 @@ function signal(c, board) {
 function buildPanel(c, board, f) {
   const { word, tone } = signal(c, board);
   const goals = board.flatMap((b) => b.readings);
-  const missed = goals.filter((r) => !r.broken && !met(r.goal, r.value));
+  const missed = goals.filter((r) => !r.broken && !r.unread && !met(r.goal, r.value));
   const broken = goals.filter((r) => r.broken);
 
   const ciLine = c.unknown
@@ -659,7 +668,7 @@ function statusPanel(board, f) {
   const misses = board
     .flatMap((b) =>
       b.readings
-        .filter((r) => !r.broken && !met(r.goal, r.value))
+        .filter((r) => !r.broken && !r.unread && !met(r.goal, r.value))
         .map(
           (r) =>
             `<tr><td>${esc(b.persona.name)}</td><td>${esc(r.goal.name)}</td>
@@ -844,7 +853,7 @@ function briefPanel(commits, board, rm, f, now) {
 
   const misses = board.flatMap((b) =>
     b.readings
-      .filter((r) => !r.broken && !met(r.goal, r.value))
+      .filter((r) => !r.broken && !r.unread && !met(r.goal, r.value))
       .map(
         (r) =>
           `<li><b>${esc(b.persona.name)}</b> — ${esc(r.goal.name)} is ${r.value}, past ${r.goal.bound.value}</li>`,

@@ -19,6 +19,8 @@ Nothing touches a daemon or a canvas.
 | `fixture/canvas.json` | 20 notes, 4 groups, a To do / Doing / Done board with 11 cards |
 | `fixture/screens/*.html`, `*.png` | 8 synthetic app screens and their renders (390×760 phone, 800×520 desktop) |
 | `results.json` | written by a run: every summary with source, kind, model, words, latency, tokens, cost, answer rule |
+| `eval.mjs` | the faithfulness eval's judge prompts, plan and scoring (phase 5); pure |
+| `eval.json` | written by `eval`: every summary's claims with a verdict each, short, useful, and the totals the copy persona reads |
 
 The fixture: notes from 6 to about 180 words — four under 40 words (a
 reminder, a call-back, a one-line decision, a welcome line that is little
@@ -39,6 +41,8 @@ node bench.mjs plan --prompts   # ... and every prompt in full
 node bench.mjs render           # only if a screen's HTML changed (playwright-core in ~/code/stitch-playwright, installed Chrome)
 node bench.mjs run              # the calls; writes results.json
 node bench.mjs table            # results.json as the table below
+node bench.mjs eval --plan      # what the eval would call; no key, no model, free
+node bench.mjs eval             # judge every summary in results.json; writes eval.json
 ```
 
 `run` prints the plan before calling and refuses a plan over 150 calls. The
@@ -87,6 +91,10 @@ summary.
 **faithful** (says nothing the source does not), **short** (≤ 30 words),
 **useful** (tells it apart from its neighbours — n01 from n05, n13 from n19,
 the four groups from each other, the three areas from each other).
+
+## The faithfulness eval (phase 5)
+
+**`node bench.mjs eval` judges `results.json` and writes `eval.json`; built 14 Oct 2026, not yet run (there is no `results.json` to judge).** For each summary, one call to the cheapest tier (`claude-haiku-5-5`, through the same key lookup as `run`) splits it into claims and marks each `supported`, `unsupported` or `contradicted` against exactly the content the summariser saw (and the pictures, for a vision row); **short** is ≤ 30 words, counted without a model; **useful** is one more call per neighbour set (n01/n05, n13/n19, the four groups, the three areas, per model) that shows the judge the sources by letter and the summaries shuffled and asks which is which, so a summary is useful when it is matched to its own. Projected from the run's plan: 83 calls, cap 150; it prints the count before calling and stops with zero calls without `results.json` or a key. `node scripts/measure.mjs summary-unfaithful` reads `eval.json`: the product tier's summaries with any claim not supported, the copy persona's number; until the first eval it prints `no reading yet` and exits 3. The judge is the summariser's own tier, so a judge that agrees with itself is the bias to watch; `--names` on that metric lists every unsupported claim to argue with.
 
 ## Answer rule
 

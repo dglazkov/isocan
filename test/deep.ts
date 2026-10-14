@@ -87,6 +87,7 @@ export const DEEP: readonly DeepFile[] = [
   { file: "packages/cli/test/beside.test.ts", secs: 17.3 },
   { file: "packages/cli/test/mv-out.test.ts", secs: 10.8 },
   { file: "test/canvas-board.test.ts", secs: 73 },
+  { file: "test/measure.test.ts", secs: 27.2 },
   { file: "packages/cli/test/dispatch.test.ts", secs: 77 },
   { file: "packages/cli/test/rc.test.ts", secs: 66 },
   { file: "packages/cli/test/direct.test.ts", secs: 63 },

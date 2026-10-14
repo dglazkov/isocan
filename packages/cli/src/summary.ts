@@ -207,11 +207,11 @@ export async function summaryStatsReport(ctx: Ctx, canvasId: string, days: numbe
     [`last ${stats.days.length} day${stats.days.length === 1 ? "" : "s"} with any`, ...tallyCells(stats.total)],
   ];
   const widths = head.map((_, col) => Math.max(...rows.map((r) => r[col]!.length)));
-  const { perHour, usedThisHour, resetsInMs } = stats.budget;
+  const { perHour, usedThisHour, resetsInMs, visionPerHour, visionUsedThisHour } = stats.budget;
   const lines = [
     `summaries on ${stats.canvasId}`,
     ...rows.map((r) => r.map((cell, col) => (col === 0 ? cell.padEnd(widths[col]!) : cell.padStart(widths[col]!))).join("  ").trimEnd()),
-    `budget — ${usedThisHour} of ${perHour} made this hour${resetsInMs ? `; it resets in ${Math.ceil(resetsInMs / 60_000)} min` : ""}`,
+    `budget — ${usedThisHour} of ${perHour} made this hour${resetsInMs ? `; it resets in ${Math.ceil(resetsInMs / 60_000)} min` : ""}${visionPerHour ? `; ${visionUsedThisHour ?? 0} of ${visionPerHour} looked at pictures` : ""}`,
     `cache — ${stats.entries.held} of ${stats.entries.max} entries held`,
   ];
   return { json: stats, lines };

@@ -4279,8 +4279,15 @@ export const JOURNEYS = [
      * To do into Doing: both summaries keep their old words marked updating,
      * never an empty frame, until the quiet period has passed and both are
      * replaced by what the frames now hold — two more calls, nothing else.
+     *
+     * Then phase 3b, looking at pictures: a picture is added to Onboarding.
+     * With the setting off the stub is sent no image, and the card says what
+     * the words say. With it on, the stub is sent the picture as an image
+     * block and the card shows the summary made from it. Turned off again,
+     * the card never shows that summary: a viewer with vision off never reads
+     * a vision summary.
      */
-    what: "a three-area board far away shows three ≈ summaries; a card dragged across changes both after the quiet period; an excluded note never reaches the model",
+    what: "a three-area board far away shows three ≈ summaries; a card dragged across changes both after the quiet period; an excluded note never reaches the model; a picture is sent only with looking at pictures on, and its summary is read only then",
     async run(rig) {
       const { b } = rig;
       const asked = [];
@@ -4290,10 +4297,13 @@ export const JOURNEYS = [
         req.on("end", () => {
           const sent = JSON.parse(body || "{}");
           asked.push(sent);
-          const prompt = String(sent.messages?.[0]?.content?.[0]?.text ?? sent.messages?.[0]?.content ?? "");
+          const content = sent.messages?.[0]?.content;
+          const blocks = Array.isArray(content) ? content : [];
+          const prompt = String(blocks.find((one) => one.type === "text")?.text ?? content ?? "");
           const title = /titled "([^"]+)"/.exec(prompt)?.[1] ?? "?";
           const members = [...prompt.matchAll(/^- (?:Note|Card|Screen|Picture) "([^"]+)"/gm)].map((m) => m[1]);
-          const summary = `Acme ${title} holds ${members.join(" and ") || "nothing"}`;
+          const seen = blocks.filter((one) => one.type === "image").length;
+          const summary = `Acme ${title} holds ${members.join(" and ") || "nothing"}${seen ? `, ${seen} seen` : ""}`;
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify({ id: "msg_stub", type: "message", role: "assistant", model: sent.model, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary }) }] }));
         });
@@ -4349,11 +4359,14 @@ export const JOURNEYS = [
         // Zoomed out around the board's middle until a card's words are under 5px and the whole board is on screen.
         const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
         const box = () => b.ev(`(() => { const rs = [${Object.keys(frames).map(frameSel).join(",")}].map((s) => document.querySelector(s).getBoundingClientRect()); return { left: Math.min(...rs.map((r) => r.left)), right: Math.max(...rs.map((r) => r.right)), top: Math.min(...rs.map((r) => r.top)), bottom: Math.max(...rs.map((r) => r.bottom)) }; })()`);
-        for (let n = 0; (await scale()) > 0.24 && n < 80; n++) {
-          const r = await box();
-          await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.min(Math.max(Math.round((r.left + r.right) / 2), 200), 1080), y: Math.min(Math.max(Math.round((r.top + r.bottom) / 2), 200), 700), deltaX: 0, deltaY: 120, modifiers: 2 });
-          await sleep(40);
-        }
+        const zoomOut = async () => {
+          for (let n = 0; (await scale()) > 0.24 && n < 80; n++) {
+            const r = await box();
+            await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.min(Math.max(Math.round((r.left + r.right) / 2), 200), 1080), y: Math.min(Math.max(Math.round((r.top + r.bottom) / 2), 200), 700), deltaX: 0, deltaY: 120, modifiers: 2 });
+            await sleep(40);
+          }
+        };
+        await zoomOut();
         const at = await box();
         if (at.left < 0 || at.right > 1280 || at.top < 0 || at.bottom > 900) throw new Error(`zoomed out to ${await scale()}, the board is not all on screen: ${JSON.stringify(at)}`);
 
@@ -4413,7 +4426,39 @@ export const JOURNEYS = [
         if (gaps !== 0) throw new Error(`a frame's summary card was missing on ${gaps} sampled frame(s) between the old summary and the new`);
         if (asked.length !== 6) throw new Error(`one drag across two frames, ${asked.length - 4} more model calls`);
         if (prompts().some((p) => /CONFIDENTIAL|forty percent|Margins/.test(p))) throw new Error("the excluded note reached the model");
-        return { frames: Object.keys(frames).length, calls: asked.length, scale: await scale(), before: first["To do"].text, after: { todo: (await read("To do")).text, doing: (await read("Doing")).text } };
+        const after = { todo: (await read("To do")).text, doing: (await read("Doing")).text };
+
+        // 3. Looking at pictures (phase 3b). A picture joins Onboarding; with the setting off, no image is sent.
+        const images = () => asked.reduce((n, a) => n + (Array.isArray(a.messages?.[0]?.content) ? a.messages[0].content.filter((one) => one.type === "image").length : 0), 0);
+        const shot = path.join(home, "acme-sign-up.png");
+        writeFileSync(shot, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
+        runCli("--canvas", id, "add", shot, "--in", frames.Onboarding, "--title", "Sign up shot");
+        await until(b, `${current("Onboarding")} && /Sign up shot/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's text-only summary, naming the picture by title", 20_000);
+        if (images() !== 0) throw new Error(`with looking at pictures off, ${images()} image(s) were sent`);
+        if (/seen/.test((await read("Onboarding")).text)) throw new Error("with looking at pictures off, the card shows a summary made from pictures");
+        const textOnly = asked.length;
+
+        // With it on: the picture goes as an image block, and the card shows what was made from it.
+        const reopen = async (flags) => {
+          await b.ev(`(() => { localStorage.setItem("isocan.experiments", ${JSON.stringify(JSON.stringify(flags))}); return true; })()`);
+          await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+          await until(b, Object.keys(frames).map((t) => `!!document.querySelector(${frameSel(t)})`).join(" && "), "the four frames, reopened", 15_000);
+          await zoomOut();
+        };
+        await reopen(["semantic.zoom", "semantic.zoom.vision"]);
+        await until(b, `${current("Onboarding")} && /1 seen/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's summary made looking at its picture", 20_000);
+        if (images() !== 1) throw new Error(`looking at pictures, ${images()} image(s) were sent, not the one picture`);
+        if (asked.length !== textOnly + 1) throw new Error(`looking at pictures cost ${asked.length - textOnly} calls, not one`);
+        if (!/\(picture 1\)/.test(prompts().at(-1))) throw new Error("the prompt does not say which member the picture is of");
+        const looked = (await read("Onboarding")).text;
+
+        // Off again: the vision summary is never read, though it is cached.
+        await reopen(["semantic.zoom"]);
+        await until(b, `${current("Onboarding")} && /Sign up shot/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's text-only summary again", 20_000);
+        await sleep(1500);
+        if (/seen/.test((await read("Onboarding")).text)) throw new Error("with looking at pictures off again, the card shows the summary made from pictures");
+        if (asked.length !== textOnly + 1) throw new Error(`turning looking at pictures off made ${asked.length - textOnly - 1} more calls`);
+        return { frames: Object.keys(frames).length, calls: asked.length, scale: await scale(), before: first["To do"].text, after, looked, images: images() };
       } finally {
         proc.kill();
         await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });

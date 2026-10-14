@@ -9,7 +9,7 @@ note: "the walk: a bench that judges summaries before any ship, text nodes behin
 
 **13 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run. Phases 1–4 (long notes, groups and areas, freshness and cost, the terminal) are CLOSED on a stub model. Next: 3b (looking at pictures) and 5 (evidence); both need a text key at the home to be proved for real, as does the bench.**
+**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run. Phases 1–4 and 3b are CLOSED on a stub model; phase 5's walk and eval are written. What is left needs a text key at the home: the bench's first run, the eval's first number, and Dion's walk.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -117,7 +117,7 @@ called and stale summaries keep showing.
 
 ## Phase 3b — Looking at pictures
 
-**Status: NOT STARTED.**
+**Status: CLOSED on a stub model, 14 October 2026.** `semantic.zoom.vision`, "Semantic Zoom: look at pictures", shows in Settings only under `semantic.zoom` and is disabled, with the reason, where the home's model takes no pictures (`GET /api/text/pictures`). The make route takes `vision`; at most eight pictures go, largest on the canvas first, PNGs downscaled to 1024 px at the home with `node:zlib`; a screen alone is a new `screen` kind. The key gains "vision" only when a source has a picture, so a note or a group of notes keeps one entry. A separate 15-an-hour vision budget, counted in the ledger. `summary-vision.test.ts` on a recording stub: vision off sends no image; on, eight of ten go, largest first, a 2048 px render arrives at 1024×768; a vision-off reader never reads a vision summary; a model without pictures is refused before any is read. The board journey gained a picture: 0 images with vision off, 1 with it on. The bench's vision column is not yet run (no key).
 
 **Outcome:** the `semantic.zoom.vision` row (shown only under
 `semantic.zoom`); the make route's `vision` input; downscaled renders of
@@ -131,6 +131,13 @@ model, which records what it was sent): with vision off no image is sent;
 with it on a screen's render is, at most eight per group; a viewer with
 vision off never reads a vision summary. The bench (phase 0) gains a vision
 column for the fixture's screens before this ships.
+
+### Trajectory
+
+- **2026-10-14** — The home cannot draw a screen: a screen's picture is its version's image visual face (what `canvas shot --into` adds), else its title, and the prompt says which went by title.
+- **2026-10-14** — Only PNGs are scaled down at the home (`node:zlib`, no new dependency); JPEG, WebP and GIF over 1024 px go by title. A decoder (an image library, and a Dockerfile line) waits on Dion.
+- **2026-10-14** — The pictures check lives in `lib/api.ts`, the app's one door, spelled there and held equal to core's constant by a test: entry 710,185 → 710,246.
+- **2026-10-14** — Open: no `isocan summary --vision`, so an agent cannot ask for a vision summary; the look of a lone screen's card is unjudged.
 
 ## Phase 4 — The terminal
 
@@ -150,7 +157,7 @@ names the new verb and flag.
 
 ## Phase 5 — Evidence
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 14 October 2026.** The walk is written (`docs/verify/2026-10-14-semantic-zoom.md`, twelve steps, unverified; it needs a text key at the home). The faithfulness eval is built (`bench/eval.mjs`, `bench.mjs eval`): a cheapest-tier judge marks each claim supported, unsupported or contradicted against what the summariser saw, and "useful" is a matching task over the fixture's look-alike pairs; about 83 calls, refused with zero calls without a key. The `copy` persona owns `summary-unfaithful` (at most 0), which reads the recorded `bench/eval.json` and reports "no reading yet" (exit 3) until the eval has run; the ratchet, the nightly and the board count that as neither held nor missed. Not yet: the eval's first number and the walk, both waiting on a key.
 
 **Outcome:** a verify walk in `docs/verify/` for what only a person can judge
 (does a summary tell neighbours apart, is it ever wrong in a way that
@@ -158,3 +165,11 @@ misleads, does the band switch at the right zoom); an eval of summary
 faithfulness on the bench fixtures that a persona owns.
 
 **Proof:** the walk written, and the eval's first number.
+
+### Trajectory
+
+- **2026-10-14** — A recorded reading can be absent honestly: exit 3 plus "no reading yet", counted as neither held nor missed. `summary-unfaithful` is the first goal to use it.
+- **2026-10-14** — The persona is `copy`, not `qa-tester`: a summary is words on the screen a model wrote, and copy's standing rule is that a confidently wrong sentence is worse than none.
+- **2026-10-14** — The judge is the summariser's own tier; self-agreement is the bias to watch. In a three-item "useful" set the middle summary stays in place, so the area set is the weakest check.
+- **2026-10-14** — Open: the bench, the eval's first number and the walk all wait on a text key at the home and Dion's yes.
+

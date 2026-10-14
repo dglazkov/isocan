@@ -33,6 +33,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CEILING } from "./bundle-ceiling.mjs";
 import { operationMembers } from "./isomorphism.mjs";
+import { NO_READING, NO_READING_PREFIX } from "./lib/reading.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 /**
@@ -67,6 +68,25 @@ const CROWDED = [
 const GROUND_FRAMES = "scripts/ground-frames.json";
 /** The directories a living ground is drawn from — what a reading goes stale against. */
 const GROUND_SOURCES = ["packages/web/src/components/themes", "packages/web/src/lib/groundfield.ts", "packages/web/src/lib/groundsleep.ts", "packages/web/src/lib/groundmotion.ts"];
+
+/** Semantic Zoom's faithfulness eval, written by `bench.mjs eval` (semantic-zoom phase 5). */
+const SUMMARY_EVAL = "docs/projects/semantic-zoom/bench/eval.json";
+/** What an eval reading goes stale against: the bench's prompts and fixture, the judge's words, and the product's prompt. */
+const SUMMARY_EVAL_SOURCES = [
+  "docs/projects/semantic-zoom/bench/prompts.mjs",
+  "docs/projects/semantic-zoom/bench/eval.mjs",
+  "docs/projects/semantic-zoom/bench/fixture/canvas.json",
+  "packages/core/src/semantic-zoom.ts",
+];
+const SUMMARY_EVAL_AGAIN = "with a text key at the home: cd docs/projects/semantic-zoom/bench && node bench.mjs run && node bench.mjs eval";
+
+/**
+ * **A reading nobody has taken** — thrown by a metric that reads a recorded
+ * file which does not exist yet, and printed as `no reading yet: …` with exit
+ * `NO_READING` (`scripts/lib/reading.mjs` says why that is a third answer and
+ * neither a zero nor a broken instrument).
+ */
+class NoReading extends Error {}
 
 const lines = (file) => readFileSync(path.join(repo, file), "utf8").split("\n").length;
 
@@ -347,6 +367,42 @@ const METRICS = {
    * "not just X, it's Y". Most need a reader. These few are a string match, and
    * a string match is a number.
    */
+  /**
+   * **Summaries that say something their source does not** (Semantic Zoom
+   * phase 5) — the second READING here after `ground-frame-ms`, and the first
+   * whose instrument is a model.
+   *
+   * `bench.mjs eval` asks a judge (the cheapest tier, through the home's text
+   * key) to split each summary in `results.json` into claims and say whether
+   * the source supports each; this counts the product tier's summaries with
+   * any claim unsupported or contradicted. Both runs cost money and need a
+   * key, so neither happens on a push: whoever changes the prompt or the
+   * fixture takes it again, and `--names` says when, at what commit, and
+   * whether the prompts changed since.
+   *
+   * Until the first eval there is no `eval.json`, and this prints
+   * `no reading yet` and exits `NO_READING` rather than a number — 0 would
+   * say the summaries are faithful, which nobody has checked.
+   */
+  "summary-unfaithful": {
+    what: "bench summaries on the product tier with a claim their source does not support — the last recorded eval",
+    take: () => summaryReading().unfaithful,
+    names: () => summaryReading().lines,
+    breakIt: {
+      file: SUMMARY_EVAL,
+      // Before the first eval there is nothing to edit: the break is a reading
+      // that exists. After it, one more unfaithful summary in the reading.
+      get create() {
+        return !existsSync(path.join(repo, SUMMARY_EVAL));
+      },
+      apply: (t) => {
+        const unfaithful = { sourceId: "selftest", tier: "cheap", vision: false, summary: "Acme ships on Friday.", claims: [{ claim: "Acme ships on Friday", verdict: "unsupported", why: "selftest" }], faithful: false };
+        const r = t ? JSON.parse(t) : { evaluatedAt: "selftest", commit: null, judge: "selftest", rows: [] };
+        r.rows.push(unfaithful);
+        return JSON.stringify(r, null, 2) + "\n";
+      },
+    },
+  },
   "copy-tells": {
     what: "user-facing strings in the app that trip a greppable copy rule",
     take() {
@@ -742,6 +798,41 @@ function copiedRules() {
 }
 
 /**
+ * The eval's reading as a number and as lines: summaries on the product tier
+ * (`cheap`) the judge found a claim in that the source does not support. A
+ * missing file is `NoReading`; a file with no judged summary on that tier is
+ * one too, because a count over nothing is not a zero.
+ */
+function summaryReading() {
+  const file = path.join(repo, SUMMARY_EVAL);
+  if (!existsSync(file)) {
+    throw new NoReading(`the bench's summaries have never been judged (no ${SUMMARY_EVAL}); take it ${SUMMARY_EVAL_AGAIN}`);
+  }
+  const r = JSON.parse(readFileSync(file, "utf8"));
+  const product = (r.rows ?? []).filter((row) => row.tier === "cheap");
+  const judged = product.filter((row) => row.faithful === true || row.faithful === false);
+  if (judged.length === 0) throw new NoReading(`${SUMMARY_EVAL} judged no summary on the product tier; take it again ${SUMMARY_EVAL_AGAIN}`);
+  const bad = judged.filter((row) => row.faithful === false);
+  let since;
+  try {
+    const changed = run("git", ["diff", "--name-only", r.commit, "--", ...SUMMARY_EVAL_SOURCES]).trim().split("\n").filter(Boolean);
+    since = changed.length ? `STALE: ${changed.join(", ")} changed since ${r.commit} — take it again` : `no prompt or fixture has changed since ${r.commit}`;
+  } catch {
+    since = `cannot tell whether the prompts changed since ${r.commit} (that commit is not in this clone)`;
+  }
+  const lines = [
+    `judged ${r.evaluatedAt} at ${r.commit} by ${r.judge}; summaries from the run of ${r.results?.ranAt ?? "?"} (prompt ${r.results?.promptVersion ?? "?"}) — ${since}`,
+    `product tier: ${judged.length} of ${product.length} summaries judged, ${bad.length} with a claim the source does not support`,
+    ...bad.flatMap((row) => [
+      `${row.sourceId}${row.vision ? " +vision" : ""}: ${row.summary}`,
+      ...(row.claims ?? []).filter((c) => c.verdict !== "supported").map((c) => `    ${c.verdict}: ${c.claim} — ${c.why}`),
+    ]),
+    `${bad.length} is what \`summary-unfaithful\` prints. Again, ${SUMMARY_EVAL_AGAIN}`,
+  ];
+  return { unfaithful: bad.length, lines };
+}
+
+/**
  * The reading as a number and as lines. The number is the dearest ground's
  * main-thread time per frame less the plain ground's, to a tenth of a
  * millisecond; a missing file throws, which every caller reads as a broken
@@ -806,6 +897,16 @@ if (argv.includes("--list")) {
   process.exit(0);
 }
 
+/** For the selftest: a metric with no reading yet answers "no reading", which a break must turn into a number. */
+function takeOrUnread(m) {
+  try {
+    return m.take();
+  } catch (err) {
+    if (err instanceof NoReading) return NO_READING_PREFIX;
+    throw err;
+  }
+}
+
 if (argv.includes("--selftest")) {
   /**
    * **It mutates real files, so it must have the tree to itself.**
@@ -819,15 +920,28 @@ if (argv.includes("--selftest")) {
    * refuses outright if anything it is about to break is already modified. A
    * selftest that clobbers uncommitted work is worse than one that does not
    * run.
+   *
+   * `--selftest <metric>…` breaks only the ones named, so a person adding a
+   * metric can prove it fires without mutating every other target in a tree
+   * somebody else is working in. CI runs it bare: all of them.
    */
+  const only = argv.filter((a) => !a.startsWith("--"));
+  for (const n of only) {
+    if (!METRICS[n]) {
+      console.error(`unknown metric "${n}" — try --list`);
+      process.exit(2);
+    }
+  }
+  const chosen = Object.fromEntries(Object.entries(METRICS).filter(([n]) => only.length === 0 || only.includes(n)));
   const targets = [
     ...new Set(
-      Object.values(METRICS)
+      Object.values(chosen)
         .filter((m) => m.breakIt && !m.breakIt.create)
         .map((m) => m.breakIt.file),
     ),
   ];
-  const dirty = run("git", ["status", "--porcelain", "--", ...targets]).trim();
+  // No paths would ask git about the whole tree: a selftest that only creates files has nothing to clobber.
+  const dirty = targets.length ? run("git", ["status", "--porcelain", "--", ...targets]).trim() : "";
   if (dirty) {
     console.error(
       "refusing: these files have uncommitted changes and the selftest would overwrite them:\n" +
@@ -837,7 +951,7 @@ if (argv.includes("--selftest")) {
     process.exit(1);
   }
   let bad = 0;
-  for (const [name, m] of Object.entries(METRICS)) {
+  for (const [name, m] of Object.entries(chosen)) {
     if (!m.breakIt) {
       console.log(`REFUSED ${name} — no way to break it is declared, so it cannot be trusted`);
       bad++;
@@ -857,7 +971,7 @@ if (argv.includes("--selftest")) {
       continue;
     }
     const before = creating ? null : readFileSync(file, "utf8");
-    const clean = m.take();
+    const clean = takeOrUnread(m);
     let broken;
     try {
       const mutated = m.breakIt.apply(before ?? "");
@@ -867,7 +981,7 @@ if (argv.includes("--selftest")) {
         continue;
       }
       writeFileSync(file, mutated);
-      broken = m.take();
+      broken = takeOrUnread(m);
     } finally {
       // Put it back exactly, or take away exactly what was added.
       if (creating) rmSync(file, { force: true });
@@ -884,7 +998,7 @@ if (argv.includes("--selftest")) {
     console.error(`\n${bad} metric(s) cannot be trusted. A goal measured by one of these is a goal that passes forever.`);
     process.exit(1);
   }
-  console.log(`\nall ${Object.keys(METRICS).length} metrics move when the thing they measure breaks`);
+  console.log(`\nall ${Object.keys(chosen).length} metrics move when the thing they measure breaks`);
   process.exit(0);
 }
 
@@ -919,8 +1033,20 @@ if (argv.includes("--names")) {
     );
     process.exit(2);
   }
-  for (const line of metric.names()) console.log(line);
+  try {
+    for (const line of metric.names()) console.log(line);
+  } catch (err) {
+    if (!(err instanceof NoReading)) throw err;
+    console.log(`${NO_READING_PREFIX}: ${err.message}`);
+  }
   process.exit(0);
 }
 
-console.log(metric.take());
+try {
+  console.log(metric.take());
+} catch (err) {
+  if (!(err instanceof NoReading)) throw err;
+  // Not a number and not a crash: see scripts/lib/reading.mjs.
+  console.log(`${NO_READING_PREFIX}: ${err.message}`);
+  process.exit(NO_READING);
+}

@@ -5,9 +5,10 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { atLeast } from "@isocan/core";
 import { ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import type { CanvasContents, Item } from "@isocan/core";
+import type { TextImage } from "@isocan/core/jev";
 import {
-  checkSummary, semanticZoomPrompt, SEMANTIC_ZOOM_PROMPT_VERSION, summarisableText, summariesRoute, summaryKey, summaryMemberKind, summaryMembers, summaryReadsWords, summaryStatsRoute,
-  SUMMARY_BAD_ANSWER, SUMMARY_EXCLUDED, SUMMARY_MIN_WORDS, SUMMARY_MODEL, SUMMARY_NO_SOURCE, SUMMARY_OVER_BUDGET, SUMMARY_QUIET, SUMMARY_QUIET_MS, SUMMARY_SCHEMA, SUMMARY_SYSTEM,
+  checkSummary, semanticZoomPrompt, SEMANTIC_ZOOM_PROMPT_VERSION, summarisablePicture, summarisableText, summariesRoute, summaryKey, summaryMemberKind, summaryMembers, summaryPicture, summaryReadsWords, summaryStatsRoute,
+  SUMMARY_BAD_ANSWER, SUMMARY_EXCLUDED, SUMMARY_MIN_WORDS, SUMMARY_MODEL, SUMMARY_NO_PICTURES, SUMMARY_NO_SOURCE, SUMMARY_OVER_BUDGET, SUMMARY_QUIET, SUMMARY_QUIET_MS, SUMMARY_SCHEMA, SUMMARY_SYSTEM, SUMMARY_VISION_OVER_BUDGET,
   textSummaryKey, wordCount, type SummaryEntry, type SummaryMake, type SummaryMember, type SummaryRead, type SummaryStats,
 } from "@isocan/core/semantic-zoom";
 import { TEXT_MAX_BYTES, TEXT_RATE_LIMITED, TEXT_UNAVAILABLE } from "@isocan/core/text";
@@ -16,6 +17,7 @@ import { capabilityIn, type ViewOnlyError } from "./grants.ts";
 import type { HomeLinks } from "./home-links.ts";
 import type { Store } from "./store.ts";
 import { SummaryLedger } from "./summary-ledger.ts";
+import { pictureToSend, PICTURE_READ_MAX } from "./summary-pictures.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
 import type { TextModel } from "./text.ts";
 
@@ -55,6 +57,18 @@ import type { TextModel } from "./text.ts";
  * included — and a cost record per day (`summary-ledger.ts`), read by the
  * canvas's editors at `GET …/summaries/stats`. The cache evicts what nobody
  * can reach before what nobody has read lately.
+ *
+ * Since phase 3b, a summary may **look at pictures** (design §11): a make
+ * with `vision: true` sends, beside the words, the pictures of the screens
+ * and pictures it holds (`summary-pictures.ts`: at most 1024 px on the long
+ * side, at most eight, the largest on the canvas first), and a screen or a
+ * picture alone may be summarised (kind `screen`, only ever with vision).
+ * `vision` is part of the key only where a picture would be sent, so a text
+ * node's key never changes and only items with pictures gain a second
+ * entry. A read gets a vision entry only when it says `vision=1`; without
+ * it, never — not even as a stale stand-in. A model that takes no pictures
+ * refuses such a make (`summary-no-pictures`), and calls with pictures have
+ * an hourly budget of their own inside the canvas's (`summary-vision-budget`).
  */
 
 /** How the summaries are configured: every field has a production default; the fields exist so a test can hold a clock and a small bound. */
@@ -67,12 +81,18 @@ export interface SummaryOptions {
   maxEntries?: number;
   /** Model calls per canvas per rolling hour, across everyone. Default `ISOCAN_SUMMARY_PER_HOUR`, else 60. */
   perHour?: number;
+  /** Of those, calls that send pictures (design §11). Default `ISOCAN_SUMMARY_VISION_PER_HOUR`, else 15. */
+  visionPerHour?: number;
   now?: () => number;
 }
 
 const MAX_ENTRIES = 2_000;
 /** A canvas's summaries an hour, across everyone (design §6). */
 const PER_HOUR = 60;
+/** Of those, the ones that look at pictures (design §11): one costs about ten text calls. */
+const VISION_PER_HOUR = 15;
+/** Pictures one summary sends at most (design §11). */
+const MAX_PICTURES = 8;
 /** The stats route's span: a month by default, a quarter at most (what the ledger keeps). */
 const STATS_DAYS = 30;
 const STATS_MAX_DAYS = 90;
@@ -86,15 +106,21 @@ interface Indexed {
   kind: SummaryEntry["kind"];
   sourceIds: string[];
   madeAt: string;
+  /** Made looking at pictures: read only by a reader who says `vision=1`, and current only against the vision key. */
+  vision: boolean;
   /** Last read or written, for least-recently-read eviction. */
   touched: number;
 }
 
 /**
- * The current key of each source still on the canvas (by its id): what a
- * reader would ask about now. A source gone, or now excluded, is absent.
+ * The current key of each source still on the canvas, by its slot (`slot`):
+ * what a reader would ask about now, with pictures or without. A source gone,
+ * or now excluded, is absent.
  */
-type Current = (canvasId: string, sources: Map<string, SummaryEntry["kind"]>) => Promise<Map<string, string>>;
+type Current = (canvasId: string, sources: Map<string, { sourceId: string; kind: SummaryEntry["kind"]; vision: boolean }>) => Promise<Map<string, string>>;
+
+/** A source's text-only entries and its vision entries are two lines of succession, so eviction and staleness keep them apart. */
+const slot = (sourceId: string, vision: boolean) => (vision ? `${sourceId}\u0000vision` : sourceId);
 
 /**
  * **The cache, one directory per canvas.** An in-memory index (key → kind,
@@ -130,7 +156,7 @@ class SummaryCache {
       if (!name.endsWith(".json")) continue;
       const full = path.join(this.dir(canvasId), name);
       const [entry, stat] = await Promise.all([this.file(full), fs.stat(full).catch(() => null)]);
-      if (entry) fresh.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, touched: stat?.mtimeMs ?? 0 });
+      if (entry) fresh.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, vision: entry.vision === true, touched: stat?.mtimeMs ?? 0 });
     }
     return fresh;
   }
@@ -162,12 +188,13 @@ class SummaryCache {
    * The newest entry made for this source, whatever its key — what a reader
    * shows while the current content waits. The source is an entry's first
    * id: a note's own, a group's or an area's container (its members follow).
+   * A vision entry only when `vision` says the reader looks at pictures.
    */
-  async newestFor(canvasId: string, sourceId: string): Promise<SummaryEntry | null> {
+  async newestFor(canvasId: string, sourceId: string, vision: boolean): Promise<SummaryEntry | null> {
     const index = await this.load(canvasId);
     let best: [string, Indexed] | null = null;
     for (const row of index) {
-      if (row[1].sourceIds[0] !== sourceId) continue;
+      if (row[1].sourceIds[0] !== sourceId || (row[1].vision && !vision)) continue;
       if (!best || row[1].madeAt > best[1].madeAt) best = row;
     }
     return best ? this.get(canvasId, best[0]) : null;
@@ -189,19 +216,19 @@ class SummaryCache {
     const temp = `${full}.${process.pid}.${this.now()}.tmp`;
     await fs.writeFile(temp, JSON.stringify(entry));
     await fs.rename(temp, full);
-    index.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, touched: this.now() });
+    index.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, vision: entry.vision === true, touched: this.now() });
     if (index.size <= this.max) return;
-    const sources = new Map<string, SummaryEntry["kind"]>();
+    const sources = new Map<string, { sourceId: string; kind: SummaryEntry["kind"]; vision: boolean }>();
     const newest = new Map<string, [string, Indexed]>();
     for (const row of index) {
-      const source = row[1].sourceIds[0]!;
-      sources.set(source, row[1].kind);
+      const source = slot(row[1].sourceIds[0]!, row[1].vision);
+      sources.set(source, { sourceId: row[1].sourceIds[0]!, kind: row[1].kind, vision: row[1].vision });
       const best = newest.get(source);
       if (!best || row[1].madeAt > best[1].madeAt) newest.set(source, row);
     }
     const current = await this.current(canvasId, sources);
     const unreachable = (key: string, row: Indexed): boolean => {
-      const source = row.sourceIds[0]!;
+      const source = slot(row.sourceIds[0]!, row.vision);
       const now = current.get(source);
       if (now === undefined) return true;
       return key !== now && (index.has(now) || newest.get(source)?.[0] !== key);
@@ -220,6 +247,12 @@ class SummaryCache {
 
 /** The words of a blob, up to `limit` bytes, and whether there were more. */
 async function readWords(stream: Readable, limit: number): Promise<{ text: string; cut: boolean }> {
+  const { bytes, cut } = await readBytes(stream, limit);
+  return { text: bytes.toString("utf8"), cut };
+}
+
+/** A blob's bytes, up to `limit`, and whether there were more. */
+async function readBytes(stream: Readable, limit: number): Promise<{ bytes: Buffer; cut: boolean }> {
   const chunks: Buffer[] = [];
   let size = 0;
   let cut = false;
@@ -234,7 +267,7 @@ async function readWords(stream: Readable, limit: number): Promise<{ text: strin
     chunks.push(buffer);
     size += buffer.length;
   }
-  return { text: Buffer.concat(chunks).toString("utf8"), cut };
+  return { bytes: Buffer.concat(chunks), cut };
 }
 
 /** What `registerModelRoutes` hands over: its closures, its text model and its owner-only rule. */
@@ -257,22 +290,24 @@ interface SummaryRouteScope {
 
 type Made = { status: number; body: unknown };
 
-/** The kinds a summary may be asked for. */
-const KINDS: readonly string[] = ["text", "group", "area"];
+/** The kinds a summary may be asked for; `screen` only with `vision`. */
+const KINDS: readonly string[] = ["text", "group", "area", "screen"];
 
 /**
  * What one make needs, whatever it is of: the key, the sources the entry
  * names, when the content last changed (for the quiet period), and how to
  * collect the prompt — run only once nothing cached answers and the quiet
  * period has passed, so a cache hit reads no blob. `prompt: null` means
- * nothing to summarise.
+ * nothing to summarise. `looks`: the key is a vision key (a picture would be
+ * sent), so the entry is a vision entry; `images` are the pictures that were.
  */
 interface Plan {
   kind: SummaryEntry["kind"];
   key: string;
   sourceIds: string[];
   changedAt: number;
-  collect: () => Promise<{ prompt: string | null } | Made>;
+  looks: boolean;
+  collect: () => Promise<{ prompt: string | null; images?: TextImage[] } | Made>;
 }
 
 /** `GET` and `POST /api/projects/:id/summaries`, on `app`. */
@@ -284,20 +319,26 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
   const current: Current = async (canvasId, sources) => {
     const { canvas } = await engine.getSnapshot(canvasId);
     const keys = new Map<string, string>();
-    for (const [sourceId, kind] of sources) {
+    for (const [at, { sourceId, kind, vision }] of sources) {
       if (kind === "text") {
         const item = summarisableText(canvas, sourceId);
-        if (item && item !== "excluded") keys.set(sourceId, await textSummaryKey(item));
+        if (item && item !== "excluded") keys.set(at, await textSummaryKey(item));
+        continue;
+      }
+      if (kind === "screen") {
+        const item = summarisablePicture(canvas, sourceId);
+        if (item && item !== "excluded") keys.set(at, await summaryKey("screen", [item], true));
         continue;
       }
       const held = summaryMembers(canvas, kind, sourceId);
-      if (held && held !== "excluded") keys.set(sourceId, await summaryKey(kind, [held.container, ...held.members]));
+      if (held && held !== "excluded") keys.set(at, await summaryKey(kind, [held.container, ...held.members], vision));
     }
     return keys;
   };
   const cache = new SummaryCache(path.join(scope.home, "summaries"), maxEntries, now, current);
   const perHour = () => options.perHour ?? (Number(process.env.ISOCAN_SUMMARY_PER_HOUR) || PER_HOUR);
-  const ledger = new SummaryLedger(path.join(scope.home, "summaries"), perHour, now);
+  const visionPerHour = () => options.visionPerHour ?? (Number(process.env.ISOCAN_SUMMARY_VISION_PER_HOUR) || VISION_PER_HOUR);
+  const ledger = new SummaryLedger(path.join(scope.home, "summaries"), perHour, now, visionPerHour);
   const inFlight = new Map<string, Promise<Made>>();
   const quietMs = () => options.quietMs ?? (Number(process.env.ISOCAN_SUMMARY_QUIET_MS) || SUMMARY_QUIET_MS);
   const ask: Parameters<TextModel["write"]>[1] = {
@@ -316,7 +357,7 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     const version = item.versions.find((v) => v.id === item.currentVersionId);
     if (!version) return { status: 404, body: { error: `${item.id} has no current version`, code: SUMMARY_NO_SOURCE } };
     return {
-      kind: "text", key: await textSummaryKey(item), sourceIds: [item.id], changedAt: Date.parse(version.createdAt),
+      kind: "text", key: await textSummaryKey(item), sourceIds: [item.id], changedAt: Date.parse(version.createdAt), looks: false,
       collect: async () => {
         const stream = await store.openBlob(canvasId, version.blobHash);
         if (!stream) return { status: 404, body: { error: `the words of ${item.id} are not at this home`, code: SUMMARY_NO_SOURCE } };
@@ -335,16 +376,17 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
    * the quiet period. A move is a change here, unlike for a note: it is how
    * an area's membership moves.
    */
-  const containerPlan = async (canvasId: string, canvas: CanvasContents, kind: "group" | "area", sourceId: string): Promise<Plan | Made> => {
+  const containerPlan = async (canvasId: string, canvas: CanvasContents, kind: "group" | "area", sourceId: string, vision: boolean): Promise<Plan | Made> => {
     const found = summaryMembers(canvas, kind, sourceId);
     if (found === null) return { status: 404, body: { error: `there is no ${kind} ${sourceId} on this canvas`, code: SUMMARY_NO_SOURCE } };
     if (found === "excluded") return { status: 422, body: { error: `this ${kind} is excluded from context, so it is never sent to a model`, code: SUMMARY_EXCLUDED } };
     const { container, members } = found;
-    const before = await cache.newestFor(canvasId, container.id);
+    const before = await cache.newestFor(canvasId, container.id, true);
     const touched = [container, ...members, ...(before?.sourceIds ?? []).map((one) => canvas.items[one]).filter((one): one is Item => !!one)];
+    const looks = vision && members.some((m) => summaryPicture(m) !== null);
     return {
-      kind, key: await summaryKey(kind, [container, ...members]), sourceIds: [container.id, ...members.map((m) => m.id)],
-      changedAt: Math.max(...touched.map((one) => Date.parse(one.updatedAt) || 0)),
+      kind, key: await summaryKey(kind, [container, ...members], vision), sourceIds: [container.id, ...members.map((m) => m.id)],
+      changedAt: Math.max(...touched.map((one) => Date.parse(one.updatedAt) || 0)), looks,
       collect: async () => {
         if (members.length === 0) return { prompt: null };
         // Titles always go; words go shortest first while they fit, so the longest are the ones given by title only.
@@ -363,11 +405,56 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
             room -= size;
           } else left++;
         }
+        // Looking at pictures: the largest on the canvas first, at most eight, each sent as `picture N` in that order.
+        const pictured = new Map<string, number>();
+        const images: TextImage[] = [];
+        const candidates = looks ? members.filter((m) => summaryPicture(m) !== null).sort((a, b) => b.width * b.height - a.width * a.height || (a.id < b.id ? -1 : 1)) : [];
+        for (const m of candidates) {
+          if (images.length >= MAX_PICTURES) break;
+          const image = await picture(canvasId, m);
+          if (!image) continue;
+          images.push(image);
+          pictured.set(m.id, images.length);
+        }
         const shown = members.map((m): SummaryMember => {
           const body = words.get(m.id);
-          return { kind: summaryMemberKind(m), title: m.title, ...(body ? { body } : {}) };
+          const n = pictured.get(m.id);
+          return { kind: summaryMemberKind(m), title: m.title, ...(body ? { body } : {}), ...(n ? { picture: n } : {}) };
         });
-        return { prompt: semanticZoomPrompt({ kind, title: container.title, members: shown, left }) };
+        const unseen = candidates.length - images.length;
+        return { prompt: semanticZoomPrompt({ kind, title: container.title, members: shown, left, ...(unseen ? { unseen } : {}) }), images };
+      },
+    };
+  };
+
+  /** One item's picture, made ready to send (`summary-pictures.ts`), or null — it then goes by its title. */
+  const picture = async (canvasId: string, item: Item): Promise<TextImage | null> => {
+    const face = summaryPicture(item);
+    const stream = face ? await store.openBlob(canvasId, face.blobHash) : null;
+    if (!face || !stream) return null;
+    const { bytes, cut } = await readBytes(stream, PICTURE_READ_MAX);
+    const ready = cut ? null : pictureToSend(bytes, face.mimeType);
+    return ready ? { mediaType: ready.mediaType, data: ready.data } : null;
+  };
+
+  /**
+   * A screen's or a picture's plan, alone (design §11; only ever with
+   * vision): keyed with its picture, quiet since its current version was
+   * made, and its picture read only when a summary is to be made. One with
+   * no picture that can be sent is nothing to summarise — its title is all
+   * there would be — and is remembered as short, with no model asked.
+   */
+  const screenPlan = async (canvas: CanvasContents, canvasId: string, sourceId: string): Promise<Plan | Made> => {
+    const item = summarisablePicture(canvas, sourceId);
+    if (item === null) return { status: 404, body: { error: `there is no screen or picture with a picture to send by ${sourceId} on this canvas`, code: SUMMARY_NO_SOURCE } };
+    if (item === "excluded") return { status: 422, body: { error: "this screen is excluded from context, so it is never sent to a model", code: SUMMARY_EXCLUDED } };
+    const version = item.versions.find((v) => v.id === item.currentVersionId)!;
+    return {
+      kind: "screen", key: await summaryKey("screen", [item], true), sourceIds: [item.id], changedAt: Date.parse(version.createdAt), looks: true,
+      collect: async () => {
+        const image = await picture(canvasId, item);
+        if (!image) return { prompt: null };
+        return { prompt: semanticZoomPrompt({ kind: "screen", title: item.title, picture: summaryMemberKind(item) === "screen" ? "screen" : "picture" }), images: [image] };
       },
     };
   };
@@ -377,21 +464,24 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     const home = homes?.for(id) ?? null;
     if (home) return home.personalRequest("GET", req.url);
     await engine.getSnapshot(id);
-    const query = req.query as { keys?: string; for?: string };
+    const query = req.query as { keys?: string; for?: string; vision?: string };
     const keys = String(query.keys ?? "").split(",").filter((key) => KEY.test(key)).slice(0, MAX_KEYS);
     const sources = String(query.for ?? "").split(",");
+    // Only a reader who looks at pictures reads what was made looking at them — exact or stale.
+    const vision = query.vision === "1";
     const summaries: SummaryRead["summaries"] = {};
     const hits = new Map<SummaryEntry["kind"], number>();
     let stale = 0;
     for (const [n, key] of keys.entries()) {
-      const exact = await cache.get(id, key);
+      const found = await cache.get(id, key);
+      const exact = found && (vision || !found.vision) ? found : null;
       if (exact) {
         summaries[key] = exact;
         if (!exact.short) hits.set(exact.kind, (hits.get(exact.kind) ?? 0) + 1);
         continue;
       }
       const sourceId = sources[n];
-      const older = sourceId ? await cache.newestFor(id, sourceId) : null;
+      const older = sourceId ? await cache.newestFor(id, sourceId, vision) : null;
       if (older) {
         summaries[key] = { ...older, stale: true };
         stale++;
@@ -429,6 +519,10 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     if (!body || typeof body !== "object" || !KINDS.includes(body.kind as string) || typeof body.sourceId !== "string" || !body.sourceId) {
       return reply.status(400).send({ error: "a summary is asked for by `kind` (\"text\", \"group\" or \"area\") and `sourceId`", code: SUMMARY_NO_SOURCE });
     }
+    const vision = body.vision === true;
+    if (body.kind === "screen" && !vision) {
+      return reply.status(400).send({ error: "a screen or a picture alone is summarised only by looking at it (`vision: true`)", code: SUMMARY_NO_SOURCE });
+    }
     const down = refusals.of(id);
     if (down) throw new TakenDownError(down);
     const refusedBadge = refusals.refusingAttestation(req.badge?.attestations ?? []);
@@ -437,10 +531,13 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     if (!atLeast(capabilityIn(req.badge!, id) ?? "edit", "edit")) throw await viewOnly(id);
     // A canvas homed elsewhere is summarised there, with that home's key and cache.
     const home = homes?.for(id) ?? null;
-    if (home) return home.personalRequest("POST", req.url, { kind: body.kind, sourceId: body.sourceId });
+    if (home) return home.personalRequest("POST", req.url, { kind: body.kind, sourceId: body.sourceId, ...(vision ? { vision } : {}) });
 
     const { canvas } = await engine.getSnapshot(id);
-    const plan = body.kind === "text" ? await textPlan(id, canvas, body.sourceId) : await containerPlan(id, canvas, body.kind!, body.sourceId);
+    const plan =
+      body.kind === "text" ? await textPlan(id, canvas, body.sourceId)
+      : body.kind === "screen" ? await screenPlan(canvas, id, body.sourceId)
+      : await containerPlan(id, canvas, body.kind!, body.sourceId, vision);
     if ("status" in plan) return reply.status(plan.status).send(plan.body);
     const { key } = plan;
     const cached = await cache.get(id, key);
@@ -460,9 +557,14 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
       return reply.status(made.status).send(made.body);
     }
     const making = (async (): Promise<Made> => {
+      // A model that takes no pictures is never sent any, nor asked to look: said before a picture is read.
+      if (plan.looks && textModel.keySource() && !textModel.takesImages()) {
+        return { status: 422, body: { error: "this home's text model takes no pictures — its summaries go by words and titles only", code: SUMMARY_NO_PICTURES } };
+      }
       const collected = await plan.collect();
       if ("status" in collected) return collected;
-      const base = { key, kind: plan.kind, sourceIds: plan.sourceIds, promptVersion: SEMANTIC_ZOOM_PROMPT_VERSION, madeAt: new Date(now()).toISOString() };
+      const images = collected.images ?? [];
+      const base = { key, kind: plan.kind, sourceIds: plan.sourceIds, promptVersion: SEMANTIC_ZOOM_PROMPT_VERSION, madeAt: new Date(now()).toISOString(), ...(plan.looks ? { vision: true as const } : {}) };
       if (collected.prompt === null) {
         // Nothing to summarise: a short note's opening words are most of it, an empty group is its title. Remembered, so nobody asks again; no model, no key.
         const entry: SummaryEntry = { ...base, summary: null, short: true, words: 0, model: null, madeFor: null };
@@ -479,10 +581,16 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
         await ledger.record(id, { what: "over-budget" });
         return { status: 429, body: { error: `this canvas has made its ${perHour()} summaries for the hour — the ones it has keep showing`, code: SUMMARY_OVER_BUDGET, retryAfterMs } };
       }
+      // Inside the canvas's hour, the calls that send pictures have their own.
+      const visionRetryAfterMs = images.length ? ledger.overBudget(id, true) : 0;
+      if (visionRetryAfterMs > 0) {
+        await ledger.record(id, { what: "over-budget" });
+        return { status: 429, body: { error: `this canvas has made its ${visionPerHour()} summaries that look at pictures for the hour — the text-only ones keep showing`, code: SUMMARY_VISION_OVER_BUDGET, retryAfterMs: visionRetryAfterMs } };
+      }
       if (!textModel.take(req.badge!.badgeId)) return { status: 429, body: { error: "this badge has asked for enough words this minute — wait a moment", code: TEXT_RATE_LIMITED } };
-      ledger.spend(id);
-      const written = await textModel.write({ prompt: collected.prompt, schema: SUMMARY_SCHEMA }, ask);
-      const called = (kept: boolean, model: string) => ledger.record(id, { what: "call", kind: plan.kind, model, kept, ...(written.usage ? { tokens: written.usage } : {}) });
+      ledger.spend(id, images.length > 0);
+      const written = await textModel.write({ prompt: collected.prompt, schema: SUMMARY_SCHEMA }, images.length ? { ...ask, images } : ask);
+      const called = (kept: boolean, model: string) => ledger.record(id, { what: "call", kind: plan.kind, model, kept, ...(images.length ? { vision: true } : {}), ...(written.usage ? { tokens: written.usage } : {}) });
       if (written.status !== 200) {
         await called(false, written.model ?? "unknown");
         return written;
@@ -492,7 +600,7 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
       const reasons = checkSummary(summary);
       await called(reasons.length === 0, model);
       if (reasons.length > 0) return { status: 502, body: { error: `the summary broke the answer rule (${reasons.join(", ")}) and was not kept`, code: SUMMARY_BAD_ANSWER } };
-      const entry: SummaryEntry = { ...base, summary: summary as string, words: wordCount(summary as string), model, madeFor: source === "file" ? await keyOwner() : "home" };
+      const entry: SummaryEntry = { ...base, summary: summary as string, words: wordCount(summary as string), model, madeFor: source === "file" ? await keyOwner() : "home", ...(plan.looks ? { pictures: images.length } : {}) };
       await cache.put(id, entry);
       return { status: 200, body: entry };
     })();

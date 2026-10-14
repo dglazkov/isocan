@@ -1,4 +1,4 @@
-import { envTextGenerator, textProvider, type JsonSchema, type TextProvider } from "@isocan/core/jev";
+import { envTextGenerator, textProvider, type JsonSchema, type TextImage, type TextProvider } from "@isocan/core/jev";
 import { TEXT_PER_MINUTE, TEXT_UPSTREAM } from "@isocan/core/text";
 import { KeyFileRefused, resolveTextKey } from "@isocan/core/keystore";
 
@@ -94,11 +94,14 @@ function usageOf(body: unknown): { inputTokens: number; outputTokens: number } |
  * one, its own model (a function of the provider, so a Claude key gets the
  * cheap tier and any other key its own default), and Claude's fallbacks off
  * for a model that has none. Absent, everything is as `/api/text` asks.
+ * Since phase 3b, `images`: pictures sent with the prompt, for a summary that
+ * looks at them — asked only where `takesImages()` said yes.
  */
 interface OwnAsk {
   system?: string;
   model?: (provider: TextProvider) => string | undefined;
   fallbacks?: boolean;
+  images?: readonly TextImage[];
 }
 
 const WINDOW_MS = 60_000;
@@ -130,6 +133,17 @@ export class TextModel {
 
   private key(): string | undefined {
     return this.resolve()?.key;
+  }
+
+  /**
+   * Would a call now be asked of a model that takes pictures (Semantic Zoom
+   * design §11)? Claude's do, and its generator sends them; the OpenAI-shaped
+   * endpoint is not asked about pictures here. False with no key.
+   */
+  takesImages(): boolean {
+    const resolved = this.resolve();
+    if (!resolved) return false;
+    return (this.opts.provider?.() ?? resolved.provider ?? textProvider(resolved.key)) === "anthropic";
   }
 
   /** Does this home hold a key — can anything be written here at all. */
@@ -185,6 +199,7 @@ export class TextModel {
       fetch: counted,
       ...(own.system !== undefined ? { system: own.system } : {}),
       ...(own.fallbacks !== undefined ? { fallbacks: own.fallbacks } : {}),
+      ...(own.images?.length ? { images: own.images } : {}),
     });
     try {
       const value = await generator.generateJson(request.prompt, request.schema);

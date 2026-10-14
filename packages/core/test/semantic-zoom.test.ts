@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "../src/model.ts";
 import {
-  checkSummary, memberTypeSize, semanticZoomPrompt, SEMANTIC_ZOOM_PROMPT_VERSION, summarisableText, summaryKey, summaryMemberKind, summaryMembers, summaryReadsWords, textSummaryKey, wordCount,
+  checkSummary, memberTypeSize, semanticZoomPrompt, SEMANTIC_ZOOM_PROMPT_VERSION, summarisablePicture, summarisableText, summaryKey, summaryPicture, summaryMemberKind, summaryMembers, summaryReadsWords, textSummaryKey, wordCount,
 } from "../src/semantic-zoom.ts";
 
 /**
@@ -190,5 +190,48 @@ describe("a group's and an area's prompt", () => {
     expect(cut.split("\n")[0]).toBe('This is a group on a canvas, titled "Acme", holding 3 items.');
     expect(cut).toContain("2 items, the longest, are given by title only.");
     expect(cut.indexOf("given by title only")).toBeLessThan(cut.indexOf("<<<"));
+  });
+});
+
+describe("looking at pictures (phase 3b, design §11)", () => {
+  const shot = (over: Partial<Item> = {}, version: Partial<Item["versions"][number]> = {}): Item =>
+    textNode({ id: "itm_shot", title: "Acme sign up", properties: {}, versions: [{ id: "ver_s", blobHash: "hs", mimeType: "image/png", filename: "s.png", size: 10, createdAt: "2026-10-14T00:00:00Z", createdBy: actor, ...version }], currentVersionId: "ver_s", ...over });
+  const html = (visual?: { blobHash: string; mimeType: string }) => shot({ id: "itm_screen" }, { mimeType: "text/html", blobHash: "hh", ...(visual ? { visual } : {}) });
+
+  it("a picture is its own blob; a screen is its render when it has one, and nothing without; text, SVG and video are never pictures", () => {
+    expect(summaryPicture(shot())).toEqual({ blobHash: "hs", mimeType: "image/png" });
+    expect(summaryPicture(html({ blobHash: "hv", mimeType: "image/png" }))).toEqual({ blobHash: "hv", mimeType: "image/png" });
+    expect(summaryPicture(html())).toBeNull();
+    expect(summaryPicture(textNode())).toBeNull();
+    expect(summaryPicture(shot({}, { mimeType: "image/svg+xml" }))).toBeNull();
+    expect(summaryPicture(shot({}, { mimeType: "video/mp4" }))).toBeNull();
+  });
+
+  it("vision is in the key only where a picture would be sent: a text node and a group of notes keep one key; a group with a picture gets a second", async () => {
+    const note = textNode();
+    expect(await summaryKey("text", [note], true)).toBe(await textSummaryKey(note));
+    const frame = textNode({ id: "itm_frame", title: "Onboarding", properties: { kind: "group" } });
+    expect(await summaryKey("group", [frame, note], true)).toBe(await summaryKey("group", [frame, note]));
+    expect(await summaryKey("group", [frame, note, shot()], true)).not.toBe(await summaryKey("group", [frame, note, shot()]));
+    expect(await summaryKey("group", [frame, html()], true)).toBe(await summaryKey("group", [frame, html()]));
+  });
+
+  it("a text-only prompt is word for word what it was; with pictures each is numbered, the bench's line says so, and the unseen are counted", () => {
+    const members = [{ kind: "screen" as const, title: "Sign up" }, { kind: "picture" as const, title: "Logo" }];
+    const plain = semanticZoomPrompt({ kind: "group", title: "Onboarding", members });
+    expect(plain).not.toMatch(/picture \d|attached|No picture/);
+    const looked = semanticZoomPrompt({ kind: "group", title: "Onboarding", members: [{ ...members[0]!, picture: 1 }, members[1]!], unseen: 1 });
+    expect(looked).toContain('- Screen "Sign up" (picture 1)');
+    expect(looked).toContain('- Picture "Logo"\n');
+    expect(looked).toContain("The pictures attached are numbered");
+    expect(looked).toContain("No picture was sent of one screen or picture: it is given by title only.");
+    expect(semanticZoomPrompt({ kind: "screen", title: "Pricing", picture: "screen" })).toMatch(/^This is a screen \(a picture of an app's interface\) on a canvas, titled "Pricing"\./);
+    expect(semanticZoomPrompt({ kind: "screen", title: "Logo", picture: "picture" })).toMatch(/^This is a picture on a canvas, titled "Logo"\./);
+  });
+
+  it("a screen alone may be summarised when it has a picture and is not excluded", () => {
+    expect(summarisablePicture(canvasOf(shot()), "itm_shot")).toMatchObject({ id: "itm_shot" });
+    expect(summarisablePicture(canvasOf(html()), "itm_screen")).toBeNull();
+    expect(summarisablePicture(canvasOf(shot({ properties: { context: "excluded" } })), "itm_shot")).toBe("excluded");
   });
 });

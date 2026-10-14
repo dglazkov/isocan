@@ -26,7 +26,7 @@ and the done column should not be flattered by either.
 finding is its claim, checked against the code, ranked by us. Each project row
 below counts the findings that name it.
 
-## What needs a person <sub>15</sub>
+## What needs a person <sub>16</sub>
 
 Built and shipped, and never once exercised by a human being — the part no
 commit can do. Each is a walk in [`verify/`](verify/README.md), written by
@@ -50,6 +50,7 @@ whoever built the thing for somebody who knows nothing about it.
 | **unverified** | [On a real phone](verify/2026-10-01-on-a-real-phone.md) — isocan on a physical phone — the on-screen keyboard over the Chat, Safari's toolbar coming and going, and whether pinch, pan and swipe feel right; mobile phases 0–2, owed since 13 Sep | 2026-10-01 | an iPhone with Safari (an Android phone too, if you have one), a canvas with a few cards and a short deck on it — twenty minutes · [#182](https://github.com/dglazkov/isocan/issues/182) |
 | **unverified** | [The operator, on the hosted home](verify/2026-10-01-operator-hosted.md) — the operator's six acts — look, take down, purge, end, revoke, refuse — done by a real operator on dev.isocan.io; operator phases 1–6, built 12–13 Sep and only proved locally | 2026-10-01 | an operator email on dev's ISOCAN_OPERATORS, a second owner account, a third browser profile, the owner's phone and laptop, and two networks — about two hours · [#77](https://github.com/dglazkov/isocan/issues/77) |
 | **unverified** | [The living grounds, by eye and hand](verify/2026-10-10-living-grounds.md) — Whether the seven living grounds feel like what they are named for, whether their motion distracts from reading a card, and whether Full, Calm and Still are the right three, judged by a person's eyes and hand. | 2026-10-10 | The web app in a desktop browser with a mouse or trackpad, a canvas with a few cards on it, and twenty minutes. Reduce motion must be off in the system settings. |
+| **unverified** | [Semantic Zoom, with a real model](verify/2026-10-14-semantic-zoom.md) — Semantic Zoom with a real model: whether a summary seen from far away tells a note apart from its neighbours, whether one is ever wrong in a way that misleads, whether the band switches at the right zoom without flicker, whether an edit swaps summaries without a blank, whether a group's card and the washed members under it read well, and whether the app and `isocan summary` agree; every journey so far ran on a stub model | 2026-10-14 | a home you own with a text key (`isocan keys set anthropic` on that home, or ISOCAN_TEXT_API_KEY in its environment), a desktop browser with a mouse or trackpad, a terminal with the isocan CLI, a second browser or a private window, and forty minutes; it spends real model calls, about a cent |
 
 ## Partly built <sub>49</sub>
 

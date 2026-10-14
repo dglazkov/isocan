@@ -9,6 +9,9 @@
  *   node bench.mjs plan     build the fixture, print every call it would make; no key, no model
  *   node bench.mjs run      plan, then make the calls (real money; Dion's yes, once)
  *   node bench.mjs table    print results.json as the README's table
+ *   node bench.mjs eval     judge every summary in results.json (phase 5); writes eval.json
+ *   node bench.mjs eval --plan   what the eval would call; no key, no model
+ *   (eval also takes --results <file> and --out <file>, for checking it against a stub)
  *
  * Nothing here touches a daemon or a canvas. The key is resolved exactly as
  * the home's text model resolves it (`resolveTextKey`, `@isocan/core/keystore`:
@@ -18,6 +21,7 @@
  * here by hand only so the bench can read `usage` and attach images.
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -30,10 +34,25 @@ import {
   semanticZoomPrompt,
   wordCount,
 } from "./prompts.mjs";
+import {
+  EVAL_CALL_CAP,
+  EVAL_VERSION,
+  CLAIMS_SCHEMA,
+  JUDGE_SYSTEM,
+  MATCH_SCHEMA,
+  claimsPrompt,
+  isShort,
+  matchPrompt,
+  planEval,
+  scoreClaims,
+  scoreMatches,
+  totals,
+} from "./eval.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureDir = path.join(here, "fixture");
 const resultsFile = path.join(here, "results.json");
+const evalFile = path.join(here, "eval.json");
 
 /** The plan may not exceed this many calls (Dion's yes was for one run of about this size). */
 const CALL_CAP = 150;
@@ -185,6 +204,167 @@ async function ask({ key, model, prompt, images }) {
   }
 }
 
+
+// ---------- the faithfulness eval (phase 5): a judge over results.json
+
+/** One judge call: the cheapest tier, its own system line, structured output. Same endpoint and key as `ask`. */
+async function judgeCall({ key, model, prompt, images, schema }) {
+  const scrub = (t) => String(t).split(key).join("[key]");
+  const started = Date.now();
+  const res = await fetch(CLAUDE_MESSAGES_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model,
+      max_tokens: 16000,
+      system: JUDGE_SYSTEM,
+      messages: [{ role: "user", content: images.length ? [...images, { type: "text", text: prompt }] : prompt }],
+      output_config: { effort: CLAUDE_TEXT_EFFORT, format: { type: "json_schema", schema } },
+    }),
+  });
+  const latencyMs = Date.now() - started;
+  if (!res.ok) return { latencyMs, error: scrub(`HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`) };
+  const body = await res.json();
+  const usage = body.usage ?? {};
+  const out = { latencyMs, inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 };
+  if (body.stop_reason === "refusal") return { ...out, error: "refusal" };
+  const text = (body.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
+  try {
+    return { ...out, value: JSON.parse(text) };
+  } catch {
+    return { ...out, error: scrub(`not JSON: ${text.slice(0, 200)}`) };
+  }
+}
+
+/** Find a fixture source by id: a note, group or area, or a screen alone. */
+function sourceFinder(fixture) {
+  const all = new Map([...fixture.sources, ...fixture.screens].map((s) => [s.id, s]));
+  return (id) => {
+    const s = all.get(id);
+    if (!s) throw new Error(`results.json names ${id}, which the fixture does not have; the fixture changed since the run`);
+    return s;
+  };
+}
+
+/** Every summary the run would make, each answered: what `eval --plan` counts before there are results. */
+function projectedResults(fixture) {
+  const tiers = TIERS.anthropic;
+  return plan(fixture, tiers).calls.map((c) => ({ sourceId: c.source.id, kind: c.source.kind, model: tiers[c.tier].model, tier: c.tier, vision: c.vision, summary: "(projected)" }));
+}
+
+function describeEval(p, judgeModel, projected) {
+  console.log(
+    `eval${projected ? " (projected from the run's plan: no results.json yet)" : ""}: ${p.calls.length} judge calls — ${p.claims} summaries checked claim by claim, ${p.sets} neighbour sets matched; judge ${judgeModel}; cap ${EVAL_CALL_CAP}`,
+  );
+}
+
+async function evaluate(argv) {
+  const at = argv.indexOf("--results");
+  const from = at >= 0 ? path.resolve(argv[at + 1]) : resultsFile;
+  const outAt = argv.indexOf("--out");
+  const out = outAt >= 0 ? path.resolve(argv[outAt + 1]) : evalFile;
+  const planOnly = argv.includes("--plan");
+  const fixture = buildFixture();
+  const sourceOf = sourceFinder(fixture);
+  const judgeModel = TIERS.anthropic.cheap.model;
+  if (!existsSync(from)) {
+    if (planOnly) {
+      describeEval(planEval(projectedResults(fixture), sourceOf), judgeModel, true);
+      return;
+    }
+    console.error(`No ${path.relative(process.cwd(), from) || from}: the bench has not been run, so there is nothing to judge (node bench.mjs run first). Nothing was called.`);
+    process.exit(2);
+  }
+  const results = JSON.parse(readFileSync(from, "utf8"));
+  const p = planEval(results.results, sourceOf);
+  describeEval(p, judgeModel, false);
+  if (planOnly) return;
+  if (p.calls.length > EVAL_CALL_CAP) {
+    console.error(`The eval would make ${p.calls.length} calls, over the cap of ${EVAL_CALL_CAP}. Nothing was called.`);
+    process.exit(2);
+  }
+  const resolved = await resolveKey();
+  if (!resolved) {
+    console.error("No text-model key is configured: ISOCAN_TEXT_API_KEY is unset and there is no keys.json under ISOCAN_KEYS_HOME, ISOCAN_HOME or ~/.isocan. Nothing was called.");
+    process.exit(2);
+  }
+  const tiers = TIERS[resolved.provider];
+  if (!tiers) {
+    console.error(`The configured provider is ${resolved.provider}; the eval names a judge for anthropic only. Nothing was called.`);
+    process.exit(2);
+  }
+  const judge = tiers.cheap;
+  console.log(`key: ${resolved.source}, provider ${resolved.provider} (the key itself is not shown)`);
+
+  let made = 0;
+  let cost = 0;
+  const spend = (r) => {
+    made++;
+    cost += ((r.inputTokens ?? 0) * judge.in + (r.outputTokens ?? 0) * judge.out) / 1e6;
+  };
+  const rowKey = (r) => `${r.model}|${r.vision ? 1 : 0}|${r.sourceId}`;
+  const rows = new Map();
+  for (const r of results.results) {
+    rows.set(rowKey(r), {
+      sourceId: r.sourceId, kind: r.kind, title: r.title, model: r.model, tier: r.tier, vision: r.vision,
+      summary: r.summary, words: r.summary ? wordCount(r.summary) : 0, short: r.summary ? isShort(r.summary) : false,
+      claims: [], unsupported: 0, contradicted: 0, faithful: null, useful: null,
+      ...(r.summary ? {} : { error: r.error ?? "no summary" }),
+    });
+  }
+  const neighbours = [];
+  for (const c of p.calls) {
+    if (c.kind === "claims") {
+      const images = c.row.vision ? imagesFor(c.source) : [];
+      const r = await judgeCall({ key: resolved.key, model: judge.model, prompt: claimsPrompt(c.source, c.row.summary, { vision: c.row.vision }), images, schema: CLAIMS_SCHEMA });
+      spend(r);
+      const row = rows.get(rowKey(c.row));
+      if (r.error) row.judgeError = r.error;
+      else Object.assign(row, scoreClaims(r.value.claims));
+      console.log(`${String(made).padStart(3)} claims ${c.row.sourceId} ${c.row.model}${c.row.vision ? " +vision" : ""} ${r.error ? `ERROR ${r.error}` : `${row.claims.length} claims, ${row.faithful ? "faithful" : `${row.unsupported} unsupported, ${row.contradicted} contradicted`}`}`);
+    } else {
+      const { prompt, key } = matchPrompt(c.sources, c.rows.map((r) => r.summary));
+      const r = await judgeCall({ key: resolved.key, model: judge.model, prompt, images: [], schema: MATCH_SCHEMA });
+      spend(r);
+      // The key lists summaries in the order the prompt showed them: reversed.
+      const shownRows = [...c.rows].reverse();
+      const scored = r.error ? null : scoreMatches(key, r.value.matches);
+      if (scored) scored.forEach((s, i) => (rows.get(rowKey(shownRows[i])).useful = s.correct));
+      neighbours.push({ set: c.set, model: c.model, tier: c.tier, vision: c.vision, ...(scored ? { matched: scored.map((s, i) => ({ sourceId: shownRows[i].sourceId, ...s })), correct: scored.filter((s) => s.correct).length, of: scored.length } : { error: r.error }) });
+      console.log(`${String(made).padStart(3)} match  ${c.set} ${c.model}${c.vision ? " +vision" : ""} ${scored ? `${scored.filter((s) => s.correct).length}/${scored.length} told apart` : `ERROR ${r.error}`}`);
+    }
+  }
+  const list = [...rows.values()];
+  let commit = null;
+  try {
+    commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: here, encoding: "utf8" }).trim();
+  } catch {
+    commit = null;
+  }
+  writeFileSync(
+    out,
+    JSON.stringify(
+      {
+        evaluatedAt: new Date().toISOString(),
+        commit,
+        evalVersion: EVAL_VERSION,
+        judge: judge.model,
+        results: { ranAt: results.ranAt, promptVersion: results.promptVersion, calls: results.calls },
+        calls: made,
+        costUsd: +cost.toFixed(6),
+        ...totals(list),
+        neighbours,
+        rows: list,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  const t = totals(list).product;
+  console.log(`\n${made} judge calls, $${cost.toFixed(4)} — written to ${path.relative(process.cwd(), out)}`);
+  console.log(`product tier: ${t.unfaithful} of ${t.judged} judged summaries say something their source does not (node scripts/measure.mjs summary-unfaithful)`);
+}
+
 // ---------- commands
 
 async function render() {
@@ -299,7 +479,8 @@ else if (command === "plan") {
   if (process.argv.includes("--prompts")) for (const s of [...fixture.sources, ...fixture.screens]) console.log(`\n=== ${s.id}\n${semanticZoomPrompt(s)}`);
 } else if (command === "run") await run();
 else if (command === "table") table();
+else if (command === "eval") await evaluate(process.argv.slice(3));
 else {
-  console.error(`unknown command ${command}: render | plan | run | table`);
+  console.error(`unknown command ${command}: render | plan | run | table | eval`);
   process.exit(1);
 }
