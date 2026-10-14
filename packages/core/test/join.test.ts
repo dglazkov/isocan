@@ -8,6 +8,7 @@ import {
   applyActorJoin,
   applyClaim,
   emptyActorRegistry,
+  mergeJoins,
 } from "../src/claims.ts";
 import { actorAliases, actorColor, resolveActor, sameActor } from "../src/identity.ts";
 import { inboxOn, namesFor, reasonFor } from "../src/inbox.ts";
@@ -114,6 +115,32 @@ describe("resolveActor", () => {
     expect(actorAliases(registry.joined, kenny.id)).toEqual([kenny.id]);
     expect(sameActor(registry.joined, second.id, third.id)).toBe(true);
     expect(sameActor(registry.joined, second.id, kenny.id)).toBe(false);
+  });
+});
+
+describe("mergeJoins: a home's folds, taken by a replica", () => {
+  it("adds what the home folded and reports nothing when nothing is new", () => {
+    const merged = mergeJoins({}, { [second.id]: dimitri.id });
+    expect(merged).toEqual({ [second.id]: dimitri.id });
+    expect(mergeJoins(merged!, { [second.id]: dimitri.id })).toBeNull();
+    expect(mergeJoins(undefined, undefined)).toBeNull();
+  });
+
+  it("keeps a fold it already holds rather than letting another home move it", () => {
+    // A join is forever, so the first one recorded here is the true one; a
+    // second home saying otherwise is the disagreement, not a correction.
+    const held = { [second.id]: dimitri.id };
+    expect(mergeJoins(held, { [second.id]: third.id, [kenny.id]: dimitri.id })).toEqual({
+      [second.id]: dimitri.id,
+      [kenny.id]: dimitri.id,
+    });
+  });
+
+  it("never records a fold into itself, or one that would close a loop", () => {
+    const held = { [second.id]: dimitri.id };
+    expect(mergeJoins(held, { [third.id]: third.id })).toBeNull();
+    // dimitri → second would make second → dimitri → second.
+    expect(mergeJoins(held, { [dimitri.id]: second.id })).toBeNull();
   });
 });
 

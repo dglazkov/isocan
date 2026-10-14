@@ -680,6 +680,50 @@ describe("the lid close", () => {
   }, 20_000);
 });
 
+describe("a fold made at the home", () => {
+  /**
+   * **Found 14 Oct 2026.** A person folded their old dev identity into their
+   * main one from a browser AT the home, and the laptop that replicates the
+   * canvas went on showing two people. The home already sent its `joined`
+   * map on every snapshot, resume and roster; the replica merged the names
+   * and colours beside it and dropped the map. So names caught up while undo,
+   * the inbox and ownership on the laptop still saw two actors.
+   */
+  it("reaches a replica that holds the canvas, and is still there after it restarts", async () => {
+    await birthAtA();
+    await letBIn();
+    await until(() => canvas(B), (snap) => snap.canvas.items["itm_1"] !== undefined, "B to hold the canvas");
+
+    // At the home, one browser that speaks for both of a person's names.
+    const old = { id: "usr_acme_old", name: "Acme Laptop" };
+    const person = { id: "usr_acme", name: "Acme Person" };
+    await H.badge.speakAs(old, "web:old");
+    await H.badge.speakAs(person, "web:person");
+    // The old name wrote here, so this is a room the fold repaints.
+    await op(H, old, {
+      type: "item.add",
+      itemId: "itm_old",
+      version: nv("ver_old"),
+      width: 40,
+      height: 40,
+      placement: { x: 1, y: 1 },
+    });
+    await op(H, person, { type: "actor.join", from: old.id, into: person.id }, null);
+
+    const folded = await until(
+      () => canvas(B),
+      (snap) => snap.joined?.[old.id] === person.id,
+      "the fold to reach B",
+    );
+    expect(folded.names[old.id]).toBe(person.name);
+
+    // Written down, not just held: the file a restart reads has it.
+    await B.daemon.close();
+    const stored = JSON.parse(await fs.readFile(p.actorsFile(bDir), "utf8")) as { joined?: Record<string, string> };
+    expect(stored.joined?.[old.id]).toBe(person.id);
+  }, 30_000);
+});
+
 describe("what a replica will and will not do on its own", () => {
   it("serves no page to a person", async () => {
     // The one-origin rule, asserted where the replica is a real replica of a

@@ -1358,13 +1358,13 @@ export class HomeLink implements HomeConnection {
       case "resumed":
         this.carrying(link);
         this.hello({ canvasId, type: "resumed", since, lastSeq: message.lastSeq });
-        await this.engine.mergeRemoteIdentity(message.colors, message.names);
+        await this.engine.mergeRemoteIdentity(message.colors, message.names, message.joined);
         return;
       case "snapshot":
         this.carrying(link);
         this.hello({ canvasId, type: "snapshot", since, lastSeq: message.lastSeq });
         await this.engine.adoptRemoteSnapshot(canvasId, message);
-        await this.engine.mergeRemoteIdentity(message.colors, message.names);
+        await this.engine.mergeRemoteIdentity(message.colors, message.names, message.joined);
         return;
       case "op-applied": {
         const applied = await this.engine.applyRemote(canvasId, message.entry);
@@ -1416,7 +1416,7 @@ export class HomeLink implements HomeConnection {
           this.origin(),
           message.sessions.filter((session) => !ours.has(session.sessionId)),
         );
-        await this.engine.mergeRemoteIdentity(message.colors, message.names);
+        await this.engine.mergeRemoteIdentity(message.colors, message.names, message.joined);
         return;
       }
     }
