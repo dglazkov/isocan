@@ -153,6 +153,30 @@ describe("a turn in a named agent (phase 3)", () => {
     } finally { agent.close(); }
   });
 
+  it("reads a turn's dollars from usage_update, and cancel stops the running prompt (critique phase 1)", async () => {
+    const agent = await AcpAgentProcess.spawn({ harness: "claude-code", command: process.execPath, args: [fakeAcp] }, { cwd: home, env: { ...process.env, FAKE_ACP_USAGE: "0.42", FAKE_ACP_SLOW_MS: "300" } });
+    try {
+      const session = await agent.ensureSession(home, null);
+      const usage: (number | undefined)[] = [];
+      const answer = await agent.prompt(session.sessionId, "hello", (event) => {
+        if (event.kind !== "usage") return;
+        usage.push(event.usd);
+        agent.cancel(session.sessionId);
+      });
+      expect(usage).toEqual([0.42]);
+      expect(answer.stopReason).toBe("cancelled");
+    } finally { agent.close(); }
+    const tokensOnly = await AcpAgentProcess.spawn({ harness: "codex", command: process.execPath, args: [fakeAcp] }, { cwd: home, env: { ...process.env, FAKE_ACP_USAGE: "tokens" } });
+    try {
+      const session = await tokensOnly.ensureSession(home, null);
+      const events: { kind: string; usd?: number }[] = [];
+      const answer = await tokensOnly.prompt(session.sessionId, "hello", (event) => { if (event.kind === "usage") events.push(event); });
+      // A usage beat with no cost is a beat with no dollars, not zero dollars.
+      expect(events).toEqual([{ kind: "usage" }]);
+      expect(answer.stopReason).toBe("end_turn");
+    } finally { tokensOnly.close(); }
+  });
+
   it("the adapter's environment is a list, not the shell: needs pass, accidents do not, the hook adds", () => {
     const shell: NodeJS.ProcessEnv = {
       PATH: "/usr/bin",

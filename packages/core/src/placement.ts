@@ -55,6 +55,38 @@ export function anchorOffset(item: { width: number; height: number }): {
   return { x: item.width, y: 0 };
 }
 
+/**
+ * **A thread anchored at a point ON an item**, from fractions of its size —
+ * `{0.62, 0.81}` is 62% across and 81% down. The model stores an offset from
+ * the item's origin (`CommentThread`), and this is the one conversion: a
+ * critic's note (`isocan critique note --at`) and `isocan comment add --item
+ * --at` both call it, so a pin placed at a point means the same place from
+ * both. Fractions rather than pixels because an agent reads HTML, not a
+ * rendering, and "the bottom third" is what it can honestly say. Outside
+ * 0–1 is refused: a point off the item is not a point on it.
+ */
+export function anchorAtFraction(
+  item: { width: number; height: number },
+  at: { x: number; y: number },
+): { x: number; y: number } {
+  for (const v of [at.x, at.y]) {
+    if (!Number.isFinite(v) || v < 0 || v > 1) {
+      throw new RangeError(`--at takes fractions of the item's size, each 0 to 1 (0,0 is its top-left, 1,1 its bottom-right) — not ${at.x},${at.y}`);
+    }
+  }
+  return { x: Math.round(at.x * item.width), y: Math.round(at.y * item.height) };
+}
+
+/** And back: where an anchored thread sits on its item, as fractions of the
+ *  item's size, rounded to two places — what a note is read back as. */
+export function fractionOfAnchor(
+  item: { width: number; height: number },
+  offset: { x: number; y: number },
+): { x: number; y: number } {
+  const of = (v: number, size: number) => (size > 0 ? Math.round((v / size) * 100) / 100 : 0);
+  return { x: of(offset.x, item.width), y: of(offset.y, item.height) };
+}
+
 /** Anything already taking up room — an item, or one just placed this pass. */
 export type Placed = Box;
 

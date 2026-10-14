@@ -25,6 +25,15 @@ export interface RcAgentRow {
   cwd: string;
   /** The ACP resume handle, once phase 3 mints one. Null until then. */
   sessionId: string | null;
+  /**
+   * **What one run of this agent may spend** (critique phase 1) — the
+   * persona's `PersonaBudget`, written at enrolment by whoever enrolled it
+   * (a critic's card, today). A row with a budget is run-scoped: a **run** is
+   * the turns one thread summons (in the Chat, one person's message), each
+   * run starts a fresh session, and the room stops it at either cap and says
+   * so in the thread. Absent: the agent is bounded only by the room's limits.
+   */
+  budget?: { turnsPerRun?: number; usdPerRun?: number } | undefined;
   /** Private compare-and-restore token while enrolment is being published. */
   preparationId?: string;
 }

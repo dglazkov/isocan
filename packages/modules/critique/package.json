@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "isocan": {
-    "engines": "^0.2.8",
+    "engines": "^0.2.9",
     "proposed": [
       "points"
     ]

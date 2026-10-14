@@ -13,11 +13,12 @@ Then two critics and the read, then the web's doors.
 **Phase citations name their project**: `critique phase 2`, never a bare
 "phase 2".
 
-**Where we are, 14 Oct 2026:** phase 0 is CLOSED — critics live on the
-canvas as persona items, added from the nine packs or written by hand, named
-by the shared homage rules, and drawn as cards behind the `critique`
-experiment. **critique phase 1 is next**: one critic, asked and answering,
-which spends model tokens and waits on Dion's yes to the budget.
+**Where we are, 14 Oct 2026:** phase 0 is CLOSED and phase 1 PART-DONE. A
+critic asked for a critique of a real screen answers with pinned, typed
+notes and leaves the screen untouched — walked once on a real harness. What
+is not proven is the dollar cap: the harness used reports no cost, so that
+run was bounded by turns alone. **critique phase 2 is next**: the ceiling,
+so a critic is refused at the door if it tries to edit.
 
 ---
 
@@ -41,7 +42,7 @@ words.
 
 ## Phase 1 — One critic, asked
 
-**Status: NOT STARTED.**
+**Status: PART-DONE.** 2026-10-14 — a real critic run on a synthetic Acme checkout left four pinned, typed notes and `critique done`, and the screen's version did not move; the dollar cap is unproven, because the harness walked reports no cost.
 
 - The `critique.critic` template: `AGENTS.md` from the critic item, the note
   format, notes and nothing else, read the screen and not the thread.
@@ -125,6 +126,26 @@ person.
   also require a property (module API 0.2.8).
 - **2026-10-14** — `parsePersona` listed `color` as a known key and then
   dropped it, despite its own test's warning. It is read now.
+- **2026-10-14** — The first real critique, by *Inevitable* on Codex, took
+  38 seconds and one turn, and left one *working* note and three *risk*
+  notes, each naming its question ("Pay and Save … divide the checkout into
+  two competing destinations. Make Save for later a text link."). The first
+  attempt produced nothing: Codex's sandbox blocked the local port and its
+  login shell put the released `isocan` ahead of the one being tested.
+- **2026-10-14** — A critic's `turns per run` counts summons, not model
+  steps, so one prompt with many tool calls fits in a single turn. A
+  harness that reports no cost (Codex) is bounded only by that and the
+  ten-minute turn ceiling. The dollar cap is read from ACP's
+  `usage_update.cost`, and it has not met a harness that sends one.
+- **2026-10-14** — A critic's colour is its actor's colour (`actor.setColor`,
+  set when it is asked), so the pins wear it everywhere, outside the
+  experiment. That is a fact about the actor, so it is not gated.
+- **2026-10-14 — Open:** proving the dollar cap needs a harness that
+  reports cost. Claude Code's adapter (`@agentclientprotocol/claude-agent-acp`)
+  is not on this machine, and downloading it is Dion's call. A critic sees
+  only the screen's HTML: `canvas shot` renders a whole canvas, not one item.
+  The packs' "How it ranks" section talks about competition entries and
+  reads oddly in a critique brief.
 - **2026-10-14 — Open:** the browser has no roster: design-competition's web
   activation does not carry its contributions, so the critique phase 4
   Critics panel needs the roster from the CLI side or the daemon. And the

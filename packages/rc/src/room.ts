@@ -51,6 +51,7 @@ import {
   turnedAway,
   turnedAwayLine,
 } from "@isocan/core";
+import { capLine, capMet, freshRun, runKeyOf, spendWords, type RunSpend } from "./budget.ts";
 import { gateTurn, type GuardLimits, type GuardState } from "./guards.ts";
 import { itemCenter, nameResolver, summonsPrompt, threadLocus, type SummonsContext } from "./helpers.ts";
 import type { RcAgentRow } from "./rows.ts";
@@ -132,12 +133,18 @@ export interface RoomTurnEvent {
   kind: string;
   text?: string;
   detail?: string;
+  /** `kind: "usage"`: the dollars this turn has cost so far, when the
+   *  harness reports a cost (ACP's `usage_update`). */
+  usd?: number;
 }
 
 /** What runs one turn: the shape `AcpAgentProcess` has. */
 export interface RoomAdapter {
   ensureSession(cwd: string, stored: string | null): Promise<{ sessionId: string; resumed: boolean }>;
   prompt(sessionId: string, text: string, onEvent: (event: RoomTurnEvent) => void): Promise<{ stopReason: string }>;
+  /** Stop the running prompt (ACP's `session/cancel`): what a run's budget
+   *  does at its dollar cap. Absent: the turn runs to its end. */
+  cancel?(sessionId: string): void;
   /** The turn is over, whichever way; awaited before the face comes off. */
   close(): void | Promise<void>;
 }
@@ -270,6 +277,8 @@ export function mapState(map: Map<string, unknown> = new Map()): RoomState {
 const keys = {
   guard: (actorId: string) => `guard:${actorId}`,
   session: (actorId: string) => `session:${actorId}`,
+  /** What one run of a budgeted agent has spent (`budget.ts`). */
+  run: (actorId: string, runKey: string) => `run:${actorId}:${runKey}`,
   origins: (actorId: string) => `origins:${actorId}`,
   gateSaid: (canvasId: string, key: string) => `said:${canvasId}:gate:${key}`,
   turnedAwaySaid: (canvasId: string, key: string) => `said:${canvasId}:turned-away:${key}`,
@@ -978,7 +987,6 @@ async function room(
     const firstComment = flagged.find(
       (e) => e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply",
     );
-    const face = await routes.createSession(p.id, record.actor, undefined, harness.harness).catch(() => null);
     // Where the summons points, so the face lands somewhere rather than
     // floating unplaced: the summoning thread, or (a routed change) the
     // first changed item. `working` is re-asserted on every beat below —
@@ -987,6 +995,41 @@ async function room(
     const changedItemId = (flagged[0]?.envelope.op as { itemId?: string }).itemId ?? null;
     const snapshot = await routes.snapshot(p.id).catch(() => null);
     const thread = threadId ? snapshot?.canvas.threads[threadId] : undefined;
+    /**
+     * **A budgeted agent's run** (`budget.ts`, critique phase 1). Its turns
+     * are counted per run, before a face goes on: a run already at its cap
+     * takes no turn, says so in the thread once, and the batch is answered
+     * — held, it would only be asked again.
+     */
+    const budget = row.budget ?? null;
+    const runKey = budget
+      ? runKeyOf(thread ?? (threadId ? { id: threadId } : null), (firstComment?.envelope.op as { comment?: { id?: string } } | undefined)?.comment?.id ?? null)
+      : null;
+    const spend: RunSpend | null = runKey
+      ? ((await state.get(keys.run(record.actor.id, runKey))) as RunSpend | undefined) ?? freshRun()
+      : null;
+    const keepSpend = () => (runKey && spend ? state.set(keys.run(record.actor.id, runKey), spend) : Promise.resolve());
+    if (budget && spend) {
+      const met = capMet(spend, budget);
+      if (met) {
+        if (!spend.said) {
+          spend.said = true;
+          await keepSpend();
+          await sayInThread(threadId, capLine(record.actor.name, met, spend, budget));
+        }
+        say(`run at its budget — ${spendWords(spend, budget, harness.harness)}; no turn`);
+        await routes
+          .parkAdvance({ canvasId: p.id, actorId: record.actor.id, parkId: dispatch.parkId, to: tip })
+          .then(() => {
+            dispatch.cursor = tip;
+          })
+          .catch(() => {});
+        return;
+      }
+      spend.turns += 1;
+      await keepSpend();
+    }
+    const face = await routes.createSession(p.id, record.actor, undefined, harness.harness).catch(() => null);
     const anchoredItem = thread?.anchorItemId ? snapshot?.canvas.items[thread.anchorItemId] : undefined;
     const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : undefined;
     const contextItem = anchoredItem ?? item;
@@ -1068,11 +1111,25 @@ async function room(
       // One session handle per AGENT (standing agents phase 2): a summons on
       // any canvas resumes the same conversation — this row's handle, else the
       // one another room minted for the same actor.
+      // A budgeted agent's run has a session of its own instead: fresh for a
+      // new run, so the card it was asked from is the one it reads, and a
+      // run's dollars are that session's.
       const storedSession = (await state.get(keys.session(record.actor.id))) as string | undefined;
-      const session = await agent.ensureSession(row.cwd, row.sessionId ?? storedSession ?? null);
-      await state.set(keys.session(record.actor.id), session.sessionId);
-      await rows.setSessionId(p.id, record.actor.id, session.sessionId);
+      const session = await agent.ensureSession(row.cwd, spend ? spend.session : (row.sessionId ?? storedSession ?? null));
+      if (spend) {
+        spend.session = session.sessionId;
+        await keepSpend();
+      } else {
+        await state.set(keys.session(record.actor.id), session.sessionId);
+        await rows.setSessionId(p.id, record.actor.id, session.sessionId);
+      }
       say(`session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`);
+      // Dollars, as the harness reports them for THIS turn: an adapter is
+      // spawned per turn, so what it reports is counted on top of what the
+      // run had spent before the turn began.
+      const usdBefore = spend?.usd ?? null;
+      let turnUsd: number | null = null;
+      let cancelled = false;
       // The event stream the adapter is already sending, spent on the face:
       // each tool call becomes an inferred status (so it never displaces
       // anything the agent said with `--say`) and re-asserts `working`.
@@ -1083,6 +1140,15 @@ async function room(
         session.sessionId,
         summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }, summonsContext),
         (event) => {
+          if (event.kind === "usage" && typeof event.usd === "number" && spend && budget) {
+            turnUsd = Math.max(turnUsd ?? 0, event.usd);
+            spend.usd = (usdBefore ?? 0) + turnUsd;
+            if (!cancelled && capMet(spend, budget) === "usd") {
+              cancelled = true;
+              say(`at its budget mid-turn — ${spendWords(spend, budget, harness.harness)}; stopping the turn`);
+              agent?.cancel?.(session.sessionId);
+            }
+          }
           if (event.kind === "permission") say(`permission ${event.detail}`);
           if (event.kind === "tool" && event.detail && clock.now() - lastToolBeat >= 2_000) {
             lastToolBeat = clock.now();
@@ -1107,6 +1173,17 @@ async function room(
         return;
       }
       say(`turn ended — ${turn.stopReason}`);
+      if (spend && budget) {
+        // The rc's own accounting of the run, said where its owner reads,
+        // and the stop said where the person asked.
+        say(`run so far — ${spendWords(spend, budget, harness.harness)}`);
+        const met = capMet(spend, budget);
+        if (met && (cancelled || met === "usd") && !spend.said) {
+          spend.said = true;
+          await sayInThread(threadId, capLine(record.actor.name, met, spend, budget));
+        }
+        await keepSpend();
+      }
       // Completion, explicitly: the room SAW the turn end, so the cursor
       // advances now rather than waiting for the park's inferred evidence.
       await routes

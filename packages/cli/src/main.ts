@@ -214,6 +214,7 @@ import {
   renamedFilename,
   titleSlug,
   mainThread,
+  anchorAtFraction,
   anchorOffset,
   buildCorpus,
   buildRecap,
@@ -6566,10 +6567,24 @@ const moduleHost: CliHost = {
    * when one is named, so the agent's harness starts where its `AGENTS.md` is.
    */
   enrol: async (ctx, canvasId, ask) => {
+    // `reuse` (critique phase 1): an agent already standing here with its rc
+    // half on THIS machine is not enrolled again — its directory is written
+    // afresh from the template and its budget refreshed, and that is all. No
+    // op, so asking a critic twice is not two enrolments in the log.
+    if (ask.reuse) {
+      const snapshot = await ctx.client.snapshot(canvasId);
+      const record = Object.values(snapshot.canvas.agents ?? {}).find((a) => a.actor.name.toLowerCase() === ask.name.toLowerCase());
+      const row = record ? (await readRcAgents(ctx.home)).find((r) => r.canvasId === canvasId && r.actorId === record.actor.id) : undefined;
+      if (record && row) {
+        const prepared = ask.template ? await prepareFromTemplate(ctx.home, canvasId, ask.name, ask.template, ask.args ?? {}) : null;
+        await upsertRcAgent(ctx.home, { ...row, ...(prepared ? { cwd: prepared.dir } : {}), ...(ask.budget ? { budget: ask.budget } : {}) });
+        return { actorId: record.actor.id, dir: prepared?.dir ?? null, reused: true };
+      }
+    }
     const prepared = ask.template ? await prepareFromTemplate(ctx.home, canvasId, ask.name, ask.template, ask.args ?? {}) : null;
     const harness = ask.harness ?? prepared?.harness ?? ctx.harness ?? null;
-    const agent = await mintAndEnrol(ctx, canvasId, ask.name, { cwd: prepared?.dir ?? process.cwd(), harness });
-    return { actorId: agent.id, dir: prepared?.dir ?? null };
+    const agent = await mintAndEnrol(ctx, canvasId, ask.name, { cwd: prepared?.dir ?? process.cwd(), harness, ...(ask.budget ? { budget: ask.budget } : {}) });
+    return { actorId: agent.id, dir: prepared?.dir ?? null, reused: false };
   },
   /** `rc remove`, promoted: the standing goes, the history and the directory stay. */
   withdraw: async (ctx, canvasId, actorId) => {
@@ -11786,7 +11801,7 @@ comment
   .option("--item <item>", "anchor to this item")
   .option("--quote <text>", "anchor to exact rendered text on --item")
   .option("--occurrence <number>", "which matching quote, counted from 1")
-  .option("--at <x,y>", "freestanding at world coordinates")
+  .option("--at <x,y>", "freestanding at world coordinates — or, with --item, a point ON the item as fractions of its size (0.6,0.8)")
   .option("--in <group>", "attach this group and its complete subtree as frozen context")
   .option("--include-excluded", "explicitly include excluded context in this request")
   .action(
@@ -11803,8 +11818,11 @@ comment
         anchorItemId = item.id;
         // Anchored pins store an offset from the item origin, and where that
         // lands is core's to say — one spelling, so ⇧C in the app and this
-        // command put a thread in the same place (`anchorOffset`).
-        ({ x, y } = anchorOffset(item));
+        // command put a thread in the same place (`anchorOffset`). With
+        // --at it is a point on the item instead, as fractions of its size,
+        // converted by the one function `critique note` uses too.
+        if (opts.at && opts.quote !== undefined) throw new Error("--at and --quote are two different places — pass one");
+        ({ x, y } = opts.at ? anchorAtFraction(item, parseXY(opts.at)) : anchorOffset(item));
       } else {
         ({ x, y } = parseXY(opts.at!));
         anchorItemId = null;
@@ -13358,6 +13376,8 @@ async function mintAndEnrol(
     model?: string | null | undefined;
     rules?: unknown;
     say?: (line: string) => void;
+    /** What one run may spend (`RcAgentRow.budget`). */
+    budget?: RcAgentRow["budget"];
   },
 ): Promise<Actor> {
   // An actor this badge still holds under the key the name derives moves to
@@ -13391,6 +13411,7 @@ async function mintAndEnrol(
     ...(trimmedModel ? { model: trimmedModel } : {}),
     cwd: opts.cwd,
     sessionId: null,
+    ...(opts.budget ? { budget: opts.budget } : {}),
   }, () => ctx.client.sendOp(canvasId, ctx.actor, {
     type: "agent.enroll",
     agent,
@@ -14591,6 +14612,7 @@ async function openAdapter(
   return {
     ensureSession: (cwd, stored) => agent.ensureSession(cwd, stored),
     prompt: (sessionId, text, onEvent) => agent.prompt(sessionId, text, onEvent),
+    cancel: (sessionId) => agent.cancel(sessionId),
     close: async () => {
       agent.close();
       // The loan comes back: whatever session the pointer names on this

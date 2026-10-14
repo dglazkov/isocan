@@ -4,18 +4,26 @@ import critiqueCore, {
   CRITIC_PROP,
   CRITICS_POINT,
   DEFAULT_BUDGET,
+  NOTE_KINDS,
   canvasClashes,
   creditPerson,
   criticItems,
   criticMarkdown,
   criticProblems,
   criticSlug,
+  doneLine,
   draftFromRoster,
+  findRequest,
   findInRoster,
   lensPath,
+  mentionWord,
+  noteBody,
   readCritic,
   readLens,
+  readNote,
+  readNoteBody,
   refuseJoin,
+  requestBody,
   roster,
   rosterProblems,
   skeletonDraft,
@@ -179,5 +187,81 @@ describe("the roster", () => {
 
   it("slugs a name into the critic's id", () => {
     expect(criticSlug("Form Follows Emotion")).toBe("form-follows-emotion");
+  });
+});
+
+describe("a critic's note", () => {
+  it("writes the kind and the question itself, and reads them back", () => {
+    const body = noteBody({ kind: "risk", question: 2, questionText: "What could go?", text: "Two filled buttons compete. Keep Pay; make Save a link." });
+    expect(body.split("\n")[0]).toBe("**Risk** · question 2 · *What could go?*");
+    expect(readNoteBody(body)).toEqual({ kind: "risk", question: 2, questionText: "What could go?", text: "Two filled buttons compete. Keep Pay; make Save a link." });
+    for (const kind of NOTE_KINDS) expect(readNoteBody(noteBody({ kind, question: 1, text: "Leave it." }))?.kind).toBe(kind);
+  });
+
+  it("is not a note unless the first line is the verb's — prose cannot promote itself", () => {
+    expect(readNoteBody("This is a **Blocker** · question 1\nreally")).toBeNull();
+    expect(readNoteBody("**Fatal** · question 1\nno such kind")).toBeNull();
+    expect(readNoteBody("Looks fine to me")).toBeNull();
+  });
+
+  it("reads a pinned thread back into who, where, kind, question and text", () => {
+    const screen = { id: "itm_screen", width: 400, height: 800 } as Item;
+    const critic = { id: "act_quiet", name: "Quiet Hands" };
+    const thread = {
+      id: "thr_1",
+      x: 248,
+      y: 648,
+      anchorItemId: screen.id,
+      comments: [{ id: "cmt_1", author: critic, body: noteBody({ kind: "working", question: 3, text: "The total leads. Leave it." }), createdAt: "2026-10-14T10:00:00.000Z" }],
+      createdAt: "2026-10-14T10:00:00.000Z",
+      createdBy: critic,
+    };
+    expect(readNote(thread, { [screen.id]: screen })).toEqual({
+      threadId: "thr_1",
+      critic: "Quiet Hands",
+      criticId: "act_quiet",
+      item: "itm_screen",
+      at: { x: 0.62, y: 0.81 },
+      kind: "working",
+      question: 3,
+      text: "The total leads. Leave it.",
+      createdAt: "2026-10-14T10:00:00.000Z",
+    });
+    expect(readNote({ ...thread, anchorItemId: null }, { [screen.id]: screen })).toBeNull();
+    expect(readNote({ ...thread, main: true }, { [screen.id]: screen })).toBeNull();
+  });
+});
+
+describe("asking, and the last word", () => {
+  const ada = { id: "usr_ada", name: "Ada" };
+  const request = (id: string, threadId: string, anchor: string | null, items: string[], at: string) => ({
+    id: threadId,
+    x: 0,
+    y: 0,
+    anchorItemId: anchor,
+    comments: [{ id, author: ada, body: requestBody("Quiet Hands", "Acme checkout"), mentions: ["act_quiet"], items, createdAt: at }],
+    createdAt: at,
+    createdBy: ada,
+  });
+
+  it("mentions the critic by its first word and names the screen by its title", () => {
+    expect(mentionWord("Quiet Hands")).toBe("Quiet");
+    expect(requestBody("Quiet Hands", "Acme checkout")).toMatch(/^@Quiet what do you make of #Acme checkout\?/);
+  });
+
+  it("finds the newest request about this screen, anchored to it or naming it in the Chat", () => {
+    const threads = {
+      a: request("cmt_a", "thr_a", "itm_screen", [], "2026-10-14T10:00:00.000Z"),
+      b: { ...request("cmt_b", "thr_main", null, ["itm_screen"], "2026-10-14T11:00:00.000Z"), main: true },
+      c: request("cmt_c", "thr_c", "itm_other", [], "2026-10-14T12:00:00.000Z"),
+    };
+    expect(findRequest({ threads }, "act_quiet", "itm_screen")).toEqual({ threadId: "thr_main", commentId: "cmt_b", createdAt: "2026-10-14T11:00:00.000Z" });
+    expect(findRequest({ threads }, "act_somebody", "itm_screen")).toBeNull();
+  });
+
+  it("says how many notes, of what", () => {
+    const n = (kind: (typeof NOTE_KINDS)[number]) => ({ kind }) as never;
+    expect(doneLine([n("risk"), n("working"), n("risk")], "Acme checkout")).toBe("Done — 3 notes on #Acme checkout: 1 working, 2 risk.");
+    expect(doneLine([], "Acme checkout")).toBe("Done — no notes on #Acme checkout.");
   });
 });

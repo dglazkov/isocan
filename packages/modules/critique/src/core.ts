@@ -1,9 +1,12 @@
 import {
   contributions,
   firstWordClashes,
+  fractionOfAnchor,
   homageNameProblems,
   parsePersona,
   titleSlug,
+  type CanvasContents,
+  type CommentThread,
   type ContributionPoint,
   type CoreModule,
   type Item,
@@ -317,6 +320,109 @@ export function skeletonDraft(agentName: string, opts: { after?: string; self?: 
     ? opts.self ? `after ${after}, by ${after}` : `after ${after}; not affiliated`
     : opts.self ? "by its author" : "original; not affiliated with anyone";
   return { name: criticSlug(agentName), agentName: agentName.trim(), credit, ...(opts.self ? { self: true } : {}), lens: { questions: ["", "", ""], looksFor: "", ranks: "" } };
+}
+
+/* ---- Phase 1: asking, and the note ------------------------------------ */
+
+/** The template a critic's working directory is written from. */
+export const CRITIC_TEMPLATE = "critique.critic";
+
+/** What a note says the critic found. *Working* is a finding as much as
+ *  *risk*: "leave it" is advice. */
+export const NOTE_KINDS = ["working", "risk", "blocker"] as const;
+export type NoteKind = (typeof NOTE_KINDS)[number];
+
+const KIND_WORD: Record<NoteKind, string> = { working: "Working", risk: "Risk", blocker: "Blocker" };
+
+/** The word a mention finds a critic by — the first of its agent name
+ *  (`rosterClashes` keeps two critics from sharing one). */
+export function mentionWord(agentName: string): string {
+  return agentName.trim().split(/\s+/)[0] ?? agentName;
+}
+
+/**
+ * **A note's text**: the first line is the verb's — `**Risk** · question 2 ·
+ * *What could go…?*` — and the rest is the critic's. The kind and the
+ * question are written here and never by the model, so a critic's prose
+ * cannot promote itself to a blocker.
+ */
+export function noteBody(note: { kind: NoteKind; question: number; questionText?: string; text: string }): string {
+  const asked = note.questionText?.trim() ? ` · *${note.questionText.trim().replace(/\*/g, "")}*` : "";
+  return `**${KIND_WORD[note.kind]}** · question ${note.question}${asked}\n${note.text.trim()}`;
+}
+
+const FIRST_LINE = /^\*\*(Working|Risk|Blocker)\*\* · question (\d+)(?: · \*(.*)\*)?$/;
+
+/** A note's text read back — null when its first line is not the verb's. */
+export function readNoteBody(body: string): { kind: NoteKind; question: number; questionText: string; text: string } | null {
+  const [first = "", ...rest] = body.split("\n");
+  const m = FIRST_LINE.exec(first.trim());
+  if (!m) return null;
+  return { kind: m[1]!.toLowerCase() as NoteKind, question: Number(m[2]), questionText: m[3] ?? "", text: rest.join("\n").trim() };
+}
+
+/** One critic's note, as the read (phase 3's fold) will take it. */
+export interface CritiqueNote {
+  threadId: string;
+  /** Who wrote it, by name and id: the thread's author. */
+  critic: string;
+  criticId: string;
+  item: string;
+  /** Where on the item, as fractions of its size. */
+  at: { x: number; y: number };
+  kind: NoteKind;
+  question: number;
+  text: string;
+  createdAt: string;
+}
+
+/** A thread read as a note — null when it is not one: not anchored to a live
+ *  item, or its first comment not in the note's shape. */
+export function readNote(thread: CommentThread, items: Readonly<Record<string, Item>>): CritiqueNote | null {
+  const item = thread.anchorItemId ? items[thread.anchorItemId] : undefined;
+  const first = thread.comments[0];
+  if (!item || !first || thread.main) return null;
+  const note = readNoteBody(first.body);
+  if (!note) return null;
+  return {
+    threadId: thread.id,
+    critic: first.author.name,
+    criticId: first.author.id,
+    item: item.id,
+    at: fractionOfAnchor(item, thread),
+    kind: note.kind,
+    question: note.question,
+    text: note.text,
+    createdAt: thread.createdAt,
+  };
+}
+
+/** The words of a request, as `isocan critique` writes them: the critic by
+ *  its mention word, the screen by its title, so the thread reads as a
+ *  person asking and the Chat's own syntax would say the same. */
+export function requestBody(agentName: string, itemTitle: string): string {
+  return `@${mentionWord(agentName)} what do you make of #${itemTitle}? Pin your notes on it; change nothing.`;
+}
+
+/** Where a critique was asked for: the newest comment that mentions this
+ *  critic and is about this item — anchored to it, or naming it with `#`. */
+export function findRequest(canvas: Pick<CanvasContents, "threads">, criticId: string, itemId: string): { threadId: string; commentId: string; createdAt: string } | null {
+  let best: { threadId: string; commentId: string; createdAt: string } | null = null;
+  for (const thread of Object.values(canvas.threads)) {
+    for (const c of thread.comments) {
+      if (!(c.mentions ?? []).includes(criticId)) continue;
+      if (thread.anchorItemId !== itemId && !(c.items ?? []).includes(itemId)) continue;
+      if (!best || c.createdAt > best.createdAt) best = { threadId: thread.id, commentId: c.id, createdAt: c.createdAt };
+    }
+  }
+  return best;
+}
+
+/** The critic's last word in the request thread: how many notes, of what. */
+export function doneLine(notes: readonly CritiqueNote[], itemTitle: string): string {
+  if (notes.length === 0) return `Done — no notes on #${itemTitle}.`;
+  const counts = NOTE_KINDS.map((k) => [k, notes.filter((n) => n.kind === k).length] as const).filter(([, n]) => n > 0);
+  return `Done — ${notes.length} ${notes.length === 1 ? "note" : "notes"} on #${itemTitle}: ${counts.map(([k, n]) => `${n} ${k}`).join(", ")}.`;
 }
 
 /** The record. */

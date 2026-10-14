@@ -20,6 +20,40 @@ a `credit` line saying who it is after and that it is not affiliated, its
 - Editing is `isocan edit <card> critic.md` — the card is the critic, so the
   next critique reads what you wrote. `critic ls` re-reads it.
 
-Asking a critic for a critique is not built yet (critique phase 1). In the
-app the cards draw as critic cards behind **Settings → Experiments →
-Critique**, and as plain markdown without it.
+### Asking for a critique
+
+- `isocan critique <item> --by <critic>` — asks one critic what it makes of a
+  screen (`isocan critique "#Checkout" --by inevitable`). The first time on a
+  canvas it enrols the critic on **your** runner, so your `isocan rc` must be
+  parked there — without one it says so and enrols nothing. Every time, it
+  re-reads the card and rewrites the critic's working directory from it, then
+  opens one thread on the screen that @mentions the critic; the rc's ordinary
+  wake does the rest. `@Inevitable what do you make of #Checkout?` in the Chat
+  wakes an enrolled critic the same way.
+- The critic is bounded per run (the thread that asked) by its card's
+  `budget`: turns, counted by the rc, and dollars where the harness reports
+  them. At a cap the rc stops it and says so in the thread in one line.
+- `isocan critique notes <item>` — the critics' notes on a screen, read back:
+  who, kind, question, where (fractions of the screen) and the move.
+
+### When you are the critic
+
+Your card is in your `AGENTS.md`. Read the screen (`isocan get <item>`), not
+the threads, and answer only with these two:
+
+- `isocan critique note <item> --at <fx,fy> --kind working|risk|blocker
+  --question <n> "<what you see, then one move>"` — a note pinned at a point
+  on the screen, as fractions of its size (0,0 top-left, 1,1 bottom-right).
+  The verb writes the first line itself (`**Risk** · question 2 · *…*`); a
+  note's text never names its own kind. *Working* is a finding too: say
+  "Leave it."
+- `isocan critique done <item>` — your last act: says in the request thread
+  how many notes you left, of what kind. Then end your turn.
+
+`isocan comment add <text> --item <item> --at <fx,fy>` pins an ordinary
+thread at a point on an item the same way (without `--at`, `--item` hangs it
+off the item's corner).
+
+In the app the cards draw as critic cards behind **Settings → Experiments →
+Critique**, and as plain markdown without it. A critic's pins wear its
+colour, because `critique` gives the critic's actor the card's colour.

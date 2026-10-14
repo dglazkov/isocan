@@ -62,7 +62,7 @@ export interface CliHost {
    * prepares the agent's working directory first, and that directory is the
    * row's cwd.
    */
-  enrol: (ctx: Ctx, canvasId: string, ask: EnrolRequest) => Promise<{ actorId: string; dir: string | null }>;
+  enrol: (ctx: Ctx, canvasId: string, ask: EnrolRequest) => Promise<{ actorId: string; dir: string | null; reused: boolean }>;
   /** Take an agent's standing back — what `isocan rc rm` does. The log keeps
    *  everything; the working directory is left where it is. */
   withdraw: (ctx: Ctx, canvasId: string, actorId: string) => Promise<void>;
@@ -74,6 +74,19 @@ export interface EnrolRequest {
   args?: Readonly<Record<string, string>>;
   /** A harness name `isocan harness` knows; unset, the machine's default. */
   harness?: string;
+  /**
+   * **What one run of this agent may spend** (module API 0.2.9) — turns and
+   * dollars, the persona's `PersonaBudget`; the rc stops a run at either cap
+   * and says so in the thread. A run is the turns one thread summons.
+   */
+  budget?: { turnsPerRun?: number; usdPerRun?: number };
+  /**
+   * **Reuse a standing enrolment** (module API 0.2.9): when an agent of this
+   * name already stands on the canvas with its rc half on this machine, write
+   * its directory afresh from the template and refresh its budget, and send
+   * no op. `reused` in the answer says which happened.
+   */
+  reuse?: boolean;
 }
 
 /**

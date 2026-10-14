@@ -1280,8 +1280,15 @@ export function isDataOnly(manifest: ModuleManifest): boolean {
  * critique's critic cards are markdown, and every other markdown item stays
  * the built-in chain's. Optional and provided: a module built for `^0.2.7`
  * still loads.
+ *
+ * **0.2.8 → 0.2.9 on 14 Oct 2026**, an addition: `EnrolRequest.budget` and
+ * `EnrolRequest.reuse` (under the existing `templates` proposal), and the
+ * `reused` flag in `host.enrol`'s answer — critique's critics are enrolled
+ * once per canvas, refreshed from their card each time they are asked, and
+ * bounded per run. Optional fields a module passes and a member it is
+ * handed: a module built for `^0.2.8` still loads.
  */
-export const MODULE_API_VERSION = "0.2.8";
+export const MODULE_API_VERSION = "0.2.9";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it

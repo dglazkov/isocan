@@ -1429,3 +1429,94 @@ describe("the summons carries thread history, item metadata, and non-owner stand
     await room.done;
   });
 });
+
+/**
+ * **A run's budget** (critique phase 1, `budget.ts`). A row with a `budget`
+ * is bounded per run — the turns one thread summons — by turns the room
+ * counts and dollars the adapter reports, and each run has its own session.
+ */
+describe("a budgeted agent's run", () => {
+  const reply = (home: AcmeHome, threadId: string, body: string) =>
+    home.append(OWNER, { type: "thread.reply", threadId, comment: { id: `cmt_r${home.tip + 1}`, body, mentions: [PERCY.id] } } as unknown as Operation);
+  const systemLines = (home: AcmeHome, threadId: string) =>
+    home.threads[threadId]!.comments.filter((c) => c.author.id !== OWNER.id && c.author.id !== PERCY.id).map((c) => c.body);
+
+  it("stops at its turns, says so in the thread once, and starts the next run in a fresh session", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const rows: RcAgentRow[] = [
+      { canvasId: CANVAS.id, actorId: PERCY.id, name: PERCY.name, harness: "claude-code", cwd: "/acme/percy", sessionId: "acp_old", budget: { turnsPerRun: 1, usdPerRun: 0.4 } },
+    ];
+    const { deps, lines, turns } = roomOver(home, clock, { rows });
+    const sessions: (string | null)[] = [];
+    const adapterFor = deps.adapterFor;
+    deps.adapterFor = async (row) => {
+      const harness = await adapterFor(row);
+      return {
+        ...harness,
+        open: async (turn) => {
+          const adapter = await harness.open(turn);
+          return { ...adapter, ensureSession: async (_cwd, stored) => (sessions.push(stored), { sessionId: stored ?? `acp_run_${sessions.length}`, resumed: stored !== null }) };
+        },
+      };
+    };
+    const room = runRoom(deps);
+    await clock.advance(0);
+
+    const first = home.mention(OWNER, PERCY, "@Percy what do you make of #Checkout?");
+    await clock.advance(0);
+    expect(turns).toHaveLength(1);
+    // A run starts fresh: the row's old session is not the run's.
+    expect(sessions).toEqual([null]);
+    expect(lines).toContain("Percy · run so far — 1 of 1 turns; claude-code reports no spend, so turns are the only bound");
+
+    reply(home, first, "@Percy and the header?");
+    await clock.advance(5_000);
+    reply(home, first, "@Percy hello?");
+    await clock.advance(5_000);
+    expect(turns).toHaveLength(1);
+    expect(systemLines(home, first)).toEqual(["Percy stopped at its budget — 1 of 1 turns for this run. Ask again in a new thread for a new run."]);
+
+    const second = home.mention(OWNER, PERCY, "@Percy and #Cart?");
+    await clock.advance(5_000);
+    expect(turns).toHaveLength(2);
+    expect(sessions).toEqual([null, null]);
+    expect(systemLines(home, second)).toEqual([]);
+    await room.stop();
+    await room.done;
+  });
+
+  it("cancels a turn that passes its dollars mid-way, and says so in the thread", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.enrol(PERCY);
+    const rows: RcAgentRow[] = [
+      { canvasId: CANVAS.id, actorId: PERCY.id, name: PERCY.name, harness: "claude-code", cwd: "/acme/percy", sessionId: null, budget: { turnsPerRun: 6, usdPerRun: 0.4 } },
+    ];
+    const { deps, lines } = roomOver(home, clock, { rows });
+    const cancelled: string[] = [];
+    deps.adapterFor = async () => ({
+      harness: "claude-code",
+      open: async (): Promise<RoomAdapter> => ({
+        ensureSession: async () => ({ sessionId: "acp_run", resumed: false }),
+        prompt: async (_s, _t, onEvent) => {
+          onEvent({ kind: "usage", usd: 0.15 });
+          onEvent({ kind: "usage", usd: 0.42 });
+          return { stopReason: cancelled.length ? "cancelled" : "end_turn" };
+        },
+        cancel: (sessionId) => cancelled.push(sessionId),
+        close: () => {},
+      }),
+    });
+    const room = runRoom(deps);
+    await clock.advance(0);
+    const threadId = home.mention(OWNER, PERCY, "@Percy what do you make of #Checkout?");
+    await clock.advance(0);
+    expect(cancelled).toEqual(["acp_run"]);
+    expect(lines).toContain("Percy · run so far — 1 of 6 turns, $0.42 of $0.40");
+    expect(systemLines(home, threadId)).toEqual(["Percy stopped at its budget — $0.42 of $0.40 for this run. Ask again in a new thread for a new run."]);
+    await room.stop();
+    await room.done;
+  });
+});
