@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { SKILL_INSTALL_COMMAND } from "@isocan/core";
 import { PUBLIC_PATH, TERMS_PATH, faceFor, isSsoHome } from "../src/lib/faces.ts";
-import { attestedEmailLocalPart, enterFromAttestOffer } from "../src/lib/identity.ts";
+import { attestedEmail, attestedEmailLocalPart, enterFromAttestOffer } from "../src/lib/identity.ts";
 import { browserClipboard, copyLabel, copySaid, copyToClipboard } from "../src/lib/copy.ts";
 import { LEDGER, verbOf } from "../src/lib/ledger.ts";
 import { TERMS } from "../src/lib/terms.ts";
@@ -253,7 +253,10 @@ describe("SSO auto-entry from an attested badge offer", () => {
     at: "2026-10-14T00:00:00.000Z",
   };
 
-  it("extracts the local-part from the newest email attestation", () => {
+  it("extracts the address and local-part from the newest email attestation", () => {
+    expect(attestedEmail([])).toBeNull();
+    expect(attestedEmail([{ attribute: "repo:acme/app", verifiedVia: "github", at: "now" }])).toBeNull();
+    expect(attestedEmail([proxyAttestation])).toBe("alice@acme.example");
     expect(attestedEmailLocalPart([])).toBeNull();
     expect(attestedEmailLocalPart([{ attribute: "repo:acme/app", verifiedVia: "github", at: "now" }])).toBeNull();
     expect(attestedEmailLocalPart([proxyAttestation])).toBe("alice");

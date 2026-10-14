@@ -10,6 +10,7 @@ import type { Actor, Attestation, AttestOffer } from "@isocan/core";
 // ordering from its static import of the door.
 import "../src/stores/canvasStore.ts";
 import { VerifyPanel } from "../src/components/VerifyDialog.tsx";
+import { attesterOffer } from "../src/lib/signin.ts";
 
 /**
  * **The words on the first machine** (multi-identity phase 4).
@@ -162,5 +163,41 @@ describe("the identity menu's entry", () => {
     expect(html).toMatch(
       /<button [^>]*class="context-item identity-action"[^>]*>(?:(?!<\/button>).)*Prove your address…<span class="share-link-note">So your other machines/,
     );
+  });
+
+  it("replaces the You section and Leave button with a read-only email line on an SSO home", async () => {
+    const realFetch = globalThis.fetch;
+    const prevDoc = (globalThis as { document?: unknown }).document;
+    try {
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            attesters: ["email"],
+            auth: null,
+            attestations: [
+              { attribute: "email:kenny@example.com", verifiedVia: "proxy", at: "2026-10-14T00:00:00.000Z" },
+            ],
+            resumable: [],
+          } satisfies AttestOffer),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        )) as typeof fetch;
+      await attesterOffer(true);
+      (globalThis as { document?: unknown }).document = {
+        documentElement: { dataset: { sso: "true" } },
+      };
+
+      const html = renderToStaticMarkup(
+        h(IdentityMenu, { actor: kenny, canvasId: null, onIdentity: () => {}, onClose: () => {} }),
+      );
+      expect(html).toContain('<div class="share-link-note">kenny@example.com</div>');
+      expect(html).not.toContain("Prove your address…");
+      expect(html).not.toContain("Your surfaces…");
+      expect(html).not.toContain('<div class="identity-menu-head">You</div>');
+      expect(html).not.toContain("Leave — enter as someone else");
+    } finally {
+      globalThis.fetch = realFetch;
+      if (prevDoc === undefined) delete (globalThis as { document?: unknown }).document;
+      else (globalThis as { document?: unknown }).document = prevDoc;
+    }
   });
 });

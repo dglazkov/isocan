@@ -91,20 +91,29 @@ export async function adoptIdentity(actor: Actor): Promise<Actor> {
 }
 
 /**
+ * The newest `email:<local>@<domain>` address on this badge without its
+ * `email:` prefix, or null when the badge carries none.
+ */
+export function attestedEmail(attestations: readonly Attestation[]): string | null {
+  for (let i = attestations.length - 1; i >= 0; i--) {
+    const attr = attestations[i]!.attribute;
+    if (!attr.startsWith("email:")) continue;
+    const address = attr.slice("email:".length).trim();
+    const at = address.indexOf("@");
+    if (at <= 0) continue;
+    if (address.slice(0, at).trim()) return address;
+  }
+  return null;
+}
+
+/**
  * The local-part of the newest `email:<local>@<domain>` attestation on this
  * badge, or null when the badge carries none.
  */
 export function attestedEmailLocalPart(attestations: readonly Attestation[]): string | null {
-  for (let i = attestations.length - 1; i >= 0; i--) {
-    const attr = attestations[i]!.attribute;
-    if (!attr.startsWith("email:")) continue;
-    const address = attr.slice("email:".length);
-    const at = address.indexOf("@");
-    if (at <= 0) continue;
-    const local = address.slice(0, at).trim();
-    if (local) return local;
-  }
-  return null;
+  const address = attestedEmail(attestations);
+  if (!address) return null;
+  return address.slice(0, address.indexOf("@")).trim() || null;
 }
 
 /**

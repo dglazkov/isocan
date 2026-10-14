@@ -3,11 +3,13 @@ import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "rea
 import type { Actor } from "@isocan/core";
 import {
   adoptIdentity,
+  attestedEmail,
   foldIdentity,
   knownIdentities,
   renameIdentity,
   signOut,
 } from "../lib/identity.ts";
+import { isSsoHome } from "../lib/faces.ts";
 import { IDENTITY_COLORS, actorColorIn, loadActorColors, useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
 import { setActorColor, setActorMark } from "../lib/identitycolor.ts";
@@ -150,7 +152,9 @@ export function IdentityMenu({
   // The same gate every control of this project stands behind: the refusal's
   // "Prove your address" is drawn only where the home can verify an email.
   const offer = useAttestOffer();
-  const canProve = offer !== null && canVerifyEmail(offer);
+  const sso = isSsoHome();
+  const ssoEmail = sso && offer ? attestedEmail(offer.attestations) : null;
+  const canProve = !sso && offer !== null && canVerifyEmail(offer);
   const themePref = useTheme((s) => s.pref);
   const setThemePref = useTheme((s) => s.setPref);
   const hiddenChrome = useUiStore((s) => s.hiddenChrome);
@@ -341,6 +345,7 @@ export function IdentityMenu({
           Rename
         </button>
       </form>
+      {ssoEmail && <div className="share-link-note">{ssoEmail}</div>}
       {error && <RefusalNote refusal={error} onProve={canProve ? () => setVerify(true) : null} />}
       {others.length > 0 && (
         <>
@@ -419,23 +424,27 @@ export function IdentityMenu({
         * the cloud, the order a person meets them, and both behind the canvas
         * guard because a pass names exactly one canvas.
         */}
-      <div className="identity-menu-head">You</div>
-      <div className="identity-actions">
-        <Action
-          icon={<AddressMark />}
-          label="Prove your address…"
-          note="So your other machines can be you, and so somebody can invite you by email."
-          title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
-          onClick={() => setVerify(true)}
-        />
-        <Action
-          icon={<SurfacesMark />}
-          label="Your surfaces…"
-          note="Every browser and machine that is you; end one from here."
-          title="Every surface that carries your identity — and end one that should not"
-          onClick={() => setSurfaces(true)}
-        />
-      </div>
+      {!sso && (
+        <>
+          <div className="identity-menu-head">You</div>
+          <div className="identity-actions">
+            <Action
+              icon={<AddressMark />}
+              label="Prove your address…"
+              note="So your other machines can be you, and so somebody can invite you by email."
+              title="Prove an email address — so your other machines can be you, and so somebody can invite you by email"
+              onClick={() => setVerify(true)}
+            />
+            <Action
+              icon={<SurfacesMark />}
+              label="Your surfaces…"
+              note="Every browser and machine that is you; end one from here."
+              title="Every surface that carries your identity — and end one that should not"
+              onClick={() => setSurfaces(true)}
+            />
+          </div>
+        </>
+      )}
       <div className="identity-menu-head">Your agents</div>
       <div className="identity-actions">
         <Action
@@ -603,16 +612,18 @@ export function IdentityMenu({
           </div>
         </>
       )}
-      <button
-        className="btn identity-leave"
-        onClick={() => {
-          signOut();
-          onIdentity(null);
-          onClose(); // don't leave the menu hanging open behind the door
-        }}
-      >
-        Leave — enter as someone else
-      </button>
+      {!sso && (
+        <button
+          className="btn identity-leave"
+          onClick={() => {
+            signOut();
+            onIdentity(null);
+            onClose(); // don't leave the menu hanging open behind the door
+          }}
+        >
+          Leave — enter as someone else
+        </button>
+      )}
     </div>
   );
 }

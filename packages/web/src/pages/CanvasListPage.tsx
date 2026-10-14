@@ -53,6 +53,7 @@ const IdentityMenu = lazy(() => import("../components/IdentityMenu.tsx").then((m
 import { HomeGlyph } from "../components/Glyphs.tsx";
 import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { useActorMarks } from "../lib/marks.ts";
+import { isSsoHome } from "../lib/faces.ts";
 
 const SORT_KEY = "isocan.canvases.sort";
 /** Above this many canvases, the filter and the sort appear. */
@@ -858,7 +859,7 @@ export function CanvasListPage({
         <div className="who" ref={whoRef}>
           <button
             className={`who-btn${identityOpen ? " active" : ""}`}
-            title="You — rename yourself, or enter as someone else"
+            title={isSsoHome() ? "You — rename yourself" : "You — rename yourself, or enter as someone else"}
             onClick={() => setIdentityOpen(!identityOpen)}
           >
             <span className={faceMarkClass(marks, actor)} style={faceMarkStyle(colors, actor)}>
