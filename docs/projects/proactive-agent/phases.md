@@ -54,8 +54,7 @@ inspector), **Delete** (⌫, one undo) that summons the author with
 
 ### Trajectory
 
-- **2026-10-14** — Open: whether the cap of three is per canvas or per
-  source, and whether non-screen proposals draw the same way. Waits on Dion.
+- **2026-10-14** — Decided (Dion): the cap is five, not three ("Cap of three feels a lil small? Maybe 5?"), per agent per canvas, one constant `PROPOSAL_CAP`. Open: whether non-screen proposals draw the same way (phase 1 draws them the same). Waits on Dion.
 
 ## Phase 2 — The night watch
 

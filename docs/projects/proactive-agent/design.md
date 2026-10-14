@@ -77,7 +77,8 @@ Seven rules, the same in every moment, so a person learns them once.
    the canvas's taste note. §3.
 6. **One lead voice, with restraint you can see.** One agent per canvas
    proposes (`proactive=<agent name>` on the canvas, set by the person).
-   It caps itself at three open proposals per canvas, says what it chose
+   It caps itself at five open proposals per canvas (`PROPOSAL_CAP`;
+   Dion, 14 Oct 2026: three felt small), says what it chose
    not to do, and states what it will not touch. A result ends with at most
    three next moves, at different altitudes (this screen, the flow, the
    system). Critics and walkers are guests: their notes are comments the
@@ -101,7 +102,7 @@ the canvas, titled so, pinned into context, editable like any note.
 - The properties: `proposal=sure|hunch`, `proposalCites=<JSON list of
   {kind, ref}>`, `proposalWhy=<text>`; `parent=` from `lineage.ts`. A core
   module `proposal.ts` is the one reading: `proposalMarked`, `proposalsOf`,
-  `proposalRoom(canvas, actorId)` (how many of the three are free).
+  `proposalRoom(canvas, actorId)` (how many of the five are free).
 - Placed beneath the source with the existing anchor placement, never on
   top of anything.
 - Delete is a summons: like a prototype click (`prototype-click.ts`), the
@@ -125,8 +126,8 @@ Delete, and the taste note written by hand-run agents. No triggers yet.
 the diff inspector, lineage, context pins, the prototype-click road.
 
 **Open questions:** whether a proposal for a non-screen item (a note, a
-DESIGN.md) is drawn the same way; whether the cap of three is per canvas or
-per source.
+DESIGN.md) is drawn the same way (phase 1 draws it the same; Dion to
+confirm). The cap is five open proposals per agent per canvas.
 
 ## 4. The night watch
 
@@ -209,7 +210,8 @@ on, with a reason), then the digest of what everyone else did.
 
 **Rules:**
 
-- At most three proposals per morning, whatever the night found.
+- At most five proposals per morning (`PROPOSAL_CAP`), whatever the night
+  found, plus any original the goodnight conversation named for editing.
 - Lower confidence is drawn as a hunch (§2.2).
 - The brief is a comment the agent posted when its work finished; the panel
   finds it by its `record` data, so nothing has to be live at return.
@@ -225,7 +227,7 @@ digest panel.
 **What exists:** `VisitDigest.tsx` and `visitdigest.ts` (phone face only
 today), seen marks, `recap.ts`, `inbox`.
 
-**Open questions:** *Open — waits on Dion:* whether three is the cap or it
+**Open questions:** *Open — waits on Dion:* whether five is the cap or it
 scales with time away; what the morning says when the night found nothing
 (the draft: one line, and the reason).
 
