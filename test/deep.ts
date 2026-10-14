@@ -206,6 +206,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/grid.test.ts", secs: 9.4, why: "a single case that walks once" },
   { file: "packages/cli/test/model.test.ts", secs: 0.4, why: "local-judge phase 0: three short walks of `isocan model` — no daemon, no network; measured 7 October" },
   { file: "packages/cli/test/conditional-edit.test.ts", secs: 2.3, why: "one daemon in process; about fifteen `edit` spawns for the conditional path, each a fraction of a second" },
+  { file: "packages/cli/test/summary.test.ts", secs: 6.7, why: "semantic-zoom phase 4: one in-process daemon with a stub model, a dozen short walks of `isocan summary` and `ls --summaries`; measured 14 October" },
   { file: "packages/cli/test/keys.test.ts", secs: 6.9, why: "keys phase 1: a dozen short walks of `isocan keys` — no daemon knock — plus one in-process daemon for the no-restart proof; measured 2 October" },
   { file: "packages/cli/test/tools.test.ts", secs: 7.7, why: "three cases sharing one daemon" },
   { file: "packages/cli/test/panels.test.ts", secs: 9.3, why: "three cases, the tools file's shape; 18 September, and NOT measured on the run that built this list — it is 16.4s on the machine where tools.test.ts is 13.6s, scaled by that anchor to the 7.7 recorded there. The closest file to the line after correspondence, so it is one to re-measure rather than trust" },

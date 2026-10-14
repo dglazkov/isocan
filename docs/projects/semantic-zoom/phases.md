@@ -9,7 +9,7 @@ note: "the walk: a bench that judges summaries before any ship, text nodes behin
 
 **13 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run. Phases 1–2 (long notes, groups and areas, behind the experiment) are CLOSED on a stub model; next is phase 3, freshness and cost.**
+**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run. Phases 1–4 (long notes, groups and areas, freshness and cost, the terminal) are CLOSED on a stub model. Next: 3b (looking at pictures) and 5 (evidence); both need a text key at the home to be proved for real, as does the bench.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -97,7 +97,7 @@ an excluded member.
 
 ## Phase 3 — Freshness and cost
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** A per-canvas budget of 60 makes an hour (`ISOCAN_SUMMARY_PER_HOUR`), answered over it with a 429 `summary-budget` and `retryAfterMs`; nothing is called and stale summaries keep showing. Eviction takes what nobody can reach first (a key no longer current and not the stale summary on screen; a deleted or excluded source), then least-recently-read. `SummaryLedger` keeps a cost record per canvas per UTC day (calls, tokens, model, kind, makes, hits, stale reads, refusals; 90 days) at `GET …/summaries/stats`, editors only. Server tests on a stub: forty notes make 40 calls once and 0 on a reload; ten edits in a minute make 1; over budget, 0 calls and the stale summary shows; eviction order; the stats add up. Deep suite 822 files, the one failure a bookkeeping list, fixed and re-run.
 
 **Outcome:** the per-canvas hourly budget; eviction; nearest-first ordering;
 a cost record (calls, tokens, per canvas per day) that `isocan summary --stats`
@@ -106,6 +106,14 @@ prints.
 **Proof:** a forty-note fixture seen whole makes forty calls once and zero on
 a reload; ten edits in a minute make one call; over the budget, nothing is
 called and stale summaries keep showing.
+
+### Trajectory
+
+- **2026-10-14** — The budget is checked after owner-only and no-key and before the badge's rate, so a canvas refusal spends none of the badge's minute. The web pauses 60 s on it and wakes on its own; the rate-limit pause before this only ended when the view moved.
+- **2026-10-14** — "Unreachable" is not "not current": the newest entry for a source whose current key has none yet is the stale summary on screen, and is kept.
+- **2026-10-14** — Tokens come from the provider's own `usage`, read from a cloned response inside `TextModel.write`; core's generators are unchanged. A forty-note canvas takes about two minutes on one badge, because of `/api/text`'s 30 a minute, not the budget.
+- **2026-10-14** — The cache's first load of a canvas raced since phase 1 (concurrent makes each built their own index); the forty-note test found it, and the load promise is now kept.
+- **2026-10-14** — Open: the hour is held in memory, so a restarted home starts it fresh; every viewer read that hits writes the ledger once.
 
 ## Phase 3b — Looking at pictures
 
@@ -126,13 +134,19 @@ column for the fixture's screens before this ships.
 
 ## Phase 4 — The terminal
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** `isocan summary <item|group|area>` reports current, stale (with its age), short, excluded or missing, computing the content key from core over the snapshot the CLI already reads; `--refresh` uses the web's make route and prints the quiet period and the hourly budget as answers (exit 0); `--stats` prints the cost record; `ls --summaries` adds a column and never makes. The agent guide says summaries are approximate and an agent reads the words before acting. `summary.test.ts` (scratch daemon, stub model, `perHour: 2`): every state, `ls` making nothing, refresh while quiet and over budget, a group, a view-only identity refused `--refresh` and `--stats`.
 
 **Outcome:** `isocan summary`, `--refresh`, `ls --summaries`, the agent-guide
 paragraph.
 
 **Proof:** CLI tests against a scratch daemon with the stub; `surface.test.ts`
 names the new verb and flag.
+
+### Trajectory
+
+- **2026-10-14** — `current` after a make is the proof that the terminal's key matches the home's. `ls --summaries` is witnessed making nothing: a short note stays `missing`, where any make would cache it as `short`.
+- **2026-10-14** — The CLI's summary code is a static import, and `routes.ts` spells the route path itself: every lazy shape split core's shared chunk and cost `isocan --version` a module past its budget (40 → 41/42). Semantic Zoom adds about 10 KB to every command and no module.
+- **2026-10-14** — Open: `ApiError` drops bodies, so the terminal cannot show the budget's `retryAfterMs`; it points at `--stats`.
 
 ## Phase 5 — Evidence
 

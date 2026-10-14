@@ -7,11 +7,12 @@ import { CLAUDE_TEXT_MODEL } from "@isocan/core/jev";
 import { TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import { writeKey } from "@isocan/core/keystore";
 import {
-  SEMANTIC_ZOOM_PROMPT_VERSION, summariesRoute, summaryKey, summaryMembers, SUMMARY_EXCLUDED, SUMMARY_MODEL, SUMMARY_NO_SOURCE, SUMMARY_QUIET, SUMMARY_SYSTEM, textSummaryKey,
-  type SummaryEntry, type SummaryRead,
+  SEMANTIC_ZOOM_PROMPT_VERSION, summariesRoute, summaryKey, summaryMembers, summaryStatsRoute, SUMMARY_EXCLUDED, SUMMARY_MODEL, SUMMARY_NO_SOURCE, SUMMARY_OVER_BUDGET, SUMMARY_QUIET,
+  SUMMARY_SYSTEM, textSummaryKey, type SummaryEntry, type SummaryRead, type SummaryStats, type SummaryTally,
 } from "@isocan/core/semantic-zoom";
 import { TEXT_ROUTE } from "@isocan/core/text";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
+import type { SummaryOptions } from "../src/summaries.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 /**
@@ -58,10 +59,12 @@ afterEach(async () => {
   }
 });
 
+/** What each fake answer says it cost, as Claude says it. */
+const USAGE = { input_tokens: 120, output_tokens: 18 };
 const claudeSays = (value: unknown) =>
-  new Response(JSON.stringify({ id: "msg_acme", type: "message", role: "assistant", model: SUMMARY_MODEL, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(value) }] }), { status: 200 });
+  new Response(JSON.stringify({ id: "msg_acme", type: "message", role: "assistant", model: SUMMARY_MODEL, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(value) }], usage: USAGE }), { status: 200 });
 
-async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response>; legacy?: boolean } = {}): Promise<Rig> {
+async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response>; legacy?: boolean; summaries?: SummaryOptions } = {}): Promise<Rig> {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-summaries-"));
   const calls: Call[] = [];
   const clock = { now: Date.now() };
@@ -75,8 +78,9 @@ async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response>
   }
   const daemon = await startDaemon({
     port: 0, home, auth: null, contentPort: "off", birthHome: null,
-    text: opts.storedKey ? { fetch: fake } : { key: () => KEY, fetch: fake },
-    summaries: { now: () => clock.now },
+    // The badge's minute runs on the test's clock too, so a test can step past it.
+    text: opts.storedKey ? { fetch: fake, now: () => clock.now } : { key: () => KEY, fetch: fake, now: () => clock.now },
+    summaries: { now: () => clock.now, ...opts.summaries },
   });
   const address = daemon.app.server.address();
   const base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
@@ -430,5 +434,202 @@ describe("groups and areas (phase 2)", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ short: true, summary: null, sourceIds: ["itm_empty"] });
     expect(r.calls).toHaveLength(0);
+  });
+});
+
+/** A new version of a note with these words; the clock is NOT moved, so it has just changed. */
+async function edit(r: Rig, itemId: string, n: number, words: string): Promise<void> {
+  const blob = await r.daemon.store.putBlob(CANVAS, Buffer.from(words), { mimeType: "text/markdown", filename: "note.md" });
+  const res = await op(r.base, r.owner, { type: "item.addVersion", itemId, version: { id: `ver_${itemId}_${n}`, blobHash: blob.blobHash, mimeType: "text/markdown", filename: "note.md", size: Buffer.byteLength(words) } });
+  expect(res.ok, await res.clone().text()).toBe(true);
+}
+
+const stats = async (r: Rig, badge: TestBadge, days?: number) => {
+  const res = await fetch(`${r.base}${summaryStatsRoute(CANVAS)}${days ? `?days=${days}` : ""}`, { headers: badge.headers });
+  expect(res.status, await res.clone().text()).toBe(200);
+  return (await res.json()) as SummaryStats;
+};
+
+const sum = (tallies: Array<Partial<SummaryTally> | undefined>, field: keyof SummaryTally) => tallies.reduce((n, t) => n + (t?.[field] ?? 0), 0);
+
+describe("freshness and cost (phase 3)", () => {
+  it("a forty-note canvas seen whole makes forty calls once, and none on a reload", async () => {
+    const r = await rig();
+    const ids = Array.from({ length: 40 }, (_, n) => `itm_note_${String(n).padStart(2, "0")}`);
+    for (const [n, id] of ids.entries()) await note(r, id, LONG.replace("Acme launch notes", `Acme notes ${n}`));
+    const keys = await Promise.all(ids.map(async (id) => textSummaryKey(await itemOf(r, id))));
+    expect(await read(r, r.owner, keys, ids)).toEqual({});
+
+    // The first sight: every note asked for. The badge's 30 a minute holds the last ten until the minute turns.
+    const first = await Promise.all(ids.map((id) => make(r, r.owner, id)));
+    expect(first.filter((res) => res.status === 200)).toHaveLength(30);
+    expect(first.filter((res) => res.status === 429)).toHaveLength(10);
+    r.clock.now += 61_000;
+    for (const [n, res] of first.entries()) if (res.status === 429) expect((await make(r, r.owner, ids[n]!)).status).toBe(200);
+    expect(r.calls).toHaveLength(40);
+
+    // A reload: one read answers all forty, and asking again makes nothing.
+    const again = await read(r, r.owner, keys, ids);
+    expect(Object.keys(again)).toHaveLength(40);
+    expect(Object.values(again).every((entry) => entry.summary === SUMMARY && !entry.stale)).toBe(true);
+    for (const id of ids) expect((await make(r, r.owner, id)).status).toBe(200);
+    expect(r.calls).toHaveLength(40);
+    const day = (await stats(r, r.owner)).days[0]!;
+    expect(day).toMatchObject({ calls: 40, makes: 40, hits: 80 });
+  });
+
+  it("ten edits in a minute make one call, once the note has gone quiet", async () => {
+    const r = await rig();
+    await note(r, "itm_long", LONG);
+    for (let n = 2; n <= 11; n++) {
+      await edit(r, "itm_long", n, `${LONG}\nEdit ${n}.`);
+      r.clock.now = Date.now() + 5_000;
+      const early = await make(r, r.owner, "itm_long");
+      expect(early.status).toBe(202);
+      expect(await early.json()).toMatchObject({ code: SUMMARY_QUIET });
+    }
+    expect(r.calls).toHaveLength(0);
+    r.clock.now = Date.now() + 31_000;
+    expect((await make(r, r.owner, "itm_long")).status).toBe(200);
+    expect(r.calls).toHaveLength(1);
+    expect(JSON.stringify(r.calls[0]!.body.messages)).toContain("Edit 11.");
+  });
+
+  it("over the canvas's hourly budget nothing is called, stale summaries keep showing, missing ones fall back, and the hour turning opens it again", async () => {
+    const r = await rig({ summaries: { perHour: 2 } });
+    await note(r, "itm_a", LONG);
+    await note(r, "itm_b", LONG.replace("Acme launch", "Acme retro"));
+    await note(r, "itm_c", LONG.replace("Acme launch", "Acme hiring"));
+    expect((await make(r, r.owner, "itm_a")).status).toBe(200);
+    expect((await make(r, r.owner, "itm_b")).status).toBe(200);
+    expect(r.calls).toHaveLength(2);
+    const oldKey = await textSummaryKey(await itemOf(r, "itm_a"));
+
+    await edit(r, "itm_a", 2, `${LONG}\nRavi adds a line.`);
+    r.clock.now = Date.now() + 31_000;
+    const newKey = await textSummaryKey(await itemOf(r, "itm_a"));
+    for (const id of ["itm_a", "itm_c"]) {
+      const refused = await make(r, r.owner, id);
+      expect(refused.status, id).toBe(429);
+      const said = (await refused.json()) as { code: string; retryAfterMs: number };
+      expect(said.code).toBe(SUMMARY_OVER_BUDGET);
+      expect(said.retryAfterMs).toBeGreaterThan(0);
+    }
+    expect(r.calls).toHaveLength(2);
+    // The edited note keeps its old summary, marked stale; the never-made one has nothing, so the reader falls back to its opening words.
+    const cKey = await textSummaryKey(await itemOf(r, "itm_c"));
+    const shown = await read(r, r.owner, [newKey, cKey], ["itm_a", "itm_c"]);
+    expect(shown[newKey]).toMatchObject({ key: oldKey, summary: SUMMARY, stale: true });
+    expect(shown[cKey]).toBeUndefined();
+    // A refusal for the canvas spent none of the badge's rate, and a cached answer is no call: both still answer.
+    expect((await make(r, r.owner, "itm_b")).status).toBe(200);
+
+    const before = await stats(r, r.owner);
+    expect(before.budget).toMatchObject({ perHour: 2, usedThisHour: 2 });
+    expect(before.days[0]).toMatchObject({ calls: 2, overBudget: 2, stale: 1 });
+
+    r.clock.now += 3_600_000;
+    expect((await make(r, r.owner, "itm_a")).status).toBe(200);
+    expect(r.calls).toHaveLength(3);
+  });
+
+  it("evicts what nobody can reach before what nobody has read lately, keeping the bound", async () => {
+    const r = await rig({ summaries: { maxEntries: 3 } });
+    // The clock only moves forward, a second a step, and always past every note's quiet period.
+    const tick = () => (r.clock.now = Math.max(r.clock.now + 1_000, Date.now() + 31_000));
+    const keyOf = async (id: string) => textSummaryKey(await itemOf(r, id));
+    const file = (key: string) => path.join(r.home, "summaries", CANVAS, `${key}.json`);
+    const fresh = async (id: string) => {
+      const at = r.clock.now;
+      await note(r, id, LONG.replace("Acme launch", `Acme ${id}`));
+      r.clock.now = at;
+      tick();
+    };
+    for (const id of ["itm_a", "itm_b", "itm_c"]) await fresh(id);
+    for (const id of ["itm_a", "itm_b", "itm_c"]) {
+      tick();
+      expect((await make(r, r.owner, id)).status).toBe(200);
+    }
+    const [a1, b, c] = [await keyOf("itm_a"), await keyOf("itm_b"), await keyOf("itm_c")];
+    // A's first summary is the most recently read of the three.
+    tick();
+    expect(await read(r, r.owner, [a1])).toHaveProperty(a1);
+
+    // A is edited and summarised again: four entries, one over. A's first is no longer anybody's current key, so it goes, though it was read last.
+    await edit(r, "itm_a", 2, `${LONG}\nA second version.`);
+    tick();
+    expect((await make(r, r.owner, "itm_a")).status).toBe(200);
+    const a2 = await keyOf("itm_a");
+    expect([a1, a2, b, c].map((key) => existsSync(file(key)))).toEqual([false, true, true, true]);
+
+    // A fourth note: everything left is reachable, so the least recently read goes — B, made before C and read since by nobody.
+    await fresh("itm_d");
+    expect((await make(r, r.owner, "itm_d")).status).toBe(200);
+    const d = await keyOf("itm_d");
+    expect([a2, b, c, d].map((key) => existsSync(file(key)))).toEqual([true, false, true, true]);
+
+    // A deleted note's summary is nobody's to reach: it goes before C, read longer ago than it.
+    tick();
+    expect(await read(r, r.owner, [d])).toHaveProperty(d);
+    expect((await op(r.base, r.owner, { type: "item.delete", itemId: "itm_d" })).ok).toBe(true);
+    await fresh("itm_e");
+    expect((await make(r, r.owner, "itm_e")).status).toBe(200);
+    expect([a2, c, d, await keyOf("itm_e")].map((key) => existsSync(file(key)))).toEqual([true, true, false, true]);
+    expect((await stats(r, r.owner)).entries).toEqual({ held: 3, max: 3 });
+  });
+
+  it("keeps a cost record per day whose numbers add up, read by editors and never by a viewer", async () => {
+    let answer = 0;
+    // Every third answer breaks the answer rule: a call paid for and not kept.
+    const r = await rig({ legacy: true, answer: async () => claudeSays({ summary: ++answer % 3 === 0 ? "Here is a summary:\n- one" : SUMMARY }) });
+    const day1 = Date.parse("2026-10-14T09:00:00Z");
+    await note(r, "itm_a", LONG);
+    await note(r, "itm_b", LONG.replace("Acme launch", "Acme retro"));
+    await area(r, "itm_doing", "Doing", 2_000);
+    await card(r, "itm_safari", "Safari crash", "Ana is on the Acme Safari crash.", 2_100, 100);
+    r.clock.now = Math.max(day1, Date.now() + 31_000);
+    const firstDay = new Date(r.clock.now).toISOString().slice(0, 10);
+    expect((await make(r, r.owner, "itm_a")).status).toBe(200);
+    expect((await make(r, r.owner, "itm_b")).status).toBe(200);
+    expect((await make(r, r.owner, "itm_doing", "area")).status).toBe(502);
+    expect((await make(r, r.owner, "itm_a")).status).toBe(200);
+    const keys = [await textSummaryKey(await itemOf(r, "itm_a")), await textSummaryKey(await itemOf(r, "itm_b"))];
+    expect(Object.keys(await read(r, r.owner, keys))).toHaveLength(2);
+
+    // The next day: the area again, and one more read.
+    r.clock.now += 86_400_000;
+    const secondDay = new Date(r.clock.now).toISOString().slice(0, 10);
+    expect((await make(r, r.owner, "itm_doing", "area")).status).toBe(200);
+    expect(Object.keys(await read(r, r.owner, keys.slice(0, 1)))).toHaveLength(1);
+    expect(r.calls).toHaveLength(4);
+
+    const got = await stats(r, r.owner);
+    expect(got.days.map((day) => day.day)).toEqual([secondDay, firstDay]);
+    const [second, first] = got.days as [SummaryStats["days"][number], SummaryStats["days"][number]];
+    expect(first).toMatchObject({ calls: 3, makes: 2, hits: 3, inputTokens: 360, outputTokens: 54 });
+    expect(first.byKind).toEqual({
+      text: { calls: 2, makes: 2, hits: 3, inputTokens: 240, outputTokens: 36 },
+      area: { calls: 1, makes: 0, hits: 0, inputTokens: 120, outputTokens: 18 },
+    });
+    expect(first.byModel).toEqual({ [SUMMARY_MODEL]: { calls: 3, inputTokens: 360, outputTokens: 54 } });
+    expect(second).toMatchObject({ calls: 1, makes: 1, hits: 1 });
+    // Every split adds up to its day, and the days to the total.
+    for (const day of got.days) {
+      for (const field of ["calls", "makes", "hits", "inputTokens", "outputTokens"] as const) expect(sum(Object.values(day.byKind), field), `${day.day} ${field}`).toBe(day[field]);
+      for (const field of ["calls", "inputTokens", "outputTokens"] as const) expect(sum(Object.values(day.byModel), field)).toBe(day[field]);
+    }
+    for (const field of ["calls", "makes", "hits", "inputTokens", "outputTokens"] as const) expect(got.total[field]).toBe(sum(got.days, field));
+    expect(got.total).toMatchObject({ calls: 4, makes: 3, hits: 4, inputTokens: 480, outputTokens: 72 });
+    expect(got.total.byModel[SUMMARY_MODEL]).toEqual({ calls: 4, inputTokens: 480, outputTokens: 72 });
+    expect((await stats(r, r.owner, 1)).days.map((day) => day.day)).toEqual([secondDay]);
+
+    // The record is a file at the home, and survives the route: a fresh read of it says the same.
+    const onDisk = JSON.parse(await fsp.readFile(path.join(r.home, "summaries", `${CANVAS}.stats.json`), "utf8")) as { days: Record<string, unknown> };
+    expect(Object.keys(onDisk.days).sort()).toEqual([firstDay, secondDay]);
+
+    const visitor = await viewer(r);
+    const refused = await fetch(`${r.base}${summaryStatsRoute(CANVAS)}`, { headers: visitor.headers });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "view-only" });
   });
 });

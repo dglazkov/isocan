@@ -2,6 +2,7 @@ import { classifyAutomaticSource } from "@isocan/api/context";
 import { contextPinPort, pinFromSource } from "@isocan/api";
 import { registerPersonalContext } from "./personal-context.ts";
 import { noteOnBench, registerBench } from "./bench.ts";
+import { summaryColumn, summaryReport, summaryStatsReport } from "./summary.ts";
 import { registerKeys } from "./keys.ts";
 import { registerModel } from "./model.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
@@ -7227,8 +7228,9 @@ program
   .option("--reaction <emoji>", "only items wearing this mark")
   .option("--in <group>", "direct group members; legacy areas use item centres")
   .option("--recursive", "with --in, include every explicit descendant")
+  .option("--summaries", "add a column with each text node's, group's and area's Semantic Zoom summary, where one is cached (≈, approximate; never makes one)")
   .action(
-    run(async (opts: { kind?: string; filter?: string; reaction?: string; in?: string; recursive?: boolean }, cmd: Command) => {
+    run(async (opts: { kind?: string; filter?: string; reaction?: string; in?: string; recursive?: boolean; summaries?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "surveying the canvas…" });
@@ -7256,7 +7258,11 @@ program
           (current?.filename ?? "").toLowerCase().includes(needle)
         );
       });
-      if (ctx.json) return printJson(items.map((item) => ({ ...item, kind: itemKind(item) })));
+      // `--summaries` reads what is cached and never asks for one to be made (semantic zoom phase 4).
+      const summaries = opts.summaries ? await summaryColumn(ctx, p.id, snapshot.canvas, items) : null;
+      if (ctx.json) {
+        return printJson(items.map((item) => ({ ...item, kind: itemKind(item), ...(summaries ? { summary: summaries.get(item.id)?.json ?? null } : {}) })));
+      }
       printTable(
         items.map((i) => ({
           id: i.id,
@@ -7271,8 +7277,46 @@ program
           size: `${i.width}x${i.height}`,
           vers: String(i.versions.length),
           "updated by": actorNameIn(snapshot.names, i.updatedBy),
+          ...(summaries ? { summary: truncate(summaries.get(i.id)?.text ?? "", 48) } : {}),
         })),
       );
+    }),
+  );
+
+/**
+ * **`isocan summary`** — Semantic Zoom's summary of a text node, a group or
+ * an area, and whether it is current (design §8, phase 4). The body is
+ * `summary.ts`, loaded only when this runs.
+ */
+program
+  .command("summary [item]")
+  .description("A text node's, group's or area's Semantic Zoom summary (≈, approximate) and whether it is current, stale, short, excluded or missing")
+  .option("--refresh", "ask the home to make one, under the same rules as the app: edit access, the key's own spend rules, rate, the canvas's hourly budget, and a quiet period after a change")
+  .option("--stats", "what this canvas's summaries have cost: calls, tokens, the hour's budget, the cache (editors only)")
+  .option("--days <n>", "with --stats: how many days back (default 30, at most 90)")
+  .action(
+    run(async (ref: string | undefined, opts: { refresh?: boolean; stats?: boolean; days?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.stats) {
+        if (ref !== undefined || opts.refresh) throw new Error("--stats is about the whole canvas: drop the item and --refresh");
+        const days = opts.days === undefined ? undefined : Number(opts.days);
+        if (days !== undefined && !(Number.isInteger(days) && days > 0)) throw new Error(`--days wants a whole number of days, got: ${opts.days}`);
+        const p = await resolveCanvas(ctx);
+        const report = await summaryStatsReport(ctx, p.id, days);
+        if (ctx.json) return printJson(report.json);
+        for (const line of report.lines) console.log(line);
+        return;
+      }
+      if (ref === undefined) throw new Error("which item, group or area? isocan summary <item> — or --stats for the canvas");
+      if (opts.days !== undefined) throw new Error("--days goes with --stats");
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      const report = await summaryReport(ctx, p.id, snapshot.canvas, item, {
+        ...opts,
+        ago: (iso) => { const words = ago(iso, Date.now(), true); return words ? `${words} ago` : "moments ago"; },
+      });
+      if (ctx.json) return printJson(report.json);
+      for (const line of report.lines) console.log(line);
     }),
   );
 

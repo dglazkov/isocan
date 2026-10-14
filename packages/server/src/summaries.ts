@@ -6,15 +6,16 @@ import { atLeast } from "@isocan/core";
 import { ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import type { CanvasContents, Item } from "@isocan/core";
 import {
-  checkSummary, semanticZoomPrompt, SEMANTIC_ZOOM_PROMPT_VERSION, summarisableText, summariesRoute, summaryKey, summaryMemberKind, summaryMembers, summaryReadsWords,
-  SUMMARY_BAD_ANSWER, SUMMARY_EXCLUDED, SUMMARY_MIN_WORDS, SUMMARY_MODEL, SUMMARY_NO_SOURCE, SUMMARY_QUIET, SUMMARY_QUIET_MS, SUMMARY_SCHEMA, SUMMARY_SYSTEM,
-  textSummaryKey, wordCount, type SummaryEntry, type SummaryMake, type SummaryMember, type SummaryRead,
+  checkSummary, semanticZoomPrompt, SEMANTIC_ZOOM_PROMPT_VERSION, summarisableText, summariesRoute, summaryKey, summaryMemberKind, summaryMembers, summaryReadsWords, summaryStatsRoute,
+  SUMMARY_BAD_ANSWER, SUMMARY_EXCLUDED, SUMMARY_MIN_WORDS, SUMMARY_MODEL, SUMMARY_NO_SOURCE, SUMMARY_OVER_BUDGET, SUMMARY_QUIET, SUMMARY_QUIET_MS, SUMMARY_SCHEMA, SUMMARY_SYSTEM,
+  textSummaryKey, wordCount, type SummaryEntry, type SummaryMake, type SummaryMember, type SummaryRead, type SummaryStats,
 } from "@isocan/core/semantic-zoom";
 import { TEXT_MAX_BYTES, TEXT_RATE_LIMITED, TEXT_UNAVAILABLE } from "@isocan/core/text";
 import type { Engine } from "./engine.ts";
 import { capabilityIn, type ViewOnlyError } from "./grants.ts";
 import type { HomeLinks } from "./home-links.ts";
 import type { Store } from "./store.ts";
+import { SummaryLedger } from "./summary-ledger.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
 import type { TextModel } from "./text.ts";
 
@@ -47,6 +48,13 @@ import type { TextModel } from "./text.ts";
  * A source changed in the last 30 s is not summarised yet (202,
  * `summary-quiet`, with how long to wait); one make per key is in flight at a time, and a second
  * request for the same key waits for the first and spends nothing.
+ *
+ * Since phase 3, a canvas has a budget — 60 model calls an hour across
+ * everyone, beyond the badge's rate; over it a make is a 429
+ * (`summary-budget`) and nothing is asked, while reads keep answering, stale
+ * included — and a cost record per day (`summary-ledger.ts`), read by the
+ * canvas's editors at `GET …/summaries/stats`. The cache evicts what nobody
+ * can reach before what nobody has read lately.
  */
 
 /** How the summaries are configured: every field has a production default; the fields exist so a test can hold a clock and a small bound. */
@@ -57,10 +65,17 @@ export interface SummaryOptions {
   model?: () => string | undefined;
   /** Entries kept per canvas before the least recently read is evicted. Default 2,000. */
   maxEntries?: number;
+  /** Model calls per canvas per rolling hour, across everyone. Default `ISOCAN_SUMMARY_PER_HOUR`, else 60. */
+  perHour?: number;
   now?: () => number;
 }
 
 const MAX_ENTRIES = 2_000;
+/** A canvas's summaries an hour, across everyone (design §6). */
+const PER_HOUR = 60;
+/** The stats route's span: a month by default, a quarter at most (what the ledger keeps). */
+const STATS_DAYS = 30;
+const STATS_MAX_DAYS = 90;
 /** At most this many keys in one read: a settled viewport asks about what is on screen, not the whole canvas. */
 const MAX_KEYS = 200;
 /** The words a prompt may carry, under `/api/text`'s request bound with room for the instruction. */
@@ -68,6 +83,7 @@ const MAX_SOURCE_BYTES = TEXT_MAX_BYTES - 4_096;
 const KEY = /^[0-9a-f]{64}$/;
 
 interface Indexed {
+  kind: SummaryEntry["kind"];
   sourceIds: string[];
   madeAt: string;
   /** Last read or written, for least-recently-read eviction. */
@@ -75,32 +91,47 @@ interface Indexed {
 }
 
 /**
- * **The cache, one directory per canvas.** An in-memory index (key → source
- * ids, when made, when last read) is loaded from the directory the first time
- * a canvas is touched, so a stale lookup by source and an eviction need no
- * scan; the files are the truth and survive a restart.
+ * The current key of each source still on the canvas (by its id): what a
+ * reader would ask about now. A source gone, or now excluded, is absent.
+ */
+type Current = (canvasId: string, sources: Map<string, SummaryEntry["kind"]>) => Promise<Map<string, string>>;
+
+/**
+ * **The cache, one directory per canvas.** An in-memory index (key → kind,
+ * source ids, when made, when last read) is loaded from the directory the
+ * first time a canvas is touched, so a stale lookup by source and an eviction
+ * need no scan; the files are the truth and survive a restart.
  */
 class SummaryCache {
-  private readonly index = new Map<string, Map<string, Indexed>>();
+  /** The load promise, not the map, so two first touches at once share one index instead of each filling its own. */
+  private readonly index = new Map<string, Promise<Map<string, Indexed>>>();
 
-  constructor(private readonly root: string, private readonly max: number, private readonly now: () => number) {}
+  constructor(private readonly root: string, private readonly max: number, private readonly now: () => number, private readonly current: Current) {}
+
+  /** How many entries a canvas holds now. */
+  async size(canvasId: string): Promise<number> {
+    return (await this.load(canvasId)).size;
+  }
 
   private dir(canvasId: string): string {
     return path.join(this.root, encodeURIComponent(canvasId));
   }
 
-  private async load(canvasId: string): Promise<Map<string, Indexed>> {
-    const held = this.index.get(canvasId);
-    if (held) return held;
+  private load(canvasId: string): Promise<Map<string, Indexed>> {
+    let held = this.index.get(canvasId);
+    if (!held) this.index.set(canvasId, (held = this.read(canvasId)));
+    return held;
+  }
+
+  private async read(canvasId: string): Promise<Map<string, Indexed>> {
     const fresh = new Map<string, Indexed>();
     const names = await fs.readdir(this.dir(canvasId)).catch(() => [] as string[]);
     for (const name of names) {
       if (!name.endsWith(".json")) continue;
       const full = path.join(this.dir(canvasId), name);
       const [entry, stat] = await Promise.all([this.file(full), fs.stat(full).catch(() => null)]);
-      if (entry) fresh.set(entry.key, { sourceIds: entry.sourceIds, madeAt: entry.madeAt, touched: stat?.mtimeMs ?? 0 });
+      if (entry) fresh.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, touched: stat?.mtimeMs ?? 0 });
     }
-    this.index.set(canvasId, fresh);
     return fresh;
   }
 
@@ -142,7 +173,15 @@ class SummaryCache {
     return best ? this.get(canvasId, best[0]) : null;
   }
 
-  /** Keep one, and evict the least recently read beyond the bound. */
+  /**
+   * Keep one, and beyond the bound evict (design §5): first what nobody can
+   * reach, then the least recently read. An entry is reachable when its key
+   * is its source's current key, or when it is the newest for a source whose
+   * current key has no entry yet — the stale summary a reader is shown while
+   * the new content waits. Everything else — an old version's, a source
+   * deleted or now excluded, a container whose members moved on — is
+   * unreachable, however recently somebody read it.
+   */
   async put(canvasId: string, entry: SummaryEntry): Promise<void> {
     const index = await this.load(canvasId);
     await fs.mkdir(this.dir(canvasId), { recursive: true });
@@ -150,9 +189,28 @@ class SummaryCache {
     const temp = `${full}.${process.pid}.${this.now()}.tmp`;
     await fs.writeFile(temp, JSON.stringify(entry));
     await fs.rename(temp, full);
-    index.set(entry.key, { sourceIds: entry.sourceIds, madeAt: entry.madeAt, touched: this.now() });
+    index.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, touched: this.now() });
     if (index.size <= this.max) return;
-    const oldest = [...index].sort((a, b) => a[1].touched - b[1].touched).slice(0, index.size - this.max);
+    const sources = new Map<string, SummaryEntry["kind"]>();
+    const newest = new Map<string, [string, Indexed]>();
+    for (const row of index) {
+      const source = row[1].sourceIds[0]!;
+      sources.set(source, row[1].kind);
+      const best = newest.get(source);
+      if (!best || row[1].madeAt > best[1].madeAt) newest.set(source, row);
+    }
+    const current = await this.current(canvasId, sources);
+    const unreachable = (key: string, row: Indexed): boolean => {
+      const source = row.sourceIds[0]!;
+      const now = current.get(source);
+      if (now === undefined) return true;
+      return key !== now && (index.has(now) || newest.get(source)?.[0] !== key);
+    };
+    const ranked = [...index].map((row) => ({ row, gone: unreachable(...row) }));
+    const oldest = ranked
+      .sort((a, b) => Number(b.gone) - Number(a.gone) || a.row[1].touched - b.row[1].touched)
+      .slice(0, index.size - this.max)
+      .map(({ row }) => row);
     for (const [key] of oldest) {
       index.delete(key);
       await fs.rm(path.join(this.dir(canvasId), `${key}.json`), { force: true });
@@ -221,7 +279,25 @@ interface Plan {
 export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteScope): void {
   const { engine, store, homes, refusals, admit, viewOnly, textModel, notTheOwners, keyOwner, options } = scope;
   const now = options.now ?? Date.now;
-  const cache = new SummaryCache(path.join(scope.home, "summaries"), options.maxEntries ?? MAX_ENTRIES, now);
+  const maxEntries = options.maxEntries ?? MAX_ENTRIES;
+  /** Each source's current key, from the canvas as it is now: what eviction keeps. */
+  const current: Current = async (canvasId, sources) => {
+    const { canvas } = await engine.getSnapshot(canvasId);
+    const keys = new Map<string, string>();
+    for (const [sourceId, kind] of sources) {
+      if (kind === "text") {
+        const item = summarisableText(canvas, sourceId);
+        if (item && item !== "excluded") keys.set(sourceId, await textSummaryKey(item));
+        continue;
+      }
+      const held = summaryMembers(canvas, kind, sourceId);
+      if (held && held !== "excluded") keys.set(sourceId, await summaryKey(kind, [held.container, ...held.members]));
+    }
+    return keys;
+  };
+  const cache = new SummaryCache(path.join(scope.home, "summaries"), maxEntries, now, current);
+  const perHour = () => options.perHour ?? (Number(process.env.ISOCAN_SUMMARY_PER_HOUR) || PER_HOUR);
+  const ledger = new SummaryLedger(path.join(scope.home, "summaries"), perHour, now);
   const inFlight = new Map<string, Promise<Made>>();
   const quietMs = () => options.quietMs ?? (Number(process.env.ISOCAN_SUMMARY_QUIET_MS) || SUMMARY_QUIET_MS);
   const ask: Parameters<TextModel["write"]>[1] = {
@@ -305,17 +381,46 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     const keys = String(query.keys ?? "").split(",").filter((key) => KEY.test(key)).slice(0, MAX_KEYS);
     const sources = String(query.for ?? "").split(",");
     const summaries: SummaryRead["summaries"] = {};
+    const hits = new Map<SummaryEntry["kind"], number>();
+    let stale = 0;
     for (const [n, key] of keys.entries()) {
       const exact = await cache.get(id, key);
       if (exact) {
         summaries[key] = exact;
+        if (!exact.short) hits.set(exact.kind, (hits.get(exact.kind) ?? 0) + 1);
         continue;
       }
       const sourceId = sources[n];
       const older = sourceId ? await cache.newestFor(id, sourceId) : null;
-      if (older) summaries[key] = { ...older, stale: true };
+      if (older) {
+        summaries[key] = { ...older, stale: true };
+        stale++;
+      }
     }
+    for (const [kind, count] of hits) await ledger.record(id, { what: "hit", kind, count });
+    if (stale) await ledger.record(id, { what: "stale", count: stale });
     return { summaries } satisfies SummaryRead;
+  });
+
+  /**
+   * **`GET …/summaries/stats` — what this canvas's summaries cost.** The
+   * canvas's editors only: a summary says nothing a viewer could not read by
+   * zooming in, but its cost says what somebody's key spent, and on a public
+   * canvas a viewer is anybody. Editors are the people who can cause a
+   * summary, so they are the people who may see what causing one costs.
+   * `?days=N` (default 30, at most 90). A canvas homed elsewhere is answered
+   * by its home, which holds the record.
+   */
+  app.get(summaryStatsRoute(":id"), async (req) => {
+    const { id } = req.params as { id: string };
+    await admit(req, id);
+    if (!atLeast(capabilityIn(req.badge!, id) ?? "edit", "edit")) throw await viewOnly(id);
+    const home = homes?.for(id) ?? null;
+    if (home) return home.personalRequest("GET", req.url);
+    await engine.getSnapshot(id);
+    const asked = Math.floor(Number((req.query as { days?: string }).days));
+    const span = Number.isFinite(asked) && asked > 0 ? Math.min(asked, STATS_MAX_DAYS) : STATS_DAYS;
+    return (await ledger.stats(id, span, { held: await cache.size(id), max: maxEntries })) satisfies SummaryStats;
   });
 
   app.post(route, { bodyLimit: 4096 }, async (req, reply) => {
@@ -339,7 +444,10 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     if ("status" in plan) return reply.status(plan.status).send(plan.body);
     const { key } = plan;
     const cached = await cache.get(id, key);
-    if (cached) return cached;
+    if (cached) {
+      if (!cached.short) await ledger.record(id, { what: "hit", kind: cached.kind });
+      return cached;
+    }
     const quietFor = now() - plan.changedAt;
     if (quietFor < quietMs()) {
       const retryAfterMs = quietMs() - quietFor;
@@ -365,12 +473,24 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
       const refused = source === "file" ? await notTheOwners(req) : null;
       if (refused) return { status: 403, body: { error: ownerOnlySentence(refused.owner), code: TEXT_OWNER_ONLY } };
       if (!source) return { status: 503, body: { error: "this home has no text model — summaries can't be made here", code: TEXT_UNAVAILABLE } };
+      // The canvas's hour before the badge's minute, so a refusal for the canvas spends none of the badge's rate.
+      const retryAfterMs = ledger.overBudget(id);
+      if (retryAfterMs > 0) {
+        await ledger.record(id, { what: "over-budget" });
+        return { status: 429, body: { error: `this canvas has made its ${perHour()} summaries for the hour — the ones it has keep showing`, code: SUMMARY_OVER_BUDGET, retryAfterMs } };
+      }
       if (!textModel.take(req.badge!.badgeId)) return { status: 429, body: { error: "this badge has asked for enough words this minute — wait a moment", code: TEXT_RATE_LIMITED } };
+      ledger.spend(id);
       const written = await textModel.write({ prompt: collected.prompt, schema: SUMMARY_SCHEMA }, ask);
-      if (written.status !== 200) return written;
+      const called = (kept: boolean, model: string) => ledger.record(id, { what: "call", kind: plan.kind, model, kept, ...(written.usage ? { tokens: written.usage } : {}) });
+      if (written.status !== 200) {
+        await called(false, written.model ?? "unknown");
+        return written;
+      }
       const { model, value } = written.body as { model: string; value: { summary?: unknown } | null };
       const summary = typeof value?.summary === "string" ? value.summary.trim() : value?.summary;
       const reasons = checkSummary(summary);
+      await called(reasons.length === 0, model);
       if (reasons.length > 0) return { status: 502, body: { error: `the summary broke the answer rule (${reasons.join(", ")}) and was not kept`, code: SUMMARY_BAD_ANSWER } };
       const entry: SummaryEntry = { ...base, summary: summary as string, words: wordCount(summary as string), model, madeFor: source === "file" ? await keyOwner() : "home" };
       await cache.put(id, entry);

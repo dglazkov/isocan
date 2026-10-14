@@ -7,6 +7,10 @@ import { designRequestsRoute, type DesignRecordOperation, type DesignRequestsRes
 import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core/design-decision";
 import { designRepairsRoute, type DesignRepairsResponse } from "@isocan/core/design-repair";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
+import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "@isocan/core/semantic-zoom";
+
+/** Core's `summariesRoute`, spelled here: see `DaemonRoutes.summaries` for why it is not imported. */
+const summariesPath = (canvasId: string) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 import type {
   Actor,
   ActorBindingRecord,
@@ -1032,6 +1036,45 @@ export class DaemonRoutes {
    */
   homes(): Promise<HomesResponse> {
     return this.request("GET", HOMES_ROUTE);
+  }
+
+  /**
+   * **Semantic Zoom's cached summaries, by content key** (an experiment;
+   * `docs/projects/semantic-zoom/design.md` §5). `sourceIds`, in the keys'
+   * order, lets the home answer a key it has no entry for with the newest
+   * entry for that source, marked `stale`. A read never makes one.
+   *
+   * The path is spelled here rather than imported from core's
+   * `summariesRoute`, on purpose and measured: any runtime import of
+   * `@isocan/core/semantic-zoom` from this file, static or lazy, re-cuts the
+   * CLI bundle's chunks and costs `isocan --version` a module past its budget
+   * (`test/cli-bundle.test.ts`; 40 → 41, 14 Oct 2026). The CLI's summary
+   * tests read and make through these two methods against a real home, so a
+   * drift from core's spelling fails there.
+   */
+  summaries(canvasId: string, keys: string[], sourceIds: string[]): Promise<SummaryRead> {
+    const query = `keys=${keys.join(",")}&for=${sourceIds.map(encodeURIComponent).join(",")}`;
+    return this.request("GET", `${summariesPath(canvasId)}?${query}`);
+  }
+
+  /**
+   * **Ask the home to make one summary** — the route the web's fetcher asks,
+   * under the same rules (edit capability, the key's own spend rules, rate,
+   * the quiet period). The home collects the words; the client names only the
+   * kind and the source. A 202 is `summary-quiet`, carrying `retryAfterMs`.
+   */
+  makeSummary(canvasId: string, make: SummaryMake): Promise<SummaryEntry | SummaryWait> {
+    return this.request("POST", summariesPath(canvasId), make);
+  }
+
+  /**
+   * **What a canvas's summaries have cost** (`GET …/summaries/stats`, phase
+   * 3): calls, tokens, makes and hits per day, the hour's budget, the cache.
+   * Editors only — it says what somebody's key spent. `days` defaults to 30
+   * at the home, at most 90.
+   */
+  summaryStats(canvasId: string, days?: number): Promise<SummaryStats> {
+    return this.request("GET", `${summariesPath(canvasId)}/stats${days ? `?days=${days}` : ""}`);
   }
 
   /** Complete current scope; omitted roots read ambient pins. Reads never move presence. */

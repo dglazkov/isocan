@@ -140,7 +140,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **Items** (`items`)
 - `add <thing> [--as file|site|doc|canvas]` — one door for a file, a site, a Google Doc or a canvas
-- `text`, `inline`, `get`, `show`, `ls [--kind|--filter]`, `set`, `edit`, `tree`, `save` — make, read, change, write out
+- `text`, `inline`, `get`, `show`, `ls [--kind|--filter|--summaries]`, `set`, `edit`, `tree`, `save` — make, read, change, write out; `summary [--refresh|--stats]` — the ≈ summary
 - `version ls|promote|prune` — the version stack (prune ⚠)
 - `mv`, `align`, `distribute`, `fit`, `tidy`, `merge`, `react`, `copy` — arrange, mark, duplicate
 - `rm`, `restore`, `trash ls|restore|empty` (empty ⚠), `undo`, `redo` — take back
@@ -1193,6 +1193,24 @@ argument needs `--` first. For anything with more than one line in it, pipe it:
 ```sh
 printf '## Standup\n\n- text tool landed\n- park bug fixed\n' | isocan text -f -
 ```
+
+## Summaries, far away (an experiment)
+
+Behind the *Semantic Zoom* experiment, a person zoomed out past where words
+can be read sees a short model-written summary of a long text node, a group
+or an area, marked **≈** in the app. `isocan summary <item|group|area>` prints
+the cached one and whether it is `current`, `stale` (the content changed since;
+it says how old the summary is), `short` (40 words or fewer: the words are the
+summary), `excluded` (never sent to a model) or `missing`; `--json` for the
+row. `isocan ls --summaries` adds the column and never makes one. **A summary
+is approximate**: read the words (`isocan get <item>`) before acting on
+anything it says. `--refresh` asks the home to make one, under the app's rules:
+you need edit access, it spends the canvas owner's model key only as that key
+is shared, a thing changed in the last 30 s waits, and a canvas makes at most
+so many an hour — either way the CLI prints the home's answer and exits 0.
+`isocan summary --stats [--days N]` (editors) prints what they cost: calls,
+tokens, the hour's budget, the cache. A summary is never an op; nothing it
+does is in undo.
 
 ## A Google Doc on the canvas
 

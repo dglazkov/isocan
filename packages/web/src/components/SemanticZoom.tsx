@@ -1,7 +1,7 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { AREA_TITLE_HEIGHT, groupStackBox, isArea, isGroupItem, isTextItem, textDrawSize, textIsLegible, type Item } from "@isocan/core";
 import { TEXT_OWNER_ONLY } from "@isocan/core/keys";
-import { memberTypeSize, summarisableText, summariesRoute, summaryKey, summaryMembers, SUMMARY_QUIET, type SummaryEntry, type SummaryRead, type SummaryWait } from "@isocan/core/semantic-zoom";
+import { memberTypeSize, summarisableText, summariesRoute, summaryKey, summaryMembers, SUMMARY_OVER_BUDGET, SUMMARY_QUIET, type SummaryEntry, type SummaryRead, type SummaryWait } from "@isocan/core/semantic-zoom";
 import { TEXT_RATE_LIMITED, TEXT_UNAVAILABLE } from "@isocan/core/text";
 import { ApiError, request } from "../lib/api.ts";
 import { TEXT_MARK_CSS } from "../lib/chrome.ts";
@@ -39,7 +39,9 @@ import "./semantic-zoom.css";
  * most four at a time. The home decides whether this person's key may be
  * spent; when it says no (owner-only, no key, view-only) this view stops
  * asking and only reads, and when the note changed moments ago it says how
- * long to wait.
+ * long to wait. When the badge's minute or the canvas's hour is spent
+ * (`summary-budget`, phase 3) it pauses, still reading — a stale summary
+ * keeps showing, a missing one keeps its fallback — and asks again after.
  */
 export default function SemanticZoom({ canvasId }: { canvasId: string }) {
   useEffect(() => watch(canvasId), [canvasId]);
@@ -52,6 +54,8 @@ const AT_ONCE = 4;
 const SETTLE_MS = 300;
 /** Keys per read: what one screen shows, not a whole canvas. */
 const PER_READ = 100;
+/** How long a view stops asking after the badge's rate or the canvas's budget says no. */
+const PAUSE_MS = 60_000;
 
 /** A frame with less room than this on screen (px) has no room for a summary line: it keeps its title only (design §3, the mark band). */
 const CARD_MIN = { w: 96, h: 28 };
@@ -107,6 +111,7 @@ function watch(canvasId: string): () => void {
   let pausedUntil = 0;
   let seen: Seen[] = [];
   let settle: ReturnType<typeof setTimeout> | undefined;
+  let resume: ReturnType<typeof setTimeout> | undefined;
 
   const keyOf = (kind: Seen["kind"], sources: Item[]) => {
     const at = [kind, ...sources.map((one) => `${one.id}\n${one.currentVersionId}\n${one.title}`)].join("\n");
@@ -171,7 +176,12 @@ function watch(canvasId: string): () => void {
   };
 
   const pump = () => {
-    if (!mayAsk || Date.now() < pausedUntil || useCanvasStore.getState().capability !== "edit") return;
+    if (!mayAsk || useCanvasStore.getState().capability !== "edit") return;
+    if (Date.now() < pausedUntil) {
+      // One wake-up at the end of the pause, whatever the view does meanwhile.
+      resume ??= setTimeout(() => ((resume = undefined), schedule(0)), pausedUntil - Date.now() + 250);
+      return;
+    }
     for (const { item, kind, key } of seen) {
       if (making.size >= AT_ONCE) return;
       const entry = byKey.get(key);
@@ -192,7 +202,8 @@ function watch(canvasId: string): () => void {
           const code = error instanceof ApiError ? error.code : undefined;
           // Not this person's to pay for, or nothing to pay with: read only, from now on.
           if (code === TEXT_OWNER_ONLY || code === TEXT_UNAVAILABLE || code === "view-only" || code === "not-admitted") mayAsk = false;
-          else if (code === TEXT_RATE_LIMITED) pausedUntil = Date.now() + 60_000;
+          // The badge's minute or the canvas's hour is spent: read only for a while, then ask again.
+          else if (code === TEXT_RATE_LIMITED || code === SUMMARY_OVER_BUDGET) pausedUntil = Date.now() + PAUSE_MS;
           else failed.add(key);
         },
       ).finally(() => {
@@ -241,6 +252,7 @@ function watch(canvasId: string): () => void {
   return () => {
     live = false;
     clearTimeout(settle);
+    clearTimeout(resume);
     for (const timer of timers.values()) clearTimeout(timer);
     offView();
     offCanvas();

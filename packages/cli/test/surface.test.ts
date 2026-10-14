@@ -190,6 +190,22 @@ describe("the agent-facing surface", () => {
     expect(documentedVerbs(prose)).toEqual(new Set());
   });
 
+  it("names Semantic Zoom's verb and flags, and says a summary is approximate", () => {
+    // Phase 4 of docs/projects/semantic-zoom: `summary`, its `--refresh`, and
+    // `ls --summaries`, each findable from the cold start — and the rule that
+    // comes with them, because an agent acting on a summary instead of the
+    // words is the failure the experiment's "≈" exists to prevent.
+    expect(commands).toContain("summary");
+    expect(documented.has("summary")).toBe(true);
+    expect(cold).toContain("`summary [--refresh|--stats]`");
+    expect(cold).toContain("--summaries");
+    expect(guide).toMatch(/`isocan summary <item\|group\|area>`/);
+    expect(guide).toMatch(/`--refresh`/);
+    expect(guide).toMatch(/`isocan summary --stats \[--days N\]`/);
+    expect(guide).toMatch(/`isocan ls --summaries`/);
+    expect(guide).toMatch(/approximate[\s\S]{0,40}read the words \(`isocan get/);
+  });
+
   it("tells agents that a gap between the surfaces is a bug", () => {
     // The guide has to say this out loud: an agent that finds it cannot do
     // something a person can should report it, not work around it. In the
