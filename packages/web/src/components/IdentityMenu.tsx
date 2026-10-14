@@ -18,6 +18,7 @@ import { DISPLAY_SWITCHES, HIDEABLE, showAllChrome } from "../lib/hideable.ts";
 import { EXPERIMENTS } from "../lib/experiments.ts";
 import type { TextPictures } from "@isocan/core/text";
 import { fetchTextPictures } from "../lib/api.ts";
+import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { loadExperiments } from "../modules.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
@@ -124,7 +125,13 @@ export function IdentityMenu({
   const mine = marks[actor.id] ?? null;
   const [picking, setPicking] = useState(false);
   const markButton = useRef<HTMLButtonElement>(null);
-  const [name, setName] = useState(actor.name);
+  /** What everybody else sees you called: the registry, not the name this
+   * browser stored when it signed in. A rename made elsewhere (the terminal,
+   * another browser, a fold) left the stored one behind, and the field opened
+   * on a name the hover card above it no longer showed. */
+  const current = actorNameIn(useActorNames(), actor);
+  const [name, setName] = useState(current);
+  useEffect(() => setName(current), [current]);
   const [others, setOthers] = useState(() =>
     knownIdentities().filter((known) => known.id !== actor.id),
   );
@@ -189,13 +196,13 @@ export function IdentityMenu({
   const trimmed = name.trim();
   /**
    * **Is there a rename to do?** — the same question the submit handler
-   * already asks before it does anything (`!trimmed || trimmed === actor.name`
+   * already asks before it does anything (`!trimmed || trimmed === current`
    * closes without sending). The button was live for both answers, so it went
    * blue and pressable over a name nobody had touched, and pressing it just
    * shut the menu. A control that offers an act it will not perform teaches
    * people not to believe the next one.
    */
-  const renames = trimmed !== "" && trimmed !== actor.name;
+  const renames = trimmed !== "" && trimmed !== current;
 
   /** Send a claim; `name` is what the person asked to be called, for the
    * refusal to name. */
@@ -358,16 +365,16 @@ export function IdentityMenu({
                 {claimed?.has(other.id) && folding !== other.id && (
                   <button
                     className="btn identity-fold"
-                    title={`Make ${other.name} the same person as ${actor.name}, everywhere`}
+                    title={`Make ${other.name} the same person as ${current}, everywhere`}
                     onClick={() => setFolding(other.id)}
                   >
-                    Fold into {actor.name}
+                    Fold into {current}
                   </button>
                 )}
                 {claimed?.has(other.id) && folding === other.id && (
                   <div className="identity-fold-arm">
                     <span>
-                      Everything written as {other.name} becomes {actor.name}&rsquo;s. This cannot
+                      Everything written as {other.name} becomes {current}&rsquo;s. This cannot
                       be undone.
                     </span>
                     <button
