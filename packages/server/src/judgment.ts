@@ -41,8 +41,8 @@ const JUDGE_MODEL = "jev-latest";
 export interface JudgmentOptions {
   /** The key, read per call. Default: `resolveKey("typesafe")` — `TYPESAFE_API_KEY`, else `keys.json` under `keysHome`. */
   key?: () => string | undefined;
-  /** Whose `keys.json` the default key reads: the daemon's home. Default `ISOCAN_HOME`, else `~/.isocan`. */
-  keysHome?: string;
+  /** Whose `keys.json` the default key reads: the daemon's home, or `null` when this daemon has no workstation. */
+  keysHome?: string | null | undefined;
   fetch?: typeof fetch;
   url?: string;
   /** Judgments per badge per minute. Default `JUDGMENT_PER_MINUTE`. */
@@ -75,7 +75,7 @@ export class Judge {
       const key = this.opts.key()?.trim();
       return key ? { key, source: "env" } : undefined;
     }
-    const found = warnRefusedKeys(() => resolveKey("typesafe", this.opts.keysHome ? { home: this.opts.keysHome } : {}));
+    const found = warnRefusedKeys(() => resolveKey("typesafe", this.opts.keysHome !== undefined ? { home: this.opts.keysHome } : {}));
     const key = found?.key.trim();
     return key ? { key, source: found!.source } : undefined;
   }

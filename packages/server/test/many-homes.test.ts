@@ -201,7 +201,7 @@ describe("one daemon, many homes", () => {
     // cosmetic: it is what stops either link's sweep later claiming a
     // locally-born canvas under the "this id has no row, so it must be mine"
     // rule, which is the one branch of the arbitration that WRITES.
-    expect(D.daemon.homes.assignments()).toEqual({
+    expect(D.daemon.homes!.assignments()).toEqual({
       [LOCAL]: null,
       [ONE]: H1.base,
       [TWO]: H2.base,
@@ -326,8 +326,8 @@ describe("one daemon, many homes", () => {
     // assertion would pass against the old behaviour purely by being fast.
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const h1 = D.daemon.homes.link(H1.base)!;
-    const h2 = D.daemon.homes.link(H2.base)!;
+    const h1 = D.daemon.homes!.link(H1.base)!;
+    const h2 = D.daemon.homes!.link(H2.base)!;
     expect(h1.handshakes(TWO)).toEqual({ resumed: 0, snapshots: 0, last: null });
     expect(h1.handshakes(LOCAL)).toEqual({ resumed: 0, snapshots: 0, last: null });
     expect(h2.handshakes(ONE)).toEqual({ resumed: 0, snapshots: 0, last: null });
@@ -390,8 +390,8 @@ describe("one daemon, many homes", () => {
     // Nothing moved. The row still names H1, H2's link never dialled it, and
     // the canvas on this disk is still the one it always was — title, items and
     // all. An adoption would have swapped every one of those.
-    expect(D.daemon.homes.homeOf(ONE)).toBe(H1.base);
-    expect(D.daemon.homes.link(H2.base)!.handshakes(ONE)).toEqual({
+    expect(D.daemon.homes!.homeOf(ONE)).toBe(H1.base);
+    expect(D.daemon.homes!.link(H2.base)!.handshakes(ONE)).toEqual({
       resumed: 0,
       snapshots: 0,
       last: null,
@@ -430,7 +430,7 @@ describe("one daemon, many homes", () => {
     await birthAll();
     // No birth default and two links: `homeScoped` has nothing to break the
     // tie with, and the local desk is emphatically not the answer.
-    expect(D.daemon.homes.homeScopedAmbiguity()).toEqual([H1.base, H2.base].sort());
+    expect(D.daemon.homes!.homeScopedAmbiguity()).toEqual([H1.base, H2.base].sort());
 
     const listed = await fetch(`${D.base}${BADGES_ROUTE}`, { headers: D.badge.headers });
     expect(listed.status).toBe(409);
@@ -462,7 +462,7 @@ describe("one daemon, many homes", () => {
    */
   it("redeems its own pass on a rig that cannot place anybody else's", async () => {
     await birthAll();
-    expect(D.daemon.homes.homeScopedAmbiguity()).toEqual([H1.base, H2.base].sort());
+    expect(D.daemon.homes!.homeScopedAmbiguity()).toEqual([H1.base, H2.base].sort());
     const redeem = async (token: string) =>
       fetch(`${D.base}/api/passes/redeem`, {
         method: "POST",
@@ -551,7 +551,7 @@ describe("a machine that predates all of this", () => {
     try {
       // Still this daemon's. The birth default says where the NEXT canvas
       // goes and nothing else.
-      expect(second.daemon.homes.homeOf("prj_dion")).toBeNull();
+      expect(second.daemon.homes!.homeOf("prj_dion")).toBeNull();
       // And the write still lands here rather than being forwarded to a home
       // that has never heard of this canvas.
       await op(second, "prj_dion", item("itm_dion", 5));
@@ -581,7 +581,7 @@ describe("a machine that predates all of this", () => {
 
     const rig = await dionsRig(dDir, H1.base);
     try {
-      expect(rig.daemon.homes.homeOf("prj_dion")).toBeNull();
+      expect(rig.daemon.homes!.homeOf("prj_dion")).toBeNull();
       const mint = async (): Promise<{ token: string; passId: string }> => {
         const minted = await post(rig, "/api/projects/prj_dion/passes", { actorId: dion.id });
         expect(minted.status).toBe(200);
@@ -656,7 +656,7 @@ describe("a machine that predates all of this", () => {
     // No intervening boot: straight from a pre-10.3 store to a configured home.
     const pointed = await dionsRig(dDir, H1.base);
     try {
-      expect(pointed.daemon.homes.homeOf("prj_dion")).toBeNull();
+      expect(pointed.daemon.homes!.homeOf("prj_dion")).toBeNull();
       await op(pointed, "prj_dion", item("itm_dion", 9));
       expect((await canvas(pointed, "prj_dion")).canvas.items["itm_dion"]).toMatchObject({ x: 9 });
     } finally {
@@ -682,7 +682,7 @@ describe("a machine that predates all of this", () => {
 
     const upgraded = await dionsRig(dDir, H1.base);
     try {
-      expect(upgraded.daemon.homes.homeOf("prj_old")).toBe(H1.base);
+      expect(upgraded.daemon.homes!.homeOf("prj_old")).toBe(H1.base);
     } finally {
       await upgraded.daemon.close();
     }
@@ -737,7 +737,7 @@ describe("a machine that predates all of this", () => {
 
     const second = await dionsRig(dDir, H1.base);
     try {
-      expect(second.daemon.homes.homeOf("prj_dion")).toBeNull();
+      expect(second.daemon.homes!.homeOf("prj_dion")).toBeNull();
       const page = await fetch(`${second.base}/p/prj_dion`, { headers: { Accept: "text/html" } });
       // Never the signpost: that header is this daemon disowning a canvas it
       // is the home of.
@@ -807,7 +807,7 @@ describe("what makes many homes durable rather than incidental", () => {
     await D.daemon.close();
     D = await bootD();
 
-    expect(D.daemon.homes.assignments()).toEqual({
+    expect(D.daemon.homes!.assignments()).toEqual({
       [LOCAL]: null,
       [ONE]: H1.base,
       [TWO]: H2.base,
@@ -857,11 +857,11 @@ describe("what makes many homes durable rather than incidental", () => {
       "the row to be dropped from homes.json",
     );
     expect(onDisk).toEqual({ [LOCAL]: null, [TWO]: H2.base });
-    expect(D.daemon.homes.assignments()).toEqual({ [LOCAL]: null, [TWO]: H2.base });
+    expect(D.daemon.homes!.assignments()).toEqual({ [LOCAL]: null, [TWO]: H2.base });
     // And a canvas re-created under the same id, naming nothing, is born HERE
     // rather than at the home the dead row pointed at.
     await op(D, null, { type: "project.create", canvasId: ONE, title: "Acme, Again" });
-    expect(D.daemon.homes.homeOf(ONE)).toBeNull();
+    expect(D.daemon.homes!.homeOf(ONE)).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect((await canvas(D, ONE)).project.title).toBe("Acme, Again");
   }, 30_000);

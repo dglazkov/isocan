@@ -47,6 +47,14 @@ export const oplogArchiveFile = (home: string, id: string) =>
   path.join(canvasDir(home, id), "oplog-archive.jsonl");
 export const blobsDir = (home: string, id: string) => path.join(canvasDir(home, id), "blobs");
 export const blobsIndexFile = (home: string, id: string) => path.join(canvasDir(home, id), "blobs.json");
+/** Cached semantic-zoom cards for `FileStore` (`summaries/<id>/<key>.json`); hosted homes keep these in GCS (`canvases/{id}/summaries/{key}.json`) via `CloudStore`. */
+export const summariesDir = (home: string, id: string) =>
+  path.join(home, "summaries", encodeURIComponent(id));
+/** Per-canvas daily summary spend ledger for `FileDesk` (`summaries/<id>.stats.json`); hosted homes keep this in Firestore (`summaryStats/{id}`) via `CloudDesk`. */
+export const summaryStatsFile = (home: string, id: string) =>
+  path.join(home, "summaries", `${encodeURIComponent(id)}.stats.json`);
+/** Durable per-agent park cursors for `FileDesk` (`park-cursors.json`); hosted homes keep these in Firestore (`parks/{canvasId}__{actorId}`) via `CloudDesk`. */
+export const parkCursorsFile = (home: string) => path.join(home, "park-cursors.json");
 export const daemonFile = (home: string) => path.join(home, "daemon.json");
 export const daemonLogFile = (home: string) => path.join(home, "daemon.log");
 export const identityFile = (home: string) => path.join(home, "identity.json");

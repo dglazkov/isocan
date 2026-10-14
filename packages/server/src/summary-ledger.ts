@@ -1,6 +1,5 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import type { SummaryDay, SummaryEntry, SummaryStats, SummaryTally } from "@isocan/core/semantic-zoom";
+import type { Desk } from "./desk.ts";
 
 /**
  * **What Semantic Zoom's summaries cost, per canvas per day, and the hour's
@@ -74,27 +73,12 @@ export class SummaryLedger {
   /** The calls that sent pictures, per canvas, inside `spent`. */
   private readonly looked = new Map<string, number[]>();
 
-  constructor(private readonly root: string, private readonly perHour: () => number, private readonly now: () => number, private readonly visionPerHour: () => number) {}
-
-  private file(canvasId: string): string {
-    return path.join(this.root, `${encodeURIComponent(canvasId)}.stats.json`);
-  }
+  constructor(private readonly desk: Desk, private readonly perHour: () => number, private readonly now: () => number, private readonly visionPerHour: () => number) {}
 
   private load(canvasId: string): Promise<Record<string, SummaryDay>> {
     let held = this.days.get(canvasId);
-    if (!held) this.days.set(canvasId, (held = this.read(canvasId)));
+    if (!held) this.days.set(canvasId, (held = this.desk.summaryDays(canvasId)));
     return held;
-  }
-
-  private async read(canvasId: string): Promise<Record<string, SummaryDay>> {
-    let read: Record<string, SummaryDay> = {};
-    try {
-      const raw = JSON.parse(await fs.readFile(this.file(canvasId), "utf8")) as { days?: Record<string, SummaryDay> };
-      if (raw && typeof raw.days === "object" && raw.days) read = raw.days;
-    } catch {
-      // No record yet, or one that cannot be read: start counting from here.
-    }
-    return read;
   }
 
   /** The calls this canvas has made in the last hour (or, with `vision`, those that sent pictures), oldest first. */
@@ -142,16 +126,10 @@ export class SummaryLedger {
     await this.write(canvasId, days);
   }
 
-  /** One write at a time per canvas, each of the whole record as it now stands, by rename. */
+  /** One write at a time per canvas, each of the whole record as it now stands, behind the desk. */
   private write(canvasId: string, days: Record<string, SummaryDay>): Promise<void> {
     const before = this.writing.get(canvasId) ?? Promise.resolve();
-    const next = before.then(async () => {
-      await fs.mkdir(this.root, { recursive: true });
-      const full = this.file(canvasId);
-      const temp = `${full}.${process.pid}.${Date.now()}.tmp`;
-      await fs.writeFile(temp, JSON.stringify({ canvasId, days }));
-      await fs.rename(temp, full);
-    });
+    const next = before.then(() => this.desk.putSummaryDays(canvasId, days));
     this.writing.set(canvasId, next.catch(() => undefined));
     return next;
   }

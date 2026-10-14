@@ -16,7 +16,8 @@ import type { Desk } from "./desk.ts";
 import type { Engine } from "./engine.ts";
 import type { RouteOptions } from "./http.ts";
 import { mintPass, redeemPass } from "./passes.ts";
-import { loopbackBound, refuseAmbiguousHome } from "./route-helpers.ts";
+import { NotAReplicaError } from "./home-links.ts";
+import { isRequestSelfAddress, loopbackBound, refuseAmbiguousHome } from "./route-helpers.ts";
 
 /**
  * **The pass routes** — minting one, reading it back, redeeming it (Scene 5).
@@ -37,6 +38,7 @@ export interface PassRouteScope {
  * and the registration order are the ones they had inline. */
 export function registerPassRoutes(app: FastifyInstance, scope: PassRouteScope): void {
   const { engine, desk, options, sourceMutation } = scope;
+  const homes = options?.workstation?.homes ?? null;
 
   // Two routes with deliberately different shapes, and the asymmetry is the
   // design rather than an accident of naming.
@@ -95,7 +97,7 @@ export function registerPassRoutes(app: FastifyInstance, scope: PassRouteScope):
     if (actorId) await engine.requireActor(req.badge!.badgeId, actorId);
     // THIS canvas's home: a pass admits to one canvas, and single-use is only
     // a property of the desk that holds the row.
-    const home = options.homes?.for(id) ?? null;
+    const home = homes?.for(id) ?? null;
     if (home) {
       // The name rides up with the actor so the home can vouch for an actor it
       // has never heard of — `HomeLink.mintPass` claims before it asks, and
@@ -130,7 +132,7 @@ export function registerPassRoutes(app: FastifyInstance, scope: PassRouteScope):
    */
   app.get("/api/projects/:id/passes/:passId", async (req, reply) => {
     const { id, passId } = req.params as { id: string; passId: string };
-    const home = options.homes?.for(id) ?? null;
+    const home = homes?.for(id) ?? null;
     if (home) return home.pass(id, passId);
     const held = await desk.pass(passId);
     if (!held || held.canvasId !== id || held.mintedBy !== req.badge!.badgeId) {
@@ -184,7 +186,7 @@ export function registerPassRoutes(app: FastifyInstance, scope: PassRouteScope):
     const local = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
     if (
       body.adoptIdentity &&
-      (options.servesWorld === true || !loopbackBound(app) || !local || !options.adoptIdentity)
+      (options.servesWorld === true || !loopbackBound(app) || !local || !options.workstation)
     ) {
       return reply.status(403).send({
         error: "saving a machine's person is available only through its local daemon",
@@ -193,7 +195,7 @@ export function registerPassRoutes(app: FastifyInstance, scope: PassRouteScope):
     }
     const finish = async (answer: RedeemPassResponse): Promise<RedeemPassResponse> => {
       if (!body.adoptIdentity || !answer.actor) return answer;
-      return { ...answer, identity: await options.adoptIdentity!(answer.actor) };
+      return { ...answer, identity: await options.workstation!.adoptIdentity(answer.actor) };
     };
     // No special case for a missing token: `redeemPass` parses it, and an
     // empty string is not a pass in exactly the way a mangled one is not.
@@ -229,22 +231,29 @@ export function registerPassRoutes(app: FastifyInstance, scope: PassRouteScope):
      */
     const asked = typeof body.home === "string" ? body.home.trim() : "";
     const askedHost = asked === "" ? null : hostOf(asked);
-    const self = askedHost !== null && askedHost === String(req.headers.host ?? "");
+    const self =
+      (askedHost !== null && askedHost === String(req.headers.host ?? "")) ||
+      (asked !== "" && isRequestSelfAddress(app, req, asked));
     const parsed = asked === "" || self ? parsePassToken(token) : null;
     const held = parsed ? await desk.pass(parsed.passId) : null;
-    const own = held !== null && (options.homes?.for(held.canvasId) ?? null) === null;
+    const own = held !== null && (homes?.for(held.canvasId) ?? null) === null;
+    if (!own && asked !== "" && !self && !homes) {
+      throw new NotAReplicaError(
+        "this home is an authoritative home, not a replica — it does not redeem passes at other homes",
+      );
+    }
     if (asked === "" && !own) {
       // Only when the caller named nothing: an address in the request IS the
       // answer, so a pass pasted with its address is never ambiguous. This is
       // the older caller, and the browser at a home.
-      const stuck = refuseAmbiguousHome(reply, options.homes, "redeem a pass");
+      const stuck = refuseAmbiguousHome(reply, homes, "redeem a pass");
       if (stuck) return stuck;
     }
     const home = own
       ? null
       : asked !== "" && !self
-        ? (options.homes?.linkFor(normalizeHomeUrl(asked)) ?? null)
-        : (options.homes?.homeScoped() ?? null);
+        ? (homes?.linkFor(normalizeHomeUrl(asked)) ?? null)
+        : (homes?.homeScoped() ?? null);
     if (home) {
       const answer = await home.redeemPass(token);
       if (answer.actor) await engine.endowClaim(badge.badgeId, answer.actor, answer.canvasId);

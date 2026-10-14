@@ -11,6 +11,7 @@ import type {
   SlashCommand,
   UploadTicket,
 } from "@isocan/core";
+import type { SummaryEntry } from "@isocan/core/semantic-zoom";
 import {
   applyActorColor,
   applyActorJoin,
@@ -48,6 +49,8 @@ import {
   opsCollection,
   padSeq,
   snapshotKey,
+  summaryObjectKey,
+  summaryPrefix,
 } from "./naming.ts";
 import { hostedPurgeHorizons } from "./purge-horizons.ts";
 
@@ -847,6 +850,45 @@ export class CloudStore implements Store {
       .map((line) => JSON.parse(line) as LogEntry);
   }
 
+  // ---- semantic zoom summaries ----
+
+  async listSummaries(id: string): Promise<Array<{ entry: SummaryEntry; touched: number }>> {
+    const prefix = summaryPrefix(id);
+    const objectKeys = await this.objects.list(prefix);
+    const rows: Array<{ entry: SummaryEntry; touched: number }> = [];
+    for (const objectKey of objectKeys) {
+      if (!objectKey.startsWith(prefix) || !objectKey.endsWith(".json")) continue;
+      const key = objectKey.slice(prefix.length, -5);
+      if (!SUMMARY_KEY.test(key)) continue;
+      const [raw, stat] = await Promise.all([
+        this.objects.readAll(objectKey),
+        this.objects.stat(objectKey),
+      ]);
+      const entry = parseSummaryBuffer(raw);
+      if (entry) rows.push({ entry, touched: stat?.updated.getTime() ?? 0 });
+    }
+    return rows;
+  }
+
+  async getSummary(id: string, key: string): Promise<SummaryEntry | null> {
+    if (!SUMMARY_KEY.test(key)) return null;
+    return parseSummaryBuffer(await this.objects.readAll(summaryObjectKey(id, key)));
+  }
+
+  async putSummary(id: string, entry: SummaryEntry): Promise<void> {
+    if (!SUMMARY_KEY.test(entry.key)) throw new Error(`invalid summary key: ${entry.key}`);
+    await this.objects.put(
+      summaryObjectKey(id, entry.key),
+      Buffer.from(JSON.stringify(entry), "utf8"),
+      { contentType: "application/json" },
+    );
+  }
+
+  async deleteSummary(id: string, key: string): Promise<void> {
+    if (!SUMMARY_KEY.test(key)) return;
+    await this.objects.delete(summaryObjectKey(id, key));
+  }
+
   // ---- internals ----
 
   private actorOverflowKey(seq: number): string {
@@ -990,6 +1032,18 @@ export function actorsFromDocument(
     colors: (saved.colors as ActorRegistry["colors"]) ?? {},
   };
   return { registry, lastSeq: (data?.["lastSeq"] as number | undefined) ?? 0 };
+}
+
+const SUMMARY_KEY = /^[0-9a-f]{64}$/;
+
+function parseSummaryBuffer(raw: Buffer | null): SummaryEntry | null {
+  if (!raw) return null;
+  try {
+    const entry = JSON.parse(raw.toString("utf8")) as SummaryEntry;
+    return entry && typeof entry.key === "string" && Array.isArray(entry.sourceIds) ? entry : null;
+  } catch {
+    return null;
+  }
 }
 
 function* chunks<T>(items: readonly T[], size: number): Generator<T[]> {

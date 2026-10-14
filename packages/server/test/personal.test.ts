@@ -11,9 +11,9 @@ const person: Actor = { id: "usr_personal_maya", name: "Maya" };
 const other: Actor = { id: "usr_personal_theo", name: "Theo" };
 const agent: Actor = { id: "usr_personal_rowan", name: "Rowan" };
 const nodes: Array<{ daemon: Daemon; dir: string }> = [];
-async function node(birthHome: string | null = null) {
+async function node(birthHome: string | null = null, servesWorld = true) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-personal-"));
-  const daemon = await startDaemon({ port: 0, home: dir, birthHome, homePollMs: 50, servesWorld: true });
+  const daemon = await startDaemon({ port: 0, home: dir, birthHome, homePollMs: 50, servesWorld });
   nodes.push({ daemon, dir });
   return { daemon, dir, base: `http://127.0.0.1:${(daemon.app.server.address() as { port: number }).port}` };
 }
@@ -191,7 +191,7 @@ it("rechecks a current source grant when a queued write starts", async () => {
 });
 
 it("forwards destination birth and private reads to the authority, without a replica birth link", async () => {
-  const { home, badge } = await fixture(); const local = await node(); const localBadge = await mintTestBadge(local.base);
+  const { home, badge } = await fixture(); const local = await node(null, false); const localBadge = await mintTestBadge(local.base);
   await localBadge.speakAs(person, "home:maya");
   const pass = await json<{ token: string }>(await request(home, badge, "POST", "/api/projects/prj_destination/passes", { actorId: person.id }));
   await json(await request(local, localBadge, "POST", "/api/passes/redeem", { home: home.base, token: pass.token }));
@@ -338,7 +338,7 @@ it("park setup and long-poll continuation recheck personal read policy", async (
 });
 
 it("two-home raw reads and watch fetches recheck current grants without reading retained private bytes", async () => {
-  const { home, badge } = await fixture(); const local = await node(); const localBadge = await mintTestBadge(local.base);
+  const { home, badge } = await fixture(); const local = await node(null, false); const localBadge = await mintTestBadge(local.base);
   await localBadge.speakAs(person, "home:maya"); await localBadge.speakAs(other, "home:theo");
   const pass = await json<{ token: string }>(await request(home, badge, "POST", "/api/projects/prj_destination/passes", { actorId: person.id }));
   await json(await request(local, localBadge, "POST", "/api/passes/redeem", { home: home.base, token: pass.token }));
@@ -363,7 +363,7 @@ it("two-home raw reads and watch fetches recheck current grants without reading 
   homeBytes.mockClear();
   const upload = await fetch(`${local.base}/api/projects/${source}/blobs`, { method: "POST", headers: { ...headers, "Content-Type": "text/plain", "X-Isocan-Filename": "forbidden.txt" }, body: "FORBIDDEN_RAW_WRITE" });
   expect(upload.status).toBe(403); expect(await upload.json()).toMatchObject({ code: "personal-intent-exceeded" });
-  const connection = local.daemon.homes.for(source)!;
+  const connection = local.daemon.homes!.for(source)!;
   const actual = connection.personalRequest.bind(connection);
   let entered!: () => void; let release!: () => void;
   const ready = new Promise<void>((resolve) => { entered = resolve; }); const gate = new Promise<void>((resolve) => { release = resolve; });

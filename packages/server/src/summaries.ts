@@ -1,5 +1,3 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { atLeast } from "@isocan/core";
@@ -12,6 +10,7 @@ import {
   textSummaryKey, wordCount, type SummaryEntry, type SummaryMake, type SummaryMember, type SummaryRead, type SummaryStats,
 } from "@isocan/core/semantic-zoom";
 import { TEXT_MAX_BYTES, TEXT_RATE_LIMITED, TEXT_UNAVAILABLE } from "@isocan/core/text";
+import type { Desk } from "./desk.ts";
 import type { Engine } from "./engine.ts";
 import { capabilityIn, type ViewOnlyError } from "./grants.ts";
 import type { HomeLinks } from "./home-links.ts";
@@ -132,15 +131,11 @@ class SummaryCache {
   /** The load promise, not the map, so two first touches at once share one index instead of each filling its own. */
   private readonly index = new Map<string, Promise<Map<string, Indexed>>>();
 
-  constructor(private readonly root: string, private readonly max: number, private readonly now: () => number, private readonly current: Current) {}
+  constructor(private readonly store: Store, private readonly max: number, private readonly now: () => number, private readonly current: Current) {}
 
   /** How many entries a canvas holds now. */
   async size(canvasId: string): Promise<number> {
     return (await this.load(canvasId)).size;
-  }
-
-  private dir(canvasId: string): string {
-    return path.join(this.root, encodeURIComponent(canvasId));
   }
 
   private load(canvasId: string): Promise<Map<string, Indexed>> {
@@ -151,23 +146,10 @@ class SummaryCache {
 
   private async read(canvasId: string): Promise<Map<string, Indexed>> {
     const fresh = new Map<string, Indexed>();
-    const names = await fs.readdir(this.dir(canvasId)).catch(() => [] as string[]);
-    for (const name of names) {
-      if (!name.endsWith(".json")) continue;
-      const full = path.join(this.dir(canvasId), name);
-      const [entry, stat] = await Promise.all([this.file(full), fs.stat(full).catch(() => null)]);
-      if (entry) fresh.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, vision: entry.vision === true, touched: stat?.mtimeMs ?? 0 });
+    for (const { entry, touched } of await this.store.listSummaries(canvasId)) {
+      fresh.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, vision: entry.vision === true, touched });
     }
     return fresh;
-  }
-
-  private async file(full: string): Promise<SummaryEntry | null> {
-    try {
-      const entry = JSON.parse(await fs.readFile(full, "utf8")) as SummaryEntry;
-      return entry && typeof entry.key === "string" && Array.isArray(entry.sourceIds) ? entry : null;
-    } catch {
-      return null;
-    }
   }
 
   /** One entry by key, marked as read. */
@@ -175,7 +157,7 @@ class SummaryCache {
     const index = await this.load(canvasId);
     const row = index.get(key);
     if (!row) return null;
-    const entry = await this.file(path.join(this.dir(canvasId), `${key}.json`));
+    const entry = await this.store.getSummary(canvasId, key);
     if (!entry) {
       index.delete(key);
       return null;
@@ -211,11 +193,7 @@ class SummaryCache {
    */
   async put(canvasId: string, entry: SummaryEntry): Promise<void> {
     const index = await this.load(canvasId);
-    await fs.mkdir(this.dir(canvasId), { recursive: true });
-    const full = path.join(this.dir(canvasId), `${entry.key}.json`);
-    const temp = `${full}.${process.pid}.${this.now()}.tmp`;
-    await fs.writeFile(temp, JSON.stringify(entry));
-    await fs.rename(temp, full);
+    await this.store.putSummary(canvasId, entry);
     index.set(entry.key, { kind: entry.kind, sourceIds: entry.sourceIds, madeAt: entry.madeAt, vision: entry.vision === true, touched: this.now() });
     if (index.size <= this.max) return;
     const sources = new Map<string, { sourceId: string; kind: SummaryEntry["kind"]; vision: boolean }>();
@@ -240,7 +218,7 @@ class SummaryCache {
       .map(({ row }) => row);
     for (const [key] of oldest) {
       index.delete(key);
-      await fs.rm(path.join(this.dir(canvasId), `${key}.json`), { force: true });
+      await this.store.deleteSummary(canvasId, key);
     }
   }
 }
@@ -274,6 +252,7 @@ async function readBytes(stream: Readable, limit: number): Promise<{ bytes: Buff
 interface SummaryRouteScope {
   engine: Engine;
   store: Store;
+  desk: Desk;
   homes: HomeLinks | null | undefined;
   refusals: Refusals;
   admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;
@@ -283,8 +262,6 @@ interface SummaryRouteScope {
   notTheOwners: (req: FastifyRequest) => Promise<{ owner: string | null } | null>;
   /** This machine's person, for `madeFor` when the stored key paid. */
   keyOwner: () => Promise<string | null>;
-  /** The home directory the cache lives under. */
-  home: string;
   options: SummaryOptions;
 }
 
@@ -335,10 +312,10 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     }
     return keys;
   };
-  const cache = new SummaryCache(path.join(scope.home, "summaries"), maxEntries, now, current);
+  const cache = new SummaryCache(store, maxEntries, now, current);
   const perHour = () => options.perHour ?? (Number(process.env.ISOCAN_SUMMARY_PER_HOUR) || PER_HOUR);
   const visionPerHour = () => options.visionPerHour ?? (Number(process.env.ISOCAN_SUMMARY_VISION_PER_HOUR) || VISION_PER_HOUR);
-  const ledger = new SummaryLedger(path.join(scope.home, "summaries"), perHour, now, visionPerHour);
+  const ledger = new SummaryLedger(scope.desk, perHour, now, visionPerHour);
   const inFlight = new Map<string, Promise<Made>>();
   const quietMs = () => options.quietMs ?? (Number(process.env.ISOCAN_SUMMARY_QUIET_MS) || SUMMARY_QUIET_MS);
   const ask: Parameters<TextModel["write"]>[1] = {

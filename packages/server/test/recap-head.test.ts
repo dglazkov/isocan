@@ -11,9 +11,9 @@ const nodes: Array<{ daemon: Daemon; dir: string; base: string }> = [];
 function recapSpellings(id: string) {
   return [recapHeadRoute(id), `/%61pi/projects/${id}/context/recap`, `/api/%70rojects/${id}/context/recap`, `/api/projects/${id}/%63ontext/recap`, `/api/projects/${id}/context/%72ecap`, `/api/projects/%70${id.slice(1)}/context/recap`];
 }
-async function node() {
+async function node(servesWorld = true) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-recap-head-"));
-  const daemon = await startDaemon({ home: dir, port: 0, contentPort: "off", birthHome: null, servesWorld: true, homePollMs: 60_000 });
+  const daemon = await startDaemon({ home: dir, port: 0, contentPort: "off", birthHome: null, servesWorld, homePollMs: 60_000 });
   const result = { daemon, dir, base: `http://127.0.0.1:${(daemon.app.server.address() as { port: number }).port}` };
   nodes.push(result); return result;
 }
@@ -87,19 +87,19 @@ it("forwards the actual head to its home and never falls back to a retained repl
   await owner.speakAs(actor, "home:maya");
   const id = "prj_recap_forward";
   await op(home, owner, null, { type: "project.create", canvasId: id, title: "Acme authoritative" });
-  const local = await node(), localBadge = await mintTestBadge(local.base);
+  const local = await node(false), localBadge = await mintTestBadge(local.base);
   await localBadge.speakAs(actor, "home:maya");
   const pass = await json<{ token: string }>(await request(home, owner, "POST", `/api/projects/${id}/passes`, { actorId: actor.id }));
   await json(await request(local, localBadge, "POST", "/api/passes/redeem", { home: home.base, token: pass.token }));
   await expect.poll(() => local.daemon.store.canvasExists(id)).toBe(true);
   const source = (await json<PersonalEnsureResponse>(await request(local, localBadge, "POST", "/api/personal/ensure", { actorId: actor.id, destinationCanvasId: id }))).source!.canvasId;
-  await local.daemon.homes.for(source)!.join(source, actor);
+  await local.daemon.homes!.for(source)!.join(source, actor);
   await expect.poll(() => local.daemon.store.canvasExists(source)).toBe(true);
-  await expect.poll(() => local.daemon.homes.linkFor(home.base).handshakes(source).last).not.toBeNull();
+  await expect.poll(() => local.daemon.homes!.linkFor(home.base).handshakes(source).last).not.toBeNull();
   // Drain this fixture's background replication after real snapshots landed.
   // Retained assignments and credentials still drive actual HTTP forwarding;
   // no polling/redial reads can contaminate the request observation window.
-  await local.daemon.homes.close();
+  await local.daemon.homes!.close();
   await local.daemon.engine.settled();
   const localReads = countReads(local), homeReads = countReads(home);
   const context: SourceRequestContext = { policy: { mode: "exclude" }, expectedHome: home.base };

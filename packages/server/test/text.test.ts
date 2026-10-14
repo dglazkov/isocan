@@ -219,7 +219,7 @@ describe("a canvas homed elsewhere", () => {
     const { token } = (await pass.json()) as { token: string };
     const redeemed = await fetch(`${relay.base}/api/passes/redeem`, { method: "POST", headers: { "Content-Type": "application/json", ...relayBadge.headers }, body: JSON.stringify({ home: upstream.base, token }) });
     expect(redeemed.status, await redeemed.clone().text()).toBe(200);
-    await expect.poll(() => relay.daemon.homes.for(CANVAS) !== null).toBe(true);
+    await expect.poll(() => relay.daemon.homes!.for(CANVAS) !== null).toBe(true);
 
     const res = await ask(relay, relayBadge, REQUEST);
     expect(res.status, await res.clone().text()).toBe(200);

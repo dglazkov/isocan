@@ -73,6 +73,68 @@ export interface HomeLinksOptions {
   rc?: RcHolds;
 }
 
+/** Thrown when a daemon is asked to link to its own address (`409 self-link`), preventing outbound sync/reconcile/blob feedback loops. */
+export class SelfLinkError extends Error {
+  readonly code = "self-link" as const;
+  constructor(address: string) {
+    super(
+      `${address} is this daemon's own address — a daemon cannot link to itself as its own replica`,
+    );
+    this.name = "SelfLinkError";
+  }
+}
+
+/** Thrown when a hosted home (`workstation === null`) is asked to dial a foreign home as a replica (`409 not-a-replica`). */
+export class NotAReplicaError extends Error {
+  readonly code = "not-a-replica" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "NotAReplicaError";
+  }
+}
+
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+
+/**
+ * Does `targetUrl` name this daemon itself?
+ *
+ * Checked both at the HTTP door (where `reqHost` is the `Host` header the
+ * request arrived on — e.g. `isocan.io` behind a load balancer) and inside
+ * `HomeLinks` (where `boundPort` is the local loopback port the daemon is
+ * listening on). Either match is enough: a daemon reached as `isocan.io` may
+ * not dial `https://isocan.io`, and a local daemon on `127.0.0.1:4321` may not
+ * dial `http://localhost:4321` or `http://127.0.0.1:4321`.
+ */
+export function isSelfAddress(
+  targetUrl: string,
+  reqHost?: string | null,
+  boundPort?: number | null,
+  loopback?: boolean,
+): boolean {
+  let url: URL;
+  try {
+    url = new URL(normalizeHomeUrl(targetUrl));
+  } catch {
+    return false;
+  }
+  const targetHost = url.host.toLowerCase();
+  if (reqHost) {
+    let normalizedReqHost = reqHost.trim().toLowerCase();
+    try {
+      normalizedReqHost = new URL(`${url.protocol}//${normalizedReqHost}`).host.toLowerCase();
+    } catch {
+      // keep raw lowered host if not parseable as URL authority
+    }
+    if (targetHost === normalizedReqHost) return true;
+  }
+  if (loopback && typeof boundPort === "number" && boundPort > 0) {
+    const hostname = url.hostname.toLowerCase();
+    const port = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
+    if (LOOPBACK_HOSTNAMES.has(hostname) && port === boundPort) return true;
+  }
+  return false;
+}
+
 export class HomeLinks implements HomeDirectory, HomeRegistry {
   /** The birth default, normalized. Null when a canvas born here stays here. */
   readonly birthHome: string | null;
@@ -80,6 +142,7 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
   private readonly options: HomeLinksOptions;
   private rows: HomeAssignments = {};
   private readonly open = new Map<string, HomeLink>();
+  private localPort: number | null = null;
   /** Writes to `homes.json`, serialized. Two concurrent births would otherwise
    * both read the record, both add their row, and the second write would
    * erase the first — the same read-modify-write hazard `blobs.json` is on the
@@ -94,6 +157,15 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
   constructor(options: HomeLinksOptions) {
     this.options = options;
     this.birthHome = options.birthHome === null ? null : normalizeHomeUrl(options.birthHome);
+  }
+
+  /** Record this daemon's bound loopback port so `linkFor` and `bind` refuse self-links. */
+  setLocalPort(port: number): void {
+    this.localPort = port;
+  }
+
+  private isSelf(homeUrl: string): boolean {
+    return this.localPort !== null && isSelfAddress(homeUrl, null, this.localPort, true);
   }
 
   /**
@@ -141,8 +213,10 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
     // on its own.
     await this.load();
     const addresses = new Set<string>();
-    for (const value of Object.values(this.rows)) if (value !== null) addresses.add(value);
-    if (this.birthHome !== null) addresses.add(this.birthHome);
+    for (const value of Object.values(this.rows)) {
+      if (value !== null && !this.isSelf(value)) addresses.add(value);
+    }
+    if (this.birthHome !== null && !this.isSelf(this.birthHome)) addresses.add(this.birthHome);
     // Started in parallel: each `start()` takes a sweep's round trip, and a
     // machine with three homes must not spend three timeouts booting when one
     // of them is down.
@@ -171,7 +245,8 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
    * address, or null for "this daemon is its home". Absent and null are the
    * same answer — see `homes.ts` for why both spellings exist. */
   homeOf(canvasId: string): string | null {
-    return this.rows[canvasId] ?? null;
+    const address = this.rows[canvasId] ?? null;
+    return address !== null && !this.isSelf(address) ? address : null;
   }
 
   /** Every row, for `GET /api/homes`. A copy: the caller is a route handler
@@ -294,6 +369,7 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
 
   async bind(canvasId: string, homeUrl: string | null): Promise<HomeConnection | null> {
     const target = homeUrl !== null ? normalizeHomeUrl(homeUrl) : this.birthHome;
+    if (target !== null && this.isSelf(target)) throw new SelfLinkError(target);
     // Written BEFORE the write is forwarded, not after: the answer landing
     // locally fires the engine's op-applied event, and a link deciding whether
     // to open a socket for this canvas reads exactly this row. A row written
@@ -356,6 +432,7 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
    */
   linkFor(homeUrl: string): HomeLink {
     const key = normalizeHomeUrl(homeUrl);
+    if (this.isSelf(key)) throw new SelfLinkError(key);
     const existing = this.open.get(key);
     if (existing) return existing;
     const gatewayUrl = gatewayBaseFor(key, this.options.home);
@@ -416,7 +493,7 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
    * to be refused.
    */
   homeScoped(): HomeConnection | null {
-    if (this.birthHome !== null) return this.linkFor(this.birthHome);
+    if (this.birthHome !== null && !this.isSelf(this.birthHome)) return this.linkFor(this.birthHome);
     const links = [...this.open.values()];
     return links.length === 1 ? links[0]! : null;
   }

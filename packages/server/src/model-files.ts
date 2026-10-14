@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { localModel, MODELS_ROUTE } from "@isocan/core/local-judge";
 import { modelPath } from "@isocan/core/modelstore";
 import { loopbackBound } from "./route-helpers.ts";
+import type { Workstation } from "./workstation.ts";
 
 /**
  * **`GET /models/<name>` — the local judge's model, from this machine to its
@@ -50,8 +51,8 @@ const LOOPBACK_PEERS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const isLoopbackHost = (host: string | undefined) => !!host && /^(localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/i.test(host.trim());
 
 interface ModelFileScope {
-  /** The home whose `models/` is served — the one keys.json is in. */
-  home: string;
+  /** The workstation whose `models/` is served — null on a hosted home. */
+  workstation: Workstation | null | undefined;
   servesWorld: boolean | undefined;
 }
 
@@ -60,13 +61,13 @@ const MODEL_FILE_ROUTE = `${MODELS_ROUTE}/:name`;
 /** `GET /models/:name` on `app`, behind this machine-only gate. */
 export function registerModelFileRoutes(app: FastifyInstance, scope: ModelFileScope): void {
   app.get(MODEL_FILE_ROUTE, async (req, reply) => {
-    if (scope.servesWorld === true || !loopbackBound(app) || !LOOPBACK_PEERS.has(req.ip) || !isLoopbackHost(req.headers.host)) {
+    if (!scope.workstation || scope.servesWorld === true || !loopbackBound(app) || !LOOPBACK_PEERS.has(req.ip) || !isLoopbackHost(req.headers.host)) {
       return reply.status(404).send({ error: "models are served only by a local daemon to this machine's own pages", code: "model-not-here" });
     }
     const name = (req.params as { name: string }).name;
     const model = localModel(name);
     if (!model) return reply.status(404).send({ error: "no such model", code: "model-unknown" });
-    const file = modelPath(scope.home, model);
+    const file = modelPath(scope.workstation.keysHome, model);
     const size = await fs.stat(file).then((s) => s.size, () => -1);
     if (size !== model.bytes) {
       return reply.status(404).send({ error: `${model.name} is not on this machine — \`isocan model fetch ${model.name}\` puts it there`, code: "model-not-fetched" });

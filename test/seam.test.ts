@@ -98,8 +98,8 @@ describe("the storage seam", () => {
     }
   });
 
-  it("store.ts and desk.ts still have no runtime import at all", async () => {
-    for (const file of ["packages/server/src/store.ts", "packages/server/src/desk.ts", "packages/server/src/personal-desk.ts"]) {
+  it("store.ts, desk.ts and workstation.ts still have no runtime import at all", async () => {
+    for (const file of ["packages/server/src/store.ts", "packages/server/src/desk.ts", "packages/server/src/personal-desk.ts", "packages/server/src/workstation.ts"]) {
       const source = await read(file);
       // `[\s\S]` on purpose: these files' imports are multi-line, and a regex
       // that only saw single-line ones would pass by not looking.
@@ -116,7 +116,7 @@ describe("the storage seam", () => {
   it("daemon.ts is still the one place a backing is reached for", async () => {
     // By MODULE PATH, because that is what a runtime coupling actually is;
     // the class names appear in prose all over these files and should.
-    const backings = ["./file-store.ts", "./file-desk.ts", "@isocan/cloudstore"];
+    const backings = ["./file-store.ts", "./file-desk.ts", "./file-workstation.ts", "@isocan/cloudstore"];
     const allowed = new Set(["daemon.ts", "index.ts"]);
     const server = path.join(repo, "packages/server/src");
     let checked = 0;

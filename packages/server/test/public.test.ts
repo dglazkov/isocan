@@ -8,9 +8,9 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
 
 const owner: Actor = { id: "usr_public_owner", name: "Maya" };
 const nodes: Array<{ daemon: Daemon; dir: string }> = [];
-async function node(birthHome: string | null = null) {
+async function node(birthHome: string | null = null, servesWorld = birthHome === null) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "isocan-public-"));
-  const daemon = await startDaemon({ port: 0, home: dir, birthHome, homePollMs: 50, servesWorld: true });
+  const daemon = await startDaemon({ port: 0, home: dir, birthHome, homePollMs: 50, servesWorld });
   nodes.push({ daemon, dir });
   return { daemon, dir, base: `http://127.0.0.1:${(daemon.app.server.address() as { port: number }).port}` };
 }
@@ -141,7 +141,7 @@ it("checks current backing lifecycle rather than retained metadata or a warmed r
 });
 
 it.each([false, true])("forwards mutations to the canvas home without listing replicas (read before pass: %s)", async (readBeforePass) => {
-  const home = await node(); const local = await node(); const mine = await seed(home);
+  const home = await node(); const local = await node(null, false); const mine = await seed(home);
   const row = await link(home.base, mine, "prj_public", "read");
   const localBadge = await mintTestBadge(local.base);
   await localBadge.speakAs(owner);

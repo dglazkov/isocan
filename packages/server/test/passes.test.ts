@@ -515,7 +515,7 @@ describe("an unmatched /api path says so, in JSON, with a code", () => {
       // what an older home now looks like from a replica. Injected rather than
       // deployed, because the other way to get one is to check out phase 7.
       let asked = false;
-      replica.homes.link(base)!.freeName = async () => {
+      replica.homes!.link(base)!.freeName = async () => {
         asked = true;
         throw new HomeRefusedError(404, "no such route", UNKNOWN_ROUTE);
       };

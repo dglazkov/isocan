@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import type { ActorRegistry, LogEntry, Canvas, CanvasState, SlashCommand } from "@isocan/core";
+import type { SummaryEntry } from "@isocan/core/semantic-zoom";
 import {
   applyActorColor,
   applyActorJoin,
@@ -193,6 +194,9 @@ export class FileStore implements Store {
       }
       await fs.rm(target, { recursive: true, force: true });
     }
+    const summaries = await fs.readdir(p.summariesDir(this.home, id)).catch(() => [] as string[]);
+    objects += summaries.length;
+    await fs.rm(p.summariesDir(this.home, id), { recursive: true, force: true });
     return { files, bytes, ops, objects, keeps: [] };
   }
 
@@ -600,7 +604,53 @@ export class FileStore implements Store {
     return readJsonLines<LogEntry>(p.oplogArchiveFile(this.home, id));
   }
 
+  // ---- semantic zoom summaries ----
+
+  async listSummaries(id: string): Promise<Array<{ entry: SummaryEntry; touched: number }>> {
+    const dir = p.summariesDir(this.home, id);
+    const names = await fs.readdir(dir).catch(() => [] as string[]);
+    const rows: Array<{ entry: SummaryEntry; touched: number }> = [];
+    for (const name of names) {
+      if (!name.endsWith(".json")) continue;
+      const key = name.slice(0, -5);
+      if (!SUMMARY_KEY.test(key)) continue;
+      const full = path.join(dir, name);
+      const [entry, stat] = await Promise.all([
+        this.readSummaryFile(full),
+        fs.stat(full).catch(() => null),
+      ]);
+      if (entry) rows.push({ entry, touched: stat?.mtimeMs ?? 0 });
+    }
+    return rows;
+  }
+
+  async getSummary(id: string, key: string): Promise<SummaryEntry | null> {
+    if (!SUMMARY_KEY.test(key)) return null;
+    return this.readSummaryFile(path.join(p.summariesDir(this.home, id), `${key}.json`));
+  }
+
+  async putSummary(id: string, entry: SummaryEntry): Promise<void> {
+    if (!SUMMARY_KEY.test(entry.key)) throw new Error(`invalid summary key: ${entry.key}`);
+    const dir = p.summariesDir(this.home, id);
+    await fs.mkdir(dir, { recursive: true });
+    await writeFileAtomic(path.join(dir, `${entry.key}.json`), JSON.stringify(entry));
+  }
+
+  async deleteSummary(id: string, key: string): Promise<void> {
+    if (!SUMMARY_KEY.test(key)) return;
+    await fs.rm(path.join(p.summariesDir(this.home, id), `${key}.json`), { force: true });
+  }
+
   // ---- internals ----
+
+  private async readSummaryFile(full: string): Promise<SummaryEntry | null> {
+    try {
+      const entry = JSON.parse(await fs.readFile(full, "utf8")) as SummaryEntry;
+      return entry && typeof entry.key === "string" && Array.isArray(entry.sourceIds) ? entry : null;
+    } catch {
+      return null;
+    }
+  }
 
   private async readIndex(id: string): Promise<Record<string, BlobMeta>> {
     return (await readJson<Record<string, BlobMeta>>(p.blobsIndexFile(this.home, id))) ?? {};
@@ -616,6 +666,8 @@ export class FileStore implements Store {
     }
   }
 }
+
+const SUMMARY_KEY = /^[0-9a-f]{64}$/;
 
 function pretty(value: unknown): string {
   return JSON.stringify(value, null, 2);

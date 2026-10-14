@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ActorClaim, CanvasTakedown, Grant, Group, HomeRefusal, OperatorAct, Space } from "@isocan/core";
 import { groupSubject, LINK, PASS_TTL_MS, SHELF } from "@isocan/core";
-import type { BadgeRecord, Desk, PassRecord } from "@isocan/server";
+import type { SummaryDay } from "@isocan/core/semantic-zoom";
+import type { BadgeRecord, Desk, ParkRow, PassRecord } from "@isocan/server";
 import type { ConformanceOptions } from "./store-conformance.ts";
 
 /**
@@ -1283,6 +1284,40 @@ export function deskConformance(
         // lift's reason — and creates nothing.
         await desk.liftRefusal("actor:usr_nobody", { at: ts(14), by: "email:olu@acme.test", actId: "opr_5" });
         expect(await desk.refusalFor("actor:usr_nobody")).toBeNull();
+      }),
+    );
+
+    test(
+      "summary cost ledger, park cursors, and migration marks round-trip per canvas and actor",
+      withDesk(async ({ desk }) => {
+        expect(await desk.summaryDays("prj_a")).toEqual({});
+        const day: SummaryDay = {
+          day: "2026-10-14",
+          calls: 2,
+          inputTokens: 120,
+          outputTokens: 30,
+          makes: 2,
+          hits: 5,
+          stale: 1,
+          overBudget: 0,
+          vision: 0,
+          byKind: { text: { calls: 2, inputTokens: 120, outputTokens: 30, makes: 2, hits: 5 } },
+          byModel: { "claude-haiku-4-5-20251001": { calls: 2, inputTokens: 120, outputTokens: 30 } },
+        };
+        await desk.putSummaryDays("prj_a", { "2026-10-14": day });
+        expect(await desk.summaryDays("prj_a")).toEqual({ "2026-10-14": day });
+        expect(await desk.summaryDays("prj_b")).toEqual({});
+
+        expect(await desk.parkRow("prj_a", "usr_ada")).toBeNull();
+        const row: ParkRow = { cursor: 3, delivered: 5, rehanded: 4, parkId: "park_1" };
+        await desk.putParkRow("prj_a", "usr_ada", row);
+        expect(await desk.parkRow("prj_a", "usr_ada")).toEqual(row);
+        expect(await desk.parkRow("prj_a", "usr_bo")).toBeNull();
+        expect(await desk.parkRow("prj_b", "usr_ada")).toBeNull();
+
+        expect(await desk.linkGrantsMigrated()).toBe(false);
+        await desk.markLinkGrantsMigrated("2026-10-14T12:00:00.000Z");
+        expect(await desk.linkGrantsMigrated()).toBe(true);
       }),
     );
   });

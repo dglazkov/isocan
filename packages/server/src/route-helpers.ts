@@ -1,6 +1,7 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { AMBIGUOUS_HOME, isLive, type Grant } from "@isocan/core";
-import type { HomeLinks } from "./home-links.ts";
+import { isSelfAddress, NotAReplicaError, SelfLinkError, type HomeLinks } from "./home-links.ts";
+import type { Workstation } from "./workstation.ts";
 
 /**
  * **What more than one route file asks.** Three helpers `http.ts` held at
@@ -25,6 +26,82 @@ export function loopbackBound(app: FastifyInstance): boolean {
   const address = app.server.address();
   if (!address || typeof address === "string") return false;
   return address.address === "127.0.0.1" || address.address === "::1";
+}
+
+/** The TCP port this Fastify instance is listening on, or null if not bound. */
+export function boundPort(app: FastifyInstance): number | null {
+  const address = app.server.address();
+  return address && typeof address === "object" ? address.port : null;
+}
+
+/** Does `targetUrl` name this daemon itself, by `Host` header or loopback port? */
+export function isRequestSelfAddress(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  targetUrl: string,
+): boolean {
+  const rawHost = Array.isArray(req.headers.host) ? req.headers.host[0] : req.headers.host;
+  return isSelfAddress(targetUrl, rawHost ?? null, boundPort(app), loopbackBound(app));
+}
+
+/**
+ * Validate and normalize `body.home` on `project.create` (`POST /api/ops`).
+ *
+ * - On an authoritative hosted home (`!workstation`), naming this home's own
+ *   origin means "birth it here" (`undefined`), while naming another home is
+ *   refused (`409 not-a-replica`).
+ * - On a local workstation, naming this daemon's own address is refused
+ *   (`409 self-link`), because a replica cannot birth canvases at itself.
+ */
+export function resolveCreateHome(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  workstation: Workstation | null | undefined,
+  rawHome: string | undefined,
+): string | undefined {
+  const trimmed = typeof rawHome === "string" ? rawHome.trim() : "";
+  if (!trimmed) return undefined;
+  const self = isRequestSelfAddress(app, req, trimmed);
+  if (!workstation) {
+    if (self) return undefined;
+    throw new NotAReplicaError(
+      "this home is an authoritative home, not a replica — it does not birth canvases at other homes",
+    );
+  }
+  if (self) throw new SelfLinkError(trimmed);
+  return trimmed;
+}
+
+/**
+ * Resolve and validate the target home for `POST /api/home/join`.
+ *
+ * Refuses self-links (`409 self-link`) before anything else, refuses hosted
+ * homes (`409 not-a-replica`) when `!workstation`, and refuses local daemons
+ * with neither a named home nor a `birthHome` (`409 not-a-replica`).
+ */
+export function resolveJoinHome(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  workstation: Workstation | null | undefined,
+  rawHome: unknown,
+): string {
+  const named = typeof rawHome === "string" && rawHome.trim() ? rawHome.trim() : null;
+  if (named && isRequestSelfAddress(app, req, named)) throw new SelfLinkError(named);
+  if (!workstation) {
+    throw new NotAReplicaError(
+      "this home is an authoritative home, not a replica — it does not fetch canvases from other homes",
+    );
+  }
+  const address = named ?? workstation.birthHome;
+  if (!address) {
+    throw new NotAReplicaError(
+      "no home was named and this daemon has no birth default, so there is nowhere to " +
+        "fetch a canvas from. Say which home (the canvas's marker carries the address), " +
+        "or `isocan home <url>` to set where canvases born here go.",
+    );
+  }
+  if (isRequestSelfAddress(app, req, address)) throw new SelfLinkError(address);
+  return address;
 }
 
 /**
