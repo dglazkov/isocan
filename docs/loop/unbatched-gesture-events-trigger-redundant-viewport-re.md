@@ -3,7 +3,7 @@ title: Unbatched gesture events trigger redundant viewport re-renders
 loop:
   - 973d569e-e39f-4269-8267-05969b694213
 loop_rank: P2
-loop_state: ACTIVE
+loop_state: RESOLVED
 loop_goal: pg_v67IPMwQ
 decision: untriaged
 ---
