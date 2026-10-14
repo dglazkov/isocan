@@ -332,6 +332,17 @@ export interface EnrolledAgent {
      * say where an invitation came from when somebody asks.
      */
     invitedFrom?: string;
+    /**
+     * **What this agent may do here, at most** (critique phase 2) — `note`
+     * for an enrolled critic: notes on items, replies, reactions, and nothing
+     * else, checked at the home after the badge's capability
+     * (`ceilingRefusal`), so it only ever narrows. Written by `agent.ceiling`,
+     * kept across a re-enrolment, gone with the row on `agent.withdraw`.
+     */
+    ceiling?: "note";
+    /** Who set the ceiling — the one actor, beside `agent.withdraw`, whose
+     *  `agent.ceiling … null` lifts it. */
+    ceilingBy?: Actor;
 }
 /**
  * Everything ON one canvas: items, threads, the trash, and the agents with standing here.
