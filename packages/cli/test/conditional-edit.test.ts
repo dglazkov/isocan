@@ -169,7 +169,7 @@ describe("the conditional edit's own words", () => {
 });
 
 /**
- * **A name is not a type** (lessons.md, 14 Oct 2026). An agent renumbering
+ * **A name is not a type** (lessons.md #122, 14 Oct 2026). An agent renumbering
  * thirteen HTML slides wrote each one to a file named after its item id, no
  * extension, and ran `isocan edit <item> <file>`. The new versions took their
  * filename and type from that path — `itm_… (application/octet-stream)` — and

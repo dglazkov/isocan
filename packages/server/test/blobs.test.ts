@@ -99,7 +99,7 @@ describe("concurrent blob uploads", () => {
 
 /**
  * **A name is not a type, and the type a hash was first filed under must not
- * outlive the name that set it** (lessons.md, 14 Oct 2026). Thirteen slides
+ * outlive the name that set it** (lessons.md #122, 14 Oct 2026). Thirteen slides
  * uploaded from extensionless files were filed `application/octet-stream`;
  * re-saving the same bytes as `.html` made versions that said `text/html`,
  * but this route kept answering octet-stream under `nosniff`, and full screen

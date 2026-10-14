@@ -80,7 +80,7 @@ export function extensionFor(filename: string, mimeType: string): string {
  * extensionless files, filed as `application/octet-stream`, and re-saved as
  * `01-title.html`: the new versions said `text/html`, the blobs kept octet-
  * stream, and the content route's `nosniff` made full screen blank
- * (`docs/reviews/lessons.md`).
+ * (`docs/reviews/lessons.md` #122).
  *
  * The answer is the new type ONLY when the recorded one says nothing —
  * missing, empty or octet-stream — and the new one says something. Two

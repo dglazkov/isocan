@@ -265,7 +265,7 @@ export function storeConformance(
       "heals a blob filed as octet-stream when the same bytes arrive typed, and keeps the first of two specific types",
       withStore(async ({ store }) => {
         await seed(store);
-        // 14 Oct 2026 (lessons.md): a slide uploaded from an extensionless
+        // 14 Oct 2026 (lessons.md #122): a slide uploaded from an extensionless
         // file, then the same bytes re-saved as `.html`.
         const page = Buffer.from("<!doctype html><h1>Slide</h1>");
         const first = await store.putBlob("prj_1", page, { mimeType: "application/octet-stream", filename: "itm_slide" });

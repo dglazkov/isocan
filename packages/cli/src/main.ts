@@ -8312,7 +8312,7 @@ unconditional edit.`,
         // A new version of the SAME item: a file whose name says nothing about
         // its type (`/tmp/itm_x`, a mktemp) keeps the item's own name and type
         // rather than becoming `application/octet-stream`. Thirteen slides of a
-        // talk turned into raw bytes that way on 14 Oct 2026 (lessons.md #120).
+        // talk turned into raw bytes that way on 14 Oct 2026 (lessons.md #122).
         const given = path.basename(file);
         const typed = mimeFromName(given) !== undefined;
         filename = typed ? given : current.filename;
