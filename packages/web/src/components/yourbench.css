@@ -2,7 +2,6 @@
    Its own file because `styles.css` is one of the three doors every feature
    has to edit, and a component that can hold its own styles should. Loaded by
    `YourBench.tsx`, which is the only thing that draws these. */
-.bench-panel { display: flex; flex-direction: column; gap: 8px; min-width: 320px; }
 /* `--ink-muted` and `--good` (BC-6, 27 Sep 2026): this asked for `--muted` and `--ok`,
    neither defined anywhere, so the quiet rows were full ink and "ready" fell back to the
    fill accent, which is unreadable on graphite. tokens.test.ts now reads this file. */

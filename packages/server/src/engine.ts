@@ -48,6 +48,7 @@ import {
   mergeJoins,
   actorMarks,
   actorKinds,
+  personIntoAgent,
   actorNames,
   allocateName,
   applyActorColor,
@@ -817,6 +818,8 @@ export class Engine {
       for (const id of [from, into]) {
         if (!claimsActor(claims, id)) throw notBothActors(from, into, id);
       }
+      const wrongWay = personIntoAgent((await this.actors()).registry, request.op);
+      if (wrongWay) throw wrongWay;
       const homes = this.homes?.all() ?? [];
       if (homes.length > 0) {
         await Promise.allSettled(

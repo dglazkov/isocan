@@ -303,7 +303,10 @@ never a way to take a name that isn't yours.
 its comments, mentions and undo become yours, and the home refuses it unless
 this machine already speaks for both. It exists for a person who spent weeks
 as a second name on a second machine; an agent almost never wants it, and
-never for an actor that is not its own earlier self.
+never for an actor that is not its own earlier self. Asked to merge your
+person's identities, run `isocan identity --home --join <actorId>`: `--home`
+folds into the machine's person rather than into you, and the home refuses
+folding a person into an agent.
 
 If `--session` found no harness session, mention it to the human after you
 have worked around it: a harness isocan has not met can opt in for good by

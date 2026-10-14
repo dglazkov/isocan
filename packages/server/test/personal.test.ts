@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { SOURCE_POLICY_HEADER, sourcePolicyHeader, type Actor, type Operation, type PersonalEnsureResponse, type PersonalLinkResponse } from "@isocan/core";
+import { SOURCE_POLICY_HEADER, personRequired, sourcePolicyHeader, type Actor, type Operation, type PersonalEnsureResponse, type PersonalLinkResponse } from "@isocan/core";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { mintTestBadge, type TestBadge } from "./badge.ts";
 
@@ -432,4 +432,32 @@ it("invalid gesture identities cannot create a source or unlink a live card", as
   const result = await request(home, badge, "POST", "/api/projects/prj_destination/personal/unlink", { actorId: person.id, itemId: linked.link.itemId });
   expect(result.status).toBe(403); expect(await home.daemon.store.tipSeq("prj_destination")).toBe(tip);
   expect((await home.daemon.engine.getSnapshot("prj_destination")).canvas.items[linked.link.itemId]).toBeDefined();
+});
+
+/**
+ * **A person stays a person, and an agent is told how to switch** (14 Oct 2026).
+ * Reported from a hosted home: a person folded their browser into the id their
+ * laptop announced, and the bench answered "personal canvases belong to people"
+ * — the laptop's id read as an agent there. A fold that brings an agent's old
+ * id along must not do that either, and the refusal an agent does get names who
+ * is asking and what to do, rather than a code path's shorthand.
+ */
+it("keeps a person a person through a fold, refuses the fold that would not, and words the refusal", async () => {
+  const { home, badge } = await fixture();
+  const tab: Actor = { id: "usr_personal_maya_tab", name: "Maya Tab" };
+  const kit: Actor = { id: "usr_personal_kit", name: "Kit" };
+  await badge.speakAs(tab, "web:maya-tab");
+  await badge.speakAs(kit, "claude-code:kit");
+  // The browser folds into the laptop's person, and so does an agent's old id.
+  for (const from of [tab.id, agent.id]) await op(home, badge, null, { type: "actor.join", from, into: person.id });
+  expect((await home.daemon.engine.actorKinds())[person.id]).toBeUndefined();
+  expect(await json(await request(home, badge, "GET", `/api/personal?actorId=${tab.id}`))).toMatchObject({ owner: { id: person.id }, source: null });
+  // An agent session asked to "merge my identities" folds into ITSELF; the home refuses.
+  const wrongWay = await request(home, badge, "POST", "/api/ops", { actor: kit, canvasId: null, op: { type: "actor.join", from: person.id, into: kit.id } });
+  expect(wrongWay.status).toBe(400);
+  expect(await wrongWay.json()).toMatchObject({ code: "bad-join", error: expect.stringContaining(`isocan identity --home --join ${kit.id}`) });
+  // The agent itself is refused, by name, with the way to switch.
+  const refused = await request(home, badge, "GET", `/api/personal?actorId=${kit.id}`);
+  expect(refused.status).toBe(403);
+  expect(await refused.json()).toMatchObject({ code: "personal-person-required", error: personRequired("Kit") });
 });

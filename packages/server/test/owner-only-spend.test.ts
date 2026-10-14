@@ -78,7 +78,9 @@ beforeEach(async () => {
   const address = daemon.app.server.address();
   base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   owner = await mintTestBadge(base);
-  await owner.speakAs(priya);
+  // The machine's person, claimed the way a person's own terminal claims (`home:`) —
+  // a fold into her from her tablet is a person folding into a person.
+  await owner.speakAs(priya, "home:person");
   const made = await fetch(`${base}/api/ops`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...owner.headers },

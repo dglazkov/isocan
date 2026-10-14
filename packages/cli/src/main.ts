@@ -1085,7 +1085,7 @@ program
   .option("--as <actorId>", "resume an existing actor whose session is gone (implies --session)")
   .option(
     "--join <actorId>",
-    "fold that actor into the one this session is — its comments, mentions and undo become yours; cannot be undone",
+    "fold that actor into the one this session is (with --home, into the machine's person) — its comments, mentions and undo become yours; cannot be undone",
   )
   .option(
     "--color <color>",
@@ -1121,7 +1121,13 @@ program
          * old id to this one from now on.
          */
         if (opts.join !== undefined) {
-          const resolved = await resolveIdentity(client, home);
+          // `--home` folds into the machine's person even inside a coding
+          // harness, where the command otherwise speaks as the agent's
+          // session — the one way a person in an agent's terminal can fold
+          // that agent into themselves rather than the reverse.
+          const person = opts.home ? await readIdentity(home) : null;
+          if (person) client.reclaimWith(() => reclaimIdentity(client, { actor: person, key: HOME_CLAIM_KEY }));
+          const resolved = person ? { actor: person } : await resolveIdentity(client, home);
           if (!resolved) throw new Error(await noIdentityHere(client, home));
           const from = opts.join.trim();
           await client.sendOp(null, resolved.actor, {

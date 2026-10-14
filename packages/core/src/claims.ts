@@ -150,7 +150,19 @@ export const PERSON_HARNESSES: ReadonlySet<string> = new Set(["web", "home", "cl
  * is neither, and reads as not an agent.
  */
 export const isAgentHarness = (harness: string | null | undefined): boolean =>
-  harness !== null && harness !== undefined && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase());
+  harness !== null && harness !== undefined && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase()) &&
+  // **A relay is not a kind** (14 Oct 2026). `replica:` is the key a daemon
+  // claims under when it carries its person up to a home: transport custody,
+  // not a harness. `bindName` stopped recording it on 14 Sep, and the file
+  // store repaired the rows it had already written, but a hosted home's cloud
+  // store never did — so a person announced by their own laptop before then
+  // still read as an agent there, and folding their browser into that id
+  // turned the browser into one too ("personal canvases belong to people").
+  harness.toLowerCase() !== "replica";
+
+/** Is this harness a person's own surface? */
+const isPersonHarness = (harness: string | null | undefined): boolean =>
+  typeof harness === "string" && PERSON_HARNESSES.has(harness.toLowerCase());
 
 /** Actor id → "agent", for every actor whose last claim came from a harness
  *  that is not a person's. People are absent rather than "person", so a
@@ -164,8 +176,17 @@ export type ActorKinds = Record<string, "agent">;
  */
 export function actorKinds(registry: ActorRegistry): ActorKinds {
   const kinds: ActorKinds = {};
+  // **People win a fold** (14 Oct 2026). A join says two ids are one person,
+  // so when any id folded into an actor last claimed from a person's surface,
+  // the actor is a person — an agent's old id folded into you does not make
+  // you an agent. Only an actor every one of whose ids is an agent's is one.
+  const people = new Set<string>();
   for (const [id, harness] of Object.entries(registry.harnesses ?? {})) {
-    if (isAgentHarness(harness)) kinds[resolveActor(registry.joined, id)] = "agent";
+    if (isPersonHarness(harness)) people.add(resolveActor(registry.joined, id));
+  }
+  for (const [id, harness] of Object.entries(registry.harnesses ?? {})) {
+    const into = resolveActor(registry.joined, id);
+    if (isAgentHarness(harness) && !people.has(into)) kinds[into] = "agent";
   }
   return kinds;
 }
@@ -540,7 +561,13 @@ export function bindName(
   const harness = harnessOf(sessionKey);
   // A replica claims transport custody. It does not identify the person or
   // harness behind that transport and must not overwrite an actual claim.
-  const withHarness: ActorRegistry = harness && harness.toLowerCase() !== "replica"
+  // **A person stays a person** (14 Oct 2026): an agent session that resumes
+  // somebody's actor (`isocan identity --as` from inside a coding harness)
+  // speaks as them, and does not turn them into an agent. A person's surface
+  // still overwrites an agent's row, which is how a misread actor recovers:
+  // claim yourself from a browser or your own terminal.
+  const keepsPerson = isPersonHarness(registry.harnesses?.[actor.id]) && isAgentHarness(harness);
+  const withHarness: ActorRegistry = harness && harness.toLowerCase() !== "replica" && !keepsPerson
     ? { ...registry, harnesses: { ...(registry.harnesses ?? {}), [actor.id]: harness } }
     : registry;
   const current = registry.names[actor.id];
@@ -779,6 +806,46 @@ export function notBothActors(from: string, into: string, missing: string): OpVa
     `this badge does not speak for ${missing} — folding ${from} into ${into} needs a badge ` +
       "that is both. Prove the address they signed in with (the web app's identity menu), " +
       "or `isocan identity --as <actor id>` with a vouch, then fold.",
+  );
+}
+
+/**
+ * **A fold never makes a person an agent** (14 Oct 2026). `isocan identity
+ * --join` folds into whoever the command speaks as, and inside a coding
+ * harness that is the agent's session — so an agent asked to "merge my
+ * identities" folded its person into itself, and the person's every surface
+ * became the agent. Refused at the home before the join is logged (never on
+ * replay: a fold already in a log is history), with the way round in the
+ * words. Null when the fold is fine.
+ */
+export function personIntoAgent(registry: ActorRegistry, op: ActorJoinOp): OpValidationError | null {
+  const kinds = actorKinds(registry);
+  const from = resolveActor(registry.joined, op.from);
+  const into = resolveActor(registry.joined, op.into);
+  const person = Object.entries(registry.harnesses ?? {}).some(
+    ([id, harness]) => resolveActor(registry.joined, id) === from && isPersonHarness(harness),
+  );
+  if (!person || kinds[into] !== "agent") return null;
+  const name = (id: string) => registry.names[id]?.name ?? id;
+  return new OpValidationError(
+    "bad-join",
+    `${name(from)} is a person and ${name(into)} is an agent — folding the person into the agent would ` +
+      `make every surface of ${name(from)} the agent. Fold the other way, from ${name(from)}'s own surface: ` +
+      `the web app's identity menu, or \`isocan identity --home --join ${op.into}\` in their own terminal.`,
+  );
+}
+
+/**
+ * **The refusal for an agent opening a personal canvas** — one sentence for
+ * the bench panel, `isocan bench` and `isocan personal`, since all three show
+ * what the home said. It names who the home thinks is asking, and how to ask
+ * as the person instead.
+ */
+export function personRequired(name: string): string {
+  return (
+    `${name} is recorded at this home as an agent, and a personal canvas belongs to a person. ` +
+    "Switch to your own person — your face's menu in the web app, or `isocan identity --home` in " +
+    "your own terminal — and open your bench as them."
   );
 }
 
