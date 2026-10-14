@@ -2691,6 +2691,7 @@ export class Engine {
     if (mine.length === 0) return [];
     const names = await this.actorNames();
     const { registry } = await this.actors();
+    const kinds = actorKinds(registry);
     // Already one of mine, so not something to resume. Includes the actor this
     // badge is wearing right now, which would otherwise be offered back to it.
     const seen = new Set<string>(me!.claims.map((claim) => claim.actorId));
@@ -2704,6 +2705,10 @@ export class Engine {
           // An actor folded into somebody else answers to nobody, so there is
           // nobody to resume under that id (multi-identity phase 5).
           if (resolveActor(registry.joined, claim.actorId) !== claim.actorId) continue;
+          // An agent enrolled or claiming on a badge that also carries its
+          // owner's attestation (for example, a CLI harness running behind an
+          // authenticating proxy) is not a human persona to resume at the door.
+          if (kinds[claim.actorId] === "agent") continue;
           rows.push({
             actor: { id: claim.actorId, name: names[claim.actorId] ?? "" },
             via: attestation.attribute,

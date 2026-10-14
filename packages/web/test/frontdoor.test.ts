@@ -305,20 +305,43 @@ describe("SSO auto-entry from an attested badge offer", () => {
     expect(entered).toEqual(["alice"]);
   });
 
-  it("defers to the identity dialog when multiple personas are resumable or the claim is refused", async () => {
-    const multiple = await enterFromAttestOffer(
+  it("auto-resumes the persona matching the email local-part when multiple personas are resumable", async () => {
+    const adopted: string[] = [];
+    const who = await enterFromAttestOffer(
       {
         attesters: ["email"],
         auth: null,
         attestations: [proxyAttestation],
-        resumable: [alice, aliceAdmin],
+        resumable: [aliceAdmin, alice],
+      },
+      {
+        adopt: async (actor) => {
+          adopted.push(actor.id);
+          return actor;
+        },
+        enter: async () => {
+          throw new Error("should not mint fresh actor when resumable matches local-part");
+        },
+      },
+    );
+    expect(who).toEqual(alice);
+    expect(adopted).toEqual(["usr_alice"]);
+  });
+
+  it("defers to the identity dialog when multiple personas are ambiguous or the claim is refused", async () => {
+    const ambiguous = await enterFromAttestOffer(
+      {
+        attesters: ["email"],
+        auth: null,
+        attestations: [proxyAttestation],
+        resumable: [aliceAdmin, { id: "usr_alice_review", name: "Alice (Review)" }],
       },
       {
         adopt: async () => alice,
         enter: async () => alice,
       },
     );
-    expect(multiple).toBeNull();
+    expect(ambiguous).toBeNull();
 
     const taken = await enterFromAttestOffer(
       {

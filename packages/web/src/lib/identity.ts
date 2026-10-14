@@ -110,9 +110,11 @@ export function attestedEmailLocalPart(attestations: readonly Attestation[]): st
 /**
  * Auto-enter on an SSO home from the badge's current attestation offer:
  * - If exactly one actor is resumable on that address, resume it (`adoptIdentity`).
+ * - If multiple personas exist (`resumable.length > 1`) and exactly one matches
+ *   the attested email's local-part, resume that primary persona.
  * - If no actor exists yet on that address, claim the email's local-part (`enterAs`).
- * - If multiple personas exist (`resumable.length > 1`) or the claim is refused
- *   (`name-taken`), return null so the identity dialog lets the person choose.
+ * - Otherwise (ambiguous personas or a refused `name-taken` claim), return null
+ *   so the identity dialog lets the person choose.
  */
 export async function enterFromAttestOffer(
   offer: AttestOffer | null,
@@ -121,13 +123,19 @@ export async function enterFromAttestOffer(
   if (!offer || !offer.attesters.includes("email")) return null;
   const adopt = actions.adopt ?? adoptIdentity;
   const enter = actions.enter ?? enterAs;
+  const local = attestedEmailLocalPart(offer.attestations);
   try {
     if (offer.resumable.length === 1) {
       return await adopt(offer.resumable[0]!);
     }
-    if (offer.resumable.length === 0) {
-      const local = attestedEmailLocalPart(offer.attestations);
-      if (local) return await enter(local);
+    if (offer.resumable.length > 1 && local) {
+      const matched = offer.resumable.filter((actor) => sameName(actor.name, local));
+      if (matched.length === 1) {
+        return await adopt(matched[0]!);
+      }
+    }
+    if (offer.resumable.length === 0 && local) {
+      return await enter(local);
     }
   } catch {
     return null;
