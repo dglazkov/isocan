@@ -160,17 +160,13 @@ this phase runs once.
 
 ## Phase 7 — Two critics
 
-**Status: NOT STARTED.**
+**Status: RETIRED.** 2026-10-14 — became its own project, [`critique`](../critique/phases.md), the first proactive experiment built in full.
 
-2B. Two of design-competition's packs run as lenses over one screen, on
-demand, each alone. They pin points (`react --at`) and comment; they hold a
-grant that cannot edit; the lead agent writes agree / split / blocker, names
-the tension in a split, and *build both* makes two proposals, each citing
-the critic it answers. The two settings — how loud, and when — arrive with
-the first trigger that could use them, not before.
-
-**Acceptance:** two critics over one screen; an attempt by a critic to edit
-is refused at the door, not by its prompt; a split produces two proposals.
+**Formerly:** two of design-competition's packs as lenses over one screen,
+pinning notes, unable to edit, with the lead agent's agree / split / blocker
+and *build both*. All of it is in critique, which also found that "unable to
+edit" needs a ceiling on an agent's claim, since no grant comments without
+editing.
 
 ## Phase 8 — Explain this screen
 
