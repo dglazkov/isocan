@@ -230,6 +230,23 @@ export function adoptHandedIdentity(actor: Actor): Actor {
 }
 
 /**
+ * **The stored copy catches up with the registry.** The name this browser
+ * wrote at sign-in is memory; when the registry says otherwise (a rename from
+ * the terminal, another browser, a fold), the registry wins and this copy is
+ * refreshed — the current identity and its roster row, key kept, so the next
+ * boot paints the right name before any registry has arrived. Touches nothing
+ * when this browser is not `id`.
+ */
+export function rememberName(id: string, name: string): void {
+  const current = parsePersona(read(KEY));
+  if (current && current.id === id && current.name !== name) write(KEY, { ...current, name });
+  const roster = personas();
+  if (roster.some((p) => p.id === id && p.name !== name)) {
+    write(ROSTER_KEY, roster.map((p) => (p.id === id ? { ...p, name } : p)));
+  }
+}
+
+/**
  * Step out. The roster survives — leaving is not forgetting — so the dialog
  * can offer the way back in.
  */

@@ -94,7 +94,10 @@ const bare = (source: string) =>
 describe("the canvas list", () => {
   const page = bare(list);
   it("joins the spaces list to the canvases and draws a heading per space, No space last", () => {
-    expect(page).toMatch(/listSpaces\(\)/);
+    // Read under its own deadline, never awaited with the list itself
+    // (behaviourally: canvaslist-reads.test.ts, late spaces become headings).
+    expect(page).toMatch(/withDeadline\(SIDE_READ_DEADLINE_MS, "the spaces did not answer", listSpaces\)/);
+    expect(page).toMatch(/\(answer\) => \{ if \(current\(\)\) setSpaces\(answer\.spaces\); \}/);
     expect(page).toMatch(/space \? space\.name : "No space"/);
     // The last group is the null one, after every space in name order.
     expect(page).toMatch(/\{ space: null, canvases: byGroup\.get\(null\)! \}\]/);

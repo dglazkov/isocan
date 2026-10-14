@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode } from "react";
 import { preloadMarkdown } from "./lib/markdown.tsx";
 import { BrowserRouter, matchPath, Route, Routes, useLocation } from "react-router-dom";
 import type { Actor } from "@isocan/core";
@@ -7,6 +7,7 @@ import { ApiError, getSnapshot } from "./lib/api.ts";
 import { CANVAS_GROUPS_REQUIRED } from "@isocan/core";
 import { Viewer } from "./components/LazyViewer.tsx";
 import { adoptIdentity, enterFromAttestOffer, knownIdentities, readIdentity } from "./lib/identity.ts";
+import { noteClaimed, useSelf } from "./lib/names.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
 import { attesterOffer, type SignIn, type SignInLanding } from "./lib/signin.ts";
 import { faceFor, isSsoHome, PUBLIC_PATH } from "./lib/faces.ts";
@@ -72,7 +73,20 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
   // silently replaced.
   const [redeeming, setRedeeming] = useState(arrival !== null);
   const [refused, setRefused] = useState<ArrivalRefused | null>(null);
-  const [actor, setActor] = useState<Actor | null>(readIdentity);
+  const [stored, setStored] = useState<Actor | null>(readIdentity);
+  /**
+   * **One "you", reconciled here and handed down** (14 Oct 2026): the header
+   * chip, the identity menu, your face in the pile and every other surface
+   * that says who you are read this actor, whose name is the registry's —
+   * see `useSelf`. Every identity answer arrives through `setActor`, and a
+   * claim's answer is noted in the registry first, so a rename that just
+   * landed is not overruled by the roster heard before it.
+   */
+  const setActor = useCallback((next: Actor | null) => {
+    if (next) noteClaimed(next);
+    setStored(next);
+  }, []);
+  const actor = useSelf(stored, setStored);
   /**
    * What a tab that came back from an inbox proved — and who it may now be.
    *
@@ -122,7 +136,7 @@ export function App({ arrival, signIn }: { arrival: Arrival; signIn: SignIn }) {
     return () => {
       live = false;
     };
-  }, [arrival]);
+  }, [arrival, setActor]);
 
   useEffect(() => {
     if (!signIn) return;

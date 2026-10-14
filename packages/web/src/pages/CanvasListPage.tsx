@@ -1,7 +1,7 @@
 import "../components/canvas-list.css";
 import { Inbox } from "../components/Inbox.tsx";
 import { useUiStore } from "../stores/uiStore.ts";
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Actor, MetaPatch, Canvas, Space } from "@isocan/core";
 import {
@@ -36,6 +36,7 @@ import {
   listSpaces,
   removeFromSpace,
   sendOp,
+  withDeadline,
 } from "../lib/api.ts";
 // A modal, loaded when it is opened — see `CanvasCrumb` for the reasoning.
 const ShareDialog = lazy(() =>
@@ -58,6 +59,11 @@ import { isSsoHome } from "../lib/faces.ts";
 const SORT_KEY = "isocan.canvases.sort";
 /** Above this many canvases, the filter and the sort appear. */
 const BROWSE_FROM = 8;
+/** How long the canvas list may take before the page says it could not be
+ * read. Longer than a slow home, shorter than somebody's patience. */
+const LIST_READ_DEADLINE_MS = 10_000;
+/** The spaces and the takedowns cost only headings and greying when late. */
+const SIDE_READ_DEADLINE_MS = 10_000;
 
 export function CanvasListPage({
   actor,
@@ -126,32 +132,54 @@ export function CanvasListPage({
    * rendered.
    */
   const [takenDown, setTakenDown] = useState<Map<string, TakedownNotice>>(new Map());
-  const refresh = useCallback(
-    () =>
-      Promise.all([
-        listCanvases(),
-        listSpaces().then(
-          (answer) => answer.spaces,
-          () => [] as Space[],
-        ),
-        fetchTakedowns().catch(() => [] as TakedownNotice[]),
-      ]).then(
-        ([found, seen, down]) => {
+  /**
+   * **Three reads, and only one of them can hold the list.**
+   *
+   * They were one `Promise.all`, which is "beside" in the comments above and
+   * "instead" in the code: a rejection was caught, but a takedowns or spaces
+   * read that simply never answered held the canvases with it, and the page
+   * sat on "Loading…" for good (14 Oct 2026). So each lands on its own, the
+   * canvases paint the moment they arrive, and every read has a deadline —
+   * a list that does not answer in time takes the error path it always had
+   * (the sentence, and the recent canvases), never an endless "Loading…".
+   *
+   * `asked` numbers each refresh, so a slow answer from an earlier one cannot
+   * land over a newer one's.
+   */
+  const asked = useRef(0);
+  const refresh = useCallback(() => {
+    const turn = ++asked.current;
+    const current = () => asked.current === turn;
+    void withDeadline(SIDE_READ_DEADLINE_MS, "the spaces did not answer", listSpaces).then(
+      (answer) => { if (current()) setSpaces(answer.spaces); },
+      () => { if (current()) setSpaces([]); },
+    );
+    void withDeadline(SIDE_READ_DEADLINE_MS, "the takedowns did not answer", (signal) => fetchTakedowns(undefined, signal)).then(
+      (down) => { if (current()) setTakenDown(new Map(down.map((row) => [row.canvasId, row]))); },
+      () => { if (current()) setTakenDown(new Map()); },
+    );
+    return withDeadline(
+      LIST_READ_DEADLINE_MS,
+      `the canvases could not be read — this home did not answer in ${LIST_READ_DEADLINE_MS / 1000}s`,
+      listCanvases,
+    ).then(
+      (found) => {
+        if (current()) {
           setCanvases(found);
-          setSpaces(seen);
-          setTakenDown(new Map(down.map((row) => [row.canvasId, row])));
           setListError(null);
-          return found;
-        },
-        (err: unknown) => {
-          const fallback = recentCanvases();
+        }
+        return found;
+      },
+      (err: unknown) => {
+        const fallback = recentCanvases();
+        if (current()) {
           setCanvases((prev) => (prev && prev.length > 0 ? prev : fallback));
           setListError(err instanceof Error ? err.message : "the canvases could not be read");
-          return fallback;
-        },
-      ),
-    [],
-  );
+        }
+        return fallback;
+      },
+    );
+  }, []);
   useEffect(() => {
     void refresh();
   }, [refresh]);
