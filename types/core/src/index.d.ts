@@ -66,6 +66,7 @@ export * from "./shortcuts.js";
 export * from "./shortcuttext.js";
 export * from "./bytes.js";
 export * from "./format.js";
+export * from "./tidy.js";
 export * from "./merge.js";
 export * from "./onit.js";
 export * from "./slop.js";

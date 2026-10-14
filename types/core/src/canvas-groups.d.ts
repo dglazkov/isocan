@@ -114,8 +114,13 @@ export declare function groupArrangeAction(state: CanvasState, itemIds: readonly
     kind: "tidy";
     perRow?: number;
     gap?: number;
-    mode?: "smart" | "grid";
+    mode?: "smart" | "grid" | "in-place";
     containerId?: string;
+    chrome?: (item: Item) => {
+        above: number;
+        below: number;
+    };
+    tolerance?: number;
 }): Extract<GroupAction, {
     kind: "transform";
 }>;

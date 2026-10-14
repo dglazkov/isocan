@@ -46,8 +46,15 @@ export declare const FORMAT_GAP_X = 80;
  * from each hanging beneath it, reference material gathered below. It is more
  * useful and more opinionated, and being asked for by name is the right price
  * for moving things somebody did not ask to have interpreted.
+ *
+ * `in-place` keeps the arrangement and cleans up its alignment: near-aligned
+ * edges snapped to shared lines, nearly-equal gaps evened out, nothing
+ * re-dealt and nothing overlapping (`tidy.ts`). It is what Tidy on a
+ * SELECTION means (14 Oct 2026): `grid` re-deals the picked items into a new
+ * lattice, which is a different request from "neaten these".
  */
-export type FormatMode = "grid" | "smart";
+export type FormatMode = "grid" | "smart" | "in-place";
+/** Every tidy mode, in the order the CLI names them. */
 export declare const FORMAT_MODES: readonly FormatMode[];
 export declare function isFormatMode(value: unknown): value is FormatMode;
 interface FormatOptions {

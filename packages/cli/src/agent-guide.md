@@ -303,7 +303,10 @@ never a way to take a name that isn't yours.
 its comments, mentions and undo become yours, and the home refuses it unless
 this machine already speaks for both. It exists for a person who spent weeks
 as a second name on a second machine; an agent almost never wants it, and
-never for an actor that is not its own earlier self.
+never for an actor that is not its own earlier self. Asked to merge your
+person's identities, run `isocan identity --home --join <actorId>`: `--home`
+folds into the machine's person rather than into you, and the home refuses
+folding a person into an agent.
 
 If `--session` found no harness session, mention it to the human after you
 have worked around it: a harness isocan has not met can opt in for good by
@@ -925,7 +928,11 @@ isocan fit <items...>                  # grow items to the size their content wa
   gathered below. It is one `items.move`, so it is one undo, and it is a fixed
   point — running it on a formatted canvas moves nothing. `--dry-run` says what
   would move. Prefer it over placing items by hand; hand placement is for what
-  the person asked for on top of it.
+  the person asked for on top of it. **Naming items is a different request**:
+  `isocan tidy <items...>` lines THOSE up where they are — near-aligned edges
+  snapped, nearly-equal gaps evened, nothing re-dealt, name strips and marks
+  rows kept clear (`in-place`, what the app's Tidy row does). `isocan tidy
+  grid <items...>` re-deals them onto a lattice instead.
 - **Say what a thing came from.** When you build an item FROM another one — a
   variation, a spec written from a sketch, a page split out of a page — add
   `--prop parent=<source item id>`. It costs one property and it is what makes

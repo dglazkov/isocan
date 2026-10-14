@@ -457,6 +457,23 @@ export declare function applyActorJoin(registry: ActorRegistry, op: ActorJoinOp)
  * browser is the door's proof and on a CLI is `--as` with a vouch.
  */
 export declare function notBothActors(from: string, into: string, missing: string): OpValidationError;
+/**
+ * **A fold never makes a person an agent** (14 Oct 2026). `isocan identity
+ * --join` folds into whoever the command speaks as, and inside a coding
+ * harness that is the agent's session — so an agent asked to "merge my
+ * identities" folded its person into itself, and the person's every surface
+ * became the agent. Refused at the home before the join is logged (never on
+ * replay: a fold already in a log is history), with the way round in the
+ * words. Null when the fold is fine.
+ */
+export declare function personIntoAgent(registry: ActorRegistry, op: ActorJoinOp): OpValidationError | null;
+/**
+ * **The refusal for an agent opening a personal canvas** — one sentence for
+ * the bench panel, `isocan bench` and `isocan personal`, since all three show
+ * what the home said. It names who the home thinks is asking, and how to ask
+ * as the person instead.
+ */
+export declare function personRequired(name: string): string;
 /** The actors folded into others, old id → new id — the wire shape. */
 export declare function actorJoins(registry: ActorRegistry): ActorJoins;
 /**
