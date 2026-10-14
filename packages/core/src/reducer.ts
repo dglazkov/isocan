@@ -21,6 +21,7 @@ import { positionIsMeaningful, resolvePlacement } from "./placement.ts";
 import { applyGroupChange, resolveGroupOperation, validateGroupForest } from "./canvas-groups.ts";
 import { validateDesignRecordState, validateDesignRecordEffect } from "./design-record.ts";
 import { validateClick } from "./prototype-click.ts";
+import { PROPOSAL_PROP, proposalRefusal } from "./proposal.ts";
 import { DesignRestoreConflict, designDecisionMarkdown, designTargetMatches, rejectDesignDecisionMetadata, sameDesignValue, validateDesignDecisionComment } from "./design-decision-state.ts";
 
 /**
@@ -210,6 +211,13 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
         throw new OpValidationError("duplicate-id", `item id already exists: ${op.itemId}`);
       }
       requireFinite({ width: op.width, height: op.height }, "item.add");
+      // No trigger, no proposal; and one agent's open proposals are capped
+      // (`proposal.ts`). Here, at the one writer, so every surface is refused
+      // by the same sentence rather than trusted to ask first.
+      if (op.properties?.[PROPOSAL_PROP] !== undefined) {
+        const refused = proposalRefusal(canvas, actor.id, op.properties);
+        if (refused) throw new OpValidationError("bad-op", refused);
+      }
       if ("x" in op.placement) {
         requireFinite({ x: op.placement.x, y: op.placement.y }, "item.add placement");
       }
@@ -743,6 +751,12 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
   if (c.mentions?.length) comment.mentions = [...c.mentions];
   if (c.record) comment.record = c.record;
   if (c.click) comment.click = validateClick(c.click);
+  if (c.deleted !== undefined) {
+    if (typeof c.deleted !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(c.deleted)) {
+      throw new OpValidationError("bad-op", "a delete note names the proposal it deleted by its item id");
+    }
+    comment.deleted = c.deleted;
+  }
   if (c.items?.length) comment.items = [...c.items];
   const context = c.context;
   if (context) {

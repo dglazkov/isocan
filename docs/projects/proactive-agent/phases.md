@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-14
 see: design-partner, wireframes, standing-agents, personas, version-diff, copy-edit
 note: "the walk: proposals and the taste note first, because every moment uses them; then the night watch and the morning review; explain; the brief card; ripple; stuck detection; critics and the desk check; walkers; design words; evidence."
@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: designed, not started. Next: phase 1, proposals and the taste note, which every later phase uses. Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phase 1 (proposals, and deletes that teach) is CLOSED. Next: phase 2, the night watch (`/goodnight`, a conversation, the work on the canvas by morning). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -31,11 +31,11 @@ Rules for every phase, on top of `AGENTS.md`:
 
 ## Phase 1 — Proposals, and deletes that teach
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `proposal.ts` (`PROPOSAL_CAP = 5`, `proposalMarked`, `proposalsOf`, `proposalRoom`, `proposalRefusal`), `proposal-words.ts` and `design-words.ts` (twelve terms); the reducer refuses any `item.add` carrying `proposal` with an empty cite list, a missing source, an empty or overlong why, or a sixth open proposal by the same agent, so every door is refused in one sentence. `isocan propose` (placed beneath the source by footprint) and `isocan taste`; the `proactive` agent-guide topic. The web draws the dashed mark, the connector, the ochre chip and the why with defined terms, and Keep (`choose`), Compare and Delete (⌫ and the button: the trash and the `deleted` comment to the author in one undo, with an optional reason). The taste note, "What your deletes taught", is pinned and placed clear of every footprint. `proposal.test.ts`, `propose.test.ts` and the `proactive-proposal` journey (the terminal standing in for agent Kit): the proposal beneath its source with its chip; Delete trashes it, the comment reaches the author, the taste note gains a line; with nobody answerable the delete still happens and the toast says the note was not taken. Deep suite 834 of 834; entry 721,210 → 723,869.
 
 **Outcome:** core `proposal.ts` (`proposalMarked`, `proposalsOf`,
 `proposalRoom`), `design-words.ts` (the glossary); `isocan propose`
-refusing an empty cite list and a fourth open proposal; the dashed mark,
+refusing an empty cite list and a sixth open proposal; the dashed mark,
 trigger chip and dotted-underlined why in the web app, generalised from the
 wireframe *maybe* marks; **Keep** (`choose`), **Compare** (the diff
 inspector), **Delete** (⌫, one undo) that summons the author with
@@ -56,6 +56,11 @@ inspector), **Delete** (⌫, one undo) that summons the author with
 
 - **2026-10-14** — Decided (Dion): the cap is five, not three ("Cap of three feels a lil small? Maybe 5?"), per agent per canvas, one constant `PROPOSAL_CAP`. Open: whether non-screen proposals draw the same way (phase 1 draws them the same). Waits on Dion.
 - **2026-10-14** — Decided (Dion): the cap does not grow with time away, and an open proposal never expires; room frees only when the person keeps or deletes one ("Should acknowledge before growing more").
+- **2026-10-14** — The cite and cap rules run in the reducer, not either client, so a plain `add --prop proposal=…` is refused in the same words; the cost is about 2.6 KB of entry chunk, because the reducer runs in the browser.
+- **2026-10-14** — Keep is `choose`, and choosing a proposal now trashes only that proposal; other children of the source stay. `isocan choose` on a proposal behaves the same way.
+- **2026-10-14** — A delete's note cannot be anchored to the trashed proposal (a thread needs a live anchor); with no prior thread it stands freestanding at the proposal's spot, in the delete's undo group.
+- **2026-10-14** — Placement counts footprints (the name strip above, the marks row below): the first cut's taste note landed on the source's name strip, and its 40-unit gap let a proposal's strip sit on the source's marks row.
+- **2026-10-14** — Open: an agent can still `isocan rm` its own proposal and free room (the guide says not to); kept and deleted proposals are not yet judge-corpus labels (a third corpus kind); on a group canvas a proposal lands at the root, not in the source's group; `--hunch` does not draw rough.
 
 ## Phase 2 — The night watch
 
@@ -99,14 +104,14 @@ item the person edited in their last hour is off limits unless named.
 
 - Journey `proactive-morning` (stub agent, a fixture night): returning past
   *ready by* shows the brief first, its proposals (at most five), one failed promise with
-  its reason, and the person's screens unchanged byte for byte.
-- Unit: a fourth proposal from the night is refused; a seen mark newer than
+  its reason, and the person's screens unchanged byte for byte except an
+  original the goodnight conversation named for editing.
+- Unit: a sixth proposal from the night is refused; a seen mark newer than
   *ready by* shows no review.
 
 ### Trajectory
 
-- **2026-10-14** — Open: whether three is the cap or it scales with time
-  away; the wording when the night found nothing. Waits on Dion.
+- **2026-10-14** — Decided (Dion): five, and it does not scale with time away; nothing new until what is there is kept or deleted. Open: the wording when the night found nothing. Waits on Dion.
 
 ## Phase 4 — Explain this item
 

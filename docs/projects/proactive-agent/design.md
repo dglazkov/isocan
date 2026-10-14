@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-14
 see: design-partner, wireframes, standing-agents, personas, version-diff, copy-edit
 note: "The mechanism for a proactive agent: a proposal is an ordinary item with parent= and a few properties, drawn dashed outside itself like a wireframe maybe, kept with choose and deleted with one key; a delete summons its author, who writes a line in a pinned taste note. One lead agent per canvas, a standing agent through isocan rc, is woken by triggers the rc derives from the op stream or the person asks for. Then a section per moment: night watch, morning review, explain, the brief card, ripple, stuck, critics, walkers, design words."
@@ -205,7 +205,7 @@ shows what others did.
 
 **What the person sees:** their work untouched; the promised frames filled;
 the "While you were away" panel, on desktop as on the phone, leading with
-the agent's brief (at most three items, highest confidence first, each with
+the agent's brief (at most five items, highest confidence first, each with
 its two-line why), then **Left alone** (what the agent saw and did not act
 on, with a reason), then the digest of what everyone else did.
 

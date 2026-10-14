@@ -164,6 +164,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `design workflow|start|brief|receipt|questions|ask|answer|reference|compare|respond|decide|review|craft` — a design request
 - `design show|check|set|use|import|skip|direction|project|reconcile|recipes|recipe|audit|repair` — the design system
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
+- `propose`, `taste` — work left beneath an item with its trigger and why; what deletes taught (`proactive`)
 - `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
@@ -3984,6 +3985,58 @@ directory with no persisted home. So: wait the seconds the message names, and
 then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
+
+<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, and the taste note a delete asks you to write -->
+
+## Proposals: work beside the person's, never over it
+
+When you have a reason to change something the person made and they did not
+ask, **propose** it instead of editing it. A proposal is an ordinary item
+hanging beneath its source, drawn with a dashed outline, a chip naming what
+prompted it, and your why; the person keeps it, compares it, or deletes it.
+
+```sh
+isocan propose <source> <file> --cites comment:<commentId> --why "Summary before detail: the pickup time comes first."
+isocan propose <source> sketch.html --cites op:412 --cites brief:audience --why "…" --hunch
+```
+
+The grammar, the same every time:
+
+- **Solid is the person's; dashed is yours.** Never `edit` an item the
+  person made to deliver an idea of your own — propose it. Placement is
+  beneath the source, clear of everything; you do not choose it.
+- **No trigger, no proposal.** `--cites kind:ref` at least once: `comment`,
+  `op` (a seq), `version` (`<item>@vN`), `design` (a DESIGN.md version),
+  `brief`, `promise`, `docket`, `critic`. The chip shows the first. A
+  proposal without one is refused, by the CLI and by the canvas itself.
+- **The why is design words, two sentences at most** — "summary before
+  detail", "visual hierarchy", "proximity", "primary action", "type scale",
+  "density". The canvas underlines the terms it knows and defines them in
+  place, so the person learns the word by seeing their own work in it.
+- **`--hunch` when you are not sure,** and draw it rough (a wireframe, a
+  pencil note): fidelity is confidence, and the person reads it before a word.
+- **Five open proposals per agent per canvas, and no more** — the canvas
+  refuses a sixth. Room frees only when the person keeps or deletes one;
+  nothing ages out. Waiting is the answer, not making room yourself.
+
+**Keep** is `choose`: the proposal becomes the next version of its source and
+goes to the trash, one undo; other proposals on the same source stay.
+**Compare** is the diff (`isocan diff <proposal> --source`).
+
+**A delete comes back to you.** When the person deletes your proposal, a
+comment reaches you on its thread carrying `deleted: <itemId>`, with their
+reason when they typed one. Answer it by adding **one line** to the taste
+note — what the delete taught, as a rule a later proposal can be held to —
+and nothing else:
+
+```sh
+isocan taste "No gates before value: never put sign-up before the menu."
+isocan taste                       # read it
+```
+
+The taste note ("What your deletes taught") is pinned into context, so
+`isocan context` hands it to every agent: **read it before you propose.** The
+person edits or clears it like any note; do not argue with a line they removed.
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

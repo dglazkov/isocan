@@ -4039,6 +4039,118 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "proactive-proposal",
+    /**
+     * **A proposal, and a delete that teaches** (proactive-agent phase 1,
+     * journey scene 1, `docs/projects/proactive-agent/phases.md`).
+     *
+     * The agent is a stub: the terminal speaking as Kit — `propose`, a parked
+     * `wait`, and `taste` — not a model. What is under test is the canvas:
+     * the proposal hangs beneath its source with its chip, ⌫ trashes it, a
+     * comment carrying `deleted` reaches the parked author, and the line it
+     * writes lands in the pinned taste note; then, with nothing parked for
+     * Kit, a second delete still happens and the toast says the note was not
+     * taken. Screenshots of both moments are returned for a person.
+     */
+    what: "a proposal hangs beneath its source; Delete trashes it, reaches its author, and the taste note gains a line",
+    async run(rig) {
+      const env = { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port };
+      const runCli = (args, extra = {}) =>
+        execFileSync(process.execPath, [cli, ...args], { cwd: rig.home, encoding: "utf8", env: { ...env, ...extra } });
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-proactive-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await rig.b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+
+      writeFileSync(path.join(rig.home, "identity.json"), JSON.stringify({ id: "usr_pp_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      runCli(["bench", "add", "Kit", "--actor", "usr_pp_kit", "--harness", "pi"]);
+      const kit = { ISOCAN_SESSION_ID: "journey-kit" };
+      runCli(["identity", "--as", "usr_pp_kit", "--name", "Kit"], kit);
+
+      const id = JSON.parse(runCli(["--json", "canvas", "create", "Acme Bakery"])).canvasId;
+      const page = path.join(rig.home, "checkout.html");
+      writeFileSync(page, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p>Sourdough loaf × 1</p><p><b>Total $8</b></p><p>Pickup: Saturday 9:00</p></body>");
+      const source = JSON.parse(runCli(["--json", "--canvas", id, "add", page, "--at", "0,0", "--size", "390x520", "--title", "Checkout"])).itemId;
+      const ask = JSON.parse(runCli(["--json", "--canvas", id, "comment", "add", "people miss the pickup slot", "--at", "420,40"]));
+      const commentId = ask.commentId ?? ask.comment?.id;
+      if (!commentId) throw new Error(`comment add named no comment: ${JSON.stringify(ask)}`);
+
+      const better = path.join(rig.home, "checkout-pickup-first.html");
+      writeFileSync(better, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p><b>Pickup: Saturday 9:00</b></p><p>Sourdough loaf × 1</p><p>Total $8</p></body>");
+      const why = "Summary before detail: the pickup time is what the person must check, so it comes first.";
+      const first = JSON.parse(runCli(["--json", "--canvas", id, "propose", source, better, "--cites", `comment:${commentId}`, "--why", why], kit)).itemId;
+
+      const { address } = JSON.parse(runCli(["--json", "--canvas", id, "pass"]));
+      await rig.b.ev(`(() => { localStorage.clear(); return true; })()`);
+      await rig.b.send("Page.navigate", { url: address });
+      await sleep(2500);
+      await until(rig.b, `!!document.querySelector(".world")`, "the canvas to open for Maya");
+      const mark = `document.querySelector('[data-proposal="${first}"]')`;
+      await until(rig.b, `!!${mark}?.querySelector(".proposal-chip")`, "the proposal's mark and chip", 10_000);
+      const chip = await rig.b.ev(`${mark}.querySelector(".proposal-chip").textContent`);
+      if (!/Maya's comment, “people miss the pickup slot”/.test(chip)) throw new Error(`the chip does not name its trigger: ${chip}`);
+      const geometry = await rig.b.ev(`(() => {
+        const s = document.querySelector('[data-item-id="${source}"]').getBoundingClientRect();
+        const p = document.querySelector('[data-item-id="${first}"]').getBoundingClientRect();
+        return { below: p.top >= s.bottom, overlap: !(p.right <= s.left || p.left >= s.right || p.bottom <= s.top || p.top >= s.bottom) };
+      })()`);
+      if (!geometry.below || geometry.overlap) throw new Error(`the proposal does not hang beneath its source: ${JSON.stringify(geometry)}`);
+      const terms = await rig.b.ev(`[...${mark}.querySelectorAll(".proposal-term")].map(t => t.firstChild.textContent)`);
+      if (!terms.includes("Summary before detail")) throw new Error(`the why underlines nothing: ${JSON.stringify(terms)}`);
+      const beneath = await shot("beneath");
+
+      // Kit appears and parks — the stub agent's lap, so the delete has somebody to reach.
+      runCli(["--canvas", id, "session", "start", "--label", "Kit 🤖"], kit);
+      const parked = spawn(process.execPath, [cli, "--canvas", id, "wait", "--json", "--timeout", "60"], { cwd: rig.home, env: { ...env, ...kit }, stdio: ["ignore", "pipe", "pipe"] });
+      let woke = "";
+      parked.stdout.on("data", (c) => (woke += c));
+      const exited = new Promise((r) => parked.once("exit", r));
+      await sleep(3000);
+
+      await rig.type("v");
+      await rig.click(`[data-item-id="${first}"] .item-titlebar .chrome-left`, "the proposal's title");
+      await until(rig.b, `!!document.querySelector('[data-item-id="${first}"].selected')`, "the proposal selected");
+      await rig.press("Delete");
+      await until(rig.b, `!document.querySelector('[data-item-id="${first}"]')`, "the proposal to leave the canvas");
+      await until(rig.b, `!!document.querySelector(".proposal-toast")`, "the delete's toast");
+      const taken = await rig.b.ev(`document.querySelector(".proposal-toast p").textContent`);
+      if (!/Kit will note what it taught/.test(taken)) throw new Error(`the toast does not say Kit will take the note: ${taken}`);
+      await rig.click(".proposal-toast input", "the toast's reason");
+      await rig.type("it pushed the total down");
+      await rig.press("Enter");
+      await Promise.race([exited, sleep(15_000)]);
+      if (!/"deleted":\s*"/.test(woke) || !woke.includes(first)) throw new Error(`Kit's wait did not wake on the delete's comment: ${woke.slice(0, 400)}`);
+      if (!woke.includes("it pushed the total down")) throw new Error("the reason did not travel with the comment");
+
+      // Kit answers the way the guide says: one line in the taste note.
+      runCli(["--canvas", id, "taste", "Keep the total near the button; move the pickup up, not the price down."], kit);
+      // Read back from the home: the note sits above everything, which may be
+      // off this viewport, and an item off screen is not drawn.
+      const note = JSON.parse(runCli(["--json", "--canvas", id, "taste"]));
+      if (!note.text.includes("- Keep the total near the button")) throw new Error(`the taste note did not gain the line: ${note.text}`);
+      const shown = JSON.parse(runCli(["--json", "--canvas", id, "show", note.itemId]));
+      if (shown.properties.taste !== "1" || shown.properties.context !== "pinned") throw new Error(`the taste note is not pinned: ${JSON.stringify(shown.properties)}`);
+
+      // Nobody parked now: the second delete still happens, and says the note was not taken.
+      runCli(["--canvas", id, "session", "end"], kit);
+      const second = JSON.parse(runCli(["--json", "--canvas", id, "propose", source, better, "--cites", `comment:${commentId}`, "--why", "Proximity: price beside the button.", "--hunch"], kit)).itemId;
+      await until(rig.b, `!!document.querySelector('[data-proposal="${second}"] .proposal-chip')`, "the second proposal's mark", 10_000);
+      await rig.click(`[data-item-id="${second}"] .item-titlebar .chrome-left`, "the second proposal's title");
+      await until(rig.b, `!!document.querySelector('[data-item-id="${second}"].selected')`, "the second proposal selected");
+      await rig.press("Delete");
+      await until(rig.b, `!document.querySelector('[data-item-id="${second}"]')`, "the second proposal to leave the canvas");
+      await until(rig.b, `/not taken/.test(document.querySelector(".proposal-toast p")?.textContent ?? "")`, "the toast to say the note was not taken");
+      const untaken = await shot("untaken");
+      const trash = JSON.parse(runCli(["--json", "--canvas", id, "trash", "ls"]));
+      const trashed = JSON.stringify(trash);
+      if (!trashed.includes(first) || !trashed.includes(second)) throw new Error("the deletes did not reach the trash");
+      const errors = rig.b.takeErrors();
+      if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+      return { screenshots: { beneath, untaken } };
+    },
+  },
+  {
     name: "launcher",
     /** ⌘K stopped being a third composer and became the way to reach
      *  everything. A launcher that opens but does nothing is the worst version

@@ -9156,6 +9156,42 @@ program
   );
 
 /**
+ * **Work left beside the person's, with a note** (proactive-agent phase 1).
+ * A proposal hangs dashed beneath its source; Keep (`choose`) folds it in,
+ * Delete comes back to its author as a comment, answered with `taste`. The
+ * bodies live in `propose.ts`, loaded on these verbs only.
+ */
+const proposeDeps = () => ({ canvasAndSnapshot: (ctx: Ctx) => canvasAndSnapshot(ctx), resolveItem, sendOp: (ctx: Ctx, canvasId: string, op: Operation, group?: string) => sendOp(ctx, canvasId, op, group), mimeFor, printJson });
+
+program
+  .command("propose <source> <file>")
+  .description("Leave work beside an item rather than over it: a dashed proposal beneath it, citing what prompted it")
+  .option("--cites <kind:ref...>", "what prompted it — comment:<id>, op:<seq>, version:<item>@vN, design:…, brief:…, promise:…, docket:…, critic:… (at least one)")
+  .option("--why <text>", "why, in design words — two sentences at most")
+  .option("--hunch", "a hunch rather than sure: drawn and read as a rough idea")
+  .option("--title <title>", "what it is called (default: the source's title, \"— proposal\")")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (source: string, file: string, opts: { cites?: string[]; why?: string; hunch?: boolean; title?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { propose } = await import("./propose.ts");
+      await propose(ctx, proposeDeps(), source, file, opts);
+    }),
+  );
+
+program
+  .command("taste [line...]")
+  .description("The canvas's taste note — what deletes taught: print it, or add one line (made and pinned on first need)")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (words: string[], _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { taste } = await import("./propose.ts");
+      await taste(ctx, proposeDeps(), words);
+    }),
+  );
+
+/**
  * **What changed between two versions** (docs/projects/version-diff/design.md).
  *
  * Choosing a variation, or reviewing an agent's edit, without seeing what is

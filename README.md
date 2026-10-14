@@ -374,6 +374,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   source and chosen from there. `isocan diff <item> [from] [to]` prints the
   same summary (`--source` for a variation, `--json` for the structure).
   Comparing never writes anything.
+- **Proposals, beside your work rather than over it**: an agent with an idea
+  about something you made runs `isocan propose <item> <file> --cites
+  comment:<id> --why "…"`, and a copy hangs beneath your item in a dashed
+  outline, joined to it, with an ochre chip saying what prompted it and a
+  short why whose design terms are dotted-underlined and defined on hover.
+  **Keep** makes it the next version of your item (one ⌘Z), **Compare** opens
+  the side-by-side, **Delete** (⌫) trashes it and asks its author — in a
+  comment, with your optional reason — what it should learn, which it writes
+  as one line in **What your deletes taught**, a note pinned into every
+  agent's context (`isocan taste`). A proposal must cite a trigger, and one
+  agent keeps at most five open on a canvas.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

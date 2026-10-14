@@ -101,6 +101,17 @@ const VersionFanOut = lazy(() =>
 );
 import { CommentLayer } from "./CommentLayer.tsx";
 import { ModuleUnderlays } from "./ModuleUnderlays.tsx";
+/**
+ * **A canvas with no proposal downloads no proposal marks** (proactive-agent
+ * phase 1): first paint carries one scan of the items for the `proposal`
+ * property, and the marks, their sheet and their keys arrive only where it
+ * finds one.
+ */
+const ProposalMarks = lazy(() => import("./ProposalMarks.tsx"));
+function ProposalsWhenAny({ canvasId, actor }: { canvasId: string; actor: Actor }) {
+  const any = useCanvasStore((s) => Object.values((s.past?.canvas ?? s.canvas)?.items ?? {}).some((i) => i.properties?.proposal));
+  return any ? <Suspense fallback={null}><ProposalMarks canvasId={canvasId} actor={actor} /></Suspense> : null;
+}
 import { CursorLayer } from "./CursorLayer.tsx";
 import { CursorGlow } from "./CursorGlow.tsx";
 /**
@@ -1299,6 +1310,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
             map node is chromeless text, and a line over it strikes through
             the words. */}
         <ModuleUnderlays canvasId={canvasId} actor={actor} />
+        <ProposalsWhenAny canvasId={canvasId} actor={actor} />
         {currentNode && canvas?.items[currentNode] && <div className="phone-current-node" aria-label="Current node" style={{ left: canvas.items[currentNode]!.x, top: canvas.items[currentNode]!.y, width: canvas.items[currentNode]!.width, height: canvas.items[currentNode]!.height }} />}
 
         {items.map((item) => (

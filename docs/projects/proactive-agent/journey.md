@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-14
 see: design-partner, wireframes, standing-agents, personas, version-diff, copy-edit
 note: "A proactive agent: an agent on the canvas that works beside a person rather than over them, and teaches the language of design as it goes. Its work arrives as proposals, dashed and hanging beneath what they came from, each citing what prompted it and saying why in design words; a delete is one key and teaches it something. Nine moments: the night watch and the morning review, explain this item, the brief as a card, changes ripple, stuck detection, critics in the room, walking a flow as someone else, and saying it like a designer. Scenes here; the mechanism is design.md; the walk is phases.md."

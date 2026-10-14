@@ -2,6 +2,7 @@ import type { CanvasContents, Item, ItemVersion } from "./model.ts";
 import { childrenOf, parentOf } from "./lineage.ts";
 import type { MetaPatch, Operation } from "./ops.ts";
 import { copyPreferencePatch } from "./preference.ts";
+import { proposalMarked } from "./proposal.ts";
 
 /** `copy-variants.ts`'s `COPY_STANCE_PROP`, spelled here so core's barrel never imports the lazy copy-variants chunk. */
 const COPY_STANCE_PROP = "copyStance";
@@ -98,7 +99,11 @@ export function convergePlan(
   // command says was made from this source.
   const siblings = childrenOf(canvas, parentId);
   const family = siblings.map((item: Item) => item.id);
-  const trash = family.includes(chosenId) ? family : [chosenId, ...family];
+  // A proposal is Kept alone (proactive-agent §3): it folds in and goes, and
+  // every other child of the source — another agent's proposal, the person's
+  // own variations — stays where it is. A proposal is not one of a set of
+  // takes the person chose between; it is one note somebody left.
+  const trash = proposalMarked(chosen) ? [chosenId] : family.includes(chosenId) ? family : [chosenId, ...family];
 
   const stance = chosen.properties[COPY_STANCE_PROP]?.trim();
   const losingCopy = stance ? siblings.filter((s) => s.id !== chosenId && Boolean(s.properties[COPY_STANCE_PROP]?.trim())) : [];

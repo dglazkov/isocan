@@ -202,9 +202,11 @@ describe("spacing", () => {
     // 950 -> 960 for the arrival toasts (.joined-*): three declarations, all
     // on existing steps. 960 -> 1320 on 27 Sep 2026 when the component
     // sheets were counted too (BC-6/BC-4): 340 declarations that were always
-    // there, measured at 1,291.
+    // there, measured at 1,291. 1320 -> 1340 on 14 Oct 2026 for the proposal
+    // marks and their Delete toast (proactive-agent phase 1): fifteen
+    // declarations, all on existing steps, against a total already at 1,318.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1320);
+    expect(spacing.length).toBeLessThan(1340);
   });
 });
 
