@@ -162,8 +162,9 @@ concerns, an empty dashed frame: a placeholder proposal with
 - Before writing, the note says whether anything can answer overnight: a
   standing agent that is answerable (`summons.ts`, the bench). If none is,
   the note says so and promises nothing.
-- *Will not touch* always includes what was settled today, the design
-  system and the person's originals; the agent may add, never remove.
+- *Will not touch* always includes what was settled today and the design
+  system, and every original the conversation did not name for editing; the
+  agent may add, never remove.
 - The work runs through the standing agent's ordinary summons: the ticked
   note is a comment addressed to it, so the rc wakes it as for any other
   ask, and its budget is the rc's.
@@ -180,12 +181,18 @@ keep properties.
 and it starts a conversation about what to work on; by the morning the
 canvas has changed: the agreed work is on it.
 
-**Open questions:** *Open — waits on Dion:* whether a team shares one night
-watch or each person leaves their own; whether a first session gets one;
-whether "changed by the morning" means only new work beside the person's
-(the grammar's rule today: proposals hang beneath their source, originals
-untouched) or may also edit an original when the conversation agreed to it
-explicitly.
+**Decided (Dion, 14 Oct 2026), the rest:** the agreed work **may edit an
+original** when the conversation named that item and said so ("rework the
+checkout screen"); the edit lands as a new version of the item, so the
+version before the night is one step back in its history and the morning
+review lists every original it changed. Anything not named that way is still
+work beside the person's, as proposals. And **each person leaves their own**:
+two people on one canvas can each `/goodnight`, each conversation has its own
+note and promises, and a promise never touches an item another person's
+conversation named.
+
+**Open questions:** *Open — waits on Dion:* whether a first session gets a
+night watch.
 
 ## 5. The morning review
 
