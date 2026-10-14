@@ -21,10 +21,20 @@ export interface TextOptions {
     perMinute?: number;
     now?: () => number;
 }
-/** What `TextModel.write` hands the route to send back as it is: `{ model, value }` with 200, or a `text-upstream` refusal with 502. */
+/**
+ * What `TextModel.write` hands the route to send back as it is: `{ model, value }` with 200, or a `text-upstream` refusal with 502.
+ * `usage` is what the provider said the call cost, summed over its tries, for an in-process caller's own record (Semantic Zoom's
+ * cost record); it is never sent, and is absent when the provider said nothing.
+ */
 interface Written {
     status: number;
     body: unknown;
+    usage?: {
+        inputTokens: number;
+        outputTokens: number;
+    };
+    /** The model that was asked, answered or not. */
+    model?: string;
 }
 /**
  * **What an in-process caller asks differently** — Semantic Zoom's make

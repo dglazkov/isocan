@@ -32,6 +32,12 @@ export declare const SUMMARY_SYSTEM = "You summarise what is on a canvas for som
 export declare const SUMMARY_SCHEMA: JsonSchema;
 /** The summaries route for one canvas: `GET` reads cached entries by key, `POST` asks for one to be made. */
 export declare function summariesRoute(canvasId: string): string;
+/**
+ * **What a canvas's summaries have cost** — `GET …/summaries/stats`, read by
+ * the canvas's editors, never its viewers: it says what somebody's key spent.
+ * What `isocan summary --stats` prints.
+ */
+export declare function summaryStatsRoute(canvasId: string): string;
 /** The source changed less than `SUMMARY_QUIET_MS` ago: a 202, not a refusal, carrying `retryAfterMs`. */
 export declare const SUMMARY_QUIET = "summary-quiet";
 /** The model's answer broke the answer rule; nothing was cached. */
@@ -40,6 +46,13 @@ export declare const SUMMARY_BAD_ANSWER = "summary-bad-answer";
 export declare const SUMMARY_EXCLUDED = "summary-excluded";
 /** There is no text node, group or area of that kind by that id on this canvas. */
 export declare const SUMMARY_NO_SOURCE = "summary-no-source";
+/**
+ * The canvas has spent its summaries for the hour (design §6: 60 an hour
+ * across everyone, beyond `/api/text`'s own rate). A 429 carrying
+ * `retryAfterMs`: nothing was asked of a model, stale summaries keep showing,
+ * and a reader pauses as it does for the rate limit.
+ */
+export declare const SUMMARY_OVER_BUDGET = "summary-budget";
 /** What a summary is of: one text node, a group's members, or what sits inside an area. */
 type SummaryKind = "text" | "group" | "area";
 /**
@@ -72,6 +85,53 @@ export interface SummaryRead {
 export interface SummaryWait {
     code: typeof SUMMARY_QUIET;
     retryAfterMs: number;
+}
+/**
+ * **A count of what summaries did** — one day's, one kind's, or a whole
+ * span's. `calls` are model calls asked, kept or not; `makes` are summaries a
+ * model wrote and the home kept (a short note's or an empty frame's `short`
+ * entry is neither); `hits` are entries answered from the cache, by a read or
+ * by a make that found its key already made; the tokens are what the
+ * provider said the calls cost.
+ */
+export interface SummaryTally {
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    makes: number;
+    hits: number;
+}
+/**
+ * **One day of one canvas's summaries, at the home** (UTC). `stale` counts
+ * reads answered with an older summary while the new content waited;
+ * `overBudget` counts makes refused because the canvas's hour was spent;
+ * `byKind` and `byModel` split the same numbers, so each adds up to the day.
+ */
+export interface SummaryDay extends SummaryTally {
+    day: string;
+    stale: number;
+    overBudget: number;
+    byKind: Partial<Record<SummaryKind, SummaryTally>>;
+    byModel: Record<string, Pick<SummaryTally, "calls" | "inputTokens" | "outputTokens">>;
+}
+/**
+ * `GET …/summaries/stats?days=N`'s answer: the last `N` days that had any
+ * (default 30, at most 90), newest first; their `total`; the hour's budget as
+ * it stands; and how full the cache is.
+ */
+export interface SummaryStats {
+    canvasId: string;
+    days: SummaryDay[];
+    total: Omit<SummaryDay, "day">;
+    budget: {
+        perHour: number;
+        usedThisHour: number;
+        resetsInMs: number | null;
+    };
+    entries: {
+        held: number;
+        max: number;
+    };
 }
 /** `POST` asks for one: the kind, and the source's item id. The home collects the content, never the client. */
 export interface SummaryMake {

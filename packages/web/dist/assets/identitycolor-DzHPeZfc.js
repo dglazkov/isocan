@@ -1,0 +1,1 @@
+import{d2 as o,d3 as r,h as a}from"./index-DUua02a-.js";async function d(t,e){await o(null,t,{type:"actor.setColor",actorId:t.id,color:e});const s={...a.getState().actorColors};e===null?delete s[t.id]:s[t.id]=e,a.setState({actorColors:s})}async function i(t,e,s=t){await o(null,t,{type:"actor.setMark",actorId:s.id,mark:e}),r(s.id,e)}export{d as a,i as s};

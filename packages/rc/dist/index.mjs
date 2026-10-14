@@ -1633,6 +1633,7 @@ var designDecisionsRoute = (canvasId) => `/api/projects/${encodeURIComponent(can
 var designRepairsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/design/repairs`;
 
 // packages/api/src/routes.ts
+var summariesPath = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 var OPERATIONS_ROUTE = "/api/ops";
 var platformFetch = (input, init) => fetch(input, init);
 var DaemonRoutes = class {
@@ -2255,6 +2256,42 @@ var DaemonRoutes = class {
    */
   homes() {
     return this.request("GET", HOMES_ROUTE);
+  }
+  /**
+   * **Semantic Zoom's cached summaries, by content key** (an experiment;
+   * `docs/projects/semantic-zoom/design.md` §5). `sourceIds`, in the keys'
+   * order, lets the home answer a key it has no entry for with the newest
+   * entry for that source, marked `stale`. A read never makes one.
+   *
+   * The path is spelled here rather than imported from core's
+   * `summariesRoute`, on purpose and measured: any runtime import of
+   * `@isocan/core/semantic-zoom` from this file, static or lazy, re-cuts the
+   * CLI bundle's chunks and costs `isocan --version` a module past its budget
+   * (`test/cli-bundle.test.ts`; 40 → 41, 14 Oct 2026). The CLI's summary
+   * tests read and make through these two methods against a real home, so a
+   * drift from core's spelling fails there.
+   */
+  summaries(canvasId, keys2, sourceIds) {
+    const query = `keys=${keys2.join(",")}&for=${sourceIds.map(encodeURIComponent).join(",")}`;
+    return this.request("GET", `${summariesPath(canvasId)}?${query}`);
+  }
+  /**
+   * **Ask the home to make one summary** — the route the web's fetcher asks,
+   * under the same rules (edit capability, the key's own spend rules, rate,
+   * the quiet period). The home collects the words; the client names only the
+   * kind and the source. A 202 is `summary-quiet`, carrying `retryAfterMs`.
+   */
+  makeSummary(canvasId, make) {
+    return this.request("POST", summariesPath(canvasId), make);
+  }
+  /**
+   * **What a canvas's summaries have cost** (`GET …/summaries/stats`, phase
+   * 3): calls, tokens, makes and hits per day, the hour's budget, the cache.
+   * Editors only — it says what somebody's key spent. `days` defaults to 30
+   * at the home, at most 90.
+   */
+  summaryStats(canvasId, days) {
+    return this.request("GET", `${summariesPath(canvasId)}/stats${days ? `?days=${days}` : ""}`);
   }
   /** Complete current scope; omitted roots read ambient pins. Reads never move presence. */
   contextManifest(canvasId, request) {

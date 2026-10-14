@@ -5,6 +5,7 @@ import { type DesignRecordOperation, type DesignRequestsResponse } from "../../c
 import { type DesignDecisionsResponse } from "../../core/src/design-decision.js";
 import { type DesignRepairsResponse } from "../../core/src/design-repair.js";
 import { type RecapHeadResponse } from "../../core/src/index.js";
+import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "../../core/src/semantic-zoom.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
 import type { BadgeStore, BuildStamp, UpgradeVerdict } from "../../core/src/index.js";
 import { ApiError } from "../../core/src/index.js";
@@ -422,6 +423,35 @@ export declare class DaemonRoutes {
      * field still means.
      */
     homes(): Promise<HomesResponse>;
+    /**
+     * **Semantic Zoom's cached summaries, by content key** (an experiment;
+     * `docs/projects/semantic-zoom/design.md` §5). `sourceIds`, in the keys'
+     * order, lets the home answer a key it has no entry for with the newest
+     * entry for that source, marked `stale`. A read never makes one.
+     *
+     * The path is spelled here rather than imported from core's
+     * `summariesRoute`, on purpose and measured: any runtime import of
+     * `@isocan/core/semantic-zoom` from this file, static or lazy, re-cuts the
+     * CLI bundle's chunks and costs `isocan --version` a module past its budget
+     * (`test/cli-bundle.test.ts`; 40 → 41, 14 Oct 2026). The CLI's summary
+     * tests read and make through these two methods against a real home, so a
+     * drift from core's spelling fails there.
+     */
+    summaries(canvasId: string, keys: string[], sourceIds: string[]): Promise<SummaryRead>;
+    /**
+     * **Ask the home to make one summary** — the route the web's fetcher asks,
+     * under the same rules (edit capability, the key's own spend rules, rate,
+     * the quiet period). The home collects the words; the client names only the
+     * kind and the source. A 202 is `summary-quiet`, carrying `retryAfterMs`.
+     */
+    makeSummary(canvasId: string, make: SummaryMake): Promise<SummaryEntry | SummaryWait>;
+    /**
+     * **What a canvas's summaries have cost** (`GET …/summaries/stats`, phase
+     * 3): calls, tokens, makes and hits per day, the hour's budget, the cache.
+     * Editors only — it says what somebody's key spent. `days` defaults to 30
+     * at the home, at most 90.
+     */
+    summaryStats(canvasId: string, days?: number): Promise<SummaryStats>;
     /** Complete current scope; omitted roots read ambient pins. Reads never move presence. */
     contextManifest(canvasId: string, request?: ContextRequest): Promise<ContextManifest>;
     /** Frozen provenance belongs to the saved comment, not today's membership. */

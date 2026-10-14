@@ -34,6 +34,13 @@ import type { TextModel } from "./text.js";
  * A source changed in the last 30 s is not summarised yet (202,
  * `summary-quiet`, with how long to wait); one make per key is in flight at a time, and a second
  * request for the same key waits for the first and spends nothing.
+ *
+ * Since phase 3, a canvas has a budget — 60 model calls an hour across
+ * everyone, beyond the badge's rate; over it a make is a 429
+ * (`summary-budget`) and nothing is asked, while reads keep answering, stale
+ * included — and a cost record per day (`summary-ledger.ts`), read by the
+ * canvas's editors at `GET …/summaries/stats`. The cache evicts what nobody
+ * can reach before what nobody has read lately.
  */
 /** How the summaries are configured: every field has a production default; the fields exist so a test can hold a clock and a small bound. */
 export interface SummaryOptions {
@@ -43,6 +50,8 @@ export interface SummaryOptions {
     model?: () => string | undefined;
     /** Entries kept per canvas before the least recently read is evicted. Default 2,000. */
     maxEntries?: number;
+    /** Model calls per canvas per rolling hour, across everyone. Default `ISOCAN_SUMMARY_PER_HOUR`, else 60. */
+    perHour?: number;
     now?: () => number;
 }
 /** What `registerModelRoutes` hands over: its closures, its text model and its owner-only rule. */
