@@ -78,7 +78,8 @@ Seven rules, the same in every moment, so a person learns them once.
 6. **One lead voice, with restraint you can see.** One agent per canvas
    proposes (`proactive=<agent name>` on the canvas, set by the person).
    It caps itself at five open proposals per canvas (`PROPOSAL_CAP`;
-   Dion, 14 Oct 2026: three felt small), says what it chose
+   Dion, 14 Oct 2026: three felt small); room frees only when the person
+   keeps or deletes one, never by time passing; it says what it chose
    not to do, and states what it will not touch. A result ends with at most
    three next moves, at different altitudes (this screen, the flow, the
    system). Critics and walkers are guests: their notes are comments the
@@ -227,8 +228,12 @@ digest panel.
 **What exists:** `VisitDigest.tsx` and `visitdigest.ts` (phone face only
 today), seen marks, `recap.ts`, `inbox`.
 
-**Open questions:** *Open — waits on Dion:* whether five is the cap or it
-scales with time away; what the morning says when the night found nothing
+**Decided (Dion, 14 Oct 2026):** five does not grow with time away. A
+week away is still at most five, and the agent makes no more until the
+person has acknowledged what is there: room frees only when a proposal is
+kept or deleted, never by waiting.
+
+**Open questions:** *Open — waits on Dion:* what the morning says when the night found nothing
 (the draft: one line, and the reason).
 
 ## 6. Explain this item
