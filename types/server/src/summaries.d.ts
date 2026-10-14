@@ -41,6 +41,18 @@ import type { TextModel } from "./text.js";
  * included — and a cost record per day (`summary-ledger.ts`), read by the
  * canvas's editors at `GET …/summaries/stats`. The cache evicts what nobody
  * can reach before what nobody has read lately.
+ *
+ * Since phase 3b, a summary may **look at pictures** (design §11): a make
+ * with `vision: true` sends, beside the words, the pictures of the screens
+ * and pictures it holds (`summary-pictures.ts`: at most 1024 px on the long
+ * side, at most eight, the largest on the canvas first), and a screen or a
+ * picture alone may be summarised (kind `screen`, only ever with vision).
+ * `vision` is part of the key only where a picture would be sent, so a text
+ * node's key never changes and only items with pictures gain a second
+ * entry. A read gets a vision entry only when it says `vision=1`; without
+ * it, never — not even as a stale stand-in. A model that takes no pictures
+ * refuses such a make (`summary-no-pictures`), and calls with pictures have
+ * an hourly budget of their own inside the canvas's (`summary-vision-budget`).
  */
 /** How the summaries are configured: every field has a production default; the fields exist so a test can hold a clock and a small bound. */
 export interface SummaryOptions {
@@ -52,6 +64,8 @@ export interface SummaryOptions {
     maxEntries?: number;
     /** Model calls per canvas per rolling hour, across everyone. Default `ISOCAN_SUMMARY_PER_HOUR`, else 60. */
     perHour?: number;
+    /** Of those, calls that send pictures (design §11). Default `ISOCAN_SUMMARY_VISION_PER_HOUR`, else 15. */
+    visionPerHour?: number;
     now?: () => number;
 }
 /** What `registerModelRoutes` hands over: its closures, its text model and its owner-only rule. */

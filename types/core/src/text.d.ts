@@ -29,6 +29,19 @@ export { TEXT_UNAVAILABLE } from "./jev.js";
  * must name. Only the lazy dialog chunk reads this file in the browser.
  */
 export declare const TEXT_ROUTE = "/api/text";
+/**
+ * **Does this home's text model look at pictures** — `GET`, answered with
+ * `TextPictures`. Semantic Zoom's "look at pictures" row asks it (design
+ * §11), so a home whose model takes none says so in Settings and the row
+ * stays off. Whether a key exists at all is the text route's own question;
+ * this says only whether the one it would use takes images.
+ */
+export declare const TEXT_PICTURES_ROUTE = "/api/text/pictures";
+/** `TEXT_PICTURES_ROUTE`'s answer: whether pictures may be sent, and when not, why, in a sentence for a person. */
+export interface TextPictures {
+    pictures: boolean;
+    why?: string;
+}
 /** A request bigger than this is refused before anything is asked. A screen's copy prompt and schema are a few KB. */
 export declare const TEXT_MAX_BYTES: number;
 /**

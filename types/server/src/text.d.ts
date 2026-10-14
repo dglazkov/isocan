@@ -1,4 +1,4 @@
-import { type JsonSchema, type TextProvider } from "../../core/src/jev.js";
+import { type JsonSchema, type TextImage, type TextProvider } from "../../core/src/jev.js";
 /** Says once on stderr that a loose keys file was refused, and carries on with no key. */
 export declare function warnRefusedKeys<T>(read: () => T | undefined): T | undefined;
 /**
@@ -43,11 +43,14 @@ interface Written {
  * one, its own model (a function of the provider, so a Claude key gets the
  * cheap tier and any other key its own default), and Claude's fallbacks off
  * for a model that has none. Absent, everything is as `/api/text` asks.
+ * Since phase 3b, `images`: pictures sent with the prompt, for a summary that
+ * looks at them — asked only where `takesImages()` said yes.
  */
 interface OwnAsk {
     system?: string;
     model?: (provider: TextProvider) => string | undefined;
     fallbacks?: boolean;
+    images?: readonly TextImage[];
 }
 export declare class TextModel {
     private readonly opts;
@@ -62,6 +65,12 @@ export declare class TextModel {
      */
     keySource(): "env" | "file" | undefined;
     private key;
+    /**
+     * Would a call now be asked of a model that takes pictures (Semantic Zoom
+     * design §11)? Claude's do, and its generator sends them; the OpenAI-shaped
+     * endpoint is not asked about pictures here. False with no key.
+     */
+    takesImages(): boolean;
     /** Does this home hold a key — can anything be written here at all. */
     available(): boolean;
     /** Spend one of this badge's completions for the minute, or say it has none left. */

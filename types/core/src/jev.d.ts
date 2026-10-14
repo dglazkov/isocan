@@ -353,6 +353,16 @@ export declare const CLAUDE_TEXT_MODEL = "claude-opus-5-5";
  * own default is `medium`, so it is set explicitly).
  */
 export declare const CLAUDE_TEXT_EFFORT = "low";
+/**
+ * **A picture sent with a prompt** — base64 bytes and their format, as
+ * Claude's image blocks take them. Semantic Zoom's summaries that look at
+ * pictures (design §11) are the one caller; only Claude's generator takes
+ * them.
+ */
+export interface TextImage {
+    mediaType: string;
+    data: string;
+}
 /** Options for `claudeTextGenerator`. */
 interface ClaudeTextGeneratorOptions {
     apiKey?: string;
@@ -371,6 +381,8 @@ interface ClaudeTextGeneratorOptions {
      * fallback (the cheap tier a summary asks for) turns it off.
      */
     fallbacks?: boolean;
+    /** Pictures sent before the prompt, in order, as image blocks in the one user turn. Absent, the turn is the prompt alone, as it always was. */
+    images?: readonly TextImage[];
 }
 /**
  * The schema as Claude's structured outputs accept it: every object closed
@@ -410,6 +422,8 @@ interface EnvTextGeneratorOptions {
     system?: string;
     /** Claude's `fallbacks: "default"`; absent, on, as it always was. */
     fallbacks?: boolean;
+    /** Pictures sent with the prompt — Claude's only; asking the OpenAI-shaped endpoint with any throws, rather than dropping them unsaid. */
+    images?: readonly TextImage[];
 }
 /**
  * The text generator the environment names — the CLI's with a key of its own,
