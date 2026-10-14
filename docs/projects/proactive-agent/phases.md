@@ -90,14 +90,14 @@ honest "nothing can answer tonight" when no standing agent is answerable.
 
 **Outcome:** the "While you were away" panel on desktop as well as the
 phone, leading with the agent's brief (found by its `record` data), at most
-three proposals in confidence order, **Left alone** with reasons, then the
+up to five proposals in confidence order, **Left alone** with reasons, then the
 digest; promised frames filled or filled with a reason; the rule that an
 item the person edited in their last hour is off limits unless named.
 
 **Proof:**
 
 - Journey `proactive-morning` (stub agent, a fixture night): returning past
-  *ready by* shows the brief first, three proposals, one failed promise with
+  *ready by* shows the brief first, its proposals (at most five), one failed promise with
   its reason, and the person's screens unchanged byte for byte.
 - Unit: a fourth proposal from the night is refused; a seen mark newer than
   *ready by* shows no review.

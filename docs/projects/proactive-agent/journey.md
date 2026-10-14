@@ -98,7 +98,7 @@ One promise failed: the frame under the order-history screen says *"Nothing
 worth showing: every take I tried broke the list's scan line. Here's the
 one I'd have shown."* An empty frame never stays empty without a reason.
 
-**What makes this right:** a cap of three, the restraint said out loud
+**What makes this right:** a cap of five, the restraint said out loud
 ("left alone"), and failure reported plainly, so the three that did arrive
 are worth reading.
 
@@ -207,7 +207,7 @@ sharper.
   until somebody keeps it.
 - It never proposes without a trigger it can cite.
 - It never speaks over a run of edits.
-- It never makes more than it said it would: three proposals, and the
+- It never makes more than it said it would: five proposals, and the
   budget each promise named.
 - It never lets a critic or a walker act. They are guests; one agent
   synthesises and acts, and only when asked.
