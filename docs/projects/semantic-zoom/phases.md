@@ -9,7 +9,7 @@ note: "the walk: a bench that judges summaries before any ship, text nodes behin
 
 **13 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Next: phase 0, the bench, which spends real model calls and so waits on his yes to run.**
+**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run; phase 1 proceeds on a stub model.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -27,7 +27,7 @@ Rules for every phase, on top of `AGENTS.md`:
 
 ## Phase 0 — The bench
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 14 October 2026.** The bench is built (`bench/`: `bench.mjs render | plan | run | table`, the prompts in `prompts.mjs` ready to lift into core, a synthetic Acme fixture of 20 notes, 4 groups, an 11-card board and 8 rendered screens). It has not been run: no text key resolves on the build machine, so `run` stopped with zero calls. The plan is 74 calls (worst case 88), estimated well under $0.50.
 
 **Outcome:** `docs/projects/semantic-zoom/bench/`: a script that runs the
 three prompts over a fixture canvas (synthetic, "Acme": twenty notes of
@@ -39,6 +39,14 @@ token cost.
 summary against its source (faithful: says nothing the source does not; short:
 under 30 words; useful: tells two neighbours apart), and the model tier
 chosen. Run once, by hand, with Dion's yes.
+
+### Trajectory
+
+- **2026-10-13** — `/api/text` is not prompt-free: `claudeTextGenerator` (core `jev.ts`) sends a copywriting system prompt on every call and always asks for `fallbacks: "default"`, and the door takes no model. Phase 1's make route must set its own system line and model in-process, or summaries are asked of a copywriter on the most capable tier.
+- **2026-10-13** — The 40-word threshold catches 16 of the fixture's 20 notes, and the four it leaves out are already their own title. Kept.
+- **2026-10-13** — A screen alone needs its own framing line (`screen`) for §11; the bench adds it, used only with vision. Phase 3b's to ship.
+- **2026-10-13** — Estimated, not measured: a 40-note canvas is about $0.002 on Haiku and $0.04 on Sonnet; vision's cap is about rate, not money.
+- **2026-10-13** — Open: the run (table, judgements, tier choice) waits on a text key at the home (`isocan keys set anthropic` or `ISOCAN_TEXT_API_KEY`).
 
 ## Phase 1 — Text nodes, behind the experiment
 
