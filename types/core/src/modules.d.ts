@@ -597,8 +597,22 @@ export interface RendererFacts {
 export interface ModuleRenderer<R> {
     /** The mimes this draws — the same list the module's kind claims. */
     mimes: readonly string[];
+    /**
+     * **Only items carrying this property** (module API 0.2.8, critique phase
+     * 0). A critic is an ordinary markdown item, so claiming `text/markdown`
+     * outright would take every note on every canvas; naming the property that
+     * marks it claims those items and leaves the rest to the built-in chain.
+     * Data, like `marks` and `spotlights`: the shell tests the property.
+     */
+    property?: string;
     component: R;
 }
+/** Does this renderer claim this version of this item? The one test, so the
+ *  card and its compact face cannot disagree about who draws it. */
+export declare function rendererClaims(renderer: {
+    mimes: readonly string[];
+    property?: string;
+}, mimeType: string, item?: Pick<Item, "properties"> | null): boolean;
 /**
  * **What an inspector is handed** (phase 4): the open item, and its bytes on
  * request. The workbench mounts a module's inspector beside the stage when
@@ -1103,8 +1117,14 @@ export declare function isDataOnly(manifest: ModuleManifest): boolean;
  * optional `choice` `{ stance, against }` so *Choose a voice…* records the
  * winning stance and losing stances in the same op group (copy-edit phase 6).
  * A module built for `^0.2.6` still loads.
+ *
+ * **0.2.7 → 0.2.8 on 14 Oct 2026**, an addition: `ModuleRenderer.property`,
+ * so a renderer can claim only the items of a mime that carry a property —
+ * critique's critic cards are markdown, and every other markdown item stays
+ * the built-in chain's. Optional and provided: a module built for `^0.2.7`
+ * still loads.
  */
-export declare const MODULE_API_VERSION = "0.2.7";
+export declare const MODULE_API_VERSION = "0.2.8";
 /**
  * **The parts of the API we intend to change**, named so a module can say it
  * is using one and a home can say yes before it runs.

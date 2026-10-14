@@ -107,6 +107,7 @@ export * from "./converge.js";
 export * from "./itemthread.js";
 export * from "./claim.js";
 export * from "./persona.js";
+export * from "./homage.js";
 export * from "./inbox.js";
 export * from "./roll.js";
 export * from "./prototype-click.js";
