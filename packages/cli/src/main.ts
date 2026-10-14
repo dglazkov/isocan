@@ -2,6 +2,7 @@ import { classifyAutomaticSource } from "@isocan/api/context";
 import { contextPinPort, pinFromSource } from "@isocan/api";
 import { registerPersonalContext } from "./personal-context.ts";
 import { noteOnBench, registerBench } from "./bench.ts";
+import { summaryColumn, summaryReport, summaryStatsReport } from "./summary.ts";
 import { registerKeys } from "./keys.ts";
 import { registerModel } from "./model.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
@@ -283,6 +284,7 @@ import {
   newCanvasId,
   newThreadId,
   newVersionId,
+  newOpId,
   // Core's is the pure, total computation; this file's `normalizeHomeUrl`
   // wraps it with the refusals a person typing an address has earned. Two
   // names because they answer two questions — see both doc comments.
@@ -495,6 +497,7 @@ import {
 } from "@isocan/api";
 import { agentHelp, type ModuleGuide } from "./agent-guide.ts";
 import { printDesignAudit } from "./design-audit.ts";
+import { EXIT_CONFLICT, EXIT_UNSUPPORTED, appliedResult, conditionalEditOp, conditionalEditSentence, conflictResult, parseExpectedMeta, parseOpId, staleBeforeSending, type ConditionalEditResult } from "./conditional-edit.ts";
 import { CLI_MODULES } from "./modules.ts";
 import { loadRuntimeModules } from "./runtime-modules.ts";
 import type { CliHost, EnrolTemplate } from "./modulehost.ts";
@@ -541,7 +544,7 @@ import {
   type Build,
 } from "./managed.ts";
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
-import { installJetskiPlugin } from "./jetski-plugin.ts";
+import { installAntigravityPlugin } from "./antigravity-plugin.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
 import { inlineHtmlAssets, inlineMarkdownAssets } from "./inline.ts";
 import {
@@ -2392,7 +2395,7 @@ program
         );
         say(await adoptGlobal(home));
         if (opts.restart !== false) {
-          const bin = path.join(found.root, "packages", "cli", "bin", "isocan.js");
+          const bin = packageBin(found.root);
           spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
             stdio: "inherit",
           });
@@ -2446,9 +2449,7 @@ program
         // process is running the OLD build's code, and no symlink flip moves a
         // running process; the whole point of the flip is that the next
         // command resolves differently, and this is that next command.
-        const bin = moved
-          ? path.join(moved.root, "packages", "cli", "bin", "isocan.js")
-          : path.join(install.root, "packages", "cli", "bin", "isocan.js");
+        const bin = packageBin(moved ? moved.root : install.root);
         spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
           stdio: "inherit",
         });
@@ -3849,7 +3850,7 @@ async function passForAgent(ctx: Ctx, canvas: Canvas, origin: string, name: stri
  * **`isocan embed` — the address to paste into somebody else's window**
  * (#220, phase 1).
  *
- * A canvas opened in an agent manager's pane — Jetski, an IDE webview, a
+ * A canvas opened in an agent manager's pane — Antigravity, an IDE webview, a
  * browser tab beside a conversation — arrives as a cross-site frame, and a
  * cross-site frame is a stranger. It cannot ride the badge cookie this
  * machine's browser holds, because that cookie lives in a jar keyed on the
@@ -4332,7 +4333,7 @@ program
   .option("--force", "refresh the skill even if this directory already has one")
   .option("--direct", "run no daemon here — speak to the home itself, keeping no local copy")
   .option("--daemon", "run a daemon here with a replica of its own, whatever this place looks like")
-  .option("--jetski", "link the Jetski plugin into ~/.gemini/config/plugins/isocan")
+  .option("--antigravity", "link the Antigravity plugin into ~/.gemini/config/plugins/isocan")
   .action(
     run(
       async (
@@ -4343,7 +4344,7 @@ program
           force?: boolean;
           direct?: boolean;
           daemon?: boolean;
-          jetski?: boolean;
+          antigravity?: boolean;
         },
         cmd: Command,
       ) => {
@@ -4488,13 +4489,13 @@ program
         // are the transient one, the installed copy is handed the daemon.
         const transient = (await whichInstall(path.resolve(myRoot()))).kind === "npx";
         const handOff = transient && !direct ? durableBin : null;
-        if (opts.jetski) {
+        if (opts.antigravity) {
           const pluginRoot = transient && durableBin ? rootOfBin(durableBin) : myRoot();
-          const said = installJetskiPlugin({
-            sourceDir: path.join(pluginRoot, "plugins", "jetski"),
+          const said = installAntigravityPlugin({
+            sourceDir: path.join(pluginRoot, "plugins", "antigravity"),
             force: opts.force ?? false,
           });
-          report.jetski = `${said} — restart Jetski so it loads hooks.json`;
+          report.antigravity = `${said} — restart Antigravity so it loads hooks.json`;
         }
         /**
          * **The whole daemon paragraph, skipped** — this is what direct mode
@@ -7227,8 +7228,9 @@ program
   .option("--reaction <emoji>", "only items wearing this mark")
   .option("--in <group>", "direct group members; legacy areas use item centres")
   .option("--recursive", "with --in, include every explicit descendant")
+  .option("--summaries", "add a column with each text node's, group's and area's Semantic Zoom summary, where one is cached (≈, approximate; never makes one)")
   .action(
-    run(async (opts: { kind?: string; filter?: string; reaction?: string; in?: string; recursive?: boolean }, cmd: Command) => {
+    run(async (opts: { kind?: string; filter?: string; reaction?: string; in?: string; recursive?: boolean; summaries?: boolean }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       await narrate(ctx, p.id, { status: "surveying the canvas…" });
@@ -7256,7 +7258,11 @@ program
           (current?.filename ?? "").toLowerCase().includes(needle)
         );
       });
-      if (ctx.json) return printJson(items.map((item) => ({ ...item, kind: itemKind(item) })));
+      // `--summaries` reads what is cached and never asks for one to be made (semantic zoom phase 4).
+      const summaries = opts.summaries ? await summaryColumn(ctx, p.id, snapshot.canvas, items) : null;
+      if (ctx.json) {
+        return printJson(items.map((item) => ({ ...item, kind: itemKind(item), ...(summaries ? { summary: summaries.get(item.id)?.json ?? null } : {}) })));
+      }
       printTable(
         items.map((i) => ({
           id: i.id,
@@ -7271,8 +7277,46 @@ program
           size: `${i.width}x${i.height}`,
           vers: String(i.versions.length),
           "updated by": actorNameIn(snapshot.names, i.updatedBy),
+          ...(summaries ? { summary: truncate(summaries.get(i.id)?.text ?? "", 48) } : {}),
         })),
       );
+    }),
+  );
+
+/**
+ * **`isocan summary`** — Semantic Zoom's summary of a text node, a group or
+ * an area, and whether it is current (design §8, phase 4). The body is
+ * `summary.ts`, loaded only when this runs.
+ */
+program
+  .command("summary [item]")
+  .description("A text node's, group's or area's Semantic Zoom summary (≈, approximate) and whether it is current, stale, short, excluded or missing")
+  .option("--refresh", "ask the home to make one, under the same rules as the app: edit access, the key's own spend rules, rate, the canvas's hourly budget, and a quiet period after a change")
+  .option("--stats", "what this canvas's summaries have cost: calls, tokens, the hour's budget, the cache (editors only)")
+  .option("--days <n>", "with --stats: how many days back (default 30, at most 90)")
+  .action(
+    run(async (ref: string | undefined, opts: { refresh?: boolean; stats?: boolean; days?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      if (opts.stats) {
+        if (ref !== undefined || opts.refresh) throw new Error("--stats is about the whole canvas: drop the item and --refresh");
+        const days = opts.days === undefined ? undefined : Number(opts.days);
+        if (days !== undefined && !(Number.isInteger(days) && days > 0)) throw new Error(`--days wants a whole number of days, got: ${opts.days}`);
+        const p = await resolveCanvas(ctx);
+        const report = await summaryStatsReport(ctx, p.id, days);
+        if (ctx.json) return printJson(report.json);
+        for (const line of report.lines) console.log(line);
+        return;
+      }
+      if (ref === undefined) throw new Error("which item, group or area? isocan summary <item> — or --stats for the canvas");
+      if (opts.days !== undefined) throw new Error("--days goes with --stats");
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const item = resolveItem(snapshot, ref);
+      const report = await summaryReport(ctx, p.id, snapshot.canvas, item, {
+        ...opts,
+        ago: (iso) => { const words = ago(iso, Date.now(), true); return words ? `${words} ago` : "moments ago"; },
+      });
+      if (ctx.json) return printJson(report.json);
+      for (const line of report.lines) console.log(line);
     }),
   );
 
@@ -8139,13 +8183,52 @@ program
 
 program
   .command("edit <item> [file]")
-  .description("Create a new version — from a file, or in $EDITOR")
+  .description("Create a new version — from a file, or in $EDITOR; with --if-version, only if nobody changed the item first")
   .option("--visual <file>", "companion visualizer file to render on the canvas")
+  .option("--if-version <versionId>", "edit only if this is still the item's current version — otherwise write nothing and exit 4")
+  .option("--if-meta <json>", `with --if-version: also require this exact {"title","properties"} — what the last --json answer printed`)
+  .option("--title <title>", "with --if-version: retitle in the same act")
+  .option("--prop <k=v>", "with --if-version: set a property in the same act (repeatable)", collectProp, {})
+  .option("--rm-prop <key>", "with --if-version: remove a property in the same act (repeatable)", (v: string, prev: string[]) => [...prev, v], [])
+  .option("--op-id <id>", "with --if-version: this edit's own id (op_…), the same on every retry — a repeat answers with what already landed")
+  .addHelpText(
+    "after",
+    `
+A conditional edit is one act: the new content and any --title/--prop land
+together, or nothing does.
+
+  isocan --json edit "Pulse" pulse.md --if-version ver_abc --op-id op_week41pulse
+  # → {"status":"applied","versionId":"ver_def","title":…,"properties":…}   exit 0
+  # → {"status":"replayed", …}  the same op id had already landed            exit 0
+  # → {"status":"conflict","currentVersionId":"ver_xyz", …}  nothing written  exit ${EXIT_CONFLICT}
+  # → {"status":"unsupported", …}  the home predates conditional edits       exit ${EXIT_UNSUPPORTED}
+
+Pass the last answer's title and properties back as --if-meta to also refuse
+when a person renamed or re-tagged the card. It never falls back to an
+unconditional edit.`,
+  )
   .action(
-    run(async (ref: string, file: string | undefined, opts: { visual?: string }, cmd: Command) => {
+    run(async (ref: string, file: string | undefined, opts: { visual?: string; ifVersion?: string; ifMeta?: string; title?: string; prop: Record<string, string>; rmProp: string[]; opId?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
+      const patch = metaPatch(opts);
+      if (!opts.ifVersion && (opts.ifMeta || opts.opId || Object.keys(patch).length > 0)) {
+        throw new Error("--if-meta, --op-id, --title, --prop and --rm-prop travel with a conditional edit — add --if-version <versionId> (`isocan --json versions <item>` prints the current one)");
+      }
+      const expectedMeta = opts.ifMeta ? parseExpectedMeta(opts.ifMeta) : undefined;
+      const callerOpId = opts.opId ? parseOpId(opts.opId) : undefined;
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
+      const settle = (result: ConditionalEditResult) => {
+        if (result.status === "conflict") process.exitCode = EXIT_CONFLICT;
+        if (result.status === "unsupported") process.exitCode = EXIT_UNSUPPORTED;
+        if (ctx.json) printJson(result);
+        else (result.status === "applied" || result.status === "replayed" ? console.log : console.error)(conditionalEditSentence(result));
+      };
+      // Stale already, and not a retry: say so before anything is uploaded.
+      if (opts.ifVersion && !callerOpId) {
+        const stale = staleBeforeSending(item, opts.ifVersion, expectedMeta);
+        if (stale) return settle(conflictResult(item, opts.ifVersion, stale));
+      }
       const current = item.versions.find((v) => v.id === item.currentVersionId)!;
       // Announce the edit BEFORE the slow part (upload, or a human in
       // $EDITOR) — the applied op will resolve this back into "done".
@@ -8269,18 +8352,29 @@ program
 
       const upload = await ctx.client.uploadBlob(p.id, data, mimeType, filename);
       const versionId = newVersionId();
-      await sendOp(ctx, p.id, {
-        type: "item.addVersion",
-        itemId: item.id,
-        version: {
-          id: versionId,
-          blobHash: upload.blobHash,
-          mimeType,
-          filename,
-          size: upload.size,
-          ...(visualFace ? { visual: visualFace } : {}),
-        },
-      });
+      const version = {
+        id: versionId,
+        blobHash: upload.blobHash,
+        mimeType,
+        filename,
+        size: upload.size,
+        ...(visualFace ? { visual: visualFace } : {}),
+      };
+      if (opts.ifVersion) {
+        // One op, sent once under its own id, and never an unconditional
+        // write behind it: the home's refusal is the answer.
+        const opId = callerOpId ?? newOpId();
+        const reread = async () => resolveItem(await ctx.client.snapshot(p.id), item.id);
+        try {
+          const response = await ctx.client.sendOp(p.id, ctx.actor, conditionalEditOp(item.id, version, opts.ifVersion, patch, expectedMeta), undefined, undefined, undefined, undefined, undefined, opId);
+          return settle(appliedResult(response, await reread(), versionId, opId));
+        } catch (err) {
+          if (err instanceof ApiError && err.code === "edit-conflict") return settle(conflictResult(await reread(), opts.ifVersion, "it changed while this edit was on its way"));
+          if (err instanceof ApiError && err.code === "unknown-op") return settle({ status: "unsupported", itemId: item.id, reason: "this home does not know conditional edits (`item.edit`) — it is older than the CLI" });
+          throw err;
+        }
+      }
+      await sendOp(ctx, p.id, { type: "item.addVersion", itemId: item.id, version });
       // New words in a caption's old box: grow it to hold them, the same
       // question `set` asks of a new look (core `textNodeRefit`). A short
       // label re-worded into a sentence otherwise shows its first line.

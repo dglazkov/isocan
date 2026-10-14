@@ -1,4 +1,4 @@
-import { envTextGenerator, textProvider, type JsonSchema, type TextProvider } from "@isocan/core/jev";
+import { envTextGenerator, textProvider, type JsonSchema, type TextImage, type TextProvider } from "@isocan/core/jev";
 import { TEXT_PER_MINUTE, TEXT_UPSTREAM } from "@isocan/core/text";
 import { KeyFileRefused, resolveTextKey } from "@isocan/core/keystore";
 
@@ -66,10 +66,42 @@ export interface TextOptions {
   now?: () => number;
 }
 
-/** What `TextModel.write` hands the route to send back as it is: `{ model, value }` with 200, or a `text-upstream` refusal with 502. */
+/**
+ * What `TextModel.write` hands the route to send back as it is: `{ model, value }` with 200, or a `text-upstream` refusal with 502.
+ * `usage` is what the provider said the call cost, summed over its tries, for an in-process caller's own record (Semantic Zoom's
+ * cost record); it is never sent, and is absent when the provider said nothing.
+ */
 interface Written {
   status: number;
   body: unknown;
+  usage?: { inputTokens: number; outputTokens: number };
+  /** The model that was asked, answered or not. */
+  model?: string;
+}
+
+/** The tokens a provider's answer says it cost: Claude's `input_tokens`/`output_tokens`, the OpenAI shape's `prompt_tokens`/`completion_tokens`. */
+function usageOf(body: unknown): { inputTokens: number; outputTokens: number } | null {
+  const usage = (body as { usage?: Record<string, unknown> } | null)?.usage;
+  if (!usage || typeof usage !== "object") return null;
+  const n = (...names: string[]) => names.map((name) => usage[name]).find((v): v is number => typeof v === "number") ?? 0;
+  return { inputTokens: n("input_tokens", "prompt_tokens"), outputTokens: n("output_tokens", "completion_tokens") };
+}
+
+/**
+ * **What an in-process caller asks differently** — Semantic Zoom's make
+ * route (`summaries.ts`), which is not `/api/text` and must not change what
+ * `/api/text`'s callers get. Its own system line instead of the copywriting
+ * one, its own model (a function of the provider, so a Claude key gets the
+ * cheap tier and any other key its own default), and Claude's fallbacks off
+ * for a model that has none. Absent, everything is as `/api/text` asks.
+ * Since phase 3b, `images`: pictures sent with the prompt, for a summary that
+ * looks at them — asked only where `takesImages()` said yes.
+ */
+interface OwnAsk {
+  system?: string;
+  model?: (provider: TextProvider) => string | undefined;
+  fallbacks?: boolean;
+  images?: readonly TextImage[];
 }
 
 const WINDOW_MS = 60_000;
@@ -103,6 +135,17 @@ export class TextModel {
     return this.resolve()?.key;
   }
 
+  /**
+   * Would a call now be asked of a model that takes pictures (Semantic Zoom
+   * design §11)? Claude's do, and its generator sends them; the OpenAI-shaped
+   * endpoint is not asked about pictures here. False with no key.
+   */
+  takesImages(): boolean {
+    const resolved = this.resolve();
+    if (!resolved) return false;
+    return (this.opts.provider?.() ?? resolved.provider ?? textProvider(resolved.key)) === "anthropic";
+  }
+
   /** Does this home hold a key — can anything be written here at all. */
   available(): boolean {
     return this.key() !== undefined;
@@ -131,26 +174,40 @@ export class TextModel {
    * provider, an answer that is not JSON — comes back as `text-upstream` with
    * the provider's words, never the key.
    */
-  async write(request: { prompt: string; schema: JsonSchema }): Promise<Written> {
+  async write(request: { prompt: string; schema: JsonSchema }, own: OwnAsk = {}): Promise<Written> {
     const resolved = this.resolve();
     if (!resolved) throw new Error("the text model has no key");
     const { key } = resolved;
     const named = this.opts.provider ? this.opts.provider() : undefined;
     const provider = named ?? resolved.provider ?? textProvider(key);
-    const model = (this.opts.model ? this.opts.model() : undefined) ?? resolved.model;
+    const model = own.model?.(provider) ?? (this.opts.model ? this.opts.model() : undefined) ?? resolved.model;
+    // Read what each answer says it cost, on a copy, so the generator reads the answer as it always did.
+    let usage: Written["usage"];
+    const send = this.opts.fetch ?? globalThis.fetch;
+    const counted = (async (...args: Parameters<typeof fetch>) => {
+      const res = await send(...args);
+      if (res.ok) {
+        const spent = usageOf(await res.clone().json().catch(() => null));
+        if (spent) usage = { inputTokens: (usage?.inputTokens ?? 0) + spent.inputTokens, outputTokens: (usage?.outputTokens ?? 0) + spent.outputTokens };
+      }
+      return res;
+    }) as typeof fetch;
     const generator = envTextGenerator({
       apiKey: key,
       provider,
       ...(model ? { model } : {}),
-      ...(this.opts.fetch ? { fetch: this.opts.fetch } : {}),
+      fetch: counted,
+      ...(own.system !== undefined ? { system: own.system } : {}),
+      ...(own.fallbacks !== undefined ? { fallbacks: own.fallbacks } : {}),
+      ...(own.images?.length ? { images: own.images } : {}),
     });
     try {
       const value = await generator.generateJson(request.prompt, request.schema);
       const body = { model: generator.name, value };
       const text = JSON.stringify(body);
-      return { status: 200, body: text.includes(key) ? JSON.parse(this.scrub(text, key)) : body };
+      return { status: 200, body: text.includes(key) ? JSON.parse(this.scrub(text, key)) : body, model: generator.name, ...(usage ? { usage } : {}) };
     } catch (error) {
-      return { status: 502, body: { error: this.scrub(`the text model could not write this: ${(error as Error).message}`, key), code: TEXT_UPSTREAM } };
+      return { status: 502, body: { error: this.scrub(`the text model could not write this: ${(error as Error).message}`, key), code: TEXT_UPSTREAM }, model: generator.name, ...(usage ? { usage } : {}) };
     }
   }
 }

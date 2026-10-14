@@ -45,6 +45,7 @@ import {
   actorAliases,
   actorColors,
   actorJoins,
+  mergeJoins,
   actorMarks,
   actorKinds,
   actorNames,
@@ -2232,12 +2233,16 @@ export class Engine {
    * "transient and self-healing" — that was a hypothesis, and it measured
    * false.
    */
-  mergeRemoteIdentity(colors: ActorColors, names: ActorNames): Promise<void> {
+  mergeRemoteIdentity(colors: ActorColors, names: ActorNames, joined?: ActorJoins): Promise<void> {
     return this.enqueueHome(async () => {
       const runtime = await this.actors();
       const nextNames = { ...runtime.registry.names };
       const nextColors = { ...runtime.registry.colors };
-      let changed = false;
+      // The home's folds too (14 Oct 2026): it always sent them, and dropping
+      // them here left a laptop showing one person's two names as two people
+      // in everything that compares ids — undo, the inbox, ownership.
+      const nextJoined = mergeJoins(runtime.registry.joined, joined);
+      let changed = nextJoined !== null;
       const now = new Date().toISOString();
       for (const [actorId, name] of Object.entries(names)) {
         if (nextNames[actorId]?.name === name) continue;
@@ -2253,9 +2258,14 @@ export class Engine {
       // mouse move on every canvas: a disk write per cursor beat for data that
       // did not change would put the actors file on the latency path.
       if (!changed) return;
-      // Spread, not rebuilt: a roster carries names and colours only, and the
-      // registry has more fields than that (marks, joins, harnesses).
-      runtime.registry = { ...runtime.registry, names: nextNames, colors: nextColors };
+      // Spread, not rebuilt: a roster carries names, colours and joins only,
+      // and the registry has more fields than that (marks, harnesses).
+      runtime.registry = {
+        ...runtime.registry,
+        names: nextNames,
+        colors: nextColors,
+        ...(nextJoined !== null ? { joined: nextJoined } : {}),
+      };
       await this.store.saveActors(runtime.registry, runtime.lastSeq);
     });
   }

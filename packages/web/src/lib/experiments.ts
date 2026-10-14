@@ -1,5 +1,3 @@
-import { useUiStore } from "../stores/uiStore.ts";
-
 /**
  * **Things that are on because you turned them on** (9 Sep 2026).
  *
@@ -34,6 +32,12 @@ import { useUiStore } from "../stores/uiStore.ts";
  * canvas for everybody — readable by anyone whose build knows the kind, and a
  * file with a legible mime to anyone whose does not. That is #156's removal
  * story, and it is what makes an experiment safe to turn off again.
+ *
+ * ## Only Settings reads this list
+ *
+ * So it is only in Settings' lazy chunk, sentences and all. Whether one is on
+ * is the ui store's `experiments` — read where it is needed (`modules.ts`,
+ * `CanvasPage`) without pulling this file into a first visit.
  */
 interface Experiment {
   id: string;
@@ -41,6 +45,13 @@ interface Experiment {
   name: string;
   /** One sentence: what turning it on gets you, and what is unfinished. */
   what: string;
+  /** Shown only while this other experiment is on: a refinement meaningless without it. */
+  under?: string;
+  /**
+   * Offered only where the home's text model looks at pictures
+   * (`TEXT_PICTURES_ROUTE`); elsewhere the row says why, and stays off.
+   */
+  needsPictures?: true;
 }
 
 /** Every experiment this build offers, in the order Settings lists them. */
@@ -70,10 +81,18 @@ export const EXPERIMENTS: readonly Experiment[] = [
     name: "Anatomy",
     what: "Explore a codebase as a map of concepts, files and evidence on the canvas. The workspace slot and its four lenses are still taking shape.",
   },
+  {
+    id: "semantic.zoom",
+    name: "Semantic Zoom",
+    what: "Far away, a long note, a group or an area shows a short model-written summary instead of words too small to read, marked ≈.",
+  },
+  {
+    id: "semantic.zoom.vision",
+    name: "Semantic Zoom: look at pictures",
+    what: "Screens and pictures — alone, or in a group or an area — are summarised from what they show, not only their titles. One costs about ten text summaries, so a canvas makes at most 15 an hour.",
+    under: "semantic.zoom",
+    needsPictures: true,
+  },
 ];
 
-/** Is this one on? Read outside React — the module list is not a component. */
-export function experimentOn(id: string): boolean {
-  return useUiStore.getState().experiments.includes(id);
-}
 

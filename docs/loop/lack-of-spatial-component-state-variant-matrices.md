@@ -2,6 +2,7 @@
 title: Lack of spatial component state variant matrices
 loop:
   - 1ab7649c-7c55-415a-ba5b-0f053559fa33
+  - db27944f-aa9e-493f-925e-3e3527391382
 loop_rank: P2
 loop_state: ACTIVE
 loop_goal: pg_v67IPNa4

@@ -65,7 +65,7 @@ with no page), and 7–8 Sep were merged as drafts.
 
 - 17 of 49 projects name an issue.
 - 60 issues are open; 14 of them are named nowhere in `docs/projects`.
-- Issues of finished work are still open: cleanup #355, groups-by-hand #373, jetski #364, inbox #147, sheep-harness #210, wireframes #350.
+- Issues of finished work are still open: cleanup #355, groups-by-hand #373, antigravity #364, inbox #147, sheep-harness #210, wireframes #350.
 - A verify walk points at #261, which is closed, though the walk is still owed.
 - There are 0 milestones and labels on about 25 issues. 31 issues have had no update since 11 Sep.
 - Three PRs (#246–248, a parallel roadmap registry) have been open since 11 Sep.

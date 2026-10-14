@@ -286,6 +286,16 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     }
 
     const wheelPinch = { factor: 1, x: 0, y: 0, frame: 0 };
+    const wheelPan = { dx: 0, dy: 0, frame: 0 };
+    let wheelIdle: ReturnType<typeof setTimeout> | null = null;
+    function markWheelMoving() {
+      setPanning(true);
+      if (wheelIdle !== null) clearTimeout(wheelIdle);
+      wheelIdle = setTimeout(() => {
+        wheelIdle = null;
+        setPanning(false);
+      }, 160);
+    }
     function onWheel(e: WheelEvent) {
       stopGlide();
       freezePresentation();
@@ -294,6 +304,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
         // Pinch (or ctrl+wheel): always own it, wherever the cursor is, so the
         // browser never page-zooms. Zoom the canvas at the cursor instead.
         e.preventDefault();
+        markWheelMoving();
         // A trackpad sends several of these a frame; each would be a whole
         // render of everything that reads the viewport. Gather them and zoom
         // once a frame, at the latest cursor — the same total, one render.
@@ -337,8 +348,19 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
       e.preventDefault();
       // A wheel during a coast takes over from it.
       stopCoastRef.current();
-      const ui = useUiStore.getState();
-      ui.setViewport(pan(ui.viewport, -e.deltaX, -e.deltaY));
+      markWheelMoving();
+      wheelPan.dx += e.deltaX;
+      wheelPan.dy += e.deltaY;
+      if (wheelPan.frame === 0) {
+        wheelPan.frame = requestAnimationFrame(() => {
+          const { dx, dy } = wheelPan;
+          wheelPan.frame = 0;
+          wheelPan.dx = 0;
+          wheelPan.dy = 0;
+          const ui = useUiStore.getState();
+          ui.setViewport(pan(ui.viewport, -dx, -dy));
+        });
+      }
     }
     window.addEventListener("wheel", onWheel, { passive: false, capture: true });
 
@@ -350,9 +372,11 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
     function onGestureStart(e: GestureEvent) {
       e.preventDefault();
       gestureScale = e.scale;
+      markWheelMoving();
     }
     function onGestureChange(e: GestureEvent) {
       e.preventDefault();
+      markWheelMoving();
       const factor = e.scale / gestureScale;
       gestureScale = e.scale;
       const ui = useUiStore.getState();
@@ -368,6 +392,8 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
 
     return () => {
       if (wheelPinch.frame) cancelAnimationFrame(wheelPinch.frame);
+      if (wheelPan.frame) cancelAnimationFrame(wheelPan.frame);
+      if (wheelIdle !== null) clearTimeout(wheelIdle);
       window.removeEventListener("wheel", onWheel, true);
       window.removeEventListener("gesturestart", onGestureStart as EventListener, true);
       window.removeEventListener("gesturechange", onGestureChange as EventListener, true);

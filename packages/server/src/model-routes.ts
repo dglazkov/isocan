@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { atLeast, sameActor, type ActorClaim, JUDGMENT_BAD_REQUEST, JUDGMENT_MAX_BYTES, JUDGMENT_RATE_LIMITED, JUDGMENT_ROUTE, JUDGMENT_TOO_LARGE, JUDGMENT_UNAVAILABLE, type JudgmentRequest } from "@isocan/core";
-import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextRequest } from "@isocan/core/text";
+import { TEXT_BAD_REQUEST, TEXT_MAX_BYTES, TEXT_PICTURES_ROUTE, TEXT_RATE_LIMITED, TEXT_ROUTE, TEXT_TOO_LARGE, TEXT_UNAVAILABLE, type TextPictures, type TextRequest } from "@isocan/core/text";
 import { JUDGMENT_OWNER_ONLY, LIVE_TOKEN_BAD_REQUEST, LIVE_TOKEN_OWNER_ONLY, LIVE_TOKEN_RATE_LIMITED, LIVE_TOKEN_ROUTE, LIVE_TOKEN_UNAVAILABLE, ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import { defaultKeysHome, readKeyFile } from "@isocan/core/keystore";
 import type { Engine } from "./engine.ts";
@@ -11,6 +11,8 @@ import { Judge } from "./judgment.ts";
 import { LiveTokens } from "./live-token.ts";
 import { identityFile } from "./paths.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
+import { registerSummaryRoutes } from "./summaries.ts";
+import type { Store } from "./store.ts";
 import { TextModel } from "./text.ts";
 
 /**
@@ -26,6 +28,10 @@ import { TextModel } from "./text.ts";
  */
 interface ModelRouteScope {
   engine: Engine;
+  /** The canvas's blobs, which Semantic Zoom's make route reads a note's words from. */
+  store: Store;
+  /** The home directory Semantic Zoom's summary cache lives under. */
+  home: string;
   options: RouteOptions;
   refusals: Refusals;
   admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;
@@ -46,7 +52,7 @@ async function personAt(home: string): Promise<{ id: string; name: string } | nu
 
 /** The judgment and text routes, on `app`, at the point `registerRoutes` reaches them. */
 export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope): void {
-  const { engine, options, refusals, admit, viewOnly, claimsOf } = scope;
+  const { engine, store, home, options, refusals, admit, viewOnly, claimsOf } = scope;
   /**
    * **Owner-only spend** (keys phase 3; `docs/projects/keys/design.md`). A key
    * from keys.json is this machine's person's own, and pays only for them:
@@ -178,6 +184,29 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     }
     const written = await textModel.write(asked);
     return reply.status(written.status).send(written.body);
+  });
+  /**
+   * **`GET /api/text/pictures` — does the text model here look at pictures**
+   * (Semantic Zoom design §11). What Settings' "look at pictures" row asks
+   * before it offers itself: with a model that takes none, the row says so
+   * and stays off. It names no key and spends nothing, so any badge may ask.
+   */
+  app.get(TEXT_PICTURES_ROUTE, async () => {
+    if (!textModel.available()) return { pictures: false, why: "This home has no text model, so nothing is summarised here." } satisfies TextPictures;
+    if (!textModel.takesImages()) return { pictures: false, why: "This home's text model takes no pictures, so this stays off." } satisfies TextPictures;
+    return { pictures: true } satisfies TextPictures;
+  });
+  /**
+   * **Semantic Zoom's summaries** (`summaries.ts`): read by anyone who may
+   * view, made through this text model and this owner-only rule, in-process
+   * — `/api/text`'s guards, with a summary's own system line and model.
+   */
+  const textKeysHome = options.text?.keysHome ?? defaultKeysHome();
+  registerSummaryRoutes(app, {
+    engine, store, homes: options.homes, refusals, admit, viewOnly, textModel, home,
+    notTheOwners: (req) => notTheOwners(req, textKeysHome),
+    keyOwner: async () => (await personAt(textKeysHome))?.id ?? null,
+    options: options.summaries ?? {},
   });
   /**
    * **`POST /api/voice/token` — a short-lived Gemini Live token, minted with

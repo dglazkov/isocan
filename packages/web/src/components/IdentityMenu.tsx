@@ -1,5 +1,5 @@
 import { faceMark } from "@isocan/core";
-import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import {
   adoptIdentity,
@@ -16,6 +16,8 @@ import { refreshActorMarks, useActorMarks } from "../lib/marks.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 import { DISPLAY_SWITCHES, HIDEABLE, showAllChrome } from "../lib/hideable.ts";
 import { EXPERIMENTS } from "../lib/experiments.ts";
+import type { TextPictures } from "@isocan/core/text";
+import { fetchTextPictures } from "../lib/api.ts";
 import { loadExperiments } from "../modules.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { EmojiPicker } from "./EmojiPicker.tsx";
@@ -165,6 +167,25 @@ export function IdentityMenu({
   const setChromeHidden = useUiStore((s) => s.setChromeHidden);
   const experiments = useUiStore((s) => s.experiments);
   const setExperiment = useUiStore((s) => s.setExperiment);
+  /**
+   * Whether the home's text model looks at pictures, asked only while a row
+   * that needs it could show (Semantic Zoom's "look at pictures", design
+   * §11): with a model that takes none the row says so and stays off. Null
+   * until the home answers; an unanswered ask reads as "not here".
+   */
+  const askPictures = EXPERIMENTS.some((entry) => entry.needsPictures && (!entry.under || experiments.includes(entry.under)));
+  const [pictures, setPictures] = useState<TextPictures | null>(null);
+  useEffect(() => {
+    if (!askPictures) return;
+    let live = true;
+    fetchTextPictures().then(
+      (answer) => live && setPictures(answer),
+      () => live && setPictures({ pictures: false, why: "This home did not say whether its text model takes pictures, so this stays off." }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [askPictures]);
   const trimmed = name.trim();
   /**
    * **Is there a rename to do?** — the same question the submit handler
@@ -553,20 +574,25 @@ export function IdentityMenu({
         <>
           <div className="identity-menu-head">Experiments</div>
           <div className="chrome-list" role="group" aria-label="Experiments you can turn on">
-            {EXPERIMENTS.map((entry) => (
-              <label key={entry.id} className="chrome-row">
-                <input
-                  type="checkbox"
-                  checked={experiments.includes(entry.id)}
-                  onChange={(e) => {
-                    setExperiment(entry.id, e.target.checked);
-                    void loadExperiments();
-                  }}
-                />
-                <span className="chrome-name">{entry.name}</span>
-                <span className="chrome-where">{entry.what}</span>
-              </label>
-            ))}
+            {EXPERIMENTS.filter((entry) => !entry.under || experiments.includes(entry.under)).map((entry) => {
+              // A row that needs pictures, at a home whose model takes none (or has not said yet), is off and says why.
+              const refused = entry.needsPictures && !pictures?.pictures;
+              return (
+                <label key={entry.id} className="chrome-row">
+                  <input
+                    type="checkbox"
+                    checked={!refused && experiments.includes(entry.id)}
+                    disabled={refused}
+                    onChange={(e) => {
+                      setExperiment(entry.id, e.target.checked);
+                      void loadExperiments();
+                    }}
+                  />
+                  <span className="chrome-name">{entry.name}</span>
+                  <span className="chrome-where">{entry.what}{refused && pictures?.why ? ` ${pictures.why}` : ""}</span>
+                </label>
+              );
+            })}
           </div>
         </>
       )}

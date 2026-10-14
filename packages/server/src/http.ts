@@ -11,6 +11,7 @@ import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type
 import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
 import { collectInbox, sequenceInbox } from "./inbox.ts";
 import type { JudgmentOptions } from "./judgment.ts";
+import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
 import type { LiveTokenOptions } from "./live-token.ts";
 import { registerModelRoutes } from "./model-routes.ts";
@@ -188,9 +189,11 @@ import {
   attestersOf,
   attesterRefusal,
   BadIdTokenError,
+  ensureProxyAttestation,
   googleSigningKeys,
   verifyIdToken,
   type AuthConfig,
+  type ProxyAuthConfig,
   type SigningKeys,
 } from "./attest.ts";
 import { gcCanvases } from "./gc.ts";
@@ -484,6 +487,8 @@ export interface RouteOptions {
   /** The home's text model (`text.ts`): its key, provider, rate and transport.
    * Absent, the key is `ISOCAN_TEXT_API_KEY`, else `keys.json`, read per call. */
   text?: TextOptions;
+  /** Semantic Zoom's summaries (`summaries.ts`): the quiet period, the model, the bound and the clock. Absent, the production defaults. */
+  summaries?: SummaryOptions;
   /** The talk module's Gemini Live tokens (`live-token.ts`): its key, rate and
    * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
   liveToken?: LiveTokenOptions;
@@ -593,6 +598,8 @@ export interface RouteOptions {
    * boolean somebody could set wrongly.
    */
   auth?: AuthConfig | null;
+  /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+  proxyAuth?: ProxyAuthConfig | null;
   /**
    * **The addresses this home calls its operator** (operator phase 1), or
    * absent/empty for none — which is every daemon in this repo.
@@ -690,7 +697,8 @@ export function registerRoutes(
   // recomputed it per call would invite somebody to make it a lookup that can
   // fail halfway through a request.
   const auth = options.auth ?? null;
-  const attesters = attestersOf(auth);
+  const proxyAuth = options.proxyAuth ?? null;
+  const attesters = attestersOf(auth, proxyAuth);
   const signingKeys = options.signingKeys ?? googleSigningKeys;
   /** Who this home calls its operator, derived once for `auth`'s reason: it
    * cannot change while the process is up, and a list recomputed per call
@@ -1172,6 +1180,7 @@ export function registerRoutes(
     }
 
     if (req.badge) {
+      req.badge = await ensureProxyAttestation(desk, req.badge, req.headers, proxyAuth);
       await desk.touch(req.badge.badgeId, new Date().toISOString());
       /**
        * **A home with no operator says so, for the whole prefix** (operator
@@ -1188,7 +1197,7 @@ export function registerRoutes(
        * reachable.
        */
       if (pathname.startsWith(OPERATOR_API_PREFIX)) {
-        const absence = operatorAbsence(auth, operators);
+        const absence = operatorAbsence(auth, operators, proxyAuth);
         if (absence) return reply.status(400).send({ error: absence, code: NO_OPERATOR });
       }
       // The door's test, re-asked. One hook rather than a call in each
@@ -1438,6 +1447,7 @@ export function registerRoutes(
     const carrier = ((req.body ?? {}) as DoorRequest).carrier ?? "bearer";
     const { record, token } = mintBadge(carrier === "cookie" ? "cookie" : "bearer");
     await desk.put(record);
+    await ensureProxyAttestation(desk, record, req.headers, proxyAuth);
     if (carrier === "cookie") {
       // The secret is NEVER in the body for the cookie carrier: the whole
       // value of HttpOnly is that page JavaScript cannot read the credential,
@@ -1972,7 +1982,7 @@ export function registerRoutes(
   });
 
   // `POST /api/judgment` and `POST /api/text`, the two routes that spend the home's keys — in `model-routes.ts`.
-  registerModelRoutes(app, { engine, options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
+  registerModelRoutes(app, { engine, store, home: rosterHomeOf(options), options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
   // `/api/keys`, the settings area's machine-local key routes — in `key-routes.ts`.
   registerKeyRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld, ...(options.keys ? { keys: options.keys } : {}) });
   // `GET /models/<name>`, the local judge's model to this machine's own pages — in `model-files.ts`.
@@ -5729,6 +5739,7 @@ function registerPages(
       } else {
         const { record, token } = mintBadge("cookie");
         await desk.put(record);
+        await ensureProxyAttestation(desk, record, req.headers, options.proxyAuth ?? null);
         const secure = isSecureRequest(req.headers, Boolean((req.raw.socket as { encrypted?: boolean }).encrypted));
         // A canvas opened in an agent manager's pane arrives HERE first, and
         // this is the one request that can still tell it is a frame (#220).

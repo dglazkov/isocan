@@ -6,7 +6,7 @@ import { packageBin, packageRoot } from "@isocan/core/packageroot";
 import { Agent, EnvHttpProxyAgent, fetch as undiciFetch, setGlobalDispatcher } from "undici";
 import { isLoopbackBase } from "@isocan/core";
 import type { BadgeStore, SourceRequestContext } from "@isocan/core";
-import { fileBadgeStore, paths } from "@isocan/server";
+import { fileBadgeStore, gatewayBaseFor, paths } from "@isocan/server";
 import { isBadgeUpstream } from "./identity.ts";
 import { DaemonRoutes, platformFetch } from "./routes.ts";
 
@@ -85,6 +85,16 @@ function proxyFetch(base: string, proxyUrl: string): typeof fetch {
       }
       throw err;
     }
+  };
+}
+
+function gatewayFetch(base: string, gatewayUrl: string): typeof fetch {
+  return (input, init) => {
+    const matchesBase =
+      typeof input === "string" &&
+      (input === base || input.startsWith(`${base}/`) || input.startsWith(`${base}?`));
+    const rewritten = matchesBase ? `${gatewayUrl}${input.slice(base.length)}` : input;
+    return platformFetch(rewritten, init);
   };
 }
 
@@ -235,19 +245,22 @@ export class DaemonClient extends DaemonRoutes {
       sourceContext,
     );
     this.home = home;
+    const gateway = gatewayBaseFor(this.base, this.home);
+    if (gateway) {
+      const via = gatewayFetch(this.base, gateway);
+      this.fetcher = via;
+      this.probeFetcher = via;
+    } else {
+      const proxy = proxyForBase(this.base);
+      if (proxy) {
+        const via = proxyFetch(this.base, proxy);
+        this.fetcher = via;
+        this.probeFetcher = via;
+      } else if (isLoopbackBase(this.base)) {
+        this.fetcher = boundedFetch(this.base);
+      }
+    }
   }
-
-  /**
-   * The Node half's one addition to how a request is MADE, rather than to
-   * what is in it: through the configured HTTP(S) proxy when one applies,
-   * else on this machine a bounded connect and a bounded retry, else the
-   * surface's own default.
-   */
-  protected override fetcher: typeof fetch = (() => {
-    const proxy = proxyForBase(this.base);
-    if (proxy) return proxyFetch(this.base, proxy);
-    return isLoopbackBase(this.base) ? boundedFetch(this.base) : platformFetch;
-  })();
 
   /**
    * **A blob, as the bytes Node code reads.** The route

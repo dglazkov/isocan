@@ -80,7 +80,14 @@ export function indexWithDraftRow(index, day) {
 }
 
 const repo = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
-const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], ...opts }).trimEnd();
+/**
+ * A command's stdout, trimmed. A caller that sends stdout elsewhere (`checked`
+ * discards `npm ci`'s and shows the test's) gets `null` back from
+ * `execFileSync`, and that is "" here: on 12 Oct 2026 it was a TypeError, on
+ * the first run that ever reached the merge path, and the queue held four
+ * drafts because of it.
+ */
+export const run = (cmd, args, opts = {}) => (execFileSync(cmd, args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], ...opts }) ?? "").trimEnd();
 const git = (...args) => run("git", args);
 const gh = (...args) => run("gh", args);
 

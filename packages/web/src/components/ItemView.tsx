@@ -52,15 +52,17 @@ import { loadTextFont } from "../lib/textfont.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
+import { useHtmlSnapshot } from "../lib/htmlsnapshot.ts";
 import { sendPrototypeClick } from "../lib/prototypeclick.ts";
 import { FrameAnchor, anchored, anchorFromMessage, nextSpot, type FrameSpot } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
 import { useUiStore } from "../stores/uiStore.ts";
+import { useGistStore } from "../stores/gistStore.ts";
 import { publishDrag, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
+import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_GIST, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 /**
@@ -257,8 +259,15 @@ function ItemViewInner({
   const held = useRef<ZoomHeld>({}).current;
   // The zoom, as the decisions it drives here and nothing finer — so this item
   // re-renders when one of them flips, not on every step of a zoom.
-  const zoom = useUiStore((s) => zoomDecisions(item, width, height, s.viewport.scale, held));
+  // Semantic Zoom's summary of this item, when the experiment's chunk put one
+  // here: a text node's mark, or a group's or an area's card with its
+  // members' type size, which the zoom turns into `Z_GIST`.
+  const gistEntry = useGistStore((s) => s[item.id]);
+  const zoom = useUiStore((s) => zoomDecisions(item, width, height, s.viewport.scale, held, gistEntry?.px));
   const roomy = (held.r = (zoom & Z_ROOMY) !== 0);
+  // The members cannot be read: the summary card shows inside the frame, and
+  // the frame rises over them (`.gisted`). Never for a stacked group's card.
+  const gisted = !stackBox && !(held.g = (zoom & Z_GIST) === 0);
   // Which of the icon and the name the title row keeps. The rule lives in
   // lib/chrome.ts (`titleRow`) so a test can reach it without a browser — there
   // is no floor, and chrome.test.ts is where that is held. The ROOM the name
@@ -448,6 +457,9 @@ function ItemViewInner({
   // names it (`lib/textfont.ts`). Idempotent, so safe in render.
   if (isText) loadTextFont(textFontOf(item));
   const textLegible = !isText || (held.t = (zoom & Z_LEGIBLE) !== 0);
+  // Semantic Zoom's summary, drawn in the opening words' place — only where
+  // the words cannot be read, and only when the experiment's chunk put one here.
+  const gist = textLegible ? null : gistEntry?.node;
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
   const isMark = isAnnotation(item);
@@ -861,7 +873,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${gisted ? " gisted" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       data-group-id={isCanvasGroup ? item.id : undefined}
       data-presentation={detail}
@@ -886,7 +898,7 @@ function ItemViewInner({
         )
       }
       style={{
-        ...(isCanvasGroup && !stackBox ? { zIndex: -10000 + groupDepth } : {}),
+        ...(isCanvasGroup && !stackBox && !gisted ? { zIndex: -10000 + groupDepth } : {}),
         left: x,
         top: y,
         width,
@@ -982,6 +994,7 @@ function ItemViewInner({
           {item.title}{isCanvasGroup && <small className="group-member-count">{memberCount} items</small>}
         </div>
       )}
+      {gisted && gistEntry!.node}
       {isCanvasGroup && <>
         {dropTarget && <span className="group-drop-label" role="status">Add to {item.title}</span>}
         {dropOut && <span className="group-drop-label out" role="status">Out of {item.title}</span>}
@@ -1216,22 +1229,20 @@ function ItemViewInner({
       )}
       {!isCanvasGroup && <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
         {/**
-         * Too far away to read: draw the mark, not the words.
+         * Too far away to read: draw the opening words big enough to read,
+         * not the words at their own size.
          *
          * The node keeps its box — its place and footprint on the canvas are
-         * still true — and what changes is that forty illegible shapes become
-         * one legible one. The mark is sized never to exceed the node it
-         * stands for (`textMarkSize`), because a glyph bigger than its own
-         * node would misdescribe the canvas, and at the zoom where dozens of
-         * nodes are marks that is the same smear in a different hat.
+         * still true. Inside it, its first line (its title) is set at a size
+         * a person can read and clipped to the box, so a node far away still
+         * says what it is about. It used to be a single "T", which said only
+         * that it was text (Dion, 13 Oct 2026: "show SOME of the text"). The
+         * size is still `textMarkSize`, so the words never claim more room
+         * than the node they stand for.
          */}
         {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
-          <span
-            className="text-mark"
-            aria-label={item.title}
-            style={{ fontSize: TEXT_MARK_CSS }}
-          >
-            T
+          gist ?? <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
+            {item.title}
           </span>
         ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !entered && !(nearWindow && roomy) ? (
           /**
@@ -1675,7 +1686,16 @@ function VersionFace({
   }
   if (mimeType === "text/html") {
     return (
-      <HtmlItemView canvasId={canvasId} blobHash={blobHash} filename={filename} warm={warm ?? []} itemId={itemId} actor={actor} />
+      <HtmlItemView
+        canvasId={canvasId}
+        blobHash={blobHash}
+        filename={filename}
+        warm={warm ?? []}
+        itemId={itemId}
+        actor={actor}
+        width={size?.width}
+        height={size?.height}
+      />
     );
   }
   return (
@@ -1771,6 +1791,8 @@ function HtmlItemView({
   warm,
   itemId,
   actor,
+  width,
+  height,
 }: {
   canvasId: string;
   blobHash: string;
@@ -1780,6 +1802,8 @@ function HtmlItemView({
    *  entered item or full screen. Then a prototype click is delivered. */
   itemId?: string | undefined;
   actor?: Actor | undefined;
+  width?: number | undefined;
+  height?: number | undefined;
 }) {
   const origin = useContentOrigin(canvasId, [blobHash, ...warm]);
   const stack = useRef<HTMLDivElement>(null);
@@ -1793,6 +1817,17 @@ function HtmlItemView({
   const spot = nextSpot(heldSpot, itemId, blobHash);
   if (spot !== heldSpot) setSpot(spot);
   const src = frame ? anchored(frame.src, spot.carried ?? anchor) : null;
+  const snapshotUrl = useHtmlSnapshot(
+    canvasId,
+    blobHash,
+    width ?? 880,
+    height ?? 640,
+    Boolean(src),
+  );
+  const [proxyReady, setProxyReady] = useState(false);
+  useEffect(() => {
+    setProxyReady(false);
+  }, [blobHash]);
   useEffect(() => {
     if (!itemId || !actor) return;
     const hear = (e: MessageEvent) => {
@@ -1812,16 +1847,31 @@ function HtmlItemView({
     return () => window.removeEventListener("message", hear);
   }, [canvasId, itemId, actor, src]);
   if (!src || !frame) return <div className="html-view" />;
+  const keepLiveFrame = Boolean(actor) || warm.length > 0 || !proxyReady;
   return (
-    <HtmlView
-      stackRef={stack}
-      src={src}
-      sandbox={frame.sandbox}
-      title={filename}
-      warm={warm
-        .map((hash) => itemFrame(origin, canvasId, hash)?.src)
-        .filter((src): src is string => src !== undefined)}
-    />
+    <div className={`html-view-surface${proxyReady ? " has-snapshot" : ""}`}>
+      {snapshotUrl && (
+        <img
+          className="html-snapshot"
+          src={snapshotUrl}
+          alt=""
+          decoding="sync"
+          draggable={false}
+          onLoad={() => requestAnimationFrame(() => setProxyReady(true))}
+        />
+      )}
+      {keepLiveFrame && (
+        <HtmlView
+          stackRef={stack}
+          src={src}
+          sandbox={frame.sandbox}
+          title={filename}
+          warm={warm
+            .map((hash) => itemFrame(origin, canvasId, hash)?.src)
+            .filter((src): src is string => src !== undefined)}
+        />
+      )}
+    </div>
   );
 }
 

@@ -19,7 +19,13 @@ import { PresenceHub } from "./presence.ts";
 import { daemonFile, isocanHome } from "./paths.ts";
 import { resolveHomeUrl } from "./config.ts";
 import { readGoogleToken } from "./google.ts";
-import { resolveAuth, type AuthConfig, type SigningKeys } from "./attest.ts";
+import {
+  resolveAuth,
+  resolveProxyAuth,
+  type AuthConfig,
+  type ProxyAuthConfig,
+  type SigningKeys,
+} from "./attest.ts";
 import { resolveOperators } from "./operator.ts";
 import { startBlobKeeper } from "./blobkeeper.ts";
 import { gcIntervalFromEnv, startGcSweeper } from "./gc.ts";
@@ -29,6 +35,7 @@ import { contentTtl } from "./content-auth.ts";
 import { adoptIdentity } from "./badge-store.ts";
 import type { JudgmentOptions } from "./judgment.ts";
 import type { KeyRouteOptions } from "./key-routes.ts";
+import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
 import type { LiveTokenOptions } from "./live-token.ts";
 
@@ -142,6 +149,8 @@ export interface DaemonOptions {
    * which a test needs to be able to say on a machine whose environment has.
    */
   auth?: AuthConfig | null;
+  /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+  proxyAuth?: ProxyAuthConfig | null;
   /**
    * **The addresses this home calls its operator**, or `[]` for none — which
    * is every daemon in this repo, and is not a defect (operator phase 1).
@@ -217,6 +226,8 @@ export interface DaemonOptions {
    * transport; a running home reads `ISOCAN_TEXT_API_KEY`, else its
    * `keys.json`, per call. */
   text?: TextOptions;
+  /** Semantic Zoom's summaries (`summaries.ts`) — tests hand it a clock and a quiet period; a running home reads `ISOCAN_SUMMARY_MODEL` and `ISOCAN_SUMMARY_QUIET_MS`. */
+  summaries?: SummaryOptions;
   /** The talk module's Live tokens (`live-token.ts`) — tests hand it a fake
    * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
   liveToken?: LiveTokenOptions;
@@ -389,6 +400,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
   // and an explicit value is a caller (a test) saying so on a machine whose
   // environment says otherwise.
   const auth = options.auth !== undefined ? options.auth : resolveAuth();
+  const proxyAuth = options.proxyAuth !== undefined ? options.proxyAuth : resolveProxyAuth();
   /**
    * **Who runs this home**, read beside the attester and at the same moment,
    * because they are two halves of one capability: a list with no attester
@@ -535,6 +547,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     birthHome,
     homes,
     auth,
+    proxyAuth,
     operators,
     sockets,
     sweeps,
@@ -565,6 +578,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // home's, not the process's, for the reason `rosterHome` is.
     judgment: { keysHome: home, ...options.judgment },
     text: { keysHome: home, ...options.text },
+    ...(options.summaries ? { summaries: options.summaries } : {}),
     liveToken: { keysHome: home, ...options.liveToken },
     ...(options.keys ? { keys: options.keys } : {}),
   };
@@ -660,6 +674,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // from a badge that proved a refused address is refused `refused` — both
     // before an admitted member short-circuits past the door.
     refusals,
+    proxyAuth,
     // The content origin has no socket either — the upgrade is hijacked off
     // the raw server and never sees the door hook that refuses it everything
     // but blob bytes.

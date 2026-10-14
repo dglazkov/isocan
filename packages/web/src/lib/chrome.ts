@@ -315,7 +315,7 @@ export function underSlotFor(state: {
  * again at each site is the rule that gets missed. `chrome.test.ts` holds each
  * CSS form to its JS twin, number for number, across widths and zooms.
  */
-export type ZoomHeld = { r?: boolean; t?: boolean; s?: boolean };
+export type ZoomHeld = { r?: boolean; t?: boolean; s?: boolean; g?: boolean };
 /** Bit: `hasRoomForChrome` — the title bar and the row under it are drawn. */
 export const Z_ROOMY = 1;
 /** Bit: `titleRow(...).icon` — the kind icon keeps its place in the title row. */
@@ -328,8 +328,10 @@ export const Z_LEGIBLE = 8;
 export const Z_SPELL = 16;
 /** Bit: the kind mark would be at least `KIND_MARK_MIN` pixels, so it is worth drawing. */
 export const Z_MARK = 32;
-/** The six decisions above for one item at one zoom, each rule handed its last answer in `held`. */
-export function zoomDecisions(item: Item, width: number, height: number, scale: number, held: ZoomHeld): number {
+/** Bit: a group's or an area's members are too small to read (`textIsLegible` of their median type size, `memberPx`), so its Semantic Zoom summary card shows. */
+export const Z_GIST = 64;
+/** The seven decisions above for one item at one zoom, each rule handed its last answer in `held`. `memberPx` is only ever handed over by Semantic Zoom's chunk, for a group or an area it has a summary for. */
+export function zoomDecisions(item: Item, width: number, height: number, scale: number, held: ZoomHeld, memberPx?: number): number {
   const row = titleRow(width, scale);
   const legible = !isTextItem(item) || textIsLegible(textDrawSize(item), scale, held.t);
   return (
@@ -338,7 +340,8 @@ export function zoomDecisions(item: Item, width: number, height: number, scale: 
     (row.name ? Z_NAME : 0) |
     (legible ? Z_LEGIBLE : 0) |
     (underRowSpellsItOut(width, scale, Object.keys(item.reactions ?? {}).length, held.s) ? Z_SPELL : 0) |
-    (textMarkSize(width, height, scale) >= KIND_MARK_MIN ? Z_MARK : 0)
+    (textMarkSize(width, height, scale) >= KIND_MARK_MIN ? Z_MARK : 0) |
+    (memberPx && !textIsLegible(memberPx, scale, held.g) ? Z_GIST : 0)
   );
 }
 

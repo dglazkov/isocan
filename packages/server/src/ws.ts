@@ -33,6 +33,7 @@ import { supportsDesignRequests } from "@isocan/core";
 import { DesignRequestClientError, designRequestOperation } from "./design-request-capability.ts";
 import type { Desk } from "./desk.ts";
 import { admissionIn, admittingGrant, heldCapability } from "./grants.ts";
+import { ensureProxyAttestation, type ProxyAuthConfig } from "./attest.ts";
 import {
   isSecureRequest,
   originAllowed,
@@ -110,6 +111,8 @@ interface WebSocketOptions {
    * nothing is down and nobody is refused, which is that test's truth.
    */
   refusals?: Refusals;
+  /** Trusted reverse-proxy identity header configuration (`ISOCAN_PROXY_EMAIL_HEADER`). */
+  proxyAuth?: ProxyAuthConfig | null;
 }
 
 /**
@@ -603,7 +606,7 @@ export function attachWebSockets(
         return { code: WS_BAD_ORIGIN, reason: "origin" };
       }
     }
-    const badge = await resolveBadge(desk, presented);
+    let badge = await resolveBadge(desk, presented);
     if (!badge) {
       /**
        * **A dead badge dialling again is told so** (operator phase 4), not sent
@@ -616,6 +619,7 @@ export function attachWebSockets(
       if (await resolveEnded(desk, presented)) return { code: WS_NOT_ADMITTED, reason: ENDED };
       return { code: WS_NO_BADGE, reason: "badge required" };
     }
+    badge = await ensureProxyAttestation(desk, badge, request.headers, options.proxyAuth ?? null);
     await desk.touch(badge.badgeId, new Date().toISOString());
     /**
      * **Taken down: refused here, before the door, with its own reason**

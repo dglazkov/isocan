@@ -33,6 +33,7 @@
  * cannot tell its own limits from a defect generates confident nonsense.
  */
 import { execFileSync, spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -78,11 +79,12 @@ async function until(b, expression, what, ms = 8000) {
  */
 const pickPort = () => 20_000 + Math.floor(Math.random() * 9_000);
 
-async function startDaemon(home, attempt = 0) {
+async function startDaemon(home, attempt = 0, extraEnv = {}) {
   const port = pickPort();
   const proc = spawn(process.execPath, [cli, "serve"], {
     env: {
       ...process.env,
+      ...extraEnv,
       ISOCAN_HOME: home,
       ISOCAN_PORT: String(port),
       ISOCAN_CONTENT_PORT: String(port + 1),
@@ -113,7 +115,7 @@ async function startDaemon(home, attempt = 0) {
     // Only a lost port is retried. A daemon that will not boot for any other
     // reason must say so rather than be tried four more times.
     const raced = /EADDRINUSE|did not come up|already/i.test(String(err));
-    if (raced && attempt < 3) return startDaemon(home, attempt + 1);
+    if (raced && attempt < 3) return startDaemon(home, attempt + 1, extraEnv);
     throw err;
   }
 }
@@ -4130,6 +4132,340 @@ export const JOURNEYS = [
       if (!restyled.includes(`>${NEW}<`)) throw new Error("the restyle took the heading's words back");
       if (restyled.includes(`>${title}<`)) throw new Error(`the restyled screen still draws the old heading "${title}"`);
       return { screen: screen.item.id, from: title, to: NEW, refusedOn: rowScreen.item.id, refusal };
+    },
+  },
+  {
+    name: "semantic-zoom-text",
+    /**
+     * **Semantic Zoom, phase 1: a long note far away shows a summary**
+     * (`docs/projects/semantic-zoom/phases.md`, phase 1's proof). Its own
+     * daemon, because the shared one has no text model: this one's model is a
+     * stub on loopback (`ISOCAN_TEXT_ENDPOINT`) that records what it was asked
+     * and answers a fixed summary — never a real model — and its quiet period
+     * is 2.5 s rather than 30 so the walk does not wait half a minute.
+     *
+     * Flag off, zoomed out: no request to the summaries route, no chunk of the
+     * experiment's, nothing asked of the stub, and the node shows its opening
+     * words. Flag on: the summary shows, marked ≈ and named "Summary of …".
+     * An edit: the old summary stays with its updating mark, then the new one
+     * replaces it, and at no sampled frame in between is the mark missing.
+     */
+    what: "flag off asks nothing; flag on, a far-away long note shows its ≈ summary; an edit keeps the old one, marked updating, until the new one lands",
+    async run(rig) {
+      const { b } = rig;
+      const asked = [];
+      const stub = createServer((req, res) => {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          const sent = JSON.parse(body || "{}");
+          asked.push(sent);
+          const prompt = JSON.stringify(sent.messages ?? []);
+          const summary = /Ravi adds a revision/.test(prompt) ? `Acme summary ${asked.length}: revised plan, Ravi adds a revision.` : `Acme summary ${asked.length}: launch slips two weeks; Ravi owns pricing.`;
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ id: "msg_stub", type: "message", role: "assistant", model: sent.model, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary }) }] }));
+        });
+      });
+      await new Promise((r) => stub.listen(0, "127.0.0.1", r));
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-sz-"));
+      const { proc, origin } = await startDaemon(home, 0, {
+        ISOCAN_TEXT_API_KEY: "sk-ant-journey-stub-not-a-key",
+        ISOCAN_TEXT_PROVIDER: "anthropic",
+        ISOCAN_TEXT_ENDPOINT: `http://127.0.0.1:${stub.address().port}/v1/messages`,
+        ISOCAN_SUMMARY_QUIET_MS: "2500",
+        ISOCAN_SUMMARY_MODEL: "",
+        ISOCAN_TEXT_MODEL: "",
+      });
+      try {
+        const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, ISOCAN_SESSION_ID: "acme-semantic-zoom-journey", ISOCAN_HARNESS: "test" };
+        const runCli = (...args) => {
+          const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+          return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+        };
+        runCli("identity", "--session", "--name", "Acme Notes CLI");
+        const id = runCli("canvas", "create", "Acme semantic zoom").canvasId;
+        const words = (extra = "") => `# Notes\n\n${"The Acme launch slips two weeks while Ravi rewrites the pricing page and the team settles the open question on data residency. ".repeat(3)}${extra}`;
+        const file = path.join(home, "notes.md");
+        writeFileSync(file, words());
+        const note = runCli("--canvas", id, "text", "-f", file, "--at", "0,0").itemId;
+        const sel = JSON.stringify(`.item[data-item-id="${note}"]`);
+
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await throughTheDoor(b, origin, "Journey", "journeys-semantic-zoom");
+        const open = async () => {
+          await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+          await until(b, `!!document.querySelector(${sel})`, "the note on the canvas", 15_000);
+        };
+        const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
+        const zoomOut = async () => {
+          for (let n = 0; (await scale()) > 0.15 && n < 80; n++) {
+            const at = await b.ev(`(() => { const r = document.querySelector(${sel}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+            await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.min(Math.max(at.x, 200), 1080), y: Math.min(Math.max(at.y, 200), 700), deltaX: 0, deltaY: 120, modifiers: 2 });
+            await sleep(40);
+          }
+          await until(b, `!!document.querySelector(${sel} + " .text-mark")`, "the note too small to read, drawn as its mark", 4000);
+        };
+        const summaryRequests = () => b.ev(`performance.getEntriesByType("resource").filter((e) => e.name.includes("/summaries")).length`);
+        const chunk = () => b.ev(`performance.getEntriesByType("resource").some((e) => /SemanticZoom-/.test(e.name)) || [...document.querySelectorAll("script[src],link[href]")].some((e) => /SemanticZoom-/.test(e.src || e.href))`);
+
+        // 1. Flag off: nothing asked, nothing loaded, the opening words.
+        await b.ev(`(() => { localStorage.removeItem("isocan.experiments"); return true; })()`);
+        await open();
+        await zoomOut();
+        await sleep(3000);
+        if (await summaryRequests()) throw new Error("with the flag off the page still asked the summaries route");
+        if (await chunk()) throw new Error("with the flag off the Semantic Zoom chunk loaded anyway");
+        if (asked.length) throw new Error(`with the flag off the model was asked ${asked.length} time(s)`);
+        if (await b.ev(`!!document.querySelector(".sz-gist")`)) throw new Error("with the flag off a summary is drawn");
+        const opening = await b.ev(`document.querySelector(${sel} + " .text-mark").textContent.trim()`);
+        if (opening !== "Notes") throw new Error(`with the flag off the far-away note says "${opening}", not its opening words`);
+
+        // 2. Flag on: the summary, marked as one.
+        await b.ev(`(() => { localStorage.setItem("isocan.experiments", JSON.stringify(["semantic.zoom"])); return true; })()`);
+        await open();
+        await zoomOut();
+        const gist = sel + ' + " .sz-gist"';
+        await until(b, `/Acme summary \\d+: launch slips/.test(document.querySelector(${gist})?.textContent ?? "") && !document.querySelector(${gist}).hasAttribute("data-stale")`, "the note's summary, current", 20_000);
+        const first = await b.ev(`(() => { const g = document.querySelector(${gist}); return { text: g.textContent.trim(), name: g.getAttribute("aria-label"), role: g.getAttribute("role") }; })()`);
+        if (!first.text.startsWith("≈")) throw new Error(`the summary is not marked ≈: "${first.text}"`);
+        if (first.name !== "Summary of Notes") throw new Error(`the summary's accessible name is "${first.name}", not "Summary of Notes"`);
+        if (asked.length !== 1) throw new Error(`one note, ${asked.length} model calls`);
+        if (asked[0].model !== "claude-haiku-5-5") throw new Error(`the summary asked ${asked[0].model}, not the cheap tier`);
+        if (!/too far away to read/.test(String(asked[0].system))) throw new Error("the summary was asked under the copywriter's system line");
+
+        // 3. An edit: the old summary stays, marked updating, until the new one replaces it — never an empty frame.
+        await b.ev(`(() => {
+          window.__szGaps = 0; window.__szWatch = true;
+          const look = () => { if (!document.querySelector(${gist})) window.__szGaps++; };
+          new MutationObserver(look).observe(document.querySelector(".world"), { subtree: true, childList: true, characterData: true, attributes: true });
+          const frame = () => { if (!window.__szWatch) return; look(); requestAnimationFrame(frame); };
+          requestAnimationFrame(frame);
+          return true;
+        })()`);
+        writeFileSync(file, words("\n\nRavi adds a revision to the plan."));
+        runCli("--canvas", id, "edit", note, file);
+        await until(b, `document.querySelector(${gist})?.hasAttribute("data-stale") && /launch slips/.test(document.querySelector(${gist}).textContent) && !!document.querySelector(${gist} + " .sz-updating")`, "the old summary kept, marked as being updated", 10_000);
+        await until(b, `/revised plan/.test(document.querySelector(${gist})?.textContent ?? "") && !document.querySelector(${gist}).hasAttribute("data-stale")`, "the new summary in the old one's place", 20_000);
+        const gaps = await b.ev(`(() => { window.__szWatch = false; return window.__szGaps; })()`);
+        if (gaps !== 0) throw new Error(`the summary mark was missing on ${gaps} sampled frame(s) between the old summary and the new`);
+        if (asked.length !== 2) throw new Error(`one edit, ${asked.length - 1} more model calls`);
+        return { note, calls: asked.length, first: first.text, then: await b.ev(`document.querySelector(${gist}).textContent.trim()`) };
+      } finally {
+        proc.kill();
+        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        stub.close();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
+  {
+    name: "semantic-zoom-board",
+    /**
+     * **Semantic Zoom, phase 2: a board's areas say what they hold**
+     * (`docs/projects/semantic-zoom/phases.md`, phase 2's proof). Its own
+     * daemon with a recording stub on loopback, as `semantic-zoom-text`: the
+     * stub answers each prompt with the frame's title and its members' titles
+     * as it was sent them, so what a card says IS what the home collected.
+     *
+     * A board of three areas — on a groups canvas an area is a group (`isocan
+     * area new`), so its members are explicit — plus a fourth group holding a
+     * note excluded from context. Zoomed out until the cards cannot be read:
+     * four summary cards, ≈ and "Summary of …", one model call each, the
+     * excluded note's words in none of them. Then a person drags a card from
+     * To do into Doing: both summaries keep their old words marked updating,
+     * never an empty frame, until the quiet period has passed and both are
+     * replaced by what the frames now hold — two more calls, nothing else.
+     *
+     * Then phase 3b, looking at pictures: a picture is added to Onboarding.
+     * With the setting off the stub is sent no image, and the card says what
+     * the words say. With it on, the stub is sent the picture as an image
+     * block and the card shows the summary made from it. Turned off again,
+     * the card never shows that summary: a viewer with vision off never reads
+     * a vision summary.
+     */
+    what: "a three-area board far away shows three ≈ summaries; a card dragged across changes both after the quiet period; an excluded note never reaches the model; a picture is sent only with looking at pictures on, and its summary is read only then",
+    async run(rig) {
+      const { b } = rig;
+      const asked = [];
+      const stub = createServer((req, res) => {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          const sent = JSON.parse(body || "{}");
+          asked.push(sent);
+          const content = sent.messages?.[0]?.content;
+          const blocks = Array.isArray(content) ? content : [];
+          const prompt = String(blocks.find((one) => one.type === "text")?.text ?? content ?? "");
+          const title = /titled "([^"]+)"/.exec(prompt)?.[1] ?? "?";
+          const members = [...prompt.matchAll(/^- (?:Note|Card|Screen|Picture) "([^"]+)"/gm)].map((m) => m[1]);
+          const seen = blocks.filter((one) => one.type === "image").length;
+          const summary = `Acme ${title} holds ${members.join(" and ") || "nothing"}${seen ? `, ${seen} seen` : ""}`;
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ id: "msg_stub", type: "message", role: "assistant", model: sent.model, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary }) }] }));
+        });
+      });
+      await new Promise((r) => stub.listen(0, "127.0.0.1", r));
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-szb-"));
+      const { proc, origin } = await startDaemon(home, 0, {
+        ISOCAN_TEXT_API_KEY: "sk-ant-journey-stub-not-a-key",
+        ISOCAN_TEXT_PROVIDER: "anthropic",
+        ISOCAN_TEXT_ENDPOINT: `http://127.0.0.1:${stub.address().port}/v1/messages`,
+        ISOCAN_SUMMARY_QUIET_MS: "2500",
+        ISOCAN_SUMMARY_MODEL: "",
+        ISOCAN_TEXT_MODEL: "",
+      });
+      try {
+        const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, ISOCAN_SESSION_ID: "acme-semantic-board-journey", ISOCAN_HARNESS: "test" };
+        const runCli = (...args) => {
+          const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+          return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+        };
+        runCli("identity", "--session", "--name", "Acme Board CLI");
+        const id = runCli("canvas", "create", "Acme sprint board").canvasId;
+        const frames = {};
+        for (const [n, title] of ["To do", "Doing", "Done", "Onboarding"].entries()) {
+          frames[title] = runCli("--canvas", id, "canvas", "group", "new", title, "--at", `${n * 800},0`, "--size", "700x900").itemId;
+        }
+        const cards = {};
+        const note = (frame, title, words) => {
+          const file = path.join(home, `${title.replace(/\W+/g, "-")}.md`);
+          writeFileSync(file, `# ${title}\n\n${words}\n`);
+          cards[title] = runCli("--canvas", id, "text", "-f", file, "--in", frames[frame]).itemId;
+        };
+        note("To do", "Billing migration", "Ravi moves Acme billing to the new ledger.");
+        note("To do", "Copy fix", "Ana rewrites the empty state.");
+        note("Doing", "Safari crash", "Ana is on the Safari crash.");
+        note("Done", "Pricing page", "Ravi shipped the pricing page.");
+        note("Onboarding", "Sign up", "Sign up asks for a work email.");
+        note("Onboarding", "Margins", "ACME-CONFIDENTIAL margins are forty percent.");
+        runCli("--canvas", id, "context", "exclude", cards.Margins);
+        // Every source quiet before the browser looks, so the first summaries are made at once.
+        await sleep(2800);
+
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await throughTheDoor(b, origin, "Journey", "journeys-semantic-board");
+        await b.ev(`(() => { localStorage.setItem("isocan.experiments", JSON.stringify(["semantic.zoom"])); return true; })()`);
+        await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+        const frameSel = (title) => JSON.stringify(`.item[data-item-id="${frames[title]}"]`);
+        await until(b, Object.keys(frames).map((t) => `!!document.querySelector(${frameSel(t)})`).join(" && "), "the four frames on the canvas", 15_000);
+
+        // Zoomed out around the board's middle until a card's words are under 5px and the whole board is on screen.
+        const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
+        const box = () => b.ev(`(() => { const rs = [${Object.keys(frames).map(frameSel).join(",")}].map((s) => document.querySelector(s).getBoundingClientRect()); return { left: Math.min(...rs.map((r) => r.left)), right: Math.max(...rs.map((r) => r.right)), top: Math.min(...rs.map((r) => r.top)), bottom: Math.max(...rs.map((r) => r.bottom)) }; })()`);
+        const zoomOut = async () => {
+          for (let n = 0; (await scale()) > 0.24 && n < 80; n++) {
+            const r = await box();
+            await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.min(Math.max(Math.round((r.left + r.right) / 2), 200), 1080), y: Math.min(Math.max(Math.round((r.top + r.bottom) / 2), 200), 700), deltaX: 0, deltaY: 120, modifiers: 2 });
+            await sleep(40);
+          }
+        };
+        await zoomOut();
+        const at = await box();
+        if (at.left < 0 || at.right > 1280 || at.top < 0 || at.bottom > 900) throw new Error(`zoomed out to ${await scale()}, the board is not all on screen: ${JSON.stringify(at)}`);
+
+        // 1. Four summary cards, each marked and named, current.
+        const cardOf = (title) => `${frameSel(title)} + " .sz-card"`;
+        const current = (title) => `(() => { const c = document.querySelector(${cardOf(title)}); return !!c && !c.hasAttribute("data-stale"); })()`;
+        await until(b, Object.keys(frames).map(current).join(" && "), "a current summary card in each of the four frames", 20_000);
+        const read = (title) => b.ev(`(() => { const c = document.querySelector(${cardOf(title)}); return { text: c.textContent.trim(), name: c.getAttribute("aria-label"), role: c.getAttribute("role"), raised: getComputedStyle(c.closest(".item")).zIndex }; })()`);
+        const first = {};
+        for (const title of Object.keys(frames)) {
+          const c = (first[title] = await read(title));
+          if (!c.text.startsWith("≈")) throw new Error(`${title}'s summary is not marked ≈: "${c.text}"`);
+          if (c.name !== `Summary of ${title}`) throw new Error(`${title}'s summary is named "${c.name}"`);
+          if (c.role !== "note") throw new Error(`${title}'s summary has role ${c.role}`);
+          // The frame rises over its members while its card shows, so the card is not painted under them.
+          if (c.raised !== "1") throw new Error(`${title}'s frame stays at z-index ${c.raised} under its members`);
+        }
+        // Members are listed by id, so in either order.
+        if (!/holds (Billing migration and Copy fix|Copy fix and Billing migration)$/.test(first["To do"].text)) throw new Error(`To do says "${first["To do"].text}"`);
+        if (!/holds Safari crash$/.test(first.Doing.text)) throw new Error(`Doing says "${first.Doing.text}"`);
+        if (asked.length !== 4) throw new Error(`four frames, ${asked.length} model calls`);
+        const prompts = () => asked.map((a) => JSON.stringify(a.messages));
+        if (!prompts().every((p) => /This is a group on a canvas/.test(p))) throw new Error("a call was not a group's summary");
+        if (prompts().some((p) => /CONFIDENTIAL|forty percent|Margins/.test(p))) throw new Error("the excluded note reached the model");
+        if (/Margins/.test(first.Onboarding.text) || !/holds Sign up$/.test(first.Onboarding.text)) throw new Error(`Onboarding says "${first.Onboarding.text}"`);
+
+        // 2. A person drags Copy fix from To do into Doing.
+        await b.ev(`(() => {
+          window.__szbGaps = 0; window.__szbWatch = true;
+          const look = () => { if (!document.querySelector(${cardOf("To do")}) || !document.querySelector(${cardOf("Doing")})) window.__szbGaps++; };
+          new MutationObserver(look).observe(document.querySelector(".world"), { subtree: true, childList: true, characterData: true, attributes: true });
+          const frame = () => { if (!window.__szbWatch) return; look(); requestAnimationFrame(frame); };
+          requestAnimationFrame(frame);
+          return true;
+        })()`);
+        const from = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.item[data-item-id="${cards["Copy fix"]}"]`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        const into = await b.ev(`(() => { const r = document.querySelector(${frameSel("Doing")}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.bottom - r.height / 4) }; })()`);
+        const hit = await b.ev(`document.elementFromPoint(${from.x}, ${from.y})?.closest(".item")?.dataset.itemId ?? null`);
+        if (hit !== cards["Copy fix"]) throw new Error(`a press on Copy fix lands on ${hit} — under its frame's summary card, a person could not grab it`);
+        // At the canvas's level a press on a member takes its whole group; ⌘ (Ctrl off a Mac) reaches the one card, as a person does.
+        const MOD = process.platform === "darwin" ? 4 : 2;
+        const mouse = (type, x, y, buttons) => b.send("Input.dispatchMouseEvent", { type, x: Math.round(x), y: Math.round(y), modifiers: MOD, buttons, button: "left", clickCount: type === "mouseMoved" ? 0 : 1 });
+        await mouse("mousePressed", from.x, from.y, 1);
+        for (let s = 1; s <= 12; s++) {
+          await mouse("mouseMoved", from.x + ((into.x - from.x) * s) / 12, from.y + ((into.y - from.y) * s) / 12, 1);
+          await sleep(30);
+        }
+        await mouse("mouseReleased", into.x, into.y, 0);
+        const parent = () => runCli("--canvas", id, "show", cards["Copy fix"]).containerId ?? null;
+        for (let n = 0; parent() !== frames.Doing && n < 20; n++) await sleep(250);
+        if (parent() !== frames.Doing) throw new Error(`the drag left Copy fix in ${parent()}, not in Doing (${frames.Doing})`);
+        await until(b, `(() => { const c = document.querySelector(${cardOf("To do")}); return !!c && c.hasAttribute("data-stale") && /Copy fix/.test(c.textContent) && !!c.querySelector(".sz-updating"); })()`, "To do's old summary kept, marked as being updated", 10_000);
+        await until(b, `(() => { const c = document.querySelector(${cardOf("Doing")}); return !!c && c.hasAttribute("data-stale") && /holds Safari crash/.test(c.textContent); })()`, "Doing's old summary kept, marked as being updated", 10_000);
+        await until(b, `${current("To do")} && /holds Billing migration$/.test(document.querySelector(${cardOf("To do")}).textContent)`, "To do's new summary, without Copy fix", 20_000);
+        await until(b, `${current("Doing")} && /Copy fix and Safari crash|Safari crash and Copy fix/.test(document.querySelector(${cardOf("Doing")}).textContent)`, "Doing's new summary, with Copy fix", 20_000);
+        const gaps = await b.ev(`(() => { window.__szbWatch = false; return window.__szbGaps; })()`);
+        if (gaps !== 0) throw new Error(`a frame's summary card was missing on ${gaps} sampled frame(s) between the old summary and the new`);
+        if (asked.length !== 6) throw new Error(`one drag across two frames, ${asked.length - 4} more model calls`);
+        if (prompts().some((p) => /CONFIDENTIAL|forty percent|Margins/.test(p))) throw new Error("the excluded note reached the model");
+        const after = { todo: (await read("To do")).text, doing: (await read("Doing")).text };
+
+        // 3. Looking at pictures (phase 3b). A picture joins Onboarding; with the setting off, no image is sent.
+        const images = () => asked.reduce((n, a) => n + (Array.isArray(a.messages?.[0]?.content) ? a.messages[0].content.filter((one) => one.type === "image").length : 0), 0);
+        const shot = path.join(home, "acme-sign-up.png");
+        writeFileSync(shot, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
+        runCli("--canvas", id, "add", shot, "--in", frames.Onboarding, "--title", "Sign up shot");
+        await until(b, `${current("Onboarding")} && /Sign up shot/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's text-only summary, naming the picture by title", 20_000);
+        if (images() !== 0) throw new Error(`with looking at pictures off, ${images()} image(s) were sent`);
+        if (/seen/.test((await read("Onboarding")).text)) throw new Error("with looking at pictures off, the card shows a summary made from pictures");
+        const textOnly = asked.length;
+
+        // With it on: the picture goes as an image block, and the card shows what was made from it.
+        const reopen = async (flags) => {
+          await b.ev(`(() => { localStorage.setItem("isocan.experiments", ${JSON.stringify(JSON.stringify(flags))}); return true; })()`);
+          await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+          await until(b, Object.keys(frames).map((t) => `!!document.querySelector(${frameSel(t)})`).join(" && "), "the four frames, reopened", 15_000);
+          await zoomOut();
+        };
+        await reopen(["semantic.zoom", "semantic.zoom.vision"]);
+        await until(b, `${current("Onboarding")} && /1 seen/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's summary made looking at its picture", 20_000);
+        if (images() !== 1) throw new Error(`looking at pictures, ${images()} image(s) were sent, not the one picture`);
+        if (asked.length !== textOnly + 1) throw new Error(`looking at pictures cost ${asked.length - textOnly} calls, not one`);
+        if (!/\(picture 1\)/.test(prompts().at(-1))) throw new Error("the prompt does not say which member the picture is of");
+        const looked = (await read("Onboarding")).text;
+
+        // Off again: the vision summary is never read, though it is cached.
+        await reopen(["semantic.zoom"]);
+        await until(b, `${current("Onboarding")} && /Sign up shot/.test(document.querySelector(${cardOf("Onboarding")}).textContent)`, "Onboarding's text-only summary again", 20_000);
+        await sleep(1500);
+        if (/seen/.test((await read("Onboarding")).text)) throw new Error("with looking at pictures off again, the card shows the summary made from pictures");
+        if (asked.length !== textOnly + 1) throw new Error(`turning looking at pictures off made ${asked.length - textOnly - 1} more calls`);
+        return { frames: Object.keys(frames).length, calls: asked.length, scale: await scale(), before: first["To do"].text, after, looked, images: images() };
+      } finally {
+        proc.kill();
+        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        stub.close();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
     },
   },
 ];

@@ -621,7 +621,8 @@ describe("on a replica", () => {
       // the link is OFF, so nothing else could have listed it.
       await waitFor(async () => {
         const res = await fetch(`${replicaBase}/api/projects/${CANVAS}/canvas`, { headers: cli.headers });
-        return res.status === 200;
+        if (res.status !== 200) return false;
+        return ((await replica.desk.badge(cli.badgeId))?.admissions.length ?? 0) > 0;
       }, "the canvas to replicate after redemption");
 
       // No local admission was written for the CLI badge: what let it in was

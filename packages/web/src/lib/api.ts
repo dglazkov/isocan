@@ -1,3 +1,4 @@
+import type { TextPictures } from "@isocan/core/text";
 import { inboxRoute, type InboxResponse } from "@isocan/core";
 import { rcAnsweringRoute, rcAskRoute } from "@isocan/core";
 import type {
@@ -1427,4 +1428,14 @@ export function fetchInbox(actorId: string, signal?: AbortSignal): Promise<Inbox
 /** Actual current sessions establish offer liveness; stored enrollment never substitutes for this read. */
 export function getCurrentSessions(canvasId: string, signal?: AbortSignal): Promise<PresenceSession[]> {
   return request("GET", `/api/projects/${encodeURIComponent(canvasId)}/sessions`, undefined, signal);
+}
+
+/**
+ * Whether this home's model takes pictures (Semantic Zoom's "look at
+ * pictures" row). Core's `TEXT_PICTURES_ROUTE`, spelled here because this
+ * file is the app's one door and importing the constant would make the
+ * entry name core's text chunk; the Semantic Zoom test holds the two equal.
+ */
+export function fetchTextPictures(): Promise<TextPictures> {
+  return request<TextPictures>("GET", "/api/text/pictures");
 }

@@ -1,4 +1,5 @@
 import { createPublicKey, verify as verifySignature, X509Certificate } from "node:crypto";
+import type { IncomingHttpHeaders } from "node:http";
 import {
   attestedKindOf,
   BAD_ID_TOKEN,
@@ -8,6 +9,7 @@ import {
   type Attestation,
   type GrantSubject,
 } from "@isocan/core";
+import type { BadgeRecord, Desk } from "./desk.ts";
 
 /**
  * **The attesters this home has borrowed** — mechanism 3's "borrow, never
@@ -106,6 +108,148 @@ export function resolveAuth(env: NodeJS.ProcessEnv = process.env): AuthConfig | 
 }
 
 /**
+ * Configuration for trusting an authenticating reverse proxy standing directly
+ * in front of this home (`ISOCAN_PROXY_EMAIL_HEADER`).
+ */
+export interface ProxyAuthConfig {
+  /** Lowercased HTTP header names checked in order for the authenticated identity. */
+  headers: readonly string[];
+  /** Positive protobuf field number when headers carry base64url wire payloads instead of plain text. */
+  protoField: number | null;
+  /** Optional prefix pattern removed from the email local-part before normalizing. */
+  stripPrefix: RegExp | null;
+}
+
+/**
+ * Resolve reverse-proxy identity attestation configuration from environment:
+ * - `ISOCAN_PROXY_EMAIL_HEADER`: comma-separated header name(s), e.g. `"x-forwarded-email"`
+ * - `ISOCAN_PROXY_EMAIL_PROTO_FIELD`: optional protobuf string field number (e.g. `"2"`)
+ * - `ISOCAN_PROXY_EMAIL_STRIP_PREFIX`: optional prefix regex stripped from local-parts
+ */
+export function resolveProxyAuth(env: NodeJS.ProcessEnv = process.env): ProxyAuthConfig | null {
+  const rawHeaders = env["ISOCAN_PROXY_EMAIL_HEADER"]?.trim();
+  if (!rawHeaders) return null;
+  const headers = rawHeaders
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  if (headers.length === 0) return null;
+  const rawField = Number(env["ISOCAN_PROXY_EMAIL_PROTO_FIELD"]?.trim() ?? "");
+  const protoField = Number.isInteger(rawField) && rawField > 0 ? rawField : null;
+  const rawPrefix = env["ISOCAN_PROXY_EMAIL_STRIP_PREFIX"]?.trim();
+  const stripPrefix = rawPrefix ? new RegExp(rawPrefix, "i") : null;
+  return { headers, protoField, stripPrefix };
+}
+
+function readVarint(buf: Buffer, pos: number): { val: number; next: number } | null {
+  let result = 0;
+  let shift = 0;
+  while (pos < buf.length && shift < 64) {
+    const byte = buf[pos++]!;
+    result += (byte & 0x7f) * 2 ** shift;
+    shift += 7;
+    if ((byte & 0x80) === 0) return { val: result, next: pos };
+  }
+  return null;
+}
+
+function extractProtoStringField(token: string, targetField: number): string | null {
+  try {
+    const buf = Buffer.from(token.trim(), "base64url");
+    let pos = 0;
+    while (pos < buf.length) {
+      const tag = readVarint(buf, pos);
+      if (!tag) break;
+      pos = tag.next;
+      const fieldNumber = tag.val >>> 3;
+      const wireType = tag.val & 0x7;
+      if (wireType === 0) {
+        const skipped = readVarint(buf, pos);
+        if (!skipped) break;
+        pos = skipped.next;
+      } else if (wireType === 1) {
+        pos += 8;
+      } else if (wireType === 5) {
+        pos += 4;
+      } else if (wireType === 2) {
+        const len = readVarint(buf, pos);
+        if (!len || len.val < 0 || len.next + len.val > buf.length) break;
+        const start = len.next;
+        const end = start + len.val;
+        if (fieldNumber === targetField) {
+          return buf.subarray(start, end).toString("utf8");
+        }
+        pos = end;
+      } else {
+        break;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+const ANON_PROXY_LOCAL_PARTS = new Set(["", "anonymous", "nobody", "noone"]);
+
+function headerFirst(value: string | string[] | undefined): string | null {
+  const first = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" && first.trim() ? first.trim() : null;
+}
+
+/** Extract the raw proxy identity header value configured in `proxyAuth`, or null. */
+export function rawProxyHeader(headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null): string | null {
+  if (!proxyAuth) return null;
+  for (const name of proxyAuth.headers) {
+    const found = headerFirst(headers[name]);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Build an `email:<addr>` attestation from configured reverse-proxy headers, or null. */
+export function attestationFromProxy(
+  headers: IncomingHttpHeaders,
+  proxyAuth: ProxyAuthConfig | null,
+  now = Date.now(),
+): Attestation | null {
+  const rawHeader = rawProxyHeader(headers, proxyAuth);
+  if (!proxyAuth || !rawHeader) return null;
+  const extracted = proxyAuth.protoField
+    ? extractProtoStringField(rawHeader, proxyAuth.protoField)
+    : rawHeader.replace(/^[a-z0-9._-]+:(?=.+@)/i, "");
+  if (!extracted || extracted.length > 320) return null;
+  const lower = extracted.trim().toLowerCase();
+  const at = lower.indexOf("@");
+  if (at <= 0 || at === lower.length - 1 || lower.indexOf("@", at + 1) !== -1) return null;
+  let local = lower.slice(0, at);
+  const domain = lower.slice(at + 1);
+  if (proxyAuth.stripPrefix) local = local.replace(proxyAuth.stripPrefix, "");
+  if (!local || ANON_PROXY_LOCAL_PARTS.has(local) || !domain.includes(".")) return null;
+  return {
+    attribute: normalizeAttribute(`email:${local}@${domain}`),
+    verifiedVia: "proxy",
+    at: new Date(now).toISOString(),
+  };
+}
+
+/** Ensure a trusted reverse-proxy email attestation is recorded on `badge` when `proxyAuth` is configured. */
+export async function ensureProxyAttestation(
+  desk: Desk,
+  badge: BadgeRecord,
+  headers: IncomingHttpHeaders,
+  proxyAuth: ProxyAuthConfig | null,
+  now = Date.now(),
+): Promise<BadgeRecord> {
+  if (!proxyAuth) return badge;
+  const attestation = attestationFromProxy(headers, proxyAuth, now);
+  if (!attestation) return badge;
+  if ((badge.attestations ?? []).some((row) => row.attribute === attestation.attribute)) return badge;
+  await desk.attest(badge.badgeId, attestation);
+  return { ...badge, attestations: [...(badge.attestations ?? []), attestation] };
+}
+
+/**
  * What a home with this configuration can verify.
  *
  * `email` when there is an attester, and that is the whole list today.
@@ -124,8 +268,8 @@ export function resolveAuth(env: NodeJS.ProcessEnv = process.env): AuthConfig | 
  * could be WRITTEN and admitted nobody would be a dialog that lies, and that
  * is worse than a refusal.
  */
-export function attestersOf(auth: AuthConfig | null): AttestedKind[] {
-  return auth ? ["email"] : [];
+export function attestersOf(auth: AuthConfig | null, proxyAuth: ProxyAuthConfig | null = null): AttestedKind[] {
+  return auth || proxyAuth ? ["email"] : [];
 }
 
 /**

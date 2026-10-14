@@ -851,6 +851,10 @@ describe("the chrome's CSS forms compute what the functions did", async () => {
         expect(!!(bits & chrome.Z_NAME)).toBe(row.name);
         expect(!!(bits & chrome.Z_SPELL)).toBe(chrome.underRowSpellsItOut(w, scale, 1, was));
         expect(!!(bits & chrome.Z_MARK)).toBe(core.textMarkSize(w, h, scale) >= core.KIND_MARK_MIN);
+        // Semantic Zoom's card: only with a members' type size, and only where it cannot be read.
+        expect(bits & chrome.Z_GIST).toBe(0);
+        const gisted = chrome.zoomDecisions(note, w, h, scale, was === undefined ? {} : { g: was }, 16);
+        expect(!!(gisted & chrome.Z_GIST)).toBe(!core.textIsLegible(16, scale, was));
       }
     }
   });

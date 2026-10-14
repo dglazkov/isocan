@@ -21,6 +21,32 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 14 October 2026
+
+- **Semantic Zoom, an experiment.** Turn it on in Settings → Experiments.
+  Zoomed out past where a long note can be read, it shows a short summary,
+  marked ≈, instead of only its first line. When the note changes, the old
+  summary stays, marked as updating, until the new one arrives. Summaries
+  are made with the canvas owner's model key and never change the canvas.
+  Groups get one too: zoomed out, a group says what is in it. A second
+  setting, **look at pictures**, lets summaries describe screens and images
+  too, where the canvas's model can see them.
+
+## 13 October 2026
+
+- **Text far away says what it is.** Zoomed out past where a note's words
+  can be read, it used to show a single "T". Now it shows its opening words
+  at a size you can read, so you can tell notes apart from across the canvas.
+- **An edit that checks first.** `isocan edit <item> <file> --if-version
+  <versionId>` writes the new version only if nobody changed the item since
+  you read it. If somebody did, it writes nothing and says where the item
+  stands now. A title or property change can ride in the same edit, and a
+  retry after a dropped connection never applies twice. It is for scripts
+  that keep one card current, such as a weekly report.
+- **The faces overlap.** The people and agents on a canvas now sit as a pile,
+  each tucked a little under the next, so a full room takes less of the bar.
+  An unread badge and the face you point at still come to the front.
+
 ## 10 October 2026
 
 - **Four more living grounds.** **Pond**: still water your cursor drags

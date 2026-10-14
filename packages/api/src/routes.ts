@@ -7,6 +7,10 @@ import { designRequestsRoute, type DesignRecordOperation, type DesignRequestsRes
 import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core/design-decision";
 import { designRepairsRoute, type DesignRepairsResponse } from "@isocan/core/design-repair";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
+import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "@isocan/core/semantic-zoom";
+
+/** Core's `summariesRoute`, spelled here: see `DaemonRoutes.summaries` for why it is not imported. */
+const summariesPath = (canvasId: string) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 import type {
   Actor,
   ActorBindingRecord,
@@ -277,6 +281,10 @@ export class DaemonRoutes {
    */
   protected fetcher: typeof fetch = platformFetch;
 
+  /** Transport fetcher used for unretried probes (`healthz`); matches `platformFetch` on loopback
+   * so probes never trigger retry budgets, while routing through configured proxies/gateways. */
+  protected probeFetcher: typeof fetch = platformFetch;
+
   /**
    * Every request carries the badge, and a refused one heals itself and comes
    * straight back. This is what makes neither the door nor the membership
@@ -373,7 +381,7 @@ export class DaemonRoutes {
   private async reBadge(signal: AbortSignal | undefined = this.lifetime): Promise<boolean> {
     if (this.badgeStore.upstream) return false;
     signal?.throwIfAborted();
-    const answer = await askTheDoor(this.base, 10_000, signal);
+    const answer = await askTheDoor(this.base, 10_000, signal, this.fetcher);
     signal?.throwIfAborted();
     if ("refused" in answer) {
       if (answer.refused.status === 403 || answer.refused.status === 429) {
@@ -475,7 +483,7 @@ export class DaemonRoutes {
       // status` slower at answering the question it answers correctly now —
       // "nothing is there yet". The deadline is for the calls whose failure
       // reaches a person as an error.
-      const res = await fetch(`${this.base}${healthPath(this.base)}`, {
+      const res = await this.probeFetcher(`${this.base}${healthPath(this.base)}`, {
         signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(this.lifetime ? [this.lifetime] : [])]),
       });
       return res.ok ? ((await res.json()) as Health) : null;
@@ -1028,6 +1036,45 @@ export class DaemonRoutes {
    */
   homes(): Promise<HomesResponse> {
     return this.request("GET", HOMES_ROUTE);
+  }
+
+  /**
+   * **Semantic Zoom's cached summaries, by content key** (an experiment;
+   * `docs/projects/semantic-zoom/design.md` §5). `sourceIds`, in the keys'
+   * order, lets the home answer a key it has no entry for with the newest
+   * entry for that source, marked `stale`. A read never makes one.
+   *
+   * The path is spelled here rather than imported from core's
+   * `summariesRoute`, on purpose and measured: any runtime import of
+   * `@isocan/core/semantic-zoom` from this file, static or lazy, re-cuts the
+   * CLI bundle's chunks and costs `isocan --version` a module past its budget
+   * (`test/cli-bundle.test.ts`; 40 → 41, 14 Oct 2026). The CLI's summary
+   * tests read and make through these two methods against a real home, so a
+   * drift from core's spelling fails there.
+   */
+  summaries(canvasId: string, keys: string[], sourceIds: string[]): Promise<SummaryRead> {
+    const query = `keys=${keys.join(",")}&for=${sourceIds.map(encodeURIComponent).join(",")}`;
+    return this.request("GET", `${summariesPath(canvasId)}?${query}`);
+  }
+
+  /**
+   * **Ask the home to make one summary** — the route the web's fetcher asks,
+   * under the same rules (edit capability, the key's own spend rules, rate,
+   * the quiet period). The home collects the words; the client names only the
+   * kind and the source. A 202 is `summary-quiet`, carrying `retryAfterMs`.
+   */
+  makeSummary(canvasId: string, make: SummaryMake): Promise<SummaryEntry | SummaryWait> {
+    return this.request("POST", summariesPath(canvasId), make);
+  }
+
+  /**
+   * **What a canvas's summaries have cost** (`GET …/summaries/stats`, phase
+   * 3): calls, tokens, makes and hits per day, the hour's budget, the cache.
+   * Editors only — it says what somebody's key spent. `days` defaults to 30
+   * at the home, at most 90.
+   */
+  summaryStats(canvasId: string, days?: number): Promise<SummaryStats> {
+    return this.request("GET", `${summariesPath(canvasId)}/stats${days ? `?days=${days}` : ""}`);
   }
 
   /** Complete current scope; omitted roots read ambient pins. Reads never move presence. */

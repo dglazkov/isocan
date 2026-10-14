@@ -54,6 +54,26 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
+// Loop can be installed without night. Use its validator when present and keep
+// the standalone boundary equivalent when this is the only installed script.
+// Shared by the CLI and installed planning readers. Validate before I/O.
+function standalonePlanningConfig(config = {}) {
+  const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const fail = message => { throw Object.assign(new Error(message), { exitCode: 2 }); };
+  if (!object(config)) fail('planning config must be an object');
+  const phases = config.phases === undefined ? {} : config.phases;
+  if (!object(phases)) fail('phases must be an object');
+  const source = Object.hasOwn(phases, 'source') ? phases.source : 'files';
+  if (!['files', 'milestones'].includes(source)) fail('phases.source must be files or milestones');
+  const ownerLabel = Object.hasOwn(phases, 'ownerLabel') ? phases.ownerLabel : 'keel:owner';
+  if (typeof ownerLabel !== 'string' || !ownerLabel.trim()) fail('phases.ownerLabel must be a nonempty label');
+  return { source, ownerLabel };
+}
+const planningModule = new URL('./keel/planning-config.mjs', import.meta.url);
+const planningConfig = existsSync(planningModule)
+  ? (await import(planningModule.href)).planningConfig : standalonePlanningConfig;
+const INACTIVE = 'Loop phase homing is unsupported for phases.source milestones; edit the plan in GitHub. Local phase proposals, decisions, proving, push and rendering are inactive; archived files are unchanged.';
+
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
@@ -615,7 +635,9 @@ export function contextProblems(own, triageSource) {
 
 /** Per-project wording and names, from .keel/keel.json "loop". */
 export function settings(root = ROOT) {
-  const keel = readJson(join(root, '.keel', 'keel.json'));
+  const configPath = join(root, '.keel', 'keel.json');
+  const keel = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {};
+  const planning = planningConfig(keel);
   const own = keel.loop && typeof keel.loop === 'object' ? keel.loop : {};
   const display = nonEmpty(own.name) ? own.name : typeof keel.name === 'string' && keel.name ? keel.name : basename(root);
   const name = display.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
@@ -627,6 +649,7 @@ export function settings(root = ROOT) {
   return {
     display,
     name,
+    planningSource: planning.source,
     shape: keel.phases?.shape === 'projects' ? 'projects' : 'phases',
     run: own.run ?? 'node scripts/loop.mjs',
     insights: own.insights ?? 'https://jules.google.com/jitro',
@@ -675,6 +698,8 @@ async function shell(command, { root, env, what }) {
 }
 
 export function phases(root = ROOT) {
+  const s = settings(root);
+  if (s.planningSource !== 'files' || s.shape === 'projects') return [];
   const dir = join(root, 'docs', 'phases');
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter(n => n.endsWith('.md') && n !== 'README.md').map(file => {
@@ -697,8 +722,9 @@ export function projects(root = ROOT) {
  */
 export function render(root = ROOT, { check = false } = {}) {
   const dir = join(root, 'docs', 'loop'), out = join(root, 'docs', 'LOOP.md');
-  const findings = loadFindings(dir);
   const s = settings(root);
+  if (s.planningSource !== 'files') return { ok: true, stale: false, problems: [], inactive: INACTIVE };
+  const findings = loadFindings(dir);
   const page = `${renderLoopDoc(findings, phases(root), s)}\n`;
   if (!check) { writeFileSync(out, page); return { ok: true, stale: false, problems: [] }; }
   if (!findings.length && !existsSync(out)) return { ok: true, stale: false, problems: [] };
@@ -814,6 +840,7 @@ export function proposeArgv(slug, o, shape = 'phases') {
  * Returns { proved, skipped }.
  */
 export function proveUntriaged({ root, env, s, slug = null, err }) {
+  if (s.planningSource === 'milestones') return { proved: 0, skipped: INACTIVE };
   const dir = join(root, 'docs', 'loop');
   const targets = loadFindings(dir).filter(f => (slug ? f.slug === slug : f.decision === 'untriaged'));
   if (!targets.length) return { proved: 0, skipped: null };
@@ -961,7 +988,8 @@ export async function main(argv, { root = ROOT, env = process.env, log = console
   const { values: v, positionals } = parsed;
   const [cmd = 'list', ...rest] = positionals;
   const DIR = join(root, 'docs', 'loop');
-  const s = settings(root);
+  let s;
+  try { s = settings(root); } catch (e) { err(e.message); return 2; }
   const call = (args, opts = {}) => stitch(args, { root, env, ...opts });
   const save = f => { mkdirSync(DIR, { recursive: true }); writeFileSync(join(DIR, `${f.slug}.md`), serializeFinding(f)); };
   const find = ref => {
@@ -1029,7 +1057,8 @@ export async function main(argv, { root = ROOT, env = process.env, log = console
 
   /** Write docs/LOOP.md, then run the project's afterRender, as ledger's own script ran its roadmap. */
   const write = async () => {
-    render(root);
+    const result = render(root);
+    if (result.inactive) { log(result.inactive); return; }
     if (s.problems.length) throw new LoopError(`.keel/keel.json: ${s.problems.join('; ')}`);
     if (s.afterRender) await shell(s.afterRender, { root, env: commandEnv(env, s), what: 'afterRender' });
   };
@@ -1040,6 +1069,7 @@ export async function main(argv, { root = ROOT, env = process.env, log = console
   };
 
   try {
+    if (s.planningSource !== 'files' && ['propose', 'decide', 'prove', 'push'].includes(cmd)) throw new LoopError(INACTIVE, 2);
     switch (cmd) {
       case 'pull': {
         const ws = workspace(root, env);
@@ -1129,6 +1159,7 @@ export async function main(argv, { root = ROOT, env = process.env, log = console
         return 0;
       }
       case 'render': {
+        if (s.planningSource !== 'files') { log(INACTIVE); return 0; }
         if (!v.check) { await write(); log('wrote docs/LOOP.md'); return 0; }
         const r = render(root, { check: true });
         if (r.stale) err(`docs/LOOP.md is out of date — run: ${s.run} render`);
