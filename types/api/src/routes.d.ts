@@ -7,6 +7,7 @@ import { type DesignRepairsResponse } from "../../core/src/design-repair.js";
 import { type RecapHeadResponse } from "../../core/src/index.js";
 import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "../../core/src/semantic-zoom.js";
 import type { Actor, ActorBindingRecord, ActorClaimOp, BadgesResponse, BlobUploadResponse, Capability, CanvasSnapshotResponse, CanvasGroupMigrationPreview, ContextManifest, ContextRequest, ContextContentPage, CreateSessionResponse, GcReport, GcRequest, HomeGcReport, GrantResponse, PublicCanvasesResponse, GrantsResponse, GrantSubject, HomesResponse, KillBadgeResponse, LogEntry, MintPassResponse, PassResponse, Operation, PostOpResponse, PresenceSession, Canvas, RedeemPassResponse, UpdateSessionRequest, ParkAdvanceRequest, ParkClaimRequest, ParkClaimResponse, ParkDeliveredRequest, RcAnsweringResponse, RcHoldRequest, RcHoldResponse, WatchLogRequest, WatchLogResponse, ActorNames, ActorKinds, NewsResponse, PresenceWhereResponse, ServingResponse, SlashCommand, SpaceCanvasResponse, SpaceLinkRequest, SpaceLinkResponse, SpaceResponse, SpacesResponse, SeenMarksResponse, SeenResponse, GroupResponse, GroupAction, GroupsResponse, OperatorLogResponse, OperatorLookRequest, OperatorLookResponse, OperatorPurgeRequest, OperatorPurgeResponse, OperatorShowResponse, OperatorTakedownRequest, OperatorTakedownResponse, OperatorEndRequest, OperatorEndResponse, OperatorRevokeRequest, OperatorRevokeResponse, OperatorRefuseRequest, OperatorRefuseResponse, TakedownsResponse } from "../../core/src/index.js";
+import { type ForgetCanvasResponse } from "../../core/src/index.js";
 import type { BadgeStore, BuildStamp, UpgradeVerdict } from "../../core/src/index.js";
 import { ApiError } from "../../core/src/index.js";
 /** Ordinary and typed operations share this actual writer endpoint across transports and fault probes. */
@@ -414,6 +415,9 @@ export declare class DaemonRoutes {
      * the birth default, which is what a marker naming no home deserves.
      */
     joinFromHome(canvasId: string, home?: string): Promise<Canvas>;
+    /** Drop this machine's copy of a canvas its home no longer has
+     *  (`HOME_FORGET_ROUTE` in core says when the daemon refuses). */
+    forgetCanvas(canvasId: string): Promise<ForgetCanvasResponse>;
     /**
      * **Which canvas lives where, and which homes are answering.**
      *

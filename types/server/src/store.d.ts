@@ -139,7 +139,11 @@ export interface Store {
      */
     tipSeq(id: string): Promise<number | null>;
     /** project.delete is soft: the state is moved aside, recoverable by hand. */
-    softDeleteCanvas(id: string): Promise<void>;
+    /** Where the canvas was kept and where it lived, when the backing has paths. */
+    softDeleteCanvas(id: string): Promise<{
+        keptAt: string;
+        restoreTo: string;
+    } | void>;
     /** When this canvas was taken down, or null — the one question `load` asks
      * before it answers. */
     takenDownAt(id: string): Promise<string | null>;

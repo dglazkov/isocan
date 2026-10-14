@@ -5,9 +5,13 @@ export interface InboxResponse {
     entries: InboxEntry[];
     marks: import("./seen.js").SeenMarks;
     homes: Record<string, string | null>;
+    /** `gone`: the canvas's home answered that it no longer has it, so the
+     * copy held here is all that is left — `isocan canvas forget` drops it. */
     unavailable: {
         canvasId: string;
         error: string;
+        gone?: true;
+        title?: string;
     }[];
 }
 /** The read-only inbox assembly; a canvas id explicitly presents its address. */

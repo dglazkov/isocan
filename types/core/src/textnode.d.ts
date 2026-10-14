@@ -444,8 +444,9 @@ font?: TextFont | null): {
  *
  * So every surface that changes a node's words or look asks this one
  * question, with the look the node will have once the change lands. It only
- * ever GROWS, on both axes: a box somebody dragged wider keeps its width (more
- * room only means fewer lines, so the estimate's height still holds), and a
+ * ever GROWS, on both axes: a box somebody dragged wider keeps its width, and
+ * the height it needs is measured at that width (`textHeightAt` — the
+ * column's height was what an edit used to grow a wide box to), and a
  * note that got smaller does not have the canvas rearranged under it — `⇧F`
  * and `isocan fit` are the deliberate re-fit. Null when the box already holds
  * the words, so a caller sends nothing rather than a resize to the same size.
@@ -473,11 +474,19 @@ export declare function textNodeRefit(item: Item, body: string, patch?: {
     height: number;
 } | null;
 /**
- * What "fit to content" means for a caption: the box its words need in its
- * look, from scratch — so, unlike `textNodeRefit`, it may shrink. `⇧F` and
+ * What "fit to content" means for a caption: the height its words need in its
+ * look AT ITS WIDTH — so, unlike `textNodeRefit`, it may shrink. `⇧F` and
  * `isocan fit` both ask this, which is how a node already stored a line short
  * (made before `textNodeRefit` existed) is put right in one gesture from
  * either surface. Null when it is not a caption: paper keeps its square.
+ *
+ * A wider box keeps its width. It was refitted from scratch at the default
+ * column, which turned an 840×400 note into about 350×1600 and pushed it onto
+ * its neighbours (14 Oct 2026): a width somebody set is a layout decision,
+ * and nothing here can tell it from one the estimate made, so fit keeps it. A
+ * box crushed narrower than its words' own width still grows back to it —
+ * "fit" grows to what the content wants, the same width rule `textRefit`
+ * keeps — and either way the height is measured at the width it ends with.
  */
 export declare function textNodeFit(item: Item, body: string): {
     width: number;

@@ -1295,6 +1295,7 @@ function healthPath(base2) {
   return isLoopbackBase(base2) ? "/healthz" : "/api/healthz";
 }
 var HOME_JOIN_ROUTE = "/api/home/join";
+var HOME_FORGET_ROUTE = "/api/home/forget";
 var HOMES_ROUTE = "/api/homes";
 var PRESENCE_WHERE_ROUTE = "/api/presence/where";
 var NEWS_ROUTE = "/api/news";
@@ -2245,6 +2246,11 @@ var DaemonRoutes = class {
       ...home !== void 0 ? { home } : {}
     });
     return canvas;
+  }
+  /** Drop this machine's copy of a canvas its home no longer has
+   *  (`HOME_FORGET_ROUTE` in core says when the daemon refuses). */
+  forgetCanvas(canvasId) {
+    return this.request("POST", HOME_FORGET_ROUTE, { canvasId });
   }
   /**
    * **Which canvas lives where, and which homes are answering.**

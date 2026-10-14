@@ -555,7 +555,11 @@ where somebody actually named you, rather than the Chat being busy.
 
 The daemon assembles the inbox at each canvas’s home, using the same routing
 and seen marks as the web inbox. A failed or withdrawn home is reported as
-unavailable. Reading the inbox never marks a canvas seen.
+unavailable. A canvas deleted at its home while this machine was away is said
+once — *gone at its home* — and `isocan canvas forget <id>` lets go of the
+copy here (refused while the home still has it; the copy is moved aside, not
+erased, and the command says where). Reading the inbox never marks a canvas
+seen.
 
 **It is the same rule `isocan wait` parks on** — one function, `reasonFor`
 in core, that both call: a comment
@@ -3979,7 +3983,7 @@ makes this refusal certain.
 `isocan --help` covers everything; the commands you'll live in:
 `comment ls|add|reply|edit|anchor|main|rm`,
 `session start|on|work|say|signal|point|select|end|move`,
-`canvas new|ls|show|edit|archive|rm` (rm needs `--force` and is
+`canvas new|ls|show|edit|archive|forget|rm` (rm needs `--force` and is
 NOT undoable — confirm on the thread first, and never delete a canvas you did
 not make). **`canvas archive` is the one to reach for instead**: it takes a
 canvas out of the list and changes nothing else — the address, the history,

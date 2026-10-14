@@ -64,7 +64,10 @@ export declare class FileStore implements Store {
     tipSeq(id: string): Promise<number | null>;
     appendLog(id: string, entry: LogEntry): Promise<void>;
     /** project.delete is soft: the directory is moved aside, recoverable by hand. */
-    softDeleteCanvas(id: string): Promise<void>;
+    softDeleteCanvas(id: string): Promise<{
+        keptAt: string;
+        restoreTo: string;
+    }>;
     /**
      * Load the registry: snapshot plus any oplog tail the snapshot doesn't
      * cover. Replay is trivial — the envelope carries the RESOLVED actor, so a

@@ -139,6 +139,9 @@ export interface HomeConnection {
      * per-browser answer seen-marks exist to replace.
      */
     inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse>;
+    /** Whether the home still has this canvas — false only on its 404, and a
+     *  throw when it does not answer (`isocan canvas forget` reads this). */
+    holds(canvasId: string, signal?: AbortSignal): Promise<boolean>;
     seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse>;
     markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
     spaces(): Promise<SpacesResponse>;
@@ -726,6 +729,12 @@ export declare class HomeLink implements HomeConnection {
     badges(): Promise<BadgesResponse>;
     killBadge(badgeId: string): Promise<KillBadgeResponse>;
     inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse>;
+    /**
+     * Does the home still have this canvas? Only a 404 says no: a refusal is
+     * the home answering FOR the canvas (it just will not let this machine
+     * in), and an unreachable home answers nothing, so it throws.
+     */
+    holds(canvasId: string, signal?: AbortSignal): Promise<boolean>;
     seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse>;
     markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
     spaces(): Promise<SpacesResponse>;
