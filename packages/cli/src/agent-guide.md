@@ -2430,7 +2430,8 @@ it:
 
 Both are `item.update` with a property, so they replicate, undo and are visible
 to everybody like any other fact. The same two verbs are on an item's menu in
-the app.
+the app, under "For agents": **Agents always read this** is `pin`, **Agents
+skip this** is `exclude`, and pressing a ticked one is `unmark`.
 
 **Keeping a piece of a source here.** Inheritance keeps following a source. To
 stop following and keep one piece instead, `isocan context pin <item> --from

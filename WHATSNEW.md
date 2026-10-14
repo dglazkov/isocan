@@ -23,6 +23,12 @@ second week.
 
 ## 14 October 2026
 
+- **A shorter right-click menu.** Rows that cannot apply to what you selected
+  are gone instead of greyed out: four items now get 14 rows, not 30. Tidy is
+  one row; Align, Space evenly and Pack into a grid live under **Arrange**.
+  On a single item, **Agents always read this** and **Agents skip this**
+  (under For agents) replace "Pin into context" and "Keep out of context".
+
 - **Tidy lines things up where they are.** Tidy on a selection now snaps
   nearly-aligned edges into shared rows and columns and evens out nearly-equal
   gaps, keeping your arrangement and never landing on a neighbour's name. The
