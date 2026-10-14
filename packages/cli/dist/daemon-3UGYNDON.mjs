@@ -149,7 +149,7 @@ import {
   writeHomes,
   writeMarker,
   writePersona
-} from "./chunk-FWLQPADX.mjs";
+} from "./chunk-JRPYAOKK.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import "./chunk-EWDNRPLR.mjs";
@@ -33040,11 +33040,14 @@ function registerPassRoutes(app, scope) {
     const asked = typeof body.home === "string" ? body.home.trim() : "";
     const askedHost = asked === "" ? null : hostOf(asked);
     const self = askedHost !== null && askedHost === String(req.headers.host ?? "");
-    if (asked === "") {
+    const parsed = asked === "" || self ? parsePassToken(token) : null;
+    const held = parsed ? await desk.pass(parsed.passId) : null;
+    const own = held !== null && (options.homes?.for(held.canvasId) ?? null) === null;
+    if (asked === "" && !own) {
       const stuck = refuseAmbiguousHome(reply, options.homes, "redeem a pass");
       if (stuck) return stuck;
     }
-    const home = asked !== "" && !self ? options.homes?.linkFor(normalizeHomeUrl(asked)) ?? null : options.homes?.homeScoped() ?? null;
+    const home = own ? null : asked !== "" && !self ? options.homes?.linkFor(normalizeHomeUrl(asked)) ?? null : options.homes?.homeScoped() ?? null;
     if (home) {
       const answer = await home.redeemPass(token);
       if (answer.actor) await engine.endowClaim(badge.badgeId, answer.actor, answer.canvasId);

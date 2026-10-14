@@ -14,7 +14,7 @@ import {
   paths_exports,
   readConfigFile,
   writeIdentityName
-} from "./chunk-LKVR2JYE.mjs";
+} from "./chunk-HCQRLBFV.mjs";
 import {
   designRepairsRoute
 } from "./chunk-PKQBK4R5.mjs";
@@ -29274,7 +29274,7 @@ async function readDesignAudit(ctx, canvasId, options = {}, captured) {
   });
 }
 async function repairDesignItem(ctx, request) {
-  const { designReviewPort: designReviewPort2 } = await import("./design-review-node-6CDQTAN7.mjs");
+  const { designReviewPort: designReviewPort2 } = await import("./design-review-node-JEHJIXKK.mjs");
   return repairDesignScreen(designReviewPort2(ctx), request);
 }
 
