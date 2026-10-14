@@ -55,6 +55,9 @@ function waitUntilCalm(delayMs: number): Promise<void> {
         });
         return;
       }
+      // The page can be gone by the time the delay ends (a test's DOM torn
+      // down under a pending timer threw "window is not defined" in CI).
+      if (typeof window === "undefined") return resolve();
       if ("requestIdleCallback" in window) {
         window.requestIdleCallback(() => resolve(), { timeout: 200 });
       } else {
