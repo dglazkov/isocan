@@ -23,6 +23,9 @@ second week.
 
 ## 13 October 2026
 
+- **Text far away says what it is.** Zoomed out past where a note's words
+  can be read, it used to show a single "T". Now it shows its opening words
+  at a size you can read, so you can tell notes apart from across the canvas.
 - **An edit that checks first.** `isocan edit <item> <file> --if-version
   <versionId>` writes the new version only if nobody changed the item since
   you read it. If somebody did, it writes nothing and says where the item
