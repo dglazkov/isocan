@@ -2383,11 +2383,6 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
   box-shadow: var(--shadow-pop); padding: 10px 12px; font-size: 12px;
   display: flex; flex-direction: column; min-height: 0;
 }
-.thread-comments {
-  overflow-y: auto; overscroll-behavior: contain; min-height: 0;
-  /* Bleed into the padding so the scrollbar rides the popover's edge. */
-  margin: -10px -12px 0; padding: 10px 12px 0;
-}
 /* .comment renders in the thread popover AND the main-thread panel. */
 .comment { margin-bottom: 8px; overflow-wrap: anywhere; }
 /**
@@ -2472,11 +2467,6 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
 }
 .comment .body hr { border: none; border-top: 1px solid var(--line-soft); margin: 0.6em 0; }
 .thread-popover form { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; flex: none; }
-.thread-popover .thread-actions { display: flex; justify-content: space-between; margin-top: 6px; flex: none; }
-.thread-popover .thread-actions button {
-  background: none; border: none; color: var(--danger); font-size: 11px; padding: 2px 4px;
-}
-.thread-popover .thread-actions button.promote { color: var(--accent); }
 
 /* ---------- main thread (#36): docked panel + collapsed pill ---------- */
 /* The designated agent↔user channel. Docked left like the trash panel's
@@ -3780,9 +3770,6 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; align-items: center; justify-content: center;
   color: var(--accent); font-weight: 600;
 }
-/* Dragging the textarea taller than the clamped popover scrolls, not spills. */
-.compose-popover form { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.compose-popover .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
 .page-note { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--ink-muted); }
 /* A refusal needs more than one line: what happened, and what to do about it. */
 .page-note-stack { flex-direction: column; gap: 8px; text-align: center; padding: 0 24px; }
@@ -5209,9 +5196,6 @@ button.mt-card:hover { border-color: var(--accent); }
 
 /* Discussion controls stay outside the canonical document text. */
 .document-discussions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.thread-text-anchor { margin: 0 0 12px; overflow-wrap: anywhere; }
-.thread-text-anchor blockquote { margin: 0 0 8px; padding-left: 12px; border-left: 2px solid var(--accent); white-space: pre-wrap; max-height: 160px; overflow: auto; }
-.thread-text-anchor small { color: var(--ink-muted); }
 .markdown-resource-missing { text-decoration: underline dotted; color: var(--ink-muted); cursor: help; }
 
 .text-comment-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; position: sticky; top: 0; z-index: 2; background: var(--card); padding: 4px; }

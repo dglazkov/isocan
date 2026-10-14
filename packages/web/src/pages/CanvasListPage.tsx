@@ -36,8 +36,8 @@ import {
   listSpaces,
   removeFromSpace,
   sendOp,
-  withDeadline,
 } from "../lib/api.ts";
+import { withDeadline } from "../lib/deadline.ts";
 // A modal, loaded when it is opened — see `CanvasCrumb` for the reasoning.
 const ShareDialog = lazy(() =>
   import("../components/ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })),

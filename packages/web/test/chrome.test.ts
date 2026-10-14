@@ -603,7 +603,7 @@ describe("the Chat and the comments say which they are", () => {
     // `thread.setMain` demotes the current one — a canvas has a single slot,
     // so promoting is also a demotion, and the button that hides that is
     // the button somebody loses a conversation to.
-    const layer = read("CommentLayer.tsx");
+    const layer = read("CommentPopovers.tsx");
     expect(layer).toContain("Make this the Chat");
     // "goes BACK to" was the false half: a Chat born with `main: true` has
     // never been a pin, so there is nowhere for it to go back to.
@@ -660,7 +660,7 @@ describe("the Chat and the comments say which they are", () => {
     );
     // And promoting still works from the canvas, which is what makes the
     // removal safe: it is how you change which thread is the Chat.
-    expect(read("CommentLayer.tsx")).toMatch(/type: "thread\.setMain", threadId: thread\.id/);
+    expect(read("CommentPopovers.tsx")).toMatch(/type: "thread\.setMain", threadId: thread\.id/);
   });
 
   it("writes a name one way, on every screen", () => {
@@ -700,7 +700,7 @@ describe("the Chat and the comments say which they are", () => {
   });
 
   it("names the thing a pin holds a comment, on the button that deletes one", () => {
-    expect(read("CommentLayer.tsx")).toContain("Delete comment");
+    expect(read("CommentPopovers.tsx")).toContain("Delete comment");
   });
 
   it("keeps the CLI and the guide on the same word as the app", () => {

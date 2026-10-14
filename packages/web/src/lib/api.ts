@@ -280,31 +280,6 @@ export async function knockOnDoor(claimIdentity = true): Promise<boolean> {
   }
 }
 
-/**
- * **A read that answers in time, or is told it failed.**
- *
- * The signal cancels the fetch, but a signal alone is not a deadline: a
- * request can be waiting on something no signal reaches — the door's
- * recovery, a shared re-claim — and an aborted signal nobody checks leaves
- * the caller on "Loading…" for good. So the answer is raced against the
- * clock as well, and the clock always wins at `ms`: the caller hears
- * `message`, whatever the read was waiting on.
- */
-export function withDeadline<T>(ms: number, message: string, read: (signal: AbortSignal) => Promise<T>): Promise<T> {
-  const controller = new AbortController();
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      const late = new Error(message);
-      controller.abort(late);
-      reject(late);
-    }, ms);
-    read(controller.signal).then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      (err: unknown) => { clearTimeout(timer); reject(err); },
-    );
-  });
-}
-
 /** Shared authenticated transport for lazy feature adapters, with caller cancellation. */
 export async function request<T>(
   method: string, url: string, body?: unknown, signal?: AbortSignal,

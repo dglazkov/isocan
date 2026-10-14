@@ -61,13 +61,13 @@ describe("every composer takes the same two keys", () => {
    * honour it.
    */
   it("grows, so a second line is possible at all", () => {
-    const layer = read("../src/components/CommentLayer.tsx");
+    const layer = read("../src/components/CommentPopovers.tsx");
     const reply = layer.slice(layer.indexOf('placeholder="Reply…"'));
     expect(reply.slice(0, reply.indexOf("/>"))).toContain("grow");
   });
 
   it("sends on Enter and on ⌘Enter, the same as the Chat", () => {
-    const layer = read("../src/components/CommentLayer.tsx");
+    const layer = read("../src/components/CommentPopovers.tsx");
     const chat = read("../src/components/MainThreadPanel.tsx");
     for (const [name, src] of [["reply", layer], ["chat", chat]] as const) {
       expect(src, `${name} lost submitOnEnter`).toContain("submitOnEnter(e);");

@@ -243,7 +243,7 @@ describe("the tray's standing-agent doors", () => {
     expect(grant).toMatch(/readsAsTurnedAway\(c\.body, agentName\)/);
     expect(grant).not.toMatch(/thread\.reply|thread\.create/);
     // Under the ask in both places a mention can be made.
-    expect(read("components/CommentLayer.tsx")).toMatch(/<GateGrant /);
+    expect(read("components/CommentPopovers.tsx")).toMatch(/<GateGrant /);
     expect(read("components/MainThreadPanel.tsx")).toMatch(/<GateGrant /);
   });
 
@@ -265,7 +265,7 @@ describe("the tray's standing-agent doors", () => {
     expect(boundary).toMatch(/lazy\(\(\) => import\("\.\/GatePanel\.tsx"\)/);
     expect(boundary).toMatch(/Suspense fallback=\{null\}/);
     // The only import of either module is the boundary's own dynamic one.
-    for (const host of ["components/CommentLayer.tsx", "components/MainThreadPanel.tsx", "components/AgentRow.tsx"]) {
+    for (const host of ["components/CommentLayer.tsx", "components/CommentPopovers.tsx", "components/MainThreadPanel.tsx", "components/AgentRow.tsx"]) {
       expect(read(host), `${host} must reach the gate controls through LazyGate`).not.toMatch(
         /from "\.\/Gate(Grant|Panel)\.tsx"/,
       );
