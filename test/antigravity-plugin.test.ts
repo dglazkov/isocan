@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { harnessVars, harnessVarsFor } from "../packages/api/src/harness.ts";
-import { findBinding as daemonFindBinding } from "../packages/server/src/binding.ts";
+import { findBinding as daemonFindBinding, removeMarker, writeMarker } from "../packages/server/src/binding.ts";
 // @ts-expect-error — the plugin is plain .mjs with no types, on purpose (see below).
 import { agentEnv, findBinding, personEnv, resolveCli, workspacePaths } from "../plugins/antigravity/lib/workspace.mjs";
 // @ts-expect-error — as above.
@@ -151,6 +151,44 @@ describe("the plugin reads a folder's canvas exactly as the daemon does", () => 
     expect(beside.plugin).toEqual(beside.daemon);
     expect(beside.plugin).toBeNull();
   });
+
+  it("writes and reads out-of-tree bindings in bindings.json for non-git VCS or nonRepoBindings: home, keeping the folder clean", async () => {
+    const home = dir("isocan-home-bindings");
+    fs.writeFileSync(path.join(home, "config.json"), JSON.stringify({ nonRepoBindings: "home" }));
+    const plain = dir("acme-plain");
+    fs.mkdirSync(path.join(plain, "sub"), { recursive: true });
+
+    const written = await withHome(tmp, () => writeMarker(plain, { canvasId: "prj_acmeout", title: "Acme Out", home: "https://acme.example" }, home));
+    expect(written).toBe(path.join(home, "bindings.json"));
+    expect(fs.existsSync(path.join(plain, ".isocan", "project.json"))).toBe(false);
+
+    const seen = await both(path.join(plain, "sub"), home);
+    expect(seen.plugin).toEqual(seen.daemon);
+    expect(seen.plugin).toEqual({
+      root: plain,
+      canvasId: "prj_acmeout",
+      title: "Acme Out",
+      home: "https://acme.example",
+    });
+
+    // A non-git VCS root (.hg) also prefers bindings.json even without config.json.
+    const home2 = dir("isocan-home-hg");
+    const hgRepo = dir("acme-hg");
+    fs.mkdirSync(path.join(hgRepo, ".hg"), { recursive: true });
+    const hgWritten = await withHome(tmp, () => writeMarker(hgRepo, { canvasId: "prj_acmehg" }, home2));
+    expect(hgWritten).toBe(path.join(home2, "bindings.json"));
+    expect(fs.existsSync(path.join(hgRepo, ".isocan", "project.json"))).toBe(false);
+    const seenHg = await both(hgRepo, home2);
+    expect(seenHg.plugin).toEqual(seenHg.daemon);
+    expect(seenHg.plugin).toEqual({ root: hgRepo, canvasId: "prj_acmehg" });
+
+    // removeMarker cleans the bindings.json entry.
+    const removed = await withHome(tmp, () => removeMarker(plain, home));
+    expect(removed).toBe(path.join(home, "bindings.json"));
+    const afterRemove = await both(plain, home);
+    expect(afterRemove.plugin).toEqual(afterRemove.daemon);
+    expect(afterRemove.plugin).toBeNull();
+  });
 });
 
 describe("the plugin's environments", () => {
@@ -294,6 +332,18 @@ describe("SessionStart: a conversation in a bound folder arrives on its canvas",
     expect(said).toContain("Your presence session did not start (isocan session start: timed out after 10s)");
     expect(said).not.toContain("You are on the canvas now");
   });
+
+  it("names bindings.json when a workspace is bound out-of-tree", async () => {
+    const outHome = dir("isocan-home-out");
+    const outFolder = dir("acme-out-folder");
+    fs.writeFileSync(path.join(outHome, "bindings.json"), JSON.stringify({ [outFolder]: { projectId: "prj_acmeout", title: "Acme Out" } }));
+    const { run } = fakeRun({ "identity --session": SAVED });
+    const out = await sessionStart(
+      { conversationId: "conv-out", workspacePaths: [outFolder] },
+      { env: { ...env, ISOCAN_HOME: outHome }, run },
+    );
+    expect(out.injectSteps[0].ephemeralMessage).toContain(path.join(outHome, "bindings.json"));
+  });
 });
 
 describe("the canvas pane's routes", () => {
@@ -384,6 +434,45 @@ describe("the canvas pane's routes", () => {
     clock += 61_000;
     await routes["/api/workspace"](bindings());
     expect(calls).toHaveLength(2);
+  });
+
+  it("identifies an Antigravity conversation face even when actors.json is absent (direct mode)", async () => {
+    const home = dir("isocan-home-direct-convo");
+    fs.mkdirSync(path.join(home, "sessions"), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, "sessions", "usr_directbot.json"),
+      JSON.stringify({ canvasId: "prj_acme", sessionId: "ses_db1", label: "Direct Bot 🤖" }),
+    );
+    fs.writeFileSync(
+      path.join(home, "antigravity-conversations.json"),
+      JSON.stringify({
+        conversations: {
+          "conv-direct": {
+            canvasId: "prj_acme",
+            actorId: "usr_directbot",
+            name: "Direct Bot",
+            root: acme,
+            at: 1_000,
+          },
+        },
+      }),
+    );
+    const { routes } = createPane({
+      env: paneEnv({ ISOCAN_HOME: home }),
+      run: fakeRun({ harness: JSON.stringify(SCAN) }).run,
+      now: () => 1_000,
+    });
+    const state = await routes["/api/workspace"](bindings());
+    expect(state.sessions).toEqual([
+      {
+        actorId: "usr_directbot",
+        name: "Direct Bot",
+        label: "Direct Bot 🤖",
+        harness: "antigravity",
+        sessionId: "ses_db1",
+        conversationId: "conv-direct",
+      },
+    ]);
   });
 
   it("still shows the presets when the scan fails or the CLI is too old to say what pins", async () => {

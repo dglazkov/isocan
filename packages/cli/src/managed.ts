@@ -227,6 +227,7 @@ async function smokeAttempt(
    * that has no business reaching a candidate nobody has approved yet.
    */
   delete env.ISOCAN_HOME_URL;
+  delete env.ISOCAN_DIRECT;
   delete env.ISOCAN_STORE;
   delete env.ISOCAN_BIND;
   env.ISOCAN_CONTENT_PORT = "off";
@@ -405,11 +406,18 @@ const defaultRunner: Runner = (command, args) =>
  * from, and reading it means having it. What the check protects is the flip,
  * not the download — a mismatched tree is deleted and `current` never moves.
  */
+function parseGithubSpec(spec: string): { url: string; ref: string | null } | null {
+  const m = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?:#([A-Za-z0-9_./-]+))?$/.exec(spec);
+  if (!m) return null;
+  return { url: `https://github.com/${m[1]}.git`, ref: m[2] ?? null };
+}
+
 export async function installBuild(options: {
   home: string;
   spec: string;
   want: string | null;
   npm?: string;
+  git?: string;
   run?: Runner;
 }): Promise<InstallResult> {
   const { home, spec, want } = options;
@@ -434,6 +442,7 @@ export async function installBuild(options: {
     }
   }
   const npm = options.npm ?? (process.platform === "win32" ? "npm.cmd" : "npm");
+  const git = options.git ?? (process.platform === "win32" ? "git.exe" : "git");
   const run = options.run ?? defaultRunner;
   const staging = paths.stagingBuildDir(home);
   await fs.rm(staging, { recursive: true, force: true });
@@ -442,7 +451,33 @@ export async function installBuild(options: {
     await fs.rm(staging, { recursive: true, force: true });
     return { ok: false, build: null, why };
   };
-  const done = await run(npm, ["install", "--prefix", staging, spec, "--no-audit", "--no-fund"]);
+  /**
+   * `#release` carries zero runtime dependencies, so a `github:` spec can be
+   * fetched directly with a shallow `git clone` into `node_modules/isocan` —
+   * working even on machines with Node and git but no npm, and without
+   * touching a package registry. Non-GitHub specs (or callers naming `npm`
+   * explicitly) keep the npm prefix install.
+   */
+  const gh = options.npm === undefined ? parseGithubSpec(spec) : null;
+  let done: RunResult;
+  if (gh) {
+    const target = paths.buildRoot(staging);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    done = await run(git, [
+      "clone",
+      "--depth",
+      "1",
+      "--single-branch",
+      ...(gh.ref ? ["--branch", gh.ref] : []),
+      gh.url,
+      target,
+    ]);
+    if (done.status === 0) {
+      await fs.rm(path.join(target, ".git"), { recursive: true, force: true });
+    }
+  } else {
+    done = await run(npm, ["install", "--prefix", staging, spec, "--no-audit", "--no-fund"]);
+  }
   if (done.status !== 0) {
     const said = (done.stderr || done.stdout || done.error?.message || "").trim();
     return await discard(

@@ -463,6 +463,7 @@ import {
   markerFile,
   readMarker,
   recordDir,
+  removeMarker,
   writeMarker,
 } from "@isocan/server";
 import { DEFAULT_MODE, DIRECT_VAR, refuseDaemonVerb, resolveDeclared } from "@isocan/api";
@@ -1111,7 +1112,9 @@ program
         cmd: Command,
       ) => {
         const home = paths.isocanHome();
-        const client = new DaemonClient((await baseForCwd(home, daemonPort(cmd))).base, home);
+        const baseInfo = await baseForCwd(home, daemonPort(cmd));
+        const client = new DaemonClient(baseInfo.base, home);
+        client.direct = Boolean(baseInfo.direct);
         await retireStrandedIdentities(process.cwd(), home);
         /**
          * **Two actors become one person** (multi-identity phase 5). The same
@@ -1224,7 +1227,9 @@ program
               if (landed) {
                 console.log(
                   `this directory's canvas: "${landed.canvas.title}" (${landed.canvas.id})` +
-                    (landed.created ? ` — created; bound via ${markerFile(landed.root)}` : ""),
+                    (landed.created
+                      ? ` — created; bound via ${landed.marker ?? markerFile(landed.root)}`
+                      : ""),
                 );
               }
             } catch (err) {
@@ -1422,6 +1427,7 @@ program
       const direct = declared?.mode === "direct" ? declared.at : null;
       const daemonBase = direct ?? `http://127.0.0.1:${port}`;
       const client = new DaemonClient(daemonBase, isocanHome);
+      client.direct = Boolean(direct);
       // A hosted home over the internet is not a loopback port; half a
       // second is a fine deadline for one and a coin-flip for the other.
       const health = await client.healthz(direct ? 5_000 : 500);
@@ -2338,6 +2344,7 @@ program
     ) => {
       const home = paths.isocanHome();
       const port = daemonPort(cmd);
+      const { direct } = await baseForCwd(home, port).catch(() => ({ direct: null }));
 
       /**
        * **A pin is a recorded decision, not a one-off flip** (auto-upgrade
@@ -2382,7 +2389,7 @@ program
             "auto upgrades stop here until `isocan upgrade --unpin`",
         );
         say(await adoptGlobal(home));
-        if (opts.restart !== false) {
+        if (opts.restart !== false && !direct) {
           const bin = packageBin(found.root);
           spawnSync(process.execPath, [bin, "--port", String(port), "restart"], {
             stdio: "inherit",
@@ -2414,7 +2421,11 @@ program
           install,
           plan,
           port,
+          direct,
         });
+        if (direct) {
+          return;
+        }
         if (opts.restart === false) {
           console.log(
             moved
@@ -2479,6 +2490,9 @@ program
         console.log("fetched the newest build");
       }
 
+      if (direct) {
+        return;
+      }
       if (opts.restart === false) {
         console.log("the daemon still runs the old build — `isocan restart` when you're ready");
         return;
@@ -2486,14 +2500,8 @@ program
       if (plan.action === "none") {
         // Nothing was fetched, so bouncing the daemon would be theatre —
         // unless it is serving some other copy, which is the one case where
-        // an upgrade that changed nothing still has work to do. On a direct
-        // machine there is no daemon to be serving anything, so the exception
-        // has no case to cover: what got upgraded is this CLI, and it is
-        // already the copy that will run next time.
-        const { direct } = await baseForCwd(home, port);
-        const health = direct
-          ? null
-          : await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
+        // an upgrade that changed nothing still has work to do.
+        const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
         if (!health || !stalenessOf(health).stale) {
           console.log("the daemon is already running this build");
           return;
@@ -2535,8 +2543,9 @@ async function swapBuild(options: {
   install: Install;
   plan: UpgradePlan;
   port: number;
+  direct?: string | null;
 }): Promise<Build | null> {
-  const { home, rollback, install, plan, port } = options;
+  const { home, rollback, install, plan, port, direct = null } = options;
   const before = await currentSha(home);
 
   /**
@@ -2559,7 +2568,9 @@ async function swapBuild(options: {
     return previous;
   }
 
-  const health = await new DaemonClient(`http://127.0.0.1:${port}`, home).healthz();
+  const probeClient = new DaemonClient(direct ?? `http://127.0.0.1:${port}`, home);
+  probeClient.direct = Boolean(direct);
+  const health = await probeClient.healthz(direct ? 5_000 : 500);
   const want = health?.upgrade?.homeCommit ?? null;
   if (want && before === want) {
     // Already on what the home runs. There is still adoption to do on a
@@ -4858,11 +4869,15 @@ program
           }
           const landed = await canvasArrives(client, arrival.canvasId, 15_000);
           if (root) {
-            report.marker = await writeMarker(root, {
-              canvasId: arrival.canvasId,
-              ...(landed?.title !== undefined ? { title: landed.title } : {}),
-              home: arrival.origin,
-            });
+            report.marker = await writeMarker(
+              root,
+              {
+                canvasId: arrival.canvasId,
+                ...(landed?.title !== undefined ? { title: landed.title } : {}),
+                home: arrival.origin,
+              },
+              home,
+            );
             await recordDir(home, root, arrival.canvasId);
           } else {
             report.marker =
@@ -5566,8 +5581,10 @@ canvas
       // A marker left standing would quietly re-materialize the canvas on
       // the next mutating command — deleting the canvas unbinds the dir too.
       if (ctx.binding?.canvasId === p.id) {
-        await fs.rm(markerFile(ctx.binding.root), { force: true }).catch(() => {});
-        console.log(`(unbound ${ctx.binding.root} — removed ${markerFile(ctx.binding.root)})`);
+        const removed = await removeMarker(ctx.binding.root, ctx.home).catch(() =>
+          markerFile(ctx.binding!.root),
+        );
+        console.log(`(unbound ${ctx.binding.root} — removed ${removed})`);
       }
       console.log(`deleted canvas ${p.id} (recoverable by hand in deleted-projects/)`);
     }),
@@ -5626,18 +5643,22 @@ program
        * naming this canvas is a fresh clone, and rewriting it changes
        * nothing (`bindVerdict`).
        */
-      const claim = await readMarker(root);
+      const claim = await readMarker(root, ctx.home);
       if (!opts.force && bindVerdict(claim, p.id) === "taken") {
         throw new Error(
           `${takenSentence(root, claim!)} — \`isocan use ${ref} --force\` rebinds it anyway`,
         );
       }
-      const livesAt = await ctx.homeOf(p.id);
-      const file = await writeMarker(root, {
-        canvasId: p.id,
-        title: p.title,
-        ...(livesAt ? { home: livesAt } : {}),
-      });
+      const livesAt = (await ctx.homeOf(p.id)) ?? (ctx.client.direct ? ctx.client.base : null);
+      const file = await writeMarker(
+        root,
+        {
+          canvasId: p.id,
+          title: p.title,
+          ...(livesAt ? { home: livesAt } : {}),
+        },
+        ctx.home,
+      );
       await recordDir(ctx.home, root, p.id);
       // "Recognised" and "attached" are different facts about the world, so
       // the clone case says which one happened rather than claiming to have

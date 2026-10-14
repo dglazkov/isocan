@@ -352,6 +352,40 @@ describe("the daemon verbs", () => {
     expect(out.stdout).not.toContain("not running");
   });
 
+  it("`isocan status --json` computes an upgrade verdict against a direct home", async () => {
+    const remote = http.createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          ok: true,
+          pid: 1,
+          startedAt: "2026-08-25T10:00:00.000Z",
+          commit: "deadbeef",
+          builtAt: "2099-01-01T00:00:00.000Z",
+        }),
+      );
+    });
+    await new Promise<void>((resolve) => remote.listen(0, "127.0.0.1", resolve));
+    const addr = remote.address();
+    const remoteUrl = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+    try {
+      const out = await isocan(["status", "--json"], {
+        ISOCAN_DIRECT: remoteUrl,
+        ISOCAN_BUILD_SHA: "aaaaaaa",
+      });
+      expect(out.code, out.stderr).toBe(0);
+      const body = JSON.parse(out.stdout);
+      expect(body.upgrade).toMatchObject({
+        available: true,
+        home: remoteUrl,
+        homeCommit: "deadbee",
+        mine: "aaaaaaa",
+      });
+    } finally {
+      await new Promise<void>((resolve) => remote.close(() => resolve()));
+    }
+  });
+
   it("`isocan status` and `isocan direct` route health probes through configured gateways and reject 200 OK HTML login walls", async () => {
     const loginWall = http.createServer((_req, res) => {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });

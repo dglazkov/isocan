@@ -198,10 +198,14 @@ describe("one upgrade at a time", () => {
 });
 
 describe("applying it", () => {
-  /** The seam: an `npm install` that writes a fixture into the staging prefix. */
+  /** The seam: a fetch runner that writes a fixture into the staging prefix. */
+  const prefixOf = (args: string[]) =>
+    args.includes("--prefix")
+      ? args[args.indexOf("--prefix") + 1]!
+      : path.resolve(args.at(-1)!, "..", "..");
   const installing = (sha: string, options: { broken?: boolean } = {}) =>
     async (_c: string, args: string[]) => {
-      await makeBuild(args[args.indexOf("--prefix") + 1]!, sha, options);
+      await makeBuild(prefixOf(args), sha, options);
       return { status: 0, stdout: "", stderr: "" };
     };
 

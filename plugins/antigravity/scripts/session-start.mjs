@@ -25,7 +25,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { recordConversation } from "../lib/antigravity.mjs";
-import { agentEnv, bindingFor, isocanHome, runIsocan, workspacePaths } from "../lib/workspace.mjs";
+import { agentEnv, bindingFor, isocanHome, markerSource, runIsocan, workspacePaths } from "../lib/workspace.mjs";
 
 const PILL = "[Isocan Canvas](sidecar://isocan/canvas/)";
 
@@ -58,7 +58,7 @@ export async function sessionStart(input, { env = process.env, run = runIsocan, 
   if (!binding) return null;
 
   const canvas = binding.title ? `"${binding.title}" (${binding.canvasId})` : binding.canvasId;
-  const marker = path.join(binding.root, ".isocan", "project.json");
+  const marker = markerSource(binding.root, home);
   const lines = [`isocan: this workspace is bound to the canvas ${canvas} by ${marker}.`];
 
   const conversationId = (typeof input?.conversationId === "string" && input.conversationId) || env.ANTIGRAVITY_CONVERSATION_ID || "";

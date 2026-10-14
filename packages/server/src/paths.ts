@@ -141,6 +141,11 @@ export const commandFile = (home: string, name: string) =>
  * directory itself; this file only answers "where on disk does that canvas's
  * work live" without a filesystem crawl. */
 export const dirsFile = (home: string) => path.join(home, "dirs.json");
+/** Out-of-tree directory bindings (`realpath → MarkerFile`) for workspaces
+ * that have no enclosing `.git` repository (non-git VCS checkouts or when
+ * `nonRepoBindings: "home"` is configured in `config.json`), so binding a
+ * non-git directory never dirties its working tree. */
+export const bindingsFile = (home: string) => path.join(home, "bindings.json");
 /**
  * **Which home each canvas on this machine belongs to** — `canvasId →
  * homeUrl | null`, phase 10.3's one new file.

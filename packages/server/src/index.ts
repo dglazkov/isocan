@@ -83,6 +83,7 @@ export {
   markerFile,
   readMarker,
   recordDir,
+  removeMarker,
   writeMarker,
 } from "./binding.ts";
 export type { DirBinding, DirMarker } from "./binding.ts";

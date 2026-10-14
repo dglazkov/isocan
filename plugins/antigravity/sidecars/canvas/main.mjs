@@ -35,7 +35,7 @@ import {
   threadMessage,
 } from "../../lib/antigravity.mjs";
 import { startRelay } from "../../lib/relay.mjs";
-import { bindingFor, isocanHome, personEnv, resolveCli, runIsocan, workspacePaths } from "../../lib/workspace.mjs";
+import { bindingFor, isocanHome, markerSource, personEnv, resolveCli, runIsocan, workspacePaths } from "../../lib/workspace.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -261,7 +261,9 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
     const conversations = binding ? conversationsOn(home, binding.canvasId, now()) : [];
     const sessions = live.map((sess) => {
       const convo = conversations.find((c) => c.actorId && c.actorId === sess.actorId);
-      return convo ? { ...sess, conversationId: convo.conversationId, ...(convo.tier ? { tier: convo.tier } : {}) } : sess;
+      return convo
+        ? { ...sess, harness: sess.harness ?? "antigravity", conversationId: convo.conversationId, ...(convo.tier ? { tier: convo.tier } : {}) }
+        : sess;
     });
     let presets = [];
     let presetsError = null;
@@ -311,7 +313,7 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
     const { paths, binding } = where(data);
     const folder = paths[0];
     if (!folder) throw new Error("Antigravity has not said which folder this workspace is");
-    if (binding) throw new Error(`this workspace is already bound, by ${path.join(binding.root, ".isocan", "project.json")}`);
+    if (binding) throw new Error(`this workspace is already bound, by ${markerSource(binding.root, home)}`);
     let ref = canvasRef(data?.ref);
     if (!ref) ref = (await execJson(["canvas", "new", text(data?.title) ?? path.basename(folder)], folder)).canvasId;
     const { stdout } = await exec(["use", ref], folder);
