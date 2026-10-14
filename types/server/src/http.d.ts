@@ -1,4 +1,5 @@
 import type { JudgmentOptions } from "./judgment.js";
+import type { SummaryOptions } from "./summaries.js";
 import type { TextOptions } from "./text.js";
 import type { LiveTokenOptions } from "./live-token.js";
 import { type KeyRouteOptions } from "./key-routes.js";
@@ -57,6 +58,8 @@ export interface RouteOptions {
     /** The home's text model (`text.ts`): its key, provider, rate and transport.
      * Absent, the key is `ISOCAN_TEXT_API_KEY`, else `keys.json`, read per call. */
     text?: TextOptions;
+    /** Semantic Zoom's summaries (`summaries.ts`): the quiet period, the model, the bound and the clock. Absent, the production defaults. */
+    summaries?: SummaryOptions;
     /** The talk module's Gemini Live tokens (`live-token.ts`): its key, rate and
      * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
     liveToken?: LiveTokenOptions;

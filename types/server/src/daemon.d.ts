@@ -8,6 +8,7 @@ import { type AuthConfig, type ProxyAuthConfig, type SigningKeys } from "./attes
 import { HomeLinks } from "./home-links.js";
 import type { JudgmentOptions } from "./judgment.js";
 import type { KeyRouteOptions } from "./key-routes.js";
+import type { SummaryOptions } from "./summaries.js";
 import type { TextOptions } from "./text.js";
 import type { LiveTokenOptions } from "./live-token.js";
 export interface DaemonOptions {
@@ -197,6 +198,8 @@ export interface DaemonOptions {
      * transport; a running home reads `ISOCAN_TEXT_API_KEY`, else its
      * `keys.json`, per call. */
     text?: TextOptions;
+    /** Semantic Zoom's summaries (`summaries.ts`) — tests hand it a clock and a quiet period; a running home reads `ISOCAN_SUMMARY_MODEL` and `ISOCAN_SUMMARY_QUIET_MS`. */
+    summaries?: SummaryOptions;
     /** The talk module's Live tokens (`live-token.ts`) — tests hand it a fake
      * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
     liveToken?: LiveTokenOptions;

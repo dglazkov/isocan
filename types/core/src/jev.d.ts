@@ -323,6 +323,8 @@ export interface HttpTextGeneratorOptions {
     model?: string;
     endpoint?: string;
     fetch?: typeof globalThis.fetch;
+    /** The system line, in place of the default "Return only valid JSON…" — a caller with a job of its own (Semantic Zoom's summaries) says what it is. */
+    system?: string;
 }
 /**
  * Deterministic, offline `TextGenerator` that synthesizes schema-valid JSON
@@ -357,6 +359,18 @@ interface ClaudeTextGeneratorOptions {
     model?: string;
     endpoint?: string;
     fetch?: typeof globalThis.fetch;
+    /**
+     * The system line. Absent, the copywriting one every `/wire` caller has
+     * always had; Semantic Zoom's summaries pass their own (phase 0 found a
+     * summary asked through the default was asked of a copywriter).
+     */
+    system?: string;
+    /**
+     * Ask for `fallbacks: "default"` (and its beta). Absent, true — what every
+     * existing caller sends. A caller naming a model with no server-side
+     * fallback (the cheap tier a summary asks for) turns it off.
+     */
+    fallbacks?: boolean;
 }
 /**
  * The schema as Claude's structured outputs accept it: every object closed
@@ -392,6 +406,10 @@ interface EnvTextGeneratorOptions {
     model?: string;
     provider?: TextProvider;
     fetch?: typeof globalThis.fetch;
+    /** The system line, for either provider; absent, each provider's default. */
+    system?: string;
+    /** Claude's `fallbacks: "default"`; absent, on, as it always was. */
+    fallbacks?: boolean;
 }
 /**
  * The text generator the environment names — the CLI's with a key of its own,

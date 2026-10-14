@@ -26,6 +26,19 @@ interface Written {
     status: number;
     body: unknown;
 }
+/**
+ * **What an in-process caller asks differently** — Semantic Zoom's make
+ * route (`summaries.ts`), which is not `/api/text` and must not change what
+ * `/api/text`'s callers get. Its own system line instead of the copywriting
+ * one, its own model (a function of the provider, so a Claude key gets the
+ * cheap tier and any other key its own default), and Claude's fallbacks off
+ * for a model that has none. Absent, everything is as `/api/text` asks.
+ */
+interface OwnAsk {
+    system?: string;
+    model?: (provider: TextProvider) => string | undefined;
+    fallbacks?: boolean;
+}
 export declare class TextModel {
     private readonly opts;
     private asked;
@@ -53,6 +66,6 @@ export declare class TextModel {
     write(request: {
         prompt: string;
         schema: JsonSchema;
-    }): Promise<Written>;
+    }, own?: OwnAsk): Promise<Written>;
 }
 export {};

@@ -4,6 +4,7 @@ import type { Engine } from "./engine.js";
 import { type ViewOnlyError } from "./grants.js";
 import type { RouteOptions } from "./http.js";
 import { type Refusals } from "./takedowns.js";
+import type { Store } from "./store.js";
 /**
  * **The routes that spend the home's keys** — `POST /api/judgment` (the
  * judge, wireframes phase 5), `POST /api/text` (the text model, copy-edit
@@ -17,6 +18,10 @@ import { type Refusals } from "./takedowns.js";
  */
 interface ModelRouteScope {
     engine: Engine;
+    /** The canvas's blobs, which Semantic Zoom's make route reads a note's words from. */
+    store: Store;
+    /** The home directory Semantic Zoom's summary cache lives under. */
+    home: string;
     options: RouteOptions;
     refusals: Refusals;
     admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;
