@@ -595,7 +595,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   each works alone in one thread, and when both are done `isocan critique
   read` folds their notes into where they agree, where they split and what
   blocks; `critique both` asks an agent to build a split both ways, as two
-  variations each citing the note it answers.
+  variations each citing the note it answers. In the browser the same doors
+  are **Critics** in the palette (the roster, add, write, release), a screen's
+  *Critique with…*, and *Post the read…* and *Build both…* under the request
+  thread's comments — each sending what the verb sends.
 - **MCP collaboration**: `isocan mcp` exposes sixteen tools plus current canvas
   and layered Context resources. Read items, frozen request bytes and context;
   claim an explicit durable agent session, create or edit items, post or reply

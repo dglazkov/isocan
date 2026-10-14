@@ -25,3 +25,13 @@ export declare function readRuntimeModules(home: string): RuntimeModule[];
  * on both sides, so a symlink cannot reach past the directory.
  */
 export declare function moduleFile(home: string, slug: string, relative: string): string | null;
+/**
+ * **A built-in module's asset, or null** (critique phase 4). A module built
+ * into this copy (design-competition, critique) registers no base and is not
+ * under `~/.isocan/modules/`, so its `assets/` were reachable from the
+ * terminal (`packagePath("packages/modules", …)`, which `lensOf` reads) and
+ * from nowhere a browser could ask. The same files, served the same way:
+ * only a module this process registered, only under its `assets/`, real
+ * paths on both sides.
+ */
+export declare function builtInAsset(slug: string, relative: string): string | null;

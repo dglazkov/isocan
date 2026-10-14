@@ -1,0 +1,1 @@
+function p(n,e,o){const a=new Set(e.map(r=>r.id));return{type:"group.change",action:{kind:"copy",sourceCanvasId:n,items:e,rootIds:e.filter(r=>!r.containerId||!a.has(r.containerId)).map(r=>r.id),at:o,groupPlacement:"preserve"}}}export{p};
