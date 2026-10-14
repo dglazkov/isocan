@@ -45,6 +45,38 @@ export declare function anchorOffset(item: {
     x: number;
     y: number;
 };
+/**
+ * **A thread anchored at a point ON an item**, from fractions of its size —
+ * `{0.62, 0.81}` is 62% across and 81% down. The model stores an offset from
+ * the item's origin (`CommentThread`), and this is the one conversion: a
+ * critic's note (`isocan critique note --at`) and `isocan comment add --item
+ * --at` both call it, so a pin placed at a point means the same place from
+ * both. Fractions rather than pixels because an agent reads HTML, not a
+ * rendering, and "the bottom third" is what it can honestly say. Outside
+ * 0–1 is refused: a point off the item is not a point on it.
+ */
+export declare function anchorAtFraction(item: {
+    width: number;
+    height: number;
+}, at: {
+    x: number;
+    y: number;
+}): {
+    x: number;
+    y: number;
+};
+/** And back: where an anchored thread sits on its item, as fractions of the
+ *  item's size, rounded to two places — what a note is read back as. */
+export declare function fractionOfAnchor(item: {
+    width: number;
+    height: number;
+}, offset: {
+    x: number;
+    y: number;
+}): {
+    x: number;
+    y: number;
+};
 /** Anything already taking up room — an item, or one just placed this pass. */
 export type Placed = Box;
 export declare const overlaps: (a: Box, b: Box, pad: number) => boolean;

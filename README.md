@@ -583,8 +583,11 @@ That parity is a house rule with a test behind it: see AGENTS.md.
 - **Critics** (experiment): a critic is a persona card on the canvas — a
   principle's name, a credit line, a colour and three questions. `isocan critic
   add inevitable` seeds one from a design pack, `critic new "<name>"` writes
-  your own, and `isocan edit` changes what it asks. Asking one to critique a
-  screen comes next ([the walk](docs/projects/critique/phases.md)).
+  your own, and `isocan edit` changes what it asks. `isocan critique <screen>
+  --by inevitable` asks one on your parked `isocan rc`: it pins typed notes
+  (*working*, *risk*, *blocker*, each naming its question) at points on the
+  screen with `critique note`, changes nothing, and stops at its card's
+  budget ([the walk](docs/projects/critique/phases.md)).
 - **MCP collaboration**: `isocan mcp` exposes sixteen tools plus current canvas
   and layered Context resources. Read items, frozen request bytes and context;
   claim an explicit durable agent session, create or edit items, post or reply

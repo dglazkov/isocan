@@ -2717,6 +2717,27 @@ The payload (the same shape \`isocan wait --json\` returns):
 ` + JSON.stringify(fullPayload, null, 2);
 };
 
+// packages/rc/src/budget.ts
+var freshRun = () => ({ turns: 0, usd: null, session: null, said: false });
+function runKeyOf(thread, commentId) {
+  if (thread && !thread.main) return thread.id;
+  return commentId ?? thread?.id ?? "none";
+}
+function capMet(spend, budget) {
+  if (budget.usdPerRun !== void 0 && spend.usd !== null && spend.usd >= budget.usdPerRun) return "usd";
+  if (budget.turnsPerRun !== void 0 && spend.turns >= budget.turnsPerRun) return "turns";
+  return null;
+}
+var dollars = (n) => `$${n.toFixed(2)}`;
+function spendWords(spend, budget, harness) {
+  const turns = budget.turnsPerRun !== void 0 ? `${spend.turns} of ${budget.turnsPerRun} turns` : `${spend.turns} ${spend.turns === 1 ? "turn" : "turns"}`;
+  if (spend.usd !== null) return `${turns}, ${dollars(spend.usd)}${budget.usdPerRun !== void 0 ? ` of ${dollars(budget.usdPerRun)}` : ""}`;
+  return `${turns}; ${harness} reports no spend, so turns are the only bound`;
+}
+function capLine(name, cap, spend, budget) {
+  return cap === "usd" ? `${name} stopped at its budget \u2014 ${dollars(spend.usd ?? 0)} of ${dollars(budget.usdPerRun ?? 0)} for this run. Ask again in a new thread for a new run.` : `${name} stopped at its budget \u2014 ${spend.turns} of ${budget.turnsPerRun} turns for this run. Ask again in a new thread for a new run.`;
+}
+
 // packages/rc/src/room.ts
 var RoomHold = class extends Error {
   constructor(line, retryAfter) {
@@ -2742,6 +2763,8 @@ function mapState(map = /* @__PURE__ */ new Map()) {
 var keys = {
   guard: (actorId) => `guard:${actorId}`,
   session: (actorId) => `session:${actorId}`,
+  /** What one run of a budgeted agent has spent (`budget.ts`). */
+  run: (actorId, runKey) => `run:${actorId}:${runKey}`,
   origins: (actorId) => `origins:${actorId}`,
   gateSaid: (canvasId, key) => `said:${canvasId}:gate:${key}`,
   turnedAwaySaid: (canvasId, key) => `said:${canvasId}:turned-away:${key}`,
@@ -3186,11 +3209,33 @@ async function room(deps, life, announce, onLeave) {
     const firstComment = flagged.find(
       (e2) => e2.envelope.op.type === "thread.create" || e2.envelope.op.type === "thread.reply"
     );
-    const face = await routes.createSession(p.id, record.actor, void 0, harness.harness).catch(() => null);
     const threadId = firstComment ? firstComment.envelope.op.threadId : null;
     const changedItemId = (flagged[0]?.envelope.op).itemId ?? null;
     const snapshot = await routes.snapshot(p.id).catch(() => null);
     const thread = threadId ? snapshot?.canvas.threads[threadId] : void 0;
+    const budget = row.budget ?? null;
+    const runKey = budget ? runKeyOf(thread ?? (threadId ? { id: threadId } : null), firstComment?.envelope.op?.comment?.id ?? null) : null;
+    const spend = runKey ? await state.get(keys.run(record.actor.id, runKey)) ?? freshRun() : null;
+    const keepSpend = () => runKey && spend ? state.set(keys.run(record.actor.id, runKey), spend) : Promise.resolve();
+    if (budget && spend) {
+      const met = capMet(spend, budget);
+      if (met) {
+        if (!spend.said) {
+          spend.said = true;
+          await keepSpend();
+          await sayInThread(threadId, capLine(record.actor.name, met, spend, budget));
+        }
+        say(`run at its budget \u2014 ${spendWords(spend, budget, harness.harness)}; no turn`);
+        await routes.parkAdvance({ canvasId: p.id, actorId: record.actor.id, parkId: dispatch.parkId, to: tip }).then(() => {
+          dispatch.cursor = tip;
+        }).catch(() => {
+        });
+        return;
+      }
+      spend.turns += 1;
+      await keepSpend();
+    }
+    const face = await routes.createSession(p.id, record.actor, void 0, harness.harness).catch(() => null);
     const anchoredItem = thread?.anchorItemId ? snapshot?.canvas.items[thread.anchorItemId] : void 0;
     const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : void 0;
     const contextItem = anchoredItem ?? item;
@@ -3255,15 +3300,32 @@ async function room(deps, life, announce, onLeave) {
         narrate: say
       });
       const storedSession = await state.get(keys.session(record.actor.id));
-      const session = await agent.ensureSession(row.cwd, row.sessionId ?? storedSession ?? null);
-      await state.set(keys.session(record.actor.id), session.sessionId);
-      await rows.setSessionId(p.id, record.actor.id, session.sessionId);
+      const session = await agent.ensureSession(row.cwd, spend ? spend.session : row.sessionId ?? storedSession ?? null);
+      if (spend) {
+        spend.session = session.sessionId;
+        await keepSpend();
+      } else {
+        await state.set(keys.session(record.actor.id), session.sessionId);
+        await rows.setSessionId(p.id, record.actor.id, session.sessionId);
+      }
       say(`session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`);
+      const usdBefore = spend?.usd ?? null;
+      let turnUsd = null;
+      let cancelled = false;
       let lastToolBeat = 0;
       const turn = await agent.prompt(
         session.sessionId,
         summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }, summonsContext),
         (event) => {
+          if (event.kind === "usage" && typeof event.usd === "number" && spend && budget) {
+            turnUsd = Math.max(turnUsd ?? 0, event.usd);
+            spend.usd = (usdBefore ?? 0) + turnUsd;
+            if (!cancelled && capMet(spend, budget) === "usd") {
+              cancelled = true;
+              say(`at its budget mid-turn \u2014 ${spendWords(spend, budget, harness.harness)}; stopping the turn`);
+              agent?.cancel?.(session.sessionId);
+            }
+          }
           if (event.kind === "permission") say(`permission ${event.detail}`);
           if (event.kind === "tool" && event.detail && clock.now() - lastToolBeat >= 2e3) {
             lastToolBeat = clock.now();
@@ -3281,6 +3343,15 @@ async function room(deps, life, announce, onLeave) {
         return;
       }
       say(`turn ended \u2014 ${turn.stopReason}`);
+      if (spend && budget) {
+        say(`run so far \u2014 ${spendWords(spend, budget, harness.harness)}`);
+        const met = capMet(spend, budget);
+        if (met && (cancelled || met === "usd") && !spend.said) {
+          spend.said = true;
+          await sayInThread(threadId, capLine(record.actor.name, met, spend, budget));
+        }
+        await keepSpend();
+      }
       await routes.parkAdvance({ canvasId: p.id, actorId: record.actor.id, parkId: dispatch.parkId, to: tip }).then(() => {
         dispatch.cursor = tip;
       }).catch(() => {

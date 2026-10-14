@@ -83,6 +83,9 @@ export interface RoomTurnEvent {
     kind: string;
     text?: string;
     detail?: string;
+    /** `kind: "usage"`: the dollars this turn has cost so far, when the
+     *  harness reports a cost (ACP's `usage_update`). */
+    usd?: number;
 }
 /** What runs one turn: the shape `AcpAgentProcess` has. */
 export interface RoomAdapter {
@@ -93,6 +96,9 @@ export interface RoomAdapter {
     prompt(sessionId: string, text: string, onEvent: (event: RoomTurnEvent) => void): Promise<{
         stopReason: string;
     }>;
+    /** Stop the running prompt (ACP's `session/cancel`): what a run's budget
+     *  does at its dollar cap. Absent: the turn runs to its end. */
+    cancel?(sessionId: string): void;
     /** The turn is over, whichever way; awaited before the face comes off. */
     close(): void | Promise<void>;
 }

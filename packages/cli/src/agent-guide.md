@@ -178,7 +178,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **What a canvas carries** (`extend`, and a topic per module)
 - `module add|rm|ls`, `tool ls|add`, `panel ls|add` — modules, rail tools, dock panels
-- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge`, `critic` — module families; `--agent-help <verb>` finds each
+- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge`, `critic`, `critique` — module families; `--agent-help <verb>` finds each
 
 <!-- topic: protocol | the lap in full — naming yourself, the session, who is at your terminal, parking, several of you, your inbox, asking a person, pointing at words -->
 
@@ -2545,7 +2545,8 @@ They accept `--item <refs...>` and `--in <group> [--include-excluded]`.
 `ask <question...>`, `comment add <text>` and `comment reply <thread> <text>`
 accept the same `--in` context attachment. `comment edit <thread> <comment> <text>`
 preserves saved context unless `--in` explicitly replaces it. `ask --item`
-and `comment add --item` choose the thread's anchor; `--in` chooses the
+and `comment add --item` choose the thread's anchor (`comment add --item <item>
+--at 0.6,0.8` pins it at a point on the item, as fractions of its size); `--in` chooses the
 context attached to the message. Group #references also expand at the writer.
 Excluded descendants stay listed and skip content unless explicitly overridden.
 This does not change mention/summon permissions. `session say <text>` remains
