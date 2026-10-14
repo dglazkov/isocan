@@ -69,6 +69,7 @@ export function invertOperation(
     case "agent.enroll":
     case "agent.invite":
     case "agent.withdraw":
+    case "agent.ceiling":
       // Standing is granted and withdrawn deliberately, never by a casual ⌘Z
       // — an undo that silently re-armed (or silently silenced) an agent
       // would be exactly the invisible standing change journey 8 refuses.

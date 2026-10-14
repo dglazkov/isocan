@@ -13,6 +13,7 @@ import type {
 import { emptyCanvas, mainThread } from "./model.ts";
 import type { MetaPatch, NewComment, NewVersion, OpEnvelope } from "./ops.ts";
 import { OpValidationError, unknownOperation } from "./errors.ts";
+import { BEYOND_CEILING } from "./ceiling.ts";
 import { questionnaireQuestionMarkdown, validateQuestionnaireComment, questionnaireStates, rejectQuestionnaireMetadata } from "./questionnaire.ts";
 import { DesignPartnerContractError, parseDesignQuestionSet, parseDesignResponse } from "./design-partner.ts";
 import { designResponseMarkdown } from "./design-partner-plan.ts";
@@ -639,10 +640,14 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       // gate from anybody else's (`EnrolledAgent.writtenBy`).
       const standing = canvas.agents?.[op.agent.id];
       const rules = op.rules !== undefined ? op.rules : standing?.rules;
+      // A ceiling outlives a re-enrolment (critique phase 2): `rc add` of a
+      // capped critic's name must not quietly lift what `critic release`
+      // and `agent.withdraw` are the only ways to lift.
       const row = {
         actor: op.agent,
         ...(rules !== undefined ? { rules } : {}),
         writtenBy: actor,
+        ...(standing?.ceiling ? { ceiling: standing.ceiling, ...(standing.ceilingBy ? { ceilingBy: standing.ceilingBy } : {}) } : {}),
       };
       return withCanvas({
         ...canvas,
@@ -688,6 +693,27 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
       // possibly-absent record on purpose — `{...undefined}` is `{}`, and the
       // entry chunk has no bytes for a `?? {}`.
       return withCanvas({ ...canvas, agents, withdrawn: { ...canvas.withdrawn, [op.actorId]: actor } });
+    }
+
+    case "agent.ceiling": {
+      // Set by a person, about an agent: never by the agent itself, and
+      // lifted only by whoever set it (or by withdrawing the agent). The
+      // door has already refused anything a capped actor sends that is not
+      // a note, this op included (`ceilingRefusal`); these are the rules
+      // for everybody else.
+      const standing = canvas.agents?.[op.actorId];
+      if (!standing) throw new OpValidationError("unknown-actor", `no standing agent: ${op.actorId}`);
+      if (op.actorId === actor.id) throw new OpValidationError(BEYOND_CEILING, "an agent cannot set or lift its own ceiling — the person who enrolled it does");
+      if (op.ceiling !== null && op.ceiling !== "note") throw new OpValidationError("bad-op", `not a ceiling: ${String(op.ceiling)} (the one there is is "note")`);
+      if (op.ceiling === null) {
+        if (!standing.ceiling) return state;
+        if (standing.ceilingBy && standing.ceilingBy.id !== actor.id) {
+          throw new OpValidationError(BEYOND_CEILING, `${standing.actor.name}'s ceiling was set by ${standing.ceilingBy.name}, who lifts it — or withdraw the agent`);
+        }
+        const { ceiling: _c, ceilingBy: _b, ...rest } = standing;
+        return withCanvas({ ...canvas, agents: { ...canvas.agents, [op.actorId]: rest } });
+      }
+      return withCanvas({ ...canvas, agents: { ...canvas.agents, [op.actorId]: { ...standing, ceiling: op.ceiling, ceilingBy: actor } } });
     }
 
     default:

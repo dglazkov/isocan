@@ -122,6 +122,29 @@ export function findInRoster(list: readonly RosterEntry[], ref: string): RosterE
   return list.find(({ critic }) => critic.id === q || criticSlug(critic.agentName) === q || critic.agentName.toLowerCase() === q || critic.title.toLowerCase() === q) ?? null;
 }
 
+/**
+ * **The canvas's critic by what somebody types** — the one resolver every
+ * verb that names a critic on a canvas uses (`critique --by`, `critic
+ * release`). A card answers to its id (`name`), its agent name, and the
+ * first word a mention finds it by; and, because the card does not carry
+ * the roster id it was added under, a roster ref (`ive`, `Inevitable`, the
+ * title) is read through `findInRoster` — the matcher `critic add` uses —
+ * to the card wearing that entry's agent name.
+ */
+export function findCritic<T extends { critic: { name: string; agentName: string } }>(
+  on: readonly T[],
+  ref: string,
+  list: readonly RosterEntry[] = roster(),
+): T | undefined {
+  const q = ref.trim().replace(/^@/, "").toLowerCase();
+  if (!q) return undefined;
+  const named = (agentName: string) => on.find(({ critic }) => critic.agentName.toLowerCase() === agentName.toLowerCase());
+  const direct = on.find(({ critic }) => critic.name.toLowerCase() === q || critic.agentName.toLowerCase() === q || mentionWord(critic.agentName).toLowerCase() === q);
+  if (direct) return direct;
+  const entry = findInRoster(list, q);
+  return entry ? named(entry.critic.agentName) : undefined;
+}
+
 /** Where a roster entry's lens is, relative to the module that contributed it. */
 export function lensPath(critic: RosterCritic): string {
   return `${(critic.dir ?? `assets/packs/${critic.id}`).replace(/\/+$/, "")}/critique.md`;

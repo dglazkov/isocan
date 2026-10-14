@@ -125,6 +125,7 @@ export * from "./theme.ts";
 export * from "./sprint.ts";
 export * from "./timeline.ts";
 export * from "./opwords.ts";
+export * from "./ceiling.ts";
 export * from "./canonical-json.ts";
 export * from "./canvassort.ts";
 export * from "./canvasswitch.ts";

@@ -587,7 +587,10 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   --by inevitable` asks one on your parked `isocan rc`: it pins typed notes
   (*working*, *risk*, *blocker*, each naming its question) at points on the
   screen with `critique note`, changes nothing, and stops at its card's
-  budget ([the walk](docs/projects/critique/phases.md)).
+  budget ([the walk](docs/projects/critique/phases.md)). "Changes nothing" is
+  the home's rule, not the prompt's: an asked critic is capped at notes on
+  that canvas, and an edit from it is refused `beyond-ceiling` until you run
+  `isocan critic release`.
 - **MCP collaboration**: `isocan mcp` exposes sixteen tools plus current canvas
   and layered Context resources. Read items, frozen request bytes and context;
   claim an explicit durable agent session, create or edit items, post or reply

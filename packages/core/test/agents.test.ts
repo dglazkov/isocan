@@ -28,6 +28,7 @@ import {
   roster,
   rulesOf,
   SYSTEM_ACTOR,
+  ceilingRefusal,
 } from "../src/index.ts";
 import { alice, apply, bob, seedState } from "./helpers.ts";
 
@@ -815,5 +816,45 @@ describe("the system voice (phase 5)", () => {
     expect(
       dispatchReason(systemReply, SYSTEM_ACTOR.id, { actorId: sian.id, names: [sian] }, s.canvas),
     ).toBeNull();
+  });
+});
+
+/**
+ * **A critic's ceiling** (critique phase 2): `agent.ceiling` on the
+ * enrolment row, and the pure question the home asks of every op
+ * (`ceilingRefusal`). The engine's half — the refusal at the door, the
+ * forward from a replica — is `packages/api/test/ceiling.test.ts`.
+ */
+describe("agent.ceiling, and what a capped agent may send", () => {
+  const capped = () => apply(apply(seedState(), { type: "agent.enroll", agent: sian })!, { type: "agent.ceiling", actorId: sian.id, ceiling: "note" })!;
+
+  it("sets the ceiling with who set it; withdraw takes it with the row; a re-enrolment keeps it", () => {
+    const s = capped();
+    expect(s.canvas.agents?.usr_sian).toMatchObject({ ceiling: "note", ceilingBy: alice });
+    expect(apply(s, { type: "agent.enroll", agent: sian }, bob)!.canvas.agents?.usr_sian).toMatchObject({ ceiling: "note", ceilingBy: alice });
+    const gone = apply(apply(s, { type: "agent.withdraw", actorId: sian.id })!, { type: "agent.enroll", agent: sian })!;
+    expect(gone.canvas.agents?.usr_sian?.ceiling).toBeUndefined();
+    expect(invertOperation(s, { type: "agent.ceiling", actorId: sian.id, ceiling: "note" })).toBeNull();
+  });
+
+  it("is never the agent's own to set or lift, and only its setter lifts it", () => {
+    const s = capped();
+    expect(() => apply(s, { type: "agent.ceiling", actorId: sian.id, ceiling: null }, sian)).toThrow(/cannot set or lift its own ceiling/);
+    expect(() => apply(s, { type: "agent.ceiling", actorId: sian.id, ceiling: null }, bob)).toThrow(/was set by Alice, who lifts it/);
+    expect(() => apply(seedState(), { type: "agent.ceiling", actorId: sian.id, ceiling: "note" })).toThrow(OpValidationError);
+    expect(apply(s, { type: "agent.ceiling", actorId: sian.id, ceiling: null })!.canvas.agents?.usr_sian).toEqual({ actor: sian, writtenBy: alice });
+  });
+
+  it("lets a note on an item, a reply and a reaction through, and nothing else", () => {
+    const { canvas } = capped();
+    const thread = { type: "thread.create", threadId: "thr_1", x: 0, y: 0, anchorItemId: "itm_1", comment: { id: "cmt_1", body: "a note" } } as const;
+    expect(ceilingRefusal(canvas, sian.id, thread)).toBeNull();
+    expect(ceilingRefusal(canvas, sian.id, { type: "thread.reply", threadId: "thr_1", comment: { id: "cmt_2", body: "done" } })).toBeNull();
+    expect(ceilingRefusal(canvas, sian.id, { type: "item.react", itemId: "itm_1", emoji: "👀", on: true, at: { x: 0.5, y: 0.5 } })).toBeNull();
+    expect(ceilingRefusal(canvas, sian.id, { ...thread, anchorItemId: null })).toMatch(/a thread pinned to no item was refused/);
+    expect(ceilingRefusal(canvas, sian.id, { type: "item.move", itemId: "itm_1", x: 1, y: 1 })).toMatch(/^Sian is a critic on this canvas: .* item\.move was refused and nothing was written\. Alice can lift that/);
+    expect(ceilingRefusal(canvas, sian.id, null)).toMatch(/an undo was refused/);
+    // Nobody else on the canvas is touched by it.
+    expect(ceilingRefusal(canvas, alice.id, { type: "item.move", itemId: "itm_1", x: 1, y: 1 })).toBeNull();
   });
 });

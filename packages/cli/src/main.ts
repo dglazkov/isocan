@@ -12666,6 +12666,10 @@ function describeEntry(entry: import("@isocan/core").LogEntry): string {
       return `${who} brought ${op.agent.name} here from a bench — answerable on this canvas`;
     case "agent.withdraw":
       return `${who} dismissed ${op.actorId} — no longer answering here`;
+    case "agent.ceiling":
+      return op.ceiling
+        ? `${who} capped ${op.actorId} at ${op.ceiling} — notes, replies and reactions only`
+        : `${who} lifted ${op.actorId}'s ceiling`;
     default: {
       const target =
         (op as { itemId?: string }).itemId ?? (op as { threadId?: string }).threadId ?? "";

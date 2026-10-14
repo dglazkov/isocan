@@ -13,6 +13,7 @@ import critiqueCore, {
   criticSlug,
   doneLine,
   draftFromRoster,
+  findCritic,
   findRequest,
   findInRoster,
   lensPath,
@@ -183,6 +184,15 @@ describe("the roster", () => {
     expect(rosterProblems({ ...PACK, agentName: "Acme Eyes" }).join()).toMatch(/never its person/);
     expect(lensPath(PACK)).toBe("assets/packs/acme/critique.md");
     expect(lensPath({ ...PACK, dir: "lenses/acme/" })).toBe("lenses/acme/critique.md");
+  });
+
+  it("finds a canvas's critic by its card's names or, through the roster, by the id it was added under", () => {
+    const on = [{ itemId: "itm_q", critic: { name: "quiet-hands", agentName: "Quiet Hands" } }];
+    const list = [{ module: "@acme/critics", critic: PACK }];
+    for (const ref of ["quiet-hands", "Quiet Hands", "quiet", "@Quiet", "acme", "ACME"]) expect(findCritic(on, ref, list)?.itemId, ref).toBe("itm_q");
+    expect(findCritic(on, "loud", list)).toBeUndefined();
+    // A roster entry with no card on this canvas finds nothing here.
+    expect(findCritic([], "acme", list)).toBeUndefined();
   });
 
   it("slugs a name into the critic's id", () => {

@@ -62,6 +62,8 @@ import {
   collectCanvasNames,
   invertOperation,
   isSystemActor,
+  ceilingRefusal,
+  BEYOND_CEILING,
   newOpId,
   notBothActors,
   notYourActor,
@@ -1853,6 +1855,10 @@ export class Engine {
         );
       }
       const runtime = await this.runtime(canvasId);
+      // A capped critic has no undo here (critique phase 2): what it would
+      // undo is a note, and the inverse is a removal it may not write.
+      const capped = ceilingRefusal(runtime.state.canvas, actor.id, null);
+      if (capped) throw new OpValidationError(BEYOND_CEILING, capped);
       if (clientFeatures !== undefined) {
         requireGroupClient(clientFeatures, runtime.state.project);
         requireQuestionnaireClient(clientFeatures, runtime.state.canvas, runtime.entries);
@@ -1928,6 +1934,10 @@ export class Engine {
         );
       }
       const runtime = await this.runtime(canvasId);
+      // A capped critic has no undo here (critique phase 2): what it would
+      // undo is a note, and the inverse is a removal it may not write.
+      const capped = ceilingRefusal(runtime.state.canvas, actor.id, null);
+      if (capped) throw new OpValidationError(BEYOND_CEILING, capped);
       if (clientFeatures !== undefined) {
         requireGroupClient(clientFeatures, runtime.state.project);
         requireQuestionnaireClient(clientFeatures, runtime.state.canvas, runtime.entries);
@@ -2877,6 +2887,18 @@ export class Engine {
       throw new OpValidationError("bad-op", "canvasId is required");
     }
     const runtime = await this.runtime(canvasId);
+
+    /**
+     * **The ceiling, at the one place an op is applied** (critique phase 2).
+     * After the badge's capability (the door in `http.ts`) and before
+     * anything else reads the op, so it only narrows and a refusal writes
+     * nothing. Here rather than at the route because this is the HOME's
+     * apply: a replica forwards (`forwardSubmit`) without applying, and the
+     * forward lands on this line at the home, where the enrolment row is
+     * canvas state like any other. Undo and redo ask before they choose.
+     */
+    const capped = ceilingRefusal(runtime.state.canvas, request.actor.id, op);
+    if (capped) throw new OpValidationError(BEYOND_CEILING, capped);
 
     if (cause === undefined) guardDesignRecordEdit(runtime.state, op);
 

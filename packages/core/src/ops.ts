@@ -526,6 +526,25 @@ export type Operation =
        * whole story, which is journey 8's "history untouched". */
       type: "agent.withdraw";
       actorId: string;
+    }
+  | {
+      /**
+       * **A ceiling on one agent's standing here** (critique phase 2): with
+       * `note`, the only ops the home accepts from that actor on this canvas
+       * are an item-anchored `thread.create`, a `thread.reply` and an
+       * `item.react` (`ceilingRefusal`); `null` lifts it. Set by `isocan
+       * critique` when it enrols a critic, lifted by `isocan critic release`
+       * — and by `agent.withdraw`, whose row it lives on.
+       *
+       * A distinct type rather than a field on `agent.enroll`, for
+       * `agent.invite`'s reason: a home that does not know ceilings must
+       * REFUSE this op, not accept an enrolment and drop the field — a
+       * critic left uncapped without anyone being told is the one outcome
+       * the ceiling exists to prevent. Not undoable, like every standing op.
+       */
+      type: "agent.ceiling";
+      actorId: string;
+      ceiling: "note" | null;
     };
 
 /**

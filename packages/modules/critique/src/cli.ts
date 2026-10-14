@@ -24,7 +24,6 @@ import {
   canvasClashes,
   doneLine,
   findRequest,
-  mentionWord,
   noteBody,
   readNote,
   requestBody,
@@ -34,6 +33,7 @@ import {
   criticMarkdown,
   criticProblems,
   draftFromRoster,
+  findCritic,
   findInRoster,
   lensPath,
   readCritic,
@@ -89,13 +89,6 @@ async function criticsOn(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotRes
   return out;
 }
 
-/** One critic on this canvas by what somebody types: its name, its agent
- *  name, or the first word a mention finds it by. */
-function findOn(on: readonly CanvasCritic[], ref: string): CanvasCritic | undefined {
-  const q = ref.trim().replace(/^@/, "").toLowerCase();
-  return on.find(({ critic }) => critic.name === q || critic.agentName.toLowerCase() === q || mentionWord(critic.agentName).toLowerCase() === q);
-}
-
 /** A critic card's current bytes — the card IS the critic, so this is read
  *  every time one is asked, never cached. */
 async function cardText(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, itemId: string): Promise<string> {
@@ -118,6 +111,30 @@ async function asCritic(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResp
   const me = (await criticsOn(ctx, canvasId, snapshot)).find(({ critic }) => critic.agentName.toLowerCase() === ctx.actor.name.toLowerCase());
   if (!me) throw new Error(`\`critique ${verb}\` is a critic's verb, and ${ctx.actor.name} is not a critic on this canvas — \`isocan critic ls\``);
   return me;
+}
+
+/**
+ * **The critic's ceiling** (critique phase 2): `agent.ceiling note` on its
+ * enrolment row, so the home refuses anything it sends that is not a note,
+ * a reply or a reaction — the door holding when the prompt does not. Sent
+ * by the person asking, never the critic; once per canvas, skipped when the
+ * row already carries it. A home that cannot hold a ceiling refuses the op,
+ * and then the critic is not left standing uncapped: one enrolled just now
+ * is withdrawn again, and nothing is asked.
+ */
+async function capCritic(host: CliHost, ctx: Ctx, canvasId: string, agentName: string, enrolled: { actorId: string; reused: boolean }): Promise<void> {
+  const row = (await ctx.client.snapshot(canvasId)).canvas.agents?.[enrolled.actorId];
+  if (row?.ceiling === "note") return;
+  try {
+    await host.sendOp(ctx, canvasId, { type: "agent.ceiling", actorId: enrolled.actorId, ceiling: "note" });
+  } catch (err) {
+    if (!enrolled.reused) await host.withdraw(ctx, canvasId, enrolled.actorId).catch(() => {});
+    const why = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `this canvas's home would not cap ${agentName} at notes (${why}), and a critic that could edit is not one — ` +
+        `nothing was asked${enrolled.reused ? "" : `, and ${agentName} was not left enrolled`}`,
+    );
+  }
 }
 
 const hex = (c: string | undefined) => (c && /^#[0-9a-fA-F]{6}$/.test(c.trim()) ? c.trim() : null);
@@ -236,6 +253,35 @@ the roster, or write your own; edit it with \`isocan edit <card> file.md\`.`,
       }),
     );
 
+  family
+    .command("release <critic>")
+    .description("Lift a critic's ceiling on this canvas, so the same agent may edit again — yours to lift, never the critic's")
+    .option("--canvas <canvas>")
+    .action(
+      run(async (ref: string, _opts: unknown, cmd: Command) => {
+        const ctx = await ctxOf(cmd);
+        const canvas = await resolveCanvas(ctx);
+        const snapshot = await ctx.client.snapshot(canvas.id);
+        // The one resolver `critique --by` uses, over the cards AND the
+        // enrolment rows: a card edited away or removed must not leave an
+        // agent capped with no door out, so a row answers to its own name
+        // (and id) as a card would.
+        const rows = Object.values(snapshot.canvas.agents ?? {});
+        const cards = criticItems(snapshot.canvas.items).map((item) => ({ critic: { name: String(item.properties[CRITIC_PROP]), agentName: item.title } }));
+        const bare = rows.map((a) => ({ critic: { name: a.actor.id, agentName: a.actor.name } }));
+        const named = findCritic([...cards, ...bare], ref)?.critic.agentName.toLowerCase();
+        const hit = named === undefined ? undefined : rows.find((a) => a.actor.name.toLowerCase() === named);
+        if (!hit) throw new Error(`no agent "${ref}" stands on ${canvas.title} — \`isocan critic ls\` lists the critics here`);
+        if (hit.ceiling !== "note") {
+          if (ctx.json) return printJson({ actorId: hit.actor.id, ceiling: null, changed: false });
+          return console.log(`${hit.actor.name} has no ceiling on ${canvas.title} — nothing to lift`);
+        }
+        await host.sendOp(ctx, canvas.id, { type: "agent.ceiling", actorId: hit.actor.id, ceiling: null });
+        if (ctx.json) return printJson({ actorId: hit.actor.id, ceiling: null, changed: true });
+        console.log(`${hit.actor.name} may edit ${canvas.title} again — \`isocan critique\` caps it at notes the next time it is asked`);
+      }),
+    );
+
   registerCritique(host);
 }
 
@@ -272,7 +318,7 @@ bounded by the budget on its card. It answers with \`critique note\` and
         const snapshot = await ctx.client.snapshot(canvas.id);
         const item = screenOf(host, snapshot, ref);
         const on = await criticsOn(ctx, canvas.id, snapshot);
-        const hit = findOn(on, opts.by);
+        const hit = findCritic(on, opts.by);
         if (!hit) throw new Error(`no critic "${opts.by}" on ${canvas.title} — \`isocan critic ls\` lists them; \`isocan critic add ${opts.by}\` adds one from the roster`);
         const clash = canvasClashes(on).find((c) => c.id === hit.critic.name);
         const problems = [...criticProblems(hit.critic), ...(clash ? [clash.problem] : [])];
@@ -295,6 +341,7 @@ bounded by the budget on its card. It answers with \`critique note\` and
           budget: { ...DEFAULT_BUDGET, ...(critic.budget ?? {}) },
           reuse: true,
         });
+        await capCritic(host, ctx, canvas.id, critic.agentName, enrolled);
         // Its pins and its cursor wear its colour: a colour is an actor fact
         // (`actor.setColor`), which every surface already paints a pin's
         // face with, and this badge holds the critic's actor.

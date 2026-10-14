@@ -13,12 +13,11 @@ Then two critics and the read, then the web's doors.
 **Phase citations name their project**: `critique phase 2`, never a bare
 "phase 2".
 
-**Where we are, 14 Oct 2026:** phase 0 is CLOSED and phase 1 PART-DONE. A
-critic asked for a critique of a real screen answers with pinned, typed
-notes and leaves the screen untouched — walked once on a real harness. What
-is not proven is the dollar cap: the harness used reports no cost, so that
-run was bounded by turns alone. **critique phase 2 is next**: the ceiling,
-so a critic is refused at the door if it tries to edit.
+**Where we are, 14 Oct 2026:** phases 0 and 2 are CLOSED, phase 1
+PART-DONE. Critics live on the canvas, answer a critique with pinned, typed
+notes, and are refused at the home if they try anything else. Phase 1
+still owes a dollar cap proven against a harness that reports cost.
+**critique phase 3 is next**: two critics, and the read.
 
 ---
 
@@ -68,7 +67,7 @@ budget before the first real run.
 
 ## Phase 2 — The ceiling
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 2026-10-14 — a critic's edit, move, add or unpinned comment is refused with `beyond-ceiling` and nothing is written, through the CLI and through ops sent directly, and by the home when a replica forwards them; its notes, replies and reactions land; it cannot lift its own ceiling; the person's `critic release` lets the same agent edit again.
 
 A `note` ceiling on an enrolled critic's claim on one canvas, checked at the
 door after the badge's capability. Only creating an item-anchored thread,
@@ -140,6 +139,28 @@ person.
 - **2026-10-14** — A critic's colour is its actor's colour (`actor.setColor`,
   set when it is asked), so the pins wear it everywhere, outside the
   experiment. That is a fact about the actor, so it is not gated.
+- **2026-10-14** — The ceiling lives on the critic's enrolment row in canvas
+  state (`EnrolledAgent.ceiling`, with `ceilingBy`), written by a new op,
+  `agent.ceiling`, and checked in `Engine.applyAndPersist`: the one place the
+  home applies an op, so a replica forwarding a write meets it there. A new
+  op rather than a field on `agent.enroll`, because a home that predates it
+  refuses an unknown op but would silently drop an unknown field and leave
+  the critic uncapped. Undo and redo are checked before they choose.
+- **2026-10-14 — Open:** the ceiling binds the critic's *actor*, not its
+  process. Agents ride their machine's badge (agent-custody), so a critic
+  process that drops its session key speaks as the person, who is not
+  capped. The door holds against the critic; it is not a sandbox.
+- **2026-10-14 — Open:** a capped critic may still reply in any thread and
+  mention anyone, so it could ask an editing agent to make the change it
+  is not allowed to make. This is the same worry that kept roles from a
+  commenter rung. One way to close it is refusing mentions from a capped
+  actor.
+- **2026-10-14 — Open:** isocan.io refuses `agent.ceiling` until this is
+  deployed there, so `critique` against a hosted canvas fails loudly —
+  nothing is asked, and a critic enrolled for the ask is withdrawn — rather
+  than running uncapped. dev.isocan.io follows CI; production moves with the
+  `prod` tag, which is a person's step. Smaller: a refused `edit` has
+  already uploaded its blob; the agent tray does not yet say "notes only".
 - **2026-10-14 — Open:** proving the dollar cap needs a harness that
   reports cost. Claude Code's adapter (`@agentclientprotocol/claude-agent-acp`)
   is not on this machine, and downloading it is Dion's call. A critic sees

@@ -84,6 +84,7 @@ const OP_WORDS: Record<OperationType, string> = {
   "agent.enroll": "enrolled an agent",
   "agent.invite": "brought an agent from their bench",
   "agent.withdraw": "dismissed an agent",
+  "agent.ceiling": "changed what an agent may do",
 };
 
 /**

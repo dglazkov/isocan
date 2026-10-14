@@ -35,6 +35,20 @@ a `credit` line saying who it is after and that it is not affiliated, its
   them. At a cap the rc stops it and says so in the thread in one line.
 - `isocan critique notes <item>` — the critics' notes on a screen, read back:
   who, kind, question, where (fractions of the screen) and the move.
+- `isocan critic release <critic>` — lifts the critic's ceiling (below) on
+  this canvas, so the same agent may edit here again. Only whoever set it can;
+  `isocan rc remove <name>` lifts it too, with the standing. The next `critique`
+  caps it again.
+
+**A critic is capped at notes.** Asking caps the critic's standing on that
+canvas, and the home holds it whatever the critic's instructions say: from
+the critic, the canvas accepts a thread pinned to an item (`critique note`,
+`comment add --item`), a reply in a thread (`critique done`, `comment reply`)
+and a reaction (`react`, with or without `--at`) — and refuses everything
+else, an edit, a move, a new item, a free-standing thread, an undo, with
+`beyond-ceiling` and a sentence, writing nothing. It cannot lift its own
+ceiling. If you are a critic and want something changed, the note saying what
+to change is the whole of your power.
 
 ### When you are the critic
 
