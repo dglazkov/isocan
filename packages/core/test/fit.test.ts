@@ -131,3 +131,21 @@ describe("fitting items to their content", () => {
     expect(r.moves.map((m) => m.itemId)).toEqual(["left"]);
   });
 });
+
+describe("a fit moves only what it brought into collision", () => {
+  /* `isocan fit` on wide notes moved two of them to unrelated places
+     (14 Oct 2026): a node already touching a neighbour — put there by
+     somebody — was "settled" off it although the fit only shrank it. */
+  it("keeps a node that shrank inside a neighbour it already overlapped", () => {
+    const canvas = canvasOf(item("note", 0, 0, 840, 400), item("label", 20, 20, 100, 30));
+    const r = fitMoves(canvas, [{ itemId: "note", width: 840, height: 200 }]);
+    expect(r.moves).toEqual([]);
+    expect(r.resizes).toEqual([{ itemId: "note", width: 840, height: 200 }]);
+  });
+  it("still steps clear of something it newly grew into", () => {
+    const canvas = canvasOf(item("note", 0, 0, 840, 400), item("below", 0, 500, 840, 400));
+    const r = fitMoves(canvas, [{ itemId: "note", width: 840, height: 800 }]);
+    expect(r.moves.map((m) => m.itemId)).toEqual(["note"]);
+    expect(overlapping(rects(canvas, r))).toBe(0);
+  });
+});

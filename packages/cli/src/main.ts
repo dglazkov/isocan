@@ -5522,6 +5522,31 @@ canvas
     }),
   );
 
+/**
+ * **Let go of a copy whose home no longer has the canvas** (14 Oct 2026). The
+ * daemon refuses, in words, a canvas that lives here and one its home still
+ * answers for (`HOME_FORGET_ROUTE` in core). Recoverable: the copy is moved
+ * aside, and moving it back brings it back as this machine's own canvas.
+ */
+canvas
+  .command("forget <ref>")
+  .description("Drop this machine's copy of a canvas its home no longer has (recoverable)")
+  .action(
+    run(async (ref: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const target = matchRef(await ctx.client.listCanvases(), ref);
+      const { keptAt, restoreTo } = await ctx.client.forgetCanvas(target.id);
+      const config = await readConfig(ctx.home);
+      if (config.defaultProjectId === target.id) await writeConfig(ctx.home, {});
+      if (ctx.json) return printJson({ canvasId: target.id, keptAt, restoreTo });
+      console.log(`forgot ${target.id} — "${target.title}" is no longer listed here`);
+      if (keptAt && restoreTo) {
+        console.log(`  the copy is kept, not erased; to bring the canvas back as this machine's own,`);
+        console.log(`  stop the daemon (\`isocan stop\`) and move ${keptAt} back to ${restoreTo}`);
+      }
+    }),
+  );
+
 canvas
   .command("rm [ref]")
   .alias("delete")
@@ -7381,7 +7406,7 @@ program
 
 program
   .command("mv <item> [x] [y] [more...]")
-  .description("Move an item — to x y, by a delta with --by, or next to another with --beside; several at once as item x y item x y …")
+  .description("Move an item — to x y (or x,y), by a delta with --by, or next to another with --beside; several at once as item x y item x y …")
   .option("--by <dx,dy>", "move relative to where it is now, e.g. --by 0,-40")
   .option("--beside <item>", "put it next to this item, clear of it by the standard gap")
   .option("--side <side>", "with --beside: left | right | above | below (default: right)")
@@ -7401,6 +7426,9 @@ program
         opts: { by?: string; in?: string; out?: boolean; toRoot?: boolean; cell?: string; dryRun?: boolean; beside?: string; side?: string },
         cmd: Command,
       ) => {
+        // `x,y` is how `--at` and `--by` say a point, so `mv itm 300,200`
+        // means what it looks like; every positional pair may be either form.
+        [x, y, ...more] = splitCommaPairs([x, y, ...more].filter((one): one is string => one !== undefined));
         const ctx = await ctxOf(cmd);
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         /**
@@ -7571,6 +7599,16 @@ program
  * null, so the item's position was permanently `null,null`. Say what was
  * wrong with what they typed.
  */
+/**
+ * `mv`'s positionals with every `x,y` token opened into two, so a comma pair
+ * and two numbers are one grammar. Only a token that is exactly two numbers
+ * splits; anything else (an item ref, a typo) passes through to be refused
+ * where it was always refused.
+ */
+function splitCommaPairs(args: string[]): string[] {
+  return args.flatMap((one) => (/^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(one) ? one.split(",") : [one]));
+}
+
 function positionalXY(x: string | undefined, y: string | undefined): { x: number; y: number } {
   const at = { x: Number(x), y: Number(y) };
   if (!Number.isFinite(at.x) || !Number.isFinite(at.y)) {
@@ -9697,10 +9735,30 @@ program
         ...(target ? { canvasId: target.id } : {}),
         ...(session?.label ? { label: session.label } : {}),
       });
-      for (const failed of unavailable) console.error(`${failed.canvasId} unavailable: ${failed.error}`);
+      /**
+       * **A canvas gone at its home is said once** (14 Oct 2026). It used to
+       * open every inbox as "prj_… unavailable: canvas not found", the copy
+       * here outliving a delete made while this machine was away. It is told
+       * once, with the verb that lets it go, and remembered per machine
+       * (`inbox-told.json` in the home, not the oplog); `--json` still lists
+       * it on stderr as `{"unavailable": […]}` with `gone: true`, keeping
+       * stdout the entry array scripts already read.
+       */
+      const gone = unavailable.filter((failed) => failed.gone);
+      const told = path.join(ctx.home, "inbox-told.json");
+      const already = new Set<string>(await fs.readFile(told, "utf8").then((text) => JSON.parse(text) as string[]).catch(() => []));
+      if (ctx.json && unavailable.length > 0) console.error(JSON.stringify({ unavailable }));
+      else {
+        for (const failed of unavailable) if (!failed.gone) console.error(`${failed.canvasId} unavailable: ${failed.error}`);
+        const fresh = gone.filter((failed) => !already.has(failed.canvasId));
+        for (const failed of fresh) {
+          console.error(`${failed.title ? `"${failed.title}" (${failed.canvasId})` : failed.canvasId} is gone at its home — \`isocan canvas forget ${failed.canvasId}\` lets go of the copy here`);
+        }
+        if (fresh.length > 0) await fs.writeFile(told, JSON.stringify([...already, ...fresh.map((failed) => failed.canvasId)]));
+      }
       const byReason = opts.mentions ? entries.filter((e) => e.reason === "mentioned") : entries;
       const wanted = opts.new ? newSince(byReason, marks) : byReason;
-      if (entries.length === 0 && unavailable.length > 0) throw new Error("Inbox incomplete: some canvases could not be read.");
+      if (entries.length === 0 && unavailable.length > gone.length) throw new Error("Inbox incomplete: some canvases could not be read.");
       const ordered = inboxNewestFirst(wanted).slice(0, Number(opts.limit ?? 20));
       if (ctx.json) return printJson(ordered);
       if (ordered.length === 0) {

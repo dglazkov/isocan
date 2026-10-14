@@ -1,5 +1,5 @@
 import type { CanvasContents } from "./model.ts";
-import { nearestFreeSpot } from "./placement.ts";
+import { PLACEMENT_CLEARANCE, nearestFreeSpot, overlaps } from "./placement.ts";
 
 /** An item and the size its content actually wants. */
 export interface FitTarget {
@@ -57,7 +57,11 @@ export function fitMoves(canvas: CanvasContents, targets: FitTarget[]): FitResul
     // it keeps its exact position and the group grows outward from it. An
     // earlier version skipped the check for the first item, which let it grow
     // straight over a bystander that was not being fitted at all.
-    const at = nearestFreeSpot(want, settled);
+    // Only what the fit brought it into is in the way. A node already
+    // touching a neighbour was put there by somebody; a fit that only
+    // shrank it used to relocate it anyway, to somewhere unrelated.
+    const before = Object.values(canvas.items).filter((other) => other.id !== item.id && overlaps(item, other, PLACEMENT_CLEARANCE)).map((other) => other.id);
+    const at = nearestFreeSpot(want, settled.filter((other) => !before.includes(other.id)));
     if (at.x !== item.x || at.y !== item.y) moves.push({ itemId: t.itemId, x: at.x, y: at.y });
     settled.push({ id: t.itemId, ...at, width: t.width, height: t.height });
   }

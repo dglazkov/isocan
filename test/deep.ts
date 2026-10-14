@@ -228,6 +228,8 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/ended.test.ts", secs: 5.3, why: "a single case" },
   { file: "packages/cli/test/operator-revoke.test.ts", secs: 4.0, why: "two cases" },
   { file: "packages/cli/test/second-device.test.ts", secs: 3.7, why: "a single case" },
+  { file: "packages/cli/test/canvas-forget.test.ts", secs: 2.8, why: "a single case, eleven spawns over two in-process daemons, one restarted: a canvas gone at its home said once by inbox and let go by `canvas forget`; measured 14 October" },
+  { file: "packages/cli/test/design-review-replica.test.ts", secs: 2.5, why: "a single case, five spawns over three in-process daemons: `design workflow` on a replica that adopted its home's snapshot; measured 14 October" },
   { file: "packages/cli/test/managed.test.ts", secs: 6.0, why: "21 cases and under four seconds, because only the two that need a server spawn one" },
   { file: "packages/cli/test/operator-end.test.ts", secs: 3.0, why: "a single case" },
   { file: "packages/cli/test/browse.test.ts", secs: 2.1, why: "two cases, one command each" },

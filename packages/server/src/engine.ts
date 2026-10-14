@@ -2158,6 +2158,21 @@ export class Engine {
   /** The home says this canvas is gone. Soft, like every delete here: the
    * directory is moved aside rather than removed, so a replica that was told
    * to forget a canvas can still be asked what it used to hold. */
+  /**
+   * **Let go of this machine's copy** (`HOME_FORGET_ROUTE`) — the same soft
+   * delete a home's `canvas-deleted` makes, asked for by a person after the
+   * home said it no longer has the canvas. Answers where the copy was kept.
+   */
+  forgetReplica(canvasId: string): Promise<{ keptAt: string; restoreTo: string } | null> {
+    return this.enqueue(canvasId, async () => {
+      if (!(await this.store.canvasExists(canvasId))) throw new CanvasNotFoundError(canvasId);
+      const kept = await this.store.softDeleteCanvas(canvasId);
+      this.canvases.delete(canvasId);
+      this.emit(canvasId, { type: "canvas-deleted" });
+      return kept ?? null;
+    });
+  }
+
   applyRemoteDelete(canvasId: string): Promise<void> {
     return this.enqueue(canvasId, async () => {
       if (!(await this.store.canvasExists(canvasId))) return;

@@ -347,6 +347,9 @@ export interface HomeConnection {
    * per-browser answer seen-marks exist to replace.
    */
   inbox(canvasId: string, actor: Actor, label?: string, signal?: AbortSignal): Promise<InboxResponse>;
+  /** Whether the home still has this canvas — false only on its 404, and a
+   *  throw when it does not answer (`isocan canvas forget` reads this). */
+  holds(canvasId: string, signal?: AbortSignal): Promise<boolean>;
   seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse>;
   markSeen(canvasId: string, seq: number, actor?: Actor): Promise<SeenResponse>;
   spaces(): Promise<SpacesResponse>;
@@ -2008,6 +2011,21 @@ export class HomeLink implements HomeConnection {
     await abortable(this.ensureClaim(actor), signal);
     signal?.throwIfAborted();
     return abortable(this.api<InboxResponse>("GET", inboxRoute(actor.id, { canvasId, ...(label !== undefined ? { label } : {}) }), undefined, signal), signal);
+  }
+
+  /**
+   * Does the home still have this canvas? Only a 404 says no: a refusal is
+   * the home answering FOR the canvas (it just will not let this machine
+   * in), and an unreachable home answers nothing, so it throws.
+   */
+  async holds(canvasId: string, signal?: AbortSignal): Promise<boolean> {
+    try {
+      await this.api("GET", `/api/projects/${encodeURIComponent(canvasId)}/canvas`, undefined, signal);
+      return true;
+    } catch (err) {
+      if (err instanceof HomeRefusedError) return err.status !== 404;
+      throw err;
+    }
   }
 
   async seen(actor?: Actor, canvasId?: string, signal?: AbortSignal): Promise<SeenMarksResponse> {

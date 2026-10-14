@@ -18,7 +18,8 @@ import { INSTALL_SPEC } from "@isocan/core";
  * So the three ways a spawn goes wrong are three sentences:
  * - the file is missing: this copy is incomplete, and which file;
  * - it cannot start: which module is missing, and how to reinstall;
- * - it ran and failed: its exit code AND the last thing it said, which in
+ * - it ran and failed: its exit code AND what it said (for an uncaught throw,
+ *   the error's own line rather than Node's version trailer), which in
  *   `--json` mode (`quiet`) was captured and thrown away before.
  *
  * stderr is captured rather than inherited so it can be read, and echoed
@@ -52,7 +53,13 @@ export function runPackageScript(
         `The install is incomplete — reinstall it: npm i -g ${INSTALL_SPEC}`,
     );
   }
-  const said = stderr.trim().split("\n").filter(Boolean).at(-1);
+  // An uncaught throw ends with Node's "Node.js v24…" trailer, after the
+  // stack and any properties of the error, and that trailer was all a
+  // person read (`canvas shot --size 1800x1300`, 14 Oct 2026). The error's
+  // own line is the one just above its first stack frame.
+  const lines = stderr.split("\n").filter((line) => line.trim() && !/^Node\.js v\d/.test(line));
+  const frame = lines.findIndex((line) => /^\s+at\s/.test(line));
+  const said = (frame > 0 ? lines[frame - 1] : lines.at(-1))?.trim();
   const how = child.status === null ? `killed by ${child.signal ?? "a signal"}` : `exit ${child.status}`;
   throw new Error(`${opts.what} did not land (${how})${said ? `: ${said}` : ""}`);
 }

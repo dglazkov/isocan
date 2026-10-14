@@ -400,12 +400,19 @@ export function groupArrangeAction(state: CanvasState, itemIds: readonly string[
 export function groupFitAction(state: CanvasState, targets: readonly { itemId: string; width?: number; height?: number }[]): Extract<GroupAction, { kind: "frame" }> {
   const roots = groupSelectionRoots(state.canvas, targets.map((target) => target.itemId));
   const excluded = new Set(groupTransformClosure(state.canvas, roots));
-  const settled = new Map<string | null, GroupBox[]>();
+  const settled = new Map<string | null, Array<GroupBox & { id: string }>>();
   const fitted: Array<{ itemId: string; box?: GroupBox }> = [];
-  const occupiedAt = (parent: string | null): GroupBox[] => {
+  const occupiedAt = (parent: string | null): Array<GroupBox & { id: string }> => {
     let occupied = settled.get(parent);
-    if (!occupied) { occupied = groupSelectionRoots(state.canvas, groupChildren(state.canvas, parent).filter((sibling) => !excluded.has(sibling.id)).map((sibling) => sibling.id)).map((siblingId) => groupFootprint(itemIn(state.canvas, siblingId), state.canvas)); settled.set(parent, occupied); }
+    if (!occupied) { occupied = groupSelectionRoots(state.canvas, groupChildren(state.canvas, parent).filter((sibling) => !excluded.has(sibling.id)).map((sibling) => sibling.id)).map((siblingId) => ({ id: siblingId, ...groupFootprint(itemIn(state.canvas, siblingId), state.canvas) })); settled.set(parent, occupied); }
     return occupied;
+  };
+  // What each target already touched before the fit, as `fitMoves` keeps it:
+  // an overlap somebody made is not one the fit has to clear up.
+  const touchedBefore = (id: string, parent: string | null): Set<string> => {
+    const mine = groupFootprint(itemIn(state.canvas, id), state.canvas);
+    const siblings = groupSelectionRoots(state.canvas, groupChildren(state.canvas, parent).map((sibling) => sibling.id)).filter((other) => other !== id);
+    return new Set(siblings.filter((other) => overlaps(mine, groupFootprint(itemIn(state.canvas, other), state.canvas), PLACEMENT_CLEARANCE)));
   };
   // A group frame fits around fixed children first. Native siblings may move
   // clear of that resulting frame, never through it or its attached marks.
@@ -416,9 +423,10 @@ export function groupFitAction(state: CanvasState, targets: readonly { itemId: s
     const desired = frameFit ? groupFitBox(state.canvas, id) : { ...boxOf(item), width: target.width ?? item.width, height: target.height ?? item.height }; validBox(desired);
     const occupied = occupiedAt(item.containerId ?? null);
     const footprint = enclosing([{ ...desired, height: desired.height + labelHeight(item) }, ...annotationsOf(state.canvas, id).map((mark) => mapBox(mark, item, desired))]);
-    const at = isGroupItem(item) ? footprint : nearestFreeSpot(footprint, occupied);
+    const before = isGroupItem(item) ? null : touchedBefore(id, item.containerId ?? null);
+    const at = before === null ? footprint : nearestFreeSpot(footprint, occupied.filter((other) => !before.has(other.id)));
     const box = { ...desired, x: desired.x + at.x - footprint.x, y: desired.y + at.y - footprint.y };
-    fitted.push({ itemId: id, ...(frameFit ? {} : { box }) }); occupied.push({ ...footprint, x: at.x, y: at.y });
+    fitted.push({ itemId: id, ...(frameFit ? {} : { box }) }); occupied.push({ id, ...footprint, x: at.x, y: at.y });
   }
   return { kind: "frame", targets: fitted, expected: captureGroupExpectations(state, roots) };
 }

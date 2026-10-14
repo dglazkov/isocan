@@ -21,7 +21,45 @@ describe("the seven recorded native HTML probes", () => {
     expect(report.onSystem).toBe(onSystem);
     expect(report.offSystem.map(v => v.value)).toEqual(off);
     expect(codes(report)).toEqual(expectedCodes);
-    expect(report.ruleVersion).toBe("1.1.0");
+    expect(report.ruleVersion).toBe("1.2.0");
+  });
+});
+
+describe("a var() nested inside a function's arguments resolves like a top-level one", () => {
+  /* Every HTML add printed "var() cannot be resolved statically for
+     background" for a gradient built from the system's own tokens — the
+     guide's instruction followed, reported as a gap. */
+  const root = "<style>:root{--color-ink:#112233;--color-paper:#fff;--r:17}</style>";
+  it("checks gradient stops that are token references", () => {
+    const report = audit(`${root}<p style="background:linear-gradient(to right, var(--color-ink) 0%, var(--color-paper))">Acme</p>`);
+    expect(report.onSystem).toBe(2);
+    expect(report.coverage.unexamined).toEqual([]);
+  });
+  it("still finds the off-system stop beside a token one, at its own range", () => {
+    const source = `${root}<p style="background:linear-gradient(var(--color-ink), #ff0000)">Acme</p>`;
+    const report = audit(source);
+    expect(report.offSystem.map(v => v.value)).toEqual(["#ff0000"]);
+    const finding = report.diagnostics.find(d => d.code === "design/off-scale-color")!;
+    expect(source.slice(finding.range.start.offset, finding.range.end.offset)).toBe("#ff0000");
+    expect(report.coverage.unexamined).toEqual([]);
+  });
+  it("reads rgb() channels from variables, and points the finding at what was written", () => {
+    expect(audit(`${root}<p style="color:rgb(var(--r) 34 51)">Acme</p>`).onSystem).toBe(1);
+    const source = `${root}<p style="color:rgb(var(--r) 0 0)">Acme</p>`;
+    const report = audit(source);
+    expect(report.offSystem.map(v => v.value)).toEqual(["rgb(17 0 0)"]);
+    const finding = report.diagnostics.find(d => d.code === "design/off-scale-color")!;
+    expect(source.slice(finding.range.start.offset, finding.range.end.offset)).toBe("rgb(var(--r) 0 0)");
+  });
+  it("reports a nested reference that does not resolve once, as the missing variable it is", () => {
+    const report = audit('<p style="background:linear-gradient(var(--missing), #112233)">Acme</p>');
+    expect(codes(report)).toEqual(["design/missing-variable"]);
+    expect(unexamined(report)).toEqual([]);
+    expect(report.onSystem).toBe(1);
+  });
+  it("says a color-mix() is unexamined once, naming the mix rather than the var() inside it", () => {
+    const report = audit(`${root}<p style="background:color-mix(in srgb, var(--color-ink) 40%, white)">Acme</p>`);
+    expect(report.coverage.unexamined.map(u => u.explanation)).toEqual([expect.stringMatching(/^color-mix\(\) computes its colour/)]);
   });
 });
 

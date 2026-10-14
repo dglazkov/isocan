@@ -313,12 +313,12 @@ export class FileStore implements Store {
   }
 
   /** project.delete is soft: the directory is moved aside, recoverable by hand. */
-  async softDeleteCanvas(id: string): Promise<void> {
+  async softDeleteCanvas(id: string): Promise<{ keptAt: string; restoreTo: string }> {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    await fs.rename(
-      p.canvasDir(this.home, id),
-      path.join(p.deletedCanvasesDir(this.home), `${id}-${stamp}`),
-    );
+    const keptAt = path.join(p.deletedCanvasesDir(this.home), `${id}-${stamp}`);
+    const restoreTo = p.canvasDir(this.home, id);
+    await fs.rename(restoreTo, keptAt);
+    return { keptAt, restoreTo };
   }
 
   // ---- the actor registry (home-scoped; see core/claims.ts) ----

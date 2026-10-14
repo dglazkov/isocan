@@ -1060,6 +1060,8 @@ isocan bench [add <name> [--actor <id>] [--harness <n>] [--model <id>]
                                    # be parked, no turn starts, no other
                                    # canvas changes.
 isocan canvas create|list [--all]|show|edit|delete
+isocan canvas forget <canvas>     # drop this machine's copy of a canvas its
+                                  # home no longer has (recoverable)
 isocan use <canvas> [--home]      # bind this dir to a canvas (--home: fallback)
 isocan add <file> [--at x,y | --anchor <item>] [--title] [-d] [--prop k=v]
 isocan ls · show <item> · mv <item> <x> <y> · set <item> […] · rm · restore

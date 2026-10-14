@@ -9,7 +9,7 @@ import { PersonalService, PersonalError } from "./personal.ts";
 import { SOURCE_POLICY_HEADER, parseSourcePolicyHeader, SOURCE_ACCESS_ROUTE, type SourceRequestContext, type SourceAccessRequest, type PersonalLinkRequest, type PersonalUnlinkRequest, type PersonalReadRequest } from "@isocan/core";
 import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type SetPublicListingRequest } from "@isocan/core";
 import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
-import { collectInbox, sequenceInbox } from "./inbox.ts";
+import { CanvasGoneAtHomeError, collectInbox, sequenceInbox } from "./inbox.ts";
 import type { JudgmentOptions } from "./judgment.ts";
 import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
@@ -251,6 +251,7 @@ import { personaRefusal, readPersonas, writePersona } from "./personas.ts";
 import { liveGrants, loopbackBound, refuseAmbiguousHome } from "./route-helpers.ts";
 import { registerOperatorRoutes } from "./operator-routes.ts";
 import { registerPassRoutes } from "./pass-routes.ts";
+import { registerForgetRoutes } from "./forget-routes.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -3033,9 +3034,13 @@ export function registerRoutes(
         const remote = options.homes?.for(canvas.id) ?? null;
         if (remote) {
           const bounded = AbortSignal.any([signal, AbortSignal.timeout(8000), ...(context?.signal ? [context.signal] : [])]);
-          const result = context
-            ? await remote.personalRequest<InboxResponse>("GET", `${INBOX_ROUTE}?${new URLSearchParams({ actorId: actor.id, canvasId: canvas.id, ...(label ? { label } : {}) })}`, undefined, actor, { ...context, signal: bounded })
-            : await remote.inbox(canvas.id, actor, label, bounded);
+          const result = await (context
+            ? remote.personalRequest<InboxResponse>("GET", `${INBOX_ROUTE}?${new URLSearchParams({ actorId: actor.id, canvasId: canvas.id, ...(label ? { label } : {}) })}`, undefined, actor, { ...context, signal: bounded })
+            : remote.inbox(canvas.id, actor, label, bounded)
+          ).catch((err: unknown) => {
+            if (err instanceof HomeRefusedError && err.status === 404) throw new CanvasGoneAtHomeError(err.message);
+            throw err;
+          });
           return { ...result, homes: { ...result.homes, [canvas.id]: options.homes!.homeOf(canvas.id) } };
         }
         const down = refusals.of(canvas.id);
@@ -3979,6 +3984,9 @@ export function registerRoutes(
     await options.homes.bind(canvasId, address);
     return { canvas } satisfies JoinCanvasResponse;
   });
+
+  // In `forget-routes.ts`; it reads the home links and the local door only.
+  registerForgetRoutes(app, { engine, options, admit });
 
   app.get("/api/projects/:id/canvas", async (req) => {
     const { id } = req.params as { id: string };

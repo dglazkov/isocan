@@ -47,6 +47,19 @@ describe("runPackageScript", () => {
     );
   });
 
+  it("names the thrown error, not the Node.js version line an uncaught throw ends with", () => {
+    // `canvas shot --size 1800x1300` reported only "Node.js v24.20.0": the
+    // last stderr line of an uncaught throw is Node's version trailer.
+    const file = script("throws.mjs", 'await Promise.resolve();\nthrow new Error("Acme viewport refused");\n');
+    expect(() => runPackageScript(file, [], { what: "the screenshot", quiet: true })).toThrow(
+      /^the screenshot did not land \(exit 1\): Error: Acme viewport refused$/,
+    );
+    const custom = script("throws-props.mjs", 'const e = new RangeError("Acme size too large"); e.code = "ACME"; throw e;\n');
+    expect(() => runPackageScript(custom, [], { what: "the screenshot", quiet: true })).toThrow(
+      /: RangeError: Acme size too large$/,
+    );
+  });
+
   it("hands the script the daemon it was asked to use, so the CLI it spawns in turn uses it too", () => {
     // `canvas shot --into` spawns `isocan edit` from inside the script. With
     // `--port 4467` on the outer command and nothing handed down, that `edit`

@@ -3,8 +3,14 @@
 The session that drew the concepts ran into seven problems in isocan and
 reported them as observed. Each was then traced in the code at `7bb1f4e9`.
 None was reproduced against a daemon: these are readings, not fixes. They are
-ordinary bugs, separate from the proactive work, and each wants its own
-issue.
+ordinary bugs, separate from the proactive work.
+
+**All seven were fixed on 14 October 2026**, each with a test that failed
+before its fix (lessons 113–117). Number 2's size failure could not be
+reproduced — `--size 1800x1300` renders — but the message now names whatever
+the real error is. Number 7 needed a decision: a replica never forgets on its
+own, so the fix is `isocan canvas forget <id>`, explicit and recoverable,
+and an inbox that says once that a canvas is gone.
 
 | # | What happened | Verdict | Where it comes from |
 | --- | --- | --- | --- |

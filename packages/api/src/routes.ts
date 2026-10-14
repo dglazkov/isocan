@@ -123,6 +123,8 @@ import {
   narrowed,
   HOME_GC_ROUTE,
   HOME_JOIN_ROUTE,
+  HOME_FORGET_ROUTE,
+  type ForgetCanvasResponse,
   HOMES_ROUTE,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
@@ -1024,6 +1026,12 @@ export class DaemonRoutes {
       ...(home !== undefined ? { home } : {}),
     } satisfies JoinCanvasRequest);
     return canvas;
+  }
+
+  /** Drop this machine's copy of a canvas its home no longer has
+   *  (`HOME_FORGET_ROUTE` in core says when the daemon refuses). */
+  forgetCanvas(canvasId: string): Promise<ForgetCanvasResponse> {
+    return this.request<ForgetCanvasResponse>("POST", HOME_FORGET_ROUTE, { canvasId });
   }
 
   /**

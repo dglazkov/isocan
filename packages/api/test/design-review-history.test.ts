@@ -45,6 +45,14 @@ describe("ordinary shared review history retains its meaning", () => {
     await expect(prepareDesignReviewStep(f!.otherIO, { canvasId: f!.canvasId, runId: row.run.id, base: row.ref, action: "record", record: unavailableRecord, ...ids(`retry_${label}`) })).rejects.toThrow();
   });
 
+  it("still refuses a history with a real hole, wherever it was read from", async () => {
+    // The replica fix (design-review-node's completeHistory) reads the home
+    // when the local log is partial; a hole in the history itself stays fatal.
+    await startAndRecord();
+    const holed: DesignReviewWritePort = { ...f!.io, history: async (id, signal) => (await f!.io.history(id, signal)).filter(row => row.seq !== 2) };
+    await expect(readDesignReviews(holed, { canvasId: f!.canvasId, runId: f!.start.runId })).rejects.toThrow(/incomplete at sequence 2; its consumed budget is unavailable, never reset/);
+  });
+
   it("serializes truly simultaneous reservations and attributes the one accepted actor without a private journal", async () => {
     const row = await startAndRecord();
     const [a, b] = await Promise.all([prepareDesignReviewStep(f!.io, { canvasId: f!.canvasId, runId: row.run.id, base: row.ref, action: "begin-repair", passId: "repair_agent", sessionId: "synthetic-agent", ...ids("race_agent") }), prepareDesignReviewStep(f!.otherIO, { canvasId: f!.canvasId, runId: row.run.id, base: row.ref, action: "begin-repair", passId: "repair_helper", sessionId: "synthetic-helper", ...ids("race_helper") })]);

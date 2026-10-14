@@ -1274,6 +1274,26 @@ export function canvasesRoute(reach?: CanvasesReach): string {
  */
 export const HOME_JOIN_ROUTE = "/api/home/join";
 
+/**
+ * **Let go of a replica whose home no longer has the canvas** (14 Oct 2026).
+ * A replica never forgets what it holds on its own — a 404 can be a home
+ * having a bad day — so a canvas deleted at its home while this machine was
+ * away stayed here forever, and every `isocan inbox` opened with "canvas not
+ * found". Forgetting is the person's act: refused for a canvas this machine
+ * is the home of, and for one its home still answers for, and recoverable —
+ * the copy is moved aside, not erased.
+ */
+export const HOME_FORGET_ROUTE = "/api/home/forget";
+
+/** What `HOME_FORGET_ROUTE` did: where the copy was kept, when the backing
+ *  has a place on disk to say. */
+export interface ForgetCanvasResponse {
+  canvasId: string;
+  keptAt: string | null;
+  /** Where moving `keptAt` back (daemon stopped) brings the canvas back. */
+  restoreTo: string | null;
+}
+
 /** Take up a canvas that lives at another home: fetch it from there and
  *  hold it here as a replica, under the same id. */
 export interface JoinCanvasRequest {
