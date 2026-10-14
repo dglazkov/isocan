@@ -901,10 +901,15 @@ img { height: auto; }
 .canvas-viewport.panning .item.selected,
 .canvas-viewport.panning .item.entered,
 .canvas-viewport.panning .thread-popover { pointer-events: auto; }
+/* Paint containment goes on the CONTENT, which clips already, not the item:
+   on the item it clipped everything hung outside the box while a pan was
+   on — the ×N version badge cut in half at the top-right corner (14 Oct
+   2026), the name strip above and the marks row below. */
 .canvas-viewport.panning .item {
-  contain: layout style paint;
+  contain: layout style;
   box-shadow: none;
 }
+.canvas-viewport.panning .item-content { contain: paint; }
 .canvas-viewport.comment-mode { cursor: crosshair; }
 /* Zoom tool: magnifier cursor, and the item under it lights up as the target. */
 .canvas-viewport.zoom { cursor: zoom-in; }
