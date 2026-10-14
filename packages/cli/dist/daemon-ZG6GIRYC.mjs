@@ -30577,6 +30577,7 @@ import { crc32, deflateSync, inflateSync } from "node:zlib";
 var PICTURE_SIDE = 1024;
 var PICTURE_READ_MAX = 20 * 1024 * 1024;
 var DECODE_MAX_PIXELS = 25e6;
+var SHARP_MAX_PIXELS = 1e8;
 var SEND_MAX_BYTES = 35e5;
 function sizeOf(bytes, mimeType) {
   if (mimeType === "image/png") return bytes.length >= 24 && bytes.readUInt32BE(12) === 1229472850 ? { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) } : null;
@@ -30701,11 +30702,32 @@ function encodePng(width, height, rgba) {
   head.set([8, 6, 0, 0, 0], 8);
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", head), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
-function pictureToSend(bytes, mimeType) {
+var importSharp = () => import("sharp");
+var installed;
+function loadSharp(load) {
+  const attempt = () => load().then((m) => m.default, () => null);
+  return load === importSharp ? installed ??= attempt() : attempt();
+}
+async function scaleWithSharp(sharp, bytes) {
+  try {
+    const fitted = sharp(bytes, { limitInputPixels: SHARP_MAX_PIXELS, failOn: "error" }).rotate().resize({ width: PICTURE_SIDE, height: PICTURE_SIDE, fit: "inside", withoutEnlargement: true });
+    const [png, jpeg] = await Promise.all([
+      fitted.clone().png({ compressionLevel: 9 }).toBuffer({ resolveWithObject: true }),
+      fitted.clone().flatten({ background: "#ffffff" }).jpeg({ quality: 85 }).toBuffer({ resolveWithObject: true })
+    ]);
+    const [best, mediaType] = jpeg.data.length < png.data.length ? [jpeg, "image/jpeg"] : [png, "image/png"];
+    return best.data.length <= SEND_MAX_BYTES ? { mediaType, data: best.data.toString("base64"), width: best.info.width, height: best.info.height } : null;
+  } catch {
+    return null;
+  }
+}
+async function pictureToSend(bytes, mimeType, load = importSharp) {
   const size = sizeOf(bytes, mimeType);
   if (!size || !size.width || !size.height) return null;
   const long = Math.max(size.width, size.height);
   if (long <= PICTURE_SIDE) return bytes.length <= SEND_MAX_BYTES ? { mediaType: mimeType, data: bytes.toString("base64"), ...size } : null;
+  const sharp = await loadSharp(load);
+  if (sharp) return scaleWithSharp(sharp, bytes);
   if (mimeType !== "image/png") return null;
   const decoded = decodePng(bytes);
   if (!decoded) return null;
@@ -30975,7 +30997,7 @@ function registerSummaryRoutes(app, scope) {
     const stream = face ? await store.openBlob(canvasId, face.blobHash) : null;
     if (!face || !stream) return null;
     const { bytes, cut } = await readBytes(stream, PICTURE_READ_MAX);
-    const ready = cut ? null : pictureToSend(bytes, face.mimeType);
+    const ready = cut ? null : await pictureToSend(bytes, face.mimeType);
     return ready ? { mediaType: ready.mediaType, data: ready.data } : null;
   };
   const screenPlan = async (canvas, canvasId, sourceId) => {

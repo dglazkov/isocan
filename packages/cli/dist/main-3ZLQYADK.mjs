@@ -14983,14 +14983,14 @@ program2.command("serve").alias("start").description("Run the state daemon (auto
       throw refuseDaemonVerb("serve", declared.at ?? "its home");
     }
     if (opts.foreground) {
-      const { runDaemon } = await import("./daemon-J2D6OF2Z.mjs");
+      const { runDaemon } = await import("./daemon-ZG6GIRYC.mjs");
       await runDaemon({ port, home: home3, ...opts.force ? { takeover: true } : {} });
       return new Promise(() => {
       });
     }
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home3);
     if (opts.force) {
-      const { stopDaemons } = await import("./daemon-J2D6OF2Z.mjs");
+      const { stopDaemons } = await import("./daemon-ZG6GIRYC.mjs");
       const stopped = await stopDaemons(port, home3);
       if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
     } else if (await client.health()) {
@@ -15178,7 +15178,7 @@ async function rosterCaveat(ctx, canvasId) {
   return why === null ? null : `this is only who this machine can see \u2014 ${why}`;
 }
 async function restartDaemon(home3, port) {
-  const { stopDaemons } = await import("./daemon-J2D6OF2Z.mjs");
+  const { stopDaemons } = await import("./daemon-ZG6GIRYC.mjs");
   const stopped = await stopDaemons(port, home3);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home3);
   await client.ensureDaemon();
@@ -15646,7 +15646,7 @@ function say(adoption) {
 }
 program2.command("stop").description("Stop the daemon \u2014 asks the port who it is, so a stale one can't hide").action(
   run(async (_opts, cmd) => {
-    const { stopDaemons } = await import("./daemon-J2D6OF2Z.mjs");
+    const { stopDaemons } = await import("./daemon-ZG6GIRYC.mjs");
     const declared = await resolveDeclared(paths_exports.isocanHome());
     if (declared?.mode === "direct") {
       throw refuseDaemonVerb("stop", declared.at ?? "its home");
@@ -16606,7 +16606,7 @@ program2.command("setup [target]").description(
               }
             }
           } else if (before && stalenessOf(before).stale) {
-            const { stopDaemons } = await import("./daemon-J2D6OF2Z.mjs");
+            const { stopDaemons } = await import("./daemon-ZG6GIRYC.mjs");
             await stopDaemons(port, home3);
             await fs18.rm(path18.join(home3, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
