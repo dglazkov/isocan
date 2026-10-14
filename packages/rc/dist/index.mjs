@@ -45,6 +45,20 @@ function commentContextRoute(canvasId, threadId, commentId) {
   return `/api/projects/${encodeURIComponent(canvasId)}/threads/${encodeURIComponent(threadId)}/comments/${encodeURIComponent(commentId)}/context`;
 }
 
+// packages/core/src/canvas-group-kit.ts
+var GROUP_KIND = "group";
+function fail(message) {
+  throw new OpValidationError("bad-op", `canvas group: ${message}`);
+}
+function itemIn(canvas, id) {
+  const item = canvas.items[id];
+  if (!item) throw new OpValidationError("unknown-item", `unknown item: ${id}`);
+  return item;
+}
+function isGroupItem(item) {
+  return item.properties.kind === GROUP_KIND;
+}
+
 // packages/core/src/textnode.ts
 var TEXT_KIND = "text";
 function isTextItem(item) {
@@ -125,126 +139,7 @@ function newId(prefix) {
 var newThreadId = () => newId("thr");
 var newCommentId = () => newId("cmt");
 
-// packages/core/src/browseritem.ts
-var BROWSER_MIME = "text/uri-list";
-
-// packages/core/src/address.ts
-var CANVAS_PATH_PREFIX = "/p";
-var CANVAS_ROUTE = `${CANVAS_PATH_PREFIX}/:canvasId`;
-var ITEM_ROUTE = `${CANVAS_ROUTE}/i/:itemId`;
-function canvasPath(canvasId) {
-  return `${CANVAS_PATH_PREFIX}/${encodeURIComponent(canvasId)}`;
-}
-var DECK_PATH_SEGMENT = "deck";
-var DECK_ROUTE = `${CANVAS_ROUTE}/${DECK_PATH_SEGMENT}`;
-var MODULE_PAGE_PATH_SEGMENT = "x";
-var MODULE_PAGE_ROUTE = `${CANVAS_ROUTE}/${MODULE_PAGE_PATH_SEGMENT}/:segment`;
-var WORKBENCH_PATH_SEGMENT = "w";
-var WORKBENCH_ROUTE = `${CANVAS_ROUTE}/${WORKBENCH_PATH_SEGMENT}`;
-var WORKBENCH_ITEM_ROUTE = `${WORKBENCH_ROUTE}/:wbItemId`;
-function canvasUrl(origin, canvasId) {
-  return `${origin.replace(/\/+$/, "")}${canvasPath(canvasId)}`;
-}
-function canvasUrlWithPass(origin, canvasId, token) {
-  return urlWithPass(canvasUrl(origin, canvasId), token);
-}
-function urlWithPass(url2, token) {
-  return `${url2}#${token}`;
-}
-function splitPassFragment(address) {
-  const hash2 = address.indexOf("#");
-  if (hash2 < 0) return { address };
-  const pass = address.slice(hash2 + 1);
-  const rest = address.slice(0, hash2);
-  return pass ? { address: rest, pass } : { address: rest };
-}
-function parseCanvasAddress(raw) {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const { address, pass } = splitPassFragment(trimmed);
-  const schemed = /^[a-z][a-z0-9+.-]*:\/\//i.test(address) ? address : `${/^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(address) ? "http" : "https"}://${address}`;
-  let url2;
-  try {
-    url2 = new URL(schemed);
-  } catch {
-    return null;
-  }
-  if (url2.protocol !== "http:" && url2.protocol !== "https:") return null;
-  if (!url2.hostname) return null;
-  const parts = url2.pathname.replace(/\/+$/, "").split("/");
-  if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
-  const canvasId = decodeSegment(parts[2]);
-  if (!canvasId) return null;
-  return { origin: url2.origin, canvasId, ...pass !== void 0 ? { pass } : {} };
-}
-function decodeSegment(segment) {
-  if (!segment) return null;
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return null;
-  }
-}
-function normalizeHomeUrl(raw) {
-  const trimmed = raw.trim();
-  try {
-    const url2 = new URL(trimmed);
-    if (url2.protocol !== "http:" && url2.protocol !== "https:") return trimmed.replace(/\/+$/, "");
-    return url2.origin;
-  } catch {
-    return trimmed.replace(/\/+$/, "");
-  }
-}
-
-// packages/core/src/canvasitem.ts
-var CANVAS_KIND = "canvas";
-function isCanvasItem(item) {
-  return item.properties.kind === CANVAS_KIND;
-}
-
-// packages/core/src/modules.ts
-var REGISTRY = /* @__PURE__ */ new Map();
-function modules() {
-  return [...REGISTRY.values()];
-}
-function moduleKinds() {
-  return modules().flatMap((m) => m.kinds ?? []);
-}
-function moduleKindOf(mime) {
-  return moduleKinds().find((k) => k.mimes.includes(mime)) ?? null;
-}
-var JUDGMENT_ROUTE = "/api/judgment";
-
-// packages/core/src/kinds.ts
-function itemKind(item) {
-  if (isDrawingItem(item)) return "drawing";
-  if (isTextItem(item)) return "text";
-  if (isCanvasItem(item)) return "canvas";
-  const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
-  const mime = current?.mimeType ?? "";
-  const added = moduleKindOf(mime);
-  if (added) return added.id;
-  if (mime === BROWSER_MIME) return "site";
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("video/")) return "video";
-  if (mime === "text/html") return "screen";
-  if (mime.startsWith("text/") || mime === "application/pdf") return "document";
-  return "other";
-}
-
 // packages/core/src/canvas-groups.ts
-var GROUP_KIND = "group";
-function fail(message) {
-  throw new OpValidationError("bad-op", `canvas group: ${message}`);
-}
-function itemIn(canvas, id) {
-  const item = canvas.items[id];
-  if (!item) throw new OpValidationError("unknown-item", `unknown item: ${id}`);
-  return item;
-}
-function isGroupItem(item) {
-  return item.properties.kind === GROUP_KIND;
-}
 function groupAncestors(canvas, itemId) {
   return ancestors(canvas, itemIn(canvas, itemId)).map((id) => itemIn(canvas, id));
 }
@@ -269,6 +164,19 @@ function groupChangeItemIds(op) {
   if (op.action.kind === "copy") return op.action.rootIds;
   return "itemIds" in op.action ? op.action.itemIds : "moves" in op.action ? op.action.moves.map((move) => move.itemId) : "targets" in op.action ? op.action.targets.map((target) => target.itemId) : [op.action.itemId];
 }
+
+// packages/core/src/modules.ts
+var REGISTRY = /* @__PURE__ */ new Map();
+function modules() {
+  return [...REGISTRY.values()];
+}
+function moduleKinds() {
+  return modules().flatMap((m) => m.kinds ?? []);
+}
+function moduleKindOf(mime) {
+  return moduleKinds().find((k) => k.mimes.includes(mime)) ?? null;
+}
+var JUDGMENT_ROUTE = "/api/judgment";
 
 // packages/core/src/badge.ts
 var BADGE_SCHEME = "Bearer";
@@ -311,10 +219,12 @@ function bearerHeader(badge) {
 var BADGES_ROUTE = "/api/badges";
 var badgeRoute = (badgeId) => `${BADGES_ROUTE}/${encodeURIComponent(badgeId)}`;
 
-// packages/core/src/grants.ts
+// packages/core/src/rungs.ts
 function narrowed(capability) {
   return capability !== void 0 && capability !== "edit";
 }
+
+// packages/core/src/grants.ts
 var grantsRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/grants`;
 var grantRoute = (canvasId, grantId) => `${grantsRoute(canvasId)}/${encodeURIComponent(grantId)}`;
 var grantRevokeRoute = (canvasId, grantId, options = {}) => {
@@ -401,6 +311,74 @@ var PASS_TTL_MS = 15 * 60 * 1e3;
 var passesRoute = (canvasId) => `/api/projects/${encodeURIComponent(canvasId)}/passes`;
 var passRoute = (canvasId, passId) => `${passesRoute(canvasId)}/${encodeURIComponent(passId)}`;
 var PASS_REDEEM_ROUTE = "/api/passes/redeem";
+
+// packages/core/src/address.ts
+var CANVAS_PATH_PREFIX = "/p";
+var CANVAS_ROUTE = `${CANVAS_PATH_PREFIX}/:canvasId`;
+var ITEM_ROUTE = `${CANVAS_ROUTE}/i/:itemId`;
+function canvasPath(canvasId) {
+  return `${CANVAS_PATH_PREFIX}/${encodeURIComponent(canvasId)}`;
+}
+var DECK_PATH_SEGMENT = "deck";
+var DECK_ROUTE = `${CANVAS_ROUTE}/${DECK_PATH_SEGMENT}`;
+var MODULE_PAGE_PATH_SEGMENT = "x";
+var MODULE_PAGE_ROUTE = `${CANVAS_ROUTE}/${MODULE_PAGE_PATH_SEGMENT}/:segment`;
+var WORKBENCH_PATH_SEGMENT = "w";
+var WORKBENCH_ROUTE = `${CANVAS_ROUTE}/${WORKBENCH_PATH_SEGMENT}`;
+var WORKBENCH_ITEM_ROUTE = `${WORKBENCH_ROUTE}/:wbItemId`;
+function canvasUrl(origin, canvasId) {
+  return `${origin.replace(/\/+$/, "")}${canvasPath(canvasId)}`;
+}
+function canvasUrlWithPass(origin, canvasId, token) {
+  return urlWithPass(canvasUrl(origin, canvasId), token);
+}
+function urlWithPass(url2, token) {
+  return `${url2}#${token}`;
+}
+function splitPassFragment(address) {
+  const hash2 = address.indexOf("#");
+  if (hash2 < 0) return { address };
+  const pass = address.slice(hash2 + 1);
+  const rest = address.slice(0, hash2);
+  return pass ? { address: rest, pass } : { address: rest };
+}
+function parseCanvasAddress(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const { address, pass } = splitPassFragment(trimmed);
+  const schemed = /^[a-z][a-z0-9+.-]*:\/\//i.test(address) ? address : `${/^(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(address) ? "http" : "https"}://${address}`;
+  let url2;
+  try {
+    url2 = new URL(schemed);
+  } catch {
+    return null;
+  }
+  if (url2.protocol !== "http:" && url2.protocol !== "https:") return null;
+  if (!url2.hostname) return null;
+  const parts = url2.pathname.replace(/\/+$/, "").split("/");
+  if (parts.length !== 3 || parts[0] !== "" || `/${parts[1]}` !== CANVAS_PATH_PREFIX) return null;
+  const canvasId = decodeSegment(parts[2]);
+  if (!canvasId) return null;
+  return { origin: url2.origin, canvasId, ...pass !== void 0 ? { pass } : {} };
+}
+function decodeSegment(segment) {
+  if (!segment) return null;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+function normalizeHomeUrl(raw) {
+  const trimmed = raw.trim();
+  try {
+    const url2 = new URL(trimmed);
+    if (url2.protocol !== "http:" && url2.protocol !== "https:") return trimmed.replace(/\/+$/, "");
+    return url2.origin;
+  } catch {
+    return trimmed.replace(/\/+$/, "");
+  }
+}
 
 // packages/core/src/emoji.ts
 var e = (emoji, name, ...keywords) => ({
@@ -1262,6 +1240,32 @@ var CLAIM_REFUSAL = {
   claimedJustNow: "claimed-just-now",
   live: "live"
 };
+
+// packages/core/src/browseritem.ts
+var BROWSER_MIME = "text/uri-list";
+
+// packages/core/src/canvasitem.ts
+var CANVAS_KIND = "canvas";
+function isCanvasItem(item) {
+  return item.properties.kind === CANVAS_KIND;
+}
+
+// packages/core/src/kinds.ts
+function itemKind(item) {
+  if (isDrawingItem(item)) return "drawing";
+  if (isTextItem(item)) return "text";
+  if (isCanvasItem(item)) return "canvas";
+  const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
+  const mime = current?.mimeType ?? "";
+  const added = moduleKindOf(mime);
+  if (added) return added.id;
+  if (mime === BROWSER_MIME) return "site";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "text/html") return "screen";
+  if (mime.startsWith("text/") || mime === "application/pdf") return "document";
+  return "other";
+}
 
 // packages/core/src/protocol.ts
 var CANVAS_GROUPS_FEATURE = "canvas-groups-v4";
@@ -2866,9 +2870,9 @@ async function room(deps, life, announce, onLeave) {
     };
   };
   const reconcile = async (roster2) => {
-    for (const record of Object.values(roster2)) {
-      if (notHeld.has(record.actor.id)) continue;
-      await rows.adopt(await adoptionRow(record.actor.id, record.actor.name));
+    for (const record2 of Object.values(roster2)) {
+      if (notHeld.has(record2.actor.id)) continue;
+      await rows.adopt(await adoptionRow(record2.actor.id, record2.actor.name));
     }
     await reap(roster2);
   };
@@ -2968,18 +2972,18 @@ async function room(deps, life, announce, onLeave) {
     policyState.joined = first?.joined;
     if (first) policyState.nameOf = nameResolver(first);
   }
-  const policyOf = (record) => answerPolicy(rulesOf(record.rules), keeping, record.writtenBy?.id, policyState.joined);
-  const policyLine = (record) => policyWords(policyOf(record), (id) => known.get(id) ?? policyState.nameOf(id), owner.id, policyState.joined) ?? "listens to everyone";
-  const sayPolicy = async (record) => {
+  const policyOf = (record2) => answerPolicy(rulesOf(record2.rules), keeping, record2.writtenBy?.id, policyState.joined);
+  const policyLine = (record2) => policyWords(policyOf(record2), (id) => known.get(id) ?? policyState.nameOf(id), owner.id, policyState.joined) ?? "listens to everyone";
+  const sayPolicy = async (record2) => {
     const key = keys.gateSaid(
       p.id,
-      `${record.actor.id} ${record.writtenBy?.id ?? ""} ${JSON.stringify(rulesOf(record.rules).listen ?? null)}`
+      `${record2.actor.id} ${record2.writtenBy?.id ?? ""} ${JSON.stringify(rulesOf(record2.rules).listen ?? null)}`
     );
     if (await state.get(key)) return;
     await state.set(key, true);
-    if (gateSetAside(rulesOf(record.rules), keeping, record.writtenBy?.id, policyState.joined)) {
+    if (gateSetAside(rulesOf(record2.rules), keeping, record2.writtenBy?.id, policyState.joined)) {
       narrate(
-        `${record.actor.name}'s gate was last written by ${record.writtenBy?.name ?? "somebody else"}, not you \u2014 answering only you until you say otherwise: isocan rc listen ${record.actor.name} --to <names|everyone>`
+        `${record2.actor.name}'s gate was last written by ${record2.writtenBy?.name ?? "somebody else"}, not you \u2014 answering only you until you say otherwise: isocan rc listen ${record2.actor.name} --to <names|everyone>`
       );
     }
   };
@@ -2997,11 +3001,11 @@ async function room(deps, life, announce, onLeave) {
   );
   if (enrolledCount > 0) {
     const byWords = /* @__PURE__ */ new Map();
-    for (const record of Object.values(opening)) {
-      if (notHeld.has(record.actor.id)) continue;
-      const words = policyLine(record);
-      byWords.set(words, [...byWords.get(words) ?? [], record.actor.name]);
-      await sayPolicy(record);
+    for (const record2 of Object.values(opening)) {
+      if (notHeld.has(record2.actor.id)) continue;
+      const words = policyLine(record2);
+      byWords.set(words, [...byWords.get(words) ?? [], record2.actor.name]);
+      await sayPolicy(record2);
     }
     for (const [words, names] of byWords) {
       const narrowed2 = words !== "listens to everyone";
@@ -3038,19 +3042,19 @@ async function room(deps, life, announce, onLeave) {
     return snapshot !== null && !snapshot.canvas.agents?.[actorId];
   };
   const rolls = /* @__PURE__ */ new Map();
-  const sayRoll = async (record, kind, canvas) => {
-    const words = policyWords(policyOf(record), (id) => known.get(id) ?? policyState.nameOf(id), void 0, policyState.joined) ?? "listens to everyone";
-    const body = rollWords(kind, record.actor.name, words);
+  const sayRoll = async (record2, kind, canvas) => {
+    const words = policyWords(policyOf(record2), (id) => known.get(id) ?? policyState.nameOf(id), void 0, policyState.joined) ?? "listens to everyone";
+    const body = rollWords(kind, record2.actor.name, words);
     for (let attempt = 0; attempt < 2; attempt++) {
       const at = attempt === 0 && canvas ? canvas : (await routes.snapshot(p.id).catch(() => null))?.canvas;
       if (!at) break;
       try {
-        await routes.sendOp(p.id, record.actor, rollOp(at, kind, body));
-        narrate(`${record.actor.name} \xB7 said in the Chat \u2014 ${body}`);
+        await routes.sendOp(p.id, record2.actor, rollOp(at, kind, body));
+        narrate(`${record2.actor.name} \xB7 said in the Chat \u2014 ${body}`);
         return true;
       } catch (err) {
         if (attempt === 1 || !(err instanceof ApiError && err.code === "main-exists")) {
-          narrate(`${record.actor.name} \xB7 could not say "${kind}" in the Chat \u2014 ${err.message}`);
+          narrate(`${record2.actor.name} \xB7 could not say "${kind}" in the Chat \u2014 ${err.message}`);
           return false;
         }
       }
@@ -3062,8 +3066,8 @@ async function room(deps, life, announce, onLeave) {
     const ended = clock.now();
     let canvas = null;
     for (const actorId of actorIds) {
-      const record = policyState.roster[actorId];
-      if (!record || !dispatches.has(actorId)) continue;
+      const record2 = policyState.roster[actorId];
+      if (!record2 || !dispatches.has(actorId)) continue;
       let mine = rolls.get(actorId);
       if (!mine) {
         canvas ??= (await routes.snapshot(p.id).catch(() => null))?.canvas ?? null;
@@ -3072,8 +3076,8 @@ async function room(deps, life, announce, onLeave) {
         mine = { last: lastRoll(canvas, actorId), seen: typeof seen === "number" ? seen : void 0, kept: 0 };
         rolls.set(actorId, mine);
       }
-      const due = deps.announce(record.actor) ? rollDue({ last: mine.last, seen: mine.seen, now: began }) : null;
-      if (due && await sayRoll(record, due, canvas)) {
+      const due = deps.announce(record2.actor) ? rollDue({ last: mine.last, seen: mine.seen, now: began }) : null;
+      if (due && await sayRoll(record2, due, canvas)) {
         mine.last = { kind: due, at: ended };
         canvas = null;
       }
@@ -3090,19 +3094,19 @@ async function room(deps, life, announce, onLeave) {
     await rolling;
     const now = clock.now();
     for (const [actorId, mine] of rolls) {
-      const record = policyState.roster[actorId];
-      if (!record) continue;
+      const record2 = policyState.roster[actorId];
+      if (!record2) continue;
       await state.set(keys.seen(p.id, actorId), now);
-      if (mine.last && mine.last.kind !== "away" && deps.announce(record.actor)) {
-        await sayRoll(record, "away", null);
+      if (mine.last && mine.last.kind !== "away" && deps.announce(record2.actor)) {
+        await sayRoll(record2, "away", null);
       }
     }
   });
   const holdOnce = (actorIds = [...dispatches.keys()]) => {
     const policies = {};
     for (const actorId of actorIds) {
-      const record = policyState.roster[actorId];
-      if (record) policies[actorId] = policyOf(record);
+      const record2 = policyState.roster[actorId];
+      if (record2) policies[actorId] = policyOf(record2);
     }
     return routes.rcHold({ canvasId: p.id, actorIds, waitMs: 1e4, owner, policies }, life);
   };
@@ -3169,17 +3173,17 @@ async function room(deps, life, announce, onLeave) {
       }
     }
   })();
-  const runSummons = async (record, dispatch) => {
+  const runSummons = async (record2, dispatch) => {
     const entries = dispatch.pending.splice(0);
     const tip = dispatch.scannedTip;
     try {
-      await runSummonsInner(record, dispatch, entries, tip);
+      await runSummonsInner(record2, dispatch, entries, tip);
     } catch (err) {
       dispatch.pending.unshift(...entries);
       throw err;
     }
   };
-  const runSummonsInner = async (record, dispatch, entries, tip) => {
+  const runSummonsInner = async (record2, dispatch, entries, tip) => {
     const flagged = dispatch.redeliverUpTo === null ? entries : entries.map((e2) => e2.seq <= dispatch.redeliverUpTo ? { ...e2, redelivered: true } : e2);
     dispatch.redeliverUpTo = null;
     const summoned = flagged.some(
@@ -3191,44 +3195,44 @@ async function room(deps, life, announce, onLeave) {
     const carried = /* @__PURE__ */ new Map();
     for (const id of new Set(authors)) carried.set(id, await originsOf(id));
     const speakers = [...speakersFor(authors, (id) => carried.get(id))];
-    await state.set(keys.origins(record.actor.id), speakers);
-    const say = (line) => narrate(`${record.actor.name} \xB7 ${line}`);
+    await state.set(keys.origins(record2.actor.id), speakers);
+    const say = (line) => narrate(`${record2.actor.name} \xB7 ${line}`);
     try {
       await routes.claimActor({
         type: "actor.claim",
-        sessionKey: await deps.agentKey(record.actor.name),
-        as: record.actor.id
+        sessionKey: await deps.agentKey(record2.actor.name),
+        as: record2.actor.id
       });
     } catch (err) {
       if (!heldElsewhere(err)) throw err;
-      await standDownNotHeld(record.actor.id);
+      await standDownNotHeld(record2.actor.id);
       return;
     }
     say(`${reason} from ${from}, ${flagged.length} ${flagged.length === 1 ? "entry" : "entries"} \u2014 starting a session`);
     try {
       await routes.parkDelivered({
         canvasId: p.id,
-        actorId: record.actor.id,
+        actorId: record2.actor.id,
         parkId: dispatch.parkId,
         tip
       });
     } catch (err) {
       if (err instanceof ApiError && err.code === PARK_ADOPTED_CODE) {
-        narrate(`another park adopted ${record.actor.name}'s cursor \u2014 standing down for it`);
-        dispatches.delete(record.actor.id);
+        narrate(`another park adopted ${record2.actor.name}'s cursor \u2014 standing down for it`);
+        dispatches.delete(record2.actor.id);
         return;
       }
       throw err;
     }
-    const row = (await rows.list()).find((r) => r.canvasId === p.id && r.actorId === record.actor.id) ?? {
+    const row = (await rows.list()).find((r) => r.canvasId === p.id && r.actorId === record2.actor.id) ?? {
       canvasId: p.id,
-      actorId: record.actor.id,
-      name: record.actor.name,
+      actorId: record2.actor.id,
+      name: record2.actor.name,
       harness: null,
       cwd: rcCwd,
       sessionId: null
     };
-    const harness = await deps.adapterFor({ ...row, name: record.actor.name });
+    const harness = await deps.adapterFor({ ...row, name: record2.actor.name });
     const firstComment = flagged.find(
       (e2) => e2.envelope.op.type === "thread.create" || e2.envelope.op.type === "thread.reply"
     );
@@ -3238,18 +3242,18 @@ async function room(deps, life, announce, onLeave) {
     const thread = threadId ? snapshot?.canvas.threads[threadId] : void 0;
     const budget = row.budget ?? null;
     const runKey = budget ? runKeyOf(thread ?? (threadId ? { id: threadId } : null), firstComment?.envelope.op?.comment?.id ?? null) : null;
-    const spend = runKey ? await state.get(keys.run(record.actor.id, runKey)) ?? freshRun() : null;
-    const keepSpend = () => runKey && spend ? state.set(keys.run(record.actor.id, runKey), spend) : Promise.resolve();
+    const spend = runKey ? await state.get(keys.run(record2.actor.id, runKey)) ?? freshRun() : null;
+    const keepSpend = () => runKey && spend ? state.set(keys.run(record2.actor.id, runKey), spend) : Promise.resolve();
     if (budget && spend) {
       const met = capMet(spend, budget);
       if (met) {
         if (!spend.said) {
           spend.said = true;
           await keepSpend();
-          await sayInThread(threadId, capLine(record.actor.name, met, spend, budget));
+          await sayInThread(threadId, capLine(record2.actor.name, met, spend, budget));
         }
         say(`run at its budget \u2014 ${spendWords(spend, budget, harness.harness)}; no turn`);
-        await routes.parkAdvance({ canvasId: p.id, actorId: record.actor.id, parkId: dispatch.parkId, to: tip }).then(() => {
+        await routes.parkAdvance({ canvasId: p.id, actorId: record2.actor.id, parkId: dispatch.parkId, to: tip }).then(() => {
           dispatch.cursor = tip;
         }).catch(() => {
         });
@@ -3258,7 +3262,7 @@ async function room(deps, life, announce, onLeave) {
       spend.turns += 1;
       await keepSpend();
     }
-    const face = await routes.createSession(p.id, record.actor, void 0, harness.harness).catch(() => null);
+    const face = await routes.createSession(p.id, record2.actor, void 0, harness.harness).catch(() => null);
     const anchoredItem = thread?.anchorItemId ? snapshot?.canvas.items[thread.anchorItemId] : void 0;
     const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : void 0;
     const contextItem = anchoredItem ?? item;
@@ -3299,7 +3303,7 @@ async function room(deps, life, announce, onLeave) {
     };
     const beat = (patch) => {
       if (!face) return;
-      void routes.updateSession(p.id, face.sessionId, { actor: record.actor, ...patch }).catch(() => {
+      void routes.updateSession(p.id, face.sessionId, { actor: record2.actor, ...patch }).catch(() => {
       });
     };
     const heartbeat = new AbortController();
@@ -3316,20 +3320,20 @@ async function room(deps, life, announce, onLeave) {
     try {
       agent = await harness.open({
         canvasId: p.id,
-        agent: record.actor,
+        agent: record2.actor,
         owner,
         face: face?.sessionId ?? null,
         threadId,
         narrate: say
       });
-      const storedSession = await state.get(keys.session(record.actor.id));
+      const storedSession = await state.get(keys.session(record2.actor.id));
       const session = await agent.ensureSession(row.cwd, spend ? spend.session : row.sessionId ?? storedSession ?? null);
       if (spend) {
         spend.session = session.sessionId;
         await keepSpend();
       } else {
-        await state.set(keys.session(record.actor.id), session.sessionId);
-        await rows.setSessionId(p.id, record.actor.id, session.sessionId);
+        await state.set(keys.session(record2.actor.id), session.sessionId);
+        await rows.setSessionId(p.id, record2.actor.id, session.sessionId);
       }
       say(`session ${session.resumed ? "resumed" : "started"} in ${row.cwd}`);
       const usdBefore = spend?.usd ?? null;
@@ -3338,7 +3342,7 @@ async function room(deps, life, announce, onLeave) {
       let lastToolBeat = 0;
       const turn = await agent.prompt(
         session.sessionId,
-        summonsPrompt(p.title, record.actor.name, { reason, entries: flagged }, summonsContext),
+        summonsPrompt(p.title, record2.actor.name, { reason, entries: flagged }, summonsContext),
         (event) => {
           if (event.kind === "usage" && typeof event.usd === "number" && spend && budget) {
             turnUsd = Math.max(turnUsd ?? 0, event.usd);
@@ -3361,8 +3365,8 @@ async function room(deps, life, announce, onLeave) {
           }
         }
       );
-      if (!dispatches.has(record.actor.id) || turn.stopReason !== "end_turn" && await withdrawnHere(record.actor.id)) {
-        say(`turn stopped \u2014 ${record.actor.name} was withdrawn`);
+      if (!dispatches.has(record2.actor.id) || turn.stopReason !== "end_turn" && await withdrawnHere(record2.actor.id)) {
+        say(`turn stopped \u2014 ${record2.actor.name} was withdrawn`);
         return;
       }
       say(`turn ended \u2014 ${turn.stopReason}`);
@@ -3371,11 +3375,11 @@ async function room(deps, life, announce, onLeave) {
         const met = capMet(spend, budget);
         if (met && (cancelled || met === "usd") && !spend.said) {
           spend.said = true;
-          await sayInThread(threadId, capLine(record.actor.name, met, spend, budget));
+          await sayInThread(threadId, capLine(record2.actor.name, met, spend, budget));
         }
         await keepSpend();
       }
-      await routes.parkAdvance({ canvasId: p.id, actorId: record.actor.id, parkId: dispatch.parkId, to: tip }).then(() => {
+      await routes.parkAdvance({ canvasId: p.id, actorId: record2.actor.id, parkId: dispatch.parkId, to: tip }).then(() => {
         dispatch.cursor = tip;
       }).catch(() => {
       });
@@ -3394,18 +3398,18 @@ async function room(deps, life, announce, onLeave) {
     return from;
   };
   const takeUp = async (roster2) => {
-    for (const record of Object.values(roster2)) {
-      if (dispatches.has(record.actor.id) || notHeld.has(record.actor.id)) continue;
-      known.set(record.actor.id, record.actor.name);
-      const parked = await parkAgent(record.actor.id, await ownRow(record.actor.id));
+    for (const record2 of Object.values(roster2)) {
+      if (dispatches.has(record2.actor.id) || notHeld.has(record2.actor.id)) continue;
+      known.set(record2.actor.id, record2.actor.name);
+      const parked = await parkAgent(record2.actor.id, await ownRow(record2.actor.id));
       if (parked === "not-held") {
-        await sayNotHeld(record.actor.id);
+        await sayNotHeld(record2.actor.id);
         continue;
       }
-      const row = await adoptionRow(record.actor.id, record.actor.name);
+      const row = await adoptionRow(record2.actor.id, record2.actor.name);
       const adopted = await rows.adopt(row);
-      if (adopted) narrate(`${record.actor.name} \xB7 where and how supplied \u2014 ${suppliedWords(row)}`);
-      if (parked !== "held") couldNotHold(record.actor.id, parked.error);
+      if (adopted) narrate(`${record2.actor.name} \xB7 where and how supplied \u2014 ${suppliedWords(row)}`);
+      if (parked !== "held") couldNotHold(record2.actor.id, parked.error);
     }
   };
   const startTip = (await routes.watchLog({ only: [p.id] })).cursors[p.id] ?? 0;
@@ -3473,9 +3477,9 @@ async function room(deps, life, announce, onLeave) {
             await sayNotHeld(op.agent.id);
             continue;
           }
-          const record = roster2[op.agent.id];
-          narrate(`${by.name} enrolled ${op.agent.name} \u2014 answerable here${record ? ` \xB7 ${policyLine(record)}` : ""}`);
-          if (record) await sayPolicy(record);
+          const record2 = roster2[op.agent.id];
+          narrate(`${by.name} enrolled ${op.agent.name} \u2014 answerable here${record2 ? ` \xB7 ${policyLine(record2)}` : ""}`);
+          if (record2) await sayPolicy(record2);
           const row = await adoptionRow(op.agent.id, op.agent.name);
           const adopted = await rows.adopt(row);
           if (adopted) narrate(`${op.agent.name} \xB7 where and how supplied \u2014 ${suppliedWords(row)}`);
@@ -3495,16 +3499,16 @@ async function room(deps, life, announce, onLeave) {
         await state.delete(keys.session(op.actorId));
         continue;
       }
-      for (const record of Object.values(roster2)) {
-        const dispatch = dispatches.get(record.actor.id);
+      for (const record2 of Object.values(roster2)) {
+        const dispatch = dispatches.get(record2.actor.id);
         if (!dispatch || entry.seq <= dispatch.scannedTip) continue;
         const joined = snapshot?.joined;
         const carried = await originsOf(by.id);
         const agent = {
-          actorId: record.actor.id,
-          names: [{ id: record.actor.id, name: record.actor.name }],
-          rules: rulesOf(record.rules),
-          policy: policyOf(record),
+          actorId: record2.actor.id,
+          names: [{ id: record2.actor.id, name: record2.actor.name }],
+          rules: rulesOf(record2.rules),
+          policy: policyOf(record2),
           hands: keeping.hands,
           ...joined ? { joined } : {},
           ...carried && carried.size > 0 ? { onBehalfOf: [...carried] } : {}
@@ -3515,7 +3519,7 @@ async function room(deps, life, announce, onLeave) {
           continue;
         }
         if (turnedAway(op, by.id, agent) && (op.type === "thread.create" || op.type === "thread.reply")) {
-          const key = keys.turnedAwaySaid(p.id, `${op.threadId} ${by.id} ${record.actor.id}`);
+          const key = keys.turnedAwaySaid(p.id, `${op.threadId} ${by.id} ${record2.actor.id}`);
           if (await state.get(key)) continue;
           await state.set(key, true);
           const nameOf = snapshot ? nameResolver(snapshot) : (id) => known.get(id);
@@ -3523,12 +3527,12 @@ async function room(deps, life, announce, onLeave) {
           const asker = askers.join(",") || by.name;
           const askerIds = agent.onBehalfOf ?? [by.id];
           const ran = askerIds.map((id) => lapsedFor(agent.policy, id, joined)).find((at) => at !== void 0);
-          const line = turnedAwayLine(record.actor.name, agent.policy, nameOf, asker, { lapsed: ran });
+          const line = turnedAwayLine(record2.actor.name, agent.policy, nameOf, asker, { lapsed: ran });
           const already = snapshot?.canvas.threads[op.threadId]?.comments.some(
             (c) => isSystemActor(c.author.id) && c.body === line
           );
           const who = agent.onBehalfOf ? `${by.name}, for ${askers.join(" and ")},` : by.name;
-          narrate(`${record.actor.name} \xB7 ${who} asked; ${policyLine(record)} \u2014 said so in the thread, nothing started`);
+          narrate(`${record2.actor.name} \xB7 ${who} asked; ${policyLine(record2)} \u2014 said so in the thread, nothing started`);
           if (!already) await sayInThread(op.threadId, line);
         }
       }
@@ -3546,8 +3550,8 @@ async function room(deps, life, announce, onLeave) {
     for (const [actorId, dispatch] of dispatches) {
       if (dispatch.busy || dispatch.pending.length === 0) continue;
       if (clock.now() < dispatch.retryAfter) continue;
-      const record = roster2[actorId];
-      if (!record) continue;
+      const record2 = roster2[actorId];
+      if (!record2) continue;
       const enrolledIds = new Set(Object.keys(roster2));
       const hasPersonWord = dispatch.pending.some(
         (e2) => !enrolledIds.has(e2.envelope.actor.id) && !isSystemActor(e2.envelope.actor.id)
@@ -3558,7 +3562,7 @@ async function room(deps, life, announce, onLeave) {
       await state.set(keys.guard(actorId), guard);
       if (verdict.verdict === "hold-cycle") {
         if (verdict.announce) {
-          const line = `${record.actor.name} paused after ${guard.agentChain} agent-to-agent ${guard.agentChain === 1 ? "turn" : "turns"} with no person in the conversation \u2014 a human word resumes it.`;
+          const line = `${record2.actor.name} paused after ${guard.agentChain} agent-to-agent ${guard.agentChain === 1 ? "turn" : "turns"} with no person in the conversation \u2014 a human word resumes it.`;
           narrate(`${line}`);
           await sayInThread(threadOf(dispatch.pending), line);
         }
@@ -3567,34 +3571,34 @@ async function room(deps, life, announce, onLeave) {
       if (verdict.verdict === "hold-ceiling") {
         dispatch.retryAfter = verdict.retryAfter;
         if (verdict.announce) {
-          const line = `${record.actor.name} is at its ceiling \u2014 ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((verdict.freesAt - clock.now()) / 6e4))} min).`;
+          const line = `${record2.actor.name} is at its ceiling \u2014 ${TURNS_PER_HOUR} turns in the past hour. This summons waits (about ${Math.max(1, Math.round((verdict.freesAt - clock.now()) / 6e4))} min).`;
           narrate(`${line}`);
           await sayInThread(threadOf(dispatch.pending), line);
         }
         continue;
       }
       if (wasHeld) {
-        narrate(`${record.actor.name}'s hold lifted \u2014 dispatching what waited`);
+        narrate(`${record2.actor.name}'s hold lifted \u2014 dispatching what waited`);
       }
       const failedThread = threadOf(dispatch.pending);
       dispatch.busy = true;
-      void runSummons(record, dispatch).catch(async (err) => {
+      void runSummons(record2, dispatch).catch(async (err) => {
         if (await withdrawnHere(actorId)) {
           dispatch.pending.length = 0;
-          narrate(`${record.actor.name} \xB7 turn stopped \u2014 ${record.actor.name} was withdrawn`);
+          narrate(`${record2.actor.name} \xB7 turn stopped \u2014 ${record2.actor.name} was withdrawn`);
           return;
         }
         if (err instanceof RoomHold) {
-          narrate(`${record.actor.name} \xB7 turn held \u2014 ${err.line}`);
+          narrate(`${record2.actor.name} \xB7 turn held \u2014 ${err.line}`);
           await sayInThread(failedThread, err.line);
           dispatch.retryAfter = err.retryAfter;
           return;
         }
         const why = err.message;
-        narrate(`${record.actor.name} \xB7 turn FAILED \u2014 ${why} (retrying in 60s)`);
+        narrate(`${record2.actor.name} \xB7 turn FAILED \u2014 ${why} (retrying in 60s)`);
         await sayInThread(
           failedThread,
-          `${record.actor.name} couldn't answer \u2014 ${why}. The summons is held and will be retried; \`isocan rc\`'s log has the detail.`
+          `${record2.actor.name} couldn't answer \u2014 ${why}. The summons is held and will be retried; \`isocan rc\`'s log has the detail.`
         );
         dispatch.retryAfter = clock.now() + 6e4;
       }).finally(() => {

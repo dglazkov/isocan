@@ -1,7 +1,8 @@
 import { type PersonalSourceRecord, type PersonalConsent, type PersonalLinkIntent, type ReservePersonalRequest, type PersonalReservation } from "./personal-desk.js";
 import type { PersonalDelegate } from "../../core/src/index.js";
 import type { ActorClaim, Attestation, CanvasTakedown, Capability, Grant, GrantSubject, Group, HomeRefusal, PurgeCounts, SeenMark, SeenMarks, Space, OperatorAct, OperatorEnd, OperatorRevocation } from "../../core/src/index.js";
-import type { BadgeRecord, Desk, PassRecord, Provenance } from "./desk.js";
+import type { SummaryDay } from "../../core/src/semantic-zoom.js";
+import type { BadgeRecord, Desk, ParkRow, PassRecord, Provenance } from "./desk.js";
 export declare class FileDesk implements Desk {
     readonly home: string;
     private state;
@@ -155,6 +156,13 @@ export declare class FileDesk implements Desk {
     /** Not lifted — expired rows included, because the desk keeps no clock
      * and the registry is the one reader that judges expiry (see `Desk`). */
     refusals(): Promise<HomeRefusal[]>;
+    summaryDays(canvasId: string): Promise<Record<string, SummaryDay>>;
+    putSummaryDays(canvasId: string, days: Record<string, SummaryDay>): Promise<void>;
+    parkRow(canvasId: string, actorId: string): Promise<ParkRow | null>;
+    putParkRow(canvasId: string, actorId: string, row: ParkRow): Promise<void>;
+    linkGrantsMigrated(): Promise<boolean>;
+    markLinkGrantsMigrated(at: string): Promise<void>;
+    private readParkRows;
     /**
      * The badge behind an id, **or nothing if it was killed** — the one lookup
      * every method here goes through, so "a killed badge is a badge nobody

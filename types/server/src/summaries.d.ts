@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { Desk } from "./desk.js";
 import type { Engine } from "./engine.js";
 import { type ViewOnlyError } from "./grants.js";
 import type { HomeLinks } from "./home-links.js";
@@ -72,6 +73,7 @@ export interface SummaryOptions {
 interface SummaryRouteScope {
     engine: Engine;
     store: Store;
+    desk: Desk;
     homes: HomeLinks | null | undefined;
     refusals: Refusals;
     admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;
@@ -83,8 +85,6 @@ interface SummaryRouteScope {
     } | null>;
     /** This machine's person, for `madeFor` when the stored key paid. */
     keyOwner: () => Promise<string | null>;
-    /** The home directory the cache lives under. */
-    home: string;
     options: SummaryOptions;
 }
 /** `GET` and `POST /api/projects/:id/summaries`, on `app`. */

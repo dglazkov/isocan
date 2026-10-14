@@ -1,13 +1,14 @@
 import type { Actor, CanvasContents, CanvasState, Item } from "./model.js";
 import type { GroupAction, GroupAnchor, GroupBox, GroupCell, GroupChange, GroupExpectation, GroupLayout, GroupOperation, GroupPlacementPolicy, GroupStamp } from "./canvas-group-types.js";
+import { isGroupItem } from "./canvas-group-kit.js";
 import type { Operation } from "./ops.js";
 /** Empty frames have one shared initial size on the CLI and browser shelf. */
 export declare const GROUP_DEFAULT_SIZE: {
     width: number;
     height: number;
 };
-/** Kind is explicit: visual overlap never turns an ordinary card into a container. */
-export declare function isGroupItem(item: Item): boolean;
+/** Kind is explicit: visual overlap never turns an ordinary card into a container (`canvas-group-kit.ts`). */
+export { isGroupItem };
 /** Direct membership, with null addressing the canvas root instead of an enclosing frame. */
 export declare function groupChildren(canvas: CanvasContents, groupId: string | null): Item[];
 /** Breadcrumb order starts at the immediate parent and ends at the canvas root. */
@@ -103,35 +104,6 @@ export declare function groupDropPolicy(group: Item, point: {
     x: number;
     y: number;
 }): "auto" | "preserve";
-/** Shared arrangement targets footprints; attached marks never receive a competing layout slot. */
-export declare function groupArrangeAction(state: CanvasState, itemIds: readonly string[], options: {
-    kind: "align";
-    edge: "left" | "right" | "top" | "bottom" | "center" | "middle" | "hcenter" | "vcenter";
-} | {
-    kind: "distribute";
-    axis: "h" | "v";
-} | {
-    kind: "tidy";
-    perRow?: number;
-    gap?: number;
-    mode?: "smart" | "grid" | "in-place";
-    containerId?: string;
-    chrome?: (item: Item) => {
-        above: number;
-        below: number;
-    };
-    tolerance?: number;
-}): Extract<GroupAction, {
-    kind: "transform";
-}>;
-/** Content-fit settles only normalized targets against sibling placement units in the same scope. */
-export declare function groupFitAction(state: CanvasState, targets: readonly {
-    itemId: string;
-    width?: number;
-    height?: number;
-}[]): Extract<GroupAction, {
-    kind: "frame";
-}>;
 /** Preview the same resolved whole act, including ancestor frame repair and any drop transfer. */
 export declare function groupPreviewBoxes(state: CanvasState, action: Exclude<GroupAction, {
     kind: "apply";

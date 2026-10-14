@@ -1,4 +1,5 @@
 import type { ActorRegistry, LogEntry, Canvas, CanvasState, PurgeCounts, PurgeHorizon, SlashCommand, UploadTicket } from "../../core/src/index.js";
+import type { SummaryEntry } from "../../core/src/semantic-zoom.js";
 import type { Readable } from "node:stream";
 export interface BlobMeta {
     /** The name the bytes are filed under — `<sha256>.<ext>`. A path segment on
@@ -263,4 +264,20 @@ export interface Store {
      * §2). Compaction and introspection operate on the same record.
      */
     readArchivedLog(id: string): Promise<LogEntry[]>;
+    /**
+     * Every cached summary entry for this canvas, with when its backing object
+     * was last written — what `SummaryCache` loads its in-memory index from on
+     * first touch. Derived and regenerable: never replicated, and erased by
+     * `purgeCanvas`.
+     */
+    listSummaries(id: string): Promise<Array<{
+        entry: SummaryEntry;
+        touched: number;
+    }>>;
+    /** One cached summary entry by its 64-hex key, or null. */
+    getSummary(id: string, key: string): Promise<SummaryEntry | null>;
+    /** Write one summary entry into this canvas's cache. */
+    putSummary(id: string, entry: SummaryEntry): Promise<void>;
+    /** Remove one summary entry from this canvas's cache. */
+    deleteSummary(id: string, key: string): Promise<void>;
 }

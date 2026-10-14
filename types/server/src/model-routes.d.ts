@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { type ActorClaim } from "../../core/src/index.js";
+import type { Desk } from "./desk.js";
 import type { Engine } from "./engine.js";
 import { type ViewOnlyError } from "./grants.js";
 import type { RouteOptions } from "./http.js";
 import { type Refusals } from "./takedowns.js";
 import type { Store } from "./store.js";
+import type { Workstation } from "./workstation.js";
 /**
  * **The routes that spend the home's keys** — `POST /api/judgment` (the
  * judge, wireframes phase 5), `POST /api/text` (the text model, copy-edit
@@ -20,8 +22,10 @@ interface ModelRouteScope {
     engine: Engine;
     /** The canvas's blobs, which Semantic Zoom's make route reads a note's words from. */
     store: Store;
-    /** The home directory Semantic Zoom's summary cache lives under. */
-    home: string;
+    /** The home's desk, where Semantic Zoom's summary budget lives. */
+    desk: Desk;
+    /** The local workstation (`keys.json`, `identity.json`, `homes`), or null on a hosted home. */
+    workstation: Workstation | null | undefined;
     options: RouteOptions;
     refusals: Refusals;
     admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;

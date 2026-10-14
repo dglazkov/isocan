@@ -18,8 +18,10 @@ export type { Daemon, DaemonOptions, RunDaemonOptions } from "./daemon.js";
 export { Engine, CanvasNotFoundError, NothingToUndoError } from "./engine.js";
 export type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, PurgeReport, Store, } from "./store.js";
 export { FileStore } from "./file-store.js";
-export type { Desk, BadgeRecord, Admission, PassRecord, Provenance, BadgeKind } from "./desk.js";
+export type { Desk, BadgeRecord, Admission, PassRecord, ParkRow, Provenance, BadgeKind } from "./desk.js";
 export { FileDesk } from "./file-desk.js";
+export type { Workstation } from "./workstation.js";
+export { FileWorkstation } from "./file-workstation.js";
 /**
  * `liveAdmission` crosses the package boundary because the second desk backing
  * has to ask it too (operator phase 2): "an admission that has run out is
@@ -36,7 +38,7 @@ export type { BadgeStore, DoorAnswer, StoredBadge } from "./badge-store.js";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.js";
 export { HomeLink, HomeRefusedError, HomeUnreachableError } from "./home-link.js";
 export type { HomeConnection, HomeDirectory, HomeHandshakes, HomeHello, HomeRegistry, } from "./home-link.js";
-export { HomeLinks } from "./home-links.js";
+export { HomeLinks, NotAReplicaError, SelfLinkError, isSelfAddress } from "./home-links.js";
 export type { HomeLinksOptions } from "./home-links.js";
 export { homesRecorded, readHomes, writeHomes } from "./homes.js";
 export type { HomeAssignments } from "./homes.js";

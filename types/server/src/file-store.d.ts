@@ -1,6 +1,7 @@
 import type { CanvasLifecycle } from "./store.js";
 import type { Readable } from "node:stream";
 import type { ActorRegistry, LogEntry, Canvas, CanvasState, SlashCommand } from "../../core/src/index.js";
+import type { SummaryEntry } from "../../core/src/semantic-zoom.js";
 import type { BlobListing, BlobMeta, BlobUploadRequest, LoadedCanvas, PurgeReport, Store } from "./store.js";
 export declare class FileStore implements Store {
     readonly home: string;
@@ -158,6 +159,14 @@ export declare class FileStore implements Store {
     /** The archive is appended in compaction order and compaction always drops
      * the oldest entries, so the file is already oldest-first. */
     readArchivedLog(id: string): Promise<LogEntry[]>;
+    listSummaries(id: string): Promise<Array<{
+        entry: SummaryEntry;
+        touched: number;
+    }>>;
+    getSummary(id: string, key: string): Promise<SummaryEntry | null>;
+    putSummary(id: string, entry: SummaryEntry): Promise<void>;
+    deleteSummary(id: string, key: string): Promise<void>;
+    private readSummaryFile;
     private readIndex;
     /** Age of a blob file in ms, or null if it is already gone. */
     private ageMs;

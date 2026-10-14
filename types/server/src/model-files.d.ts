@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Workstation } from "./workstation.js";
 /**
  * **`GET /models/<name>` — the local judge's model, from this machine to its
  * own pages** (local-judge phase 0; design *Privacy, proved rather than
@@ -36,8 +37,8 @@ export declare const JUDGE_WORKER_POLICY = "default-src 'none'; script-src 'self
 /** The policy a static file is served with, if it has one of its own — only the judge's Worker does. */
 export declare function judgeWorkerPolicy(file: string): string | null;
 interface ModelFileScope {
-    /** The home whose `models/` is served — the one keys.json is in. */
-    home: string;
+    /** The workstation whose `models/` is served — null on a hosted home. */
+    workstation: Workstation | null | undefined;
     servesWorld: boolean | undefined;
 }
 /** `GET /models/:name` on `app`, behind this machine-only gate. */

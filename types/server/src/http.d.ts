@@ -4,7 +4,6 @@ import type { TextOptions } from "./text.js";
 import type { LiveTokenOptions } from "./live-token.js";
 import { type KeyRouteOptions } from "./key-routes.js";
 import type { FastifyInstance } from "fastify";
-import type { Actor } from "../../core/src/index.js";
 import { Engine } from "./engine.js";
 import { type AuthConfig, type ProxyAuthConfig, type SigningKeys } from "./attest.js";
 import { Refusals } from "./takedowns.js";
@@ -13,11 +12,10 @@ import { SweepHub } from "./sweep.js";
 import type { Store } from "./store.js";
 import type { BadgeRecord, Desk } from "./desk.js";
 import { PresenceHub } from "./presence.js";
-import type { HomeLinks } from "./home-links.js";
 import type { ParkCursors } from "./park.js";
-import { type GoogleToken } from "./google.js";
 import { RcHolds } from "./rc-holds.js";
 import { type ContentSigning } from "./content.js";
+import type { Workstation } from "./workstation.js";
 declare module "fastify" {
     interface FastifyRequest {
         /** The badge this request presented, resolved once by the door hook. */
@@ -66,12 +64,17 @@ export interface RouteOptions {
     /** The machine-local key routes (`key-routes.ts`): the environment and the
      * provider transport they read. Absent, `process.env` and `fetch`. */
     keys?: KeyRouteOptions;
-    /** Local setup persists its pass-returned person in the same process as
-     * home badge writes. The route guards local custody before spending a pass. */
-    adoptIdentity?: (actor: Actor) => Promise<{
-        actor: Actor;
-        adopted: boolean;
-    }>;
+    /**
+     * **The local workstation seam** (`Workstation | null`).
+     *
+     * Holds single-user machine state (`keys.json`, `identity.json`, `google.json`,
+     * `dirs.json`, `modules/`) and outbound replica state (`homes.json`, `HomeLinks`).
+     * Present on a local daemon (`FileWorkstation`) and `null` on a hosted home
+     * (`ISOCAN_STORE=cloud` or `servesWorld: true`), so a hosted home has no
+     * object to become a replica through, spend local keys from, or bind local
+     * directories in.
+     */
+    workstation?: Workstation | null;
     /**
      * Where a sweep's per-badge outcomes go (roles design, "Reaching an open
      * socket"): the daemon hands the same hub to `ws.ts`, which tells the
@@ -79,41 +82,6 @@ export interface RouteOptions {
      * constructs routes alone, in which case one is made and nobody listens.
      */
     sweeps?: SweepHub;
-    /** Where a canvas born here, naming nothing, is born — or null when it stays
-     * here. What the health route reports as `home` (redefined in phase 10.3,
-     * because `stalenessOf` and older CLIs read that key and the birth default
-     * is the one whole-daemon answer that still exists), and what a `POST
-     * /api/home/join` with no address falls back to. */
-    birthHome?: string | null;
-    /**
-     * **Every home this daemon dials, and which canvas belongs to which.**
-     *
-     * It decides three things here: which canvas's writes and reads forward and
-     * to where, whether a given page is served at this origin at all (see
-     * `registerPages` — the one-origin rule is per canvas now), and what `GET
-     * /api/homes` answers. Absent means a daemon that is the home of everything
-     * it holds, which is every daemon a test constructs without one.
-     */
-    homes?: HomeLinks | null;
-    /**
-     * **This machine's runtime modules** (`docs/projects/modules/design.md`,
-     * phase 3): the isocan home whose `modules/` directory holds them. Read per
-     * request by `/api/serving` and `/modules/<slug>/…`, so `isocan module add`
-     * needs no restart. Absent on a daemon that should serve none.
-     */
-    modulesHome?: string;
-    /**
-     * **Whose `dirs.json` the directory routes read and write** — the roster of
-     * which directory is bound to which canvas (`binding.ts`), behind the tree,
-     * the picker, the bind and the backing. `daemon.ts` passes the home it runs
-     * out of; absent, the process's own (`isocanHome()`), read per request.
-     *
-     * It was always the process's, which is the same directory in every real
-     * daemon and a different one in every test: a daemon started on a temp home
-     * recorded its binds in the person's own `~/.isocan/dirs.json`
-     * (`docs/reviews/lessons.md` #104).
-     */
-    rosterHome?: string;
     /**
      * **Does this daemon serve the world?** What the bind says, stated rather
      * than sniffed: `daemon.ts` derives it from the address it was told to listen
@@ -152,13 +120,6 @@ export interface RouteOptions {
      * hosted home until its content host is configured.
      */
     contentSigning?: ContentSigning | null;
-    /**
-     * The Drive token on THIS machine, read fresh per request so `isocan gdoc
-     * auth` takes effect without a restart — or null, which is every hosted
-     * home and most local ones. Only `/api/docs/export` reads it, and only
-     * after the anonymous export has refused. See `google.ts`.
-     */
-    googleToken?: () => Promise<GoogleToken | null>;
     /**
      * **The attester this home has borrowed**, or null when it has borrowed
      * none — which is every local daemon and is not a defect.

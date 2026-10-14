@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { type KeyEnv } from "../../core/src/keys.js";
+import type { Workstation } from "./workstation.js";
 /**
  * **The settings area's hands: model keys, over HTTP, to this machine only**
  * (keys phase 2; `docs/projects/keys/design.md`).
@@ -44,8 +45,8 @@ export interface KeyRouteOptions {
     fetch?: typeof fetch;
 }
 interface KeyRouteScope {
-    /** The home whose `keys.json` this daemon reads — its own, as the judge's is. */
-    home: string;
+    /** The workstation whose `keys.json` this daemon reads — null on a hosted home. */
+    workstation: Workstation | null | undefined;
     /** What the bind says (`RouteOptions.servesWorld`): a daemon serving the world has no key routes. */
     servesWorld: boolean | undefined;
     keys?: KeyRouteOptions;

@@ -25,6 +25,7 @@ export * from "./placement.js";
 export * from "./area.js";
 export * from "./canvas-group-types.js";
 export * from "./canvas-groups.js";
+export * from "./canvas-group-arrange.js";
 export * from "./group-aim.js";
 export * from "./group-stack.js";
 export * from "./canvas-scope.js";

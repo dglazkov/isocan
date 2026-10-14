@@ -3,6 +3,7 @@ import { canvasItemOf } from "./canvasitem.js";
 import { type DesignScopeOptions, type DesignSystemSelection } from "./designsystem.js";
 import { type ContextExtras, type ContextPiece } from "./context.js";
 import type { RecapHeadResponse } from "./recap-head.js";
+export * from "./memory-link.js";
 /**
  * **Memory, in layers you can see** (`docs/projects/memory/design.md`).
  *
@@ -20,13 +21,6 @@ import type { RecapHeadResponse } from "./recap-head.js";
  * defines, set and cleared by `item.update` the way a pin is. The record is
  * never hidden: the link is an item anyone on the canvas can see.
  */
-export declare const MEMORY_PROP = "memory";
-export declare const MEMORY_INHERIT = "inherit";
-/** Phase 2's value — the person's own canvas, read only by their actors. */
-export declare const MEMORY_PERSONAL = "personal";
-export type MemoryLink = "inherit" | "personal";
-/** What a canvas card says about the memory behind it, or nothing. */
-export declare function memoryOf(item: Item): MemoryLink | null;
 /**
  * The canvases this one inherits from, **in the order the room reads them**:
  * top to bottom, then left to right. Several links compose in that order,
@@ -49,13 +43,6 @@ export declare function personalCanvasItemOf(home: string, sourceCanvasId: strin
     name: string;
 }): ReturnType<typeof canvasItemOf> & {
     title: string;
-};
-/** The patch that sets or clears the link — one spelling for both surfaces,
- *  cleared with `removeProperties` for the reason `markPatch` records. */
-export declare function memoryPatch(memory: MemoryLink | null): {
-    properties: Record<string, string>;
-} | {
-    removeProperties: string[];
 };
 /** A linked canvas as the reader could fetch it — or could not, with the
  *  reason in words, because a blank heading is the site item's first lesson. */
@@ -178,4 +165,3 @@ export declare function contextSheetSpot(canvas: CanvasContents, size?: {
     x: number;
     y: number;
 };
-export {};

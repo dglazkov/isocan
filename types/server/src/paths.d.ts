@@ -38,6 +38,12 @@ export declare const oplogFile: (home: string, id: string) => string;
 export declare const oplogArchiveFile: (home: string, id: string) => string;
 export declare const blobsDir: (home: string, id: string) => string;
 export declare const blobsIndexFile: (home: string, id: string) => string;
+/** Cached semantic-zoom cards for `FileStore` (`summaries/<id>/<key>.json`); hosted homes keep these in GCS (`canvases/{id}/summaries/{key}.json`) via `CloudStore`. */
+export declare const summariesDir: (home: string, id: string) => string;
+/** Per-canvas daily summary spend ledger for `FileDesk` (`summaries/<id>.stats.json`); hosted homes keep this in Firestore (`summaryStats/{id}`) via `CloudDesk`. */
+export declare const summaryStatsFile: (home: string, id: string) => string;
+/** Durable per-agent park cursors for `FileDesk` (`park-cursors.json`); hosted homes keep these in Firestore (`parks/{canvasId}__{actorId}`) via `CloudDesk`. */
+export declare const parkCursorsFile: (home: string) => string;
 export declare const daemonFile: (home: string) => string;
 export declare const daemonLogFile: (home: string) => string;
 export declare const identityFile: (home: string) => string;

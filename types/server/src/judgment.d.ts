@@ -33,8 +33,8 @@ export declare const JUDGE_URL = "https://api.typesafe.ai/v1/systemone";
 export interface JudgmentOptions {
     /** The key, read per call. Default: `resolveKey("typesafe")` — `TYPESAFE_API_KEY`, else `keys.json` under `keysHome`. */
     key?: () => string | undefined;
-    /** Whose `keys.json` the default key reads: the daemon's home. Default `ISOCAN_HOME`, else `~/.isocan`. */
-    keysHome?: string;
+    /** Whose `keys.json` the default key reads: the daemon's home, or `null` when this daemon has no workstation. */
+    keysHome?: string | null | undefined;
     fetch?: typeof fetch;
     url?: string;
     /** Judgments per badge per minute. Default `JUDGMENT_PER_MINUTE`. */

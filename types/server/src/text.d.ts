@@ -10,8 +10,8 @@ export declare function warnRefusedKeys<T>(read: () => T | undefined): T | undef
 export interface TextOptions {
     /** The key, read per call. Default: `resolveTextKey` — `ISOCAN_TEXT_API_KEY`, else `keys.json` under `keysHome`. */
     key?: () => string | undefined;
-    /** Whose `keys.json` the default key reads: the daemon's home. Default `ISOCAN_HOME`, else `~/.isocan`. */
-    keysHome?: string;
+    /** Whose `keys.json` the default key reads: the daemon's home, or `null` when this daemon has no workstation and reads from the environment alone. */
+    keysHome?: string | null | undefined;
     /** The provider. Default: `ISOCAN_TEXT_PROVIDER`, else the key's shape. */
     provider?: () => TextProvider | undefined;
     /** The model. Default: `ISOCAN_TEXT_MODEL`, else the provider's default. */

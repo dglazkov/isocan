@@ -29,8 +29,33 @@ import type { Store } from "./store.js";
  * use `--as`. A sessionKey names one conversation on one machine, so that
  * should be approximately nobody.
  */
-export declare function runMigrations(home: string, store: Store, desk: Desk, 
+export declare function runWorkstationMigrations(home: string, store: Store, desk: Desk, 
 /** The home this machine has configured, as `resolveHomeUrl` answers it —
  * the birth default from phase 10.3 on. Null when nothing is configured,
  * which is every daemon in this repo and every hosted home. */
 configuredHome: string | null): Promise<void>;
+/**
+ * Every canvas that predates grants gets the standing link grant it would
+ * have been born with (phase 7).
+ *
+ * **Why this is not optional.** The door now refuses a badge no grant admits.
+ * Every canvas already in the world — on every laptop, and at dev.isocan.io —
+ * has no grant row, so without this every one of them becomes unreachable the
+ * moment its daemon is upgraded: not degraded, not read-only, gone.
+ *
+ * **Why not "no grants means link is implied".** That is the same fallback
+ * `desk.ts` forbids for the claim queries, for exactly the same reason: it
+ * would make a canvas whose grant was never written admit everybody anyway,
+ * so a birth path that forgot to write the row would look perfect until the
+ * day somebody turned a link off and it did not go off. The rows are written.
+ *
+ * **The marker lives on the desk** (`linkGrantsMigrated` /
+ * `markLinkGrantsMigrated`), so a hosted container starting from a fresh
+ * filesystem sees the marker in Firestore and skips the per-canvas scan on
+ * every cold start.
+ *
+ * `grantedBy` is the migration rather than a badge id, so "who opened this
+ * canvas up?" answers "nobody — it predates the question" instead of
+ * fingering whichever badge happened to be around.
+ */
+export declare function grantTheLinkOnOldCanvases(store: Store, desk: Desk): Promise<void>;

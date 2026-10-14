@@ -1,4 +1,5 @@
 import type { SummaryEntry, SummaryStats } from "../../core/src/semantic-zoom.js";
+import type { Desk } from "./desk.js";
 type Kind = SummaryEntry["kind"];
 type Tokens = {
     inputTokens: number;
@@ -28,7 +29,7 @@ type Happened = {
  * the hour.
  */
 export declare class SummaryLedger {
-    private readonly root;
+    private readonly desk;
     private readonly perHour;
     private readonly now;
     private readonly visionPerHour;
@@ -38,10 +39,8 @@ export declare class SummaryLedger {
     private readonly spent;
     /** The calls that sent pictures, per canvas, inside `spent`. */
     private readonly looked;
-    constructor(root: string, perHour: () => number, now: () => number, visionPerHour: () => number);
-    private file;
+    constructor(desk: Desk, perHour: () => number, now: () => number, visionPerHour: () => number);
     private load;
-    private read;
     /** The calls this canvas has made in the last hour (or, with `vision`, those that sent pictures), oldest first. */
     private hour;
     /** How long until this canvas may call a model again — with `vision`, one that sends pictures, which must pass both hours: 0 when it may now. */
@@ -50,7 +49,7 @@ export declare class SummaryLedger {
     spend(canvasId: string, vision?: boolean): void;
     /** Count what happened, in today's row, and write the record. */
     record(canvasId: string, happened: Happened): Promise<void>;
-    /** One write at a time per canvas, each of the whole record as it now stands, by rename. */
+    /** One write at a time per canvas, each of the whole record as it now stands, behind the desk. */
     private write;
     /** The record as `GET …/summaries/stats` answers it: the last `span` days that had any, newest first, and their total. */
     stats(canvasId: string, span: number, entries: SummaryStats["entries"]): Promise<SummaryStats>;

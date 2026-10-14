@@ -64,12 +64,34 @@ export interface HomeLinksOptions {
      * `rc-relay` and whose asks arrive back down as `rc-ask` (agent-custody). */
     rc?: RcHolds;
 }
+/** Thrown when a daemon is asked to link to its own address (`409 self-link`), preventing outbound sync/reconcile/blob feedback loops. */
+export declare class SelfLinkError extends Error {
+    readonly code: "self-link";
+    constructor(address: string);
+}
+/** Thrown when a hosted home (`workstation === null`) is asked to dial a foreign home as a replica (`409 not-a-replica`). */
+export declare class NotAReplicaError extends Error {
+    readonly code: "not-a-replica";
+    constructor(message: string);
+}
+/**
+ * Does `targetUrl` name this daemon itself?
+ *
+ * Checked both at the HTTP door (where `reqHost` is the `Host` header the
+ * request arrived on — e.g. `isocan.io` behind a load balancer) and inside
+ * `HomeLinks` (where `boundPort` is the local loopback port the daemon is
+ * listening on). Either match is enough: a daemon reached as `isocan.io` may
+ * not dial `https://isocan.io`, and a local daemon on `127.0.0.1:4321` may not
+ * dial `http://localhost:4321` or `http://127.0.0.1:4321`.
+ */
+export declare function isSelfAddress(targetUrl: string, reqHost?: string | null, boundPort?: number | null, loopback?: boolean): boolean;
 export declare class HomeLinks implements HomeDirectory, HomeRegistry {
     /** The birth default, normalized. Null when a canvas born here stays here. */
     readonly birthHome: string | null;
     private readonly options;
     private rows;
     private readonly open;
+    private localPort;
     /** Writes to `homes.json`, serialized. Two concurrent births would otherwise
      * both read the record, both add their row, and the second write would
      * erase the first — the same read-modify-write hazard `blobs.json` is on the
@@ -81,6 +103,9 @@ export declare class HomeLinks implements HomeDirectory, HomeRegistry {
      * otherwise print a line per poll until somebody killed the daemon. */
     private complained;
     constructor(options: HomeLinksOptions);
+    /** Record this daemon's bound loopback port so `linkFor` and `bind` refuse self-links. */
+    setLocalPort(port: number): void;
+    private isSelf;
     /**
      * Read the record, open a link per distinct address, and start dialling.
      *

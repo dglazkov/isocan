@@ -3,9 +3,10 @@ import { Engine } from "./engine.js";
 import { SweepHub } from "./sweep.js";
 import type { Store } from "./store.js";
 import type { Desk } from "./desk.js";
+import type { Workstation } from "./workstation.js";
 import { PresenceHub } from "./presence.js";
 import { type AuthConfig, type ProxyAuthConfig, type SigningKeys } from "./attest.js";
-import { HomeLinks } from "./home-links.js";
+import type { HomeLinks } from "./home-links.js";
 import type { JudgmentOptions } from "./judgment.js";
 import type { KeyRouteOptions } from "./key-routes.js";
 import type { SummaryOptions } from "./summaries.js";
@@ -14,6 +15,10 @@ import type { LiveTokenOptions } from "./live-token.js";
 export interface DaemonOptions {
     port?: number;
     home?: string;
+    /** Optional Store override (tests inject a separate backing directory). */
+    store?: Store;
+    /** Optional Desk override (tests inject a separate backing directory). */
+    desk?: Desk;
     /** The WebSocket heartbeat interval; tests only. Production beats every
      * 25 s (`ws.ts`), and a test that has to watch a beat find an instance
      * behind the store should not have to wait one. */
@@ -221,6 +226,9 @@ export interface Daemon {
     /** The home's private ledgers. Two seams, side by side: canvas state
      * replicates through the store, the desk's ledgers never leave. */
     desk: Desk;
+    /** The local workstation (`FileWorkstation`) on a personal machine, or `null`
+     * on an authoritative hosted home (`ISOCAN_STORE=cloud` or `servesWorld: true`). */
+    workstation: Workstation | null;
     port: number;
     /** The content origin this daemon actually stands behind — what
      * `GET /api/serving` advertises — or null when no content listener bound
@@ -231,16 +239,15 @@ export interface Daemon {
      * it would do next would be a daemon nothing could ask. */
     birthHome: string | null;
     /**
-     * **Every home this daemon dials, and which canvas belongs to which.**
+     * **Every home this daemon dials, and which canvas belongs to which**
+     * (`workstation?.homes ?? null`).
      *
-     * Never null — a daemon that is the home of everything it holds has an empty
-     * registry rather than a missing one, which is what lets every caller ask
-     * one kind of question instead of branching on whether there is anywhere to
-     * ask. Exposed so a test can reach one link and ask what its last handshake
-     * actually was ("resumed from 241" versus "re-snapshotted"), and, as
-     * importantly, what a link did NOT do.
+     * Present on a local workstation and `null` on a hosted home, which dials
+     * nothing and cannot become a replica. Exposed so a test can reach one link
+     * and ask what its last handshake actually was ("resumed from 241" versus
+     * "re-snapshotted"), and, as importantly, what a link did NOT do.
      */
-    homes: HomeLinks;
+    homes: HomeLinks | null;
     /**
      * The sweep's outcomes (roles design, "Reaching an open socket"), exposed
      * for the reason `homes` is: a test that writes rows on the desk can run a

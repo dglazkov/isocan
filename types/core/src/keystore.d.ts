@@ -88,10 +88,10 @@ export declare function setKeySharing(home: string, share: boolean): Promise<str
  * refused for its mode is refused here too. Returns the file written.
  */
 export declare function setKeyAgents(home: string, agents: boolean): Promise<string>;
-/** Where to look: the environment and the home. Both default to this process's. */
+/** Where to look: the environment and the home. Both default to this process's; `home: null` resolves from the environment alone and never reads disk. */
 export interface ResolveOptions {
     env?: KeyEnv;
-    home?: string;
+    home?: string | null | undefined;
 }
 /**
  * **The one resolver.** The environment's key for this provider if it sets

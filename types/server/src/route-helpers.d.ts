@@ -1,6 +1,7 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { type Grant } from "../../core/src/index.js";
-import type { HomeLinks } from "./home-links.js";
+import { type HomeLinks } from "./home-links.js";
+import type { Workstation } from "./workstation.js";
 /**
  * **What more than one route file asks.** Three helpers `http.ts` held at
  * module scope until the operator and pass routes moved out of
@@ -17,6 +18,28 @@ export declare function liveGrants(grants: Grant[]): Grant[];
  * machine, localhost trust stands" needs to know, and the hosted home (bound
  * to 0.0.0.0) must not take the clause. */
 export declare function loopbackBound(app: FastifyInstance): boolean;
+/** The TCP port this Fastify instance is listening on, or null if not bound. */
+export declare function boundPort(app: FastifyInstance): number | null;
+/** Does `targetUrl` name this daemon itself, by `Host` header or loopback port? */
+export declare function isRequestSelfAddress(app: FastifyInstance, req: FastifyRequest, targetUrl: string): boolean;
+/**
+ * Validate and normalize `body.home` on `project.create` (`POST /api/ops`).
+ *
+ * - On an authoritative hosted home (`!workstation`), naming this home's own
+ *   origin means "birth it here" (`undefined`), while naming another home is
+ *   refused (`409 not-a-replica`).
+ * - On a local workstation, naming this daemon's own address is refused
+ *   (`409 self-link`), because a replica cannot birth canvases at itself.
+ */
+export declare function resolveCreateHome(app: FastifyInstance, req: FastifyRequest, workstation: Workstation | null | undefined, rawHome: string | undefined): string | undefined;
+/**
+ * Resolve and validate the target home for `POST /api/home/join`.
+ *
+ * Refuses self-links (`409 self-link`) before anything else, refuses hosted
+ * homes (`409 not-a-replica`) when `!workstation`, and refuses local daemons
+ * with neither a named home nor a `birthHome` (`409 not-a-replica`).
+ */
+export declare function resolveJoinHome(app: FastifyInstance, req: FastifyRequest, workstation: Workstation | null | undefined, rawHome: unknown): string;
 /**
  * **Refuse a home-scoped act this daemon cannot place**, or null to carry on.
  *
