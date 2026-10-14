@@ -21,6 +21,14 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 14 October 2026
+
+- **Semantic Zoom, an experiment.** Turn it on in Settings → Experiments.
+  Zoomed out past where a long note can be read, it shows a short summary,
+  marked ≈, instead of only its first line. When the note changes, the old
+  summary stays, marked as updating, until the new one arrives. Summaries
+  are made with the canvas owner's model key and never change the canvas.
+
 ## 13 October 2026
 
 - **Text far away says what it is.** Zoomed out past where a note's words

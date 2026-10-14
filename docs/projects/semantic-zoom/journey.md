@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-13
 see: canvas-groups
 note: "Semantic Zoom, an experiment: zoomed out past where words can be read, a text node, a group or an area shows a short model-written summary of what it holds instead of an unreadable smear, kept until its content changes. Scenes here; the mechanism is design.md; the walk is phases.md."

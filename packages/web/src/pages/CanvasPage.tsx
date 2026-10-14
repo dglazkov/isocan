@@ -63,6 +63,8 @@ const FullScreen = lazy(() => import("../components/FullScreen.tsx").then((m) =>
 const DeckPrint = lazy(() => import("../components/DeckPrint.tsx").then((m) => ({ default: m.DeckPrint })));
 const ModulePage = lazy(() => import("../components/ModulePage.tsx").then((m) => ({ default: m.ModulePage })));
 const ModuleOverlays = lazy(() => import("../components/ModuleOverlays.tsx").then((m) => ({ default: m.ModuleOverlays })));
+/** Semantic Zoom (an experiment): loaded only for a person who turned it on. */
+const SemanticZoom = lazy(() => import("../components/SemanticZoom.tsx"));
 /** Workspace composition is paid for only when someone opens a workspace. */
 const ModuleWorkspaceView = lazy(() =>
   import("../components/ModuleWorkspace.tsx").then((m) => ({ default: m.ModuleWorkspaceView })),
@@ -287,7 +289,7 @@ function CanvasSurface({
   const helpOpen = useUiStore((s) => s.helpOpen);
   const setHistoryOpen = useUiStore((s) => s.setHistoryOpen);
   const moduleDialogOpen = useUiStore((s) => s.moduleDialog !== null);
-  useUiStore((s) => s.experiments);
+  const semanticZoom = useUiStore((s) => s.experiments).includes("semantic.zoom");
   const moduleOverlaysVisible = modules().some((module) => module.overlays?.length);
   const groupDialogOpen = useUiStore((s) => s.groupDialog !== null);
   // The canvas's own title, for the tab. Subscribed separately from the
@@ -1181,6 +1183,7 @@ function CanvasSurface({
           canvas and below the app's own chrome, so a module can add to the
           screen without covering the controls the app promises. */}
       {moduleOverlaysVisible && <Suspense fallback={null}><ModuleOverlays canvasId={canvasId!} actor={actor} /></Suspense>}
+      {semanticZoom && <Suspense fallback={null}><SemanticZoom canvasId={canvasId!} /></Suspense>}
       {/* A module's popup, opened by a command or a palette entry and
           never by itself (proposed: `dialogs`). */}
       {moduleDialogOpen && <Suspense fallback={null}><ModuleDialogs canvasId={canvasId!} actor={actor} /></Suspense>}

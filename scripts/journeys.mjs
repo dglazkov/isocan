@@ -33,6 +33,7 @@
  * cannot tell its own limits from a defect generates confident nonsense.
  */
 import { execFileSync, spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -78,11 +79,12 @@ async function until(b, expression, what, ms = 8000) {
  */
 const pickPort = () => 20_000 + Math.floor(Math.random() * 9_000);
 
-async function startDaemon(home, attempt = 0) {
+async function startDaemon(home, attempt = 0, extraEnv = {}) {
   const port = pickPort();
   const proc = spawn(process.execPath, [cli, "serve"], {
     env: {
       ...process.env,
+      ...extraEnv,
       ISOCAN_HOME: home,
       ISOCAN_PORT: String(port),
       ISOCAN_CONTENT_PORT: String(port + 1),
@@ -113,7 +115,7 @@ async function startDaemon(home, attempt = 0) {
     // Only a lost port is retried. A daemon that will not boot for any other
     // reason must say so rather than be tried four more times.
     const raced = /EADDRINUSE|did not come up|already/i.test(String(err));
-    if (raced && attempt < 3) return startDaemon(home, attempt + 1);
+    if (raced && attempt < 3) return startDaemon(home, attempt + 1, extraEnv);
     throw err;
   }
 }
@@ -4130,6 +4132,134 @@ export const JOURNEYS = [
       if (!restyled.includes(`>${NEW}<`)) throw new Error("the restyle took the heading's words back");
       if (restyled.includes(`>${title}<`)) throw new Error(`the restyled screen still draws the old heading "${title}"`);
       return { screen: screen.item.id, from: title, to: NEW, refusedOn: rowScreen.item.id, refusal };
+    },
+  },
+  {
+    name: "semantic-zoom-text",
+    /**
+     * **Semantic Zoom, phase 1: a long note far away shows a summary**
+     * (`docs/projects/semantic-zoom/phases.md`, phase 1's proof). Its own
+     * daemon, because the shared one has no text model: this one's model is a
+     * stub on loopback (`ISOCAN_TEXT_ENDPOINT`) that records what it was asked
+     * and answers a fixed summary — never a real model — and its quiet period
+     * is 2.5 s rather than 30 so the walk does not wait half a minute.
+     *
+     * Flag off, zoomed out: no request to the summaries route, no chunk of the
+     * experiment's, nothing asked of the stub, and the node shows its opening
+     * words. Flag on: the summary shows, marked ≈ and named "Summary of …".
+     * An edit: the old summary stays with its updating mark, then the new one
+     * replaces it, and at no sampled frame in between is the mark missing.
+     */
+    what: "flag off asks nothing; flag on, a far-away long note shows its ≈ summary; an edit keeps the old one, marked updating, until the new one lands",
+    async run(rig) {
+      const { b } = rig;
+      const asked = [];
+      const stub = createServer((req, res) => {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          const sent = JSON.parse(body || "{}");
+          asked.push(sent);
+          const prompt = JSON.stringify(sent.messages ?? []);
+          const summary = /Ravi adds a revision/.test(prompt) ? `Acme summary ${asked.length}: revised plan, Ravi adds a revision.` : `Acme summary ${asked.length}: launch slips two weeks; Ravi owns pricing.`;
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ id: "msg_stub", type: "message", role: "assistant", model: sent.model, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary }) }] }));
+        });
+      });
+      await new Promise((r) => stub.listen(0, "127.0.0.1", r));
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-sz-"));
+      const { proc, origin } = await startDaemon(home, 0, {
+        ISOCAN_TEXT_API_KEY: "sk-ant-journey-stub-not-a-key",
+        ISOCAN_TEXT_PROVIDER: "anthropic",
+        ISOCAN_TEXT_ENDPOINT: `http://127.0.0.1:${stub.address().port}/v1/messages`,
+        ISOCAN_SUMMARY_QUIET_MS: "2500",
+        ISOCAN_SUMMARY_MODEL: "",
+        ISOCAN_TEXT_MODEL: "",
+      });
+      try {
+        const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, ISOCAN_SESSION_ID: "acme-semantic-zoom-journey", ISOCAN_HARNESS: "test" };
+        const runCli = (...args) => {
+          const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+          return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+        };
+        runCli("identity", "--session", "--name", "Acme Notes CLI");
+        const id = runCli("canvas", "create", "Acme semantic zoom").canvasId;
+        const words = (extra = "") => `# Notes\n\n${"The Acme launch slips two weeks while Ravi rewrites the pricing page and the team settles the open question on data residency. ".repeat(3)}${extra}`;
+        const file = path.join(home, "notes.md");
+        writeFileSync(file, words());
+        const note = runCli("--canvas", id, "text", "-f", file, "--at", "0,0").itemId;
+        const sel = JSON.stringify(`.item[data-item-id="${note}"]`);
+
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await throughTheDoor(b, origin, "Journey", "journeys-semantic-zoom");
+        const open = async () => {
+          await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+          await until(b, `!!document.querySelector(${sel})`, "the note on the canvas", 15_000);
+        };
+        const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
+        const zoomOut = async () => {
+          for (let n = 0; (await scale()) > 0.15 && n < 80; n++) {
+            const at = await b.ev(`(() => { const r = document.querySelector(${sel}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+            await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.min(Math.max(at.x, 200), 1080), y: Math.min(Math.max(at.y, 200), 700), deltaX: 0, deltaY: 120, modifiers: 2 });
+            await sleep(40);
+          }
+          await until(b, `!!document.querySelector(${sel} + " .text-mark")`, "the note too small to read, drawn as its mark", 4000);
+        };
+        const summaryRequests = () => b.ev(`performance.getEntriesByType("resource").filter((e) => e.name.includes("/summaries")).length`);
+        const chunk = () => b.ev(`performance.getEntriesByType("resource").some((e) => /SemanticZoom-/.test(e.name)) || [...document.querySelectorAll("script[src],link[href]")].some((e) => /SemanticZoom-/.test(e.src || e.href))`);
+
+        // 1. Flag off: nothing asked, nothing loaded, the opening words.
+        await b.ev(`(() => { localStorage.removeItem("isocan.experiments"); return true; })()`);
+        await open();
+        await zoomOut();
+        await sleep(3000);
+        if (await summaryRequests()) throw new Error("with the flag off the page still asked the summaries route");
+        if (await chunk()) throw new Error("with the flag off the Semantic Zoom chunk loaded anyway");
+        if (asked.length) throw new Error(`with the flag off the model was asked ${asked.length} time(s)`);
+        if (await b.ev(`!!document.querySelector(".sz-gist")`)) throw new Error("with the flag off a summary is drawn");
+        const opening = await b.ev(`document.querySelector(${sel} + " .text-mark").textContent.trim()`);
+        if (opening !== "Notes") throw new Error(`with the flag off the far-away note says "${opening}", not its opening words`);
+
+        // 2. Flag on: the summary, marked as one.
+        await b.ev(`(() => { localStorage.setItem("isocan.experiments", JSON.stringify(["semantic.zoom"])); return true; })()`);
+        await open();
+        await zoomOut();
+        const gist = sel + ' + " .sz-gist"';
+        await until(b, `/Acme summary \\d+: launch slips/.test(document.querySelector(${gist})?.textContent ?? "") && !document.querySelector(${gist}).hasAttribute("data-stale")`, "the note's summary, current", 20_000);
+        const first = await b.ev(`(() => { const g = document.querySelector(${gist}); return { text: g.textContent.trim(), name: g.getAttribute("aria-label"), role: g.getAttribute("role") }; })()`);
+        if (!first.text.startsWith("≈")) throw new Error(`the summary is not marked ≈: "${first.text}"`);
+        if (first.name !== "Summary of Notes") throw new Error(`the summary's accessible name is "${first.name}", not "Summary of Notes"`);
+        if (asked.length !== 1) throw new Error(`one note, ${asked.length} model calls`);
+        if (asked[0].model !== "claude-haiku-5-5") throw new Error(`the summary asked ${asked[0].model}, not the cheap tier`);
+        if (!/too far away to read/.test(String(asked[0].system))) throw new Error("the summary was asked under the copywriter's system line");
+
+        // 3. An edit: the old summary stays, marked updating, until the new one replaces it — never an empty frame.
+        await b.ev(`(() => {
+          window.__szGaps = 0; window.__szWatch = true;
+          const look = () => { if (!document.querySelector(${gist})) window.__szGaps++; };
+          new MutationObserver(look).observe(document.querySelector(".world"), { subtree: true, childList: true, characterData: true, attributes: true });
+          const frame = () => { if (!window.__szWatch) return; look(); requestAnimationFrame(frame); };
+          requestAnimationFrame(frame);
+          return true;
+        })()`);
+        writeFileSync(file, words("\n\nRavi adds a revision to the plan."));
+        runCli("--canvas", id, "edit", note, file);
+        await until(b, `document.querySelector(${gist})?.hasAttribute("data-stale") && /launch slips/.test(document.querySelector(${gist}).textContent) && !!document.querySelector(${gist} + " .sz-updating")`, "the old summary kept, marked as being updated", 10_000);
+        await until(b, `/revised plan/.test(document.querySelector(${gist})?.textContent ?? "") && !document.querySelector(${gist}).hasAttribute("data-stale")`, "the new summary in the old one's place", 20_000);
+        const gaps = await b.ev(`(() => { window.__szWatch = false; return window.__szGaps; })()`);
+        if (gaps !== 0) throw new Error(`the summary mark was missing on ${gaps} sampled frame(s) between the old summary and the new`);
+        if (asked.length !== 2) throw new Error(`one edit, ${asked.length - 1} more model calls`);
+        return { note, calls: asked.length, first: first.text, then: await b.ev(`document.querySelector(${gist}).textContent.trim()`) };
+      } finally {
+        proc.kill();
+        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        stub.close();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
     },
   },
 ];

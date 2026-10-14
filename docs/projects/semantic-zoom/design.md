@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-13
 see: canvas-groups
 note: "The mechanism for Semantic Zoom: a per-viewer experiment flag; a fourth zoom band below the opening-words mark; summaries of text nodes, groups and areas made through the existing /api/text door, keyed by a hash of exactly what was summarised, cached at the home outside the oplog, debounced, and replaced only when the key changes; a CLI read and refresh."

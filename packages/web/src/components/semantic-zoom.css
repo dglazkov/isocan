@@ -1,0 +1,26 @@
+/* Semantic Zoom's summary mark (an experiment; `SemanticZoom.tsx`). Loaded
+   with the experiment's chunk and never before: the box, size and colour are
+   `.text-mark`'s, so a summary sits exactly where the opening words would,
+   and this sheet only says what is different about it. */
+
+/* The words are a model's, not the note's: set in the regular weight, so
+   they never pass for the note's own heading. */
+.sz-gist {
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* "≈" says "approximately this", before the words, in the accent so it
+   reads as a sign rather than as part of the summary. */
+.sz-gist .sz-sign {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+/* Being brought up to date: the old summary stays, with a quiet glyph after
+   it. Quiet by token, not by opacity. */
+.sz-gist .sz-updating {
+  font-style: normal;
+  color: var(--ink-soft);
+}

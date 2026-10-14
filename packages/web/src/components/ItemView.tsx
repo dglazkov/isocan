@@ -58,6 +58,7 @@ import { FrameAnchor, anchored, anchorFromMessage, nextSpot, type FrameSpot } fr
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
 const DesignSystemView = lazy(() => import("./DesignSystemView.tsx").then((module) => ({ default: module.DesignSystemView })));
 import { useUiStore } from "../stores/uiStore.ts";
+import { useGistStore } from "../stores/gistStore.ts";
 import { publishDrag, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
@@ -449,6 +450,9 @@ function ItemViewInner({
   // names it (`lib/textfont.ts`). Idempotent, so safe in render.
   if (isText) loadTextFont(textFontOf(item));
   const textLegible = !isText || (held.t = (zoom & Z_LEGIBLE) !== 0);
+  // Semantic Zoom's summary, drawn in the opening words' place — only where
+  // the words cannot be read, and only when the experiment's chunk put one here.
+  const gist = useGistStore((s) => (textLegible ? null : s[item.id]));
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
   const isMark = isAnnotation(item);
@@ -1229,7 +1233,7 @@ function ItemViewInner({
          * than the node they stand for.
          */}
         {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
-          <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
+          gist ?? <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
             {item.title}
           </span>
         ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !entered && !(nearWindow && roomy) ? (

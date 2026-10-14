@@ -35,6 +35,7 @@ import { contentTtl } from "./content-auth.ts";
 import { adoptIdentity } from "./badge-store.ts";
 import type { JudgmentOptions } from "./judgment.ts";
 import type { KeyRouteOptions } from "./key-routes.ts";
+import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
 import type { LiveTokenOptions } from "./live-token.ts";
 
@@ -225,6 +226,8 @@ export interface DaemonOptions {
    * transport; a running home reads `ISOCAN_TEXT_API_KEY`, else its
    * `keys.json`, per call. */
   text?: TextOptions;
+  /** Semantic Zoom's summaries (`summaries.ts`) — tests hand it a clock and a quiet period; a running home reads `ISOCAN_SUMMARY_MODEL` and `ISOCAN_SUMMARY_QUIET_MS`. */
+  summaries?: SummaryOptions;
   /** The talk module's Live tokens (`live-token.ts`) — tests hand it a fake
    * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
   liveToken?: LiveTokenOptions;
@@ -575,6 +578,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     // home's, not the process's, for the reason `rosterHome` is.
     judgment: { keysHome: home, ...options.judgment },
     text: { keysHome: home, ...options.text },
+    ...(options.summaries ? { summaries: options.summaries } : {}),
     liveToken: { keysHome: home, ...options.liveToken },
     ...(options.keys ? { keys: options.keys } : {}),
   };

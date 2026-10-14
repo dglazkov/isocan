@@ -11,6 +11,7 @@ import { PUBLIC_CANVASES_ROUTE, isListedGrant, type PublicCanvasesResponse, type
 import { INBOX_ROUTE, inboxOn, namesFor, type InboxResponse } from "@isocan/core";
 import { collectInbox, sequenceInbox } from "./inbox.ts";
 import type { JudgmentOptions } from "./judgment.ts";
+import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
 import type { LiveTokenOptions } from "./live-token.ts";
 import { registerModelRoutes } from "./model-routes.ts";
@@ -486,6 +487,8 @@ export interface RouteOptions {
   /** The home's text model (`text.ts`): its key, provider, rate and transport.
    * Absent, the key is `ISOCAN_TEXT_API_KEY`, else `keys.json`, read per call. */
   text?: TextOptions;
+  /** Semantic Zoom's summaries (`summaries.ts`): the quiet period, the model, the bound and the clock. Absent, the production defaults. */
+  summaries?: SummaryOptions;
   /** The talk module's Gemini Live tokens (`live-token.ts`): its key, rate and
    * transport. Absent, the key is `GEMINI_API_KEY`, else `keys.json`, read per call. */
   liveToken?: LiveTokenOptions;
@@ -1979,7 +1982,7 @@ export function registerRoutes(
   });
 
   // `POST /api/judgment` and `POST /api/text`, the two routes that spend the home's keys — in `model-routes.ts`.
-  registerModelRoutes(app, { engine, options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
+  registerModelRoutes(app, { engine, store, home: rosterHomeOf(options), options, refusals, admit, viewOnly, claimsOf: (badgeId) => desk.claimsOf(badgeId) });
   // `/api/keys`, the settings area's machine-local key routes — in `key-routes.ts`.
   registerKeyRoutes(app, { home: rosterHomeOf(options), servesWorld: options.servesWorld, ...(options.keys ? { keys: options.keys } : {}) });
   // `GET /models/<name>`, the local judge's model to this machine's own pages — in `model-files.ts`.

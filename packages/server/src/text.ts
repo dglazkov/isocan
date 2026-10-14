@@ -72,6 +72,20 @@ interface Written {
   body: unknown;
 }
 
+/**
+ * **What an in-process caller asks differently** — Semantic Zoom's make
+ * route (`summaries.ts`), which is not `/api/text` and must not change what
+ * `/api/text`'s callers get. Its own system line instead of the copywriting
+ * one, its own model (a function of the provider, so a Claude key gets the
+ * cheap tier and any other key its own default), and Claude's fallbacks off
+ * for a model that has none. Absent, everything is as `/api/text` asks.
+ */
+interface OwnAsk {
+  system?: string;
+  model?: (provider: TextProvider) => string | undefined;
+  fallbacks?: boolean;
+}
+
 const WINDOW_MS = 60_000;
 
 export class TextModel {
@@ -131,18 +145,20 @@ export class TextModel {
    * provider, an answer that is not JSON — comes back as `text-upstream` with
    * the provider's words, never the key.
    */
-  async write(request: { prompt: string; schema: JsonSchema }): Promise<Written> {
+  async write(request: { prompt: string; schema: JsonSchema }, own: OwnAsk = {}): Promise<Written> {
     const resolved = this.resolve();
     if (!resolved) throw new Error("the text model has no key");
     const { key } = resolved;
     const named = this.opts.provider ? this.opts.provider() : undefined;
     const provider = named ?? resolved.provider ?? textProvider(key);
-    const model = (this.opts.model ? this.opts.model() : undefined) ?? resolved.model;
+    const model = own.model?.(provider) ?? (this.opts.model ? this.opts.model() : undefined) ?? resolved.model;
     const generator = envTextGenerator({
       apiKey: key,
       provider,
       ...(model ? { model } : {}),
       ...(this.opts.fetch ? { fetch: this.opts.fetch } : {}),
+      ...(own.system !== undefined ? { system: own.system } : {}),
+      ...(own.fallbacks !== undefined ? { fallbacks: own.fallbacks } : {}),
     });
     try {
       const value = await generator.generateJson(request.prompt, request.schema);

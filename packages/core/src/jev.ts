@@ -640,6 +640,8 @@ export interface HttpTextGeneratorOptions {
   model?: string;
   endpoint?: string;
   fetch?: typeof globalThis.fetch;
+  /** The system line, in place of the default "Return only valid JSON…" — a caller with a job of its own (Semantic Zoom's summaries) says what it is. */
+  system?: string;
 }
 
 const STOP_WORDS = new Set([
@@ -738,7 +740,7 @@ export function httpTextGenerator(opts: HttpTextGeneratorOptions = {}): TextGene
         body: JSON.stringify({
           model,
           messages: [
-            { role: "system", content: "Return only valid JSON conforming to the provided JSON schema." },
+            { role: "system", content: opts.system ?? "Return only valid JSON conforming to the provided JSON schema." },
             { role: "user", content: prompt },
           ],
           response_format: {
@@ -800,6 +802,18 @@ interface ClaudeTextGeneratorOptions {
   model?: string;
   endpoint?: string;
   fetch?: typeof globalThis.fetch;
+  /**
+   * The system line. Absent, the copywriting one every `/wire` caller has
+   * always had; Semantic Zoom's summaries pass their own (phase 0 found a
+   * summary asked through the default was asked of a copywriter).
+   */
+  system?: string;
+  /**
+   * Ask for `fallbacks: "default"` (and its beta). Absent, true — what every
+   * existing caller sends. A caller naming a model with no server-side
+   * fallback (the cheap tier a summary asks for) turns it off.
+   */
+  fallbacks?: boolean;
 }
 
 /**
@@ -852,6 +866,7 @@ export function claudeTextGenerator(opts: ClaudeTextGeneratorOptions = {}): Text
   const model = opts.model ?? textEnv("ISOCAN_TEXT_MODEL") ?? CLAUDE_TEXT_MODEL;
   const endpoint = opts.endpoint ?? textEnv("ISOCAN_TEXT_ENDPOINT") ?? CLAUDE_MESSAGES_URL;
   const fetchFn = opts.fetch ?? globalThis.fetch;
+  const fallbacks = opts.fallbacks ?? true;
   const scrub = (text: string) => (apiKey ? text.split(apiKey).join("[key]") : text);
 
   return {
@@ -867,13 +882,13 @@ export function claudeTextGenerator(opts: ClaudeTextGeneratorOptions = {}): Text
               "content-type": "application/json",
               "x-api-key": apiKey,
               "anthropic-version": "2023-06-01",
-              "anthropic-beta": CLAUDE_FALLBACK_BETA,
+              ...(fallbacks ? { "anthropic-beta": CLAUDE_FALLBACK_BETA } : {}),
             },
             body: JSON.stringify({
               model,
               max_tokens: 16000,
-              fallbacks: "default",
-              system: "You write the words on an app's screens: labels, headings, buttons, sample content. Answer with the JSON the schema asks for and nothing else.",
+              ...(fallbacks ? { fallbacks: "default" } : {}),
+              system: opts.system ?? "You write the words on an app's screens: labels, headings, buttons, sample content. Answer with the JSON the schema asks for and nothing else.",
               messages: [
                 {
                   role: "user",
@@ -951,6 +966,10 @@ interface EnvTextGeneratorOptions {
   model?: string;
   provider?: TextProvider;
   fetch?: typeof globalThis.fetch;
+  /** The system line, for either provider; absent, each provider's default. */
+  system?: string;
+  /** Claude's `fallbacks: "default"`; absent, on, as it always was. */
+  fallbacks?: boolean;
 }
 
 /**
@@ -963,8 +982,8 @@ interface EnvTextGeneratorOptions {
 export function envTextGenerator(opts: EnvTextGeneratorOptions = {}): TextGenerator {
   const apiKey = opts.apiKey ?? textEnv("ISOCAN_TEXT_API_KEY");
   const provider = opts.provider ?? textProvider(apiKey);
-  const shared = { ...(apiKey !== undefined ? { apiKey } : {}), ...(opts.model !== undefined ? { model: opts.model } : {}), ...(opts.fetch ? { fetch: opts.fetch } : {}) };
-  return provider === "anthropic" ? claudeTextGenerator(shared) : httpTextGenerator(shared);
+  const shared = { ...(apiKey !== undefined ? { apiKey } : {}), ...(opts.model !== undefined ? { model: opts.model } : {}), ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.system !== undefined ? { system: opts.system } : {}) };
+  return provider === "anthropic" ? claudeTextGenerator({ ...shared, ...(opts.fallbacks !== undefined ? { fallbacks: opts.fallbacks } : {}) }) : httpTextGenerator(shared);
 }
 
 // ---------- the home's text model

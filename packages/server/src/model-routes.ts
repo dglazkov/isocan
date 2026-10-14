@@ -11,6 +11,8 @@ import { Judge } from "./judgment.ts";
 import { LiveTokens } from "./live-token.ts";
 import { identityFile } from "./paths.ts";
 import { RefusedError, TakenDownError, type Refusals } from "./takedowns.ts";
+import { registerSummaryRoutes } from "./summaries.ts";
+import type { Store } from "./store.ts";
 import { TextModel } from "./text.ts";
 
 /**
@@ -26,6 +28,10 @@ import { TextModel } from "./text.ts";
  */
 interface ModelRouteScope {
   engine: Engine;
+  /** The canvas's blobs, which Semantic Zoom's make route reads a note's words from. */
+  store: Store;
+  /** The home directory Semantic Zoom's summary cache lives under. */
+  home: string;
   options: RouteOptions;
   refusals: Refusals;
   admit: (req: FastifyRequest, canvasId: string) => Promise<unknown>;
@@ -46,7 +52,7 @@ async function personAt(home: string): Promise<{ id: string; name: string } | nu
 
 /** The judgment and text routes, on `app`, at the point `registerRoutes` reaches them. */
 export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope): void {
-  const { engine, options, refusals, admit, viewOnly, claimsOf } = scope;
+  const { engine, store, home, options, refusals, admit, viewOnly, claimsOf } = scope;
   /**
    * **Owner-only spend** (keys phase 3; `docs/projects/keys/design.md`). A key
    * from keys.json is this machine's person's own, and pays only for them:
@@ -178,6 +184,18 @@ export function registerModelRoutes(app: FastifyInstance, scope: ModelRouteScope
     }
     const written = await textModel.write(asked);
     return reply.status(written.status).send(written.body);
+  });
+  /**
+   * **Semantic Zoom's summaries** (`summaries.ts`): read by anyone who may
+   * view, made through this text model and this owner-only rule, in-process
+   * — `/api/text`'s guards, with a summary's own system line and model.
+   */
+  const textKeysHome = options.text?.keysHome ?? defaultKeysHome();
+  registerSummaryRoutes(app, {
+    engine, store, homes: options.homes, refusals, admit, viewOnly, textModel, home,
+    notTheOwners: (req) => notTheOwners(req, textKeysHome),
+    keyOwner: async () => (await personAt(textKeysHome))?.id ?? null,
+    options: options.summaries ?? {},
   });
   /**
    * **`POST /api/voice/token` — a short-lived Gemini Live token, minted with

@@ -28,7 +28,15 @@ import { judgeWeb } from "@isocan/judge/web";
 import { competitionActivation } from "@isocan/design-competition/activation";
 import { wireframeActivation } from "@isocan/wireframe/activation";
 import { useUiStore } from "./stores/uiStore.ts";
-import { experimentOn } from "./lib/experiments.ts";
+
+/**
+ * Is this experiment on? Read outside React — the module list is not a
+ * component. Here rather than beside `EXPERIMENTS` (`lib/experiments.ts`) so
+ * the list's descriptive sentences, which only Settings reads, stay in the
+ * lazy Settings chunk instead of every first visit (Semantic Zoom phase 1
+ * paid for its row that way).
+ */
+const experimentOn = (id: string): boolean => useUiStore.getState().experiments.includes(id);
 
 /**
  * **The modules this app carries** (`docs/projects/modules/design.md`).

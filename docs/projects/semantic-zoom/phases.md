@@ -1,5 +1,5 @@
 ---
-status: designed
+status: partial
 since: 2026-10-13
 see: canvas-groups
 note: "the walk: a bench that judges summaries before any ship, text nodes behind the experiment, groups and areas, freshness and cost, the CLI, evidence."
@@ -9,7 +9,7 @@ note: "the walk: a bench that judges summaries before any ship, text nodes behin
 
 **13 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run; phase 1 proceeds on a stub model.**
+**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run. Phase 1 (text nodes behind the experiment) is CLOSED on a stub model; next is phase 2, groups and areas.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -50,7 +50,7 @@ chosen. Run once, by hand, with Dion's yes.
 
 ## Phase 1 — Text nodes, behind the experiment
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** The `semantic.zoom` experiment; core `semantic-zoom.ts` (the prompt lifted from the bench, the content key over prompt version, kind, item id, version id and title, the answer check, the 40-word line); the home's cache at `<home>/summaries/<canvasId>/<key>.json` (2,000 per canvas, least-recently-read evicted) with `GET …/summaries?keys=…&for=…` (view) and `POST …/summaries` (the home collects the words and runs `/api/text`'s guards in-process); the summary band in ItemView with "≈", "Summary of …" and ↻ while updating. The journey `semantic-zoom-text` on a recording stub: flag off, no summaries request, no chunk, 0 model calls; flag on, the summary shows, asked of `claude-haiku-5-5` under its own system line; an edit keeps the old summary with ↻ until the new one replaces it, 0 frames without the mark, 2 model calls. A test holds that the canvas's `lastSeq` does not move. Deep suite: 820 of 821 files, the one an unused export, fixed and re-run.
 
 **Outcome:** the `semantic.zoom` experiment; core's content key, text
 collector, prompt and checks; the home's summary cache and its two routes;
@@ -66,6 +66,14 @@ the opening words; the "≈" mark; the stale-while-updating mark.
 - Journey `semantic-zoom-text` (stub model): flag off → no requests; flag on,
   zoomed out → the summary shows; an edit → the old summary stays with the
   updating mark, then the new one replaces it with no empty frame between.
+
+### Trajectory
+
+- **2026-10-14** — The make route sets its own system line, model (`claude-haiku-5-5`, `ISOCAN_SUMMARY_MODEL`) and no `fallbacks`, in-process through `TextModel.write(req, own)`; `/api/text`'s callers still get the copywriter line, the most capable tier and fallbacks, held by a test.
+- **2026-10-14** — A note changed in the last 30 s answers 202 `{code: "summary-quiet", retryAfterMs}` rather than a refusal, because the web's `ApiError` drops bodies. A stale summary is found by `GET …?keys=…&for=<sourceIds>`: the newest entry for the same note. `ISOCAN_SUMMARY_QUIET_MS` overrides the 30 s (the journey uses 2.5 s).
+- **2026-10-14** — The home decides the 40-word line and caches a short note as a `short` entry: the client never loads the words to count them.
+- **2026-10-14** — The entry chunk was already 710,970 on main (4,670 past the 706,300 ceiling, from other work; CI reports it and does not fail). The experiment row was paid for by moving `experimentOn` into `modules.ts`, so `EXPERIMENTS`' sentences ride the lazy Settings chunk: 710,079.
+- **2026-10-14** — Open: forwarding the routes to a canvas homed elsewhere is wired and untested; the fetcher measures the window, not the canvas, and has no hysteresis of its own (ItemView decides).
 
 ## Phase 2 — Groups and areas
 
