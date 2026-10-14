@@ -66,16 +66,46 @@ interface MenuContext {
  * teaches people to stop reading it.
  */
 function offered(entries: MenuEntry[]): MenuEntry[] {
-  if (canEditNow()) return entries;
-  const kept = entries.filter((entry) => "separator" in entry || !entry.writes);
-  return kept.filter(
-    (entry, i) =>
-      !("separator" in entry) ||
-      (i > 0 && i < kept.length - 1 && !("separator" in kept[i - 1]!)),
-  );
+  return settled(canEditNow() ? entries : entries.filter((entry) => "separator" in entry || !entry.writes));
 }
 
-/** The menu for one or more selected items. */
+/**
+ * **Rules and headings only where they separate something** (14 Oct 2026).
+ * Blocks come and go with the selection now — the single-item rows are not
+ * there for four items, and nothing in "For agents" is — so a heading or a
+ * rule that ends up with no rows under it goes. Where two meet, the later
+ * one stands: it is the one that names the rows that follow.
+ */
+function settled(entries: MenuEntry[]): MenuEntry[] {
+  return entries.filter((entry, i) => {
+    if (!("separator" in entry)) return true;
+    const next = entries[i + 1];
+    if (!next || "separator" in next) return false;
+    // A bare rule at the very top separates nothing; a heading there still names.
+    return Boolean(entry.separator) || entries.slice(0, i).some((e) => !("separator" in e));
+  });
+}
+
+/**
+ * The menu for one or more selected items.
+ *
+ * **Shown when it can run on this selection, left out when it cannot**
+ * (14 Oct 2026). Dion, on four selected items: *"the context menu is
+ * confusing and long"* — twenty-four rows, a third of them grey. The single
+ * item's acts were shown dimmed on a multi-selection, on the argument that a
+ * menu whose shape changes between opens cannot be learned. That argument no
+ * longer holds: the shape already changed with the selection (a group's own
+ * rows, the copy rows, a module's marks, the hand-in), and eleven grey rows
+ * taught people to stop reading. So a row that cannot apply to THIS selection
+ * is not on the menu, and `disabled` is kept for "not right now" — a row that
+ * would run once something about the canvas changed, where seeing it dimmed is
+ * the hint. The read-only canvas already worked this way (`offered`).
+ *
+ * The order is most-used first, and the same skeleton for one item and for
+ * many, so the blocks stay where the hand learnt them: groups; tidy and
+ * arrange; copy, cut, duplicate; looking at it; the one item's own acts; what
+ * agents read; the deck and the modules' marks; delete, last and apart.
+ */
 export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
   const one = items.length === 1 ? items[0]! : null;
   const ids = items.map((i) => i.id);
@@ -84,6 +114,34 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
 
   return offered([
     ...canvasGroupEntries(items, ctx),
+    /**
+     * **Tidy, on the ones you picked** (#196).
+     *
+     * Offered only with two or more selected, because tidying one item is
+     * arranging it with respect to itself. It runs the same fold `isocan tidy
+     * <items...>` runs, and lands them in the box they already occupy rather
+     * than at the canvas's own origin — a menu must not shove somebody's work
+     * across the room, or through whatever was standing there.
+     *
+     * **Tidy keeps the arrangement** (14 Oct 2026). It used to run `grid`,
+     * which re-deals the selection onto a new lattice; Dion pressed it on four
+     * loosely-arranged items wanting the alignment cleaned up, and got a
+     * different arrangement with a title on top of a neighbour's name. The row
+     * is `in-place` now — lines snapped, gaps evened, nothing re-dealt,
+     * nothing overlapping.
+     */
+    ...(many
+      ? [
+          { separator: "" },
+          {
+            label: `Tidy ${items.length} items`,
+            writes: true,
+            run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "in-place")),
+          },
+          arrangeEntry(items, ctx),
+        ]
+      : []),
+    { separator: "" },
     {
       label: many ? `Copy ${items.length} items` : "Copy",
       shortcutFor: "Copy the selection",
@@ -109,100 +167,16 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
         });
       },
     },
-    /**
-     * **Tidy, on the ones you picked** (#196).
-     *
-     * Offered only with two or more selected, because tidying one item is
-     * arranging it with respect to itself. It runs the same fold `isocan
-     * format <items...>` runs, and lands them in the box they already occupy
-     * rather than at the canvas's own origin — a menu must not shove
-     * somebody's work across the room, or through whatever was standing
-     * there.
-     *
-     * The rows say TIDY, not `grid`. `grid` and `smart` stay the modes, but
-     * `isocan align` already means the standard thing — line items up on one
-     * edge — so a row called Align would be one word for two operations. A
-     * menu is for intent; a verb is for precision.
-     */
-    /**
-     * **"Arrange", because "Format" was the third word for two things**
-     * (7 Sep 2026).
-     *
-     * The heading said Format and the rows beneath it said Tidy — one
-     * operation naming itself twice, in the space of two lines. The CLI verb
-     * is `tidy` now (with `format` kept as an alias), and the heading names
-     * the FAMILY rather than either member, because there are two members and
-     * they are genuinely different: tidy decides new positions, align needs
-     * an edge before it can do anything at all.
-     */
-    /**
-     * **Tidy keeps the arrangement** (14 Oct 2026). It used to run `grid`,
-     * which re-deals the selection onto a new lattice; Dion pressed it on
-     * four loosely-arranged items wanting the alignment cleaned up, and got a
-     * different arrangement with a title on top of a neighbour's name. The
-     * plain row is `in-place` now — lines snapped, gaps evened, nothing
-     * re-dealt, nothing overlapping — and the lattice is still one row down,
-     * by its own name.
-     */
-    { separator: many ? "Arrange" : "" },
-    {
-      label: many ? `Tidy ${items.length} items` : "Tidy",
-      writes: true,
-      disabled: !many,
-      run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "in-place")),
-    },
-    {
-      label: "Tidy — grid",
-      writes: true,
-      disabled: !many,
-      run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "grid")),
-    },
-    {
-      label: "Tidy — smart",
-      writes: true,
-      disabled: !many,
-      run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "smart")),
-    },
-    {
-      /**
-       * **Align, which the app could not do at all until now.**
-       *
-       * `isocan align --to <edge>` has always existed; nothing in the web app
-       * reached it, so the one operation whose whole nature is "to WHAT?" was
-       * the one you could not see the answers to. A submenu is the shape that
-       * fixes it — the six edges are the question, so showing them IS the
-       * explanation.
-       *
-       * Named for people rather than for the flag: `hcenter` and `vcenter` are
-       * exact and unreadable, and `alignLabel` in core keeps the two surfaces
-       * from inventing different words for one edge.
-       */
-      label: "Align",
-      writes: true,
-      disabled: !many,
-      run: () => {},
-      submenu: ALIGN_EDGES.map((edge) => ({
-        label: alignLabel(edge),
-        writes: true,
-        run: () => groupTask(() => alignItems(ctx.canvasId, ctx.actor, ids, edge)),
-      })),
-    },
-    ...(groupsEnabled() ? [
-      { label: "Distribute horizontally", writes: true, disabled: ids.length < 3, run: () => groupTask(() => distributeGroupItems(ctx.canvasId, ctx.actor, ids, "h")) },
-      { label: "Distribute vertically", writes: true, disabled: ids.length < 3, run: () => groupTask(() => distributeGroupItems(ctx.canvasId, ctx.actor, ids, "v")) },
-    ] : []),
     { separator: "" },
-    ...(!one || !isGroupItem(one) ? [{
+    ...(one && !isGroupItem(one) ? [{
       label: "Open full screen",
       shortcutFor: "Open the selection full screen",
-      disabled: !one,
-      run: () => one && ctx.navigate(itemPath(ctx.canvasId, one.id)),
+      run: () => ctx.navigate(itemPath(ctx.canvasId, one.id)),
     }] : []),
-    {
+    ...(one ? [{
       label: "Open in the workbench",
-      disabled: !one,
-      run: () => one && ctx.navigate(workbenchItemPath(ctx.canvasId, one.id)),
-    },
+      run: () => ctx.navigate(workbenchItemPath(ctx.canvasId, one.id)),
+    }] : []),
     {
       label: "Zoom to it",
       run: () =>
@@ -213,135 +187,17 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
           maxY: Math.max(...items.map((i) => i.y + i.height)),
         }),
     },
-    { separator: "" },
-    {
-      label: "Rename",
-      shortcutFor: "Rename",
-      writes: true,
-      disabled: !one,
-      run: () => one && useUiStore.getState().setRenaming(one.id),
-    },
-    {
-      label: "Version history",
-      shortcutFor: "Show the version stack",
-      // The stack is only a thing when there is more than one wording of it.
-      disabled: !one || one.versions.length < 2,
-      run: () => one && useUiStore.getState().setFanned(one.id),
-    },
-    {
-      // What changed (docs/projects/version-diff/design.md): the last edit, or
-      // a variation against its source. The inspector loads on the click.
-      label: "Compare versions",
-      disabled: !one || (one.versions.length < 2 && !parentOf(one)),
-      run: () => one && void import("../components/VersionCompare.tsx").then((m) => m.openCompare({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
-    },
-    // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary` — and, once
-    // it has voices (on the screen or on one of them), all of them side by side to mix (phase 3) — `isocan
-    // words mix`. Both load on the click, through the one lazy file.
-    ...(one && version?.mimeType === "text/html"
-      ? ["Vary the copy…", "Compare the copy…"].map((label, i) => ({
-          label,
-          writes: !i,
-          disabled: i > 0 && !Object.values(useCanvasStore.getState().canvas!.items).some((o) => o.properties.copyStance !== undefined && (o.id === one.id || o.properties.parent === one.id)),
-          run: () => void import("../components/VaryCopy.tsx").then((m) => (i ? m.openCopyCompare : m.openVaryCopy)({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
-        }))
-      : []),
-    // A voice for a whole wire flow (copy-edit phase 5) — `isocan wire voice` — on any screen of a fleshed flow or
-    // its prototype, as the module that draws flows says (`WebCopyWriter.flow.offers`). Loads on the click.
-    ...(one && shellModules().some((m) => m.copy?.flow?.offers(useCanvasStore.getState().canvas!, one))
-      ? [{
-          label: "Choose a voice…",
-          writes: true,
-          run: () => void import("../components/VaryCopy.tsx").then((m) => m.openChooseVoice({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
-        }]
-      : []),
-    { separator: "" },
-    {
-      label: "Copy link",
-      disabled: !one,
-      run: () => {
-        if (!one) return;
-        // `browserClipboard()` rather than `navigator.clipboard`: the module
-        // exists because a refusal and an absent clipboard look identical at
-        // the call site, and both end in "take it by hand".
-        void copyToClipboard(itemAddress(ctx.canvasId, one.id), browserClipboard()).then(
-          (state: CopyState) =>
-            state === "copied"
-              ? flashNotice("Link copied")
-              : setNotice("The clipboard refused — the address is the item's full-screen URL."),
-        );
-      },
-    },
-    {
-      label: "Download",
-      /* The accelerator is looked up from `SHORTCUTS`, never spelled here —
-         a rebound key cannot leave the menu telling somebody the old one. */
-      shortcutFor: "Download",
-      disabled: !one || !version,
-      run: () => {
-        if (!one || !version) return;
-        void downloadItem(ctx.canvasId, version.blobHash, version.filename).catch((err: Error) =>
-          setNotice(err.message),
-        );
-      },
-    },
-    { separator: "" },
-    /**
-     * **Stage 2 of the context view, on the surface that is not a terminal.**
-     *
-     * `isocan context pin` and `exclude` act on an item, so the app's home for
-     * them is the item's own menu rather than the Context panel — that panel
-     * lists PIECES, and pinning a piece is not a thing. Without this the CLI
-     * would hold a verb the app does not, which is the gap the whole project
-     * exists to close.
-     *
-     * One entry that toggles, not two that contradict: an item is pinned or it
-     * is not, and a menu offering "Pin" beside "Unpin" makes the reader work
-     * out which one is true.
-     */
-    {
-      label: contextMark(items[0]!) === "pinned" ? "Unpin from context" : "Pin into context",
-      writes: true,
-      disabled: many,
-      run: () => {
-        const item = items[0];
-        if (!item) return;
-        const next = contextMark(item) === "pinned" ? null : "pinned";
-        void sendEchoed(ctx.canvasId, ctx.actor, {
-          type: "item.update",
-          itemId: item.id,
-          patch: markPatch(next),
-        });
-        flashNotice(next ? `"${item.title}" is pinned into context` : `"${item.title}" is no longer pinned`);
-      },
-    },
-    {
-      // Excluded is not deleted: the item stays, its versions stay, its
-      // comments stay. Only what a reader assembling context is told changes.
-      label: contextMark(items[0]!) === "excluded" ? "Put back in context" : "Keep out of context",
-      writes: true,
-      disabled: many,
-      run: () => {
-        const item = items[0];
-        if (!item) return;
-        const next = contextMark(item) === "excluded" ? null : "excluded";
-        void sendEchoed(ctx.canvasId, ctx.actor, {
-          type: "item.update",
-          itemId: item.id,
-          patch: markPatch(next),
-        });
-        flashNotice(
-          next ? `"${item.title}" is kept out of context — it is still on the canvas` : `"${item.title}" is back in context`,
-        );
-      },
-    },
+    ...(one ? oneItemEntries(one, version, ctx) : []),
+    ...(one ? contextEntries(one, ctx) : []),
     /**
      * **The deck** (#87): mark an item as a slide and full screen's bare
      * arrows flip through just the marked ones, in reading order. The same
-     * toggling shape as the context marks above, and the same op underneath —
-     * `item.update` with a property, so the CLI's `isocan slides add` and
-     * this entry cannot disagree.
+     * op underneath as the context marks above — `item.update` with a
+     * property, so the CLI's `isocan slides add` and
+     * this entry cannot disagree. Its own block rather than under "For
+     * agents": a deck is for the people in the room.
      */
+    { separator: "" },
     {
       /**
        * **A whole selection at once**, which is how a deck actually gets
@@ -447,6 +303,183 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
 }
 
 /**
+ * **Arrange ›: the ways of putting a selection in order that need an answer
+ * first** (14 Oct 2026).
+ *
+ * Tidy decides for you, so it stays a row of its own. Everything in here asks
+ * "to what?" — which edge, which direction, what shape — so it opens, and
+ * showing the answers IS the explanation. This replaced an "Arrange" heading
+ * over six rows (Tidy, Tidy — grid, Tidy — smart, Align ›, Distribute ×2):
+ * Dion's question was *"what does Tidy — smart mean? Why would I choose
+ * that?"*, and a row whose name has to be looked up is not a door.
+ *
+ * - **Align left … bottom**: `isocan align --to <edge>`. The edge's word is
+ *   core's `alignLabel`, so the CLI and the app name one edge one way; the
+ *   menu adds the verb, because inside a submenu called Arrange a row reading
+ *   only "Left" does not say what it does.
+ * - **Space evenly across / down**: `isocan distribute --axis h|v`, worded for
+ *   the effect rather than the operation. Only at three or more, where there
+ *   is a middle to move — two items are already evenly spaced — and only on a
+ *   canvas with groups, where the web has the act at all.
+ * - **Pack into a grid**: `isocan tidy grid <items...>` — re-deals them onto a
+ *   lattice, the one Tidy used to be.
+ *
+ * `smart` is not here: it hangs variations under their source and gathers
+ * media below, which is a canvas-wide reading order, not a way to arrange four
+ * cards. It stays in ⌘K ("Format: smart") and as `isocan tidy smart`.
+ */
+function arrangeEntry(items: readonly Item[], ctx: MenuContext): MenuEntry {
+  const ids = items.map((i) => i.id);
+  return {
+    label: "Arrange",
+    writes: true,
+    run: () => {},
+    submenu: [
+      ...ALIGN_EDGES.map((edge) => ({
+        label: `Align ${alignLabel(edge).toLowerCase()}`,
+        writes: true,
+        run: () => groupTask(() => alignItems(ctx.canvasId, ctx.actor, ids, edge)),
+      })),
+      ...(groupsEnabled() && ids.length >= 3 ? [
+        { separator: "" },
+        { label: "Space evenly across", writes: true, run: () => groupTask(() => distributeGroupItems(ctx.canvasId, ctx.actor, ids, "h")) },
+        { label: "Space evenly down", writes: true, run: () => groupTask(() => distributeGroupItems(ctx.canvasId, ctx.actor, ids, "v")) },
+      ] : []),
+      { separator: "" },
+      {
+        label: "Pack into a grid",
+        writes: true,
+        run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "grid")),
+      },
+    ],
+  };
+}
+
+/** The acts only one item has: its name, its versions, its words, its address and its bytes. */
+function oneItemEntries(one: Item, version: Item["versions"][number] | null, ctx: MenuContext): MenuEntry[] {
+  const history = one.versions.length > 1;
+  return [
+    { separator: "" },
+    {
+      label: "Rename",
+      shortcutFor: "Rename",
+      writes: true,
+      run: () => useUiStore.getState().setRenaming(one.id),
+    },
+    // The stack is only a thing when there is more than one wording of it.
+    ...(history ? [{
+      label: "Version history",
+      shortcutFor: "Show the version stack",
+      run: () => useUiStore.getState().setFanned(one.id),
+    }] : []),
+    // What changed (docs/projects/version-diff/design.md): the last edit, or
+    // a variation against its source. The inspector loads on the click.
+    ...(history || parentOf(one) ? [{
+      label: "Compare versions",
+      run: () => void import("../components/VersionCompare.tsx").then((m) => m.openCompare({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
+    }] : []),
+    // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary` — and, once
+    // it has voices (on the screen or on one of them), all of them side by side to mix (phase 3) — `isocan
+    // words mix`. Both load on the click, through the one lazy file. "Compare the copy…" stays dimmed until
+    // there are voices: that is "not yet", and seeing it beside "Vary the copy…" says what comes next.
+    ...(version?.mimeType === "text/html"
+      ? ["Vary the copy…", "Compare the copy…"].map((label, i) => ({
+          label,
+          writes: !i,
+          disabled: i > 0 && !Object.values(useCanvasStore.getState().canvas!.items).some((o) => o.properties.copyStance !== undefined && (o.id === one.id || o.properties.parent === one.id)),
+          run: () => void import("../components/VaryCopy.tsx").then((m) => (i ? m.openCopyCompare : m.openVaryCopy)({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
+        }))
+      : []),
+    // A voice for a whole wire flow (copy-edit phase 5) — `isocan wire voice` — on any screen of a fleshed flow or
+    // its prototype, as the module that draws flows says (`WebCopyWriter.flow.offers`). Loads on the click.
+    ...(shellModules().some((m) => m.copy?.flow?.offers(useCanvasStore.getState().canvas!, one))
+      ? [{
+          label: "Choose a voice…",
+          writes: true,
+          run: () => void import("../components/VaryCopy.tsx").then((m) => m.openChooseVoice({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
+        }]
+      : []),
+    { separator: "" },
+    {
+      label: "Copy link",
+      run: () => {
+        // `browserClipboard()` rather than `navigator.clipboard`: the module
+        // exists because a refusal and an absent clipboard look identical at
+        // the call site, and both end in "take it by hand".
+        void copyToClipboard(itemAddress(ctx.canvasId, one.id), browserClipboard()).then(
+          (state: CopyState) =>
+            state === "copied"
+              ? flashNotice("Link copied")
+              : setNotice("The clipboard refused — the address is the item's full-screen URL."),
+        );
+      },
+    },
+    ...(version ? [{
+      label: "Download",
+      /* The accelerator is looked up from `SHORTCUTS`, never spelled here —
+         a rebound key cannot leave the menu telling somebody the old one. */
+      shortcutFor: "Download",
+      run: () => {
+        void downloadItem(ctx.canvasId, version.blobHash, version.filename).catch((err: Error) =>
+          setNotice(err.message),
+        );
+      },
+    }] : []),
+  ];
+}
+
+/**
+ * **Stage 2 of the context view, on the surface that is not a terminal.**
+ *
+ * `isocan context pin` and `exclude` act on an item, so the app's home for
+ * them is the item's own menu rather than the Context panel — that panel
+ * lists PIECES, and pinning a piece is not a thing. Without this the CLI
+ * would hold a verb the app does not, which is the gap the whole project
+ * exists to close.
+ *
+ * **Said as what agents do, not as "context"** (14 Oct 2026). The rows read
+ * "Pin into context" and "Keep out of context", and Dion asked what the
+ * context stuff was about: "context" is the CLI's noun for what an agent
+ * reads before it starts, and the app had never said so. So the heading names
+ * who it is for, and each row says what an agent will do with this item. The
+ * CLI keeps its verbs — `context pin`, `context exclude` — and its own words
+ * (`markLabel`), because an agent reading `isocan context` is reading about
+ * context; the agent guide says what the app calls them.
+ *
+ * **Two ticks, not labels that turn over.** A mark is one of three states —
+ * always read, skipped, neither — so the rows are a set: the tick says which
+ * is true now, and pressing a ticked row takes the mark off. A row whose
+ * label flipped between "Pin" and "Unpin" made the reader work out which was
+ * true, and a set of two flipping rows doubled it.
+ *
+ * "Agents skip this" rather than "Hide from agents": the item is not hidden —
+ * `isocan ls` still lists it and an agent asked about it can read it. Only
+ * what an agent is TOLD to read changes, and a row must not promise more.
+ *
+ * One item only, as `isocan context pin <item>` is: on a multi-selection the
+ * block is not offered rather than dimmed.
+ */
+function contextEntries(item: Item, ctx: MenuContext): MenuEntry[] {
+  const now = contextMark(item);
+  const toggle = (mark: "pinned" | "excluded") => {
+    const next = now === mark ? null : mark;
+    void sendEchoed(ctx.canvasId, ctx.actor, { type: "item.update", itemId: item.id, patch: markPatch(next) });
+    // Excluded is not deleted: the item stays, its versions stay, its
+    // comments stay. Only what a reader assembling context is told changes.
+    flashNotice(
+      mark === "pinned"
+        ? next ? `Agents always read "${item.title}"` : `Agents no longer always read "${item.title}"`
+        : next ? `Agents skip "${item.title}" — it is still on the canvas` : `Agents no longer skip "${item.title}"`,
+    );
+  };
+  return [
+    { separator: "For agents" },
+    { label: "Agents always read this", checked: now === "pinned", writes: true, run: () => toggle("pinned") },
+    { label: "Agents skip this", checked: now === "excluded", writes: true, run: () => toggle("excluded") },
+  ];
+}
+
+/**
  * **Which DESIGN.md governs, chosen where you are looking at it** — the web's
  * door to `isocan design use`. Offered on a markdown item called DESIGN.md
  * (every note on a canvas offering to become its design system would be a
@@ -488,8 +521,9 @@ function chooseEntry(item: Item, ctx: MenuContext): MenuEntry[] {
 /**
  * What the deck entry is called for THIS selection.
  *
- * One entry that says what pressing it does, never two that contradict — the
- * same rule the context-mark entries above follow. The count is the count
+ * One entry that says what pressing it does, never two that contradict. The
+ * context marks became a ticked pair on 14 Oct because they are a set of
+ * three states; a slide is on or off, so its label still says the act. The count is the count
  * that will MOVE, so a selection of ten where seven are already slides reads
  * "Make 3 slides" and nobody presses it expecting ten.
  */

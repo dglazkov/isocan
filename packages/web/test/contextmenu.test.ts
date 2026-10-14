@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { Actor, Item } from "@isocan/core";
-import { keyFor, SHORTCUTS } from "@isocan/core";
+import { ALIGN_EDGES, alignLabel, keyFor, SHORTCUTS } from "@isocan/core";
+import { useCanvasStore } from "../src/stores/canvasStore.ts";
 import { canvasMenu, itemMenu } from "../src/lib/menuentries.tsx";
 import type { MenuAction, MenuEntry } from "../src/components/ContextMenu.tsx";
 
@@ -54,6 +55,9 @@ const actions = (entries: MenuEntry[]): MenuAction[] =>
 const labels = (entries: MenuEntry[]) => actions(entries).map((a) => a.label);
 const find = (entries: MenuEntry[], label: string) =>
   actions(entries).find((a) => a.label.startsWith(label));
+/** The menu as a person reads it: headings as "— Name", rules as "—". */
+const shape = (entries: MenuEntry[]) =>
+  entries.map((e) => ("separator" in e ? (e.separator ? `— ${e.separator}` : "—") : e.label));
 
 describe("every accelerator the menu prints is a real one", () => {
   it("never shows a blank key", () => {
@@ -75,9 +79,11 @@ describe("every accelerator the menu prints is a real one", () => {
 });
 
 describe("the item menu", () => {
+  afterEach(() => useCanvasStore.setState({ capability: "edit", record: null } as never));
+
   it("offers the acts an item has", () => {
     const entries = itemMenu([item("itm_a", 2)], ctx);
-    for (const label of ["Copy", "Cut", "Duplicate", "Rename", "Download", "Copy link", "Delete"]) {
+    for (const label of ["Copy", "Cut", "Duplicate", "Rename", "Version history", "Compare versions", "Download", "Copy link", "Delete"]) {
       expect(labels(entries), `missing ${label}`).toContain(label);
     }
   });
@@ -87,13 +93,80 @@ describe("the item menu", () => {
     expect(actions(entries).filter((a) => a.danger).map((a) => a.label)).toEqual(["Delete"]);
   });
 
-  it("dims what does not apply rather than removing it", () => {
-    // A menu whose shape changes between one open and the next is a menu you
-    // cannot learn — so single-item acts are shown, dimmed, on a multi-select.
+  /**
+   * **Left out when it cannot apply, not dimmed** (14 Oct 2026). This test
+   * said the opposite until Dion counted twenty-four rows on four items, a
+   * third of them grey: a menu that is mostly grey teaches people to stop
+   * reading it. Dimmed is for "not right now", where seeing it is the hint.
+   */
+  it("leaves out what cannot apply to this selection rather than dimming it", () => {
     const many = itemMenu([item("itm_a"), item("itm_b")], ctx);
-    expect(find(many, "Rename")?.disabled).toBe(true);
-    expect(find(many, "Download")?.disabled).toBe(true);
-    expect(find(many, "Copy")?.disabled).toBeFalsy();
+    for (const label of ["Open full screen", "Open in the workbench", "Rename", "Version history", "Compare versions", "Copy link", "Download", "Agents always read this", "Agents skip this"]) {
+      expect(labels(many), `${label} on two items`).not.toContain(label);
+    }
+    expect(actions(many).filter((a) => a.disabled).map((a) => a.label)).toEqual([]);
+    const single = itemMenu([item("itm_a")], ctx);
+    for (const label of ["Tidy", "Arrange", "Align"]) expect(labels(single).some((l) => l.startsWith(label)), `${label} on one item`).toBe(false);
+    expect(actions(single).filter((a) => a.disabled).map((a) => a.label)).toEqual([]);
+  });
+
+  it("is the same skeleton for one item and for four, most used first", () => {
+    expect(shape(itemMenu([item("itm_a", 2)], ctx))).toEqual([
+      "— Groups", "Preview group conversion…", "Group selection", "Add to group…",
+      "—", "Copy", "Cut", "Duplicate",
+      "—", "Open full screen", "Open in the workbench", "Zoom to it",
+      "—", "Rename", "Version history", "Compare versions",
+      "—", "Copy link", "Download",
+      "— For agents", "Agents always read this", "Agents skip this",
+      "—", "🎬 Make this a slide",
+      "—", "Delete",
+    ]);
+    const four = ["itm_a", "itm_b", "itm_c", "itm_d"].map((id) => item(id));
+    expect(shape(itemMenu(four, ctx))).toEqual([
+      "— Groups", "Preview group conversion…", "Group selection", "Add to group…",
+      "—", "Tidy 4 items", "Arrange",
+      "—", "Copy 4 items", "Cut", "Duplicate",
+      "—", "Zoom to it",
+      "—", "🎬 Make 4 slides",
+      "—", "Delete 4 items",
+    ]);
+  });
+
+  it("puts the arranging that needs an answer under Arrange, worded by core's edges", () => {
+    const arrange = (n: number) => find(itemMenu(Array.from({ length: n }, (_, i) => item(`itm_${i}`)), ctx), "Arrange")!.submenu!;
+    const edges = ALIGN_EDGES.map((edge) => `Align ${alignLabel(edge).toLowerCase()}`);
+    expect(shape(arrange(2))).toEqual([...edges, "—", "Pack into a grid"]);
+    // Space evenly is the web's group-canvas act, and needs a middle to move.
+    useCanvasStore.setState({ record: { groupMode: "groups" } } as never);
+    expect(shape(arrange(2))).toEqual([...edges, "—", "Pack into a grid"]);
+    expect(shape(arrange(3))).toEqual([...edges, "—", "Space evenly across", "Space evenly down", "—", "Pack into a grid"]);
+    // Smart is a canvas-wide reading order; it lives in ⌘K and the CLI, not here.
+    expect(JSON.stringify(itemMenu([item("itm_a"), item("itm_b")], ctx))).not.toMatch(/smart/i);
+  });
+
+  it("says what agents do with an item, as a ticked pair", () => {
+    const rows = (props: Record<string, string>) => {
+      const one = { ...item("itm_a"), properties: props } as Item;
+      return actions(itemMenu([one], ctx)).filter((a) => a.label.startsWith("Agents"));
+    };
+    expect(rows({}).map((a) => [a.label, a.checked])).toEqual([["Agents always read this", false], ["Agents skip this", false]]);
+    expect(rows({ context: "pinned" }).map((a) => a.checked)).toEqual([true, false]);
+    expect(rows({ context: "excluded" }).map((a) => a.checked)).toEqual([false, true]);
+  });
+
+  it("drops every write on a view-only canvas, and the headings left with nothing under them", () => {
+    useCanvasStore.setState({ capability: "read" } as never);
+    const single = itemMenu([item("itm_a", 2)], ctx);
+    expect(actions(single).some((a) => a.writes)).toBe(false);
+    expect(shape(single)).toEqual([
+      "— Groups", "Preview group conversion…",
+      "—", "Copy",
+      "—", "Open full screen", "Open in the workbench", "Zoom to it",
+      "—", "Version history", "Compare versions",
+      "—", "Copy link", "Download",
+    ]);
+    const four = ["itm_a", "itm_b", "itm_c", "itm_d"].map((id) => item(id));
+    expect(shape(itemMenu(four, ctx))).toEqual(["— Groups", "Preview group conversion…", "—", "Copy 4 items", "—", "Zoom to it"]);
   });
 
   it("counts what it will act on, so the label cannot lie", () => {
@@ -103,7 +176,7 @@ describe("the item menu", () => {
   });
 
   it("offers version history only where there is history", () => {
-    expect(find(itemMenu([item("itm_a", 1)], ctx), "Version")?.disabled).toBe(true);
+    expect(find(itemMenu([item("itm_a", 1)], ctx), "Version")).toBeUndefined();
     expect(find(itemMenu([item("itm_a", 3)], ctx), "Version")?.disabled).toBeFalsy();
   });
 });

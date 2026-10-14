@@ -89,7 +89,7 @@ describe("the Compare inspector", () => {
     const ctx = { canvasId: "cnv_acme", actor: { id: "usr_acme", name: "Acme" }, world: { x: 0, y: 0 }, navigate: () => {} };
     const entry = (it: Item) => itemMenu([it], ctx).find((e): e is MenuAction => !("separator" in e) && (e as MenuEntry & { label?: string }).label === "Compare versions");
     expect(entry(items.a)?.disabled).toBeFalsy();
-    expect(entry(items.b)?.disabled).toBe(true);
+    expect(entry(items.b)).toBeUndefined(); // no history and no source: not offered (14 Oct 2026)
     expect(entry(items.c)?.disabled).toBeFalsy();
   });
 });

@@ -4705,8 +4705,8 @@ button.mt-card:hover { border-color: var(--accent); }
 /* A pointer on its way to an open submenu crosses rows it is not choosing
    (`lib/menuaim.ts`); they do not light up, and the open row stays lit. */
 .context-menu[data-aim] .context-item:not(.open):hover { background: none; }
-/* Dimmed, not removed: a menu whose shape changes between one open and the
-   next is a menu you cannot learn. */
+/* Dimmed is "not right now", where seeing the row is the hint; a row that
+   cannot apply to what was right-clicked is left out (`itemMenu`). */
 .context-item:disabled { opacity: 0.4; cursor: default; }
 .context-item.danger { color: var(--danger); }
 

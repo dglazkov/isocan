@@ -2745,10 +2745,12 @@ export const JOURNEYS = [
      * Style ›, move toward its children — and they vanished, because the
      * shortest path crosses the row below. Now a pointer heading into the open
      * submenu keeps it (`lib/menuaim.ts`): this walks that diagonal in small
-     * real mouse steps, crossing the row below Align, and chooses the far item;
-     * then walks straight DOWN from Align and insists the menu does let go.
+     * real mouse steps, crossing the row below Arrange, and chooses Align
+     * bottom, far down its submenu; then walks straight DOWN from Arrange and
+     * insists the menu does let go. (Align was a root row until 14 Oct 2026;
+     * it lives under Arrange › now.)
      */
-    what: "a diagonal from Align › across the row below keeps the submenu and chooses its far item; straight down lets it go",
+    what: "a diagonal from Arrange › across the row below keeps the submenu and chooses Align bottom; straight down lets it go",
     async run(rig) {
       const { b } = rig;
       await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -2785,32 +2787,32 @@ export const JOURNEYS = [
           if (each) await each(at);
         }
       };
-      // Both cards selected, so Align is offered; then the menu, by a real right-click.
+      // Both cards selected, so Arrange is offered; then the menu, by a real right-click.
       const a = await centre(`.item[data-item-id="${cards[0]}"]`), c = await centre(`.item[data-item-id="${cards[1]}"]`);
       await press(a, { button: "left" });
       await press(c, { button: "left", modifiers: 8 });
       const ROOT = `.context-menu:not(.context-submenu)`;
-      const ALIGN = `${ROOT} > .context-sub > button[aria-haspopup="menu"]`;
-      const findAlign = `[...document.querySelectorAll(${JSON.stringify(ALIGN)})].find((el) => el.textContent.trim().startsWith("Align"))`;
+      const ARRANGE = `${ROOT} > .context-sub > button[aria-haspopup="menu"]`;
+      const findArrange = `[...document.querySelectorAll(${JSON.stringify(ARRANGE)})].find((el) => el.textContent.trim().startsWith("Arrange"))`;
       const openMenu = async () => {
         await mouse("mouseMoved", c.x, c.y);
         await press(c, { button: "right" });
-        await until(b, `!!${findAlign} && !${findAlign}.disabled`, "the item menu, with Align offered for two cards", 4000);
-        const row = await b.ev(`(() => { const r = ${findAlign}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), left: Math.round(r.left), h: Math.round(r.height) }; })()`);
-        // Onto Align from its left, the way a hand arrives, and wait out the beat.
+        await until(b, `!!${findArrange} && !${findArrange}.disabled`, "the item menu, with Arrange offered for two cards", 4000);
+        const row = await b.ev(`(() => { const r = ${findArrange}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), left: Math.round(r.left), h: Math.round(r.height) }; })()`);
+        // Onto Arrange from its left, the way a hand arrives, and wait out the beat.
         await walk({ x: row.left + 4, y: row.y }, row, 4);
-        await until(b, `${findAlign}.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`, "hovering Align to open its submenu", 2000);
+        await until(b, `${findArrange}.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`, "hovering Arrange to open its submenu", 2000);
         return row;
       };
-      const subOpen = `${findAlign}?.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`;
+      const subOpen = `${findArrange}?.getAttribute("aria-expanded") === "true" && !!document.querySelector(".context-submenu")`;
 
-      // 1. The diagonal: Align's centre to the submenu's LAST row, crossing the rows below Align.
+      // 1. The diagonal: Arrange's centre to Align bottom, far down its submenu, crossing the rows below Arrange.
       const row = await openMenu();
-      const far = await b.ev(`(() => { const all = [...document.querySelectorAll(".context-submenu button")]; const el = all[all.length - 1]; el.setAttribute("data-journey-far", ""); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
+      const far = await b.ev(`(() => { const el = [...document.querySelectorAll(".context-submenu button")].find((e) => e.textContent.trim() === "Align bottom"); el.setAttribute("data-journey-far", ""); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
       const crossed = new Set();
       const diagonalAt = Date.now();
       await walk(row, far, 24, async (at) => {
-        const over = await b.ev(`(() => { const el = document.elementFromPoint(${at.x}, ${at.y})?.closest("button"); return el && !el.closest(".context-submenu") && el !== ${findAlign} ? el.textContent.trim() : null; })()`);
+        const over = await b.ev(`(() => { const el = document.elementFromPoint(${at.x}, ${at.y})?.closest("button"); return el && !el.closest(".context-submenu") && el !== ${findArrange} ? el.textContent.trim() : null; })()`);
         if (over) crossed.add(over);
         if (!(await b.ev(subOpen))) throw new Error(`the submenu closed on the way to "${far.label}", at ${at.x},${at.y}${over ? ` over "${over}"` : ""}`);
       }, 50); // a hand's pace: ~1.3s, so the close grace (300ms) alone cannot carry it — only the aim can
@@ -2826,14 +2828,14 @@ export const JOURNEYS = [
       const deadline = Date.now() + 6000;
       let bottoms = await edges();
       while (bottoms[0] !== bottoms[1] && Date.now() < deadline) { await sleep(200); bottoms = await edges(); }
-      if (far.label !== "Bottom" || bottoms[0] !== bottoms[1]) throw new Error(`choosing "${far.label}" did not align the bottoms: ${JSON.stringify(bottoms)}`);
+      if (far.label !== "Align bottom" || bottoms[0] !== bottoms[1]) throw new Error(`choosing "${far.label}" did not align the bottoms: ${JSON.stringify(bottoms)}`);
 
-      // 2. Straight down from Align is choosing another row: the submenu lets go.
+      // 2. Straight down from Arrange is choosing another row: the submenu lets go.
       await openMenu();
-      const below = await b.ev(`(() => { const el = ${findAlign}.parentElement.nextElementSibling; const r = el.getBoundingClientRect(); return { x: ${row.x}, y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
+      const below = await b.ev(`(() => { let el = ${findArrange}.parentElement.nextElementSibling; while (el && el.classList.contains("context-sep")) el = el.nextElementSibling; const r = el.getBoundingClientRect(); return { x: ${row.x}, y: Math.round(r.top + r.height / 2), label: el.textContent.trim() }; })()`);
       const leftAt = Date.now();
       await walk(row, below, 4);
-      await until(b, `!(${subOpen})`, `moving straight down onto "${below.label}" to close Align's submenu`, 1500);
+      await until(b, `!(${subOpen})`, `moving straight down onto "${below.label}" to close Arrange's submenu`, 1500);
       const letGoMs = Date.now() - leftAt;
       return { crossed: [...crossed], diagonalMs, chose: far.label, bottoms, straightDown: { onto: below.label, letGoMs } };
     },
