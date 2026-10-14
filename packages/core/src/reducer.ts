@@ -757,6 +757,13 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
     }
     comment.deleted = c.deleted;
   }
+  if (c.goodnight !== undefined) {
+    // A goodnight turn (proactive-agent phase 2): a plan, or a brief naming its note.
+    const { step, note } = (c.goodnight ?? {}) as { step?: unknown; note?: unknown };
+    if (step === "plan" && note === undefined) comment.goodnight = { step };
+    else if (step === "brief" && typeof note === "string" && /^[\w-]{1,64}$/.test(note)) comment.goodnight = { step, note };
+    else throw new OpValidationError("bad-op", "a goodnight turn is a plan, or a brief naming its note");
+  }
   if (c.items?.length) comment.items = [...c.items];
   const context = c.context;
   if (context) {

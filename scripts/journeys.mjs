@@ -4151,6 +4151,206 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "proactive-night-watch",
+    /**
+     * **The night watch** (proactive-agent phase 2, journey scene 2,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon, because it writes a `config.json` naming the
+     * scripted harness: **no model runs**. `packages/cli/test/fake-acp.mjs`
+     * is Kit's harness and its `FAKE_ACP_ACT` hook is Kit — summoned by the
+     * real `isocan rc` on every Chat message, reading the night with
+     * `isocan goodnight read`, answering in the thread, and only after
+     * "That's the plan" writing the note and the promised frames, then
+     * filling what is still ticked and posting the brief.
+     *
+     * Maya types `/goodnight` in the Chat, steers once (naming Checkout for a
+     * rework), presses **That's the plan**, sees the note and a promised
+     * frame, and unticks the contrast check — its frame goes. The night fills
+     * the basket's frame and edits Checkout, the one original she named, and
+     * nothing else of hers. Then, with Kit dismissed, a second `/goodnight`
+     * writes a note that promises nothing and says why. Screenshots of the
+     * conversation and of the note with its frame are returned for a person.
+     */
+    what: "/goodnight opens a talk with the lead; That's the plan writes the note and frames; untick takes a frame; with nobody to answer the note promises nothing",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-night-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_night_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: the conversation's three turns and the night's work.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const json = (...args) => JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, ...args], { encoding: "utf8" }));
+  const read = json("goodnight", "read");
+  if (!read.youLead || !read.conversation) return;
+  const listed = json("comment", "ls");
+  const main = (Array.isArray(listed) ? listed : listed.threads).find((t) => t.main);
+  const at = main.comments.findIndex((c) => c.id === read.conversation.askId);
+  const kitSaid = main.comments.slice(at + 1).some((c) => c.author.name === "Kit");
+  if (read.conversation.planned) {
+    json("goodnight", "note",
+      "--promise", "Basket | three takes on the empty basket, one a sketch | three takes",
+      "--promise", "Order history | check the red against contrast | one take",
+      "--edit", "Checkout | pickup first | one new version",
+      "--thought", "The basket is the first thing a regular sees on a slow week.");
+    run("comment", "reply", main.id, "The note is on the canvas: untick anything you do not want. I start in a moment.");
+    const go = path.join(cwd, "night-go");
+    for (let i = 0; i < 240 && !existsSync(go); i++) await new Promise((r) => setTimeout(r, 250));
+    const now = json("goodnight", "show", "--for", "Maya");
+    for (const line of now.lines.filter((l) => l.ticked)) {
+      const file = path.join(cwd, "take-" + line.n + ".html");
+      if (line.edit) {
+        writeFileSync(file, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p><b>Pickup: Saturday 9:00</b></p><p>Sourdough loaf × 1</p><p>Total $8</p></body>");
+        run("goodnight", "fill", line.on, file);
+      } else {
+        writeFileSync(file, "<!doctype html><title>Basket</title><body style='font:16px system-ui;padding:24px'><h1>Your basket is empty</h1><p>Today's loaf: sourdough. Order by Friday.</p></body>");
+        run("goodnight", "fill", line.frame, file, "--hunch", "--why", "Empty states teach: show the first step, not the void.");
+      }
+    }
+    run("goodnight", "done", "One hunch on the empty basket. Checkout reworked, pickup first. You unticked the contrast check, so I left it alone.");
+    return;
+  }
+  const settled = read.settled.map((s) => s.what).join("; ") || "nothing yet";
+  const open = read.open.map((s) => s.what).join("; ") || "nothing";
+  if (!kitSaid) {
+    run("comment", "reply", main.id, "**Settled today:** " + settled + ". **Left open:** " + open + ". **Tonight I could try:** three takes on the empty Basket, one a sketch (an empty state should teach the first step); a contrast check of the red on Order history; and a rework of Checkout with the pickup time first, but only if you name it for editing.");
+    return;
+  }
+  run("comment", "reply", main.id, "The plan as it stands: three takes on the Basket, beside it; the contrast check on Order history; Checkout reworked, pickup first, because you named it. Say that's the plan when it is right.");
+}
+`);
+      const { proc, origin } = await startDaemon(home);
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-night-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const screens = {};
+        for (const [i, title, words] of [[0, "Basket", "Your basket is empty."], [1, "Checkout", "Sourdough loaf × 1 · Total $8 · Pickup: Saturday 9:00"], [2, "Order history", "Last week: two loaves"]]) {
+          const file = path.join(home, `screen-${i}.html`);
+          writeFileSync(file, `<!doctype html><title>${title}</title><body style='font:16px system-ui;padding:24px'><h1>${title}</h1><p>${words}</p></body>`);
+          screens[title] = runCli("--canvas", id, "add", file, "--title", title, "--size", "390x520", "--at", `${i * 470},0`).itemId;
+        }
+        runCli("--canvas", id, "comment", "add", "/ask Should the empty basket suggest a loaf?", "--item", screens.Basket);
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        const versions = (itemId) => runCli("--canvas", id, "show", itemId).versions.length;
+        const before = { Basket: versions(screens.Basket), Checkout: versions(screens.Checkout), "Order history": versions(screens["Order history"]) };
+
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        await until(b, `!!document.querySelector('.item[data-item-id="${screens.Basket}"]')`, "the Basket screen on Maya's canvas", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.parked)`, "Maya's rc to park", 20_000);
+        const chatText = () => b.ev(`document.querySelector(".main-panel .main-msgs")?.textContent ?? ""`);
+
+        // 1. /goodnight, in the Chat: Kit opens with what it read.
+        await rig.click(".main-panel form textarea", "the Chat's input");
+        await rig.type("/goodnight long day, the basket bugs me");
+        await rig.press("Enter");
+        await until(b, `(document.querySelector(".main-panel .main-msgs")?.textContent ?? "").includes("Tonight I could try")`, "Kit's opener in the Chat", 45_000);
+        const opener = await chatText();
+        if (!/Left open:.*Should the empty basket suggest a loaf\?/.test(opener)) throw new Error(`the opener does not say what is left open: ${opener.slice(-600)}`);
+
+        // 2. She steers, naming Checkout; Kit restates the plan.
+        await rig.click(".main-panel form textarea", "the Chat's input");
+        await rig.type("rework the checkout screen too, pickup first");
+        await rig.press("Enter");
+        await until(b, `(document.querySelector(".main-panel .main-msgs")?.textContent ?? "").includes("The plan as it stands")`, "Kit restating the plan", 45_000);
+        let early = null;
+        try { early = runCli("--canvas", id, "goodnight", "show"); } catch { /* no note yet: the point */ }
+        if (early) throw new Error("a note was written before Maya said that's the plan");
+        await until(b, `!!document.querySelector(".goodnight-plan button")`, "the That's the plan control under the conversation");
+        const conversation = await shot("conversation");
+
+        // 3. That's the plan: the note, and a promised frame under each line's item.
+        await rig.click(".goodnight-plan button", "That's the plan");
+        await until(b, `!!document.querySelector("[data-handoff]") && document.querySelectorAll('[data-promise="promised"]').length === 2`, "the note and its two promised frames", 45_000);
+        const note = runCli("--canvas", id, "goodnight", "show");
+        const [basketLine, contrastLine, reworkLine] = note.lines;
+        if (!basketLine.frame || !contrastLine.frame || reworkLine.frame || !reworkLine.edit) throw new Error(`the note's lines are not as agreed: ${JSON.stringify(note.lines)}`);
+        const under = await b.ev(`(() => {
+          const s = document.querySelector('[data-item-id="${screens.Basket}"]').getBoundingClientRect();
+          const f = document.querySelector('[data-item-id="${basketLine.frame}"]').getBoundingClientRect();
+          return f.top >= s.bottom && Math.abs(f.left - s.left) < 2;
+        })()`);
+        if (!under) throw new Error("the promised frame does not hang beneath the Basket");
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+        const noteShot = await shot("note-and-frame");
+
+        // 4. She unticks the contrast check: its frame goes, the line stays as an offer.
+        await rig.click(`[data-handoff] [data-line="2"] input`, "the contrast check's box");
+        await until(b, `!document.querySelector('[data-item-id="${contrastLine.frame}"]')`, "the contrast check's frame to go");
+        const unticked = runCli("--canvas", id, "goodnight", "show").lines[1];
+        if (unticked.ticked || unticked.frame) throw new Error(`line 2 is still a promise: ${JSON.stringify(unticked)}`);
+
+        // 5. The night: Kit fills what is still ticked, and says so.
+        writeFileSync(path.join(kitDir, "night-go"), "go");
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some(t => t.main && t.comments.some(c => c.goodnight?.step === "brief")))`, "the night's brief in the Chat", 60_000);
+        const frame = runCli("--canvas", id, "show", basketLine.frame);
+        if (frame.properties.proposal !== "hunch") throw new Error(`the basket's frame was not filled as a hunch: ${JSON.stringify(frame.properties)}`);
+        const after = { Basket: versions(screens.Basket), Checkout: versions(screens.Checkout), "Order history": versions(screens["Order history"]) };
+        if (after.Checkout !== before.Checkout + 1) throw new Error(`Checkout, named for editing, has ${after.Checkout} versions — not one more than ${before.Checkout}`);
+        if (after.Basket !== before.Basket || after["Order history"] !== before["Order history"]) throw new Error(`the night edited an original nobody named: ${JSON.stringify({ before, after })}`);
+        if (JSON.stringify(runCli("--canvas", id, "ls")).includes(contrastLine.frame)) throw new Error("the unticked line's frame came back");
+
+        // 6. Kit dismissed: a second goodnight promises nothing, and says why.
+        runCli("--canvas", id, "rc", "remove", "Kit");
+        await rig.click(".main-panel form textarea", "the Chat's input");
+        await rig.type("/goodnight again");
+        await rig.press("Enter");
+        await until(b, `/Nothing can answer overnight/.test(document.querySelector(".main-panel [role=alert]")?.textContent ?? "")`, "the Chat to say nothing can answer", 20_000);
+        const quiet = runCli("--canvas", id, "goodnight", "show");
+        if (quiet.itemId === note.itemId || quiet.lines.length !== 0 || !/Nothing can answer overnight: "Kit" is named to lead here/.test(quiet.nothing ?? "")) throw new Error(`the second note does not promise nothing with its reason: ${JSON.stringify(quiet)}`);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: { conversation, note: noteShot } };
+      } catch (err) {
+        throw new Error(`${err.message}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        proc.kill();
+        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
     name: "launcher",
     /** ⌘K stopped being a third composer and became the way to reach
      *  everything. A launcher that opens but does nothing is the worst version

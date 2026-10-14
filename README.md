@@ -385,6 +385,18 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   as one line in **What your deletes taught**, a note pinned into every
   agent's context (`isocan taste`). A proposal must cite a trigger, and one
   agent keeps at most five open on a canvas.
+- **Goodnight: agree the night's work, then leave**: type `/goodnight` in the
+  Chat (`isocan goodnight` in a terminal) and the canvas's lead agent — the
+  one named by `proactive=<name>` on the canvas, else its standing agent —
+  opens with what you settled today, what is left open and a few things it
+  could try. Steer it in the Chat; press **That's the plan** and it writes a
+  note (settled, left open, a ticked *Tonight I will* list with budgets,
+  *will not touch*, ready by) with an empty dashed frame under each item a
+  line concerns. Untick a line and its frame goes. Overnight it fills each
+  frame, or says plainly why one failed; it edits an original only when you
+  named it in the conversation, never what you settled today or the design
+  system, and never an item someone else's goodnight named. When nothing can
+  answer, the note says so and promises nothing.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

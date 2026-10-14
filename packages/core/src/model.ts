@@ -274,6 +274,13 @@ export interface Comment {
   click?: import("./prototype-click.ts").PrototypeClick;
   /** A person deleted this proposal (an item id); its author is asked what it taught — see `proposal.ts`. */
   deleted?: string;
+  /**
+   * A turn of a goodnight conversation that machinery reads (proactive-agent
+   * phase 2, `goodnight.ts`): `plan`, the person saying "That's the plan";
+   * `brief`, the agent's account of the night, a `record` naming its note —
+   * what the morning review finds it by.
+   */
+  goodnight?: GoodnightMark;
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];
@@ -286,6 +293,13 @@ export interface Comment {
    * honest source for how long that took, since both ends are daemon
    * timestamps rather than something the author typed. */
   editedAt?: string;
+}
+
+/** What a goodnight comment carries: which turn it is, and for a brief, the note it reports on. */
+export interface GoodnightMark {
+  step: "plan" | "brief";
+  /** The note's item id — a brief only. */
+  note?: string;
 }
 
 /**

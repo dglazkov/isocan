@@ -1,5 +1,5 @@
 import type { Actor, CanvasContents, Item, Operation } from "@isocan/core";
-import { deletedBody, itemThread, listeners, newCommentId, newGroupId, newThreadId, proposalMarked } from "@isocan/core";
+import { PROPOSAL_PROP, deletedBody, itemThread, listeners, newCommentId, newGroupId, newThreadId, proposalMarked } from "@isocan/core";
 import { fetchRcAnswering } from "./api.ts";
 import { sendEchoed, sendEchoedResult, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -31,6 +31,16 @@ import { showProposalToast } from "../components/ProposalToast.tsx";
 export async function deleteProposals(canvasId: string, actor: Actor, ids: string[]): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas || ids.length === 0) return;
+  // A promised frame of your own goodnight is not a proposal you reject: ⌫
+  // on it is "not tonight" — the line unticked on the note, the frame gone,
+  // one undo, and no lesson asked of anybody (proactive-agent phase 2).
+  const promised = ids.filter((id) => canvas.items[id]?.properties[PROPOSAL_PROP] === "promised");
+  if (promised.length) {
+    const { untickFrame } = await import("./goodnight.ts");
+    for (const id of promised) await untickFrame(canvasId, actor, id);
+    ids = ids.filter((id) => !promised.includes(id));
+    if (ids.length === 0) return;
+  }
   const proposals = ids.map((id) => canvas.items[id]).filter((item): item is Item => Boolean(item) && proposalMarked(item!));
   const group = newGroupId();
   const result = await sendEchoedResult(

@@ -104,12 +104,12 @@ import { ModuleUnderlays } from "./ModuleUnderlays.tsx";
 /**
  * **A canvas with no proposal downloads no proposal marks** (proactive-agent
  * phase 1): first paint carries one scan of the items for the `proposal`
- * property, and the marks, their sheet and their keys arrive only where it
- * finds one.
+ * property (or a goodnight note's `handoff`, phase 2), and the marks, their
+ * sheet and their keys arrive only where it finds one.
  */
 const ProposalMarks = lazy(() => import("./ProposalMarks.tsx"));
 function ProposalsWhenAny({ canvasId, actor }: { canvasId: string; actor: Actor }) {
-  const any = useCanvasStore((s) => Object.values((s.past?.canvas ?? s.canvas)?.items ?? {}).some((i) => i.properties?.proposal));
+  const any = useCanvasStore((s) => Object.values((s.past?.canvas ?? s.canvas)?.items ?? {}).some((i) => i.properties?.proposal || i.properties?.handoff));
   return any ? <Suspense fallback={null}><ProposalMarks canvasId={canvasId} actor={actor} /></Suspense> : null;
 }
 import { CursorLayer } from "./CursorLayer.tsx";

@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phase 1 (proposals, and deletes that teach) is CLOSED. Next: phase 2, the night watch (`/goodnight`, a conversation, the work on the canvas by morning). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–2 (proposals; the night watch) are CLOSED. Next: phase 3, the morning review. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -64,7 +64,7 @@ inspector), **Delete** (⌫, one undo) that summons the author with
 
 ## Phase 2 — The night watch
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** `/goodnight` in the Chat (or `isocan goodnight`) summons the lead (`proactive=<name>` on the canvas, else the first answerable standing agent, critics excluded), which reads `goodnight read`, opens with settled today, left open and what it could try, and is steered in the Chat; **That's the plan** (a button, the words, or `goodnight plan`) ends it. Only then does `goodnight note` write the note (Settled today, Left open, Tonight I will, Will not touch, a thought, Ready by; its model in `handoffNote`) and hang an empty `proposal=promised` frame beneath each promise. Core `planNight` holds the rules: agreed lines only, the cap with promised frames counted, an edit only on an item the person named, never the design system or anything settled today, never an item another person's open goodnight named; with nothing answerable the note promises nothing and says why. Untick by checkbox, ⌫/**Not tonight** or `goodnight untick`. The night fills (`goodnight fill`, a new version for a named original) or fails each frame with a reason; `goodnight done` posts the brief as a Chat `record` with `goodnight: {step: "brief"}` once every ticked line is answered. `goodnight.test.ts` (core 15, CLI 4) and the `proactive-night-watch` journey (real `isocan rc`, a fake ACP agent as Kit, no model). Deep suite 835 of 836, the one a connect timeout under load in `passes.test.ts`, which passes alone. Entry 723,869 → 725,217.
 
 **Outcome:** `/goodnight`, the **Hand off** menu row and `isocan handoff`;
 core derivations for *settled today* and *left open*; the handoff note as a
@@ -89,6 +89,11 @@ honest "nothing can answer tonight" when no standing agent is answerable.
   one night watch; whether a first session gets one. Waits on Dion.
 - **2026-10-14** — Decided (Dion): the night watch starts only with an explicit `/goodnight`, never a closed tab or idling. `/goodnight` opens a conversation in the Chat about what to work on; the note and its promised frames are written from what that conversation agreed, and by the morning the canvas carries that work. Open: whether the agreed work may edit an original, or only hangs beside it.
 - **2026-10-14** — Decided (Dion): the agreed work may edit an original the conversation named for editing, as a new version the morning review lists; everything else stays beside, as proposals. Each person leaves their own `/goodnight`; one person's promises never touch an item another's conversation named.
+- **2026-10-14** — "That's the plan" is the one summons for the night: the lead writes the note and its frames and does the work in that turn, so an untick races the work. Open: a separate send, if that race matters with a real model.
+- **2026-10-14** — With nothing to answer, the person's own client writes the note, which promises nothing and says why.
+- **2026-10-14** — Promised and failed frames are proposal states the reducer counts toward five; a promised frame must cite `promise:<note>#n`, and Keep refuses an empty frame or a failure with no take.
+- **2026-10-14** — Open: when a note stops blocking another person's night (ready-by, or every ticked line answered); every standing agent wakes on `/goodnight` and the non-leads spend a turn staying silent; a second `/goodnight` the same day writes a second note; the proposal cards overlap neighbouring frames at low zoom.
+- **2026-10-14** — Entry 725,217, 18,917 past the ceiling against a jump of 20,000. Dion: finish the phases, then a slimming pass.
 
 ## Phase 3 — The morning review
 

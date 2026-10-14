@@ -9192,6 +9192,129 @@ program
   );
 
 /**
+ * **The night watch** (proactive-agent phase 2): stopping for the day opens a
+ * conversation with the lead agent, and only "That's the plan" lets it write
+ * the note and the promised frames. The person's verbs (`start`, `plan`,
+ * `untick`, `show`) and the lead's (`read`, `note`, `fill`, `done`) are one
+ * family; their bodies live in `goodnight.ts`, loaded on these verbs only.
+ */
+const goodnightDeps = () => ({ ...proposeDeps(), newComment: (ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, body: string) => newComment(ctx, canvasId, snapshot, body) });
+const collectList = (v: string, prev: string[] = []) => [...prev, v];
+
+const goodnightCmd = program
+  .command("goodnight")
+  .description("Stopping for the day: talk through what the lead agent works on overnight, then its note and promises");
+
+goodnightCmd
+  .command("start [words...]", { isDefault: true })
+  .description("Open the conversation: a /goodnight in the Chat to the canvas's lead agent (or an honest note when nothing can answer)")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (words: string[], _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { start } = await import("./goodnight.ts");
+      await start(ctx, goodnightDeps(), words ?? []);
+    }),
+  );
+
+goodnightCmd
+  .command("plan [words...]")
+  .description("\"That's the plan\": end the conversation, so the lead writes the note and starts the night's work")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (words: string[], _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { plan } = await import("./goodnight.ts");
+      await plan(ctx, goodnightDeps(), words ?? []);
+    }),
+  );
+
+goodnightCmd
+  .command("show")
+  .description("Print a goodnight note — yours, or --for somebody's")
+  .option("--for <person>")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (opts: { for?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { show } = await import("./goodnight.ts");
+      await show(ctx, goodnightDeps(), opts);
+    }),
+  );
+
+goodnightCmd
+  .command("untick <n>")
+  .description("Take line n off tonight's list: it stays an offer, and its empty frame goes (one undo)")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (n: string, _opts: unknown, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { untick } = await import("./goodnight.ts");
+      await untick(ctx, goodnightDeps(), n);
+    }),
+  );
+
+goodnightCmd
+  .command("read")
+  .description("The lead's read: who leads, whether anything can answer, room, settled today, left open, what was named")
+  .option("--for <person>", "whose goodnight (default: the latest one with no note yet)")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (opts: { for?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { read } = await import("./goodnight.ts");
+      await read(ctx, goodnightDeps(), opts);
+    }),
+  );
+
+goodnightCmd
+  .command("note")
+  .description("The lead writes the agreed note and its promised frames — only after \"That's the plan\"")
+  .option("--for <person>", "whose goodnight (default: the latest one with no note yet)")
+  .option("--promise <line>", "\"<item> | <what you will do> | <budget>\" — a proposal beside the item, an empty frame until filled (repeatable)", collectList)
+  .option("--edit <line>", "\"<item> | <the rework> | <budget>\" — edit an original the person named (repeatable)", collectList)
+  .option("--open <doubt>", "\"comment:<id> | what was said\" — a doubt read today, cited (repeatable)", collectList)
+  .option("--wont <thing>", "something else you will not touch (repeatable)", collectList)
+  .option("--thought <text>", "a thought left for the morning")
+  .option("--ready <HH:MM>", "when the morning may look (default 8:00)")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (opts: { for?: string; promise?: string[]; edit?: string[]; open?: string[]; wont?: string[]; thought?: string; ready?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { note } = await import("./goodnight.ts");
+      await note(ctx, goodnightDeps(), opts);
+    }),
+  );
+
+goodnightCmd
+  .command("fill <item> [file]")
+  .description("Answer one promise: fill its frame (or the named original, as a new version), or --failed with the reason")
+  .option("--hunch", "a hunch rather than sure")
+  .option("--why <text>", "why, in design words — two sentences at most")
+  .option("--failed <reason>", "it did not work: say why; a file is the take you would have shown")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (item: string, file: string | undefined, opts: { hunch?: boolean; why?: string; failed?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { fill } = await import("./goodnight.ts");
+      await fill(ctx, goodnightDeps(), item, file, opts);
+    }),
+  );
+
+goodnightCmd
+  .command("done <brief...>")
+  .description("Every promise answered: post the night's brief in the Chat — a record the morning finds")
+  .option("--for <person>")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (words: string[], opts: { for?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { done } = await import("./goodnight.ts");
+      await done(ctx, goodnightDeps(), words, opts);
+    }),
+  );
+
+/**
  * **What changed between two versions** (docs/projects/version-diff/design.md).
  *
  * Choosing a variation, or reviewing an agent's edit, without seeing what is

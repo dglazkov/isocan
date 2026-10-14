@@ -23,6 +23,15 @@ second week.
 
 ## 14 October 2026
 
+- **Goodnight.** Type `/goodnight` in the Chat when you stop for the day.
+  The canvas's agent tells you what you settled, what is still open, and a
+  few things it could try overnight. Steer it, then press **That's the
+  plan**: it leaves a note with tonight's list and an empty dashed frame
+  under each screen it will work on, and you can untick anything. It only
+  reworks a screen you named, never what you settled today or your design
+  system, and never what a teammate's goodnight claimed. If no agent can
+  work tonight, the note says so. From a terminal: `isocan goodnight`.
+
 - **Agents can propose instead of edit.** An agent with an idea about your
   screen leaves it beside the screen: a dashed copy hanging beneath it, a
   chip saying what prompted it, and a short why whose design terms you can

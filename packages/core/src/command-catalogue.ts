@@ -78,6 +78,12 @@ export const DEFAULT_COMMAND_CATALOGUE = [
     source: "built-in",
   },
   {
+    name: "goodnight",
+    description: "Stopping for the day: agree what the lead agent works on overnight",
+    usage: "[what is on your mind]",
+    source: "built-in",
+  },
+  {
     name: "sprint",
     description: "Run a design sprint here — you facilitate, people and agents sketch, one person decides",
     usage: "[what we are designing] | <phase> [8m] [note]",

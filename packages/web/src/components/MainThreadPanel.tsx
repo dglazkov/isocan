@@ -14,6 +14,10 @@ const ModuleComposerControls = lazy(() =>
   import("./ModuleComposer.tsx").then((module) => ({ default: module.ModuleComposerControls })),
 );
 
+/** **That's the plan** under a goodnight conversation (proactive-agent
+ *  phase 2) — loaded only once this person has said `/goodnight` here. */
+const GoodnightPlan = lazy(() => import("./GoodnightPlan.tsx"));
+
 /** The Chat's clean-up — the remove control on a message and the owner's
  *  "Clean up…" menu — loaded only for somebody who can write here. */
 const ChatTidy = lazy(() => import("./ChatTidy.tsx"));
@@ -692,6 +696,9 @@ function Panel({
                 actor={actor}
               />
           )}
+          {thread && canEdit && thread.comments.some((c) => c.author.id === actor.id && c.body.trimStart().startsWith("/goodnight")) && (
+            <Suspense fallback={null}><GoodnightPlan canvasId={canvasId} actor={actor} thread={thread} /></Suspense>
+          )}
         {(hasDesignRequests || designSource) && <Suspense fallback={<p>Opening design task…</p>}><DesignTaskPanel key={questionnaireViewer} canvasId={canvasId} actor={actor} startSource={designSource} onStarted={() => setDesignSource(null)} /></Suspense>}
         </div>
       </div>
@@ -733,6 +740,16 @@ function Panel({
             const said = await joinFromChat(canvasId, actor, ask, bench);
             if (said) setRefused(said);
             else setDraft("");
+            return;
+          }
+          // `/goodnight` posts to the lead by name, and when nothing can
+          // answer writes the honest note too (lib/goodnight.ts, fetched on
+          // this Enter only).
+          if (/^\s*\/goodnight(\s|$)/.test(body)) {
+            const { startGoodnight } = await import("../lib/goodnight.ts");
+            const said = await startGoodnight(canvasId, actor, body, useUiStore.getState().selectedItemIds);
+            setDraft("");
+            if (said) setRefused(said);
             return;
           }
           // /help and its kind are answered here rather than posted: see

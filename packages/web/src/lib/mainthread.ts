@@ -21,10 +21,12 @@ export async function postToMain(
    * can act on exactly what was on screen rather than guess from the words. */
   attached: string[] = [],
   contextRequest?: NewComment["contextRequest"],
+  /** Machinery's data riding on the message — a goodnight turn, say. */
+  extra?: Partial<NewComment>,
 ): ReturnType<typeof sendEchoedResult> {
   const withItems = (text: string) => {
     const comment = makeComment(text);
-    return { ...comment, ...(attached.length ? { items: [...new Set([...(comment.items ?? []), ...attached])] } : {}), ...(contextRequest ? { contextRequest } : {}) };
+    return { ...comment, ...(attached.length ? { items: [...new Set([...(comment.items ?? []), ...attached])] } : {}), ...(contextRequest ? { contextRequest } : {}), ...extra };
   };
   const existing = mainThread(useCanvasStore.getState().canvas!);
   if (existing) {

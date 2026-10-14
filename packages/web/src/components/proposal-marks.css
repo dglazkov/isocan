@@ -121,3 +121,25 @@
   color: var(--ink);
 }
 .proposal-toast[data-untaken] p { color: var(--warn); }
+
+/* The night watch (proactive-agent phase 2): a promised frame is dashed and
+   faint until the night fills it; a failed one keeps the dash in the warning
+   ink. Beside a goodnight note, its lines with their boxes; under a goodnight
+   conversation in the Chat, the one control that ends it. */
+[data-promise="promised"] > .proposal-outline { outline-color: var(--ink-muted); }
+[data-promise="failed"] > .proposal-outline { outline-color: var(--warn); }
+.night-line { display: flex; gap: 6px; align-items: flex-start; line-height: 1.4; }
+.night-line input { margin: 2px 0 0; }
+.goodnight-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--card);
+  font-size: 12px;
+}
+.goodnight-plan p { margin: 0; color: var(--ink-muted); }
+.goodnight-plan .btn { align-self: flex-start; }

@@ -1,6 +1,6 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Actor, CanvasContents, Item } from "@isocan/core";
-import { citeLabel, designWordSpans, parentOf, proposalCites, proposalsOf, PROPOSAL_PROP, PROPOSAL_WHY_PROP } from "@isocan/core";
+import { citeLabel, designWordSpans, goodnightNotes, parentOf, proposalCites, proposalsOf, PROMISE_TAKE_PROP, PROPOSAL_PROP, PROPOSAL_WHY_PROP, type NightNote } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import "./proposal-marks.css";
@@ -34,28 +34,45 @@ export default function ProposalMarks({ canvasId, actor }: { canvasId: string; a
       {proposalsOf(canvas).map((item) => (
         <ProposalMark key={item.id} canvas={canvas} item={item} canvasId={canvasId} actor={actor} canEdit={canEdit} />
       ))}
+      {goodnightNotes(canvas).map(({ item, note }) => (
+        <NightTicks key={item.id} item={item} note={note} canvasId={canvasId} actor={actor} canEdit={canEdit} />
+      ))}
     </>
   );
 }
 
+/** What a promise's chip says: whose goodnight, which line. */
+function promiseLabel(canvas: CanvasContents, item: Item): string {
+  const ref = proposalCites(item).find((c) => c.kind === "promise")?.ref ?? "";
+  const [noteId, n] = ref.split("#");
+  const note = goodnightNotes(canvas).find((one) => one.item.id === noteId)?.note;
+  return note ? `${note.person.name}'s goodnight · line ${n}` : "a goodnight";
+}
+
 function ProposalMark({ canvas, item, canvasId, actor, canEdit }: { canvas: CanvasContents; item: Item; canvasId: string; actor: Actor; canEdit: boolean }) {
   const source = canvas.items[parentOf(item) ?? ""];
-  const hunch = item.properties[PROPOSAL_PROP] === "hunch";
+  const state = item.properties[PROPOSAL_PROP];
+  const hunch = state === "hunch";
+  const promised = state === "promised";
+  const failed = state === "failed";
+  // A failed promise can be kept or compared only when it carries the take it would have shown.
+  const take = !failed || Boolean(item.properties[PROMISE_TAKE_PROP]);
   const cite = proposalCites(item)[0];
   const why = item.properties[PROPOSAL_WHY_PROP] ?? "";
   const stop = (e: ReactPointerEvent) => e.stopPropagation();
   const keep = () => void import("../lib/choose.ts").then((m) => m.chooseVariation(canvasId, actor, item.id));
   const compare = () => void import("./VersionCompare.tsx").then((m) => m.openCompare({ canvasId, actor, itemId: item.id, source: true }));
   const remove = () => void import("../lib/proposalDelete.ts").then((m) => m.deleteProposals(canvasId, actor, [item.id]));
+  const label = cite?.kind === "promise" ? promiseLabel(canvas, item) : cite ? citeLabel(canvas, cite) : "";
   return (
-    <div data-proposal={item.id} data-hunch={hunch ? "" : undefined}>
+    <div data-proposal={item.id} data-hunch={hunch ? "" : undefined} data-promise={promised ? "promised" : failed ? "failed" : undefined}>
       {source && <Connector from={source} to={item} />}
       <div className="proposal-outline" style={{ left: item.x, top: item.y, width: item.width, height: item.height }} aria-hidden />
       <div className="proposal-anchor" style={{ left: item.x + item.width, top: item.y } as CSSProperties}>
         <div className="proposal-note" onPointerDown={stop}>
-          <span className="proposal-chip" title={cite ? `Prompted by ${citeLabel(canvas, cite)}` : undefined}>
-            <b>{hunch ? "hunch" : "proposal"}</b>
-            {cite && <span>{citeLabel(canvas, cite)}</span>}
+          <span className="proposal-chip" title={label ? `Prompted by ${label}` : undefined}>
+            <b>{promised ? "promised tonight" : failed ? "did not work" : hunch ? "hunch" : "proposal"}</b>
+            {label && <span>{label}</span>}
           </span>
           {why && (
             <p className="proposal-why">
@@ -73,14 +90,50 @@ function ProposalMark({ canvas, item, canvasId, actor, canEdit }: { canvas: Canv
               )}
             </p>
           )}
-          {canEdit && (
+          {canEdit && promised && (
+            <div className="proposal-actions" role="toolbar" aria-label={`Promise: ${item.title}`}>
+              <button type="button" className="btn" onClick={remove} title="Take this line off tonight's list (⌫) — it stays an offer on the note">Not tonight</button>
+            </div>
+          )}
+          {canEdit && !promised && (
             <div className="proposal-actions" role="toolbar" aria-label={`Proposal: ${item.title}`}>
-              <button type="button" className="btn" onClick={keep} title="Make this the next version of what it came from">Keep</button>
-              <button type="button" className="btn" onClick={compare} title="Side by side with what it came from">Compare</button>
+              {take && <button type="button" className="btn" onClick={keep} title="Make this the next version of what it came from">Keep</button>}
+              {take && <button type="button" className="btn" onClick={compare} title="Side by side with what it came from">Compare</button>}
               <button type="button" className="btn" onClick={remove} title="Delete it (⌫) — the agent is asked what it should learn">Delete</button>
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * **Tonight's list, tickable** (proactive-agent phase 2): beside a goodnight
+ * note, its lines with their boxes. Unticking one — only the note's own
+ * person may — keeps it on the note as an offer and takes its empty frame,
+ * one undo. A line cannot be ticked back here: a new promise is the lead's
+ * to make, against the cap, in the conversation.
+ */
+function NightTicks({ item, note, canvasId, actor, canEdit }: { item: Item; note: NightNote; canvasId: string; actor: Actor; canEdit: boolean }) {
+  const mine = canEdit && note.person.id === actor.id;
+  if (note.lines.length === 0) return null;
+  const untick = (n: number) => void import("../lib/goodnight.ts").then((m) => m.untickGoodnight(canvasId, actor, item, n));
+  return (
+    <div className="proposal-anchor" style={{ left: item.x + item.width, top: item.y } as CSSProperties}>
+      <div className="proposal-note night-ticks" data-handoff={item.id} onPointerDown={(e) => e.stopPropagation()}>
+        <span className="proposal-chip"><b>tonight</b><span>{mine ? "untick what you do not want" : `${note.person.name}'s goodnight`}</span></span>
+        {note.lines.map((line) => (
+          <label key={line.n} className="night-line" data-line={line.n}>
+            <input
+              type="checkbox"
+              checked={line.ticked}
+              disabled={!mine || !line.ticked || Boolean(line.result)}
+              onChange={() => untick(line.n)}
+            />
+            <span>{line.text}{line.result ? ("failed" in line.result ? " — did not work" : " — done") : ""}</span>
+          </label>
+        ))}
       </div>
     </div>
   );

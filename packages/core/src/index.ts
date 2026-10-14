@@ -107,6 +107,7 @@ export * from "./memory.ts";
 export * from "./converge.ts";
 export * from "./proposal.ts";
 export * from "./proposal-words.ts";
+export * from "./goodnight.ts";
 export * from "./design-words.ts";
 export * from "./itemthread.ts";
 export * from "./claim.ts";

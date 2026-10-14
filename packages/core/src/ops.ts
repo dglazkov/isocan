@@ -71,6 +71,8 @@ export interface NewComment {
   click?: import("./prototype-click.ts").PrototypeClick;
   /** A deleted proposal's id; see Comment.deleted. */
   deleted?: string;
+  /** A goodnight turn; see Comment.goodnight. */
+  goodnight?: import("./model.ts").GoodnightMark;
   /** Resolved #item-references (item ids); see Comment.items. */
   items?: string[];
   /** Public attachment intent; the home resolves it at one canvas revision. */

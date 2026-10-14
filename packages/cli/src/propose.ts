@@ -62,7 +62,7 @@ export interface ProposeDeps {
  * means "under that one"; past ten rows it goes unchosen and the daemon's
  * own tidy finds it a clear spot.
  */
-function beneath(canvas: CanvasContents, source: Item, size: { width: number; height: number }): { x: number; y: number; chosen?: true } {
+export function beneath(canvas: CanvasContents, source: Item, size: { width: number; height: number }): { x: number; y: number; chosen?: true } {
   // Footprint to footprint: the source's marks row below it, this one's name
   // strip above it, and the clearance between — so the strip never sits on
   // the row, which a box-to-box gap of 40 would allow.

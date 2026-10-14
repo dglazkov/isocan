@@ -27,7 +27,12 @@ import { PARENT_PROP, parentOf } from "./lineage.ts";
  * if it ever sends one.
  */
 
-/** `proposal=sure|hunch`: the agent's own word for how hard to look. */
+/**
+ * `proposal=sure|hunch`: the agent's own word for how hard to look. Two more
+ * states belong to the night watch (phase 2, `goodnight.ts`): `promised`, an
+ * empty frame a goodnight note promised, and `failed`, a promise that did not
+ * work, carrying its reason as the why.
+ */
 export const PROPOSAL_PROP = "proposal";
 /** `proposalCites=<JSON list of {kind, ref}>`: what prompted it — at least one. */
 export const PROPOSAL_CITES_PROP = "proposalCites";
@@ -49,6 +54,9 @@ export const PROPOSAL_CAP = 5;
  * module's prototype and design-scope reads.
  */
 export type ProposalConfidence = "sure" | "hunch";
+
+/** Every state the canvas marks: how sure, or where a night's promise stands. */
+const MARKED_STATES: readonly string[] = ["sure", "hunch", "promised", "failed"];
 
 /**
  * What can prompt a proposal (design §2.3): a comment, an op by seq, an item
@@ -80,10 +88,15 @@ export function proposalCites(item: Pick<Item, "properties">): ProposalCite[] {
   }
 }
 
-/** Whether the canvas marks this item as a proposal: it says how sure it is and what it came from. */
+/**
+ * Whether the canvas marks this item as a proposal: it says how sure it is
+ * (or that it is a night's promise) and what it came from. A promised frame
+ * and a failed promise are marked too, so both count toward the cap — five
+ * is everything of the agent's still waiting on the person.
+ */
 export function proposalMarked(item: Pick<Item, "properties">): boolean {
   const p = item.properties ?? {};
-  return (p[PROPOSAL_PROP] === "sure" || p[PROPOSAL_PROP] === "hunch") && Boolean(p[PARENT_PROP]);
+  return MARKED_STATES.includes(p[PROPOSAL_PROP] ?? "") && Boolean(p[PARENT_PROP]);
 }
 
 /** The open proposals on a canvas — of one source when named — oldest first. */
@@ -115,13 +128,19 @@ export function proposalRefusal(
   properties: Record<string, string>,
 ): string | null {
   const p = properties[PROPOSAL_PROP];
-  if (p !== "sure" && p !== "hunch") return `a proposal is sure or hunch, not "${p ?? ""}"`;
+  // `promised` is born empty under a goodnight note; `failed` is only ever
+  // reached by filling a promise, never added.
+  if (p !== "sure" && p !== "hunch" && p !== "promised") return `a proposal is sure or hunch, not "${p ?? ""}"`;
   const parent = properties[PARENT_PROP];
   if (!parent || !canvas.items[parent]) {
     return "a proposal hangs beneath its source — name an item that is on the canvas";
   }
-  if (proposalCites({ properties }).length === 0) {
+  const cites = proposalCites({ properties });
+  if (cites.length === 0) {
     return `no trigger, no proposal: cite what prompted it with --cites kind:ref (${CITE_KINDS.join(", ")})`;
+  }
+  if (p === "promised" && !cites.some((c) => c.kind === "promise")) {
+    return "a promised frame cites the goodnight line that promised it — write it with `isocan goodnight note`";
   }
   const why = (properties[PROPOSAL_WHY_PROP] ?? "").trim();
   if (!why) return "a proposal says why, in design words: --why \"…\"";
