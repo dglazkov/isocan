@@ -346,7 +346,13 @@ describe("isocan share keeps people out", () => {
 
   it("--revoke says the link would still admit them, and --bar keeps them out in the same request", async () => {
     const canvasId = await bornCanvas();
-    expect((await cli("share", "sam@example.com")).code).toBe(0);
+    const invitedJson = await cli("share", "sam@example.com", "--as", "edit", "--json");
+    expect(invitedJson.code, invitedJson.stderr).toBe(0);
+    expect(
+      (JSON.parse(invitedJson.stdout) as { grants: Grant[] }).grants.some(
+        (g) => g.subject === "email:sam@example.com",
+      ),
+    ).toBe(true);
     const sam = await holderOf("sam@example.com");
     expect(await enter(sam, canvasId)).toBe(200);
 

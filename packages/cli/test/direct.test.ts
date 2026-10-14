@@ -351,6 +351,43 @@ describe("the daemon verbs", () => {
     // direct machine gives.
     expect(out.stdout).not.toContain("not running");
   });
+
+  it("`isocan status` and `isocan direct` route health probes through configured gateways and reject 200 OK HTML login walls", async () => {
+    const loginWall = http.createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end("<!doctype html><html><body>Sign in</body></html>");
+    });
+    await new Promise<void>((resolve) => loginWall.listen(0, "127.0.0.1", resolve));
+    const wallAddr = loginWall.address();
+    const wallPort = typeof wallAddr === "object" && wallAddr ? wallAddr.port : 0;
+    const loginWallUrl = `http://127.0.0.1:${wallPort}`;
+
+    try {
+      // Without a gateway, the 200 OK HTML login page is rejected rather than
+      // mistaken for a healthy daemon or throwing an uncaught JSON parse error.
+      const refusedDirect = await isocan(["direct", loginWallUrl]);
+      expect(refusedDirect.code).not.toBe(0);
+      expect(refusedDirect.stderr).toContain("without a health payload");
+
+      const unroutedStatus = await isocan(["status", "--json"], { ISOCAN_DIRECT: loginWallUrl });
+      expect(unroutedStatus.code, unroutedStatus.stderr).toBe(0);
+      expect(unroutedStatus.stdout).toContain("NOT ANSWERING");
+
+      // With ISOCAN_HOME_GATEWAYS mapping the canonical URL to the real home,
+      // both `isocan direct <url>` and `isocan status --json` route through the gateway.
+      const gatewayEnv = {
+        ISOCAN_HOME_GATEWAYS: JSON.stringify({ [loginWallUrl]: homeUrl }),
+      };
+      const setDirect = await isocan(["direct", loginWallUrl], gatewayEnv);
+      expect(setDirect.code, setDirect.stderr).toBe(0);
+
+      const statusJson = await isocan(["status", "--json"], gatewayEnv);
+      expect(statusJson.code, statusJson.stderr).toBe(0);
+      expect(JSON.parse(statusJson.stdout)).toMatchObject({ ok: true });
+    } finally {
+      await new Promise<void>((resolve) => loginWall.close(() => resolve()));
+    }
+  });
 });
 
 describe("isocan direct", () => {

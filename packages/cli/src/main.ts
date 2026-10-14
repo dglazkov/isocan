@@ -56,7 +56,6 @@ import type {
   GroupView,
   Space,
   SweepReport,
-  UpgradeVerdict,
   WatchedLogEntry,
 } from "@isocan/core";
 import {
@@ -127,7 +126,6 @@ import {
   cancelledSince,
   commandFileText,
   findCommand,
-  healthPath,
   parseCommandFile,
   collectCanvasActors,
   bySeverity,
@@ -1418,19 +1416,15 @@ program
        * it has to be able to say "nothing is wrong, and here is why there is
        * no daemon".
        */
-      const declared = await resolveDeclared(paths.isocanHome());
+      const isocanHome = paths.isocanHome();
+      const declared = await resolveDeclared(isocanHome);
       const direct = declared?.mode === "direct" ? declared.at : null;
-      // The one raw health fetch left in the CLI — `status` wants the body
-      // shape, not `healthz()`'s null-or-Health. The path still comes from the
-      // address (see `healthPath`), so this cannot drift from every other
-      // probe the way a literal would.
       const daemonBase = direct ?? `http://127.0.0.1:${port}`;
-      const res = await fetch(`${daemonBase}${healthPath(daemonBase)}`, {
-        // A hosted home over the internet is not a loopback port; half a
-        // second is a fine deadline for one and a coin-flip for the other.
-        signal: AbortSignal.timeout(direct ? 5_000 : 500),
-      }).catch(() => null);
-      if (!res?.ok) {
+      const client = new DaemonClient(daemonBase, isocanHome);
+      // A hosted home over the internet is not a loopback port; half a
+      // second is a fine deadline for one and a coin-flip for the other.
+      const health = await client.healthz(direct ? 5_000 : 500);
+      if (!health) {
         console.log(
           direct
             ? `mode: direct — no daemon here; commands speak to ${direct}\n` +
@@ -1439,17 +1433,6 @@ program
         );
         return;
       }
-      const health = (await res.json()) as {
-        pid: number;
-        startedAt: string;
-        version: string;
-        root?: string;
-        codeAt?: string;
-        home?: string;
-        /** Auto-upgrade phase 2. Absent on a homeless or offline daemon, and
-         * on any daemon older than the field — absent is never "current". */
-        upgrade?: UpgradeVerdict;
-      };
       /**
        * **Which canvases live where** — the second read, and the one that
        * makes the role line true.
@@ -1463,7 +1446,7 @@ program
        * whole truth.
        */
       const record = await readHomeRecord(
-        new DaemonClient(daemonBase, paths.isocanHome()),
+        client,
         health.home ?? null,
       ).catch(() => null);
       const summary: HomeSummary = { birth: record?.birth ?? health.home ?? null, rows: record?.rows ?? {} };
@@ -1497,7 +1480,7 @@ program
         // Whether item content serves from its own origin (content-origin
         // plan, stage 2). Best-effort: a daemon older than the route just
         // doesn't get the line.
-        ...(await new DaemonClient(daemonBase, paths.isocanHome())
+        ...(await client
           .serving()
           .then((s) => ({
             // The base, and — from stage 4b — whether a read there has to
@@ -1919,7 +1902,7 @@ program
 
       if (url === undefined && !opts.clear) {
         const target = live ?? configured;
-        const reachable = target ? await homeAnswers(target) : null;
+        const reachable = target ? await homeAnswers(target, isocanHome) : null;
         /**
          * **Per canvas, because that is where the answer lives now.**
          *
@@ -2190,7 +2173,7 @@ program
       // pointed at an address that does not answer cannot run a single
       // command, because there is no replica underneath to fall back to.
       const target = normalizeHomeUrl(url!);
-      const answers = await homeAnswers(target);
+      const answers = await homeAnswers(target, isocanHome);
       if (!answers.ok) {
         throw new Error(
           `nothing answered at ${target} (${answers.why}) — a direct machine has no local ` +
@@ -2262,7 +2245,7 @@ async function pointDaemonAtHome(opts: {
         "unset it first (`unset ISOCAN_HOME_URL`), then run this again",
     );
   }
-  const reachable = target ? await homeAnswers(target) : null;
+  const reachable = target ? await homeAnswers(target, isocanHome) : null;
   if (reachable && !reachable.ok && !force) {
     throw new Error(
       `nothing answered at ${target} (${reachable.why}) — a daemon whose home is ` +
@@ -2326,19 +2309,15 @@ function normalizeHomeUrl(input: string): string {
   return normalizeAddress(raw);
 }
 
-/** Does the address answer as a home? The health route, which is what the
- * daemon itself will dial — `healthPath` picks `/api/healthz` for anything
- * that is not loopback, because Google's frontend swallows the bare path. */
-async function homeAnswers(url: string): Promise<{ ok: boolean; why: string }> {
-  try {
-    const res = await fetch(`${url}${healthPath(url)}`, { signal: AbortSignal.timeout(5000) });
-    return res.ok
-      ? { ok: true, why: "" }
-      : { ok: false, why: `it answered ${res.status} — is that address a home?` };
-  } catch (err) {
-    const why = (err as Error).name === "TimeoutError" ? "no answer in 5s" : (err as Error).message;
-    return { ok: false, why };
-  }
+/** Does the address answer as a home? Routes through `DaemonClient` so
+ * configured gateways and proxies apply, and verifies a `{ ok: true }` health
+ * payload so an HTML login redirect never masquerades as a live home. */
+async function homeAnswers(
+  url: string,
+  isocanHome = paths.isocanHome(),
+): Promise<{ ok: boolean; why: string }> {
+  const res = await new DaemonClient(url, isocanHome).probeHealth(5_000);
+  return res.ok ? { ok: true, why: "" } : { ok: false, why: res.why };
 }
 
 program
@@ -3190,18 +3169,20 @@ async function shareRows(
         }
         const answer = await scope.revoke(live.id, barWith);
         sweepAlso(answer.swept);
-        if (answer.bar) {
-          console.log(`revoked ${subject} on ${scope.what}, and kept out${reachedLine(answer)} — they are refused at the door until \`--unbar\``);
-        } else {
-          console.log(`revoked ${subject} on ${scope.what}${reachedLine(answer)}`);
-          // The difference between withdrawing and barring, said where the
-          // person can act on it (roles journey 3, step 3). From the home's
-          // answer, not from this verb's copy of the rows. Since roles
-          // phase 4 the answer can name the space, whose Share is the remedy.
-          if (answer.stillAdmittedBy === "link") {
-            console.log("they can still enter by the link; `--bar` to keep them out");
-          } else if (answer.stillAdmittedBy === "space") {
-            console.log("they can still enter by the space this canvas is in; `isocan share --space <name> --revoke` removes them from every canvas in it");
+        if (!ctx.json) {
+          if (answer.bar) {
+            console.log(`revoked ${subject} on ${scope.what}, and kept out${reachedLine(answer)} — they are refused at the door until \`--unbar\``);
+          } else {
+            console.log(`revoked ${subject} on ${scope.what}${reachedLine(answer)}`);
+            // The difference between withdrawing and barring, said where the
+            // person can act on it (roles journey 3, step 3). From the home's
+            // answer, not from this verb's copy of the rows. Since roles
+            // phase 4 the answer can name the space, whose Share is the remedy.
+            if (answer.stillAdmittedBy === "link") {
+              console.log("they can still enter by the link; `--bar` to keep them out");
+            } else if (answer.stillAdmittedBy === "space") {
+              console.log("they can still enter by the space this canvas is in; `isocan share --space <name> --revoke` removes them from every canvas in it");
+            }
           }
         }
       }
@@ -3216,10 +3197,12 @@ async function shareRows(
         const subject = normalizeSubject(grantSubjectOf(barWho));
         const answer = await scope.bar(subject);
         sweepAlso(answer.swept);
-        console.log(
-          `kept out ${subject} on ${scope.what} (${answer.grant.id})${reachedLine(answer)} — they are refused at the door ` +
-            "whatever the link allows, until `--unbar`",
-        );
+        if (!ctx.json) {
+          console.log(
+            `kept out ${subject} on ${scope.what} (${answer.grant.id})${reachedLine(answer)} — they are refused at the door ` +
+              "whatever the link allows, until `--unbar`",
+          );
+        }
       }
 
       /**
@@ -3238,7 +3221,9 @@ async function shareRows(
         }
         const answer = await scope.revoke(bar.id);
         sweepAlso(answer.swept);
-        console.log(`let ${subject} back in to ${scope.what}${reachedLine(answer)} — the link or an invitation now decides`);
+        if (!ctx.json) {
+          console.log(`let ${subject} back in to ${scope.what}${reachedLine(answer)} — the link or an invitation now decides`);
+        }
       }
 
       if (opts.as !== undefined && who === undefined) {
@@ -3263,13 +3248,15 @@ async function shareRows(
         sweepAlso(answer.swept);
         const { grant } = answer;
         const groupId = groupIdOf(grant.subject);
-        console.log(
-          `granted ${grant.subject} on ${scope.what} as ${capabilityWord.dialog[capabilityOf(grant)]} ` +
-            `(${grant.id})${reachedLine(answer)} — ` +
-            (groupId !== null
-              ? "its members get in by proving an address in the group; who is in it is read at the door"
-              : "they get in by proving that address; nothing was emailed from here"),
-        );
+        if (!ctx.json) {
+          console.log(
+            `granted ${grant.subject} on ${scope.what} as ${capabilityWord.dialog[capabilityOf(grant)]} ` +
+              `(${grant.id})${reachedLine(answer)} — ` +
+              (groupId !== null
+                ? "its members get in by proving an address in the group; who is in it is read at the door"
+                : "they get in by proving that address; nothing was emailed from here"),
+          );
+        }
       }
 
 
@@ -3307,11 +3294,13 @@ async function shareSpace(
     const answer = await ctx.client.setSpaceLink(space.id, capability, ctx.actor.id);
     sweepAlso(answer.swept);
     const reached = answer.reached === 1 ? "1 canvas" : `${answer.reached} canvases`;
-    console.log(
-      `link ${capability === "edit" ? "on" : capability} on every canvas in ${space.name} — reached ${reached}` +
-        (answer.changed === answer.reached ? "" : ` (${answer.changed} changed; the rest already stood so)`) +
-        "; each canvas's own link can be set again with `isocan share --link`",
-    );
+    if (!ctx.json) {
+      console.log(
+        `link ${capability === "edit" ? "on" : capability} on every canvas in ${space.name} — reached ${reached}` +
+          (answer.changed === answer.reached ? "" : ` (${answer.changed} changed; the rest already stood so)`) +
+          "; each canvas's own link can be set again with `isocan share --link`",
+      );
+    }
   }
   await shareRows(ctx, spaceScope(ctx, space), who, opts, sweepAlso);
 
