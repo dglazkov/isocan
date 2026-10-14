@@ -44,9 +44,9 @@ export interface DesignUse {
  * Could this item BE a design system — markdown words, rather than a screen,
  * a picture, a group or a caption? What `isocan design use` accepts.
  *
- * Here rather than beside `isDesignSystem` for the bytes: `designsystem.ts`
- * is in the web's entry chunk, and anything added to it rides along even when
- * only a lazy chunk calls it.
+ * Here rather than beside `isDesignSystem` for the bytes: `design-role.ts`,
+ * where it lives, is in the web's entry chunk, and anything added to it rides
+ * along even when only a lazy chunk calls it.
  */
 function isDesignDocument(item: Item): boolean {
   const kind = item.properties.kind;

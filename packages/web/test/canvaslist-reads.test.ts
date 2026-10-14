@@ -29,9 +29,13 @@ const never = <T,>() => new Promise<T>(() => {});
 vi.mock("../src/lib/api.ts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/lib/api.ts")>()),
   listCanvases: () => reads.canvases!(),
-  listSpaces: () => reads.spaces!(),
   fetchTakedowns: () => reads.takedowns!(),
   fetchHomes: () => never(),
+}));
+// Spaces moved to the access calls' own module (the entry-chunk slimming, 14 Oct).
+vi.mock("../src/lib/api-access.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/lib/api-access.ts")>()),
+  listSpaces: () => reads.spaces!(),
 }));
 // Neighbours with reads of their own, and nothing to do with this one.
 vi.mock("../src/components/PublicCatalogue.tsx", () => ({ PublicCatalogue: () => null }));

@@ -26,18 +26,20 @@ import {
 } from "@isocan/core";
 import { recentCanvases } from "../lib/recents.ts";
 import {
-  addToSpace,
   ApiError,
-  createSpace,
-  deleteSpace,
   fetchHomes,
   fetchTakedowns,
   listCanvases,
-  listSpaces,
-  removeFromSpace,
   sendOp,
 } from "../lib/api.ts";
 import { withDeadline } from "../lib/deadline.ts";
+import {
+  addToSpace,
+  createSpace,
+  deleteSpace,
+  listSpaces,
+  removeFromSpace,
+} from "../lib/api-access.ts";
 // A modal, loaded when it is opened — see `CanvasCrumb` for the reasoning.
 const ShareDialog = lazy(() =>
   import("../components/ShareDialog.tsx").then((m) => ({ default: m.ShareDialog })),

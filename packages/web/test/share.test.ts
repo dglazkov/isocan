@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CURRENT_CLIENT_FEATURES, CLIENT_FEATURES_HEADER, grantRevokeRoute, grantRoute, grantsRoute, LINK } from "@isocan/core";
-import { ApiError, createBar, createGrant, listGrants, revokeGrant } from "../src/lib/api.ts";
+import { ApiError } from "../src/lib/api.ts";
+import { createBar, createGrant, listGrants, revokeGrant } from "../src/lib/api-access.ts";
 
 /**
  * **The Share dialog's three calls, as they go out on the wire.**

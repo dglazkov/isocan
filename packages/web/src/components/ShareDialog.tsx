@@ -5,6 +5,9 @@ import type { PresenceSession, RowState } from "@isocan/core";
 import { useCanEdit } from "../lib/capability.ts";
 import { useAnswerable } from "../lib/answerable.ts";
 import {
+  ApiError,
+} from "../lib/api.ts";
+import {
   createBar,
   createGrant,
   createSpaceGrant,
@@ -17,8 +20,7 @@ import {
   revokeSpaceGrant,
   setSpaceLink,
   setPublicListing,
-  ApiError,
-} from "../lib/api.ts";
+} from "../lib/api-access.ts";
 import { attesterOffer, canInviteByEmail } from "../lib/signin.ts";
 import { isSsoHome } from "../lib/faces.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";

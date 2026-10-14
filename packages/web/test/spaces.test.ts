@@ -10,7 +10,7 @@ import {
   listSpaces,
   removeFromSpace,
   setSpaceLink,
-} from "../src/lib/api.ts";
+} from "../src/lib/api-access.ts";
 
 /**
  * **The space, on the web surface** (roles phase 4). Two things worth holding
