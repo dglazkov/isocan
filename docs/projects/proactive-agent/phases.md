@@ -82,6 +82,7 @@ honest "nothing can answer tonight" when no standing agent is answerable.
 - **2026-10-14** — Open: what counts as leaving (an explicit word only, or
   also closing the tab or idling, and after how long); whether a team shares
   one night watch; whether a first session gets one. Waits on Dion.
+- **2026-10-14** — Decided (Dion): the night watch starts only with an explicit `/goodnight`, never a closed tab or idling. `/goodnight` opens a conversation in the Chat about what to work on; the note and its promised frames are written from what that conversation agreed, and by the morning the canvas carries that work. Open: whether the agreed work may edit an original, or only hangs beside it.
 
 ## Phase 3 — The morning review
 

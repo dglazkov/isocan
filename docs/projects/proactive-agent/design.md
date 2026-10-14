@@ -130,10 +130,17 @@ per source.
 
 ## 4. The night watch
 
-**Trigger:** the person says they are stopping (`/goodnight` in the Chat, a
-**Hand off** button in the canvas menu, `isocan handoff` in the terminal).
-Offered, never forced, when the tab closes or the person goes idle after a
-working session; **Not tonight** is one tap.
+**Trigger:** the person says they are stopping, and only then:
+`/goodnight` in the Chat (or `isocan goodnight` in the terminal). Nothing is
+offered on a closed tab or an idle pointer (decided, Dion, 14 Oct 2026).
+
+**A conversation first.** `/goodnight` opens a thread with the lead agent,
+in the Chat, to talk through what the person wants worked on overnight. The
+agent opens with what it read (settled today, left open, and two or three
+things it could try, each with why), and the person steers: add, drop,
+reword, "not that one". The thread ends when the person says so (**That's
+the plan**, or a word to the same effect), and only then does the agent
+write the note below from what was agreed.
 
 **What the person sees:** a handoff note written by the lead agent, as a
 text node near the work: **Settled today**, **Left open**, **Tonight I
@@ -161,23 +168,31 @@ concerns, an empty dashed frame: a placeholder proposal with
   note is a comment addressed to it, so the rc wakes it as for any other
   ask, and its budget is the rc's.
 
-**Smallest version:** `/goodnight` writes a note with settled, open, and
-one promise; one promised frame; the morning review (§5) fills it.
+**Smallest version:** `/goodnight` opens the thread; one exchange settles
+one promise; the note lists settled, open and that promise; one promised
+frame; the morning review (§5) fills it.
 
 **What exists:** `isocan rc`, the bench, `summons.ts`, `roll.ts`'s *away*
 line, `comment list --open`, `converge.ts`, `preference.ts`, the maybe and
 keep properties.
 
-**Open questions:** *Open — waits on Dion:* what counts as leaving (an
-explicit word only, or also closing the tab or idling, and after how
-long); whether a team shares one night watch or each person leaves their
-own; whether a first session gets one.
+**Decided (Dion, 14 Oct 2026):** leaving is an explicit `/goodnight` only,
+and it starts a conversation about what to work on; by the morning the
+canvas has changed: the agreed work is on it.
+
+**Open questions:** *Open — waits on Dion:* whether a team shares one night
+watch or each person leaves their own; whether a first session gets one;
+whether "changed by the morning" means only new work beside the person's
+(the grammar's rule today: proposals hang beneath their source, originals
+untouched) or may also edit an original when the conversation agreed to it
+explicitly.
 
 ## 5. The morning review
 
-**Trigger:** the person returns: their seen mark (`seen.ts`) is older than
-the handoff's ready-by time, or older than eight hours with proposals made
-since.
+**Trigger:** the person returns after a `/goodnight`: their seen mark
+(`seen.ts`) is older than the handoff's ready-by time. Without a goodnight
+there is no morning review; the ordinary "While you were away" digest still
+shows what others did.
 
 **What the person sees:** their work untouched; the promised frames filled;
 the "While you were away" panel, on desktop as on the phone, leading with
