@@ -397,6 +397,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   named it in the conversation, never what you settled today or the design
   system, and never an item someone else's goodnight named. When nothing can
   answer, the note says so and promises nothing.
+- **The morning review**: come back after your own `/goodnight` and the
+  "While you were away" panel — on desktop as on the phone — leads with the
+  lead agent's brief: one plain line if the night failed or made nothing,
+  then at most five proposals, the surest first, each with its why (a
+  promise that did not work says why), then what it **left alone** and why,
+  then every original it changed because you named it, with the version
+  before one click away. `isocan goodnight review` prints the same. Seeing
+  it closes the night's note; the five never grow with time away.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

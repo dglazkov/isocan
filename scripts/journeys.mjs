@@ -253,6 +253,7 @@ async function rig() {
         Delete: { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" },
         Escape: { windowsVirtualKeyCode: 27, key: "Escape", code: "Escape" },
         j: { windowsVirtualKeyCode: 74, key: "j", code: "KeyJ" },
+        z: { windowsVirtualKeyCode: 90, key: "z", code: "KeyZ" },
       };
       const k = codes[key];
       if (!k) throw new Error(`journeys cannot press ${key} yet`);
@@ -4309,7 +4310,71 @@ export default async function act({ prompt, cli, cwd }) {
         await sleep(800);
         const noteShot = await shot("note-and-frame");
 
+        // 3b. No note covers anything (the 33% screenshot, 14 Oct 2026): each
+        // proposal's note and tonight's list, measured against every item drawn
+        // and every other note, at Fit, 100%, 51% and 33% — light, and dark.
+        const apart = async (at) => {
+          const hits = await b.ev(`(() => {
+            const box = (e) => e.getBoundingClientRect();
+            const hit = (a, c) => a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom;
+            const notes = [...document.querySelectorAll(".proposal-note")].filter((n) => box(n).width > 0 && box(n).height > 0)
+              .map((n) => ({ of: n.closest("[data-proposal]")?.dataset.proposal ?? n.dataset.handoff, r: box(n) }));
+            const items = [...document.querySelectorAll(".item[data-item-id]")].map((e) => ({ id: e.dataset.itemId, r: box(e) }));
+            const out = [];
+            for (const n of notes) {
+              for (const i of items) if (i.id !== n.of && hit(n.r, i.r)) out.push(n.of + " over item " + i.id);
+              for (const m of notes) if (m !== n && hit(n.r, m.r)) out.push(n.of + " over note " + m.of);
+            }
+            return { out, notes: notes.length };
+          })()`);
+          if (hits.notes === 0) throw new Error(`no note is drawn at ${at}`);
+          if (hits.out.length) throw new Error(`a note covers something at ${at}: ${hits.out.join("; ")}`);
+        };
+        const zoomTo = async (label, outs) => {
+          await rig.click(".zoom-pct", "the zoom menu");
+          await rig.clickText(".zoom-menu-row", label, label);
+          for (let i = 0; i < outs; i++) await rig.click('.zoom-step[title="Zoom out"]', "zoom out");
+          await sleep(600);
+        };
+        const themed = async (name) => {
+          const files = {};
+          for (const theme of ["light", "dark"]) {
+            await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+            await sleep(200);
+            files[theme] = await shot(`${name}-${theme}`);
+          }
+          await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+          return files;
+        };
+        await apart("Zoom to Fit");
+        // 100%, centred on the Basket's promised frame (selected, framed, then
+        // let go, so its note is placed rather than opened).
+        await rig.click(`[data-item-id="${basketLine.frame}"] .item-titlebar .chrome-left`, "the Basket's promised frame");
+        await zoomTo("Zoom to Selection", 0);
+        await zoomTo("Zoom to 100%", 0);
+        await rig.press("Escape");
+        await sleep(400);
+        await apart("100%");
+        const at100 = await themed("night-100");
+        await zoomTo("Zoom to 100%", 3);
+        await apart("51%");
+        await zoomTo("Zoom to Fit", 0);
+        await zoomTo("Zoom to 100%", 5);
+        await apart("33%");
+        const at33 = await themed("night-33");
+        await zoomTo("Zoom to Fit", 0);
+
         // 4. She unticks the contrast check: its frame goes, the line stays as an offer.
+        // At this zoom tonight's list may stand as its chip alone (pointing at
+        // it opens it) or not at all (selecting the note opens it).
+        const listMode = await b.ev(`document.querySelector("[data-handoff]").closest("[data-card]").dataset.card`);
+        if (listMode === "chip") {
+          const tonight = await b.ev(`(() => { const r = document.querySelector("[data-handoff] .proposal-chip").getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+          await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: tonight.x, y: tonight.y });
+        } else if (listMode === "none") {
+          await rig.click(`[data-item-id="${note.itemId}"] .item-titlebar .chrome-left`, "the goodnight note");
+        }
+        await sleep(200);
         await rig.click(`[data-handoff] [data-line="2"] input`, "the contrast check's box");
         await until(b, `!document.querySelector('[data-item-id="${contrastLine.frame}"]')`, "the contrast check's frame to go");
         const unticked = runCli("--canvas", id, "goodnight", "show").lines[1];
@@ -4335,7 +4400,236 @@ export default async function act({ prompt, cli, cwd }) {
         if (quiet.itemId === note.itemId || quiet.lines.length !== 0 || !/Nothing can answer overnight: "Kit" is named to lead here/.test(quiet.nothing ?? "")) throw new Error(`the second note does not promise nothing with its reason: ${JSON.stringify(quiet)}`);
         const errors = b.takeErrors();
         if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
-        return { screenshots: { conversation, note: noteShot } };
+        return { screenshots: { conversation, note: noteShot, at100, at33 } };
+      } catch (err) {
+        throw new Error(`${err.message}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        proc.kill();
+        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-morning",
+    /**
+     * **The morning review** (proactive-agent phase 3, journey scene 3,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * The night watch's fixture — its own home, the real `isocan rc`, and
+     * `packages/cli/test/fake-acp.mjs` as Kit, so **no model runs** — with
+     * Maya's half driven from her terminal: she opens the canvas in the
+     * browser (her seen mark), says `/goodnight`, names Checkout for a
+     * rework and says that's the plan. Kit promises two takes beside the
+     * Basket and a regroup of Order history, edits Checkout, fills the
+     * Basket's frames (one sure, one a hunch), fails the regroup with its
+     * reason and the take it would have shown, and posts the brief with
+     * what it left alone, ready-by now.
+     *
+     * She comes back (a reload: her mark is older than ready-by): the
+     * desktop "While you were away" panel leads with the brief, then the
+     * proposals highest confidence first, the failed promise with its
+     * reason, Left alone, and Checkout with the version before; her other
+     * screens are byte for byte what they were. Seeing it closes the note.
+     * After a visit newer than ready-by (`isocan seen --mark`) there is no
+     * review. Screenshots of the panel, light and dark, for a person.
+     */
+    what: "back after /goodnight: the desktop away panel leads with the brief, ≤5 proposals sure-first, a failed promise with its reason, Left alone, the named original's version before; a newer seen mark shows none",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-morning-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_morning_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: open, restate, then — on "That's the plan" — the note and the whole night.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const json = (...args) => JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, ...args], { encoding: "utf8" }));
+  const read = json("goodnight", "read");
+  if (!read.youLead || !read.conversation) return;
+  const listed = json("comment", "ls");
+  const main = (Array.isArray(listed) ? listed : listed.threads).find((t) => t.main);
+  const at = main.comments.findIndex((c) => c.id === read.conversation.askId);
+  const kitSaid = main.comments.slice(at + 1).some((c) => c.author.name === "Kit");
+  if (read.conversation.planned) {
+    if (main.comments.some((c) => c.goodnight?.step === "brief")) return;
+    const note = json("goodnight", "note",
+      "--promise", "Basket | a finished take on the empty basket | one take",
+      "--promise", "Basket | a sketch of the empty basket | one sketch",
+      "--promise", "Order history | group past orders by week | one take",
+      "--edit", "Checkout | pickup first | one new version",
+      "--ready", new Date().toISOString());
+    const page = (title, body) => "<!doctype html><title>" + title + "</title><body style='font:16px system-ui;padding:24px'><h1>" + title + "</h1>" + body + "</body>";
+    for (const line of note.lines) {
+      const file = path.join(cwd, "take-" + line.n + ".html");
+      if (line.edit) {
+        writeFileSync(file, page("Checkout", "<p><b>Pickup: Saturday 9:00</b></p><p>Sourdough loaf × 1</p><p>Total $8</p>"));
+        run("goodnight", "fill", line.on, file);
+      } else if (line.n === 1) {
+        writeFileSync(file, page("Your basket is empty", "<p>Today's loaf: sourdough. Order by Friday.</p>"));
+        run("goodnight", "fill", line.frame, file, "--why", "Empty states teach: show the first step, not the void.");
+      } else if (line.n === 2) {
+        writeFileSync(file, page("Nothing here yet", "<p>A loaf, sketched.</p>"));
+        run("goodnight", "fill", line.frame, file, "--hunch", "--why", "A sketch first: the warmth of the empty state is the open question.");
+      } else {
+        writeFileSync(file, page("Order history", "<p>Week of 6 Oct: two loaves</p>"));
+        run("goodnight", "fill", line.frame, file, "--failed", "every take broke the list's scan line");
+      }
+    }
+    run("goodnight", "done", "Two takes on the basket: one I'm sure of, one hunch. Checkout reworked, pickup first. The order-history regroup did not work.",
+      "--left", "Ravi's note about delivery | a business decision, not a design one");
+    return;
+  }
+  if (!kitSaid) {
+    run("comment", "reply", main.id, "**Tonight I could try:** two takes on the empty Basket, one a sketch; a regroup of Order history by week; and Checkout reworked with the pickup time first, if you name it for editing.");
+    return;
+  }
+  run("comment", "reply", main.id, "The plan as it stands: two takes on the Basket, beside it; the Order history regroup; Checkout reworked, pickup first, because you named it. Say that's the plan when it is right.");
+}
+`);
+      const { proc, origin } = await startDaemon(home);
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-morning-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const chat = (id) => {
+        const listed = runCli("--canvas", id, "comment", "ls");
+        return ((Array.isArray(listed) ? listed : listed.threads).find((t) => t.main)?.comments ?? []);
+      };
+      const waitFor = async (test, what, ms = 45_000) => {
+        for (const end = Date.now() + ms; Date.now() < end; await sleep(400)) if (test()) return;
+        throw new Error(`timed out waiting for ${what}`);
+      };
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const screens = {};
+        for (const [i, title, words] of [[0, "Basket", "Your basket is empty."], [1, "Checkout", "Sourdough loaf × 1 · Total $8 · Pickup: Saturday 9:00"], [2, "Order history", "Last week: two loaves"], [3, "Menu", "Sourdough, rye, focaccia"]]) {
+          const file = path.join(home, `screen-${i}.html`);
+          writeFileSync(file, `<!doctype html><title>${title}</title><body style='font:16px system-ui;padding:24px'><h1>${title}</h1><p>${words}</p></body>`);
+          screens[title] = runCli("--canvas", id, "add", file, "--title", title, "--size", "390x520", "--at", `${i * 470},0`).itemId;
+        }
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        const current = (itemId) => { const s = runCli("--canvas", id, "show", itemId); return { versions: s.versions.length, current: s.currentVersionId, hash: s.versions.find((v) => v.id === s.currentVersionId)?.blobHash ?? null }; };
+        const before = Object.fromEntries(Object.entries(screens).map(([t, itemId]) => [t, current(itemId)]));
+
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        // The evening visit: Maya's seen mark is written now, before the night.
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); localStorage.setItem("isocan.theme", "light"); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        await until(b, `!!document.querySelector('.item[data-item-id="${screens.Basket}"]')`, "the Basket screen on Maya's canvas", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.parked)`, "Maya's rc to park", 20_000);
+        if (await b.ev(`!!document.querySelector("[data-away-panel]")`)) throw new Error("a morning review showed before any goodnight");
+        await sleep(1500); // the visit's mark lands
+
+        // The goodnight, from her terminal: a talk, Checkout named, that's the plan.
+        const asked = runCli("--canvas", id, "goodnight", "start", "the basket bugs me");
+        await waitFor(() => chat(id).some((c) => /Tonight I could try/.test(c.body)), "Kit's opener");
+        runCli("--canvas", id, "comment", "reply", asked.threadId, "rework the checkout screen too, pickup first");
+        await waitFor(() => chat(id).some((c) => /The plan as it stands/.test(c.body)), "Kit restating the plan");
+        runCli("--canvas", id, "goodnight", "plan");
+        await waitFor(() => chat(id).some((c) => c.goodnight?.step === "brief"), "the night's brief", 90_000);
+        const review = runCli("--canvas", id, "goodnight", "review");
+        if (!review.due) throw new Error(`the review is not due after the night: ${review.notDue}`);
+
+        // The morning: she comes back. The panel leads with the brief.
+        await b.send("Page.reload", {});
+        await sleep(2500);
+        await until(b, `!!document.querySelector("[data-away-panel] [data-morning]")`, "the morning review in the desktop away panel", 20_000);
+        const panel = await b.ev(`(() => {
+          const p = document.querySelector("[data-away-panel]");
+          const m = p.querySelector("[data-morning]");
+          const first = p.querySelector("details > :not(summary)");
+          return {
+            leads: first === m,
+            brief: m.querySelector("[data-morning-brief]")?.textContent ?? "",
+            headline: m.querySelector("[data-morning-headline]")?.textContent ?? null,
+            proposals: [...m.querySelectorAll("[data-morning-proposal]")].map((li) => [li.dataset.morningProposal, li.textContent]),
+            left: m.querySelector("[data-morning-left]")?.textContent ?? "",
+            edited: [...m.querySelectorAll("[data-morning-edited]")].map((li) => li.dataset.morningEdited),
+            digest: !!p.querySelector("[data-change-seq]"),
+          };
+        })()`);
+        if (!panel.leads) throw new Error("the brief does not lead the away panel");
+        if (!/Two takes on the basket/.test(panel.brief)) throw new Error(`the brief is not Kit's: ${panel.brief}`);
+        if (panel.headline) throw new Error(`a night that made things carries a failure line: ${panel.headline}`);
+        const states = panel.proposals.map(([s]) => s);
+        if (JSON.stringify(states) !== JSON.stringify(["sure", "hunch", "failed"])) throw new Error(`the proposals are not highest confidence first: ${JSON.stringify(panel.proposals)}`);
+        if (panel.proposals.length > 5) throw new Error("more than five proposals in one morning");
+        if (!/every take broke the list's scan line/.test(panel.proposals[2][1])) throw new Error(`the failed promise does not say why: ${panel.proposals[2][1]}`);
+        if (!/Ravi's note about delivery — a business decision/.test(panel.left)) throw new Error(`Left alone is missing Kit's reason: ${panel.left}`);
+        if (JSON.stringify(panel.edited) !== JSON.stringify([screens.Checkout])) throw new Error(`the edited originals are not just Checkout: ${JSON.stringify(panel.edited)}`);
+        if (!panel.digest) throw new Error("the digest of what everyone did does not follow the brief");
+        const after = Object.fromEntries(Object.entries(screens).map(([t, itemId]) => [t, current(itemId)]));
+        for (const t of ["Basket", "Order history", "Menu"]) {
+          if (JSON.stringify(after[t]) !== JSON.stringify(before[t])) throw new Error(`“${t}” changed overnight: ${JSON.stringify({ before: before[t], after: after[t] })}`);
+        }
+        if (after.Checkout.versions !== before.Checkout.versions + 1 || after.Checkout.hash === before.Checkout.hash) throw new Error(`Checkout, named for editing, is not one new version: ${JSON.stringify(after.Checkout)}`);
+        // Closing the note is not her act: the review renders, the note closes,
+        // and one ⌘Z on arrival does not reopen it.
+        await waitFor(() => runCli("--canvas", id, "goodnight", "review").reviewed, "the note to close once its review was seen", 10_000);
+        // Focus the canvas first (an empty spot of it), so the chord reaches the page.
+        for (const type of ["mousePressed", "mouseReleased"]) await b.send("Input.dispatchMouseEvent", { type, x: 1200, y: 820, button: "left", clickCount: 1 });
+        await rig.press("z", { meta: true });
+        await sleep(1500);
+        if (!runCli("--canvas", id, "goodnight", "review").reviewed) throw new Error("one ⌘Z on arrival reopened the night's note");
+        if (!(await b.ev(`!!document.querySelector("[data-away-panel] [data-morning]")`))) throw new Error("the review went away on ⌘Z");
+        const lightShot = await shot("away-light");
+        await b.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
+        await b.ev(`(() => { localStorage.setItem("isocan.theme", "dark"); document.documentElement.dataset.theme = "dark"; return true; })()`);
+        await sleep(600);
+        const darkShot = await shot("away-dark");
+        await b.send("Emulation.setEmulatedMedia", { features: [] });
+        await b.ev(`(() => { localStorage.setItem("isocan.theme", "light"); document.documentElement.dataset.theme = "light"; return true; })()`);
+
+        // The version before: the existing compare inspector.
+        await rig.click(`[data-morning-edited="${screens.Checkout}"] [data-morning-before]`, "See the version before");
+        await until(b, `!!document.querySelector("[data-version-compare]")`, "the version compare to open");
+        await rig.press("Escape");
+
+        // A visit newer than ready-by: no review.
+        runCli("--canvas", id, "seen", "--mark");
+        const later = runCli("--canvas", id, "goodnight", "review");
+        if (later.due || later.notDue !== "you have been back since its ready-by") throw new Error(`a seen mark newer than ready-by still owes a review: ${JSON.stringify({ due: later.due, notDue: later.notDue })}`);
+        await b.send("Page.reload", {});
+        await sleep(2500);
+        await until(b, `!!document.querySelector('.item[data-item-id="${screens.Basket}"]')`, "the canvas again", 20_000);
+        await sleep(1500);
+        if (await b.ev(`!!document.querySelector("[data-away-panel]")`)) throw new Error("the review showed again after a visit newer than ready-by");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: { light: lightShot, dark: darkShot } };
       } catch (err) {
         throw new Error(`${err.message}\n--- rc ---\n${rcOut.slice(-3000)}`);
       } finally {

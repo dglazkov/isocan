@@ -105,6 +105,11 @@ export function invertOperation(
 
     case "item.update": {
       const item = getItem(op.itemId);
+      // A morning review seen (`goodnight.ts`'s `HANDOFF_REVIEWED_PROP`,
+      // spelled here for `converge.ts`'s reason): the person's client closes
+      // the night's note on arrival, which is not an act of theirs — so it is
+      // never on their ⌘Z, where an accident would reopen the note.
+      if (op.filename === undefined && Object.keys(op.patch).join() === "properties" && Object.keys(op.patch.properties ?? {}).join() === "handoffReviewed") return null;
       const current = item.versions.find((version) => version.id === item.currentVersionId);
       return {
         type: "item.update",

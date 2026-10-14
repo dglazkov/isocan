@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–2 (proposals; the night watch) are CLOSED. Next: phase 3, the morning review. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–3 (proposals; the night watch; the morning review) are CLOSED. Next: phase 4, explain this item. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -97,7 +97,7 @@ honest "nothing can answer tonight" when no standing agent is answerable.
 
 ## Phase 3 — The morning review
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `morning.ts`: `morningDue` (this person's latest goodnight note, not yet reviewed, its night over, their seen mark older than ready-by; no goodnight, no review) and `nightReview` (a headline only when the night failed or made nothing; the brief found by its `goodnight` data; at most `PROPOSAL_CAP` proposals, sure, hunch, then failed with its reason; Left alone; originals edited because the person named them, each with the version before). The phone's digest leads with `MorningBrief`; on desktop a lazy `AwayPanel` shows only when a review is due. `isocan goodnight review` prints the same. "Mid-way" items (content edits in the hour before `/goodnight`) are off limits unless named: `planNight` refuses the line and `propose` refuses the night's extra proposals on them. Seeing the review closes the note (`handoffReviewed`) with a write that has no inverse. The `proactive-morning` journey: brief first, proposals in order with the failure's reason, Left alone, Checkout the only edited original with its compare, the other screens unchanged byte for byte, the note closed and still closed after a ⌘Z, and no review after a later seen mark. Deep suite 837 of 838: the one a test pinning a line that `da6fcb916` changed, fixed in `4e8c2035e`. Entry 725,389 → 725,793.
 
 **Outcome:** the "While you were away" panel on desktop as well as the
 phone, leading with the agent's brief (found by its `record` data), at most
@@ -117,6 +117,10 @@ item the person edited in their last hour is off limits unless named.
 ### Trajectory
 
 - **2026-10-14** — Decided (Dion): five, and it does not scale with time away; nothing new until what is there is kept or deleted. Open: the wording when the night found nothing. Waits on Dion.
+- **2026-10-14** — The review is derived, not stored: the note's model, the lead's proposals made after the note, and the brief record; `isocan goodnight review` and the panel read one `nightReview`.
+- **2026-10-14** — Seeing the review closes the note with a write that has no inverse (`invert.ts`), so it is on nobody's ⌘Z; the panel sends it once. This answers phase 2's "when does a note stop blocking".
+- **2026-10-14** — Proposal notes are placed against real neighbours (`placeCards`): beneath their own frame first, beside only when clear, a chip when there is no room, so none covers another frame at any zoom; the night-watch journey checks it at four zooms.
+- **2026-10-14** — Open: the failed or empty night's wording (drafts in `morning.ts`); whether desktop shows the ordinary digest when no review is due (no, for now); older open proposals count toward five but are not listed; the digest below the brief lists each of the agent's overnight edits. Waits on Dion.
 
 ## Phase 4 — Explain this item
 

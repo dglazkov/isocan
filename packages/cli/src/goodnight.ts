@@ -13,7 +13,11 @@ import {
   goodnightTalk,
   leftOpen,
   mainThread,
+  midwayItems,
+  morningDue,
+  morningText,
   namedByOthers,
+  nightReview,
   newGroupId,
   newItemId,
   newThreadId,
@@ -364,11 +368,14 @@ export async function note(
     throw new Error(`${lead.agent?.actor.name ?? "nobody"} leads this canvas's night, not you — the lead writes the note`);
   }
   const now = Date.now();
-  const ready = readyAt(opts.ready ?? "8:00", now);
+  // HH:MM is the next such time; a full ISO instant is taken as written.
+  const iso = opts.ready && /\dT\d/.test(opts.ready) && !Number.isNaN(Date.parse(opts.ready)) ? new Date(opts.ready).toISOString() : null;
+  const ready = iso ?? readyAt(opts.ready ?? "8:00", now);
   if (!ready) throw new Error(`"${opts.ready}" is not a time — write --ready 08:00`);
   const asks = [...(opts.promise ?? []).map((raw) => parseLine(snapshot, raw, false)), ...(opts.edit ?? []).map((raw) => parseLine(snapshot, raw, true))];
   const entries = await ctx.client.getLog(p.id, 0).catch(() => []);
   const settled = settledToday(snapshot.canvas, entries, person.id, startOfToday(now), snapshot.joined);
+  const midway = midwayItems(snapshot.canvas, entries, person.id, Date.parse(talk.ask.createdAt), snapshot.joined);
   const planned = planNight({
     canvas: snapshot.canvas,
     person,
@@ -379,6 +386,7 @@ export async function note(
     named: talk.named,
     settled,
     others: namedByOthers(snapshot.canvas, thread, person.id, now, snapshot.joined),
+    midway,
   });
   if ("refused" in planned) throw new Error(planned.refused);
   const titles: Record<string, string> = {};
@@ -394,7 +402,8 @@ export async function note(
     ready,
     ...(planned.nothing ? { nothing: planned.nothing } : {}),
     named: talk.named,
-    titles,
+    titles: { ...titles, ...Object.fromEntries(midway.map((id) => [id, snapshot.canvas.items[id]?.title ?? id])) },
+    ...(midway.length ? { midway } : {}),
   });
   if (ctx.json) return deps.printJson({ noteId: written.itemId, lines: written.note.lines, nothing: written.note.nothing ?? null });
   console.log(`wrote ${person.name}'s note (${written.itemId})${written.note.nothing ? ` — ${written.note.nothing}` : ""}`);
@@ -434,7 +443,7 @@ export async function fill(ctx: Ctx, deps: GoodnightDeps, ref: string, file: str
 }
 
 /** `isocan goodnight done <brief…>` — every promise answered: the night's brief, a record the morning finds. */
-export async function done(ctx: Ctx, deps: GoodnightDeps, words: string[], opts: { for?: string }): Promise<void> {
+export async function done(ctx: Ctx, deps: GoodnightDeps, words: string[], opts: { for?: string; left?: string[] }): Promise<void> {
   const { canvas: p, snapshot } = await deps.canvasAndSnapshot(ctx);
   const mine = goodnightNotes(snapshot.canvas).filter(({ note }) => note.lead && sameActor(snapshot.joined, note.lead.id, ctx.actor.id));
   const found = opts.for ? mine.find(({ note }) => sameActor(snapshot.joined, note.person.id, personOn(snapshot, opts.for!).id)) : mine[0];
@@ -443,7 +452,34 @@ export async function done(ctx: Ctx, deps: GoodnightDeps, words: string[], opts:
   if (refused) throw new Error(refused);
   const brief = words.join(" ").trim();
   if (!brief) throw new Error("say how the night went — highest confidence first, and what you left alone");
+  const left = (opts.left ?? []).map((raw) => {
+    const [what, why] = raw.split("|").map((part) => part.replace(/\s+/g, " ").trim());
+    if (!what || !why) throw new Error(`"${raw}" is not a line — write "<what you left alone> | <why>"`);
+    return { what, why };
+  });
+  // Left alone is the note's, so the morning reads it beside the unticked lines.
+  if (left.length) await rewriteNote(ctx, deps, p.id, found.item, { ...found.note, left: [...(found.note.left ?? []), ...left] }, newGroupId());
   const said = await sayInChat(ctx, deps, p.id, snapshot, brief, { record: true, goodnight: { step: "brief", note: found.item.id } });
   if (ctx.json) return deps.printJson({ ...said, noteId: found.item.id });
   console.log(`the night's brief is in the Chat for ${found.note.person.name} (${said.commentId}).`);
+}
+
+/**
+ * `isocan goodnight review [--for <who>]` — the morning review in a terminal:
+ * the latest goodnight's brief (one plain line first when the night failed or
+ * made nothing), its proposals highest confidence first, what was left alone
+ * and why, and the originals it edited with the version before. Printed
+ * whether or not it is due; `due` says whether the web would show it now.
+ */
+export async function review(ctx: Ctx, deps: GoodnightDeps, opts: { for?: string }): Promise<void> {
+  const { canvas: p, snapshot } = await deps.canvasAndSnapshot(ctx);
+  const person = opts.for ? personOn(snapshot, opts.for) : ctx.actor;
+  const { item } = latestNote(snapshot, person);
+  const now = Date.now();
+  const mark = sameActor(snapshot.joined, person.id, ctx.actor.id) ? ((await ctx.client.seen(ctx.actor.id, p.id).catch(() => null))?.marks[p.id] ?? null) : null;
+  const due = morningDue(snapshot.canvas, person.id, mark, now, snapshot.joined);
+  const out = nightReview(snapshot.canvas, item.id, now, snapshot.joined)!;
+  if (ctx.json) return deps.printJson({ ...out, due: "noteId" in due, ...("not" in due ? { notDue: due.not } : {}) });
+  console.log(morningText(out));
+  if ("not" in due) console.log(`\n(the canvas would not show this now: ${due.not})`);
 }

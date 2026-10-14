@@ -205,8 +205,11 @@ describe("spacing", () => {
     // there, measured at 1,291. 1320 -> 1340 on 14 Oct 2026 for the proposal
     // marks and their Delete toast (proactive-agent phase 1): fifteen
     // declarations, all on existing steps, against a total already at 1,318.
+    // 1340 -> 1350 the same day for the morning review (phase 3): six
+    // declarations, all on existing steps, against a total at 1,338; the
+    // digest's own rules moved from phone.css rather than being restated.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1340);
+    expect(spacing.length).toBeLessThan(1350);
   });
 });
 

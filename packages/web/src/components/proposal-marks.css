@@ -1,9 +1,11 @@
 /* The proposal marks (ProposalMarks.tsx): a dashed outline OUTSIDE each open
-   proposal, a dashed connector to its source, and beside it a note: the ochre
-   trigger chip, the why, and its three keys. Its own sheet,
-   loaded with the lazy component, so a canvas with no proposal pays nothing.
-   World-unit boxes divide their strokes by --scale; the anchors counter-scale
-   so the words stay one readable size at every zoom (the maybe mark's rule). */
+   proposal, a dashed connector to its source, and a note: the ochre trigger
+   chip, the why, and its three keys. Its own sheet, loaded with the lazy
+   component, so a canvas with no proposal pays nothing. World-unit boxes
+   divide their strokes by --scale; the anchors counter-scale so the words
+   stay one readable size at every zoom (the maybe mark's rule) — and
+   `placeCards` decides where each note goes and how much of it shows, so a
+   counter-scaled note is never bigger than the room it has. */
 .proposal-outline {
   position: absolute;
   pointer-events: none;
@@ -23,6 +25,11 @@
   stroke-dasharray: calc(6px / var(--scale, 1)) calc(4px / var(--scale, 1));
 }
 .proposal-anchor {
+  /* Defaults only: each anchor's own are set inline from `placeCards`. */
+  --card-x: 0px;
+  --card-y: 0px;
+  --card-w: 240px;
+  --card-open-w: 240px;
   position: absolute;
   width: 0;
   height: 0;
@@ -35,6 +42,8 @@
   align-items: center;
   gap: 6px;
   max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   padding: 2px 8px;
   border: 1px solid var(--warn);
   border-radius: 9px;
@@ -45,12 +54,16 @@
   white-space: nowrap;
 }
 .proposal-chip b { text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; }
-.proposal-chip span { overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.proposal-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+/* Where and how wide: `placeCards` says, in screen pixels, through the
+   anchor's --card-x / --card-y / --card-w (one source for the placement and
+   the drawing, so the test of one is a test of the other). */
 .proposal-note {
   position: absolute;
-  left: 14px;
-  top: 0;
-  width: 240px;
+  left: var(--card-x);
+  top: var(--card-y);
+  width: var(--card-w);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -86,7 +99,24 @@
 }
 .proposal-term:hover .proposal-term-def,
 .proposal-term:focus .proposal-term-def { visibility: visible; }
-.proposal-actions { display: flex; gap: 6px; }
+.proposal-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Stepped down (far zoom, or no room): the chip alone, a strip under its own
+   frame no wider than the frame looks — or, with no room even for that,
+   nothing but the outline. Hover, focus (the chip is a tab stop when it
+   stands alone) or selecting the proposal opens the whole note at a readable
+   width, lifted over the items for as long as it is open: the one moment a
+   note may cover something, because somebody asked to read it. */
+.proposal-anchor[data-card="chip"]:not(:hover, :focus-within, [data-open]) > .proposal-note {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.proposal-anchor[data-card="chip"]:not(:hover, :focus-within, [data-open]) > .proposal-note > :not(.proposal-chip),
+.proposal-anchor[data-card="none"]:not(:focus-within, [data-open]) { display: none; }
+.proposal-anchor:not([data-card="full"]):is(:hover, :focus-within, [data-open]) { z-index: 1; }
+.proposal-anchor:not([data-card="full"]):is(:hover, :focus-within, [data-open]) > .proposal-note { width: var(--card-open-w); }
 
 /* The toast after a Delete (proposalDelete.ts): what happened, whether the
    note was taken, and an optional reason. One per delete, bottom centre. */

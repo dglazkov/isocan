@@ -23,6 +23,13 @@ second week.
 
 ## 14 October 2026
 
+- **The night's work is waiting in the morning.** If you said `/goodnight`,
+  the "While you were away" panel, now on desktop too, opens with your
+  agent's brief: at most five proposals, the surest first, each with why;
+  any promise that did not work and why; what it left alone; and every
+  screen it changed because you named it, with the version before one click
+  away. `isocan goodnight review` prints the same.
+
 - **Goodnight.** Type `/goodnight` in the Chat when you stop for the day.
   The canvas's agent tells you what you settled, what is still open, and a
   few things it could try overnight. Steer it, then press **That's the

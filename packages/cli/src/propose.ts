@@ -16,6 +16,7 @@ import {
   newItemId,
   newVersionId,
   overlaps,
+  midwayRefusal,
   parseCite,
   proposalProperties,
   proposalRefusal,
@@ -110,7 +111,7 @@ export async function propose(
   const properties = proposalProperties(source.id, opts.hunch ? "hunch" : "sure", cites, opts.why ?? "");
   // The reducer refuses the same thing in the same words; asking here first
   // says so before the file is read or uploaded.
-  const refused = proposalRefusal(snapshot.canvas, ctx.actor.id, properties);
+  const refused = proposalRefusal(snapshot.canvas, ctx.actor.id, properties) ?? midwayRefusal(snapshot.canvas, ctx.actor.id, source.id, Date.now());
   if (refused) throw new Error(refused);
 
   const bytes = await fs.readFile(file);

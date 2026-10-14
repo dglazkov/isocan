@@ -81,7 +81,7 @@ export function PhoneFace({ canvasId, actor, visit, prior }: { prior: PriorVisit
     {moreOpen && <div className="phone-more-menu" role="menu"><button role="menuitem" onClick={() => { setMoreOpen(false); setThreadOpen(false); setContextOpen(true); }}>Context</button></div>}
     <div className="phone-body">
       {state.tab === "Chat" && <div className="phone-chat">
-        <VisitDigest prior={prior} onItem={open} onThread={openThread} />
+        <VisitDigest prior={prior} actor={actor} onItem={open} onThread={openThread} />
         <MainThreadBody canvasId={canvasId} actor={actor} docked={false} onOpenItem={open} refCards={(comment) => <MessageReferenceCards canvasId={canvasId} comment={comment} onOpenItem={open} />} />
       </div>}
       {state.tab === "Agents" && <div className="phone-agents" aria-label="Agents on this canvas">

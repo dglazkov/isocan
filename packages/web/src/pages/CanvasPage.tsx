@@ -82,6 +82,7 @@ import type { PhoneVisit } from "../components/PhoneFace.tsx";
  *  is needed to paint the Chat, only to move it. */
 const ChatPlace = lazy(() => import("../components/ChatBar.tsx"));
 const PhoneFace = lazy(() => import("../components/PhoneFace.tsx").then((m) => ({ default: m.PhoneFace })));
+const AwayPanel = lazy(() => import("../components/VisitDigest.tsx").then((m) => ({ default: m.AwayPanel })));
 const CanvasTools = lazy(() => import("../components/CanvasTools.tsx").then((m) => ({ default: m.CanvasTools })));
 /** Asked for by a keystroke and unmounted when closed, so it need not be in
  *  the bytes a first visit downloads. */
@@ -1244,6 +1245,8 @@ function CanvasSurface({
         </Suspense>
       )}
       <OwnCursor actor={actor} />
+      {/* The morning review on desktop: only where a goodnight note stands. */}
+      {!phone && priorVisit?.canvasId === canvasId && Object.values(useCanvasStore.getState().canvas?.items ?? {}).some((i) => i.properties.handoff) && <Suspense><AwayPanel key={canvasId} prior={priorVisit} actor={actor} /></Suspense>}
       {phone && <Suspense><PhoneFace key={`${canvasId}:${actor.id}`} canvasId={canvasId} actor={actor} visit={phoneVisit} prior={priorVisit?.canvasId === canvasId && priorVisit.actorId === actor.id ? priorVisit : null} /></Suspense>}
       {/* Last, so it covers the panels and the toolbar: full screen means the
           screen. Driven by the route rather than by state — see

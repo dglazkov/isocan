@@ -54,6 +54,14 @@ import { PLACEMENT_GAP, nearestFreeSpot } from "./placement.ts";
 export const HANDOFF_PROP = "handoff";
 /** `handoffNote=<JSON NightNote>`: the note's model, which its text is made from. */
 const HANDOFF_NOTE_PROP = "handoffNote";
+/**
+ * `handoffReviewed=<ISO>`: the person's morning review of this note was seen
+ * (phase 3, `morning.ts`) — the note is closed from then on, so it stops
+ * holding other people's goodnights off the items it named. Written by the
+ * person's client on arrival, not by an act of theirs, so an `item.update`
+ * setting only this has no inverse (`invert.ts`): it is on nobody's ⌘Z.
+ */
+export const HANDOFF_REVIEWED_PROP = "handoffReviewed";
 /** On a failed promise: it still shows the take it would have made (`converge.ts` spells it too). */
 export const PROMISE_TAKE_PROP = "promiseTake";
 
@@ -102,6 +110,13 @@ export interface NightNote {
   named: string[];
   /** Titles at writing, for the words: the note still reads after a rename. */
   titles: Record<string, string>;
+  /**
+   * Items the person changed in the hour before their `/goodnight`
+   * (`midwayItems`): off limits overnight unless a ticked line names one.
+   */
+  midway?: string[];
+  /** What the agent saw and did not act on, each with its reason (`goodnight done --left`). */
+  left?: { what: string; why: string }[];
 }
 
 // ---------- who leads, and whether it can answer
@@ -337,7 +352,8 @@ export function handoffProperties(note: NightNote): Record<string, string> {
  * ticked line has not been answered. A note nobody reviewed stays on the
  * canvas as a record; it stops counting as *open* once the night is over.
  */
-function noteOpen(note: NightNote, now: number): boolean {
+function noteOpen(note: NightNote, now: number, item?: Pick<Item, "properties">): boolean {
+  if (item?.properties[HANDOFF_REVIEWED_PROP]) return false;
   return now < Date.parse(note.ready) || note.lines.some((line) => line.ticked && !line.result);
 }
 
@@ -366,8 +382,8 @@ export function namedByOthers(
 ): Map<string, Actor> {
   const out = new Map<string, Actor>();
   const notes = goodnightNotes(canvas);
-  for (const { note } of notes) {
-    if (sameActor(joined, note.person.id, personId) || !noteOpen(note, now)) continue;
+  for (const { item, note } of notes) {
+    if (sameActor(joined, note.person.id, personId) || !noteOpen(note, now, item)) continue;
     for (const id of [...note.named, ...note.lines.map((l) => l.on)]) out.set(id, note.person);
   }
   const people = new Map<string, Actor>();
@@ -407,6 +423,8 @@ export interface NightInput {
   settled: readonly NightCited[];
   /** Other people's goodnights (`namedByOthers`). */
   others: ReadonlyMap<string, Actor>;
+  /** What the person was mid-way through when they left (`midwayItems`). */
+  midway?: readonly string[];
 }
 
 /**
@@ -422,6 +440,10 @@ export interface NightInput {
  *   the design system or something settled today.
  * - Proposal lines (each one promised frame) fit the lead's free room;
  *   promised frames count toward the cap, so a sixth is refused.
+ * - Never on a screen the person was mid-way through (`midwayItems`, design
+ *   §5): a line on one is the person's to agree, so it stands only when they
+ *   named the item in the conversation — the line that then names it is the
+ *   ticked consent the morning reads.
  */
 export function planNight(input: NightInput): { lines: NightLine[]; nothing?: string } | { refused: string } {
   const { canvas } = input;
@@ -436,6 +458,9 @@ export function planNight(input: NightInput): { lines: NightLine[]; nothing?: st
     if (!item) return { refused: `line ${i + 1} names no item on this canvas` };
     const other = input.others.get(item.id);
     if (other) return { refused: `“${item.title}” is in ${other.name}'s goodnight tonight — one person's night never touches an item another's named` };
+    if (input.midway?.includes(item.id) && !input.named.includes(item.id)) {
+      return { refused: `${input.person.name} was still working on “${item.title}” in the hour before /goodnight, so it is off limits tonight unless they name it — leave it alone, or ask them` };
+    }
     if (ask.edit) {
       if (isDesignSystem(item)) return { refused: `the design system is never edited overnight — propose beside “${item.title}” instead` };
       if (settled.has(item.id)) return { refused: `“${item.title}” was settled today, so it is on the will-not-touch list — propose beside it instead` };
@@ -454,6 +479,48 @@ export function planNight(input: NightInput): { lines: NightLine[]; nothing?: st
     return { refused: `room for ${room} more proposal${room === 1 ? "" : "s"} tonight, not ${proposals} — ${PROPOSAL_CAP} is the most one agent keeps open, promised frames included; agree fewer` };
   }
   return { lines };
+}
+
+/** How long before `/goodnight` an edit still counts as work in progress. */
+const MIDWAY_MS = 3600_000;
+/** The ops that change what an item SHOWS — an edit; placing, moving, renaming or marking one is not. */
+const EDITS: readonly string[] = ["item.addVersion", "item.edit", "item.setCurrentVersion", "item.restoreVersion", "item.removeVersion"];
+
+/**
+ * **What the person was mid-way through when they left** (design §5): the
+ * items whose content they changed in the hour before `/goodnight` — a new
+ * version, a text edit, a version switched or restored; undone acts, adding,
+ * moving and marking do not count — that are still on the canvas. The night
+ * leaves these alone unless a ticked line names one.
+ */
+export function midwayItems(canvas: CanvasContents, entries: readonly LogEntry[], personId: string, leftAtMs: number, joined?: ActorJoins): string[] {
+  const undone = undoneSeqs(entries);
+  const out = new Set<string>();
+  for (const entry of entries) {
+    const op = entry.envelope.op;
+    const at = Date.parse(entry.envelope.ts);
+    if (undone.has(entry.seq) || entry.cause || at > leftAtMs || at < leftAtMs - MIDWAY_MS) continue;
+    if (!EDITS.includes(op.type) || !("itemId" in op) || typeof op.itemId !== "string") continue;
+    if (!sameActor(joined, entry.envelope.actor.id, personId)) continue;
+    const item = canvas.items[op.itemId];
+    if (item && !item.properties[HANDOFF_PROP] && !item.properties[PROPOSAL_PROP]) out.add(item.id);
+  }
+  return [...out];
+}
+
+/**
+ * **Whether this agent's night may propose beside this item**, or why not:
+ * while a note it leads is open, an item its person was mid-way through is
+ * off limits unless a ticked line names it. `isocan propose` asks it, so a
+ * night's extra proposal cannot land on a half-finished screen.
+ */
+export function midwayRefusal(canvas: CanvasContents, actorId: string, itemId: string, now: number): string | null {
+  for (const { item, note } of goodnightNotes(canvas)) {
+    if (note.lead?.id !== actorId || !noteOpen(note, now, item) || !note.midway?.includes(itemId)) continue;
+    if (note.lines.some((l) => l.ticked && l.on === itemId)) continue;
+    return `${note.person.name} was still working on “${canvas.items[itemId]?.title ?? itemId}” when they left, and no ticked line names it — leave it alone tonight`;
+  }
+  return null;
 }
 
 /** The properties a promised frame is born with: beneath its source, citing the line that promised it. */
@@ -510,7 +577,7 @@ export function fillTarget(canvas: CanvasContents, actorId: string, itemId: stri
       if (frameLine.result) return { refused: `line ${frameLine.n} has already been answered` };
       return { kind: "frame", noteItem, note, line: frameLine };
     }
-    if (!noteOpen(note, now)) continue;
+    if (!noteOpen(note, now, noteItem)) continue;
     const editLine = note.lines.find((l) => l.edit && l.on === itemId);
     if (editLine) {
       if (!editLine.ticked) return { refused: `${note.person.name} unticked line ${editLine.n} — it stays an offer, not a promise` };
@@ -620,7 +687,10 @@ export function noteText(note: NightNote): string {
   out.push("", "## Will not touch", "- what was settled today", "- the design system", "- every original you did not name for editing");
   const edits = note.lines.filter((l) => l.edit && l.ticked);
   if (edits.length) out.push(`- (named for editing: ${edits.map((l) => `“${title(l.on)}”`).join(", ")})`);
+  const midway = (note.midway ?? []).filter((id) => !note.lines.some((l) => l.ticked && l.on === id));
+  if (midway.length) out.push(`- what you were still working on: ${midway.map((id) => `“${title(id)}”`).join(", ")}`);
   out.push(...note.wont.map((w) => `- ${w}`));
+  if (note.left?.length) out.push("", "## Left alone", ...note.left.map((l) => `- ${l.what} — ${l.why}`));
   if (note.thought) out.push("", "## A thought", note.thought);
   out.push("", "## Ready by", readyWords(note.ready), "");
   return out.join("\n");

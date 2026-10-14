@@ -580,7 +580,11 @@ THEN THE NIGHT'S WORK, in this turn: for each ticked line, in order —
   isocan goodnight fill <frame> --failed "<why it did not work>" [take.html]
 A line they unticked is refused: skip it. When every promise is filled or
 failed, report once — \`isocan goodnight done "<two takes I am sure of, one
-hunch; what I left alone and why>"\` — highest confidence first.`,
+hunch; what I left alone and why>"\` — highest confidence first, with
+\`--left "<what you saw and left alone> | <why>"\` for each thing you chose not
+to touch. Never touch what they changed in the hour before /goodnight unless a
+ticked line names it. The morning review reads all of it: \`isocan goodnight
+review\` prints what they will see.`,
     "sprint": `Facilitate a design sprint on this canvas. You hold the clock; you never vote,
 never sketch, and never decide.
 

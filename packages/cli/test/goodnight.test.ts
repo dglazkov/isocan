@@ -154,6 +154,8 @@ describe("isocan goodnight, with Kit parked", () => {
       "--promise", "Basket | three takes on the empty basket, one a sketch | three takes",
       "--promise", "Order history | check the red against contrast",
       "--edit", "Checkout | pickup first | one new version",
+      // Ready now, so a later visit is newer than ready-by (the morning review's rule).
+      "--ready", new Date().toISOString(),
     ], kit);
     const [basket, contrast, rework] = note.lines;
     expect(basket).toMatchObject({ on: ids.Basket, edit: false, ticked: true, budget: "three takes" });
@@ -186,11 +188,27 @@ describe("isocan goodnight, with Kit parked", () => {
     expect((await isocan(["--canvas", canvas, "goodnight", "fill", ids.Checkout, take], kit)).code).toBe(0);
     expect((await json(["--canvas", canvas, "show", ids.Checkout])).versions.length).toBe(before + 1);
 
-    const brief = await json(["--canvas", canvas, "goodnight", "done", "One hunch on the basket; Checkout reworked, pickup first."], kit);
+    const brief = await json(["--canvas", canvas, "goodnight", "done", "One hunch on the basket; Checkout reworked, pickup first.", "--left", "Ravi's note about delivery | a business decision, not a design one"], kit);
     expect(brief.noteId).toBe(note.noteId);
     const threads = await json(["--canvas", canvas, "comment", "ls"]);
     const main = (Array.isArray(threads) ? threads : threads.threads).find((x: any) => x.main);
     const last = main.comments.at(-1);
     expect(last).toMatchObject({ record: true, goodnight: { step: "brief", note: note.noteId } });
+
+    // The morning (phase 3): Maya's review, the same brief the web leads with.
+    const review = await json(["--canvas", canvas, "goodnight", "review"]);
+    expect(review).toMatchObject({ due: true, headline: null, brief: { body: "One hunch on the basket; Checkout reworked, pickup first." } });
+    expect(review.proposals.map((p: any) => [p.itemId, p.state])).toEqual([[basket.frame, "hunch"]]);
+    expect(review.left).toEqual([
+      { what: "Ravi's note about delivery", why: "a business decision, not a design one" },
+      { what: "check the red against contrast", why: "you unticked it, so it was an offer, not a promise" },
+    ]);
+    expect(review.edited).toMatchObject([{ itemId: ids.Checkout, title: "Checkout" }]);
+    const printed = await isocan(["--canvas", canvas, "goodnight", "review"]);
+    expect(printed.stdout).toMatch(/^Kit's brief for Maya\nOne hunch on the basket/);
+    expect(printed.stdout).toMatch(/Left alone:\n {2}- Ravi's note about delivery — a business decision/);
+    // A visit after ready-by: no review is due any more.
+    expect((await isocan(["--canvas", canvas, "seen", "--mark"])).code).toBe(0);
+    expect(await json(["--canvas", canvas, "goodnight", "review"])).toMatchObject({ due: false, notDue: "you have been back since its ready-by" });
   });
 });

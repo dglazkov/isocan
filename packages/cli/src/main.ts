@@ -9276,7 +9276,7 @@ goodnightCmd
   .option("--open <doubt>", "\"comment:<id> | what was said\" — a doubt read today, cited (repeatable)", collectList)
   .option("--wont <thing>", "something else you will not touch (repeatable)", collectList)
   .option("--thought <text>", "a thought left for the morning")
-  .option("--ready <HH:MM>", "when the morning may look (default 8:00)")
+  .option("--ready <HH:MM>", "when the morning may look (default 8:00; an ISO instant is taken as written)")
   .option("--canvas <canvas>")
   .action(
     run(async (opts: { for?: string; promise?: string[]; edit?: string[]; open?: string[]; wont?: string[]; thought?: string; ready?: string }, cmd: Command) => {
@@ -9305,12 +9305,26 @@ goodnightCmd
   .command("done <brief...>")
   .description("Every promise answered: post the night's brief in the Chat — a record the morning finds")
   .option("--for <person>")
+  .option("--left <line>", "\"<what you saw and left alone> | <why>\" — the morning lists it under Left alone (repeatable)", collectList)
   .option("--canvas <canvas>")
   .action(
-    run(async (words: string[], opts: { for?: string }, cmd: Command) => {
+    run(async (words: string[], opts: { for?: string; left?: string[] }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { done } = await import("./goodnight.ts");
       await done(ctx, goodnightDeps(), words, opts);
+    }),
+  );
+
+goodnightCmd
+  .command("review")
+  .description("The morning review: the night's brief, its proposals highest confidence first, what was left alone, what it edited")
+  .option("--for <person>")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (opts: { for?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { review } = await import("./goodnight.ts");
+      await review(ctx, goodnightDeps(), opts);
     }),
   );
 
