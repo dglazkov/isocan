@@ -9,7 +9,7 @@ note: "the walk: a bench that judges summaries before any ship, text nodes behin
 
 **13 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 13 Oct 2026: designed, not started. Waits on Dion's answers to design.md §10, the first of which (who pays) decides phase 1's guards.**
+**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Next: phase 0, the bench, which spends real model calls and so waits on his yes to run.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -82,6 +82,23 @@ prints.
 **Proof:** a forty-note fixture seen whole makes forty calls once and zero on
 a reload; ten edits in a minute make one call; over the budget, nothing is
 called and stale summaries keep showing.
+
+## Phase 3b — Looking at pictures
+
+**Status: NOT STARTED.**
+
+**Outcome:** the `semantic.zoom.vision` row (shown only under
+`semantic.zoom`); the make route's `vision` input; downscaled renders of
+images and screens sent with the prompt; `vision` in the content key; its own
+hourly budget; the row refusing, with the reason, when the provider's model
+takes no images.
+
+**Proof:** unit: a vision summary and a text-only one of the same item are
+two keys; a text node's key does not change with vision. Journey (stub
+model, which records what it was sent): with vision off no image is sent;
+with it on a screen's render is, at most eight per group; a viewer with
+vision off never reads a vision summary. The bench (phase 0) gains a vision
+column for the fixture's screens before this ships.
 
 ## Phase 4 — The terminal
 

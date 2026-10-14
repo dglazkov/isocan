@@ -141,7 +141,8 @@ collector truncates by member (largest last) and says so in the prompt.
   words, what this is and what matters in it; say only what the content says;
   name people and numbers as written; no preamble.
 - Images and screens are summarised from their titles and any text they
-  carry, not their pixels, in phases 1–3. A vision pass is an open question.
+  carry, not their pixels, unless the viewer has also turned on **Semantic
+  Zoom: look at pictures** (§11).
 - Model: the cheapest tier the configured provider offers (a summary is a
   short, high-volume, low-stakes call), overridable with
   `ISOCAN_SUMMARY_MODEL`. `/api/text`'s own default is the most capable tier,
@@ -169,15 +170,40 @@ collector truncates by member (largest last) and says so in the prompt.
   none until something changes.
 - **Entry bytes:** one experiment row.
 
-## 10. Open questions for Dion
+## 10. Decided (Dion, 13 Oct 2026)
 
-1. **Who pays.** As designed, only a person whose key may already be spent
-   (the owner, or anyone if the key is shared) causes summaries; everyone
-   else reads them. Alternative: per-viewer keys.
-2. **Text nodes at all?** A short note's opening words may beat its summary.
-   Proposed: summarise only notes longer than ~40 words.
-3. **Shown to people without the flag?** Proposed no while it is an
-   experiment, so nobody meets model text they did not opt into.
-4. **Images.** Titles only, or a vision call per screen (cost × 10)?
-5. **Agents.** Should an agent's `ls` see summaries by default once this
-   leaves the experiment?
+1. **Who pays: the first person who can.** The first viewer whose key may be
+   spent under the key's own rules (the owner, or anyone if the key is
+   shared) and who sees a missing summary causes it; everyone after reads it.
+   No per-viewer keys.
+2. **Text nodes: only long ones.** A note is summarised only when its body is
+   longer than about 40 words; a shorter one keeps showing its opening words.
+3. **Not shown without the flag.** While this is an experiment, nobody meets
+   model text they did not opt into.
+4. **Vision: yes, as its own setting** (§11).
+
+Still open: should an agent's `ls` see summaries by default once this leaves
+the experiment?
+
+## 11. Looking at pictures
+
+A second experiment row, `semantic.zoom.vision`, named **Semantic Zoom: look
+at pictures**, shown in Settings only while `semantic.zoom` is on, and
+meaningless without it.
+
+- **What changes:** for a viewer with it on, an image, a screen or a group or
+  area holding them is summarised from what it shows, not just its title.
+  The make route takes `vision: true`; the server sends the image (a
+  downscaled render, at most 1024 px on the long side, at most eight per
+  group or area, largest first) alongside the text.
+- **A separate summary, not a replacement.** `vision` is part of the content
+  key, so a vision summary and a text-only one of the same thing are two
+  cache entries. A viewer with vision on reads the vision summary when there
+  is one and the text-only one meanwhile; a viewer with it off never causes
+  or sees a vision summary.
+- **Cost.** A vision call is roughly ten times a text one, so it has its own
+  budget inside the canvas's (at most 15 an hour) and needs a provider whose
+  configured model takes images; with one that does not, the row says so and
+  stays off.
+- **Text-only items are unchanged.** A text node's summary is the same with
+  or without vision; only items with pictures get a second entry.
