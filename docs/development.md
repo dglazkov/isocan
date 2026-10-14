@@ -312,9 +312,10 @@ scrolled into view, ⌘Enter that appeared to add nothing, a panel header
 collapsed to `display: block`, and a reducer that stopped stamping the canvas —
 **that last mutation passed all 2,300 tests.**
 
-`node scripts/journeys.mjs` is the answer: it boots its own daemon on its own
-port in its own temp home, drives the built app through a headless browser, and
-walks the journeys a person actually takes. `.agents/personas/journeys.md` owns
+`node scripts/journeys.mjs` is the answer: for each journey it boots a daemon
+on its own port in its own temp home, with a browser of its own, drives the
+built app through that headless browser, and walks the journeys a person
+actually takes. `.agents/personas/journeys.md` owns
 it, and `journeys.yml` walks it weekly rather than per push — ninety seconds
 against a suite that answers in one, for a class of bug that does not need
 catching within the minute.

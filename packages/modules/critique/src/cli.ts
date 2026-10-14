@@ -29,6 +29,7 @@ import {
   critiqueRead,
   critiqueStatus,
   mentionWord,
+  owesReadyLine,
   readWords,
   readyLine,
   type CriticActor,
@@ -507,14 +508,32 @@ asks them all; each works alone, and when the last is done
          * mention addresses that one actor, so the other critics stay asleep.
          */
         const thread = snapshot.canvas.threads[asked.threadId];
-        const status = thread ? critiqueStatus(thread, await criticActors(ctx, canvas.id, snapshot), isSystemActor) : null;
+        const critics = await criticActors(ctx, canvas.id, snapshot);
+        const status = thread ? critiqueStatus(thread, critics, isSystemActor) : null;
         const othersDone = status ? status.pending.every((p) => p.id === ctx.actor.id) : true;
         const last = status !== null && status.asked.length >= 2 && othersDone && status.asker.id !== ctx.actor.id;
         const comment = last
           ? { id: newCommentId(), body: `${line}\n${readyLine(status.asker.name, status.threadId)}`, mentions: [status.asker.id] }
           : { id: newCommentId(), body: line, record: true };
         await sendOp(ctx, canvas.id, { type: "thread.reply", threadId: asked.threadId, comment } as never);
-        if (ctx.json) return printJson({ threadId: asked.threadId, notes: notes.length, last });
+        /**
+         * **Read again before deciding nobody is last.** The snapshot above
+         * was read before this done landed, and a critic finishing at the same
+         * moment read one from before its own. Each saw the other working, so
+         * neither said the read was ready (`owesReadyLine`). Once this write
+         * is in the thread, the thread's order says whose done was last, and
+         * that critic, and only it, says so in a reply of its own.
+         */
+        let told = last;
+        if (!last && status !== null && status.asked.length >= 2) {
+          const now = (await ctx.client.snapshot(canvas.id)).canvas.threads[asked.threadId];
+          if (now && owesReadyLine(now, critics, isSystemActor) === ctx.actor.id) {
+            const ready = { id: newCommentId(), body: readyLine(status.asker.name, status.threadId), mentions: [status.asker.id] };
+            await sendOp(ctx, canvas.id, { type: "thread.reply", threadId: asked.threadId, comment: ready } as never);
+            told = true;
+          }
+        }
+        if (ctx.json) return printJson({ threadId: asked.threadId, notes: notes.length, last: told });
         console.log(line);
       }),
     );

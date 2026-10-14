@@ -39,6 +39,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { browser, throughTheDoor } from "./lib/browser.mjs";
+import { reapOnExit, startDaemon as ownDaemon } from "./lib/daemon.mjs";
 
 const repo = fileURLToPath(new URL("..", import.meta.url));
 const cli = path.join(repo, "packages/cli/bin/isocan.js");
@@ -61,83 +62,106 @@ async function until(b, expression, what, ms = 8000) {
 }
 
 /**
- * A daemon of this run's own, and a browser that has been through the door.
+ * **A daemon of this run's own, which the run takes with it.**
  *
- * The identity is claimed through the API and written to `localStorage` under
- * the key the app reads, because every journey starts signed in — the door
- * itself has its own journey and does not belong in the middle of the others.
- */
-/**
- * **A port this run picks, and retries when it loses.**
+ * This spawned `isocan serve`, which is a launcher: it starts a DETACHED
+ * `serve --foreground` and exits, so the `proc.kill()` every teardown here
+ * sent went to a process that was already gone, and the 3 s wait after it
+ * waited for an exit that had already happened. Every rig, and every journey
+ * with a daemon of its own, left one behind. By 14 Oct 2026 this Mac held
+ * about 290 of them (≈8 GB) and a deep run reached load average 98.
  *
- * `ISOCAN_PORT=0` is not available: the daemon polls its own health on a known
- * port before reporting ready, so it must be told the number — the same
- * constraint `managed.ts` has, and the reason that file's `freePort` guesses
- * too. A guess has a real race, so this does what `smokeTest` does about it:
- * tries again. Below the ephemeral floor on both platforms (32768 on Linux,
- * 49152 on macOS), so nothing the OS hands out can land on top of it.
+ * `lib/daemon.mjs` starts the daemon itself, in its own process group, picks
+ * the port and retries only a lost race, and stops it by signalling the group
+ * and waiting. It also takes every daemon down on an uncaught error, SIGINT,
+ * SIGTERM or SIGHUP, and the daemon watches this pid (ISOCAN_DAEMON_GUARD_PID)
+ * for the one ending nothing here can see, a SIGKILL.
  */
-const pickPort = () => 20_000 + Math.floor(Math.random() * 9_000);
+const startDaemon = (home, env = {}) => ownDaemon({ cli, home, env });
 
-async function startDaemon(home, attempt = 0, extraEnv = {}) {
-  const port = pickPort();
-  const proc = spawn(process.execPath, [cli, "serve"], {
-    env: {
-      ...process.env,
-      ...extraEnv,
-      ISOCAN_HOME: home,
-      ISOCAN_PORT: String(port),
-      ISOCAN_CONTENT_PORT: String(port + 1),
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let out = "";
-  try {
-    const origin = await new Promise((resolve, reject) => {
-      const deadline = setTimeout(() => reject(new Error(`daemon did not start:\n${out}`)), 30_000);
-      const look = (chunk) => {
-        out += chunk.toString();
-        if (out.includes(`http://127.0.0.1:${port}`) && /started|running/i.test(out)) {
-          clearTimeout(deadline);
-          resolve(`http://127.0.0.1:${port}`);
-        }
-      };
-      proc.stdout.on("data", look);
-      proc.stderr.on("data", look);
-      proc.once("exit", (code) => {
-        clearTimeout(deadline);
-        reject(new Error(`daemon exited (${code}):\n${out}`));
-      });
-    });
-    return { proc, origin };
-  } catch (err) {
-    proc.kill();
-    // Only a lost port is retried. A daemon that will not boot for any other
-    // reason must say so rather than be tried four more times.
-    const raced = /EADDRINUSE|did not come up|already/i.test(String(err));
-    if (raced && attempt < 3) return startDaemon(home, attempt + 1, extraEnv);
-    throw err;
-  }
+/**
+ * **Chrome as it comes, on every machine, owned by the run.**
+ *
+ * `--disable-extensions`, because a managed Mac force-installs its policy
+ * extensions into every new profile, headless ones included: eleven extension
+ * targets in a profile that is a second old (14 Oct 2026). While they start,
+ * the page's lazy chunks fail to load (`net::ERR_FAILED`, "Failed to fetch
+ * dynamically imported module", a canvas that never opens), and now and then
+ * the page stops answering altogether. One browser shared by the whole run
+ * paid that start once. A browser per journey paid it fifty times: 10 fresh
+ * rigs in 30 failed, and 0 in 30 with the flag, which leaves only Chrome's own
+ * two component extensions. The journeys test isocan in the browser CI has,
+ * not in whatever a machine's policy adds.
+ *
+ * Owned like the daemon: a run that is interrupted takes its Chrome with it,
+ * and one that would not exit stays owned so the exit hook does.
+ */
+async function ownBrowser() {
+  const b = await browser({ args: ["--disable-extensions"] });
+  const unreap = reapOnExit(b.pid);
+  const close = b.close;
+  b.close = async () => {
+    await close();
+    unreap();
+  };
+  return b;
 }
 
+/**
+ * **A fresh daemon, home and browser for every journey, through the door.**
+ *
+ * One rig used to serve the whole run, and a journey could leave it changed
+ * in ways the next journey walked into:
+ *
+ * - a CLI identity name claimed in the shared home (`meadow-idle` claimed
+ *   "Meadow Journey CLI", so `meadow`, `ground-motion` and `meadow-others`
+ *   were refused it: "is taken here");
+ * - the door's cookie, `isocan_badge`, which is scoped to the host and not
+ *   the port: `critique` crossed its own daemon's door on 127.0.0.1, replacing
+ *   the rig's badge, and every later journey's Create form was refused with
+ *   "this badge does not speak for usr_… — claim that actor first";
+ * - an `identity.json` rewritten in the shared home (`proactive-proposal`
+ *   makes it Maya's), and emulated sizes and media nobody cleared.
+ *
+ * So eighteen journeys failed in a full run and passed alone. The cure is to
+ * make the full run what `--only` already was, a rig of the journey's own,
+ * rather than to teach the rig to undo every way it can be changed. That list
+ * grows with each journey, and the first one nobody thought of is the next
+ * failure. A daemon starts in under a second and Chrome in about one, so
+ * isolation costs a few seconds a journey.
+ *
+ * The identity is claimed through the API and written to `localStorage` under
+ * the key the app reads, because every journey starts signed in. The door has
+ * its own journey and does not belong in the middle of the others.
+ */
 async function rig() {
   const home = mkdtempSync(path.join(tmpdir(), "isocan-journeys-"));
-  const { proc, origin } = await startDaemon(home);
+  let daemon = null;
+  let b = null;
+  try {
+    daemon = await startDaemon(home);
+    b = await ownBrowser();
+    /**
+     * **Arm the load listener BEFORE navigating**, and wait for the document
+     * rather than for a duration. `Page.navigate` resolves when navigation
+     * STARTS; evaluating against a page that is still `about:blank` makes a
+     * relative `fetch("/api/door")` fail with "Failed to fetch" — which reads
+     * as a daemon that is down and is nothing of the kind. `grade.mjs` learned
+     * the same lesson and its `once` exists for exactly this.
+     */
+    const loaded = b.once("Page.loadEventFired");
+    await b.send("Page.navigate", { url: daemon.origin });
+    await Promise.race([loaded, sleep(15_000)]);
+    // One door-crossing, shared with the canvas screenshot (`lib/browser.mjs`).
+    await throughTheDoor(b, daemon.origin, "Journey", "journeys");
+  } catch (err) {
+    await b?.close().catch(() => {});
+    await daemon?.stop().catch(() => {});
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    throw err;
+  }
+  const { origin } = daemon;
 
-  const b = await browser();
-  /**
-   * **Arm the load listener BEFORE navigating**, and wait for the document
-   * rather than for a duration. `Page.navigate` resolves when navigation
-   * STARTS; evaluating against a page that is still `about:blank` makes a
-   * relative `fetch("/api/door")` fail with "Failed to fetch" — which reads as
-   * a daemon that is down and is nothing of the kind. `grade.mjs` learned the
-   * same lesson and its `once` exists for exactly this.
-   */
-  const loaded = b.once("Page.loadEventFired");
-  await b.send("Page.navigate", { url: origin });
-  await Promise.race([loaded, sleep(15_000)]);
-  // One door-crossing, shared with the canvas screenshot (`lib/browser.mjs`).
-  await throughTheDoor(b, origin, "Journey", "journeys");
     /**
    * **A real click, on whatever is actually on top at that point.**
    *
@@ -314,14 +338,18 @@ async function rig() {
       await b.send("Page.navigate", { url: origin + route });
       await sleep(900);
     },
+    /**
+     * Browser, then daemon, then home. Each step runs even when the one
+     * before it threw: a Chrome that would not exit is no reason to leave a
+     * daemon serving a home about to be deleted. The first error is the one
+     * reported.
+     */
     close: async () => {
-      await b.close();
-      proc.kill();
-      await new Promise((r) => {
-        proc.once("exit", r);
-        setTimeout(r, 3000);
-      });
+      let failure = null;
+      try { await b.close(); } catch (err) { failure ??= err; }
+      try { await daemon.stop(); } catch (err) { failure ??= err; }
       rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      if (failure) throw failure;
     },
   };
 }
@@ -338,7 +366,7 @@ async function makeCanvas(rig, title) {
     return true;
   })()`);
   await rig.click(".canvas-card.create button[type=submit]", "the Create button");
-  await until(
+  await untilOrSay(
     rig.b,
     `[...document.querySelectorAll(".canvas-card h3")].some(h => h.textContent === ${JSON.stringify(title)})`,
     `the canvas "${title}" to appear in the list`,
@@ -348,8 +376,27 @@ async function makeCanvas(rig, title) {
     return h.closest("a").getAttribute("href").split("/").pop();
   })()`);
   await rig.go(`/p/${id}`);
-  await until(rig.b, `!!document.querySelector(".world")`, "the canvas to open");
+  await untilOrSay(rig.b, `!!document.querySelector(".world")`, "the canvas to open");
   return id;
+}
+
+/**
+ * `until`, and when it times out, where the page is and what it shows.
+ *
+ * "never became true: the canvas … to appear in the list" was the whole of
+ * seven failures for days, and the Create form had printed the reason above
+ * the list each time ("this badge does not speak for usr_…"). A wait that
+ * fails should report what the page shows, or the next reader has to rebuild
+ * the scene to find it.
+ */
+async function untilOrSay(b, expression, what, ms) {
+  try {
+    await until(b, expression, what, ms);
+  } catch (err) {
+    const page = await b.ev(`({ at: location.pathname, says: (document.body?.innerText ?? "").replace(/\\s+/g, " ").trim().slice(0, 300) })`).catch(() => null);
+    const thrown = b.takeErrors();
+    throw new Error(`${err.message} — the page is at ${page?.at ?? "?"} and shows: ${page?.says || "(nothing)"}${thrown.length ? `; it threw: ${thrown[0]}` : ""}`);
+  }
 }
 
 /**
@@ -1338,18 +1385,28 @@ export const JOURNEYS = [
       const workSleptAfter = Date.now() - workedAt;
       if (workSleptAfter > 3500) throw new Error(`with an agent working the meadow took ${workSleptAfter}ms to fall asleep — the bound is 3500`);
       const workAsleep = (await groundNow(b)).frames;
+      // Watched for at least 1.5 s and until the cursor has visibly moved,
+      // up to 8 s. It was exactly 15 samples a tenth of a second apart, but the
+      // wander is CursorLayer's rAF animation, with random "thinking" pauses of
+      // up to 1.4 s, on a page that throttles rAF. A pause at the start of a
+      // fixed window left the cursor still for all of it, and the walk failed
+      // alone on 14 Oct 2026 with a test run beside it ("did not wander").
+      // Watching longer only lengthens the stretch in which the meadow must
+      // draw nothing.
       const seen = new Set();
-      for (let i = 0; i < 15; i++) {
+      const watchFrom = Date.now();
+      while (Date.now() - watchFrom < 1500 || (seen.size < 2 && Date.now() - watchFrom < 8000)) {
         seen.add(await cursorAt());
         await sleep(100);
       }
+      const watchedMs = Date.now() - watchFrom;
       const working = await groundNow(b);
-      if (seen.size < 2) throw new Error("the working agent's cursor did not wander, so this proves nothing about the wander");
+      if (seen.size < 2) throw new Error(`the working agent's cursor did not wander in ${watchedMs}ms, so this proves nothing about the wander`);
       if (working.frames !== workAsleep || working.state !== "asleep") {
         throw new Error(`the meadow drew ${working.frames - workAsleep} frames while the agent's cursor only wandered (state ${working.state})`);
       }
       journeyCli(rig, other, "--canvas", id, "session", "end");
-      return { webgl2: true, awake: awakeSeen, frames: moving.frames - before, trailAtStop: atLast, trailBetweenHops: atBetween, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot, working: { sleptAfterMs: workSleptAfter, wanderPositions: seen.size, framesWhileWandering: 0 } };
+      return { webgl2: true, awake: awakeSeen, frames: moving.frames - before, trailAtStop: atLast, trailBetweenHops: atBetween, sleptAfterMs: sleptAfter, framesAsleep: 0, screenshot: shot, working: { sleptAfterMs: workSleptAfter, wanderPositions: seen.size, watchedMs, framesWhileWandering: 0 } };
     },
   },
   {
@@ -2094,14 +2151,23 @@ export const JOURNEYS = [
     /**
      * **The lift** (groups-by-hand phase 1): what the hand holds wears
      * `--shadow-lift` once the press has become a drag, and settles back to
-     * the card's shadow on release. Depth only — nothing grows, nothing
+     * an item's resting shadow on release. Depth only — nothing grows, nothing
      * fades, nothing leaves the hand — and a dragged group lifts its FRAME,
      * not each of its members.
      *
      * Asserted as STATE: the computed `box-shadow` is polled until it equals
      * the token (a probe element resolves `var(--shadow-lift)` and
-     * `var(--shadow-card)` in this page's theme, so the comparison is
+     * `var(--shadow-item)` in this page's theme, so the comparison is
      * theme-proof), never caught mid-transition.
+     *
+     * **The resting token moved on 8 Oct 2026, and this journey was not told.**
+     * It was written on 1 Oct (3679d9086), when `.item` rested in
+     * `--shadow-card`. bcc730381 gave items their own soft halo,
+     * `--shadow-item`, on Dion's ask, and kept `--shadow-card` for the chrome.
+     * It updated `lift.test.ts` and not this, so from then on the journey
+     * failed at "the card to rest in --shadow-card" on a product working as
+     * designed. The comparison is now against the token items actually rest
+     * in, and the lift must still differ from it.
      */
     what: "a dragged card wears the lift and settles back; a dragged group lifts its frame, not its members",
     async run(rig) {
@@ -2138,12 +2204,13 @@ export const JOURNEYS = [
         document.querySelector(".item").parentElement.appendChild(probe);
         probe.style.boxShadow = "var(--shadow-lift)";
         const lift = getComputedStyle(probe).boxShadow;
-        probe.style.boxShadow = "var(--shadow-card)";
-        const card = getComputedStyle(probe).boxShadow;
+        probe.style.boxShadow = "var(--shadow-item)";
+        const rest = getComputedStyle(probe).boxShadow;
         probe.remove();
-        return { lift, card };
+        return { lift, rest };
       })()`);
-      if (!tokens.lift || tokens.lift === "none" || tokens.lift === tokens.card) throw new Error(`--shadow-lift does not resolve to its own shadow (${tokens.lift})`);
+      if (!tokens.rest || tokens.rest === "none") throw new Error(`--shadow-item does not resolve to a shadow (${tokens.rest})`);
+      if (!tokens.lift || tokens.lift === "none" || tokens.lift === tokens.rest) throw new Error(`--shadow-lift does not resolve to its own shadow (${tokens.lift})`);
       const look = (itemId) => b.ev(`(() => {
         const el = document.querySelector(${sel(itemId)});
         if (!el) return null;
@@ -2188,13 +2255,13 @@ export const JOURNEYS = [
       // arrival motion, which a headless page throttles: wait for the STATE
       // it ends in (no transform) rather than read its scale as the lift's.
       await until(b, `/^(none|matrix\\(1, 0, 0, 1, 0, 0\\))$/.test(getComputedStyle(document.querySelector(${sel(card)})).transform)`, "the card to come to rest at its own size");
-      await shadowIs(card, tokens.card, "the card to rest in --shadow-card");
+      await shadowIs(card, tokens.rest, "the card to rest in --shadow-item");
       const rest = await look(card);
       const hand = await grab(`.item[data-item-id="${card}"] .item-titlebar`, "the card's title bar");
       // A press that has not moved is a click, and a click never lifts.
       await sleep(250);
       const pressed = await look(card);
-      if (pressed.lifted || pressed.shadow !== tokens.card) {
+      if (pressed.lifted || pressed.shadow !== tokens.rest) {
         await hand.release(0);
         throw new Error(`a press that never moved already lifted the card (${pressed.shadow})`);
       }
@@ -2212,7 +2279,7 @@ export const JOURNEYS = [
       if (mid.opacity !== "1") throw new Error(`a dragged card is translucent (opacity ${mid.opacity}) — the lift says moving, not a fade`);
       if (Math.abs(mid.w - rest.w) > 0.5 || Math.abs(mid.h - rest.h) > 0.5) throw new Error(`the lifted card changed size (${rest.w}×${rest.h} → ${mid.w}×${mid.h})`);
       if (Math.abs(mid.x - rest.x - 40) > 8) throw new Error(`the card is not under the hand: moved ${mid.x - rest.x}px for a 40px drag`);
-      await shadowIs(card, tokens.card, "the released card to settle back to --shadow-card");
+      await shadowIs(card, tokens.rest, "the released card to settle back to --shadow-item");
       const settled = await look(card);
       if (settled.lifted) throw new Error("the released card still wears .lifted");
 
@@ -2245,11 +2312,11 @@ export const JOURNEYS = [
       const frameMid = await look(group);
       const memberMid = await look(card);
       await handle.release(40);
-      if (memberMid.lifted || memberMid.shadow !== tokens.card) throw new Error(`a member of the dragged group lifted too (${memberMid.shadow}) — the frame lifts, its members ride flat`);
+      if (memberMid.lifted || memberMid.shadow !== tokens.rest) throw new Error(`a member of the dragged group lifted too (${memberMid.shadow}) — the frame lifts, its members ride flat`);
       if (Math.abs(frameMid.x - frameRest.x - 40) > 8) throw new Error(`the group is not under the hand: moved ${frameMid.x - frameRest.x}px for a 40px drag`);
       if (frameMid.transform !== "none" || Math.abs(frameMid.w - frameRest.w) > 0.5) throw new Error(`the lifted frame was transformed or resized (${frameRest.w}×${frameRest.h}, ${frameRest.transform} → ${frameMid.w}×${frameMid.h}, ${frameMid.transform})`);
       await shadowIs(group, "none", "the released group's frame to lie flat again");
-      return { cardDragMode: migrated ? "legacy" : "groups", lift: tokens.lift, card: tokens.card, memberDuringGroupDrag: memberMid.shadow };
+      return { cardDragMode: migrated ? "legacy" : "groups", lift: tokens.lift, rest: tokens.rest, memberDuringGroupDrag: memberMid.shadow };
     },
   },
   {
@@ -2473,7 +2540,7 @@ export const JOURNEYS = [
       const rest = await look(b);
 
       // The second person: a browser of its own, through the door as somebody else.
-      const m = await browser();
+      const m = await ownBrowser();
       try {
         const loaded = m.once("Page.loadEventFired");
         await m.send("Page.navigate", { url: rig.origin });
@@ -3565,6 +3632,18 @@ export const JOURNEYS = [
           throw err;
         } finally { await b.ev(`(() => { document.querySelector("[data-journey-press]")?.removeAttribute("data-journey-press"); return true; })()`); }
       };
+      /** Mark the pin whose title matches `pattern`, or say which pins there were. */
+      const markPin = async (pattern, attr, what) => {
+        const titles = await b.ev(`(() => {
+          document.querySelector("[${attr}]")?.removeAttribute("${attr}");
+          const pins = [...document.querySelectorAll(".pin")];
+          const p = pins.find((p) => new RegExp(${JSON.stringify(pattern)}).test(p.title));
+          if (!p) return pins.map((p) => p.title);
+          p.setAttribute("${attr}", "");
+          return null;
+        })()`);
+        if (titles) throw new Error(`no pin for ${what} (/${pattern}/) — the pins read:\n  ${titles.join("\n  ")}`);
+      };
       const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-critique-"));
       const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
       const act = path.join(home, "act.mjs");
@@ -3610,7 +3689,8 @@ export default async function act({ prompt, cli, cwd }) {
   if (threadId) run("comment", "reply", threadId, "Built both: one " + ideas[0] + ", one with " + ideas[1] + ".");
 }
 `);
-      const { proc, origin } = await startDaemon(home);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
       // The harness variables of whoever runs this must not decide who the
       // CLI speaks as: the person is the home's identity, the agents are the rc's.
       const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
@@ -3696,7 +3776,16 @@ export default async function act({ prompt, cli, cwd }) {
 
         // 3. Both enrolled on Ada's runner, capped, and their notes pinned in their colours.
         await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.agents ?? {}).filter(a => a.ceiling === 'note').length === 2)`, "both critics enrolled and capped at notes", 30_000);
-        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some(t => t.comments.some(c => c.body.includes('every critic asked here is done'))))`, "the last critic to say the read is ready", 60_000);
+        try {
+          await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some(t => t.comments.some(c => c.body.includes('every critic asked here is done'))))`, "the last critic to say the read is ready", 60_000);
+        } catch (err) {
+          // What the request thread holds instead: two "Done — " lines and
+          // no ready line is the critics racing each other, not a slow rc.
+          const said = Object.values((await snapshot()).threads)
+            .filter((t) => t.comments.some((c) => /^Done — /.test(c.body)))
+            .flatMap((t) => t.comments.map((c) => `${c.author.name}: ${c.body.split("\n").join(" / ").slice(0, 160)}`));
+          throw new Error(`${err.message} — the request thread reads:\n  ${said.join("\n  ") || "(no thread with a done line)"}\n--- rc ---\n${rcOut.slice(-1500)}`);
+        }
         const canvas = await snapshot();
         const critics = Object.values(canvas.agents).filter((a) => a.ceiling === "note");
         const colours = await b.ev(`fetch('/api/colors').then(r => r.json())`);
@@ -3710,7 +3799,7 @@ export default async function act({ prompt, cli, cwd }) {
         // A pin opens its note where it is pinned — once the arrival toasts,
         // which sit over the screen's corner, have said their piece.
         await until(b, `!document.querySelector('.toast-said')`, "the comment toasts to clear", 30_000);
-        await b.ev(`(() => { const p = [...document.querySelectorAll('.pin')].find(p => p.title.includes('Inevitable') && p.title.includes('question 2')); p.setAttribute('data-journey-pin', ''); return true; })()`);
+        await markPin("^(?=[\\s\\S]*Inevitable)(?=[\\s\\S]*question 2)", "data-journey-pin", "Inevitable's question-2 note");
         const pinAt = await b.ev(`(() => { const r = document.querySelector('[data-journey-pin]').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
         // Two critics pinned one region, so the later pin overlaps this one:
         // pressed on its uncovered top-left, where a person would aim.
@@ -3720,8 +3809,11 @@ export default async function act({ prompt, cli, cwd }) {
         if (Math.abs(pop.x - pinAt.x) > 340 || Math.abs(pop.y - pinAt.y) > 240) throw new Error(`the note opened at ${JSON.stringify(pop)}, far from its pin at ${JSON.stringify(pinAt)}`);
         await rig.press("Escape");
 
-        // 4. The request thread: post the read; it carries a split.
-        await b.ev(`(() => { const p = [...document.querySelectorAll('.pin')].find(p => /what do you make of|Done — /.test(p.title)); p.setAttribute('data-journey-request', ''); return true; })()`);
+        // 4. The request thread: post the read; it carries a split. Its pin
+        // shows its newest comment: the last critic's done with the ready line
+        // folded in, or, when the two critics finished at once, the ready line
+        // on its own (`owesReadyLine`, 14 Oct 2026).
+        await markPin("what do you make of|Done — |every critic", "data-journey-request", "the request thread");
         await rig.click("[data-journey-request]", "the request thread's pin");
         await pressButton(".thread-popover button", "Post the read", "Post the read… under the ready line");
         await until(b, `/They split/.test(document.querySelector('.crit-read')?.textContent ?? '')`, "the read, with its split, in the dialog", 10_000);
@@ -3732,7 +3824,7 @@ export default async function act({ prompt, cli, cwd }) {
         await until(b, `!document.querySelector('.modal-backdrop')`, "the read posted");
         // The thread closed for the dialog; open it again from its pin.
         await until(b, `!document.querySelector('.toast-said')`, "the comment toasts to clear", 30_000);
-        await b.ev(`(() => { document.querySelector('[data-journey-request]')?.removeAttribute('data-journey-request'); const p = [...document.querySelectorAll('.pin')].find(p => /what do you make of|Done — |every critic|They agree|Reduction/.test(p.title)); p.setAttribute('data-journey-request', ''); return true; })()`);
+        await markPin("what do you make of|Done — |every critic|They agree|Reduction", "data-journey-request", "the request thread, again");
         await rig.click("[data-journey-request]", "the request thread's pin, again");
         await until(b, `[...document.querySelectorAll('.thread-popover .comment')].some(c => /They split/.test(c.textContent) && /Reduction against warmth/.test(c.textContent))`, "the posted read in the request thread", 10_000);
 
@@ -3764,8 +3856,7 @@ export default async function act({ prompt, cli, cwd }) {
           await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
           if (rc.exitCode === null) rc.kill("SIGKILL");
         }
-        proc.kill();
-        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        await daemon.stop();
         rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
         await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
       }
@@ -4230,7 +4321,8 @@ export default async function act({ prompt, cli, cwd }) {
   run("comment", "reply", main.id, "The plan as it stands: three takes on the Basket, beside it; the contrast check on Order history; Checkout reworked, pickup first, because you named it. Say that's the plan when it is right.");
 }
 `);
-      const { proc, origin } = await startDaemon(home);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
       const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
       for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
       const runCli = (...args) => {
@@ -4409,8 +4501,7 @@ export default async function act({ prompt, cli, cwd }) {
           await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
           if (rc.exitCode === null) rc.kill("SIGKILL");
         }
-        proc.kill();
-        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        await daemon.stop();
         rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       }
     },
@@ -4500,7 +4591,8 @@ export default async function act({ prompt, cli, cwd }) {
   run("comment", "reply", main.id, "The plan as it stands: two takes on the Basket, beside it; the Order history regroup; Checkout reworked, pickup first, because you named it. Say that's the plan when it is right.");
 }
 `);
-      const { proc, origin } = await startDaemon(home);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
       const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
       for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
       const runCli = (...args) => {
@@ -4638,8 +4730,7 @@ export default async function act({ prompt, cli, cwd }) {
           await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
           if (rc.exitCode === null) rc.kill("SIGKILL");
         }
-        proc.kill();
-        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        await daemon.stop();
         rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       }
     },
@@ -4698,7 +4789,8 @@ export default async function act({ prompt, cli, cwd }) {
     "--propose", file);
 }
 `);
-      const { proc, origin } = await startDaemon(home);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
       const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
       for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
       const runCli = (...args) => {
@@ -4859,8 +4951,7 @@ export default async function act({ prompt, cli, cwd }) {
           await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
           if (rc.exitCode === null) rc.kill("SIGKILL");
         }
-        proc.kill();
-        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        await daemon.stop();
         rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       }
     },
@@ -5237,7 +5328,7 @@ export default async function act({ prompt, cli, cwd }) {
       });
       await new Promise((r) => stub.listen(0, "127.0.0.1", r));
       const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-sz-"));
-      const { proc, origin } = await startDaemon(home, 0, {
+      const daemon = await startDaemon(home, {
         ISOCAN_TEXT_API_KEY: "sk-ant-journey-stub-not-a-key",
         ISOCAN_TEXT_PROVIDER: "anthropic",
         ISOCAN_TEXT_ENDPOINT: `http://127.0.0.1:${stub.address().port}/v1/messages`,
@@ -5245,6 +5336,7 @@ export default async function act({ prompt, cli, cwd }) {
         ISOCAN_SUMMARY_MODEL: "",
         ISOCAN_TEXT_MODEL: "",
       });
+      const { origin } = daemon;
       try {
         const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, ISOCAN_SESSION_ID: "acme-semantic-zoom-journey", ISOCAN_HARNESS: "test" };
         const runCli = (...args) => {
@@ -5323,8 +5415,7 @@ export default async function act({ prompt, cli, cwd }) {
         if (asked.length !== 2) throw new Error(`one edit, ${asked.length - 1} more model calls`);
         return { note, calls: asked.length, first: first.text, then: await b.ev(`document.querySelector(${gist}).textContent.trim()`) };
       } finally {
-        proc.kill();
-        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        await daemon.stop();
         stub.close();
         rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
         await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
@@ -5379,7 +5470,7 @@ export default async function act({ prompt, cli, cwd }) {
       });
       await new Promise((r) => stub.listen(0, "127.0.0.1", r));
       const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-szb-"));
-      const { proc, origin } = await startDaemon(home, 0, {
+      const daemon = await startDaemon(home, {
         ISOCAN_TEXT_API_KEY: "sk-ant-journey-stub-not-a-key",
         ISOCAN_TEXT_PROVIDER: "anthropic",
         ISOCAN_TEXT_ENDPOINT: `http://127.0.0.1:${stub.address().port}/v1/messages`,
@@ -5387,6 +5478,7 @@ export default async function act({ prompt, cli, cwd }) {
         ISOCAN_SUMMARY_MODEL: "",
         ISOCAN_TEXT_MODEL: "",
       });
+      const { origin } = daemon;
       try {
         const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, ISOCAN_SESSION_ID: "acme-semantic-board-journey", ISOCAN_HARNESS: "test" };
         const runCli = (...args) => {
@@ -5529,8 +5621,7 @@ export default async function act({ prompt, cli, cwd }) {
         if (asked.length !== textOnly + 1) throw new Error(`turning looking at pictures off made ${asked.length - textOnly - 1} more calls`);
         return { frames: Object.keys(frames).length, calls: asked.length, scale: await scale(), before: first["To do"].text, after, looked, images: images() };
       } finally {
-        proc.kill();
-        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        await daemon.stop();
         stub.close();
         rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
         await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
@@ -5625,26 +5716,39 @@ async function main() {
       ]
     : chosen;
 
-  const r = await rig();
+  // Any daemon a CLI under this run starts for itself (an `rc` or a `wait`
+  // whose daemon went away calls `ensureDaemon`) inherits this, and so dies
+  // with the run too rather than outliving it unowned.
+  process.env.ISOCAN_DAEMON_GUARD_PID = String(process.pid);
   const results = [];
-  try {
-    for (const journey of list) {
-      const started = Date.now();
-      try {
-        const proof = await journey.run(r);
-        results.push({ name: journey.name, what: journey.what, ok: true, ms: Date.now() - started, ...(proof ? { proof } : {}) });
-      } catch (err) {
-        results.push({
-          name: journey.name,
-          what: journey.what,
-          ok: false,
-          ms: Date.now() - started,
-          why: err instanceof Error ? err.message : String(err),
-        });
-      }
+  const why = (err) => (err instanceof Error ? err.message : String(err));
+  for (const journey of list) {
+    // A rig of the journey's own: see `rig()` for what sharing one cost.
+    const booted = Date.now();
+    let r = null;
+    const result = { name: journey.name, what: journey.what };
+    try {
+      r = await rig();
+    } catch (err) {
+      results.push({ ...result, ok: false, ms: Date.now() - booted, why: `the rig did not start: ${why(err)}` });
+      continue;
     }
-  } finally {
-    await r.close();
+    const started = Date.now();
+    try {
+      const proof = await journey.run(r);
+      Object.assign(result, { ok: true, ms: Date.now() - started, ...(proof ? { proof } : {}) });
+    } catch (err) {
+      Object.assign(result, { ok: false, ms: Date.now() - started, why: why(err) });
+    }
+    try {
+      await r.close();
+    } catch (err) {
+      // A walk that passed and left a browser or daemon it could not stop
+      // did not pass: the next one would run beside it.
+      if (result.ok) Object.assign(result, { ok: false, why: `the walk passed, then its rig would not stop: ${why(err)}` });
+    }
+    result.setupMs = started - booted;
+    results.push(result);
   }
 
   const failed = results.filter((x) => !x.ok);

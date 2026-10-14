@@ -752,6 +752,36 @@ export function critiqueStatus(thread: CommentThread, critics: readonly CriticAc
   };
 }
 
+/**
+ * **Which critic owes the asker the ready line, read from the thread as the
+ * home holds it** — the asked critic whose done line is the last critic's word
+ * in the thread, once every asked critic has finished and nobody has said the
+ * read is ready. Null otherwise, including when the last word is the rc
+ * stopping a critic at its budget, since no critic spoke last.
+ *
+ * `critique done` decides "am I last?" from the snapshot it read BEFORE it
+ * wrote, and `isocan rc` runs critics' turns at the same time. Two critics
+ * finishing together each read the other as still working, each posted a
+ * plain record, and the asker was never told: two "Done — " lines and no
+ * ready line, found by the critique journey on 14 Oct 2026. The thread's own
+ * order is the one fact both racers share, so after its write lands a critic
+ * reads again and asks this. Exactly one critic's done line is last, so
+ * exactly one critic answers, and a ready line already said answers nobody.
+ */
+export function owesReadyLine(thread: CommentThread, critics: readonly CriticActor[], isSystem: (actorId: string) => boolean): string | null {
+  const status = critiqueStatus(thread, critics, isSystem);
+  if (!status || status.asked.length < 2 || status.pending.length > 0) return null;
+  const later = thread.comments.slice(thread.comments.findIndex((c) => c.id === status.commentId) + 1);
+  if (later.some((c) => isReadyLine(c.body))) return null;
+  const asked = new Map(status.asked.map((a) => [a.id, a]));
+  const finished = later.filter(
+    (c) => (asked.has(c.author.id) && isDoneLine(c.body)) || (isSystem(c.author.id) && status.asked.some((a) => isCapLine(c.body, a.name))),
+  );
+  const lastWord = finished.at(-1);
+  if (!lastWord || !asked.has(lastWord.author.id) || lastWord.author.id === status.asker.id) return null;
+  return lastWord.author.id;
+}
+
 /** The line the LAST of two or more critics adds to its done: the asker, by
  *  mention, told the read is ready — the one wake the read needs. */
 export function readyLine(askerName: string, threadId: string): string {

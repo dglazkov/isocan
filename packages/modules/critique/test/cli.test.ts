@@ -402,6 +402,41 @@ describe("two critics, and the read (critique phase 3)", () => {
     });
   });
 
+  /**
+   * `isocan rc` runs both critics at once, and each `done` decided "am I
+   * last?" from a snapshot read before either done landed. Each saw the other
+   * working and posted a record, and the lead was never told: the critique
+   * journey's thread on 14 Oct 2026 read two "Done — " lines and no ready
+   * line. Here both first reads are from before either write, as they were.
+   */
+  it("two critics finishing at once still tell the asker, once", async () => {
+    const h = harness({ as: LEAD, agents: { [LEAD.id]: { actor: LEAD, writtenBy: ADA } } });
+    const threadId = await critique(h);
+    await as(h, QUIET, "critique", "note", "itm_screen", "--at", "0.45,0.2", "--kind", "risk", "--question", "2", "The photo pushes the order below the fold. Cut it.");
+    await as(h, WARM, "critique", "note", "itm_screen", "--at", "0.5,0.15", "--kind", "working", "--question", "2", "The photo carries the warmth. Leave it.");
+    const before = structuredClone(h.threads);
+    const live = h.ctx.client.snapshot;
+    let reads = 0;
+    // Each done reads first (the stale thread) and, after it writes, may read again (live).
+    const firstReads = new Set<number>();
+    h.ctx.client.snapshot = async () => {
+      reads += 1;
+      const snap = await live();
+      return firstReads.has(reads) ? { ...snap, canvas: { ...snap.canvas, threads: structuredClone(before) } } : snap;
+    };
+    firstReads.add(reads + 1);
+    await as(h, QUIET, "critique", "done", "itm_screen");
+    firstReads.add(reads + 1);
+    await as(h, WARM, "critique", "done", "itm_screen");
+    expect(h.errors).toEqual([]);
+    const replies = (h.ops.filter((op) => op.type === "thread.reply") as Extract<Operation, { type: "thread.reply" }>[]).map((op) => op.comment);
+    expect(replies).toEqual([
+      { id: expect.any(String), body: "Done — 1 note on #Acme checkout: 1 risk.", record: true },
+      { id: expect.any(String), body: "Done — 1 note on #Acme checkout: 1 working.", record: true },
+      { id: expect.any(String), body: `@Lead every critic asked here is done — the read: \`isocan critique read ${threadId}\``, mentions: [LEAD.id] },
+    ]);
+  });
+
   it("critique read folds the notes; --post replies once, a record, the lead's words above the fold", async () => {
     const h = harness({ as: LEAD, agents: { [LEAD.id]: { actor: LEAD, writtenBy: ADA } } });
     const threadId = await critique(h);

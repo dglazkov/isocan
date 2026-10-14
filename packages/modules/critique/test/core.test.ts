@@ -19,6 +19,7 @@ import critiqueCore, {
   lensPath,
   mentionWord,
   noteBody,
+  owesReadyLine,
   readCritic,
   readLens,
   readNote,
@@ -281,6 +282,46 @@ describe("asking, and the last word", () => {
     const n = (kind: (typeof NOTE_KINDS)[number]) => ({ kind }) as never;
     expect(doneLine([n("risk"), n("working"), n("risk")], "Acme checkout")).toBe("Done — 3 notes on #Acme checkout: 1 working, 2 risk.");
     expect(doneLine([], "Acme checkout")).toBe("Done — no notes on #Acme checkout.");
+  });
+
+  /**
+   * Two critics finishing together each read the other as working, each
+   * posted a record, and the asker was never told. The critique journey found
+   * it on 14 Oct 2026: two "Done — " lines and no ready line. The thread's
+   * order decides who owes the line, so exactly one critic says it.
+   */
+  it("owes the ready line to the critic whose done landed last, and to nobody once it is said", () => {
+    const quiet = { id: "act_quiet", name: "Quiet Hands" };
+    const warm = { id: "act_warm", name: "Warm Light" };
+    const critics = [quiet, warm];
+    const at = "2026-10-14T10:00:00.000Z";
+    const say = (id: string, author: { id: string; name: string }, body: string, extra: Record<string, unknown> = {}) => ({ id, author, body, createdAt: at, ...extra });
+    const ask = (mentions: string[], ...later: ReturnType<typeof say>[]) =>
+      ({
+        id: "thr_ask", x: 0, y: 0, anchorItemId: "itm_screen", createdAt: at, createdBy: ada,
+        comments: [say("cmt_ask", ada, requestBody(["Quiet Hands", "Warm Light"], "Acme checkout"), { mentions }), ...later],
+      }) as never;
+    const both = [quiet.id, warm.id];
+    const nobodySystem = () => false;
+    const quietDone = say("cmt_q", quiet, "Done — 1 note on #Acme checkout: 1 risk.", { record: true });
+    const warmDone = say("cmt_w", warm, "Done — 1 note on #Acme checkout: 1 working.", { record: true });
+
+    // One still working: nobody owes it yet.
+    expect(owesReadyLine(ask(both, quietDone), critics, nobodySystem)).toBeNull();
+    // Both finished and neither said it: the later done owes it, whichever critic wrote it.
+    expect(owesReadyLine(ask(both, quietDone, warmDone), critics, nobodySystem)).toBe(warm.id);
+    expect(owesReadyLine(ask(both, warmDone, quietDone), critics, nobodySystem)).toBe(quiet.id);
+    // Said already, inside the last done or as a reply of its own: owed by nobody.
+    const saidInDone = say("cmt_w2", warm, `Done — 1 note on #Acme checkout: 1 working.\n${readyLine("Ada", "thr_ask")}`, { mentions: [ada.id] });
+    expect(owesReadyLine(ask(both, quietDone, saidInDone), critics, nobodySystem)).toBeNull();
+    const saidAlone = say("cmt_r", warm, readyLine("Ada", "thr_ask"), { mentions: [ada.id] });
+    expect(owesReadyLine(ask(both, quietDone, warmDone, saidAlone), critics, nobodySystem)).toBeNull();
+    // One critic asked: there is no read to be ready.
+    expect(owesReadyLine(ask([quiet.id], quietDone), critics, nobodySystem)).toBeNull();
+    // The rc stopped the last critic at its budget: no critic spoke last, so none owes it.
+    const rc = { id: "sys_rc", name: "isocan" };
+    const capped = say("cmt_cap", rc, "Warm Light stopped at its budget: 6 turns.");
+    expect(owesReadyLine(ask(both, quietDone, capped), critics, (id) => id === rc.id)).toBeNull();
   });
 });
 

@@ -21,6 +21,7 @@ import {
   COMMAND_NAME,
   emptyCanvas,
   extensionFor,
+  healedBlobType,
   OplogFencedError,
   OpValidationError,
   parseCommandFile,
@@ -647,7 +648,7 @@ export class CloudStore implements Store {
     const existing = await ref.get();
     if (existing.exists) {
       const found = existing.data() as BlobMeta;
-      return { blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, meta) };
     }
     const file = `${blobHash}.${extensionFor(meta.filename, meta.mimeType)}`;
     await this.objects.put(blobKey(id, file), data, { contentType: meta.mimeType });
@@ -666,9 +667,26 @@ export class CloudStore implements Store {
       // construction, so there is nothing to reconcile.
       if ((err as { code?: number }).code !== ALREADY_EXISTS) throw err;
       const found = (await ref.get()).data() as BlobMeta;
-      return { blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, meta) };
     }
     return { blobHash, size: data.length, mimeType: meta.mimeType };
+  }
+
+  /**
+   * The same bytes again: heal the recorded type when it said nothing and this
+   * upload says something (`healedBlobType` — two specific types keep the
+   * first). The stored object keeps the key it was written under. Answers the
+   * type the record now holds.
+   */
+  private async healBlobType(
+    ref: ReturnType<CollectionReference["doc"]>,
+    found: BlobMeta,
+    meta: { mimeType: string; filename: string },
+  ): Promise<string> {
+    const healed = healedBlobType(found.mimeType, meta.mimeType);
+    if (!healed) return found.mimeType;
+    await ref.update({ mimeType: healed, filename: meta.filename });
+    return healed;
   }
 
   async blobMeta(id: string, blobHash: string): Promise<BlobMeta | null> {
@@ -736,7 +754,7 @@ export class CloudStore implements Store {
     } catch (err) {
       if ((err as { code?: number }).code !== ALREADY_EXISTS) throw err;
       const found = (await ref.get()).data() as BlobMeta;
-      return { blobHash: request.blobHash, size: found.size, mimeType: found.mimeType };
+      return { blobHash: request.blobHash, size: found.size, mimeType: await this.healBlobType(ref, found, request) };
     }
     return { blobHash: request.blobHash, size: stat.size, mimeType: request.mimeType };
   }

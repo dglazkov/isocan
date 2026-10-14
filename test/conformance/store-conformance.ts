@@ -262,6 +262,33 @@ export function storeConformance(
     );
 
     test(
+      "heals a blob filed as octet-stream when the same bytes arrive typed, and keeps the first of two specific types",
+      withStore(async ({ store }) => {
+        await seed(store);
+        // 14 Oct 2026 (lessons.md): a slide uploaded from an extensionless
+        // file, then the same bytes re-saved as `.html`.
+        const page = Buffer.from("<!doctype html><h1>Slide</h1>");
+        const first = await store.putBlob("prj_1", page, { mimeType: "application/octet-stream", filename: "itm_slide" });
+        const again = await store.putBlob("prj_1", page, { mimeType: "text/html", filename: "01-title.html" });
+        expect(again.blobHash).toBe(first.blobHash);
+        expect(again.mimeType, "the put answers the healed type").toBe("text/html");
+        const meta = (await store.blobMeta("prj_1", first.blobHash))!;
+        expect(meta.mimeType).toBe("text/html");
+        expect(meta.filename).toBe("01-title.html");
+        expect(meta.file, "the stored object keeps the key it was written under").toBe(`${first.blobHash}.bin`);
+        expect(await collect(await store.openBlob("prj_1", first.blobHash))).toEqual(page);
+
+        // Two specific types for the same bytes: the first stays. One hash
+        // serves both names; a later upload must not re-type it for the other.
+        const words = Buffer.from("plain words\n");
+        await store.putBlob("prj_1", words, { mimeType: "text/plain", filename: "a.txt" });
+        const md = await store.putBlob("prj_1", words, { mimeType: "text/markdown", filename: "a.md" });
+        expect(md.mimeType).toBe("text/plain");
+        expect((await store.blobMeta("prj_1", md.blobHash))!.mimeType).toBe("text/plain");
+      }),
+    );
+
+    test(
       "answers which of many hashes it holds, as blobMeta would one by one",
       withStore(async ({ store }) => {
         await seed(store);

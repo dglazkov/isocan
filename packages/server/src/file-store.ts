@@ -16,6 +16,7 @@ import {
   COMMAND_NAME,
   emptyCanvas,
   extensionFor,
+  healedBlobType,
   OpValidationError,
   parseCommandFile,
   emptyActorRegistry,
@@ -504,6 +505,15 @@ export class FileStore implements Store {
     const index = await this.readIndex(id);
     const existing = index[blobHash];
     if (existing) {
+      // The same bytes again. Their recorded type is healed when it said
+      // nothing and this upload says something (`healedBlobType`); the file
+      // on disk keeps the name it was written under.
+      const healed = healedBlobType(existing.mimeType, meta.mimeType);
+      if (healed) {
+        index[blobHash] = { ...existing, mimeType: healed, filename: meta.filename };
+        await writeFileAtomic(p.blobsIndexFile(this.home, id), pretty(index));
+        return { blobHash, size: existing.size, mimeType: healed };
+      }
       return { blobHash, size: existing.size, mimeType: existing.mimeType };
     }
     const ext = extensionFor(meta.filename, meta.mimeType);

@@ -4435,13 +4435,18 @@ button.mt-card:hover { border-color: var(--accent); }
      decision behind an alpha is one no colour test can see. */
 }
 
-/* The opening words, top-left like the words they stand for, wrapped to the
-   box and clipped by it. The inset is in em, so it shrinks with the words and
-   keeps them off a sticky's edge at every zoom. */
+/* The opening words, top-left like the words they stand for, on one line
+   that ends in an ellipsis when the box is narrower than they are. The inset
+   is in em, so it shrinks with the words and keeps them off a sticky's edge
+   at every zoom. */
 .text-mark {
   display: block; overflow: hidden; padding: 0.5em 0.7em;
   width: 100%; height: 100%;
-  font-weight: 600; line-height: 1.2; overflow-wrap: anywhere;
+  font-weight: 600; line-height: 1.2;
+  /* One line, ended with an ellipsis. Wrapped to the box and clipped by it,
+     the second line was sliced through at the zooms where the box held one
+     and a half (Dion, 14 Oct 2026, a deck's speaker notes). */
+  white-space: nowrap; text-overflow: ellipsis;
   /* Quieter than the words themselves, by TOKEN and not opacity
      (`dimmed.test.ts` refuses faded text). `--ink-muted`, not the eyebrows'
      `--ink-soft`: these are words to be read now, not a glyph to notice. */

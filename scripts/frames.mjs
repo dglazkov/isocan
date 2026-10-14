@@ -85,11 +85,12 @@
  * camera did not move is a wheel that reached nothing, and reading its frames
  * would report a flawless 16.7 ms from a page doing no work.
  */
-import { spawn, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startDaemon } from "./lib/daemon.mjs";
 
 /** The long-frame tail of a list of inter-frame gaps, in ms. */
 export function frameStats(gaps) {
@@ -290,16 +291,14 @@ async function main() {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const home = mkdtempSync(path.join(tmpdir(), "isocan-frames-"));
-  const port = 21_000 + Math.floor(Math.random() * 8_000);
+  // The measured tree's own daemon (`--root`'s bin), started and owned by
+  // `lib/daemon.mjs`. This spawned `isocan serve`, a launcher that exits once
+  // the DETACHED daemon it starts answers, so the `daemon.kill()` in the
+  // `finally` below signalled nothing and every measurement left one behind.
+  const daemon = await startDaemon({ cli, home, timeoutMs: 60_000 });
+  const { port } = daemon;
+  const origin = `http://${crossSite ? "localhost" : "127.0.0.1"}:${port}`;
   const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: String(port), ISOCAN_CONTENT_PORT: String(port + 1), ISOCAN_SESSION_ID: `acme-frames-${port}`, ISOCAN_HARNESS: "test" };
-  const daemon = spawn(process.execPath, [cli, "serve"], { env, stdio: ["ignore", "pipe", "pipe"] });
-  const origin = await new Promise((resolve, reject) => {
-    let out = "";
-    const t = setTimeout(() => reject(new Error(`daemon did not start:\n${out}`)), 60_000);
-    const look = (c) => { out += c; if (out.includes(`http://127.0.0.1:${port}`) && /started|running/i.test(out)) { clearTimeout(t); resolve(`http://${crossSite ? "localhost" : "127.0.0.1"}:${port}`); } };
-    daemon.stdout.on("data", look); daemon.stderr.on("data", look);
-    daemon.once("exit", (code) => reject(new Error(`daemon exited ${code}:\n${out}`)));
-  });
   const run = (...args) => execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, env, encoding: "utf8", timeout: 60_000 });
   try {
     run("identity", "--name", `Acme Frames ${port}`, "--session");
@@ -455,7 +454,7 @@ async function main() {
       await b.close();
     }
   } finally {
-    daemon.kill();
+    await daemon.stop();
     rmSync(home, { recursive: true, force: true });
   }
 }

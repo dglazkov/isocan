@@ -167,3 +167,40 @@ describe("the conditional edit's own words", () => {
     expect(appliedResult(response, card, "ver_first", "op_acmeweek42pulse").status).toBe("applied");
   });
 });
+
+/**
+ * **A name is not a type** (lessons.md, 14 Oct 2026). An agent renumbering
+ * thirteen HTML slides wrote each one to a file named after its item id, no
+ * extension, and ran `isocan edit <item> <file>`. The new versions took their
+ * filename and type from that path — `itm_… (application/octet-stream)` — and
+ * the deck showed raw bytes. A file whose name says nothing about its type is
+ * a new version of the SAME item, so it keeps the item's own name and type; a
+ * recognised extension is still a deliberate change and still lands as one.
+ */
+describe("isocan edit <item> <file> — the type of the new version", () => {
+  let slide: string;
+  const version = async () => {
+    const card = (await client.snapshot(canvas)).canvas.items[slide]!;
+    return card.versions.find((v) => v.id === card.currentVersionId)!;
+  };
+
+  beforeAll(async () => {
+    const page = path.join(home, "01-title.html");
+    await fs.writeFile(page, "<!doctype html><h1>Acme</h1>");
+    slide = JSON.parse(await ok("--canvas", canvas, "--json", "add", page, "--title", "Acme title slide")).itemId;
+  });
+
+  it("keeps the item's filename and type when the file has no extension", async () => {
+    const untyped = path.join(home, slide); // `/…/itm_…`, as the agent wrote it
+    await fs.writeFile(untyped, "<!doctype html><h1>Acme, renumbered</h1>");
+    await ok("--canvas", canvas, "--json", "edit", slide, untyped);
+    expect(await version()).toMatchObject({ filename: "01-title.html", mimeType: "text/html" });
+  });
+
+  it("still takes a different recognised extension as a deliberate change of type", async () => {
+    const notes = path.join(home, "title-notes.md");
+    await fs.writeFile(notes, "# Acme\n");
+    await ok("--canvas", canvas, "--json", "edit", slide, notes);
+    expect(await version()).toMatchObject({ filename: "title-notes.md", mimeType: "text/markdown" });
+  });
+});

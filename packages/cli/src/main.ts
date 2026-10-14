@@ -546,6 +546,7 @@ import {
 import { findOnPath, globalBinDir, rootOfBin } from "./onpath.ts";
 import { installAntigravityPlugin } from "./antigravity-plugin.ts";
 import { defaultSize, mimeFor } from "./mime.ts";
+import { mimeFromName } from "@isocan/core";
 import { inlineHtmlAssets, inlineMarkdownAssets } from "./inline.ts";
 import {
   collectProp,
@@ -8308,8 +8309,14 @@ unconditional edit.`,
       let mimeType: string;
       if (file) {
         const raw = await fs.readFile(file);
-        filename = path.basename(file);
-        mimeType = mimeFor(filename);
+        // A new version of the SAME item: a file whose name says nothing about
+        // its type (`/tmp/itm_x`, a mktemp) keeps the item's own name and type
+        // rather than becoming `application/octet-stream`. Thirteen slides of a
+        // talk turned into raw bytes that way on 14 Oct 2026 (lessons.md #120).
+        const given = path.basename(file);
+        const typed = mimeFromName(given) !== undefined;
+        filename = typed ? given : current.filename;
+        mimeType = typed ? mimeFor(given) : current.mimeType;
         data = raw;
         if (opts.visual) {
           const visRaw = await fs.readFile(opts.visual);
