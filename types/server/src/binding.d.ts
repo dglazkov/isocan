@@ -52,7 +52,7 @@ export interface DirBinding extends DirMarker {
     root: string;
 }
 export declare const markerFile: (dir: string) => string;
-export declare function readMarker(dir: string): Promise<DirMarker | null>;
+export declare function readMarker(dir: string, home?: string): Promise<DirMarker | null>;
 /** The nearest binding at or above `cwd`, walking up like `.git` discovery.
  * Stops at the user's home directory: a marker above it could only be an
  * accident, and would claim every canvas on the machine. */
@@ -66,7 +66,10 @@ export declare function findBinding(cwd: string, home: string): Promise<DirBindi
  */
 export declare function bindableRoot(cwd: string, home: string): Promise<string | null>;
 /** Write (or rewrite) the marker. Returns the file it wrote, for saying so. */
-export declare function writeMarker(root: string, marker: DirMarker): Promise<string>;
+export declare function writeMarker(root: string, marker: DirMarker, home?: string): Promise<string>;
+/** Remove a directory's binding (in-tree `.isocan/project.json` or out-of-tree
+ * `bindings.json` row). Returns the file that held the binding. */
+export declare function removeMarker(root: string, home?: string): Promise<string>;
 export declare function recordDir(home: string, root: string, canvasId: string): Promise<void>;
 /** Every directory the roster remembers for a canvas — worktrees and clones
  * are several honest answers, not a conflict. */

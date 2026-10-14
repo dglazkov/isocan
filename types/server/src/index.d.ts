@@ -52,7 +52,7 @@ export { modulesDir, readRuntimeModules, type RuntimeModule } from "./modules.js
  * that can name a directory, so the primitives belong beside the filesystem
  * and both surfaces call them (`docs/research/2026-08-26-attaching-a-directory.md`).
  */
-export { bindableRoot, dirsOf, findBinding, markerFile, readMarker, recordDir, writeMarker, } from "./binding.js";
+export { bindableRoot, dirsOf, findBinding, markerFile, readMarker, recordDir, removeMarker, writeMarker, } from "./binding.js";
 export type { DirBinding, DirMarker } from "./binding.js";
 export * from "./personas.js";
 export * from "./personal-desk.js";

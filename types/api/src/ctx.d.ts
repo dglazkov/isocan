@@ -238,4 +238,5 @@ birthHome?: string | null): Promise<{
     canvas: Canvas;
     root: string;
     created: boolean;
+    marker?: string;
 } | null>;

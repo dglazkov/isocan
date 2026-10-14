@@ -349,6 +349,8 @@ think is the last.
    outrank the derived narration until your next comment.
 4. **Build.** `add` new files, `edit <item> <file>` for changes to existing
    items (each edit stacks a version — never re-add), `mv`/`set` to arrange.
+   The file's extension is its type: keep it (`slide.html`, not `/tmp/itm_x`);
+   a file with none keeps the item's current name and type.
    Every op you run snaps your cursor to where it happened.
 5. **Close the loop on the thread.** Always `isocan comment reply <thread>
    "…"` describing what you did, where you put it, and any judgment calls.

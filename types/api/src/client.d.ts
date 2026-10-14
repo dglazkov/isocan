@@ -1,5 +1,5 @@
 import type { SourceRequestContext } from "../../core/src/index.js";
-import { DaemonRoutes } from "./routes.js";
+import { DaemonRoutes, type Health } from "./routes.js";
 /**
  * **The Node-only half of the client** — how a daemon comes to exist on this
  * machine, layered over the typed route surface it then speaks to.
@@ -12,7 +12,19 @@ export declare class DaemonClient extends DaemonRoutes {
     /** The client home directory: where this machine's badge, daemon log and
      * managed builds live. The route surface takes the badge store alone. */
     readonly home: string;
+    /** True when this client speaks directly to a remote home with no local
+     * daemon in front of it (`direct` mode). In that arrangement the remote
+     * home's `/api/healthz` carries no `upgrade` field of its own, so
+     * `probeHealth` computes the verdict against this CLI's build stamp. */
+    direct: boolean;
     constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext);
+    probeHealth(timeoutMs?: number): Promise<{
+        ok: true;
+        health: Health;
+    } | {
+        ok: false;
+        why: string;
+    }>;
     /**
      * **A blob, as the bytes Node code reads.** The route
      * surface answers a `Uint8Array`, because `isocan/rc` hands that surface to

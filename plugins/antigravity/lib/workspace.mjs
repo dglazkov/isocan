@@ -28,22 +28,43 @@ const canon = (p) => {
   }
 };
 
-/** `packages/server/src/binding.ts` `readMarker`: `projectId` (or
+/** `packages/server/src/binding.ts` `parseMarker`: `projectId` (or
  * `canvasId`), and a `home` that is present but unusable rejects the file. */
+function parseMarker(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const canvasId = raw.projectId ?? raw.canvasId;
+  if (typeof canvasId !== "string" || canvasId.length === 0) return null;
+  if (raw.home !== undefined && (typeof raw.home !== "string" || raw.home.trim() === "")) return null;
+  return {
+    canvasId,
+    ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
+    ...(typeof raw.home === "string" ? { home: raw.home.trim() } : {}),
+  };
+}
+
+function readBindings(isocan) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(isocan, "bindings.json"), "utf8"));
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+/** `packages/server/src/binding.ts` `readMarker`. */
 function readMarker(dir) {
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(dir, ".isocan", "project.json"), "utf8"));
-    const canvasId = raw.projectId ?? raw.canvasId;
-    if (typeof canvasId !== "string" || canvasId.length === 0) return null;
-    if (raw.home !== undefined && (typeof raw.home !== "string" || raw.home.trim() === "")) return null;
-    return {
-      canvasId,
-      ...(typeof raw.title === "string" && raw.title ? { title: raw.title } : {}),
-      ...(typeof raw.home === "string" ? { home: raw.home.trim() } : {}),
-    };
+    return parseMarker(JSON.parse(fs.readFileSync(path.join(dir, ".isocan", "project.json"), "utf8")));
   } catch {
     return null;
   }
+}
+
+/** Which file actually holds `root`'s binding: the in-tree marker when
+ * present, else the out-of-tree `bindings.json` fallback in `home`. */
+export function markerSource(root, home) {
+  const inTree = path.join(root, ".isocan", "project.json");
+  return fs.existsSync(inTree) ? inTree : path.join(canon(home), "bindings.json");
 }
 
 /**
@@ -55,11 +76,12 @@ function readMarker(dir) {
 export function findBinding(cwd, home) {
   const isocan = canon(home);
   const userHome = canon(os.homedir());
+  const outOfTree = readBindings(isocan);
   let dir = canon(cwd);
   for (;;) {
     const excluded = dir === userHome || path.dirname(dir) === dir || path.join(dir, ".isocan") === isocan;
     if (!excluded) {
-      const marker = readMarker(dir);
+      const marker = readMarker(dir) ?? parseMarker(outOfTree[dir]);
       if (marker) return { root: dir, ...marker };
     }
     const parent = path.dirname(dir);

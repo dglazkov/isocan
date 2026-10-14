@@ -41,13 +41,14 @@ a `credit` line saying who it is after and that it is not affiliated, its
 - `isocan critique <item> --by inevitable,frog` — asks two (or more) at once:
   each is enrolled and capped as above, and ONE thread on the screen mentions
   them all. Each works alone — its brief says read the screen, not the thread
-  — and its done line is a record, so it wakes nobody. The **last** critic's
-  done line mentions whoever asked, which is the one wake the read needs. A
-  critic the rc stopped at its budget counts as done.
+  — and its done line is a record, so it wakes nobody. The **last** critic to
+  finish mentions whoever asked, which is the one wake the read needs: in its
+  done line, or in a reply just after it when two finish at the same moment.
+  A critic the rc stopped at its budget counts as done.
 - `/critique #Checkout with Inevitable and Form Follows Emotion` in the Chat is
   the same ask through a parked agent (`isocan command show critique`). That
   agent is the **lead**: it runs `critique --by`, ends its turn, and is woken
-  by the last done line to write the reply.
+  by the last critic's mention to write the reply.
 - `isocan critique read <thread|item>` — the fold: **agree** (two or more
   critics, one kind, pins within 0.15 of the screen of each other, moves not
   opposed), **split** (in one region, one critic's *working* or "Leave it."

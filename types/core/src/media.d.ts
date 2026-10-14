@@ -17,6 +17,26 @@
  */
 export declare function extensionFor(filename: string, mimeType: string): string;
 /**
+ * **Whether bytes already stored should take the type they just arrived
+ * with** — the type a backing records once per content hash, healed.
+ *
+ * A blob is keyed by its hash, so the first upload of some bytes used to name
+ * their type for good. On 14 Oct 2026 thirteen slides were uploaded from
+ * extensionless files, filed as `application/octet-stream`, and re-saved as
+ * `01-title.html`: the new versions said `text/html`, the blobs kept octet-
+ * stream, and the content route's `nosniff` made full screen blank
+ * (`docs/reviews/lessons.md` #122).
+ *
+ * The answer is the new type ONLY when the recorded one says nothing —
+ * missing, empty or octet-stream — and the new one says something. Two
+ * specific types that disagree keep the first: one hash legitimately serves
+ * two names (a `.txt` and a `.md` of the same words), and letting the latest
+ * upload re-type bytes that other versions are already served as would let
+ * any writer turn somebody's `text/plain` into a rendered `text/html`. Null
+ * means "leave the record alone".
+ */
+export declare function healedBlobType(recorded: string | undefined, offered: string): string | null;
+/**
  * **The mime a name implies, or nothing** — a loaded module's extensions
  * first, then the table.
  *
