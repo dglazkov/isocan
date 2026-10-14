@@ -409,6 +409,11 @@ export class HomeLinks implements HomeDirectory, HomeRegistry {
    * wrong home rather than a wrong answer, which is the right side of the
    * cheerful-wrong-address line — and the real fix, when a scene forces it, is
    * for a pass token to name its home the way a canvas address does.
+   *
+   * One case is no longer asked here at all: a pass whose row is on THIS
+   * daemon's desk (13 Oct 2026). The redeem route looks there first, because
+   * a mixed rig with a birth default was sending its own passes to that home
+   * to be refused.
    */
   homeScoped(): HomeConnection | null {
     if (this.birthHome !== null) return this.linkFor(this.birthHome);

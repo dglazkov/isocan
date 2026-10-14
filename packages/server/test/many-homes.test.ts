@@ -453,6 +453,37 @@ describe("one daemon, many homes", () => {
     const ok = await fetch(`${decided.base}${BADGES_ROUTE}`, { headers: decided.badge.headers });
     expect(ok.status).toBe(200);
   }, 30_000);
+
+  /**
+   * The same refusal used to cover a pass this daemon minted itself, and that
+   * one has an honest local answer: the row is on this desk, so there is
+   * nothing to place. Only a pass this desk does NOT hold is still a question
+   * about a home.
+   */
+  it("redeems its own pass on a rig that cannot place anybody else's", async () => {
+    await birthAll();
+    expect(D.daemon.homes.homeScopedAmbiguity()).toEqual([H1.base, H2.base].sort());
+    const redeem = async (token: string) =>
+      fetch(`${D.base}/api/passes/redeem`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await mintTestBadge(D.base)).headers },
+        body: JSON.stringify({ token }),
+      });
+
+    const own = await post(D, `/api/projects/${LOCAL}/passes`, {});
+    expect(own.status).toBe(200);
+    const mine = await redeem(((await own.json()) as { token: string }).token);
+    expect(mine.status).toBe(200);
+    expect(await mine.json()).toMatchObject({ canvasId: LOCAL });
+
+    // Minted through this daemon for a canvas at H1, so the row is H1's — and
+    // with no address beside it, which home to ask is still unanswerable.
+    const theirs = await post(D, `/api/projects/${ONE}/passes`, {});
+    expect(theirs.status).toBe(200);
+    const stuck = await redeem(((await theirs.json()) as { token: string }).token);
+    expect(stuck.status).toBe(409);
+    expect(((await stuck.json()) as { code: string }).code).toBe("ambiguous-home");
+  }, 30_000);
 });
 
 /**
@@ -528,6 +559,79 @@ describe("a machine that predates all of this", () => {
       expect((await get<{ id: string }[]>(H1, "/api/projects")).some((r) => r.id === "prj_dion")).toBe(false);
     } finally {
       await second.daemon.close();
+    }
+  }, 30_000);
+
+  it("redeems a pass for its own canvas at its own desk, whatever the birth default is", async () => {
+    /**
+     * **Reported 13 Oct 2026, on exactly this rig.** A birth default at a
+     * home and a canvas born here before it. `isocan pass` minted for that
+     * canvas, its address opened in a tab on this daemon, and the tab read
+     * "this canvas's home did not recognise the pass in that address".
+     *
+     * Minting routes by the canvas, so the row was on THIS desk. Redeeming
+     * named no home — a browser never does — so it went to `homeScoped`, which
+     * is the birth default, which had never heard of it. A valid pass reported
+     * invalid, by the one machine that could have looked.
+     */
+    await D.daemon.close();
+    const zeroth = await dionsRig(dDir, null);
+    await post(zeroth, "/api/ops", { canvasId: null, actor: dion, op: { type: "project.create", canvasId: "prj_dion", title: "Acme Sprint Board" } });
+    await zeroth.daemon.close();
+
+    const rig = await dionsRig(dDir, H1.base);
+    try {
+      expect(rig.daemon.homes.homeOf("prj_dion")).toBeNull();
+      const mint = async (): Promise<{ token: string; passId: string }> => {
+        const minted = await post(rig, "/api/projects/prj_dion/passes", { actorId: dion.id });
+        expect(minted.status).toBe(200);
+        const body = (await minted.json()) as { token: string; pass: { id: string } };
+        return { token: body.token, passId: body.pass.id };
+      };
+      const redeem = (badge: TestBadge, body: { token: string; home?: string }) =>
+        fetch(`${rig.base}/api/passes/redeem`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...badge.headers },
+          body: JSON.stringify(body),
+        });
+
+      // The browser's shape: a token and nothing else.
+      const tab = await mintTestBadge(rig.base);
+      const first = await mint();
+      const arrived = await redeem(tab, { token: first.token });
+      expect(arrived.status).toBe(200);
+      expect(await arrived.json()).toMatchObject({ canvasId: "prj_dion", actor: { id: dion.id } });
+      // Spent HERE, by that tab — the minter reads its own row back.
+      const row = await get<{ pass: { redeemedBy?: string } }>(rig, `/api/projects/prj_dion/passes/${first.passId}`);
+      expect(row.pass.redeemedBy).toBe(tab.badgeId);
+      // And the claim is real: the tab now writes as the person it was handed.
+      const wrote = await fetch(`${rig.base}/api/ops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...tab.headers },
+        body: JSON.stringify({ canvasId: "prj_dion", actor: dion, op: item("itm_tab", 3) }),
+      });
+      expect(wrote.status).toBe(200);
+
+      // A caller that names this daemon's own address means the same desk.
+      const other = await mintTestBadge(rig.base);
+      const second = await mint();
+      expect((await redeem(other, { token: second.token, home: rig.base })).status).toBe(200);
+
+      // The birth default still answers for what is NOT on this desk: a pass
+      // the home minted, presented here with no address, is spent there.
+      const hosted = await post(H1, "/api/ops", {
+        canvasId: null,
+        actor: { id: "usr_h1", name: "Acme Home" },
+        op: { type: "project.create", canvasId: "prj_hosted", title: "Widget Redesign" },
+      });
+      expect(hosted.status).toBe(200);
+      const fromHome = await post(H1, "/api/projects/prj_hosted/passes", {});
+      const { token: homeToken } = (await fromHome.json()) as { token: string };
+      const third = await redeem(await mintTestBadge(rig.base), { token: homeToken });
+      expect(third.status).toBe(200);
+      expect(await third.json()).toMatchObject({ canvasId: "prj_hosted" });
+    } finally {
+      await rig.daemon.close();
     }
   }, 30_000);
 

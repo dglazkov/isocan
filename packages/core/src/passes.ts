@@ -267,6 +267,10 @@ export interface RedeemPassRequest {
    * home sends and what every caller older than this field sends. A CLI sends
    * it only when the address is NOT its own daemon's, because a daemon that
    * dialled itself would be its own replica.
+   *
+   * "Decide for me" starts at the daemon's own desk: the one machine that CAN
+   * read which desk holds a row is the desk holding it, so a pass this daemon
+   * minted for a canvas of its own is spent there and never sent to a home.
    */
   home?: string;
   /** Setup on a local daemon also saves the pass-returned actor as its

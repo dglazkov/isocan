@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   normalizeHomeUrl,
+  parsePassToken,
   PASS_REDEEM_ROUTE,
   PASS_UNKNOWN,
   type Actor,
@@ -215,19 +216,33 @@ export function registerPassRoutes(app: FastifyInstance, scope: PassRouteScope):
      *
      * Absent — every caller older than the field, and the browser at a home —
      * falls back to `homeScoped`, whose seam is named where it lives.
+     *
+     * **Unless the row is on this desk** (13 Oct 2026). Minting routes by the
+     * canvas, so a pass for a canvas this daemon is the home of is written
+     * HERE — and a browser on this daemon redeems with a token and nothing
+     * else, which sent it to the birth default to be told `unknown-pass` about
+     * a pass that was valid, unspent and one lookup away. The token is opaque
+     * about its home to everybody except the desk that holds it, so that desk
+     * is asked first. Only for a canvas still this daemon's own: a row for one
+     * that has since moved to a home is not this desk's to spend. And never
+     * over an address the caller did name, which stays the answer.
      */
     const asked = typeof body.home === "string" ? body.home.trim() : "";
     const askedHost = asked === "" ? null : hostOf(asked);
     const self = askedHost !== null && askedHost === String(req.headers.host ?? "");
-    if (asked === "") {
+    const parsed = asked === "" || self ? parsePassToken(token) : null;
+    const held = parsed ? await desk.pass(parsed.passId) : null;
+    const own = held !== null && (options.homes?.for(held.canvasId) ?? null) === null;
+    if (asked === "" && !own) {
       // Only when the caller named nothing: an address in the request IS the
       // answer, so a pass pasted with its address is never ambiguous. This is
       // the older caller, and the browser at a home.
       const stuck = refuseAmbiguousHome(reply, options.homes, "redeem a pass");
       if (stuck) return stuck;
     }
-    const home =
-      asked !== "" && !self
+    const home = own
+      ? null
+      : asked !== "" && !self
         ? (options.homes?.linkFor(normalizeHomeUrl(asked)) ?? null)
         : (options.homes?.homeScoped() ?? null);
     if (home) {
