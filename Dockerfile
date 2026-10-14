@@ -121,10 +121,21 @@ RUN npm prune --omit=dev --no-audit --no-fund
 # `exports` map does not publish it, and @google-cloud/storage's does not. The
 # workspaces get a filesystem check instead, because their `exports` maps
 # publish only "." and the thing being asserted is the link, not the module.
+#
+# And `sharp` (Semantic Zoom phase 3b, 14 Oct 2026), which is LOADED, not
+# resolved, because what can go missing is not the package but its native
+# half: an optionalDependency of @isocan/server whose libvips arrives as
+# @img/sharp-linux-x64 + @img/sharp-libvips-linux-x64, picked from the lockfile
+# by this image's os, cpu and libc (Debian, glibc). npm skips a failed optional
+# install without a word, and the daemon would then fall back to scaling PNGs
+# only (summary-pictures.ts) — correct, quieter, and nobody would know. No
+# install script runs (--ignore-scripts above), and none is needed: the
+# binaries are plain files in those packages.
 RUN node -e " \
       const fs = require('node:fs'); \
       for (const m of ['@google-cloud/firestore','@google-cloud/storage','tsx']) { \
         require.resolve(m); console.log('kept:', m); } \
+      const sharp = require('sharp'); console.log('kept: sharp', sharp.versions.sharp, 'libvips', sharp.versions.vips); \
       for (const w of ['core','server','cli','cloudstore']) { \
         const p = 'node_modules/@isocan/' + w; \
         if (!fs.existsSync(p + '/package.json')) throw new Error('workspace link lost: ' + p); \

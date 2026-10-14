@@ -355,8 +355,15 @@ export const RELEASE_NODE_ENTRIES = {
  * without this line the first bundle built here pulled in
  * @google-cloud/firestore and @google-cloud/storage — 1.7 MB of generated
  * protobuf in the largest single input — and quietly undid that.
+ *
+ * `sharp` is the second (Semantic Zoom phase 3b, 14 Oct 2026): an optional
+ * dependency of `@isocan/server`, reached by `import("sharp")` inside
+ * `summary-pictures.ts` to scale pictures for a summary. It is native — a
+ * `.node` binding and ~20 MB of libvips per platform — so it cannot be
+ * inlined, and the release manifest does not declare it: an install's import
+ * fails, and the daemon falls back to scaling PNGs alone, as it did before.
  */
-export const CLI_BUNDLE_EXTERNAL = ["@isocan/cloudstore"];
+export const CLI_BUNDLE_EXTERNAL = ["@isocan/cloudstore", "sharp"];
 
 /**
  * **A `require` for the CommonJS half of the dependency tree** (phase 2).
@@ -381,7 +388,8 @@ const CJS_SHIM = [
  *
  * node platform, ESM, not minified: these files are read by people debugging
  * an install, and the win being chased is file opens, not bytes. npm
- * **Nothing is external but `@isocan/cloudstore`** (phase 2). The npm
+ * **Nothing is external but `@isocan/cloudstore` and `sharp`** (phase 2;
+ * `sharp` since 14 Oct 2026, see CLI_BUNDLE_EXTERNAL). The npm
  * dependencies are inlined, so the release manifest declares none of them and
  * an install has nothing to resolve: 227 packages became two. The cost is one
  * banner — see CJS_SHIM — because half the dependency tree is CommonJS and
@@ -819,7 +827,8 @@ export async function extractTree(tree, dir) {
  * - the package's own name resolves through its `exports`;
  * - a bare name resolves if the manifest declares it (npm installs it) or it
  *   is CLI_BUNDLE_EXTERNAL — imported by the hosted daemon alone, from an
- *   image that installs it; everything else is unresolvable.
+ *   image that installs it, or (`sharp`) optional, its failed import caught;
+ *   everything else is unresolvable.
  *
  * `esbuild` does the reading, with every import marked external, so each file
  * is parsed once and nothing is followed or bundled. `require()` is left out

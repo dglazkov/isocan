@@ -136,6 +136,7 @@ column for the fixture's screens before this ships.
 
 - **2026-10-14** — The home cannot draw a screen: a screen's picture is its version's image visual face (what `canvas shot --into` adds), else its title, and the prompt says which went by title.
 - **2026-10-14** — Only PNGs are scaled down at the home (`node:zlib`, no new dependency); JPEG, WebP and GIF over 1024 px go by title. A decoder (an image library, and a Dockerfile line) waits on Dion.
+- **2026-10-14** — Decided (Dion: "Image library sounds good"): `sharp`, an optional dependency of `@isocan/server` alone, scales JPEG, WebP, a GIF's first frame and PNG to 1024 px and sends whichever of PNG or JPEG is smaller. It is external to the CLI bundle and undeclared on `release`, so installs carry no native binaries and keep the zlib PNG path; the image `require`s it after the prune so a dropped optional install fails the build rather than going quiet. `docker build` was not run here.
 - **2026-10-14** — The pictures check lives in `lib/api.ts`, the app's one door, spelled there and held equal to core's constant by a test: entry 710,185 → 710,246.
 - **2026-10-14** — Open: no `isocan summary --vision`, so an agent cannot ask for a vision summary; the look of a lone screen's card is unjudged.
 

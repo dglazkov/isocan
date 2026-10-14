@@ -111,6 +111,8 @@ describe("installable straight from git", () => {
       const runtimeDeclared = new Set([
         ...Object.keys(pkg.dependencies ?? {}),
         ...Object.keys(pkg.peerDependencies ?? {}),
+        // Optional: imported with `await import()` and a fallback when absent (the server's `sharp`).
+        ...Object.keys(pkg.optionalDependencies ?? {}),
       ]);
 
       const runtimeFiles = [

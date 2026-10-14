@@ -6,22 +6,50 @@ import type { TextImage } from "@isocan/core/jev";
  * §11, phase 3b): a picture's bytes, made ready for a model — at most
  * `PICTURE_SIDE` pixels on the long side — or nothing, said honestly.
  *
- * The home has no image library and no browser, and Semantic Zoom does not
- * add either: a PNG — what `isocan canvas shot` and a screen's render are —
- * is decoded and box-averaged down here with `node:zlib` alone; a JPEG, a
- * GIF or a WebP is measured from its header and sent as it is when it is
- * already small enough, and not sent at all when it is not (the summary then
- * names it by its title, and the prompt says so). What this refuses it
- * refuses by returning null, never by throwing: a picture that cannot be
- * sent is a title, not a failed summary.
+ * A picture already within the side goes as it is. One over it is scaled
+ * down by **`sharp`** (libvips) when the home has it: JPEG, WebP, GIF (its
+ * first frame) and PNG are decoded, turned upright by their EXIF orientation,
+ * fitted inside 1024 × 1024, and re-encoded as a PNG and as a JPEG, and the
+ * smaller of the two goes (a screen is flat colour and comes out a small PNG;
+ * a photograph comes out a small JPEG; both are what every model API takes).
+ * Without `sharp` only a PNG — what `isocan canvas shot` and a screen's render
+ * are — is scaled, decoded and box-averaged down here with `node:zlib` alone,
+ * and anything else over the side is not sent at all (the summary names it by
+ * its title, and the prompt says so). What this refuses it refuses by
+ * returning null, never by throwing: a picture that cannot be sent is a
+ * title, not a failed summary.
+ *
+ * **Why `sharp`, and why optional** (14 Oct 2026, Dion's yes to an image
+ * library). `sharp` ships prebuilt libvips for glibc and musl Linux, macOS
+ * and Windows as per-platform optional packages, so the home's image
+ * (`node:24.20.0-slim`, Debian, glibc, x64 on Cloud Build) installs
+ * `@img/sharp-linux-x64` from the lockfile with no compiler, no apt line and
+ * no install script — `npm ci --ignore-scripts` is enough. The pure-JS road
+ * was worse on every axis that matters here: `jpeg-js` decodes a photo on
+ * the event loop, blocking the daemon, and holds all of it as RGBA (which is
+ * why the PNG path below caps at 25 MP), GIF wants a second library, and WebP has no maintained pure-JS decoder at
+ * all (only WASM builds of libwebp, a native library by another name). libvips
+ * shrinks a JPEG while it decodes it and works off the event loop. But the
+ * daemon also runs inside the CLI people install from the `release` branch,
+ * whose manifest declares nothing to resolve, and a native
+ * dependency there would put ~20 MB of platform binaries on every install for
+ * the one feature that needs a model key with pictures. So `sharp` is an
+ * `optionalDependency` of `@isocan/server` only, external to the CLI bundle
+ * (`CLI_BUNDLE_EXTERNAL` in `scripts/release.mjs`), and loaded here by
+ * `await import()` on the first picture that needs scaling: the image and a
+ * checkout have it, an installed CLI does not, and a laptop without it keeps
+ * the PNG-only behaviour above rather than failing. The Dockerfile asserts
+ * the image loads it, so the home cannot quietly lose it.
  */
 
 /** The long side a picture is sent at, at most (design §11). */
 const PICTURE_SIDE = 1024;
 /** Bytes a picture may be read from at all: anything bigger is a title. */
 export const PICTURE_READ_MAX = 20 * 1024 * 1024;
-/** Pixels a PNG may be decoded at: 25 MP is a 5000 × 5000 screenshot, about 100 MB of RGBA while it is scaled. */
+/** Pixels a PNG may be decoded at here: 25 MP is a 5000 × 5000 screenshot, about 100 MB of RGBA while it is scaled. */
 const DECODE_MAX_PIXELS = 25_000_000;
+/** Pixels `sharp` may decode: more than `node:zlib`'s, because libvips streams and shrinks a JPEG on load rather than holding it whole. */
+const SHARP_MAX_PIXELS = 100_000_000;
 /** Bytes one picture may go to a model at, under Claude's 5 MB a picture once in base64. */
 const SEND_MAX_BYTES = 3_500_000;
 
@@ -160,17 +188,51 @@ function encodePng(width: number, height: number, rgba: Uint8Array): Buffer {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", head), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
 
+type Sharp = typeof import("sharp").default;
+
+/** How `sharp` is reached: the real import, or (in a test) one that fails as it does where the package or its binary is absent. */
+type ImportSharp = () => Promise<{ default: Sharp }>;
+const importSharp: ImportSharp = () => import("sharp");
+let installed: Promise<Sharp | null> | undefined;
+
+/** `sharp` when it loads, else null — once for the real import, every time for any other. */
+function loadSharp(load: ImportSharp): Promise<Sharp | null> {
+  const attempt = () => load().then((m) => m.default, () => null);
+  return load === importSharp ? (installed ??= attempt()) : attempt();
+}
+
+/** A picture fitted inside `PICTURE_SIDE` by `sharp`, as the smaller of a PNG and a JPEG, or null when it cannot be read or is still too big to send. */
+async function scaleWithSharp(sharp: Sharp, bytes: Buffer): Promise<(TextImage & { width: number; height: number }) | null> {
+  try {
+    const fitted = sharp(bytes, { limitInputPixels: SHARP_MAX_PIXELS, failOn: "error" })
+      .rotate()
+      .resize({ width: PICTURE_SIDE, height: PICTURE_SIDE, fit: "inside", withoutEnlargement: true });
+    const [png, jpeg] = await Promise.all([
+      fitted.clone().png({ compressionLevel: 9 }).toBuffer({ resolveWithObject: true }),
+      fitted.clone().flatten({ background: "#ffffff" }).jpeg({ quality: 85 }).toBuffer({ resolveWithObject: true }),
+    ]);
+    const [best, mediaType] = jpeg.data.length < png.data.length ? [jpeg, "image/jpeg"] : [png, "image/png"];
+    return best.data.length <= SEND_MAX_BYTES ? { mediaType, data: best.data.toString("base64"), width: best.info.width, height: best.info.height } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * **A picture made ready to send, or null** — the picture whole when its
- * long side is already within `PICTURE_SIDE`; a PNG over it decoded and
- * box-averaged down to it; anything else over it, or that cannot be read, or
- * too big to send, null (and it goes by its title).
+ * long side is already within `PICTURE_SIDE`; over it, scaled down to it by
+ * `sharp` when the home has it, else (a PNG only) decoded and box-averaged
+ * down here; anything else, or that cannot be read, or too big to send, null
+ * (and it goes by its title). `load` is how `sharp` is imported, for a test
+ * to make that import fail.
  */
-export function pictureToSend(bytes: Buffer, mimeType: string): (TextImage & { width: number; height: number }) | null {
+export async function pictureToSend(bytes: Buffer, mimeType: string, load: ImportSharp = importSharp): Promise<(TextImage & { width: number; height: number }) | null> {
   const size = sizeOf(bytes, mimeType);
   if (!size || !size.width || !size.height) return null;
   const long = Math.max(size.width, size.height);
   if (long <= PICTURE_SIDE) return bytes.length <= SEND_MAX_BYTES ? { mediaType: mimeType, data: bytes.toString("base64"), ...size } : null;
+  const sharp = await loadSharp(load);
+  if (sharp) return scaleWithSharp(sharp, bytes);
   if (mimeType !== "image/png") return null;
   const decoded = decodePng(bytes);
   if (!decoded) return null;

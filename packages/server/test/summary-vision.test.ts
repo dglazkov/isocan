@@ -3,6 +3,7 @@ import { promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { crc32, deflateSync } from "node:zlib";
+import sharp from "sharp";
 import { CANVAS_GROUPS_FEATURE } from "@isocan/core";
 import {
   summariesRoute, summaryKey, summaryMembers, summaryStatsRoute, SUMMARY_NO_PICTURES, SUMMARY_NO_SOURCE, SUMMARY_VISION_OVER_BUDGET, textSummaryKey,
@@ -25,7 +26,10 @@ import { mintTestBadge, type TestBadge } from "./badge.ts";
  * stale; a model that takes no pictures refuses before anything is read or
  * asked; calls with pictures have their own hourly budget inside the
  * canvas's, counted in the cost record; and a screen alone is framed as one.
- * A real daemon on a temp home; never a real model. Fixtures are synthetic (Acme).
+ * With `sharp` a JPEG, a WebP and a GIF (its first frame) over 1024 px are
+ * scaled down and sent too; with its import failing, only a PNG is, as before.
+ * A real daemon on a temp home; never a real model. Fixtures are synthetic (Acme),
+ * generated here — no picture is committed.
  */
 
 const KEY = "sk-ant-fake_VISION_DO_NOT_PRINT_";
@@ -302,16 +306,96 @@ describe("looking at pictures (phase 3b)", () => {
   });
 });
 
+/** A synthetic photo-like picture, `w` × `h`: a diagonal gradient with a little noise, so JPEG has something to compress. */
+function photo(w: number, h: number, format: "jpeg" | "webp" | "gif"): Promise<Buffer> {
+  const raw = Buffer.alloc(w * h * 3);
+  let seed = 7;
+  for (let i = 0; i < w * h; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const x = i % w, y = Math.floor(i / w), n = seed % 24;
+    raw.set([((x * 255) / w + n) & 0xff, ((y * 255) / h + n) & 0xff, 128 + (n >> 1)], i * 3);
+  }
+  const image = sharp(raw, { raw: { width: w, height: h, channels: 3 } });
+  return (format === "jpeg" ? image.jpeg() : format === "webp" ? image.webp() : image.gif()).toBuffer();
+}
+
+/** Two flat frames, red then blue, as one animated GIF of `w` × `h`. */
+async function animatedGif(w: number, h: number): Promise<Buffer> {
+  const frame = (r: number, b: number) => sharp({ create: { width: w, height: h, channels: 3, background: { r, g: 0, b } } }).png().toBuffer();
+  return sharp([await frame(255, 0), await frame(0, 255)], { join: { animated: true } }).gif().toBuffer();
+}
+
+/** A picture item of any format, drawn on the canvas at `size`. */
+async function pictureOf(r: Rig, itemId: string, title: string, bytes: Buffer, mimeType: string, size = { width: 400, height: 300 }) {
+  const blob = await r.daemon.store.putBlob(CANVAS, bytes, { mimeType, filename: `shot.${mimeType.split("/")[1]}` });
+  await add(r, itemId, title, { blobHash: blob.blobHash, mimeType, size: bytes.length }, size);
+}
+
+/** What a sent picture decodes as: its format and size, read by sharp. */
+async function decoded(data: string) {
+  const { format, width, height, pages } = await sharp(Buffer.from(data, "base64")).metadata();
+  return { format, width, height, pages };
+}
+
+/** The import as it fails where `sharp` (or its native half) is not installed. */
+const noSharp = () => Promise.reject(Object.assign(new Error("Cannot find package 'sharp'"), { code: "ERR_MODULE_NOT_FOUND" }));
+
+describe("looking at JPEG, WebP and GIF pictures (sharp)", () => {
+  it("scales each over 1024 px down to it and sends it as an image block", async () => {
+    const r = await rig();
+    await pictureOf(r, "itm_jpeg", "Acme hero photo", await photo(2400, 1600, "jpeg"), "image/jpeg", { width: 600, height: 400 });
+    await pictureOf(r, "itm_webp", "Acme team photo", await photo(1200, 1800, "webp"), "image/webp", { width: 500, height: 400 });
+    await pictureOf(r, "itm_gif", "Acme spinner", await animatedGif(1600, 1200), "image/gif", { width: 400, height: 300 });
+    await group(r, "itm_gallery", "Gallery", ["itm_jpeg", "itm_webp", "itm_gif"]);
+
+    const res = await make(r, "itm_gallery", "group", true);
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(await res.json()).toMatchObject({ vision: true, pictures: 3 });
+    const { images, text } = sent(r.calls[0]!);
+    expect(images).toHaveLength(3);
+    expect(text).not.toContain("No picture was sent");
+    // Largest on the canvas first: the JPEG, the WebP, the GIF — each re-encoded as a PNG or a JPEG, whichever was smaller.
+    const sizes = await Promise.all(images.map((b) => decoded(b.source!.data)));
+    expect(images.map((b) => b.source!.media_type).every((t) => t === "image/png" || t === "image/jpeg")).toBe(true);
+    expect(sizes.map(({ width, height }) => ({ width, height }))).toEqual([
+      { width: 1024, height: 683 },
+      { width: 683, height: 1024 },
+      { width: 1024, height: 768 },
+    ]);
+    // The photo-like JPEG comes out smaller as a JPEG; the flat GIF frame as a PNG.
+    expect(images[0]!.source!.media_type).toBe("image/jpeg");
+    expect(images[2]!.source!.media_type).toBe("image/png");
+  });
+});
+
 describe("a picture made ready to send", () => {
-  it("is sent whole within 1024 px, scaled down when a PNG is over it, and not at all when it cannot be read or scaled", () => {
-    const small = pictureToSend(png(300, 200), "image/png");
+  it("is sent whole within 1024 px, and scaled down by sharp over it — a GIF by its first frame", async () => {
+    const small = await pictureToSend(png(300, 200), "image/png");
     expect(small).toMatchObject({ mediaType: "image/png", width: 300, height: 200 });
-    const tall = pictureToSend(png(500, 3000), "image/png")!;
+    const smallJpeg = await photo(800, 600, "jpeg");
+    expect(await pictureToSend(smallJpeg, "image/jpeg")).toMatchObject({ mediaType: "image/jpeg", width: 800, height: 600, data: smallJpeg.toString("base64") });
+    const tall = (await pictureToSend(png(500, 3000), "image/png"))!;
     expect({ width: tall.width, height: tall.height }).toEqual({ width: 171, height: 1024 });
+    expect(await decoded(tall.data)).toMatchObject({ width: 171, height: 1024 });
+    const gif = (await pictureToSend(await animatedGif(2048, 1024), "image/gif"))!;
+    expect(await decoded(gif.data)).toMatchObject({ format: "png", width: 1024, height: 512 });
+    const { data, info } = await sharp(Buffer.from(gif.data, "base64")).raw().toBuffer({ resolveWithObject: true });
+    expect([...data.subarray(0, 3)], `first frame is red, not blue (${info.channels} channels)`).toEqual([255, 0, 0]);
+    // A JPEG header saying 4000 × 3000 with nothing after it cannot be decoded: it goes by its title.
+    const header = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x0b, 0xb8, 0x0f, 0xa0, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01]);
+    expect(await pictureToSend(header, "image/jpeg")).toBeNull();
+    expect(await pictureToSend(Buffer.from("not a picture"), "image/png")).toBeNull();
+  });
+
+  it("without sharp keeps the PNG-only behaviour: a PNG scaled with node:zlib, anything else over 1024 px by its title", async () => {
+    const tall = (await pictureToSend(png(500, 3000), "image/png", noSharp))!;
+    expect({ mediaType: tall.mediaType, width: tall.width, height: tall.height }).toEqual({ mediaType: "image/png", width: 171, height: 1024 });
     expect(sizeOfPng(Buffer.from(tall.data, "base64"))).toEqual({ width: 171, height: 1024 });
-    // A JPEG header saying 4000 × 3000: there is no decoder here, so it goes by its title.
-    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x0b, 0xb8, 0x0f, 0xa0, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01]);
-    expect(pictureToSend(jpeg, "image/jpeg")).toBeNull();
-    expect(pictureToSend(Buffer.from("not a picture"), "image/png")).toBeNull();
+    const smallJpeg = await photo(800, 600, "jpeg");
+    expect(await pictureToSend(smallJpeg, "image/jpeg", noSharp)).toMatchObject({ mediaType: "image/jpeg", width: 800, height: 600 });
+    expect(await pictureToSend(await photo(2400, 1600, "jpeg"), "image/jpeg", noSharp)).toBeNull();
+    expect(await pictureToSend(await photo(1200, 1800, "webp"), "image/webp", noSharp)).toBeNull();
+    expect(await pictureToSend(await animatedGif(1600, 1200), "image/gif", noSharp)).toBeNull();
+    expect(await pictureToSend(Buffer.from("not a picture"), "image/png", noSharp)).toBeNull();
   });
 });

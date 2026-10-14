@@ -433,7 +433,7 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     const stream = face ? await store.openBlob(canvasId, face.blobHash) : null;
     if (!face || !stream) return null;
     const { bytes, cut } = await readBytes(stream, PICTURE_READ_MAX);
-    const ready = cut ? null : pictureToSend(bytes, face.mimeType);
+    const ready = cut ? null : await pictureToSend(bytes, face.mimeType);
     return ready ? { mediaType: ready.mediaType, data: ready.data } : null;
   };
 
