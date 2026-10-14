@@ -1161,6 +1161,7 @@ isocan panel list|add [--yes]          # panels this canvas puts in its dock
 #   the manifest is read, and refused, before there is a frame. `add` prints
 #   what it may do, and adds nothing until --yes.
 isocan format [--dry-run]              # tidy the canvas: rows, children, references
+isocan tidy <items...>                 # line those up where they are: nothing re-dealt
 isocan merge <drawings...>             # several drawings into one, exactly
 isocan shortcuts                       # every key the canvas answers to
 isocan wait [--timeout s] [--all-ops]  # park; wake on a comment for you on

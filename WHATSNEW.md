@@ -23,6 +23,14 @@ second week.
 
 ## 14 October 2026
 
+- **Tidy lines things up where they are.** Tidy on a selection now snaps
+  nearly-aligned edges into shared rows and columns and evens out nearly-equal
+  gaps, keeping your arrangement and never landing on a neighbour's name. The
+  old re-dealing onto a grid is still there as **Tidy — grid**.
+- **Your bench opens.** A person whose identities were merged could be refused
+  their own bench as if they were an agent; that is fixed, and the panel is a
+  readable width.
+
 - **Critics, as cards on your canvas (an experiment).** Turn on **Critique**
   in Experiments, then `isocan critic add inevitable` puts a critic on the
   canvas as a card: its three questions, what it looks for, and a credit

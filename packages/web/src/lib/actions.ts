@@ -8,7 +8,8 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
 import { chatHiddenNow, openPanel } from "./panels.ts";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
-import { formatMoves, formatScope } from "@isocan/core";
+import { formatMoves, formatScope, itemChrome, tidyMoves, type FormatMode, type Item } from "@isocan/core";
+import { hasRoomForChrome } from "./chrome.ts";
 import { canEditNow } from "./capability.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
 import { modules, moduleViews } from "../modules.ts";
@@ -264,9 +265,18 @@ export const ACTIONS: readonly Action[] = [
   },
   // ---- Canvas ----
   {
+    id: "tidy-in-place",
+    name: "Tidy in place",
+    hint: "line the selection up where it is — nothing re-dealt, nothing overlapping",
+    group: "Canvas",
+    available: (ctx) => onCanvas(ctx) && ctx.selection.length > 1,
+    writes: true,
+    run: (ctx) => runFormat(ctx, "in-place"),
+  },
+  {
     id: "format-grid",
     name: "Format: grid",
-    hint: "straighten the lines, decide nothing",
+    hint: "re-deal onto one lattice, decide nothing",
     group: "Canvas",
     available: onCanvas,
     writes: true,
@@ -413,19 +423,34 @@ function moduleActions(): Action[] {
  * it was asked for, on work that was not selected. `formatScope` is the fold
  * both surfaces read, so the same selection lands on the same coordinates
  * whether the ask came from here or from `isocan tidy <items...>`.
+ *
+ * **`in-place` is what Tidy on a selection means** (14 Oct 2026): the
+ * arrangement kept, its lines straightened (`tidy.ts` in core). The footprint
+ * it keeps clear is the one on screen — the name strip and marks row at THIS
+ * zoom, where the item is big enough to wear them — and "nearly lined up" is
+ * a few screen pixels at this zoom too, so it means what it looks like.
  */
 export async function tidyItems(
   canvasId: string,
   actor: Actor,
   itemIds: readonly string[],
-  mode: "grid" | "smart",
+  mode: FormatMode,
 ): Promise<void> {
   const canvas = useCanvasStore.getState().canvas;
   if (!canvas) return;
+  const scale = useUiStore.getState().viewport.scale;
+  const chrome = (item: Item) => hasRoomForChrome(item.width, item.height, scale) ? itemChrome(item, scale) : { above: 0, below: 0 };
+  const tolerance = 16 / scale;
   if (groupsEnabled()) {
     const project = useCanvasStore.getState().record!;
     const ids = itemIds.length ? [...itemIds] : groupScopeRoots(canvas, useUiStore.getState().activeGroupId).map((item) => item.id);
-    if (ids.length) await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, ids, { kind: "tidy", mode }));
+    if (ids.length) await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, ids, { kind: "tidy", mode, ...(mode === "in-place" ? { chrome, tolerance } : {}) }));
+    return;
+  }
+  if (mode === "in-place") {
+    const ids = itemIds.length ? itemIds : Object.keys(canvas.items);
+    const moves = tidyMoves(canvas, ids, { chrome, tolerance });
+    if (moves.length) await sendEchoed(canvasId, actor, { type: "items.move", moves });
     return;
   }
   const scoped = formatScope(canvas, itemIds);
@@ -473,7 +498,7 @@ export async function distributeGroupItems(canvasId: string, actor: Actor, itemI
   await changeCanvasGroup(canvasId, actor, groupArrangeAction({ project, canvas }, itemIds, { kind: "distribute", axis }));
 }
 
-async function runFormat(ctx: ActionContext, mode: "grid" | "smart"): Promise<void> {
+async function runFormat(ctx: ActionContext, mode: FormatMode): Promise<void> {
   if (!ctx.canvasId) return;
   await tidyItems(ctx.canvasId, ctx.actor, ctx.selection, mode);
 }

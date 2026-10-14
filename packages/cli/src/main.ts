@@ -172,6 +172,7 @@ import {
   drawingViewBox,
   SHORTCUTS,
   formatMoves,
+  tidyMoves,
   inScope,
   anchorOf,
   CURSORS,
@@ -7925,7 +7926,7 @@ program
   .command("tidy [mode] [items...]")
   .alias("format")
   .description(
-    "Tidy the canvas — `grid` straightens the lines (default), `smart` reads it. Name items to tidy only those, where they are",
+    "Tidy — name items to line them up where they are (`in-place`, the default with items); the canvas: `grid` re-deals onto a lattice (default), `smart` reads it",
   )
   .option("--dry-run", "say what would move, move nothing")
   .option("--per-row <n>", "how many per row")
@@ -7940,14 +7941,25 @@ program
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const perRow = opts.perRow === undefined ? undefined : Number(opts.perRow);
+      /**
+       * **`isocan tidy <items...>` lines THOSE up where they are** (14 Oct
+       * 2026). The mode is optional, so a first word that is not one is the
+       * first item — and named items with no mode get `in-place`, the same
+       * default the app's Tidy row has: the arrangement kept, its lines
+       * straightened. `grid <items...>` still re-deals them onto a lattice.
+       */
+      if (mode !== undefined && !isFormatMode(mode) && (refs.length > 0 || snapshot.canvas.items[mode] || /^itm_/.test(mode))) {
+        refs = [mode, ...refs];
+        mode = undefined;
+      }
       if (snapshot.project.groupMode === "groups") {
         if (perRow !== undefined && (!Number.isInteger(perRow) || perRow < 1)) throw new Error("--per-row expects a positive integer");
         if (mode !== undefined && !isFormatMode(mode)) throw new Error(`not a format: ${mode}`);
         if (refs.length && opts.in) throw new Error("choose named items or --in <group>");
         const groups = new CanvasGroups(ctx.client, p.id, () => ctx.actor);
-        if (opts.in && perRow === undefined && mode !== "smart") return reportCanvasGroup(ctx, await groups.layout(opts.in, {}, { tidy: true, dryRun: !!opts.dryRun }));
+        if (opts.in && perRow === undefined && mode !== "smart" && mode !== "in-place") return reportCanvasGroup(ctx, await groups.layout(opts.in, {}, { tidy: true, dryRun: !!opts.dryRun }));
         const ids = refs.length ? refs : opts.in ? groupChildren(snapshot.canvas, resolveCanvasGroupRef(snapshot.canvas, opts.in, true).id).map((item) => item.id) : groupSelectionRoots(snapshot.canvas, Object.keys(snapshot.canvas.items));
-        return reportCanvasGroup(ctx, await groups.arrange(ids, { kind: "tidy", mode: mode ?? "grid", ...(opts.in ? { containerId: resolveCanvasGroupRef(snapshot.canvas, opts.in, true).id } : {}), ...(perRow !== undefined ? { perRow } : {}) }, opts));
+        return reportCanvasGroup(ctx, await groups.arrange(ids, { kind: "tidy", mode: mode ?? (refs.length ? "in-place" : "grid"), ...(opts.in ? { containerId: resolveCanvasGroupRef(snapshot.canvas, opts.in, true).id } : {}), ...(perRow !== undefined ? { perRow } : {}) }, opts));
       }
       /**
        * `--in <area>`: the same arrangement over the sheet's contents only,
@@ -7991,12 +8003,16 @@ program
       if (mode !== undefined && !isFormatMode(mode)) {
         throw new Error(`not a format: ${mode} — ${FORMAT_MODES.join(", ")}`);
       }
-      const chosen: FormatMode | undefined = mode;
-      const moves = formatMoves(scope, {
-        ...(chosen ? { mode: chosen } : {}),
-        ...(perRow === undefined ? {} : { perRow }),
-        ...(origin ? { origin } : {}),
-      });
+      const chosen: FormatMode | undefined = mode ?? (picked ? "in-place" : undefined);
+      // In place over named items reads the WHOLE canvas, so what was not
+      // named is something to keep clear of rather than something to move.
+      const moves = picked && chosen === "in-place"
+        ? tidyMoves(snapshot.canvas, Object.keys(picked.scope.items))
+        : formatMoves(scope, {
+          ...(chosen ? { mode: chosen } : {}),
+          ...(perRow === undefined ? {} : { perRow }),
+          ...(origin ? { origin } : {}),
+        });
       let areaResize: { width: number; height: number } | null = null;
       if (area) {
         const movesMap = new Map(moves.map((m) => [m.itemId, m]));

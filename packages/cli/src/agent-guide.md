@@ -928,7 +928,11 @@ isocan fit <items...>                  # grow items to the size their content wa
   gathered below. It is one `items.move`, so it is one undo, and it is a fixed
   point — running it on a formatted canvas moves nothing. `--dry-run` says what
   would move. Prefer it over placing items by hand; hand placement is for what
-  the person asked for on top of it.
+  the person asked for on top of it. **Naming items is a different request**:
+  `isocan tidy <items...>` lines THOSE up where they are — near-aligned edges
+  snapped, nearly-equal gaps evened, nothing re-dealt, name strips and marks
+  rows kept clear (`in-place`, what the app's Tidy row does). `isocan tidy
+  grid <items...>` re-deals them onto a lattice instead.
 - **Say what a thing came from.** When you build an item FROM another one — a
   variation, a spec written from a sketch, a page split out of a page — add
   `--prop parent=<source item id>`. It costs one property and it is what makes

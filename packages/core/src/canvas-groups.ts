@@ -6,6 +6,7 @@ import { GroupConflictError, OpValidationError } from "./errors.ts";
 import { PLACEMENT_GAP, PLACEMENT_CLEARANCE, nearestFreeSpot, overlaps, resolvePlacement, positionIsMeaningful } from "./placement.ts";
 import { reduceOperation } from "./reducer.ts";
 import { formatMoves } from "./format.ts";
+import { itemChrome, tidyInPlace, type TidyUnit } from "./tidy.ts";
 import type { Operation } from "./ops.ts";
 import { activityOpType } from "./opwords.ts";
 
@@ -364,9 +365,10 @@ export function groupDropPolicy(group: Item, point: { x: number; y: number }): "
 }
 
 /** Shared arrangement targets footprints; attached marks never receive a competing layout slot. */
-export function groupArrangeAction(state: CanvasState, itemIds: readonly string[], options: { kind: "align"; edge: "left" | "right" | "top" | "bottom" | "center" | "middle" | "hcenter" | "vcenter" } | { kind: "distribute"; axis: "h" | "v" } | { kind: "tidy"; perRow?: number; gap?: number; mode?: "smart" | "grid"; containerId?: string }): Extract<GroupAction, { kind: "transform" }> {
+export function groupArrangeAction(state: CanvasState, itemIds: readonly string[], options: { kind: "align"; edge: "left" | "right" | "top" | "bottom" | "center" | "middle" | "hcenter" | "vcenter" } | { kind: "distribute"; axis: "h" | "v" } | { kind: "tidy"; perRow?: number; gap?: number; mode?: "smart" | "grid" | "in-place"; containerId?: string; chrome?: (item: Item) => { above: number; below: number }; tolerance?: number }): Extract<GroupAction, { kind: "transform" }> {
   const roots = groupSelectionRoots(state.canvas, itemIds);
   if (!roots.length) fail("select items to arrange");
+  if (options.kind === "tidy" && options.mode === "in-place") return groupTidyInPlace(state, roots, options);
   const units = roots.map((id) => ({ item: itemIn(state.canvas, id), box: groupFootprint(itemIn(state.canvas, id), state.canvas) }));
   const bounds = enclosing(units.map((unit) => unit.box));
   const moves = units.map(({ item }) => ({ itemId: item.id, x: item.x, y: item.y }));
@@ -393,6 +395,31 @@ export function groupArrangeAction(state: CanvasState, itemIds: readonly string[
     const packed = enclosing(placed);
     units.forEach(({ item, box }, i) => { const at = positions.get(item.id) ?? box; moves[i] = { itemId: item.id, x: item.x + at.x - box.x + origin.x - packed.x, y: item.y + at.y - box.y + origin.y - packed.y }; });
   }
+  return { kind: "transform", moves, expected: captureGroupExpectations(state, roots) };
+}
+
+/**
+ * **Tidy in place on a group canvas** — the same `tidyInPlace` the legacy
+ * canvas and `isocan tidy <items...>` use, over placement units. A unit's
+ * footprint is its box, the name strip above it and the marks row below
+ * (`itemChrome`, at the app's zoom when it passes one), and every attached
+ * mark's overhang; the label is ABOVE the item, where the canvas draws it.
+ * Items outside the moved closure are obstacles; one already touching a unit
+ * is left as it was.
+ */
+function groupTidyInPlace(state: CanvasState, roots: string[], options: { chrome?: (item: Item) => { above: number; below: number }; tolerance?: number }): Extract<GroupAction, { kind: "transform" }> {
+  const chrome = options.chrome ?? ((item: Item) => itemChrome(item));
+  const footOf = (item: Item, box: GroupBox): GroupBox => {
+    const c = chrome(item);
+    return enclosing([{ ...box, y: box.y - c.above, height: box.height + c.above + c.below }, ...annotationsOf(state.canvas, item.id).map(boxOf)]);
+  };
+  const units: Array<TidyUnit & { item: Item }> = roots.map((id) => { const item = itemIn(state.canvas, id); const box = groupStackBox(item) ?? boxOf(item); return { id, item, box, footprint: footOf(item, box) }; });
+  const closure = new Set(groupTransformClosure(state.canvas, roots));
+  const obstacles = Object.values(state.canvas.items)
+    .filter((item) => !closure.has(item.id) && !groupUnderStack(state.canvas, item.id) && !(annotationTarget(item) && closure.has(annotationTarget(item)!)))
+    .map((item) => footOf(item, groupStackBox(item) ?? boxOf(item)));
+  const at = tidyInPlace(units, { obstacles, ...(options.tolerance !== undefined ? { tolerance: options.tolerance } : {}) });
+  const moves = units.map(({ id, item, box }) => { const to = at.get(id)!; return { itemId: id, x: item.x + to.x - box.x, y: item.y + to.y - box.y }; });
   return { kind: "transform", moves, expected: captureGroupExpectations(state, roots) };
 }
 

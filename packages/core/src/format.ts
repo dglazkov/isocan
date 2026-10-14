@@ -3,6 +3,7 @@ import { itemKind } from "./kinds.ts";
 import type { Move } from "./layout.ts";
 import { childrenOf, parentOf } from "./lineage.ts";
 import type { CanvasContents, Item } from "./model.ts";
+import { tidyMoves } from "./tidy.ts";
 
 /**
  * One tidy for the whole canvas: the arrangement `/format` means.
@@ -57,10 +58,17 @@ const FORMAT_BAND_GAP_Y = 160;
  * from each hanging beneath it, reference material gathered below. It is more
  * useful and more opinionated, and being asked for by name is the right price
  * for moving things somebody did not ask to have interpreted.
+ *
+ * `in-place` keeps the arrangement and cleans up its alignment: near-aligned
+ * edges snapped to shared lines, nearly-equal gaps evened out, nothing
+ * re-dealt and nothing overlapping (`tidy.ts`). It is what Tidy on a
+ * SELECTION means (14 Oct 2026): `grid` re-deals the picked items into a new
+ * lattice, which is a different request from "neaten these".
  */
-export type FormatMode = "grid" | "smart";
+export type FormatMode = "grid" | "smart" | "in-place";
 
-export const FORMAT_MODES: readonly FormatMode[] = ["grid", "smart"];
+/** Every tidy mode, in the order the CLI names them. */
+export const FORMAT_MODES: readonly FormatMode[] = ["grid", "smart", "in-place"];
 
 export function isFormatMode(value: unknown): value is FormatMode {
   return typeof value === "string" && (FORMAT_MODES as readonly string[]).includes(value);
@@ -187,6 +195,7 @@ export function formatMoves(canvas: CanvasContents, options: FormatOptions = {})
   const items = Object.values(canvas.items);
   if (items.length === 0) return [];
   if ((options.mode ?? "grid") === "grid") return gridMoves(canvas, options);
+  if (options.mode === "in-place") return tidyMoves(canvas, items.map((item) => item.id));
 
   const screens = items.filter((item) => role(canvas, item) === "screen");
   const reference = items.filter((item) => role(canvas, item) === "reference");

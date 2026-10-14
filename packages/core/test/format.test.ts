@@ -201,6 +201,7 @@ describe("the grid tidy", () => {
     expect(isFormatMode("grid")).toBe(true);
     expect(isFormatMode("smart")).toBe(true);
     expect(isFormatMode("tidy")).toBe(false);
-    expect(FORMAT_MODES).toEqual(["grid", "smart"]);
+    expect(isFormatMode("in-place")).toBe(true);
+    expect(FORMAT_MODES).toEqual(["grid", "smart", "in-place"]);
   });
 });

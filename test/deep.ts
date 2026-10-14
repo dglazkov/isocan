@@ -205,6 +205,7 @@ export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/migration.test.ts", secs: 9.8, why: "left the deep lane on the measurement that built this list — recorded at 11s, measured at 9.4" },
   { file: "packages/cli/test/correspondence.test.ts", secs: 9.9, why: "two cases, two walks — and the closest file to the line, so the one to watch" },
   { file: "packages/cli/test/grid.test.ts", secs: 9.4, why: "a single case that walks once" },
+  { file: "packages/cli/test/tidy.test.ts", secs: 8.7, why: "tidy in place: four short walks per canvas mode (text, set, tidy, undo, redo) on one in-process daemon each; measured 14 October" },
   { file: "packages/cli/test/model.test.ts", secs: 0.4, why: "local-judge phase 0: three short walks of `isocan model` — no daemon, no network; measured 7 October" },
   { file: "packages/cli/test/conditional-edit.test.ts", secs: 2.3, why: "one daemon in process; about fifteen `edit` spawns for the conditional path, each a fraction of a second" },
   { file: "packages/cli/test/summary.test.ts", secs: 6.7, why: "semantic-zoom phase 4: one in-process daemon with a stub model, a dozen short walks of `isocan summary` and `ls --summaries`; measured 14 October" },

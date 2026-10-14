@@ -424,11 +424,12 @@ something the arrangement cannot do.
 **Read the argument first, because it decides which of three things this is.**
 
 **WITH ITEMS SELECTED OR ATTACHED, tidy those and nothing else** — run
-\`isocan format grid <item ids>\`. They land in the box they already occupy,
-so the rest of the canvas does not move and nothing is shoved through
-somebody else's work. Somebody who picked six screens and asked for a tidy
-has said which six; rearranging the whole canvas is doing more than was
-asked, to work that was not chosen.
+\`isocan tidy <item ids>\`. That lines them up WHERE THEY ARE: near-aligned
+edges snapped to shared lines, nearly-equal gaps evened, nothing re-dealt and
+nothing overlapping, so the rest of the canvas does not move and the
+arrangement somebody made survives. Somebody who picked six screens and asked
+for a tidy has said which six, and asked for them neater, not rearranged. Only
+when the note says grid or lattice, run \`isocan tidy grid <item ids>\`.
 
 **\`/format\` or \`/format grid\`** — run \`isocan format grid\`. It straightens
 the lines and decides nothing: every item on one lattice, uniform gutters,

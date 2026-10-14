@@ -135,9 +135,24 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
      * they are genuinely different: tidy decides new positions, align needs
      * an edge before it can do anything at all.
      */
+    /**
+     * **Tidy keeps the arrangement** (14 Oct 2026). It used to run `grid`,
+     * which re-deals the selection onto a new lattice; Dion pressed it on
+     * four loosely-arranged items wanting the alignment cleaned up, and got a
+     * different arrangement with a title on top of a neighbour's name. The
+     * plain row is `in-place` now — lines snapped, gaps evened, nothing
+     * re-dealt, nothing overlapping — and the lattice is still one row down,
+     * by its own name.
+     */
     { separator: many ? "Arrange" : "" },
     {
       label: many ? `Tidy ${items.length} items` : "Tidy",
+      writes: true,
+      disabled: !many,
+      run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "in-place")),
+    },
+    {
+      label: "Tidy — grid",
       writes: true,
       disabled: !many,
       run: () => groupTask(() => tidyItems(ctx.canvasId, ctx.actor, ids, "grid")),

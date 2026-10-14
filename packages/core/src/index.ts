@@ -66,6 +66,7 @@ export * from "./shortcuts.ts";
 export * from "./shortcuttext.ts";
 export * from "./bytes.ts";
 export * from "./format.ts";
+export * from "./tidy.ts";
 export * from "./merge.ts";
 export * from "./onit.ts";
 export * from "./slop.ts";
