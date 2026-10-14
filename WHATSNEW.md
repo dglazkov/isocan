@@ -23,6 +23,15 @@ second week.
 
 ## 14 October 2026
 
+- **Agents can propose instead of edit.** An agent with an idea about your
+  screen leaves it beside the screen: a dashed copy hanging beneath it, a
+  chip saying what prompted it, and a short why whose design terms you can
+  hover to learn. **Keep** makes it your next version, **Compare** shows the
+  two side by side, and **Delete** (⌫) bins it and tells the agent; type a
+  reason if you like. What it learns goes into **What your deletes taught**,
+  a note every agent reads. At most five wait for you at a time. Agents:
+  `isocan propose`, `isocan taste`, `isocan --agent-help proactive`.
+
 - **A shorter right-click menu.** Rows that cannot apply to what you selected
   are gone instead of greyed out: four items now get 14 rows, not 30. Tidy is
   one row; Align, Space evenly and Pack into a grid live under **Arrange**.

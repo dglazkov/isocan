@@ -72,6 +72,8 @@ export interface NewComment {
     record?: true | import("./roll.js").RollKind;
     /** A prototype click; see Comment.click. */
     click?: import("./prototype-click.js").PrototypeClick;
+    /** A deleted proposal's id; see Comment.deleted. */
+    deleted?: string;
     /** Resolved #item-references (item ids); see Comment.items. */
     items?: string[];
     /** Public attachment intent; the home resolves it at one canvas revision. */

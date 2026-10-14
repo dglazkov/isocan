@@ -238,6 +238,8 @@ export interface Comment {
     record?: true | import("./roll.js").RollKind;
     /** A person pressed a control in a prototype; see `prototype-click.ts`. */
     click?: import("./prototype-click.js").PrototypeClick;
+    /** A person deleted this proposal (an item id); its author is asked what it taught — see `proposal.ts`. */
+    deleted?: string;
     /** Item ids #-referenced in the body, resolved at authoring time against
      * the live items the author could see. Absent on older comments. */
     items?: string[];
