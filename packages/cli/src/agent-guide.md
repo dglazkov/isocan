@@ -166,6 +166,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
 - `propose`, `taste` — work left beneath an item with its trigger and why; what deletes taught (`proactive`)
 - `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
+- `explain <item>` — how an item got here: the versions that mattered and why, the roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
 - `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
@@ -3987,7 +3988,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note a delete asks you to write, the night watch (`/goodnight`) and the morning review -->
+<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note a delete asks you to write, the night watch (`/goodnight`), the morning review, and Explain's critique -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4108,6 +4109,38 @@ same thing (`--json` says whether it is `due`). Seeing it closes the note
 (`handoffReviewed`), so it no longer holds other people's goodnights off the
 items it named. The cap does not grow with time away: nothing new until what
 is there is kept or deleted.
+
+## Explain this item, and the critique you are asked for
+
+`isocan explain <item> [--depth plain|designer|deep] [--json]` prints how an
+item got here — the same story the Explain panel draws, derived from the
+canvas and never generated: the versions that mattered (a run of edits by one
+hand is one move; a `choose`, a kept proposal and an adopted decision stand
+alone), each with who made it and the reason given at the time (the comment
+that made it, the chosen variation's own comment); the roads not taken (the
+variations a `choose` trashed, deleted proposals, options nobody adopted);
+what moved around it since (a newer DESIGN.md, newer versions of its
+relatives); and *speak design*, phrases typed about it beside a designer's
+term. Read it before you change an item somebody else shaped.
+
+When a person presses **Critique**, you (the canvas's lead) get a Chat message
+"Critique, please: …" naming the item. Read `isocan explain <item> --depth
+deep`, then answer in one command — what is working, one risk, one thing to
+try — and make the thing to try a proposal beneath it:
+
+```sh
+isocan explain <item> --critique --working "The pickup slot leads." \
+  --risk "The total sits below the fold on small phones." \
+  --try "Proximity: pin the total beside the button." \
+  --speak "make the total pop => raise the total's contrast" --propose try.html [--hunch]
+```
+
+The critique posts as a record (it wakes nobody); `--propose` makes the
+proposal citing `explain:<that comment>`, with `--try` as its why (two
+sentences at most), under the cap like any other. `--speak` pairs the
+person's own words with a designer's (repeatable). Nothing else in Explain
+writes: `--rationale` (Copy as rationale) puts the explanation beside the item
+as a note, and only when somebody asks for it.
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

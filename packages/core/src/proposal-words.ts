@@ -49,6 +49,7 @@ const KIND_WORD: Record<ProposalCite["kind"], string> = {
   promise: "a promise",
   docket: "a finding",
   critic: "a critic's note",
+  explain: "a critique",
 };
 
 /**
@@ -57,11 +58,15 @@ const KIND_WORD: Record<ProposalCite["kind"], string> = {
  * miss the pickup slot""); anything else says its kind and ref.
  */
 export function citeLabel(canvas: CanvasContents, cite: ProposalCite): string {
-  if (cite.kind === "comment") {
+  if (cite.kind === "comment" || cite.kind === "explain") {
     for (const thread of Object.values(canvas.threads)) {
       const c = thread.comments.find((one: Comment) => one.id === cite.ref) ?? (thread.id === cite.ref ? thread.comments[0] : undefined);
       if (c) {
         const words = c.body.replace(/\s+/g, " ").trim();
+        if (cite.kind === "explain") {
+          const tried = /^One thing to try: (.*)$/m.exec(c.body)?.[1] ?? words;
+          return `${c.author.name}'s critique, “${tried.length > 48 ? `${tried.slice(0, 47)}…` : tried}”`;
+        }
         return `${c.author.name}'s comment, “${words.length > 48 ? `${words.slice(0, 47)}…` : words}”`;
       }
     }

@@ -101,7 +101,7 @@ describe("the item menu", () => {
    */
   it("leaves out what cannot apply to this selection rather than dimming it", () => {
     const many = itemMenu([item("itm_a"), item("itm_b")], ctx);
-    for (const label of ["Open full screen", "Open in the workbench", "Rename", "Version history", "Compare versions", "Copy link", "Download", "Agents always read this", "Agents skip this"]) {
+    for (const label of ["Open full screen", "Open in the workbench", "Rename", "Version history", "Compare versions", "Explain", "Copy link", "Download", "Agents always read this", "Agents skip this"]) {
       expect(labels(many), `${label} on two items`).not.toContain(label);
     }
     expect(actions(many).filter((a) => a.disabled).map((a) => a.label)).toEqual([]);
@@ -115,7 +115,7 @@ describe("the item menu", () => {
       "— Groups", "Preview group conversion…", "Group selection", "Add to group…",
       "—", "Copy", "Cut", "Duplicate",
       "—", "Open full screen", "Open in the workbench", "Zoom to it",
-      "—", "Rename", "Version history", "Compare versions",
+      "—", "Rename", "Version history", "Compare versions", "Explain",
       "—", "Copy link", "Download",
       "— For agents", "Agents always read this", "Agents skip this",
       "—", "🎬 Make this a slide",
@@ -162,7 +162,7 @@ describe("the item menu", () => {
       "— Groups", "Preview group conversion…",
       "—", "Copy",
       "—", "Open full screen", "Open in the workbench", "Zoom to it",
-      "—", "Version history", "Compare versions",
+      "—", "Version history", "Compare versions", "Explain",
       "—", "Copy link", "Download",
     ]);
     const four = ["itm_a", "itm_b", "itm_c", "itm_d"].map((id) => item(id));

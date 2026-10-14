@@ -9166,7 +9166,7 @@ const proposeDeps = () => ({ canvasAndSnapshot: (ctx: Ctx) => canvasAndSnapshot(
 program
   .command("propose <source> <file>")
   .description("Leave work beside an item rather than over it: a dashed proposal beneath it, citing what prompted it")
-  .option("--cites <kind:ref...>", "what prompted it — comment:<id>, op:<seq>, version:<item>@vN, design:…, brief:…, promise:…, docket:…, critic:… (at least one)")
+  .option("--cites <kind:ref...>", "what prompted it — comment:<id>, op:<seq>, version:<item>@vN, design:…, brief:…, promise:…, docket:…, critic:…, explain:<critique> (at least one)")
   .option("--why <text>", "why, in design words — two sentences at most")
   .option("--hunch", "a hunch rather than sure: drawn and read as a rough idea")
   .option("--title <title>", "what it is called (default: the source's title, \"— proposal\")")
@@ -9325,6 +9325,35 @@ goodnightCmd
       const ctx = await ctxOf(cmd);
       const { review } = await import("./goodnight.ts");
       await review(ctx, goodnightDeps(), opts);
+    }),
+  );
+
+/**
+ * **How an item got here** (proactive-agent phase 4): the versions that
+ * mattered and why, the roads not taken, what moved since, speak design and
+ * the lead's critique — core's derived story, the one the Explain panel
+ * draws. Reads only, unless `--rationale`, `--ask` or `--critique` is said.
+ * The body lives in `explain.ts`, loaded on this verb only.
+ */
+program
+  .command("explain <item>")
+  .description("How an item got here: the versions that mattered and why, the roads not taken, what moved since, speak design, the lead's critique")
+  .option("--depth <depth>", "plain, designer or deep", "plain")
+  .option("--rationale", "Copy as rationale: put the explanation on the canvas as a note beside the item")
+  .option("--ask", "Critique: ask the canvas's lead agent, in the Chat, for what is working, a risk and one thing to try")
+  .option("--critique", "the lead's answer: post --working, --risk and --try as the critique (a record in the Chat)")
+  .option("--working <text>", "with --critique: what is working")
+  .option("--risk <text>", "with --critique: one risk")
+  .option("--try <text>", "with --critique: one thing to try — two sentences at most, the proposal's why")
+  .option("--speak <pair>", "with --critique: \"what was said => how a designer says it\" (repeatable)", collectList)
+  .option("--propose <file>", "with --critique: the thing to try, as a proposal beneath the item citing explain:<the critique>")
+  .option("--hunch", "with --propose: a hunch rather than sure")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (item: string, opts: import("./explain.ts").ExplainOpts, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { explain } = await import("./explain.ts");
+      await explain(ctx, goodnightDeps(), item, opts);
     }),
   );
 

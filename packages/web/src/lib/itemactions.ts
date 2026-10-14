@@ -126,3 +126,8 @@ export async function downloadItem(
 
 /** Paste, as the menu's door to it — the same act ⌘V performs. */
 export { pasteInto } from "./clipboard.ts";
+
+/** **Explain this item** (proactive-agent phase 4): the panel loads on the ask — the menu's and ⌘K's one door to it. */
+export function explainItem(canvasId: string, actor: Actor, itemId: string): void {
+  void import("../components/ExplainPanel.tsx").then((m) => m.openExplain({ canvasId, actor, itemId }));
+}

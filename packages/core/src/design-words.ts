@@ -62,3 +62,21 @@ export function designWordSpans(text: string): WordSpan[] {
   if (at < text.length) spans.push({ text: text.slice(at) });
   return spans;
 }
+
+/**
+ * **The plain phrases a sentence uses, each beside the term that means it**
+ * — Explain's *speak design* (proactive-agent phase 4): "make it more
+ * obvious" → *visual hierarchy*. Case-insensitive, whole words, the phrase
+ * as it was typed; one reading per phrase, in the order they appear.
+ */
+export function plainReadings(text: string): { said: string; term: string; means: string }[] {
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const found: { at: number; said: string; term: string; means: string }[] = [];
+  for (const word of DESIGN_WORDS) {
+    for (const phrase of word.plain) {
+      const m = new RegExp(`\\b${escape(phrase)}\\b`, "i").exec(text);
+      if (m) found.push({ at: m.index, said: m[0], term: word.term, means: word.means });
+    }
+  }
+  return found.sort((a, b) => a.at - b.at).map(({ said, term, means }) => ({ said, term, means }));
+}

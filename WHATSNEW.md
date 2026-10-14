@@ -23,6 +23,14 @@ second week.
 
 ## 14 October 2026
 
+- **Explain this item.** Choose **Explain** from an item's menu (or ⌘K) and
+  a panel beside the canvas tells you how it got here: the few versions that
+  mattered and why, the roads not taken, what has changed around it since,
+  and how a designer would say what people typed about it. Plain, Designer
+  or Deep dive. **Critique** asks the canvas's agent what works, one risk
+  and one thing to try, which arrives as a proposal. **Copy as rationale**
+  puts the story on the canvas. `isocan explain <item>`.
+
 - **The night's work is waiting in the morning.** If you said `/goodnight`,
   the "While you were away" panel, now on desktop too, opens with your
   agent's brief: at most five proposals, the surest first, each with why;

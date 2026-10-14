@@ -405,6 +405,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   then every original it changed because you named it, with the version
   before one click away. `isocan goodnight review` prints the same. Seeing
   it closes the night's note; the five never grow with time away.
+- **Explain this item**: choose **Explain** from an item's menu (or ⌘K) and
+  a panel beside the canvas says how it got here — the few versions that
+  mattered, who made each and the reason given at the time (the comment
+  that made it, the variation chosen and its own comment), the roads not
+  taken (variations in the trash, deleted proposals, options not adopted),
+  what moved around it since (a newer DESIGN.md, its relatives), and phrases
+  typed about it beside how a designer would say them. Plain, Designer or
+  Deep dive. **Critique** asks the canvas's lead agent for what is working, a
+  risk and one thing to try, which arrives as a proposal beneath it; **Copy
+  as rationale** puts the explanation on the canvas as a note. Nothing else
+  writes. `isocan explain <item> [--depth …]` prints the same story.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

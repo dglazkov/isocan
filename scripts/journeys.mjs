@@ -4645,6 +4645,227 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "proactive-explain",
+    /**
+     * **Explain this item** (proactive-agent phase 4, journey scene 4,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme Checkout with a few versions, two variations
+     * (each announced in a comment) and a `choose`; a DESIGN.md that moved on
+     * afterwards; a comment saying "make it more obvious".
+     *
+     * Maya opens Explain from the item's menu: a panel beside the live
+     * canvas, the canvas and her selection where they were. It names the
+     * choice with its comment, the losing variation in the trash, the newer
+     * DESIGN.md and the speak-design pair, in all three depths. Escape
+     * closes it, and nothing was written. Opened again from ⌘K, **Critique**
+     * summons Kit, whose critique arrives in the panel with its proposal
+     * citing `explain:` beneath Checkout; **Copy as rationale** puts a note
+     * beside it. With Kit dismissed, Critique is off and the panel says why.
+     * Screenshots of the panel at each depth, light and dark, for a person.
+     */
+    what: "Explain opens beside the canvas and Escape closes it; nothing is written until Critique or Copy as rationale is pressed",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-explain-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_explain_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: asked for a critique, it reads the deep story and answers in one command.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const itemId = /Critique, please: “[^”]*” \\((itm_[\\w-]+)\\)/.exec(prompt)?.[1];
+  if (!canvasId || !itemId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const deep = JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, "explain", itemId, "--depth", "deep"], { encoding: "utf8" }));
+  if (deep.story.critique) return;
+  const file = path.join(cwd, "try.html");
+  writeFileSync(file, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p>Pickup: Saturday 9:00</p><p>Sourdough loaf × 1</p><p><b>Total $8</b> <button>Pay</button></p></body>");
+  run("explain", itemId, "--critique",
+    "--working", "The pickup slot leads, so the one thing a regular must check comes first.",
+    "--risk", "The total sits below the fold on a small phone.",
+    "--try", "Proximity: put the total beside the Pay button.",
+    "--speak", "make it more obvious => raise the total in the visual hierarchy",
+    "--propose", file);
+}
+`);
+      const { proc, origin } = await startDaemon(home);
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const page = (name, words) => {
+        const file = path.join(home, `${name}.html`);
+        writeFileSync(file, `<!doctype html><title>${name}</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p>${words}</p></body>`);
+        return file;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-explain-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const panel = `document.querySelector("[data-explain-panel]")`;
+      const panelText = () => b.ev(`${panel}?.textContent ?? ""`);
+      const served = async (id) => b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => JSON.stringify([r.canvas.items, r.canvas.threads, r.canvas.trash]))`);
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const ds = path.join(home, "DESIGN.md");
+        writeFileSync(ds, "# Acme Bakery\n\nPrimary: #b5523b\n");
+        const system = runCli("--canvas", id, "add", ds, "--title", "DESIGN.md", "--at", "1000,0", "--prop", "role=design-system").itemId;
+        const checkout = runCli("--canvas", id, "add", page("checkout", "Sourdough loaf × 1 · Total $8 · Pickup: Saturday 9:00"), "--title", "Checkout", "--size", "390x520", "--at", "0,0").itemId;
+        runCli("--canvas", id, "edit", checkout, page("checkout-2", "Sourdough loaf × 1 · Pickup: Saturday 9:00 · Total $8"));
+        const takes = {};
+        for (const [i, title, words] of [[0, "Checkout A", "A: one long page"], [1, "Checkout B", "B: shorter form, pickup slot first"]]) {
+          takes[title] = runCli("--canvas", id, "add", page(`take-${i}`, title), "--title", title, "--size", "390x520", "--at", `${i * 470},700`, "--prop", `parent=${checkout}`).itemId;
+          runCli("--canvas", id, "comment", "add", `${words} #${takes[title]}`, "--item", takes[title]);
+        }
+        runCli("--canvas", id, "choose", takes["Checkout B"]);
+        writeFileSync(ds, "# Acme Bakery\n\nPrimary: #a3412c\n");
+        runCli("--canvas", id, "edit", system, ds);
+        runCli("--canvas", id, "comment", "add", "make it more obvious where the total is", "--item", checkout);
+        const basket = runCli("--canvas", id, "add", page("basket", "Your basket is empty."), "--title", "Basket", "--size", "390x520", "--at", "500,0").itemId;
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        const sel = (itemId) => `'.item[data-item-id="${itemId}"]'`;
+        await until(b, `!!document.querySelector(${sel(checkout)})`, "Checkout on Maya's canvas", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+        await sleep(1500);
+
+        // 1. Explain, from the item's menu: a real right-click on Checkout, a real press.
+        await rig.click(`[data-item-id="${checkout}"] .item-titlebar .chrome-left`, "Checkout's title");
+        await until(b, `!!document.querySelector('[data-item-id="${checkout}"].selected')`, "Checkout selected");
+        const before = await served(id);
+        const world = await b.ev(`document.querySelector(".world")?.getAttribute("style") ?? ""`);
+        const mouse = (type, x, y, button = "left") => b.send("Input.dispatchMouseEvent", { type, x, y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+        const at = await b.ev(`(() => { const r = document.querySelector(${sel(checkout)}).getBoundingClientRect(); return { x: Math.round(r.left + 20), y: Math.round(r.bottom - 20) }; })()`);
+        await mouse("mouseMoved", at.x, at.y, "none");
+        await mouse("mousePressed", at.x, at.y, "right");
+        await mouse("mouseReleased", at.x, at.y, "right");
+        const row = `[...document.querySelectorAll(".context-menu button")].find((el) => el.textContent.trim() === "Explain")`;
+        await until(b, `!!${row}`, `the item menu, offering "Explain"`, 4000);
+        const r = await b.ev(`(() => { const r = ${row}.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        await mouse("mousePressed", r.x, r.y);
+        await mouse("mouseReleased", r.x, r.y);
+        await until(b, `!!${panel}?.querySelector('[data-explain-section="how"] li')`, "the Explain panel, with how it got here", 10_000);
+
+        // Beside the canvas, not over it: the canvas still drawn, the panel on the right.
+        const beside = await b.ev(`(() => { const p = ${panel}.getBoundingClientRect(); return { left: p.left, right: p.right, w: innerWidth, world: !!document.querySelector(".world"), modal: !!document.querySelector("[aria-modal=true]") }; })()`);
+        if (!beside.world || beside.modal || beside.left < beside.w / 2 || beside.right > beside.w) throw new Error(`the panel is not beside the canvas: ${JSON.stringify(beside)}`);
+        const plain = await panelText();
+        for (const want of ["Maya chose “Checkout B” over 1 other take — “B: shorter form, pickup slot first", "“Checkout A”, a variation by Maya, in the trash", "the design system “DESIGN.md” changed since", "“make it more obvious” — a designer would say “visual hierarchy”"]) {
+          if (!plain.includes(want)) throw new Error(`the panel does not say ${JSON.stringify(want)}: ${plain.slice(0, 900)}`);
+        }
+        if (!(await b.ev(`!!${panel}.querySelector('[data-explain-trash]')`))) throw new Error("the road not taken has no way to be seen again");
+
+        // 2. Each depth, light and dark.
+        const shots = {};
+        for (const depth of ["plain", "designer", "deep"]) {
+          await rig.click(`[data-explain-depth="${depth}"]`, `the ${depth} depth`);
+          await until(b, `${panel}.querySelector('[data-explain-depth="${depth}"]').getAttribute("aria-pressed") === "true"`, `${depth} pressed`);
+          const text = await panelText();
+          if (depth === "designer" && !/v3 · Maya converged on the variation “Checkout B”/.test(text)) throw new Error(`Designer does not name the move: ${text.slice(0, 600)}`);
+          if (depth === "deep" && !/comment cmt_/.test(text)) throw new Error(`Deep dive does not cite its comments: ${text.slice(0, 600)}`);
+          for (const theme of ["light", "dark"]) {
+            await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+            await sleep(250);
+            shots[`${depth}-${theme}`] = await shot(`${depth}-${theme}`);
+          }
+          await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        }
+        await rig.click(`[data-explain-depth="plain"]`, "back to Plain");
+
+        // 3. Escape closes it; her place and her selection are where they were, and nothing was written.
+        await rig.press("Escape");
+        await until(b, `!${panel}`, "Escape to close the panel", 3000);
+        if (!(await b.ev(`!!document.querySelector('[data-item-id="${checkout}"].selected')`))) throw new Error("closing Explain lost the selection");
+        const worldAfter = await b.ev(`document.querySelector(".world")?.getAttribute("style") ?? ""`);
+        if (worldAfter !== world) throw new Error(`Explain moved the canvas: ${world} → ${worldAfter}`);
+        if ((await served(id)) !== before) throw new Error("opening Explain, switching depths and closing it wrote to the canvas");
+
+        // 4. ⌘K → Explain this item; Critique summons Kit, whose critique and proposal arrive in the panel.
+        await rig.press("k", { meta: true });
+        await until(b, `!!document.querySelector(".command-palette input, [data-palette] input, .palette input")`, "the launcher", 3000);
+        await rig.type("Explain this item");
+        await sleep(200);
+        await rig.press("Enter");
+        await until(b, `!!${panel}?.querySelector("[data-explain-critique]") && !${panel}.querySelector("[data-explain-critique]").disabled`, "Critique, offered with Kit to answer", 10_000);
+        if ((await served(id)) !== before) throw new Error("opening Explain from ⌘K wrote to the canvas");
+        await rig.click("[data-explain-critique]", "Critique");
+        await until(b, `(${panel}?.textContent ?? "").includes("Kit's critique") && (${panel}.textContent).includes("a proposal beneath it")`, "Kit's critique and its proposal in the panel", 60_000);
+        const critique = await panelText();
+        if (!/Working: The pickup slot leads/.test(critique) || !/A risk: The total sits below the fold/.test(critique)) throw new Error(`the critique is not in the panel: ${critique.slice(-800)}`);
+        if (!critique.includes("“make it more obvious” — a designer would say “raise the total in the visual hierarchy”")) throw new Error(`Kit's speak-design pair is not in the panel: ${critique.slice(0, 900)}`);
+        const story = runCli("--canvas", id, "explain", checkout).story;
+        const proposal = runCli("--canvas", id, "show", story.critique.proposal.itemId);
+        const cites = JSON.parse(proposal.properties.proposalCites);
+        if (cites[0]?.kind !== "explain" || cites[0]?.ref !== story.critique.commentId) throw new Error(`the proposal does not cite the critique: ${JSON.stringify(cites)}`);
+        await until(b, `!!document.querySelector('[data-proposal="${proposal.id ?? story.critique.proposal.itemId}"] .proposal-chip')`, "the proposal's mark beneath Checkout", 10_000);
+        const critiqued = await shot("critique");
+
+        // 5. Copy as rationale: one note beside Checkout.
+        const items = Object.keys(JSON.parse(await served(id))[0]).length;
+        await rig.click("[data-explain-rationale]", "Copy as rationale");
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.title === "Why “Checkout” looks like this"))`, "the rationale note on the canvas", 10_000);
+        if (Object.keys(JSON.parse(await served(id))[0]).length !== items + 1) throw new Error("Copy as rationale wrote more than one item");
+        await rig.click(".explain-close", "the panel's close");
+
+        // 6. Kit dismissed: Critique is off, and the panel says why; the history stands.
+        runCli("--canvas", id, "rc", "remove", "Kit");
+        await rig.click(`[data-item-id="${basket}"] .item-titlebar .chrome-left`, "Basket's title");
+        await rig.press("k", { meta: true });
+        await until(b, `!!document.querySelector(".command-palette input, [data-palette] input, .palette input")`, "the launcher", 3000);
+        await rig.type("Explain this item");
+        await sleep(200);
+        await rig.press("Enter");
+        await until(b, `!!${panel}?.querySelector("[data-explain-cannot]")`, "the panel to say why nothing can critique", 10_000);
+        const cannot = await b.ev(`${panel}.querySelector("[data-explain-cannot]").textContent`);
+        if (!/No critique: .*Kit/.test(cannot)) throw new Error(`the panel does not say why: ${cannot}`);
+        if (!(await b.ev(`${panel}.querySelector("[data-explain-critique]").disabled`))) throw new Error("Critique is offered with nobody to answer");
+        if (!(await panelText()).includes("Maya made it")) throw new Error("the history does not stand without a critique");
+        await rig.press("Escape");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: { ...shots, critique: critiqued } };
+      } catch (err) {
+        throw new Error(`${err.message}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        proc.kill();
+        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
     name: "launcher",
     /** ⌘K stopped being a third composer and became the way to reach
      *  everything. A launcher that opens but does nothing is the worst version

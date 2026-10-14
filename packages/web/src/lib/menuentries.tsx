@@ -17,7 +17,7 @@ import {
   TrashGlyph,
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
-import { cutItems, deleteItems, downloadItem, itemAddress, pasteInto } from "./itemactions.ts";
+import { cutItems, deleteItems, downloadItem, explainItem, itemAddress, pasteInto } from "./itemactions.ts";
 import { PAINTED } from "../components/themes/PaintedGround.tsx";
 import { MOTIONS, MOTION_LABELS, currentMotion, writeMotion } from "./groundmotion.ts";
 import { captureClipboard } from "./clipboard.ts";
@@ -378,6 +378,8 @@ function oneItemEntries(one: Item, version: Item["versions"][number] | null, ctx
       label: "Compare versions",
       run: () => void import("../components/VersionCompare.tsx").then((m) => m.openCompare({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })),
     }] : []),
+    // How it got here (proactive-agent phase 4) — `isocan explain`; a panel beside the canvas, loaded on the click.
+    { label: "Explain", run: () => explainItem(ctx.canvasId, ctx.actor, one.id) },
     // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary` — and, once
     // it has voices (on the screen or on one of them), all of them side by side to mix (phase 3) — `isocan
     // words mix`. Both load on the click, through the one lazy file. "Compare the copy…" stays dimmed until

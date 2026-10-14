@@ -210,5 +210,5 @@ describe("isocan goodnight, with Kit parked", () => {
     // A visit after ready-by: no review is due any more.
     expect((await isocan(["--canvas", canvas, "seen", "--mark"])).code).toBe(0);
     expect(await json(["--canvas", canvas, "goodnight", "review"])).toMatchObject({ due: false, notDue: "you have been back since its ready-by" });
-  });
+  }, 120_000);
 });

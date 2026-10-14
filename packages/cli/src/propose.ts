@@ -90,14 +90,19 @@ function footprints(canvas: CanvasContents, except?: string) {
   });
 }
 
-/** `isocan propose <source> <file> --cites <kind:ref>… --why "…" [--hunch]`. */
+/**
+ * `isocan propose <source> <file> --cites <kind:ref>… --why "…" [--hunch]`.
+ * `quiet` returns what was made instead of printing it — how `explain
+ * --critique --propose` makes its proposal and says so in one answer.
+ */
 export async function propose(
   ctx: Ctx,
   deps: ProposeDeps,
   sourceRef: string,
   file: string,
   opts: { cites?: string[]; why?: string; hunch?: boolean; title?: string },
-): Promise<void> {
+  quiet = false,
+): Promise<{ itemId: string; room: number } | void> {
   // Read the cites before anything else: no trigger, no proposal, and
   // nothing is uploaded on the way to that refusal.
   const cites: ProposalCite[] = [];
@@ -130,6 +135,7 @@ export async function propose(
     properties,
   });
   const room = proposalRoom(snapshot.canvas, ctx.actor.id) - 1;
+  if (quiet) return { itemId, room };
   if (ctx.json) return deps.printJson({ itemId, sourceId: source.id, cites, room });
   console.log(
     `proposed ${itemId} beneath "${source.title}" (${opts.hunch ? "a hunch" : "sure"}; cites ${citeLabel(snapshot.canvas, cites[0]!)})` +

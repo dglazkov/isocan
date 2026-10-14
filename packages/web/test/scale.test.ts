@@ -208,8 +208,12 @@ describe("spacing", () => {
     // 1340 -> 1350 the same day for the morning review (phase 3): six
     // declarations, all on existing steps, against a total at 1,338; the
     // digest's own rules moved from phone.css rather than being restated.
+    // 1350 -> 1360 the same day for the Explain panel (phase 4): ten
+    // declarations, all on existing steps, against a total at 1,344; the
+    // panel's sheet restates the morning panel's measures rather than
+    // sharing a sheet across two lazy chunks.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1350);
+    expect(spacing.length).toBeLessThan(1360);
   });
 });
 

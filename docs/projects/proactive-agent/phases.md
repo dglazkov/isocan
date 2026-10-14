@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–3 (proposals; the night watch; the morning review) are CLOSED. Next: phase 4, explain this item. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–4 (proposals; the night watch; the morning review; explain) are CLOSED. Next: phase 5, the brief as a card — after the entry chunk's slimming pass, since it sits 193 bytes under the jump. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -124,7 +124,7 @@ item the person edited in their last hour is off limits unless named.
 
 ## Phase 4 — Explain this item
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `explain.ts`: `explainStory` reads the canvas alone (versions grouped into moves by one hand, split where a comment announced the work; a choose, a kept proposal or an adopted decision stands alone), picks at most four seams for Plain and Designer and every move for Deep dive, and lists the roads not taken (trashed variations, deleted proposals, unadopted options), what moved around the item since (a newer DESIGN.md, relatives, proposals beside it) and speak-design pairs. One renderer, `explainSections(story, depth)`, feeds the panel, `isocan explain` and Copy as rationale. A panel beside the canvas, loaded on click; Escape closes it with the view and selection untouched and nothing written. **Critique** asks the lead in the Chat; it answers with `explain --critique`, a record comment plus a proposal citing `explain:`; with nothing to answer the button is disabled and says why. `explain.test.ts` (core 19, CLI 5) and the `proactive-explain` journey (real `isocan rc`, a fake ACP agent). Entry 725,793 → 726,107, 193 bytes under the jump.
 
 **Outcome:** core's explain story (versions and authors, the comment that
 made each version via `lane.ts`, design decisions, `choose` and `prefer`,
@@ -147,6 +147,10 @@ arrives as a proposal.
 ### Trajectory
 
 *nothing yet.*
+- **2026-10-14** — The seams come from the canvas, not `timeline.ts` weights (every `item.addVersion` weighs the same): runs by one hand, split where a comment announced the work, turn fifty versions into four.
+- **2026-10-14** — `laneFor`'s open span over-claims for a history, so Explain bounds each comment to versions within two minutes after it; the Chat's own lane is unchanged.
+- **2026-10-14** — The goodnight CLI test took 37 s on CI against a 30 s limit (12 s here), which kept main red: it moved to the deep lane with a two-minute limit.
+- **2026-10-14** — Open, waits on Dion: one depth setting for the whole app or Explain only; pins drawn on changed regions; asking for a second critique; a wire's slot-level why and "behind" are pointed at, not shown.
 
 ## Phase 5 — The brief as a card
 
