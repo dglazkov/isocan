@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { CommentThread, Item, Operation } from "@isocan/core";
 import type { CliHost, EnrolRequest } from "@isocan/cli/modulehost";
 import critiqueCli from "../src/cli.ts";
-import { registerModule, unregisterModule } from "@isocan/core";
-import critiqueCore, { CRITICS_POINT, CRITIC_PROP, CRITIC_TEMPLATE, criticMarkdown, noteBody, readNoteBody, type RosterCritic } from "../src/core.ts";
+import { askTemplate, registerModule, unregisterModule } from "@isocan/core";
+import critiqueCore, { CRITICS_POINT, CRITIC_PROP, CRITIC_TEMPLATE, criticMarkdown, enrolArgs, noteBody, readNoteBody, type RosterCritic } from "../src/core.ts";
 
 /**
  * **Asking a critic, and its two answers** — driven in process through the
@@ -241,6 +241,17 @@ describe("the critique.critic template", () => {
     await template.prepare({ card: card().replace("Is it calm?", "Could a person queuing do this one-handed?") }, dir);
     expect(readFileSync(path.join(dir, "AGENTS.md"), "utf8")).toContain("1. Could a person queuing do this one-handed?");
     await expect(template.prepare({ card: "just a note" }, dir)).rejects.toThrow(/not a critic/);
+  });
+
+  it("reads a card sent in pieces — the shape a browser's ask crosses the home in — and answers with its budget", async () => {
+    const template = critiqueCli.templates!.find((t) => t.id === CRITIC_TEMPLATE)!;
+    const dir = mkdtempSync(path.join(tmpdir(), "acme-critic-"));
+    const args = enrolArgs(card(), "prj_acme", "itm_card");
+    // Every piece passes the home's own check on what an ask may carry.
+    expect(askTemplate({ template: CRITIC_TEMPLATE, args })).not.toHaveProperty("error");
+    const answer = await template.prepare(args, dir);
+    expect(readFileSync(path.join(dir, "AGENTS.md"), "utf8")).toContain("# You are Quiet Hands");
+    expect(answer).toMatchObject({ budget: { turnsPerRun: 6, usdPerRun: 0.4 } });
   });
 });
 

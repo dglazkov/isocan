@@ -3531,6 +3531,246 @@ export const JOURNEYS = [
     },
   },
   {
+    name: "critique",
+    /**
+     * **Critique, scene 3, in a browser** (critique phase 4,
+     * `docs/projects/critique/journey.md`). Add two critics in the Critics
+     * dialog, right-click a screen → *Critique with…* both, see their pins in
+     * two colours, post the read, see its split, press *Build both*, and see
+     * two variations each citing the note it answers.
+     *
+     * Its own home and daemon, because it writes a `config.json` naming the
+     * scripted harness as the machine's default. **Nothing here runs a
+     * model**: `packages/cli/test/fake-acp.mjs` is every harness, and its
+     * `FAKE_ACP_ACT` hook runs the act below as the summoned agent — the
+     * critics pin notes and say done through `isocan critique`, the builder
+     * adds two variations through `isocan add`. Every write the browser makes
+     * is the real request: the enrolment rings the parked rc through the ask
+     * route, and nothing on the page is stubbed.
+     *
+     * When it fails: `CRITIQUE_SHOT=<file.png>` keeps the screen at a press
+     * that could not land, and `CRITIQUE_RC_LOG=<file>` the parked rc's output.
+     */
+    what: "two critics added in the panel, asked from a screen's menu, pin in two colours; the read's split builds both",
+    async run(rig) {
+      const { b } = rig;
+      /** A button in a scrolling list, scrolled to and pressed for real. */
+      const pressButton = async (scope, text, what) => {
+        await until(b, `[...document.querySelectorAll(${JSON.stringify(scope)})].some(e => e.textContent.trim().startsWith(${JSON.stringify(text)}))`, what, 15_000);
+        await b.ev(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(scope)})].find(e => e.textContent.trim().startsWith(${JSON.stringify(text)})); el.scrollIntoView({ block: "center" }); el.setAttribute("data-journey-press", ""); return true; })()`);
+        await sleep(300);
+        try { await rig.click("[data-journey-press]", what); } catch (err) {
+          if (process.env.CRITIQUE_SHOT) writeFileSync(process.env.CRITIQUE_SHOT, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+          throw err;
+        } finally { await b.ev(`(() => { document.querySelector("[data-journey-press]")?.removeAttribute("data-journey-press"); return true; })()`); }
+      };
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-critique-"));
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_crit_ada", name: "Ada", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // The turn's work. Two critics whose notes make one agreement (the
+      // price, both "make it larger") and one split (the photo: remove
+      // against make it larger) — the scene's own shape.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+const NOTES = {
+  "Inevitable": [["0.5,0.3", "risk", "2", "The photo pulls the eye from the one thing this screen is for. Remove the photo."],
+                 ["0.7,0.8", "risk", "1", "The price is too quiet beside the photo. Make the price larger."]],
+  "Form Follows Emotion": [["0.52,0.32", "risk", "1", "The photo is the only warmth on the screen, and it is small. Make the photo larger and warmer."],
+                           ["0.72,0.79", "risk", "2", "The price whispers. Make the price larger."]],
+};
+export default async function act({ prompt, cli, cwd }) {
+  const who = /^You are (.+?), an agent enrolled/.exec(prompt)?.[1] ?? "";
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const threadId = /"threadId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const payload = JSON.parse(prompt.slice(prompt.indexOf("returns):\\n") + 10));
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  if (NOTES[who]) {
+    const item = payload.item?.id;
+    for (const [at, kind, q, text] of NOTES[who]) run("critique", "note", item, "--at", at, "--kind", kind, "--question", q, text);
+    run("critique", "done", item);
+    return;
+  }
+  const strings = [];
+  const walk = (v) => { if (typeof v === "string") strings.push(v); else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+  walk(payload);
+  const brief = strings.find((s) => s.includes("build both sides of this split"));
+  if (!brief) return;
+  const ideas = ["without the photo", "the photo larger and warmer"];
+  const sides = [...brief.matchAll(/--title "([^"]+)" --prop parent=(\\S+) --prop critique\\.answers=([^\\s\`]+)/g)];
+  sides.forEach(([, title, parent, answers], i) => {
+    const file = path.join(cwd, "variation-" + (i + 1) + ".html");
+    writeFileSync(file, "<main><h1>Acme checkout</h1><p>" + ideas[i] + "</p><button>Pay</button></main>");
+    run("add", file, "--title", title.replace("<the idea>", ideas[i]), "--prop", "parent=" + parent, "--prop", "critique.answers=" + answers);
+  });
+  if (threadId) run("comment", "reply", threadId, "Built both: one " + ideas[0] + ", one with " + ideas[1] + ".");
+}
+`);
+      const { proc, origin } = await startDaemon(home);
+      // The harness variables of whoever runs this must not decide who the
+      // CLI speaks as: the person is the home's identity, the agents are the rc's.
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme critique").canvasId;
+        const screenFile = path.join(home, "checkout.html");
+        writeFileSync(screenFile, "<main><img alt='a loaf' src='data:,'><h1>Acme checkout</h1><p class='price'>$12</p><button>Pay</button></main>");
+        const screen = runCli("--canvas", id, "add", screenFile, "--title", "Checkout", "--size", "390x700").itemId;
+        const scoutDir = path.join(home, "scout");
+        execFileSync("mkdir", ["-p", scoutDir]);
+        runCli("--canvas", id, "rc", "add", "Scout", "--dir", scoutDir);
+        const snapshot = () => b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.canvas)`);
+
+        // The runner, parked: every agent's turn is the scripted harness.
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        // Ada, in the browser, with the experiment on.
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); localStorage.setItem("isocan.experiments", JSON.stringify(["critique"])); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        await until(b, `!!document.querySelector('.item[data-item-id="${screen}"]')`, "the Checkout screen on Ada's canvas", 20_000);
+        try {
+          await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => r.parked)`, "Ada's rc to park", 20_000);
+        } catch (err) {
+          const seen = await b.ev(`fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(async r => r.status + " " + await r.text())`);
+          throw new Error(`${err.message} — the page reads ${seen}\n${rcOut.slice(-2000)}`);
+        }
+        const versionBefore = (await snapshot()).items[screen].currentVersionId;
+
+        // 1. Critics, from the palette: add two from the roster.
+        await rig.press("k", { meta: true });
+        await until(b, `!!document.querySelector('.palette')`, "the launcher");
+        await rig.type("Critics");
+        await rig.clickText(".palette-row", "Critics", "the Critics entry");
+        await until(b, `!!document.querySelector('button[aria-label="Add Inevitable"]')`, "the roster in the Critics dialog — read from the daemon", 10_000);
+        await rig.click('button[aria-label="Add Inevitable"]', "Add Inevitable");
+        await until(b, `!!document.querySelector('button[aria-label="Inevitable is on this canvas"]')`, "Inevitable added", 10_000);
+        await rig.click('button[aria-label="Add Form Follows Emotion"]', "Add Form Follows Emotion");
+        await until(b, `!!document.querySelector('button[aria-label="Form Follows Emotion is on this canvas"]')`, "Form Follows Emotion added", 10_000);
+        const cards = runCli("--canvas", id, "critic", "ls");
+        const names = cards.critics.map((c) => c.agentName).sort();
+        if (JSON.stringify(names) !== JSON.stringify(["Form Follows Emotion", "Inevitable"])) throw new Error(`critic ls reads ${JSON.stringify(names)} after the dialog's two adds`);
+        // The same card the terminal writes: the pack's lens, its headings included.
+        const inevitable = cards.critics.find((c) => c.agentName === "Inevitable");
+        if (inevitable.questions.length !== 3 || !inevitable.credit.endsWith("; not affiliated")) throw new Error(`the web's Inevitable is not the roster's: ${JSON.stringify(inevitable)}`);
+        await rig.press("Escape");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the Critics dialog to close");
+
+        // 2. Right-click the screen → Critique with… → both. Adding a card
+        // glided the camera to it, so first the whole canvas, as a person would.
+        await rig.click(".zoom-pct", "the zoom menu");
+        await rig.clickText(".zoom-menu-row", "Zoom to Fit", "Zoom to Fit");
+        await sleep(800);
+        const centre = await b.ev(`(() => { const r = document.querySelector('.item[data-item-id="${screen}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height * 0.6) }; })()`);
+        const mouse = (type, button) => b.send("Input.dispatchMouseEvent", { type, x: centre.x, y: centre.y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+        await mouse("mousePressed", "left");
+        await mouse("mouseReleased", "left");
+        await mouse("mousePressed", "right");
+        await mouse("mouseReleased", "right");
+        await sleep(500);
+        const menuText = await b.ev(`[...document.querySelectorAll('.context-menu [role=menuitem]')].map(e => e.textContent.trim()).join(' | ')`);
+        await rig.clickText(".context-menu [role=menuitem]", "Critique with", `Critique with… in the screen's menu (it offers: ${menuText})`);
+        await until(b, `document.querySelectorAll('.crit-pick input[type=checkbox]').length === 2`, "both critics offered", 10_000);
+        await b.ev(`(() => { document.querySelectorAll('.crit-pick label.crit-row').forEach((l, i) => l.setAttribute('data-crit', String(i))); return true; })()`);
+        await rig.click('label[data-crit="0"] input', "the first critic's box");
+        await rig.click('label[data-crit="1"] input', "the second critic's box");
+        await pressButton(".crit-actions button", "Ask 2 critics", "Ask 2 critics");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the ask to land and the dialog to close", 40_000);
+
+        // 3. Both enrolled on Ada's runner, capped, and their notes pinned in their colours.
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.agents ?? {}).filter(a => a.ceiling === 'note').length === 2)`, "both critics enrolled and capped at notes", 30_000);
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some(t => t.comments.some(c => c.body.includes('every critic asked here is done'))))`, "the last critic to say the read is ready", 60_000);
+        const canvas = await snapshot();
+        const critics = Object.values(canvas.agents).filter((a) => a.ceiling === "note");
+        const colours = await b.ev(`fetch('/api/colors').then(r => r.json())`);
+        const wanted = { Inevitable: "#0071e3" };
+        for (const c of critics) if (wanted[c.actor.name] && colours[c.actor.id]?.toLowerCase() !== wanted[c.actor.name]) throw new Error(`${c.actor.name} wears ${colours[c.actor.id]}, not its card's ${wanted[c.actor.name]}`);
+        const noteThreads = Object.values(canvas.threads).filter((t) => t.anchorItemId === screen && /^\*\*Risk\*\* · question/.test(t.comments[0].body));
+        if (noteThreads.length !== 4) throw new Error(`${noteThreads.length} notes on the screen, not 4`);
+        const pinColours = await b.ev(`(() => [...new Set([...document.querySelectorAll('.pin')].filter(p => /Risk/.test(p.title)).map(p => getComputedStyle(p.querySelector('.pin-avatar')).backgroundColor))])()`);
+        if (pinColours.length !== 2) throw new Error(`the notes' pins wear ${JSON.stringify(pinColours)} — not two colours`);
+
+        // A pin opens its note where it is pinned — once the arrival toasts,
+        // which sit over the screen's corner, have said their piece.
+        await until(b, `!document.querySelector('.toast-said')`, "the comment toasts to clear", 30_000);
+        await b.ev(`(() => { const p = [...document.querySelectorAll('.pin')].find(p => p.title.includes('Inevitable') && p.title.includes('question 2')); p.setAttribute('data-journey-pin', ''); return true; })()`);
+        const pinAt = await b.ev(`(() => { const r = document.querySelector('[data-journey-pin]').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
+        // Two critics pinned one region, so the later pin overlaps this one:
+        // pressed on its uncovered top-left, where a person would aim.
+        await rig.click("[data-journey-pin]", "Inevitable's photo note", { x: 0.2, y: 0.2 });
+        await until(b, `/Remove the photo/.test(document.querySelector('.thread-popover')?.textContent ?? '')`, "the note opened");
+        const pop = await b.ev(`(() => { const r = document.querySelector('.thread-popover').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`);
+        if (Math.abs(pop.x - pinAt.x) > 340 || Math.abs(pop.y - pinAt.y) > 240) throw new Error(`the note opened at ${JSON.stringify(pop)}, far from its pin at ${JSON.stringify(pinAt)}`);
+        await rig.press("Escape");
+
+        // 4. The request thread: post the read; it carries a split.
+        await b.ev(`(() => { const p = [...document.querySelectorAll('.pin')].find(p => /what do you make of|Done — /.test(p.title)); p.setAttribute('data-journey-request', ''); return true; })()`);
+        await rig.click("[data-journey-request]", "the request thread's pin");
+        await pressButton(".thread-popover button", "Post the read", "Post the read… under the ready line");
+        await until(b, `/They split/.test(document.querySelector('.crit-read')?.textContent ?? '')`, "the read, with its split, in the dialog", 10_000);
+        await b.ev(`(() => { const t = document.querySelector('.crit-say textarea'); t.setAttribute('data-journey-say', ''); return true; })()`);
+        await rig.click("[data-journey-say]", "the words field");
+        await rig.type("Reduction against warmth: one would cut the photo, one would make it the voice.");
+        await pressButton(".crit-actions button", "Post the read", "Post the read");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the read posted");
+        // The thread closed for the dialog; open it again from its pin.
+        await until(b, `!document.querySelector('.toast-said')`, "the comment toasts to clear", 30_000);
+        await b.ev(`(() => { document.querySelector('[data-journey-request]')?.removeAttribute('data-journey-request'); const p = [...document.querySelectorAll('.pin')].find(p => /what do you make of|Done — |every critic|They agree|Reduction/.test(p.title)); p.setAttribute('data-journey-request', ''); return true; })()`);
+        await rig.click("[data-journey-request]", "the request thread's pin, again");
+        await until(b, `[...document.querySelectorAll('.thread-popover .comment')].some(c => /They split/.test(c.textContent) && /Reduction against warmth/.test(c.textContent))`, "the posted read in the request thread", 10_000);
+
+        // 5. Build both.
+        await pressButton(".thread-popover button", "Build both", "Build both… under the posted read");
+        await until(b, `!!document.querySelector('.crit-pick input[type=radio]:checked')`, "a builder chosen", 10_000);
+        const builder = await b.ev(`document.querySelector('.crit-pick input[type=radio]:checked').closest('label').textContent`);
+        if (!/Scout/.test(builder)) throw new Error(`the builder offered is ${builder}, not Scout — a critic must never be`);
+        if (await b.ev(`[...document.querySelectorAll('.crit-pick label')].some(l => /Inevitable|Form Follows/.test(l.textContent))`)) throw new Error("a critic is offered as a builder");
+        await pressButton(".crit-actions button", "Build both", "Build both");
+        await until(b, `!document.querySelector('.modal-backdrop')`, "the ask to build both sent");
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'canvas-groups-v4'}}).then(r => r.json()).then(r => Object.values(r.canvas.items).filter(i => i.properties.parent === '${screen}' && i.properties['critique.answers']).length === 2)`, "two variations of the screen", 60_000);
+        const after = await snapshot();
+        const variations = Object.values(after.items).filter((i) => i.properties.parent === screen);
+        const answered = new Set(variations.map((v) => v.properties["critique.answers"]));
+        const authors = new Set([...answered].map((t) => after.threads[t]?.comments[0].author.name));
+        if (answered.size !== 2 || authors.size !== 2) throw new Error(`the variations answer ${[...answered]} by ${[...authors]} — not one note per critic`);
+        for (const v of variations) await until(b, `!!document.querySelector('.item[data-item-id="${v.id}"]')`, `${v.title} on Ada's canvas`, 10_000);
+        if (versionBefore && after.items[screen].currentVersionId !== versionBefore) throw new Error("the screen's version moved — critics and the builder must leave it as it is");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { critics: critics.map((c) => c.actor.name), pins: pinColours, variations: variations.map((v) => v.title) };
+      } catch (err) {
+        if (process.env.CRITIQUE_RC_LOG) writeFileSync(process.env.CRITIQUE_RC_LOG, rcOut);
+        throw err;
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        proc.kill();
+        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
+  {
     name: "panels",
     /** The bug: the Personas panel's header collapsed to `display: block` and
      *  its icon sat on its own title, while every test passed. */

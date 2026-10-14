@@ -1,5 +1,5 @@
 import type { ContextPiece } from "./context.ts";
-import type { Canvas, CanvasContents, Item } from "./model.ts";
+import type { Canvas, CanvasContents, CommentThread, Item } from "./model.ts";
 import type { Operation } from "./ops.ts";
 import type { JudgmentRequest } from "./judgment.ts";
 import type { TextRequest } from "./text.ts";
@@ -543,6 +543,15 @@ export interface EnrolAsk {
   /** A template id a module on the rc's machine registered: `design-competition.fighter`. */
   template?: string;
   args?: Readonly<Record<string, string>>;
+  /**
+   * **Ring for an agent that already stands** (module API 0.2.10). Without it
+   * a name already enrolled resolves at once and nothing is asked. With it and
+   * a `template`, the ask still goes, and the rc that answers for the agent
+   * writes its directory afresh from the template — no op, so nothing lands
+   * to wait for, and this resolves once the ask is delivered. What `reuse`
+   * does for `CliHost.enrol`, asked from the canvas.
+   */
+  reuse?: boolean;
 }
 
 /** A template id: `<module>.<name>`, lowercase, the shape a property key has. */
@@ -1066,6 +1075,8 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
   dialogs?: readonly ModuleDialog<D>[];
   /** **Rows in an item's right-click menu** — only once the module's lazy half is loaded (`ModuleMenuFacts`). */
   menu?: (facts: ModuleMenuFacts) => readonly ModuleMenuRow[];
+  /** **Buttons under one comment in a thread** (module API 0.2.10) — the item menu's rows, under a comment instead (`ModuleCommentFacts`). */
+  comments?: (facts: ModuleCommentFacts) => readonly ModuleMenuRow[];
   /**
    * **Who writes the words of a screen this module draws** (copy-edit
    * phases 1–2, module API 0.2.5) — `WebCopyWriter`. A screen whose copy deck
@@ -1159,6 +1170,23 @@ export interface WebFlowVoice {
 export interface ModuleMenuFacts {
   canvas: CanvasContents;
   items: readonly Item[];
+  open: (dialog: string, args: string) => void;
+}
+
+/**
+ * **What a module's comment buttons are handed** (critique phase 4, module
+ * API 0.2.10: the posted read's *Build both*). One comment, its thread and
+ * the canvas, and the same one door the item menu has — `open`, the module's
+ * own dialog with the words a command would have typed — so a button under a
+ * comment runs what the dialog runs and never grows a path of its own. Asked
+ * only of a module whose half is loaded. Only a row's `label` and `run` are
+ * read here — a separator, a tick, a submenu or `disabled` is not drawn — so
+ * a button that cannot act now is left out rather than greyed.
+ */
+export interface ModuleCommentFacts {
+  canvas: CanvasContents;
+  thread: CommentThread;
+  comment: CommentThread["comments"][number];
   open: (dialog: string, args: string) => void;
 }
 
@@ -1287,8 +1315,15 @@ export function isDataOnly(manifest: ModuleManifest): boolean {
  * once per canvas, refreshed from their card each time they are asked, and
  * bounded per run. Optional fields a module passes and a member it is
  * handed: a module built for `^0.2.8` still loads.
+ *
+ * **0.2.9 → 0.2.10 on 14 Oct 2026**, an addition (critique phase 4):
+ * `WebModule.comments`, buttons a module MAY put under a comment, which open
+ * its own dialogs; `EnrolAsk.reuse`, so the web can ring for an agent that
+ * already stands; and a template's `prepare` may answer with the agent's
+ * `budget` and `color`, which the rc applies when it enrols from a web ask.
+ * Optional, provided or passed: a module built for `^0.2.9` still loads.
  */
-export const MODULE_API_VERSION = "0.2.9";
+export const MODULE_API_VERSION = "0.2.10";
 
 /**
  * **The parts of the API we intend to change**, named so a module can say it

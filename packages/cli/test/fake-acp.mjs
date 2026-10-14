@@ -12,6 +12,7 @@
 // session transiently does, to exercise the client's retry.
 import { promises as fsp, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const STORE = "fake-acp-sessions.json";
 const known = () => {
@@ -186,6 +187,18 @@ function handle(msg) {
         });
       }
       if (slow > 0) await new Promise((r) => setTimeout(r, slow));
+      // FAKE_ACP_ACT=<path to a .mjs>: the turn's work, scripted — its default
+      // export is called with the prompt, the CLI and this turn's cwd, and
+      // runs isocan as the summoned agent (the injected environment says who
+      // that is). A journey's critics and builder, with no model at all.
+      if (process.env.FAKE_ACP_ACT) {
+        try {
+          const act = await import(pathToFileURL(process.env.FAKE_ACP_ACT).href);
+          await act.default({ prompt: promptText, cli: process.env.FAKE_ACP_CLI, cwd: process.cwd() });
+        } catch (err) {
+          process.stderr.write(`fake-acp: the scripted act failed — ${err?.stack ?? err}\n`);
+        }
+      }
       if (process.env.FAKE_ACP_REPLY === "1" && process.env.FAKE_ACP_CLI) {
         const threadId = promptText.match(/"threadId":\s*"([^"]+)"/)?.[1];
         const canvasId = promptText.match(/"canvasId":\s*"([^"]+)"/)?.[1];

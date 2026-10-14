@@ -86,13 +86,16 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
           (a) => a.actor.name.toLowerCase() === ask.name.toLowerCase(),
         );
       const already = standing();
-      if (already) return { actorId: already.actor.id };
+      if (already && !(ask.reuse && ask.template)) return { actorId: already.actor.id };
       await askEnrolAgent(canvasId, {
         name: ask.name,
         from: actor,
         ...(ask.template ? { template: ask.template } : {}),
         ...(ask.args ? { args: { ...ask.args } } : {}),
       });
+      // `reuse` (module API 0.2.10): the rc rewrites a standing agent's
+      // directory and sends no op, so the delivered ask is the whole answer.
+      if (already) return { actorId: already.actor.id };
       const until = Date.now() + ENROL_PATIENCE_MS;
       while (Date.now() < until) {
         const row = standing();

@@ -20,9 +20,14 @@ import { packagePath } from "@isocan/core/packageroot";
 import type { CliHost, CliModule, Ctx } from "@isocan/cli/modulehost";
 import {
   ANSWERS_PROP,
+  bothBrief,
+  cardOf,
+  CRITIC_CARD,
+  requestNotes,
+  requestScreen,
+  enrolArgs,
   critiqueRead,
   critiqueStatus,
-  gist,
   mentionWord,
   readWords,
   readyLine,
@@ -61,13 +66,12 @@ import {
 } from "./core.ts";
 
 /**
- * **Critics, from a terminal** — `isocan critic ls|add|new`. The web's
- * Critics panel is critique phase 4; until then these are the doors, and
- * editing a critic is `isocan edit` on its card like any markdown item.
+ * **Critics, from a terminal** — `isocan critic ls|add|new`. The browser's
+ * Critics dialog (`web.tsx`) sends the same writes; editing a critic is
+ * `isocan edit` on its card like any markdown item.
  */
 
-/** A critic card's size on the canvas: a column of questions, not a page. */
-const CARD = { width: 360, height: 440 };
+const CARD = CRITIC_CARD;
 
 /**
  * **A roster entry's lens**, from the module that contributed it.
@@ -111,12 +115,7 @@ async function criticActors(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshot
 }
 
 /** The notes the asked critics left on the screen since they were asked. */
-function notesFor(snapshot: CanvasSnapshotResponse, itemId: string, status: CritiqueStatus): CritiqueNote[] {
-  const who = new Set(status.asked.map((a) => a.id));
-  return Object.values(snapshot.canvas.threads)
-    .map((t) => readNote(t, snapshot.canvas.items))
-    .filter((n): n is CritiqueNote => n !== null && n.item === itemId && who.has(n.criticId) && n.createdAt >= status.createdAt);
-}
+const notesFor = (snapshot: CanvasSnapshotResponse, itemId: string, status: CritiqueStatus) => requestNotes(snapshot.canvas, itemId, status);
 
 /**
  * **The request a read is of** — a thread id, or a screen, whose newest
@@ -130,8 +129,7 @@ async function requestOf(host: CliHost, ctx: Ctx, canvasId: string, snapshot: Ca
   if (direct) {
     const status = read(direct);
     if (!status) throw new Error(`thread ${ref} asks no critic anything — a read is of a critique's request thread`);
-    const request = direct.comments.find((c) => c.id === status.commentId)!;
-    const itemId = direct.anchorItemId ?? request.items?.[0];
+    const itemId = requestScreen(direct, status);
     const item = itemId ? snapshot.canvas.items[itemId] : undefined;
     if (!item) throw new Error(`thread ${ref} is about no screen that is still here`);
     return { status, item };
@@ -413,7 +411,7 @@ asks them all; each works alone, and when the last is done
           const enrolled = await host.enrol(ctx, canvas.id, {
             name: critic.agentName,
             template: CRITIC_TEMPLATE,
-            args: { card: await cardText(ctx, canvas.id, snapshot, hit.itemId), canvas: canvas.id, cardItem: hit.itemId },
+            args: enrolArgs(await cardText(ctx, canvas.id, snapshot, hit.itemId), canvas.id, hit.itemId),
             budget,
             reuse: true,
           });
@@ -638,15 +636,7 @@ variations through the /variation path — \`isocan add … --prop parent=<scree
             : `${status.asker.name} asked, and is not an agent here — name who builds them: \`--to <agent>\`, an agent on this canvas that may edit`);
         }
         if (builder.ceiling === "note") throw new Error(`${builder.actor.name} is a critic, capped at notes — it cannot build. Name an agent that may edit: \`--to <agent>\``);
-        const side = (n: CritiqueNote, i: number) =>
-          `${i}. Answering ${n.critic}'s note (${n.threadId}, ${n.kind}): “${gist(n.text, 240)}”\n` +
-          `   \`isocan add <file> --title "${item.title} — <the idea>" --prop parent=${item.id} --prop ${ANSWERS_PROP}=${n.threadId}\``;
-        const body = [
-          `@${mentionWord(builder.actor.name)} build both sides of this split: two variations of #${item.title}, one per critic, each doing what its note asks and nothing else.`,
-          side(a, 1),
-          side(b, 2),
-          `This is /variation's procedure for two (\`isocan command show variation\`): real alternatives, named for the idea; then \`isocan format\` and one reply here saying what each tried. Leave ${item.title} itself as it is.`,
-        ].join("\n");
+        const body = bothBrief(builder.actor.name, item, a, b);
         const commentId = newCommentId();
         await host.sendOp(ctx, canvas.id, { type: "thread.reply", threadId: status.threadId, comment: { id: commentId, body, mentions: [builder.actor.id], items: [item.id] } } as never);
         if (ctx.json) return printJson({ threadId: status.threadId, commentId, builder: builder.actor.id, answers: [a.threadId, b.threadId], parent: item.id });
@@ -663,11 +653,16 @@ variations through the /variation path — \`isocan add … --prop parent=<scree
  * card changes the next critique. The brief is the thread; this is who the
  * critic is and the one way it may answer.
  */
-async function prepareCritic(args: Readonly<Record<string, string>>, into: string): Promise<void> {
-  const critic: Critic | null = args.card ? readCritic(args.card) : null;
+async function prepareCritic(args: Readonly<Record<string, string>>, into: string): Promise<{ budget: { usdPerRun: number; turnsPerRun: number }; color?: string }> {
+  const card = cardOf(args);
+  const critic: Critic | null = card ? readCritic(card) : null;
   if (!critic) throw new Error("the critic's card is not a critic any more — its front matter needs `critic: true`");
   await fs.writeFile(path.join(into, "AGENTS.md"), criticBrief(critic));
   await fs.writeFile(path.join(into, "CLAUDE.md"), criticBrief(critic));
+  // What the card says the critic IS, for the rc to apply when the ask came
+  // from the browser — which carries only this template's id and strings.
+  const colour = hex(critic.color);
+  return { budget: { ...DEFAULT_BUDGET, ...(critic.budget ?? {}) }, ...(colour ? { color: colour } : {}) };
 }
 
 /** The brief itself, from the card's current text. */

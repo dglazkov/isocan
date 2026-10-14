@@ -30,6 +30,7 @@ import { actorNameIn, useActorNames } from "../lib/names.ts";
 import { CommandChip, awaitingReply, withoutCommand } from "./MainThreadPanel.tsx";
 import { OnIt } from "./OnIt.tsx";
 import { GateGrant } from "./LazyGate.tsx";
+import { modules as shellModules } from "../modules.ts";
 import { liveActorIds } from "../lib/presence.ts";
 import { useActorMarks } from "../lib/marks.ts";
 import { CommentFold, CommentWhen } from "./CommentWhen.tsx";
@@ -415,6 +416,10 @@ export function ThreadPopover({
             {comment.mentions && comment.mentions.length > 0 && (
               <GateGrant canvasId={canvasId} viewer={actor} thread={thread} comment={comment} />
             )}
+            {/* A loaded module's buttons under this comment (`WebModule.comments`): each opens its dialog. The thread
+                closes first — it sits above every dialog. Outside the reply form, so a bare button submits
+                nothing; only a row's label and run are read. */}
+            {canEdit && canvas && shellModules().flatMap((m) => m.comments?.({ canvas, thread, comment, open: (id, args) => { useUiStore.getState().setOpenThread(null); useUiStore.getState().openModuleDialog(id, args); } }) ?? []).map((row, i) => "run" in row && <button key={i} className="btn" onClick={row.run}>{row.label}</button>)}
           </div>
         ))}
         <OnIt

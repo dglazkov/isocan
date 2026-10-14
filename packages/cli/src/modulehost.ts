@@ -109,7 +109,15 @@ export interface EnrolTemplate {
   /** Namespaced: `<module>.<name>`. */
   id: string;
   describe: string;
-  prepare: (args: Readonly<Record<string, string>>, into: string) => Promise<{ harness?: string } | void>;
+  /**
+   * Writes the directory. May answer with what the agent IS as well as where
+   * it starts (module API 0.2.10): a `harness`, what one run may `budget`, and
+   * the `color` its face wears. The rc applies the last two when it enrols
+   * from a web ask, which carries nothing but the template's id and strings —
+   * so a critic asked from the browser is bounded by its card exactly as one
+   * asked from a terminal.
+   */
+  prepare: (args: Readonly<Record<string, string>>, into: string) => Promise<{ harness?: string; budget?: { turnsPerRun?: number; usdPerRun?: number }; color?: string } | void>;
 }
 
 export interface CliModule {

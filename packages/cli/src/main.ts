@@ -6620,7 +6620,7 @@ async function prepareFromTemplate(
   name: string,
   id: string,
   args: Readonly<Record<string, string>>,
-): Promise<{ dir: string; harness?: string }> {
+): Promise<{ dir: string; harness?: string; budget?: { turnsPerRun?: number; usdPerRun?: number }; color?: string }> {
   const template = enrolTemplate(id);
   if (!template) throw new Error(`no module on this machine offers the template ${id} — isocan module ls`);
   // Named by core's one title rule (cleanup DU-2, 27 Sep 2026): "Zoë" is
@@ -6632,7 +6632,7 @@ async function prepareFromTemplate(
   const dir = path.join(base, before && existsSync(path.join(base, before)) ? before : titleSlug(name) || "agent");
   await fs.mkdir(dir, { recursive: true });
   const out = await template.prepare(args, dir);
-  return { dir, ...(out?.harness ? { harness: out.harness } : {}) };
+  return { dir, ...(out?.harness ? { harness: out.harness } : {}), ...(out?.budget ? { budget: out.budget } : {}), ...(out?.color ? { color: out.color } : {}) };
 }
 for (const m of CLI_MODULES) {
   registerModule(m.core);
@@ -14532,7 +14532,32 @@ async function runRcRoom(
       const prepared = ask.template
         ? await prepareFromTemplate(ctx.home, p.id, ask.name, ask.template, ask.args ?? {})
         : null;
-      await mintAndEnrol(ctx, p.id, ask.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null, say: print });
+      // **A template ask for an agent already standing here, on this
+      // machine, is a refresh** (critique phase 4): the directory was just
+      // written afresh, so the row takes it and the template's budget, and
+      // no op is sent — what `CliHost.enrol`'s `reuse` does. Only a template
+      // ask: the web rings for a standing name only when a module said
+      // `reuse`, and a bare add of a worn name still meets the claim's refusal.
+      const standing = prepared
+        ? Object.values((await ctx.client.snapshot(p.id)).canvas.agents ?? {}).find((a) => a.actor.name.toLowerCase() === ask.name.toLowerCase())
+        : undefined;
+      const row = standing ? (await readRcAgents(ctx.home)).find((r) => r.canvasId === p.id && r.actorId === standing.actor.id) : undefined;
+      let actorId: string;
+      if (prepared && standing && row) {
+        await upsertRcAgent(ctx.home, { ...row, cwd: prepared.dir, ...(prepared.budget ? { budget: prepared.budget } : {}) });
+        print(`${ask.name} stands here already — its directory is written afresh from ${ask.template}`);
+        actorId = standing.actor.id;
+      } else {
+        actorId = (await mintAndEnrol(ctx, p.id, ask.name, { cwd: prepared?.dir ?? rcCwd, harness: prepared?.harness ?? null, say: print, ...(prepared?.budget ? { budget: prepared.budget } : {}) })).id;
+      }
+      // The face the template says it wears. This machine's badge holds the
+      // agent's actor, which a browser's never does — so the colour is set
+      // here or nowhere (`actor.setColor` repaints only actors a badge claims).
+      if (prepared?.color) {
+        await ctx.client.sendOp(null, ctx.actor, { type: "actor.setColor", actorId, color: prepared.color }).catch((err: unknown) => {
+          print(`${ask.name}'s colour was not set — ${err instanceof Error ? err.message : String(err)}`);
+        });
+      }
     },
     agentKey: (name) => machineAgentKey(ctx.home, name),
     narrate: print,

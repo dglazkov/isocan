@@ -13,9 +13,12 @@
     "typecheck": "tsc --noEmit"
   },
   "isocan": {
-    "engines": "^0.2.9",
+    "engines": "^0.2.10",
     "proposed": [
-      "points"
+      "points",
+      "dialogs",
+      "templates",
+      "host"
     ]
   },
   "dependencies": {

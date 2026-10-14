@@ -13,12 +13,12 @@ Then two critics and the read, then the web's doors.
 **Phase citations name their project**: `critique phase 2`, never a bare
 "phase 2".
 
-**Where we are, 14 Oct 2026:** phases 0, 2 and 3 are CLOSED, phase 1
-PART-DONE. Critics live on the canvas, answer with pinned, typed notes, are
-refused at the home if they try anything else, wake only when mentioned,
-and two of them are read into agree, split and blocker — with a split built
-both ways. Phase 1 still owes a dollar cap proven against a harness that
-reports cost. **critique phase 4 is next**: the web's doors.
+**Where we are, 14 Oct 2026:** every phase is built. Phases 0, 2 and 3 are
+CLOSED; phases 1 and 4 are PART-DONE, each waiting on something only a
+person can supply. Phase 1 needs a harness that reports cost, to prove the
+dollar cap; Dion decides whether to install Claude Code's adapter. Phase 4
+needs a person to [walk it](../../verify/2026-10-14-critique-in-the-browser.md)
+in a browser. Nothing is waiting on code.
 
 ---
 
@@ -103,7 +103,7 @@ the other's.
 
 ## Phase 4 — The web's doors
 
-**Status: NOT STARTED.**
+**Status: PART-DONE.** 2026-10-14 — journey scene 3 plays end to end in a real browser (`journeys.mjs --only critique`, the critics and builder scripted): critics added in the panel, asked from a screen's menu, pins in two colours that open their notes, the read's split built both ways, the screen unchanged; a person's walk is owed.
 
 - **Critics** panel: the roster, the canvas's critics, add and new.
 - Right-click on a screen → **Critique with…** → pick critics → the same
@@ -162,6 +162,18 @@ person.
   the fold's grouping with `critique read --post --say`. From the CLI, the
   person is told, and reads it themselves. No new wake machinery was needed;
   the lead's own words have been proven in process, not walked.
+- **2026-10-14** — The browser gets the roster from the daemon
+  (`GET /api/points/:point`) and the lens text from the same `critique.md`
+  files, served from a built-in module's `assets/`, confined to modules the
+  process registered. Critique may not import design-competition, and
+  bundling the packs would make a second copy. *Build both* lists every
+  standing agent not capped at notes and preselects one; nothing is sent
+  until the person presses.
+- **2026-10-14 — Open:** the entry chunk grew 284 bytes for a comment-button
+  slot and enrol's `reuse` branch, on a chunk already over its ceiling. Pins
+  at nearby points overlap. The posted read still shows the CLI's `critique
+  both thr_…` line. A critic refreshed and woken in the same moment can run
+  on the old card.
 - **2026-10-14 — Open:** a builder asked to *Build both* answered "remove the
   banner" by shrinking it, and Codex made a 2.8 MB image with its own
   image tool, a spend the runner cannot see. A builder held to its note's

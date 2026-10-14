@@ -105,7 +105,17 @@ export interface RosterEntry {
 /** **The roster**: every accepted contribution, first-word clashes refused.
  *  Empty when nothing contributes — `critic new` still works then. */
 export function roster(): RosterEntry[] {
-  const all = contributions<RosterCritic>(CRITICS_POINT).map(({ module, value }) => ({ module, critic: value }));
+  return rosterFrom(contributions<RosterCritic>(CRITICS_POINT));
+}
+
+/**
+ * **The roster from contributions read somewhere else** — the browser's, off
+ * the daemon's registry (`/api/points/critique.critics`), which is the one
+ * `roster()` reads in the terminal. Each is checked again here, and the
+ * first-word clashes refused the same way.
+ */
+export function rosterFrom(found: readonly { module: string; value: unknown }[]): RosterEntry[] {
+  const all = found.filter(({ value }) => rosterProblems(value).length === 0).map(({ module, value }) => ({ module, critic: value as RosterCritic }));
   const clashes = new Set(firstWordClashes(all.map(({ critic }) => critic)).map((c) => c.id));
   return all.filter(({ critic }) => !clashes.has(critic.id));
 }
@@ -446,6 +456,26 @@ export function findRequest(canvas: Pick<CanvasContents, "threads">, criticId: s
   return best;
 }
 
+/**
+ * **What a critic's enrolment carries to the template** — the card's bytes,
+ * the canvas, and the card item. An ask from the browser crosses the home as
+ * strings of at most 512 characters (`askTemplate`), and a card is longer, so
+ * the card goes in pieces — `card`, `card-2`, … — and `cardOf` joins them.
+ * The terminal sends the same pieces, so the template reads one shape.
+ */
+export function enrolArgs(card: string, canvasId: string, cardItem: string): Record<string, string> {
+  const pieces = card.match(/[\s\S]{1,500}/g) ?? [""];
+  if (pieces.length > 13) throw new Error(`this critic's card is ${card.length} characters, and a critic carries at most ${13 * 500} — shorten it`);
+  return { canvas: canvasId, "card-item": cardItem, ...Object.fromEntries(pieces.map((p, i) => [i === 0 ? "card" : `card-${i + 1}`, p])) };
+}
+
+/** The card's bytes back from `enrolArgs`' pieces. */
+export function cardOf(args: Readonly<Record<string, string>>): string {
+  let text = args["card"] ?? "";
+  for (let i = 2; args[`card-${i}`] !== undefined; i++) text += args[`card-${i}`];
+  return text;
+}
+
 /** The critic's last word in the request thread: how many notes, of what. */
 export function doneLine(notes: readonly CritiqueNote[], itemTitle: string): string {
   if (notes.length === 0) return `Done — no notes on #${itemTitle}.`;
@@ -726,6 +756,73 @@ export function critiqueStatus(thread: CommentThread, critics: readonly CriticAc
  *  mention, told the read is ready — the one wake the read needs. */
 export function readyLine(askerName: string, threadId: string): string {
   return `@${mentionWord(askerName)} every critic asked here is done — the read: \`isocan critique read ${threadId}\``;
+}
+
+/** The notes the asked critics left on the screen since they were asked —
+ *  what a read folds, from the terminal and the browser alike. */
+export function requestNotes(canvas: Pick<CanvasContents, "threads" | "items">, itemId: string, status: CritiqueStatus): CritiqueNote[] {
+  const who = new Set(status.asked.map((a) => a.id));
+  return Object.values(canvas.threads)
+    .map((t) => readNote(t, canvas.items))
+    .filter((n): n is CritiqueNote => n !== null && n.item === itemId && who.has(n.criticId) && n.createdAt >= status.createdAt);
+}
+
+/** The screen a request thread is about: the item it is pinned to, or the first it names. */
+export function requestScreen(thread: CommentThread, status: CritiqueStatus): string | undefined {
+  return thread.anchorItemId ?? thread.comments.find((c) => c.id === status.commentId)?.items?.[0];
+}
+
+/** A critic card's size on the canvas: a column of questions, not a page. */
+export const CRITIC_CARD = { width: 360, height: 440 } as const;
+
+/** Whether a comment is the last critic's ready line (`readyLine`). */
+export const isReadyLine = (body: string) => /every critic asked here is done — the read: `isocan critique read [^`]+`/.test(body);
+
+/** The read's own blocker line — every posted read ends its grouping with it (`readWords`). */
+const BLOCKER_LINE = /^\*\*Blocker:\*\*/m;
+
+/** Whether a comment is a posted read (`critique read --post`). */
+export const isPostedRead = (body: string) => BLOCKER_LINE.test(body);
+
+/** The split refs a posted read carries — what each of its *Build both* buttons asks for. */
+export function postedSplits(body: string): string[] {
+  if (!isPostedRead(body)) return [];
+  return [...body.matchAll(/`isocan critique both ([^`\s]+\+[^`\s]+)`/g)].map((m) => m[1]!);
+}
+
+/** An agent on this canvas, as the builder question reads it. */
+interface Standing {
+  actor: { id: string; name: string };
+  ceiling?: string;
+}
+
+/**
+ * **Who may build both sides of a split**: an agent standing on this canvas
+ * and not capped at notes — never a critic. The asker first when the asker is
+ * one of them (the lead), so `critique both` with no `--to` and the browser's
+ * preselection name the same agent.
+ */
+export function buildersFor(agents: Readonly<Record<string, Standing>> | undefined, askerId: string): Standing[] {
+  const may = Object.values(agents ?? {}).filter((a) => a.ceiling !== "note");
+  return [...may.filter((a) => a.actor.id === askerId), ...may.filter((a) => a.actor.id !== askerId)];
+}
+
+/**
+ * **The ask `critique both` posts** — one per side, each citing the note it
+ * answers, and the `/variation` procedure for two. One text for the terminal
+ * and the browser's *Build both*, so the builder reads the same brief
+ * whichever surface pressed it.
+ */
+export function bothBrief(builderName: string, item: { id: string; title: string }, a: CritiqueNote, b: CritiqueNote): string {
+  const side = (n: CritiqueNote, i: number) =>
+    `${i}. Answering ${n.critic}'s note (${n.threadId}, ${n.kind}): “${gist(n.text, 240)}”\n` +
+    `   \`isocan add <file> --title "${item.title} — <the idea>" --prop parent=${item.id} --prop ${ANSWERS_PROP}=${n.threadId}\``;
+  return [
+    `@${mentionWord(builderName)} build both sides of this split: two variations of #${item.title}, one per critic, each doing what its note asks and nothing else.`,
+    side(a, 1),
+    side(b, 2),
+    `This is /variation's procedure for two (\`isocan command show variation\`): real alternatives, named for the idea; then \`isocan format\` and one reply here saying what each tried. Leave ${item.title} itself as it is.`,
+  ].join("\n");
 }
 
 /** The slash command: an agent reading it from the Chat asks, and later leads. */

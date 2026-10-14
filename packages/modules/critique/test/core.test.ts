@@ -29,6 +29,14 @@ import critiqueCore, {
   rosterProblems,
   skeletonDraft,
   type RosterCritic,
+  buildersFor,
+  cardOf,
+  enrolArgs,
+  isPostedRead,
+  isReadyLine,
+  postedSplits,
+  readyLine,
+  rosterFrom,
 } from "../src/core.ts";
 
 /**
@@ -273,5 +281,40 @@ describe("asking, and the last word", () => {
     const n = (kind: (typeof NOTE_KINDS)[number]) => ({ kind }) as never;
     expect(doneLine([n("risk"), n("working"), n("risk")], "Acme checkout")).toBe("Done — 3 notes on #Acme checkout: 1 working, 2 risk.");
     expect(doneLine([], "Acme checkout")).toBe("Done — no notes on #Acme checkout.");
+  });
+});
+
+describe("the web's doors, in core (critique phase 4)", () => {
+  it("carries a card longer than one ask string in pieces, and joins them back byte for byte", () => {
+    const long = `---\nname: acme\n---\n${"Is it calm? ".repeat(150)}`;
+    const args = enrolArgs(long, "prj_acme", "itm_card");
+    expect(Object.keys(args).filter((k) => k.startsWith("card-") && k !== "card-item").length).toBeGreaterThan(1);
+    expect(Object.values(args).every((v) => v.length <= 512)).toBe(true);
+    expect(cardOf(args)).toBe(long);
+    expect(() => enrolArgs("x".repeat(13 * 500 + 1), "prj_acme", "itm_card")).toThrow(/at most 6500/);
+  });
+
+  it("finds the ready line and the splits a posted read carries", () => {
+    expect(isReadyLine(`Done — 2 notes on #Acme.\n${readyLine("Ada", "thr_1")}`)).toBe(true);
+    expect(isReadyLine("Done — 2 notes on #Acme.")).toBe(false);
+    const read = "**They split** near 0.5,0.3 (remove against add): A — x against B — y — build both: `isocan critique both thr_a+thr_b`\n**Blocker:** none.";
+    expect(isPostedRead(read)).toBe(true);
+    expect(postedSplits(read)).toEqual(["thr_a+thr_b"]);
+    expect(postedSplits("`isocan critique both thr_a+thr_b` but no blocker line")).toEqual([]);
+  });
+
+  it("offers as builders the agents that may edit — never a critic — the asker first", () => {
+    const agents = {
+      a: { actor: { id: "a", name: "Inevitable" }, ceiling: "note" },
+      b: { actor: { id: "b", name: "Scout" } },
+      c: { actor: { id: "c", name: "Lead" } },
+    };
+    expect(buildersFor(agents, "c").map((x) => x.actor.name)).toEqual(["Lead", "Scout"]);
+    expect(buildersFor(agents, "usr_ada").map((x) => x.actor.name)).toEqual(["Scout", "Lead"]);
+  });
+
+  it("reads a roster from contributions fetched elsewhere, refusing what the point would", () => {
+    const ok = { id: "acme", title: "Acme", agentName: "Quiet Hands", credit: "after Acme", name: "Acme Person", homage: "An homage; not affiliated.", colour: "#112233", critique: ["a?", "b?", "c?"] };
+    expect(rosterFrom([{ module: "@acme/critics", value: ok }, { module: "@acme/critics", value: { id: "bad" } }]).map((e) => e.critic.id)).toEqual(["acme"]);
   });
 });

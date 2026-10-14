@@ -17,7 +17,7 @@ import type { LiveTokenOptions } from "./live-token.ts";
 import { registerModelRoutes } from "./model-routes.ts";
 import { registerKeyRoutes, type KeyRouteOptions } from "./key-routes.ts";
 import { judgeWorkerPolicy, registerModelFileRoutes } from "./model-files.ts";
-import { textAttention } from "@isocan/core";
+import { textAttention, contributions } from "@isocan/core";
 import { CLIENT_FEATURES_HEADER, supportsCanvasGroups, GroupConflictError, MigrationBoundaryError } from "@isocan/core";
 import { CanvasGroupsClientError, groupOperation, requireGroupClient } from "./canvas-groups.ts";
 import { QuestionnaireClientError, questionnaireOperation, requireQuestionnaireClient } from "./questionnaire-capability.ts";
@@ -183,7 +183,7 @@ import {
 } from "@isocan/core";
 import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { isocanHome } from "./paths.ts";
-import { moduleFile, readRuntimeModules } from "./modules.ts";
+import { builtInAsset, moduleFile, readRuntimeModules } from "./modules.ts";
 import { boundDirs, hashBound, pickList, readBound, readTree, writeBound } from "./tree.ts";
 import {
   attestersOf,
@@ -2149,12 +2149,27 @@ export function registerRoutes(
    */
   app.get("/modules/:slug/*", async (req, reply) => {
     const { slug, "*": rest } = req.params as { slug: string; "*": string };
-    const file = options.modulesHome && /^[a-z0-9][a-z0-9._-]*$/.test(slug) ? moduleFile(options.modulesHome, slug, rest) : null;
+    const named = /^[a-z0-9][a-z0-9._-]*$/.test(slug);
+    const file = (options.modulesHome && named ? moduleFile(options.modulesHome, slug, rest) : null) ?? (named ? builtInAsset(slug, rest) : null);
     if (!file) return reply.status(404).send({ error: `not found: GET /modules/${slug}/${rest}` });
     reply.type(STATIC_TYPES[path.extname(file)] ?? "application/octet-stream");
     reply.header("Cache-Control", "no-cache");
     reply.header("X-Content-Type-Options", "nosniff");
     return reply.send(createReadStream(file));
+  });
+
+  /**
+   * **What has been contributed to a point, here** (critique phase 4). The
+   * browser registers a deferred module's record only once its half loads,
+   * so a point another module's data fills — critique's roster, filled by
+   * design-competition's nine packs — reads empty there. This process
+   * registered every module it runs (the CLI's two lists), so its registry is
+   * the one `isocan critic ls` reads, and the browser asks it rather than
+   * keeping a second copy. Data only, validated by the point's own rule.
+   */
+  app.get("/api/points/:point", async (req) => {
+    const { point } = req.params as { point: string };
+    return { point, contributions: contributions(point) };
   });
 
   // ---- slash commands: the work a message can ask for ----
