@@ -68,6 +68,25 @@ export const TERMS_PATH = "/terms";
 export const PUBLIC_PATH = "/public";
 
 /**
+ * Whether this home sits behind an authenticating reverse proxy (SSO).
+ *
+ * The server stamps `data-sso="true"` on `<html>` at serve time whenever
+ * `ISOCAN_PROXY_EMAIL_HEADER` is configured, keeping the web bundle identical
+ * across homes ("one image, many homes"); `VITE_ISOCAN_SSO=true` is also
+ * accepted for local Vite development.
+ */
+export function isSsoHome(): boolean {
+  if ((import.meta.env as Record<string, unknown> | undefined)?.["VITE_ISOCAN_SSO"] === "true") {
+    return true;
+  }
+  try {
+    return typeof document !== "undefined" && document.documentElement.dataset.sso === "true";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Which face this browser meets, at this address, being who it is.
  *
  * The origin's path is matched EXACTLY, not as a prefix. A canvas's path (see
@@ -75,8 +94,12 @@ export const PUBLIC_PATH = "/public";
  * notice, and a stranger who follows a share link must still meet the door:
  * the canvas behind it may be open to a link grant, but who they are is still
  * stamped on everything they touch there.
+ *
+ * On an SSO home (`sso === true`), the visitor is never an anonymous stranger,
+ * so the origin meets the door (which auto-resumes or auto-claims their
+ * identity) rather than the marketing front page.
  */
-export function faceFor(pathname: string, actor: Actor | null): Face {
+export function faceFor(pathname: string, actor: Actor | null, sso = isSsoHome()): Face {
   // A trailing slash is the same door — `/` and `//` name the origin — and a
   // path with any segment in it does not.
   const at = pathname.replace(/\/+$/, "");
@@ -98,5 +121,5 @@ export function faceFor(pathname: string, actor: Actor | null): Face {
   if (proveSegmentIn(pathname) !== null) return "operator-prove";
   if (actor) return "here";
   if (at === PUBLIC_PATH) return "public";
-  return at === "" ? "front-page" : "door";
+  return at === "" && !sso ? "front-page" : "door";
 }

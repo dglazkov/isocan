@@ -25,7 +25,7 @@ import { supportsQuestionnaires } from "@isocan/core";
 import { supportsDesignRequests } from "@isocan/core";
 import { DesignRequestClientError, designRequestOperation } from "./design-request-capability.ts";
 import { registerCanvasGroupContext } from "./canvas-group-context.ts";
-import { createReadStream, existsSync, statSync, promises as fs } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -5555,7 +5555,19 @@ function registerPages(
   },
 ): void {
   const dist = packagePath("packages/web/dist");
-  const built = existsSync(path.join(dist, "index.html"));
+  const indexFile = path.join(dist, "index.html");
+  const built = existsSync(indexFile);
+  /**
+   * When an authenticating reverse proxy stands in front of this home
+   * (`options.proxyAuth`), stamp `data-sso="true"` on the root element of
+   * `index.html` at serve time so the web app knows on first paint that the
+   * visitor's identity is already attested — without compiling a separate
+   * bundle per home.
+   */
+  const ssoShell =
+    built && options.proxyAuth
+      ? readFileSync(indexFile, "utf8").replace('<html lang="en">', '<html lang="en" data-sso="true">')
+      : null;
 
   /**
    * Is this daemon a PURE replica — a birth default set, and not one canvas of
@@ -5691,6 +5703,7 @@ function registerPages(
           ? "public, max-age=86400"
           : "no-cache",
     );
+    if (ssoShell !== null && file === indexFile) return reply.send(ssoShell);
     return reply.send(createReadStream(file));
   };
 

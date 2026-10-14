@@ -1,4 +1,4 @@
-import type { Actor, ActorClaimOp } from "@isocan/core";
+import type { Actor, ActorClaimOp, Attestation, AttestOffer } from "@isocan/core";
 import { newId } from "@isocan/core";
 import { claimActor, sendOp } from "./api.ts";
 
@@ -88,6 +88,51 @@ export async function renameIdentity(name: string): Promise<Actor> {
 export async function adoptIdentity(actor: Actor): Promise<Actor> {
   const known = personas().find((p) => p.id === actor.id);
   return resume(known ?? { ...actor });
+}
+
+/**
+ * The local-part of the newest `email:<local>@<domain>` attestation on this
+ * badge, or null when the badge carries none.
+ */
+export function attestedEmailLocalPart(attestations: readonly Attestation[]): string | null {
+  for (let i = attestations.length - 1; i >= 0; i--) {
+    const attr = attestations[i]!.attribute;
+    if (!attr.startsWith("email:")) continue;
+    const address = attr.slice("email:".length);
+    const at = address.indexOf("@");
+    if (at <= 0) continue;
+    const local = address.slice(0, at).trim();
+    if (local) return local;
+  }
+  return null;
+}
+
+/**
+ * Auto-enter on an SSO home from the badge's current attestation offer:
+ * - If exactly one actor is resumable on that address, resume it (`adoptIdentity`).
+ * - If no actor exists yet on that address, claim the email's local-part (`enterAs`).
+ * - If multiple personas exist (`resumable.length > 1`) or the claim is refused
+ *   (`name-taken`), return null so the identity dialog lets the person choose.
+ */
+export async function enterFromAttestOffer(
+  offer: AttestOffer | null,
+  actions: { adopt?: (actor: Actor) => Promise<Actor>; enter?: (name: string) => Promise<Actor> } = {},
+): Promise<Actor | null> {
+  if (!offer || !offer.attesters.includes("email")) return null;
+  const adopt = actions.adopt ?? adoptIdentity;
+  const enter = actions.enter ?? enterAs;
+  try {
+    if (offer.resumable.length === 1) {
+      return await adopt(offer.resumable[0]!);
+    }
+    if (offer.resumable.length === 0) {
+      const local = attestedEmailLocalPart(offer.attestations);
+      if (local) return await enter(local);
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 /**

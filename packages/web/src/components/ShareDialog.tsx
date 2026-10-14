@@ -19,7 +19,7 @@ import {
   setPublicListing,
   ApiError,
 } from "../lib/api.ts";
-import { attesterOffer, canVerifyEmail } from "../lib/signin.ts";
+import { attesterOffer, canInviteByEmail } from "../lib/signin.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useActorColors } from "../lib/colors.ts";
 import { faceMarkClass, faceMarkStyle } from "../lib/face.ts";
@@ -612,7 +612,7 @@ export function ShareDialog({
 
       {/* The "who" field — on a home that can verify one, for somebody who
           may invite. */}
-      {!canEdit ? null : offer && canVerifyEmail(offer) ? (
+      {!canEdit ? null : offer && canInviteByEmail(offer) ? (
         <>
           <form
             className="share-address"
@@ -1195,7 +1195,7 @@ function SpaceShare({
 
       {error && <div className="identity-warning">{error}</div>}
 
-      {offer && canVerifyEmail(offer) ? (
+      {offer && canInviteByEmail(offer) ? (
         <>
           <form
             className="share-address"

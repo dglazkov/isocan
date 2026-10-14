@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Actor, AttestOffer } from "@isocan/core";
-import { attesterOffer, canVerifyEmail, sendSignInLink } from "../lib/signin.ts";
+import { attesterOffer, canInviteByEmail, canVerifyEmail, sendSignInLink } from "../lib/signin.ts";
 import { adoptIdentity } from "../lib/identity.ts";
 
 /**
@@ -148,7 +148,7 @@ export function VerifyPanel({
 
       {!offer && !shown && <div className="share-link-note">asking the desk…</div>}
 
-      {offer && !canVerifyEmail(offer) && (
+      {offer && !canInviteByEmail(offer) && (
         <div className="share-link-note">
           This home has borrowed nowhere to verify an address — no inbox, no Google, no GitHub —
           so there is nothing to prove here yet. Sharing works by link, which is how it has
@@ -156,7 +156,7 @@ export function VerifyPanel({
         </div>
       )}
 
-      {offer && canVerifyEmail(offer) && (
+      {offer && canInviteByEmail(offer) && (
         <>
           <div className="share-link-note">
             Proving an address here is what lets your other machines be you: a browser that
@@ -203,7 +203,7 @@ export function VerifyPanel({
               here, proved. It works once. On a dev home it may well be in your spam folder —
               the sender domain is not isocan's yet.
             </div>
-          ) : (
+          ) : canVerifyEmail(offer) ? (
             <form
               className="share-address"
               onSubmit={(e) => {
@@ -224,7 +224,7 @@ export function VerifyPanel({
                 Send me a link
               </button>
             </form>
-          )}
+          ) : null}
 
           {offer.resumable.length > 0 && (
             <>

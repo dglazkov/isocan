@@ -157,6 +157,19 @@ describe("the door's rows", () => {
     expect(html).toContain("Welcome to isocan");
     expect(html).toContain('placeholder="Your name"');
   });
+
+  it("renders resumable rows on a reverse-proxy authenticated home where auth is null", async () => {
+    fakeHome({
+      attesters: ["email"],
+      auth: null,
+      attestations: [{ attribute: "email:dimitri@acme.example", verifiedVia: "proxy", at: "2026-10-14" }],
+      resumable: [dimitri],
+    });
+    await attesterOffer(true);
+    const html = renderToStaticMarkup(h(IdentityDialog, { onDone: () => {} }));
+    expect(rowsIn(html)).toEqual(["Dimitri"]);
+    expect(html).toContain("<h2>Who&#x27;s writing?</h2>");
+  });
 });
 
 describe("the offer cache", () => {

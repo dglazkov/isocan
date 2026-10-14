@@ -167,13 +167,18 @@ export function useAttestOffer(): AttestOffer | null {
  * door, whatever the badge once proved (multi-identity phase 1 finding).
  */
 export function resumableIn(answer: AttestOffer | null): Actor[] {
-  return answer && answer.auth !== null ? answer.resumable : [];
+  return answer && answer.attesters.includes("email") ? answer.resumable : [];
 }
 
-/** Can this home verify an email at all? The Share dialog's "who" field and
- * the identity menu's sign-in entry are both drawn from this, so a home that
- * has borrowed nothing shows neither — rather than showing a control whose
- * only outcome is a refusal. */
+/** Can this home admit `email:` / `group:` grants (via email sign-in or an
+ * authenticating reverse proxy)? Drawn by the Share dialog's invite field and
+ * the Prove panel's outer gate. */
+export function canInviteByEmail(o: AttestOffer): boolean {
+  return o.attesters.includes("email");
+}
+
+/** Can this browser initiate an email-link verification flow itself? Requires
+ * both an email attester and a browser-callable auth provider (`o.auth`). */
 export function canVerifyEmail(o: AttestOffer): boolean {
   return o.auth !== null && o.attesters.includes("email");
 }

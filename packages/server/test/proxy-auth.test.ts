@@ -1,8 +1,9 @@
 import http from "node:http";
 import net from "node:net";
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { LINK } from "@isocan/core";
 import { DaemonClient } from "@isocan/api";
@@ -154,6 +155,15 @@ describe("Reverse-proxy identity attestation + per-home transport gateway", () =
     const hostedPort = (hostedDaemon.app.server.address() as net.AddressInfo).port;
     const gw = await startAuthGateway(hostedPort, () => currentCaller);
     cleanup.push(() => gw.close());
+
+    // When the web bundle is built, GET / stamps `data-sso="true"` on `<html>`
+    // so the browser skips the anonymous marketing landing page on first paint.
+    const distIndex = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist/index.html");
+    if (existsSync(distIndex)) {
+      const pageRes = await fetch(`${gw.url}/`);
+      expect(pageRes.status).toBe(200);
+      expect(await pageRes.text()).toContain('<html lang="en" data-sso="true">');
+    }
 
     // 1. Alice configures gateway mapping for canonical https://canvas.acme.example
     const aliceHome = await tempDir();

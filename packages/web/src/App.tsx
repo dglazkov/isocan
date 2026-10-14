@@ -6,11 +6,10 @@ import { CANVAS_ROUTE, DECK_ROUTE, ITEM_ROUTE, MODULE_PAGE_ROUTE, WORKBENCH_ITEM
 import { ApiError, getSnapshot } from "./lib/api.ts";
 import { CANVAS_GROUPS_REQUIRED } from "@isocan/core";
 import { Viewer } from "./components/LazyViewer.tsx";
-import { readIdentity } from "./lib/identity.ts";
+import { adoptIdentity, enterFromAttestOffer, knownIdentities, readIdentity } from "./lib/identity.ts";
 import type { Arrival, ArrivalRefused } from "./lib/arrival.ts";
-import type { SignIn, SignInLanding } from "./lib/signin.ts";
-import { adoptIdentity } from "./lib/identity.ts";
-import { faceFor, PUBLIC_PATH } from "./lib/faces.ts";
+import { attesterOffer, type SignIn, type SignInLanding } from "./lib/signin.ts";
+import { faceFor, isSsoHome, PUBLIC_PATH } from "./lib/faces.ts";
 import { IdentityDialog } from "./components/IdentityDialog.tsx";
 import { CanvasPage } from "./pages/CanvasPage.tsx";
 import { FrontPage } from "./pages/FrontPage.tsx";
@@ -233,7 +232,8 @@ export function Doorway({
   children: (actor: Actor) => ReactNode;
 }) {
   const { pathname } = useLocation();
-  const face = faceFor(pathname, actor);
+  const sso = isSsoHome();
+  const face = faceFor(pathname, actor, sso);
   // Before the actor branch, exactly as the rule orders them: the terms are the
   // same document for a stranger, for somebody with a badge, and for an agent
   // (phase 13.7).
@@ -255,6 +255,19 @@ export function Doorway({
   if (face === "here" && actor) return <>{children(actor)}</>;
   if (face === "front-page") return <FrontPage onIdentity={onIdentity} />;
   /**
+   * On an SSO home, a cold browser (`knownIdentities().length === 0`) already
+   * holds a proxy-attested badge and can auto-resume or auto-claim straight
+   * into the canvas list. A browser that deliberately stepped out ("Leave —
+   * enter as someone else") has a non-empty roster and meets the door directly
+   * so it is not forced back into the persona it just left.
+   */
+  const door =
+    sso && knownIdentities().length === 0 ? (
+      <SsoGate onIdentity={onIdentity} door={<IdentityDialog onDone={onIdentity} />} />
+    ) : (
+      <IdentityDialog onDone={onIdentity} />
+    );
+  /**
    * A stranger at a canvas address may be a VIEWER (#88), and a viewer is not
    * asked who they are — there is nothing their name would attach to. The
    * gate asks the home first; everyone the home calls an editor still meets
@@ -267,11 +280,46 @@ export function Doorway({
       <ViewerGate
         canvasId={canvasish.params.canvasId}
         itemId={(canvasish.params as { itemId?: string }).itemId ?? null}
-        door={<IdentityDialog onDone={onIdentity} />}
+        door={door}
       />
     );
   }
-  return <IdentityDialog onDone={onIdentity} />;
+  return door;
+}
+
+/**
+ * **Auto-enter on an SSO home** — asks `GET /api/attest` for the badge's
+ * attested email and resumable personas, auto-resumes or auto-claims when
+ * unambiguous, and falls back to `IdentityDialog` when multiple personas exist
+ * or a name is taken.
+ */
+export function SsoGate({
+  onIdentity,
+  door,
+}: {
+  onIdentity: (actor: Actor) => void;
+  door: ReactNode;
+}) {
+  const [standing, setStanding] = useState<"asking" | "door">("asking");
+  useEffect(() => {
+    let live = true;
+    setStanding("asking");
+    attesterOffer()
+      .then((offer) => enterFromAttestOffer(offer))
+      .then((actor) => {
+        if (!live) return;
+        if (actor) onIdentity(actor);
+        else setStanding("door");
+      })
+      .catch(() => {
+        if (live) setStanding("door");
+      });
+    return () => {
+      live = false;
+    };
+  }, [onIdentity]);
+  if (standing === "asking") return <div className="page-note">Letting you in…</div>;
+  return <>{door}</>;
 }
 
 /**
