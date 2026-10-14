@@ -13,11 +13,12 @@ Then two critics and the read, then the web's doors.
 **Phase citations name their project**: `critique phase 2`, never a bare
 "phase 2".
 
-**Where we are, 14 Oct 2026:** phases 0 and 2 are CLOSED, phase 1
-PART-DONE. Critics live on the canvas, answer a critique with pinned, typed
-notes, and are refused at the home if they try anything else. Phase 1
-still owes a dollar cap proven against a harness that reports cost.
-**critique phase 3 is next**: two critics, and the read.
+**Where we are, 14 Oct 2026:** phases 0, 2 and 3 are CLOSED, phase 1
+PART-DONE. Critics live on the canvas, answer with pinned, typed notes, are
+refused at the home if they try anything else, wake only when mentioned,
+and two of them are read into agree, split and blocker — with a split built
+both ways. Phase 1 still owes a dollar cap proven against a harness that
+reports cost. **critique phase 4 is next**: the web's doors.
 
 ---
 
@@ -84,7 +85,7 @@ way.
 
 ## Phase 3 — Two critics, and the read
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 2026-10-14 — two real critics on one synthetic screen, independent by transcript, read into one agreement and one split (remove against add) that the posted reply matches; *Build both* made two variations each citing the note it answers; the screen's version did not move.
 
 - `/critique #Item with A and B` and `critique <item> --by a,b`: one thread,
   both mentioned, both run.
@@ -146,6 +147,25 @@ person.
   op rather than a field on `agent.enroll`, because a home that predates it
   refuses an unknown op but would silently drop an unknown field and leave
   the critic uncapped. Undo and redo are checked before they choose.
+- **2026-10-14** — The first two-critic walk grouped "remove the banner"
+  and "replace it with a photograph" as *agree*, because both were *risk*
+  in one region — the exact tension the read exists for. The read now
+  classifies each note's move by verb (keep, add, remove, other) and calls
+  opposed moves a split. A move in none of the families (*tone it down*,
+  *swap*) never opposes anything, so that read misses it.
+- **2026-10-14** — Critics woke on every Chat message and on a person's
+  "thanks" in the request thread, spending on each. Changed in core's wake
+  rule (`dispatchReason`, and `inboxOn` so the two agree): an agent with a
+  `note` ceiling wakes only when mentioned. Uncapped agents are unchanged.
+- **2026-10-14** — The lead is whoever asked. A parked agent that ran
+  `/critique` is woken by the last critic's `done`, and posts its words over
+  the fold's grouping with `critique read --post --say`. From the CLI, the
+  person is told, and reads it themselves. No new wake machinery was needed;
+  the lead's own words have been proven in process, not walked.
+- **2026-10-14 — Open:** a builder asked to *Build both* answered "remove the
+  banner" by shrinking it, and Codex made a 2.8 MB image with its own
+  image tool, a spend the runner cannot see. A builder held to its note's
+  verb, and a bound on harness-side tools, are both unbuilt.
 - **2026-10-14 — Open:** the ceiling binds the critic's *actor*, not its
   process. Agents ride their machine's badge (agent-custody), so a critic
   process that drops its session key speaks as the person, who is not

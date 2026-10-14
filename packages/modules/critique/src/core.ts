@@ -11,6 +11,7 @@ import {
   type CoreModule,
   type Item,
   type Persona,
+  type SlashCommand,
 } from "@isocan/core";
 
 /**
@@ -420,11 +421,15 @@ export function readNote(thread: CommentThread, items: Readonly<Record<string, I
   };
 }
 
-/** The words of a request, as `isocan critique` writes them: the critic by
+/** The words of a request, as `isocan critique` writes them: each critic by
  *  its mention word, the screen by its title, so the thread reads as a
- *  person asking and the Chat's own syntax would say the same. */
-export function requestBody(agentName: string, itemTitle: string): string {
-  return `@${mentionWord(agentName)} what do you make of #${itemTitle}? Pin your notes on it; change nothing.`;
+ *  person asking and the Chat's own syntax would say the same. Two or more
+ *  are told they answer alone — independence is arranged, not hoped for. */
+export function requestBody(agentNames: string | readonly string[], itemTitle: string): string {
+  const names = (typeof agentNames === "string" ? [agentNames] : [...agentNames]).map((n) => `@${mentionWord(n)}`);
+  if (names.length === 1) return `${names[0]} what do you make of #${itemTitle}? Pin your notes on it; change nothing.`;
+  const who = `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  return `${who} — what do you make of #${itemTitle}? Each of you on your own: pin your notes on it; change nothing.`;
 }
 
 /** Where a critique was asked for: the newest comment that mentions this
@@ -448,11 +453,318 @@ export function doneLine(notes: readonly CritiqueNote[], itemTitle: string): str
   return `Done — ${notes.length} ${notes.length === 1 ? "note" : "notes"} on #${itemTitle}: ${counts.map(([k, n]) => `${n} ${k}`).join(", ")}.`;
 }
 
+/* ---- Phase 3: two critics, and the read -------------------------------- */
+
+/**
+ * **The property a Build-both variation carries**: the note thread it
+ * answers. `parent=` says what screen it is a variation of; this says which
+ * critic's move it is, so the two can be told apart without reading them.
+ */
+export const ANSWERS_PROP = "critique.answers";
+
+/**
+ * **One region of a screen**: two pins are in the same region when they are
+ * at most this far apart, measured in fractions of the screen's width and
+ * height (Euclidean). 0.15 is roughly "the same block" on a phone-shaped
+ * screen — two notes about one button agree; a note on the header and one on
+ * the footer do not. One constant, so the read and its test say one thing.
+ */
+export const REGION = 0.15;
+
+/** How far apart two pins are, in fractions of the screen. */
+export function pinDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/**
+ * **A note's move, by its verb** — the one concrete change a note ends in,
+ * sorted into a family without a model. The vocabulary is this one
+ * constant: each family is a list of patterns tried against the move (the
+ * note's last sentence), lower-cased, in this order — KEEP first, because
+ * "Leave it." is the whole of a keep; then ADD, because "replace it with a
+ * photograph" contains no removal verb but would read as one; then REMOVE.
+ * Anything unmatched is OTHER, and OTHER never opposes anything.
+ *
+ * What it misses, on purpose: verbs not listed ("tone it down", "quiet it",
+ * "swap", "move it above the fold" — OTHER); negation ("don't remove it");
+ * a move whose object is not the thing pinned (two notes in one region about
+ * different elements, read as one); and "make it smaller", which is a
+ * shrink and is counted with REMOVE, as is "reduce".
+ */
+export const MOVE_VOCABULARY = {
+  keep: [/^(leave|keep) (it|this|that|them)( alone| as it is| as is| exactly as it is)?$/, /^no change( here)?$/],
+  add: [
+    /^(add|enlarge|increase|bring in|bring back|introduce|expand|amplify|grow|give it\b)/,
+    /^replace\b.*\bwith\b/,
+    /^(set|make)\b.*\b(larger|bigger|braver|bolder|warmer|louder|heavier|more prominent)\b/,
+    /^give\b.*\b(weight|room|presence|more)\b/,
+  ],
+  remove: [
+    /^(remove|cut|drop|delete|lose|hide|strip|get rid of|take out|eliminate|reduce|shrink|shorten|trim)\b/,
+    /^(set|make)\b.*\b(smaller|quieter|lighter|less prominent)\b/,
+  ],
+} as const;
+
+export type MoveFamily = "keep" | "add" | "remove" | "other";
+
+/** A note's move: its last sentence, without the closing stop. */
+export function moveOf(text: string): string {
+  const sentences = text.trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+  return (sentences.at(-1) ?? "").replace(/[.!?]+$/, "").trim();
+}
+
+/** Which family a note's move falls in (`MOVE_VOCABULARY`). */
+export function moveFamily(text: string): MoveFamily {
+  const move = moveOf(text).toLowerCase();
+  for (const family of ["keep", "add", "remove"] as const) {
+    if (MOVE_VOCABULARY[family].some((p) => p.test(move))) return family;
+  }
+  return "other";
+}
+
+/**
+ * **Which way a note leans**: `keep` (working, or a move that is a keep) or
+ * `change` (risk or blocker with any other move).
+ */
+export function stance(note: Pick<CritiqueNote, "kind" | "text">): "keep" | "change" {
+  if (note.kind === "working") return "keep";
+  return moveFamily(note.text) === "keep" ? "keep" : "change";
+}
+
+/**
+ * **Why two notes oppose**, or null: one keeps what the other would change
+ * (`keep-change`), or one would remove what the other would add or enlarge
+ * (`remove-add`). Same family, or OTHER on either side, is no opposition.
+ */
+export function opposition(a: Pick<CritiqueNote, "kind" | "text">, b: Pick<CritiqueNote, "kind" | "text">): "keep-change" | "remove-add" | null {
+  if (stance(a) !== stance(b)) return "keep-change";
+  const fam = new Set([moveFamily(a.text), moveFamily(b.text)]);
+  return fam.has("remove") && fam.has("add") ? "remove-add" : null;
+}
+
+/** Notes that two critics agree on: same kind, one region, moves not opposed. */
+export interface AgreeGroup {
+  kind: NoteKind;
+  critics: string[];
+  notes: CritiqueNote[];
+  at: { x: number; y: number };
+}
+
+/** Where two critics split, in one region: one keeps what another would
+ *  change, or one removes what another would add. `sides[0]` is the keep
+ *  (or the remove) side. */
+export interface SplitGroup {
+  at: { x: number; y: number };
+  why: "keep-change" | "remove-add";
+  sides: [CritiqueNote[], CritiqueNote[]];
+  /** `<side 0 note>+<side 1 note>` — what `critique both` takes. */
+  ref: string;
+}
+
+/** The fold: agree, split and blocker, each citing its notes; the rest alone. */
+export interface CritiqueRead {
+  agree: AgreeGroup[];
+  split: SplitGroup[];
+  blocker: CritiqueNote[];
+  /** Notes in no agree, split or blocker group — said, not dropped. */
+  alone: CritiqueNote[];
+}
+
+const centre = (notes: readonly CritiqueNote[]) => {
+  const r = (v: number) => Math.round(v * 100) / 100;
+  return { x: r(notes.reduce((s, n) => s + n.at.x, 0) / notes.length), y: r(notes.reduce((s, n) => s + n.at.y, 0) / notes.length) };
+};
+
+const ordered = (notes: readonly CritiqueNote[]) =>
+  [...notes].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.threadId.localeCompare(b.threadId));
+
+/** Connected components of the notes over one kind of edge. */
+function components(notes: readonly CritiqueNote[], edge: (a: CritiqueNote, b: CritiqueNote) => boolean): CritiqueNote[][] {
+  const parent = notes.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i]!)));
+  const linked = new Set<number>();
+  for (let i = 0; i < notes.length; i++) {
+    for (let j = i + 1; j < notes.length; j++) {
+      if (!edge(notes[i]!, notes[j]!)) continue;
+      parent[find(j)] = find(i);
+      linked.add(i).add(j);
+    }
+  }
+  const groups = new Map<number, CritiqueNote[]>();
+  for (const i of linked) groups.set(find(i), [...(groups.get(find(i)) ?? []), notes[i]!]);
+  return [...groups.values()].map(ordered).sort((a, b) => a[0]!.createdAt.localeCompare(b[0]!.createdAt) || a[0]!.threadId.localeCompare(b[0]!.threadId));
+}
+
+/**
+ * **The read** (design §5): a pure fold over parsed notes.
+ *
+ * - **agree** — notes from two or more critics, the same kind, pins within
+ *   one `REGION` of each other (chained: a third note near either joins);
+ * - **split** — notes from different critics within one region where one
+ *   keeps (`stance`) and another would change;
+ * - **blocker** — every blocker note, by anyone.
+ *
+ * A note may sit in an agree group and a split at once — two critics agree a
+ * thing is a risk and a third says leave it — because both are true. Notes
+ * by one critic never agree or split with each other. Deterministic: the
+ * same notes in any order give the same read.
+ */
+export function critiqueRead(input: readonly CritiqueNote[]): CritiqueRead {
+  const notes = ordered(input);
+  const near = (a: CritiqueNote, b: CritiqueNote) => a.criticId !== b.criticId && pinDistance(a.at, b.at) <= REGION;
+  const agree = components(notes, (a, b) => near(a, b) && a.kind === b.kind && opposition(a, b) === null).map((group) => ({
+    kind: group[0]!.kind,
+    critics: [...new Set(group.map((n) => n.critic))],
+    notes: group,
+    at: centre(group),
+  }));
+  const splitOf = (why: "keep-change" | "remove-add", first: (n: CritiqueNote) => boolean) =>
+    components(notes, (a, b) => near(a, b) && opposition(a, b) === why).map((group): SplitGroup => {
+      const sides: [CritiqueNote[], CritiqueNote[]] = [group.filter(first), group.filter((n) => !first(n))];
+      return { at: centre(group), why, sides, ref: `${sides[0][0]!.threadId}+${sides[1][0]!.threadId}` };
+    });
+  const split = [
+    ...splitOf("keep-change", (n) => stance(n) === "keep"),
+    ...splitOf("remove-add", (n) => moveFamily(n.text) === "remove"),
+  ];
+  const blocker = notes.filter((n) => n.kind === "blocker");
+  const grouped = new Set([...agree.flatMap((g) => g.notes), ...split.flatMap((g) => g.sides.flat()), ...blocker].map((n) => n.threadId));
+  return { agree, split, blocker, alone: notes.filter((n) => !grouped.has(n.threadId)) };
+}
+
+/** A note's first sentence, short enough to quote in a line. */
+export function gist(text: string, max = 90): string {
+  const first = (text.trim().split(/(?<=[.!?])\s/)[0] ?? "").trim();
+  return first.length <= max ? first : `${first.slice(0, max - 1).trimEnd()}…`;
+}
+
+const where = (at: { x: number; y: number }) => `near ${at.x},${at.y}`;
+
+/**
+ * **The fold, in words** — the grouping and nothing more. Every line cites
+ * its notes by critic and quotes them; a split carries the `critique both`
+ * that would build it. Naming the tension in design words is the lead's,
+ * written above this, never here.
+ */
+export function readWords(read: CritiqueRead): string {
+  const lines: string[] = [];
+  for (const g of read.agree) {
+    lines.push(`**They agree** (${g.notes.length} ${g.kind} notes ${where(g.at)}): ${g.notes.map((n) => `${n.critic} — “${gist(n.text)}”`).join("; ")}`);
+  }
+  for (const s of read.split) {
+    const side = (ns: readonly CritiqueNote[]) =>
+      ns.map((n) => {
+        const said = gist(n.text);
+        const move = moveOf(n.text);
+        return `${n.critic} (${n.kind}) — “${said}”${move && !said.startsWith(move) ? ` → “${move}.”` : ""}`;
+      }).join("; ");
+    lines.push(`**They split** ${where(s.at)}${s.why === "remove-add" ? " (remove against add)" : ""}: ${side(s.sides[0])} against ${side(s.sides[1])} — build both: \`isocan critique both ${s.ref}\``);
+  }
+  lines.push(read.blocker.length ? `**Blocker:** ${read.blocker.map((n) => `${n.critic} — “${gist(n.text)}”`).join("; ")}` : "**Blocker:** none.");
+  if (read.alone.length) lines.push(`On their own: ${read.alone.map((n) => `${n.critic} (${n.kind}) — “${gist(n.text)}”`).join("; ")}`);
+  return lines.join("\n");
+}
+
+/** A critic on this canvas, as an actor. */
+export interface CriticActor {
+  id: string;
+  name: string;
+}
+
+/** Where one asked critic stands in a request thread. */
+export interface AskedCritic extends CriticActor {
+  /** `done`: its `critique done` line; `capped`: the rc's budget line; null: still working. */
+  state: "done" | "capped" | null;
+}
+
+/** A request thread, read: who asked, whom, and who has finished. */
+export interface CritiqueStatus {
+  threadId: string;
+  commentId: string;
+  asker: { id: string; name: string };
+  createdAt: string;
+  asked: AskedCritic[];
+  pending: AskedCritic[];
+}
+
+/** Whether a comment is a critic's last word — `critique done`'s line. */
+export const isDoneLine = (body: string) => body.startsWith("Done — ");
+
+/** Whether a system comment is the rc stopping this critic at its budget
+ *  (`capLine` in `packages/rc/src/budget.ts`) — a stop counts as done. */
+export const isCapLine = (body: string, name: string) => body.startsWith(`${name} stopped at its budget`);
+
+/**
+ * **Where a critique stands** — read off its request thread alone. The
+ * request is the first comment that mentions a critic; the asked are the
+ * critics it mentions; each is done when it has posted its done line in the
+ * thread, or the rc has said there that it stopped it at its budget. Null
+ * when the thread asks no critic anything.
+ */
+export function critiqueStatus(thread: CommentThread, critics: readonly CriticActor[], isSystem: (actorId: string) => boolean): CritiqueStatus | null {
+  const byId = new Map(critics.map((c) => [c.id, c]));
+  const request = thread.comments.find((c) => (c.mentions ?? []).some((id) => byId.has(id)));
+  if (!request) return null;
+  const later = thread.comments.slice(thread.comments.indexOf(request) + 1);
+  const asked: AskedCritic[] = [...new Set((request.mentions ?? []).filter((id) => byId.has(id)))].map((id) => {
+    const c = byId.get(id)!;
+    const done = later.some((x) => x.author.id === id && isDoneLine(x.body));
+    const capped = !done && later.some((x) => isSystem(x.author.id) && isCapLine(x.body, c.name));
+    return { ...c, state: done ? "done" : capped ? "capped" : null };
+  });
+  return {
+    threadId: thread.id,
+    commentId: request.id,
+    asker: { id: request.author.id, name: request.author.name },
+    createdAt: request.createdAt,
+    asked,
+    pending: asked.filter((a) => a.state === null),
+  };
+}
+
+/** The line the LAST of two or more critics adds to its done: the asker, by
+ *  mention, told the read is ready — the one wake the read needs. */
+export function readyLine(askerName: string, threadId: string): string {
+  return `@${mentionWord(askerName)} every critic asked here is done — the read: \`isocan critique read ${threadId}\``;
+}
+
+/** The slash command: an agent reading it from the Chat asks, and later leads. */
+const CRITIQUE_COMMAND: SlashCommand = {
+  name: "critique",
+  description: "Ask critics what they make of a screen — they pin notes, change nothing, and you write the one reply",
+  usage: "#Item with <critic> [and <critic>]",
+  source: "module",
+  body: `Ask the named critics for a critique of one screen, then write the one reply.
+
+1. WHICH SCREEN: the item #-referenced in the message (or attached). WHICH
+   CRITICS: the names after "with", split on "and" and commas — each is a
+   critic card on this canvas (\`isocan critic ls\`). If a named critic is not
+   here, \`isocan critic add <name>\` adds it from the roster; if it is not in
+   the roster either, say so in one line and stop.
+2. \`isocan critique "#<Item>" --by <a>,<b>\` — ONE thread on the screen that
+   mentions every critic. It refuses with a sentence when no runner is
+   parked; say that sentence to the person and stop. Then end your turn: the
+   critics work on their own and must not see each other's notes, so you do
+   not wait, read or comment.
+3. You are woken again when the last critic is done (its done line mentions
+   you). Run \`isocan critique read <thread>\`: the fold groups the notes into
+   agree, split and blocker, each citing its notes.
+4. Write the reply: \`isocan critique read <thread> --post --say "<your words>"\`.
+   Your words name each tension in design words — what the two critics value
+   that pulls the screen two ways (reduction against warmth, density against
+   calm) — in two or three sentences. Do not average a split and do not pick a
+   side; the person chooses. The grouping below your words is the fold's.
+5. Build nothing unless asked. If the person asks for both sides of a split,
+   \`isocan critique both <ref> --to <you>\` posts the brief, and you build the
+   two variations it names.`,
+};
+
 /** The record. */
 export const critiqueCore: CoreModule = {
   name: "@isocan/critique",
-  propertyKeys: [CRITIC_PROP],
+  propertyKeys: [CRITIC_PROP, ANSWERS_PROP],
   points: [CRITICS],
+  commands: [CRITIQUE_COMMAND],
 };
 
 /** The runtime loader reads `mod.default`; a named export alone builds and

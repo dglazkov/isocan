@@ -20,6 +20,8 @@ import critiqueCore, { CRITICS_POINT, CRITIC_PROP, CRITIC_TEMPLATE, criticMarkdo
 
 const ADA = { id: "usr_ada", name: "Ada" };
 const QUIET = { id: "act_quiet", name: "Quiet Hands" };
+const WARM = { id: "act_warm", name: "Warm Light" };
+const LEAD = { id: "act_lead", name: "Lead Hand" };
 
 const card = (extra = "") =>
   criticMarkdown({
@@ -43,20 +45,31 @@ function item(id: string, title: string, props: Record<string, string> = {}, siz
   } as unknown as Item;
 }
 
-function harness(opts: { parked?: boolean; owners?: { id: string; name: string }[]; as?: { id: string; name: string }; refuseCeiling?: string; reused?: boolean } = {}) {
+const warmCard = () =>
+  criticMarkdown({
+    name: "warm-light",
+    agentName: "Warm Light",
+    credit: "after Bo Acme's work; not affiliated",
+    color: "#cc6633",
+    lens: { questions: ["Does it feel like someone made it?", "Where is the warmth?", "Would you miss it?"], looksFor: "Feeling first.", ranks: "Warm over neat." },
+  });
+
+function harness(opts: { parked?: boolean; owners?: { id: string; name: string }[]; as?: { id: string; name: string }; refuseCeiling?: string; reused?: boolean; agents?: Record<string, { actor: { id: string; name: string }; writtenBy?: { id: string; name: string } }> } = {}) {
   const program = new Command().exitOverride().option("--json");
   const ops: Operation[] = [];
   const homeOps: Operation[] = [];
   const enrols: EnrolRequest[] = [];
   const errors: string[] = [];
-  const blobs: Record<string, string> = { blob_itm_card: card(), blob_itm_screen: "<main>Acme checkout</main>" };
+  const blobs: Record<string, string> = { blob_itm_card: card(), blob_itm_warm: warmCard(), blob_itm_screen: "<main>Acme checkout</main>" };
   const items: Record<string, Item> = {
     itm_card: item("itm_card", "Quiet Hands", { [CRITIC_PROP]: "quiet-hands" }),
+    itm_warm: item("itm_warm", "Warm Light", { [CRITIC_PROP]: "warm-light" }),
     itm_screen: item("itm_screen", "Acme checkout"),
   };
   const threads: Record<string, CommentThread> = {};
-  const agents: Record<string, { actor: { id: string; name: string }; ceiling?: "note" }> = {};
+  const agents: Record<string, { actor: { id: string; name: string }; ceiling?: "note"; writtenBy?: { id: string; name: string } }> = { ...(opts.agents ?? {}) };
   const withdrawn: string[] = [];
+  const printed: unknown[] = [];
   const ctx = {
     json: false,
     actor: opts.as ?? ADA,
@@ -102,18 +115,25 @@ function harness(opts: { parked?: boolean; owners?: { id: string; name: string }
           x: op.x,
           y: op.y,
           anchorItemId: op.anchorItemId,
-          comments: [{ ...c, author: ctx.actor, createdAt: new Date(Date.now() + ops.length).toISOString() }],
+          comments: [{ ...c, author: { ...ctx.actor }, createdAt: new Date(Date.now() + ops.length).toISOString() }],
           createdAt: new Date(Date.now() + ops.length).toISOString(),
           createdBy: ctx.actor,
         } as CommentThread;
       }
+      if (op.type === "thread.reply") {
+        const c = op.comment as { id: string; body: string; mentions?: string[]; record?: true };
+        threads[op.threadId]!.comments.push({ ...c, author: { ...ctx.actor }, createdAt: new Date(Date.now() + ops.length).toISOString() } as never);
+      }
       return { envelope: { op } };
     },
-    printJson: () => {},
+    printJson: (v: unknown) => {
+      printed.push(v);
+    },
     enrol: async (_ctx: unknown, _canvas: string, ask: EnrolRequest) => {
       enrols.push(ask);
-      agents[QUIET.id] ??= { actor: QUIET };
-      return { actorId: QUIET.id, dir: "/acme/critic", reused: opts.reused ?? false };
+      const actor = ask.name === WARM.name ? WARM : QUIET;
+      agents[actor.id] ??= { actor };
+      return { actorId: actor.id, dir: "/acme/critic", reused: opts.reused ?? false };
     },
     withdraw: async (_ctx: unknown, _canvas: string, actorId: string) => {
       withdrawn.push(actorId);
@@ -126,7 +146,7 @@ function harness(opts: { parked?: boolean; owners?: { id: string; name: string }
     await program.parseAsync(["node", "isocan", ...argv]);
     log.mockRestore();
   };
-  return { say, ops, homeOps, enrols, errors, blobs, ctx, threads, agents, withdrawn };
+  return { say, ops, homeOps, enrols, errors, blobs, ctx, threads, agents, withdrawn, printed };
 }
 
 describe("isocan critique <item> --by <critic>", () => {
@@ -297,5 +317,137 @@ describe("the critic's ceiling, from the asking side", () => {
     expect(h.ops).toHaveLength(count);
     await h.say("critic", "release", "loud");
     expect(h.errors).toEqual([expect.stringMatching(/^no agent "loud" stands on Acme/)]);
+  });
+});
+
+describe("two critics, and the read (critique phase 3)", () => {
+  /** Ask both, then let each critic answer in turn as itself. */
+  async function critique(h: ReturnType<typeof harness>) {
+    await h.say("critique", "#Acme checkout", "--by", "quiet,warm");
+    const ask = h.ops.find((op) => op.type === "thread.create") as Extract<Operation, { type: "thread.create" }>;
+    return ask.threadId;
+  }
+  const as = async (h: ReturnType<typeof harness>, who: { id: string; name: string }, ...argv: string[]) => {
+    const before = h.ctx.actor;
+    h.ctx.actor = who;
+    await h.say(...argv);
+    h.ctx.actor = before;
+  };
+
+  it("enrols and caps both, and opens ONE thread on the screen mentioning both", async () => {
+    const h = harness();
+    await critique(h);
+    expect(h.errors).toEqual([]);
+    expect(h.enrols.map((e) => e.name)).toEqual(["Quiet Hands", "Warm Light"]);
+    expect(h.enrols[1]!.args!.card).toBe(h.blobs.blob_itm_warm);
+    expect(h.ops.map((op) => op.type)).toEqual(["agent.ceiling", "agent.ceiling", "thread.create"]);
+    expect(h.ops.slice(0, 2)).toEqual([
+      { type: "agent.ceiling", actorId: QUIET.id, ceiling: "note" },
+      { type: "agent.ceiling", actorId: WARM.id, ceiling: "note" },
+    ]);
+    const ask = h.ops[2] as Extract<Operation, { type: "thread.create" }>;
+    expect(ask.comment).toMatchObject({ mentions: [QUIET.id, WARM.id], items: ["itm_screen"] });
+    expect(ask.comment.body).toBe("@Quiet and @Warm — what do you make of #Acme checkout? Each of you on your own: pin your notes on it; change nothing.");
+    expect(h.homeOps.map((op) => (op as { color?: string }).color)).toEqual(["#336699", "#cc6633"]);
+  });
+
+  it("refuses the whole ask, enrolling nobody, when one named critic is not here", async () => {
+    const h = harness();
+    await h.say("critique", "itm_screen", "--by", "quiet,loud");
+    expect(h.errors[0]).toMatch(/no critic "loud" on Acme/);
+    expect(h.enrols).toEqual([]);
+    expect(h.ops).toEqual([]);
+  });
+
+  it("lets a lead agent ask on its owner's runner — the person whose enrolment of it stands", async () => {
+    const h = harness({ as: LEAD, owners: [ADA], agents: { [LEAD.id]: { actor: LEAD, writtenBy: ADA } } });
+    await h.say("critique", "itm_screen", "--by", "quiet,warm");
+    expect(h.errors).toEqual([]);
+    const stranger = harness({ as: LEAD, owners: [{ id: "usr_sam", name: "Sam" }], agents: { [LEAD.id]: { actor: LEAD, writtenBy: ADA } } });
+    await stranger.say("critique", "itm_screen", "--by", "quiet,warm");
+    expect(stranger.errors[0]).toMatch(/is Sam's/);
+  });
+
+  it("the first done is a record; the last mentions the asker and says where the read is", async () => {
+    const h = harness({ as: LEAD, agents: { [LEAD.id]: { actor: LEAD, writtenBy: ADA } } });
+    const threadId = await critique(h);
+    await as(h, QUIET, "critique", "note", "itm_screen", "--at", "0.45,0.2", "--kind", "risk", "--question", "2", "The photo pushes the order below the fold. Cut it.");
+    // Still working: the read refuses to post, and a critic may not read it.
+    await h.say("critique", "read", threadId, "--post");
+    expect(h.errors.pop()).toMatch(/^still waiting on Quiet Hands and Warm Light/);
+    await as(h, WARM, "critique", "read", threadId);
+    expect(h.errors.pop()).toMatch(/Warm Light, you are one of the critics asked here and not done/);
+    await as(h, QUIET, "critique", "done", "itm_screen");
+    await as(h, WARM, "critique", "note", "itm_screen", "--at", "0.5,0.15", "--kind", "working", "--question", "2", "The photo carries the warmth. Leave it.");
+    await as(h, WARM, "critique", "done", "itm_screen");
+    expect(h.errors).toEqual([]);
+    const replies = h.ops.filter((op) => op.type === "thread.reply") as Extract<Operation, { type: "thread.reply" }>[];
+    expect(replies).toHaveLength(2);
+    expect(replies[0]!.comment).toEqual({ id: expect.any(String), body: "Done — 1 note on #Acme checkout: 1 risk.", record: true });
+    expect(replies[1]!.comment).toEqual({
+      id: expect.any(String),
+      body: `Done — 1 note on #Acme checkout: 1 working.\n@Lead every critic asked here is done — the read: \`isocan critique read ${threadId}\``,
+      mentions: [LEAD.id],
+    });
+  });
+
+  it("critique read folds the notes; --post replies once, a record, the lead's words above the fold", async () => {
+    const h = harness({ as: LEAD, agents: { [LEAD.id]: { actor: LEAD, writtenBy: ADA } } });
+    const threadId = await critique(h);
+    await as(h, QUIET, "critique", "note", "itm_screen", "--at", "0.45,0.2", "--kind", "risk", "--question", "2", "The photo pushes the order below the fold. Cut it.");
+    await as(h, QUIET, "critique", "note", "itm_screen", "--at", "0.7,0.3", "--kind", "risk", "--question", "1", "The price is too quiet. Set it larger.");
+    await as(h, WARM, "critique", "note", "itm_screen", "--at", "0.5,0.15", "--kind", "working", "--question", "2", "The photo carries the warmth. Leave it.");
+    await as(h, WARM, "critique", "note", "itm_screen", "--at", "0.72,0.34", "--kind", "risk", "--question", "3", "The total is a footnote. Give it weight.");
+    await as(h, QUIET, "critique", "done", "itm_screen");
+    await as(h, WARM, "critique", "done", "itm_screen");
+    h.ctx.json = true;
+    await h.say("critique", "read", "itm_screen");
+    const out = h.printed.at(-1) as { threadId: string; pending: string[]; read: { agree: unknown[]; split: { ref: string }[]; blocker: unknown[] } };
+    expect(out.threadId).toBe(threadId);
+    expect(out.pending).toEqual([]);
+    expect(out.read.agree).toHaveLength(1);
+    expect(out.read.split).toHaveLength(1);
+    expect(out.read.blocker).toEqual([]);
+    h.ctx.json = false;
+    await h.say("critique", "read", threadId, "--post", "--say", "Reduction against warmth: one would cut the photo, one keeps it for the feeling.");
+    expect(h.errors).toEqual([]);
+    const posted = h.ops.at(-1) as Extract<Operation, { type: "thread.reply" }>;
+    expect(posted).toMatchObject({ type: "thread.reply", threadId, comment: { record: true, items: ["itm_screen"] } });
+    const [words, , ...fold] = posted.comment.body.split("\n");
+    expect(words).toBe("Reduction against warmth: one would cut the photo, one keeps it for the feeling.");
+    expect(fold[0]).toMatch(/^\*\*They agree\*\* \(2 risk notes/);
+    expect(fold[1]).toContain(`isocan critique both ${out.read.split[0]!.ref}`);
+    expect(fold[2]).toBe("**Blocker:** none.");
+  });
+
+  it("critique both asks an agent that may edit for two variations, each citing its note; never a critic", async () => {
+    const h = harness({ as: LEAD, agents: { [LEAD.id]: { actor: LEAD, writtenBy: ADA } } });
+    const threadId = await critique(h);
+    await as(h, QUIET, "critique", "note", "itm_screen", "--at", "0.45,0.2", "--kind", "risk", "--question", "2", "The photo pushes the order below the fold. Cut it.");
+    await as(h, WARM, "critique", "note", "itm_screen", "--at", "0.5,0.15", "--kind", "working", "--question", "2", "The photo carries the warmth. Leave it.");
+    await as(h, QUIET, "critique", "done", "itm_screen");
+    await as(h, WARM, "critique", "done", "itm_screen");
+    const notes = h.ops.filter((op) => op.type === "thread.create" && op.threadId !== threadId) as Extract<Operation, { type: "thread.create" }>[];
+    const [cut, keep] = notes.map((n) => n.threadId);
+    await h.say("critique", "both", `${cut}+${cut}`);
+    expect(h.errors.pop()).toMatch(/both notes are Quiet Hands's/);
+    await h.say("critique", "both", `${keep}+${cut}`, "--to", "quiet");
+    expect(h.errors.pop()).toMatch(/Quiet Hands is a critic, capped at notes/);
+    await h.say("critique", "both", `${keep}+${cut}`);
+    expect(h.errors).toEqual([]);
+    const ask = h.ops.at(-1) as Extract<Operation, { type: "thread.reply" }>;
+    expect(ask).toMatchObject({ type: "thread.reply", threadId, comment: { mentions: [LEAD.id], items: ["itm_screen"] } });
+    expect(ask.comment.body).toMatch(/^@Lead build both sides of this split/);
+    expect(ask.comment.body).toContain(`--prop parent=itm_screen --prop critique.answers=${keep}`);
+    expect(ask.comment.body).toContain(`--prop parent=itm_screen --prop critique.answers=${cut}`);
+    // A person asked, so there is no lead to default to: name one.
+    const person = harness();
+    const t2 = await critique(person);
+    expect(t2).toBeTruthy();
+    await as(person, QUIET, "critique", "note", "itm_screen", "--at", "0.45,0.2", "--kind", "risk", "--question", "2", "Cut it.");
+    await as(person, WARM, "critique", "note", "itm_screen", "--at", "0.5,0.15", "--kind", "working", "--question", "2", "Leave it.");
+    const pn = person.ops.filter((op) => op.type === "thread.create" && op.threadId !== t2) as Extract<Operation, { type: "thread.create" }>[];
+    await person.say("critique", "both", `${pn[1]!.threadId}+${pn[0]!.threadId}`);
+    expect(person.errors.pop()).toMatch(/Ada asked, and is not an agent here — name who builds them/);
   });
 });

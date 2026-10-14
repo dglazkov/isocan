@@ -5,6 +5,8 @@ import type { Command } from "commander";
 import {
   anchorAtFraction,
   anchorOffset,
+  isSystemActor,
+  type CommentThread,
   moduleAsset,
   moduleSlug,
   newCommentId,
@@ -17,6 +19,16 @@ import {
 import { packagePath } from "@isocan/core/packageroot";
 import type { CliHost, CliModule, Ctx } from "@isocan/cli/modulehost";
 import {
+  ANSWERS_PROP,
+  critiqueRead,
+  critiqueStatus,
+  gist,
+  mentionWord,
+  readWords,
+  readyLine,
+  type CriticActor,
+  type CritiqueNote,
+  type CritiqueStatus,
   CRITIC_PROP,
   CRITIC_TEMPLATE,
   DEFAULT_BUDGET,
@@ -87,6 +99,53 @@ async function criticsOn(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotRes
     if (critic) out.push({ itemId: item.id, critic });
   }
   return out;
+}
+
+/** The critics on this canvas as actors: each enrolment row whose agent
+ *  wears a critic card's name. A card never asked has no actor yet. */
+async function criticActors(ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse): Promise<CriticActor[]> {
+  const names = new Set((await criticsOn(ctx, canvasId, snapshot)).map(({ critic }) => critic.agentName.toLowerCase()));
+  return Object.values(snapshot.canvas.agents ?? {})
+    .filter((a) => names.has(a.actor.name.toLowerCase()))
+    .map((a) => ({ id: a.actor.id, name: a.actor.name }));
+}
+
+/** The notes the asked critics left on the screen since they were asked. */
+function notesFor(snapshot: CanvasSnapshotResponse, itemId: string, status: CritiqueStatus): CritiqueNote[] {
+  const who = new Set(status.asked.map((a) => a.id));
+  return Object.values(snapshot.canvas.threads)
+    .map((t) => readNote(t, snapshot.canvas.items))
+    .filter((n): n is CritiqueNote => n !== null && n.item === itemId && who.has(n.criticId) && n.createdAt >= status.createdAt);
+}
+
+/**
+ * **The request a read is of** — a thread id, or a screen, whose newest
+ * thread asking critics is the one. Returns the thread's status and the
+ * screen it is about (the item it is pinned to, or the one it names).
+ */
+async function requestOf(host: CliHost, ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, ref: string): Promise<{ status: CritiqueStatus; item: Item }> {
+  const critics = await criticActors(ctx, canvasId, snapshot);
+  const read = (t: CommentThread) => critiqueStatus(t, critics, isSystemActor);
+  const direct = snapshot.canvas.threads[ref];
+  if (direct) {
+    const status = read(direct);
+    if (!status) throw new Error(`thread ${ref} asks no critic anything — a read is of a critique's request thread`);
+    const request = direct.comments.find((c) => c.id === status.commentId)!;
+    const itemId = direct.anchorItemId ?? request.items?.[0];
+    const item = itemId ? snapshot.canvas.items[itemId] : undefined;
+    if (!item) throw new Error(`thread ${ref} is about no screen that is still here`);
+    return { status, item };
+  }
+  const item = screenOf(host, snapshot, ref);
+  const candidates = Object.values(snapshot.canvas.threads)
+    .map((t) => ({ t, s: read(t) }))
+    .filter((x): x is { t: CommentThread; s: CritiqueStatus } => {
+      const s = x.s;
+      return s !== null && (x.t.anchorItemId === item.id || (x.t.comments.find((c) => c.id === s.commentId)?.items ?? []).includes(item.id));
+    })
+    .sort((a, b) => b.s.createdAt.localeCompare(a.s.createdAt));
+  if (!candidates[0]) throw new Error(`nobody has asked a critic about ${item.title} — \`isocan critique ${item.id} --by <critic>\``);
+  return { status: candidates[0].s, item };
 }
 
 /** A critic card's current bytes — the card IS the critic, so this is read
@@ -299,62 +358,92 @@ function registerCritique(host: CliHost): void {
     .command("critique")
     .description("Ask a critic about a screen — it pins notes on it and changes nothing")
     .argument("[item]", "the screen (an item; `#Title` works)")
-    .option("--by <critic>", "the critic on this canvas — its name, or the word you would @mention")
+    .option("--by <critics>", "the critics on this canvas, comma-separated — each by its name, or the word you would @mention")
     .option("--canvas <canvas>")
     .addHelpText(
       "after",
       `
   isocan critique "#Checkout" --by inevitable
-Needs your \`isocan rc\` parked on the canvas: the critic runs there, on your key,
-bounded by the budget on its card. It answers with \`critique note\` and
-\`critique done\`, which are its verbs, not yours.`,
+  isocan critique "#Checkout" --by inevitable,frog
+Needs your \`isocan rc\` parked on the canvas: each critic runs there, on your key,
+bounded by the budget on its card. They answer with \`critique note\` and
+\`critique done\`, which are their verbs, not yours. With two or more, one thread
+asks them all; each works alone, and when the last is done
+\`isocan critique read <thread>\` folds their notes into agree, split and blocker.`,
     )
     .action(
       run(async (ref: string | undefined, opts: { by?: string }, cmd: Command) => {
-        if (!ref || !opts.by) throw new Error("pass the screen and the critic: `isocan critique <item> --by <critic>`");
-        if (opts.by.includes(",")) throw new Error("one critic per critique for now — two at once, and one voice for them, is critique phase 3");
+        if (!ref || !opts.by) throw new Error("pass the screen and the critics: `isocan critique <item> --by <critic>[,<critic>]`");
+        const refs = [...new Set(opts.by.split(",").map((s) => s.trim()).filter(Boolean))];
+        if (refs.length === 0) throw new Error("--by names at least one critic");
         const ctx = await ctxOf(cmd);
         const canvas = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(canvas.id);
         const item = screenOf(host, snapshot, ref);
         const on = await criticsOn(ctx, canvas.id, snapshot);
-        const hit = findCritic(on, opts.by);
-        if (!hit) throw new Error(`no critic "${opts.by}" on ${canvas.title} — \`isocan critic ls\` lists them; \`isocan critic add ${opts.by}\` adds one from the roster`);
-        const clash = canvasClashes(on).find((c) => c.id === hit.critic.name);
-        const problems = [...criticProblems(hit.critic), ...(clash ? [clash.problem] : [])];
-        if (problems.length) throw new Error(`${hit.critic.agentName}'s card needs fixing first — ${problems.join("; ")}`);
+        // Every critic resolved and checked before anything is enrolled, so a
+        // refusal for the second leaves the canvas as it found it.
+        const hits: CanvasCritic[] = [];
+        for (const one of refs) {
+          const hit = findCritic(on, one);
+          if (!hit) throw new Error(`no critic "${one}" on ${canvas.title} — \`isocan critic ls\` lists them; \`isocan critic add ${one}\` adds one from the roster`);
+          const clash = canvasClashes(on).find((c) => c.id === hit.critic.name);
+          const problems = [...criticProblems(hit.critic), ...(clash ? [clash.problem] : [])];
+          if (problems.length) throw new Error(`${hit.critic.agentName}'s card needs fixing first — ${problems.join("; ")}`);
+          if (!hits.some((h) => h.itemId === hit.itemId)) hits.push(hit);
+        }
         // No runner, no critique — and nothing enrolled, so a refusal leaves
         // the canvas as it found it.
         const answering = await ctx.client.rcAnswering(canvas.id).catch(() => null);
         if (!answering?.parked) {
           throw new Error(`nobody's runner is parked on ${canvas.title} — start \`isocan rc\` there, then ask again. Nothing was enrolled.`);
         }
+        // The runner must be the asker's — or, for an agent asking (the lead
+        // of a `/critique`), its owner's: the person whose enrolment of it
+        // stands here.
         const owners = answering.owners ?? [];
-        if (owners.length > 0 && !owners.some((o) => o.id === ctx.actor.id)) {
+        const onBehalf = snapshot.canvas.agents?.[ctx.actor.id]?.writtenBy?.id;
+        if (owners.length > 0 && !owners.some((o) => o.id === ctx.actor.id || (onBehalf !== undefined && o.id === onBehalf))) {
           throw new Error(`the runner parked on ${canvas.title} is ${owners.map((o) => o.name).join(", ")}'s, and a critic runs on the machine that asks — start your own \`isocan rc\`. Nothing was enrolled.`);
         }
-        const { critic } = hit;
-        const enrolled = await host.enrol(ctx, canvas.id, {
-          name: critic.agentName,
-          template: CRITIC_TEMPLATE,
-          args: { card: await cardText(ctx, canvas.id, snapshot, hit.itemId), canvas: canvas.id, cardItem: hit.itemId },
-          budget: { ...DEFAULT_BUDGET, ...(critic.budget ?? {}) },
-          reuse: true,
-        });
-        await capCritic(host, ctx, canvas.id, critic.agentName, enrolled);
-        // Its pins and its cursor wear its colour: a colour is an actor fact
-        // (`actor.setColor`), which every surface already paints a pin's
-        // face with, and this badge holds the critic's actor.
-        const colour = hex(critic.color);
-        if (colour) await ctx.client.sendOp(null, ctx.actor, { type: "actor.setColor", actorId: enrolled.actorId, color: colour }).catch(() => {});
+        const asked: { hit: CanvasCritic; actorId: string; reused: boolean; dir: string | null; budget: { usdPerRun: number; turnsPerRun: number } }[] = [];
+        for (const hit of hits) {
+          const { critic } = hit;
+          const budget = { ...DEFAULT_BUDGET, ...(critic.budget ?? {}) };
+          const enrolled = await host.enrol(ctx, canvas.id, {
+            name: critic.agentName,
+            template: CRITIC_TEMPLATE,
+            args: { card: await cardText(ctx, canvas.id, snapshot, hit.itemId), canvas: canvas.id, cardItem: hit.itemId },
+            budget,
+            reuse: true,
+          });
+          await capCritic(host, ctx, canvas.id, critic.agentName, enrolled);
+          // Its pins and its cursor wear its colour: a colour is an actor fact
+          // (`actor.setColor`), which every surface already paints a pin's
+          // face with, and this badge holds the critic's actor.
+          const colour = hex(critic.color);
+          if (colour) await ctx.client.sendOp(null, ctx.actor, { type: "actor.setColor", actorId: enrolled.actorId, color: colour }).catch(() => {});
+          asked.push({ hit, actorId: enrolled.actorId, reused: enrolled.reused, dir: enrolled.dir, budget });
+        }
+        // ONE thread, mentioning every critic: the request, the record, and
+        // where the read lands.
         const threadId = newThreadId();
-        const comment = { id: newCommentId(), body: requestBody(critic.agentName, item.title), mentions: [enrolled.actorId], items: [item.id] };
+        const comment = { id: newCommentId(), body: requestBody(asked.map((a) => a.hit.critic.agentName), item.title), mentions: asked.map((a) => a.actorId), items: [item.id] };
         await sendOp(ctx, canvas.id, { type: "thread.create", threadId, ...anchorOffset(item), anchorItemId: item.id, comment } as never);
-        const budget = { ...DEFAULT_BUDGET, ...(critic.budget ?? {}) };
-        if (ctx.json) return printJson({ threadId, critic: critic.name, actorId: enrolled.actorId, enrolled: !enrolled.reused, dir: enrolled.dir, item: item.id, budget });
+        if (ctx.json) {
+          const rows = asked.map((a) => ({ critic: a.hit.critic.name, actorId: a.actorId, enrolled: !a.reused, dir: a.dir, budget: a.budget }));
+          return printJson(rows.length === 1 ? { threadId, item: item.id, ...rows[0]! } : { threadId, item: item.id, critics: rows });
+        }
+        for (const a of asked) {
+          console.log(
+            `asked ${a.hit.critic.agentName} about ${item.title} (thread ${threadId}) — ${a.reused ? "already enrolled; its card re-read" : "enrolled on your runner"}, ` +
+              `at most ${a.budget.turnsPerRun} turns and $${a.budget.usdPerRun.toFixed(2)}.`,
+          );
+        }
         console.log(
-          `asked ${critic.agentName} about ${item.title} (thread ${threadId}) — ${enrolled.reused ? "already enrolled; its card re-read" : "enrolled on your runner"}, ` +
-            `at most ${budget.turnsPerRun} turns and $${budget.usdPerRun.toFixed(2)}. Its notes pin to the screen: \`isocan critique notes ${item.id}\``,
+          asked.length === 1
+            ? `Its notes pin to the screen: \`isocan critique notes ${item.id}\``
+            : `Each works alone. When the last is done it says so here, and \`isocan critique read ${threadId}\` folds the notes.`,
         );
       }),
     );
@@ -409,8 +498,25 @@ bounded by the budget on its card. It answers with \`critique note\` and
           .map((t) => readNote(t, snapshot.canvas.items))
           .filter((n): n is NonNullable<typeof n> => n !== null && n.criticId === ctx.actor.id && n.item === item.id && n.createdAt >= asked.createdAt);
         const line = doneLine(notes, item.title);
-        await sendOp(ctx, canvas.id, { type: "thread.reply", threadId: asked.threadId, comment: { id: newCommentId(), body: line } } as never);
-        if (ctx.json) return printJson({ threadId: asked.threadId, notes: notes.length });
+        /**
+         * **Who this line wakes** (critique phase 3). A done line is a record
+         * — it reports what happened — so it summons nobody: without that, the
+         * first critic's done would wake the second through the ordinary
+         * in-your-thread rule, mid-critique, with the first's tally in its
+         * summons. The LAST of two or more critics instead mentions whoever
+         * asked, which is the one wake the read needs: a lead agent is
+         * summoned by the ordinary mention rule, a person is notified, and a
+         * mention addresses that one actor, so the other critics stay asleep.
+         */
+        const thread = snapshot.canvas.threads[asked.threadId];
+        const status = thread ? critiqueStatus(thread, await criticActors(ctx, canvas.id, snapshot), isSystemActor) : null;
+        const othersDone = status ? status.pending.every((p) => p.id === ctx.actor.id) : true;
+        const last = status !== null && status.asked.length >= 2 && othersDone && status.asker.id !== ctx.actor.id;
+        const comment = last
+          ? { id: newCommentId(), body: `${line}\n${readyLine(status.asker.name, status.threadId)}`, mentions: [status.asker.id] }
+          : { id: newCommentId(), body: line, record: true };
+        await sendOp(ctx, canvas.id, { type: "thread.reply", threadId: asked.threadId, comment } as never);
+        if (ctx.json) return printJson({ threadId: asked.threadId, notes: notes.length, last });
         console.log(line);
       }),
     );
@@ -435,6 +541,116 @@ bounded by the budget on its card. It answers with \`critique note\` and
           console.log(`${n.critic} · ${n.kind} · question ${n.question} · at ${n.at.x},${n.at.y}  (${n.threadId})`);
           console.log(`  ${n.text.replace(/\n/g, "\n  ")}`);
         }
+      }),
+    );
+
+  family
+    .command("read <ref>")
+    .description("Fold a critique's notes into agree, split and blocker — and, with --post, reply with it in the request thread")
+    .option("--post", "post the read as the one reply in the request thread (only once every critic asked is done)")
+    .option("--say <words>", "with --post: your words above the fold, naming each tension in design words")
+    .option("--canvas <canvas>")
+    .addHelpText(
+      "after",
+      `
+<ref> is the request thread, or the screen (its newest critique). The grouping
+is \`critiqueRead\`'s, deterministic: agree is two critics, one kind, one region
+(pins within 0.15 of the screen) whose moves do not oppose; split is two critics
+in one region where one keeps (working, or "Leave it.") what the other would
+change, or one removes what the other adds or enlarges (the move's verb, read
+from MOVE_VOCABULARY); blocker is every blocker. The words that
+name a tension are yours — \`--say\` — and never the fold's.`,
+    )
+    .action(
+      run(async (ref: string, opts: { post?: boolean; say?: string }, cmd: Command) => {
+        const ctx = await ctxOf(cmd);
+        const canvas = await resolveCanvas(ctx);
+        const snapshot = await ctx.client.snapshot(canvas.id);
+        const { status, item } = await requestOf(host, ctx, canvas.id, snapshot, ref);
+        // A soft fence, said plainly: a critic still at work does not read the
+        // others. (Reading cannot be refused at the home the way writing is —
+        // `comment list` would show the threads — so the order is what holds.)
+        if (status.pending.some((p) => p.id === ctx.actor.id)) throw new Error(`${ctx.actor.name}, you are one of the critics asked here and not done — your judgement is your own; the read is for after`);
+        const notes = notesFor(snapshot, item.id, status);
+        const read = critiqueRead(notes);
+        const words = readWords(read);
+        const waiting = status.pending.map((p) => p.name);
+        if (opts.say && !opts.post) throw new Error("--say is the words above a posted read — add --post");
+        if (opts.post) {
+          // Independence is arranged by order: the read is written once,
+          // after every critic has finished, so no critic's notes were
+          // written having seen it.
+          if (waiting.length) throw new Error(`still waiting on ${waiting.join(" and ")} — the read is posted once every critic asked is done (or stopped at its budget)`);
+          const body = `${opts.say?.trim() ? `${opts.say.trim()}\n\n` : ""}${words}`;
+          // A record: the read reports, and must not wake the critics it
+          // reports on (they are in this thread).
+          await host.sendOp(ctx, canvas.id, { type: "thread.reply", threadId: status.threadId, comment: { id: newCommentId(), body, record: true, items: [item.id] } } as never);
+        }
+        if (ctx.json) return printJson({ threadId: status.threadId, item: item.id, asked: status.asked, pending: waiting, notes: notes.length, read, posted: !!opts.post });
+        const head = `${item.title} — asked ${status.asked.map((a) => `${a.name}${a.state === "capped" ? " (stopped at its budget)" : a.state === null ? " (still working)" : ""}`).join(", ")}; ${notes.length} ${notes.length === 1 ? "note" : "notes"}`;
+        console.log(head);
+        console.log(words);
+        if (waiting.length) console.log(`(not final: still waiting on ${waiting.join(" and ")})`);
+        else if (opts.post) console.log(`posted in thread ${status.threadId}`);
+      }),
+    );
+
+  family
+    .command("both <split>")
+    .description("Ask an agent to build both sides of a split: two variations of the screen, each citing the note it answers")
+    .option("--to <agent>", "the agent who builds them — one on this canvas that may edit (default: the lead who asked)")
+    .option("--canvas <canvas>")
+    .addHelpText(
+      "after",
+      `
+<split> is the ref \`critique read\` prints beside a split (\`<note>+<note>\`).
+Nothing is built here: the agent is asked, in the request thread, to make two
+variations through the /variation path — \`isocan add … --prop parent=<screen>
+--prop ${ANSWERS_PROP}=<note>\` — one per side. Critics never build; they are capped.`,
+    )
+    .action(
+      run(async (ref: string, opts: { to?: string }, cmd: Command) => {
+        const ctx = await ctxOf(cmd);
+        const canvas = await resolveCanvas(ctx);
+        const snapshot = await ctx.client.snapshot(canvas.id);
+        const ids = ref.split("+").map((s) => s.trim());
+        const pair = ids.map((id) => {
+          const t = snapshot.canvas.threads[id];
+          return t ? readNote(t, snapshot.canvas.items) : null;
+        });
+        if (ids.length !== 2 || pair.some((n) => n === null)) throw new Error(`"${ref}" is not a split — \`isocan critique read <thread>\` prints each split's ref, \`<note>+<note>\``);
+        const [a, b] = pair as [CritiqueNote, CritiqueNote];
+        if (a.item !== b.item) throw new Error("those two notes are on different screens — a split is about one");
+        if (a.criticId === b.criticId) throw new Error(`both notes are ${a.critic}'s — a split is two critics`);
+        const { status, item } = await requestOf(host, ctx, canvas.id, snapshot, a.item);
+        // The ref must still be a split in the read as it stands — what the
+        // person was shown, not two notes picked by hand.
+        const split = critiqueRead(notesFor(snapshot, item.id, status)).split.find((s) => s.sides[0].some((n) => n.threadId === a.threadId) && s.sides[1].some((n) => n.threadId === b.threadId));
+        if (!split) throw new Error(`${a.critic}'s and ${b.critic}'s notes are not a split in ${item.title}'s read — \`isocan critique read ${status.threadId}\``);
+        const agents = Object.values(snapshot.canvas.agents ?? {});
+        const wanted = opts.to?.trim().replace(/^@/, "").toLowerCase();
+        const builder = wanted
+          ? agents.find((x) => x.actor.id === wanted || x.actor.name.toLowerCase() === wanted || mentionWord(x.actor.name).toLowerCase() === wanted)
+          : agents.find((x) => x.actor.id === status.asker.id);
+        if (!builder) {
+          throw new Error(wanted
+            ? `no agent "${opts.to}" stands on ${canvas.title} — \`isocan who\` lists them`
+            : `${status.asker.name} asked, and is not an agent here — name who builds them: \`--to <agent>\`, an agent on this canvas that may edit`);
+        }
+        if (builder.ceiling === "note") throw new Error(`${builder.actor.name} is a critic, capped at notes — it cannot build. Name an agent that may edit: \`--to <agent>\``);
+        const side = (n: CritiqueNote, i: number) =>
+          `${i}. Answering ${n.critic}'s note (${n.threadId}, ${n.kind}): “${gist(n.text, 240)}”\n` +
+          `   \`isocan add <file> --title "${item.title} — <the idea>" --prop parent=${item.id} --prop ${ANSWERS_PROP}=${n.threadId}\``;
+        const body = [
+          `@${mentionWord(builder.actor.name)} build both sides of this split: two variations of #${item.title}, one per critic, each doing what its note asks and nothing else.`,
+          side(a, 1),
+          side(b, 2),
+          `This is /variation's procedure for two (\`isocan command show variation\`): real alternatives, named for the idea; then \`isocan format\` and one reply here saying what each tried. Leave ${item.title} itself as it is.`,
+        ].join("\n");
+        const commentId = newCommentId();
+        await host.sendOp(ctx, canvas.id, { type: "thread.reply", threadId: status.threadId, comment: { id: commentId, body, mentions: [builder.actor.id], items: [item.id] } } as never);
+        if (ctx.json) return printJson({ threadId: status.threadId, commentId, builder: builder.actor.id, answers: [a.threadId, b.threadId], parent: item.id });
+        console.log(`asked ${builder.actor.name} to build both in thread ${status.threadId} — one answering ${a.critic}, one answering ${b.critic}, each with parent=${item.id} and ${ANSWERS_PROP}=<its note>`);
       }),
     );
 }
@@ -480,6 +696,8 @@ function criticBrief(critic: Critic): string {
     "## How a critique goes",
     "",
     "The summons names the thread you were asked in and the screen: the item that thread is pinned to, or the one it names with `#Title`. That screen is the whole job.",
+    "",
+    "Other critics may be asked in the same thread. You answer alone: never read their notes (`critique notes` and `critique read` are not your verbs), and never wait for them.",
     "",
     "1. **Read the screen**, not the threads. `isocan show <item>` gives its size; `isocan get <item>` prints its HTML. Read that. Do not read other threads or other critics' notes, and do not answer them — your judgement is your own.",
     "2. **Write notes, and nothing else** — three to five of them, each with one verb:",

@@ -590,7 +590,12 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   budget ([the walk](docs/projects/critique/phases.md)). "Changes nothing" is
   the home's rule, not the prompt's: an asked critic is capped at notes on
   that canvas, and an edit from it is refused `beyond-ceiling` until you run
-  `isocan critic release`.
+  `isocan critic release`. Ask two at once (`--by inevitable,frog`, or
+  `/critique #Checkout with Inevitable and Form Follows Emotion` in the Chat):
+  each works alone in one thread, and when both are done `isocan critique
+  read` folds their notes into where they agree, where they split and what
+  blocks; `critique both` asks an agent to build a split both ways, as two
+  variations each citing the note it answers.
 - **MCP collaboration**: `isocan mcp` exposes sixteen tools plus current canvas
   and layered Context resources. Read items, frozen request bytes and context;
   claim an explicit durable agent session, create or edit items, post or reply

@@ -847,6 +847,19 @@ export function readsAsTurnedAway(body: string, agentName: string): boolean {
  * the rule and the park applying it cannot drift — the piercing that must
  * never differ between them is one function's control flow.
  */
+/**
+ * **A critic hears only its name** (critique phase 3). An agent whose
+ * enrolment row on this canvas carries the `note` ceiling is a critic here,
+ * asked for one thing at a time: the Chat being loud, a "thanks" in a thread
+ * it was asked in, a change to an item — none of it is a critique, and each
+ * used to spend a turn of its budget. So for it only `mentioned` routes.
+ * Read off the canvas the op lands on, so the rc, `wait` and the inbox say
+ * one thing; an uncapped agent is untouched.
+ */
+function mentionsOnly(canvas: CanvasContents | null | undefined, actorId: string): boolean {
+  return canvas?.agents?.[actorId]?.ceiling === "note";
+}
+
 export function dispatchReason(
   op: Operation,
   authorId: string,
@@ -894,19 +907,21 @@ export function dispatchReason(
     ? admits(agent.policy, authorId, agent)
     : listensTo(agent.rules, authorId, agent.joined);
   if (!admitted) return null;
+  const capped = mentionsOnly(canvas, agent.actorId);
   if (op.type === "thread.create" || op.type === "thread.reply") {
     const thread = canvas?.threads[op.threadId];
     const candidates = canvas ? collectCanvasNames(canvas) : undefined;
     const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined, candidates);
-    if (reason) return reason;
+    if (reason && (!capped || reason === "mentioned")) return reason;
   }
   if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas?.threads[op.threadId];
     const comment = thread?.comments.find((c) => c.id === op.commentId);
     const candidates = canvas ? collectCanvasNames(canvas) : undefined;
     const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined, candidates);
-    if (reason) return reason;
+    if (reason && (!capped || reason === "mentioned")) return reason;
   }
+  if (capped) return null;
   const rules = agent.rules;
   if (!rules) return null;
   const items = rules.items ?? [];
@@ -929,12 +944,13 @@ export function inboxOn(
   joined?: ActorJoins,
 ): InboxEntry[] {
   const candidates = collectCanvasNames(canvas);
+  const capped = mentionsOnly(canvas, actor.id);
   const out: InboxEntry[] = [];
   for (const thread of Object.values(canvas.threads ?? {})) {
     for (const comment of thread.comments) {
       if (sameActor(joined, comment.author.id, actor.id)) continue;
       const reason = reasonFor(comment, thread, actor.id, names, joined, candidates);
-      if (!reason) continue;
+      if (!reason || (capped && reason !== "mentioned")) continue;
       out.push({
         canvasId,
         ...(canvasTitle ? { canvasTitle } : {}),
