@@ -4434,15 +4434,17 @@ button.mt-card:hover { border-color: var(--accent); }
      decision behind an alpha is one no colour test can see. */
 }
 
+/* The opening words, top-left like the words they stand for, wrapped to the
+   box and clipped by it. The inset is in em, so it shrinks with the words and
+   keeps them off a sticky's edge at every zoom. */
 .text-mark {
-  display: flex; align-items: center; justify-content: center;
+  display: block; overflow: hidden; padding: 0.5em 0.7em;
   width: 100%; height: 100%;
-  font-weight: 700; line-height: 1;
-  /* Quiet by TOKEN, not by opacity: `dimmed.test.ts` refuses faded text
-     because a contrast decision hidden behind an alpha is one no colour
-     test can see. `--ink-soft` is the same voice the section eyebrows use,
-     which is exactly the loudness this wants. */
-  color: var(--ink-soft);
+  font-weight: 600; line-height: 1.2; overflow-wrap: anywhere;
+  /* Quieter than the words themselves, by TOKEN and not opacity
+     (`dimmed.test.ts` refuses faded text). `--ink-muted`, not the eyebrows'
+     `--ink-soft`: these are words to be read now, not a glyph to notice. */
+  color: var(--ink-muted);
   user-select: none;
 }
 .item.textnode .md-view {

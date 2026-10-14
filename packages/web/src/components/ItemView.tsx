@@ -1217,22 +1217,20 @@ function ItemViewInner({
       )}
       {!isCanvasGroup && <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
         {/**
-         * Too far away to read: draw the mark, not the words.
+         * Too far away to read: draw the opening words big enough to read,
+         * not the words at their own size.
          *
          * The node keeps its box — its place and footprint on the canvas are
-         * still true — and what changes is that forty illegible shapes become
-         * one legible one. The mark is sized never to exceed the node it
-         * stands for (`textMarkSize`), because a glyph bigger than its own
-         * node would misdescribe the canvas, and at the zoom where dozens of
-         * nodes are marks that is the same smear in a different hat.
+         * still true. Inside it, its first line (its title) is set at a size
+         * a person can read and clipped to the box, so a node far away still
+         * says what it is about. It used to be a single "T", which said only
+         * that it was text (Dion, 13 Oct 2026: "show SOME of the text"). The
+         * size is still `textMarkSize`, so the words never claim more room
+         * than the node they stand for.
          */}
         {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
-          <span
-            className="text-mark"
-            aria-label={item.title}
-            style={{ fontSize: TEXT_MARK_CSS }}
-          >
-            T
+          <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
+            {item.title}
           </span>
         ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !entered && !(nearWindow && roomy) ? (
           /**
