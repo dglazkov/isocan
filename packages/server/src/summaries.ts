@@ -4,10 +4,11 @@ import type { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { atLeast } from "@isocan/core";
 import { ownerOnlySentence, TEXT_OWNER_ONLY } from "@isocan/core/keys";
+import type { CanvasContents, Item } from "@isocan/core";
 import {
-  checkSummary, semanticZoomPrompt, SEMANTIC_ZOOM_PROMPT_VERSION, summarisableText, summariesRoute, SUMMARY_BAD_ANSWER, SUMMARY_EXCLUDED, SUMMARY_MIN_WORDS,
-  SUMMARY_MODEL, SUMMARY_NO_SOURCE, SUMMARY_QUIET, SUMMARY_QUIET_MS, SUMMARY_SCHEMA, SUMMARY_SYSTEM, textSummaryKey, wordCount,
-  type SummaryEntry, type SummaryMake, type SummaryRead,
+  checkSummary, semanticZoomPrompt, SEMANTIC_ZOOM_PROMPT_VERSION, summarisableText, summariesRoute, summaryKey, summaryMemberKind, summaryMembers, summaryReadsWords,
+  SUMMARY_BAD_ANSWER, SUMMARY_EXCLUDED, SUMMARY_MIN_WORDS, SUMMARY_MODEL, SUMMARY_NO_SOURCE, SUMMARY_QUIET, SUMMARY_QUIET_MS, SUMMARY_SCHEMA, SUMMARY_SYSTEM,
+  textSummaryKey, wordCount, type SummaryEntry, type SummaryMake, type SummaryMember, type SummaryRead,
 } from "@isocan/core/semantic-zoom";
 import { TEXT_MAX_BYTES, TEXT_RATE_LIMITED, TEXT_UNAVAILABLE } from "@isocan/core/text";
 import type { Engine } from "./engine.ts";
@@ -19,7 +20,7 @@ import type { TextModel } from "./text.ts";
 
 /**
  * **Semantic Zoom's summaries, at the home** (`docs/projects/semantic-zoom/`,
- * design §5 and §6; phase 1: text nodes).
+ * design §5 and §6; text nodes since phase 1, groups and areas since phase 2).
  *
  * A summary is derived, regenerable and nobody's act, so it is not an op: it
  * lives in a cache beside the snapshots, `<home>/summaries/<canvasId>/<key>.json`,
@@ -38,7 +39,10 @@ import type { TextModel } from "./text.ts";
  *   then passes `/api/text`'s guards in-process — edit capability, owner-only
  *   spend unless shared, the badge's rate, the size — and asks the text model
  *   with its own system line and its own model (the cheap tier), so what
- *   `/api/text`'s callers get is unchanged.
+ *   `/api/text`'s callers get is unchanged. A group or an area is collected
+ *   here too (`summaryMembers`): a client names the container, never its
+ *   members, and over the size bound the longest members' words are left
+ *   out first, their titles kept, and the prompt says so.
  *
  * A source changed in the last 30 s is not summarised yet (202,
  * `summary-quiet`, with how long to wait); one make per key is in flight at a time, and a second
@@ -123,12 +127,16 @@ class SummaryCache {
     return entry;
   }
 
-  /** The newest entry made for exactly this one source, whatever its key — what a reader shows while the current content waits. */
+  /**
+   * The newest entry made for this source, whatever its key — what a reader
+   * shows while the current content waits. The source is an entry's first
+   * id: a note's own, a group's or an area's container (its members follow).
+   */
   async newestFor(canvasId: string, sourceId: string): Promise<SummaryEntry | null> {
     const index = await this.load(canvasId);
     let best: [string, Indexed] | null = null;
     for (const row of index) {
-      if (row[1].sourceIds.length !== 1 || row[1].sourceIds[0] !== sourceId) continue;
+      if (row[1].sourceIds[0] !== sourceId) continue;
       if (!best || row[1].madeAt > best[1].madeAt) best = row;
     }
     return best ? this.get(canvasId, best[0]) : null;
@@ -191,6 +199,24 @@ interface SummaryRouteScope {
 
 type Made = { status: number; body: unknown };
 
+/** The kinds a summary may be asked for. */
+const KINDS: readonly string[] = ["text", "group", "area"];
+
+/**
+ * What one make needs, whatever it is of: the key, the sources the entry
+ * names, when the content last changed (for the quiet period), and how to
+ * collect the prompt — run only once nothing cached answers and the quiet
+ * period has passed, so a cache hit reads no blob. `prompt: null` means
+ * nothing to summarise.
+ */
+interface Plan {
+  kind: SummaryEntry["kind"];
+  key: string;
+  sourceIds: string[];
+  changedAt: number;
+  collect: () => Promise<{ prompt: string | null } | Made>;
+}
+
 /** `GET` and `POST /api/projects/:id/summaries`, on `app`. */
 export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteScope): void {
   const { engine, store, homes, refusals, admit, viewOnly, textModel, notTheOwners, keyOwner, options } = scope;
@@ -205,6 +231,70 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     model: (provider) => options.model?.() ?? (process.env.ISOCAN_SUMMARY_MODEL?.trim() || (provider === "anthropic" ? SUMMARY_MODEL : undefined)),
   };
   const route = summariesRoute(":id");
+
+  /** A note's plan: its one item, quiet since its current version was made, and its words read only when a summary is to be made. */
+  const textPlan = async (canvasId: string, canvas: CanvasContents, sourceId: string): Promise<Plan | Made> => {
+    const item = summarisableText(canvas, sourceId);
+    if (item === null) return { status: 404, body: { error: `there is no text node ${sourceId} on this canvas`, code: SUMMARY_NO_SOURCE } };
+    if (item === "excluded") return { status: 422, body: { error: "this text is excluded from context, so it is never sent to a model", code: SUMMARY_EXCLUDED } };
+    const version = item.versions.find((v) => v.id === item.currentVersionId);
+    if (!version) return { status: 404, body: { error: `${item.id} has no current version`, code: SUMMARY_NO_SOURCE } };
+    return {
+      kind: "text", key: await textSummaryKey(item), sourceIds: [item.id], changedAt: Date.parse(version.createdAt),
+      collect: async () => {
+        const stream = await store.openBlob(canvasId, version.blobHash);
+        if (!stream) return { status: 404, body: { error: `the words of ${item.id} are not at this home`, code: SUMMARY_NO_SOURCE } };
+        const { text, cut } = await readWords(stream, MAX_SOURCE_BYTES);
+        if (!cut && wordCount(text) <= SUMMARY_MIN_WORDS) return { prompt: null };
+        return { prompt: semanticZoomPrompt({ kind: "text", title: item.title, body: cut ? `${text}\n(The note is longer; this is its opening.)` : text }) };
+      },
+    };
+  };
+
+  /**
+   * A group's or an area's plan: the container and what it holds
+   * (`summaryMembers`, excluded members already gone), keyed by all of them.
+   * Quiet once nothing it holds — nor anything its last summary held, which
+   * is how a card just dragged OUT of an area still counts — has changed in
+   * the quiet period. A move is a change here, unlike for a note: it is how
+   * an area's membership moves.
+   */
+  const containerPlan = async (canvasId: string, canvas: CanvasContents, kind: "group" | "area", sourceId: string): Promise<Plan | Made> => {
+    const found = summaryMembers(canvas, kind, sourceId);
+    if (found === null) return { status: 404, body: { error: `there is no ${kind} ${sourceId} on this canvas`, code: SUMMARY_NO_SOURCE } };
+    if (found === "excluded") return { status: 422, body: { error: `this ${kind} is excluded from context, so it is never sent to a model`, code: SUMMARY_EXCLUDED } };
+    const { container, members } = found;
+    const before = await cache.newestFor(canvasId, container.id);
+    const touched = [container, ...members, ...(before?.sourceIds ?? []).map((one) => canvas.items[one]).filter((one): one is Item => !!one)];
+    return {
+      kind, key: await summaryKey(kind, [container, ...members]), sourceIds: [container.id, ...members.map((m) => m.id)],
+      changedAt: Math.max(...touched.map((one) => Date.parse(one.updatedAt) || 0)),
+      collect: async () => {
+        if (members.length === 0) return { prompt: null };
+        // Titles always go; words go shortest first while they fit, so the longest are the ones given by title only.
+        let room = MAX_SOURCE_BYTES - members.reduce((sum, m) => sum + Buffer.byteLength(m.title) + 32, 0);
+        const words = new Map<string, string>();
+        const read = await Promise.all(members.filter(summaryReadsWords).map(async (m) => {
+          const version = m.versions.find((v) => v.id === m.currentVersionId);
+          const stream = version ? await store.openBlob(canvasId, version.blobHash) : null;
+          return { id: m.id, text: stream ? (await readWords(stream, MAX_SOURCE_BYTES)).text.trim() : "" };
+        }));
+        let left = 0;
+        for (const one of read.sort((a, b) => Buffer.byteLength(a.text) - Buffer.byteLength(b.text) || (a.id < b.id ? -1 : 1))) {
+          const size = Buffer.byteLength(one.text);
+          if (size <= room) {
+            words.set(one.id, one.text);
+            room -= size;
+          } else left++;
+        }
+        const shown = members.map((m): SummaryMember => {
+          const body = words.get(m.id);
+          return { kind: summaryMemberKind(m), title: m.title, ...(body ? { body } : {}) };
+        });
+        return { prompt: semanticZoomPrompt({ kind, title: container.title, members: shown, left }) };
+      },
+    };
+  };
 
   app.get(route, async (req) => {
     const { id } = req.params as { id: string };
@@ -231,8 +321,8 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
   app.post(route, { bodyLimit: 4096 }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as Partial<SummaryMake> | null;
-    if (!body || typeof body !== "object" || body.kind !== "text" || typeof body.sourceId !== "string" || !body.sourceId) {
-      return reply.status(400).send({ error: "a summary is asked for by `kind` (\"text\") and `sourceId`", code: SUMMARY_NO_SOURCE });
+    if (!body || typeof body !== "object" || !KINDS.includes(body.kind as string) || typeof body.sourceId !== "string" || !body.sourceId) {
+      return reply.status(400).send({ error: "a summary is asked for by `kind` (\"text\", \"group\" or \"area\") and `sourceId`", code: SUMMARY_NO_SOURCE });
     }
     const down = refusals.of(id);
     if (down) throw new TakenDownError(down);
@@ -245,19 +335,16 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
     if (home) return home.personalRequest("POST", req.url, { kind: body.kind, sourceId: body.sourceId });
 
     const { canvas } = await engine.getSnapshot(id);
-    const item = summarisableText(canvas, body.sourceId);
-    if (item === null) return reply.status(404).send({ error: `there is no text node ${body.sourceId} on this canvas`, code: SUMMARY_NO_SOURCE });
-    if (item === "excluded") return reply.status(422).send({ error: "this text is excluded from context, so it is never sent to a model", code: SUMMARY_EXCLUDED });
-    const key = await textSummaryKey(item);
+    const plan = body.kind === "text" ? await textPlan(id, canvas, body.sourceId) : await containerPlan(id, canvas, body.kind!, body.sourceId);
+    if ("status" in plan) return reply.status(plan.status).send(plan.body);
+    const { key } = plan;
     const cached = await cache.get(id, key);
     if (cached) return cached;
-    const version = item.versions.find((v) => v.id === item.currentVersionId);
-    if (!version) return reply.status(404).send({ error: `${item.id} has no current version`, code: SUMMARY_NO_SOURCE });
-    const quietFor = now() - Date.parse(version.createdAt);
+    const quietFor = now() - plan.changedAt;
     if (quietFor < quietMs()) {
       const retryAfterMs = quietMs() - quietFor;
       // 202, not a refusal: the ask is right, only early. The reader keeps the old summary and asks again after `retryAfterMs`.
-      return reply.status(202).send({ code: SUMMARY_QUIET, retryAfterMs, message: "this text changed moments ago — its summary waits for it to go quiet" });
+      return reply.status(202).send({ code: SUMMARY_QUIET, retryAfterMs, message: `this ${body.kind === "text" ? "text" : body.kind} changed moments ago — its summary waits for it to go quiet` });
     }
     const running = inFlight.get(key);
     if (running) {
@@ -265,12 +352,11 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
       return reply.status(made.status).send(made.body);
     }
     const making = (async (): Promise<Made> => {
-      const stream = await store.openBlob(id, version.blobHash);
-      if (!stream) return { status: 404, body: { error: `the words of ${item.id} are not at this home`, code: SUMMARY_NO_SOURCE } };
-      const { text, cut } = await readWords(stream, MAX_SOURCE_BYTES);
-      const base = { key, kind: "text" as const, sourceIds: [item.id], promptVersion: SEMANTIC_ZOOM_PROMPT_VERSION, madeAt: new Date(now()).toISOString() };
-      if (!cut && wordCount(text) <= SUMMARY_MIN_WORDS) {
-        // Nothing to summarise: the opening words are most of it. Remembered, so nobody asks again; no model, no key.
+      const collected = await plan.collect();
+      if ("status" in collected) return collected;
+      const base = { key, kind: plan.kind, sourceIds: plan.sourceIds, promptVersion: SEMANTIC_ZOOM_PROMPT_VERSION, madeAt: new Date(now()).toISOString() };
+      if (collected.prompt === null) {
+        // Nothing to summarise: a short note's opening words are most of it, an empty group is its title. Remembered, so nobody asks again; no model, no key.
         const entry: SummaryEntry = { ...base, summary: null, short: true, words: 0, model: null, madeFor: null };
         await cache.put(id, entry);
         return { status: 200, body: entry };
@@ -280,8 +366,7 @@ export function registerSummaryRoutes(app: FastifyInstance, scope: SummaryRouteS
       if (refused) return { status: 403, body: { error: ownerOnlySentence(refused.owner), code: TEXT_OWNER_ONLY } };
       if (!source) return { status: 503, body: { error: "this home has no text model — summaries can't be made here", code: TEXT_UNAVAILABLE } };
       if (!textModel.take(req.badge!.badgeId)) return { status: 429, body: { error: "this badge has asked for enough words this minute — wait a moment", code: TEXT_RATE_LIMITED } };
-      const prompt = semanticZoomPrompt({ kind: "text", title: item.title, body: cut ? `${text}\n(The note is longer; this is its opening.)` : text });
-      const written = await textModel.write({ prompt, schema: SUMMARY_SCHEMA }, ask);
+      const written = await textModel.write({ prompt: collected.prompt, schema: SUMMARY_SCHEMA }, ask);
       if (written.status !== 200) return written;
       const { model, value } = written.body as { model: string; value: { summary?: unknown } | null };
       const summary = typeof value?.summary === "string" ? value.summary.trim() : value?.summary;

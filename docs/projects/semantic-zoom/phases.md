@@ -9,7 +9,7 @@ note: "the walk: a bench that judges summaries before any ship, text nodes behin
 
 **13 October 2026.** Held to [journey.md](journey.md) and [design.md](design.md).
 
-**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run. Phase 1 (text nodes behind the experiment) is CLOSED on a stub model; next is phase 2, groups and areas.**
+**Where we are, 13 Oct 2026: designed, not started. Dion's answers are in design.md §10 (the first person who can pay causes a summary; only notes over ~40 words; not shown without the flag; vision as its own setting, §11). Phase 0's bench is built and waits on a text key to run. Phases 1–2 (long notes, groups and areas, behind the experiment) are CLOSED on a stub model; next is phase 3, freshness and cost.**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -77,7 +77,7 @@ the opening words; the "≈" mark; the stale-while-updating mark.
 
 ## Phase 2 — Groups and areas
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `summaryMembers` collects a group (`groupDescendants`) or an area (`itemsIn`, by geometry), minus excluded items, nested frames, ink and annotations, sorted by id; notes send their words, screens and pictures their titles. The home makes `group` and `area` summaries with the same guards, waits out the quiet period across the frame, its members and what its last summary held, truncates over 64 KB longest-first, and caches an empty frame as `short`. `Z_GIST` (with `holdsAtZoom` hysteresis on the median member's type size) draws a counter-scaled card under the title strip. The journey `semantic-zoom-board` on a stub: four frames, six calls; a card dragged from To do to Doing changed both summaries after the quiet period, with 0 frames showing a card missing; the excluded note never in any prompt. Deep suite 821 of 821; entry 710,079 → 710,185.
 
 **Outcome:** the group and area collectors; `Z_GIST` with hysteresis; the
 counter-scaled summary card inside a group's or area's frame.
@@ -86,6 +86,14 @@ counter-scaled summary card inside a group's or area's frame.
 out shows three summaries; dragging a card from one area to another changes
 both keys and, after the debounce, both summaries; a group's summary ignores
 an excluded member.
+
+### Trajectory
+
+- **2026-10-14** — An area's key covers membership, not each member's x, y, w, h (design §4 departed from): the prompt carries no positions, so a nudge inside an area keeps its summary, and a card moved in or out changes the key.
+- **2026-10-14** — A frame's quiet period runs from the newest `updatedAt` across the frame, its members, and what its last summary held, so after a drag both the area it left and the area it joined wait.
+- **2026-10-14** — On a groups canvas an "area" is a group (`isocan area new`); geometric areas exist only on legacy canvases. The board journey uses groups; legacy areas are proved by core and server tests, not in a browser.
+- **2026-10-14** — While its card shows, a frame rises over its members (`.gisted`, z-index 1) and stops taking the pointer, so the card is not painted under the cards and a ⌘-press still reaches one. The members are washed at about 40% meanwhile: a judgement for phase 5's walk.
+- **2026-10-14** — Open: forwarding a make to a canvas homed elsewhere is wired and untested, as in phase 1.
 
 ## Phase 3 — Freshness and cost
 

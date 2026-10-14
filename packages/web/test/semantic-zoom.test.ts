@@ -51,10 +51,14 @@ describe("off costs nothing", () => {
   });
 
   it("draws nothing new without it: ItemView only reads what the chunk wrote, and the store starts empty", () => {
-    expect(read("stores/gistStore.ts")).toContain("create<Record<string, ReactNode>>(() => ({}))");
+    expect(read("stores/gistStore.ts")).toContain("create<Record<string, { node: ReactNode; px?: number }>>(() => ({}))");
     const item = read("components/ItemView.tsx");
-    expect(item).toContain("useGistStore((s) => (textLegible ? null : s[item.id]))");
+    expect(item).toContain("const gistEntry = useGistStore((s) => s[item.id]);");
+    expect(item).toContain("const gist = textLegible ? null : gistEntry?.node;");
     expect(item).toMatch(/gist \?\? <span className="text-mark"/);
+    // A group's or an area's card shows only where the zoom says its members cannot be read.
+    expect(item).toContain("zoomDecisions(item, width, height, s.viewport.scale, held, gistEntry?.px)");
+    expect(item).toContain("{gisted && gistEntry!.node}");
   });
 
   it("keeps the experiment list's sentences out of the first visit: only Settings imports it", () => {
@@ -67,6 +71,7 @@ describe("off costs nothing", () => {
   it("the summary is marked as one: ≈, and an accessible name that says Summary of", () => {
     const zoom = read("components/SemanticZoom.tsx");
     expect(zoom).toContain(`aria-label={\`Summary of \${title}`);
+    expect(zoom).toContain(`aria-label={\`Summary of \${item.title}`);
     expect(zoom).toContain("≈");
     expect(zoom).toContain("sz-updating");
   });

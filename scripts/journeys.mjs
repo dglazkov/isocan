@@ -4262,6 +4262,167 @@ export const JOURNEYS = [
       }
     },
   },
+  {
+    name: "semantic-zoom-board",
+    /**
+     * **Semantic Zoom, phase 2: a board's areas say what they hold**
+     * (`docs/projects/semantic-zoom/phases.md`, phase 2's proof). Its own
+     * daemon with a recording stub on loopback, as `semantic-zoom-text`: the
+     * stub answers each prompt with the frame's title and its members' titles
+     * as it was sent them, so what a card says IS what the home collected.
+     *
+     * A board of three areas — on a groups canvas an area is a group (`isocan
+     * area new`), so its members are explicit — plus a fourth group holding a
+     * note excluded from context. Zoomed out until the cards cannot be read:
+     * four summary cards, ≈ and "Summary of …", one model call each, the
+     * excluded note's words in none of them. Then a person drags a card from
+     * To do into Doing: both summaries keep their old words marked updating,
+     * never an empty frame, until the quiet period has passed and both are
+     * replaced by what the frames now hold — two more calls, nothing else.
+     */
+    what: "a three-area board far away shows three ≈ summaries; a card dragged across changes both after the quiet period; an excluded note never reaches the model",
+    async run(rig) {
+      const { b } = rig;
+      const asked = [];
+      const stub = createServer((req, res) => {
+        let body = "";
+        req.on("data", (c) => (body += c));
+        req.on("end", () => {
+          const sent = JSON.parse(body || "{}");
+          asked.push(sent);
+          const prompt = String(sent.messages?.[0]?.content?.[0]?.text ?? sent.messages?.[0]?.content ?? "");
+          const title = /titled "([^"]+)"/.exec(prompt)?.[1] ?? "?";
+          const members = [...prompt.matchAll(/^- (?:Note|Card|Screen|Picture) "([^"]+)"/gm)].map((m) => m[1]);
+          const summary = `Acme ${title} holds ${members.join(" and ") || "nothing"}`;
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ id: "msg_stub", type: "message", role: "assistant", model: sent.model, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary }) }] }));
+        });
+      });
+      await new Promise((r) => stub.listen(0, "127.0.0.1", r));
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-szb-"));
+      const { proc, origin } = await startDaemon(home, 0, {
+        ISOCAN_TEXT_API_KEY: "sk-ant-journey-stub-not-a-key",
+        ISOCAN_TEXT_PROVIDER: "anthropic",
+        ISOCAN_TEXT_ENDPOINT: `http://127.0.0.1:${stub.address().port}/v1/messages`,
+        ISOCAN_SUMMARY_QUIET_MS: "2500",
+        ISOCAN_SUMMARY_MODEL: "",
+        ISOCAN_TEXT_MODEL: "",
+      });
+      try {
+        const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, ISOCAN_SESSION_ID: "acme-semantic-board-journey", ISOCAN_HARNESS: "test" };
+        const runCli = (...args) => {
+          const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+          return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+        };
+        runCli("identity", "--session", "--name", "Acme Board CLI");
+        const id = runCli("canvas", "create", "Acme sprint board").canvasId;
+        const frames = {};
+        for (const [n, title] of ["To do", "Doing", "Done", "Onboarding"].entries()) {
+          frames[title] = runCli("--canvas", id, "canvas", "group", "new", title, "--at", `${n * 800},0`, "--size", "700x900").itemId;
+        }
+        const cards = {};
+        const note = (frame, title, words) => {
+          const file = path.join(home, `${title.replace(/\W+/g, "-")}.md`);
+          writeFileSync(file, `# ${title}\n\n${words}\n`);
+          cards[title] = runCli("--canvas", id, "text", "-f", file, "--in", frames[frame]).itemId;
+        };
+        note("To do", "Billing migration", "Ravi moves Acme billing to the new ledger.");
+        note("To do", "Copy fix", "Ana rewrites the empty state.");
+        note("Doing", "Safari crash", "Ana is on the Safari crash.");
+        note("Done", "Pricing page", "Ravi shipped the pricing page.");
+        note("Onboarding", "Sign up", "Sign up asks for a work email.");
+        note("Onboarding", "Margins", "ACME-CONFIDENTIAL margins are forty percent.");
+        runCli("--canvas", id, "context", "exclude", cards.Margins);
+        // Every source quiet before the browser looks, so the first summaries are made at once.
+        await sleep(2800);
+
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await throughTheDoor(b, origin, "Journey", "journeys-semantic-board");
+        await b.ev(`(() => { localStorage.setItem("isocan.experiments", JSON.stringify(["semantic.zoom"])); return true; })()`);
+        await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+        const frameSel = (title) => JSON.stringify(`.item[data-item-id="${frames[title]}"]`);
+        await until(b, Object.keys(frames).map((t) => `!!document.querySelector(${frameSel(t)})`).join(" && "), "the four frames on the canvas", 15_000);
+
+        // Zoomed out around the board's middle until a card's words are under 5px and the whole board is on screen.
+        const scale = () => b.ev(`parseFloat(getComputedStyle(document.querySelector(".world")).getPropertyValue("--scale")) || 1`);
+        const box = () => b.ev(`(() => { const rs = [${Object.keys(frames).map(frameSel).join(",")}].map((s) => document.querySelector(s).getBoundingClientRect()); return { left: Math.min(...rs.map((r) => r.left)), right: Math.max(...rs.map((r) => r.right)), top: Math.min(...rs.map((r) => r.top)), bottom: Math.max(...rs.map((r) => r.bottom)) }; })()`);
+        for (let n = 0; (await scale()) > 0.24 && n < 80; n++) {
+          const r = await box();
+          await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: Math.min(Math.max(Math.round((r.left + r.right) / 2), 200), 1080), y: Math.min(Math.max(Math.round((r.top + r.bottom) / 2), 200), 700), deltaX: 0, deltaY: 120, modifiers: 2 });
+          await sleep(40);
+        }
+        const at = await box();
+        if (at.left < 0 || at.right > 1280 || at.top < 0 || at.bottom > 900) throw new Error(`zoomed out to ${await scale()}, the board is not all on screen: ${JSON.stringify(at)}`);
+
+        // 1. Four summary cards, each marked and named, current.
+        const cardOf = (title) => `${frameSel(title)} + " .sz-card"`;
+        const current = (title) => `(() => { const c = document.querySelector(${cardOf(title)}); return !!c && !c.hasAttribute("data-stale"); })()`;
+        await until(b, Object.keys(frames).map(current).join(" && "), "a current summary card in each of the four frames", 20_000);
+        const read = (title) => b.ev(`(() => { const c = document.querySelector(${cardOf(title)}); return { text: c.textContent.trim(), name: c.getAttribute("aria-label"), role: c.getAttribute("role"), raised: getComputedStyle(c.closest(".item")).zIndex }; })()`);
+        const first = {};
+        for (const title of Object.keys(frames)) {
+          const c = (first[title] = await read(title));
+          if (!c.text.startsWith("≈")) throw new Error(`${title}'s summary is not marked ≈: "${c.text}"`);
+          if (c.name !== `Summary of ${title}`) throw new Error(`${title}'s summary is named "${c.name}"`);
+          if (c.role !== "note") throw new Error(`${title}'s summary has role ${c.role}`);
+          // The frame rises over its members while its card shows, so the card is not painted under them.
+          if (c.raised !== "1") throw new Error(`${title}'s frame stays at z-index ${c.raised} under its members`);
+        }
+        // Members are listed by id, so in either order.
+        if (!/holds (Billing migration and Copy fix|Copy fix and Billing migration)$/.test(first["To do"].text)) throw new Error(`To do says "${first["To do"].text}"`);
+        if (!/holds Safari crash$/.test(first.Doing.text)) throw new Error(`Doing says "${first.Doing.text}"`);
+        if (asked.length !== 4) throw new Error(`four frames, ${asked.length} model calls`);
+        const prompts = () => asked.map((a) => JSON.stringify(a.messages));
+        if (!prompts().every((p) => /This is a group on a canvas/.test(p))) throw new Error("a call was not a group's summary");
+        if (prompts().some((p) => /CONFIDENTIAL|forty percent|Margins/.test(p))) throw new Error("the excluded note reached the model");
+        if (/Margins/.test(first.Onboarding.text) || !/holds Sign up$/.test(first.Onboarding.text)) throw new Error(`Onboarding says "${first.Onboarding.text}"`);
+
+        // 2. A person drags Copy fix from To do into Doing.
+        await b.ev(`(() => {
+          window.__szbGaps = 0; window.__szbWatch = true;
+          const look = () => { if (!document.querySelector(${cardOf("To do")}) || !document.querySelector(${cardOf("Doing")})) window.__szbGaps++; };
+          new MutationObserver(look).observe(document.querySelector(".world"), { subtree: true, childList: true, characterData: true, attributes: true });
+          const frame = () => { if (!window.__szbWatch) return; look(); requestAnimationFrame(frame); };
+          requestAnimationFrame(frame);
+          return true;
+        })()`);
+        const from = await b.ev(`(() => { const r = document.querySelector(${JSON.stringify(`.item[data-item-id="${cards["Copy fix"]}"]`)}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+        const into = await b.ev(`(() => { const r = document.querySelector(${frameSel("Doing")}).getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.bottom - r.height / 4) }; })()`);
+        const hit = await b.ev(`document.elementFromPoint(${from.x}, ${from.y})?.closest(".item")?.dataset.itemId ?? null`);
+        if (hit !== cards["Copy fix"]) throw new Error(`a press on Copy fix lands on ${hit} — under its frame's summary card, a person could not grab it`);
+        // At the canvas's level a press on a member takes its whole group; ⌘ (Ctrl off a Mac) reaches the one card, as a person does.
+        const MOD = process.platform === "darwin" ? 4 : 2;
+        const mouse = (type, x, y, buttons) => b.send("Input.dispatchMouseEvent", { type, x: Math.round(x), y: Math.round(y), modifiers: MOD, buttons, button: "left", clickCount: type === "mouseMoved" ? 0 : 1 });
+        await mouse("mousePressed", from.x, from.y, 1);
+        for (let s = 1; s <= 12; s++) {
+          await mouse("mouseMoved", from.x + ((into.x - from.x) * s) / 12, from.y + ((into.y - from.y) * s) / 12, 1);
+          await sleep(30);
+        }
+        await mouse("mouseReleased", into.x, into.y, 0);
+        const parent = () => runCli("--canvas", id, "show", cards["Copy fix"]).containerId ?? null;
+        for (let n = 0; parent() !== frames.Doing && n < 20; n++) await sleep(250);
+        if (parent() !== frames.Doing) throw new Error(`the drag left Copy fix in ${parent()}, not in Doing (${frames.Doing})`);
+        await until(b, `(() => { const c = document.querySelector(${cardOf("To do")}); return !!c && c.hasAttribute("data-stale") && /Copy fix/.test(c.textContent) && !!c.querySelector(".sz-updating"); })()`, "To do's old summary kept, marked as being updated", 10_000);
+        await until(b, `(() => { const c = document.querySelector(${cardOf("Doing")}); return !!c && c.hasAttribute("data-stale") && /holds Safari crash/.test(c.textContent); })()`, "Doing's old summary kept, marked as being updated", 10_000);
+        await until(b, `${current("To do")} && /holds Billing migration$/.test(document.querySelector(${cardOf("To do")}).textContent)`, "To do's new summary, without Copy fix", 20_000);
+        await until(b, `${current("Doing")} && /Copy fix and Safari crash|Safari crash and Copy fix/.test(document.querySelector(${cardOf("Doing")}).textContent)`, "Doing's new summary, with Copy fix", 20_000);
+        const gaps = await b.ev(`(() => { window.__szbWatch = false; return window.__szbGaps; })()`);
+        if (gaps !== 0) throw new Error(`a frame's summary card was missing on ${gaps} sampled frame(s) between the old summary and the new`);
+        if (asked.length !== 6) throw new Error(`one drag across two frames, ${asked.length - 4} more model calls`);
+        if (prompts().some((p) => /CONFIDENTIAL|forty percent|Margins/.test(p))) throw new Error("the excluded note reached the model");
+        return { frames: Object.keys(frames).length, calls: asked.length, scale: await scale(), before: first["To do"].text, after: { todo: (await read("To do")).text, doing: (await read("Doing")).text } };
+      } finally {
+        proc.kill();
+        await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); });
+        stub.close();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
 ];
 
 /**

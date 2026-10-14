@@ -1,7 +1,7 @@
-import { useEffect, type ReactNode } from "react";
-import { isTextItem, textDrawSize, textIsLegible, type Item } from "@isocan/core";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { AREA_TITLE_HEIGHT, groupStackBox, isArea, isGroupItem, isTextItem, textDrawSize, textIsLegible, type Item } from "@isocan/core";
 import { TEXT_OWNER_ONLY } from "@isocan/core/keys";
-import { summarisableText, summariesRoute, SUMMARY_QUIET, textSummaryKey, type SummaryEntry, type SummaryRead, type SummaryWait } from "@isocan/core/semantic-zoom";
+import { memberTypeSize, summarisableText, summariesRoute, summaryKey, summaryMembers, SUMMARY_QUIET, type SummaryEntry, type SummaryRead, type SummaryWait } from "@isocan/core/semantic-zoom";
 import { TEXT_RATE_LIMITED, TEXT_UNAVAILABLE } from "@isocan/core/text";
 import { ApiError, request } from "../lib/api.ts";
 import { TEXT_MARK_CSS } from "../lib/chrome.ts";
@@ -11,15 +11,21 @@ import { useUiStore } from "../stores/uiStore.ts";
 import "./semantic-zoom.css";
 
 /**
- * **Semantic Zoom's reader and asker, for one canvas** (an experiment; phase 1:
- * text nodes; `docs/projects/semantic-zoom/design.md` §3 and §6).
+ * **Semantic Zoom's reader and asker, for one canvas** (an experiment; text
+ * nodes since phase 1, groups and areas since phase 2;
+ * `docs/projects/semantic-zoom/design.md` §3 and §6).
  *
  * Mounted only while this person has `semantic.zoom` on, and this whole chunk
  * is fetched only then: with it off, no request is made, nothing is asked of
  * a model, and nothing of this loads. It draws nothing itself. Once the view
  * has settled it works out which text nodes on screen are too small to read,
- * reads their summaries from the home in one batch, and hands ItemView a
- * finished mark for each (`gistStore.ts`) to draw in the opening words' place.
+ * and which groups and areas hold members too small to read (the median
+ * member's type size, `memberTypeSize`), reads their summaries from the home
+ * in one batch, and hands ItemView a finished mark for each (`gistStore.ts`):
+ * a note's in its opening words' place, a group's or an area's as a card
+ * inside its frame, under the title strip. For a group or an area ItemView
+ * decides when the card shows (`Z_GIST`, with the zoom rule's hysteresis), so
+ * this hands over the members' type size beside the card.
  *
  * A summary is looked up by its content key every time, never remembered by
  * item: an edit is a new key. Until the new content has a summary, the old one
@@ -47,10 +53,16 @@ const SETTLE_MS = 300;
 /** Keys per read: what one screen shows, not a whole canvas. */
 const PER_READ = 100;
 
+/** A frame with less room than this on screen (px) has no room for a summary line: it keeps its title only (design §3, the mark band). */
+const CARD_MIN = { w: 96, h: 28 };
+
 interface Seen {
   item: Item;
+  kind: "text" | "group" | "area";
   key: string;
   distance: number;
+  /** A group's or an area's members' median type size, in world units. */
+  px?: number;
 }
 
 /** The mark ItemView draws: "≈", the summary, and while it is being brought up to date, a quiet mark saying so. */
@@ -61,6 +73,22 @@ function gist(title: string, summary: string, stale: boolean): ReactNode {
       {summary}
       {stale && <span className="sz-updating" aria-hidden="true" title="Being brought up to date"> ↻</span>}
     </span>
+  );
+}
+
+/**
+ * A group's or an area's card: counter-scaled so it reads, inside the frame
+ * under its title strip, as wide as the frame and never taller than what is
+ * left of it (`semantic-zoom.css`). "≈" and "Summary of …", like a note's.
+ */
+function card(item: Item, summary: string, stale: boolean): ReactNode {
+  const top = isGroupItem(item) ? (item.groupLayout?.titleHeight ?? AREA_TITLE_HEIGHT) : AREA_TITLE_HEIGHT;
+  return (
+    <div className="sz-gist sz-card" style={{ "--sz-top": top } as CSSProperties} role="note" aria-label={`Summary of ${item.title}${stale ? ", being brought up to date" : ""}`} data-stale={stale ? "" : undefined}>
+      <span className="sz-sign" aria-hidden="true">≈ </span>
+      {summary}
+      {stale && <span className="sz-updating" aria-hidden="true" title="Being brought up to date"> ↻</span>}
+    </div>
   );
 }
 
@@ -80,35 +108,52 @@ function watch(canvasId: string): () => void {
   let seen: Seen[] = [];
   let settle: ReturnType<typeof setTimeout> | undefined;
 
-  const keyOf = (item: Item) => {
-    const at = `${item.id}\n${item.currentVersionId}\n${item.title}`;
+  const keyOf = (kind: Seen["kind"], sources: Item[]) => {
+    const at = [kind, ...sources.map((one) => `${one.id}\n${one.currentVersionId}\n${one.title}`)].join("\n");
     let key = keys.get(at);
-    if (!key) keys.set(at, (key = textSummaryKey(item)));
+    if (!key) keys.set(at, (key = summaryKey(kind, sources)));
     return key;
   };
 
-  /** The text nodes on screen whose words cannot be read, nearest the centre first. */
+  /**
+   * What on screen cannot be read, nearest the centre first: text nodes whose
+   * words are too small, and groups and areas whose members are — counted
+   * from the zoom rule's far edge (`textIsLegible(…, false)`), so ItemView's
+   * hysteresis always has a card in hand on either side of the line.
+   */
   const onScreen = async (): Promise<Seen[]> => {
     const { canvas } = useCanvasStore.getState();
     const { tx, ty, scale } = useUiStore.getState().viewport;
     if (!canvas) return [];
     const w = window.innerWidth, h = window.innerHeight;
-    const found: Array<Omit<Seen, "key">> = [];
+    const found: Array<Omit<Seen, "key"> & { sources: Item[] }> = [];
     for (const item of Object.values(canvas.items)) {
-      if (!isTextItem(item) || textIsLegible(textDrawSize(item), scale)) continue;
+      const kind = isTextItem(item) ? "text" : isGroupItem(item) ? "group" : isArea(item) ? "area" : null;
+      if (!kind) continue;
       const left = item.x * scale + tx, top = item.y * scale + ty, right = left + item.width * scale, bottom = top + item.height * scale;
       if (right < 0 || bottom < 0 || left > w || top > h) continue;
-      if (summarisableText(canvas, item.id) !== item) continue;
-      found.push({ item, distance: Math.hypot((left + right) / 2 - w / 2, (top + bottom) / 2 - h / 2) });
+      const distance = Math.hypot((left + right) / 2 - w / 2, (top + bottom) / 2 - h / 2);
+      if (kind === "text") {
+        if (textIsLegible(textDrawSize(item), scale) || summarisableText(canvas, item.id) !== item) continue;
+        found.push({ item, kind, distance, sources: [item] });
+        continue;
+      }
+      if (groupStackBox(item) || right - left < CARD_MIN.w || bottom - top - AREA_TITLE_HEIGHT * scale < CARD_MIN.h) continue;
+      const held = summaryMembers(canvas, kind, item.id);
+      const px = typeof held === "object" && held ? memberTypeSize(held.members) : undefined;
+      if (!px || textIsLegible(px, scale, false)) continue;
+      found.push({ item, kind, distance, px, sources: [item, ...(held as { members: Item[] }).members] });
     }
     found.sort((a, b) => a.distance - b.distance);
-    return Promise.all(found.map(async (one) => ({ ...one, key: await keyOf(one.item) })));
+    return Promise.all(found.map(async ({ sources, ...one }) => ({ ...one, key: await keyOf(one.kind, sources) })));
   };
 
   /** One set of gists for what is on screen, in one store write — never an empty frame between two summaries. */
   const paint = () => {
-    const next: Record<string, ReactNode> = {};
-    for (const { item, key } of seen) {
+    const next: Record<string, { node: ReactNode; px?: number }> = {};
+    const put = (item: Item, px: number | undefined, summary: string, stale: boolean) =>
+      (next[item.id] = px ? { node: card(item, summary, stale), px } : { node: gist(item.title, summary, stale) });
+    for (const { item, key, px } of seen) {
       const entry = byKey.get(key);
       if (entry?.short) {
         shown.delete(item.id);
@@ -116,23 +161,23 @@ function watch(canvasId: string): () => void {
       }
       if (entry?.summary && !entry.stale) {
         shown.set(item.id, { title: item.title, summary: entry.summary });
-        next[item.id] = gist(item.title, entry.summary, false);
+        put(item, px, entry.summary, false);
         continue;
       }
       const before = entry?.summary ?? shown.get(item.id)?.summary;
-      if (before) next[item.id] = gist(item.title, before, true);
+      if (before) put(item, px, before, true);
     }
     useGistStore.setState(next, true);
   };
 
   const pump = () => {
     if (!mayAsk || Date.now() < pausedUntil || useCanvasStore.getState().capability !== "edit") return;
-    for (const { item, key } of seen) {
+    for (const { item, kind, key } of seen) {
       if (making.size >= AT_ONCE) return;
       const entry = byKey.get(key);
       if ((entry && !entry.stale) || failed.has(key) || making.has(key) || timers.has(key)) continue;
       making.add(key);
-      void request<SummaryEntry | SummaryWait>("POST", summariesRoute(canvasId), { kind: "text", sourceId: item.id }).then(
+      void request<SummaryEntry | SummaryWait>("POST", summariesRoute(canvasId), { kind, sourceId: item.id }).then(
         (answer) => {
           if (!live) return;
           if ("retryAfterMs" in answer && answer.code === SUMMARY_QUIET) {

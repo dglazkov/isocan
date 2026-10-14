@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { existsSync, promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { CANVAS_GROUPS_FEATURE } from "@isocan/core";
 import { CLAUDE_TEXT_MODEL } from "@isocan/core/jev";
 import { TEXT_OWNER_ONLY } from "@isocan/core/keys";
 import { writeKey } from "@isocan/core/keystore";
 import {
-  SEMANTIC_ZOOM_PROMPT_VERSION, summariesRoute, SUMMARY_EXCLUDED, SUMMARY_MODEL, SUMMARY_QUIET, SUMMARY_SYSTEM, textSummaryKey, type SummaryEntry, type SummaryRead,
+  SEMANTIC_ZOOM_PROMPT_VERSION, summariesRoute, summaryKey, summaryMembers, SUMMARY_EXCLUDED, SUMMARY_MODEL, SUMMARY_NO_SOURCE, SUMMARY_QUIET, SUMMARY_SYSTEM, textSummaryKey,
+  type SummaryEntry, type SummaryRead,
 } from "@isocan/core/semantic-zoom";
 import { TEXT_ROUTE } from "@isocan/core/text";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
@@ -59,7 +61,7 @@ afterEach(async () => {
 const claudeSays = (value: unknown) =>
   new Response(JSON.stringify({ id: "msg_acme", type: "message", role: "assistant", model: SUMMARY_MODEL, stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(value) }] }), { status: 200 });
 
-async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response> } = {}): Promise<Rig> {
+async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response>; legacy?: boolean } = {}): Promise<Rig> {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), "isocan-summaries-"));
   const calls: Call[] = [];
   const clock = { now: Date.now() };
@@ -80,7 +82,7 @@ async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response>
   const base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
   const owner = await mintTestBadge(base);
   await owner.speakAs(priya);
-  const made = await op(base, owner, { type: "project.create", canvasId: CANVAS, title: "Acme Summaries" }, null);
+  const made = await op(base, owner, { type: "project.create", canvasId: CANVAS, title: "Acme Summaries", ...(opts.legacy ? { groupMode: "legacy" } : {}) }, null);
   expect(made.ok).toBe(true);
   const r = { daemon, base, home, owner, calls, clock };
   rigs.push(r);
@@ -88,7 +90,7 @@ async function rig(opts: { storedKey?: boolean; answer?: () => Promise<Response>
 }
 
 function op(base: string, badge: TestBadge, body: unknown, canvasId: string | null = CANVAS) {
-  return fetch(`${base}/api/ops`, { method: "POST", headers: { "Content-Type": "application/json", ...badge.headers }, body: JSON.stringify({ canvasId, actor: priya, op: body }) });
+  return fetch(`${base}/api/ops`, { method: "POST", headers: { "Content-Type": "application/json", ...badge.headers }, body: JSON.stringify({ canvasId, actor: priya, op: body, clientFeatures: CANVAS_GROUPS_FEATURE }) });
 }
 
 /** A text node with these words, added as `version`, and the clock moved past its quiet period. */
@@ -107,8 +109,8 @@ async function itemOf(r: Rig, itemId: string) {
   return (await r.daemon.engine.getSnapshot(CANVAS)).canvas.items[itemId]!;
 }
 
-const make = (r: Rig, badge: TestBadge, sourceId: string) =>
-  fetch(`${r.base}${summariesRoute(CANVAS)}`, { method: "POST", headers: { "Content-Type": "application/json", ...badge.headers }, body: JSON.stringify({ kind: "text", sourceId }) });
+const make = (r: Rig, badge: TestBadge, sourceId: string, kind = "text") =>
+  fetch(`${r.base}${summariesRoute(CANVAS)}`, { method: "POST", headers: { "Content-Type": "application/json", ...badge.headers }, body: JSON.stringify({ kind, sourceId }) });
 
 const read = async (r: Rig, badge: TestBadge, keys: string[], sources: string[] = []) => {
   const res = await fetch(`${r.base}${summariesRoute(CANVAS)}?keys=${keys.join(",")}${sources.length ? `&for=${sources.join(",")}` : ""}`, { headers: badge.headers });
@@ -269,5 +271,164 @@ describe("the key follows the content", () => {
     expect(found[oldKey]).toMatchObject({ summary: SUMMARY });
     expect(found[oldKey]?.stale).toBeUndefined();
     expect(r.calls).toHaveLength(1);
+  });
+});
+
+/** A card (an uploaded Markdown file, not a text node) with these words, at a point; the clock past its quiet period. */
+async function card(r: Rig, itemId: string, title: string, words: string, x: number, y: number, extra: Record<string, unknown> = {}): Promise<void> {
+  const blob = await r.daemon.store.putBlob(CANVAS, Buffer.from(words), { mimeType: "text/markdown", filename: "card.md" });
+  const res = await op(r.base, r.owner, {
+    type: "item.add", itemId, title, width: 200, height: 120, placement: { x, y, chosen: true }, ...extra,
+    version: { id: `ver_${itemId}_1`, blobHash: blob.blobHash, mimeType: "text/markdown", filename: "card.md", size: Buffer.byteLength(words) },
+  });
+  expect(res.ok, await res.clone().text()).toBe(true);
+  r.clock.now = Date.now() + 31_000;
+}
+
+/** A legacy area: a sheet things are placed on, holding what sits inside it by geometry. Only a legacy canvas has them; a groups canvas's "area" is a group. */
+async function area(r: Rig, itemId: string, title: string, x: number): Promise<void> {
+  const blob = await r.daemon.store.putBlob(CANVAS, Buffer.from(""), { mimeType: "text/markdown", filename: "area.md" });
+  const res = await op(r.base, r.owner, {
+    type: "item.add", itemId, title, width: 400, height: 600, placement: { x, y: 0, chosen: true }, properties: { kind: "area" },
+    version: { id: `ver_${itemId}_1`, blobHash: blob.blobHash, mimeType: "text/markdown", filename: "area.md", size: 0 },
+  });
+  expect(res.ok, await res.clone().text()).toBe(true);
+}
+
+async function containerKey(r: Rig, kind: "group" | "area", id: string): Promise<string> {
+  const held = summaryMembers((await r.daemon.engine.getSnapshot(CANVAS)).canvas, kind, id);
+  if (!held || held === "excluded") throw new Error(`no ${kind} ${id}`);
+  return summaryKey(kind, [held.container, ...held.members]);
+}
+
+const prompts = (r: Rig) => r.calls.map((call) => JSON.stringify(call.body.messages));
+
+describe("groups and areas (phase 2)", () => {
+  it("an area is summarised from what sits inside it, collected by the home; a card dragged across waits out the quiet period in both areas, then changes both", async () => {
+    const r = await rig({ legacy: true });
+    await area(r, "itm_todo", "To do", 0);
+    await area(r, "itm_doing", "Doing", 500);
+    await area(r, "itm_done", "Done", 1000);
+    await card(r, "itm_billing", "Billing migration", "Ravi moves Acme billing to the new ledger.", 100, 100);
+    await card(r, "itm_copy", "Copy fix", "Ana rewrites the Acme empty state.", 100, 300);
+    await card(r, "itm_safari", "Safari crash", "Ana is on the Acme Safari crash.", 600, 100);
+
+    const todo = await make(r, r.owner, "itm_todo", "area");
+    expect(todo.status, await todo.clone().text()).toBe(200);
+    expect(await todo.json()).toMatchObject({ kind: "area", sourceIds: ["itm_todo", "itm_billing", "itm_copy"], summary: SUMMARY, key: await containerKey(r, "area", "itm_todo") });
+    expect((await make(r, r.owner, "itm_doing", "area")).status).toBe(200);
+    expect(r.calls).toHaveLength(2);
+    expect(prompts(r)[0]).toContain('This is an area on a board, titled \\"To do\\", holding 2 items.');
+    expect(prompts(r)[0]).toContain("Ravi moves Acme billing");
+    expect(prompts(r)[0]).not.toContain("Safari crash");
+    expect(prompts(r)[1]).toContain("Safari crash");
+
+    // A move inside an area keeps its key and makes nothing.
+    const todoKey = await containerKey(r, "area", "itm_todo");
+    expect((await op(r.base, r.owner, { type: "item.move", itemId: "itm_billing", x: 150, y: 420 })).ok).toBe(true);
+    expect(await containerKey(r, "area", "itm_todo")).toBe(todoKey);
+    r.clock.now = Date.now() + 1_000;
+    expect((await make(r, r.owner, "itm_todo", "area")).status).toBe(200);
+    expect(r.calls).toHaveLength(2);
+
+    // From To do to Doing: both keys change, and both wait — To do through what its last summary held.
+    const doingKey = await containerKey(r, "area", "itm_doing");
+    expect((await op(r.base, r.owner, { type: "item.move", itemId: "itm_copy", x: 600, y: 300 })).ok).toBe(true);
+    expect(await containerKey(r, "area", "itm_todo")).not.toBe(todoKey);
+    expect(await containerKey(r, "area", "itm_doing")).not.toBe(doingKey);
+    r.clock.now = Date.now() + 1_000;
+    for (const id of ["itm_todo", "itm_doing"]) {
+      const early = await make(r, r.owner, id, "area");
+      expect(early.status, id).toBe(202);
+      expect(await early.json()).toMatchObject({ code: SUMMARY_QUIET });
+    }
+    expect(r.calls).toHaveLength(2);
+    // Meanwhile a reader is handed the old summary, marked stale.
+    const newTodo = await containerKey(r, "area", "itm_todo");
+    expect((await read(r, r.owner, [newTodo], ["itm_todo"]))[newTodo]).toMatchObject({ key: todoKey, stale: true });
+
+    r.clock.now = Date.now() + 31_000;
+    expect((await make(r, r.owner, "itm_todo", "area")).status).toBe(200);
+    expect((await make(r, r.owner, "itm_doing", "area")).status).toBe(200);
+    expect(r.calls).toHaveLength(4);
+    expect(prompts(r)[2]).not.toContain("empty state");
+    expect(prompts(r)[3]).toContain("empty state");
+  });
+
+  it("a group's summary never carries an excluded member, nor anything under an excluded group; an excluded group is refused", async () => {
+    const r = await rig();
+    await card(r, "itm_signup", "Sign-up", "Acme sign-up asks for a work email.", 0, 0);
+    await card(r, "itm_secret", "Pricing", "ACME-CONFIDENTIAL margins are forty percent.", 300, 0, { properties: { context: "excluded" } });
+    await card(r, "itm_deep", "Deep", "ACME-CONFIDENTIAL board notes.", 600, 0);
+    const brief = await r.daemon.store.putBlob(CANVAS, Buffer.from("# Onboarding\n"), { mimeType: "text/markdown", filename: "brief.md" });
+    const version = (id: string) => ({ id: `ver_${id}`, blobHash: brief.blobHash, mimeType: "text/markdown", filename: "brief.md", size: 13 });
+    const group = (id: string, title: string, itemIds: string[]) => op(r.base, r.owner, { type: "group.change", action: { kind: "create", group: { id, title, version: version(id) }, itemIds } });
+    expect((await group("itm_hidden", "Hidden", ["itm_deep"])).ok).toBe(true);
+    expect((await op(r.base, r.owner, { type: "item.update", itemId: "itm_hidden", patch: { properties: { context: "excluded" } } })).ok).toBe(true);
+    const made = await group("itm_onboarding", "Onboarding", ["itm_signup", "itm_secret", "itm_hidden"]);
+    expect(made.ok, await made.clone().text()).toBe(true);
+    r.clock.now = Date.now() + 31_000;
+
+    const res = await make(r, r.owner, "itm_onboarding", "group");
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(await res.json()).toMatchObject({ kind: "group", sourceIds: ["itm_onboarding", "itm_signup"] });
+    expect(r.calls).toHaveLength(1);
+    expect(prompts(r)[0]).toContain("work email");
+    expect(prompts(r)[0]).not.toMatch(/CONFIDENTIAL|margins|board notes/);
+
+    const refused = await make(r, r.owner, "itm_hidden", "group");
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({ code: SUMMARY_EXCLUDED });
+    expect(r.calls).toHaveLength(1);
+  });
+
+  it("over the size bound, the longest members' words are left out first, their titles kept, and the prompt says so", async () => {
+    const r = await rig({ legacy: true });
+    await area(r, "itm_board", "Acme board", 0);
+    await card(r, "itm_small", "Small", "Acme small card.", 100, 100);
+    await card(r, "itm_mid", "Mid", `MIDWORD ${"m".repeat(30_000)}`, 100, 250);
+    await card(r, "itm_big", "Big", `BIGWORD ${"b".repeat(40_000)}`, 100, 400);
+    expect((await make(r, r.owner, "itm_board", "area")).status).toBe(200);
+    const prompt = prompts(r)[0]!;
+    expect(prompt).toContain("1 item, the longest, is given by title only.");
+    expect(prompt).toContain("MIDWORD");
+    expect(prompt).not.toContain("BIGWORD");
+    expect(prompt).toContain('- Card \\"Big\\"');
+  });
+
+  it("holds the same guards: a viewer reads and never causes, a stored key pays only for its owner, and a kind must match its source", async () => {
+    const r = await rig({ storedKey: true, legacy: true });
+    await area(r, "itm_doing", "Doing", 0);
+    await card(r, "itm_safari", "Safari crash", "Ana is on the Acme Safari crash.", 100, 100);
+    const ravisBadge = await mintTestBadge(r.base);
+    await ravisBadge.speakAs(ravi);
+    const notHis = await make(r, ravisBadge, "itm_doing", "area");
+    expect(notHis.status).toBe(403);
+    expect(await notHis.json()).toMatchObject({ code: TEXT_OWNER_ONLY });
+    expect((await make(r, r.owner, "itm_doing", "group")).status).toBe(404);
+    expect((await make(r, r.owner, "itm_safari", "area")).status).toBe(404);
+    const unknown = await make(r, r.owner, "itm_doing", "board");
+    expect(unknown.status).toBe(400);
+    expect(await unknown.json()).toMatchObject({ code: SUMMARY_NO_SOURCE });
+    expect(r.calls).toHaveLength(0);
+    expect((await make(r, r.owner, "itm_doing", "area")).status).toBe(200);
+    const visitor = await viewer(r);
+    const key = await containerKey(r, "area", "itm_doing");
+    expect((await read(r, visitor, [key]))[key]?.summary).toBe(SUMMARY);
+    await card(r, "itm_more", "More", "Another Acme card.", 100, 300);
+    const refused = await make(r, visitor, "itm_doing", "area");
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "view-only" });
+    expect(r.calls).toHaveLength(1);
+  });
+
+  it("an empty area is nothing to summarise: remembered as short, and no model is asked", async () => {
+    const r = await rig({ legacy: true });
+    await area(r, "itm_empty", "Empty", 0);
+    r.clock.now = Date.now() + 31_000;
+    const res = await make(r, r.owner, "itm_empty", "area");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ short: true, summary: null, sourceIds: ["itm_empty"] });
+    expect(r.calls).toHaveLength(0);
   });
 });

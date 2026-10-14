@@ -1,23 +1,27 @@
 /**
- * **Semantic Zoom** — a short, model-written summary of a text node, drawn
- * where its words are too small to read (`docs/projects/semantic-zoom/`,
- * design.md §4, §5 and §7). An experiment: the web asks for nothing unless a
+ * **Semantic Zoom** — a short, model-written summary of a text node, a group
+ * or an area, drawn where its words are too small to read
+ * (`docs/projects/semantic-zoom/`, design.md §3, §4, §5 and §7). An experiment: the web asks for nothing unless a
  * person turned `semantic.zoom` on for themselves.
  *
  * What is shared between the home and the web lives here, once: the prompt
  * (lifted from the phase 0 bench's `prompts.mjs`), the answer rule, the
  * content key a summary is stored against, which text nodes may be summarised
- * at all, and the route's path and refusal codes. A subpath
+ * at all, what a group or an area holds, and the route's path and refusal codes. A subpath
  * (`@isocan/core/semantic-zoom`), never the barrel: only the lazy chunk the
  * experiment loads reads it in the browser, so a first visit pays nothing.
  *
  * A summary is not an op. It is derived, regenerable and nobody's act, so it
  * lives in a cache at the home and never in undo, the timeline or the oplog.
  */
+import { isAnnotation } from "./annotation.ts";
+import { isArea, itemsIn } from "./area.ts";
 import { excludedInAmbient } from "./canvas-group-context.ts";
+import { groupDescendants, isGroupItem } from "./canvas-groups.ts";
+import { isDrawingItem } from "./drawing.ts";
 import type { JsonSchema } from "./jev.ts";
 import type { CanvasContents, Item } from "./model.ts";
-import { isTextItem } from "./textnode.ts";
+import { isTextItem, textDrawSize, TEXT_SIZE } from "./textnode.ts";
 
 /** Bumped on any change to the prompt's words; part of every content key, so a bump re-summarises everything at once, on purpose. */
 export const SEMANTIC_ZOOM_PROMPT_VERSION = "sz-1";
@@ -75,10 +79,10 @@ export const SUMMARY_QUIET = "summary-quiet";
 export const SUMMARY_BAD_ANSWER = "summary-bad-answer";
 /** The source is excluded from context (itself or a group above it), so it is never sent to a model. */
 export const SUMMARY_EXCLUDED = "summary-excluded";
-/** There is no text node by that id on this canvas. */
+/** There is no text node, group or area of that kind by that id on this canvas. */
 export const SUMMARY_NO_SOURCE = "summary-no-source";
 
-/** What a summary is of. Phase 1 makes `text`; groups and areas are phase 2's. */
+/** What a summary is of: one text node, a group's members, or what sits inside an area. */
 type SummaryKind = "text" | "group" | "area";
 
 /**
@@ -121,10 +125,24 @@ export interface SummaryMake {
   sourceId: string;
 }
 
-/** One source as the prompt shows it: a note's words; a group's or an area's members. */
+/**
+ * One member of a group or an area as the prompt shows it: a note's or a
+ * card's words, and only the title of a screen or a picture — what a picture
+ * shows is vision's, phase 3b.
+ */
+export interface SummaryMember {
+  kind: "note" | "card" | "screen" | "picture";
+  title: string;
+  body?: string;
+}
+
+/**
+ * One source as the prompt shows it: a note's words; a group's or an area's
+ * members, and `left`, how many of them had their words left out for length.
+ */
 type SummarySource =
   | { kind: "text"; title: string; body: string }
-  | { kind: "group" | "area"; title: string; members: Array<{ kind: "note" | "screen" | "card"; title: string; body?: string; text?: string }> };
+  | { kind: "group" | "area"; title: string; members: SummaryMember[]; left?: number };
 
 const INSTRUCTION = [
   `Summarise it for someone looking at the canvas from too far away to read it.`,
@@ -138,9 +156,10 @@ const INSTRUCTION = [
 
 const plural = (n: number) => `${n} item${n === 1 ? "" : "s"}`;
 
-/** One member line: a note's words, a screen's title and text, a card's title and note. */
-function member(m: { kind: string; title: string; body?: string; text?: string }): string {
-  if (m.kind === "screen") return `- Screen "${m.title}"${m.text ? `, showing the text: ${m.text}` : ""}`;
+/** One member line: a note's words, a card's title and words, a screen's or a picture's title. */
+function member(m: SummaryMember): string {
+  if (m.kind === "screen") return `- Screen "${m.title}"`;
+  if (m.kind === "picture") return `- Picture "${m.title}"`;
   if (m.kind === "card") return `- Card "${m.title}"${m.body ? `: ${m.body}` : ""}`;
   return `- Note "${m.title}": ${m.body ?? ""}`;
 }
@@ -148,16 +167,16 @@ function member(m: { kind: string; title: string; body?: string; text?: string }
 /**
  * **The prompt for one thing** (design §7), the bench's words unchanged: a
  * framing line per kind, one shared instruction, and the content inside a
- * fence that says it is data — a note can hold "ignore the above". Vision
- * (§11) and a screen alone are phase 3b's and are not here yet.
+ * fence that says it is data — a note can hold "ignore the above". When a
+ * group's or an area's words were too long to send whole, a line before the
+ * fence says how many members are given by their title only. Vision (§11)
+ * and a screen alone are phase 3b's and are not here yet.
  */
 export function semanticZoomPrompt(source: SummarySource): string {
-  const frame =
-    source.kind === "text"
-      ? `This is a text note on a canvas, titled "${source.title}".`
-      : `This is ${source.kind === "group" ? "a group on a canvas" : "an area on a board"}, titled "${source.title}", holding ${plural(source.members.length)}.`;
-  const content = source.kind === "text" ? source.body : source.members.map(member).join("\n");
-  return [frame, INSTRUCTION, "<<<", content, ">>>"].join("\n");
+  if (source.kind === "text") return [`This is a text note on a canvas, titled "${source.title}".`, INSTRUCTION, "<<<", source.body, ">>>"].join("\n");
+  const frame = `This is ${source.kind === "group" ? "a group on a canvas" : "an area on a board"}, titled "${source.title}", holding ${plural(source.members.length)}.`;
+  const left = source.left ? [`The content is too long to send whole: ${plural(source.left)}, the longest, ${source.left === 1 ? "is" : "are"} given by title only.`] : [];
+  return [frame, INSTRUCTION, ...left, "<<<", source.members.map(member).join("\n"), ">>>"].join("\n");
 }
 
 /** Words as the answer rule and the 40-word line count them. */
@@ -195,6 +214,61 @@ export function summarisableText(canvas: CanvasContents, itemId: string): Item |
   return excludedInAmbient(canvas, item) ? "excluded" : item;
 }
 
+/**
+ * **What a group or an area holds, for its summary** (design §4), or why
+ * not. A group holds its descendants (`groupDescendants`); an area holds
+ * what sits inside it by geometry (`itemsIn`), so moving a card in or out
+ * changes what it holds. Either way, minus anything excluded from context —
+ * itself or by a group above it (`excludedInAmbient`) — and minus what has
+ * no words or name of its own to give: other groups and areas (their members
+ * are counted instead), ink and annotations. In a fixed order, by id, so a
+ * move inside a group or an area changes neither the key nor the prompt.
+ * `"excluded"` when the group or area itself is; null when there is no group
+ * or area of that kind by that id.
+ */
+export function summaryMembers(canvas: CanvasContents, kind: "group" | "area", id: string): { container: Item; members: Item[] } | "excluded" | null {
+  const container = canvas.items[id];
+  if (!container || !(kind === "group" ? isGroupItem(container) : isArea(container))) return null;
+  if (excludedInAmbient(canvas, container)) return "excluded";
+  const held = kind === "group" ? groupDescendants(canvas, id) : itemsIn(canvas, container);
+  const members = held
+    .filter((item) => !isGroupItem(item) && !isArea(item) && !isDrawingItem(item) && !isAnnotation(item) && !excludedInAmbient(canvas, item))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return { container, members };
+}
+
+/**
+ * How a member shows in a prompt: a text node is a note and a text file a
+ * card, both with their words (which the home reads); a screen and a picture
+ * give their title only; anything else is a card by its title.
+ */
+export function summaryMemberKind(item: Item): SummaryMember["kind"] {
+  if (isTextItem(item)) return "note";
+  const mime = item.versions.find((v) => v.id === item.currentVersionId)?.mimeType ?? "";
+  if (mime === "text/html") return "screen";
+  if (/^(image|video)\//.test(mime)) return "picture";
+  return "card";
+}
+
+/** Does the home read this member's words for the prompt? A note's and a text card's, nobody else's. */
+export function summaryReadsWords(item: Item): boolean {
+  const mime = item.versions.find((v) => v.id === item.currentVersionId)?.mimeType ?? "";
+  return summaryMemberKind(item) === "note" || (mime.startsWith("text/") && mime !== "text/html");
+}
+
+/**
+ * **How big a group's or an area's words are**, in world units: the median
+ * member's type size — a text node's drawn size, anything else taken to be
+ * set at body size (`TEXT_SIZE`). Below the legible line on screen
+ * (`textIsLegible`), the members cannot be read and the summary card shows
+ * (design §3, `Z_GIST`). Undefined for an empty one: nothing to summarise.
+ */
+export function memberTypeSize(members: Item[]): number | undefined {
+  if (members.length === 0) return undefined;
+  const sizes = members.map((item) => (isTextItem(item) ? textDrawSize(item) : TEXT_SIZE)).sort((a, b) => a - b);
+  return sizes[Math.floor((sizes.length - 1) / 2)];
+}
+
 const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 /**
@@ -209,7 +283,23 @@ const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map((b) => b.toSt
  * home compute the same key from the same item.
  */
 export async function textSummaryKey(item: Pick<Item, "id" | "currentVersionId" | "title">): Promise<string> {
-  const parts = [SEMANTIC_ZOOM_PROMPT_VERSION, "text", item.id, item.currentVersionId, item.title];
+  return summaryKey("text", [item]);
+}
+
+/**
+ * **The content key of any summary**: the prompt version, the kind, then
+ * each source's id, current version id and title, in the order given — for a
+ * text node its one item (`textSummaryKey`, the same bytes), for a group or
+ * an area the container first and then `summaryMembers`' members, by id.
+ *
+ * Not an area member's x, y, w and h, though design §4 first said so: the
+ * prompt never carries a position, so a key that did would re-summarise a
+ * board every time a card was nudged inside its column and say nothing new.
+ * What the key must see of geometry is membership, and it does — a card
+ * moved in or out of an area is an id added to or gone from the list.
+ */
+export async function summaryKey(kind: SummaryKind, sources: Array<Pick<Item, "id" | "currentVersionId" | "title">>): Promise<string> {
+  const parts = [SEMANTIC_ZOOM_PROMPT_VERSION, kind, ...sources.flatMap((s) => [s.id, s.currentVersionId, s.title])];
   const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(parts)));
   return hex(digest);
 }

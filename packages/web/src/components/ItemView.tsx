@@ -62,7 +62,7 @@ import { useGistStore } from "../stores/gistStore.ts";
 import { publishDrag, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
+import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_GIST, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath } from "@isocan/core";
 /**
@@ -259,8 +259,15 @@ function ItemViewInner({
   const held = useRef<ZoomHeld>({}).current;
   // The zoom, as the decisions it drives here and nothing finer — so this item
   // re-renders when one of them flips, not on every step of a zoom.
-  const zoom = useUiStore((s) => zoomDecisions(item, width, height, s.viewport.scale, held));
+  // Semantic Zoom's summary of this item, when the experiment's chunk put one
+  // here: a text node's mark, or a group's or an area's card with its
+  // members' type size, which the zoom turns into `Z_GIST`.
+  const gistEntry = useGistStore((s) => s[item.id]);
+  const zoom = useUiStore((s) => zoomDecisions(item, width, height, s.viewport.scale, held, gistEntry?.px));
   const roomy = (held.r = (zoom & Z_ROOMY) !== 0);
+  // The members cannot be read: the summary card shows inside the frame, and
+  // the frame rises over them (`.gisted`). Never for a stacked group's card.
+  const gisted = !stackBox && !(held.g = (zoom & Z_GIST) === 0);
   // Which of the icon and the name the title row keeps. The rule lives in
   // lib/chrome.ts (`titleRow`) so a test can reach it without a browser — there
   // is no floor, and chrome.test.ts is where that is held. The ROOM the name
@@ -452,7 +459,7 @@ function ItemViewInner({
   const textLegible = !isText || (held.t = (zoom & Z_LEGIBLE) !== 0);
   // Semantic Zoom's summary, drawn in the opening words' place — only where
   // the words cannot be read, and only when the experiment's chunk put one here.
-  const gist = useGistStore((s) => (textLegible ? null : s[item.id]));
+  const gist = textLegible ? null : gistEntry?.node;
   // Ink about something paints over it — a mark under the thing it marks is
   // not a mark.
   const isMark = isAnnotation(item);
@@ -866,7 +873,7 @@ function ItemViewInner({
 
   return (
     <div
-      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
+      className={`item${selected ? " selected" : ""}${entered ? " entered" : ""}${drag ? " dragging" : ""}${lifted ? " lifted" : ""}${isInk ? " ink" : ""}${isText ? " textnode" : ""}${paper ? ` paper paper-${paper}` : ""}${isAreaItem ? " area" : ""}${gisted ? " gisted" : ""}${isCanvasGroup ? ` canvas-group${floor ? "" : " pressable"}${stackBox ? " stacked" : ""}` : ""}${dropTarget ? " group-drop-target" : ""}${aimed}${tint ? ` paper-${tint}` : ""}${isMark ? " annotation" : ""}${renaming ? " renaming" : ""}${peeked ? " peeked" : ""}${settling ? " settling" : ""}${reach !== null ? " reaching" : ""}${isSlide(item) ? " slide" : ""}${away ? " away" : ""}${arrived.current ? " arrived" : ""}`}
       data-item-id={item.id}
       data-group-id={isCanvasGroup ? item.id : undefined}
       data-presentation={detail}
@@ -891,7 +898,7 @@ function ItemViewInner({
         )
       }
       style={{
-        ...(isCanvasGroup && !stackBox ? { zIndex: -10000 + groupDepth } : {}),
+        ...(isCanvasGroup && !stackBox && !gisted ? { zIndex: -10000 + groupDepth } : {}),
         left: x,
         top: y,
         width,
@@ -987,6 +994,7 @@ function ItemViewInner({
           {item.title}{isCanvasGroup && <small className="group-member-count">{memberCount} items</small>}
         </div>
       )}
+      {gisted && gistEntry!.node}
       {isCanvasGroup && <>
         {dropTarget && <span className="group-drop-label" role="status">Add to {item.title}</span>}
         {dropOut && <span className="group-drop-label out" role="status">Out of {item.title}</span>}
