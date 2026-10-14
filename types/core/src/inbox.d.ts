@@ -404,27 +404,6 @@ opts?: {
 /** Does this comment body read as the refusal this agent got? The system
  *  voice is the only author that writes one, which the caller checks. */
 export declare function readsAsTurnedAway(body: string, agentName: string): boolean;
-/**
- * **THE routing composition, stated once** (agents-on-demand phase 4).
- * `reasonFor` is the is-this-for-me predicate; this is the whole rule a
- * park or a dispatcher applies to one op:
- *
- * - your own ops never wake you — otherwise an agent that writes what it
- *   watches for wakes itself, forever;
- * - a speaker outside the gate is not here at all: `listen` is applied
- *   BEFORE everything below, so an op from outside it is neither a summons
- *   nor a change, and never reaches the ceiling to be counted against it;
- * - a comment for you (`reasonFor`) is a SUMMONS, and it comes through any
- *   filter — the human reaching you is never the noise you asked to be
- *   spared;
- * - everything else is a CHANGE, taken only when the rules ask for it:
- *   filters narrow, an empty rule set means comments-only.
- *
- * It lived as loose composition in `wait`'s loop (`main.ts` checked the
- * summons before the filters ever ran); it lives here so the rc importing
- * the rule and the park applying it cannot drift — the piercing that must
- * never differ between them is one function's control flow.
- */
 export declare function dispatchReason(op: Operation, authorId: string, agent: {
     actorId: string;
     names: readonly MentionCandidate[];

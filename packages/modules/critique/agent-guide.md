@@ -35,6 +35,38 @@ a `credit` line saying who it is after and that it is not affiliated, its
   them. At a cap the rc stops it and says so in the thread in one line.
 - `isocan critique notes <item>` — the critics' notes on a screen, read back:
   who, kind, question, where (fractions of the screen) and the move.
+
+### Two critics, and the read
+
+- `isocan critique <item> --by inevitable,frog` — asks two (or more) at once:
+  each is enrolled and capped as above, and ONE thread on the screen mentions
+  them all. Each works alone — its brief says read the screen, not the thread
+  — and its done line is a record, so it wakes nobody. The **last** critic's
+  done line mentions whoever asked, which is the one wake the read needs. A
+  critic the rc stopped at its budget counts as done.
+- `/critique #Checkout with Inevitable and Form Follows Emotion` in the Chat is
+  the same ask through a parked agent (`isocan command show critique`). That
+  agent is the **lead**: it runs `critique --by`, ends its turn, and is woken
+  by the last done line to write the reply.
+- `isocan critique read <thread|item>` — the fold: **agree** (two or more
+  critics, one kind, pins within 0.15 of the screen of each other, moves not
+  opposed), **split** (in one region, one critic's *working* or "Leave it."
+  against another's change, or one's *remove/cut* against another's
+  *add/enlarge/replace … with* — read from the move's verb) and **blocker** (every blocker), each citing its
+  notes, and the rest *on their own*. `--json` for the groups. It says when a
+  critic is still working, and refuses a critic that is.
+- `isocan critique read <thread> --post --say "<your words>"` — the one reply,
+  posted once every critic is done: your words, naming each tension in design
+  words (reduction against warmth), then the fold's grouping. Do not average a
+  split or pick a side. Without `--say` it posts the fold alone — say so if
+  that is what you did. The reply is a record: it does not wake the critics.
+- `isocan critique both <note>+<note> [--to <agent>]` — on a split
+  (the ref `critique read` prints beside it), asks an agent that may edit —
+  the lead by default — in the request thread for two variations of the
+  screen, one answering each note: `isocan add … --prop parent=<screen> --prop
+  critique.answers=<note>`, /variation's procedure for two. A critic is never
+  the builder. If you are asked, build exactly the two, leave the screen as
+  it is, `isocan format`, and reply once.
 - `isocan critic release <critic>` — lifts the critic's ceiling (below) on
   this canvas, so the same agent may edit here again. Only whoever set it can;
   `isocan rc remove <name>` lifts it too, with the standing. The next `critique`
@@ -48,7 +80,10 @@ and a reaction (`react`, with or without `--at`) — and refuses everything
 else, an edit, a move, a new item, a free-standing thread, an undo, with
 `beyond-ceiling` and a sentence, writing nothing. It cannot lift its own
 ceiling. If you are a critic and want something changed, the note saying what
-to change is the whole of your power.
+to change is the whole of your power. A capped critic is also woken only by a
+mention of it — never by the Chat, a reply in a thread it was asked in, or a
+change — and its inbox says the same (core's routing rule, so `wait`, the rc
+and the web agree).
 
 ### When you are the critic
 

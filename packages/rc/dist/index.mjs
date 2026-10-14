@@ -1509,25 +1509,30 @@ function turnedAwayLine(agentName, policy, nameOf, asker, opts) {
 function turnedAwayMark(agentName) {
   return `this did not wake ${agentName}, and spent nothing.`;
 }
+function mentionsOnly(canvas, actorId) {
+  return canvas?.agents?.[actorId]?.ceiling === "note";
+}
 function dispatchReason(op, authorId, agent, canvas) {
   if (sameActor(agent.joined, authorId, agent.actorId)) return null;
   if (isSystemActor(authorId)) return null;
   if (op.comment?.record) return null;
   const admitted = agent.policy ? admits(agent.policy, authorId, agent) : listensTo(agent.rules, authorId, agent.joined);
   if (!admitted) return null;
+  const capped = mentionsOnly(canvas, agent.actorId);
   if (op.type === "thread.create" || op.type === "thread.reply") {
     const thread = canvas?.threads[op.threadId];
     const candidates = canvas ? collectCanvasNames(canvas) : void 0;
     const reason = reasonFor(op.comment, thread, agent.actorId, agent.names, agent.joined, candidates);
-    if (reason) return reason;
+    if (reason && (!capped || reason === "mentioned")) return reason;
   }
   if (op.type === "questionnaire.ask" || op.type === "questionnaire.answer") {
     const thread = canvas?.threads[op.threadId];
     const comment = thread?.comments.find((c) => c.id === op.commentId);
     const candidates = canvas ? collectCanvasNames(canvas) : void 0;
     const reason = comment && reasonFor(comment, thread, agent.actorId, agent.names, agent.joined, candidates);
-    if (reason) return reason;
+    if (reason && (!capped || reason === "mentioned")) return reason;
   }
+  if (capped) return null;
   const rules = agent.rules;
   if (!rules) return null;
   const items = rules.items ?? [];

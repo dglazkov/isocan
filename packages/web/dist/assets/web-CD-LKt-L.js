@@ -1,0 +1,24 @@
+import{r as d,j as n}from"./index-D1hvuRe7.js";import{a as m}from"./persona-CflUcpdk.js";import{h as p}from"./homage-C7D1Ybwb.js";const h="critique.critic",f="critique.critics",u=i=>typeof i=="string"&&i.trim().length>0;function g(i){if(!i||typeof i!="object")return["a critic is an object"];const t=i,e=[];for(const r of["id","title","agentName","credit","name","homage","colour"])u(t[r])||e.push(`${r} is missing`);return e.length>0||(/^[a-z][a-z0-9-]{1,31}$/.test(t.id)||e.push(`id "${t.id}" is not a short lowercase slug`),/^#[0-9a-fA-F]{6}$/.test(t.colour)||e.push(`colour "${t.colour}" is not #rrggbb`),(!Array.isArray(t.critique)||t.critique.length!==3||!t.critique.every(u))&&e.push("critique is three questions"),e.push(...p({agentName:t.agentName,person:t.name,affiliation:t.homage,...t.self?{self:!0}:{}},{noun:"critic",subject:"the pack",line:"the homage line"}))),e}const y={id:f,describe:"critics a canvas can add — data: a pack record (id, agentName, credit, colour, three questions) and a critique.md beside it",validate:g},w="What it looks for first",b="How it ranks";function l(i,t){const e=i.split(/\r?\n/),r=e.findIndex(o=>o.trim().toLowerCase()===`## ${t}`.toLowerCase());if(r<0)return"";const s=e.findIndex((o,a)=>a>r&&/^#{1,2}\s/.test(o));return e.slice(r+1,s<0?void 0:s).join(`
+`).trim()}function x(i){return{questions:[...(i.split(/^##\s/m)[0]??"").matchAll(/^\s*\d+\.[ \t]*(.*)$/gm)].map(r=>r[1].trim()),looksFor:l(i,w),ranks:l(i,b)}}const c=i=>(i??"").replace(/^["']|["']$/g,"").trim();function q(i,t="critic.md"){const e=m(i,t);if(!e||c(e.extra.critic).toLowerCase()!=="true")return null;const r=x(e.body),s=c(e.extra.agentName);return{name:e.name,agentName:s,credit:c(e.extra.credit),...e.color?{color:e.color}:{},self:c(e.extra.self).toLowerCase()==="true",...e.budget?{budget:e.budget}:{},...r}}const C="critique.answers",I={name:"critique",description:"Ask critics what they make of a screen — they pin notes, change nothing, and you write the one reply",usage:"#Item with <critic> [and <critic>]",source:"module",body:`Ask the named critics for a critique of one screen, then write the one reply.
+
+1. WHICH SCREEN: the item #-referenced in the message (or attached). WHICH
+   CRITICS: the names after "with", split on "and" and commas — each is a
+   critic card on this canvas (\`isocan critic ls\`). If a named critic is not
+   here, \`isocan critic add <name>\` adds it from the roster; if it is not in
+   the roster either, say so in one line and stop.
+2. \`isocan critique "#<Item>" --by <a>,<b>\` — ONE thread on the screen that
+   mentions every critic. It refuses with a sentence when no runner is
+   parked; say that sentence to the person and stop. Then end your turn: the
+   critics work on their own and must not see each other's notes, so you do
+   not wait, read or comment.
+3. You are woken again when the last critic is done (its done line mentions
+   you). Run \`isocan critique read <thread>\`: the fold groups the notes into
+   agree, split and blocker, each citing its notes.
+4. Write the reply: \`isocan critique read <thread> --post --say "<your words>"\`.
+   Your words name each tension in design words — what the two critics value
+   that pulls the screen two ways (reduction against warmth, density against
+   calm) — in two or three sentences. Do not average a split and do not pick a
+   side; the person chooses. The grouping below your words is the fold's.
+5. Build nothing unless asked. If the person asks for both sides of a split,
+   \`isocan critique both <ref> --to <you>\` posts the brief, and you build the
+   two variations it names.`},k={name:"@isocan/critique",propertyKeys:[h,C],points:[y],commands:[I]};function N({readText:i,filename:t}){const[e,r]=d.useState(void 0);if(d.useEffect(()=>{let o=!0;return i().then(a=>{o&&r(q(a,t))},()=>{o&&r(null)}),()=>{o=!1}},[i,t]),e===void 0)return null;if(e===null)return n.jsxs("div",{className:"file-view",children:["Not a critic any more — its front matter needs ",n.jsx("code",{children:"critic: true"}),"."]});const s=e.color??"currentColor";return n.jsxs("article",{className:"critic-card",style:{borderTop:`6px solid ${s}`,padding:"16px 18px",height:"100%",boxSizing:"border-box",overflow:"auto"},children:[n.jsxs("header",{style:{display:"flex",alignItems:"center",gap:10},children:[n.jsx("span",{"aria-hidden":!0,style:{width:14,height:14,borderRadius:"50%",background:s,flex:"none"}}),n.jsx("h3",{style:{margin:0,fontSize:20},children:e.agentName||e.name})]}),n.jsx("p",{style:{margin:"4px 0 12px 24px",opacity:.7,fontSize:13},children:e.credit}),n.jsx("ol",{style:{margin:0,paddingLeft:24,display:"grid",gap:8},children:e.questions.map((o,a)=>n.jsx("li",{children:o||n.jsx("em",{style:{opacity:.6},children:"unwritten"})},a))})]})}const S={core:k,renderers:[{mimes:["text/markdown"],property:h,component:N}]};export{S as critiqueWeb,S as default};
