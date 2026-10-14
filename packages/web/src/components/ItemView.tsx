@@ -52,7 +52,7 @@ import { loadTextFont } from "../lib/textfont.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
-import { useHtmlSnapshot } from "../lib/htmlsnapshot.ts";
+import { readabilityBand, showsLiveFrame, useHtmlSnapshot } from "../lib/htmlsnapshot.ts";
 import { sendPrototypeClick } from "../lib/prototypeclick.ts";
 import { FrameAnchor, anchored, anchorFromMessage, nextSpot, type FrameSpot } from "../lib/frameanchor.ts";
 import { fetchBlobText, peekBlobText, type TextLoad } from "../lib/blobtext.ts";
@@ -1275,6 +1275,7 @@ function ItemViewInner({
               canvasOf={item.properties.canvas ?? null}
               canvasSource={source}
               size={{ width, height }}
+              picture
               reloadToken={reloadToken}
               liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
             />
@@ -1575,9 +1576,14 @@ function VersionFace({
   liveDoc,
   designVersion,
   actor,
+  picture = false,
 }: {
   canvasId: string;
   designVersion?: ItemVersion | undefined;
+  /** On the canvas, where an HTML screen too small to read may show a still
+   *  picture instead of its live page (`showsLiveFrame`). Everywhere else —
+   *  full screen, the stage, the viewer — a screen is always its live page. */
+  picture?: boolean;
   actor?: Actor | undefined;
   blobHash: string;
   mimeType: string;
@@ -1693,6 +1699,8 @@ function VersionFace({
         warm={warm ?? []}
         itemId={itemId}
         actor={actor}
+        entered={entered}
+        picture={picture}
         width={size?.width}
         height={size?.height}
       />
@@ -1791,6 +1799,8 @@ function HtmlItemView({
   warm,
   itemId,
   actor,
+  entered,
+  picture,
   width,
   height,
 }: {
@@ -1802,6 +1812,9 @@ function HtmlItemView({
    *  entered item or full screen. Then a prototype click is delivered. */
   itemId?: string | undefined;
   actor?: Actor | undefined;
+  entered: boolean;
+  /** May a still picture stand in for the page — see `showsLiveFrame`. */
+  picture: boolean;
   width?: number | undefined;
   height?: number | undefined;
 }) {
@@ -1822,12 +1835,27 @@ function HtmlItemView({
     blobHash,
     width ?? 880,
     height ?? 640,
-    Boolean(src),
+    picture && Boolean(src),
   );
   const [proxyReady, setProxyReady] = useState(false);
   useEffect(() => {
     setProxyReady(false);
   }, [blobHash]);
+  // Booleans and a band, never the raw zoom: a selector that returned the
+  // scale would re-render every screen on every step of a zoom.
+  const band = useUiStore((s) => (picture ? readabilityBand(s.viewport.scale) : 2));
+  const panning = useUiStore((s) => picture && s.panning);
+  const [live, setLive] = useState(true);
+  const wantLive = showsLiveFrame({
+    picture,
+    entered: entered || Boolean(actor),
+    warm: warm.length,
+    pictureReady: proxyReady && snapshotUrl !== null,
+    band,
+    panning,
+    wasLive: live,
+  });
+  if (wantLive !== live) setLive(wantLive);
   useEffect(() => {
     if (!itemId || !actor) return;
     const hear = (e: MessageEvent) => {
@@ -1847,7 +1875,6 @@ function HtmlItemView({
     return () => window.removeEventListener("message", hear);
   }, [canvasId, itemId, actor, src]);
   if (!src || !frame) return <div className="html-view" />;
-  const keepLiveFrame = Boolean(actor) || warm.length > 0 || !proxyReady;
   return (
     <div className={`html-view-surface${proxyReady ? " has-snapshot" : ""}`}>
       {snapshotUrl && (
@@ -1860,9 +1887,13 @@ function HtmlItemView({
           onLoad={() => requestAnimationFrame(() => setProxyReady(true))}
         />
       )}
-      {keepLiveFrame && (
+      {wantLive && (
         <HtmlView
           stackRef={stack}
+          // Over its picture, a frame arrives the way a slide does: unseen
+          // until its document has loaded, so what is under it shows until
+          // then rather than a white card (or a page half drawn).
+          overPicture={proxyReady}
           src={src}
           sandbox={frame.sandbox}
           title={filename}
@@ -1881,16 +1912,20 @@ function HtmlView({
   sandbox,
   title,
   warm = [],
+  overPicture = false,
 }: {
   stackRef?: React.Ref<HTMLDivElement>;
   src: string;
   sandbox: string;
   title: string;
   warm?: readonly string[];
+  /** A picture of this page is underneath: the first frame arrives too,
+   *  instead of being shown white while it loads. */
+  overPicture?: boolean;
 }) {
   const [mounted, setMounted] = useState<string[]>([src]);
   const [loaded, setLoaded] = useState<ReadonlySet<string>>(EMPTY);
-  const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set([src]));
+  const [shown, setShown] = useState<ReadonlySet<string>>(() => (overPicture ? EMPTY : new Set([src])));
   const [visible, setVisible] = useState(src);
   const warmKey = warm.join("\u0000");
 

@@ -10,6 +10,8 @@
  *                                              #   grouped by source file when
  *                                              #   dist/ was built with sourcemaps
  *   node scripts/frames.mjs --grounds          # each living ground instead: see below
+ *   node scripts/frames.mjs --html 24 --gestures pan,zoom   # HTML screens instead of notes
+ *   node scripts/frames.mjs --html 24 --scale 0.5           # …zoomed in until they can be read
  *   node scripts/frames.mjs --grounds --record scripts/ground-frames.json
  *
  * `docs/research/2026-08-29-performance.md` measured the frame budget with a
@@ -65,6 +67,18 @@
  * `--record <file>` writes the reading as JSON; `measure.mjs ground-frame-ms`
  * reads `scripts/ground-frames.json`, so the performance persona's number is
  * the last reading somebody took, and says when and on what.
+ *
+ * **`--html <n>` seeds n HTML screens instead of notes** (14 Oct 2026). The
+ * notes board has no frames at all, so it could not see the cliff a board of
+ * live pages hits (`docs/changelog/2026-10-13.md`: 24 screens, p90 100 ms);
+ * the measurement that found it lived in one session, and the fix to its fix
+ * needed it again. Each screen is a synthetic storefront — inline styles, a
+ * script-built section, data: photos — and `frames` reports how many live
+ * frames were mounted when the gestures began, beside the tail. `--scale`
+ * zooms in to that zoom first (the board opens fitted, too far to read),
+ * `--gestures` measures only the ones named, `--dpr` is the device scale, and
+ * `--cross-site` opens the app on `localhost` so every frame is out of
+ * process, as it is on the hosted shape.
  *
  * **It refuses rather than reports** — the lesson of the August run, where the
  * guard fired three times on pages that were not the app. A gesture whose
@@ -261,6 +275,14 @@ async function main() {
   const recordOut = arg("--record", null);
   const throttle = Number(arg("--throttle", "4"));
   const profileOut = arg("--profile", null);
+  const html = Number(arg("--html", "0"));
+  const toScale = Number(arg("--scale", "0"));
+  const only = arg("--gestures", null)?.split(",") ?? null;
+  const dpr = Number(arg("--dpr", "1"));
+  // The app on `localhost` while frames come from 127.0.0.1: two SITES, so
+  // Chrome puts each frame in its own process, as isocan.io and isocan.store
+  // are. On one site the frames share the page's process and their cost hides.
+  const crossSite = argv.includes("--cross-site");
   const assets = path.join(root, "packages/web/dist/assets");
   if (!existsSync(assets)) throw new Error(`REFUSED: ${assets} does not exist — \`npm run build\` first; this measures the production app, never the dev server`);
   const cli = path.join(root, "packages/cli/bin/isocan.js");
@@ -274,7 +296,7 @@ async function main() {
   const origin = await new Promise((resolve, reject) => {
     let out = "";
     const t = setTimeout(() => reject(new Error(`daemon did not start:\n${out}`)), 60_000);
-    const look = (c) => { out += c; if (out.includes(`http://127.0.0.1:${port}`) && /started|running/i.test(out)) { clearTimeout(t); resolve(`http://127.0.0.1:${port}`); } };
+    const look = (c) => { out += c; if (out.includes(`http://127.0.0.1:${port}`) && /started|running/i.test(out)) { clearTimeout(t); resolve(`http://${crossSite ? "localhost" : "127.0.0.1"}:${port}`); } };
     daemon.stdout.on("data", look); daemon.stderr.on("data", look);
     daemon.once("exit", (code) => reject(new Error(`daemon exited ${code}:\n${out}`)));
   });
@@ -289,23 +311,41 @@ async function main() {
     const canvas = await (await connect({ port })).canvas(canvasId);
     // Notes, because markdown was the August profile's headline and every
     // note subscribes to what a canvas knows; synthetic, per the house rule.
+    // A storefront shaped like the screens people make: its own fonts and
+    // colours in a <style>, a section its script builds, and data: photos.
+    const photo = (i) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="240" height="180"><rect width="240" height="180" fill="hsl(${(i * 47) % 360} 40% 80%)"/><circle cx="120" cy="95" r="50" fill="hsl(${(i * 47 + 180) % 360} 50% 40%)"/></svg>`)}`;
+    const screen = (i) => `<!doctype html><html><head><meta charset="utf-8"><title>Acme ${i}</title><style>body{margin:0;font-family:Georgia,serif;background:#f6f3ec;color:#1d2a24}header{padding:24px 32px;background:#234236;color:#f6f3ec}h1{margin:0;font-size:36px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px 32px}.card{background:#fff;border-radius:8px;overflow:hidden}.card img{width:100%;display:block}.card p{margin:8px 12px}</style></head><body><header><h1>Acme store ${i}</h1><p>Gear for the long way round</p></header><section class="grid">${[0, 1, 2, 3, 4, 5].map((k) => `<div class="card"><img src="${photo(i + k)}" alt=""><p>Item ${k}</p></div>`).join("")}</section><section id="more"></section><script>document.getElementById("more").innerHTML = "<p style='padding:0 32px'>" + "Built by the page's own script. ".repeat(8) + "</p>";</script></body></html>`;
     const note = (i) => `# Acme note ${i}\n\nThe **quarterly** plan for team ${i % 12}, with a [link](https://example.com/${i}) and \`code\`.\n\n- first point about item ${i}\n- second point, *emphasised*\n- third point with more words to wrap across the card\n\n> A quote that sits under the list.\n`;
     const ids = [];
-    for (let i = 0; i < items; i++) ids.push((await canvas.add({ content: note(i), mime: "text/markdown", title: `Acme ${i}`, at: { x: (i % 20) * 360, y: Math.floor(i / 20) * 300 }, size: { width: 320, height: 260 } })).id);
+    if (html > 0) {
+      for (let i = 0; i < html; i++) ids.push((await canvas.add({ content: screen(i), mime: "text/html", title: `Acme screen ${i}`, at: { x: (i % 6) * 960, y: Math.floor(i / 6) * 720 }, size: { width: 880, height: 640 } })).id);
+    } else for (let i = 0; i < items; i++) ids.push((await canvas.add({ content: note(i), mime: "text/markdown", title: `Acme ${i}`, at: { x: (i % 20) * 360, y: Math.floor(i / 20) * 300 }, size: { width: 320, height: 260 } })).id);
     for (let t = 0; t < Math.min(40, items); t++) await canvas.comment(ids[(t * 3) % ids.length], `Acme comment ${t}`);
 
     const b = await browser();
     let mover = null;
     try {
-      await b.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
+      await b.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: dpr, mobile: false });
       await b.send("Page.navigate", { url: origin });
       await throughTheDoor(b, origin, "Acme Viewer");
       await b.send("Page.navigate", { url: `${origin}/p/${canvasId}` });
-      const need = Math.min(20, items);
+      const need = Math.min(20, html > 0 ? html : items);
       await until(b, `document.querySelectorAll("[data-item-id]").length >= ${need}`, "items to render", 60_000);
       await sleep(2500);
       const rendered = await b.ev(`document.querySelectorAll("[data-item-id]").length`);
       if (rendered < need) throw new Error(`REFUSED: only ${rendered} items rendered`);
+      const worldScale = `Number((document.querySelector(".world")?.style.transform.match(/scale\\(([0-9.]+)\\)/) ?? [])[1] ?? 1)`;
+      if (toScale > 0) {
+        for (let i = 0; i < 80 && (await b.ev(worldScale)) < toScale; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: 0, deltaY: -40, modifiers: 2 });
+          await sleep(40);
+        }
+        if ((await b.ev(worldScale)) < toScale) throw new Error(`REFUSED: could not zoom to ${toScale}`);
+      }
+      // Pictures render after the camera is calm; give them, and any live frame, time.
+      if (html > 0) await sleep(6000);
+      const liveFrames = `[...document.querySelectorAll(".item iframe")].filter((f) => { const r = f.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; }).length`;
+      if (html > 0) console.log(`board    ${html} screens, zoom ${(await b.ev(worldScale)).toFixed(2)}, ${await b.ev(liveFrames)} live frames on screen, ${await b.ev(`document.querySelectorAll("img.html-snapshot").length`)} pictures, ${width}x${height}@${dpr}x`);
       await b.send("Emulation.setCPUThrottlingRate", { rate: throttle });
       if (grounds) {
         const { LIVING } = await import("@isocan/core");
@@ -388,6 +428,7 @@ async function main() {
           await sleep(2500);
         }],
       ]) {
+        if (only && !only.includes(name)) continue;
         if (prepare) await prepare();
         await b.ev(probe);
         if (profileOut) await b.send("Profiler.start");
@@ -402,7 +443,7 @@ async function main() {
       }
       if (profileOut) writeFileSync(profileOut, JSON.stringify({ items, throttle, results }, null, 2));
       for (const [name, r] of Object.entries(results)) {
-        console.log(`${name.padEnd(6)} items=${items}${r.ghostPositions !== undefined ? ` ghosts=${r.ghostPositions}` : ""} throttle=${throttle}x frames=${r.frames} p50=${r.p50.toFixed(1)} p90=${r.p90.toFixed(1)} p99=${r.p99.toFixed(1)} worst=${r.worst.toFixed(1)} >16.7ms=${r.over16} >32ms=${r.over32}`);
+        console.log(`${name.padEnd(6)} items=${html > 0 ? `${html} screens` : items}${r.ghostPositions !== undefined ? ` ghosts=${r.ghostPositions}` : ""} throttle=${throttle}x frames=${r.frames} p50=${r.p50.toFixed(1)} p90=${r.p90.toFixed(1)} p99=${r.p99.toFixed(1)} worst=${r.worst.toFixed(1)} >16.7ms=${r.over16} >32ms=${r.over32}`);
         const lf = r.longFrames;
         if (lf.count) console.log(`         long frames ${lf.count}: script ${lf.scriptMs.toFixed(0)} ms, style/layout/paint ${lf.renderMs.toFixed(0)} ms; worst ${lf.worst.map((w) => `${w.ms.toFixed(0)} (${w.scriptMs.toFixed(0)} script, ${w.renderMs.toFixed(0)} render, ${w.by})`).join(", ")}`);
         if (r.bySource) for (const f of r.bySource.files.slice(0, 8)) console.log(`         ${f.ms.toFixed(0).padStart(6)} ms ${(100 * f.share).toFixed(1).padStart(5)}%  ${f.file}`);

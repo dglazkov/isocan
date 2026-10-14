@@ -68,6 +68,65 @@ function waitUntilCalm(delayMs: number): Promise<void> {
   });
 }
 
+/**
+ * **The canvas zoom below which a screen's words cannot be read, so a still
+ * picture may stand in for the live page.**
+ *
+ * The picture is NOT the page and cannot be made to be: it is drawn with the
+ * page's scripts, linked stylesheets, frames and remote assets removed, and
+ * with `body`/`html` rules matching nothing, so its type, its photos and even
+ * its height can differ from what the frame shows (14 Oct 2026: a storefront
+ * at rest showed an older-looking, shorter page with no photos). So it is
+ * shown only where that difference cannot be read — a screen this far away —
+ * and never as a screen at rest that a person can read.
+ *
+ * 0.3 from measurement (14 Oct 2026, a 2x display): at 0.37 a storefront's
+ * 16–20px body text still reads as words; at 0.3 it is 9.6–12 device px, the
+ * edge of that. And the 24-screen board the pan budget was measured on fits
+ * on screen only below it, so that board keeps its pictures. Above the line,
+ * `node scripts/frames.mjs --html 24 --scale 0.3 --dpr 2 --cross-site` (20
+ * live frames on screen) panned at p90 16.7 ms, p99 16.8, none over 32 ms.
+ */
+export const PICTURE_BELOW_SCALE = 0.3;
+/** A live frame stays until the zoom falls this far under the line, so a zoom
+ *  resting on the line does not swap the page for its picture and back. */
+const PICTURE_HYSTERESIS = 0.85;
+
+/** Where the camera's zoom is against the line: 2 readable, 0 not, 1 the band between. */
+export function readabilityBand(scale: number): 0 | 1 | 2 {
+  return scale >= PICTURE_BELOW_SCALE ? 2 : scale >= PICTURE_BELOW_SCALE * PICTURE_HYSTERESIS ? 1 : 0;
+}
+
+/**
+ * **Which surface an HTML screen shows: the live page, or its picture.**
+ *
+ * The live page whenever a person could read it or use it: entered, a deck's
+ * warm slides, anywhere but the canvas (`picture` false — full screen, the
+ * stage, the viewer, thumbnails), before a picture exists, and at any zoom a
+ * person can read (`readabilityBand`). The picture only for a screen too
+ * small on screen to read — where the 24-screen board's pan budget came from.
+ *
+ * Two holds keep the swap from being seen or paid for at the wrong moment: a
+ * live frame stays through the band between (hysteresis), and a frame that
+ * is NOT live yet is not started while the camera is moving — the same rule
+ * `useOnScreen` keeps for new mounts — so zooming in past the line mounts it
+ * once, when the gesture settles.
+ */
+export function showsLiveFrame(at: {
+  picture: boolean;
+  entered: boolean;
+  warm: number;
+  pictureReady: boolean;
+  band: 0 | 1 | 2;
+  panning: boolean;
+  wasLive: boolean;
+}): boolean {
+  if (!at.picture || at.entered || at.warm > 0 || !at.pictureReady) return true;
+  if (at.band === 0) return false;
+  if (at.wasLive) return true;
+  return at.band === 2 && !at.panning;
+}
+
 /** An HTML document as a still SVG picture: scripts, frames, linked stylesheets and remote `url(…)` references removed, so drawing it fetches and runs nothing. */
 export function sanitizeDocumentToSvg(html: string, width: number, height: number): string {
   const doc = new DOMParser().parseFromString(html, "text/html");

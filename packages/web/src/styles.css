@@ -1572,9 +1572,18 @@ img { height: auto; }
    and is promoted when it is ready, so the white above is never seen through
    — see `HtmlView`. The stack fills its parent exactly as the lone frame used
    to, so nothing that embeds a screen has to know this happens. */
-.html-view-surface { position: relative; width: 100%; height: 100%; }
+/* `user-select: none`: a frame is a replaced element, and a selection that
+   reaches one — a stray drag, a double-click's paragraph — paints the
+   selection colour over the whole page as a flat translucent veil, while
+   leaving nothing to copy (the page's own text is selected inside it, by its
+   own document). Measured 14 Oct 2026: a selection across an entered screen
+   tinted every pixel of the live page. */
+.html-view-surface { position: relative; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; }
 .html-snapshot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; pointer-events: none; z-index: 0; }
-.canvas-viewport.panning .item:not(.entered) .html-view-surface.has-snapshot .html-view-stack { display: none; }
+/* No rule hides a live frame while the camera moves: a frame is live only at
+   a zoom where its page can be read (`showsLiveFrame`), and there swapping
+   it for its picture mid-pan is a visibly different page flickering in. Far
+   screens are already their pictures, which is where the pan budget is spent. */
 .html-view-stack { position: relative; width: 100%; height: 100%; }
 .html-view-stack > .html-view { position: absolute; inset: 0; }
 /* Loading, not hidden: `visibility: hidden` and `display: none` both let a
