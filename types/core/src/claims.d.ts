@@ -459,6 +459,21 @@ export declare function applyActorJoin(registry: ActorRegistry, op: ActorJoinOp)
 export declare function notBothActors(from: string, into: string, missing: string): OpValidationError;
 /** The actors folded into others, old id → new id — the wire shape. */
 export declare function actorJoins(registry: ActorRegistry): ActorJoins;
+/**
+ * **A home's folds, taken by a replica** — the joins a home sends on every
+ * snapshot, resume and roster, added to the ones this machine holds. The
+ * merged map, or null when nothing arriving is new, so a caller on the roster
+ * path (every cursor beat) writes nothing.
+ *
+ * Additive and first-recorded-wins, because a join is forever: a fold this
+ * machine already holds is never moved by a home saying otherwise. A fold into
+ * itself, or one that would close a loop with what is held, is skipped rather
+ * than refused, since the message carrying it is about everything else too.
+ * The badge check is the home's (`applyActorJoin`'s caller), and it is not
+ * repeated here: the home is the desk that saw both claims, and a replica
+ * already takes names from it on the same terms.
+ */
+export declare function mergeJoins(held: ActorJoins | undefined, arriving: ActorJoins | undefined): ActorJoins | null;
 /** The mark every actor wears, keyed by actor id — the wire shape. A folded
  * actor wears the mark of the person it was folded into. */
 export declare function actorMarks(registry: ActorRegistry): ActorMarks;

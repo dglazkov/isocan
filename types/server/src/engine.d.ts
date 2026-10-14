@@ -918,7 +918,7 @@ export declare class Engine {
      * "transient and self-healing" — that was a hypothesis, and it measured
      * false.
      */
-    mergeRemoteIdentity(colors: ActorColors, names: ActorNames): Promise<void>;
+    mergeRemoteIdentity(colors: ActorColors, names: ActorNames, joined?: ActorJoins): Promise<void>;
     /** Forward a write and land the home's answer here. Runs INSIDE the queue —
      * hence the private, unqueued `applyRemoteEntry` rather than the public
      * `applyRemote`, which would deadlock waiting on the chain it is already
