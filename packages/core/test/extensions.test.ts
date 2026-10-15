@@ -6,6 +6,9 @@ import {
   EXTENSION_ICONS,
   IDENTITY_COLORS,
   LABEL_LIMIT,
+  PANEL_BRIDGE_VERSION,
+  PANEL_OP_MESSAGE_TYPE,
+  PANEL_OP_RESULT_TYPE,
   PANEL_ROLE,
   PANEL_SIDES,
   TITLE_LIMIT,
@@ -21,8 +24,10 @@ import {
   panelActorsIn,
   panelCapabilities,
   panelExtensionItems,
+  panelOpResult,
   panelProperties,
   readPanelExtension,
+  readPanelOpMessage,
   readToolExtension,
   toolCapabilities,
   toolExtensionItems,
@@ -367,7 +372,7 @@ describe("what a panel may do, before you keep it", () => {
      */
     const said = panelCapabilities(readPanel(review).panel!).join("\n");
     expect(said).toContain("cannot read what is selected yet");
-    expect(said).toContain("cannot send an operation");
+    expect(said).toContain("narrow versioned postMessage door as its own actor");
     expect(said, "the frame is the content origin's, never the app's").toContain("content origin");
     expect(said, "it paints in its slot and nowhere else").toContain("left dock");
   });
@@ -402,5 +407,97 @@ describe("what a panel may do, before you keep it", () => {
       },
     };
     expect(panelActorsIn(withPanel)).toEqual([{ id: "ext_review", name: "Acme Review" }]);
+  });
+
+  it("validates the narrow postMessage door: versioned, vocabulary-bounded, and operation-result only (phase 6)", () => {
+    // Non-panel messages are ignored (return null).
+    expect(readPanelOpMessage(null)).toBeNull();
+    expect(readPanelOpMessage({ type: "isocan:height", height: 400 })).toBeNull();
+
+    // Unknown protocol versions are refused rather than guessed at.
+    for (const badVersion of [undefined, 0, 2, "1", "v1", 99]) {
+      const read = readPanelOpMessage({
+        type: PANEL_OP_MESSAGE_TYPE,
+        version: badVersion,
+        requestId: "req_ver",
+        op: { type: "item.move", itemId: "itm_page", x: 10, y: 20 },
+      });
+      expect(read).toMatchObject({
+        ok: false,
+        requestId: "req_ver",
+        code: "bad-version",
+      });
+      if (read && !read.ok) {
+        expect(read.error).toContain("refused rather than guessed at");
+      }
+    }
+
+    // Operations outside the vocabulary are refused and told that proposing a
+    // new op is proposing a product feature.
+    for (const unknownType of ["panel.deploy", "item.teleport", "custom.widget"]) {
+      const read = readPanelOpMessage({
+        type: PANEL_OP_MESSAGE_TYPE,
+        version: PANEL_BRIDGE_VERSION,
+        requestId: "req_unknown",
+        op: { type: unknownType, itemId: "itm_page" },
+      });
+      expect(read).toMatchObject({
+        ok: false,
+        requestId: "req_unknown",
+        code: "unknown-op",
+      });
+      if (read && !read.ok) {
+        expect(read.error).toContain("proposing a product feature");
+      }
+    }
+
+    // Internal undo/redo inverses are also refused at the door.
+    const internal = readPanelOpMessage({
+      type: PANEL_OP_MESSAGE_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      requestId: "req_internal",
+      op: {
+        type: "item.removeVersion",
+        itemId: "itm_page",
+        versionId: "ver_1",
+        prevCurrentVersionId: "ver_0",
+      },
+    });
+    expect(internal).toMatchObject({
+      ok: false,
+      requestId: "req_internal",
+      code: "internal-op",
+    });
+
+    // Valid canvas operations in the vocabulary pass through unchanged.
+    const valid = readPanelOpMessage({
+      type: PANEL_OP_MESSAGE_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      requestId: "req_ok",
+      op: { type: "item.move", itemId: "itm_page", x: 40, y: 80 },
+    });
+    expect(valid).toEqual({
+      ok: true,
+      requestId: "req_ok",
+      op: { type: "item.move", itemId: "itm_page", x: 40, y: 80 },
+    });
+
+    // `panelOpResult` hands back ONLY a frozen operation result — no store, no
+    // client, no badge, no token.
+    const okResult = panelOpResult({ ok: true, seq: 7, id: "op_123" }, "req_ok");
+    expect(Object.isFrozen(okResult)).toBe(true);
+    expect(Object.keys(okResult).sort()).toEqual(["id", "ok", "requestId", "seq", "type", "version"]);
+    expect(okResult).toEqual({
+      type: PANEL_OP_RESULT_TYPE,
+      version: PANEL_BRIDGE_VERSION,
+      requestId: "req_ok",
+      ok: true,
+      seq: 7,
+      id: "op_123",
+    });
+
+    const errResult = panelOpResult({ ok: false, code: "view-only", error: "read only" }, "req_err");
+    expect(Object.isFrozen(errResult)).toBe(true);
+    expect(Object.keys(errResult).sort()).toEqual(["code", "error", "ok", "requestId", "type", "version"]);
   });
 });
