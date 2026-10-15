@@ -40,7 +40,7 @@ import {
   waitForFeedback,
   waitForResolvedFeedback,
   wholeLog
-} from "./chunk-NGUDPETM.mjs";
+} from "./chunk-MNUPZY2S.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -51,7 +51,7 @@ import {
   prepareDesignVerifierOffer,
   submitDesignReviewWrite,
   validatePreparedDesignReviewWrite
-} from "./chunk-4B4N6CFJ.mjs";
+} from "./chunk-IM3L7IEV.mjs";
 import {
   checkDesignCraft,
   parseDesignCraftPacket,
@@ -62,14 +62,14 @@ import {
   readDesignSystem,
   reconcileDesignProjection,
   writeDesignDirection
-} from "./chunk-GP3TSHV2.mjs";
+} from "./chunk-MG7STEOB.mjs";
 import {
   captureDesignRepair,
   parseDesignRepairBasis,
   prepareDesignRepair,
   submitDesignRepair,
   validatePreparedDesignRepair
-} from "./chunk-FO4NCDMC.mjs";
+} from "./chunk-HGHXT3U2.mjs";
 import {
   CanvasGroups,
   DaemonClient,
@@ -104,13 +104,13 @@ import {
   retireStrandedIdentities,
   shaOfRoot,
   writeIdentity
-} from "./chunk-UO3ZXJG4.mjs";
-import "./chunk-5I4NYCRY.mjs";
+} from "./chunk-HQTALRY5.mjs";
+import "./chunk-ZKWPTHFC.mjs";
 import {
   DaemonRoutes,
   OPERATIONS_ROUTE,
   platformFetch
-} from "./chunk-IT4EDWEW.mjs";
+} from "./chunk-ZWA5JOLR.mjs";
 import {
   auditDesignSource,
   designAuditFails,
@@ -119,7 +119,7 @@ import {
   readDesignAuditAdvisory,
   readDesignSourceAudit,
   repairDesignScreen
-} from "./chunk-AWYK6MSC.mjs";
+} from "./chunk-KP5HOKK2.mjs";
 import "./chunk-PKQBK4R5.mjs";
 import {
   prepareDesignDecision,
@@ -128,13 +128,13 @@ import {
   readDesignComparisons,
   respondDesignComparison,
   submitDesignDecision
-} from "./chunk-SFG6HLS4.mjs";
+} from "./chunk-BXGU6GDB.mjs";
 import {
   designReviewReadings,
   designReviewSemantic,
   readDesignReviewReference,
   readDesignReviews
-} from "./chunk-CLATEESS.mjs";
+} from "./chunk-7EJLBY7R.mjs";
 import {
   DESIGN_REVIEW_PROPERTY,
   changeDesignRequest,
@@ -148,7 +148,7 @@ import {
   readDesignRequests,
   readDesignWorkflow,
   startDesignRequest
-} from "./chunk-JOJEPIQK.mjs";
+} from "./chunk-7FDTL4BW.mjs";
 import "./chunk-U4ZPMZI4.mjs";
 import {
   answerDesignQuestions,
@@ -158,14 +158,14 @@ import {
   readDesignQuestions,
   readDesignReference,
   readGoverningDesign
-} from "./chunk-BYQCL5W3.mjs";
-import "./chunk-GR7RNVXK.mjs";
+} from "./chunk-N2TXNBMN.mjs";
+import "./chunk-H2FJRWCQ.mjs";
 import {
   ApiError,
   canvasUrlWithPass,
   isLoopbackBase,
   parseCanvasAddress
-} from "./chunk-FDNENQYZ.mjs";
+} from "./chunk-WMDWXGMU.mjs";
 import "./chunk-GUY4UN4O.mjs";
 import "./chunk-K4TDP4L5.mjs";
 import "./chunk-JYOOXWJZ.mjs";

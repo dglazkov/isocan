@@ -23,6 +23,20 @@ second week.
 
 ## 14 October 2026
 
+- **Stuck, said out loud.** When three takes in a row at the same thing
+  have missed, your next ask gets a question instead of a fourth take: the
+  agent says it has been guessing and what it noticed in what you kept, then
+  asks four now-or-instead pairs (density, brand, layout, tone) with its own
+  guess highlighted. Or ask it to show you extremes, or name a product that
+  gets it right. `isocan stuck`.
+
+- **Changes ripple.** Stop editing a screen for a minute and the canvas's
+  agent reads your edits back as a few named decisions, then shows every
+  other screen that would change, is already in sync or disagrees, with
+  previews you can keep. Nothing changes until you keep one, put the change
+  in the design system, or mark the screen a one-off. A pulse in the top
+  bar keeps one tick per screen. `isocan ripple`.
+
 - **The brief, as a card.** A design request's brief sits on the canvas as
   six lines: Making, For, Should feel, Never, Constraints, Right now. What
   you said is ruled solid; what an agent assumed is in pencil, with Right

@@ -53,6 +53,19 @@ export interface SummonsContext {
         asker: string;
         owner: string;
     };
+    /**
+     * Present when the ask that woke the turn comes after tries at one item
+     * that all missed (core's `stuckOn`, proactive-agent phase 7): the agent
+     * asks a question instead of making another take.
+     */
+    stuck?: {
+        itemId: string;
+        title: string;
+        person: string;
+        /** The question's address, `<item> · <ask>`. */
+        at: string;
+        facts: string[];
+    };
 }
 /** The fixed brief around the wait-shaped payload (phase 4's door):
  * identical for fresh and loaded sessions — delivery differs, content
