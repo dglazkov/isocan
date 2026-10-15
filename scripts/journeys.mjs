@@ -4957,6 +4957,226 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "proactive-brief-card",
+    /**
+     * **The brief, as a card** (proactive-agent phase 5, journey scene 5,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme pre-order app: Menu, Checkout and Basket, and
+     * a design request whose brief says some lines (For, Should feel) and
+     * assumes one (Never). Asked, Kit leaves a proposal beneath Checkout that
+     * cites the For line, and its chip says so.
+     *
+     * The brief's item wears the card: said lines solid, inferred ones pencil
+     * with Right / Wrong. Maya presses **Right** on Never: it turns solid, and
+     * the brief's history names her as its source. She changes **For**:
+     * nothing on the canvas changes (every screen byte for byte), Checkout is
+     * sorted under *assumed the old line* (its proposal cites For), Kit's
+     * re-read puts Menu under *matters more now* and asks ONE question. With
+     * Kit dismissed, an edit still lands and the card says the re-read waits.
+     * Screenshots of the card, light and dark, before and after the edit.
+     */
+    what: "the brief card: Right turns a pencil line solid with Maya as its source; an edit changes no screen, sorts them, and Kit asks one question",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-brief-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_brief_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: asked about Checkout, it proposes against the For line;
+      // asked for a re-read, it reads the card and answers in one command.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const json = (...args) => JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, ...args], { encoding: "utf8" }));
+  const byTitle = (title) => json("ls").find((i) => i.title === title);
+  if (prompt.includes("what would you change on Checkout")) {
+    const file = path.join(cwd, "pickup-first.html");
+    writeFileSync(file, "<!doctype html><title>Checkout</title><body style='font:16px system-ui;padding:24px'><h1>Checkout</h1><p><b>Pickup: Saturday 9:00</b></p><p>Sourdough loaf × 1</p><p>Total $8</p></body>");
+    run("propose", byTitle("Checkout").id, file, "--cites", "brief:for", "--why", "Summary before detail: a regular checks the pickup slot first.");
+    return;
+  }
+  if (prompt.includes("Brief re-read, please (")) {
+    const card = json("design", "card");
+    if (!card.reread || card.reread.answer) return;
+    run("design", "card", "--reread", "--matters", byTitle("Menu").id, "--question", "As well as regulars, or instead?");
+  }
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const page = (name, words) => {
+        const file = path.join(home, `${name}.html`);
+        writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>${name}</title><body style='font:16px system-ui;padding:24px'><h1>${name}</h1><p>${words}</p></body>`);
+        return file;
+      };
+      // The card itself, magnified: at the canvas's fitted zoom it is too small to read in a picture.
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-brief-card-${name}-${Date.now()}.png`);
+        const r = await b.ev(`(() => { const r = document.querySelector('[data-item-id="itm_acme_brief"]').getBoundingClientRect(); return { x: r.left, y: r.top, width: r.width, height: r.height }; })()`);
+        const clip = { x: Math.max(0, r.x - 8), y: Math.max(0, r.y - 30), width: r.width + 16, height: Math.min(r.height + 38, 900 - Math.max(0, r.y - 30)), scale: 2.5 };
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png", clip })).data, "base64"));
+        return file;
+      };
+      const card = `document.querySelector("[data-brief-card]")`;
+      const line = (cite) => `${card}?.querySelector('[data-brief-line="${cite}"]')`;
+      // A canvas holding a design request is served only to a reader that says it can decode one.
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas?.items ?? r))`);
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const screens = {};
+        for (const [i, title, words] of [[0, "Menu", "Sourdough · Rye · Croissant"], [1, "Checkout", "Sourdough loaf × 1 · Total $8 · Pickup: Saturday 9:00"], [2, "Basket", "Your basket is empty."]]) {
+          screens[title] = runCli("--canvas", id, "add", page(title, words), "--title", title, "--size", "390x520", "--at", `${560 + i * 470},0`).itemId;
+        }
+        const start = path.join(home, "start.json");
+        writeFileSync(start, JSON.stringify({
+          requestId: "req_acme_brief", itemId: "itm_acme_brief", versionId: "ver_acme_brief_1", title: "The brief", width: 480, height: 820, placement: { x: 0, y: 0 },
+          source: { entrance: "external-agent", externalRequestId: "acme-brief" },
+          fields: {
+            intent: "refine", fidelity: "designed", delivery: "html-node", targetItemId: null, groupId: null,
+            audience: "regulars who order weekly", primaryTask: "a pre-order app", constraints: ["pickup only"],
+            facts: [
+              { id: "feel", name: "Should feel", value: "warm, quick", origin: "supplied", sources: [] },
+              { id: "never", name: "Never", value: "pushy", origin: "assumed", sources: [] },
+            ],
+            references: [], outstandingDecisionIds: [], outputIds: [],
+          },
+        }));
+        if (runCli("--canvas", id, "design", "start", start).status !== "accepted") throw new Error("the design request was not admitted");
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await sleep(2500);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+        await sleep(1500);
+
+        // 0. Kit, asked, proposes beneath Checkout against the For line; the chip says which line.
+        runCli("--canvas", id, "comment", "add", "@Kit what would you change on Checkout for our regulars?", "--item", screens.Checkout);
+        await until(b, `!!document.querySelector('[data-proposal] .proposal-chip')`, "Kit's proposal beneath Checkout, with its chip", 60_000);
+        const chip = await b.ev(`document.querySelector('[data-proposal] .proposal-chip').textContent`);
+        if (!/cites · For/.test(chip)) throw new Error(`the chip does not name the brief's line: ${chip}`);
+
+        // 1. The card: said lines solid, inferred ones pencil — and, once Maya
+        // steps inside it (a real double-click, the canvas's way into any
+        // item's content), Right / Wrong beside the pencil ones.
+        await until(b, `!!${card}?.querySelector("[data-brief-enter]")`, "the brief card, saying how to answer its pencil lines", 20_000);
+        const enterAt = await b.ev(`(() => { const r = ${card}.querySelector("header").getBoundingClientRect(); const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2); const top = document.elementFromPoint(x, y); return { x, y, hit: !!top && !!top.closest('[data-item-id="itm_acme_brief"]'), over: top ? (top.className?.toString?.() || top.tagName) : "nothing" }; })()`);
+        if (!enterAt.hit) throw new Error(`the brief card is covered by ${enterAt.over} where a person would double-click it`);
+        for (const clickCount of [1, 2]) {
+          await b.send("Input.dispatchMouseEvent", { type: "mousePressed", x: enterAt.x, y: enterAt.y, button: "left", buttons: 1, clickCount });
+          await b.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: enterAt.x, y: enterAt.y, button: "left", buttons: 0, clickCount });
+          await sleep(150);
+        }
+        await until(b, `!!${line("never")}?.querySelector("[data-brief-right]")`, "Right and Wrong beside Never once inside the card", 20_000);
+        const ruled = await b.ev(`(() => { const rule = (c) => { const el = ${card}.querySelector('[data-brief-line="' + c + '"]'); const s = getComputedStyle(el); return [el.hasAttribute("data-said") ? "said" : el.hasAttribute("data-inferred") ? "inferred" : "empty", s.borderBottomStyle]; }; return { for: rule("for"), feel: rule("feel"), never: rule("never"), now: rule("now") }; })()`);
+        if (ruled.for.join() !== "said,solid" || ruled.feel.join() !== "said,solid" || ruled.never.join() !== "inferred,dashed" || ruled.now.join() !== "inferred,dashed") throw new Error(`the rules do not say who said what: ${JSON.stringify(ruled)}`);
+        if (await b.ev(`!!${line("for")}.querySelector("[data-brief-right]")`)) throw new Error("a said line offers Right");
+        await b.ev(`(() => { ${card}.scrollIntoView({ block: "start" }); return true; })()`);
+        const shots = {};
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(250);
+          shots[`card-${theme}`] = await shot(`card-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+
+        // 2. Right: the pencil line turns solid, and the brief's history names Maya.
+        await rig.click(`[data-brief-line="never"] [data-brief-right]`, "Right on Never");
+        await until(b, `${line("never")}?.hasAttribute("data-said")`, "Never to turn solid", 10_000);
+        const read = runCli("--canvas", id, "design", "brief", "req_acme_brief").requests[0];
+        const never = read.brief.facts.find((f) => f.id === "never");
+        if (never?.origin !== "supplied") throw new Error(`Right did not make Never supplied: ${JSON.stringify(never)}`);
+        if (!read.brief.continuation.factProvenance.some((p) => p.field === "facts.never" && p.actorId === "usr_brief_maya" && p.kind === "direct")) throw new Error(`the brief's history does not name Maya: ${JSON.stringify(read.brief.continuation.factProvenance)}`);
+        const versions = runCli("--canvas", id, "show", "itm_acme_brief").versions;
+        if (versions.at(-1).createdBy.name !== "Maya") throw new Error(`the brief's new version is not Maya's: ${JSON.stringify(versions.at(-1).createdBy)}`);
+
+        // 3. Maya changes For: nothing on the canvas changes; the screens are sorted; Kit asks one question.
+        const screensOf = (items) => JSON.stringify(Object.values(JSON.parse(items)).filter((i) => i.id !== "itm_acme_brief").map((i) => [i.id, i.currentVersionId, i.versions.length, i.x, i.y, i.properties]));
+        const before = screensOf(await served(id));
+        await rig.click(`[data-brief-line="for"] [data-brief-edit]`, "Edit on For");
+        await until(b, `!!${line("for")}?.querySelector("input")`, "For's editor");
+        await rig.selectAll();
+        await rig.type("regulars, and weekend first-timers");
+        await rig.click(`[data-brief-line="for"] [data-brief-save]`, "Save For");
+        await until(b, `(${line("for")}?.textContent ?? "").includes("weekend first-timers")`, "For's new words on the card", 10_000);
+        await until(b, `!!${card}.querySelector('[data-reread="old"] [data-reread-item="${screens.Checkout}"]')`, "Checkout under assumed the old line", 15_000);
+        await until(b, `!!${card}.querySelector("[data-reread-question]")`, "Kit's one question on the card", 60_000);
+        const reread = await b.ev(`${card}.querySelector("[data-brief-reread]").textContent`);
+        for (const want of ["Assumed the old line", "its proposal “Checkout — proposal” cites For", "Matters more now", "Menu", "Still holds", "Basket", "Kit asks: As well as regulars, or instead?"]) {
+          if (!reread.includes(want)) throw new Error(`the re-read does not say ${JSON.stringify(want)}: ${reread}`);
+        }
+        if (!(await b.ev(`!!${card}.querySelector('[data-reread="more"] [data-reread-item="${screens.Menu}"]')`))) throw new Error("Menu is not under matters more now");
+        if (screensOf(await served(id)) !== before) throw new Error("editing the brief changed something on the canvas besides the brief");
+        await b.ev(`(() => { ${card}.querySelector("[data-brief-reread]").scrollIntoView({ block: "end" }); return true; })()`);
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(250);
+          shots[`reread-${theme}`] = await shot(`reread-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        const printed = runCli("--canvas", id, "design", "card");
+        if (printed.reread?.answer?.question !== "As well as regulars, or instead?") throw new Error(`the terminal does not read the same re-read: ${JSON.stringify(printed.reread)}`);
+
+        // 4. Kit dismissed: an edit still lands, writes no screen, and the card says the re-read waits.
+        runCli("--canvas", id, "rc", "remove", "Kit");
+        await sleep(1000);
+        await rig.click(`[data-brief-line="constraints"] [data-brief-edit]`, "Edit on Constraints");
+        await until(b, `!!${line("constraints")}?.querySelector("input")`, "Constraints' editor");
+        await rig.selectAll();
+        await rig.type("pickup only · no accounts");
+        await rig.click(`[data-brief-line="constraints"] [data-brief-save]`, "Save Constraints");
+        await until(b, `!!${card}.querySelector("[data-reread-waits]")`, "the card to say the re-read waits", 15_000);
+        const waits = await b.ev(`${card}.querySelector("[data-reread-waits]").textContent`);
+        if (!/^The re-read waits: /.test(waits)) throw new Error(`the card does not say the re-read waits: ${waits}`);
+        if (screensOf(await served(id)) !== before) throw new Error("an edit with nobody to answer changed the canvas");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots };
+      } catch (err) {
+        // What the brief's item was showing, so a failure names the face rather than a timeout.
+        const face = await b.ev(`(document.querySelector("[data-design-record]")?.textContent ?? "no design record face on screen").slice(0, 1200)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the brief's face ---\n${face}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
     name: "launcher",
     /** ⌘K stopped being a third composer and became the way to reach
      *  everything. A launcher that opens but does nothing is the worst version

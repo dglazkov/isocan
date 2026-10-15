@@ -23,6 +23,14 @@ second week.
 
 ## 14 October 2026
 
+- **The brief, as a card.** A design request's brief sits on the canvas as
+  six lines: Making, For, Should feel, Never, Constraints, Right now. What
+  you said is ruled solid; what an agent assumed is in pencil, with Right
+  and Wrong beside it. Proposals say which line they answer. Changing a line
+  changes nothing else: each screen is sorted into *assumed the old line*,
+  *still holds* or *matters more now*, and your agent asks you one question.
+  `isocan design card`.
+
 - **Explain this item.** Choose **Explain** from an item's menu (or ⌘K) and
   a panel beside the canvas tells you how it got here: the few versions that
   mattered and why, the roads not taken, what has changed around it since,

@@ -13,6 +13,7 @@
     "./questionnaire": "./src/questionnaire.ts",
     "./questionnaire-adoption": "./src/questionnaire-adoption.ts",
     "./design-brief": "./src/design-brief.ts",
+    "./brief-card": "./src/brief-card.ts",
     "./design-request": "./src/design-request.ts",
     "./design-record": "./src/design-record.ts",
     "./design-direction": "./src/design-direction.ts",

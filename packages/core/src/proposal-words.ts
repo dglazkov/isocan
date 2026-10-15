@@ -1,6 +1,7 @@
 import type { CanvasContents, Comment, Item } from "./model.ts";
 import { PARENT_PROP } from "./lineage.ts";
 import { CONTEXT_PROP } from "./contextmark.ts";
+import { briefLineLabel } from "./brief-card.ts";
 import { CITE_KINDS, PROPOSAL_CITES_PROP, PROPOSAL_PROP, PROPOSAL_WHY_PROP, type ProposalCite, type ProposalConfidence } from "./proposal.ts";
 
 /**
@@ -55,7 +56,8 @@ const KIND_WORD: Record<ProposalCite["kind"], string> = {
 /**
  * **What the trigger chip says** — the first cite, in words. A comment cite
  * is found on the canvas and quoted with its author ("Ravi's comment, "people
- * miss the pickup slot""); anything else says its kind and ref.
+ * miss the pickup slot""); a brief cite names the card's line it answers
+ * (`cites · For`, phase 5); anything else says its kind and ref.
  */
 export function citeLabel(canvas: CanvasContents, cite: ProposalCite): string {
   if (cite.kind === "comment" || cite.kind === "explain") {
@@ -71,6 +73,7 @@ export function citeLabel(canvas: CanvasContents, cite: ProposalCite): string {
       }
     }
   }
+  if (cite.kind === "brief") return `cites · ${briefLineLabel(cite.ref) ?? cite.ref}`;
   return `${KIND_WORD[cite.kind]} · ${cite.ref}`;
 }
 

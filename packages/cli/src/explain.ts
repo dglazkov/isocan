@@ -58,8 +58,8 @@ export interface ExplainOpts {
   hunch?: boolean;
 }
 
-/** Say something in the Chat, about one item; the thread is born if this is the first word. */
-async function sayInChat(ctx: Ctx, deps: ExplainDeps, canvasId: string, snapshot: CanvasSnapshotResponse, body: string, extra: Partial<NewComment>) {
+/** Say something in the Chat, about one item; the thread is born if this is the first word. Shared with `design card`'s re-read. */
+export async function sayInChat(ctx: Ctx, deps: ExplainDeps, canvasId: string, snapshot: CanvasSnapshotResponse, body: string, extra: Partial<NewComment>) {
   const comment = { ...(await deps.newComment(ctx, canvasId, snapshot, body)), ...extra };
   const main = mainThread(snapshot.canvas);
   if (main) {

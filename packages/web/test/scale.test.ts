@@ -212,8 +212,11 @@ describe("spacing", () => {
     // declarations, all on existing steps, against a total at 1,344; the
     // panel's sheet restates the morning panel's measures rather than
     // sharing a sheet across two lazy chunks.
+    // 1360 -> 1390 on 14 Oct 2026 for the brief card (phase 5): twenty-six
+    // lengths in its own lazy sheet, all on existing steps, against a total
+    // at 1,355; the card's lines, its editor and the re-read's three piles.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1360);
+    expect(spacing.length).toBeLessThan(1390);
   });
 });
 

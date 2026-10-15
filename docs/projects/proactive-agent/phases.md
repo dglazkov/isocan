@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–4 (proposals; the night watch; the morning review; explain) are CLOSED. Next: phase 5, the brief as a card — after the entry chunk's slimming pass, since it sits 193 bytes under the jump. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–5 (proposals; the night watch; the morning review; explain; the brief as a card) are CLOSED. Next: phase 6, changes ripple. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -154,7 +154,7 @@ arrives as a proposal.
 
 ## Phase 5 — The brief as a card
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `brief-card.ts`: `briefCard` reads a design request's brief as six lines (Making, For, Should feel, Never, Constraints, Right now), solid only for the person's own word (`origin: supplied`), pencil for `assumed` and `context`, at most four inferred lines shown; Right now is sensed from the canvas until someone writes it. Right, Wrong and a new value are `briefEditPatch`es on the ordinary `design.request` update, so the server records the person's provenance. An edit changes nothing on the canvas: `briefReread` sorts the screens (assumed the old line, matters more now, still holds) and writes nothing, and the lead, summoned in the Chat, answers with `design card --reread` and one question; with nobody to answer, the card says the re-read waits. Proposals citing `brief:<line>` wear "cites · For". `isocan design card`. The card is the brief item's own face on the canvas (lazy). `brief-card.test.ts` (core, CLI), `briefcard.test.ts` (web) and the `proactive-brief-card` journey. Entry 691,916 → 692,006.
 
 **Outcome:** a card item rendering the active brief, solid rules for
 supplied facts and pencil rules for assumed ones (at most four); **Right**
@@ -175,6 +175,10 @@ brief's intent plus a sensed mode the person can overrule.
 - **2026-10-14** — Open: one card per canvas, per group or per design
   request, and whether it lives on the canvas, in a panel, or both. Waits on
   Dion.
+- **2026-10-14** — The card is the brief item's own face, and every edit is the existing `design.request` update; the person's authorship comes from the server's `factProvenance`, with no new field.
+- **2026-10-14** — The re-read is derived from the brief's previous version and never stored; receipts count as citing every changed line, since they were checked against the whole brief.
+- **2026-10-14** — Chosen, Dion to confirm: one card per design request, on the canvas; Right / Wrong appear inside the entered item (the canvas's grammar for an item's content); edits only while the request is active.
+- **2026-10-14** — Open, waits on Dion: editing a completed brief (needs `resume`); whether "matters more now" marks screens on the canvas; whether Right now stays sensed in core or becomes the lead's call; whether `context` facts belong in pencil.
 
 ## Phase 6 — Changes ripple
 

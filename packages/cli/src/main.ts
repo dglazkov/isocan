@@ -10963,6 +10963,32 @@ registerDesignCraft(style, ctxOf);
 registerDesignSystems(style, ctxOf);
 
 /**
+ * **The brief, as a card** (proactive-agent phase 5): the design request's
+ * brief as six lines, said ones solid and inferred ones pencil, with Right,
+ * Wrong and a new value through `design brief --update`, and the re-read an
+ * edit asks of the lead. Registered under `design` beside `brief`; the body
+ * lives in `brief-card.ts`, loaded on this verb only.
+ */
+style
+  .command("card [request]")
+  .description("The brief as a card: Making, For, Should feel, Never, Constraints, Right now — said lines solid, inferred ones pencil; Right / Wrong / a new value, and the re-read after an edit")
+  .option("--right <line>", "an inferred line is right: it becomes the person's word")
+  .option("--wrong <line>", "an inferred line is wrong: it goes, and --value is the right one")
+  .option("--set <line>", "the person's own words for a line, with --value")
+  .option("--value <text>", "with --set or --wrong: what the line should say")
+  .option("--reread", "the lead's answer to a re-read: --matters <screen>… and ONE --question")
+  .option("--matters <screen>", "with --reread: a screen that matters more now (repeatable)", collectList)
+  .option("--question <text>", "with --reread: the one clarifying question for the person")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (request: string | undefined, opts: import("./brief-card.ts").BriefCardOpts, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { designCard } = await import("./brief-card.ts");
+      await designCard(ctx, goodnightDeps(), request, opts);
+    }),
+  );
+
+/**
  * **Saying no, and where that decision lives.**
  *
  * The gate on `isocan add` refuses a screen past `DESIGN_SYSTEM_LIMIT`, and a

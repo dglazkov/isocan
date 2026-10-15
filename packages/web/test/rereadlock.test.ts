@@ -44,6 +44,10 @@ vi.mock("../src/lib/api.ts", async (original) => ({ ...(await original<object>()
 vi.mock("../src/components/DesignTaskCard.tsx", () => ({
   DesignTaskCard: ({ checking }: { checking: boolean }) => { seen.gates.push({ who: "task-card", checking }); return null; },
 }));
+// The brief card beside it (proactive-agent phase 5) is handed the same gate, as `canEdit`.
+vi.mock("../src/components/BriefCard.tsx", () => ({
+  BriefCard: ({ canEdit }: { canEdit: boolean }) => { seen.gates.push({ who: "brief-card", checking: !canEdit }); return null; },
+}));
 vi.mock("../src/components/DesignReviewHandoff.tsx", () => ({
   DesignReviewHandoff: ({ canEdit }: { canEdit: boolean }) => { seen.gates.push({ who: "review-handoff", checking: !canEdit }); return null; },
 }));
