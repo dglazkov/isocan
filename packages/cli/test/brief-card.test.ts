@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { cliEnv, collect, runCli, spawnCli, type Run } from "./cli.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 import { mintTestBadge } from "./badge.ts";
+import { parkedWait } from "./parked.ts";
 import { CLIENT_FEATURES_HEADER, CURRENT_CLIENT_FEATURES } from "@isocan/core";
 
 /**
@@ -141,8 +142,8 @@ describe("isocan design card", () => {
     const shownProposal = await json(["--canvas", canvas, "show", proposal.itemId]);
     expect(JSON.parse(shownProposal.properties.proposalCites)).toEqual([{ kind: "brief", ref: "for" }]);
     expect((await isocan(["--canvas", canvas, "session", "start", "--label", "Kit"], kit)).code).toBe(0);
-    const parked = collect(spawnCli(["--canvas", canvas, "wait", "--json", "--timeout", "30"], { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port, ...kit }) }));
-    await new Promise((r) => setTimeout(r, 1500));
+    // Collected from spawn and known to be parked before the edit is made (lessons.md #123).
+    const parked = await parkedWait({ base, headers: { ...badge.headers, [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES }, canvas, actorId: "usr_bc_kit", cli: { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port, ...kit }) } });
 
     const before = await screenState();
     const edit = await isocan(["--canvas", canvas, "design", "card", "--set", "for", "--value", "regulars, and weekend first-timers"]);
@@ -151,7 +152,7 @@ describe("isocan design card", () => {
     expect(edit.stdout).toContain("Still holds: “Menu”; “Basket”");
     expect(edit.stdout).toContain("(asked Kit in the Chat)");
     expect(await screenState()).toBe(before);
-    const woke = await parked;
+    const woke = await parked.run;
     expect(woke.stdout).toContain("Brief re-read, please (itm_acme_card@");
 
     const two = await isocan(["--canvas", canvas, "design", "card", "--reread", "--question", "Who? And when?"], kit);
