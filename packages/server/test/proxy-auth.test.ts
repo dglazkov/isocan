@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { LINK } from "@isocan/core";
-import { DaemonClient } from "@isocan/api";
+import { DaemonClient, HOME_CLAIM_KEY } from "@isocan/api";
 import { startDaemon, type Daemon } from "../src/daemon.ts";
 import { attestationFromProxy, resolveProxyAuth } from "../src/attest.ts";
 import { readHomes } from "../src/homes.ts";
@@ -175,12 +175,8 @@ describe("Reverse-proxy identity attestation + per-home transport gateway", () =
 
     // Attest offer advertises email capability while keeping `auth: null` (no Firebase popup)
     await aliceClient.badges();
-    const aliceCred = JSON.parse(await fs.readFile(path.join(aliceHome, "identity.json"), "utf8")).auth[
-      "https://canvas.acme.example"
-    ];
-    const offerRes = await fetch(`${gw.url}/api/attest`, {
-      headers: { Authorization: `Bearer ${aliceCred.badgeId}.${aliceCred.secret}` },
-    });
+    expect(existsSync(path.join(aliceHome, "identity.json"))).toBe(false);
+    const offerRes = await fetch(`${gw.url}/api/attest`);
     expect(await offerRes.json()).toMatchObject({
       attesters: ["email"],
       auth: null,
@@ -188,7 +184,11 @@ describe("Reverse-proxy identity attestation + per-home transport gateway", () =
     });
 
     // Alice claims identity, creates a private canvas shared ONLY with bob@acme.example, and closes the public link
-    const claim = await aliceClient.claimActor({ type: "actor.claim", sessionKey: "cli", name: "Alice" });
+    const claim = await aliceClient.claimActor({
+      type: "actor.claim",
+      sessionKey: HOME_CLAIM_KEY,
+      name: "Alice",
+    });
     const alice = claim.envelope.actor;
     await aliceClient.sendOp("prj_secret", alice, {
       type: "project.create",

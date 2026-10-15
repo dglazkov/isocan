@@ -1,8 +1,8 @@
 ---
-status: designed
+status: partial
 since: 2026-10-15
 see: multiuser, first-minute, multi-identity, embed, antigravity, iso-api
-note: specified 15 Oct 2026. When a home sits behind an authenticating reverse proxy (ISOCAN_PROXY_EMAIL_HEADER), the proxy's verified header is the person's identity per request, and a harness session header (X-Isocan-Session) is the agent's identity per request — with an external credential helper (homeAuth) in @isocan/api so one-shot CLI calls and same-browser embeds need zero stored badges, zero single-use passes, zero explicit identity claims, and zero background gateway daemons. Nothing is built; phase 0 is stateless proxy principal resolution at the door.
+note: phase 0 closed 15 Oct 2026 — a home with ISOCAN_PROXY_EMAIL_HEADER resolves badge-less HTTP requests and /ws upgrades to a deterministic bdg_prx_... badge and canonical home:person actor at the door, SsoGate adopts AttestOffer.bound in one step, and @isocan/api resolveIdentity discovers the human actor without ~/.isocan/identity.json. Phases 1 (X-Isocan-Session agent attribution) and 2 (homeAuth credential helper) remain.
 ---
 
 # The proxy already knows who you are

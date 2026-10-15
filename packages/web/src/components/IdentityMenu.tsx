@@ -1,9 +1,8 @@
-import { faceMark } from "@isocan/core";
+import { attestedEmail, faceMark } from "@isocan/core";
 import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor } from "@isocan/core";
 import {
   adoptIdentity,
-  attestedEmail,
   foldIdentity,
   knownIdentities,
   renameIdentity,

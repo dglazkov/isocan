@@ -1,5 +1,5 @@
-import type { Actor, ActorClaimOp, Attestation, AttestOffer } from "@isocan/core";
-import { newId } from "@isocan/core";
+import type { Actor, ActorClaimOp, AttestOffer } from "@isocan/core";
+import { attestedEmailLocalPart, newId } from "@isocan/core";
 import { claimActor, sendOp } from "./api.ts";
 
 const KEY = "isocan.identity";
@@ -91,33 +91,10 @@ export async function adoptIdentity(actor: Actor): Promise<Actor> {
 }
 
 /**
- * The newest `email:<local>@<domain>` address on this badge without its
- * `email:` prefix, or null when the badge carries none.
- */
-export function attestedEmail(attestations: readonly Attestation[]): string | null {
-  for (let i = attestations.length - 1; i >= 0; i--) {
-    const attr = attestations[i]!.attribute;
-    if (!attr.startsWith("email:")) continue;
-    const address = attr.slice("email:".length).trim();
-    const at = address.indexOf("@");
-    if (at <= 0) continue;
-    if (address.slice(0, at).trim()) return address;
-  }
-  return null;
-}
-
-/**
- * The local-part of the newest `email:<local>@<domain>` attestation on this
- * badge, or null when the badge carries none.
- */
-export function attestedEmailLocalPart(attestations: readonly Attestation[]): string | null {
-  const address = attestedEmail(attestations);
-  if (!address) return null;
-  return address.slice(0, address.indexOf("@")).trim() || null;
-}
-
-/**
  * Auto-enter on an SSO home from the badge's current attestation offer:
+ * - If the presenting badge already binds a `home:person` actor (`offer.bound`),
+ *   adopt it directly in `localStorage` with `key: "home:person"` without
+ *   issuing a redundant `actor.claim`.
  * - If exactly one actor is resumable on that address, resume it (`adoptIdentity`).
  * - If multiple personas exist (`resumable.length > 1`) and exactly one matches
  *   the attested email's local-part, resume that primary persona.
@@ -130,6 +107,9 @@ export async function enterFromAttestOffer(
   actions: { adopt?: (actor: Actor) => Promise<Actor>; enter?: (name: string) => Promise<Actor> } = {},
 ): Promise<Actor | null> {
   if (!offer || !offer.attesters.includes("email")) return null;
+  if (offer.bound) {
+    return become({ id: offer.bound.id, name: offer.bound.name, key: "home:person" });
+  }
   const adopt = actions.adopt ?? adoptIdentity;
   const enter = actions.enter ?? enterAs;
   const local = attestedEmailLocalPart(offer.attestations);

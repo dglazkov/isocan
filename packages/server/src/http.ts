@@ -185,11 +185,13 @@ import { Engine, NothingToUndoError, CanvasNotFoundError } from "./engine.ts";
 import { builtInAsset } from "./modules.ts";
 import { hashBound, readBound, readTree, writeBound } from "./tree.ts";
 import {
+  attestationFromProxy,
   attestersOf,
   attesterRefusal,
   BadIdTokenError,
   ensureProxyAttestation,
   googleSigningKeys,
+  resolveProxyPrincipal,
   verifyIdToken,
   type AuthConfig,
   type ProxyAuthConfig,
@@ -644,6 +646,42 @@ async function forwardedCallerGone(reply: FastifyReply, response: Response): Pro
   }
   reply.raw.once("close", answered);
   return false;
+}
+
+async function attachProxyBadge(
+  desk: Desk,
+  engine: Engine,
+  req: FastifyRequest,
+  pathname: string,
+  proxyAuth: ProxyAuthConfig | null,
+): Promise<BadgeRecord | null> {
+  if (req.method === "POST" && pathname === DOOR_ROUTE) return null;
+  const resolved = await resolveProxyPrincipal(desk, engine, req.headers, proxyAuth);
+  if (resolved?.kind === "badge") req.badge = resolved.badge;
+  return resolved?.kind === "ended" ? resolved.ended : null;
+}
+
+function sendEndedBadge(reply: FastifyReply, gone: BadgeRecord): FastifyReply {
+  const ended = endOf(gone);
+  return reply.status(401).send({ error: ended.sentence, code: BADGE_ENDED, reason: ended.by, ended });
+}
+
+async function buildAttestOffer(
+  engine: Engine,
+  attesters: AttestOffer["attesters"],
+  auth: AuthConfig | null,
+  badge: BadgeRecord,
+): Promise<AttestOffer> {
+  const bound = badge.claims.some((row) => row.sessionKey === "home:person")
+    ? (await engine.actorBindings(badge.badgeId, ["home:person"]))[0]?.actor
+    : undefined;
+  return {
+    attesters,
+    auth,
+    attestations: badge.attestations ?? [],
+    resumable: (await engine.resumable(badge.badgeId)).map((row) => row.actor),
+    ...(bound ? { bound } : {}),
+  };
 }
 
 export function registerRoutes(
@@ -1169,6 +1207,8 @@ export function registerRoutes(
       }
     }
 
+    const endedProxyBadge = !req.badge && !presented ? await attachProxyBadge(desk, engine, req, pathname, proxyAuth) : null;
+
     if (req.badge) {
       req.badge = await ensureProxyAttestation(desk, req.badge, req.headers, proxyAuth);
       await desk.touch(req.badge.badgeId, new Date().toISOString());
@@ -1279,7 +1319,8 @@ export function registerRoutes(
     }
     // Public browsing needs no identity, but a supplied ended credential
     // still receives its own refusal instead of silently becoming anonymous.
-    if (isOpen(req.method, pathname) && !(pathname === PUBLIC_CANVASES_ROUTE && presented)) return;
+    if (isOpen(req.method, pathname) && !(pathname === PUBLIC_CANVASES_ROUTE && (presented || endedProxyBadge))) return;
+    if (endedProxyBadge) return sendEndedBadge(reply, endedProxyBadge);
     if (!presented) {
       return reply
         .status(401)
@@ -1300,12 +1341,7 @@ export function registerRoutes(
      * `bad-badge` as before.
      */
     const gone = await resolveEnded(desk, presented);
-    if (gone) {
-      const ended = endOf(gone);
-      return reply
-        .status(401)
-        .send({ error: ended.sentence, code: BADGE_ENDED, reason: ended.by, ended });
-    }
+    if (gone) return sendEndedBadge(reply, gone);
     return reply
       .status(401)
       .send({ error: `this home does not know that badge — ask the door for a new one (POST ${DOOR_ROUTE})`, code: "bad-badge" });
@@ -3833,12 +3869,7 @@ export function registerRoutes(
     if (stuck) return stuck;
     const home = homes?.homeScoped() ?? null;
     if (home) return home.attestOffer();
-    return {
-      attesters,
-      auth,
-      attestations: req.badge!.attestations ?? [],
-      resumable: (await engine.resumable(req.badge!.badgeId)).map((row) => row.actor),
-    } satisfies AttestOffer;
+    return buildAttestOffer(engine, attesters, auth, req.badge!);
   });
 
   /**
@@ -5756,7 +5787,7 @@ function registerPages(
     // refills. The door, whose caller asked for the CREDENTIAL and can act on
     // being told to wait, answers 429 instead. Same accounting, two refusals,
     // because they are two different asks.
-    if (!req.badge) {
+    if (!req.badge && !attestationFromProxy(req.headers, options.proxyAuth ?? null)) {
       // A refused network gets the page and no badge (operator phase 6), the
       // same softest refusal a metered knock gets: the badge-less browser
       // recovers through the door, which answers 403 with the sentence.

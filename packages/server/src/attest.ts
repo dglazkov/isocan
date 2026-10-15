@@ -1,15 +1,19 @@
-import { createPublicKey, verify as verifySignature, X509Certificate } from "node:crypto";
+import { createHash, createPublicKey, verify as verifySignature, X509Certificate } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import {
+  attestedEmailLocalPart,
   attestedKindOf,
   BAD_ID_TOKEN,
+  harnessOf,
   isGroupSubject,
   normalizeAttribute,
+  PERSON_HARNESSES,
   type AttestedKind,
   type Attestation,
   type GrantSubject,
 } from "@isocan/core";
 import type { BadgeRecord, Desk } from "./desk.ts";
+import type { Engine } from "./engine.ts";
 
 /**
  * **The attesters this home has borrowed** — mechanism 3's "borrow, never
@@ -247,6 +251,143 @@ export async function ensureProxyAttestation(
   if ((badge.attestations ?? []).some((row) => row.attribute === attestation.attribute)) return badge;
   await desk.attest(badge.badgeId, attestation);
   return { ...badge, attestations: [...(badge.attestations ?? []), attestation] };
+}
+
+/**
+ * Deterministic badge id (`bdg_prx_...`) for a verified reverse-proxy principal.
+ * Keyed by the normalized attribute so every surface presenting the same
+ * proxy-verified identity resolves to one desk record without a secondary
+ * index scan.
+ */
+export function proxyBadgeId(attribute: string): string {
+  return `bdg_prx_${createHash("sha256")
+    .update(`proxy:${normalizeAttribute(attribute)}`)
+    .digest("base64url")
+    .slice(0, 16)}`;
+}
+
+const PROXY_PERSON_KEY = "home:person";
+
+type ProxyPrincipalOutcome =
+  | { kind: "badge"; badge: BadgeRecord }
+  | { kind: "ended"; ended: BadgeRecord };
+
+const inflightByDesk = new WeakMap<Desk, Map<string, Promise<ProxyPrincipalOutcome>>>();
+
+/**
+ * Resolve a badge-less request carrying a verified reverse-proxy identity header
+ * to its deterministic `bdg_prx_...` badge and bound `home:person` human actor,
+ * or report an operator-ended proxy tombstone without resurrecting it.
+ */
+export async function resolveProxyPrincipal(
+  desk: Desk,
+  engine: Engine,
+  headers: IncomingHttpHeaders,
+  proxyAuth: ProxyAuthConfig | null,
+  now = Date.now(),
+): Promise<ProxyPrincipalOutcome | null> {
+  const attestation = attestationFromProxy(headers, proxyAuth, now);
+  if (!attestation) return null;
+  const badgeId = proxyBadgeId(attestation.attribute);
+  const existing = await desk.badge(badgeId);
+  if (
+    existing &&
+    (existing.attestations ?? []).some((row) => row.attribute === attestation.attribute) &&
+    existing.claims.some((row) => row.sessionKey === PROXY_PERSON_KEY)
+  ) {
+    return { kind: "badge", badge: existing };
+  }
+  let inflight = inflightByDesk.get(desk);
+  if (!inflight) {
+    inflight = new Map();
+    inflightByDesk.set(desk, inflight);
+  }
+  const prev = inflight.get(badgeId);
+  const work = (prev ?? Promise.resolve(null)).then(
+    () => ensureProxyBadgeAndPerson(desk, engine, badgeId, attestation, now),
+    () => ensureProxyBadgeAndPerson(desk, engine, badgeId, attestation, now),
+  );
+  inflight.set(badgeId, work);
+  try {
+    return await work;
+  } finally {
+    if (inflight.get(badgeId) === work) {
+      inflight.delete(badgeId);
+    }
+  }
+}
+
+async function ensureProxyBadgeAndPerson(
+  desk: Desk,
+  engine: Engine,
+  badgeId: string,
+  attestation: Attestation,
+  now: number,
+): Promise<ProxyPrincipalOutcome> {
+  let badge = await desk.badge(badgeId);
+  if (!badge) {
+    const ended = await desk.endedBadge(badgeId);
+    if (ended) return { kind: "ended", ended };
+    const iso = new Date(now).toISOString();
+    badge = {
+      badgeId,
+      secretHash: "",
+      kind: "bearer",
+      createdAt: iso,
+      lastSeen: iso,
+      admissions: [],
+      claims: [],
+    };
+    await desk.put(badge);
+  }
+  if (!(badge.attestations ?? []).some((row) => row.attribute === attestation.attribute)) {
+    await desk.attest(badgeId, attestation);
+    badge = { ...badge, attestations: [...(badge.attestations ?? []), attestation] };
+  }
+  if (!badge.claims.some((row) => row.sessionKey === PROXY_PERSON_KEY)) {
+    let existingActorId: string | null = null;
+    const resumableIds = new Set((await engine.resumable(badgeId)).map((row) => row.actor.id));
+    if (resumableIds.size > 0) {
+      for (const other of await desk.badgesAttesting(attestation.attribute)) {
+        if (other.badgeId === badgeId) continue;
+        for (const claim of other.claims) {
+          const harness = harnessOf(claim.sessionKey);
+          if (
+            harness &&
+            PERSON_HARNESSES.has(harness.toLowerCase()) &&
+            resumableIds.has(claim.actorId)
+          ) {
+            existingActorId = claim.actorId;
+            break;
+          }
+        }
+        if (existingActorId) break;
+      }
+    }
+    if (existingActorId) {
+      await engine.claim({
+        badgeId,
+        op: {
+          type: "actor.claim",
+          sessionKey: PROXY_PERSON_KEY,
+          as: existingActorId,
+        },
+      });
+    } else {
+      const localPart = attestedEmailLocalPart([attestation]) ?? "person";
+      await engine.claim({
+        badgeId,
+        op: {
+          type: "actor.claim",
+          sessionKey: PROXY_PERSON_KEY,
+          name: localPart,
+          fresh: true,
+        },
+      });
+    }
+    badge = (await desk.badge(badgeId)) ?? badge;
+  }
+  return { kind: "badge", badge };
 }
 
 /**

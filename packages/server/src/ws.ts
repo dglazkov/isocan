@@ -33,7 +33,7 @@ import { supportsDesignRequests } from "@isocan/core";
 import { DesignRequestClientError, designRequestOperation } from "./design-request-capability.ts";
 import type { Desk } from "./desk.ts";
 import { admissionIn, admittingGrant, heldCapability } from "./grants.ts";
-import { ensureProxyAttestation, type ProxyAuthConfig } from "./attest.ts";
+import { ensureProxyAttestation, resolveProxyPrincipal, type ProxyAuthConfig } from "./attest.ts";
 import {
   isSecureRequest,
   originAllowed,
@@ -607,6 +607,16 @@ export function attachWebSockets(
       }
     }
     let badge = await resolveBadge(desk, presented);
+    if (!badge && !presented) {
+      const proxyResolved = await resolveProxyPrincipal(
+        desk,
+        engine,
+        request.headers,
+        options.proxyAuth ?? null,
+      );
+      if (proxyResolved?.kind === "ended") return { code: WS_NOT_ADMITTED, reason: ENDED };
+      if (proxyResolved?.kind === "badge") badge = proxyResolved.badge;
+    }
     if (!badge) {
       /**
        * **A dead badge dialling again is told so** (operator phase 4), not sent

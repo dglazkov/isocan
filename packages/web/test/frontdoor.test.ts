@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { SKILL_INSTALL_COMMAND } from "@isocan/core";
+import { attestedEmail, attestedEmailLocalPart, SKILL_INSTALL_COMMAND } from "@isocan/core";
 import { PUBLIC_PATH, TERMS_PATH, faceFor, isSsoHome } from "../src/lib/faces.ts";
-import { attestedEmail, attestedEmailLocalPart, enterFromAttestOffer } from "../src/lib/identity.ts";
+import { enterFromAttestOffer } from "../src/lib/identity.ts";
 import { browserClipboard, copyLabel, copySaid, copyToClipboard } from "../src/lib/copy.ts";
 import { LEDGER, verbOf } from "../src/lib/ledger.ts";
 import { TERMS } from "../src/lib/terms.ts";
@@ -260,6 +260,32 @@ describe("SSO auto-entry from an attested badge offer", () => {
     expect(attestedEmailLocalPart([])).toBeNull();
     expect(attestedEmailLocalPart([{ attribute: "repo:acme/app", verifiedVia: "github", at: "now" }])).toBeNull();
     expect(attestedEmailLocalPart([proxyAttestation])).toBe("alice");
+  });
+
+  it("adopts offer.bound directly into localStorage under home:person without issuing a redundant actor.claim", async () => {
+    const who = await enterFromAttestOffer(
+      {
+        attesters: ["email"],
+        auth: null,
+        attestations: [proxyAttestation],
+        resumable: [],
+        bound: alice,
+      },
+      {
+        adopt: async () => {
+          throw new Error("should not call adopt when offer.bound is present");
+        },
+        enter: async () => {
+          throw new Error("should not call enter when offer.bound is present");
+        },
+      },
+    );
+    expect(who).toEqual(alice);
+    expect(JSON.parse(localStorage.getItem("isocan.identity") ?? "{}")).toEqual({
+      id: "usr_alice",
+      name: "Alice",
+      key: "home:person",
+    });
   });
 
   it("auto-resumes when exactly one persona is resumable on the attested email", async () => {

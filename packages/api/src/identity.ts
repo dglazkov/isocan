@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import type { Actor, ActorBindingRecord, ActorClaimOp } from "@isocan/core";
-import { elapsedLabel } from "@isocan/core";
+import { BADGE_ENDED, elapsedLabel } from "@isocan/core";
 import { adoptIdentity as adoptStoredIdentity, paths, writeIdentityName } from "@isocan/server";
 import { ApiError } from "./routes.ts";
 import type { DaemonClient } from "./client.ts";
@@ -366,7 +366,7 @@ export async function resolveIdentity(
     return upstream;
   }
   const session = await findSessionIdentity(client, home);
-  const resolved: ResolvedIdentity | null = session
+  let resolved: ResolvedIdentity | null = session
     ? {
         actor: session.actor,
         source: "session",
@@ -384,6 +384,23 @@ export async function resolveIdentity(
             } as const)
           : null,
       );
+  if (!resolved && (await harnessSessions(home)).length === 0) {
+    const bindings = await legacyTolerant(client.actorBindings([HOME_CLAIM_KEY])).catch((err) => {
+      if (err instanceof ApiError && err.code === BADGE_ENDED && err.reason === "operator") {
+        throw err;
+      }
+      return null;
+    });
+    const homeBound = bindings?.[0];
+    if (homeBound) {
+      resolved = {
+        actor: homeBound.actor,
+        source: "home",
+        file: paths.actorsFile(home),
+        key: HOME_CLAIM_KEY,
+      };
+    }
+  }
   // Knowing who you are is knowing how to prove it: every caller that
   // resolves an identity gets the recovery wired, so no command has to
   // remember to. Registration only — nothing is sent until the home asks.

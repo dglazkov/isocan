@@ -17,15 +17,19 @@ daemon.
 **Phase citations name their project**: `proxy-identity phase 0`, never a bare
 "phase 0".
 
-**Where we are:** specified 15 Oct 2026; nothing is built.
-**proxy-identity phase 0 is next** — stateless proxy principal resolution at the
-door.
+**Where we are:** Phase 0 is closed (15 Oct 2026): badge-less HTTP requests and
+`/ws` upgrades carrying a verified `ISOCAN_PROXY_EMAIL_HEADER` resolve a
+deterministic `bdg_prx_...` badge and bind `home:person`, `GET /api/attest`
+exposes `bound` for zero-round-trip `SsoGate` entry, and `@isocan/api`
+`resolveIdentity` discovers the human actor without `~/.isocan/identity.json`.
+**proxy-identity phase 1 is next** — stateless per-session agent attribution
+(`X-Isocan-Session`).
 
 ---
 
 ## Phase 0 — Stateless proxy principal at the door
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 Oct 2026 — deterministic `bdg_prx_...` proxy badges, `home:person` binding, `AttestOffer.bound` browser entry, and zero-state `resolveIdentity` verified in `packages/server/test/proxy-identity.test.ts`.
 
 When `ISOCAN_PROXY_EMAIL_HEADER` (`proxyAuth`) produces a verified
 `email:<addr>` attestation on a badge-less HTTP request or WebSocket upgrade,
@@ -57,6 +61,10 @@ across requests, folds onto an existing actor if another badge already attested
 bdg_prx_....anything` when the proxy header is absent, honors operator ends and
 address refusals, and leaves a daemon without `ISOCAN_PROXY_EMAIL_HEADER`
 refusing badge-less requests with `401 no-badge`.
+
+**Trajectory:**
+- **2026-10-15** — `AttestOffer` gained optional `bound?: Actor` (`GET /api/attest` and `enterFromAttestOffer`) because `engine.resumable` excludes the presenting badge's own `home:person` claim, which otherwise caused `SsoGate` to attempt a colliding `enterAs` claim on `bdg_prx_...`.
+- **2026-10-15** — `POST /api/door` skips proxy-badge attachment so a syncing local replica (`HomeLink`) deliberately knocking for a durable bearer badge still receives `{ badgeId, secret }` (`http.ts`, `proxy-auth.test.ts`).
 
 ---
 
