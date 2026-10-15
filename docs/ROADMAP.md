@@ -12,7 +12,7 @@ open to anyone with the address. It is this page, published by
 that opted in with `.isocan/roadmap.json`; a publish that fails never fails a
 commit or a build, and says so in `.isocan/roadmap.log`.
 
-**50 built · 61 still open** — of which 51 partly
+**51 built · 61 still open** — of which 51 partly
 built, 10 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -26,7 +26,7 @@ and the done column should not be flattered by either.
 finding is its claim, checked against the code, ranked by us. Each project row
 below counts the findings that name it.
 
-## What needs a person <sub>18</sub>
+## What needs a person <sub>19</sub>
 
 Built and shipped, and never once exercised by a human being — the part no
 commit can do. Each is a walk in [`verify/`](verify/README.md), written by
@@ -53,6 +53,7 @@ whoever built the thing for somebody who knows nothing about it.
 | **unverified** | [A critique, in the browser](verify/2026-10-14-critique-in-the-browser.md) — a critique asked for and read by a person in the browser — whether two critics' pins can be told apart, whether the read is legible, and whether the whole thing feels like asking two colleagues; critique phase 4 | 2026-10-14 | the web app with the Critique experiment on, `isocan rc` running on your machine with an agent harness you are happy to spend on (two critics, at most 6 turns and $0.40 each, plus one builder run), a canvas with one screen — twenty minutes |
 | **unverified** | [A proactive agent, with a real model and a person](verify/2026-10-14-proactive-agent.md) — the proactive agent with a real model in front of a person: whether a proposal is ever unwelcome or in the way, whether the note a delete teaches feels right, the /goodnight conversation and its note, whether the morning review earns the return, whether Explain teaches, the brief card's said and pencil lines and the re-read's one question, whether ripple's read-back names the right decisions, whether the stuck question is kind, whether critics feel like a room, whether the walks feel honest about being simulations, and whether the design-word readings help or nag; every journey for proactive-agent phases 1–10 ran on a scripted agent | 2026-10-14 | a home you own with a scratch canvas, a standing agent that can answer on it (enrolled with `isocan rc add` and `isocan rc` running in a terminal, on a harness you are happy to spend on — `isocan harness` lists them), a desktop browser and a terminal with the isocan CLI, the Critique experiment on for step 11; about two hours over two sittings (an evening and the morning after), and real model turns on that harness — a few dollars on a frontier model |
 | **unverified** | [Semantic Zoom, with a real model](verify/2026-10-14-semantic-zoom.md) — Semantic Zoom with a real model: whether a summary seen from far away tells a note apart from its neighbours, whether one is ever wrong in a way that misleads, whether the band switches at the right zoom without flicker, whether an edit swaps summaries without a blank, whether a group's card and the washed members under it read well, and whether the app and `isocan summary` agree; every journey so far ran on a stub model | 2026-10-14 | a home you own with a text key (`isocan keys set anthropic` on that home, or ISOCAN_TEXT_API_KEY in its environment), a desktop browser with a mouse or trackpad, a terminal with the isocan CLI, a second browser or a private window, and forty minutes; it spends real model calls, about a cent |
+| **unverified** | [Node Focus — View, Edit, Enter, and Node-Anchored Chat](verify/2026-10-15-node-focus.md) — Whether the top-left View / Edit / Enter action strip, kind-aware View and Edit Focus studios (Image, Design System, Wireframe, Screen), and Node-Anchored Chat (⌘J) feel natural by hand across node types. | 2026-10-15 | The web app in a desktop browser with a canvas holding an HTML screen, a PNG image, a DESIGN.md, and a wireframe screen — about fifteen minutes. |
 
 ## Partly built <sub>51</sub>
 
@@ -125,7 +126,7 @@ whoever built the thing for somebody who knows nothing about it.
 | research | [Semantic zoom: what a canvas becomes when you stand back](research/2026-09-07-semantic-zoom.md) | 2026-09-07 | the canvas already does four kinds of zoom-responsive drawing and every one of them SUBTRACTS — the thing maps actually do is substitute, and that needs a unit to substitute for · see ui-refresh, mindmap · [#203](https://github.com/dglazkov/isocan/issues/203) |
 | **project** | [webmcp-cobrowsing](projects/webmcp-cobrowsing/journey.md) | 2026-09-11 | roadmap defined — the WebMCP surface is designed against the verified API and the existing @isocan/mcp vocabulary; design and phases follow the census-informed design · see iso-api, embed |
 
-## Built <sub>50</sub>
+## Built <sub>51</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -155,6 +156,7 @@ whoever built the thing for somebody who knows nothing about it.
 | research | [Motion on the canvas: three kinds, and only one of them is missing](research/2026-08-28-motion.md) | 2026-08-29 | pan inertia was the one real gap; built 4 Sep with arrival motion — a Hand or middle-button drag coasts under the note's three conditions, and an item from somebody else comes in rather than popping · see ui-refresh |
 | **project** | [multi-identity](projects/multi-identity/journey.md) | 2026-09-01 | all five phases closed 1 Sep 2026 — the door starts the proof and shows who this browser may be, the refusal renders its remedy, the first machine's words lead with resumption, and actor.join folds a second actor into the person who holds both. Journeys 1–6 walked on a scratch home borrowing dev's attester. · see multiuser |
 | **project** | [multiuser](projects/multiuser/journey.md) | 2026-08-30 | every phase closed or retired as of 30 Aug — 11 closed by Scene 6 played at dev (prj_hRulnNyXph), 12/12.5/12.7/13 retired, agent-on-demand moved to the on-demand project · see multiuser, on-demand · Loop: [3 accepted](LOOP.md) |
+| **project** | [node-focus](projects/node-focus/journey.md) | 2026-10-14 | All six phases CLOSED 15 Oct 2026. Capability-driven Node Focus: selecting a node shows a top-left icon strip for View, Edit and Enter (where Enter is only offered on nodes whose card interior is interactive); View Focus (/i/:itemId) presents each kind with its rich metadata, and Edit Focus (/w/:itemId) opens a kind-aware Edit Studio (with Workbench file tools when the node is a file) alongside a Chat drawer anchored to the node. · see workbench, modules, wireframes, design-partner, copy-edit |
 | **project** | [on-demand](projects/on-demand/journey.md) | 2026-08-30 | every phase closed 30 Aug 2026 — `isocan rc` parks against the home, vends agent sessions over ACP, and a summoned agent replies in a thread with presence; journey 10 (a week on one canvas) is lived rather than built. Residue is personas and the web tray's answerable relay (the latter built 31 Aug by agent-custody). AUTHORITATIVE for the wake since 30 Aug. · see on-demand, launch |
 | research | [One gesture, one undo — grouping in the oplog](research/2026-08-28-op-grouping.md) | 2026-08-29 |  · see ui-refresh |
 | research | [Optional checks should follow the project's technology and existing configuration](research/2026-09-14-optional-project-linters.md) | 2026-09-14 | Optional checks follow the project's actual technology and configuration. Independent Tailwind, CSS, HTML and rendered-accessibility fixtures pass. Tailwind is advisory because upstream coverage is incomplete; broader tools remain recommendations. · see design-lint · [#303](https://github.com/dglazkov/isocan/issues/303) |

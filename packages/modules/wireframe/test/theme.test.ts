@@ -5,7 +5,7 @@ import {
   inferLinks, mappingRequest, readWire, renderFrame, renderWire, sameStyle, stubAnswerer, themeCss, validateWire, wireframe,
   type JevRequest, type JevResponse, type PropDef, type WireSpec, type WireStyle,
 } from "../src/core.ts";
-import { __SKELETON_CSS, __WIRE_CSS } from "../src/render.ts";
+import { __HIFI_CSS, __LOFI_CSS, __SKELETON_CSS, __WIRE_CSS } from "../src/render.ts";
 import { ACME_NIGHT, ACME_WARM, PICKS } from "./fixtures/design-systems.ts";
 
 /**
@@ -44,6 +44,8 @@ const WARM: WireStyle = {
 describe("the wire sheet reads roles and nothing else", () => {
   it("holds no literal colour, and every custom property it reads is a role", () => {
     expect(__WIRE_CSS).not.toMatch(LITERAL);
+    expect(__LOFI_CSS).not.toMatch(LITERAL);
+    expect(__HIFI_CSS).not.toMatch(LITERAL);
     const read = new Set([...__WIRE_CSS.matchAll(/var\(--w-([a-z-]+)\)/g)].map((m) => m[1]!));
     // …or a derived role (`link`), computed from the roles in `themeDecls`, never mapped.
     expect([...read].filter((r) => !([...ROLES, ...DERIVED_ROLES] as readonly string[]).includes(r))).toEqual([]);

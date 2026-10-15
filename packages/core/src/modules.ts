@@ -1,5 +1,6 @@
 import type { ContextPiece } from "./context.ts";
-import type { Canvas, CanvasContents, CommentThread, Item } from "./model.ts";
+import type { Actor, Canvas, CanvasContents, CommentThread, Item, ItemVersion } from "./model.ts";
+import type { NodeCapabilities } from "./capabilities.ts";
 import type { Operation } from "./ops.ts";
 import type { JudgmentRequest } from "./judgment.ts";
 import type { TextRequest } from "./text.ts";
@@ -178,6 +179,12 @@ export interface CoreModule {
    * another area names it here, and the same lens draws the same curtain.
    */
   rounds?: (canvas: CanvasContents) => readonly VoteRound[];
+  /**
+   * **Node capability overrides** (`docs/projects/node-focus/design.md`).
+   * A module whose items have rich View/Edit focus studios or interactive card
+   * interiors can refine `{ view, edit, enter, file }` for items it claims.
+   */
+  capabilities?: (item: Item, version: ItemVersion) => Partial<NodeCapabilities> | null | undefined;
 }
 
 /**
@@ -398,6 +405,30 @@ export function spotlit(item: Item): boolean {
 /** The module kind that owns a mime, if a loaded module claims it. */
 export function moduleKindOf(mime: string): ModuleKind | null {
   return moduleKinds().find((k) => k.mimes.includes(mime)) ?? null;
+}
+
+let cachedCapabilityModulesVersion = -1;
+let cachedCapabilityModules: CoreModule[] = [];
+
+/**
+ * Capability overrides contributed by loaded modules for an item and version,
+ * merged in module registration order. Null when no loaded module refines it.
+ */
+export function moduleCapabilitiesFor(item: Item, version: ItemVersion): Partial<NodeCapabilities> | null {
+  if (cachedCapabilityModulesVersion !== registryVersion) {
+    cachedCapabilityModules = [];
+    for (const m of REGISTRY.values()) {
+      if (m.capabilities) cachedCapabilityModules.push(m);
+    }
+    cachedCapabilityModulesVersion = registryVersion;
+  }
+  if (cachedCapabilityModules.length === 0) return null;
+  let merged: Partial<NodeCapabilities> | null = null;
+  for (const m of cachedCapabilityModules) {
+    const patch = m.capabilities!(item, version);
+    if (patch) merged = { ...(merged ?? {}), ...patch };
+  }
+  return merged;
 }
 
 /**
@@ -1069,10 +1100,58 @@ interface ModuleOverlay<O> {
 }
 
 /**
+ * **A sub-part of a focused node** (`docs/projects/node-focus/design.md` §5–6):
+ * a wireframe slot (`main.pricing-cards`), a design-system token
+ * (`colors.primary`), a DOM element on a screen, or a region on an image.
+ * Carried as a removable pill in the Node-Anchored Chat composer so an agent
+ * makes surgical edits rather than rewriting the whole artifact.
+ */
+export interface FocusSubtarget {
+  kind: string;
+  id: string;
+  label: string;
+  metadata?: Readonly<Record<string, unknown>> | undefined;
+}
+
+/**
+ * **What a node focus facet (`ModuleFocus.view` / `ModuleFocus.edit`) is handed**
+ * (`docs/projects/node-focus/design.md` §5).
+ */
+export interface FocusFacts {
+  canvasId: string;
+  canvas: CanvasContents;
+  item: Item;
+  version: ItemVersion;
+  actor: Actor;
+  canEdit: boolean;
+  capabilities: NodeCapabilities;
+  host: WebHost;
+  readText: () => Promise<string>;
+  subtarget: FocusSubtarget | null;
+  setSubtarget: (subtarget: FocusSubtarget | null) => void;
+  askAgent: (seedPrompt?: string) => void;
+}
+
+/**
+ * **A kind-aware View / Edit focus studio contributed by a module or built-in
+ * kind** (`docs/projects/node-focus/design.md` §5). Generic over the view and
+ * edit component types so `@isocan/core` stays free of React.
+ */
+export interface ModuleFocus<V = unknown, E = unknown> {
+  id: string;
+  matches: (item: Item, version: ItemVersion) => boolean;
+  priority?: number | undefined;
+  capabilities?: ((item: Item, version: ItemVersion) => Partial<NodeCapabilities>) | undefined;
+  view?: V | undefined;
+  edit?: E | undefined;
+  agentPrompts?: readonly { label: string; prompt: string }[] | undefined;
+}
+
+/**
  * The browser half of a module: its `CoreModule` plus the pieces only the web app mounts.
  * Generic in each component type so core never imports React.
  */
-export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never, X = never> {
+export interface WebModule<C, R = never, I = never, P = never, O = never, D = never, W = never, X = never, F = never> {
   core: CoreModule;
   /** Drawn inside `.world`, under the items, in world units. */
   underlays?: readonly C[];
@@ -1108,6 +1187,11 @@ export interface WebModule<C, R = never, I = never, P = never, O = never, D = ne
    * Read only once the lazy half is loaded.
    */
   copy?: WebCopyWriter;
+  /**
+   * **View (`/i/:itemId`) and Edit (`/w/:itemId`) focus studios**
+   * (`docs/projects/node-focus/design.md` §5).
+   */
+  focus?: readonly ModuleFocus<F, F>[];
 }
 
 /**

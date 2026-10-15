@@ -20,9 +20,9 @@ const ENUM_MAX = 8;
 const named = new Set(RECIPES.flatMap((r) => r.sections.flatMap((s) => s.options)));
 
 describe("the wave-1 catalog", () => {
-  it("is 18 archetypes, 28 blocks, 22 primitives and 52 intents (the research's 49 and three tab targets)", () => {
+  it("is 18 archetypes, 31 blocks, 22 primitives and 52 intents (the research's 49 and three tab targets)", () => {
     expect(RECIPES).toHaveLength(18);
-    expect(BLOCKS).toHaveLength(28);
+    expect(BLOCKS).toHaveLength(31);
     expect(PRIMITIVES).toHaveLength(22);
     expect(INTENTS).toHaveLength(52);
   });
@@ -46,7 +46,7 @@ describe("the wave-1 catalog", () => {
 });
 
 describe("every name resolves", () => {
-  it("every component a recipe names exists — and the recipes name exactly the 28 blocks and 22 primitives", () => {
+  it("every component a recipe names exists — and the recipes name exactly the 31 blocks and 22 primitives", () => {
     for (const id of named) expect(COMPONENTS.has(id), `recipes name ${id}`).toBe(true);
     expect([...named].filter((id) => COMPONENTS.get(id)!.kind === "block").sort()).toEqual(BLOCKS.map((b) => b.id).sort());
     expect([...named].filter((id) => COMPONENTS.get(id)!.kind === "primitive").sort()).toEqual(PRIMITIVES.map((p) => p.id).sort());

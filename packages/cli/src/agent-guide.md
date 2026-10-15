@@ -92,8 +92,8 @@ command you run prints `⚠ … CANCELLED this`, stop, say where you got to in o
 comment, and leave nothing half-made.
 
 **Design work has one entry.** Before building or resuming a designed screen,
-run `isocan design workflow` — it reads this canvas's policy, open requests
-and next steps (topic `design`).
+run `isocan design workflow` (`design`). For a **wireframe** or flow sketch,
+run `isocan wire "<request>"` (`wire`) instead of hand-writing HTML.
 
 ## Who is at your terminal
 
@@ -166,10 +166,10 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `diff`, `prefer`, `choose` — what changed between versions, the eye test, the winner folded back
 - `propose`, `taste` — work left beneath an item with its trigger and why; what deletes taught (`proactive`)
 - `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
-- `explain <item>` — how an item got here: the versions that mattered and why, the roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
-- `ripple [item]` — a screen's settled edits read against every other screen, your read-back and previews, the person's altitude; no item: the pulse (`proactive`)
+- `explain <item>` — how an item got here: versions that mattered, roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
+- `ripple [item]` — a screen's settled edits read against every other screen; no item: the pulse (`proactive`)
 - `stuck [item]` — tries that missed: ask, don't guess; `walk [flow]` — a flow as simulated people see it (`proactive`)
-- `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
+- `words` — a screen's copy deck; `--apply` rewords strings; `words vary` makes N voices; `words mix` folds a pick home; `words lint` checks DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -794,7 +794,8 @@ explicit `file` property; they cannot read neighboring files from your disk.
   prints — and opens — the address of that ONE item, filling the window:
 
   ```sh
-  isocan open "Checkout"        # → http://…/p/<canvas>/i/<itemId>
+  isocan open "Checkout"        # → http://…/p/<canvas>/i/<itemId>  (View Focus)
+  isocan open "Checkout" --edit # → http://…/p/<canvas>/w/<itemId>  (Edit Focus)
   ```
 
   Full screen is a route rather than an operation, which is why you can hand
@@ -1544,6 +1545,13 @@ The practices that belong to design work in particular — how a request is
 entered, how its questions are asked, and what reading the design system
 before a screen means.
 
+- **Wireframes and flow sketches use `isocan wire`.** When a person asks for a
+  wireframe, low-fidelity layout or multi-screen flow sketch (with or without
+  `/wire`), run `isocan wire "<request>"` (`isocan --agent-help wire`) rather
+  than hand-authoring HTML through `design start`. It composes catalog
+  wireframes, variations and a clickable prototype in one step, and `isocan
+  wire layer <group> --layer system|lofi|hifi` steps fidelity up — or the
+  person can switch layers directly from the group's on-canvas `◧ Wire ▾` pill.
 - **One design request, through either entrance.** Read `isocan design
   workflow` for the procedure and canvas-owned automatic enrollment policy.
   `isocan design brief [request] --json` returns canonical briefs, exact

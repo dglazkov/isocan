@@ -33,9 +33,9 @@ afterAll(() => unregisterModule(competitionCore.name));
 
 const asset = (rel: string) => fileURLToPath(new URL(`../${rel}`, import.meta.url));
 
-describe("the nine default fighters", () => {
-  it("are nine, and every one passes the validator a contributed pack must pass", () => {
-    expect(DEFAULT_PACKS).toHaveLength(9);
+describe("the twelve default fighters", () => {
+  it("are twelve, and every one passes the validator a contributed pack must pass", () => {
+    expect(DEFAULT_PACKS).toHaveLength(12);
     for (const pack of DEFAULT_PACKS) expect(packProblems(pack), pack.id).toEqual([]);
   });
 
@@ -63,9 +63,9 @@ describe("the nine default fighters", () => {
     expect(rosterClashes(fighters())).toEqual([]);
   });
 
-  it("ship every file a pack names, and every DESIGN.md reads with isocan's own parser and linter", () => {
+  it("ship every file a pack names (including SOUL.md and corpus/specimen.html), and every DESIGN.md reads with isocan's own parser and linter", () => {
     for (const pack of DEFAULT_PACKS) {
-      for (const file of ["DESIGN.md", "critique.md", "references.md", "avatar.svg"] as const) {
+      for (const file of ["SOUL.md", "DESIGN.md", "critique.md", "references.md", "avatar.svg", "corpus/specimen.html"] as const) {
         expect(statSync(asset(packPath(pack, file))).size, `${pack.id}/${file}`).toBeGreaterThan(0);
       }
       const doc = parseDesign(readFileSync(asset(packPath(pack, "DESIGN.md")), "utf8"));

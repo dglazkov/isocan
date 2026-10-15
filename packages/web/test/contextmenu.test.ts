@@ -83,7 +83,7 @@ describe("the item menu", () => {
 
   it("offers the acts an item has", () => {
     const entries = itemMenu([item("itm_a", 2)], ctx);
-    for (const label of ["Copy", "Cut", "Duplicate", "Rename", "Version history", "Compare versions", "Download", "Copy link", "Delete"]) {
+    for (const label of ["Copy", "Cut", "Duplicate", "View", "Edit", "Enter", "Fit", "Rename", "Version history", "Compare versions", "Download", "Copy link", "Delete"]) {
       expect(labels(entries), `missing ${label}`).toContain(label);
     }
   });
@@ -101,7 +101,7 @@ describe("the item menu", () => {
    */
   it("leaves out what cannot apply to this selection rather than dimming it", () => {
     const many = itemMenu([item("itm_a"), item("itm_b")], ctx);
-    for (const label of ["Open full screen", "Open in the workbench", "Rename", "Version history", "Compare versions", "Explain", "Copy link", "Download", "Agents always read this", "Agents skip this"]) {
+    for (const label of ["View", "Edit", "Enter", "Rename", "Version history", "Compare versions", "Explain", "Copy link", "Download", "Agents always read this", "Agents skip this"]) {
       expect(labels(many), `${label} on two items`).not.toContain(label);
     }
     expect(actions(many).filter((a) => a.disabled).map((a) => a.label)).toEqual([]);
@@ -114,7 +114,7 @@ describe("the item menu", () => {
     expect(shape(itemMenu([item("itm_a", 2)], ctx))).toEqual([
       "— Groups", "Preview group conversion…", "Group selection", "Add to group…",
       "—", "Copy", "Cut", "Duplicate",
-      "—", "Open full screen", "Open in the workbench", "Zoom to it",
+      "—", "View", "Edit", "Enter", "Fit",
       "—", "Rename", "Version history", "Compare versions", "Explain",
       "—", "Copy link", "Download",
       "— For agents", "Agents always read this", "Agents skip this",
@@ -126,7 +126,7 @@ describe("the item menu", () => {
       "— Groups", "Preview group conversion…", "Group selection", "Add to group…",
       "—", "Tidy 4 items", "Arrange",
       "—", "Copy 4 items", "Cut", "Duplicate",
-      "—", "Zoom to it",
+      "—", "Fit",
       "—", "🎬 Make 4 slides",
       "—", "Delete 4 items",
     ]);
@@ -161,12 +161,12 @@ describe("the item menu", () => {
     expect(shape(single)).toEqual([
       "— Groups", "Preview group conversion…",
       "—", "Copy",
-      "—", "Open full screen", "Open in the workbench", "Zoom to it",
+      "—", "View", "Enter", "Fit",
       "—", "Version history", "Compare versions", "Explain",
       "—", "Copy link", "Download",
     ]);
     const four = ["itm_a", "itm_b", "itm_c", "itm_d"].map((id) => item(id));
-    expect(shape(itemMenu(four, ctx))).toEqual(["— Groups", "Preview group conversion…", "—", "Copy 4 items", "—", "Zoom to it"]);
+    expect(shape(itemMenu(four, ctx))).toEqual(["— Groups", "Preview group conversion…", "—", "Copy 4 items", "—", "Fit"]);
   });
 
   it("counts what it will act on, so the label cannot lie", () => {

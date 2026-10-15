@@ -41,15 +41,7 @@ export function Toolbar({
   onIdentity: (actor: Actor | null) => void;
 }) {
   const canvas = useCanvasStore((s) => s.record);
-  const trashOpen = useUiStore((s) => s.trashOpen);
-  const filesOpen = useUiStore((s) => s.filesPanelOpen);
-  const agentsOpen = useUiStore((s) => s.agentsPanelOpen);
-  const mainOpen = useUiStore((s) => s.mainPanelOpen);
-  const contextOpen = useUiStore((s) => s.contextPanelOpen);
-  const personasOpen = useUiStore((s) => s.personasPanelOpen);
-  const historyOpen = useUiStore((s) => s.historyOpen);
   const unreadNews = useUnreadNews();
-  const trashCount = useCanvasStore((s) => s.canvas?.trash.length ?? 0);
   const canEdit = useCanEdit();
   const navigate = useNavigate();
   /**
@@ -136,6 +128,8 @@ export function Toolbar({
                 : groupsEnabled()
                   ? ""
                   : "Not converted";
+              const ui = useUiStore.getState();
+              const trashCount = contents?.trash.length ?? 0;
               useUiStore.getState().setContextMenu({
                 // Under the handle, aligned to its left edge — a menu that
                 // opens where the pointer happened to be is right for a
@@ -145,14 +139,14 @@ export function Toolbar({
                   canvasId: canvas.id,
                   groups,
                   groupsValue,
-                  filesOpen,
-                  agentsOpen,
-                  mainOpen,
-                  contextOpen,
-                  personasOpen,
-                  trashOpen,
+                  filesOpen: ui.filesPanelOpen,
+                  agentsOpen: ui.agentsPanelOpen,
+                  mainOpen: ui.mainPanelOpen,
+                  contextOpen: ui.contextPanelOpen,
+                  personasOpen: ui.personasPanelOpen,
+                  trashOpen: ui.trashOpen,
                   trashCount,
-                  historyOpen,
+                  historyOpen: ui.historyOpen,
                   unreadNews,
                   theme: themeOf(canvas),
                   anchor: anchorOf(canvas),

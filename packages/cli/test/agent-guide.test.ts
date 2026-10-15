@@ -70,6 +70,7 @@ describe("the topics", () => {
   it("open with the cold start, then a dozen topics", () => {
     expect(cold).toContain("## The lap");
     expect(cold).toContain("## Every verb, one line each");
+    expect(cold).toContain('isocan wire "<request>"');
     expect(topics.map((t) => t.slug)).toEqual([
       "protocol", "practices", "items", "design", "context", "history",
       "agents", "present", "extend", "homes", "sharing",

@@ -1,9 +1,10 @@
 import "../assets/styles.css";
 import type { ComponentType } from "react";
-import type { DialogFacts, UnderlayFacts, WebModule } from "@isocan/core";
+import type { DialogFacts, FocusFacts, UnderlayFacts, WebModule } from "@isocan/core";
 import { WireArrows } from "./arrows.tsx";
 import { WireBehind } from "./behind-marks.tsx";
 import { offersFlowVoice } from "./flow-voice-offers.ts";
+import { wireframeFocusFacet } from "./focus.tsx";
 import { cachedSpec } from "./spec-cache.ts";
 import { PrototypeLight } from "./prototype-light.tsx";
 import { wireframeCore } from "./command.ts";
@@ -34,10 +35,11 @@ function WireUnderlay(facts: UnderlayFacts) {
   );
 }
 
-export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never, never, never, ComponentType<DialogFacts>> = {
+export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never, never, never, ComponentType<DialogFacts>, never, never, ComponentType<FocusFacts>> = {
   core: wireframeCore,
   underlays: [WireUnderlay],
   dialogs: [{ id: "wire", title: "Wireframes", component: WireDialog }],
+  focus: [wireframeFocusFacet],
   // ⌘K: find the prototypes on a busy canvas (phase 8) — a door, not a write: it opens `/wire prototypes`.
   actions: [{
     id: "wire-prototypes",
@@ -64,5 +66,21 @@ export const wireframeWeb: WebModule<ComponentType<UnderlayFacts>, never, never,
     },
   },
 };
+
+export {
+  WireframeFocusEdit,
+  WireframeFocusView,
+  applyWireStudioLayoutChange,
+  applyWireStudioSlotCopy,
+  applyWireStudioSlotIntent,
+  applyWireStudioSlotPolish,
+  applyWireStudioSlotRemove,
+  applyWireStudioSlotSwap,
+  isWireframeFocusMatch,
+  saveWireStudioSpec,
+  slotSubtargetFor,
+  wireVariationsFor,
+  wireframeFocusFacet,
+} from "./focus.tsx";
 
 export default wireframeWeb;

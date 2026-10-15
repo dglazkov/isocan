@@ -58,7 +58,7 @@ export interface FighterPack {
 }
 
 /** The files a pack's directory holds, by what they are for. */
-export type PackFile = "DESIGN.md" | "critique.md" | "references.md" | "avatar.svg";
+export type PackFile = "SOUL.md" | "DESIGN.md" | "critique.md" | "references.md" | "avatar.svg" | "corpus/specimen.html";
 
 /** A pack's file, relative to the module that contributed it. */
 export function packPath(pack: FighterPack, file: PackFile): string {

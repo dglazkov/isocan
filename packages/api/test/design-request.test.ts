@@ -25,6 +25,7 @@ it("admits the actual source, exposes missing facts, refuses automatic enrollmen
   const read = await f.otherCanvas.designWorkflow({ threadId: f.original.threadId, commentId: f.original.commentId });
   expect(read.policy).toBe("off");
   expect(read.procedure).toContain("zero to three");
+  expect(read.procedure).toContain('isocan wire "<request>"');
   expect(read.requests).toMatchObject([{ nextAction: "clarify", missingFactIds: ["audience", "primaryTask"], remainingInitialQuestions: 3, brief: { requestingActorId: f.person.actor.id, source: action.source }, author: f.agent.actor }]);
   await expect(f.agentCanvas.edit(action.itemId, { content: JSON.stringify(f.brief) })).rejects.toThrow();
 });

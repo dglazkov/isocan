@@ -6,7 +6,11 @@ import {
   unregisterModule,
   type ComposerFacts,
   type DialogFacts,
+  type FocusFacts,
   type InspectorFacts,
+  type Item,
+  type ItemVersion,
+  type ModuleFocus,
   type ModuleInspector,
   type ModuleDialog,
   type ModuleDrop,
@@ -64,7 +68,8 @@ export type ShellModule = WebModule<
   ComponentType<OverlayFacts>,
   ComponentType<DialogFacts>,
   ComponentType<WorkspaceFacts<ReactNode>>,
-  ComponentType<ComposerFacts>
+  ComponentType<ComposerFacts>,
+  ComponentType<FocusFacts>
 >;
 
 const LIST: ShellModule[] = [mindmapWeb, mermaidWeb, documentsWeb, sandboxWeb, judgeWeb];
@@ -121,7 +126,21 @@ const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>>
  * and its descriptor (the launcher row, the CLI equivalent, `projectEntry`)
  * is what stays eager.
  */
-function deferredModule(activation: { core: ShellModule["core"]; actions?: ShellModule["actions"]; dialogs?: Omit<ModuleDialog<ComponentType<DialogFacts>>, "component">[]; renderers?: { mimes: string[] }[]; underlays?: { needed: (canvas: UnderlayFacts["canvas"]) => boolean }[]; workspaces?: Omit<ModuleWorkspace<ComponentType<WorkspaceFacts<ReactNode>>>, "component">[] }, load: () => Promise<{ default: ShellModule }>): ShellModule {
+function deferredModule(
+  activation: {
+    core: ShellModule["core"];
+    actions?: ShellModule["actions"];
+    dialogs?: Omit<ModuleDialog<ComponentType<DialogFacts>>, "component">[];
+    renderers?: { mimes: string[] }[];
+    underlays?: { needed: (canvas: UnderlayFacts["canvas"]) => boolean }[];
+    workspaces?: Omit<ModuleWorkspace<ComponentType<WorkspaceFacts<ReactNode>>>, "component">[];
+    focus?: (Omit<ModuleFocus<ComponentType<FocusFacts>, ComponentType<FocusFacts>>, "view" | "edit"> & {
+      hasView?: boolean;
+      hasEdit?: boolean;
+    })[];
+  },
+  load: () => Promise<{ default: ShellModule }>,
+): ShellModule {
   let pending: Promise<ShellModule> | undefined;
   const ensure = () => pending ??= load().then(({ default: full }) => {
     const index = LIST.findIndex((record) => record.core.name === full.core.name);
@@ -161,6 +180,21 @@ function deferredModule(activation: { core: ShellModule["core"]; actions?: Shell
       const full = await ensure();
       return { default: full.workspaces!.find((entry) => entry.segment === workspace.segment)!.component };
     }) })) } : {}),
+    ...(activation.focus ? { focus: activation.focus.map((entry) => ({
+      id: entry.id,
+      matches: entry.matches,
+      ...(entry.priority !== undefined ? { priority: entry.priority } : {}),
+      ...(entry.capabilities ? { capabilities: entry.capabilities } : {}),
+      ...(entry.agentPrompts ? { agentPrompts: entry.agentPrompts } : {}),
+      ...(entry.hasView ? { view: lazy(async () => {
+        const full = await ensure();
+        return { default: full.focus!.find((f) => f.id === entry.id)!.view! };
+      }) } : {}),
+      ...(entry.hasEdit ? { edit: lazy(async () => {
+        const full = await ensure();
+        return { default: full.focus!.find((f) => f.id === entry.id)!.edit! };
+      }) } : {}),
+    })) } : {}),
   };
 }
 
@@ -313,4 +347,30 @@ export function moduleProjectViews(project: Canvas, canvas: CanvasContents) {
     const entry = workspace.projectEntry?.({ project, canvas });
     return entry ? [{ ...entry, segment: workspace.segment }] : [];
   }));
+}
+
+/**
+ * The highest-priority `ModuleFocus` facet matching this item and version among
+ * loaded modules, or null (`docs/projects/node-focus/design.md` §5).
+ *
+ * Modules with a higher `priority` (default 10) win over lower-priority facets;
+ * ties settle in module registration order.
+ */
+export function moduleFocusFor(
+  item: Item,
+  version: ItemVersion,
+): ModuleFocus<ComponentType<FocusFacts>, ComponentType<FocusFacts>> | null {
+  let best: ModuleFocus<ComponentType<FocusFacts>, ComponentType<FocusFacts>> | null = null;
+  let bestPriority = -Infinity;
+  for (const m of live()) {
+    for (const facet of m.focus ?? []) {
+      if (!facet.matches(item, version)) continue;
+      const p = facet.priority ?? 10;
+      if (p > bestPriority) {
+        best = facet;
+        bestPriority = p;
+      }
+    }
+  }
+  return best;
 }

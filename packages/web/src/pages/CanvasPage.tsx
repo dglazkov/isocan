@@ -16,6 +16,7 @@ import {
   anchorOffset,
   itemPath,
   moduleMarks,
+  nodeCapabilitiesFor,
   workbenchItemPath,
   workbenchPath,
 } from "@isocan/core";
@@ -892,13 +893,26 @@ function CanvasSurface({
           ui.setRenaming(ids[0]!);
         }
       } else if (e.key === "Enter" && ui.selectedItemIds.length === 1) {
-        // Enter opens the selection full screen. It is a NAVIGATION, not a
-        // mode flag: the address bar ends up holding the screen you are
-        // looking at, so Back leaves it and the link is sendable.
-        e.preventDefault();
+        // Enter opens the selection full screen (View Focus). It is a
+        // NAVIGATION, not a mode flag: the address bar ends up holding the
+        // screen you are looking at, so Back leaves it and the link is sendable.
         const chosen = useCanvasStore.getState().canvas?.items[ui.selectedItemIds[0]!];
-        if (chosen && isGroupItem(chosen)) enterCanvasGroup(chosen.id);
-        else navigate(itemPath(canvasId!, ui.selectedItemIds[0]!));
+        if (chosen && isGroupItem(chosen)) {
+          e.preventDefault();
+          enterCanvasGroup(chosen.id);
+        } else if (chosen && nodeCapabilitiesFor(chosen).view) {
+          e.preventDefault();
+          navigate(itemPath(canvasId!, chosen.id));
+        }
+      } else if (e.key.toLowerCase() === "e" && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        // E opens the selection in Edit Focus (/w/:itemId) when its capabilities
+        // and the viewer's permissions allow editing.
+        const one = ui.selectedItemIds.length === 1 ? ui.selectedItemIds[0]! : null;
+        const chosen = one ? useCanvasStore.getState().canvas?.items[one] : undefined;
+        if (chosen && canEditNow() && nodeCapabilitiesFor(chosen).edit) {
+          e.preventDefault();
+          navigate(workbenchItemPath(canvasId!, chosen.id));
+        }
       } else if (e.key.toLowerCase() === "w" && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         // W flips to the workbench — the agent room. A navigation for Enter's
         // reason, and it carries a single selection along as the stage's

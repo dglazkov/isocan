@@ -608,5 +608,152 @@ export const DEFAULT_PACKS: readonly FighterPack[] = [
       "text": "Above all else show the data.",
       "source": "https://jtr13.github.io/cc19/tuftes-principles-of-data-ink.html"
     }
+  },
+  {
+    "id": "field",
+    "title": "Serious toys",
+    "agentName": "Serious Toys",
+    "credit": "after Jesper Kouthoofd & Teenage Engineering",
+    "name": "Jesper Kouthoofd & Teenage Engineering",
+    "tagline": "Machined hardware meets playful switches.",
+    "bio": "Stockholm collective founded in 2005; created the OP-1 portable synthesizer, Pocket Operators, and Playdate industrial design.",
+    "colour": "#ff4f00",
+    "homage": "An homage to the published industrial and UI design principles of Jesper Kouthoofd and Teenage Engineering. Not affiliated with or endorsed by Jesper Kouthoofd or Teenage Engineering.",
+    "beliefs": [
+      "Serious instruments disguised as joyful tactile toys",
+      "Hardware bezel and digital display share one CAD grid",
+      "Colour-coded mechanical encoders map directly to live readouts"
+    ],
+    "moves": [
+      "Anodized aluminium chassis divided by 1px CAD lines",
+      "Black OLED display strip above colour-coded round switches",
+      "Uppercase monospaced silkscreen legends on every cell"
+    ],
+    "critique": [
+      "Does this feel like a physical instrument I want to pick up?",
+      "Can I read every channel's state from one glance at the panel?",
+      "Where is the crisp detent instead of mushy web chrome?"
+    ],
+    "references": [
+      {
+        "title": "OP-1 Portable Synthesizer",
+        "year": 2011,
+        "learn": "Colour-coded physical encoders mapped directly to vector parameters",
+        "url": "https://en.wikipedia.org/wiki/Teenage_Engineering_OP-1"
+      },
+      {
+        "title": "Pocket Operator Series",
+        "year": 2015,
+        "learn": "Exposed PCB grid structure makes sequencing playful and legible",
+        "url": "https://en.wikipedia.org/wiki/Pocket_Operator"
+      },
+      {
+        "title": "Playdate Handheld Console",
+        "year": 2022,
+        "learn": "A single mechanical constraint turns a small screen into joy",
+        "url": "https://en.wikipedia.org/wiki/Playdate_(console)"
+      }
+    ],
+    "quote": null
+  },
+  {
+    "id": "vignelli",
+    "title": "Grid is the argument",
+    "agentName": "Grid Is the Argument",
+    "credit": "after Massimo Vignelli & Pentagram",
+    "name": "Massimo Vignelli & Pentagram",
+    "tagline": "Semantics, syntactics, pragmatics. Zero fluff.",
+    "bio": "Italian-American modernist master (1931–2014); designed NYC Subway signage, National Park Service Unigrid, and The Vignelli Canon.",
+    "colour": "#e32619",
+    "homage": "An homage to the published principles of Massimo Vignelli and Pentagram. Not affiliated with or endorsed by the Vignelli Center or Pentagram.",
+    "beliefs": [
+      "Semantics, syntactics and pragmatics govern every timeless design",
+      "One neo-grotesk family and dramatic scale contrast beat novelty",
+      "The structural grid and black rules are visible authority"
+    ],
+    "moves": [
+      "Heavy 4px black structural bars above a flush-left 4-column grid",
+      "Monumental 72px tight display headline paired with crisp 15px copy",
+      "Zero rounded corners, stark black-on-white, one Vermilion action slab"
+    ],
+    "critique": [
+      "Where is the underlying grid, and why does that edge drift?",
+      "Does scale contrast make hierarchy clear from across the room?",
+      "Could you cut three sizes, two colours and every rounded corner?"
+    ],
+    "references": [
+      {
+        "title": "New York City Subway Signage System",
+        "year": 1970,
+        "learn": "Black structural bars and colour discs guide millions without ambiguity",
+        "url": "https://en.wikipedia.org/wiki/New_York_City_Subway_signage"
+      },
+      {
+        "title": "National Park Service Unigrid Program",
+        "year": 1977,
+        "learn": "One master modular grid unifies thousands of publications cleanly",
+        "url": "https://en.wikipedia.org/wiki/Unigrid"
+      },
+      {
+        "title": "The Vignelli Canon",
+        "year": 2009,
+        "learn": "Discipline, scale contrast and restraint outlast every graphic fad",
+        "url": "https://www.rit.edu/vignellicenter/vignelli-canon"
+      }
+    ],
+    "quote": {
+      "text": "If you can do one good design, you can do anything.",
+      "source": "https://www.rit.edu/vignellicenter/vignelli-canon"
+    }
+  },
+  {
+    "id": "signals",
+    "title": "Plain words",
+    "agentName": "Plain Words",
+    "credit": "after Jason Fried & 37signals",
+    "name": "Jason Fried & 37signals",
+    "tagline": "Copy is the interface. Cut the chrome.",
+    "bio": "Chicago software studio founded in 1999; creators of Basecamp, HEY, Ruby on Rails, Getting Real, Rework and Shape Up.",
+    "colour": "#1d6f42",
+    "homage": "An homage to the published software design principles of Jason Fried and 37signals. Not affiliated with or endorsed by Jason Fried, David Heinemeier Hansson or 37signals.",
+    "beliefs": [
+      "Copywriting is interface design: clear sentences replace clutter",
+      "Pick calm, opinionated defaults instead of ten settings screens",
+      "One clean centred sheet beats a multi-pane dashboard every time"
+    ],
+    "moves": [
+      "Rewrite every label as warm human speech before touching CSS",
+      "One centred sheet on warm cream paper with zero sidebars",
+      "A yellow highlighter stroke behind the single key reassurance"
+    ],
+    "critique": [
+      "Read your labels out loud: does any real person talk like that?",
+      "Why ask me to configure what a sensible default already knows?",
+      "Could this dashboard be one calm page with two sentences and one button?"
+    ],
+    "references": [
+      {
+        "title": "Getting Real: Copywriting is Interface Design",
+        "year": 2006,
+        "learn": "Plain human words are the clearest interface tool we have",
+        "url": "https://basecamp.com/gettingreal/09.3-copywriting-is-interface-design"
+      },
+      {
+        "title": "Shape Up",
+        "year": 2019,
+        "learn": "Cut scope aggressively so small teams ship calm, whole software",
+        "url": "https://basecamp.com/shapeup"
+      },
+      {
+        "title": "HEY Email",
+        "year": 2020,
+        "learn": "Opinionated workflows replace endless configuration checkboxes",
+        "url": "https://en.wikipedia.org/wiki/Hey_(email_service)"
+      }
+    ],
+    "quote": {
+      "text": "Copywriting is interface design.",
+      "source": "https://basecamp.com/gettingreal/09.3-copywriting-is-interface-design"
+    }
   }
 ];

@@ -227,8 +227,11 @@ describe("spacing", () => {
     // the readings card above the Chat's composer and the vocabulary panel,
     // twenty lengths in the proposal marks' lazy sheet, all on existing
     // steps, taking the total to 1,480 from 1,460.
+    // 1490 -> 1720 on 15 Oct 2026 when focus.css landed for FocusHeader,
+    // NodeFocusChat, and the Image/DesignSystem/Screen focus studios, all
+    // on existing steps (measured at 1,690).
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1490);
+    expect(spacing.length).toBeLessThan(1720);
   });
 });
 

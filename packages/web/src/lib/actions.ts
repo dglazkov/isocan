@@ -2,7 +2,7 @@ import { isGroupItem, keyFor, stackToggle } from "@isocan/core";
 import { changeCanvasGroup, groupsEnabled, enterCanvasGroup, groupTask, openGroupCreation, openGroupMigration, openGroupAddition, selectParentGroup } from "./canvasgroups.ts";
 import type { NavigateFunction } from "react-router-dom";
 import type { Actor, AlignEdge } from "@isocan/core";
-import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, itemPath, modulePagePath } from "@isocan/core";
+import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, itemPath, modulePagePath, nodeCapabilitiesFor, workbenchItemPath } from "@isocan/core";
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -69,6 +69,12 @@ const onCanvas = (ctx: ActionContext) => ctx.canvasId !== null;
 const isScreen = (id: string) => {
   const item = useCanvasStore.getState().canvas?.items[id];
   return item?.versions.find((v) => v.id === item.currentVersionId)?.mimeType === "text/html";
+};
+const selectedCaps = (ctx: ActionContext) => {
+  if (ctx.selection.length !== 1) return null;
+  const item = useCanvasStore.getState().canvas?.items[ctx.selection[0]!];
+  const version = item?.versions.find((v) => v.id === item.currentVersionId);
+  return item && version ? nodeCapabilitiesFor(item, version) : null;
 };
 const withSelection = (ctx: ActionContext) => ctx.selection.length > 0;
 
@@ -293,13 +299,23 @@ export const ACTIONS: readonly Action[] = [
     run: (ctx) => runFormat(ctx, "smart"),
   },
   {
-    id: "full-screen",
-    name: "Full screen this",
-    hint: "the selected item, filling the screen",
+    id: "view-selection",
+    name: "View selection",
+    hint: "open View Focus for the selected item",
     keys: "↵",
     group: "Canvas",
-    available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1,
+    available: (ctx) => onCanvas(ctx) && selectedCaps(ctx)?.view === true,
     run: (ctx) => ctx.navigate(itemPath(ctx.canvasId!, ctx.selection[0]!)),
+  },
+  {
+    id: "edit-selection",
+    name: "Edit selection",
+    hint: "open Edit Focus for the selected item",
+    keys: "E",
+    group: "Canvas",
+    writes: true,
+    available: (ctx) => onCanvas(ctx) && selectedCaps(ctx)?.edit === true,
+    run: (ctx) => ctx.navigate(workbenchItemPath(ctx.canvasId!, ctx.selection[0]!)),
   },
   {
     id: "export-deck",

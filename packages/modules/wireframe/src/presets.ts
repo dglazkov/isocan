@@ -72,7 +72,7 @@ export const OWN_PRESETS: readonly WirePreset[] = [
  * test holds this list to the packs directory, so a tenth pack is named here
  * or the suite says so.
  */
-export const PACK_PRESETS: readonly WirePreset[] = ["duarte", "frog", "ideo", "ive", "kare", "linear", "rams", "tufte", "victor"].map((id) => ({
+export const PACK_PRESETS: readonly WirePreset[] = ["duarte", "field", "frog", "ideo", "ive", "kare", "linear", "rams", "signals", "tufte", "victor", "vignelli"].map((id) => ({
   id,
   name: id[0]!.toUpperCase() + id.slice(1),
   about: "a design-competition pack — its tokens mapped onto the wire by the answerer",

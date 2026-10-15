@@ -47,7 +47,7 @@ describe("the Enrico label map", () => {
     expect(Object.keys(archetypeCriteria())).toEqual([...ARCHETYPE_IDS]);
     expect(Object.keys(archetypeCriteria("enrico"))).toEqual(ENRICO_IDS);
     expect(ENRICO_IDS).toHaveLength(20);
-    expect(archetypeCriteria().welcome).toMatch(/^Welcome: image, heading/);
+    expect(archetypeCriteria().welcome).toMatch(/^Welcome: image or hero-banner, heading/);
   });
 
   it("offers plain words as the options and reads the answer back as the id, or describes the ids in them", () => {

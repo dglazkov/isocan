@@ -12,12 +12,15 @@ measures whether it works.
 
 ```
 packs/<id>/
-  pack.json        who it is — the card and the rules the validator reads
-  DESIGN.md        what it builds like — tokens and rules, in the open DESIGN.md format
-  critique.md      what it asks of a rival's entry
-  references.md    the works it studies, each with what to learn and a link
-  avatar.svg       an illustrated emblem — never a photograph, never a likeness
-  assets/          optional: pictures of the work, ONLY where the licence travels
+  pack.json             who it is — the card and the rules the validator reads
+  SOUL.md               persona voice, temperament, opening ritual, signature moves & taboos
+  DESIGN.md             what it builds like — tokens and rules, in the open DESIGN.md format
+  critique.md           what it asks of a rival's entry
+  references.md         the works it studies, each with what to learn and a link
+  avatar.svg            an illustrated emblem — never a photograph, never a likeness
+  corpus/
+    specimen.html       concrete self-contained HTML+CSS specimen anchoring layout & DOM idiom
+  assets/               optional: pictures of the work, ONLY where the licence travels
 ```
 
 `pack.json`:

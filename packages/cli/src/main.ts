@@ -2676,9 +2676,13 @@ program
     "--workbench",
     "open the workbench — the agent room — instead; with an item, it is on the stage",
   )
+  .option(
+    "--edit",
+    "open the item in Edit Focus (the workbench stage)",
+  )
   .option("--page <segment>", "open a page a module adds — the Documents page is `docs`")
   .action(
-    run(async (ref: string | undefined, opts: { workbench?: boolean; page?: string }, cmd: Command) => {
+    run(async (ref: string | undefined, opts: { workbench?: boolean; edit?: boolean; page?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       // Full screen is a ROUTE, which is the whole reason the CLI can take
       // part in it at all: there is no op to send — what somebody is looking
@@ -2709,7 +2713,7 @@ program
       // an address (modules phase 4) — so `--page docs` only changes the path.
       const url = opts.page
         ? modulePageUrl(origin, canvas.id, opts.page)
-        : opts.workbench
+        : opts.workbench || opts.edit
           ? workbenchUrl(origin, canvas.id, item?.id)
           : item
             ? itemUrl(origin, canvas.id, item.id)

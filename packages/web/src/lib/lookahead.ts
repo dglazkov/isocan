@@ -70,19 +70,23 @@ export function lookaheadVector(velocity: { vx: number; vy: number }): { dx: num
   };
 }
 
+function lookaheadFace(item: Item) {
+  if (isArea(item) || isGroupItem(item) || isTextItem(item) || isDrawingItem(item)) return null;
+  const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
+  if (!current) return null;
+  if (current.mimeType.startsWith("image/") || current.mimeType.startsWith("video/")) return null;
+  const visual = visualFaceOf(current);
+  if (visual.mimeType.startsWith("image/") || visual.mimeType.startsWith("video/")) return null;
+  return { current, visual };
+}
+
 /**
  * Only items that stand down into `.item-standby` when offscreen consume
  * directional lookahead slots — text nodes, ink drawings, areas, groups, and
  * native `<img>`/`<video>` surfaces stay mounted already.
  */
 export function needsLookahead(item: Item): boolean {
-  if (isArea(item) || isGroupItem(item) || isTextItem(item) || isDrawingItem(item)) return false;
-  const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
-  if (!current) return false;
-  if (current.mimeType.startsWith("image/") || current.mimeType.startsWith("video/")) return false;
-  const visual = visualFaceOf(current);
-  if (visual.mimeType.startsWith("image/") || visual.mimeType.startsWith("video/")) return false;
-  return true;
+  return lookaheadFace(item) !== null;
 }
 
 /**
@@ -150,7 +154,6 @@ export function lookaheadCandidates(
 
   const scored: Array<{ hit: LookaheadHit; leadScore: number }> = [];
   for (const item of items) {
-    if (!needsLookahead(item)) continue;
     const iw = item.width * viewport.scale;
     const ih = item.height * viewport.scale;
     if (iw < 16 || ih < 12) continue;
@@ -160,14 +163,16 @@ export function lookaheadCandidates(
     const tEnter = sweptCorridorEntry(ix, iy, iw, ih, stage.width, stage.height, vec.dx, vec.dy);
     if (tEnter === null) continue;
 
+    const face = lookaheadFace(item);
+    if (!face) continue;
+
     // Among items already touching the viewport (`tEnter === 0`), prefer those
     // closer to the leading edge of motion rather than the trailing edge.
     const cx = ix + iw / 2 - stage.width / 2;
     const cy = iy + ih / 2 - stage.height / 2;
     const leadScore = cx * vec.dx + cy * vec.dy;
 
-    const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
-    const visual = visualFaceOf(current);
+    const { current, visual } = face;
     const hit: LookaheadHit = {
       itemId: item.id,
       tEnter,
@@ -320,6 +325,26 @@ export function useViewportLookahead(
   useEffect(() => {
     let lastAt = performance.now();
     let velocity = { vx: 0, vy: 0 };
+    const measureStage = () => {
+      const el = stageRef.current;
+      return {
+        width: el?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1280),
+        height: el?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 800),
+      };
+    };
+    let stageSize = measureStage();
+    const ro =
+      typeof ResizeObserver !== "undefined" && stageRef.current
+        ? new ResizeObserver((entries) => {
+            const rect = entries[0]?.contentRect;
+            if (rect && rect.width > 0 && rect.height > 0) {
+              stageSize = { width: rect.width, height: rect.height };
+            } else {
+              stageSize = measureStage();
+            }
+          })
+        : null;
+    if (ro && stageRef.current) ro.observe(stageRef.current);
 
     const unsub = useUiStore.subscribe((state, prev) => {
       if (state.viewport === prev.viewport) return;
@@ -336,16 +361,14 @@ export function useViewportLookahead(
               vy: velocity.vy * 0.35 + instant.vy * 0.65,
             };
 
-      const el = stageRef.current;
-      const width = el?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1280);
-      const height = el?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 800);
-      const hits = lookaheadCandidates(itemsRef.current, state.viewport, { width, height }, velocity);
+      const hits = lookaheadCandidates(itemsRef.current, state.viewport, stageSize, velocity);
       if (hits.length > 0 || activeIds.size > 0) {
         applyLookahead(canvasId, hits);
       }
     });
 
     return () => {
+      ro?.disconnect();
       unsub();
       clearLookahead();
     };

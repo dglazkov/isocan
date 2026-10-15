@@ -3,7 +3,7 @@ import type { Actor, CanvasCursor, CanvasTheme, Item, ModuleMark, ThemeAnchor } 
 import { markOffered, moduleMarkIntent, moduleMarkPatch, moduleMarks } from "@isocan/core";
 import { canvasScopes, isDesignSystem, parentOf } from "@isocan/core";
 import { isDesignFile } from "@isocan/core/design-use";
-import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemPath, markPatch, newGroupId, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
+import { CURSORS, cursorLabel, contextMark, isGroupItem, isNote, isSlide, itemPath, markPatch, newGroupId, nodeCapabilitiesFor, noteFor, THEMES, themeLabel, ALIGN_EDGES, alignLabel, slideIntent, slidePatch, workbenchItemPath, keyFor, SLIDE_EMOJI, sprintState } from "@isocan/core";
 import type { ReactNode } from "react";
 import type { MenuEntry } from "../components/ContextMenu.tsx";
 import {
@@ -111,6 +111,8 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
   const ids = items.map((i) => i.id);
   const many = items.length > 1;
   const version = one?.versions.find((v) => v.id === one.currentVersionId) ?? null;
+  const caps = one && version ? nodeCapabilitiesFor(one, version) : null;
+  const entered = one ? useUiStore.getState().enteredItemId === one.id : false;
 
   return offered([
     ...canvasGroupEntries(items, ctx),
@@ -168,17 +170,25 @@ export function itemMenu(items: Item[], ctx: MenuContext): MenuEntry[] {
       },
     },
     { separator: "" },
-    ...(one && !isGroupItem(one) ? [{
-      label: "Open full screen",
-      shortcutFor: "Open the selection full screen",
+    ...(one && !isGroupItem(one) && caps?.view ? [{
+      label: "View",
+      shortcutFor: "View the selection",
       run: () => ctx.navigate(itemPath(ctx.canvasId, one.id)),
     }] : []),
-    ...(one ? [{
-      label: "Open in the workbench",
+    ...(one && !isGroupItem(one) && caps?.edit ? [{
+      label: "Edit",
+      shortcutFor: "Edit the selection",
+      writes: true,
       run: () => ctx.navigate(workbenchItemPath(ctx.canvasId, one.id)),
     }] : []),
+    ...(one && !isGroupItem(one) && caps?.enter ? [{
+      label: entered ? "Leave" : "Enter",
+      ...(entered ? {} : { shortcutFor: "Step inside it: scroll it, click its links" }),
+      run: () => useUiStore.getState().setEntered(entered ? null : one.id),
+    }] : []),
     {
-      label: "Zoom to it",
+      label: "Fit",
+      shortcutFor: "Fit the selection",
       run: () =>
         glideToBox({
           minX: Math.min(...items.map((i) => i.x)),

@@ -65,7 +65,7 @@ import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
 import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_GIST, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
-import { itemPath } from "@isocan/core";
+import { itemPath, nodeCapabilitiesFor, workbenchItemPath } from "@isocan/core";
 /**
  * **A canvas placed on a canvas is rare, so it is not in every first visit.**
  * The card pulls the other canvas's snapshot, lays out its items as blocks and
@@ -88,6 +88,7 @@ import { useDismissOnOutside } from "../lib/dismiss.ts";
 import { beginGroupGesture } from "../lib/groupgestures.ts";
 import { DRAG_SLOP } from "../lib/gesture.ts";
 import { useCanEdit } from "../lib/capability.ts";
+import { glideToBox } from "../lib/zoomactions.ts";
 
 /** Two presses this close together are one double-press. */
 const DOUBLE_PRESS_MS = 450;
@@ -109,6 +110,35 @@ const EXPAND = (
   <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
        stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4" />
+  </svg>
+);
+
+const EDIT_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" />
+  </svg>
+);
+
+const ENTER_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 3l7 7M10 5v5H5M13 3v10H3" />
+  </svg>
+);
+
+const LEAVE_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 10L3 3M3 8V3h5M13 3v10H3" />
+  </svg>
+);
+
+const FIT_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden fill="none"
+       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3" />
+    <circle cx="8" cy="8" r="1.5" />
   </svg>
 );
 
@@ -388,6 +418,16 @@ function ItemViewInner({
   const docId = source && current.mimeType === DOC_MIME ? googleDocId(source) : null;
   const liveDoc = useUiStore((s) => docId !== null && s.liveDocs.includes(item.id));
   const setDocLive = useUiStore((s) => s.setDocLive);
+  // An HTML screen renders its own small WebP snapshot (`useHtmlSnapshot`)
+  // when zoomed out — its small form IS the signal, like `picture` above, so
+  // it keeps its preview while near the window and needs no `.kind-mark`.
+  const htmlScreen =
+    visual.mimeType === "text/html" &&
+    !item.properties.canvas &&
+    !current.designRecord &&
+    !liveDoc &&
+    !moduleRendererFor(visual.mimeType);
+  const caps = useMemo(() => nodeCapabilitiesFor(item, current), [item, current]);
   // What the strip under the item says right now. The rule lives in
   // lib/chrome.ts, where it is argued and tested.
   const underSlot = underSlotFor({
@@ -413,7 +453,7 @@ function ItemViewInner({
   // tool used inside it still reaches the canvas. See `core/area.ts`.
   const isCanvasGroup = isGroupItem(item);
   const isAreaItem = isArea(item) || isCanvasGroup;
-  const displayedGroup = { ...item, x, y, width, height };
+  const displayedGroup = isCanvasGroup ? { ...item, x, y, width, height } : item;
   const groupContent = isCanvasGroup ? groupContentBox(displayedGroup) : null;
   // Both of the canvas on screen — see `shown`. Only a sheet has members or
   // a depth worth asking for, and nothing else reads them.
@@ -444,7 +484,7 @@ function ItemViewInner({
    * it the honest thing to draw is nothing — the minimap is the view that
    * answers "what is where" at that scale, and it answers it better.
    */
-  const kindMark = !roomy && !isText && !picture && !isAreaItem && (zoom & Z_MARK) !== 0;
+  const kindMark = !roomy && !isText && !picture && !htmlScreen && !isAreaItem && (zoom & Z_MARK) !== 0;
   const tint = isAreaItem ? areaTint(item) : null;
   const grid = isAreaItem ? areaGrid(item) : null;
   const inner = isAreaItem ? areaInner(item) : null!;
@@ -498,7 +538,8 @@ function ItemViewInner({
     if (
       target.closest(".resize-handle") ||
       target.closest(".version-badge") ||
-      target.closest(".browser-reload")
+      target.closest(".browser-reload") ||
+      target.closest(".item-focus-strip")
     )
       return;
     if (entered) return; // entered content owns the pointer
@@ -844,6 +885,10 @@ function ItemViewInner({
       if (canEdit) void openTextEditor();
       return;
     }
+    if (!caps.enter) {
+      if (caps.view) navigate(itemPath(canvasId, item.id));
+      return;
+    }
     ui.setEntered(item.id);
     // The double-click that entered the item is also the browser's
     // select-the-paragraph gesture, and the content stops being
@@ -1029,6 +1074,88 @@ function ItemViewInner({
                 {dot.mark}
               </span>
             ))}
+        </div>
+      )}
+      {roomy && !resize && (soleSelection || entered) && (caps.view || (caps.edit && canEdit) || caps.enter) && (
+        <div
+          className="item-focus-strip item-focus-strip-nw"
+          style={{ ...chrome, transformOrigin: "left bottom" }}
+          role="toolbar"
+          aria-label={`${item.title} focus actions`}
+          onPointerDown={stop}
+          onDoubleClick={stop}
+        >
+          {caps.view && (
+            <button
+              type="button"
+              className={`focus-strip-btn${spellItOut ? "" : " compact"}`}
+              data-tip={spellItOut ? "Enter — Esc comes back" : "View — Enter, Esc comes back"}
+              aria-label="View"
+              onPointerDown={stop}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(itemPath(canvasId, item.id));
+              }}
+            >
+              {EXPAND}
+              {spellItOut && <span>View</span>}
+            </button>
+          )}
+          {caps.edit && canEdit && (
+            <button
+              type="button"
+              className={`focus-strip-btn${spellItOut ? "" : " compact"}`}
+              data-tip={spellItOut ? "E — Esc comes back" : "Edit — E, Esc comes back"}
+              aria-label="Edit"
+              onPointerDown={stop}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(workbenchItemPath(canvasId, item.id));
+              }}
+            >
+              {EDIT_ICON}
+              {spellItOut && <span>Edit</span>}
+            </button>
+          )}
+          {caps.enter && (
+            <button
+              type="button"
+              className={`focus-strip-btn${entered ? " active" : ""}${spellItOut ? "" : " compact"}`}
+              data-tip={
+                entered
+                  ? spellItOut
+                    ? "Esc"
+                    : "Leave — Esc"
+                  : spellItOut
+                    ? "Double-click"
+                    : "Enter — double-click"
+              }
+              aria-label={entered ? "Leave item" : "Enter item"}
+              aria-pressed={entered}
+              onPointerDown={stop}
+              onClick={(e) => {
+                e.stopPropagation();
+                useUiStore.getState().setEntered(entered ? null : item.id);
+              }}
+            >
+              {entered ? LEAVE_ICON : ENTER_ICON}
+              {spellItOut && <span>{entered ? "Leave" : "Enter"}</span>}
+            </button>
+          )}
+          <button
+            type="button"
+            className={`focus-strip-btn${spellItOut ? "" : " compact"}`}
+            data-tip={spellItOut ? "F — fit to screen" : "Fit — F"}
+            aria-label="Fit"
+            onPointerDown={stop}
+            onClick={(e) => {
+              e.stopPropagation();
+              glideToBox({ minX: x, minY: y, maxX: x + width, maxY: y + height });
+            }}
+          >
+            {FIT_ICON}
+            {spellItOut && <span>Fit</span>}
+          </button>
         </div>
       )}
       <div className="item-titlebar" style={roomy ? undefined : { display: "none" }}>
@@ -1218,18 +1345,6 @@ function ItemViewInner({
           {SLIDE_EMOJI} Notes for {noteSlideTitle}
         </span>
       )}
-      {/* The door into reading mode, on the ONE item you chose — not on every
-          text item at once. Drawn on all of them it covered the words of small
-          chromeless nodes and wrapped into a column of "Read / select text"
-          (reported 30 Sep 2026); double-click still steps inside anything. Never on a
-          text node: double-click already edits and selects its words there, and a
-          door below the words sat on the selection's own Full screen chip. */}
-      {!isCanvasGroup && !isText && (soleSelection || entered) && ["text/markdown", "text/plain"].includes(current.mimeType) && !isDesignSystem(item) && (
-        <button type="button" className="btn item-read" aria-label={entered ? "Done reading" : `Read ${item.title} and select text`}
-          onPointerDown={stop} onClick={e => { e.stopPropagation(); useUiStore.getState().setEntered(entered ? null : item.id); }}>
-          {entered ? "Done reading" : "Read / select text"}
-        </button>
-      )}
       {!isCanvasGroup && <div ref={liveRef} className={`item-content${entered ? "" : " inert"}`}>
         {/**
          * Too far away to read: draw the opening words big enough to read,
@@ -1247,7 +1362,7 @@ function ItemViewInner({
           gist ?? <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
             {item.title}
           </span>
-        ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !entered && !(nearWindow && roomy) ? (
+        ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !(htmlScreen && nearWindow) && !entered && !(nearWindow && roomy) ? (
           /**
            * Far away, or the tab is in the background: the box stays exactly
            * where it is and what it holds stands down.
@@ -1255,10 +1370,13 @@ function ItemViewInner({
            * This includes Markdown: a thousand tiny cards previously mounted
            * a thousand parsers and attention trees. The shell, title, marks
            * and pointer handlers remain; readable nearby content mounts as
-           * the camera approaches. The observer's margin/grace avoids churn,
-           * and `roomy` is the chrome's own HELD answer (core's
-           * `holdsAtZoom`), so a preview cannot remount on a zoom wobble the
-           * chrome sat through.
+           * the camera approaches. HTML screens keep their lightweight WebP
+           * snapshot (`snapshotOnly`) while near the window or inside the
+           * moving camera's directional lookahead corridor so zoomed-out and
+           * fast-panned boards show actual screens instead of blank shells.
+           * The observer's margin/grace avoids churn, and `roomy` is the
+           * chrome's own HELD answer (core's `holdsAtZoom`), so a preview
+           * cannot remount on a zoom wobble the chrome sat through.
            */
           <span className="item-standby" aria-hidden="true" />
         ) : (() => {
@@ -1339,48 +1457,6 @@ function ItemViewInner({
           />
           {underSlot === "size" && (
             <div className={`item-hint size under-right${resize ? " live" : ""}`}>
-              {/* The click path into full screen, in the one place there is
-                  room for a word. It sits beside the size rather than up in
-                  the title row because that row's width is the name's, and a
-                  control there would cost the name at every zoom for a button
-                  you want twice a session. Every kind gets it, not just the
-                  interactive ones: a picture worth opening big is as ordinary
-                  as a screen worth clicking through.
-                  
-                  "Full screen", not "Open" — which was the first label and
-                  said nothing. Open in what? A new tab, a menu, an editor?
-                  Worse, this product already uses the word: `isocan open`
-                  means "open the canvas in your browser", and you are ALREADY
-                  in the browser when you press this. The button says the state
-                  it puts you in, which is what the shortcut list calls it.
-                  
-                  Not while a corner is being dragged: your pointer is busy,
-                  the button would be under it, and the number beside it is the
-                  thing you are actually reading. */}
-              {!resize && !isCanvasGroup && (
-                <button
-                  className={`fullscreen-btn${spellItOut ? "" : " compact"}`}
-                  // The tooltip is the label, and it is drawn rather than
-                  // handed to `title`: the native one waits about a second,
-                  // arrives at the pointer instead of at the button, and
-                  // cannot be styled. `aria-label` still carries it for
-                  // anyone not hovering anything.
-                  // The tip repeats no ink: the labeled form already says
-                  // "Full screen", so its tip carries only the keys; the
-                  // compact form's face is a glyph, so its tip carries the
-                  // name too.
-                  data-tip={spellItOut ? "Enter — Esc comes back" : "Full screen — Enter, Esc comes back"}
-                  aria-label="Full screen"
-                  onPointerDown={stop}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(itemPath(canvasId, item.id));
-                  }}
-                >
-                  {EXPAND}
-                  {spellItOut && <span>Full screen</span>}
-                </button>
-              )}
               <span>
                 {Math.round(width)} × {Math.round(height)}
               </span>

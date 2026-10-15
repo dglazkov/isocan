@@ -1,4 +1,4 @@
-import type { CanvasContents } from "@isocan/core";
+import type { CanvasContents, Item, ItemVersion } from "@isocan/core";
 import { wireframeModule } from "./record.ts";
 
 /**
@@ -16,4 +16,19 @@ export const wireframeActivation = {
   // the lazy half, and the menu must be there before anybody right-clicks (24 Sep 2026). A canvas with no wire
   // fetches nothing. First paint's, so it is written small.
   underlays: [{ needed: (canvas: CanvasContents) => Object.values(canvas.items).some((i) => i.properties?.fidelity === "wireframe") }],
+  focus: [{
+    id: "module.wireframe",
+    priority: 20,
+    matches: (item: Item, version: ItemVersion) =>
+      item.properties?.fidelity === "wireframe" &&
+      item.properties?.wirePrototype === undefined &&
+      version.mimeType === "text/html",
+    hasView: true,
+    hasEdit: true,
+    agentPrompts: [
+      { label: "Swap section", prompt: "Replace the selected wireframe slot with a clearer catalog block." },
+      { label: "Tighten copy", prompt: "Rewrite the wireframe copy so every CTA and heading is specific." },
+      { label: "Polish hierarchy", prompt: "Apply visual polish tokens to emphasize the primary call-to-action." },
+    ],
+  }],
 };

@@ -1,10 +1,14 @@
 import "./artifact-stage.css";
+import "./focus.css";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { Actor } from "@isocan/core";
-import type { Backing } from "@isocan/core";
-import { automaticCanvasTarget, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, sourceFaceOf, visualFaceOf, shortcut } from "@isocan/core";
-import { homeAnswered, writeItem } from "../lib/api.ts";
+import type { Actor, Backing, FocusFacts } from "@isocan/core";
+import { automaticCanvasTarget, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, nodeCapabilitiesFor, sourceFaceOf, visualFaceOf, shortcut } from "@isocan/core";
+import { homeAnswered, readBlobText, writeItem } from "../lib/api.ts";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
+import { useUiStore } from "../stores/uiStore.ts";
+import { useFocusStore } from "../stores/focusStore.ts";
+import { useWebHost } from "../lib/modulehost.ts";
+import { resolveNodeFocus } from "../lib/focusRegistry.ts";
 import { VersionContent } from "./ItemView.tsx";
 import { CanvasPreviewBoundary } from "./CanvasPreviewBoundary.tsx";
 import { TextEditFrame } from "./TextEditFrame.tsx";
@@ -227,6 +231,11 @@ function OrdinaryArtifactStage({
    * lands, and React counts a different number. A blank page and error #310.
    */
   const disk = useCanvasStore((s) => s.backing);
+  useUiStore((s) => s.modulesGeneration);
+  const host = useWebHost(canvasId, actor);
+  const subtarget = useFocusStore((s) => s.subtarget);
+  const setSubtarget = useFocusStore((s) => s.setSubtarget);
+  const askAgent = useFocusStore((s) => s.askAgent);
 
   if (!item) {
     return (
@@ -239,6 +248,24 @@ function OrdinaryArtifactStage({
   }
 
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
+  const caps = nodeCapabilitiesFor(item, current);
+  const focusFacet = resolveNodeFocus(item, current);
+  const focusFacts: FocusFacts | null = canvas
+    ? {
+        canvasId,
+        canvas,
+        item,
+        version: current,
+        actor,
+        canEdit,
+        capabilities: caps,
+        host,
+        readText: () => readBlobText(canvasId, current.blobHash),
+        subtarget,
+        setSubtarget,
+        askAgent,
+      }
+    : null;
   const hasVisual = current.visual !== undefined;
   const editable = editableText(current.mimeType) && canEdit && !current.designRecord;
   // Not a hook — a derivation, so it may live where it is used.
@@ -247,6 +274,17 @@ function OrdinaryArtifactStage({
   const fold = (which: keyof Panes) => {
     const next = { ...panes, [which]: !panes[which] };
     if (!next.preview && !next.edit) return; // unreachable: the sole pane has no fold control
+    setPanes(next);
+    writePanes(surface, next);
+  };
+
+  const setFileMode = (mode: "studio" | "code" | "split") => {
+    const next: Panes =
+      mode === "studio"
+        ? { preview: true, edit: false }
+        : mode === "code"
+          ? { preview: false, edit: true }
+          : { preview: true, edit: true };
     setPanes(next);
     writePanes(surface, next);
   };
@@ -289,10 +327,48 @@ function OrdinaryArtifactStage({
     />
   );
 
+  if (surface === "fullscreen" && focusFacet?.view && focusFacts) {
+    const FocusView = focusFacet.view;
+    return (
+      <div className="artifact-stage" data-focus-view={focusFacet.id}>
+        <Suspense fallback={<div className="page-note">Loading view…</div>}>
+          <FocusView {...focusFacts} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  if (surface === "workbench" && !caps.file) {
+    if (caps.edit && canEdit && focusFacet?.edit && focusFacts) {
+      const FocusEdit = focusFacet.edit;
+      return (
+        <div className="artifact-stage" data-focus-edit={focusFacet.id} data-focus-file="false">
+          <Suspense fallback={<div className="page-note">Loading studio…</div>}>
+            <FocusEdit {...focusFacts} />
+          </Suspense>
+        </div>
+      );
+    }
+    if (caps.edit && canEdit) {
+      return (
+        <div className="artifact-stage focus-nonfile-studio" data-focus-file="false">
+          <div className="focus-nonfile-studio-bar">
+            <span>
+              <b>{item.title}</b> · Studio
+            </span>
+            <span>v{item.versions.length}</span>
+          </div>
+          <div className="focus-nonfile-studio-body">{saved}</div>
+        </div>
+      );
+    }
+    return <div className="artifact-stage">{saved}</div>;
+  }
+
   // Not editable: one pane, no headers, no folds — a png has no editor to
   // put away, so it gets the whole stage without ceremony. Non-local environments
   // (!disk.bound) also disallow editing dual-face artifacts entirely.
-  if (!editable || (hasVisual && !disk.bound)) return <div className="artifact-stage">{saved}</div>;
+  if (!editable || !caps.file || (hasVisual && !disk.bound)) return <div className="artifact-stage">{saved}</div>;
 
   const showDraft = panes.edit && draft !== null && current.mimeType === "text/html";
   /**
@@ -443,6 +519,34 @@ function OrdinaryArtifactStage({
                       </button>
                     </div>
                   )}
+                  {surface !== "fullscreen" && caps.file && (
+                    <div className="focus-file-mode-group" role="group" aria-label="File edit layout">
+                      <button
+                        type="button"
+                        className={`focus-file-mode-btn${panes.preview && !panes.edit ? " active" : ""}`}
+                        onClick={() => setFileMode("studio")}
+                        title="Studio only"
+                      >
+                        Studio
+                      </button>
+                      <button
+                        type="button"
+                        className={`focus-file-mode-btn${!panes.preview && panes.edit ? " active" : ""}`}
+                        onClick={() => setFileMode("code")}
+                        title="Code only"
+                      >
+                        Code
+                      </button>
+                      <button
+                        type="button"
+                        className={`focus-file-mode-btn${panes.preview && panes.edit ? " active" : ""}`}
+                        onClick={() => setFileMode("split")}
+                        title="Studio + Code split"
+                      >
+                        Split
+                      </button>
+                    </div>
+                  )}
                   <span className="spacer" />
                   {/**
                    * **Write this item out to the directory bound here** — the
@@ -509,6 +613,10 @@ function OrdinaryArtifactStage({
                       srcDoc={draft ?? ""}
                       title={`draft of ${current.filename}`}
                     />
+                  ) : surface === "workbench" && focusFacet?.edit && focusFacts ? (
+                    <Suspense fallback={<div className="page-note">Loading studio…</div>}>
+                      <focusFacet.edit {...focusFacts} />
+                    </Suspense>
                   ) : (
                     saved
                   )}

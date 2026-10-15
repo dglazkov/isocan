@@ -139,8 +139,8 @@ describe("the renderer, over all 18 archetypes", () => {
 describe("every block and primitive a recipe names", () => {
   const cases = RECIPES.flatMap((r) => r.sections.flatMap((s) => s.options.map((option) => ({ r, s, option }))));
 
-  it("covers all 50 components the recipes name (28 blocks, 22 primitives)", () => {
-    expect(new Set(cases.map((c) => c.option)).size).toBe(50);
+  it("covers all 53 components the recipes name (31 blocks, 22 primitives)", () => {
+    expect(new Set(cases.map((c) => c.option)).size).toBe(53);
   });
 
   for (const { r, s, option } of cases) {
@@ -250,5 +250,34 @@ describe("the two sheets", () => {
       for (const one of selector.split(",")) expect(one.trim()).toMatch(/^\.sk/);
     }
     expect(__SKELETON_CSS).toMatch(BLUE);
+  });
+
+  it("draws hero-banner, pricing-cards, and accordion with pattern fills and 4-tier bar emphasis", () => {
+    const heroSpec = wireframe("welcome", { platform: "site" }, (s) => (s.slot === "main.1" ? "hero-banner" : s.options[0]!));
+    const heroHtml = renderWire(heroSpec);
+    expect(heroHtml).toContain('data-block="hero-banner"');
+    expect(heroHtml).toContain("hero split");
+    expect(heroHtml).toContain("emp-primary");
+
+    const pricingSpec = wireframe("gallery", { platform: "site" }, (s) => (s.slot === "main.2" ? "pricing-cards" : s.options[0]!));
+    const pricingHtml = renderWire(pricingSpec);
+    expect(pricingHtml).toContain('data-block="pricing-cards"');
+    expect(pricingHtml).toContain("card tier popular");
+    expect(pricingHtml).toContain("billing-row");
+
+    const accSpec = wireframe("detail", {}, (s) => (s.slot === "main.2" ? "accordion" : s.options[0]!));
+    const accHtml = renderWire(accSpec);
+    expect(accHtml).toContain('data-block="accordion"');
+    expect(accHtml).toContain("acc-item open");
+    expect(accHtml).toContain("acc-body");
+
+    // Pattern fills on illustration and video media slots
+    const illuSpec = wireframe("welcome", {}, (s) => s.options[0]!);
+    illuSpec.slots.find((s) => s.slot === "main.1")!.props = { kind: "illustration", ratio: "1:1", caption: false };
+    expect(renderWire(illuSpec)).toContain("pat-dotted");
+    expect(__WIRE_CSS).toContain(".pat-striped");
+    expect(__WIRE_CSS).toContain(".pat-dotted");
+    expect(__WIRE_CSS).toContain(".pat-crosshatch");
+    expect(__WIRE_CSS).toContain(".pat-wave");
   });
 });

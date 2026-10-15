@@ -22,13 +22,30 @@ export function esc(text: string): string {
 /** Widths that look like lines of text, cycled so a block is stable from one render to the next. */
 const WIDTHS = [92, 78, 86, 64, 95, 72, 58, 88, 70, 82];
 
+/** 4-tier bar emphasis hierarchy (`wireframe-ui` opacity scale, rendered via CSS roles). */
+export type BarEmphasis = "primary" | "secondary" | "tertiary" | "subtle";
+
+/** Pure-CSS wireframe pattern fills (`wireframe-ui` media/surface textures, rendered via CSS roles). */
+export type PatternFill = "striped" | "dotted" | "crosshatch" | "wave";
+
+export function emp(level: BarEmphasis): string {
+  return `emp-${level}`;
+}
+
+export function pat(pattern: PatternFill): string {
+  return `pat-${pattern}`;
+}
+
 export function bar(width: number, cls = ""): string {
   return `<i class="bar${cls ? ` ${cls}` : ""}" style="width:${width}%"></i>`;
 }
 
 export function bars(n: number, offset = 0, cls = ""): string {
   let out = "";
-  for (let i = 0; i < n; i++) out += bar(WIDTHS[(i + offset) % WIDTHS.length]!, cls);
+  for (let i = 0; i < n; i++) {
+    const lineCls = cls || (n >= 3 && i === n - 1 ? "emp-subtle" : "");
+    out += bar(WIDTHS[(i + offset) % WIDTHS.length]!, lineCls);
+  }
   return out;
 }
 

@@ -46,6 +46,8 @@ export * from "./identity.ts";
 export * from "./filenames.ts";
 export * from "./blobrefs.ts";
 export * from "./kinds.ts";
+export * from "./capabilities.ts";
+export * from "./image-metadata.ts";
 export * from "./touches.ts";
 export * from "./elapsed.ts";
 export * from "./layout.ts";

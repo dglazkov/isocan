@@ -58,6 +58,8 @@ function packUrl(fighter: Fighter, file: PackFile): string | null {
   if (fighter.module !== OWN) return moduleAsset(fighter.module, packPath(fighter.pack, file));
   const id = fighter.pack.id;
   switch (file) {
+    case "SOUL.md":
+      return new URL(`../assets/packs/${id}/SOUL.md`, import.meta.url).href;
     case "avatar.svg":
       return new URL(`../assets/packs/${id}/avatar.svg`, import.meta.url).href;
     case "DESIGN.md":
@@ -66,6 +68,8 @@ function packUrl(fighter: Fighter, file: PackFile): string | null {
       return new URL(`../assets/packs/${id}/references.md`, import.meta.url).href;
     case "critique.md":
       return new URL(`../assets/packs/${id}/critique.md`, import.meta.url).href;
+    case "corpus/specimen.html":
+      return new URL(`../assets/packs/${id}/corpus/specimen.html`, import.meta.url).href;
   }
 }
 

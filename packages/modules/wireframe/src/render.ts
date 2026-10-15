@@ -99,10 +99,18 @@ body.screen>.frame{border:0;border-radius:0}
 .bar.lbl-bar{height:7px;margin:0 0 6px}
 .bar.cap{margin-top:8px}
 .bar.rule{height:1px;background:var(--w-surface)}
+.bar.emp-primary{background:color-mix(in srgb,var(--w-ink) 74%,var(--w-ground))}
+.bar.emp-secondary{background:color-mix(in srgb,var(--w-bar) 90%,var(--w-ink))}
+.bar.emp-tertiary{background:var(--w-bar)}
+.bar.emp-subtle{background:${BAR_SOFT}}
 .h{font-weight:700;color:var(--w-ink);line-height:1.2}
 .h1{font-size:26px}.h2{font-size:22px}.h3{font-size:18px}.h4{font-size:16px}
 .txt.s .bar{height:6px}.txt.l .bar{height:10px}.txt.quote{border-left:3px solid var(--w-line);padding-left:10px}.txt.caption .bar{background:${BAR_SOFT}}
 .img{width:100%;border:1.5px solid var(--w-line);border-radius:${R(12)};background:var(--w-surface) linear-gradient(to top right,transparent calc(50% - 1px),var(--w-line) calc(50% - 1px),var(--w-line) calc(50% + 1px),transparent calc(50% + 1px)),linear-gradient(to bottom right,transparent calc(50% - 1px),var(--w-line) calc(50% - 1px),var(--w-line) calc(50% + 1px),transparent calc(50% + 1px))}
+.pat-striped,.img.pat-striped{background:var(--w-surface) repeating-linear-gradient(45deg,var(--w-line) 0,var(--w-line) 1px,transparent 1px,transparent 7px)}
+.pat-dotted,.img.pat-dotted{background:var(--w-surface) radial-gradient(circle,var(--w-line) 1.25px,transparent 1.25px) 0 0/10px 10px}
+.pat-crosshatch,.img.pat-crosshatch{background:var(--w-surface) linear-gradient(var(--w-line) 1px,transparent 1px) 0 0/10px 10px,linear-gradient(90deg,var(--w-line) 1px,transparent 1px) 0 0/10px 10px}
+.pat-wave,.img.pat-wave{background:var(--w-surface) repeating-radial-gradient(circle at 0 100%,transparent 0,transparent 5px,var(--w-line) 5px,var(--w-line) 6px,transparent 6px,transparent 12px) 0 0/16px 12px}
 .img.sm{width:72px}
 .logo{display:flex;justify-content:center}
 .img.illustration{border-radius:50%;width:70%;margin:0 auto}
@@ -371,6 +379,26 @@ span.tx{display:inline}
 .drawer-head .row-t{flex:1}
 .clock-t{font-size:12px;font-weight:700;color:var(--w-ink)}
 .url-t{margin-left:12px;background:var(--w-ground);border-radius:8px;padding:0 10px;font-size:11px;line-height:18px;color:var(--w-ink-muted);min-width:30%}
+.hero{display:flex;flex-direction:column;gap:${S(2)};padding:${S(1.5)} 0}
+.hero.split{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:${S(2.5)};align-items:center}
+.hero-copy{display:flex;flex-direction:column;gap:${S(1.25)};align-items:flex-start}
+.hero-h{font-size:26px;line-height:1.18;letter-spacing:-.015em}
+.hero-bullets{display:flex;flex-direction:column;gap:6px}
+.hero-cta{justify-content:flex-start;padding-top:4px}
+.hero-media{width:100%}
+.pricing{display:flex;flex-direction:column;gap:${S(1.5)}}
+.billing-row{display:flex;justify-content:center}
+.billing-row .seg{min-width:220px}
+.card.tier{gap:10px;padding:${S(1.75)};position:relative}
+.card.tier.popular{border-color:var(--w-primary);border-width:2px}
+.tier-badge{align-self:flex-start}
+.tier-feats{display:flex;flex-direction:column;gap:8px;padding:6px 0;flex:1}
+.accordion{display:flex;flex-direction:column;border:1.5px solid var(--w-line);border-radius:${R(16)};overflow:hidden;background:var(--w-ground)}
+.acc-item+.acc-item{border-top:1px solid var(--w-surface)}
+.acc-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;min-height:48px}
+.acc-head .bar{margin:0}
+.acc-body{padding:0 14px 14px;border-top:1px dashed var(--w-surface)}
+.acc-item.open .acc-head{background:color-mix(in srgb,var(--w-surface) 45%,var(--w-ground))}
 `;
 
 /** A shadow's colour: the ink, or the primary, at `n`% over whatever is behind it. */
@@ -485,15 +513,24 @@ const POLISH_CSS = `
 const LOFI_CSS = `
 .frame.lofi{border-color:transparent;background:var(--w-ground)}
 .frame.lofi .slot.w{border-color:transparent;background:transparent}
-.frame.lofi .card,.frame.lofi .stat,.frame.lofi .row,.frame.lofi .form{background:var(--w-surface);border:1px solid var(--w-line);border-radius:var(--w-radius);box-shadow:0 2px 8px ${INK_AT(6)}}
-.frame.lofi .btn{border-radius:999px;font-weight:600}
+.frame.lofi :is(.card,.stat,.list.inset,.table,.accordion,.linkcard){background:var(--w-ground);border:1px solid color-mix(in srgb,var(--w-line) 65%,transparent);border-radius:var(--w-radius);box-shadow:0 2px 8px ${INK_AT(6)}}
+.frame.lofi .card.tier.popular{border-color:var(--w-primary);box-shadow:0 4px 14px ${PRIMARY_AT(16)}}
+.frame.lofi :is(.fld .box,.composer .box,.search){background:color-mix(in srgb,var(--w-surface) 55%,var(--w-ground));border:1px solid color-mix(in srgb,var(--w-line) 70%,transparent)}
+.frame.lofi .btn{border-radius:min(calc(var(--w-radius)*1.5),999px);font-weight:600;border-width:1px}
+.frame.lofi .btn.secondary{border-color:color-mix(in srgb,var(--w-line) 80%,transparent);color:var(--w-ink)}
+.frame.lofi :is(.chip,.tabs.pill span){border-width:1px;border-color:color-mix(in srgb,var(--w-line) 75%,transparent)}
+.frame.lofi .table th{background:color-mix(in srgb,var(--w-surface) 60%,var(--w-ground));border-bottom-color:color-mix(in srgb,var(--w-line) 60%,transparent)}
+.frame.lofi .bar{border-radius:999px}
 `;
 
 const HIFI_CSS = `
-.frame.hifi{background:radial-gradient(120% 80% at 50% 0%,${PRIMARY_AT(10)},transparent 65%),var(--w-ground)}
-.frame.hifi .appbar,.frame.hifi .navbar,.frame.hifi .tabbar{background:${PANE};backdrop-filter:${BLUR};-webkit-backdrop-filter:${BLUR};border-color:${INK_AT(10)}}
-.frame.hifi .card,.frame.hifi .stat,.frame.hifi .row{box-shadow:0 8px 24px ${INK_AT(10)};border-color:${INK_AT(8)}}
-.frame.hifi .btn.pri{box-shadow:0 4px 14px ${PRIMARY_AT(28)}}
+.frame.hifi{background:radial-gradient(120% 80% at 50% 0%,${PRIMARY_AT(12)},transparent 65%),radial-gradient(90% 60% at 100% 100%,color-mix(in srgb,var(--w-surface) 50%,transparent),transparent 70%),var(--w-ground)}
+.frame.hifi :is(.appbar,.navbar,.tabbar,.pagehead){background:${PANE};backdrop-filter:${BLUR};-webkit-backdrop-filter:${BLUR};border-color:${INK_AT(10)}}
+.frame.hifi :is(.card,.stat,.list.inset,.table,.accordion,.dialog,.sheet){box-shadow:0 10px 28px ${INK_AT(10)},0 2px 6px ${INK_AT(5)},inset 0 1px 0 color-mix(in srgb,var(--w-ground) 70%,transparent);border-color:${INK_AT(10)}}
+.frame.hifi .card.tier.popular{border-color:var(--w-primary);box-shadow:0 12px 32px ${PRIMARY_AT(22)},0 2px 8px ${INK_AT(8)}}
+.frame.hifi .hero{padding:${S(2)};border-radius:${R(20, 1.5)};background:linear-gradient(145deg,color-mix(in srgb,var(--w-surface) 55%,var(--w-ground)),var(--w-ground));border:1px solid ${INK_AT(8)};box-shadow:0 8px 24px ${INK_AT(7)}}
+.frame.hifi :is(.btn.primary,.fab){box-shadow:0 4px 14px ${PRIMARY_AT(28)},0 1px 3px ${INK_AT(12)}}
+.frame.hifi :is(.fld .box,.composer .box,.search){background:var(--w-ground);border-color:${INK_AT(14)};box-shadow:inset 0 1px 2px ${INK_AT(5)}}
 `;
 
 /** The polish refinement sheet — empty when `spec.polish` is absent/empty or `layers.lofi === false`. */
@@ -779,4 +816,6 @@ export function embedWireSpec(html: string, spec: WireSpec): string {
 export const __WIRE_CSS = WIRE_CSS;
 /** For the tests: every surface's sheet, which must read roles and nothing else. */
 export const __SURFACE_CSS = SURFACE_CSS;
+export const __LOFI_CSS = LOFI_CSS;
+export const __HIFI_CSS = HIFI_CSS;
 export const __SKELETON_CSS = SKELETON_CSS;
