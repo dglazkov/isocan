@@ -315,3 +315,36 @@ describe("the canvas page lets its chrome meet the body's panels on one scale", 
     expect(bad, "a stacking context on .canvas-page buries its toasts and menus under the body's panels").toEqual([]);
   });
 });
+
+/**
+ * **The phone face's Inbox: over the face it has a slot in, under a slide.**
+ *
+ * The Inbox is mounted before the canvas page and the phone face inside it,
+ * both at `--z-float`, so once the page stopped being a stacking context (the
+ * rule above) the face won the tie by coming later and painted over the slot
+ * its own header keeps for the Inbox. Before that the page's stacking context
+ * put the Inbox over every presentation instead. Both were found by driving a
+ * 375px page with the Inbox on (`scripts/mobile-journeys.mjs`, 14 Oct 2026);
+ * this holds the order the journey walks: face < Inbox < full screen.
+ */
+describe("the phone face's Inbox sits between the face and a presentation", () => {
+  const layer = (file: string, selector: string): number => {
+    const sheet = appSheets.find((s) => s.file === file);
+    expect(sheet, `${file} is not a sheet the page loads`).toBeTruthy();
+    const rule = rules(sheet!.text).find((r) => selectorsOf(r).includes(selector));
+    expect(rule, `${selector} has no rule in ${file}`).toBeTruthy();
+    const token = rule!.body.match(/z-index:\s*var\((--z-[\w-]+)\)/)?.[1];
+    expect(token, `${selector} takes no layer from the scale`).toBeTruthy();
+    const value = css.match(new RegExp(`${token}:\\s*(\\d+)`))?.[1];
+    expect(value, `${token} has no number`).toBeTruthy();
+    return Number(value);
+  };
+
+  it("puts the Inbox over the face and under full screen", () => {
+    const face = layer("packages/web/src/components/phone.css", ".phone-face");
+    const inbox = layer("packages/web/src/components/mobile-navigation.css", "body:has(.phone-face) .navigation-inbox");
+    const fullscreen = layer("packages/web/src/styles.css", ".fullscreen");
+    expect(inbox, "the face paints over its own Inbox slot").toBeGreaterThan(face);
+    expect(inbox, "the Inbox shows through a presentation").toBeLessThan(fullscreen);
+  });
+});

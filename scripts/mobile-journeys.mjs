@@ -1,10 +1,19 @@
 #!/usr/bin/env node
-/** Actual touch input, against a synthetic daemon and a fresh browser badge. */
+/**
+ * Actual touch input, against a synthetic daemon and a fresh browser badge.
+ *
+ * Every Chrome here is `ownBrowser()` (`lib/own-browser.mjs`): stock, with no
+ * policy extensions, and reaped if the run is interrupted. Each starts with
+ * the Inbox experiment on, because the phone face gives the Inbox a slot in
+ * its header and a presentation must cover it, and with the experiment off
+ * both of those checks passed by finding nothing (14 Oct 2026).
+ */
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { browser, throughTheDoor, until } from "./lib/browser.mjs";
+import { throughTheDoor, until } from "./lib/browser.mjs";
+import { ownBrowser } from "./lib/own-browser.mjs";
 import { DaemonClient, connect } from "../index.mjs";
 const { startDaemon } = await import("@isocan/server/daemon");
 const { newCanvasId, BADGE_COOKIE, THREAD_QUERY, itemPath, deckPath, noteProperties } = await import("@isocan/core");
@@ -15,14 +24,21 @@ if (out) await mkdir(out, { recursive: true });
 const daemon = await startDaemon({ home, port: 0, contentPort: 0, auth: null, birthHome: null });
 const port = daemon.app.server.address().port;
 const origin = `http://127.0.0.1:${port}`;
-let b = await browser();
+async function fresh() {
+  const next = await ownBrowser();
+  await next.send("Page.addScriptToEvaluateOnNewDocument", { source: 'try { localStorage.setItem("isocan.experiments", JSON.stringify(["inbox"])); } catch {}' });
+  return next;
+}
+let b = await fresh();
 const touch = (type, points) => b.send("Input.dispatchTouchEvent", { type, touchPoints: points.map(([x, y, id = 1]) => ({ x, y, id })) });
 async function size(width, touchEnabled = true) {
   await b.send("Emulation.setDeviceMetricsOverride", { width, height: 812, deviceScaleFactor: 1, mobile: touchEnabled });
   await b.send("Emulation.setTouchEmulationEnabled", { enabled: touchEnabled, maxTouchPoints: 5 });
 }
+/** The first laid-out match's centre, and whether a finger there lands on it. Null when nothing matches. */
+const reach = (selector) => b.ev(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(selector)})].find(el=>el.getBoundingClientRect().width); if (!e) return null; const r = e.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2; return { x, y, hit: e.contains(document.elementFromPoint(x,y)) }; })()`);
 async function tap(selector) {
-  const box = await b.ev(`(() => { const e = [...document.querySelectorAll(${JSON.stringify(selector)})].find(el=>el.getBoundingClientRect().width); if (!e) return null; const r = e.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2; return { x, y, hit: e.contains(document.elementFromPoint(x,y)) }; })()`);
+  const box = await reach(selector);
   assert(box?.hit, `${selector} is reachable`);
   await touch("touchStart", [[box.x, box.y]]); await touch("touchEnd", []); await pause(200);
 }
@@ -36,6 +52,12 @@ try {
   await client.sendOp(null, h.actor, { type: "project.create", canvasId: id, title: "Acme mobile" });
   const canvas = await h.canvas(id);
   const first = await canvas.add({ title: "First", content: "# First\nA synthetic mobile example.", mime: "text/markdown", at: { x: 0, y: 0 }, size: { width: 300, height: 240 } });
+  // Faces that are not plain text, for the swipes that once never left them:
+  // a picture, and a design system, which scrolls by itself. A row under the
+  // first, so the plan's fit (and what lies under its fingers) is as it was.
+  const picture = await canvas.add({ title: "Picture", content: `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="240"><rect width="300" height="240" fill="#5b8"/></svg>`, mime: "image/svg+xml", at: { x: 0, y: 300 }, size: { width: 300, height: 240 } });
+  const systemContent = "# Acme system\n\n## Colours\n\n- primary: #5b8\n- ink: #222\n\n## Spacing\n\n- s: 4px\n- m: 8px\n";
+  const system = await canvas.add({ title: "System", content: systemContent, mime: "text/markdown", at: { x: 500, y: 300 }, size: { width: 300, height: 240 }, properties: { role: "design-system" } });
   const priorSeq = (await client.snapshot(id)).lastSeq;
   const second = await canvas.add({ title: "Second", content: "# Second\nThe next node.", mime: "text/markdown", at: { x: 500, y: 0 }, size: { width: 300, height: 240 } });
   const pinned = await canvas.comment(first.id, "Discuss the first node here.");
@@ -61,6 +83,10 @@ try {
   await b.send("Page.navigate", { url: `${origin}/p/${id}` });
   await until(b, '!!document.querySelector(".phone-face .main-panel textarea")', "Chat first");
   await until(b, '!!document.querySelector(".phone-digest [data-change-seq]")', "prior-seen digest");
+  // The phone face keeps a slot in its header for the Inbox, so the face must
+  // not paint over it (it did, from 9cad1bb57 until mobile-navigation.css said so).
+  await until(b, '!!document.querySelector(".navigation-inbox")', "the Inbox, experiment on");
+  assert((await reach(".navigation-inbox"))?.hit, "the phone face leaves its Inbox reachable");
   const digestSeqs = await b.ev('[...document.querySelectorAll(".phone-digest [data-change-seq]")].map(e => Number(e.dataset.changeSeq))');
   assert(digestSeqs.every(seq => seq > priorSeq), "digest starts after prior mark");
   assert(digestSeqs.includes(priorSeq+1), "visit did not erase the preceding insertion");
@@ -81,10 +107,27 @@ try {
   await until(b, '!!document.querySelector(".phone-node")', "node face");
   await tap(".edge-left");
   assert.equal(await b.ev('document.querySelector(".phone-node").dataset.nodeId'), first.id);
+  // On the TEXT, once it is there: until it loads, the face is a "…" placeholder,
+  // which is the swipe below on a picture, not this one.
+  await until(b, '!!document.querySelector(".phone-node .md-view")', "first node's text");
   await touch("touchStart", [[290, 320]]); await touch("touchMove", [[70, 320]]); await touch("touchEnd", []);
   await until(b, `document.querySelector(".phone-node")?.dataset.nodeId === ${JSON.stringify(second.id)}`, "node text swipe reaches next node");
   await touch("touchStart", [[70, 320]]); await touch("touchMove", [[290, 320]]); await touch("touchEnd", []);
   await until(b, `document.querySelector(".phone-node")?.dataset.nodeId === ${JSON.stringify(first.id)}`, "node text swipe returns");
+  // A face that is not text. `.phone-artifact` scrolls, and a scroller re-enables
+  // the browser's pan for everything in it, so this swipe was the browser's and
+  // was cancelled, every time, until phone.css gave the artifact its own pan-y.
+  await tap(".edge-down");
+  await until(b, `document.querySelector(".phone-node")?.dataset.nodeId === ${JSON.stringify(picture.id)} && document.querySelector(".phone-artifact img")?.complete`, "picture node, drawn");
+  await shot("phone-picture");
+  await touch("touchStart", [[290, 320]]); await touch("touchMove", [[70, 320]]); await touch("touchEnd", []);
+  await until(b, `document.querySelector(".phone-node")?.dataset.nodeId === ${JSON.stringify(system.id)}`, "image swipe reaches next node");
+  // A face that scrolls by itself re-enables the pan one level further in, so
+  // the face has to decline it too: a design system swallowed every swipe.
+  await until(b, '!!document.querySelector(".phone-artifact .ds-view")', "design-system node, drawn");
+  await touch("touchStart", [[70, 320]]); await touch("touchMove", [[290, 320]]); await touch("touchEnd", []);
+  await until(b, `document.querySelector(".phone-node")?.dataset.nodeId === ${JSON.stringify(picture.id)}`, "design-system swipe reaches next node");
+  await tap(".edge-up"); assert.equal(await b.ev('document.querySelector(".phone-node").dataset.nodeId'), first.id);
   await tap('.edge-right'); assert.equal(await b.ev('document.querySelector(".phone-node").dataset.nodeId'), second.id);
   assert.equal(await b.ev('document.querySelector(".edge-right").disabled'), true, "dead edge has no destination");
   await tap('.edge-left');
@@ -138,7 +181,7 @@ try {
   assert.notEqual(await viewport(), mouseBefore, "mouse can pan the phone plan without moving an item");
   assert.deepEqual(b.takeErrors(), []);
   await client.createGrant(id, "link", "read", h.actor.id);
-  await b.close(); b = await browser(); await size(375);
+  await b.close(); b = await fresh(); await size(375);
   const readLoad = b.once("Page.loadEventFired"); await b.send("Page.navigate", { url: origin }); await readLoad;
   await throughTheDoor(b, origin, "Reader", "mobile-reader"); await b.send("Page.navigate", { url: `${origin}/p/${id}` });
   await until(b, '!!document.querySelector(".phone-face .main-panel")', "read admission Chat");
@@ -154,7 +197,9 @@ try {
   await canvas.edit(second.id, { content: "# Second\n\n" + Array.from({ length: 40 }, (_, n) => `Paragraph ${n+1}: the reader scrolls this synthetic long slide.`).join("\n\n") });
   // Presentation proof uses a third slide to catch accidental double advancement.
   const third = await canvas.add({ title: "Third", mime: "text/html", content: `<!doctype html><button style="position:absolute;left:10px;top:10px;width:120px;height:60px" onclick="this.textContent='Pressed'">Press me</button>`, at: { x: 1000, y: 0 } });
-  for (const slide of [first, second, third]) await canvas.set(slide.id, { properties: { slide: "yes" } });
+  // And a slide that scrolls by itself, last in the deck.
+  const fourth = await canvas.add({ title: "Fourth", mime: "text/markdown", content: systemContent, at: { x: 1500, y: 0 }, size: { width: 300, height: 240 }, properties: { role: "design-system" } });
+  for (const slide of [first, second, third, fourth]) await canvas.set(slide.id, { properties: { slide: "yes" } });
   await canvas.add({ title: "First notes", mime: "text/markdown", content: "Remember the synthetic example.", properties: noteProperties(first.id) });
   async function presentation(label) {
     await b.send("Page.navigate", { url: origin + itemPath(id, first.id) });
@@ -166,9 +211,14 @@ try {
     assert.equal(await current(), first.id, `${label} first boundary`);
     await touch("touchStart", [[330, 400]]); await touch("touchEnd", []);
     await until(b, `document.querySelector(".fullscreen")?.dataset.presentedItem === ${JSON.stringify(second.id)}`, `${label} right-third tap`);
-    await until(b, 'document.querySelector(".present-position")?.textContent === "2 / 3"', `${label} deck position follows the tap`);
+    await until(b, 'document.querySelector(".present-position")?.textContent === "2 / 4"', `${label} deck position follows the tap`);
     // The bar keeps no slot for an Inbox the slide covers, so the title has room to be read.
-    assert.equal(await b.ev('(() => { const e = document.querySelector(".navigation-inbox"); if (!e) return false; const r = e.getBoundingClientRect(); return !!r.width && e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); })()'), false, `${label} no Inbox reachable over a presentation`);
+    // Present, and covered: with the Inbox absent this passed by finding nothing.
+    // The presenter has one; a nameless view-link visitor meets the Viewer
+    // without the app's navigation at all (`ViewerGate`), so has none to cover.
+    if (label === "fullscreen") await until(b, '!!document.querySelector(".navigation-inbox")', `${label} the Inbox, mounted under the slide`);
+    const inbox = await reach(".navigation-inbox");
+    assert.equal(inbox?.hit ?? false, false, `${label} no Inbox reachable over a presentation`);
     assert(await b.ev('document.querySelector(".mobile-presentation-bar strong").getBoundingClientRect().width') >= 80, `${label} title has room`);
     await touch("touchStart", [[40, 400]]); await touch("touchEnd", []);
     await until(b, `document.querySelector(".fullscreen")?.dataset.presentedItem === ${JSON.stringify(first.id)}`, `${label} left-third tap`);
@@ -181,8 +231,17 @@ try {
     await touch("touchStart", [[330, 400]]); await touch("touchEnd", []);
     await until(b, `document.querySelector(".fullscreen")?.dataset.presentedItem === ${JSON.stringify(third.id)}`, `${label} third slide`);
     await until(b, '!!document.querySelector(".fullscreen-stage iframe")', `${label} interactive frame`);
-    const frameTree = await b.send("Page.getFrameTree");
-    const frame = frameTree.frameTree.childFrames?.find(f => f.frame.url.includes(third.versions[0].blobHash));
+    // The element is in the DOM before its document commits: the frame tree
+    // holds the child at url "" for a moment, then at the blob (measured 14 Oct
+    // 2026, ~200ms). So wait for the commit; one read lost that race in 3 runs of 8.
+    let frame = null;
+    const deadline = Date.now() + 15_000;
+    for (;;) {
+      const { frameTree } = await b.send("Page.getFrameTree");
+      frame = frameTree.childFrames?.find(f => f.frame.url.includes(third.versions[0].blobHash)) ?? null;
+      if (frame || Date.now() > deadline) break;
+      await pause(100);
+    }
     assert(frame, `${label} content frame exists`);
     const { executionContextId } = await b.send("Page.createIsolatedWorld", { frameId: frame.frame.id });
     const frameValue = async(expression) => (await b.send("Runtime.evaluate", { expression, contextId: executionContextId, returnByValue: true })).result.value;
@@ -192,6 +251,12 @@ try {
     await until({ ev: frameValue }, 'document.querySelector("button").textContent === "Pressed"', `${label} frame owns touch`);
     assert.equal(await current(), third.id, `${label} iframe touch does not flip`);
     await shot(`${label}-presentation`);
+    // A slide that scrolls by itself re-enabled the browser's pan inside the
+    // stage's, and the swipe over it was the browser's, not the deck's.
+    await b.send("Page.navigate", { url: origin + itemPath(id, fourth.id) });
+    await until(b, `document.querySelector(".fullscreen")?.dataset.presentedItem === ${JSON.stringify(fourth.id)} && !!document.querySelector(".fullscreen-stage .ds-view")`, `${label} design-system slide`);
+    await touch("touchStart", [[70, 400]]); await touch("touchMove", [[190, 400]]); await touch("touchMove", [[290, 400]]); await touch("touchEnd", []);
+    await until(b, `document.querySelector(".fullscreen")?.dataset.presentedItem === ${JSON.stringify(third.id)}`, `${label} swipe on a design-system slide`);
     await b.send("Page.navigate", { url: origin + itemPath(id, first.id) });
     await until(b, '!!document.querySelector(".mobile-presentation-bar")', `${label} notes controls`);
     await tap('.mobile-presentation-bar button[aria-pressed]');
@@ -219,11 +284,11 @@ try {
   }
   await presentation("fullscreen");
   await b.send("Page.navigate", { url: origin + deckPath(id) });
-  await until(b, 'document.querySelectorAll(".deck-sheet").length === 3', "print deck still renders all slides");
+  await until(b, 'document.querySelectorAll(".deck-sheet").length === 4', "print deck still renders all slides");
   await client.createGrant(id, "link", "view", h.actor.id);
-  await b.close(); b = await browser(); await size(375);
+  await b.close(); b = await fresh(); await size(375);
   await presentation("viewer");
-  console.log("PASS mobile: stage 0 touch; stage 1a Chat, node walk, draft, plan, agents, capability and desktop restoration; stage 1c prior-seen digest and conversation links; stage 2 FullScreen/Viewer taps, swipe, deck position, boundaries, vertical gesture, iframe, notes by button and N, browser full screen, exit and print deck");
+  console.log("PASS mobile: stage 0 touch; stage 1a Chat, Inbox slot, node walk on text, a picture and a design system, draft, plan, agents, capability and desktop restoration; stage 1c prior-seen digest and conversation links; stage 2 FullScreen/Viewer taps, swipe (text and design system), deck position, boundaries, vertical gesture, iframe, notes by button and N, browser full screen, exit and print deck");
 } finally {
   await b.close(); await daemon.close();
   await rm(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
