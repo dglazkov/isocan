@@ -1,5 +1,5 @@
 {
-  "practice": "0.8.29",
+  "practice": "0.8.30",
   "files": {
     ".agents/skills/keel/SKILL.md": {
       "practice": "agents-md",
@@ -13,9 +13,13 @@
       "practice": "loop",
       "sha256": "ca5c1f60d9d800768c3cdbbd332f6f8dbde1c90f6cde1b0b3ae3b20cdfeabf38"
     },
+    ".github/workflows/keel-morning.yml": {
+      "practice": "night",
+      "sha256": "086ec314839e1e2bd8a728467185b2163535d62932ece7ff1a906eebb9efb61d"
+    },
     ".github/workflows/keel-night.yml": {
       "practice": "night",
-      "sha256": "72d716bb9d004a379037a69fa55724f0a582ad9c8ffe082df93c71eb4e38426e"
+      "sha256": "10bdb91d20ebeebd60f9b3fba1d590667fe782ce2e93abe910153ed82307e3c7"
     },
     "AGENTS.md#agents-md": {
       "practice": "agents-md",
@@ -45,13 +49,17 @@
       "practice": "renovate",
       "sha256": "da0f4ff37fe8862c2c34516fbdcf57492bef2643d05156d953c01bf0f472896d"
     },
+    "scripts/keel/canvas-recovery.mjs": {
+      "practice": "night",
+      "sha256": "79a1e1cf141119811589965afc78bf91c10cc8b7b78e150ec6c23121ddeb8ac0"
+    },
     "scripts/keel/ci.mjs": {
       "practice": "night",
       "sha256": "0af4960574107b1424314d254ced19e5339f01a27d73db808ef84b8e65b79a48"
     },
     "scripts/keel/drain.mjs": {
       "practice": "night",
-      "sha256": "04446d1796f5975e6ebf9d1f0d9729260b45b81c93782a9b867ea42784624aff"
+      "sha256": "1c49b5de5d7c8d3e229d1e220b4c6eee24737adc585d213a00d01815a32611ad"
     },
     "scripts/keel/hygiene-measures.mjs": {
       "practice": "night",
@@ -63,7 +71,7 @@
     },
     "scripts/keel/improve.mjs": {
       "practice": "night",
-      "sha256": "b10832d96abc185564fbc4879e74d0cc0ef632f0d6172d64ab71673516645a59"
+      "sha256": "a1521dc497f35c393ccb1d3f7de1bad6af885a520557f6bccb9a944beb98d42f"
     },
     "scripts/keel/lib.mjs": {
       "practice": "night",
@@ -72,6 +80,14 @@
     "scripts/keel/milestones.mjs": {
       "practice": "night",
       "sha256": "e37492e3518422faea8580916032aa7dcff314e499e627338ede403edb7dc3bb"
+    },
+    "scripts/keel/morning.mjs": {
+      "practice": "night",
+      "sha256": "50f0b21440fac84c26e2084b5763275b14290106f29fe964080c2492fc355cd1"
+    },
+    "scripts/keel/night-plan.mjs": {
+      "practice": "night",
+      "sha256": "a24e53e3916063e5891c1fcb77f2c90f231322fd8cb1df9d07b750553a060f72"
     },
     "scripts/keel/planning-config.mjs": {
       "practice": "night",

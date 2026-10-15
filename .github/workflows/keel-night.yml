@@ -10,8 +10,15 @@
 # requests"):
 #
 #   - Measure first. Nothing here fixes anything; the page proposes one change.
-#   - A bot writes a pull request, never to main. The only push names
-#     refs/heads/keel-night/<date>.
+#   - A plan before anything runs (scripts/keel/night-plan.mjs): the owner's
+#     from the branch keel-night-plan when it is dated tonight, else keel's
+#     default plan; the page shows it, and the PR commits it as it ended
+#     (docs/night/<date>.json). A default night writes its plan to
+#     keel-night-plan from the PR step (never over a plan for tonight or
+#     later), so climb and the robot tick it as they tick an owner's.
+#   - A bot writes a pull request, never to main. The pushes name
+#     refs/heads/keel-night/<date> and, for a default night's plan alone,
+#     refs/heads/keel-night-plan (with a lease); both from the PR step.
 #   - One open PR per queue, the newest; drain.mjs enforces it, not a person.
 #   - A merge is checked, not trusted. improve.mjs's gate measure may reuse
 #     the latest eligible configured default-branch push CI result on the
@@ -19,7 +26,7 @@
 #     evidence fall back to the local gate. PR CI may require approval;
 #     the newest night PR merges only when the gate measure passed and the
 #     PR holds nothing but data
-#     (tonight's dated health page, docs/inbox/, docs/INBOX.md,
+#     (tonight's dated health page, docs/night/<date>.json, docs/inbox/, docs/INBOX.md,
 #     .keel/bounds.json; never the rest of the health directory, which may be
 #     shared). The health directory is .keel/keel.json "health" (default
 #     docs/health), read at run time; one the project git-ignores, or one
@@ -120,6 +127,47 @@ jobs:
           elif [ -f package-lock.json ]; then
             npm ci
           fi
+
+      # Tonight's plan, before anything else runs (keel phase 73): the one on
+      # the plan branch keel-night-plan when it holds a valid plan dated for
+      # tonight (the run's UTC date, the date its page and PR carry), else
+      # keel's default plan (scripts/keel/night-plan.mjs: deterministic, no
+      # model). It says which, and why. The branch is only read here; a
+      # default night's plan is pushed to it later, from the PR step, the
+      # night's one step that writes. A plan that cannot be made (an input it cannot
+      # read, exit 2) or a branch that cannot be read is red at the verdict,
+      # after the measure has still run.
+      - name: Plan the night
+        id: plan
+        run: |
+          DAY=$(date -u +%F)
+          code=0
+          found=0
+          git ls-remote --exit-code --heads origin keel-night-plan > /dev/null || found=$?
+          ARGS=()
+          if [ "$found" = 0 ]; then
+            # The branch is there: a fetch that fails is a plan the night could
+            # not read (red), never "no plan file"; only a fetched branch with no
+            # plan file is the default plan.
+            fetched=0
+            git fetch -q --no-tags origin "+refs/heads/keel-night-plan:refs/remotes/origin/keel-night-plan" || fetched=$?
+            if [ "$fetched" != 0 ]; then
+              echo "::error::git fetch could not read the plan branch keel-night-plan (exit $fetched); tonight runs the default plan."
+              ARGS=(--branch-unread "git fetch exit $fetched")
+              code=2
+            elif git show "refs/remotes/origin/keel-night-plan:.keel/night/plan.json" > "$RUNNER_TEMP/branch-plan.json" 2> /dev/null; then
+              ARGS=(--branch-plan "$RUNNER_TEMP/branch-plan.json")
+            else
+              echo "plan: keel-night-plan holds no .keel/night/plan.json"
+            fi
+          elif [ "$found" != 2 ]; then
+            echo "::error::git ls-remote could not read the plan branch keel-night-plan (exit $found); tonight runs the default plan."
+            ARGS=(--branch-unread "git ls-remote exit $found")
+            code=2
+          fi
+          node scripts/keel/night-plan.mjs tonight --date "$DAY" "${ARGS[@]}" || code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "day=$DAY" >> "$GITHUB_OUTPUT"
 
       # On keel itself only (its .keel/keel.json says "keel": "self"): lesson
       # issues and moved sources become inbox proposals. It reads and writes
@@ -246,12 +294,24 @@ jobs:
       # The body is scripts/keel/pr-body.mjs's (Summary: the commit's files;
       # Evidence: the gate and the measures outside; Merge danger: two-way,
       # data only), from improve's --pr-input.
+      #
+      # First, a night that ran keel's default plan records it on the plan
+      # branch (night-plan.mjs publish, phase 78), so climb and the robot tick
+      # it: the plan as improve left it, only when the branch holds no plan for
+      # tonight or a later night (never the owner's), with a lease. This step
+      # is the night's only writer; the plan branch is the one more ref it
+      # pushes. A failure is red at the verdict, after the PR.
       - name: Open the night's pull request
+        id: pr
         env:
           DAY: ${{ steps.improve.outputs.day }}
+          PLAN_DAY: ${{ steps.plan.outputs.day }}
           BASE: ${{ github.event.repository.default_branch }}
           HEALTH: ${{ steps.health.outputs.dir }}
         run: |
+          published=0
+          node scripts/keel/night-plan.mjs publish --date "$PLAN_DAY" || published=$?
+          echo "publish=$published" >> "$GITHUB_OUTPUT"
           if [ -z "$HEALTH" ]; then
             echo "::error::No health directory was read from .keel/keel.json."
             exit 1
@@ -301,6 +361,22 @@ jobs:
             fi
             HEALTH_PATHS+=("$p")
           done < "$RUNNER_TEMP/health-paths.bin"
+          # The night's plan as it ended (improve wrote it from the working
+          # plan): one dated file, a regular one, never under a symlink.
+          RECORD="docs/night/$DAY.json"
+          if [ -e "$RECORD" ] || [ -L "$RECORD" ]; then
+            if [ -L docs ] || [ -L docs/night ] || [ -L "$RECORD" ] || [ ! -f "$RECORD" ]; then
+              echo "::error::$RECORD is not a regular file inside the repo; the plan record is not committed."
+              exit 1
+            fi
+            ignored=0
+            git check-ignore -q -- "$RECORD" || ignored=$?
+            if [ "$ignored" = 0 ]; then
+              echo "::error::$RECORD is git-ignored, so the night's plan record is never committed: stop ignoring docs/night/."
+              exit 1
+            fi
+            HEALTH_PATHS+=("$RECORD")
+          fi
           # check-ignore refuses literal pathspecs; every git call after it reads paths literally.
           export GIT_LITERAL_PATHSPECS=1
           PATHS=("${HEALTH_PATHS[@]}")
@@ -375,69 +451,10 @@ jobs:
           fi
           # Restore the latest canvas-enabled attempt, even when it failed:
           # its pending receipt may describe a write whose answer was lost.
-          recovery=$(node -e '
-            const fs = require("node:fs");
-            const path = require("node:path");
-            const { execFileSync } = require("node:child_process");
-            const repo = process.env.REPO, base = process.env.BASE;
-            const fail = message => { console.error(`::error::${message}`); process.exit(1); };
-            if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo ?? "") || !base) fail("Canvas recovery requires the current repository and default branch.");
-            if (!["schedule", "workflow_dispatch"].includes(process.env.GITHUB_EVENT_NAME) || process.env.GITHUB_REF_NAME !== base) fail("Canvas publication requires a default-branch night, never a PR or another branch.");
-            const api = endpoint => JSON.parse(execFileSync("gh", ["api", endpoint], { encoding: "utf8", timeout: 30000, maxBuffer: 8 * 1024 * 1024 }));
-            const runs = api(`repos/${repo}/actions/workflows/keel-night.yml/runs?branch=${encodeURIComponent(base)}&per_page=100`).workflow_runs;
-            if (!Array.isArray(runs)) fail("Cannot establish canvas recovery run history.");
-            const previous = [];
-            for (const run of runs) {
-              // Never a night queued behind this one (it has no state yet); a rerun of an old night still sees the nights after it.
-              if (String(run.id) === String(process.env.GITHUB_RUN_ID)) { if (Number(process.env.GITHUB_RUN_ATTEMPT) > 1) previous.push(api(`repos/${repo}/actions/runs/${run.id}/attempts/${Number(process.env.GITHUB_RUN_ATTEMPT) - 1}`)); }
-              else if (run.status === "completed" || Number(run.id) < Number(process.env.GITHUB_RUN_ID)) previous.push(run);
-            }
-            // The attempt that ran last comes first: a rerun of an old night ran after the nights it follows by ID.
-            const newestFirst = (a, b) => (Date.parse(b.run_started_at ?? "") || 0) - (Date.parse(a.run_started_at ?? "") || 0) || b.id - a.id || b.run_attempt - a.run_attempt;
-            const eligible = previous.filter(r => Number.isSafeInteger(r.id) && Number.isSafeInteger(r.run_attempt) && /^[a-f0-9]{40}$/.test(r.head_sha ?? "") && r.head_repository?.full_name === repo && r.repository?.full_name === repo && r.head_branch === base && r.path === ".github/workflows/keel-night.yml" && ["schedule", "workflow_dispatch"].includes(r.event) && Array.isArray(r.pull_requests) && r.pull_requests.length === 0)
-              .sort(newestFirst);
-            const bounded = file => fs.existsSync(file) && !fs.lstatSync(file).isSymbolicLink() && fs.lstatSync(file).isFile() && fs.statSync(file).size <= 64 * 1024 * 1024;
-            const provenanceOf = (file, run) => {
-              const p = JSON.parse(fs.readFileSync(file, "utf8")).provenance;
-              if (p?.repo !== repo || p.workflow !== ".github/workflows/keel-night.yml" || String(p.runId) !== String(run.id) || p.attempt !== run.run_attempt || p.headSha !== run.head_sha) fail("Recovery provenance does not match the selected attempt.");
-            };
-            let latest, file;
-            const queue = [...eligible];
-            while (queue.length) {
-              const run = queue.shift();
-              const committed = api(`repos/${repo}/contents/.keel/keel.json?ref=${run.head_sha}`);
-              if (committed.encoding !== "base64" || typeof committed.content !== "string" || committed.size > 1024 * 1024) fail("Cannot establish whether the previous night had canvas enabled.");
-              const config = JSON.parse(Buffer.from(committed.content, "base64").toString("utf8"));
-              if (config.canvas?.enabled !== true || config.canvas?.cadence !== "nightly") continue;
-              if (run.status !== "completed") fail("The latest canvas night is not completed; do not race or restore older state.");
-              const name = `keel-canvas-night-${run.run_attempt}`;
-              const list = api(`repos/${repo}/actions/runs/${run.id}/artifacts?per_page=100`).artifacts;
-              if (!Array.isArray(list)) fail("Cannot list the trusted night artifacts.");
-              const found = list.filter(a => a.name === name && !a.expired && a.workflow_run?.id === run.id && a.workflow_run?.head_sha === run.head_sha && a.size_in_bytes > 0 && a.size_in_bytes <= 64 * 1024 * 1024);
-              if (found.length !== 1) fail("Latest expected attempt recovery artifact missing, expired, oversized or ambiguous. Manual recovery required; refusing older state.");
-              const dir = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "canvas-recovery-"));
-              execFileSync("gh", ["run", "download", String(run.id), "--repo", repo, "--name", name, "--dir", dir], { timeout: 60000, maxBuffer: 1024 * 1024 });
-              file = path.join(dir, "recovery.json");
-              const never = path.join(dir, "never-ran.json");
-              // An attempt whose preflight failed never touched the canvas: recover from the attempt before it,
-              // in this run if it was a rerun, else the run before.
-              if (!fs.existsSync(file) && bounded(never)) {
-                provenanceOf(never, run);
-                // Its earlier attempt takes its place in time order, never ahead of a night that ran after it.
-                if (run.run_attempt > 1) { queue.push(api(`repos/${repo}/actions/runs/${run.id}/attempts/${run.run_attempt - 1}`)); queue.sort(newestFirst); }
-                continue;
-              }
-              if (!bounded(file)) fail("The trusted artifact has no bounded recovery.json; snapshots alone cannot reconstruct ownership.");
-              provenanceOf(file, run);
-              latest = run;
-              break;
-            }
-            if (!latest) {
-              if (fs.existsSync(".keel/canvas/manifest.json")) process.exit(0); // explicit bootstrap; night validates it
-              fail("No prior canvas night journal exists. Provision the original connection manifest through setup; never reconnect automatically.");
-            }
-            console.log(file);
-          ') || preflight_fail "Canvas recovery stopped before the canvas was touched; this attempt is recorded as never run."
+          # The night and keel-morning's plan card (phase 78) write one
+          # journal, so the newest attempt of either is the one restored
+          # (scripts/keel/canvas-recovery.mjs holds the rules).
+          recovery=$(node scripts/keel/canvas-recovery.mjs --workflow keel-night.yml) || preflight_fail "Canvas recovery stopped before the canvas was touched; this attempt is recorded as never run."
           export KEEL_CANVAS_RECOVERY="$recovery"
           export KEEL_CANVAS_PERSISTENCE=artifact-v1
           export KEEL_ISOCAN="$(command -v isocan)"
@@ -474,9 +491,19 @@ jobs:
           CANVAS_OUTCOME: ${{ steps.canvas.outcome }}
           CODE: ${{ steps.improve.outputs.code }}
           GATE: ${{ steps.improve.outputs.gate }}
+          PLAN: ${{ steps.plan.outputs.code }}
+          PUBLISH: ${{ steps.pr.outputs.publish }}
         run: |
           if [ "$CANVAS_OUTCOME" = failure ]; then
             echo "::error::Canvas projection failed; the health report and queue were still processed."
+            exit 1
+          fi
+          if [ "$PLAN" != 0 ]; then
+            echo "::error::Tonight's plan could not be made or read (night-plan.mjs exit ${PLAN:-none}); the Plan the night step says which input."
+            exit 1
+          fi
+          if [ -n "$PUBLISH" ] && [ "$PUBLISH" != 0 ]; then
+            echo "::error::Tonight's default plan could not be written to keel-night-plan (night-plan.mjs publish exit $PUBLISH); the passes will not tick it. The PR step says why."
             exit 1
           fi
           if [ "$CODE" = 2 ] || [ -z "$CODE" ]; then
