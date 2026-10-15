@@ -42,8 +42,10 @@ export function chatHiddenNow(search = searchAtLoad()): boolean {
 
 type BuiltinPanel = "main" | "files" | "agents" | "context" | "personas";
 type ExtensionPanelKey = `panel:${string}`;
+/** A built-in left-dock panel or a canvas-carried panel (`panel:<itemId>`). */
 export type Panel = BuiltinPanel | ExtensionPanelKey;
 
+/** The dock key for a canvas-carried panel item (`panel:<itemId>`). */
 export function extensionPanelKey(itemId: string): ExtensionPanelKey {
   return `panel:${itemId}`;
 }

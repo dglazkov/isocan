@@ -21,6 +21,7 @@ import { useCanvasStore } from "../stores/canvasStore.ts";
  */
 export { EXTENSION_COLORS, extensionColor };
 
+/** One resolved `role=panel` item on the canvas, ready for the left dock. */
 export interface CanvasPanel {
   itemId: string;
   /** The manifest's validated title, or the item's title when unreadable. */
@@ -80,6 +81,7 @@ export function panelUnavailableSentence(entry: CanvasPanel): string {
   return `${entry.title} is unavailable — ${entry.problem}`;
 }
 
+/** Subscribe to and resolve all `role=panel` items on `canvasId`. */
 export function useCanvasPanels(canvasId: string): CanvasPanel[] {
   const canvas = useCanvasStore((s) => s.canvas);
   const [, bump] = useState(0);

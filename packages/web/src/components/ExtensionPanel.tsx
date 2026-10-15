@@ -1,6 +1,7 @@
 import { useUiStore } from "../stores/uiStore.ts";
 import { extensionPanelKey, openPanel } from "../lib/panels.ts";
 import {
+  extensionColor,
   panelUnavailableSentence,
   useCanvasPanels,
   type CanvasPanel,
@@ -27,16 +28,15 @@ export function ExtensionPanelSurface({
   active,
   panels,
   origin,
-  panelWidth = 320,
   onClose,
 }: {
   canvasId: string;
   active: CanvasPanel;
   panels: CanvasPanel[];
   origin: ContentOrigin | null;
-  panelWidth?: number;
   onClose: () => void;
 }) {
+  const panelWidth = useUiStore((s) => s.panelWidth);
   const frame = active.panel
     ? panelFrame(origin, canvasId, active.panel.bytes.blobHash)
     : null;
@@ -108,10 +108,10 @@ export function ExtensionPanelSurface({
   );
 }
 
+/** The left-dock container that mounts the active canvas-carried panel extension. */
 export function ExtensionPanel({ canvasId }: { canvasId: string }) {
   const open = useUiStore((s) => s.extensionPanelOpen);
   const activeId = useUiStore((s) => s.extensionPanelId);
-  const panelWidth = useUiStore((s) => s.panelWidth);
   const panels = useCanvasPanels(canvasId);
   const hashes = panels.flatMap((p) => (p.panel ? [p.panel.bytes.blobHash] : []));
   const origin = useContentOrigin(canvasId, hashes);
@@ -122,7 +122,7 @@ export function ExtensionPanel({ canvasId }: { canvasId: string }) {
     panels[0] ?? {
       itemId: activeId,
       title: activeId,
-      color: "#5b6b7a",
+      color: extensionColor(activeId),
       problem: "this panel is no longer on the canvas",
     };
 
@@ -132,7 +132,6 @@ export function ExtensionPanel({ canvasId }: { canvasId: string }) {
       active={active}
       panels={panels}
       origin={origin}
-      panelWidth={panelWidth}
       onClose={() => openPanel(canvasId, null)}
     />
   );

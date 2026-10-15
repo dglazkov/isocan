@@ -17,7 +17,7 @@ import {
   panelUnavailableSentence,
   resolveCanvasPanel,
 } from "../src/lib/panelExtensions.ts";
-import { extensionPanelItemId, extensionPanelKey, openPanel } from "../src/lib/panels.ts";
+import { extensionPanelKey, openPanel } from "../src/lib/panels.ts";
 import { dockEdges, railIsOpen } from "../src/lib/stage.ts";
 import { useUiStore } from "../src/stores/uiStore.ts";
 
@@ -195,8 +195,7 @@ describe("extensions phase 4: the panel frame on the content origin", () => {
 
   it("treats an open canvas panel as a first-class dock occupant in railIsOpen and dockEdges", () => {
     const key = extensionPanelKey("itm_panel");
-    expect(extensionPanelItemId(key)).toBe("itm_panel");
-    expect(extensionPanelItemId("files")).toBeNull();
+    expect(key).toBe("panel:itm_panel");
 
     openPanel("prj_acme", key, false, false);
     const ui = useUiStore.getState();
