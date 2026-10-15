@@ -4652,7 +4652,17 @@ export default async function act({ prompt, cli, cwd }) {
         runCli("--canvas", id, "comment", "reply", asked.threadId, "rework the checkout screen too, pickup first");
         await waitFor(() => chat(id).some((c) => /The plan as it stands/.test(c.body)), "Kit restating the plan");
         runCli("--canvas", id, "goodnight", "plan");
-        await waitFor(() => chat(id).some((c) => c.goodnight?.step === "brief"), "the night's brief", 90_000);
+        // The tab she said goodnight in stays open all night, and the review is
+        // owed to her coming back, not to that tab re-rendering. It did mount
+        // mid-night (15 Oct 2026): the desktop gate read the note on every
+        // render, phase 6's ripple pulse re-rendered the canvas on Kit's first
+        // fill, the review closed the note, and Kit's named edit of Checkout
+        // was refused, so no brief ever came. Watched while the night runs.
+        for (const end = Date.now() + 90_000; ; await sleep(400)) {
+          if (await b.ev(`!!document.querySelector("[data-away-panel]")`)) throw new Error("the morning review showed in the evening's own tab during the night (it closes the note, and the night's named edit is then refused)");
+          if (chat(id).some((c) => c.goodnight?.step === "brief")) break;
+          if (Date.now() > end) throw new Error("timed out waiting for the night's brief");
+        }
         const review = runCli("--canvas", id, "goodnight", "review");
         if (!review.due) throw new Error(`the review is not due after the night: ${review.notDue}`);
 

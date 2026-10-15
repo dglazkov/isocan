@@ -338,6 +338,12 @@ function CanvasSurface({
     phoneVisit.current = { tab: wbItemId ? "Canvas" : "Chat", itemId: wbItemId ?? null, plan: false };
   }
   const [priorVisit, setPriorVisit] = useState<PriorVisit | null>(null);
+  /* Whether a goodnight note stood here when this visit arrived. The desktop's
+     morning review is owed to an arrival, so this is read once, as the prior
+     visit lands, and never on a later render: read per render, the tab the
+     goodnight was said in mounted the review mid-night and closed the note
+     under the lead's feet (proactive-morning, 15 Oct 2026). */
+  const [noteOnArrival, setNoteOnArrival] = useState(false);
   const arrived = canvasTitle !== null;
   const { search } = useLocation();
   const requestedThread = new URLSearchParams(search).get(THREAD_QUERY);
@@ -352,7 +358,12 @@ function CanvasSurface({
     // `lib/seen.ts`, where the reason is a bug a browser found.
     let live = true;
     setPriorVisit(null);
-    void noteVisit(canvasId, useCanvasStore.getState().lastSeq, actor.id).then((prior) => { if (live) setPriorVisit(prior); });
+    setNoteOnArrival(false);
+    void noteVisit(canvasId, useCanvasStore.getState().lastSeq, actor.id).then((prior) => {
+      if (!live) return;
+      setNoteOnArrival(Object.values(useCanvasStore.getState().canvas?.items ?? {}).some((i) => i.properties.handoff));
+      setPriorVisit(prior);
+    });
     // Pets follow (pets phase 2): the same once-per-arrival moment, lazily —
     // `lib/pets.ts`, reached through the join chunk, decides in core whether
     // anybody comes.
@@ -1261,8 +1272,8 @@ function CanvasSurface({
         </Suspense>
       )}
       <OwnCursor actor={actor} />
-      {/* The morning review on desktop: only where a goodnight note stands. */}
-      {!phone && priorVisit?.canvasId === canvasId && Object.values(useCanvasStore.getState().canvas?.items ?? {}).some((i) => i.properties.handoff) && <Suspense><AwayPanel key={canvasId} prior={priorVisit} actor={actor} /></Suspense>}
+      {/* The morning review on desktop: only where a goodnight note stood on arrival. */}
+      {!phone && priorVisit?.canvasId === canvasId && noteOnArrival && <Suspense><AwayPanel key={canvasId} prior={priorVisit} actor={actor} /></Suspense>}
       {phone && <Suspense><PhoneFace key={`${canvasId}:${actor.id}`} canvasId={canvasId} actor={actor} visit={phoneVisit} prior={priorVisit?.canvasId === canvasId && priorVisit.actorId === actor.id ? priorVisit : null} /></Suspense>}
       {/* Last, so it covers the panels and the toolbar: full screen means the
           screen. Driven by the route rather than by state — see
