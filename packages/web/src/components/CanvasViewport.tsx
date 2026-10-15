@@ -21,6 +21,7 @@ import { groundIsPlace, hasGround, isArea, parseUriList, reachHeld } from "@isoc
 import { actorColor } from "../lib/colors.ts";
 import { publishCursor, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { useSettling } from "../lib/settling.ts";
+import { useViewportLookahead } from "../lib/lookahead.ts";
 import { type Tool, useUiStore } from "../stores/uiStore.ts";
 import { pan, pinch, pinchFactor, screenToWorld, worldToScreen, zoomAt, type TwoPoints, type Viewport } from "../lib/viewport.ts";
 import { moduleDropFor } from "../modules.ts";
@@ -1230,6 +1231,7 @@ export function CanvasViewport({ canvasId, actor, onPlanItem, currentNode }: { c
   const items = useMemo(() => canvas
     ? Object.values(canvas.items).filter((item) => (!presentation?.isolate || presentation.items[item.id]) && (!groupUnderStack(canvas, item.id) || held?.includes(item.id))).sort((a, b) => Number(isArea(b) || isGroupItem(b)) - Number(isArea(a) || isGroupItem(a)) || (isGroupItem(a) && isGroupItem(b) ? groupAncestors(canvas, a.id).length - groupAncestors(canvas, b.id).length : 0))
     : [], [canvas, presentation, held]);
+  useViewportLookahead(canvasId, items, ref);
 
   return (
     <Follows

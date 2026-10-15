@@ -9,8 +9,9 @@ const inflight = new Map<string, Promise<string | null>>();
 
 let activeTasks = 0;
 const pendingQueue: Array<() => void> = [];
+const calmWaiters = new Map<string, () => void>();
 
-function runLimited<T>(fn: () => Promise<T>): Promise<T> {
+function runLimited<T>(fn: () => Promise<T>, eager = false): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const start = () => {
       activeTasks++;
@@ -23,6 +24,7 @@ function runLimited<T>(fn: () => Promise<T>): Promise<T> {
         });
     };
     if (activeTasks < MAX_CONCURRENT) start();
+    else if (eager) pendingQueue.unshift(start);
     else pendingQueue.push(start);
   });
 }
@@ -43,13 +45,30 @@ function rememberSnapshot(key: string, url: string): void {
   }
 }
 
-function waitUntilCalm(delayMs: number): Promise<void> {
+function waitUntilCalm(blobHash: string, delayMs: number, eager: boolean): Promise<void> {
+  if (eager) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
   return new Promise((resolve) => {
+    let settled = false;
+    let unsub: (() => void) | undefined;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      calmWaiters.delete(blobHash);
+      unsub?.();
+      resolve();
+    };
+    calmWaiters.set(blobHash, finish);
     const check = () => {
+      if (settled) return;
       if (useUiStore.getState().panning) {
-        const unsub = useUiStore.subscribe((s, prev) => {
+        unsub = useUiStore.subscribe((s, prev) => {
           if (!s.panning && prev.panning) {
-            unsub();
+            unsub?.();
+            unsub = undefined;
             setTimeout(check, delayMs);
           }
         });
@@ -57,11 +76,11 @@ function waitUntilCalm(delayMs: number): Promise<void> {
       }
       // The page can be gone by the time the delay ends (a test's DOM torn
       // down under a pending timer threw "window is not defined" in CI).
-      if (typeof window === "undefined") return resolve();
+      if (typeof window === "undefined") return finish();
       if ("requestIdleCallback" in window) {
-        window.requestIdleCallback(() => resolve(), { timeout: 200 });
+        window.requestIdleCallback(() => finish(), { timeout: 200 });
       } else {
-        setTimeout(resolve, 16);
+        setTimeout(finish, 16);
       }
     };
     setTimeout(check, delayMs);
@@ -241,61 +260,82 @@ async function renderHtmlBlobSnapshot(
   blobHash: string,
   width: number,
   height: number,
+  eager = false,
 ): Promise<string | null> {
   const cached = snapshotUrls.get(blobHash);
   if (cached) return cached;
   const existing = inflight.get(blobHash);
-  if (existing) return existing;
+  if (existing) {
+    if (eager) calmWaiters.get(blobHash)?.();
+    return existing;
+  }
 
-  const task = runLimited(async () => {
-    await waitUntilCalm(16);
-    try {
-      const html = await readBlobText(canvasId, blobHash);
-      const w = Math.max(160, Math.round(width) || 880);
-      const h = Math.max(120, Math.round(height) || 640);
-      const targetW = Math.min(w, 960);
-      const targetH = Math.max(120, Math.round(h * (targetW / w)));
+  const task = (async () => {
+    await waitUntilCalm(blobHash, 16, eager);
+    return runLimited(async () => {
+      try {
+        const html = await readBlobText(canvasId, blobHash);
+        const w = Math.max(160, Math.round(width) || 880);
+        const h = Math.max(120, Math.round(height) || 640);
+        const targetW = Math.min(w, 960);
+        const targetH = Math.max(120, Math.round(h * (targetW / w)));
 
-      const svg = sanitizeDocumentToSvg(html, w, h);
-      const svgImg = new Image();
-      svgImg.decoding = "async";
-      svgImg.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-      await svgImg.decode();
+        const svg = sanitizeDocumentToSvg(html, w, h);
+        const svgImg = new Image();
+        svgImg.decoding = "async";
+        svgImg.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        await svgImg.decode();
 
-      let objectUrl: string | null = null;
-      const canvas = document.createElement("canvas");
-      canvas.width = targetW;
-      canvas.height = targetH;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(svgImg, 0, 0, targetW, targetH);
-        const webp = await new Promise<Blob | null>((resolve) => {
-          try {
-            canvas.toBlob(resolve, "image/webp", 0.86);
-          } catch {
-            resolve(null);
-          }
-        });
-        if (webp) objectUrl = URL.createObjectURL(webp);
+        let objectUrl: string | null = null;
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(svgImg, 0, 0, targetW, targetH);
+          const webp = await new Promise<Blob | null>((resolve) => {
+            try {
+              canvas.toBlob(resolve, "image/webp", 0.86);
+            } catch {
+              resolve(null);
+            }
+          });
+          if (webp) objectUrl = URL.createObjectURL(webp);
+        }
+        if (!objectUrl) {
+          objectUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+        }
+        const warm = new Image();
+        warm.decoding = "async";
+        warm.src = objectUrl;
+        await warm.decode().catch(() => {});
+        rememberSnapshot(blobHash, objectUrl);
+        return objectUrl;
+      } catch {
+        return null;
+      } finally {
+        calmWaiters.delete(blobHash);
+        inflight.delete(blobHash);
       }
-      if (!objectUrl) {
-        objectUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
-      }
-      const warm = new Image();
-      warm.decoding = "async";
-      warm.src = objectUrl;
-      await warm.decode().catch(() => {});
-      rememberSnapshot(blobHash, objectUrl);
-      return objectUrl;
-    } catch {
-      return null;
-    } finally {
-      inflight.delete(blobHash);
-    }
-  });
+    }, eager);
+  })();
 
   inflight.set(blobHash, task);
   return task;
+}
+
+/**
+ * Eagerly warm the WebP raster snapshot for an upcoming HTML screen along the
+ * camera's directional lookahead vector, bypassing the pan-settle pause so the
+ * proxy image is already decoded when the card crosses into the viewport.
+ */
+export function warmHtmlSnapshot(
+  canvasId: string,
+  blobHash: string,
+  width: number,
+  height: number,
+): Promise<string | null> {
+  return renderHtmlBlobSnapshot(canvasId, blobHash, width, height, true);
 }
 
 /** The cached still picture of an HTML item's blob, as an object URL — null until it has rendered, or while `enabled` is false. */
@@ -305,6 +345,7 @@ export function useHtmlSnapshot(
   width: number,
   height: number,
   enabled: boolean,
+  eager = false,
 ): string | null {
   const [url, setUrl] = useState<string | null>(() => snapshotUrls.get(blobHash) ?? null);
 
@@ -317,13 +358,13 @@ export function useHtmlSnapshot(
     setUrl(null);
     if (!enabled) return;
     let alive = true;
-    void renderHtmlBlobSnapshot(canvasId, blobHash, width, height).then((got) => {
+    void renderHtmlBlobSnapshot(canvasId, blobHash, width, height, eager).then((got) => {
       if (alive && got) setUrl(got);
     });
     return () => {
       alive = false;
     };
-  }, [canvasId, blobHash, width, height, enabled]);
+  }, [canvasId, blobHash, width, height, enabled, eager]);
 
   return url;
 }

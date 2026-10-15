@@ -50,6 +50,7 @@ import {
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { loadTextFont } from "../lib/textfont.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
+import { useLookahead } from "../lib/lookahead.ts";
 import { useContentOrigin } from "../lib/contentBase.ts";
 import { itemFrame, useFrameSrc } from "../lib/frame.ts";
 import { readabilityBand, showsLiveFrame, useHtmlSnapshot } from "../lib/htmlsnapshot.ts";
@@ -173,7 +174,9 @@ function ItemViewInner({
    * canvas you arrive somewhere by panning, and content should be there when
    * you get there rather than appearing after you stop.
    */
-  const { ref: liveRef, onScreen: nearWindow } = useOnScreen<HTMLDivElement>("800px");
+  const { ref: liveRef, onScreen: observedNearWindow } = useOnScreen<HTMLDivElement>("800px");
+  const inLookahead = useLookahead(item.id);
+  const nearWindow = observedNearWindow || inLookahead;
   const colors = useActorColors();
   const names = useActorNames();
   // The curtain applies to the WALL — the Vote sheet's contents — and only
@@ -1278,6 +1281,8 @@ function ItemViewInner({
               picture
               reloadToken={reloadToken}
               liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
+              snapshotOnly={(!roomy || !observedNearWindow) && !entered}
+              eagerSnapshot={inLookahead}
             />
           );
         })()}
@@ -1577,6 +1582,8 @@ function VersionFace({
   designVersion,
   actor,
   picture = false,
+  snapshotOnly,
+  eagerSnapshot,
 }: {
   canvasId: string;
   designVersion?: ItemVersion | undefined;
@@ -1584,6 +1591,13 @@ function VersionFace({
    *  picture instead of its live page (`showsLiveFrame`). Everywhere else —
    *  full screen, the stage, the viewer — a screen is always its live page. */
   picture?: boolean;
+  /** Mounted ahead of motion (`!observedNearWindow`) or too small on screen
+   *  for chrome (`!roomy`): render the cached WebP picture alone and never
+   *  mount a live `<iframe>`. */
+  snapshotOnly?: boolean | undefined;
+  /** Inside the camera's directional lookahead corridor: decode the WebP
+   *  picture without waiting for panning to stop. */
+  eagerSnapshot?: boolean | undefined;
   actor?: Actor | undefined;
   blobHash: string;
   mimeType: string;
@@ -1703,6 +1717,8 @@ function VersionFace({
         picture={picture}
         width={size?.width}
         height={size?.height}
+        snapshotOnly={snapshotOnly}
+        eagerSnapshot={eagerSnapshot}
       />
     );
   }
@@ -1805,6 +1821,8 @@ function HtmlItemView({
   picture,
   width,
   height,
+  snapshotOnly = false,
+  eagerSnapshot = false,
 }: {
   canvasId: string;
   blobHash: string;
@@ -1819,8 +1837,10 @@ function HtmlItemView({
   picture: boolean;
   width?: number | undefined;
   height?: number | undefined;
+  snapshotOnly?: boolean | undefined;
+  eagerSnapshot?: boolean | undefined;
 }) {
-  const origin = useContentOrigin(canvasId, [blobHash, ...warm]);
+  const origin = useContentOrigin(canvasId, snapshotOnly ? [] : [blobHash, ...warm]);
   const stack = useRef<HTMLDivElement>(null);
   // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
   // loaded with. A renewed signature is for the same bytes, and swapping it
@@ -1831,13 +1851,14 @@ function HtmlItemView({
   const [heldSpot, setSpot] = useState<FrameSpot>({ itemId, blobHash, reported: null, carried: null });
   const spot = nextSpot(heldSpot, itemId, blobHash);
   if (spot !== heldSpot) setSpot(spot);
-  const src = frame ? anchored(frame.src, spot.carried ?? anchor) : null;
+  const src = !snapshotOnly && frame ? anchored(frame.src, spot.carried ?? anchor) : null;
   const snapshotUrl = useHtmlSnapshot(
     canvasId,
     blobHash,
     width ?? 880,
     height ?? 640,
-    picture && Boolean(src),
+    (picture && Boolean(src)) || snapshotOnly || eagerSnapshot,
+    eagerSnapshot,
   );
   const [proxyReady, setProxyReady] = useState(false);
   useEffect(() => {
@@ -1847,16 +1868,18 @@ function HtmlItemView({
   // scale would re-render every screen on every step of a zoom.
   const band = useUiStore((s) => (picture ? readabilityBand(s.viewport.scale) : 2));
   const panning = useUiStore((s) => picture && s.panning);
-  const [live, setLive] = useState(true);
-  const wantLive = showsLiveFrame({
-    picture,
-    entered: entered || Boolean(actor),
-    warm: warm.length,
-    pictureReady: proxyReady && snapshotUrl !== null,
-    band,
-    panning,
-    wasLive: live,
-  });
+  const [live, setLive] = useState(!snapshotOnly);
+  const wantLive =
+    !snapshotOnly &&
+    showsLiveFrame({
+      picture,
+      entered: entered || Boolean(actor),
+      warm: warm.length,
+      pictureReady: proxyReady && snapshotUrl !== null,
+      band,
+      panning,
+      wasLive: live,
+    });
   if (wantLive !== live) setLive(wantLive);
   useEffect(() => {
     if (!itemId || !actor) return;
@@ -1876,7 +1899,7 @@ function HtmlItemView({
     window.addEventListener("message", hear);
     return () => window.removeEventListener("message", hear);
   }, [canvasId, itemId, actor, src]);
-  if (!src || !frame) return <div className="html-view" />;
+  if (!snapshotUrl && (!wantLive || !src || !frame)) return <div className="html-view" />;
   return (
     <div className={`html-view-surface${proxyReady ? " has-snapshot" : ""}`}>
       {snapshotUrl && (
@@ -1889,7 +1912,7 @@ function HtmlItemView({
           onLoad={() => requestAnimationFrame(() => setProxyReady(true))}
         />
       )}
-      {wantLive && (
+      {wantLive && src && frame && (
         <HtmlView
           stackRef={stack}
           // Over its picture, a frame arrives the way a slide does: unseen
