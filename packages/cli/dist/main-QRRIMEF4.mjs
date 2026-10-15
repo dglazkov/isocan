@@ -55,7 +55,7 @@ import {
   resolveCanvas,
   resolveCtx,
   resolveDeclared
-} from "./chunk-XBXJGJAZ.mjs";
+} from "./chunk-ILQQGD5C.mjs";
 import {
   prepareDesignReviewCompletion,
   prepareDesignReviewHandoff,
@@ -115,7 +115,7 @@ import {
   retireStrandedIdentities,
   shaOfRoot,
   writeIdentity
-} from "./chunk-52MFMJIK.mjs";
+} from "./chunk-DEPDUI3U.mjs";
 import {
   bindableRoot,
   buildStamp,
@@ -144,7 +144,7 @@ import {
   updateConfigFile,
   writeGoogleToken,
   writeMarker
-} from "./chunk-BYY4THWU.mjs";
+} from "./chunk-JNV7IFSE.mjs";
 import {
   DaemonRoutes
 } from "./chunk-HPFTKOB6.mjs";
@@ -16643,7 +16643,7 @@ program2.command("mcp").description(
   "Speak MCP on stdio, so an agent in another tool can collaborate on this canvas (spawned by an agent manager, not typed)"
 ).action(
   run(async () => {
-    const { serveStdio } = await import("./src-3JDLALWR.mjs");
+    const { serveStdio } = await import("./src-4WZZOPB5.mjs");
     await serveStdio({ version: buildStamp().version });
     await new Promise(() => {
     });
@@ -16658,14 +16658,14 @@ program2.command("serve").alias("start").description("Run the state daemon (auto
       throw refuseDaemonVerb("serve", declared.at ?? "its home");
     }
     if (opts.foreground) {
-      const { runDaemon } = await import("./daemon-7LI75KOH.mjs");
+      const { runDaemon } = await import("./daemon-EPTKO6SM.mjs");
       await runDaemon({ port, home: home3, ...opts.force ? { takeover: true } : {} });
       return new Promise(() => {
       });
     }
     const client = new DaemonClient(`http://127.0.0.1:${port}`, home3);
     if (opts.force) {
-      const { stopDaemons } = await import("./daemon-7LI75KOH.mjs");
+      const { stopDaemons } = await import("./daemon-EPTKO6SM.mjs");
       const stopped = await stopDaemons(port, home3);
       if (stopped.length > 0) console.log(`stopped daemon ${stopped.join(", ")}`);
     } else if (await client.health()) {
@@ -16854,7 +16854,7 @@ async function rosterCaveat(ctx, canvasId) {
   return why === null ? null : `this is only who this machine can see \u2014 ${why}`;
 }
 async function restartDaemon(home3, port) {
-  const { stopDaemons } = await import("./daemon-7LI75KOH.mjs");
+  const { stopDaemons } = await import("./daemon-EPTKO6SM.mjs");
   const stopped = await stopDaemons(port, home3);
   const client = new DaemonClient(`http://127.0.0.1:${port}`, home3);
   await client.ensureDaemon();
@@ -17331,7 +17331,7 @@ function say(adoption) {
 }
 program2.command("stop").description("Stop the daemon \u2014 asks the port who it is, so a stale one can't hide").action(
   run(async (_opts, cmd) => {
-    const { stopDaemons } = await import("./daemon-7LI75KOH.mjs");
+    const { stopDaemons } = await import("./daemon-EPTKO6SM.mjs");
     const declared = await resolveDeclared(paths_exports.isocanHome());
     if (declared?.mode === "direct") {
       throw refuseDaemonVerb("stop", declared.at ?? "its home");
@@ -17409,7 +17409,7 @@ program2.command("share").description('Who may enter this canvas: the address to
     let desk;
     const sharing = opts.check || opts.revoke === void 0 && opts.bar === void 0 && opts.unbar === void 0 && opts.public === void 0 && opts.link?.toLowerCase() !== "off";
     if (sharing) {
-      const { deskCheck, printDeskCheck } = await import("./desk-check-4B33YRX7.mjs");
+      const { deskCheck, printDeskCheck } = await import("./desk-check-XYFKZ5HE.mjs");
       const read = await ctx.client.snapshot(canvas2.id).catch((err) => err instanceof Error ? err.message : String(err));
       desk = typeof read === "string" ? { failed: read } : await deskCheck(ctx, deskCheckDeps(), canvas2, read);
       if (opts.check) {
@@ -18307,7 +18307,7 @@ program2.command("setup [target]").description(
               }
             }
           } else if (before && stalenessOf(before).stale) {
-            const { stopDaemons } = await import("./daemon-7LI75KOH.mjs");
+            const { stopDaemons } = await import("./daemon-EPTKO6SM.mjs");
             await stopDaemons(port, home3);
             await fs18.rm(path18.join(home3, ".stale-warned"), { force: true });
             report2.restarted = `${stalenessOf(before).why} \u2014 restarted on this build`;
@@ -18536,7 +18536,7 @@ canvas.command("shot <ref>").description("Screenshot a canvas as the app renders
     let ownerInput;
     if (access.kind !== "ordinary") {
       if (access.kind !== "personal" || opts.into) throw new Error(access.refused);
-      const { personalCaptureOwner } = await import("./personal-capture-A2LIIZ5D.mjs");
+      const { personalCaptureOwner } = await import("./personal-capture-GULNVMXH.mjs");
       await personalCaptureOwner(ctx.home, origin, target2.id, ctx.actor);
       ownerInput = JSON.stringify({ actor: ctx.actor });
     }
@@ -19475,7 +19475,7 @@ program2.command("present <item>").description("Present a view to the room: a ma
     const ctx = await ctxOf(cmd);
     const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
     const item = resolveItem(snapshot, ref);
-    const { deskCheck, printDeskCheck } = await import("./desk-check-4B33YRX7.mjs");
+    const { deskCheck, printDeskCheck } = await import("./desk-check-XYFKZ5HE.mjs");
     const desk = await deskCheck(ctx, deskCheckDeps(), p, snapshot, [item.id]);
     if (!ctx.json) printDeskCheck(desk);
     const origin = await ctx.homeOf(p.id) ?? ctx.client.base;
@@ -22313,7 +22313,7 @@ registerDesignSystems(style, ctxOf);
 style.command("card [request]").description("The brief as a card: Making, For, Should feel, Never, Constraints, Right now \u2014 said lines solid, inferred ones pencil; Right / Wrong / a new value, and the re-read after an edit").option("--right <line>", "an inferred line is right: it becomes the person's word").option("--wrong <line>", "an inferred line is wrong: it goes, and --value is the right one").option("--set <line>", "the person's own words for a line, with --value").option("--value <text>", "with --set or --wrong: what the line should say").option("--reread", "the lead's answer to a re-read: --matters <screen>\u2026 and ONE --question").option("--matters <screen>", "with --reread: a screen that matters more now (repeatable)", collectList).option("--question <text>", "with --reread: the one clarifying question for the person").option("--canvas <canvas>").action(
   run(async (request, opts, cmd) => {
     const ctx = await ctxOf(cmd);
-    const { designCard } = await import("./brief-card-S7XTCOV3.mjs");
+    const { designCard } = await import("./brief-card-MGT25DCD.mjs");
     await designCard(ctx, goodnightDeps(), request, opts);
   })
 );

@@ -1,29 +1,30 @@
 import { createRequire as __isocanCreateRequire } from "node:module";
 const require = __isocanCreateRequire(import.meta.url);
-import "./chunk-XBXJGJAZ.mjs";
-import "./chunk-EJ2TF764.mjs";
-import "./chunk-PHCZTV3P.mjs";
-import "./chunk-3RI4CEIP.mjs";
+import "./chunk-QWL4FJC6.mjs";
 import {
   DaemonClient
-} from "./chunk-52MFMJIK.mjs";
+} from "./chunk-PGHHZFAH.mjs";
+import "./chunk-MKGUBRAR.mjs";
+import "./chunk-ZQY6V4CF.mjs";
+import "./chunk-JXBDCJ4M.mjs";
+import "./chunk-QWD5KSU6.mjs";
+import "./chunk-SJR64PFS.mjs";
+import "./chunk-GVRC6KUY.mjs";
+import "./chunk-77VKD72U.mjs";
+import "./chunk-22LKPAT5.mjs";
 import {
   readBadge
-} from "./chunk-BYY4THWU.mjs";
-import "./chunk-HPFTKOB6.mjs";
-import "./chunk-BW3SAZCE.mjs";
+} from "./chunk-MELWGE6I.mjs";
 import "./chunk-PKQBK4R5.mjs";
-import "./chunk-SQGYEDW5.mjs";
-import "./chunk-L53WM2YB.mjs";
-import "./chunk-7IQJCBGY.mjs";
 import "./chunk-U4ZPMZI4.mjs";
-import "./chunk-DUIOTTIJ.mjs";
-import "./chunk-FYZDNGZ4.mjs";
+import "./chunk-ROZBGXHT.mjs";
+import "./chunk-OUU6V4OT.mjs";
+import "./chunk-2ZAY35XO.mjs";
+import "./chunk-LEL3H6I6.mjs";
 import {
   normalizeHomeUrl
-} from "./chunk-L3EVJHHR.mjs";
-import "./chunk-GUY4UN4O.mjs";
-import "./chunk-K4TDP4L5.mjs";
+} from "./chunk-57O6725J.mjs";
+import "./chunk-7OLMWXEB.mjs";
 import "./chunk-JYOOXWJZ.mjs";
 
 // packages/cli/src/personal-capture.ts

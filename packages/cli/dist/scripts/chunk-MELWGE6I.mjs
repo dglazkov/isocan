@@ -6157,11 +6157,13 @@ function normalizeHomeAuthEntry(raw) {
   const record = raw;
   const authHeaderCommand = parseCommandSpec(record.authHeaderCommand);
   const httpProxy = typeof record.httpProxy === "string" && record.httpProxy.trim().length > 0 ? record.httpProxy.trim() : void 0;
+  const proxyTunnel = typeof record.proxyTunnel === "boolean" ? record.proxyTunnel : void 0;
   const ttlSeconds = typeof record.ttlSeconds === "number" && Number.isFinite(record.ttlSeconds) && record.ttlSeconds > 0 ? record.ttlSeconds : void 0;
   if (!authHeaderCommand && !httpProxy) return null;
   return {
     ...authHeaderCommand ? { authHeaderCommand } : {},
     ...httpProxy ? { httpProxy } : {},
+    ...proxyTunnel !== void 0 ? { proxyTunnel } : {},
     ...ttlSeconds !== void 0 ? { ttlSeconds } : {}
   };
 }
@@ -6213,11 +6215,13 @@ function homeAuthFor(homeUrl, home, env = process.env) {
   }
   const authHeaderCommand = fromEnvMap?.authHeaderCommand ?? (cmdApplies ? envCmd : void 0) ?? fromFileMap?.authHeaderCommand;
   const httpProxy = fromEnvMap?.httpProxy ?? fromFileMap?.httpProxy;
+  const proxyTunnel = fromEnvMap?.proxyTunnel ?? fromFileMap?.proxyTunnel;
   const ttlSeconds = fromEnvMap?.ttlSeconds ?? fromFileMap?.ttlSeconds;
   if (!authHeaderCommand && !httpProxy) return null;
   return {
     ...authHeaderCommand ? { authHeaderCommand } : {},
     ...httpProxy ? { httpProxy } : {},
+    ...proxyTunnel !== void 0 ? { proxyTunnel } : {},
     ...ttlSeconds !== void 0 ? { ttlSeconds } : {}
   };
 }

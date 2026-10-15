@@ -17,7 +17,7 @@ import {
   readConfigFile,
   upgradeVerdict,
   writeIdentityName
-} from "./chunk-P5BFYJ7X.mjs";
+} from "./chunk-MELWGE6I.mjs";
 import {
   designRepairsRoute
 } from "./chunk-PKQBK4R5.mjs";
@@ -2688,7 +2688,7 @@ var require_dispatcher = __commonJS({
     "use strict";
     var EventEmitter = __require("node:events");
     var { kOriginless, kUrl } = require_symbols();
-    var Dispatcher = class extends EventEmitter {
+    var Dispatcher2 = class extends EventEmitter {
       dispatch() {
         throw new Error("not implemented");
       }
@@ -2727,7 +2727,7 @@ var require_dispatcher = __commonJS({
         });
       }
     };
-    module.exports = Dispatcher;
+    module.exports = Dispatcher2;
   }
 });
 
@@ -2736,7 +2736,7 @@ var require_dispatcher_base = __commonJS({
   "node_modules/undici/lib/dispatcher/dispatcher-base.js"(exports, module) {
     "use strict";
     var buffer = __require("node:buffer");
-    var Dispatcher = require_dispatcher();
+    var Dispatcher2 = require_dispatcher();
     var {
       ClientDestroyedError,
       ClientClosedError,
@@ -2747,7 +2747,7 @@ var require_dispatcher_base = __commonJS({
     var kOnClosed = /* @__PURE__ */ Symbol("onClosed");
     var kWebSocketOptions = /* @__PURE__ */ Symbol("webSocketOptions");
     var kEventSourceOptions = /* @__PURE__ */ Symbol("eventSourceOptions");
-    var DispatcherBase = class extends Dispatcher {
+    var DispatcherBase = class extends Dispatcher2 {
       /** @type {boolean} */
       [kDestroyed] = false;
       /** @type {Array<Function|null} */
@@ -10089,7 +10089,7 @@ var require_pool = __commonJS({
     function defaultFactory(origin, opts) {
       return new Client(origin, opts);
     }
-    var Pool = class extends PoolBase {
+    var Pool2 = class extends PoolBase {
       constructor(origin, {
         connections,
         factory = defaultFactory,
@@ -10183,7 +10183,7 @@ var require_pool = __commonJS({
         return false;
       }
     };
-    module.exports = Pool;
+    module.exports = Pool2;
   }
 });
 
@@ -10203,7 +10203,7 @@ var require_balanced_pool = __commonJS({
       kRemoveClient,
       kGetDispatcher
     } = require_pool_base();
-    var Pool = require_pool();
+    var Pool2 = require_pool();
     var { kOriginless, kUrl } = require_symbols();
     var util = require_util();
     var kFactory = /* @__PURE__ */ Symbol("factory");
@@ -10224,7 +10224,7 @@ var require_balanced_pool = __commonJS({
       return a;
     }
     function defaultFactory(origin, opts) {
-      return new Pool(origin, opts);
+      return new Pool2(origin, opts);
     }
     var BalancedPool = class extends PoolBase {
       constructor(upstreams = [], { factory = defaultFactory, connect, tls, ...opts } = {}) {
@@ -10479,7 +10479,7 @@ var require_agent = __commonJS({
     var { InvalidArgumentError, MaxOriginsReachedError } = require_errors();
     var { kBusy, kClients, kConnected, kRunning, kPending, kClose, kDestroy, kDispatch, kUrl } = require_symbols();
     var DispatcherBase = require_dispatcher_base();
-    var Pool = require_pool();
+    var Pool2 = require_pool();
     var Client = require_client();
     var util = require_util();
     var kOnConnect = /* @__PURE__ */ Symbol("onConnect");
@@ -10490,7 +10490,7 @@ var require_agent = __commonJS({
     var kOptions = /* @__PURE__ */ Symbol("options");
     var kOrigins = /* @__PURE__ */ Symbol("origins");
     function defaultFactory(origin, opts) {
-      return opts && opts.connections === 1 ? new Client(origin, opts) : new Pool(origin, opts);
+      return opts && opts.connections === 1 ? new Client(origin, opts) : new Pool2(origin, opts);
     }
     var Agent2 = class extends DispatcherBase {
       constructor({ factory = defaultFactory, maxOrigins = Infinity, connect, ...options } = {}) {
@@ -10614,7 +10614,7 @@ var require_agent = __commonJS({
 var require_dispatcher1_wrapper = __commonJS({
   "node_modules/undici/lib/dispatcher/dispatcher1-wrapper.js"(exports, module) {
     "use strict";
-    var Dispatcher = require_dispatcher();
+    var Dispatcher2 = require_dispatcher();
     var { InvalidArgumentError } = require_errors();
     var { toRawHeaders } = require_util();
     var { kOriginless, kUrl } = require_symbols();
@@ -10661,7 +10661,7 @@ var require_dispatcher1_wrapper = __commonJS({
         this.#handler.onResponseStarted?.();
       }
     };
-    var Dispatcher1Wrapper = class _Dispatcher1Wrapper extends Dispatcher {
+    var Dispatcher1Wrapper = class _Dispatcher1Wrapper extends Dispatcher2 {
       #dispatcher;
       constructor(dispatcher) {
         super();
@@ -11202,7 +11202,7 @@ var require_socks5_proxy_agent = __commonJS({
     var { ConnectTimeoutError, InvalidArgumentError } = require_errors();
     var { Socks5Client, STATES } = require_socks5_client();
     var { kBusy, kConnected, kDispatch, kClose, kDestroy } = require_symbols();
-    var Pool = require_pool();
+    var Pool2 = require_pool();
     var buildConnector = require_connect();
     var { setupConnectTimeout } = require_util();
     var { debuglog } = __require("node:util");
@@ -11364,7 +11364,7 @@ var require_socks5_proxy_agent = __commonJS({
           const originKey = String(origin);
           let pool = this[kPools].get(originKey);
           if (!pool || pool.destroyed || pool.closed) {
-            pool = new Pool(origin, {
+            pool = new Pool2(origin, {
               pipelining: opts.pipelining,
               connections: opts.connections,
               connect: async (connectOpts, callback) => {
@@ -11469,7 +11469,7 @@ var require_proxy_agent = __commonJS({
     "use strict";
     var { kProxy, kClose, kDestroy, kDispatch } = require_symbols();
     var Agent2 = require_agent();
-    var Pool = require_pool();
+    var Pool2 = require_pool();
     var DispatcherBase = require_dispatcher_base();
     var { InvalidArgumentError, RequestAbortedError, SecureProxyConnectionError, ProxyConnectionError } = require_errors();
     var buildConnector = require_connect();
@@ -11490,7 +11490,7 @@ var require_proxy_agent = __commonJS({
       return protocol === "https:" ? 443 : 80;
     }
     function defaultFactory(origin, opts) {
-      return new Pool(origin, opts);
+      return new Pool2(origin, opts);
     }
     var noop = () => {
     };
@@ -11498,7 +11498,7 @@ var require_proxy_agent = __commonJS({
       if (opts.connections === 1) {
         return new Client(origin, opts);
       }
-      return new Pool(origin, opts);
+      return new Pool2(origin, opts);
     }
     function shouldProxyTunnel(requestProtocol, proxyTunnel) {
       return proxyTunnel === true || requestProtocol !== "http:";
@@ -12353,10 +12353,10 @@ var require_retry_handler = __commonJS({
 var require_retry_agent = __commonJS({
   "node_modules/undici/lib/dispatcher/retry-agent.js"(exports, module) {
     "use strict";
-    var Dispatcher = require_dispatcher();
+    var Dispatcher2 = require_dispatcher();
     var RetryHandler = require_retry_handler();
     var { kOriginless, kUrl } = require_symbols();
-    var RetryAgent = class extends Dispatcher {
+    var RetryAgent = class extends Dispatcher2 {
       #agent = null;
       #options = null;
       constructor(agent, options = {}) {
@@ -14772,7 +14772,7 @@ var require_mock_pool = __commonJS({
   "node_modules/undici/lib/mock/mock-pool.js"(exports, module) {
     "use strict";
     var { promisify } = __require("node:util");
-    var Pool = require_pool();
+    var Pool2 = require_pool();
     var { buildMockDispatch } = require_mock_utils();
     var {
       kDispatches,
@@ -14787,7 +14787,7 @@ var require_mock_pool = __commonJS({
     var { MockInterceptor } = require_mock_interceptor();
     var Symbols = require_symbols();
     var { InvalidArgumentError } = require_errors();
-    var MockPool = class extends Pool {
+    var MockPool = class extends Pool2 {
       constructor(origin, opts) {
         if (!opts || !opts.agent || typeof opts.agent.dispatch !== "function") {
           throw new InvalidArgumentError("Argument opts.agent must implement Agent");
@@ -14897,10 +14897,10 @@ var require_mock_agent = __commonJS({
     var MockPool = require_mock_pool();
     var { matchValue, normalizeSearchParams, buildAndValidateMockOptions, normalizeOrigin } = require_mock_utils();
     var { InvalidArgumentError, UndiciError } = require_errors();
-    var Dispatcher = require_dispatcher();
+    var Dispatcher2 = require_dispatcher();
     var PendingInterceptorsFormatter = require_pending_interceptors_formatter();
     var { MockCallHistory } = require_mock_call_history();
-    var MockAgent = class extends Dispatcher {
+    var MockAgent = class extends Dispatcher2 {
       constructor(opts = {}) {
         super(opts);
         const mockOptions = buildAndValidateMockOptions(opts);
@@ -27310,8 +27310,8 @@ var require_undici = __commonJS({
   "node_modules/undici/index.js"(exports, module) {
     "use strict";
     var Client = require_client();
-    var Dispatcher = require_dispatcher();
-    var Pool = require_pool();
+    var Dispatcher2 = require_dispatcher();
+    var Pool2 = require_pool();
     var BalancedPool = require_balanced_pool();
     var RoundRobinPool = require_round_robin_pool();
     var Agent2 = require_agent();
@@ -27336,10 +27336,10 @@ var require_undici = __commonJS({
     var { getGlobalDispatcher, setGlobalDispatcher: setGlobalDispatcher2 } = require_global2();
     var DecoratorHandler = require_decorator_handler();
     var RedirectHandler = require_redirect_handler();
-    Object.assign(Dispatcher.prototype, api);
-    module.exports.Dispatcher = Dispatcher;
+    Object.assign(Dispatcher2.prototype, api);
+    module.exports.Dispatcher = Dispatcher2;
     module.exports.Client = Client;
-    module.exports.Pool = Pool;
+    module.exports.Pool = Pool2;
     module.exports.BalancedPool = BalancedPool;
     module.exports.RoundRobinPool = RoundRobinPool;
     module.exports.Agent = Agent2;
@@ -29410,8 +29410,22 @@ function proxyForBase(base, env = process.env) {
   }
   return proxy;
 }
-function proxyFetch(base, proxyUrl) {
-  const dispatcher = new import_undici.EnvHttpProxyAgent({
+function originatingProxyDispatcher(proxyUrl) {
+  return new import_undici.Pool(proxyUrl).compose((dispatch) => (opts, handler) => {
+    const { host } = new URL(String(opts.origin));
+    const headers = opts.headers && typeof opts.headers === "object" && !Array.isArray(opts.headers) ? { ...opts.headers, host } : { host };
+    return dispatch({ ...opts, headers }, handler);
+  });
+}
+function proxyFetch(base, proxyUrl, proxyTunnel) {
+  if (proxyTunnel === false && (!isLoopbackBase(proxyUrl) || !proxyUrl.toLowerCase().startsWith("http://"))) {
+    return async () => {
+      throw new Error(
+        `refusing proxyTunnel: false for non-loopback httpProxy ${proxyUrl} (for ${base})`
+      );
+    };
+  }
+  const dispatcher = proxyTunnel === false ? originatingProxyDispatcher(proxyUrl) : new import_undici.EnvHttpProxyAgent({
     httpProxy: proxyUrl,
     httpsProxy: proxyUrl,
     noProxy: "",
@@ -29500,7 +29514,7 @@ var DaemonClient = class extends DaemonRoutes {
     } else {
       const proxy = homeAuth?.httpProxy ?? proxyForBase(this.base);
       if (proxy) {
-        const via = proxyFetch(this.base, proxy);
+        const via = proxyFetch(this.base, proxy, homeAuth?.httpProxy ? homeAuth.proxyTunnel : void 0);
         this.fetcher = via;
         this.probeFetcher = via;
       } else if (isLoopbackBase(this.base)) {
@@ -29679,7 +29693,7 @@ async function readDesignAudit(ctx, canvasId, options = {}, captured) {
   });
 }
 async function repairDesignItem(ctx, request) {
-  const { designReviewPort: designReviewPort2 } = await import("./design-review-node-HF6ABO62.mjs");
+  const { designReviewPort: designReviewPort2 } = await import("./design-review-node-AYOSQRC2.mjs");
   return repairDesignScreen(designReviewPort2(ctx), request);
 }
 
