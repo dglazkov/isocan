@@ -190,6 +190,7 @@ import {
   attesterRefusal,
   BadIdTokenError,
   ensureProxyAttestation,
+  ensureProxySessionClaim,
   googleSigningKeys,
   resolveProxyPrincipal,
   verifyIdToken,
@@ -659,6 +660,19 @@ async function attachProxyBadge(
   const resolved = await resolveProxyPrincipal(desk, engine, req.headers, proxyAuth);
   if (resolved?.kind === "badge") req.badge = resolved.badge;
   return resolved?.kind === "ended" ? resolved.ended : null;
+}
+
+async function refreshProxyBadge(
+  desk: Desk,
+  engine: Engine,
+  badge: BadgeRecord,
+  req: FastifyRequest,
+  pathname: string,
+  proxyAuth: ProxyAuthConfig | null,
+): Promise<BadgeRecord> {
+  const attested = await ensureProxyAttestation(desk, badge, req.headers, proxyAuth);
+  if (req.method === "POST" && pathname === DOOR_ROUTE) return attested;
+  return ensureProxySessionClaim(desk, engine, attested, req.headers, proxyAuth);
 }
 
 function sendEndedBadge(reply: FastifyReply, gone: BadgeRecord): FastifyReply {
@@ -1210,7 +1224,7 @@ export function registerRoutes(
     const endedProxyBadge = !req.badge && !presented ? await attachProxyBadge(desk, engine, req, pathname, proxyAuth) : null;
 
     if (req.badge) {
-      req.badge = await ensureProxyAttestation(desk, req.badge, req.headers, proxyAuth);
+      req.badge = await refreshProxyBadge(desk, engine, req.badge, req, pathname, proxyAuth);
       await desk.touch(req.badge.badgeId, new Date().toISOString());
       /**
        * **A home with no operator says so, for the whole prefix** (operator

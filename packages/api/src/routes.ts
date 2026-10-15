@@ -87,6 +87,8 @@ import type {
 } from "@isocan/core";
 import {
   BADGE_ENDED,
+  parseSessionHeader,
+  SESSION_HEADER,
   PUBLIC_CANVASES_ROUTE,
   publicListingRoute,
   CURRENT_CLIENT_FEATURES,
@@ -288,6 +290,25 @@ export class DaemonRoutes {
   protected probeFetcher: typeof fetch = platformFetch;
 
   /**
+   * Optional session key provider (`<harness>:<sessionId>`) for stateless
+   * per-session agent attribution (`X-Isocan-Session`). Populated by
+   * `DaemonClient` from the ambient harness session when not overridden by
+   * `isBadgeUpstream`, `--as`, or an enrolled `agent:` identity.
+   */
+  protected sessionKey?: () => Promise<string | null> | string | null;
+
+  /** Configure or suppress the `X-Isocan-Session` header sent on HTTP requests. */
+  useSessionKey(provider: (() => Promise<string | null> | string | null) | string | null): void {
+    this.sessionKey = typeof provider === "function" ? provider : () => provider;
+  }
+
+  private async sessionHeaders(): Promise<Record<string, string>> {
+    const raw = await this.sessionKey?.();
+    const valid = parseSessionHeader(raw);
+    return valid ? { [SESSION_HEADER]: valid } : {};
+  }
+
+  /**
    * Every request carries the badge, and a refused one heals itself and comes
    * straight back. This is what makes neither the door nor the membership
    * check a breaking change: a CLI that has never seen a badge, whose home was
@@ -313,8 +334,18 @@ export class DaemonRoutes {
   ): Promise<T> {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
+    const isClaimOp =
+      body !== null &&
+      typeof body === "object" &&
+      (body as { op?: { type?: string } }).op?.type === "actor.claim";
     const send = async () => {
-      const headers: Record<string, string> = { ...(await this.authHeader()), [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...extra, ...this.policyHeaders() };
+      const headers: Record<string, string> = {
+        ...(await this.authHeader()),
+        ...(isClaimOp ? {} : await this.sessionHeaders()),
+        [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES,
+        ...extra,
+        ...this.policyHeaders(),
+      };
       signal?.throwIfAborted();
       if (body !== undefined) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url}`, {
@@ -1535,12 +1566,13 @@ export class DaemonRoutes {
     // the recovery retry spelled out — easy to miss, and a 401 on an upload
     // would read as a broken drop.
     const send = async () => {
-      const auth = await this.authHeader();
+      const [auth, session] = await Promise.all([this.authHeader(), this.sessionHeaders()]);
       signal?.throwIfAborted();
       return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs`, {
         method: "POST",
         headers: {
           ...auth,
+          ...session,
           ...this.policyHeaders(),
           "Content-Type": mimeType,
           [FILENAME_HEADER]: encodeFilename(filename),
@@ -1561,7 +1593,7 @@ export class DaemonRoutes {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers = { ...await this.authHeader(), ...this.policyHeaders() };
+      const headers = { ...(await this.authHeader()), ...(await this.sessionHeaders()), ...this.policyHeaders() };
       signal?.throwIfAborted();
       return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
         headers,

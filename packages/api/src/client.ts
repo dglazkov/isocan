@@ -8,6 +8,7 @@ import { isLoopbackBase } from "@isocan/core";
 import type { BadgeStore, SourceRequestContext } from "@isocan/core";
 import { fileBadgeStore, gatewayBaseFor, paths, plausibleSha, upgradeVerdict } from "@isocan/server";
 import { isBadgeUpstream } from "./identity.ts";
+import { harnessSessions } from "./harness.ts";
 import { DaemonRoutes, platformFetch, type Health } from "./routes.ts";
 
 if (
@@ -26,6 +27,13 @@ const upstreamBadgeStore: BadgeStore = {
   },
   async keep() {},
 };
+
+async function defaultSessionKey(home: string): Promise<string | null> {
+  const present = await harnessSessions(home);
+  const primary = present.find((s) => s.deliberate) ?? present[0];
+  if (!primary || primary.harness.toLowerCase() === "agent") return null;
+  return primary.key;
+}
 
 /**
  * The proxy URL configured in `env` for `base`, or `null` when none is set or
@@ -250,6 +258,9 @@ export class DaemonClient extends DaemonRoutes {
       sourceContext,
     );
     this.home = home;
+    if (!isBadgeUpstream()) {
+      this.useSessionKey(() => defaultSessionKey(this.home));
+    }
     const gateway = gatewayBaseFor(this.base, this.home);
     if (gateway) {
       const via = gatewayFetch(this.base, gateway);

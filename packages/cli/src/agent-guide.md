@@ -272,7 +272,11 @@ Pick like this, once, before you appear:
    earlier in this same session: keep it, a stable name beats a fresh one.
    A bare name is the HUMAN's — never yours to keep. (A `badge bdg_…` line
    under it is this machine's credential with the daemon, handed out
-   automatically; there is nothing for you to do with it.) On a machine where
+   automatically; there is nothing for you to do with it.) On a
+   proxy-authenticated home, the human and each harness session are named
+   automatically on the first command (`isocan whoami` already shows your
+   assigned session name; `isocan identity --name "<name>" --session` still
+   renames it if desired). On a machine where
    nobody has been named yet it errors with "no identity configured" — that
    is the answer "nobody, yet", not a broken install; same for a `canvas
    list` that is empty before you have named yourself (the handshake is what

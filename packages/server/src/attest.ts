@@ -7,7 +7,9 @@ import {
   harnessOf,
   isGroupSubject,
   normalizeAttribute,
+  parseSessionHeader,
   PERSON_HARNESSES,
+  SESSION_HEADER,
   type AttestedKind,
   type Attestation,
   type GrantSubject,
@@ -388,6 +390,66 @@ async function ensureProxyBadgeAndPerson(
     badge = (await desk.badge(badgeId)) ?? badge;
   }
   return { kind: "badge", badge };
+}
+
+const inflightSessionByDesk = new WeakMap<Desk, Map<string, Promise<BadgeRecord>>>();
+
+/**
+ * Ensure a valid `X-Isocan-Session` (`<harness>:<sessionId>`) on a
+ * proxy-authenticated request is claimed on `badge` before route handling.
+ *
+ * Ignored whenever `proxyAuth` is unset or `attestationFromProxy` returns null,
+ * so local daemons and unauthenticated requests keep explicit session claims.
+ */
+export async function ensureProxySessionClaim(
+  desk: Desk,
+  engine: Engine,
+  badge: BadgeRecord,
+  headers: IncomingHttpHeaders,
+  proxyAuth: ProxyAuthConfig | null,
+  now = Date.now(),
+): Promise<BadgeRecord> {
+  if (!proxyAuth || !attestationFromProxy(headers, proxyAuth, now)) return badge;
+  const sessionKey = parseSessionHeader(headers[SESSION_HEADER]);
+  if (!sessionKey) return badge;
+  if (badge.claims.some((row) => row.sessionKey === sessionKey)) return badge;
+  let inflight = inflightSessionByDesk.get(desk);
+  if (!inflight) {
+    inflight = new Map();
+    inflightSessionByDesk.set(desk, inflight);
+  }
+  const lockKey = `${badge.badgeId}\0${sessionKey}`;
+  const prev = inflight.get(lockKey);
+  const work = (prev ?? Promise.resolve(badge)).then(
+    () => claimProxySessionOnBadge(desk, engine, badge, sessionKey),
+    () => claimProxySessionOnBadge(desk, engine, badge, sessionKey),
+  );
+  inflight.set(lockKey, work);
+  try {
+    return await work;
+  } finally {
+    if (inflight.get(lockKey) === work) {
+      inflight.delete(lockKey);
+    }
+  }
+}
+
+async function claimProxySessionOnBadge(
+  desk: Desk,
+  engine: Engine,
+  fallback: BadgeRecord,
+  sessionKey: string,
+): Promise<BadgeRecord> {
+  const latest = (await desk.badge(fallback.badgeId)) ?? fallback;
+  if (latest.claims.some((row) => row.sessionKey === sessionKey)) return latest;
+  await engine.claim({
+    badgeId: fallback.badgeId,
+    op: {
+      type: "actor.claim",
+      sessionKey,
+    },
+  });
+  return (await desk.badge(fallback.badgeId)) ?? latest;
 }
 
 /**
