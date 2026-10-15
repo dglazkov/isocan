@@ -1,6 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
 import { type AttestedKind, type Attestation, type GrantSubject } from "../../core/src/index.js";
 import type { BadgeRecord, Desk } from "./desk.js";
+import type { Engine } from "./engine.js";
 /**
  * **The attesters this home has borrowed** — mechanism 3's "borrow, never
  * mint", arriving as code.
@@ -114,6 +115,26 @@ export declare function rawProxyHeader(headers: IncomingHttpHeaders, proxyAuth: 
 export declare function attestationFromProxy(headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null, now?: number): Attestation | null;
 /** Ensure a trusted reverse-proxy email attestation is recorded on `badge` when `proxyAuth` is configured. */
 export declare function ensureProxyAttestation(desk: Desk, badge: BadgeRecord, headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null, now?: number): Promise<BadgeRecord>;
+/**
+ * Deterministic badge id (`bdg_prx_...`) for a verified reverse-proxy principal.
+ * Keyed by the normalized attribute so every surface presenting the same
+ * proxy-verified identity resolves to one desk record without a secondary
+ * index scan.
+ */
+export declare function proxyBadgeId(attribute: string): string;
+type ProxyPrincipalOutcome = {
+    kind: "badge";
+    badge: BadgeRecord;
+} | {
+    kind: "ended";
+    ended: BadgeRecord;
+};
+/**
+ * Resolve a badge-less request carrying a verified reverse-proxy identity header
+ * to its deterministic `bdg_prx_...` badge and bound `home:person` human actor,
+ * or report an operator-ended proxy tombstone without resurrecting it.
+ */
+export declare function resolveProxyPrincipal(desk: Desk, engine: Engine, headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null, now?: number): Promise<ProxyPrincipalOutcome | null>;
 /**
  * What a home with this configuration can verify.
  *

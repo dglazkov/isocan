@@ -91,6 +91,13 @@ export interface AttestOffer {
      * they are, so it discloses to Jordan only that Jordan exists here.
      */
     resumable: Actor[];
+    /**
+     * The `home:person` human actor already claimed on the presenting badge,
+     * when one exists (for example, on a deterministic reverse-proxy badge).
+     * Lets a browser tab adopt its server-bound identity without issuing a
+     * redundant `actor.claim` under a separate `web:` key.
+     */
+    bound?: Actor;
 }
 /** What `POST {@link ATTEST_ROUTE}` takes: a token from the attester this
  * home named, and nothing else. No email field beside it — the address is
@@ -146,3 +153,15 @@ export declare const NO_ATTESTER = "no-attester";
  * to change (the argument `isocan share` has carried since phase 7).
  */
 export declare function grantSubjectOf(who: string): GrantSubject;
+/**
+ * The newest `email:<local>@<domain>` address on a badge without its `email:`
+ * prefix, or null when the badge carries none. Shared across the daemon, web
+ * app, and CLI so every surface reads the same attested mailbox.
+ */
+export declare function attestedEmail(attestations: readonly Attestation[]): string | null;
+/**
+ * The local-part of the newest `email:<local>@<domain>` attestation on a
+ * badge, or null when the badge carries none. Shared so the daemon and web app
+ * derive identical default human display names at the door.
+ */
+export declare function attestedEmailLocalPart(attestations: readonly Attestation[]): string | null;
