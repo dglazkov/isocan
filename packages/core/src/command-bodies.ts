@@ -540,6 +540,19 @@ first.
 Do not start building until they confirm you have understood the same thing.
 The value is in the decisions, not the prose: a spec that says "clean, modern"
 recorded nothing.`,
+    "vocabulary": `The person asked for their design vocabulary. In the app this opens a panel and asks
+nothing of you; from a terminal, answer in one short message with three lists:
+
+1. THE DESIGN WORDS THEY NOW USE — terms such as contrast, visual hierarchy,
+   proximity or type scale that appear in their own messages here.
+2. WORDS SEEN HERE AND NOT YET THEIRS — terms in your messages and proposals'
+   whys they have not used. Name them; define each in a few plain words.
+3. THEIR WORDS YOU HAVE LEARNED — the quoted lines in the taste note
+   (\`isocan taste\`), "the thumb button" means …
+
+Never grade them and never count, unless they ask for a count. Keeping their
+own words is always fine. \`isocan words read "<sentence>"\` shows how one of
+their sentences reads.`,
     "goodnight": `The person is stopping for the day. Talk through what to work on overnight — and only when they say "That's the plan", write the note and do the work.
 
 ARE YOU THE LEAD? \`isocan goodnight read --json\` answers for the person who

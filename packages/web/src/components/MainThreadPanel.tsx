@@ -18,6 +18,12 @@ const ModuleComposerControls = lazy(() =>
  *  phase 2) — loaded only once this person has said `/goodnight` here. */
 const GoodnightPlan = lazy(() => import("./GoodnightPlan.tsx"));
 
+/** **Say it like a designer** (proactive-agent phase 10): the vague words'
+ *  underline, their readings and the designer's sentence — loaded on the
+ *  first keystroke, with the vocabulary panel beside it. */
+const DesignerWords = lazy(() => import("./DesignerWords.tsx"));
+const Vocabulary = lazy(() => import("./DesignerWords.tsx").then((m) => ({ default: m.Vocabulary })));
+
 /** The Chat's clean-up — the remove control on a message and the owner's
  *  "Clean up…" menu — loaded only for somebody who can write here. */
 const ChatTidy = lazy(() => import("./ChatTidy.tsx"));
@@ -423,6 +429,10 @@ function Panel({
   const thread = canvas ? mainThread(canvas) : null;
   useLaneFollow(onOpenItem ? null : canvas, onOpenItem ? null : thread);
   const [draft, setDraft] = useChatDraft(canvasId, actor.id);
+  /** What `DesignerWords` read in the draft: what to underline, what Tab takes, the readings Enter carries. */
+  const [say, setSay] = useState<{ marks: { start: number; end: number }[]; sentence: string | null; readings: { word: string; reading: string }[] } | null>(null);
+  const vocabularyOpen = useUiStore((s) => s.vocabularyOpen);
+  const setVocabularyOpen = (vocabularyOpen: boolean) => useUiStore.setState({ vocabularyOpen });
   const context = useMessageContext(canvasId, messageContextRoots(canvas, draft, selected));
   const sending = useMessageSend(canvasId, context, draft);
   /**
@@ -705,6 +715,12 @@ function Panel({
       {hasDesignQuestions || showDesignQuestions ? <Suspense fallback={null}><QuestionnairePanel key={questionnaireViewer} canvasId={canvasId} canvas={canvas} actor={actor} thread={thread} canEdit={canEdit} startPublishing={showDesignQuestions} /></Suspense> : designPartner && canEdit && thread && <button className="main-design-ask" type="button" onClick={() => setPublisherFor(questionnaireViewer)}>Ask design questions</button>}
       {canEdit && <form
         onKeyDown={(e) => {
+          // Tab takes the designer's sentence; the field's own menu, open, has the key first.
+          if (e.key === "Tab" && !e.shiftKey && !e.defaultPrevented && say?.sentence && (e.target as HTMLElement).tagName === "TEXTAREA") {
+            e.preventDefault();
+            setDraft(say.sentence);
+            return;
+          }
           submitOnEnter(e);
           submitOnCmdEnter(e);
         }}
@@ -759,7 +775,9 @@ function Panel({
             return;
           }
           const attached = useUiStore.getState().selectedItemIds;
-          await sending.submit(() => postToMain(canvasId, actor, body, attached, context.request), () => setDraft(""));
+          // The words as typed; a reading they picked rides beside them as data.
+          const readings = say?.readings ?? [];
+          await sending.submit(() => postToMain(canvasId, actor, body, attached, context.request, readings.length ? { readings } : undefined), () => setDraft(""));
         }}
       >
         {/* **A module may stand where the message box is** (proposed:
@@ -771,6 +789,8 @@ function Panel({
         {composerHolder === null && (context.enabled ? <MessageContextPreview context={context} /> : <Attached canvasId={canvasId} />)}
         {composerHolder === null && sending.error && <p role="alert">{sending.error}</p>}
         {composerHolder === null && refused && <p role="alert">{refused}</p>}
+        {composerHolder === null && vocabularyOpen && <Suspense fallback={null}><Vocabulary canvasId={canvasId} actor={actor} onClose={() => setVocabularyOpen(false)} /></Suspense>}
+        {composerHolder === null && draft.trim() !== "" && <Suspense fallback={null}><DesignerWords draft={draft} actor={actor} onState={setSay} onVocabulary={() => setVocabularyOpen(true)} /></Suspense>}
         {composerHolder === null && <MentionField
           // One placeholder, both states: what the CHANNEL is beats what the
           // moment is. Everything typed here reaches every agent listening
@@ -789,6 +809,7 @@ function Panel({
             setDraft(next);
             if (refused) setRefused("");
           }}
+          marks={say?.marks}
           candidates={composerCandidates}
           peers={composerPeers}
           bench={bench.mentions}

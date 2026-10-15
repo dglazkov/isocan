@@ -3995,7 +3995,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `ripple`, `stuck`, critics in the room and the desk check, `walk` -->
+<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `ripple`, `stuck`, critics, the desk check, `walk`, vague words -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4373,6 +4373,32 @@ isocan walk --stumble "one-handed | Checkout | 3.1 | Could not reach Help in the
 
 `isocan walk [walk]` reads a walk back: the lanes, your pins and outcomes,
 the shared finding and the fix, or why it waits.
+
+## Say it like a designer: ask for the reading, never guess
+
+Some words a person types read more than one way: "make the header **pop**"
+is contrast, scale or colour; "it feels **cramped**" is spacing, density or
+size. The Chat underlines only those words as the person types, shows the
+three readings, and offers the sentence a designer would say (Tab takes it;
+Enter sends their own words, unchanged — both are fine, and nothing is
+graded). When they pick a reading, it travels with the message as data:
+`readings: [{ word: "pop", reading: "contrast" }]` on the comment.
+
+- **Honour a picked reading.** It is what they meant; do not re-read the word.
+- **No reading picked, and the word is in the list? Ask, in one line,
+  naming the three** — "pop as more contrast, more scale, or more colour?" —
+  rather than guess. `isocan words read "<their sentence>"` prints the
+  readings and the designer's sentence; `--pick pop=contrast` follows one.
+  It prints "nothing here reads more than one way" for a clear ask.
+- **Say it back in design words** when you answer, once, without
+  correcting them: "raised the header's contrast" teaches "contrast".
+- **Learn their own words.** When a person names something their way ("the
+  thumb button"), add it to the taste note, quoted, so the next agent uses it
+  back — and it shows in their vocabulary panel as a word you learned:
+
+```sh
+isocan taste '"the thumb button" means the main action, within thumb reach'
+```
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

@@ -771,6 +771,14 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
     else if (step === "brief" && typeof note === "string" && /^[\w-]{1,64}$/.test(note)) comment.goodnight = { step, note };
     else throw new OpValidationError("bad-op", "a goodnight turn is a plan, or a brief naming its note");
   }
+  if (c.readings !== undefined) {
+    // Picked readings of vague words (proactive-agent phase 10): a few word → reading pairs.
+    const ok = /^[a-z][a-z ]{0,31}$/;
+    if (!Array.isArray(c.readings) || c.readings.length > 8 || !c.readings.every((r) => ok.test(r?.word) && ok.test(r?.reading))) {
+      throw new OpValidationError("bad-op", "readings are up to eight lowercase word → reading pairs");
+    }
+    comment.readings = c.readings.map(({ word, reading }) => ({ word, reading }));
+  }
   if (c.items?.length) comment.items = [...c.items];
   const context = c.context;
   if (context) {

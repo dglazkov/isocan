@@ -287,6 +287,13 @@ export interface Comment {
    * what the morning review finds it by.
    */
   goodnight?: GoodnightMark;
+  /**
+   * The readings a person picked for their own vague words (proactive-agent
+   * phase 10, `vague-words.ts`): "pop" read as `contrast`. The body is what
+   * they typed, untouched; this says which way they meant it, and an agent
+   * honours it rather than guessing.
+   */
+  readings?: Array<{ word: string; reading: string }>;
   /** Item ids #-referenced in the body, resolved at authoring time against
    * the live items the author could see. Absent on older comments. */
   items?: string[];

@@ -462,6 +462,17 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   stumble on one screen, names it and proposes one fix. **They are
   simulations, and say so: they do not replace testing with people.** From an
   item's menu, or `isocan walk <flow> --task "…" [--as …]`.
+- **Say it like a designer**: type "make the header pop more, it feels
+  cramped" in the Chat and only *pop* and *cramped* are underlined, each with
+  the three ways an agent could read it (contrast, scale, colour; spacing,
+  density, size) and the sentence a designer would say. Tab takes that
+  sentence; Enter sends your own words, unchanged — both are fine, and a
+  reading you pick travels with the message so the agent need not guess.
+  Ordinary asks get no underline at all. `/vocabulary` shows the design
+  words you now use, the ones you have seen and not used, and your own words
+  the agent has learned, with *when I am vague* (offers fade as your asks
+  sharpen; always; never). Nothing is graded. `isocan words read "<sentence>"`
+  prints the same readings.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

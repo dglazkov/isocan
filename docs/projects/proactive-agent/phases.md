@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–9 (proposals; the night watch; the morning review; explain; the brief as a card; changes ripple; stuck detection; critics in the room; walk it as someone else) are CLOSED. Next: phase 10, say it like a designer. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–10 are CLOSED. Next: phase 11, evidence. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -294,7 +294,7 @@ shared stumble and one fix proposal; the simulation notice.
 
 ## Phase 10 — Say it like a designer
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `vague-words.ts` (its own subpath): ten vague words (pop, cramped, busy, clean, modern, punchy, heavy, warm, bland/boring/dull, soft), each with three named readings, underlined only where the sentence is about looks (a subject with feels/looks/seems, "make X…", or beside another look word): 0 of 80 precise asks underlined, all 20 vague ones found. In the Chat, on the first keystroke, a lazy card shows each word's readings and the sentence a designer would say; Tab takes it, Enter sends the person's own words unchanged, and a picked reading rides along as `Comment.readings`. `/vocabulary` shows the design words the person now uses, those seen and not yet theirs, and theirs the agent has learned (taste-note lines), with when to offer (fading, always, never) and an opt-in count. `isocan words read`. `vague-words.test.ts` (35), `designerwords.test.ts` (Enter sends the typed text), `words-read.test.ts` and the `proactive-words` journey. Entry 694,115 → 695,764.
 
 **Outcome:** composer underlines for vague words from `design-words.ts` in
 messages to an agent; readings drawn on the person's own screen where one is
@@ -314,6 +314,10 @@ into the taste note.
 - **2026-10-14** — Open: whether a pause to pick feels like friction, and
   whether any count of asks that needed no translation is shown (opt in
   only). Waits on Dion.
+- **2026-10-14** — Chosen, Dion to confirm: the send is never blocked; readings are words, and drawing them on the person's own screen is the lead's and deferred; the count is opt-in and off; offers fade once 8 of the last 10 asks needed no translation.
+- **2026-10-14** — The vague-word list is its own core subpath: importing `design-words` from it split a chunk out of the CLI and took `--version` to 41 modules, so the glossary terms are passed in.
+- **2026-10-14** — The deep run after this phase found two rule breaks from phase 9: a `#fff` literal in the walk panel (now the `.html-view` page white the token rule allows) and two journeys that fired `.click()` directly. Real clicks found the walk panel covering the comment toasts' close buttons; that journey waits out the toasts' 12 s, and the overlap is open.
+- **2026-10-14** — Open, waits on Dion: pictures on the readings; fading per word rather than overall; panels mounted on the body (Walk, Explain) sit above the canvas's toasts.
 
 ## Phase 11 — Evidence
 

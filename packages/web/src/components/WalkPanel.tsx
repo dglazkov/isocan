@@ -313,7 +313,7 @@ function Shot({ screen, html, walker, findings, stumbles, caption, fixed }: { sc
           page's origin (`allow-same-origin`) so it is drawn in this process, where an SVG filter reaches it; with
           no `allow-scripts` nothing in it runs, and nothing in it can be pressed (pointer-events: none). */}
       <div className="walk-lens" style={{ filter: blurred ? `url(#${lensId(scale)})` : undefined }}>
-        <iframe title={screen.title} sandbox="allow-same-origin" tabIndex={-1} srcDoc={html} style={{ width: vp.width, height: vp.height, transform: `scale(${scale})`, background: "#fff" }} />
+        <iframe title={screen.title} sandbox="allow-same-origin" tabIndex={-1} srcDoc={html} style={{ width: vp.width, height: vp.height, transform: `scale(${scale})` }} className="html-view" />
       </div>
       <svg className="walk-overlay" viewBox={`0 0 ${vp.width} ${vp.height}`} aria-hidden="true">
         {reach && <>

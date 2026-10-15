@@ -23,6 +23,13 @@ second week.
 
 ## 14 October 2026
 
+- **Say it like a designer.** Type "make the header pop more, it feels
+  cramped" and only *pop* and *cramped* are underlined, each with the three
+  ways an agent could read it and the sentence a designer would say. Tab
+  takes that sentence; Enter sends your own words, and a reading you picked
+  goes with them. `/vocabulary` shows the design words you now use and the
+  words of yours the agent has learned. Nothing is graded.
+
 - **Walk it as someone else.** Pick a flow, say the task, and walk it
   one-handed on a phone, with low vision, with a screen reader, as a
   first-time visitor, or as someone you describe in a line. Each walker gets

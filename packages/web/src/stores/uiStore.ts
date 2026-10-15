@@ -174,6 +174,8 @@ interface UiStore {
   penSession: boolean;
   /** The help panel (?): what the canvas answers to. */
   helpOpen: boolean;
+  /** Your design vocabulary (`/vocabulary`, proactive-agent phase 10), drawn above the Chat's composer. */
+  vocabularyOpen: boolean;
   /** The Pen's color, or null for "whatever color I am" — the identity color
    * worn by your cursor and your face in the pile. Remembered per browser. */
   inkColor: string | null;
@@ -717,6 +719,7 @@ export const useUiStore = create<UiStore>((set, get) => {
     sketchError: null,
     penSession: false,
     helpOpen: false,
+    vocabularyOpen: false,
     inkColor: readInkColor(),
     activeTool: "select",
     commentMode: false,

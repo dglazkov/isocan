@@ -276,6 +276,7 @@ async function rig() {
         o: { windowsVirtualKeyCode: 79, key: "o", code: "KeyO" },
         Delete: { windowsVirtualKeyCode: 46, key: "Delete", code: "Delete" },
         Escape: { windowsVirtualKeyCode: 27, key: "Escape", code: "Escape" },
+        Tab: { windowsVirtualKeyCode: 9, key: "Tab", code: "Tab" },
         j: { windowsVirtualKeyCode: 74, key: "j", code: "KeyJ" },
         z: { windowsVirtualKeyCode: 90, key: "z", code: "KeyZ" },
       };
@@ -5693,7 +5694,7 @@ export default async function act({ prompt, cli, cwd }) {
         const after = await served(id);
         if (after.items[screen].versions.length !== before.versions.length || after.items[screen].currentVersionId !== before.currentVersionId) throw new Error("a critic changed Home");
         // The four notes' arrival toasts sit over the corner the card is in; dismiss them, as a person would.
-        await b.ev(`(() => { document.querySelectorAll('.toast-close').forEach((x) => x.click()); return true; })()`);
+        while (await b.ev(`!!document.querySelector('.toast-close')`)) await rig.click(".toast-close", "a toast's close button");
         await until(b, `!document.querySelector('.toast')`, "the arrival toasts to go", 10_000);
         const shots = {};
         for (const theme of ["light", "dark"]) {
@@ -5923,7 +5924,9 @@ export default async function act({ prompt, cli, cwd }) {
         const newThreads = Object.keys(after.threads).filter((k) => !before.threads[k] && !after.threads[k].main);
         if (newThreads.length !== 2) throw new Error(`the walk opened ${newThreads.length} threads, not two pins`);
         if (!(await b.ev(`!!document.querySelector('.pin [data-persona="one-handed"]') && !!document.querySelector('.pin [data-persona="low-vision"]')`))) throw new Error("the canvas does not draw the walkers' pins");
-        await b.ev(`(() => { document.querySelectorAll('.toast-close').forEach((x) => x.click()); return true; })()`);
+        // The walk panel sits over the toasts' close buttons (an open issue), so wait out
+        // their 12 s lifetime, as a person who cannot reach them would.
+        await until(b, `!document.querySelector('.toast')`, "the arrival toasts to expire", 16_000);
         await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1700, deviceScaleFactor: 1, mobile: false });
         for (const theme of ["light", "dark"]) {
           await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
@@ -5946,6 +5949,146 @@ export default async function act({ prompt, cli, cwd }) {
         }
         await daemon.stop();
         rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
+    name: "proactive-words",
+    /**
+     * **Say it like a designer** (proactive-agent phase 10, journey scene 10,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * The agent is a stub: the terminal speaking as Kit, parked on `wait`.
+     * Maya types "make the header pop more, it feels cramped" in the Chat:
+     * only *pop* and *cramped* are underlined, each with three readings, and
+     * the designer's sentence is offered on Tab. She picks *contrast* for pop
+     * and presses Enter: her words are sent unchanged, and the reading rides
+     * with them as data — Kit's wait wakes holding both. Then Tab takes the
+     * designer's sentence for "the total needs more pop", which is what is
+     * sent. Kit learns her word for the main button into the taste note, and
+     * `/vocabulary` shows the words she now uses, those she has seen, and
+     * that one. Screenshots of the readings and the panel, light and dark.
+     * No fixed sleeps: the park is waited for as the daemon shows it.
+     */
+    what: "say it like a designer: only the vague words are underlined with three readings; Enter sends the person's words unchanged with the picked reading as data; Tab takes the designer's sentence; the vocabulary panel lists what they use, have seen and taught",
+    async run(rig) {
+      const { b } = rig;
+      // A canvas uses groups: the page's own reads say which shapes they speak.
+      const FEATURES = `{headers:{'x-isocan-features':'canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1'}}`;
+      const env = { ...process.env, ISOCAN_HOME: rig.home, ISOCAN_PORT: new URL(rig.origin).port };
+      const runCli = (args, extra = {}) =>
+        execFileSync(process.execPath, [cli, ...args], { cwd: rig.home, encoding: "utf8", env: { ...env, ...extra } });
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-words-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const themed = async (name, shots) => {
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          // Two frames: the theme's colours are painted before the picture is taken.
+          await b.ev(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))`);
+          shots[`${name}-${theme}`] = await shot(`${name}-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+      };
+
+      writeFileSync(path.join(rig.home, "identity.json"), JSON.stringify({ id: "usr_pw_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      runCli(["bench", "add", "Kit", "--actor", "usr_pw_kit", "--harness", "pi"]);
+      const kit = { ISOCAN_SESSION_ID: "journey-words-kit" };
+      runCli(["identity", "--as", "usr_pw_kit", "--name", "Kit"], kit);
+      const id = JSON.parse(runCli(["--json", "canvas", "create", "Acme Bakery"])).canvasId;
+      const page = path.join(rig.home, "header.html");
+      writeFileSync(page, "<!doctype html><title>Header</title><body style='margin:0;font:16px system-ui'><header style='padding:12px;background:#f4ede4'><h1 style='margin:0'>Acme Bakery</h1><p style='margin:0'>Fresh bread daily</p></header></body>");
+      runCli(["--canvas", id, "add", page, "--at", "0,0", "--size", "390x200", "--title", "Header"]);
+      // Kit has spoken here in design words, so Maya has seen some she has not used.
+      runCli(["--canvas", id, "notify", "Morning! I read the menu: the visual hierarchy leads with the photo, and proximity groups each loaf with its price."], kit);
+
+      // Kit parks — collected at spawn, ready when the daemon shows the park waiting (lessons.md #123).
+      runCli(["--canvas", id, "session", "start", "--label", "Kit 🤖"], kit);
+      const parked = spawn(process.execPath, [cli, "--canvas", id, "wait", "--json", "--timeout", "90"], { cwd: rig.home, env: { ...env, ...kit }, stdio: ["ignore", "pipe", "pipe"] });
+      let woke = "";
+      parked.stdout.on("data", (c) => (woke += c));
+      parked.stderr.on("data", (c) => (woke += c));
+      const exited = new Promise((r) => parked.once("exit", r));
+      try {
+        const { address } = JSON.parse(runCli(["--json", "--canvas", id, "pass"]));
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector(".main-panel .mention-input")`, "the Chat's composer for Maya", 20_000);
+        await until(b, `fetch('/api/projects/${id}/sessions', ${FEATURES}).then(r => r.ok ? r.json() : []).then(s => s.some(x => x.actor.id === "usr_pw_kit" && (x.status ?? "").includes("waiting")))`, "Kit's park to show as waiting", 20_000).catch(async (err) => {
+          throw new Error(`${err.message}: ${await b.ev(`fetch('/api/projects/${id}/sessions', ${FEATURES}).then(r => r.text())`)} / wait said: ${woke.slice(0, 300)}`);
+        });
+
+        // 1. Only the vague words, each with three readings, and the designer's sentence.
+        const said = "make the header pop more, it feels cramped";
+        await rig.click(".main-panel .mention-input", "the Chat's composer");
+        await rig.type(said);
+        const card = `document.querySelector(".main-panel .designer-words")`;
+        await until(b, `!!${card}?.querySelector("[data-designer-sentence]")`, "the readings and the designer's sentence", 10_000);
+        await until(b, `document.querySelectorAll(".main-panel .mention-backdrop .vague-word").length > 0`, "the underline in the composer");
+        const underlined = await b.ev(`JSON.stringify([...document.querySelectorAll(".main-panel .mention-backdrop .vague-word")].map((w) => w.textContent))`);
+        if (underlined !== JSON.stringify(["pop", "cramped"])) throw new Error(`the underline is not exactly pop and cramped: ${underlined}`);
+        const readings = await b.ev(`JSON.stringify([...${card}.querySelectorAll("[data-vague-word]")].map((w) => [w.dataset.vagueWord, [...w.querySelectorAll("[data-reading]")].map((r) => r.dataset.reading)]))`);
+        if (readings !== JSON.stringify([["pop", ["contrast", "scale", "colour"]], ["cramped", ["spacing", "density", "size"]]])) throw new Error(`the readings are not three each: ${readings}`);
+        const sentence = await b.ev(`${card}.querySelector("[data-designer-sentence]").textContent`);
+        if (!sentence.includes("raise the header's contrast and add space between its parts")) throw new Error(`the designer's sentence is not offered: ${sentence}`);
+
+        // 2. She picks contrast by looking; Enter sends her words unchanged, the pick beside them.
+        await rig.click('.main-panel [data-vague-word="pop"] [data-reading="contrast"]', "the contrast reading of pop");
+        await until(b, `${card}.querySelector('[data-reading="contrast"]').getAttribute("aria-checked") === "true"`, "contrast picked");
+        if (!(await b.ev(`document.activeElement?.classList.contains("mention-input")`))) throw new Error("picking a reading took the caret out of the composer");
+        const shots = {};
+        await themed("readings", shots);
+        await rig.press("Enter");
+        await Promise.race([exited, new Promise((r) => setTimeout(r, 20_000))]);
+        if (parked.exitCode === null) throw new Error("Kit's wait did not wake on Maya's message");
+        const wake = JSON.parse(woke.slice(woke.indexOf("{")));
+        const text = JSON.stringify(wake);
+        if (!text.includes(JSON.stringify(said))) throw new Error(`Kit did not get Maya's words unchanged: ${text.slice(0, 600)}`);
+        if (!/"readings":\s*\[\s*\{\s*"word":\s*"pop",\s*"reading":\s*"contrast"\s*\}\s*\]/.test(text)) throw new Error(`the picked reading did not travel with the message: ${text.slice(0, 600)}`);
+        const served = async () => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+        const sent = Object.values((await served()).threads).flatMap((t) => t.comments).filter((c) => c.author.id === "usr_pw_maya");
+        if (sent.length !== 1 || sent[0].body !== said || JSON.stringify(sent[0].readings) !== JSON.stringify([{ word: "pop", reading: "contrast" }])) throw new Error(`the sent message is not her words with the reading as data: ${JSON.stringify(sent)}`);
+        await until(b, `!document.querySelector(".main-panel .designer-words") && document.querySelector(".main-panel .mention-input").value === ""`, "the composer to clear after sending");
+
+        // 3. Tab takes the designer's sentence, and that is what Enter sends.
+        await rig.type("the total needs more pop");
+        await until(b, `!!document.querySelector(".main-panel .designer-words [data-designer-sentence]")`, "the second offer");
+        // The offer is the Chat's once the field's underline is drawn from it.
+        await until(b, `document.querySelectorAll(".main-panel .mention-backdrop .vague-word").length === 1`, "the second underline");
+        await rig.press("Tab");
+        await until(b, `document.querySelector(".main-panel .mention-input").value === "the total needs more contrast"`, "Tab to take the designer's sentence").catch(async (err) => {
+          throw new Error(`${err.message}: the field holds ${await b.ev(`JSON.stringify([document.querySelector(".main-panel .mention-input").value, document.activeElement?.className, document.querySelectorAll(".main-panel .vague-word").length])`)}`);
+        });
+        await rig.press("Enter");
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.threads).flatMap(t => t.comments).some(c => c.author.id === "usr_pw_maya" && c.body === "the total needs more contrast" && !c.readings))`, "the designer's sentence sent, with no readings", 10_000);
+
+        // 4. Kit learns her word; /vocabulary lists what she uses, has seen, and taught.
+        runCli(["--canvas", id, "taste", '"the thumb button" means the main action, within thumb reach'], kit);
+        await until(b, `fetch('/api/projects/${id}/canvas', ${FEATURES}).then(r => r.json()).then(r => Object.values(r.canvas.items).some(i => i.properties?.taste === "1"))`, "the taste note on Maya's canvas", 10_000);
+        await rig.type("/vocabulary");
+        // The "/" menu completes the command on the first Enter; the second sends it.
+        await rig.press("Enter");
+        await rig.press("Enter");
+        const panel = `document.querySelector(".main-panel [data-vocabulary]")`;
+        await until(b, `!!${panel}?.querySelector("ul[data-vocabulary-learned]")`, "the vocabulary panel with a learned word", 10_000);
+        const vocab = await b.ev(`JSON.stringify({ use: [...${panel}.querySelectorAll("[data-vocabulary-use] span")].map((s) => s.textContent), seen: [...${panel}.querySelectorAll("[data-vocabulary-seen] span")].map((s) => s.textContent), learned: ${panel}.querySelector("[data-vocabulary-learned]").textContent, count: !!${panel}.querySelector("[data-vocabulary-count]") })`);
+        const v = JSON.parse(vocab);
+        if (JSON.stringify(v.use) !== JSON.stringify(["contrast"])) throw new Error(`words she now uses: ${vocab}`);
+        if (JSON.stringify(v.seen) !== JSON.stringify(["proximity", "visual hierarchy"])) throw new Error(`words seen and not used: ${vocab}`);
+        if (!v.learned.includes("“the thumb button”") || !v.learned.includes("the main action, within thumb reach")) throw new Error(`the learned word: ${vocab}`);
+        if (v.count) throw new Error("the count of asks showed without being asked for");
+        const leftover = await served();
+        if (Object.values(leftover.threads).flatMap((t) => t.comments).some((c) => c.body.includes("/vocabulary"))) throw new Error("/vocabulary was posted to everyone instead of answered here");
+        await themed("vocabulary", shots);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots };
+      } finally {
+        if (parked.exitCode === null) parked.kill("SIGKILL");
+        try { runCli(["--canvas", id, "session", "end"], kit); } catch { /* already gone */ }
       }
     },
   },

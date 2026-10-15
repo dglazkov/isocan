@@ -80,3 +80,8 @@ export function plainReadings(text: string): { said: string; term: string; means
   }
   return found.sort((a, b) => a.at - b.at).map(({ said, term, means }) => ({ said, term, means }));
 }
+
+/** **Every term the glossary defines** — what the vocabulary panel (§12) counts as a design word. */
+export function glossaryTerms(): string[] {
+  return DESIGN_WORDS.map((w) => w.term);
+}

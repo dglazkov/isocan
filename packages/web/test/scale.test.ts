@@ -223,8 +223,12 @@ describe("spacing", () => {
     // the walk panel's lanes, thumbnails, low-vision swatches and setup in
     // their own lazy sheet, all on existing steps, taking the total to 1,460 from 1,419, one under the old bound;
     // the panel restates Explain's measures rather than sharing a sheet.
+    // 1470 -> 1490 on 14 Oct 2026 for saying it like a designer (phase 10):
+    // the readings card above the Chat's composer and the vocabulary panel,
+    // twenty lengths in the proposal marks' lazy sheet, all on existing
+    // steps, taking the total to 1,480 from 1,460.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1470);
+    expect(spacing.length).toBeLessThan(1490);
   });
 });
 

@@ -8820,6 +8820,51 @@ wordsCommand
   );
 
 /**
+ * **Say it like a designer** — `isocan words read "<sentence>"`
+ * (proactive-agent phase 10, design §12). The words in a sentence an agent
+ * could read more than one way, each with its three named readings, and the
+ * sentence a designer would say — the same list and the same sentence the
+ * Chat composer shows as a person types (`@isocan/core/vague-words`). For a
+ * sentence you are about to act on: when it prints readings and the message
+ * carried no `readings`, ask which one rather than guess. Pure: no canvas,
+ * no daemon. A subcommand of `words` rather than a verb of its own because it
+ * is about words, and the cold start's index already names the family.
+ */
+wordsCommand
+  .command("read <sentence...>")
+  .description("Say it like a designer: the words in a sentence an agent could read more than one way, each with three named readings, and the sentence a designer would say")
+  .option("--pick <word=reading>", "the reading a person picked (repeatable) — the designer's sentence follows it", (v: string, prev: string[] = []) => [...prev, v])
+  .action(
+    run(async (words: string[], opts: { pick?: string[] }, cmd: Command) => {
+      const { designerSentence, readingRefusal, vagueWords } = await import("@isocan/core/vague-words");
+      const text = words.join(" ");
+      const picks: Record<string, string> = {};
+      for (const one of opts.pick ?? []) {
+        const [word = "", reading = ""] = one.split("=").map((x) => x.trim().toLowerCase());
+        const refused = readingRefusal({ word, reading });
+        if (refused) throw new Error(`--pick ${one}: ${refused}`);
+        picks[word] = reading;
+      }
+      const spans = vagueWords(text);
+      const designer = designerSentence(text, picks);
+      if ((cmd.optsWithGlobals() as { json?: boolean }).json) {
+        printJson({ sentence: text, words: spans.map((s) => ({ said: s.said, word: s.word, at: s.start, picked: picks[s.word] ?? null, readings: s.readings })), designer });
+        return;
+      }
+      if (spans.length === 0) {
+        console.log("nothing here reads more than one way — act on it as said");
+        return;
+      }
+      for (const span of spans) {
+        console.log(`“${span.said}” reads three ways${picks[span.word] ? ` — they picked ${picks[span.word]}` : ""}:`);
+        for (const r of span.readings) console.log(`  ${picks[span.word] === r.name ? "●" : "·"} ${r.name.padEnd(13)} ${r.means}`);
+      }
+      console.log(`a designer would say: “${designer}”${Object.keys(picks).length ? "" : " (the first reading of each — a best guess)"}`);
+      console.log("their words are fine as they are; if the message carried no `readings`, ask which one they meant rather than guess");
+    }),
+  );
+
+/**
  * **A mix of voices, folded home** — `isocan words mix <source> --pick
  * <address>=<variant>` (copy-edit phase 3, journey scenes 2 and 6).
  *
