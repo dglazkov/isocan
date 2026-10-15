@@ -1,5 +1,8 @@
-import type { CanvasContents, Item } from "./model.js";
+import type { Actor, CanvasContents, Item } from "./model.js";
+import type { Grant } from "./grants.js";
 import { type CommandMetadata } from "./commands.js";
+import { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor } from "./identity.js";
+export { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor };
 export declare const TOOL_ROLE = "tool";
 /** The properties that make an item this canvas's tool. */
 export declare function toolProperties(): Record<string, string>;
@@ -188,21 +191,28 @@ export declare function readPanelExtension(text: string, canvas: CanvasContents)
  * named as one.
  */
 export declare function panelCapabilities(panel: PanelExtension): string[];
-/**
- * The colours an extension may wear on the dock — muted mineral tones that
- * read on both vellum and graphite grounds and never collide with the seven
- * `IDENTITY_COLORS` that mean a person is standing there.
- */
-export declare const EXTENSION_COLORS: ReadonlyArray<{
-    name: string;
-    value: string;
-}>;
-/** Deterministic extension colour from an item id — never in `IDENTITY_COLORS`. */
-export declare function extensionColor(id: string): string;
+/** Deterministic actor id for a panel item on a canvas (`ext_<suffix>`). */
+export declare function panelActorId(itemId: string): string;
+/** The `Actor` a panel item speaks and writes as on its canvas. */
+export declare function panelActor(itemId: string, title: string): Actor;
+/** Every panel item's actor on `canvas`, in item order. */
+export declare function panelActorsIn(canvas: CanvasContents): Actor[];
+/** `POST` provisions (or re-reads) the panel's actor, badge and grant on `canvasId`. */
+export declare const panelActorRoute: (canvasId: string, itemId: string) => string;
+/** What {@link panelActorRoute} hands back: the panel's own actor, its
+ *  standing grant on this canvas, and the bearer credential bound to that
+ *  grant so the panel's asks go through the door as the panel and not as
+ *  the person watching it. */
+export interface PanelActorResponse {
+    actor: Actor;
+    grant: Grant;
+    badgeId: string;
+    token: string;
+    color: string;
+}
 /**
  * Every panel on this canvas, oldest first, so the dock does not reshuffle
  * itself when somebody edits one. The bytes are not read here — an item's
  * content is fetched by the caller, exactly as `toolExtensionItems` leaves it.
  */
 export declare function panelExtensionItems(canvas: CanvasContents): Item[];
-export {};

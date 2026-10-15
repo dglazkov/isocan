@@ -48,7 +48,7 @@ export * from "./rungs.js";
  *   by the door and never copied onto a row, which is what makes removing a
  *   member one write.
  */
-export type GrantSubject = "link" | `email:${string}` | `repo:${string}` | `group:${string}`;
+export type GrantSubject = "link" | `email:${string}` | `repo:${string}` | `group:${string}` | `panel:${string}`;
 /**
  * **Who owns a canvas: the actor who made it.**
  *
@@ -127,6 +127,12 @@ export declare function groupSubject(groupId: string): GrantSubject;
 export declare function isGroupSubject(subject: unknown): subject is `group:${string}`;
 /** The id behind a group subject, or null when it is not one. */
 export declare function groupIdOf(subject: string): string | null;
+/** The subject a panel item on a canvas is granted as: `panel:<itemId>`. */
+export declare function panelSubject(itemId: string): GrantSubject;
+/** Is this a panel grant subject (`panel:…`)? The shape check is `grantSubjectRefusal`'s. */
+export declare function isPanelSubject(subject: unknown): subject is `panel:${string}`;
+/** The item id behind a panel subject, or null when it is not one. */
+export declare function panelItemIdOf(subject: string): string | null;
 /**
  * **What a grant names: one canvas, or one space** (roles design, "The
  * space"). A discriminated scope rather than two optional fields, so a row

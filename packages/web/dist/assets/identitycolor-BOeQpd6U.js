@@ -1,1 +1,0 @@
-import{dd as o,de as r,g as a}from"./index-DW_BtRlY.js";async function n(t,e){await o(null,t,{type:"actor.setColor",actorId:t.id,color:e});const s={...a.getState().actorColors};e===null?delete s[t.id]:s[t.id]=e,a.setState({actorColors:s})}async function i(t,e,s=t){await o(null,t,{type:"actor.setMark",actorId:s.id,mark:e}),r(s.id,e)}export{n as a,i as s};

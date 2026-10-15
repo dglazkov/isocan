@@ -2319,10 +2319,13 @@ var init_design_scope = __esm({
 });
 
 // packages/core/src/extensions.ts
+var panelActorRoute;
 var init_extensions = __esm({
   "packages/core/src/extensions.ts"() {
     "use strict";
     init_commands();
+    init_identity();
+    panelActorRoute = (canvasId, itemId) => `/api/projects/${encodeURIComponent(canvasId)}/panels/${encodeURIComponent(itemId)}/actor`;
   }
 });
 
@@ -4076,6 +4079,10 @@ var DaemonRoutes = class {
   }
   grants(canvasId) {
     return this.request("GET", grantsRoute(canvasId));
+  }
+  /** Provision or re-read a panel extension's actor, badge, and standing grant on `canvasId`. */
+  panelActor(canvasId, itemId) {
+    return this.request("POST", panelActorRoute(canvasId, itemId), {});
   }
   createGrant(canvasId, subject, capability, actorId) {
     return this.request("POST", grantsRoute(canvasId), {

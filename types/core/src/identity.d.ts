@@ -21,6 +21,22 @@ export declare const IDENTITY_COLORS: ReadonlyArray<{
     name: string;
     value: string;
 }>;
+/**
+ * The colours an extension may wear on the dock — muted mineral tones that
+ * read on both vellum and graphite grounds and never collide with the seven
+ * `IDENTITY_COLORS` that mean a person is standing there.
+ */
+export declare const EXTENSION_COLORS: ReadonlyArray<{
+    name: string;
+    value: string;
+}>;
+/** The prefix every panel extension's actor id wears (`ext_…`), so the colour
+ *  derivation and the desk can tell software in the dock from a person (`usr_…`). */
+export declare const EXTENSION_ACTOR_PREFIX = "ext_";
+/** Is this actor id an extension's (`ext_…`) rather than a person's (`usr_…`)? */
+export declare function isExtensionActor(actorId: string): boolean;
+/** Deterministic extension colour from an item or extension actor id — never in `IDENTITY_COLORS`. */
+export declare function extensionColor(id: string): string;
 /** Chosen colors, keyed by actor id — the registry's `colors` map. */
 export type ActorColors = Record<string, string>;
 /**
@@ -132,5 +148,6 @@ export declare function actorNameIn(names: ActorNames | undefined, actor: {
 /** Any color the app is willing to store or draw with: a literal hex. */
 export declare function isIdentityColor(value: string): boolean;
 /** The color this actor wears: their choice if they made one, else the one
- * their id has always implied. */
+ * their id has always implied. An extension actor (`ext_…`) always wears its
+ * cool mineral tone from `EXTENSION_COLORS`, never a person's `IDENTITY_COLORS`. */
 export declare function actorColor(actorId: string, colors?: ActorColors): string;
