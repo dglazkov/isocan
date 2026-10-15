@@ -61,10 +61,11 @@ const MARKED_STATES: readonly string[] = ["sure", "hunch", "promised", "failed"]
 /**
  * What can prompt a proposal (design §2.3): a comment, an op by seq, an item
  * version, a DESIGN.md version, a brief fact, a promise, a docket finding,
- * a critic's note, or an Explain critique (`explain:<comment>`, phase 4).
+ * a critic's note, an Explain critique (`explain:<comment>`, phase 4), or a
+ * walk (`walk:<the ask's comment>`, phase 9).
  * The kind is checked; the ref is the kind's own id.
  */
-export const CITE_KINDS = ["comment", "op", "version", "design", "brief", "promise", "docket", "critic", "explain"] as const;
+export const CITE_KINDS = ["comment", "op", "version", "design", "brief", "promise", "docket", "critic", "explain", "walk"] as const;
 /** One trigger a proposal cites. */
 export interface ProposalCite {
   kind: (typeof CITE_KINDS)[number];

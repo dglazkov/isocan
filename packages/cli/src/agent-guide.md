@@ -168,7 +168,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
 - `explain <item>` — how an item got here: the versions that mattered and why, the roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
 - `ripple [item]` — a screen's settled edits read against every other screen, your read-back and previews, the person's altitude; no item: the pulse (`proactive`)
-- `stuck [item]` — tries that all missed: ask, don't guess again (`proactive`)
+- `stuck [item]` — tries that missed: ask, don't guess; `walk [flow]` — a flow as simulated people see it (`proactive`)
 - `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
@@ -3995,7 +3995,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `ripple`, `stuck`, critics in the room and the desk check -->
+<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `ripple`, `stuck`, critics in the room and the desk check, `walk` -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4323,6 +4323,56 @@ design receipts, and the critics set to *before I share* — who are asked of
 you as a crit, with the findings, once per screen version. `isocan share
 --check` runs it alone and changes nothing. **It reports; it never blocks**:
 a blocker a critic raises is a warning in the room, not a gate.
+A walk is not part of the check; it is offered as its last line.
+
+## Walk it as someone else
+
+A person asks for a walk of a task over a flow — a group of screens (reading
+order), a wire prototype (its links, from where it opens), or one screen —
+as one or more **walkers**: each one situation and one constraint, never a
+biography. The starters are `one-handed` (a phone in one hand, the right
+thumb), `low-vision` (about 20/80, at reading distance), `screen-reader` and
+`first-time`; a person can describe another (`--as "commuter: one hand on a
+strap, reading on a moving bus"`). **They are simulations**: every surface
+says so, and so do you — they never replace testing with people.
+
+```sh
+isocan walk "Order a loaf"                                   # the lanes, measured; writes nothing
+isocan walk "Order a loaf" --task "order a loaf for Saturday" --as one-handed --as low-vision
+```
+
+What can be measured is measured, from the screens' own code, and you never
+narrate over it: thumb reach and target size where the CSS places a target
+(44×44 outside the thumb's easy zone, 24×24 anywhere), contrast against
+WCAG with what low vision sees and the nearest fix, names and roles for a
+screen reader. Each finding has an id per screen (`3.1`). The first-time
+walker and described ones are yours to judge; their pins say so.
+
+The ask reaches you, the lead, in the Chat: "Walk it as someone else, please
+(…)" with the screens at their versions, each walker and what was measured.
+Walk each one through the task in order, then answer once:
+
+```sh
+isocan walk --stumble "one-handed | Checkout | 3.1 | Could not reach Help in the corner." \
+  --stumble "low-vision | Checkout | 3.1 | Could not see Edit beside the time." \
+  --stumble "first-time | Choose a day | judged | Did not know “slot” meant a pickup time." \
+  --outcome "one-handed | stumbled | Reached Pay, not Help." \
+  --outcome "low-vision | stumbled | Could not find Edit." --outcome "first-time | made it | …" \
+  --shared "Checkout | The secondary actions are faint and out of the thumb's reach." \
+  --fix checkout-fix.html --why "Contrast and target size: Edit darkens to 7:1 and Help grows to 48 px."
+```
+
+- **A measured walker's stumble cites what was measured on that screen** (its
+  id), or says `judged` — and a judged pin says it was not measured.
+- **Every walker ends once** — made it, stumbled or gave up — and an ending
+  agrees with the pins: no "made it" after a stumble, no "gave up" without one.
+- **Where two or more walkers stumbled on one screen, name it** (`--shared`)
+  and make **one fix**: a proposal beneath that screen citing `walk:<id>`,
+  under the cap. The walk writes the pins (comments worn as each walker), the
+  record in the Chat and that proposal — nothing else, and never the screen.
+
+`isocan walk [walk]` reads a walk back: the lanes, your pins and outcomes,
+the shared finding and the fix, or why it waits.
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

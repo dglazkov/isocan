@@ -449,6 +449,19 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   the words against the Voice, wires behind the design system, stale
   receipts — and ask the critics set to *before I share*. It reports; it
   never blocks. `isocan share --check` runs it alone.
+- **Walk it as someone else**: pick a flow — a group of screens, a wire
+  prototype, or one screen — say the task, and walk it one-handed on a phone,
+  with low vision, with a screen reader, as a first-time visitor, or as
+  someone you describe in a line (a situation and a constraint, never who
+  they are). A lane per walker draws the screens as they meet them: the
+  thumb's reach over each phone screen, the screen blurred and washed out for
+  low vision with the failing words shown as they see them beside the fix,
+  the reading order for a screen reader. What the screens' code can say is
+  measured; the lead agent walks the task, pins each stumble where it
+  happens, ends each lane (made it, stumbled, gave up), and where several
+  stumble on one screen, names it and proposes one fix. **They are
+  simulations, and say so: they do not replace testing with people.** From an
+  item's menu, or `isocan walk <flow> --task "…" [--as …]`.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

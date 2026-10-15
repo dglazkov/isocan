@@ -51,6 +51,7 @@ const KIND_WORD: Record<ProposalCite["kind"], string> = {
   docket: "a finding",
   critic: "a critic's note",
   explain: "a critique",
+  walk: "a walk",
 };
 
 /**
@@ -60,6 +61,12 @@ const KIND_WORD: Record<ProposalCite["kind"], string> = {
  * (`cites · For`, phase 5); anything else says its kind and ref.
  */
 export function citeLabel(canvas: CanvasContents, cite: ProposalCite): string {
+  if (cite.kind === "walk") {
+    // The walk's ask quotes its task: “Walk it as someone else, please (…): “<task>” as …”.
+    const ask = Object.values(canvas.threads).flatMap((t) => t.comments).find((c) => c.id === cite.ref);
+    const task = ask ? /\): “([^\n]*?)” as /.exec(ask.body)?.[1] : undefined;
+    if (task) return `a walk, “${task.length > 40 ? `${task.slice(0, 39)}…` : task}”`;
+  }
   if (cite.kind === "comment" || cite.kind === "explain") {
     for (const thread of Object.values(canvas.threads)) {
       const c = thread.comments.find((one: Comment) => one.id === cite.ref) ?? (thread.id === cite.ref ? thread.comments[0] : undefined);

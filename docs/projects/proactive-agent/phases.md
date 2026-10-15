@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–8 (proposals; the night watch; the morning review; explain; the brief as a card; changes ripple; stuck detection; critics in the room) are CLOSED. Next: phase 9, walk it as someone else. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–9 (proposals; the night watch; the morning review; explain; the brief as a card; changes ripple; stuck detection; critics in the room; walk it as someone else) are CLOSED. Next: phase 10, say it like a designer. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -266,7 +266,7 @@ set to *before I share*), reporting and never blocking.
 
 ## Phase 9 — Walk it as someone else
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `walk.ts` (its own subpath) takes a flow (a module's prototype through a new `CoreModule.walkFlow` hook, a group in reading order, or one screen) and, from a static read of each screen's own HTML and CSS (`walk-read.ts`), measures what each walker meets: the thumb's reach on a 390×844 phone, contrast at WCAG 2.2's thresholds and as seen by a low-vision walker (about 20/80, a blur and veil with their sources stated), the reading order for a screen reader. The lead walks the task through the ordinary summons, pins each stumble worn as the walker, ends each lane (made it, stumbled, gave up) and, where two or more stumble on one screen, proposes one fix citing `walk:`. Every surface says first that these are simulations and do not replace testing with people. A lazy panel; `isocan walk`. `walk.test.ts` (core 12, CLI), `walk-flow.test.ts` and the `proactive-walk` journey (no screen changes; one proposal). Entry 693,724 → 694,115.
 
 **Outcome:** `isocan walk <flow> --task "…" --as low-vision --as
 one-handed`; deterministic walkers over a wire prototype path or a group's
@@ -286,6 +286,11 @@ shared stumble and one fix proposal; the simulation notice.
 
 - **2026-10-14** — Open: how walkers are grounded so they are not
   caricatures, and whether a walk joins the desk check. Waits on Dion.
+- **2026-10-14** — The measurements are a static read: contrast is exact, but reach is measured only where the CSS places a target (fixed or absolute); flex and flow targets are counted as unplaced and left to the lead. A browser-measured layout is the next step.
+- **2026-10-14** — Stumbles are grounded: a measured stumble cites a finding id or says `judged`; endings must agree with the pins; a screen two walkers hit must be named with exactly one fix.
+- **2026-10-14** — The low-vision render is an SVG filter at the thumbnail's scale; it needs the frame drawn in-process (`sandbox="allow-same-origin"`, no scripts), since a plain sandboxed frame silently ignored the filter.
+- **2026-10-14** — Chosen, Dion to confirm: walkers are a situation plus a constraint (one-handed, low vision, screen reader, first-time, or one described in a line and judged, never measured); identity words are refused; a walk is not part of the desk check, which offers it as its last line; one-handed means the right thumb.
+- **2026-10-14** — Open, waits on Dion: reach from a real browser measure; a left-handed walker; walkers as editable items on the canvas; walker colours for pins; the ask and the record print raw item ids and long instructions in the Chat.
 
 ## Phase 10 — Say it like a designer
 

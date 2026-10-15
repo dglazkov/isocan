@@ -23,6 +23,14 @@ second week.
 
 ## 14 October 2026
 
+- **Walk it as someone else.** Pick a flow, say the task, and walk it
+  one-handed on a phone, with low vision, with a screen reader, as a
+  first-time visitor, or as someone you describe in a line. Each walker gets
+  a lane: the thumb's reach over each screen, the screen as low vision sees
+  it beside the fix, the reading order. The agent pins each stumble and
+  proposes one fix where several stumble. These are simulations, and every
+  surface says so: they do not replace testing with people. `isocan walk`.
+
 - **Critics in the room.** Switch on lenses for a canvas (The Reductionist,
   The Brand Voice, or one you describe in a line), each with how loud and
   when. Ask the room about a screen and pins land in each critic's colour;

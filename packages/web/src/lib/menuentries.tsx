@@ -17,7 +17,7 @@ import {
   TrashGlyph,
   WorkbenchGlyph,
 } from "../components/Glyphs.tsx";
-import { cutItems, deleteItems, downloadItem, explainItem, itemAddress, pasteInto } from "./itemactions.ts";
+import { cutItems, deleteItems, downloadItem, explainItem, itemAddress, pasteInto, walkItem } from "./itemactions.ts";
 import { PAINTED } from "../components/themes/PaintedGround.tsx";
 import { MOTIONS, MOTION_LABELS, currentMotion, writeMotion } from "./groundmotion.ts";
 import { captureClipboard } from "./clipboard.ts";
@@ -380,6 +380,8 @@ function oneItemEntries(one: Item, version: Item["versions"][number] | null, ctx
     }] : []),
     // How it got here (proactive-agent phase 4) — `isocan explain`; a panel beside the canvas, loaded on the click.
     { label: "Explain", run: () => explainItem(ctx.canvasId, ctx.actor, one.id) },
+    // Walk it as someone else (proactive-agent phase 9) — `isocan walk`; a group of screens, a prototype or a screen, loaded on the click.
+    ...(version?.mimeType === "text/html" || one.properties.kind === "group" ? [{ label: "Walk it as someone else…", run: () => walkItem(ctx.canvasId, ctx.actor, one.id) }] : []),
     // Changes ripple (proactive-agent phase 6) — `isocan ripple`; a screen's edits read against every other screen, loaded on the click.
     ...(version?.mimeType === "text/html" && history ? [{ label: "Ripple…", run: () => void import("../components/RipplePanel.tsx").then((m) => m.openRipple({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })) }] : []),
     // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary` — and, once

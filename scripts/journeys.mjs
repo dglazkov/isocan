@@ -5739,6 +5739,217 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "proactive-walk",
+    /**
+     * **Walk it as someone else** (proactive-agent phase 9, journey scene 9,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme flow, "Order a loaf": three phone screens in a
+     * group, Checkout with a faint "Edit" and a small "Help" in the bottom-left
+     * corner.
+     *
+     * Maya opens *Walk it as someone else…* from the group's menu, says the
+     * task, and walks it one-handed and with low vision. With Kit not yet
+     * answering, the lanes draw anyway — the thumb's zones over each screen,
+     * the low-vision render, the failing words as they see them beside the fix
+     * — the notice says these are simulations, the walk says it waits, and
+     * nothing is written. With Kit's rc parked, Walk asks Kit; Kit pins one
+     * stumble per walker on Checkout, ends each lane, names the shared problem
+     * and proposes one fix. The canvas carries the two pins worn as the
+     * walkers and one proposal citing the walk; every screen is unchanged.
+     * Screenshots of the lanes, light and dark.
+     */
+    what: "walk it as someone else: two lanes over a flow with the thumb's zones and the low-vision render beside the fix, the simulation notice, the walk waiting with nothing to answer; with Kit, pins, outcomes, a shared finding and one fix — nothing else written",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-walk-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_walk_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      const pages = {
+        "Pick a loaf": `<!doctype html><meta charset="utf-8"><title>Pick a loaf</title><style>body{margin:0;color:#1d1b18;background:#fffdf8;font:16px system-ui}h1{padding:24px 16px 0}ul{padding:0 16px;list-style:none}li{padding:12px 0;border-bottom:1px solid #e8dcc8}.go{position:fixed;left:16px;right:16px;bottom:16px;height:56px;border:0;border-radius:12px;background:#8a3a20;color:#fff;font:600 16px system-ui}</style><body><h1>Pick a loaf</h1><ul><li><a href="#rye">Rye</a></li><li><a href="#sourdough">Sourdough</a></li><li><a href="#seeded">Seeded</a></li></ul><button class="go">Continue</button></body>`,
+        "Choose a day": `<!doctype html><meta charset="utf-8"><title>Choose a day</title><style>body{margin:0;color:#222;background:#fffdf8;font:16px system-ui}h1{padding:24px 16px 0}label,select{display:block;margin:8px 16px}.go{position:fixed;left:16px;right:16px;bottom:16px;height:56px;border:0;border-radius:12px;background:#8a3a20;color:#fff;font:600 16px system-ui}</style><body><h1>Choose a day</h1><label for="d">Pickup day</label><select id="d"><option>Saturday</option><option>Sunday</option></select><button class="go">Continue</button></body>`,
+        Checkout: `<!doctype html><meta charset="utf-8"><title>Checkout</title><style>body{margin:0;color:#222;background:#ffffff;font:16px system-ui}h1{padding:24px 16px 0}p{margin:8px 16px}.edit{color:#aaaaaa;background:#ffffff;border:0;font:16px system-ui}.help{position:fixed;left:8px;bottom:8px;width:28px;height:28px;display:grid;place-items:center;border-radius:14px;background:#eee;color:#222;text-decoration:none}.pay{position:fixed;left:16px;right:16px;bottom:56px;height:56px;border:0;border-radius:12px;background:#8a3a20;color:#fff;font:600 16px system-ui}</style><body><h1>Checkout</h1><p>Sourdough, Saturday 9:00 <button class="edit">Edit</button></p><p>£4.20</p><button class="pay">Pay £4.20</button><a class="help" href="#help" aria-label="Help">?</a></body>`,
+      };
+      // Kit, scripted: asked to walk, it pins one stumble per walker on Checkout, ends each lane, and proposes one fix.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId || !prompt.includes("Walk it as someone else, please (")) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const fix = path.join(cwd, "checkout-fix.html");
+  writeFileSync(fix, ${JSON.stringify(pages.Checkout.replace("#aaaaaa", "#595959").replace("width:28px;height:28px", "width:48px;height:48px"))});
+  run("walk",
+    "--stumble", "one-handed | Checkout | 3.1 | Could not reach Help in the far corner with the thumb.",
+    "--stumble", "low-vision | Checkout | 3.1 | Could not see Edit beside the pickup time.",
+    "--outcome", "one-handed | stumbled | Paid, but never found help.",
+    "--outcome", "low-vision | stumbled | Paid without changing the day: Edit was invisible.",
+    "--shared", "Checkout | The secondary actions are faint and out of the thumb's reach.",
+    "--fix", fix, "--why", "Contrast and target size: Edit darkens to 7:1 and Help grows to 48 px.");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (args, as = {}) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env: { ...env, ...as } });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-walk-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const panel = `document.querySelector("[data-walk-panel]")`;
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+      const comments = (c) => Object.values(c.threads).flatMap((t) => t.comments);
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli(["canvas", "create", "Acme Bakery"]).canvasId;
+        runCli(["--canvas", id, "canvas", "group", "new", "Order a loaf"]);
+        const screens = {};
+        let x = 0;
+        for (const [title, html] of Object.entries(pages)) {
+          const file = path.join(home, `${title.replace(/\W+/g, "-")}.html`);
+          writeFileSync(file, html);
+          screens[title] = runCli(["--canvas", id, "add", file, "--title", title, "--size", "390x844", "--in", "Order a loaf", "--at", `${x},0`]).itemId;
+          x += 470;
+        }
+        runCli(["--canvas", id, "rc", "add", "Kit", "--dir", kitDir]);
+        runCli(["--canvas", id, "canvas", "edit", "--prop", "proactive=Kit"]);
+
+        const { address } = runCli(["--canvas", id, "pass"]);
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector('[data-item-id="${screens.Checkout}"]')`, "the canvas with the flow", 20_000);
+        const before = await served(id);
+        const group = Object.values(before.items).find((i) => i.properties.kind === "group");
+        if (!group) throw new Error("no group on the canvas");
+
+        // 1. The group's menu → Walk it as someone else…: the task, two walkers, Walk — with Kit not answering.
+        const openMenu = async () => {
+          const at = await b.ev(`(() => { const r = document.querySelector('.item[data-item-id="${screens["Choose a day"]}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height * 0.5) }; })()`);
+          const mouse = (type, button) => b.send("Input.dispatchMouseEvent", { type, x: at.x, y: at.y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+          await mouse("mousePressed", "left");
+          await mouse("mouseReleased", "left");
+          await mouse("mousePressed", "right");
+          await mouse("mouseReleased", "right");
+          await sleep(500);
+          const menuText = await b.ev(`[...document.querySelectorAll('.context-menu [role=menuitem]')].map(e => e.textContent.trim()).join(' | ')`);
+          await rig.clickText(".context-menu [role=menuitem]", "Walk it as someone else", `Walk it as someone else… in the group's menu (it offers: ${menuText})`);
+          await until(b, `!!${panel}`, "the walk panel", 15_000);
+        };
+        await openMenu();
+        const opened = await b.ev(`${panel}.dataset.walkPanel`);
+        if (opened !== group.id) throw new Error(`the panel opened on ${opened}, not the group ${group.id}`);
+        await until(b, `${panel}.querySelector('[data-walk-flow]')?.textContent.includes('Pick a loaf → Choose a day → Checkout')`, "the flow's three screens in reading order", 15_000);
+        await b.ev(`(() => { const i = ${panel}.querySelector('[data-walk-task]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, 'order a loaf for Saturday'); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+        const picked = JSON.parse(await b.ev(`JSON.stringify([...${panel}.querySelectorAll('[data-walk-walker]')].filter((c) => c.checked).map((c) => c.dataset.walkWalker))`));
+        if (JSON.stringify(picked) !== JSON.stringify(["one-handed", "low-vision"])) throw new Error(`the default walkers are ${JSON.stringify(picked)}`);
+        await until(b, `!${panel}.querySelector('[data-walk-go]').disabled`, "Walk to be ready (the screens read)", 15_000);
+        await rig.click("[data-walk-go]", "Walk");
+        await until(b, `!!${panel}.querySelector('[data-walk-waits]')?.textContent.startsWith('The walk waits')`, "the walk to say it waits", 15_000);
+        await until(b, `${panel}.querySelectorAll('[data-walk-lane="one-handed"] [data-walk-render="thumb"]').length === 3 && ${panel}.querySelectorAll('[data-walk-lane="low-vision"] [data-walk-render="low-vision"]').length >= 3`, "two lanes, the thumb's zones and the low-vision render on every screen", 15_000);
+        const notice = await b.ev(`${panel}.querySelector('[data-walk-notice]')?.textContent ?? ""`);
+        if (!/These are simulations, not people/.test(notice) || !/do not replace testing/.test(notice)) throw new Error(`the simulation notice is missing: ${notice}`);
+        const waitsText = await b.ev(`${panel}.querySelector('[data-walk-waits]').textContent`);
+        const seen = JSON.parse(await b.ev(`JSON.stringify([...${panel}.querySelectorAll('[data-walk-lane="low-vision"] [data-walk-seen] [data-walk-swatch]')].map((s) => [s.dataset.walkSwatch, s.textContent, getComputedStyle(s).color, getComputedStyle(s).filter]))`));
+        if (seen.length !== 2 || seen[0][0] !== "seen" || seen[1][0] !== "fix" || seen[0][1] !== "Edit" || seen[0][2] === seen[1][2] || !seen.every((s) => s[3].includes("walk-low-vision"))) throw new Error(`the failure is not shown as they see it beside the fix: ${JSON.stringify(seen)}`);
+        if (!(await b.ev(`!!${panel}.querySelector('[data-walk-lane="low-vision"] [data-walk-fixed]')`))) throw new Error("no screen drawn with the fix in the low-vision lane");
+        const lenses = JSON.parse(await b.ev(`JSON.stringify([...${panel}.querySelectorAll('[data-walk-lane="low-vision"] .walk-lens')].map((l) => getComputedStyle(l).filter))`));
+        if (!lenses.length || !lenses.every((f) => /url\(.*walk-low-vision/.test(f))) throw new Error(`the low-vision lane's screens are not drawn through the low-vision filter: ${JSON.stringify(lenses)}`);
+        if (await b.ev(`[...${panel}.querySelectorAll('[data-walk-lane="one-handed"] .walk-lens')].some((l) => getComputedStyle(l).filter !== "none")`)) throw new Error("the one-handed lane is drawn blurred");
+        const reachFinding = await b.ev(`${panel}.querySelector('[data-walk-lane="one-handed"] [data-walk-screen="${screens.Checkout}"] [data-walk-finding="3.1"]')?.textContent ?? ""`);
+        if (!reachFinding.includes("“Help” is 28×28 px in the stretch zone")) throw new Error(`the one-handed lane does not find Help: ${reachFinding}`);
+        const asked = await served(id);
+        if (comments(asked).length !== comments(before).length) throw new Error("a walk with nothing to answer wrote a comment");
+        const shots = {};
+        // Tall enough for both lanes at once: the thumb's zones above, low vision beside the fix below.
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1700, deviceScaleFactor: 1, mobile: false });
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`waits-${theme}`] = await shot(`waits-${theme}`);
+        }
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        await b.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+        await b.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+        await until(b, `!${panel}`, "Escape to close the panel");
+
+        // 2. Kit's rc parks; Walk asks Kit, whose pins, outcomes, shared finding and one fix come back.
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+        await openMenu();
+        await until(b, `!!${panel}.querySelector('[data-walk-task]')`, "the walk's setup");
+        await b.ev(`(() => { const i = ${panel}.querySelector('[data-walk-task]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, 'order a loaf for Saturday'); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+        await until(b, `!${panel}.querySelector('[data-walk-go]').disabled`, "Walk to be ready", 15_000);
+        await rig.click("[data-walk-go]", "Walk");
+        await until(b, `${panel}.querySelectorAll('[data-walk-outcome]').length === 2 && !!${panel}.querySelector('[data-walk-shared] [data-walk-fix]')`, "Kit's outcomes and the shared finding with its fix", 60_000);
+        const outcomes = JSON.parse(await b.ev(`JSON.stringify([...${panel}.querySelectorAll('[data-walk-outcome]')].map((o) => o.dataset.walkOutcome))`));
+        if (JSON.stringify(outcomes) !== JSON.stringify(["stumbled", "stumbled"])) throw new Error(`the lanes end ${JSON.stringify(outcomes)}`);
+        const sharedText = await b.ev(`${panel}.querySelector('[data-walk-shared]').textContent`);
+        if (!sharedText.includes("“Checkout”: The secondary actions are faint and out of the thumb's reach.")) throw new Error(`the shared finding does not name Checkout: ${sharedText}`);
+        const lanePins = await b.ev(`${panel}.querySelectorAll('[data-walk-pin]').length`);
+        if (lanePins < 2) throw new Error(`the lanes carry ${lanePins} pins, not one per stumble`);
+        const after = await served(id);
+        const added = Object.keys(after.items).filter((k) => !before.items[k]);
+        if (added.length !== 1) throw new Error(`the walk added ${added.length} items, not one proposal`);
+        const proposal = after.items[added[0]];
+        const cites = JSON.parse(proposal.properties.proposalCites ?? "[]");
+        if (proposal.properties.parent !== screens.Checkout || cites[0]?.kind !== "walk") throw new Error(`the fix is not a proposal beneath Checkout citing the walk: ${JSON.stringify(proposal.properties)}`);
+        for (const [title, sid] of Object.entries(screens)) {
+          if (after.items[sid].currentVersionId !== before.items[sid].currentVersionId || after.items[sid].versions.length !== before.items[sid].versions.length) throw new Error(`the walk changed ${title}`);
+        }
+        const pins = Object.values(after.threads).filter((t) => t.anchorItemId === screens.Checkout && ["one-handed", "low-vision"].includes(t.comments[0]?.persona));
+        if (pins.length !== 2) throw new Error(`Checkout carries ${pins.length} walker pins, not two`);
+        const newThreads = Object.keys(after.threads).filter((k) => !before.threads[k] && !after.threads[k].main);
+        if (newThreads.length !== 2) throw new Error(`the walk opened ${newThreads.length} threads, not two pins`);
+        if (!(await b.ev(`!!document.querySelector('.pin [data-persona="one-handed"]') && !!document.querySelector('.pin [data-persona="low-vision"]')`))) throw new Error("the canvas does not draw the walkers' pins");
+        await b.ev(`(() => { document.querySelectorAll('.toast-close').forEach((x) => x.click()); return true; })()`);
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1700, deviceScaleFactor: 1, mobile: false });
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`walked-${theme}`] = await shot(`walked-${theme}`);
+        }
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots, waits: waitsText };
+      } catch (err) {
+        const said = await b.ev(`(document.querySelector("[data-walk-panel]")?.textContent ?? "no panel").slice(0, 1500)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the panel ---\n${said}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
     name: "launcher",
     /** ⌘K stopped being a third composer and became the way to reach
      *  everything. A launcher that opens but does nothing is the worst version

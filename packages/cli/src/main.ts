@@ -9468,6 +9468,32 @@ program
   );
 
 /**
+ * **Walk it as someone else** (proactive-agent phase 9): the lanes of a flow
+ * as each simulated person meets it, measured; with `--task`, the lead asked
+ * to walk them; the lead's pins, outcomes, shared finding and one fix. The
+ * body lives in `walk.ts`, loaded on this verb only.
+ */
+program
+  .command("walk [ref]")
+  .description("Walk it as someone else: a flow's screens as each simulated person meets them (measured), the lead asked to walk a task, its stumbles as pins and one fix — simulations, not testing with people")
+  .option("--task <task>", "the person's ask: what they are trying to do — the lead is asked to walk it")
+  .option("--as <walker>", "who walks it: one-handed, low-vision, screen-reader, first-time, or \"<name>: <what they are doing, what they cannot do>\" (repeatable; default one-handed and low-vision)", collectList)
+  .option("--stumble <pin>", "the lead's answer: \"<walker> | <screen> | <measured id, or judged> | <what happened>\" — a pin worn as the walker (repeatable)", collectList)
+  .option("--outcome <end>", "the lead's answer: \"<walker> | made it|stumbled|gave up | <one line>\" — one for every walker", collectList)
+  .option("--shared <finding>", "the lead's answer: \"<screen> | <the problem, in design words>\" — where two or more walkers stumbled")
+  .option("--fix <file>", "with --shared: the one fix, a proposal beneath that screen citing the walk")
+  .option("--why <text>", "with --fix: why, in design words (two sentences at most)")
+  .option("--hunch", "with --fix: draw it as a hunch")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (ref: string | undefined, opts: import("./walk.ts").WalkOpts, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { walk } = await import("./walk.ts");
+      await walk(ctx, goodnightDeps(), ref, opts);
+    }),
+  );
+
+/**
  * **What changed between two versions** (docs/projects/version-diff/design.md).
  *
  * Choosing a variation, or reviewing an agent's edit, without seeing what is

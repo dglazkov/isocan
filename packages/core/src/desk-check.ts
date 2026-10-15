@@ -84,6 +84,14 @@ export function deskCheckSummary(sections: readonly DeskCheckSection[]): string 
   return `Desk check before you share: ${look ? `${plural(look, "thing")} to look at` : "nothing to look at"} — it reports; it never blocks.`;
 }
 
+/**
+ * **A walk is offered, never run** (proactive-agent phase 9; chosen, Dion to
+ * confirm): walking a flow as someone else is a conversation with the lead,
+ * not a check, so the desk check names it as its last line and leaves it to
+ * the person.
+ */
+export const DESK_CHECK_WALK = "Not part of this check: a walk — `isocan walk <flow> --task \"…\"` — walks it as someone else (simulations, never a gate).";
+
 /** The findings as sentences for the critics set to *before I share* to read through their lenses — what is flagged, nothing else. */
 export function deskCheckFindings(sections: readonly DeskCheckSection[]): string[] {
   return sections.filter((s) => !s.ok).map((s) => `${s.heading}: ${s.lines.join("; ")}.`);

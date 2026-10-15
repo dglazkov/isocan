@@ -3,6 +3,7 @@ import type { CoreModule } from "@isocan/core";
 import type { CliHost, CliModule } from "@isocan/cli/modulehost";
 import { KEEP_EMOJI, wireframeModule } from "./record.ts";
 import { WIRE_COMMAND, WIRE_PROPERTY_KEYS } from "./wire-command.ts";
+import { prototypeWalkFlow } from "./walk-flow.ts";
 
 /**
  * **Wireframes from the terminal** — the agent's hands on the same catalog
@@ -263,6 +264,8 @@ const wireframeCliCore: CoreModule = {
   ...wireframeModule,
   propertyKeys: [...WIRE_PROPERTY_KEYS],
   commands: [WIRE_COMMAND],
+  // A walk follows a prototype's links (proactive-agent phase 9).
+  walkFlow: prototypeWalkFlow,
 };
 
 export const wireframeCli: CliModule = {

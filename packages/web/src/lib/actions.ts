@@ -11,7 +11,7 @@ import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts"
 import { formatMoves, formatScope, itemChrome, tidyMoves, type FormatMode, type Item } from "@isocan/core";
 import { hasRoomForChrome } from "./chrome.ts";
 import { canEditNow } from "./capability.ts";
-import { explainItem } from "./itemactions.ts";
+import { explainItem, walkItem } from "./itemactions.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
 import { modules, moduleViews } from "../modules.ts";
 
@@ -332,6 +332,8 @@ export const ACTIONS: readonly Action[] = [
   },
   // Proactive-agent phase 4: how the selected item got here — `isocan explain`'s door.
   { id: "explain", name: "Explain this item", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => explainItem(ctx.canvasId!, ctx.actor, ctx.selection[0]!) },
+  // Proactive-agent phase 9: the selected flow walked as simulated people — `isocan walk`'s door.
+  { id: "walk", name: "Walk it as someone else", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => walkItem(ctx.canvasId!, ctx.actor, ctx.selection[0]!) },
   // Proactive-agent phase 6: the selected screen's edits read against every other screen — `isocan ripple`'s door.
   { id: "ripple", name: "Ripple this screen's changes", group: "Open", available: (ctx) => onCanvas(ctx) && ctx.selection.length === 1, run: (ctx) => void import("../components/RipplePanel.tsx").then((m) => m.openRipple({ canvasId: ctx.canvasId!, actor: ctx.actor, itemId: ctx.selection[0]! })) },
   {

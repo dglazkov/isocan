@@ -219,8 +219,12 @@ describe("spacing", () => {
     // strip and the ripple panel in their own lazy sheet, all on existing
     // steps, taking the total to 1,405; the panel restates Explain's
     // measures rather than sharing a sheet across two lazy chunks.
+    // 1420 -> 1470 on 14 Oct 2026 for walking it as someone else (phase 9):
+    // the walk panel's lanes, thumbnails, low-vision swatches and setup in
+    // their own lazy sheet, all on existing steps, taking the total to 1,460 from 1,419, one under the old bound;
+    // the panel restates Explain's measures rather than sharing a sheet.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1420);
+    expect(spacing.length).toBeLessThan(1470);
   });
 });
 

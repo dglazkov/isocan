@@ -1,7 +1,7 @@
 import { CanvasHandle, readDesignAudit } from "@isocan/api";
 import { readDeskCheck } from "@isocan/api/desk-check";
 import type { Canvas, CanvasSnapshotResponse } from "@isocan/core";
-import { deskCheckFindings, deskCheckSections, deskCheckSummary, type DeskCheckInput, type DeskCheckSection } from "@isocan/core/desk-check";
+import { DESK_CHECK_WALK, deskCheckFindings, deskCheckSections, deskCheckSummary, type DeskCheckInput, type DeskCheckSection } from "@isocan/core/desk-check";
 import type { Ctx } from "./ctx.ts";
 import type { CliHost, CliModule } from "./modulehost.ts";
 
@@ -83,5 +83,6 @@ export function printDeskCheck(check: DeskCheck | { failed: string }): void {
     console.log(`  ${s.key === "critics" ? "·" : s.ok ? "✓" : "!"} ${s.heading}: ${first ?? ""}`);
     for (const line of rest) console.log(`      ${line}`);
   }
+  console.log(`  · ${DESK_CHECK_WALK}`);
   console.log("");
 }

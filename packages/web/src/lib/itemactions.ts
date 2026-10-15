@@ -131,3 +131,8 @@ export { pasteInto } from "./clipboard.ts";
 export function explainItem(canvasId: string, actor: Actor, itemId: string): void {
   void import("../components/ExplainPanel.tsx").then((m) => m.openExplain({ canvasId, actor, itemId }));
 }
+
+/** **Walk it as someone else** (proactive-agent phase 9): the panel loads on the ask — the menu's and ⌘K's one door to it. */
+export function walkItem(canvasId: string, actor: Actor, itemId: string): void {
+  void import("../components/WalkPanel.tsx").then((m) => m.openWalk({ canvasId, actor, itemId }));
+}
