@@ -555,6 +555,13 @@ var init_duplicate = __esm({
   }
 });
 
+// packages/core/src/edges.ts
+var init_edges = __esm({
+  "packages/core/src/edges.ts"() {
+    "use strict";
+  }
+});
+
 // packages/core/src/modules.ts
 function modules() {
   return [...REGISTRY.values()];
@@ -581,6 +588,7 @@ var init_canvas_group_copy = __esm({
     "use strict";
     init_canvas_groups();
     init_duplicate();
+    init_edges();
     init_modules();
     init_errors();
   }
@@ -2936,6 +2944,7 @@ var init_docstatus = __esm({
 var init_jsoncanvas = __esm({
   "packages/core/src/jsoncanvas.ts"() {
     "use strict";
+    init_edges();
     init_modules();
     init_browseritem();
   }
@@ -3294,6 +3303,7 @@ var init_src = __esm({
     init_export();
     init_text_attention();
     init_live_drag();
+    init_edges();
     init_text_anchor();
     init_markdown_resources();
     init_inbox_api();

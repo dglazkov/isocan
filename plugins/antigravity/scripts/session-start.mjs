@@ -112,8 +112,6 @@ export async function sessionStart(input, { env = process.env, run = runIsocan, 
     "Run `isocan --agent-help` once before acting on the canvas. This chat is where the person steers; the canvas " +
       "is the record. Do not park on `isocan wait` unless they ask — while the pane runs, what the canvas says to you " +
       "arrives here as a message headed \"The isocan canvas … has something for you\"; answer those on the canvas.",
-    "From the pane the person can point at items and ask about them, and run a canvas skill: a message that starts " +
-      "with `/name` is one — `isocan command show <name>` is your instructions, and `isocan command ls` lists them all.",
   );
   return { injectSteps: [{ ephemeralMessage: lines.join("\n") }] };
 }
