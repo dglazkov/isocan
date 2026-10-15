@@ -3990,7 +3990,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note a delete asks you to write, the night watch (`/goodnight`), the morning review, and Explain's critique -->
+<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note a delete asks you to write, the night watch (`/goodnight`), the morning review, Explain's critique, and the brief as a card (`design card`) -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4011,7 +4011,8 @@ The grammar, the same every time:
   beneath the source, clear of everything; you do not choose it.
 - **No trigger, no proposal.** `--cites kind:ref` at least once: `comment`,
   `op` (a seq), `version` (`<item>@vN`), `design` (a DESIGN.md version),
-  `brief`, `promise`, `docket`, `critic`. The chip shows the first. A
+  `brief` (a line of the brief card: `brief:for`), `promise`, `docket`,
+  `critic`. The chip shows the first. A
   proposal without one is refused, by the CLI and by the canvas itself.
 - **The why is design words, two sentences at most** — "summary before
   detail", "visual hierarchy", "proximity", "primary action", "type scale",
@@ -4143,6 +4144,44 @@ sentences at most), under the cap like any other. `--speak` pairs the
 person's own words with a designer's (repeatable). Nothing else in Explain
 writes: `--rationale` (Copy as rationale) puts the explanation beside the item
 as a note, and only when somebody asks for it.
+
+## The brief, as a card
+
+A design request's brief is an item on the canvas, and it draws as a card:
+**Making**, **For**, **Should feel**, **Never**, **Constraints**, **Right
+now**. A line the person said (`origin: supplied`) has a solid rule; one
+somebody inferred (`assumed`, `context`, or Right now as the canvas reads it:
+exploring, refining, shipping) has a pencil rule and **Right** / **Wrong**.
+`isocan design card [request] [--json]` prints the same card, and each line's
+cite. Read it before you propose against a brief, and cite the line your
+proposal answers — `--cites brief:for` — so its chip says `cites · For`.
+
+The person's edits go through the brief itself (`design brief --update`), so
+its history names them; the terminal has the same three:
+
+```sh
+isocan design card --right never                 # an inference becomes their word
+isocan design card --wrong tone --value "plain"  # it goes; theirs takes its place
+isocan design card --set for --value "regulars, and weekend first-timers"
+```
+
+Do not write an inferred line and then confirm it yourself: Right is the
+person's. **An edit changes nothing on the canvas — it only re-reads.** Every
+screen in the brief's scope is sorted: *assumed the old line* (a proposal
+beneath it cites the changed line, or its evidence was checked against the
+brief before the edit), *still holds*, and *matters more now*, which is your
+call as the canvas's lead. The edit posts "Brief re-read, please (…)" to you
+in the Chat. Read `isocan design card --json`, then answer in one command,
+naming the screens that matter more now and asking the person **one**
+clarifying question:
+
+```sh
+isocan design card --reread --matters Menu --question "As well as regulars, or instead?"
+```
+
+It posts as a record (it wakes nobody) and the card shows it under the edit.
+Never edit a screen because the brief changed: propose, citing the line. With
+nobody to answer, the edit still lands and the card says the re-read waits.
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

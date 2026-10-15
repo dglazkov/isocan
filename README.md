@@ -416,6 +416,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   risk and one thing to try, which arrives as a proposal beneath it; **Copy
   as rationale** puts the explanation on the canvas as a note. Nothing else
   writes. `isocan explain <item> [--depth …]` prints the same story.
+- **The brief, as a card**: a design request's brief draws on the canvas as
+  six lines — Making, For, Should feel, Never, Constraints, Right now. What
+  you said is ruled solid; what an agent inferred is ruled in pencil, with
+  **Right** and **Wrong** beside it, and Right now is read off what you are
+  doing (exploring, refining, shipping) until you say otherwise. Proposals
+  name the line they answer (`cites · For`). Editing a line changes nothing
+  on the canvas: every screen is re-read into *assumed the old line*, *still
+  holds* and *matters more now*, and the lead agent asks one clarifying
+  question. `isocan design card` prints and edits the same card.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

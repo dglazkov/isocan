@@ -18,7 +18,8 @@ export declare function proposalProperties(sourceId: string, confidence: Proposa
 /**
  * **What the trigger chip says** — the first cite, in words. A comment cite
  * is found on the canvas and quoted with its author ("Ravi's comment, "people
- * miss the pickup slot""); anything else says its kind and ref.
+ * miss the pickup slot""); a brief cite names the card's line it answers
+ * (`cites · For`, phase 5); anything else says its kind and ref.
  */
 export declare function citeLabel(canvas: CanvasContents, cite: ProposalCite): string;
 /** The note's title — the person reads it on the canvas. */
