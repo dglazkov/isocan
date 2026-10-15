@@ -904,11 +904,20 @@ img { height: auto; }
 /* Paint containment goes on the CONTENT, which clips already, not the item:
    on the item it clipped everything hung outside the box while a pan was
    on — the ×N version badge cut in half at the top-right corner (14 Oct
-   2026), the name strip above and the marks row below. */
-.canvas-viewport.panning .item {
-  contain: layout style;
-  box-shadow: none;
-}
+   2026), the name strip above and the marks row below.
+
+   **The resting shadow stays on while the camera moves** (14 Oct 2026). It
+   used to come off here, and that was what a person saw: "when you drag the
+   canvas they go away and come back again when you stop". It bought
+   nothing. `.world` has no compositor layer of its own (one for a whole
+   board cost more than it saved, research/2026-09-26-frame-budget.md), so a
+   pan repaints what is on screen with or without the halo — and because
+   `.item` eases its shadow for the lift, taking it off ran a 160 ms
+   box-shadow transition on every item at both ends of every gesture.
+   `scripts/frames.mjs`, 4x CPU, three runs each: 250 notes' pan had 4–8
+   frames over 32 ms with the shadow dropped and 2–4 with it kept; 60
+   screens, and zoom on either, did not move. */
+.canvas-viewport.panning .item { contain: layout style; }
 .canvas-viewport.panning .item-content { contain: paint; }
 .canvas-viewport.comment-mode { cursor: crosshair; }
 /* Zoom tool: magnifier cursor, and the item under it lights up as the target. */
