@@ -84,7 +84,7 @@ export default function RipplePulse({ canvasId, actor }: { canvasId: string; act
   };
   const sourceOf = (t: PulseTick) => reads.find((r) => r.source.itemId === t.itemId || r.screens.some((s) => s.itemId === t.itemId))?.source.itemId;
   const words = `${count("current")} current · ${count("behind")} behind · ${count("conflict")} in conflict`;
-  return <div className="ripple-pulse" data-ripple-pulse role="group" aria-label={`Project pulse: ${words}`}>
+  return <div className="ripple-pulse" data-ripple-pulse role="group" aria-label={`Canvas pulse: ${words}`}>
     <button className="ripple-pulse-label" data-ripple-pulse-open onClick={() => open(about?.source.itemId)} title={about ? `Ripple from “${about.source.title}”` : "Ripple"}>Pulse</button>
     {ticks.map((t) => <button
       key={t.itemId}
