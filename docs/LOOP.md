@@ -11,7 +11,7 @@ next pass knows why. `node scripts/loop.mjs pull` fetches; `decide <slug>
 <decision>` decides — and deciding is a person's, because it is sent to a
 workspace other people read.
 
-**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 51 not yet read.**
+**0 to decide · 6 accepted · 61 declined · 23 stale · 11 done · 53 not yet read.**
 
 ## Accepted, by project
 
@@ -181,7 +181,9 @@ The claim does not match the code. Dismissed in Loop, with the evidence sent bac
 - [Lack of spatial canvas region permissions and edit locking](loop/lack-of-spatial-canvas-region-permissions-and-edit-locking.md) — Loop P2
 - [Lack of spatial canvas sticky note annotation clusters](loop/lack-of-spatial-canvas-sticky-note-annotation-clusters.md) — Loop P2
 - [Lack of spatial component governance lifecycle badges](loop/lack-of-spatial-component-governance-lifecycle-badges.md) — Loop P2
+- [Lack of spatial component property inspector controls](loop/lack-of-spatial-component-property-inspector-controls.md) — Loop P2
 - [Lack of spatial component state variant matrices](loop/lack-of-spatial-component-state-variant-matrices.md) — Loop P2
+- [Lack of spatial design brief requirement coverage mapping](loop/lack-of-spatial-design-brief-requirement-coverage-mapping.md) — Loop P2
 - [Lack of spatial design token WCAG contrast audit nodes](loop/lack-of-spatial-design-token-wcag-contrast-audit-nodes.md) — Loop P2
 - [Lack of spatial viewport spotlight follow mode](loop/lack-of-spatial-viewport-spotlight-follow-mode.md) — Loop P2
 - [Living ground recomputes item bounds during viewport movement](loop/living-ground-recomputes-item-bounds-during-viewport.md) — Loop P2
