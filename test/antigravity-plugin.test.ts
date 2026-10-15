@@ -598,7 +598,7 @@ describe("the canvas pane's routes", () => {
     );
 
     // Prune the build the long-running sidecar booted from (`aaaa111`).
-    fs.rmSync(path.join(home, "builds", "aaaa111"), { recursive: true, force: true });
+    fs.rmSync(path.join(home, "builds", "aaaa111"), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
     const { routes } = createPane({ env, run: fakeRun({ harness: JSON.stringify(SCAN) }).run, bootDir: booted });
     const state = await routes["/api/workspace"](bindings());

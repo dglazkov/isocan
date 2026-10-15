@@ -5431,6 +5431,5 @@ button.mt-card:hover { border-color: var(--accent); }
 /* A module's control in the Chat composer (proposed: `composer`). The shell
    owns the row; this says where the control sits in it and how much room it
    gets when a module has asked for the whole thing. */
-.module-composer-control { display: flex; align-items: center; flex: none; }
-.module-composer-control[hidden] { display: none; }
+.module-composer-control:not([hidden]) { display: flex; align-items: center; flex: none; }
 .module-composer-wide { flex: 1 1 100%; min-width: 0; }

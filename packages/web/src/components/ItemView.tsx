@@ -71,7 +71,7 @@ import { useGistStore } from "../stores/gistStore.ts";
 import { publishDrag, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
 import { snapBox, unionBox } from "../lib/snap.ts";
-import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_GIST, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
+import { COUNTER_SCALED_CSS, nameRoomCss, TEXT_MARK_CSS, UNDER_ROW_CSS, underSlotFor, Z_CONTENT, Z_EDGES, Z_GIST, Z_ICON, Z_LEGIBLE, Z_MARK, Z_NAME, Z_ROOMY, Z_SPELL, zoomDecisions, type ZoomHeld } from "../lib/chrome.ts";
 import { useNavigate } from "react-router-dom";
 import { itemPath, nodeCapabilitiesFor, workbenchItemPath } from "@isocan/core";
 /**
@@ -319,6 +319,8 @@ function ItemViewInner({
   const gistEntry = useGistStore((s) => s[item.id]);
   const zoom = useUiStore((s) => zoomDecisions(item, width, height, s.viewport.scale, held, gistEntry?.px));
   const roomy = (held.r = (zoom & Z_ROOMY) !== 0);
+  const contentShown = (held.c = (zoom & Z_CONTENT) !== 0);
+  held.e = (zoom & Z_EDGES) !== 0;
   // The members cannot be read: the summary card shows inside the frame, and
   // the frame rises over them (`.gisted`). Never for a stacked group's card.
   const gisted = !stackBox && !(held.g = (zoom & Z_GIST) === 0);
@@ -1415,11 +1417,11 @@ function ItemViewInner({
          * size is still `textMarkSize`, so the words never claim more room
          * than the node they stand for.
          */}
-        {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType, item) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible ? (
+        {detail === "marker" ? <span className="presentation-marker" aria-hidden>◈</span> : detail === "compact" && !moduleRendererFor(current.mimeType, item) ? <div className="presentation-compact">{item.title}</div> : isText && !textLegible && contentShown ? (
           gist ?? <span className="text-mark" style={{ fontSize: TEXT_MARK_CSS }}>
             {item.title}
           </span>
-        ) : !isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !(htmlScreen && nearWindow) && !entered && !(nearWindow && roomy) ? (
+        ) : (!entered && !contentShown) || (!isText && !isInk && !picture && !/^(image|video)\//.test(visual.mimeType) && !(htmlScreen && nearWindow) && !entered && !(nearWindow && roomy)) ? (
           /**
            * Far away, or the tab is in the background: the box stays exactly
            * where it is and what it holds stands down.
