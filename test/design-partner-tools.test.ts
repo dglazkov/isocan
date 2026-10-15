@@ -19,7 +19,12 @@ it("delivers exact image blocks and real CLI/browser actions through an actual s
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1ioAAAAASUVORK5CYII=", "base64");
   await fs.writeFile(path.join(workspace, "pixel.png"), png);
   await fs.writeFile(path.join(workspace, "screen.html"), "<!doctype html><title>Acme synthetic transport</title><input id=\"quantity\" type=\"number\" value=\"0\"><form onsubmit=\"event.preventDefault();document.querySelector('#result').textContent='SAVED'\"><input id=\"name\" value=\"Existing\"><select id=\"choice\" size=\"2\"><option value=\"one\">One</option><option value=\"two\">Two</option></select><input id=\"checked\" type=\"checkbox\"><button id=\"submit\">Submit</button></form><output id=\"result\">Empty</output><button id=\"save\" onclick=\"this.textContent='Saved'\">Save</button>");
-  const config = { source: process.cwd(), workspace, home: fixture.home, base: fixture.base, canvasId: fixture.canvasId, condition: "B", runId: "synthetic", fixtureId: "inventory", sessionId: "study-agent", deadline: new Date(Date.now() + 25_000).toISOString(), evidence: path.join(directory, "evidence"), questions: path.join(directory, "questions") };
+  // The server shuts itself down at this deadline and answers nothing after
+  // it, so a deadline shorter than the test's real cost reads as a 60 s
+  // "-32001 Request timed out" on whichever call comes next. It was 25 s
+  // against a test that takes 30+ s on 4-vCPU runners (five red releases,
+  // 14–15 Oct 2026); 3 s locally reproduces it. It sits inside the 90 s budget.
+  const config = { source: process.cwd(), workspace, home: fixture.home, base: fixture.base, canvasId: fixture.canvasId, condition: "B", runId: "synthetic", fixtureId: "inventory", sessionId: "study-agent", deadline: new Date(Date.now() + 80_000).toISOString(), evidence: path.join(directory, "evidence"), questions: path.join(directory, "questions") };
   const configFile = path.join(directory, "config.json"); await fs.writeFile(configFile, JSON.stringify(config));
   const client = new Client({ name: "synthetic-independent-test", version: "1" });
   // A request the SDK gives up on fails from a timer — "MCP error -32001:
