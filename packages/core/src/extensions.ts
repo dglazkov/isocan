@@ -1,5 +1,9 @@
-import type { CanvasContents, Item } from "./model.ts";
+import type { Actor, CanvasContents, Item } from "./model.ts";
+import type { Grant } from "./grants.ts";
 import { COMMAND_NAME, findCommand, parseSlashCommand, type CommandMetadata } from "./commands.ts";
+import { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor } from "./identity.ts";
+
+export { EXTENSION_ACTOR_PREFIX, EXTENSION_COLORS, extensionColor, isExtensionActor };
 
 /**
  * **Extending the canvas from inside it** — the one reader for
@@ -489,26 +493,43 @@ export function panelCapabilities(panel: PanelExtension): string[] {
   ];
 }
 
-/**
- * The colours an extension may wear on the dock — muted mineral tones that
- * read on both vellum and graphite grounds and never collide with the seven
- * `IDENTITY_COLORS` that mean a person is standing there.
- */
-export const EXTENSION_COLORS: ReadonlyArray<{ name: string; value: string }> = [
-  { name: "Slate", value: "#5b6b7a" },
-  { name: "Copper", value: "#9a5b3e" },
-  { name: "Sage", value: "#4d6f5d" },
-  { name: "Plum", value: "#6e4f77" },
-  { name: "Ochre", value: "#8b6d38" },
-];
+/** Deterministic actor id for a panel item on a canvas (`ext_<suffix>`). */
+export function panelActorId(itemId: string): string {
+  const trimmed = itemId.trim();
+  if (trimmed.startsWith(EXTENSION_ACTOR_PREFIX)) return trimmed;
+  const suffix = trimmed.startsWith("itm_") ? trimmed.slice(4) : trimmed;
+  return `${EXTENSION_ACTOR_PREFIX}${suffix}`;
+}
 
-/** Deterministic extension colour from an item id — never in `IDENTITY_COLORS`. */
-export function extensionColor(id: string): string {
-  let hash = 5381;
-  for (let i = 0; i < id.length; i++) {
-    hash = ((hash << 5) + hash + id.charCodeAt(i)) >>> 0;
+/** The `Actor` a panel item speaks and writes as on its canvas. */
+export function panelActor(itemId: string, title: string): Actor {
+  return { id: panelActorId(itemId), name: title.trim() };
+}
+
+/** Every panel item's actor on `canvas`, in item order. */
+export function panelActorsIn(canvas: CanvasContents): Actor[] {
+  const out: Actor[] = [];
+  for (const item of panelExtensionItems(canvas)) {
+    const title = item.title.trim();
+    if (title) out.push(panelActor(item.id, title));
   }
-  return EXTENSION_COLORS[hash % EXTENSION_COLORS.length]!.value;
+  return out;
+}
+
+/** `POST` provisions (or re-reads) the panel's actor, badge and grant on `canvasId`. */
+export const panelActorRoute = (canvasId: string, itemId: string): string =>
+  `/api/projects/${encodeURIComponent(canvasId)}/panels/${encodeURIComponent(itemId)}/actor`;
+
+/** What {@link panelActorRoute} hands back: the panel's own actor, its
+ *  standing grant on this canvas, and the bearer credential bound to that
+ *  grant so the panel's asks go through the door as the panel and not as
+ *  the person watching it. */
+export interface PanelActorResponse {
+  actor: Actor;
+  grant: Grant;
+  badgeId: string;
+  token: string;
+  color: string;
 }
 
 /**

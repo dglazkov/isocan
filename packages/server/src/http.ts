@@ -101,6 +101,9 @@ import {
   isSpaceGrant,
   normalizeAttribute,
   sameGroupName,
+  isPanelExtension,
+  isPanelSubject,
+  panelItemIdOf,
   BADGE_RESTART_HINT,
   BADGES_ROUTE,
   cancelledSince,
@@ -255,6 +258,7 @@ import type { Workstation } from "./workstation.ts";
 import { registerOperatorRoutes } from "./operator-routes.ts";
 import { registerPassRoutes } from "./pass-routes.ts";
 import { registerForgetRoutes } from "./forget-routes.ts";
+import { registerPanelRoutes } from "./panel-routes.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -2657,8 +2661,9 @@ export function registerRoutes(
     // produce would admit nobody while the dialog claimed the team was
     // invited. Its maker is not asked — handing a canvas owner the id is how
     // a group is lent, and what they learn of it is its name and size.
-    const groupId = groupIdOf(subject);
+    const groupId = groupIdOf(subject), panelItemId = panelItemIdOf(subject);
     if (groupId !== null && !(await liveGroup(groupId))) return groupNotFound(reply, groupId);
+    if (panelItemId !== null && !isPanelExtension(snapshot.canvas.items[panelItemId]!)) return reply.status(404).send({ error: `no panel ${panelItemId} on ${id}`, code: "unknown-panel" });
     const grant: Grant = bars
       ? barRow(id, subject, req.badge!.badgeId)
       : {
@@ -3041,7 +3046,7 @@ export function registerRoutes(
     const onSpace = space ? liveGrants(await desk.grantsForSpace(space.id)) : [];
     const barred = [...after, ...onSpace].some((g) => isBar(g) && g.subject === mine.subject);
     const stillAdmittedBy =
-      mine.subject === LINK || barred
+      mine.subject === LINK || isPanelSubject(mine.subject) || barred
         ? undefined
         : onSpace.some((g) => g.subject === mine.subject && !isBar(g))
           ? ("space" as const)
@@ -3055,6 +3060,8 @@ export function registerRoutes(
       ...(stillAdmittedBy ? { stillAdmittedBy } : {}),
     } satisfies GrantResponse;
   });
+
+  registerPanelRoutes(app, { engine, store, desk, sourceMutation });
 
   /** One person's inbox. Remote entries and marks are read at their actual
    * home, never from an offline replica whose access may have been withdrawn. */
@@ -3437,13 +3444,9 @@ export function registerRoutes(
     const bars = body.bars === true;
     const subject = normalizeSubject(body.subject!);
     if (subject === LINK) {
-      return reply.status(400).send({
-        error:
-          "a space has no address, so it has no link row — set every canvas's link at once " +
-          "with `POST /api/spaces/:id/link` (`isocan share --space <name> --link …`)",
-        code: BAD_SPACE,
-      });
+      return reply.status(400).send({ error: "a space has no address, so it has no link row — set every canvas's link at once with `POST /api/spaces/:id/link` (`isocan share --space <name> --link …`)", code: BAD_SPACE });
     }
+    if (isPanelSubject(subject)) return reply.status(400).send({ error: "a panel lives on one canvas, so it has no space row", code: BAD_SPACE });
     const capability: Capability = body.capability ?? "edit";
     const stuck = refuseAmbiguousHome(reply, homes, "share a space");
     if (stuck) return stuck;

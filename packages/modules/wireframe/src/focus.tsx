@@ -368,7 +368,7 @@ export function WireframeFocusView(facts: FocusFacts) {
     return () => {
       active = false;
     };
-  }, [facts.version.blobHash]);
+  }, [facts, facts.version.blobHash]);
 
   const spec = useMemo(() => (html ? readWire(html) : null), [html]);
   const resolved = useMemo(
@@ -595,7 +595,7 @@ export function WireframeFocusEdit(facts: FocusFacts) {
     return () => {
       active = false;
     };
-  }, [facts.version.blobHash]);
+  }, [facts, facts.version.blobHash]);
 
   const savedSpec = useMemo(
     () => (sourceHtml ? readWire(sourceHtml) : null),

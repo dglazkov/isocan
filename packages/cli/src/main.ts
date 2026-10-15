@@ -136,6 +136,9 @@ import {
   toolExtensionItems,
   toolProperties,
   readPanelExtension,
+  panelActor,
+  panelActorId,
+  panelActorsIn,
   panelCapabilities,
   panelExtensionItems,
   panelProperties,
@@ -11649,7 +11652,7 @@ panel
     run(async (_opts: unknown, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
-      type Row = { itemId: string; title: string; side?: PanelSide; src?: string; can?: string[]; problem?: string };
+      type Row = { itemId: string; title: string; actor?: Actor; side?: PanelSide; src?: string; can?: string[]; problem?: string };
       const items = panelExtensionItems(snapshot.canvas);
       if (items.length === 0) {
         if (ctx.json) return printJson([]);
@@ -11670,7 +11673,8 @@ panel
           continue;
         }
         const can = panelCapabilities(read);
-        rows.push({ itemId: item.id, title: read.title, side: read.side, src: read.src, can });
+        const actor = panelActor(item.id, read.title);
+        rows.push({ itemId: item.id, title: read.title, actor, side: read.side, src: read.src, can });
         if (!ctx.json) {
           console.log(`${item.id}  ${panelLine(read)}`);
           for (const line of can) console.log(`    ${line}`);
@@ -11729,8 +11733,9 @@ It is an item, so \`isocan rm <item>\` takes one out of the dock again.`,
         title: read.title,
         properties: panelProperties(),
       });
-      if (ctx.json) return printJson({ itemId, ...read, can, added: true });
-      console.error(`${itemId} — ${read.title} is a panel on ${p.title}, and nothing renders it yet`);
+      const enrolled = await ctx.client.panelActor(p.id, itemId);
+      if (ctx.json) return printJson({ itemId, ...read, actor: enrolled.actor, grantId: enrolled.grant.id, can, added: true });
+      console.error(`${itemId} — ${read.title} (${enrolled.actor.id}) is a panel on ${p.title}`);
     }),
   );
 
@@ -13017,10 +13022,14 @@ program
       // Which actors to report on. A name is what a person types; an id is what
       // an op carries — accept either, and say plainly when nobody answers.
       const everyone = collectCanvasActors(snapshot.canvas);
+      for (const panelAct of panelActorsIn(snapshot.canvas)) {
+        if (!everyone.some((a) => a.id === panelAct.id)) everyone.push(panelAct);
+      }
       const actors = who
         ? everyone.filter(
             (a) =>
               a.id === who ||
+              a.id === panelActorId(who) ||
               actorNameIn(snapshot.names, a).toLowerCase() === who.toLowerCase() ||
               a.name.toLowerCase() === who.toLowerCase(),
           )

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_COMMANDS,
+  EXTENSION_ACTOR_PREFIX,
   EXTENSION_COLORS,
   EXTENSION_ICONS,
   IDENTITY_COLORS,
@@ -9,9 +10,15 @@ import {
   PANEL_SIDES,
   TITLE_LIMIT,
   TOOL_ROLE,
+  actorColor,
   extensionColor,
+  isExtensionActor,
   isPanelExtension,
   isToolExtension,
+  panelActor,
+  panelActorId,
+  panelActorRoute,
+  panelActorsIn,
   panelCapabilities,
   panelExtensionItems,
   panelProperties,
@@ -375,6 +382,25 @@ describe("what a panel may do, before you keep it", () => {
     }
     for (const id of ["itm_a", "itm_b", "itm_panel_1", "itm_panel_2", "itm_review"]) {
       expect(personHexes.has(extensionColor(id).toLowerCase())).toBe(false);
+      // And `actorColor` gives the panel's actor the exact same mineral colour
+      // its item wears, never a person's IDENTITY_COLORS — even if a registry
+      // map happened to carry an override.
+      const actor = panelActor(id, "Acme Review");
+      expect(actor.id.startsWith(EXTENSION_ACTOR_PREFIX)).toBe(true);
+      expect(isExtensionActor(actor.id)).toBe(true);
+      expect(isExtensionActor("usr_nico")).toBe(false);
+      expect(actorColor(actor.id, { [actor.id]: IDENTITY_COLORS[0]!.value })).toBe(extensionColor(id));
+      expect(personHexes.has(actorColor(actor.id).toLowerCase())).toBe(false);
     }
+    expect(panelActorId("itm_review")).toBe("ext_review");
+    expect(panelActorRoute("prj_1", "itm_review")).toBe("/api/projects/prj_1/panels/itm_review/actor");
+    const withPanel: CanvasContents = {
+      ...here,
+      items: {
+        ...here.items,
+        itm_review: { ...page("itm_review", "Acme Review"), properties: panelProperties() },
+      },
+    };
+    expect(panelActorsIn(withPanel)).toEqual([{ id: "ext_review", name: "Acme Review" }]);
   });
 });

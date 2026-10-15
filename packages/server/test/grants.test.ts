@@ -9,10 +9,22 @@ import type {
   GrantResponse,
   GrantsResponse,
   LogEntry,
+  PanelActorResponse,
+  PresenceSession,
   Canvas,
   PresenceWhereResponse,
 } from "@isocan/core";
-import { PRESENCE_WHERE_ROUTE } from "@isocan/core";
+import {
+  actorColor,
+  EXTENSION_COLORS,
+  IDENTITY_COLORS,
+  panelActorId,
+  panelActorRoute,
+  panelProperties,
+  panelSubject,
+  PRESENCE_WHERE_ROUTE,
+  recentActivity,
+} from "@isocan/core";
 import {
   FREE_NAME_ROUTE,
   grantRoute,
@@ -1109,5 +1121,320 @@ describe("the bar", () => {
     expect(withRevoke.status).toBe(403);
     expect((await body(withRevoke)).code).toBe("not-owner");
     expect(await liveRowsFor(sam)).toEqual([expect.objectContaining({ id: invited.grant.id })]);
+  });
+});
+
+/**
+ * **The extension actor** (`docs/projects/extensions/phases.md`, phase 5).
+ *
+ * A panel gets its own actor and a grant, exactly as a person gets one — the
+ * identity desk pointed at software instead of people. Proves the four claims:
+ * 1. Attribution: a panel's write is attributed to the panel's actor (`ext_…`)
+ *    and not to the person watching it (`usr_…`).
+ * 2. Undo: per-actor undo stacks keep the person's and the panel's ops separate.
+ * 3. Revocation: revoking the panel's grant tombstones the grant and sweeps the
+ *    canvas through the existing door test (`admittingGrant`), expelling the
+ *    panel's badge so its next ask is refused at the door (`403 not-admitted`)
+ *    even while the canvas's `link` grant stays live for people.
+ * 4. Presence: presence carries the panel while it works, wearing its
+ *    `EXTENSION_COLORS` mineral tone and never a person's `IDENTITY_COLORS`.
+ */
+describe("the extension actor (extensions phase 5)", () => {
+  const PAGE_ID = "itm_review_page";
+  const PANEL_ID = "itm_review_panel";
+
+  async function seedPanel(): Promise<PanelActorResponse> {
+    await makeCanvas();
+    const pageUpload = await daemon.store.putBlob(
+      CANVAS,
+      Buffer.from("<!doctype html><title>Acme Review</title>"),
+      { mimeType: "text/html", filename: "review.html" },
+    );
+    expect(
+      (
+        await op(owner, {
+          canvasId: CANVAS,
+          actor: priya,
+          op: {
+            type: "item.add",
+            itemId: PAGE_ID,
+            version: {
+              id: "ver_page_1",
+              blobHash: pageUpload.blobHash,
+              mimeType: "text/html",
+              filename: "review.html",
+              size: pageUpload.size,
+            },
+            width: 320,
+            height: 200,
+            placement: { x: 0, y: 0 },
+            title: "review.html",
+          },
+        })
+      ).status,
+    ).toBe(200);
+
+    const manifestText = JSON.stringify({
+      kind: "panel",
+      title: "Acme Review",
+      side: "left",
+      src: "review.html",
+    });
+    const manifestUpload = await daemon.store.putBlob(
+      CANVAS,
+      Buffer.from(manifestText),
+      { mimeType: "application/json", filename: "panel.json" },
+    );
+    expect(
+      (
+        await op(owner, {
+          canvasId: CANVAS,
+          actor: priya,
+          op: {
+            type: "item.add",
+            itemId: PANEL_ID,
+            version: {
+              id: "ver_panel_1",
+              blobHash: manifestUpload.blobHash,
+              mimeType: "application/json",
+              filename: "panel.json",
+              size: manifestUpload.size,
+            },
+            width: 240,
+            height: 120,
+            placement: { x: 400, y: 0 },
+            title: "Acme Review",
+            properties: panelProperties(),
+          },
+        })
+      ).status,
+    ).toBe(200);
+
+    const enrolled = await fetch(`${base}${panelActorRoute(CANVAS, PANEL_ID)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({}),
+    });
+    expect(enrolled.status).toBe(200);
+    return (await enrolled.json()) as PanelActorResponse;
+  }
+
+  function panelHeaders(panel: PanelActorResponse): Record<string, string> {
+    return {
+      ...owner.headers,
+      Authorization: `Bearer ${panel.token}`,
+    };
+  }
+
+  it("attributes a panel's write to the panel's actor and not to the person watching it", async () => {
+    const panel = await seedPanel();
+    expect(panel.actor).toEqual({ id: panelActorId(PANEL_ID), name: "Acme Review" });
+    expect(panel.grant).toMatchObject({
+      canvasId: CANVAS,
+      subject: panelSubject(PANEL_ID),
+    });
+
+    // The panel's badge speaks ONLY for the panel's actor: attempting to write
+    // as Priya using the panel's credential is refused by mechanism 5 (`not-your-actor`).
+    const impersonated = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: priya,
+        op: { type: "item.update", itemId: PAGE_ID, patch: { description: "impersonated" } },
+      }),
+    });
+    expect(impersonated.status).toBe(400);
+    expect(((await impersonated.json()) as { code: string }).code).toBe("not-your-actor");
+
+    // Writing as the panel's own actor lands and is attributed solely to the panel.
+    const wrote = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: panel.actor,
+        op: {
+          type: "thread.create",
+          threadId: "thr_panel_1",
+          x: 10,
+          y: 20,
+          anchorItemId: PAGE_ID,
+          comment: { id: "cmt_panel_1", body: "contrast ratio passes" },
+        },
+      }),
+    });
+    expect(wrote.status).toBe(200);
+
+    const snapshot = (await (await get(owner, `/api/projects/${CANVAS}/canvas`)).json()) as CanvasSnapshotResponse;
+    expect(recentActivity(snapshot.canvas, panel.actor.id)).toEqual([
+      expect.objectContaining({
+        kind: "said",
+        itemId: PAGE_ID,
+        subject: "review.html",
+        body: "contrast ratio passes",
+      }),
+    ]);
+    expect(
+      recentActivity(snapshot.canvas, priya.id).some((entry) => entry.body === "contrast ratio passes"),
+    ).toBe(false);
+  });
+
+  it("keeps undo per actor: undoing by the person does not revert the panel's ops, and vice versa", async () => {
+    const panel = await seedPanel();
+
+    // Priya moves the page to (100, 100); then the panel moves it to (250, 250)
+    // and renames its description.
+    expect(
+      (
+        await op(owner, {
+          canvasId: CANVAS,
+          actor: priya,
+          op: { type: "item.move", itemId: PAGE_ID, x: 100, y: 100 },
+        })
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (
+        await fetch(`${base}/api/ops`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+          body: JSON.stringify({
+            canvasId: CANVAS,
+            actor: panel.actor,
+            op: { type: "item.update", itemId: PAGE_ID, patch: { description: "panel note" } },
+          }),
+        })
+      ).status,
+    ).toBe(200);
+
+    // Priya undoes: her move (100, 100) -> (0, 0) reverts, while the panel's
+    // description edit ("panel note") is untouched.
+    const priyaUndo = await fetch(`${base}/api/projects/${CANVAS}/undo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({ actor: priya }),
+    });
+    expect(priyaUndo.status).toBe(200);
+    let snap = (await (await get(owner, `/api/projects/${CANVAS}/canvas`)).json()) as CanvasSnapshotResponse;
+    expect(snap.canvas.items[PAGE_ID]!.x).toBe(0);
+    expect(snap.canvas.items[PAGE_ID]!.description).toBe("panel note");
+
+    // Priya moves the page again to (300, 300); then the panel undoes: the
+    // panel's description edit reverts to "", while Priya's move (300, 300)
+    // is untouched.
+    expect(
+      (
+        await op(owner, {
+          canvasId: CANVAS,
+          actor: priya,
+          op: { type: "item.move", itemId: PAGE_ID, x: 300, y: 300 },
+        })
+      ).status,
+    ).toBe(200);
+
+    const panelUndo = await fetch(`${base}/api/projects/${CANVAS}/undo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({ actor: panel.actor }),
+    });
+    expect(panelUndo.status).toBe(200);
+    snap = (await (await get(owner, `/api/projects/${CANVAS}/canvas`)).json()) as CanvasSnapshotResponse;
+    expect(snap.canvas.items[PAGE_ID]!.description).toBe("");
+    expect(snap.canvas.items[PAGE_ID]!.x).toBe(300);
+  });
+
+  it("revoking the panel's grant expels it through the existing door test, refusing its next ask at the door", async () => {
+    const panel = await seedPanel();
+
+    // Revoke the panel's grant via the standard grants DELETE route while the
+    // canvas's `link` grant stays live for people.
+    const revoked = await fetch(`${base}${grantRoute(CANVAS, panel.grant.id)}`, {
+      method: "DELETE",
+      headers: owner.headers,
+    });
+    expect(revoked.status).toBe(200);
+    const body = (await revoked.json()) as GrantResponse;
+    expect(body.grant.id).toBe(panel.grant.id);
+    expect(body.grant.revokedAt).toBeDefined();
+    expect(body.swept).toEqual({ expelled: 1, rerooted: 0 });
+    expect(body.stillAdmittedBy).toBeUndefined();
+
+    // The panel's next ask is refused at the door with 403 `not-admitted`, not
+    // merely unsent, while a stranger person still enters on the link.
+    const refusedWrite = await fetch(`${base}/api/ops`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({
+        canvasId: CANVAS,
+        actor: panel.actor,
+        op: { type: "item.update", itemId: PAGE_ID, patch: { description: "after revoke" } },
+      }),
+    });
+    expect(refusedWrite.status).toBe(403);
+    expect(((await refusedWrite.json()) as { code: string }).code).toBe("not-admitted");
+
+    const refusedRead = await fetch(`${base}/api/projects/${CANVAS}/canvas`, {
+      headers: panelHeaders(panel),
+    });
+    expect(refusedRead.status).toBe(403);
+    expect(((await refusedRead.json()) as { code: string }).code).toBe("not-admitted");
+
+    // Re-asking `panelActorRoute` does not resurrect a tombstoned panel grant.
+    const reEnroll = await fetch(`${base}${panelActorRoute(CANVAS, PANEL_ID)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...owner.headers },
+      body: JSON.stringify({}),
+    });
+    expect(reEnroll.status).toBe(403);
+    expect(((await reEnroll.json()) as { code: string }).code).toBe("not-admitted");
+
+    // And the ambient link is still on for people.
+    expect((await get(await stranger(), `/api/projects/${CANVAS}/canvas`)).status).toBe(200);
+  });
+
+  it("carries the panel in presence while it works, wearing an extension colour", async () => {
+    const panel = await seedPanel();
+
+    const sessionRes = await fetch(`${base}/api/projects/${CANVAS}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+      body: JSON.stringify({ actor: panel.actor, label: panel.actor.name }),
+    });
+    expect(sessionRes.status).toBe(200);
+    const { sessionId } = (await sessionRes.json()) as { sessionId: string };
+
+    // An op applied with `clientId: sessionId` moves the panel's presence
+    // cursor to the item's locus while the panel works.
+    expect(
+      (
+        await fetch(`${base}/api/ops`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...panelHeaders(panel) },
+          body: JSON.stringify({
+            canvasId: CANVAS,
+            actor: panel.actor,
+            clientId: sessionId,
+            op: { type: "item.move", itemId: PAGE_ID, x: 200, y: 100 },
+          }),
+        })
+      ).status,
+    ).toBe(200);
+    await new Promise((r) => setTimeout(r, 60));
+
+    const roster = (await (
+      await get(owner, `/api/projects/${CANVAS}/sessions`)
+    ).json()) as PresenceSession[];
+    const entry = roster.find((s) => s.actor.id === panel.actor.id);
+    expect(entry).toBeDefined();
+    expect(entry!.actor).toEqual(panel.actor);
+    expect(entry!.cursor).toEqual({ x: 360, y: 200 });
+
+    const color = actorColor(panel.actor.id);
+    expect(color).toBe(panel.color);
+    expect(EXTENSION_COLORS.some((c) => c.value === color)).toBe(true);
+    expect(IDENTITY_COLORS.some((c) => c.value === color)).toBe(false);
   });
 });

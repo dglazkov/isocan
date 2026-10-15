@@ -54,7 +54,12 @@ export * from "./rungs.ts";
  *   by the door and never copied onto a row, which is what makes removing a
  *   member one write.
  */
-export type GrantSubject = "link" | `email:${string}` | `repo:${string}` | `group:${string}`;
+export type GrantSubject =
+  | "link"
+  | `email:${string}`
+  | `repo:${string}`
+  | `group:${string}`
+  | `panel:${string}`;
 
 /**
  * **Who owns a canvas: the actor who made it.**
@@ -151,6 +156,23 @@ export function isGroupSubject(subject: unknown): subject is `group:${string}` {
 /** The id behind a group subject, or null when it is not one. */
 export function groupIdOf(subject: string): string | null {
   return isGroupSubject(subject) ? subject.slice("group:".length) : null;
+}
+
+/** The subject a panel item on a canvas is granted as: `panel:<itemId>`. */
+export function panelSubject(itemId: string): GrantSubject {
+  return `panel:${itemId}`;
+}
+
+/** Is this a panel grant subject (`panel:…`)? The shape check is `grantSubjectRefusal`'s. */
+export function isPanelSubject(subject: unknown): subject is `panel:${string}` {
+  return typeof subject === "string" && subject.startsWith("panel:");
+}
+
+/** The item id behind a panel subject, or null when it is not one. */
+export function panelItemIdOf(subject: string): string | null {
+  if (!isPanelSubject(subject)) return null;
+  const id = subject.slice("panel:".length);
+  return id.startsWith("itm_") && id.length > 4 && !/\s/.test(id) ? id : null;
 }
 
 /**
@@ -300,6 +322,13 @@ export function grantSubjectRefusal(subject: unknown): string | null {
     }
     return null;
   }
+  if (isPanelSubject(subject)) {
+    const id = subject.slice("panel:".length);
+    if (!id.startsWith("itm_") || id.length <= 4 || /\s/.test(id)) {
+      return `not a panel item id: ${id} (a grant subject is \`panel:itm_…\`)`;
+    }
+    return null;
+  }
   if (subject.startsWith("email:")) {
     // An address, not a display name. Deliberately the weakest possible check
     // — one `@` with something on each side and no whitespace — because the
@@ -343,6 +372,9 @@ export function barSubjectRefusal(subject: unknown): string | null {
   }
   if (isGroupSubject(subject)) {
     return "a group cannot be kept out — un-invite it instead";
+  }
+  if (isPanelSubject(subject)) {
+    return "a panel cannot be kept out — revoke its grant instead";
   }
   return grantSubjectRefusal(subject);
 }
