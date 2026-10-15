@@ -37,6 +37,7 @@ import type {
   KillBadgeResponse,
   LogEntry,
   MintPassResponse,
+  PanelActorResponse,
   PassResponse,
   Operation,
   PostOpResponse,
@@ -130,6 +131,7 @@ import {
   HOMES_ROUTE,
   normalizeHomeUrl,
   PASS_REDEEM_ROUTE,
+  panelActorRoute,
   passesRoute,
   passRoute,
   SERVING_ROUTE,
@@ -823,6 +825,11 @@ export class DaemonRoutes {
 
   grants(canvasId: string): Promise<GrantsResponse> {
     return this.request("GET", grantsRoute(canvasId));
+  }
+
+  /** Provision or re-read a panel extension's actor, badge, and standing grant on `canvasId`. */
+  panelActor(canvasId: string, itemId: string): Promise<PanelActorResponse> {
+    return this.request("POST", panelActorRoute(canvasId, itemId), {});
   }
 
   createGrant(

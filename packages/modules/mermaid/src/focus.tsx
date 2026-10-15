@@ -84,7 +84,7 @@ export function MermaidFocusView(facts: FocusFacts) {
     return () => {
       active = false;
     };
-  }, [facts.version.blobHash]);
+  }, [facts, facts.version.blobHash]);
 
   const nodes = useMemo(() => extractMermaidNodes(dsl), [dsl]);
   const filteredNodes = useMemo(() => {
@@ -157,7 +157,7 @@ export function MermaidFocusEdit(facts: FocusFacts) {
     return () => {
       active = false;
     };
-  }, [facts.version.blobHash]);
+  }, [facts, facts.version.blobHash]);
 
   const nodes = useMemo(() => extractMermaidNodes(draft), [draft]);
   const dirty = initialDsl !== null && draft !== initialDsl;

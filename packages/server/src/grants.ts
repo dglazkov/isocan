@@ -9,6 +9,7 @@ import {
   isBar,
   isGroupLive,
   isLive,
+  isPanelSubject,
   LINK,
   narrowed,
   newId,
@@ -179,7 +180,11 @@ async function subjectAdmits(
   attestations: readonly Attestation[],
   groupOf: (groupId: string) => Promise<Group | null>,
 ): Promise<boolean> {
-  if (subject === LINK) return true;
+  // A panel's badge (`panel:itm_…`) is admitted only by the grant naming that
+  // panel, never by the canvas's ambient `link` row — so revoking the panel's
+  // grant expels it through this exact door test while the link stays on for
+  // people.
+  if (subject === LINK) return !attestations.some((row) => isPanelSubject(row.attribute));
   const groupId = groupIdOf(subject);
   if (groupId !== null) {
     const group = await groupOf(groupId);

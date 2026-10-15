@@ -1,3 +1,4 @@
+import { panelActorId } from "@isocan/core";
 import { useUiStore } from "../stores/uiStore.ts";
 import { extensionPanelKey, openPanel } from "../lib/panels.ts";
 import {
@@ -52,6 +53,7 @@ export function ExtensionPanelSurface({
       style={{ width: panelWidth }}
       aria-label={active.title}
       data-extension-color={active.color}
+      data-extension-actor={panelActorId(active.itemId)}
     >
       <PanelResizer />
       <PanelHead

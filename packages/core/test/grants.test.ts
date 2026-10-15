@@ -17,10 +17,13 @@ import {
   groupViewOf,
   isBar,
   isGroupSubject,
+  isPanelSubject,
   LINK,
   normalizeAttribute,
   normalizeSubject,
   ownsGroup,
+  panelItemIdOf,
+  panelSubject,
   upsertAttestation,
 } from "../src/index.ts";
 
@@ -101,6 +104,21 @@ describe("what is a grant subject at all", () => {
     expect(normalizeSubject("group:ppl_Ab")).toBe("group:ppl_Ab");
     // And core cannot answer it: membership needs the desk.
     expect(attestationSatisfying("group:ppl_1", [proof("group:ppl_1")])).toBeNull();
+  });
+
+  it("takes a panel by item id, keeps case intact, and satisfies by exact attestation (extensions phase 5)", () => {
+    const subject = panelSubject("itm_Review1");
+    expect(grantSubjectRefusal(subject)).toBeNull();
+    expect(isPanelSubject(subject)).toBe(true);
+    expect(panelItemIdOf(subject)).toBe("itm_Review1");
+    expect(panelItemIdOf("email:jordan@acme.test")).toBeNull();
+    expect(attestedKindOf(subject)).toBeNull();
+    expect(normalizeSubject(subject)).toBe("panel:itm_Review1");
+    expect(grantSubjectRefusal("panel:")).toMatch(/not a panel item id/);
+    expect(grantSubjectRefusal("panel:usr_1")).toMatch(/not a panel item id/);
+    expect(barSubjectRefusal(subject)).toMatch(/panel cannot be kept out/);
+    expect(attestationSatisfying(subject, [proof("panel:itm_Review1")])).not.toBeNull();
+    expect(attestationSatisfying(subject, [proof("panel:itm_review1")])).toBeNull();
   });
 });
 
