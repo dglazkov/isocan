@@ -172,3 +172,28 @@ export function systemsToRead(canvas: CanvasContents, specOf: (hash: string) => 
   }
   return [...out.values()];
 }
+
+/**
+ * **Every wire behind its system, read from the bytes** — the desk check's
+ * reading (proactive-agent phase 8): each wire's spec and each system a wire
+ * was drawn from an older version of, read once through `readText`, then
+ * `wiresBehind`. Both surfaces hand it to the desk check, so neither repeats
+ * the gather the marks and `wire style --check` do from their caches.
+ */
+export async function readWiresBehind(canvas: CanvasContents, readText: (blobHash: string) => Promise<string>): Promise<{ title: string; system: string }[]> {
+  const { readWire } = await import("./render.ts");
+  const specs = new Map<string, WireSpec | null>();
+  await Promise.all(Object.values(canvas.items).filter(isWire).map(async (item) => {
+    const key = specKey(item);
+    if (!key || specs.has(key)) return;
+    try {
+      specs.set(key, readWire(await readText(key)));
+    } catch {
+      specs.set(key, null);
+    }
+  }));
+  const specOf = (hash: string) => specs.get(hash) ?? null;
+  const docs = new Map<string, DesignDoc | null>();
+  for (const system of systemsToRead(canvas, specOf)) docs.set(system.id, await readSystemDoc(system, readText));
+  return wiresBehind(canvas, specOf, (system) => (docs.has(system.id) ? docs.get(system.id)! : null)).map((c) => ({ title: canvas.items[c.itemId]?.title || c.itemId, system: systemName(c) }));
+}

@@ -57,6 +57,7 @@ import {
   type Lens,
   type RosterEntry,
 } from "./core.ts";
+import { RoomBothDialog, RoomDialog, RoomOverlay } from "./room-web.tsx";
 
 /**
  * **Critique in the browser** — the critic card, and the web's doors
@@ -595,7 +596,11 @@ function CritiqueBothDialog({ args, canEdit, host }: DialogFacts) {
 function menu({ items, open }: ModuleMenuFacts): ModuleMenuRow[] {
   const [one] = items;
   if (items.length !== 1 || !one || one.properties[CRITIC_PROP] !== undefined) return [];
-  return [{ label: "Critique with…", writes: true, run: () => open("critique-with", one.id) }];
+  return [
+    // The room (proactive-agent phase 8): the lead wears the critics switched on — `isocan critique <item>`.
+    { label: "Crit with the room…", writes: true, run: () => open("critics-room", one.id) },
+    { label: "Critique with…", writes: true, run: () => open("critique-with", one.id) },
+  ];
 }
 
 /**
@@ -604,6 +609,11 @@ function menu({ items, open }: ModuleMenuFacts): ModuleMenuRow[] {
  * one per split it carries.
  */
 function comments({ thread, comment, open }: ModuleCommentFacts): ModuleMenuRow[] {
+  // The read of the room (proactive-agent phase 8): Build both asks the lead in the Chat for two proposals.
+  if (comment.record && comment.body.startsWith("Read of the room")) {
+    const refs = postedSplits(comment.body);
+    return refs.map((ref, i) => ({ label: refs.length > 1 ? `Build both · split ${i + 1}…` : "Build both…", writes: true, run: () => open("room-both", ref) }));
+  }
   if (isReadyLine(comment.body)) {
     const posted = thread.comments.some((c) => c.createdAt >= comment.createdAt && c.record && isPostedRead(c.body));
     return posted ? [] : [{ label: "Post the read…", writes: true, run: () => open("critique-read", thread.id) }];
@@ -613,11 +623,17 @@ function comments({ thread, comment, open }: ModuleCommentFacts): ModuleMenuRow[
 }
 
 /** The web half. */
-export const critiqueWeb: WebModule<never, typeof CriticCard, never, never, never, typeof CriticsDialog> = {
+export const critiqueWeb: WebModule<never, typeof CriticCard, never, never, typeof RoomOverlay, typeof CriticsDialog> = {
   core: critiqueCore,
   renderers: [{ mimes: ["text/markdown"], property: CRITIC_PROP, component: CriticCard }],
-  actions: [{ id: "critique.critics", name: "Critics", hint: "the roster, this canvas's critics — add, write, release", opens: "critics" }],
+  actions: [
+    { id: "critique.critics", name: "Critics", hint: "the roster, this canvas's critics — add, write, release", opens: "critics" },
+    { id: "critique.room", name: "Critics in the room", hint: "the lenses the lead wears — on or off, how loud, when; ask the room about a screen", opens: "critics-room" },
+  ],
+  overlays: [{ region: "right", label: "Read of the room", component: RoomOverlay }],
   dialogs: [
+    { id: "critics-room", title: "Critics in the room", wide: true, component: RoomDialog },
+    { id: "room-both", title: "Build both", component: RoomBothDialog },
     { id: "critics", title: "Critics", component: CriticsDialog },
     { id: "critique-with", title: "Critique with", component: CritiqueWithDialog },
     { id: "critique-read", title: "The read", wide: true, component: CritiqueReadDialog },

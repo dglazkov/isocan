@@ -3708,6 +3708,9 @@ in the web app drives:
   filter flags. Browsing does not admit you; opening an address uses the normal
   door. Public catalogue and entry pages ask crawlers not to index them; that
   instruction is not a confidentiality boundary or a crawler guarantee.
+- `isocan share` prints a **desk check** first — audit, contrast, words,
+  wires behind, stale receipts, critics set to *before I share* — and
+  `isocan share --check` runs it alone. It never blocks (topic `proactive`).
 - `isocan share --link off` — new arrivals are turned away **and the people
   who got in on that link are expelled**. It prints how many. Anyone another
   grant still covers stays, which is why the line can say "3 expelled, 1 kept
@@ -3992,7 +3995,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note, the night watch (`/goodnight`), the morning review, Explain's critique, the brief card (`design card`), `ripple` and `stuck` -->
+<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `ripple`, `stuck`, critics in the room and the desk check -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4268,6 +4271,58 @@ isocan stuck Header --question \
 
 With nothing to answer, the person's card still shows what the behaviour
 says and that the question waits.
+
+## Critics in the room: you wear the lenses
+
+A critic in the room is a **lens** — a card on the canvas named for what it
+looks for ("The Reductionist": *cut until it breaks, then add one thing
+back*), never for a person — that the person switched on. You, the lead,
+wear it: its notes are yours, posted as that critic, and its pin wears its
+colour. **Critics never edit; only you act, and only when asked.**
+
+The person sets each critic up (`isocan critic add reductionist`, `isocan
+critic new "The Purist" --lens "One typeface, nothing decorative" --refs
+"Swiss railway signage"`, `isocan critic set <critic> --on|--off --loud
+blockers|studio|everything --when pause|share|asked`; `isocan critic ls`
+lists them with their settings). A crit reaches you as a Chat message that
+starts `Crit, please (<item>@<version>…)` and names the critics, from the
+person (`isocan critique <item>`, or `--as reductionist,brand-voice`), from
+their pause, or from the desk check before a share. Answer it:
+
+```sh
+isocan get <item>          # the screen, once; read it, not the threads
+isocan critique note <item> --as reductionist --at 0.5,0.2 --kind risk \
+  "The promotion banner competes with the order button. Cut it."
+isocan critique note <item> --as brand-voice --at 0.52,0.22 --kind working \
+  "The banner's red is the only thing that says Acme. Leave it."
+isocan critique read <item> --post --say "Reduction against recognition: the banner is the noise and the brand."
+```
+
+- **Each lens on its own, from the screen alone.** Write every lens's notes
+  before you read any back, and never let one lens answer another's note.
+  Read them together only with `critique read`.
+- **Each says what its volume allows.** *Blockers only* says blockers;
+  *studio crit* the few that matter (three at most); *everything* up to
+  eight. A note quieter or one more than that is refused. A lens with
+  nothing to say at its volume says nothing; the read names it.
+- **The read of the room** is agree, split and blocker, folded from the
+  notes (`critique read <item>`); your `--say` names each tension in design
+  words. **Never average a split, and never pick a side**: a split is the
+  person's to choose.
+- **Build both** is the person's: on a split they press it (or run
+  `isocan critique both <a>+<b>`) and you are asked, in the Chat, for two
+  proposals — `isocan propose <item> <file> --cites critic:<note> --why …`,
+  one per side. Leave the screen as it is.
+
+## The desk check before a share
+
+`isocan share` and `isocan present <item>` read the canvas first and print a
+desk check above their own lines: the design audit, the system's contrast,
+the words against DESIGN.md's Voice, wires behind their design system, stale
+design receipts, and the critics set to *before I share* — who are asked of
+you as a crit, with the findings, once per screen version. `isocan share
+--check` runs it alone and changes nothing. **It reports; it never blocks**:
+a blocker a critic raises is a warning in the room, not a gate.
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

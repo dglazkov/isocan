@@ -64,7 +64,16 @@ import {
   type CriticDraft,
   type Lens,
   type RosterEntry,
+  mentionClash,
 } from "./core.ts";
+import { CRITIC_COLOR, CRITIC_ON, LOUDNESS, STARTER_LENSES, WHENS, describedDraft, findStarter, roomSettings, starterDraft } from "./room.ts";
+/**
+ * The room's verbs (proactive-agent phase 8), imported rather than loaded on
+ * the verb: a later chunk sharing this module's `core.ts` would split it into
+ * a chunk of its own that `--version` then loads (`test/cli-bundle.test.ts`).
+ */
+import * as room from "./room-cli.ts";
+
 
 /**
  * **Critics, from a terminal** — `isocan critic ls|add|new`. The browser's
@@ -198,7 +207,7 @@ async function capCritic(host: CliHost, ctx: Ctx, canvasId: string, agentName: s
 const hex = (c: string | undefined) => (c && /^#[0-9a-fA-F]{6}$/.test(c.trim()) ? c.trim() : null);
 
 /** Write one critic card: one blob, one `item.add`, the property beside it. */
-async function place(host: CliHost, ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, draft: CriticDraft, opts: { at?: string }): Promise<string> {
+async function place(host: CliHost, ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, draft: CriticDraft, opts: { at?: string }, extra: Record<string, string> = {}): Promise<string> {
   const text = criticMarkdown(draft);
   const filename = `${draft.name}.md`;
   const upload = await ctx.client.uploadBlob(canvasId, Buffer.from(text, "utf8"), "text/markdown", filename);
@@ -211,10 +220,13 @@ async function place(host: CliHost, ctx: Ctx, canvasId: string, snapshot: Canvas
     height: CARD.height,
     placement: host.placementFor(snapshot, opts, CARD),
     title: draft.agentName,
-    properties: { [CRITIC_PROP]: draft.name },
+    properties: { [CRITIC_PROP]: draft.name, ...extra },
   } as never);
   return itemId;
 }
+
+/** A new card is switched on for the room, in its colour (proactive-agent phase 8): adding a critic is switching it on. */
+const switchedOn = (draft: CriticDraft): Record<string, string> => ({ [CRITIC_ON]: "on", ...(hex(draft.color) ? { [CRITIC_COLOR]: hex(draft.color)! } : {}) });
 
 function register(host: CliHost): void {
   const { program, run, ctxOf, resolveCanvas, printJson } = host;
@@ -246,18 +258,24 @@ the roster, or write your own; edit it with \`isocan edit <card> file.md\`.`,
           agentName: critic.agentName,
           credit: critic.credit,
           ...(critic.color ? { color: critic.color } : {}),
+          lens: critic.line,
+          room: roomSettings(snapshot.canvas.items[itemId]!),
           questions: critic.questions,
           budget: critic.budget ?? null,
           problems: [...criticProblems(critic), ...(clashes.has(critic.name) ? [clashes.get(critic.name)!] : [])],
         }));
         const offered = roster().map(({ module, critic }) => ({ id: critic.id, agentName: critic.agentName, title: critic.title, credit: critic.credit, module }));
-        if (ctx.json) return printJson({ roster: offered, critics: rows });
-        console.log(offered.length ? "Roster (isocan critic add <id>):" : "Roster: none — no module contributes critics here; `isocan critic new \"<name>\"` writes one");
+        const lenses = STARTER_LENSES.map((l) => ({ id: l.id, agentName: l.agentName, lens: l.line }));
+        if (ctx.json) return printJson({ roster: offered, lenses, critics: rows });
+        console.log("Starter lenses (isocan critic add <id>):");
+        for (const l of lenses) console.log(`  ${l.id.padEnd(13)} ${l.agentName.padEnd(18)} ${l.lens}`);
+        console.log(offered.length ? "Roster (isocan critic add <id>):" : "Roster: none — no module contributes critics here; `isocan critic new \"<name>\" --lens \"…\"` writes one");
         for (const r of offered) console.log(`  ${r.id.padEnd(8)} ${r.agentName.padEnd(24)} ${r.credit}`);
         console.log(rows.length ? `On ${canvas.title}:` : `On ${canvas.title}: no critics yet`);
         for (const r of rows) {
           const budget = r.budget ? ` · ${r.budget.turnsPerRun ?? "?"} turns, $${r.budget.usdPerRun?.toFixed(2) ?? "?"}` : " · no budget";
           console.log(`  ${r.itemId}  ${r.agentName} — ${r.credit}${budget}`);
+          console.log(`      ${r.room.on ? "on" : "off"} · ${LOUDNESS[r.room.loud].label.toLowerCase()} · ${WHENS[r.room.when].toLowerCase()}${r.lens ? ` · ${r.lens}` : ""}`);
           r.questions.forEach((q, i) => console.log(`      ${i + 1}. ${q || "(unwritten)"}`));
           for (const p of r.problems) console.log(`      ! ${p}`);
         }
@@ -273,6 +291,19 @@ the roster, or write your own; edit it with \`isocan edit <card> file.md\`.`,
       run(async (ref: string, opts: { at?: string }, cmd: Command) => {
         const list = roster();
         const entry = findInRoster(list, ref);
+        const starter = entry ? null : findStarter(ref);
+        if (starter) {
+          // A starter lens (proactive-agent phase 8): named for what it looks for, never a person.
+          const ctx = await ctxOf(cmd);
+          const canvas = await resolveCanvas(ctx);
+          const snapshot = await ctx.client.snapshot(canvas.id);
+          const draft = starterDraft(starter);
+          const refused = refuseJoin(await criticsOn(ctx, canvas.id, snapshot), draft);
+          if (refused) throw new Error(refused);
+          const itemId = await place(host, ctx, canvas.id, snapshot, draft, opts, switchedOn(draft));
+          if (ctx.json) return printJson({ itemId, name: draft.name, agentName: draft.agentName, lens: draft.line, on: true });
+          return console.log(`${draft.agentName} is on ${canvas.title} (${itemId}), switched on — ${draft.line}`);
+        }
         if (!entry) {
           throw new Error(list.length
             ? `no critic "${ref}" in the roster — try one of ${list.map((e) => e.critic.id).join(", ")}, or \`isocan critic new "<name>"\``
@@ -284,7 +315,7 @@ the roster, or write your own; edit it with \`isocan edit <card> file.md\`.`,
         const draft = draftFromRoster(entry.critic, lensOf(entry));
         const refused = refuseJoin(await criticsOn(ctx, canvas.id, snapshot), draft);
         if (refused) throw new Error(refused);
-        const itemId = await place(host, ctx, canvas.id, snapshot, draft, opts);
+        const itemId = await place(host, ctx, canvas.id, snapshot, draft, opts, switchedOn(draft));
         if (ctx.json) return printJson({ itemId, name: draft.name, agentName: draft.agentName, credit: draft.credit, questions: draft.lens.questions });
         console.log(`${draft.agentName} is on ${canvas.title} (${itemId}) — ${draft.credit}`);
       }),
@@ -297,17 +328,46 @@ the roster, or write your own; edit it with \`isocan edit <card> file.md\`.`,
     .option("--at <x,y>", "where to put the card")
     .option("--after <person>", "who it is an homage to — its name may not carry theirs")
     .option("--self", "you made it of yourself, so it may carry your own name")
+    .option("--lens <line>", "a lens for the room: what it looks for, in one line — its first question")
+    .option("--refs <work>", "with --lens: work you admire that it is after (never a person's name in the critic's)")
     .action(
-      run(async (name: string, opts: { at?: string; after?: string; self?: boolean }, cmd: Command) => {
+      run(async (name: string, opts: { at?: string; after?: string; self?: boolean; lens?: string; refs?: string }, cmd: Command) => {
         const ctx = await ctxOf(cmd);
         const canvas = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(canvas.id);
+        if (opts.lens !== undefined || opts.refs !== undefined) {
+          // A lens a person describes (proactive-agent phase 8): switched on, its colour its own.
+          if (opts.after || opts.self) throw new Error("--lens describes a lens; --after and --self are for an homage — one or the other");
+          const on = await criticsOn(ctx, canvas.id, snapshot);
+          const lens = describedDraft({ agentName: name, line: opts.lens ?? "", ...(opts.refs ? { refs: opts.refs } : {}), taken: on.length });
+          if ("refused" in lens) throw new Error(lens.refused);
+          const refused = refuseJoin(on, lens);
+          if (refused) throw new Error(refused);
+          const itemId = await place(host, ctx, canvas.id, snapshot, lens, opts, switchedOn(lens));
+          if (ctx.json) return printJson({ itemId, name: lens.name, agentName: lens.agentName, credit: lens.credit, lens: lens.line ?? "", on: true });
+          return console.log(`${lens.agentName} is on ${canvas.title} (${itemId}), switched on — ${lens.line ?? `after ${opts.refs}: write its lens with \`isocan edit ${itemId} ${lens.name}.md\``}`);
+        }
         const draft = skeletonDraft(name, { ...(opts.after ? { after: opts.after } : {}), ...(opts.self ? { self: true } : {}) });
         const refused = refuseJoin(await criticsOn(ctx, canvas.id, snapshot), draft);
         if (refused) throw new Error(refused);
-        const itemId = await place(host, ctx, canvas.id, snapshot, draft, opts);
+        const itemId = await place(host, ctx, canvas.id, snapshot, draft, opts, switchedOn(draft));
         if (ctx.json) return printJson({ itemId, name: draft.name, agentName: draft.agentName, credit: draft.credit });
         console.log(`${draft.agentName} is on ${canvas.title} (${itemId}) — three questions to write: \`isocan edit ${itemId} ${draft.name}.md\``);
+      }),
+    );
+
+  family
+    .command("set <critic>")
+    .description("A critic in the room: switch it on or off, how loud (blockers, studio, everything) and when it speaks (pause, share, asked)")
+    .option("--on", "switch it on: it speaks in the room")
+    .option("--off", "switch it off: it stays on the canvas and says nothing")
+    .option("--loud <how>", "blockers (only what stops the screen), studio (the few that matter, default) or everything")
+    .option("--when <when>", "pause (when you stop editing a screen), share (in the desk check before share and present) or asked (default)")
+    .option("--canvas <canvas>")
+    .action(
+      run(async (ref: string, opts: { on?: boolean; off?: boolean; loud?: string; when?: string }, cmd: Command) => {
+        const ctx = await ctxOf(cmd);
+        await room.criticSet(host, ctx, ref, opts);
       }),
     );
 
@@ -358,10 +418,13 @@ function registerCritique(host: CliHost): void {
     .description("Ask a critic about a screen — it pins notes on it and changes nothing")
     .argument("[item]", "the screen (an item; `#Title` works)")
     .option("--by <critics>", "the critics on this canvas, comma-separated — each by its name, or the word you would @mention")
+    .option("--as <critics>", "the room: the lead wears these critics (comma-separated or repeated); with neither --as nor --by, every critic switched on", (v: string, prev: string[] = []) => [...prev, ...v.split(",").map((x) => x.trim()).filter(Boolean)])
     .option("--canvas <canvas>")
     .addHelpText(
       "after",
       `
+  isocan critique "#Home"                        the room: the lead wears every critic switched on
+  isocan critique "#Home" --as reductionist,brand-voice
   isocan critique "#Checkout" --by inevitable
   isocan critique "#Checkout" --by inevitable,frog
 Needs your \`isocan rc\` parked on the canvas: each critic runs there, on your key,
@@ -371,8 +434,10 @@ asks them all; each works alone, and when the last is done
 \`isocan critique read <thread>\` folds their notes into agree, split and blocker.`,
     )
     .action(
-      run(async (ref: string | undefined, opts: { by?: string }, cmd: Command) => {
-        if (!ref || !opts.by) throw new Error("pass the screen and the critics: `isocan critique <item> --by <critic>[,<critic>]`");
+      run(async (ref: string | undefined, opts: { by?: string; as?: string[] }, cmd: Command) => {
+        if (!ref) throw new Error("pass the screen: `isocan critique <item>` asks the room; `--by <critic>` asks a critic of its own");
+        if (opts.by && opts.as) throw new Error("--by asks critics as agents of their own; --as has the lead wear them — one or the other");
+        if (!opts.by) return room.askRoom(host, await ctxOf(cmd), ref, opts.as ?? []);
         const refs = [...new Set(opts.by.split(",").map((s) => s.trim()).filter(Boolean))];
         if (refs.length === 0) throw new Error("--by names at least one critic");
         const ctx = await ctxOf(cmd);
@@ -391,6 +456,8 @@ asks them all; each works alone, and when the last is done
           if (problems.length) throw new Error(`${hit.critic.agentName}'s card needs fixing first — ${problems.join("; ")}`);
           if (!hits.some((h) => h.itemId === hit.itemId)) hits.push(hit);
         }
+        const clash = mentionClash(hits.map((h) => h.critic));
+        if (clash) throw new Error(clash);
         // No runner, no critique — and nothing enrolled, so a refusal leaves
         // the canvas as it found it.
         const answering = await ctx.client.rcAnswering(canvas.id).catch(() => null);
@@ -449,13 +516,18 @@ asks them all; each works alone, and when the last is done
 
   family
     .command("note <item> <text...>")
-    .description("A critic's note: pinned at a point on the screen, typed, one move")
+    .description("A critic's note: pinned at a point on the screen, typed, one move — or, with --as, the lead's note worn as a critic in the room")
     .requiredOption("--at <fx,fy>", "where on the screen, as fractions of its size (0,0 top-left; 1,1 bottom-right)")
     .requiredOption("--kind <kind>", "working, risk or blocker")
-    .requiredOption("--question <n>", "which of your questions it answers")
+    .option("--question <n>", "which of your questions it answers (with --as, default 1)")
+    .option("--as <critic>", "the lead's: the critic this note is worn as — its pin wears that critic's colour")
     .option("--canvas <canvas>")
     .action(
-      run(async (ref: string, words: string[], opts: { at: string; kind: string; question: string }, cmd: Command) => {
+      run(async (ref: string, words: string[], opts: { at: string; kind: string; question?: string; as?: string }, cmd: Command) => {
+        // `critique` takes `--as` too (the room's ask), and a parent's option is parsed wherever it is written: read both.
+        const wearing = ([] as (string | undefined)[]).concat(cmd.optsWithGlobals().as ?? opts.as)[0];
+        if (wearing) return room.lensNote(host, await ctxOf(cmd), ref, words, { ...opts, as: wearing });
+        if (opts.question === undefined) throw new Error("--question is the number of the question the note answers");
         const ctx = await ctxOf(cmd);
         const canvas = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(canvas.id);
@@ -555,7 +627,7 @@ asks them all; each works alone, and when the last is done
         if (ctx.json) return printJson(notes);
         if (notes.length === 0) return console.log(`no critics' notes on ${item.title}`);
         for (const n of notes) {
-          console.log(`${n.critic} · ${n.kind} · question ${n.question} · at ${n.at.x},${n.at.y}  (${n.threadId})`);
+          console.log(`${n.critic}${n.by ? ` (worn by ${n.by.name})` : ""} · ${n.kind} · question ${n.question} · at ${n.at.x},${n.at.y}  (${n.threadId})`);
           console.log(`  ${n.text.replace(/\n/g, "\n  ")}`);
         }
       }),
@@ -583,6 +655,13 @@ name a tension are yours — \`--say\` — and never the fold's.`,
         const ctx = await ctxOf(cmd);
         const canvas = await resolveCanvas(ctx);
         const snapshot = await ctx.client.snapshot(canvas.id);
+        // The room (proactive-agent phase 8): a screen whose newest crit is the lead's lenses reads that crit.
+        if (!snapshot.canvas.threads[ref]) {
+          const screen = screenOf(host, snapshot, ref);
+          const request = await requestOf(host, ctx, canvas.id, snapshot, ref).catch(() => null);
+          const crit = room.roomFor(snapshot, screen.id, request?.status.createdAt ?? null);
+          if (crit) return room.readRoom(host, ctx, canvas.id, snapshot, screen, crit, opts);
+        }
         const { status, item } = await requestOf(host, ctx, canvas.id, snapshot, ref);
         // A soft fence, said plainly: a critic still at work does not read the
         // others. (Reading cannot be refused at the home the way writing is —
@@ -639,6 +718,8 @@ variations through the /variation path — \`isocan add … --prop parent=<scree
         const [a, b] = pair as [CritiqueNote, CritiqueNote];
         if (a.item !== b.item) throw new Error("those two notes are on different screens — a split is about one");
         if (a.criticId === b.criticId) throw new Error(`both notes are ${a.critic}'s — a split is two critics`);
+        // Lenses the lead wore: build both is two proposals, asked of the lead in the Chat.
+        if (a.persona && b.persona) return room.roomBoth(host, ctx, canvas, snapshot, a, b);
         const { status, item } = await requestOf(host, ctx, canvas.id, snapshot, a.item);
         // The ref must still be a split in the read as it stands — what the
         // person was shown, not two notes picked by hand.
@@ -751,6 +832,8 @@ export const critiqueCli: CliModule = {
       prepare: prepareCritic,
     },
   ],
+  // The desk check before a share (proactive-agent phase 8): the critics set to *before I share*, asked of the lead.
+  deskCheck: { critics: room.beforeShare },
 };
 
 export default critiqueCli;

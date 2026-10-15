@@ -107,3 +107,22 @@ off the item's corner).
 In the app the cards draw as critic cards behind **Settings → Experiments →
 Critique**, and as plain markdown without it. A critic's pins wear its
 colour, because `critique` gives the critic's actor the card's colour.
+
+### Critics in the room (the lead wears them)
+
+The same cards, worn by the canvas's lead instead of enrolled as agents of
+their own (topic `proactive` says how to answer a crit):
+
+- `isocan critic add reductionist` — a starter lens (`critic ls` lists them:
+  reductionist, brand-voice, newcomer, craftsperson), named for what it
+  looks for, never a person. `isocan critic new "<name>" --lens "<one line>"
+  [--refs "<work it is after>"]` describes one; its name may carry no word of
+  the references. A new card is switched on.
+- `isocan critic set <critic> --on|--off --loud blockers|studio|everything
+  --when pause|share|asked` — the room's settings, one undo.
+- `isocan critique <item>` — the person asks the room: every critic switched
+  on (or `--as a,b`), asked of the lead in the Chat.
+- `isocan critique note <item> --as <critic> --at <fx,fy> --kind …` — the
+  lead's note worn as that critic; `critique read <item> [--post --say …]`
+  folds the room; `critique both <a>+<b>` asks the lead for two proposals.
+

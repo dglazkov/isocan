@@ -757,6 +757,13 @@ function toComment(c: NewComment, actor: Actor, ts: string): Comment {
     }
     comment.deleted = c.deleted;
   }
+  if (c.persona !== undefined) {
+    // A critic worn by the lead (proactive-agent phase 8): the card's name, a slug.
+    if (typeof c.persona !== "string" || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(c.persona)) {
+      throw new OpValidationError("bad-op", "a critic's note names the critic it is worn as by its card's name, a lowercase slug");
+    }
+    comment.persona = c.persona;
+  }
   if (c.goodnight !== undefined) {
     // A goodnight turn (proactive-agent phase 2): a plan, or a brief naming its note.
     const { step, note } = (c.goodnight ?? {}) as { step?: unknown; note?: unknown };

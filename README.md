@@ -434,6 +434,21 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   extremes**, or **Name a product that gets it right**. With nothing to
   answer, the card still says what it saw and that the question waits.
   `isocan stuck [item]` prints the same.
+- **Critics in the room**: switch on lenses — *The Reductionist*, *The Brand
+  Voice*, or one you describe in a line, after work you admire, never a
+  person — each with *how loud* (blockers only, studio crit, everything) and
+  *when* (when you pause, before you share, only when asked). The lead agent
+  wears them over a screen: pins land in each critic's colour, and the read
+  of the room says where they **agree**, where they **split** — never
+  averaged, with **Build both** making two proposals — and any **blocker**.
+  Critics never edit. `isocan critic add|new|set|ls` and `isocan critique
+  <item> [--as …]`; in the app, *Critics in the room* behind Settings →
+  Experiments → Critique.
+- **A desk check before you share**: `isocan share` and `isocan present`
+  first read the screens as a reviewer would — the design audit, contrast,
+  the words against the Voice, wires behind the design system, stale
+  receipts — and ask the critics set to *before I share*. It reports; it
+  never blocks. `isocan share --check` runs it alone.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

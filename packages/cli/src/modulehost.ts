@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { CanvasSnapshotResponse } from "@isocan/core";
-import type { Canvas, CoreModule, GroupBox, Item, Operation, Placement } from "@isocan/core";
+import type { Canvas, CanvasContents, CoreModule, GroupBox, Item, Operation, Placement } from "@isocan/core";
 import type { CopyEdit } from "@isocan/core/copy-deck";
 import type { Ctx } from "./ctx.ts";
 import type { FencedRequest, FencedRun } from "./sandbox.ts";
@@ -131,6 +131,27 @@ export interface CliModule {
   templates?: readonly EnrolTemplate[];
   /** The writer for a copy-deck kind whose words this module owns. */
   copy?: CopyWriter;
+  /** What this module adds to the desk check before a share (proactive-agent phase 8). */
+  deskCheck?: ModuleDeskCheck;
+}
+
+/**
+ * **What a module adds to the desk check** (proactive-agent phase 8, design
+ * §9 "Before you share"). `isocan share` and `isocan present` read the
+ * screens before they act; a part only a module knows is asked of the module
+ * that knows it, as a copy-deck kind's words are (`CopyWriter`), so removing
+ * the module removes its line from the check and nothing else. Each part is
+ * optional, and none may block: a part that throws is left out.
+ */
+export interface ModuleDeskCheck {
+  /** Wires drawn from an older version of their design system — the wireframe module's reading. */
+  behind?: (canvas: CanvasContents, readText: (blobHash: string) => Promise<string>) => Promise<{ title: string; system: string }[]>;
+  /**
+   * The critics set to *before I share*, asked of the canvas's lead over
+   * these screens with the check's findings, once per screen version — or
+   * each saying why it waits. The critique module's room.
+   */
+  critics?: (host: CliHost, ctx: Ctx, canvas: Canvas, snapshot: CanvasSnapshotResponse, screens: readonly string[], findings: readonly string[]) => Promise<{ agentName: string; asked: boolean; why?: string }[]>;
 }
 
 /**

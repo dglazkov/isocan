@@ -23,6 +23,17 @@ second week.
 
 ## 14 October 2026
 
+- **Critics in the room.** Switch on lenses for a canvas (The Reductionist,
+  The Brand Voice, or one you describe in a line), each with how loud and
+  when. Ask the room about a screen and pins land in each critic's colour;
+  the read of the room says where they agree, where they split (never
+  averaged, with **Build both**) and any blocker. Critics never edit.
+  Settings → Experiments → Critique; `isocan critic`, `isocan critique`.
+- **A desk check before you share.** `isocan share` and `isocan present`
+  first read your screens the way a reviewer would (audit, contrast, words,
+  stale receipts) and ask the critics you set to "before I share". It
+  reports and never blocks. `isocan share --check` runs it alone.
+
 - **Stuck, said out loud.** When three takes in a row at the same thing
   have missed, your next ask gets a question instead of a fourth take: the
   agent says it has been guessing and what it noticed in what you kept, then

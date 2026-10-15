@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import { useTextAnchorStore } from "../stores/textAnchorStore.ts";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { Actor, CommentThread, NewComment } from "@isocan/core";
+import type { Actor, CanvasContents, CommentThread, Item, NewComment } from "@isocan/core";
 import {
   collectItemRefCandidates,
   extractItemRefs,
@@ -168,6 +168,12 @@ function ThreadPin({
   const sessions = useCanvasStore((s) => s.sessions);
   const live = liveActorIds(sessions);
   const first = thread.comments[0]!;
+  /* A critic worn by the lead (proactive-agent phase 8): the pin wears the
+     critic's face and colour, read off its card's properties — two strings,
+     so the selectors return primitives. The author still signs the note. */
+  const persona = first.persona;
+  const lensTitle = useCanvasStore((s) => (persona ? lensCard(s.canvas, persona)?.title ?? persona : null));
+  const lensColor = useCanvasStore((s) => (persona ? lensCard(s.canvas, persona)?.properties["critique.color"] ?? null : null));
   // Distinct authors in comment order; up to three initials, then a +N chip.
   const authors: Actor[] = [];
   for (const comment of thread.comments) {
@@ -246,7 +252,7 @@ function ThreadPin({
   const said =
     unread > 0
       ? `${unread} new from ${actorNameIn(names, newest.author)} — ${newest.body.slice(0, 60)}`
-      : `${authors.map((author) => actorNameIn(names, author)).join(", ")} — ${first.body.slice(0, 60)}`;
+      : `${lensTitle ? `${lensTitle} (worn by ${actorNameIn(names, first.author)})` : authors.map((author) => actorNameIn(names, author)).join(", ")} — ${first.body.slice(0, 60)}`;
 
   return (
     <button
@@ -273,19 +279,30 @@ function ThreadPin({
         useUiStore.getState().setOpenThread(open ? null : thread.id);
       }}
     >
-      {shown.map((author) => (
-        <span
-          className={`pin-avatar${live.has(author.id) ? " live" : ""}`}
-          key={author.id}
-          style={{ background: actorColorIn(colors, author.id) }}
-        >
-          {faceMark(marks, author, actorNameIn(names, author))}
-        </span>
-      ))}
+      {shown.map((author) =>
+        lensTitle && author.id === first.author.id ? (
+          <span className="pin-avatar" key={author.id} data-persona={persona} style={{ background: lensColor ?? "var(--accent)" }}>
+            {lensTitle.replace(/^(the|a|an)\s+/i, "").charAt(0).toUpperCase()}
+          </span>
+        ) : (
+          <span
+            className={`pin-avatar${live.has(author.id) ? " live" : ""}`}
+            key={author.id}
+            style={{ background: actorColorIn(colors, author.id) }}
+          >
+            {faceMark(marks, author, actorNameIn(names, author))}
+          </span>
+        ),
+      )}
       {overflow > 0 && <span className="pin-avatar pin-more">+{overflow}</span>}
       {unread > 0 && <span className="pin-unread">{unread}</span>}
     </button>
   );
+}
+
+/** The critic card a lens note is worn as — `critique.critic` restated, so the entry chunk does not carry the module. */
+function lensCard(canvas: CanvasContents | null, persona: string): Item | undefined {
+  return canvas ? Object.values(canvas.items).find((i) => i.properties["critique.critic"] === persona) : undefined;
 }
 
 /** Re-exported so the surfaces that already import it from here keep

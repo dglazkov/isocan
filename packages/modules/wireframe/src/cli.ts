@@ -277,6 +277,10 @@ export const wireframeCli: CliModule = {
     // `isocan words vary <screen>`: each voice's file is the spec with its words, rendered (`copy-variant.ts`).
     variant: async (...args) => (await import("./copy-variant.ts")).wireCopyVariant(...args),
   },
+  // The desk check before a share (proactive-agent phase 8): wires behind their design system, loaded when a check runs.
+  deskCheck: {
+    behind: async (canvas, readText) => (await import("./behind.ts")).readWiresBehind(canvas, readText),
+  },
 };
 
 export default wireframeCli;

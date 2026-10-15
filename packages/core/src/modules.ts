@@ -519,6 +519,15 @@ export interface WebHost {
    */
   runCommand: (text: string) => Promise<"local" | "posted">;
   /**
+   * **Who leads here, for this viewer** (proposed: `host`; proactive-agent
+   * phase 8) — the night watch's reading (`nightLead`, `nightAnswerable`):
+   * the agent the canvas names with `proactive=`, else its first standing
+   * agent, and why it cannot answer this viewer (null when it can). A module
+   * that asks the lead — the critique module's room — addresses one agent,
+   * not every parked one. Absent on an older host: say nothing leads.
+   */
+  lead?: () => Promise<{ lead: { id: string; name: string } | null; cannot: string | null }>;
+  /**
    * **Take back this viewer's last change** (proposed: `host`, voice-agent
    * phase 7, 30 Sep 2026) — exactly what ⌘Z does: the home's actor-scoped
    * undo for the actor `send` writes as. No new operation and no inverse

@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–7 (proposals; the night watch; the morning review; explain; the brief as a card; changes ripple; stuck detection) are CLOSED. Next: phase 8, critics in the room. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–8 (proposals; the night watch; the morning review; explain; the brief as a card; changes ripple; stuck detection; critics in the room) are CLOSED. Next: phase 9, walk it as someone else. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -237,7 +237,7 @@ of generating again.
 
 ## Phase 8 — Critics in the room, and the desk check
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** The room reuses the critique module whole (critics are critique cards on the canvas, notes keep their shape, one fold sorts them into agree, split and blocker) and changes only who speaks: the lead wears each lens, and its notes carry a `persona` field on comments. Each card holds `critique.on`, `critique.loud` (blockers, studio, everything) and `critique.when` (pause, share, asked); starter lenses are named for a way of looking, never a person. A split is surfaced with **Build both** (two proposals citing `critic:<note>`), never averaged. The desk check reads the audit, contrast, words against the Voice, wires behind and stale receipts, through a browser-safe reader in `@isocan/api` with module parts added through `CliModule.deskCheck`; `share` and `present` run it first and it never blocks. `isocan critic add|new|set`, `isocan critique <item>`, `share --check`. The room's web surface is in the critique module, behind its experiment. `room.test.ts` (11), `desk-check.test.ts` (4), `critics.test.ts` (3) and the `proactive-critics` journey. Entry 693,041 → 693,724.
 
 **Outcome:** critics as personas worn by the lead agent; `isocan crit
 <item> --as <persona>…`; per-critic pins coloured by `{ persona }` data; the
@@ -259,6 +259,10 @@ set to *before I share*), reporting and never blocking.
 - **2026-10-14** — Open: where a canvas's critics live when no repo is
   bound; whether critics see each other's notes; whether a blocker can stop
   a share. Waits on Dion.
+- **2026-10-14** — The room's web surface lives in the critique module, behind the Critique experiment: `test/modules.test.ts` forbids naming a module outside its directory. The CLI is always on.
+- **2026-10-14** — Modules add desk-check parts through `CliModule.deskCheck` (wireframe's wires behind, critique's critics), so removing a module removes its line.
+- **2026-10-14** — Chosen, Dion to confirm: critics are cards on the canvas; lenses do not read each other before they speak (by order and the guide, not enforced); a blocker warns and never stops a share; studio (3 notes) is the default loudness; a pause is a minute of quiet after the person's last edit, asked once per version.
+- **2026-10-14** — Open, waits on Dion: graduating the Critique experiment; the Share dialog does not run the desk check yet; the existing homage roster credits real designers, against design §9; a lens note's toast names the lead, not the critic; pins of two critics on one spot overlap.
 
 ## Phase 9 — Walk it as someone else
 

@@ -2857,6 +2857,7 @@ program
   )
   .option("--unbar <who>", "let somebody back in — lift the bar; the link or an invitation then decides")
   .option("--public <on|off>", "list or unlist this canvas on its home; requires an existing read/view link, changes no access")
+  .option("--check", "run the desk check alone — audit, contrast, words, wires behind, stale receipts, critics set to before I share — and change nothing about who may enter")
   .option(
     "--space <name>",
     "the SPACE's share rather than this canvas's: invitation and link flags apply to every canvas in it, " +
@@ -2865,7 +2866,7 @@ program
   .action(
     run(async (
       who: string | undefined,
-      opts: { link?: string; as?: string; revoke?: string; bar?: string | boolean; unbar?: string; space?: string; public?: string },
+      opts: { link?: string; as?: string; revoke?: string; bar?: string | boolean; unbar?: string; space?: string; public?: string; check?: boolean },
       cmd: Command,
     ) => {
       if (opts.public !== undefined) {
@@ -2877,6 +2878,24 @@ program
       const ctx = await ctxOf(cmd);
       if (opts.space !== undefined) return shareSpace(ctx, await resolveSpace(ctx, opts.space), who, opts);
       const canvas = await resolveCanvas(ctx);
+      /**
+       * **The desk check first** (proactive-agent phase 8): before an act that
+       * lets people in, or a look at the address, the canvas is read the way a
+       * reviewer would — and it never blocks. Taking access away, the space,
+       * and listing are not shares, so they skip it; `--check` is it alone.
+       */
+      let desk: import("./desk-check.ts").DeskCheck | { failed: string } | undefined;
+      const sharing = opts.check || (opts.revoke === undefined && opts.bar === undefined && opts.unbar === undefined && opts.public === undefined && opts.link?.toLowerCase() !== "off");
+      if (sharing) {
+        const { deskCheck, printDeskCheck } = await import("./desk-check.ts");
+        const read = await ctx.client.snapshot(canvas.id).catch((err: unknown) => (err instanceof Error ? err.message : String(err)));
+        desk = typeof read === "string" ? { failed: read } : await deskCheck(ctx, deskCheckDeps(), canvas, read);
+        if (opts.check) {
+          if (who !== undefined || [opts.link, opts.as].some((v) => v !== undefined)) throw new Error("--check runs the desk check alone; share without it to change who may enter");
+          return ctx.json ? printJson({ deskCheck: desk }) : printDeskCheck(desk);
+        }
+        if (!ctx.json) printDeskCheck(desk);
+      }
       // The one origin, per canvas: people always enter through the home that
       // holds THIS canvas, so the address handed out is that home's and never
       // this machine's 127.0.0.1 — the same rule `isocan open` follows, from
@@ -2971,6 +2990,7 @@ program
       const spaceRows = holder ? (await ctx.client.spaceGrants(holder.id)).grants : [];
       if (ctx.json) {
         return printJson({
+          ...(desk ? { deskCheck: desk } : {}),
           address,
           owner: canvas.createdBy,
           public: !!link && isListedGrant(link),
@@ -6721,13 +6741,17 @@ program
 
 program
   .command("present <item>")
-  .description("Present a view to the room: a main-thread comment carrying the workbench address")
+  .description("Present a view to the room: a main-thread comment carrying the workbench address — after the desk check, which never blocks")
   .option("--say <note>", "a sentence about why, ahead of the address")
   .action(
     run(async (ref: string, opts: { say?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
+      // The desk check of what is about to be shown (proactive-agent phase 8): it reports, and the present goes ahead.
+      const { deskCheck, printDeskCheck } = await import("./desk-check.ts");
+      const desk = await deskCheck(ctx, deskCheckDeps(), p, snapshot, [item.id]);
+      if (!ctx.json) printDeskCheck(desk);
       // A COMMENT, deliberately — an ephemeral "look here" channel was
       // designed for the workbench and rejected in review: everything it did,
       // a comment does better. Durable, attributed, it wakes the room (a
@@ -6739,11 +6763,12 @@ program
       const origin = (await ctx.homeOf(p.id)) ?? ctx.client.base;
       const address = workbenchUrl(origin, p.id, item.id);
       const body = opts.say ? `${opts.say} — ${address}` : address;
-      const main = mainThread(snapshot.canvas);
+      // Read again: the desk check may have asked the lead in the Chat, and that may have started it.
+      const main = mainThread((await ctx.client.snapshot(p.id)).canvas);
       if (main) {
         const comment = await newComment(ctx, p.id, snapshot, body);
         await sendOp(ctx, p.id, { type: "thread.reply", threadId: main.id, comment });
-        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id, address });
+        if (ctx.json) return printJson({ threadId: main.id, commentId: comment.id, address, deskCheck: desk });
         console.log(`on the main thread: ${body}`);
       } else {
         // No main thread: the comment lands ON the item instead — a pin on
@@ -6758,7 +6783,7 @@ program
           anchorItemId: item.id,
           comment,
         });
-        if (ctx.json) return printJson({ threadId, commentId: comment.id, address });
+        if (ctx.json) return printJson({ threadId, commentId: comment.id, address, deskCheck: desk });
         console.log(`pinned to ${item.id}: ${body}`);
       }
     }),
@@ -9226,6 +9251,8 @@ program
  * `untick`, `show`) and the lead's (`read`, `note`, `fill`, `done`) are one
  * family; their bodies live in `goodnight.ts`, loaded on these verbs only.
  */
+/** What the desk check asks of the modules loaded here (`CliModule.deskCheck`), and the host it hands them. */
+const deskCheckDeps = (): import("./desk-check.ts").DeskCheckDeps => ({ modules: CLI_MODULES, host: moduleHost });
 const goodnightDeps = () => ({ ...proposeDeps(), newComment: (ctx: Ctx, canvasId: string, snapshot: CanvasSnapshotResponse, body: string) => newComment(ctx, canvasId, snapshot, body) });
 const collectList = (v: string, prev: string[] = []) => [...prev, v];
 

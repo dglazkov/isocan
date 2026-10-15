@@ -93,6 +93,7 @@ describe("a critic item round-trips through parsePersona", () => {
       color: "#336699",
       self: false,
       budget: { usdPerRun: DEFAULT_BUDGET.usdPerRun, turnsPerRun: DEFAULT_BUDGET.turnsPerRun },
+      line: "",
       questions: ["Is it calm?", "What could go?", "Does the content lead?"],
       looksFor: "One primary action.",
       ranks: "By the questions, in order.",

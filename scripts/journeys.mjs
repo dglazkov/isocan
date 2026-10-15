@@ -5543,6 +5543,202 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "proactive-critics",
+    /**
+     * **Critics in the room, and the desk check** (proactive-agent phase 8,
+     * journey scene 8, `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme canvas with one screen, Home: a promotion
+     * banner over a hero photo.
+     *
+     * With the Critique experiment on (the room is the critique module's),
+     * Maya opens *Crit with the room…* from Home's menu, adds two starter
+     * lenses — The Reductionist and The Brand Voice — and asks the room. Kit,
+     * woken by the ask, wears each lens: the two disagree about the banner
+     * (cut it / leave it) and agree about the hero (shrink it), and Kit posts
+     * the read. Home carries pins in two colours, each its critic's; the read
+     * of the room shows one synthesis — Kit's words, an agreement and a split
+     * with *Build both* — and Home is unchanged. *Build both* reaches Kit,
+     * whose two proposals hang beneath Home, each citing the critic it
+     * answers. With The Brand Voice set to *before I share*, `isocan share`
+     * prints the desk check above the address and asks Kit to wear it.
+     * Screenshots of the pins and the read, light and dark.
+     */
+    what: "critics in the room: two lenses over one screen give two colours of pins and one read of the room with a split and Build both; isocan share prints the desk check before the address",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-critics-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_critics_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: asked for a crit, it wears each lens and posts the read; asked to build both, it proposes two.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  // The summons carries the ask and the thread around it, so a line can appear twice: one take per note.
+  const both = [...new Map([...prompt.matchAll(/isocan propose (itm_[\\w-]+) \\S+ --cites critic:(thr_[\\w-]+)/g)].map((m) => [m[2], m])).values()];
+  // The newest ask is the one to answer: the summons carries the Chat's earlier turns too.
+  const newest = prompt.lastIndexOf("Build both, please (") > prompt.lastIndexOf("Crit, please (") ? "both" : "crit";
+  if (newest === "both" && both.length === 2) {
+    const takes = [["Home, quieter", "No banner: the order button is the one thing that moves.", "background:#fff"], ["Home, braver", "The banner keeps its red and becomes the header: one block, not two.", "background:#b5452a;color:#fff"]];
+    both.forEach(([, item, note], i) => {
+      const file = path.join(cwd, "both-" + i + ".html");
+      writeFileSync(file, "<!doctype html><title>" + takes[i][0] + "</title><main style='font:16px system-ui'><header style='padding:24px;" + takes[i][2] + "'><h1>Fresh bread</h1></header><button>Order for pickup</button></main>");
+      run("propose", item, file, "--cites", "critic:" + note, "--why", takes[i][1]);
+    });
+    return;
+  }
+  const asks = [...prompt.matchAll(/Crit, please \\((itm_[\\w-]+)@[^)]*\\)[^\\n]*/g)];
+  const crit = asks.at(-1)?.[1];
+  if (newest !== "crit" || !crit) return;
+  if (asks.at(-1)[0].includes("before they share")) {
+    run("critique", "note", crit, "--as", "brand-voice", "--at", "0.5,0.3", "--kind", "risk", "The heading could be anyone's bakery. Set it in the brand's face.");
+    return;
+  }
+  run("critique", "note", crit, "--as", "reductionist", "--at", "0.5,0.07", "--kind", "risk", "The promotion banner competes with the order button. Cut it.");
+  run("critique", "note", crit, "--as", "reductionist", "--at", "0.48,0.5", "--kind", "risk", "The hero photo pushes the menu below the fold. Reduce it.");
+  run("critique", "note", crit, "--as", "brand-voice", "--at", "0.53,0.09", "--kind", "working", "The banner's red is the only thing that says Acme. Leave it.");
+  run("critique", "note", crit, "--as", "brand-voice", "--at", "0.55,0.53", "--kind", "risk", "The hero is a stock loaf anyone could use. Shrink it to a strip.");
+  run("critique", "read", crit, "--post", "--say", "Reduction against recognition: the banner is both the noise and the brand. Both lenses would give the hero less room.");
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (args, as = {}) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env: { ...env, ...as } });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-critics-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const card = `document.querySelector("[data-room-read]")`;
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli(["canvas", "create", "Acme Bakery"]).canvasId;
+        const page = path.join(home, "home.html");
+        writeFileSync(page, `<!doctype html><meta charset="utf-8"><title>Home</title><body style='margin:0;font:16px system-ui'><div style='padding:16px;background:#b5452a;color:#fff;font-weight:600'>Two loaves for one, today only</div><img alt='A loaf on a counter' style='display:block;width:100%;height:320px;background:#e8dcc8'><main style='padding:24px'><h1>Fresh bread, every morning</h1><p>Order by eight, collect from nine.</p><button style='padding:12px 20px'>Order for pickup</button></main></body>`);
+        const screen = runCli(["--canvas", id, "add", page, "--title", "Home", "--size", "390x800", "--at", "0,0"]).itemId;
+        const before = runCli(["--canvas", id, "show", screen]);
+        runCli(["--canvas", id, "rc", "add", "Kit", "--dir", kitDir]);
+        runCli(["--canvas", id, "canvas", "edit", "--prop", "proactive=Kit"]);
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli(["--canvas", id, "pass"]);
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); localStorage.setItem("isocan.experiments", JSON.stringify(["critique"])); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector('[data-item-id="${screen}"]')`, "the canvas with Home", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+
+        // 1. Home's menu → Crit with the room… → two starter lenses, switched on.
+        const centre = await b.ev(`(() => { const r = document.querySelector('.item[data-item-id="${screen}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height * 0.6) }; })()`);
+        const mouse = (type, button) => b.send("Input.dispatchMouseEvent", { type, x: centre.x, y: centre.y, button, buttons: type === "mousePressed" ? (button === "right" ? 2 : 1) : 0, clickCount: 1 });
+        await mouse("mousePressed", "left");
+        await mouse("mouseReleased", "left");
+        await mouse("mousePressed", "right");
+        await mouse("mouseReleased", "right");
+        await sleep(500);
+        const menuText = await b.ev(`[...document.querySelectorAll('.context-menu [role=menuitem]')].map(e => e.textContent.trim()).join(' | ')`);
+        await rig.clickText(".context-menu [role=menuitem]", "Crit with the room", `Crit with the room… in Home's menu (it offers: ${menuText})`);
+        await until(b, `!!document.querySelector('[data-critics-room] [data-critic-add="reductionist"]')`, "Critics in the room with the starter lenses", 15_000);
+        await rig.click('[data-critic-add="reductionist"]', "The Reductionist");
+        await until(b, `!!document.querySelector('[data-critic="the-reductionist"]')`, "The Reductionist on the canvas", 15_000);
+        await rig.click('[data-critic-add="brand-voice"]', "The Brand Voice");
+        await until(b, `!!document.querySelector('[data-critic="the-brand-voice"]')`, "The Brand Voice on the canvas", 15_000);
+        const ls = runCli(["--canvas", id, "critic", "ls"]);
+        const switched = ls.critics.map((c) => [c.agentName, c.room.on]);
+        if (JSON.stringify(switched) !== JSON.stringify([["The Reductionist", true], ["The Brand Voice", true]])) throw new Error(`critic ls reads ${JSON.stringify(switched)} after the panel's two adds`);
+        if (ls.critics.some((c) => /[A-Z][a-z]+ [A-Z][a-z]+;/.test(c.credit))) throw new Error(`a starter lens credits a person: ${JSON.stringify(ls.critics.map((c) => c.credit))}`);
+
+        // 2. Ask the room: Kit wears both lenses, and posts the read.
+        await rig.click("[data-critics-ask]", "Ask the room about “Home”");
+        await until(b, `!document.querySelector('[data-critics-room]')`, "the dialog to close on the ask");
+        await until(b, `!!${card}?.querySelector('[data-room-say]') && !!${card}.querySelector('[data-room-split]')`, "the read of the room with Kit's words and a split", 60_000);
+        const pins = JSON.parse(await b.ev(`JSON.stringify([...document.querySelectorAll('.pin [data-persona]')].map((p) => [p.dataset.persona, getComputedStyle(p).backgroundColor]))`));
+        const colours = new Map(pins);
+        if (pins.length !== 4 || colours.size !== 2) throw new Error(`Home's lens pins are not four in two colours: ${JSON.stringify(pins)}`);
+        if (colours.get("the-reductionist") === colours.get("the-brand-voice")) throw new Error(`the two critics' pins share a colour: ${JSON.stringify(pins)}`);
+        const text = await b.ev(`${card}.textContent`);
+        for (const w of ["Read of the room — “Home”", "The Reductionist", "The Brand Voice", "Kit: Reduction against recognition", "Agree", "Split", "against", "Blocker", "None.", "Build both"]) {
+          if (!text.includes(w)) throw new Error(`the read of the room does not say ${JSON.stringify(w)}: ${text.slice(0, 1500)}`);
+        }
+        const sides = JSON.parse(await b.ev(`JSON.stringify([...${card}.querySelectorAll('[data-room-split] > ul')].map((u) => u.textContent))`));
+        if (sides.length !== 2 || !sides[0].includes("Leave it") || !sides[1].includes("Cut it")) throw new Error(`the split is not two whole sides: ${JSON.stringify(sides)}`);
+        const agree = await b.ev(`${card}.querySelector('[data-room-section="agree"]').textContent`);
+        if (!agree.includes("The Reductionist and The Brand Voice agree")) throw new Error(`the agreement is missing: ${agree}`);
+        const syntheses = Object.values((await served(id)).threads).flatMap((t) => t.comments).filter((c) => c.body.startsWith("Read of the room"));
+        if (syntheses.length !== 1) throw new Error(`${syntheses.length} reads of the room posted, not one`);
+        const after = await served(id);
+        if (after.items[screen].versions.length !== before.versions.length || after.items[screen].currentVersionId !== before.currentVersionId) throw new Error("a critic changed Home");
+        // The four notes' arrival toasts sit over the corner the card is in; dismiss them, as a person would.
+        await b.ev(`(() => { document.querySelectorAll('.toast-close').forEach((x) => x.click()); return true; })()`);
+        await until(b, `!document.querySelector('.toast')`, "the arrival toasts to go", 10_000);
+        const shots = {};
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`room-${theme}`] = await shot(`room-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+
+        // 3. Build both: two proposals beneath Home, each citing the critic it answers; Home untouched.
+        await rig.click("[data-room-both]", "Build both");
+        await until(b, `!!${card}?.querySelector('[data-room-both-asked]')`, "the card to say both were asked for", 15_000);
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => Object.values(r.canvas.items).filter((i) => i.properties.proposal && i.properties.parent === "${screen}").length === 2)`, "Kit's two proposals beneath Home", 60_000);
+        const proposals = Object.values((await served(id)).items).filter((i) => i.properties.proposal && i.properties.parent === screen);
+        const cited = proposals.map((p) => JSON.parse(p.properties.proposalCites)[0].kind);
+        if (JSON.stringify(cited) !== JSON.stringify(["critic", "critic"])) throw new Error(`the proposals do not cite their critics: ${JSON.stringify(cited)}`);
+        const still = await served(id);
+        if (still.items[screen].currentVersionId !== before.currentVersionId) throw new Error("Build both changed Home");
+
+        // 4. The desk check: The Brand Voice before I share; share prints it above the address.
+        runCli(["--canvas", id, "critic", "set", "brand-voice", "--when", "share"]);
+        const printed = execFileSync(process.execPath, [cli, "--canvas", id, "share"], { cwd: home, encoding: "utf8", env });
+        const desk = printed.indexOf("Desk check before you share:");
+        const at = printed.search(/^address/m);
+        if (desk < 0 || at < 0 || desk > at) throw new Error(`share did not print the desk check before the address:\n${printed}`);
+        if (!printed.includes("it never blocks") || !printed.includes("The Brand Voice — asked to read it")) throw new Error(`the desk check does not say what it asked:\n${printed}`);
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some((t) => t.comments[0]?.persona === "the-brand-voice" && t.comments[0].body.includes("brand's face")))`, "Kit's note as The Brand Voice before the share", 60_000);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots, deskCheck: printed.slice(desk, at).trim() };
+      } catch (err) {
+        const said = await b.ev(`(document.querySelector("[data-room-read]")?.textContent ?? "no read of the room").slice(0, 1200)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the read ---\n${said}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
     name: "launcher",
     /** ⌘K stopped being a third composer and became the way to reach
      *  everything. A launcher that opens but does nothing is the worst version

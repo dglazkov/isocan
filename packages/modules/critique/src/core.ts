@@ -150,7 +150,8 @@ export function findCritic<T extends { critic: { name: string; agentName: string
   const q = ref.trim().replace(/^@/, "").toLowerCase();
   if (!q) return undefined;
   const named = (agentName: string) => on.find(({ critic }) => critic.agentName.toLowerCase() === agentName.toLowerCase());
-  const direct = on.find(({ critic }) => critic.name.toLowerCase() === q || critic.agentName.toLowerCase() === q || mentionWord(critic.agentName).toLowerCase() === q);
+  const direct = on.find(({ critic }) => critic.name.toLowerCase() === q || critic.agentName.toLowerCase() === q || mentionWord(critic.agentName).toLowerCase() === q)
+    ?? on.find(({ critic }) => lensWords(critic.agentName).toLowerCase() === q || criticSlug(lensWords(critic.agentName)) === q);
   if (direct) return direct;
   const entry = findInRoster(list, q);
   return entry ? named(entry.critic.agentName) : undefined;
@@ -201,6 +202,9 @@ export interface Critic {
   color?: string;
   self: boolean;
   budget?: Persona["budget"];
+  /** The one-line lens a critic in the room is listed by (`lens:` in its
+   *  front matter; proactive-agent phase 8) — "" when its card has none. */
+  line: string;
   questions: string[];
   looksFor: string;
   ranks: string;
@@ -224,6 +228,7 @@ export function readCritic(text: string, filename = "critic.md"): Critic | null 
     ...(persona.color ? { color: persona.color } : {}),
     self: unquote(persona.extra["self"]).toLowerCase() === "true",
     ...(persona.budget ? { budget: persona.budget } : {}),
+    line: unquote(persona.extra["lens"]),
     ...lens,
   };
 }
@@ -269,7 +274,7 @@ export interface CanvasCritic {
 export function refuseJoin(on: readonly CanvasCritic[], next: Named & { name: string }): string | null {
   const same = on.find(({ critic }) => critic.name === next.name || critic.agentName.toLowerCase() === next.agentName.toLowerCase());
   if (same) return `${same.critic.agentName} is already on this canvas (${same.itemId}) — edit that card rather than adding a second`;
-  const clash = firstWordClashes([...on.map(({ critic }) => ({ id: critic.name, agentName: critic.agentName })), { id: next.name, agentName: next.agentName }])
+  const clash = firstWordClashes([...on.map(({ critic }) => ({ id: critic.name, agentName: lensWords(critic.agentName) })), { id: next.name, agentName: lensWords(next.agentName) }])
     .find((c) => c.id === next.name);
   if (clash) return clash.problem;
   const problems = criticProblems(next);
@@ -278,7 +283,25 @@ export function refuseJoin(on: readonly CanvasCritic[], next: Named & { name: st
 
 /** Every first-word clash among a canvas's critics — `critic ls` says so. */
 export function canvasClashes(on: readonly CanvasCritic[]): { id: string; problem: string }[] {
-  return firstWordClashes(on.map(({ critic }) => ({ id: critic.name, agentName: critic.agentName })));
+  return firstWordClashes(on.map(({ critic }) => ({ id: critic.name, agentName: lensWords(critic.agentName) })));
+}
+
+/**
+ * **A critic's name without its leading article** — "The Reductionist" is
+ * told apart from "The Brand Voice" by *Reductionist*, not by *The*
+ * (proactive-agent phase 8: a room's lenses are named for what they look
+ * for, and most start with "The"). The clash checks and `findCritic` read
+ * this; a mention still resolves by the first word, so `critique --by`,
+ * which mentions, refuses two critics that share one (`mentionClash`).
+ */
+export function lensWords(agentName: string): string {
+  return agentName.trim().replace(/^(the|a|an)\s+(?=\S)/i, "");
+}
+
+/** Two asked critics a mention could not tell apart — their first words are one — or null. */
+export function mentionClash(asked: readonly Critic[]): string | null {
+  const clash = firstWordClashes(asked.map((c) => ({ id: c.name, agentName: c.agentName })))[0];
+  return clash ? `${clash.problem} — \`--by\` asks each by a mention; ask them one at a time, or as the lead's lenses with \`--as\`` : null;
 }
 
 /** The items marked as critics. */
@@ -293,6 +316,8 @@ export interface CriticDraft {
   credit: string;
   color?: string;
   self?: boolean;
+  /** The one-line lens, for a critic in the room (proactive-agent phase 8). */
+  line?: string;
   lens: Lens;
 }
 
@@ -310,6 +335,7 @@ export function criticMarkdown(draft: CriticDraft): string {
     "critic: true",
     `agentName: ${draft.agentName}`,
     `credit: ${draft.credit}`,
+    ...(draft.line?.trim() ? [`lens: ${JSON.stringify(draft.line.trim())}`] : []),
     ...(draft.color ? [`color: "${draft.color}"`] : []),
     ...(draft.self ? ["self: true"] : []),
     "budget:",
@@ -408,6 +434,11 @@ export interface CritiqueNote {
   question: number;
   text: string;
   createdAt: string;
+  /** A critic worn by the lead (proactive-agent phase 8): the card's name.
+   *  `critic` is then the card's title, `criticId` is `persona:<name>`, and
+   *  `by` is who wrote it — the one actor accountable. */
+  persona?: string;
+  by?: { id: string; name: string };
 }
 
 /** A thread read as a note — null when it is not one: not anchored to a live
@@ -418,10 +449,13 @@ export function readNote(thread: CommentThread, items: Readonly<Record<string, I
   if (!item || !first || thread.main) return null;
   const note = readNoteBody(first.body);
   if (!note) return null;
+  const persona = first.persona;
+  const card = persona ? Object.values(items).find((i) => i.properties[CRITIC_PROP] === persona) : undefined;
   return {
     threadId: thread.id,
-    critic: first.author.name,
-    criticId: first.author.id,
+    critic: persona ? card?.title || persona : first.author.name,
+    criticId: persona ? `persona:${persona}` : first.author.id,
+    ...(persona ? { persona, by: { id: first.author.id, name: first.author.name } } : {}),
     item: item.id,
     at: fractionOfAnchor(item, thread),
     kind: note.kind,

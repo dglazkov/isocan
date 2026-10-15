@@ -123,6 +123,12 @@ export function webHostFor(canvasId: string, actor: Actor, destination = creatio
      * `/wire` straight to the Chat would have skipped the first one: no
      * dialog, and with nobody parked, nothing at all.
      */
+    /** Who leads here — the night watch's own reading (`goodnight.ts`), loaded when asked. */
+    async lead() {
+      const { goodnightLead } = await import("./goodnight.ts");
+      const found = await goodnightLead(canvasId, actor.id);
+      return { lead: found.lead ? { id: found.lead.id, name: found.lead.name } : null, cannot: found.cannot };
+    },
     async runCommand(text: string): Promise<"local" | "posted"> {
       if (runLocalCommand(text, currentCommands())) return "local";
       if (!canEditNow()) throw new Error("You are reading this canvas — nothing can be posted from here.");
