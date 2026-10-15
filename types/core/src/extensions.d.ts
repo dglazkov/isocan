@@ -189,6 +189,17 @@ export declare function readPanelExtension(text: string, canvas: CanvasContents)
  */
 export declare function panelCapabilities(panel: PanelExtension): string[];
 /**
+ * The colours an extension may wear on the dock — muted mineral tones that
+ * read on both vellum and graphite grounds and never collide with the seven
+ * `IDENTITY_COLORS` that mean a person is standing there.
+ */
+export declare const EXTENSION_COLORS: ReadonlyArray<{
+    name: string;
+    value: string;
+}>;
+/** Deterministic extension colour from an item id — never in `IDENTITY_COLORS`. */
+export declare function extensionColor(id: string): string;
+/**
  * Every panel on this canvas, oldest first, so the dock does not reshuffle
  * itself when somebody edits one. The bytes are not read here — an item's
  * content is fetched by the caller, exactly as `toolExtensionItems` leaves it.
