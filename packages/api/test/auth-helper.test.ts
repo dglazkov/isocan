@@ -461,4 +461,106 @@ describe("external credential helper and forward-proxy transport (Phase 2 proof)
       await authProxy.close();
     }
   });
+
+  it("supports proxyTunnel: false for https: homes via a loopback TLS-originating proxy and refuses non-loopback proxies", async () => {
+    const authProxy = await startAuthReverseProxy(daemonPort, PRIYA);
+    const authPort = Number(new URL(authProxy.base).port);
+
+    let connectCount = 0;
+    const seenHosts: string[] = [];
+    const seenUrls: string[] = [];
+    const originatingSockets = new Set<net.Socket>();
+    const originatingProxy = http.createServer((req, res) => {
+      seenHosts.push(req.headers.host ?? "");
+      seenUrls.push(req.url ?? "");
+      const upstream = http.request(
+        {
+          host: "127.0.0.1",
+          port: authPort,
+          method: req.method,
+          path: req.url,
+          headers: req.headers,
+        },
+        (upRes) => {
+          res.writeHead(upRes.statusCode ?? 502, upRes.headers);
+          upRes.pipe(res);
+        },
+      );
+      upstream.on("error", (err) => {
+        if (!res.headersSent) res.writeHead(502);
+        res.end(err.message);
+      });
+      req.pipe(upstream);
+    });
+    originatingProxy.on("connect", (_req, clientSocket) => {
+      connectCount += 1;
+      clientSocket.destroy();
+    });
+    originatingProxy.on("connection", (socket) => {
+      originatingSockets.add(socket);
+      socket.on("close", () => originatingSockets.delete(socket));
+    });
+    await new Promise<void>((resolve) => originatingProxy.listen(0, "127.0.0.1", () => resolve()));
+    const origPort = (originatingProxy.address() as net.AddressInfo).port;
+    const origProxyUrl = `http://127.0.0.1:${origPort}`;
+
+    const clientHome = path.join(tempDir, "client-orig-proxy");
+    await fs.mkdir(clientHome, { recursive: true });
+    authProxy.setActiveToken("tok-orig");
+    const helperInline = 'process.stdout.write("X-Acme-Token: tok-orig\\n");';
+
+    await fs.writeFile(
+      paths.configFile(clientHome),
+      JSON.stringify({
+        homeAuth: {
+          "https://canvas.acme.test": {
+            authHeaderCommand: [process.execPath, "-e", helperInline],
+            httpProxy: origProxyUrl,
+            proxyTunnel: false,
+            ttlSeconds: 300,
+          },
+          "https://remote-proxy.acme.test": {
+            authHeaderCommand: [process.execPath, "-e", helperInline],
+            httpProxy: "http://proxy.acme.test:3128",
+            proxyTunnel: false,
+          },
+        },
+      }),
+    );
+
+    try {
+      const saved: Record<string, string | undefined> = {};
+      for (const key of harnessVars) {
+        saved[key] = process.env[key];
+        delete process.env[key];
+      }
+      try {
+        const client = new DaemonClient("https://canvas.acme.test", clientHome);
+        client.direct = true;
+        const resolved = await resolveIdentity(client, clientHome);
+        expect(resolved).not.toBeNull();
+        expect(resolved!.actor.name).toBe("priya");
+        expect(connectCount).toBe(0);
+        expect(seenHosts).toContain("canvas.acme.test");
+        expect(seenUrls.some((u) => u.startsWith("/api/actors"))).toBe(true);
+
+        const refusedClient = new DaemonClient("https://remote-proxy.acme.test", clientHome);
+        refusedClient.direct = true;
+        const probe = await refusedClient.probeHealth();
+        expect(probe.ok).toBe(false);
+        if (!probe.ok) {
+          expect(probe.why).toContain("refusing proxyTunnel: false for non-loopback httpProxy");
+        }
+      } finally {
+        for (const [key, val] of Object.entries(saved)) {
+          if (val === undefined) delete process.env[key];
+          else process.env[key] = val;
+        }
+      }
+    } finally {
+      for (const s of originatingSockets) s.destroy();
+      await new Promise<void>((resolve) => originatingProxy.close(() => resolve()));
+      await authProxy.close();
+    }
+  });
 });

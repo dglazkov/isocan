@@ -53,6 +53,13 @@ export interface HomeAuthEntry {
   authHeaderCommand?: readonly string[] | string;
   /** Optional explicit HTTP/HTTPS forward proxy URL for outbound requests to this home. */
   httpProxy?: string;
+  /**
+   * How `httpProxy` reaches an `https:` home:
+   * - `true` (default): HTTP `CONNECT` tunnel; this process performs TLS with the home.
+   * - `false`: plain HTTP/1.1 forward request (`Host: <home>`) to a loopback (`127.0.0.1` / `localhost`)
+   *   sidecar proxy that originates the upstream TLS / client-certificate connection itself.
+   */
+  proxyTunnel?: boolean;
   /** Cache TTL in seconds for headers emitted by `authHeaderCommand` (default `300`). */
   ttlSeconds?: number;
 }
@@ -63,6 +70,8 @@ export interface HomeAuthConfig {
   authHeaderCommand?: readonly string[];
   /** Normalized forward-proxy URL for this home, when configured. */
   httpProxy?: string;
+  /** Whether `httpProxy` uses `CONNECT` tunneling (`true`, default) or plain HTTP/1.1 to a loopback TLS-originating proxy (`false`). */
+  proxyTunnel?: boolean;
   /** Positive cache TTL in seconds, when explicitly configured. */
   ttlSeconds?: number;
 }
@@ -143,6 +152,8 @@ function normalizeHomeAuthEntry(raw: unknown): HomeAuthConfig | null {
     typeof record.httpProxy === "string" && record.httpProxy.trim().length > 0
       ? record.httpProxy.trim()
       : undefined;
+  const proxyTunnel =
+    typeof record.proxyTunnel === "boolean" ? record.proxyTunnel : undefined;
   const ttlSeconds =
     typeof record.ttlSeconds === "number" &&
     Number.isFinite(record.ttlSeconds) &&
@@ -153,6 +164,7 @@ function normalizeHomeAuthEntry(raw: unknown): HomeAuthConfig | null {
   return {
     ...(authHeaderCommand ? { authHeaderCommand } : {}),
     ...(httpProxy ? { httpProxy } : {}),
+    ...(proxyTunnel !== undefined ? { proxyTunnel } : {}),
     ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
   };
 }
@@ -226,11 +238,13 @@ export function homeAuthFor(
     (cmdApplies ? envCmd : undefined) ??
     fromFileMap?.authHeaderCommand;
   const httpProxy = fromEnvMap?.httpProxy ?? fromFileMap?.httpProxy;
+  const proxyTunnel = fromEnvMap?.proxyTunnel ?? fromFileMap?.proxyTunnel;
   const ttlSeconds = fromEnvMap?.ttlSeconds ?? fromFileMap?.ttlSeconds;
   if (!authHeaderCommand && !httpProxy) return null;
   return {
     ...(authHeaderCommand ? { authHeaderCommand } : {}),
     ...(httpProxy ? { httpProxy } : {}),
+    ...(proxyTunnel !== undefined ? { proxyTunnel } : {}),
     ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
   };
 }

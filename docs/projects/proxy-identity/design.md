@@ -209,11 +209,15 @@ Following `git`'s `credential.helper` and `kubectl`'s `exec` credential plugin:
 - **No door knocks (`upstream: true`):** When `homeAuth` is active for `base`,
   `DaemonClient` uses an `upstream: true` `BadgeStore` so it never writes a
   `bdg_...` secret to `identity.json` and never calls `POST /api/door`.
-- **Per-home forward proxy (`httpProxy`):** When `homeAuth[base].httpProxy` is
-  set, `DaemonClient` routes HTTP (`undici` `EnvHttpProxyAgent` with
-  `proxyTunnel: false`) and WebSocket (`HomeLink` / `ws` agent) traffic for that
-  home through the named forward proxy without requiring global `HTTPS_PROXY` in
-  the user's shell.
+- **Per-home forward proxy (`httpProxy` / `proxyTunnel`):** When
+  `homeAuth[base].httpProxy` is set, `DaemonClient` routes HTTP and WebSocket
+  (`HomeLink` / `ws` agent) traffic for that home through the named forward
+  proxy without requiring global `HTTPS_PROXY` in the user's shell. Setting
+  `proxyTunnel: false` on a loopback `httpProxy` (`http://127.0.0.1:<port>`)
+  forwards origin-form HTTP/1.1 with `Host: <home-host>` to a local sidecar
+  proxy that originates the upstream TLS / client-certificate connection itself
+  (rather than `CONNECT` tunneling); non-loopback `httpProxy` URLs are refused
+  when `proxyTunnel: false`.
 
 ---
 
