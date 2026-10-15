@@ -4,6 +4,7 @@ import { isGroupItem } from "./canvas-groups.ts";
 import { proposalMarked } from "./proposal.ts";
 import { luminance } from "./contrast.ts";
 import { readScreen, type ScreenRead, type WalkRect } from "./walk-read.ts";
+import { titleSlug } from "./filenames.ts";
 
 export { readScreen, type ScreenRead, type TextRun, type WalkTarget, type Spoken, type WalkRect } from "./walk-read.ts";
 
@@ -77,7 +78,8 @@ const ALIASES: Record<string, string> = {
   "screenreader": "screen-reader", sr: "screen-reader", blind: "screen-reader",
   "first-timer": "first-time", firsttime: "first-time", newcomer: "first-time", "first-visit": "first-time",
 };
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+/** A walker's id: the one title-to-slug rule, ASCII, as persona ids are. */
+const slug = (s: string) => titleSlug(s, { max: 40, ascii: true });
 /** Words that describe who someone is, not what they are doing — a walker is never one. */
 const IDENTITY = /\b(old|older|elderly|senior|grandma|grandpa|granny|grandmother|grandfather|boomer|millennial|gen ?z|woman|women|man|men|girl|boy|lady|guy|teen|teenager|kid|retired|retiree|disabled person)\b/i;
 
