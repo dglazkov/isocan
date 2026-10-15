@@ -57,7 +57,7 @@ export function PhoneFace({ canvasId, actor, visit, prior, morning }: { prior: P
   const step = (direction: Direction) => { const next = item && findNextItem(item, items, direction); if (next) open(next.id); };
   const gestures = useTouchNavigation(step, () => update({ plan: true }));
   const current = item?.versions.find((v) => v.id === item.currentVersionId) ?? item?.versions[0];
-  const visual = current && visualFaceOf(current);
+  const visual = current && visualFaceOf(current, item?.properties.face);
   const thread = (digestThread && canvas?.threads[digestThread]) || (canvas && item ? itemThread(canvas, item.id) : null);
   const openThread = (id: string) => {
     const target = canvas?.threads[id];

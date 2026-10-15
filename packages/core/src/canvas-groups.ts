@@ -1,4 +1,5 @@
 import type { Actor, CanvasContents, CanvasState, Item } from "./model.ts";
+import { NAMED_FACE_IDS, isNamedFaceId } from "./model.ts";
 import type { GroupAction, GroupAnchor, GroupBox, GroupCell, GroupChange, GroupContentFields, GroupExpectation, GroupFacts, GroupFields, GroupLayout, GroupOperation, GroupPlacementPolicy, GroupStamp, GroupWrite } from "./canvas-group-types.ts";
 import { annotationTarget, annotationsOf } from "./annotation.ts";
 import { isDrawingItem } from "./drawing.ts";
@@ -39,6 +40,14 @@ function validVisual(value: unknown): void {
   if (typeof value.blobHash !== "string" || !value.blobHash || typeof value.mimeType !== "string" || !value.mimeType) fail("visual face needs a content hash and MIME type");
   if (own(value, "filename") && typeof value.filename !== "string") fail("invalid visual filename");
   if (own(value, "size") && (typeof value.size !== "number" || !Number.isFinite(value.size) || value.size < 0)) fail("invalid visual size");
+}
+function validFaces(value: unknown, allowNull = false): void {
+  exactKeys(value, NAMED_FACE_IDS, "named faces");
+  for (const [key, face] of Object.entries(value)) {
+    if (!isNamedFaceId(key)) fail("invalid named face key");
+    if (allowNull && face === null) continue;
+    validVisual(face);
+  }
 }
 function validLayout(layout: unknown): asserts layout is GroupLayout {
   exactKeys(layout, ["titleHeight", "briefHeight", "inset", "rowGutter", "columnGutter", "rows", "columns", "rowCount", "columnCount", "display"], "layout");
@@ -551,7 +560,7 @@ function validateGroupRequest(action: GroupAction): void {
   if (action.kind === "content") {
     const op = action.operation;
     if (!record(op) || !["item.update", "item.addVersion", "item.setCurrentVersion"].includes(op.type) || typeof op.itemId !== "string") fail("invalid content operation");
-    exactKeys(op, op.type === "item.update" ? ["type", "itemId", "patch", "filename", "size", "briefHeight", "containerId", "cell", "groupPlacement"] : op.type === "item.addVersion" ? ["type", "itemId", "version", "briefHeight"] : ["type", "itemId", "versionId", "briefHeight"], "content operation");
+    exactKeys(op, op.type === "item.update" ? ["type", "itemId", "patch", "filename", "faces", "size", "briefHeight", "containerId", "cell", "groupPlacement"] : op.type === "item.addVersion" ? ["type", "itemId", "version", "briefHeight"] : ["type", "itemId", "versionId", "briefHeight"], "content operation");
     if (own(op, "briefHeight") && (typeof op.briefHeight !== "number" || !Number.isFinite(op.briefHeight) || op.briefHeight < 0 || op.briefHeight > 10000)) fail("invalid brief reservation");
     if (op.type === "item.update") {
       exactKeys(op.patch, ["title", "description", "properties", "removeProperties"], "metadata");
@@ -559,6 +568,7 @@ function validateGroupRequest(action: GroupAction): void {
       if (own(op.patch, "properties")) validProperties(op.patch.properties);
       if (own(op.patch, "removeProperties")) idList(op.patch.removeProperties, true);
       if (op.filename !== undefined && typeof op.filename !== "string") fail("invalid filename");
+      if (own(op, "faces")) validFaces(op.faces, true);
       if (own(op, "size")) { exactKeys(op.size, ["width", "height"], "resize"); validBox({ x: 0, y: 0, ...op.size }); }
       validateDestination(op);
     } else if (op.type === "item.addVersion") {
@@ -570,9 +580,10 @@ function validateGroupRequest(action: GroupAction): void {
     if (typeof action.group.id !== "string" || !action.group.id || typeof action.group.title !== "string") fail("group identity and title required");
     if (own(action.group, "description") && typeof action.group.description !== "string") fail("description must be text");
     if (own(action.group, "properties")) validProperties(action.group.properties);
-    exactKeys(action.group.version, ["id", "blobHash", "mimeType", "filename", "size", "visual"], "version");
+    exactKeys(action.group.version, ["id", "blobHash", "mimeType", "filename", "size", "visual", "faces"], "version");
     if (typeof action.group.version.id !== "string" || typeof action.group.version.blobHash !== "string" || typeof action.group.version.mimeType !== "string" || typeof action.group.version.filename !== "string" || !Number.isFinite(action.group.version.size) || action.group.version.size < 0) fail("group content version required");
     if (own(action.group.version, "visual")) validVisual(action.group.version.visual);
+    if (own(action.group.version, "faces")) validFaces(action.group.version.faces);
     if (own(action.group, "box")) requestBox(action.group.box);
     if (own(action.group, "layout")) validLayout(action.group.layout);
   }
@@ -610,6 +621,7 @@ function validateCreatedItem(item: Item): void {
   for (const version of item.versions) {
     if (!record(version) || typeof version.id !== "string" || ids.has(version.id) || typeof version.blobHash !== "string" || typeof version.mimeType !== "string" || typeof version.filename !== "string" || !Number.isFinite(version.size) || version.size < 0 || !record(version.createdBy) || typeof version.createdAt !== "string") fail("invalid created version");
     if (own(version, "visual")) validVisual(version.visual);
+    if (own(version, "faces")) validFaces(version.faces);
     ids.add(version.id);
   }
   if (!ids.has(item.currentVersionId)) fail("current version is absent");
@@ -862,7 +874,7 @@ export function resolveGroupOperation(state: CanvasState, op: GroupOperation, st
     for (const key of ["title", "description", "versions", "currentVersionId"] as const) if (!equal(before[key], item[key])) (content as Record<string, unknown>)[key] = item[key];
     const properties = Object.fromEntries([...new Set([...Object.keys(before.properties), ...Object.keys(item.properties)])].filter((key) => before.properties[key] !== item.properties[key]).map((key) => [key, item.properties[key] ?? null]));
     if (Object.keys(properties).length) content.properties = properties;
-    if (op.type === "item.update" && op.filename !== undefined) content.currentVersionId = item.currentVersionId;
+    if (op.type === "item.update" && (op.filename !== undefined || op.faces !== undefined)) content.currentVersionId = item.currentVersionId;
     if (Object.keys(content).length) contents.set(item.id, content);
     canvas.items[item.id] = item;
     const target = annotationTarget(item);

@@ -312,16 +312,35 @@ export function reduceOperation(state: CanvasState | null, envelope: OpEnvelope)
 
     case "item.update": {
       const item = getItem(op.itemId);
-      const renamed =
-        op.filename === undefined
+      const updatedVersions =
+        op.filename === undefined && op.faces === undefined
           ? item.versions
-          : item.versions.map((version) =>
-              version.id === item.currentVersionId ? { ...version, filename: op.filename! } : version,
-            );
+          : item.versions.map((version) => {
+              if (version.id !== item.currentVersionId) return version;
+              let nextFaces = version.faces ? { ...version.faces } : undefined;
+              if (op.faces !== undefined) {
+                nextFaces = nextFaces ?? {};
+                for (const [key, value] of Object.entries(op.faces)) {
+                  const faceKey = key as keyof typeof nextFaces;
+                  if (value === null || value === undefined) {
+                    delete nextFaces[faceKey];
+                  } else {
+                    nextFaces[faceKey] = value;
+                  }
+                }
+                if (Object.keys(nextFaces).length === 0) nextFaces = undefined;
+              }
+              const { faces: _oldFaces, ...restVersion } = version;
+              return {
+                ...restVersion,
+                ...(op.filename !== undefined ? { filename: op.filename } : {}),
+                ...(nextFaces ? { faces: nextFaces } : {}),
+              };
+            });
       return putItem({
         ...item,
         ...applyMetaPatch(item, op.patch),
-        versions: renamed,
+        versions: updatedVersions,
         ...stamp,
       });
     }

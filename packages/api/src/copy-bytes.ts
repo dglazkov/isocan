@@ -33,8 +33,9 @@ export interface CopyBytesPort {
   digest(bytes: Uint8Array, signal?: AbortSignal): Promise<string>;
 }
 
-/** Every face the frozen source snapshot needs: each item's current version
- *  and its visual face, deduplicated, because two items may share bytes. */
+/** Every face the frozen source snapshot needs: each item's current version,
+ *  its visual face, and any named fidelity faces, deduplicated, because two
+ *  items may share bytes. */
 export function copyFaces(items: readonly Item[]): CopyFace[] {
   const faces = new Map<string, CopyFace>();
   for (const item of items) {
@@ -43,6 +44,16 @@ export function copyFaces(items: readonly Item[]): CopyFace[] {
     faces.set(version.blobHash, version);
     const visual = visualFaceOf(version);
     faces.set(visual.blobHash, visual);
+    if (version.faces) {
+      for (const named of Object.values(version.faces)) {
+        if (!named) continue;
+        faces.set(named.blobHash, {
+          blobHash: named.blobHash,
+          mimeType: named.mimeType,
+          filename: named.filename ?? version.filename,
+        });
+      }
+    }
   }
   return [...faces.values()];
 }

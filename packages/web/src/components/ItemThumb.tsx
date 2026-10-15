@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { automaticCanvasTarget, sourceOf, itemKind, isTextItem, visualFaceOf, type Item } from "@isocan/core";
+import { activeFaceIdOf, automaticCanvasTarget, sourceOf, itemKind, isTextItem, visualFaceOf, type Item } from "@isocan/core";
 import { blobUrl } from "../lib/api.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useOnScreen } from "../lib/onscreen.ts";
@@ -59,7 +59,7 @@ export function ItemThumb({
   if (!item) return null;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
   if (!current) return null;
-  const visual = visualFaceOf(current);
+  const visual = visualFaceOf(current, activeFaceIdOf(item, current, useCanvasStore.getState().canvas));
   if (visual.mimeType.startsWith("image/") && automaticCanvasTarget(item.properties.canvas ?? null, sourceOf(item)).kind === "none") {
     return (
       <img

@@ -199,7 +199,7 @@ export function Viewer({ canvasId, itemId }: { canvasId: string; itemId: string 
             {itemId ? "That item is not on this canvas any more." : "Nothing here yet."}
           </div>
         ) : (() => {
-          const visual = visualFaceOf(current);
+          const visual = visualFaceOf(current, item.properties.face);
           return (
             <VersionContent
               canvasOf={item.properties.canvas ?? null}

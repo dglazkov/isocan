@@ -222,10 +222,15 @@ import {
   buildRecap,
   harvestPreferences,
   cleanFilePath,
+  FACE_PROP,
   FILE_PROP,
+  NAMED_FACE_IDS,
   VISUAL_FILE_PROP,
+  isNamedFaceId,
   sourceFaceOf,
   visualFaceOf,
+  type ItemFaceId,
+  type NamedFaceId,
   type VisualFace,
   copyProperties,
   duplicatePlacements,
@@ -5868,6 +5873,60 @@ function sizeFor(
   return { width: Number(match[1]), height: Number(match[2]) };
 }
 
+interface NamedFaceOptions {
+  wireframe?: string;
+  midFi?: string;
+  hiFi?: string;
+  prototype?: string;
+}
+
+function namedFacePaths(opts: NamedFaceOptions): Partial<Record<NamedFaceId, string>> {
+  const out: Partial<Record<NamedFaceId, string>> = {};
+  if (opts.wireframe) out.wireframe = opts.wireframe;
+  if (opts.midFi) out["mid-fi"] = opts.midFi;
+  if (opts.hiFi) out["hi-fi"] = opts.hiFi;
+  if (opts.prototype) out.prototype = opts.prototype;
+  return out;
+}
+
+async function uploadNamedFaces(
+  ctx: Ctx,
+  canvasId: string,
+  opts: NamedFaceOptions,
+): Promise<Partial<Record<NamedFaceId, VisualFace>> | undefined> {
+  const pathsByFace = namedFacePaths(opts);
+  const entries = NAMED_FACE_IDS.filter((id) => pathsByFace[id] !== undefined);
+  if (!entries.length) return undefined;
+  const faces: Partial<Record<NamedFaceId, VisualFace>> = {};
+  for (const faceId of entries) {
+    const filePath = pathsByFace[faceId]!;
+    const raw = await fs.readFile(filePath);
+    const filename = path.basename(filePath);
+    const mimeType = mimeFor(filename);
+    let data = raw;
+    if (mimeType === "text/html") {
+      const inlined = await inlineHtmlAssets(filePath, raw.toString("utf8"));
+      data = Buffer.from(inlined, "utf8");
+    } else if (mimeType === "text/markdown") {
+      const inlined = await inlineMarkdownAssets(filePath, raw.toString("utf8"));
+      data = Buffer.from(inlined, "utf8");
+    }
+    const uploaded = await ctx.client.uploadBlob(canvasId, data, mimeType, filename);
+    faces[faceId] = {
+      blobHash: uploaded.blobHash,
+      mimeType,
+      filename,
+      size: uploaded.size,
+    };
+  }
+  return faces;
+}
+
+function parseFaceChoice(raw: string): ItemFaceId {
+  if (raw === "source" || raw === "visual" || isNamedFaceId(raw)) return raw;
+  throw new Error(`--face expects wireframe, mid-fi, hi-fi, prototype, visual, or source — got: ${raw}`);
+}
+
 program
   .command("add <thing>")
   .description("Bring something onto the canvas — a file from disk, a live site, a Google Doc, or a canvas — read from what you give it")
@@ -5888,6 +5947,11 @@ program
     "--visual <file>",
     "companion visualizer file to render on the canvas (e.g. design-system.html for design.md)",
   )
+  .option("--wireframe <file>", "attach a wireframe face file to this item")
+  .option("--mid-fi <file>", "attach a mid-fi face file to this item")
+  .option("--hi-fi <file>", "attach a hi-fi face file to this item")
+  .option("--prototype <file>", "attach a prototype face file to this item")
+  .option("--face <face>", "initial active face (wireframe, mid-fi, hi-fi, prototype, visual, source)")
   .action(
     run(
       async (
@@ -5904,6 +5968,11 @@ program
           prop: Record<string, string>;
           drawing?: boolean;
           visual?: string;
+          wireframe?: string;
+          midFi?: string;
+          hiFi?: string;
+          prototype?: string;
+          face?: string;
         },
         cmd: Command,
       ) => {
@@ -5991,6 +6060,8 @@ program
         }
 
         const upload = await ctx.client.uploadBlob(p.id, rawSource, mimeType, filename);
+        const faces = await uploadNamedFaces(ctx, p.id, opts);
+        const chosenFace = opts.face !== undefined ? parseFaceChoice(opts.face) : undefined;
 
         const visualFileProp = opts.visual ? cleanFilePath(opts.visual) ?? path.basename(opts.visual) : undefined;
         const sourcePath = cleanFilePath(path.relative(process.cwd(), path.resolve(file)));
@@ -6002,6 +6073,7 @@ program
           ...opts.prop,
           ...(fileProp && !opts.prop[FILE_PROP] ? { [FILE_PROP]: fileProp } : {}),
           ...(visualFileProp ? { [VISUAL_FILE_PROP]: visualFileProp } : {}),
+          ...(chosenFace ? { [FACE_PROP]: chosenFace } : {}),
           /** A drawing added from the terminal is handed an SVG rather than
            *  strokes, so the colour is read back out of the markup — see
            *  `inkFromSvg`. Ink this canvas did not draw reads as nothing and
@@ -6043,6 +6115,7 @@ program
             filename,
             size: upload.size,
             ...(visualFace ? { visual: visualFace } : {}),
+            ...(faces ? { faces } : {}),
           },
           width,
           height,
@@ -7417,8 +7490,9 @@ program
   // borrows it prints the CLI's version instead of your file.
   .option("--rev <ref>", "a version id or its number in the stack (default: the current one)")
   .option("--visual", "get the visual face instead of the source face")
+  .option("--face <face>", "get a specific named face (wireframe, mid-fi, hi-fi, prototype, visual, or source)")
   .action(
-    run(async (ref: string, out: string | undefined, opts: { rev?: string; visual?: boolean }, cmd: Command) => {
+    run(async (ref: string, out: string | undefined, opts: { rev?: string; visual?: boolean; face?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
       const item = resolveItem(snapshot, ref);
@@ -7427,7 +7501,11 @@ program
           ? item.versions.find((v) => v.id === item.currentVersionId)
           : item.versions.find((v) => v.id === opts.rev) ?? item.versions[Number(opts.rev) - 1];
       if (!version) throw new Error(`no version ${opts.rev} on ${item.id}`);
-      const face = opts.visual ? visualFaceOf(version) : sourceFaceOf(version);
+      const face = opts.face
+        ? visualFaceOf(version, parseFaceChoice(opts.face))
+        : opts.visual
+          ? visualFaceOf(version)
+          : sourceFaceOf(version);
       const data = await ctx.client.downloadBlob(p.id, face.blobHash);
       if (out) {
         await fs.writeFile(out, data);
@@ -8125,6 +8203,11 @@ program
     "--visual <file>",
     "attach or update companion visualizer blob with <file>",
   )
+  .option("--wireframe <file>", "attach or update wireframe face in-place on the current version")
+  .option("--mid-fi <file>", "attach or update mid-fi face in-place on the current version")
+  .option("--hi-fi <file>", "attach or update hi-fi face in-place on the current version")
+  .option("--prototype <file>", "attach or update prototype face in-place on the current version")
+  .option("--face <face>", "set active face (wireframe, mid-fi, hi-fi, prototype, visual, source, or auto)")
   .option(
     "--keep-filename",
     "rename the item but leave the file under its old name (default: the file follows the title)",
@@ -8144,6 +8227,11 @@ program
           file?: string;
           visualFile?: string;
           visual?: string;
+          wireframe?: string;
+          midFi?: string;
+          hiFi?: string;
+          prototype?: string;
+          face?: string;
         },
         cmd: Command,
       ) => {
@@ -8151,6 +8239,15 @@ program
         const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
         const item = resolveItem(snapshot, ref);
         const patch = metaPatch(opts);
+        if (opts.face !== undefined) {
+          const trimmedFace = opts.face.trim();
+          if (trimmedFace === "" || trimmedFace === "auto" || trimmedFace === "clear") {
+            patch.removeProperties = [...(patch.removeProperties ?? []), FACE_PROP];
+          } else {
+            patch.properties = { ...(patch.properties ?? {}), [FACE_PROP]: parseFaceChoice(trimmedFace) };
+          }
+        }
+        const faces = await uploadNamedFaces(ctx, p.id, opts);
         /**
          * **Where this item belongs on disk** — a canvas fact, so it rides
          * as a property on the same op every other property rides
@@ -8216,14 +8313,14 @@ program
             : null;
         const requestedSize = opts.size ? sizeFor(opts.size, { width: 0, height: 0 }) : (refit ?? undefined);
         if (snapshot.project.groupMode === "groups" && !opts.visual) {
-          if (!Object.keys(patch).length && !requestedSize) throw new Error("nothing to change");
-          if (!Object.keys(patch).length && requestedSize) return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).resize(item.id, requestedSize, opts));
+          if (!Object.keys(patch).length && !requestedSize && !faces) throw new Error("nothing to change");
+          if (!Object.keys(patch).length && !faces && requestedSize) return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).resize(item.id, requestedSize, opts));
           const current = item.versions.find((version) => version.id === item.currentVersionId);
           const filename = opts.title !== undefined && !opts.keepFilename && current ? renamedFilename(snapshot.canvas, item.id, opts.title, current.filename) : undefined;
-          return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).update(item.id, { patch, ...(filename && filename !== current?.filename ? { filename } : {}), ...(requestedSize ? { size: requestedSize } : {}) }, opts));
+          return reportCanvasGroup(ctx, await new CanvasGroups(ctx.client, p.id, () => ctx.actor).update(item.id, { patch, ...(faces ? { faces } : {}), ...(filename && filename !== current?.filename ? { filename } : {}), ...(requestedSize ? { size: requestedSize } : {}) }, opts));
         }
         if (opts.dryRun) throw new Error("set --dry-run requires a group-enabled canvas and a metadata/size edit");
-        if (snapshot.project.groupMode === "groups" && opts.visual && (Object.keys(patch).length || requestedSize)) throw new Error("a visual version and metadata/size edits are separate acts; issue set --visual on its own");
+        if (snapshot.project.groupMode === "groups" && opts.visual && (Object.keys(patch).length || requestedSize || faces)) throw new Error("a visual version and metadata/size edits are separate acts; issue set --visual on its own");
         let did = false;
         if (opts.visual) {
           const visRaw = await fs.readFile(opts.visual);
@@ -8255,12 +8352,13 @@ program
                 filename: visFilename,
                 size: visUpload.size,
               },
+              ...(current.faces ? { faces: current.faces } : {}),
             },
           });
           console.log(`updated visual face on ${item.id} (${visFilename})`);
           did = true;
         }
-        if (Object.keys(patch).length > 0) {
+        if (Object.keys(patch).length > 0 || faces) {
           // Renaming an item renames its file — the same act the web app
           // performs, through the same op, or the two would disagree about
           // what `isocan get` hands you after a rename.
@@ -8273,6 +8371,7 @@ program
             type: "item.update",
             itemId: item.id,
             patch,
+            ...(faces ? { faces } : {}),
             ...(filename && filename !== current?.filename ? { filename } : {}),
           });
           if (filename && filename !== current?.filename) {
@@ -8303,6 +8402,11 @@ program
   .command("edit <item> [file]")
   .description("Create a new version — from a file, or in $EDITOR; with --if-version, only if nobody changed the item first")
   .option("--visual <file>", "companion visualizer file to render on the canvas")
+  .option("--wireframe <file>", "attach or update wireframe face on the new version")
+  .option("--mid-fi <file>", "attach or update mid-fi face on the new version")
+  .option("--hi-fi <file>", "attach or update hi-fi face on the new version")
+  .option("--prototype <file>", "attach or update prototype face on the new version")
+  .option("--face <face>", "set active face (wireframe, mid-fi, hi-fi, prototype, visual, source)")
   .option("--if-version <versionId>", "edit only if this is still the item's current version — otherwise write nothing and exit 4")
   .option("--if-meta <json>", `with --if-version: also require this exact {"title","properties"} — what the last --json answer printed`)
   .option("--title <title>", "with --if-version: retitle in the same act")
@@ -8326,9 +8430,13 @@ when a person renamed or re-tagged the card. It never falls back to an
 unconditional edit.`,
   )
   .action(
-    run(async (ref: string, file: string | undefined, opts: { visual?: string; ifVersion?: string; ifMeta?: string; title?: string; prop: Record<string, string>; rmProp: string[]; opId?: string }, cmd: Command) => {
+    run(async (ref: string, file: string | undefined, opts: { visual?: string; wireframe?: string; midFi?: string; hiFi?: string; prototype?: string; face?: string; ifVersion?: string; ifMeta?: string; title?: string; prop: Record<string, string>; rmProp: string[]; opId?: string }, cmd: Command) => {
       const ctx = await ctxOf(cmd);
       const patch = metaPatch(opts);
+      const chosenFace = opts.face !== undefined ? parseFaceChoice(opts.face) : undefined;
+      if (chosenFace && opts.ifVersion) {
+        patch.properties = { ...(patch.properties ?? {}), [FACE_PROP]: chosenFace };
+      }
       if (!opts.ifVersion && (opts.ifMeta || opts.opId || Object.keys(patch).length > 0)) {
         throw new Error("--if-meta, --op-id, --title, --prop and --rm-prop travel with a conditional edit — add --if-version <versionId> (`isocan --json versions <item>` prints the current one)");
       }
@@ -8355,6 +8463,12 @@ unconditional edit.`,
         cursor: itemCenter(item),
         status: `editing "${truncate(item.title || item.id, 24)}"…`,
       });
+
+      const uploadedFaces = await uploadNamedFaces(ctx, p.id, opts);
+      const mergedFaces =
+        current.faces || uploadedFaces
+          ? { ...(current.faces ?? {}), ...(uploadedFaces ?? {}) }
+          : undefined;
 
       let visualFace: VisualFace | undefined;
       let data: Buffer;
@@ -8405,28 +8519,32 @@ unconditional edit.`,
         } else if (current.visual) {
           visualFace = current.visual;
         }
-      } else if (opts.visual) {
+      } else if (opts.visual || uploadedFaces) {
         data = await ctx.client.downloadBlob(p.id, current.blobHash);
         filename = current.filename;
         mimeType = current.mimeType;
-        const visRaw = await fs.readFile(opts.visual);
-        const visFilename = path.basename(opts.visual);
-        const visMime = mimeFor(visFilename);
-        let visData = visRaw;
-        if (visMime === "text/html") {
-          const inlined = await inlineHtmlAssets(opts.visual, visRaw.toString("utf8"));
-          visData = Buffer.from(inlined, "utf8");
-        } else if (visMime === "text/markdown") {
-          const inlined = await inlineMarkdownAssets(opts.visual, visRaw.toString("utf8"));
-          visData = Buffer.from(inlined, "utf8");
+        if (opts.visual) {
+          const visRaw = await fs.readFile(opts.visual);
+          const visFilename = path.basename(opts.visual);
+          const visMime = mimeFor(visFilename);
+          let visData = visRaw;
+          if (visMime === "text/html") {
+            const inlined = await inlineHtmlAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          } else if (visMime === "text/markdown") {
+            const inlined = await inlineMarkdownAssets(opts.visual, visRaw.toString("utf8"));
+            visData = Buffer.from(inlined, "utf8");
+          }
+          const visUpload = await ctx.client.uploadBlob(p.id, visData, visMime, visFilename);
+          visualFace = {
+            blobHash: visUpload.blobHash,
+            mimeType: visMime,
+            filename: visFilename,
+            size: visUpload.size,
+          };
+        } else if (current.visual) {
+          visualFace = current.visual;
         }
-        const visUpload = await ctx.client.uploadBlob(p.id, visData, visMime, visFilename);
-        visualFace = {
-          blobHash: visUpload.blobHash,
-          mimeType: visMime,
-          filename: visFilename,
-          size: visUpload.size,
-        };
       } else {
         const editor = process.env.EDITOR ?? process.env.VISUAL;
         if (!editor) throw new Error("no $EDITOR set — pass a file instead");
@@ -8483,6 +8601,7 @@ unconditional edit.`,
         filename,
         size: upload.size,
         ...(visualFace ? { visual: visualFace } : {}),
+        ...(mergedFaces ? { faces: mergedFaces } : {}),
       };
       if (opts.ifVersion) {
         // One op, sent once under its own id, and never an unconditional
@@ -8499,6 +8618,11 @@ unconditional edit.`,
         }
       }
       await sendOp(ctx, p.id, { type: "item.addVersion", itemId: item.id, version });
+      if (chosenFace) {
+        const facePatch: MetaPatch = { properties: { [FACE_PROP]: chosenFace } };
+        if (snapshot.project.groupMode === "groups") await new CanvasGroups(ctx.client, p.id, () => ctx.actor).update(item.id, { patch: facePatch });
+        else await sendOp(ctx, p.id, { type: "item.update", itemId: item.id, patch: facePatch });
+      }
       // New words in a caption's old box: grow it to hold them, the same
       // question `set` asks of a new look (core `textNodeRefit`). A short
       // label re-worded into a sentence otherwise shows its first line.
@@ -8511,6 +8635,42 @@ unconditional edit.`,
       if (ctx.json) return printJson({ itemId: item.id, versionId, blobHash: upload.blobHash, versions: item.versions.length + 1, ...(audit ? { audit } : {}) });
       console.log(`new version ${versionId} of ${item.id} (${item.versions.length + 1} total)`);
       printArrivalAudit(audit);
+    }),
+  );
+
+program
+  .command("face <face> [items...]")
+  .description("Switch the active face (wireframe, mid-fi, hi-fi, prototype, visual, source, or auto) on items or a group")
+  .option("--in <group>", "switch the active face for an entire group")
+  .action(
+    run(async (faceArg: string, refs: string[], opts: { in?: string }, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { canvas: p, snapshot } = await canvasAndSnapshot(ctx);
+      const clear = faceArg === "auto" || faceArg === "clear" || faceArg === "";
+      const chosen = clear ? null : parseFaceChoice(faceArg);
+      const targets: Item[] = [];
+      if (refs.length > 0) {
+        for (const ref of refs) targets.push(resolveItem(snapshot, ref));
+      } else if (opts.in) {
+        const groupItem = resolveCanvasGroupRef(snapshot.canvas, opts.in, true);
+        targets.push(groupItem, ...groupChildren(snapshot.canvas, groupItem.id));
+      } else {
+        throw new Error("pass one or more items, or --in <group>");
+      }
+      const patch: MetaPatch = chosen
+        ? { properties: { [FACE_PROP]: chosen } }
+        : { removeProperties: [FACE_PROP] };
+      const groups = snapshot.project.groupMode === "groups" ? new CanvasGroups(ctx.client, p.id, () => ctx.actor) : null;
+      for (const target of targets) {
+        if (groups) {
+          await groups.update(target.id, { patch });
+        } else {
+          await sendOp(ctx, p.id, { type: "item.update", itemId: target.id, patch });
+        }
+      }
+      const ids = targets.map((t) => t.id);
+      if (ctx.json) return printJson({ face: chosen, itemIds: ids });
+      console.log(`set face=${chosen ?? "auto"} on ${ids.join(", ")}`);
     }),
   );
 
