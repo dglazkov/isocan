@@ -2,6 +2,7 @@ import type { CanvasContents, Item } from "./model.ts";
 import type { GroupAction, GroupCell, GroupPlacementPolicy } from "./canvas-group-types.ts";
 import { groupSelectionRoots, groupTransformClosure, resolveGroupOperation } from "./canvas-groups.ts";
 import { copyProperties } from "./duplicate.ts";
+import { edgeLabelProperty, isEdgeReferenceProperty } from "./edges.ts";
 import { modules } from "./modules.ts";
 import { OpValidationError } from "./errors.ts";
 
@@ -37,12 +38,16 @@ export function groupCopyAction(source: GroupCopySource, destinationCanvasId: st
       // copyProperties deliberately records a same-canvas copy's ORIGINAL
       // as its lineage parent; remapping that generated edge would point at itself.
       if (key === "parent" && sameCanvas && value === item.id) continue;
-      if (references.has(key) && remap.has(value)) properties[key] = remap.get(value)!;
+      const isRef = references.has(key) || isEdgeReferenceProperty(key);
+      if (isRef && remap.has(value)) properties[key] = remap.get(value)!;
       else if (families.has(key)) {
         const identity = `${key}:${value}`;
         if (!familyIds.has(identity)) familyIds.set(identity, options.newItemId());
         properties[key] = familyIds.get(identity)!;
-      } else if (!sameCanvas && references.has(key)) delete properties[key];
+      } else if (!sameCanvas && isRef) {
+        delete properties[key];
+        if (isEdgeReferenceProperty(key)) delete properties[edgeLabelProperty(key)];
+      }
     }
     if (!properties.annotates) delete properties.region;
     const decorated = options.decorate ? options.decorate(properties, item, source.rootIds.includes(item.id)) : properties;

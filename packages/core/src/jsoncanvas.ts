@@ -1,4 +1,5 @@
 import type { CanvasContents, Item } from "./model.ts";
+import { nodeEdges } from "./edges.ts";
 import { moduleEdges } from "./modules.ts";
 import { BROWSER_MIME, parseUriList } from "./browseritem.ts";
 
@@ -133,12 +134,21 @@ export function toJsonCanvas(
    * canvas, whichever map it belongs to, pointing parent → child with an arrow
    * — the same direction the canvas draws.
    */
-  const edges: JsonCanvasEdge[] = moduleEdges(canvas).map(({ from, to }) => ({
-    id: `${from.id}-${to.id}`,
-    fromNode: from.id,
-    toNode: to.id,
-    toEnd: "arrow",
-  }));
+  const edges: JsonCanvasEdge[] = [
+    ...moduleEdges(canvas).map(({ from, to }) => ({
+      id: `${from.id}-${to.id}`,
+      fromNode: from.id,
+      toNode: to.id,
+      toEnd: "arrow" as const,
+    })),
+    ...nodeEdges(canvas).map(({ from, to, key, label }) => ({
+      id: `${from.id}-${key}-${to.id}`,
+      fromNode: from.id,
+      toNode: to.id,
+      toEnd: "arrow" as const,
+      ...(label ? { label } : {}),
+    })),
+  ];
 
   const items = Object.values(canvas.items);
   const groupMemberships = items.filter((item) => item.containerId).length;
