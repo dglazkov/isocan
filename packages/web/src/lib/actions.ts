@@ -6,7 +6,8 @@ import { groupArrangeAction, groupScopeRoots, alignMoves, canvasPath, deckPath, 
 import { sendEchoed } from "../stores/canvasStore.ts";
 import { useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { chatHiddenNow, openPanel } from "./panels.ts";
+import { chatHiddenNow, extensionPanelKey, openPanel } from "./panels.ts";
+import { panelExtensionItems } from "@isocan/core";
 import { zoomBy, zoomTo100, zoomToFit, zoomToSelection } from "./zoomactions.ts";
 import { formatMoves, formatScope, itemChrome, tidyMoves, type FormatMode, type Item } from "@isocan/core";
 import { hasRoomForChrome } from "./chrome.ts";
@@ -517,8 +518,19 @@ export function availableActions(ctx: ActionContext): Action[] {
   // The module actions are read live, so a runtime module's arrive without a
   // reload; the build-time ones are already in ACTIONS and are not doubled.
   const live = moduleActions();
+  const canvas = useCanvasStore.getState().canvas;
+  const panelActions: Action[] = canvas
+    ? panelExtensionItems(canvas).map((item) => ({
+        id: `open-panel-${item.id}`,
+        name: `Open ${item.title}`,
+        hint: "canvas panel extension",
+        group: "Open",
+        available: onCanvas,
+        run: (c) => openPanel(c.canvasId!, extensionPanelKey(item.id)),
+      }))
+    : [];
   const known = new Set(ACTIONS.map((a) => a.id));
-  return [...ACTIONS, ...live.filter((a) => !known.has(a.id))].filter((action) => {
+  return [...ACTIONS, ...panelActions, ...live.filter((a) => !known.has(a.id))].filter((action) => {
     if (!canEditNow() && action.writes) return false;
     return action.available?.(ctx) ?? true;
   });

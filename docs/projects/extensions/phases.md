@@ -138,7 +138,7 @@ and `npm run typecheck` whole.
 
 ## Phase 4 — The frame on the content origin
 
-**Status: NOT STARTED.**
+**Status: CLOSED** (2026-10-14).
 
 **Outcome:** a panel renders in a dock slot as a sandboxed iframe whose `src` is
 the content base plus the blob the manifest names — never the app origin, and
@@ -160,6 +160,19 @@ forbids it taking a person's identity colour. A missing blob renders the
 unavailable sentence. `CONTENT_CSP` is unchanged — asserted, because this phase
 must not open the exfiltration channel that stage 3 of the content origin closed
 by measurement. `npm test`, `npm run typecheck`, and the bundle budget.
+
+**Trajectory:**
+
+- **2026-10-14** — Closed Phase 3's two open items together with the frame:
+  `Panel` in `packages/web/src/lib/panels.ts` widens to `BuiltinPanel | \`panel:\${string}\``
+  and `DockState` gains `extensionPanelOpen` so `railIsOpen`, `dockEdges`, and
+  `railpan` treat a canvas panel as a first-class dock occupant. Multiple
+  canvas panels are selectable from `RailStrip`, the `···` drawer, ⌘K, and the
+  panel header tabs. `panelFrame` in `packages/web/src/lib/frame.ts` builds the
+  iframe `src` exclusively on `contentBase()` and returns `null` when no
+  content origin is standing. `EXTENSION_COLORS` and `extensionColor` in
+  `packages/core/src/extensions.ts` give panels a mineral palette disjoint from
+  `IDENTITY_COLORS`.
 
 ## Phase 5 — The extension actor
 

@@ -482,11 +482,33 @@ export function panelCapabilities(panel: PanelExtension): string[] {
   return [
     `shows ${panel.bytes.filename} (${panel.bytes.itemId}): its bytes are an item on this canvas, and the manifest can name no other source`,
     `whoever may edit ${panel.src} decides what this panel shows, without touching this manifest — and its versions are the panel's history, so a bad one rolls back`,
-    "cannot run yet: nothing renders a panel in this build, so these bytes are stored and read and never executed",
-    "when it renders it will be a sandboxed page served from the content origin — never isocan's own origin, so it holds no badge and cannot act as you",
-    `it will paint in the ${panel.side} dock and nowhere else: not over the canvas, the top bar or another panel`,
-    "it cannot send an operation: the door a panel asks through is not built, so nothing it contains can change this canvas",
+    "renders as a sandboxed page served from the content origin — never isocan's own origin, so it holds no badge and cannot act as you",
+    `paints in the ${panel.side} dock and nowhere else: not over the canvas, the top bar or another panel`,
+    "cannot read what is selected yet: the selection message is not built in this phase",
+    "cannot send an operation: the door a panel asks through is not built, so nothing it contains can change this canvas",
   ];
+}
+
+/**
+ * The colours an extension may wear on the dock — muted mineral tones that
+ * read on both vellum and graphite grounds and never collide with the seven
+ * `IDENTITY_COLORS` that mean a person is standing there.
+ */
+export const EXTENSION_COLORS: ReadonlyArray<{ name: string; value: string }> = [
+  { name: "Slate", value: "#5b6b7a" },
+  { name: "Copper", value: "#9a5b3e" },
+  { name: "Sage", value: "#4d6f5d" },
+  { name: "Plum", value: "#6e4f77" },
+  { name: "Ochre", value: "#8b6d38" },
+];
+
+/** Deterministic extension colour from an item id — never in `IDENTITY_COLORS`. */
+export function extensionColor(id: string): string {
+  let hash = 5381;
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) + hash + id.charCodeAt(i)) >>> 0;
+  }
+  return EXTENSION_COLORS[hash % EXTENSION_COLORS.length]!.value;
 }
 
 /**
