@@ -227,7 +227,7 @@ export function CanvasTools({ canvasId, actor }: { canvasId: string; actor: Acto
 
   return (
     <div
-      className={`tool-rail${more ? " tools-expanded" : ""}`}
+      className={`tool-rail floats${more ? " tools-expanded" : ""}`}
       role="toolbar"
       aria-label="Canvas tools"
       aria-orientation="vertical"
