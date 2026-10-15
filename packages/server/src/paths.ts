@@ -171,3 +171,5 @@ export const bindingsFile = (home: string) => path.join(home, "bindings.json");
  * `POST /api/home/join`, which goes through the daemon like everything else.
  */
 export const homesFile = (home: string) => path.join(home, "homes.json");
+/** Short-lived credential-helper cache (`auth-cache/<sha256>.json`, mode `0600`) for `homeAuth`. */
+export const authCacheDir = (home: string) => path.join(home, "auth-cache");

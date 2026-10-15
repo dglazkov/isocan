@@ -17,12 +17,14 @@ daemon.
 **Phase citations name their project**: `proxy-identity phase 0`, never a bare
 "phase 0".
 
-**Where we are:** Phases 0 and 1 are closed (15 Oct 2026): badge-less HTTP
+**Where we are:** Every phase (0–2) is closed (15 Oct 2026): badge-less HTTP
 requests and `/ws` upgrades carrying a verified `ISOCAN_PROXY_EMAIL_HEADER`
-resolve a deterministic `bdg_prx_...` badge and bind `home:person`, and
+resolve a deterministic `bdg_prx_...` badge and bind `home:person`,
 `X-Isocan-Session` auto-claims a distinct agent actor per harness conversation
-on that same proxy badge (`ownsAgent` = true). **proxy-identity phase 2 is
-next** — external credential helper and forward-proxy transport (`homeAuth`).
+on that same proxy badge (`ownsAgent` = true), and `homeAuth` in `@isocan/api`
+obtains proxy headers from an external credential helper (`authHeaderCommand`,
+cached with TTL and refreshed on `401`/`302`) and routes through an optional
+per-home `httpProxy` without a background gateway daemon.
 
 ---
 
@@ -108,7 +110,7 @@ auto-claim an actor.
 
 ## Phase 2 — External credential helper and forward-proxy transport (`homeAuth`)
 
-**Status: NOT STARTED.**
+**Status: CLOSED.** 15 Oct 2026 — `homeAuth` (`authHeaderCommand` + `httpProxy`), `0600` disk cache (`~/.isocan/auth-cache/`), single-flight memory cache, and automatic refresh on `401`/`302` verified end-to-end in `packages/api/test/auth-helper.test.ts`.
 
 Allow `@isocan/api` and the CLI to obtain proxy auth headers from an external
 command (`authHeaderCommand`) with short-lived caching, automatic refresh on
@@ -136,3 +138,7 @@ produced by a synthetic helper script (`node -e ...`), and injects
 `identity.json`, zero `/api/door` calls, helper invocation cached across two
 commands, and automatic helper re-invocation when the token expires (`401` or
 `302`).
+
+**Trajectory:**
+- **2026-10-15** — `resolveBase` in `packages/api/src/ctx.ts` checks `homeAuthFor(candidate, home)` when `declared?.mode !== "daemon"`, so configuring `homeAuth` for the bound home URL routes CLI commands directly to it without requiring `ISOCAN_DIRECT=1` or spawning a local daemon (`ctx.ts`).
+- **2026-10-15** — `authHeaderFetch` wraps both `fetcher` and `probeFetcher` inside `DaemonClient` (`packages/api/src/client.ts`) rather than inside `routes.ts`, preserving `routes.ts`'s strict zero-Node/zero-lifecycle boundary (`packages/api/test/boundary.test.ts`).

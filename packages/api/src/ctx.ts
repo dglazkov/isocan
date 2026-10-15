@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Actor, HomesResponse, Canvas, SourceRequestContext, SourceAccessResponse } from "@isocan/core";
 import { DEFAULT_PORT, newCanvasId, normalizeHomeUrl } from "@isocan/core";
-import { paths, readConfigFile, stalenessOf } from "@isocan/server";
+import { configuredHomeAuthUrl, homeAuthFor, paths, readConfigFile, resolveHomeUrl, stalenessOf } from "@isocan/server";
 import { ApiError, type DaemonRoutes, type Health } from "./routes.ts";
 import { DaemonClient } from "./client.ts";
 import {
@@ -164,6 +164,16 @@ export async function resolveBase(
   binding: DirBinding | null,
 ): Promise<{ base: string; direct: string | null }> {
   const declared = await resolveDeclared(isocanHome);
+  if (declared?.mode !== "daemon") {
+    const candidate =
+      (declared?.mode === "direct" ? declared.at : null) ??
+      binding?.home ??
+      (await resolveHomeUrl(isocanHome)) ??
+      configuredHomeAuthUrl(isocanHome);
+    if (candidate && homeAuthFor(candidate, isocanHome) !== null) {
+      return { base: candidate, direct: candidate };
+    }
+  }
   if (declared?.mode === "direct") {
     // The address, in order: whatever declared it, if it named one; then the
     // directory marker's `home`. The marker is what makes the cloned-repo case

@@ -1,6 +1,6 @@
 # Proxy identity — the mechanism
 
-**15 October 2026.** Nothing is built. The scenes are [`journey.md`](journey.md);
+**15 October 2026.** Built (phases 0–2 closed 15 Oct 2026). The scenes are [`journey.md`](journey.md);
 the walk is [`phases.md`](phases.md).
 
 **The debt it discharges.** `ISOCAN_PROXY_EMAIL_HEADER` (`server/attest.ts`) was

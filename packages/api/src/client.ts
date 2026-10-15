@@ -6,7 +6,8 @@ import { packageBin, packageRoot } from "@isocan/core/packageroot";
 import { Agent, EnvHttpProxyAgent, fetch as undiciFetch, setGlobalDispatcher } from "undici";
 import { isLoopbackBase } from "@isocan/core";
 import type { BadgeStore, SourceRequestContext } from "@isocan/core";
-import { fileBadgeStore, gatewayBaseFor, paths, plausibleSha, upgradeVerdict } from "@isocan/server";
+import { fileBadgeStore, gatewayBaseFor, homeAuthFor, paths, plausibleSha, upgradeVerdict } from "@isocan/server";
+import { authHeaderFetch } from "./auth-helper.ts";
 import { isBadgeUpstream } from "./identity.ts";
 import { harnessSessions } from "./harness.ts";
 import { DaemonRoutes, platformFetch, type Health } from "./routes.ts";
@@ -251,9 +252,10 @@ export class DaemonClient extends DaemonRoutes {
   direct = false;
 
   constructor(base: string, home: string, lifetime?: AbortSignal, sourceContext?: SourceRequestContext) {
+    const homeAuth = homeAuthFor(base, home);
     super(
       base,
-      isBadgeUpstream() ? upstreamBadgeStore : fileBadgeStore(home, base),
+      isBadgeUpstream() || homeAuth !== null ? upstreamBadgeStore : fileBadgeStore(home, base),
       lifetime,
       sourceContext,
     );
@@ -267,7 +269,7 @@ export class DaemonClient extends DaemonRoutes {
       this.fetcher = via;
       this.probeFetcher = via;
     } else {
-      const proxy = proxyForBase(this.base);
+      const proxy = homeAuth?.httpProxy ?? proxyForBase(this.base);
       if (proxy) {
         const via = proxyFetch(this.base, proxy);
         this.fetcher = via;
@@ -275,6 +277,10 @@ export class DaemonClient extends DaemonRoutes {
       } else if (isLoopbackBase(this.base)) {
         this.fetcher = boundedFetch(this.base);
       }
+    }
+    if (homeAuth?.authHeaderCommand) {
+      this.fetcher = authHeaderFetch(this.base, this.home, homeAuth, this.fetcher);
+      this.probeFetcher = authHeaderFetch(this.base, this.home, homeAuth, this.probeFetcher);
     }
   }
 
