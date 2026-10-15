@@ -39,6 +39,31 @@ import { bindingFor, isocanHome, markerSource, personEnv, resolveCli, runIsocan,
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Where the sidecar's own files (`presets.json`, `public/index.html`) live on
+ * disk right now.
+ *
+ * When the pane boots through `<home>/current/...`, Node's ESM loader resolves
+ * `import.meta.url` to `<home>/builds/<boot-sha>/...`. After three auto-upgrades
+ * in `direct` mode (`no daemon.json` for `liveBuildShas`), `pruneBuilds`
+ * removes `<boot-sha>` while this long-lived sidecar is still running.
+ * Following `<home>/current` whenever `bootDir` sits inside `<home>/builds/`
+ * keeps both `presets.json` and `public/index.html` readable across upgrades.
+ */
+export function sidecarDir(env = process.env, bootDir = here) {
+  try {
+    const home = path.resolve(isocanHome(env));
+    const builds = path.join(home, "builds") + path.sep;
+    if (path.resolve(bootDir).startsWith(builds) || !fs.existsSync(bootDir)) {
+      const current = path.join(home, "current", "node_modules", "isocan", "plugins", "antigravity", "sidecars", "canvas");
+      if (fs.existsSync(current)) return current;
+    }
+  } catch {
+    // Fall back to bootDir below.
+  }
+  return bootDir;
+}
+
 /** How long a harness scan is believed. It reads PATH and config.json, which
  * change rarely, and the pane asks on every workspace change. */
 const HARNESS_TTL_MS = 60_000;
@@ -60,8 +85,8 @@ const messageOf = (err) => (err instanceof Error ? err.message : String(err));
  * (an agent's, never a model's), a harness (null: this machine's default), and
  * a model id spelled the way that harness spells it (null: its own default).
  */
-export function loadPresets(env = process.env) {
-  const file = env.ISOCAN_ANTIGRAVITY_PRESETS || path.join(here, "presets.json");
+export function loadPresets(env = process.env, bootDir = here) {
+  const file = env.ISOCAN_ANTIGRAVITY_PRESETS || path.join(sidecarDir(env, bootDir), "presets.json");
   const raw = JSON.parse(fs.readFileSync(file, "utf8"));
   const list = Array.isArray(raw) ? raw : raw?.presets;
   if (!Array.isArray(list)) throw new Error(`${file}: expected a "presets" list`);
@@ -204,7 +229,7 @@ export function canvasAgents(home, canvasId) {
  * data — `workspaceUris` as the host pushed them, plus the route's own
  * fields — and returns JSON, or throws a sentence.
  */
-export function createPane({ env = process.env, run = runIsocan, agentapi = runAgentapi, now = Date.now } = {}) {
+export function createPane({ env = process.env, run = runIsocan, agentapi = runAgentapi, now = Date.now, bootDir = here } = {}) {
   const home = isocanHome(env);
   let scanned = null;
   const skillCache = new Map();
@@ -268,7 +293,7 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
     let presets = [];
     let presetsError = null;
     try {
-      presets = loadPresets(env).map((preset) => reach(preset, scan, enrolled));
+      presets = loadPresets(env, bootDir).map((preset) => reach(preset, scan, enrolled));
     } catch (err) {
       presetsError = messageOf(err);
     }
@@ -325,7 +350,7 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
   async function modelAgent(data) {
     const binding = bound(data);
     const presetId = text(data?.presetId);
-    const preset = presetId ? loadPresets(env).find((p) => p.id === presetId) : null;
+    const preset = presetId ? loadPresets(env, bootDir).find((p) => p.id === presetId) : null;
     if (presetId && !preset) throw new Error(`no preset "${presetId}"`);
     const name = text(data?.name) ?? preset?.name ?? null;
     if (!name) throw new Error("an agent needs a name");
@@ -469,9 +494,10 @@ export function createPane({ env = process.env, run = runIsocan, agentapi = runA
   };
 }
 
-/** The page, read per request so an edit shows on the next load. */
-function page() {
-  return fs.readFileSync(path.join(here, "public", "index.html"), "utf8");
+/** The page, read per request so an edit (or an upgrade under `<home>/current`)
+ * shows on the next load. */
+function page(env = process.env, bootDir = here) {
+  return fs.readFileSync(path.join(sidecarDir(env, bootDir), "public", "index.html"), "utf8");
 }
 
 function readBody(req) {
@@ -516,7 +542,7 @@ export function hostRoutes(app) {
  * everything else is POST, carries the token when one is set, and awaits the
  * handler before serialising its answer.
  */
-export function createServer(routes, { token = process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN, preload = "" } = {}) {
+export function createServer(routes, { token = process.env.ANTIGRAVITY_SIDECAR_UI_TOKEN, preload = "", env = process.env, bootDir = here } = {}) {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const send = (status, body) => {
@@ -529,8 +555,13 @@ export function createServer(routes, { token = process.env.ANTIGRAVITY_SIDECAR_U
         return res.end(preload);
       }
       if (url.pathname !== "/") return send(404, { error: "not found" });
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-      return res.end(page());
+      try {
+        const html = page(env, bootDir);
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        return res.end(html);
+      } catch (err) {
+        return send(500, { error: messageOf(err) });
+      }
     }
     if (token && (req.headers["x-sidecar-token"] ?? url.searchParams.get("token")) !== token) {
       return send(401, { error: "unauthorized" });

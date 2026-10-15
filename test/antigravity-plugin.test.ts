@@ -12,7 +12,7 @@ import { agentEnv, findBinding, personEnv, resolveCli, workspacePaths } from "..
 // @ts-expect-error — as above.
 import { claimedName, sessionStart } from "../plugins/antigravity/scripts/session-start.mjs";
 // @ts-expect-error — as above.
-import { canvasRef, createPane, createServer, hostRoutes, isLoopback, loadPresets, tabAddress } from "../plugins/antigravity/sidecars/canvas/main.mjs";
+import { canvasRef, createPane, createServer, hostRoutes, isLoopback, loadPresets, sidecarDir, tabAddress } from "../plugins/antigravity/sidecars/canvas/main.mjs";
 import { defaultTarget, installAntigravityPlugin, uninstallAntigravityPlugin } from "../packages/cli/src/antigravity-plugin.ts";
 
 /**
@@ -576,6 +576,53 @@ describe("the canvas pane's routes", () => {
     const own = path.join(dir("presets"), "mine.json");
     fs.writeFileSync(own, JSON.stringify([{ name: "Ada", harness: "acme-agent" }, { label: "no name" }, { name: " " }]));
     expect(loadPresets({ ISOCAN_ANTIGRAVITY_PRESETS: own })).toEqual([{ id: "ada", name: "Ada", label: "Ada", harness: "acme-agent", model: null }]);
+  });
+
+  it("follows <home>/current when the managed build the sidecar booted from is pruned, and catches a missing page cleanly", async () => {
+    const home = dir("isocan-home-managed-sidecar");
+    const makeManagedSidecar = (sha: string, presetName: string, markerText: string) => {
+      const sidecar = path.join(home, "builds", sha, "node_modules", "isocan", "plugins", "antigravity", "sidecars", "canvas");
+      fs.mkdirSync(path.join(sidecar, "public"), { recursive: true });
+      fs.writeFileSync(path.join(sidecar, "presets.json"), JSON.stringify([{ id: "one", name: presetName, harness: "acme-agent" }]));
+      fs.writeFileSync(path.join(sidecar, "public", "index.html"), `<!doctype html><title>${markerText}</title>`);
+      return sidecar;
+    };
+
+    const booted = makeManagedSidecar("aaaa111", "Ada", "acme-old");
+    makeManagedSidecar("bbbb222", "Bram", "acme-new");
+    fs.symlinkSync(path.join("builds", "bbbb222"), path.join(home, "current"), "dir");
+
+    const env = paneEnv({ ISOCAN_HOME: home });
+    expect(sidecarDir(env, booted)).toBe(
+      path.join(home, "current", "node_modules", "isocan", "plugins", "antigravity", "sidecars", "canvas"),
+    );
+
+    // Prune the build the long-running sidecar booted from (`aaaa111`).
+    fs.rmSync(path.join(home, "builds", "aaaa111"), { recursive: true, force: true });
+
+    const { routes } = createPane({ env, run: fakeRun({ harness: JSON.stringify(SCAN) }).run, bootDir: booted });
+    const state = await routes["/api/workspace"](bindings());
+    expect(state.presetsError).toBeUndefined();
+    expect(state.presets).toEqual([
+      expect.objectContaining({ id: "one", name: "Bram", runsOn: "acme-agent", runnable: true }),
+    ]);
+
+    const server = createServer(routes, { token: "tok-acme", env, bootDir: booted });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      const ok = await fetch(`${base}/`);
+      expect(ok.status).toBe(200);
+      expect(await ok.text()).toContain("acme-new");
+
+      // If `current` itself is gone too, GET / answers 500 JSON rather than crashing the server.
+      fs.rmSync(path.join(home, "current"), { force: true });
+      const missing = await fetch(`${base}/`);
+      expect(missing.status).toBe(500);
+      expect(await missing.json()).toEqual({ error: expect.stringContaining("ENOENT") });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });
 

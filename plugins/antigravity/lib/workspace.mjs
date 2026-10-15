@@ -192,8 +192,13 @@ export function resolveCli(env = process.env) {
   if (env.ISOCAN_CLI) return /\.[cm]?js$/.test(env.ISOCAN_CLI) ? viaNode(env.ISOCAN_CLI) : { command: env.ISOCAN_CLI, prefix: [] };
   const found = onPath("isocan", env);
   if (found) return { command: found, prefix: [] };
-  for (const rel of ["../../../packages/cli/bin/isocan.js", "../../../packages/cli/dist/isocan.mjs"]) {
-    const candidate = fileURLToPath(new URL(rel, import.meta.url));
+  const currentPkg = path.join(isocanHome(env), "current", "node_modules", "isocan");
+  for (const candidate of [
+    fileURLToPath(new URL("../../../packages/cli/bin/isocan.js", import.meta.url)),
+    fileURLToPath(new URL("../../../packages/cli/dist/isocan.mjs", import.meta.url)),
+    path.join(currentPkg, "packages", "cli", "dist", "isocan.mjs"),
+    path.join(currentPkg, "packages", "cli", "bin", "isocan.js"),
+  ]) {
     if (fs.existsSync(candidate)) return viaNode(candidate);
   }
   return null;
