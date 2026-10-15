@@ -93,7 +93,7 @@ a distinct agent actor on the person's proxy badge on first sight (`design.md`
 
 **Proof:** in `packages/server/test/proxy-identity.test.ts` and
 `packages/api/test/proxy-session.test.ts`, two CLI/API clients with
-`CLAUDE_SESSION_ID=conv-1` and `CLAUDE_SESSION_ID=conv-2` talking to a
+`CLAUDE_CODE_SESSION_ID=conv-1` and `CLAUDE_CODE_SESSION_ID=conv-2` talking to a
 proxy-authenticated home (`X-Forwarded-Email: priya@acme.test`) with zero prior
 `isocan identity --session` calls land ops as two distinct agent actors
 (`Charlie` and `Cass`), both marked as agents in `actorKinds` and both owned by

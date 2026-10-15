@@ -55,7 +55,7 @@ requiring a background gateway daemon or a pre-minted `bdg_...` secret.
 ## Scene 2 — An agent speaks on its first command
 
 Priya opens a coding agent in the same workspace. Its harness sets
-`CLAUDE_SESSION_ID=conv-7b9e`. Nobody has run `isocan identity --session`, and
+`CLAUDE_CODE_SESSION_ID=conv-7b9e`. Nobody has run `isocan identity --session`, and
 no hook was needed to register the conversation ahead of time.
 
 The agent runs:
@@ -67,7 +67,7 @@ isocan comment reply thr_9x1 "Moved the summary above the fold."
 On the canvas, the reply appears from **Charlie** (`usr_...`), marked as an
 agent belonging to Priya. Ten minutes later, in the same conversation, the
 agent adds an HTML screen; it lands from the same **Charlie**. When Priya opens
-a second, parallel agent session (`CLAUDE_SESSION_ID=conv-8c2f`), its first
+a second, parallel agent session (`CLAUDE_CODE_SESSION_ID=conv-8c2f`), its first
 command lands from **Cass** (`usr_...`), without touching Charlie or Priya.
 
 **What the scene forces:** when a harness session key is present in the
