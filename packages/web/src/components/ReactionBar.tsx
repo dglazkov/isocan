@@ -11,9 +11,25 @@ import { ItemThumb } from "./ItemThumb.tsx";
  * scroll nobody reaches the end of. */
 const SHOWN_GROUPS = 5;
 
-import { openReactionBar, restoreReactionBar } from "./LazyReactionBar.tsx";
+const KEY = (canvasId: string) => `isocan.reactions.${canvasId}`;
 
-export { openReactionBar, restoreReactionBar };
+export function openReactionBar(canvasId: string, open: boolean): void {
+  try {
+    if (open) localStorage.setItem(KEY(canvasId), "1");
+    else localStorage.removeItem(KEY(canvasId));
+  } catch {
+    // Storage denied: the choice holds for this session and no longer.
+  }
+  useUiStore.getState().setMarksOpen(open);
+}
+
+export function restoreReactionBar(canvasId: string): void {
+  try {
+    useUiStore.getState().setMarksOpen(localStorage.getItem(KEY(canvasId)) === "1");
+  } catch {
+    useUiStore.getState().setMarksOpen(false);
+  }
+}
 
 /**
  * The canvas grouped by the marks on it.

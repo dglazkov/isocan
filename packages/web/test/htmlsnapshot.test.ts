@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { sanitizeDocumentToSvg } from "../src/lib/htmlsnapshot.ts";
+import { sanitizeDocumentToSvg } from "../src/lib/htmlsnapshot-svg.ts";
 
 describe("sanitizeDocumentToSvg", () => {
   it("preserves layout styles, body markup, and inline data URIs inside an SVG foreignObject", () => {
