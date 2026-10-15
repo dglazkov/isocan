@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Show the Data — Specimen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #fffff8;
+      color: #111111;
+      font-family: "EB Garamond", Georgia, serif;
+      padding: 48px 8%;
+      font-size: 20px;
+      line-height: 1.5;
+    }
+    article { position: relative; max-width: 980px; }
+    h1 { font-size: 40px; font-weight: 400; line-height: 1.1; margin-bottom: 16px; width: 58%; }
+    p { width: 58%; margin-bottom: 24px; }
+    .sidenote {
+      float: right;
+      clear: right;
+      width: 32%;
+      margin-right: 0;
+      font-size: 15px;
+      line-height: 1.35;
+      color: #5f5f5f;
+    }
+    .spark { vertical-align: middle; margin: 0 4px; }
+    .accent { color: #a61b1b; font-variant-numeric: lining-nums tabular-nums; }
+    table {
+      width: 58%;
+      border-collapse: collapse;
+      border-top: 1.5px solid #111111;
+      border-bottom: 1.5px solid #111111;
+      font-size: 17px;
+      font-variant-numeric: lining-nums tabular-nums;
+      margin-top: 12px;
+    }
+    th {
+      border-bottom: 1px solid #111111;
+      padding: 6px 8px;
+      font-weight: 400;
+      font-style: italic;
+      text-align: right;
+    }
+    th:first-child, td:first-child { text-align: left; padding-left: 0; }
+    td { padding: 6px 8px; text-align: right; }
+  </style>
+</head>
+<body>
+  <article>
+    <h1>Nursery moisture &amp; transit survival</h1>
+    <aside class="sidenote">
+      <sup>1</sup> Measured across 1,420 autumn parcel dispatches (Oct–Nov, 48-hour ground transit, 12–19 °C ambient). Source: Greenhouse dispatch log.
+    </aside>
+    <p>
+      Stoneware-potted specimens retain root moisture through 48-hour courier transit<sup>1</sup>
+      <svg class="spark" width="68" height="16" viewBox="0 0 68 16" fill="none" aria-label="Moisture retention trend">
+        <polyline points="2,13 16,11 30,9 44,7 58,5 64,4" stroke="#a0a0a0" stroke-width="1.2"/>
+        <circle cx="64" cy="4" r="2.5" fill="#a61b1b"/>
+      </svg>
+      <span class="accent">98.4%</span> intact on arrival, compared with 87.1% for bare nursery plastic.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Cultivar &amp; vessel</th>
+          <th>Mass (kg)</th>
+          <th>Moisture 48h (%)</th>
+          <th>Dispatched ($ USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Ficus Lyrata · Stoneware 24 cm</td><td>4.2</td><td>79</td><td>84.00</td></tr>
+        <tr><td>Monstera Deliciosa · Clay 20 cm</td><td>3.1</td><td>71</td><td>62.00</td></tr>
+        <tr><td>Asplenium Nidus · Bare pot 15 cm</td><td>1.1</td><td>52</td><td>36.00</td></tr>
+      </tbody>
+    </table>
+  </article>
+</body>
+</html>

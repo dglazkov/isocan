@@ -2037,6 +2037,51 @@ var init_blobrefs = __esm({
   }
 });
 
+// packages/core/src/design-role.ts
+var init_design_role = __esm({
+  "packages/core/src/design-role.ts"() {
+    "use strict";
+  }
+});
+
+// packages/core/src/designsystem.ts
+var DESIGN_SYSTEM_AFTER, DESIGN_SYSTEM_LIMIT;
+var init_designsystem = __esm({
+  "packages/core/src/designsystem.ts"() {
+    "use strict";
+    init_area();
+    init_canvas_scope();
+    init_design_role();
+    init_design_role();
+    DESIGN_SYSTEM_AFTER = 2;
+    DESIGN_SYSTEM_LIMIT = DESIGN_SYSTEM_AFTER * 3;
+  }
+});
+
+// packages/core/src/capabilities.ts
+var init_capabilities = __esm({
+  "packages/core/src/capabilities.ts"() {
+    "use strict";
+    init_area();
+    init_browseritem();
+    init_canvas_groups();
+    init_canvasitem();
+    init_designsystem();
+    init_drawing();
+    init_googledoc();
+    init_kinds();
+    init_modules();
+    init_textnode();
+  }
+});
+
+// packages/core/src/image-metadata.ts
+var init_image_metadata = __esm({
+  "packages/core/src/image-metadata.ts"() {
+    "use strict";
+  }
+});
+
 // packages/core/src/elapsed.ts
 function ago(iso, nowMs, seconds) {
   const ms = nowMs - Date.parse(iso);
@@ -2189,27 +2234,6 @@ var init_onit = __esm({
 var init_skillsource = __esm({
   "packages/core/src/skillsource.ts"() {
     "use strict";
-  }
-});
-
-// packages/core/src/design-role.ts
-var init_design_role = __esm({
-  "packages/core/src/design-role.ts"() {
-    "use strict";
-  }
-});
-
-// packages/core/src/designsystem.ts
-var DESIGN_SYSTEM_AFTER, DESIGN_SYSTEM_LIMIT;
-var init_designsystem = __esm({
-  "packages/core/src/designsystem.ts"() {
-    "use strict";
-    init_area();
-    init_canvas_scope();
-    init_design_role();
-    init_design_role();
-    DESIGN_SYSTEM_AFTER = 2;
-    DESIGN_SYSTEM_LIMIT = DESIGN_SYSTEM_AFTER * 3;
   }
 });
 
@@ -3146,6 +3170,8 @@ var init_src = __esm({
     init_filenames();
     init_blobrefs();
     init_kinds();
+    init_capabilities();
+    init_image_metadata();
     init_touches();
     init_elapsed();
     init_layout();

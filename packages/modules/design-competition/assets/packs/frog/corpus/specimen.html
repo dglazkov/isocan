@@ -1,0 +1,113 @@
+<!doctype html>
+<!-- emotion: warm, confident -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Form Follows Emotion — Specimen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #efece4;
+      color: #1f1c18;
+      font-family: Archivo, system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 36px;
+      display: grid;
+      place-items: center;
+    }
+    .chassis {
+      width: 100%;
+      max-width: 780px;
+      display: grid;
+      grid-template-columns: 7fr 5fr;
+      gap: 24px;
+      align-items: center;
+    }
+    .hero-field {
+      background: #d10a72;
+      color: #ffffff;
+      border-radius: 28px;
+      padding: 48px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 360px;
+    }
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #ffc233;
+    }
+    h1 {
+      font-size: 64px;
+      font-weight: 800;
+      line-height: 0.94;
+      letter-spacing: -0.03em;
+      margin: 20px 0 28px;
+    }
+    .cta-pill {
+      align-self: flex-start;
+      height: 52px;
+      padding: 0 28px;
+      border-radius: 999px;
+      border: 0;
+      background: #efece4;
+      color: #1f1c18;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .cta-pill:hover { transform: translateY(-2px); }
+    .cta-pill:active { transform: translateY(1px); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.18); }
+    .side-card {
+      background: #f8f6f0;
+      border: 1px solid #c4bfb4;
+      border-radius: 14px;
+      padding: 28px;
+      margin-left: -48px;
+      box-shadow: 0 12px 28px rgb(31 28 24 / 0.1);
+    }
+    .grooves {
+      height: 30px;
+      background-image: repeating-linear-gradient(
+        to bottom,
+        #c4bfb4 0 2px,
+        transparent 2px 10px
+      );
+      margin-bottom: 20px;
+    }
+    .track {
+      height: 10px;
+      border-radius: 999px;
+      background: #d8d5ce;
+      overflow: hidden;
+      display: flex;
+      margin-top: 16px;
+    }
+    .fill { width: 72%; background: #d10a72; }
+    .spark { width: 12%; background: #ffc233; }
+  </style>
+</head>
+<body>
+  <section class="chassis">
+    <div class="hero-field">
+      <span class="eyebrow">Morning Ritual · 01</span>
+      <h1>Bring the jungle home.</h1>
+      <button class="cta-pill" type="button">Send mine Thursday →</button>
+    </div>
+    <aside class="side-card">
+      <div class="grooves" aria-hidden="true"></div>
+      <p style="font-size: 17px; line-height: 1.5;">
+        Hand-potted Monstera Deliciosa in warm terracotta. Ready for your south window.
+      </p>
+      <div class="track" aria-label="Delivery progress">
+        <div class="fill"></div>
+        <div class="spark"></div>
+      </div>
+    </aside>
+  </section>
+</body>
+</html>
