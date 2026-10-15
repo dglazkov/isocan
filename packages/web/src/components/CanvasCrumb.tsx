@@ -120,9 +120,11 @@ export function CanvasPresence({
     useUiStore.getState().setIdentityOpen(false),
   );
 
+  const connectionIssue = connection !== "live" && connection !== "connecting";
+
   return (
     <>
-      <span className={`conn ${connection}`}>{connection}</span>
+      {connectionIssue && <span className={`conn ${connection}`}>{connection}</span>}
       {/* The pile is where you see everyone else; your own face in it is the
           handle for being someone else. */}
       <div className="identity-anchor" ref={identityRef}>

@@ -283,6 +283,10 @@ export function facesFor(
   return faces;
 }
 
+function pileRank(face: Face, isMe: (actorId: string) => boolean): 0 | 1 | 2 | 3 {
+  return face.self ? 3 : face.owner === null ? 0 : isMe(face.owner.id) ? 2 : 1;
+}
+
 /**
  * **The pile's order, left to right: other people, other agents, your pets,
  * you** (2 Oct 2026). A pet is an agent whose owner `isMe` says is you — the
@@ -290,6 +294,24 @@ export function facesFor(
  * still yours. Stable within each group, so the order a group arrived in holds.
  */
 export function pileOrder(faces: readonly Face[], isMe: (actorId: string) => boolean): Face[] {
-  const rank = (face: Face) => (face.self ? 3 : face.owner === null ? 0 : isMe(face.owner.id) ? 2 : 1);
-  return [...faces].sort((a, b) => rank(a) - rank(b));
+  return [...faces].sort((a, b) => pileRank(a, isMe) - pileRank(b, isMe));
+}
+
+/**
+ * **Where the hairline divider stands** — between other people, other agents,
+ * and your own `(pets + you)` cluster. Your pets tuck directly under your own
+ * face (`(dog(me)`) with no divider between them; when no agents are in the
+ * room, other people and you stay one human pile.
+ */
+export function pileSeparatorBefore(
+  prev: Face,
+  curr: Face,
+  isMe: (actorId: string) => boolean,
+): boolean {
+  const a = pileRank(prev, isMe);
+  const b = pileRank(curr, isMe);
+  if (a === b) return false;
+  if (a === 2 && b === 3) return false;
+  if (a === 0 && b === 3) return false;
+  return true;
 }

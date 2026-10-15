@@ -1196,11 +1196,18 @@ img { height: auto; }
    was asking for — "more spacing on the left, and maybe less on the right".
    Optical, not arithmetic: the numbers now disagree so that the spaces look
    the same. */
-.presence-cluster { padding-left: 10px; padding-right: calc(var(--pill-inset) + 2px); gap: 5px; }
+/* When healthy, both ends of the pill are round faces; when a connection issue
+   (`reconnecting` / `offline`) pops up on the left, `.conn` adds the extra 4px
+   leading room its status dot wants (`6px + 4px = 10px`). */
+.presence-cluster {
+  padding-left: calc(var(--pill-inset) + 2px);
+  padding-right: calc(var(--pill-inset) + 2px);
+  gap: 5px;
+}
 /* The word ends where the word ends: its dot already carries a 4px margin on
    the leading side, and a trailing space here would double the gap the faces
    are meant to sit against. */
-.presence-cluster .conn { margin-right: 0; }
+.presence-cluster .conn { margin-left: 4px; margin-right: 0; }
 /* Hover is the same story: a flat button gets a chip behind it, and one that
    already carries a fill keeps its own — otherwise `--accent-ink` ends up on
    `--chip`, which is white on pale grey. */
@@ -1238,7 +1245,6 @@ img { height: auto; }
 .toolbar .home:hover { background: var(--glass-chip-hover); }
 .toolbar .spacer { flex: 1; }
 .conn { font-size: 11px; color: var(--ink-muted); }
-.conn.live::before { content: "●"; color: var(--good); margin-right: 4px; }
 /* Reconnecting and offline are one treatment, not two that agree: the same
    element, two states of it, wearing the same dot for the same reason.
    Offline gets a dot like the others rather than reading as an error, because
@@ -2274,10 +2280,14 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
 
 /* ---------- facepile (who's on canvas) ---------- */
 .facepile {
-  display: flex; align-items: center; margin-left: 6px; padding-left: 10px;
-  border-left: 1px solid var(--line);
+  display: flex; align-items: center;
   /* The peek card hangs from here, so the pile is what it is measured against. */
   position: relative;
+}
+/* Only separated by a rule when a connection status precedes it. */
+.conn + .identity-anchor .facepile {
+  margin-left: 6px; padding-left: 10px;
+  border-left: 1px solid var(--line);
 }
 
 /* Who somebody is, what they are doing, and what they have done — under their
@@ -2355,8 +2365,10 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
    covers an initial. The pile has no gap of its own; the hairline between
    people and agents carries its own room. */
 .face + .face { margin-left: -6px; }
-/* Faces overlap, so a badge would slide under the next face — lift it. */
-.face.badged { z-index: 2; }
+/* Faces overlap, so a badge would slide under the next face — lift it. Your
+   own face lifts too so your pets always tuck under you (`(dog(me)`), even
+   when a pet carries an unread badge. */
+.face.badged, .face.self { z-index: 2; }
 .face:hover { z-index: 3; transform: translateY(-1px); }
 .face-mark {
   display: flex; align-items: center; justify-content: center;
