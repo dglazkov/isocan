@@ -80,6 +80,17 @@ const SUMMARY_EVAL_SOURCES = [
 ];
 const SUMMARY_EVAL_AGAIN = "with a text key at the home: cd docs/projects/semantic-zoom/bench && node bench.mjs run && node bench.mjs eval";
 
+/** The proactive agent's night, judged by `judge.mjs` (proactive-agent phase 11). */
+const KEEP_JUDGE = "docs/projects/proactive-agent/bench/judge.json";
+/** What a keep reading goes stale against: the bench's fixture and flow, the judge's words, and the rules a night runs under. */
+const KEEP_JUDGE_SOURCES = [
+  "docs/projects/proactive-agent/bench/night.mjs",
+  "docs/projects/proactive-agent/bench/judge.mjs",
+  "packages/core/src/proposal.ts",
+  "packages/core/src/goodnight.ts",
+];
+const KEEP_JUDGE_AGAIN = "on Dion's yes: cd docs/projects/proactive-agent/bench && node night.mjs --yes && node judge.mjs --yes";
+
 /**
  * **A reading nobody has taken** — thrown by a metric that reads a recorded
  * file which does not exist yet, and printed as `no reading yet: …` with exit
@@ -399,6 +410,39 @@ const METRICS = {
         const unfaithful = { sourceId: "selftest", tier: "cheap", vision: false, summary: "Acme ships on Friday.", claims: [{ claim: "Acme ships on Friday", verdict: "unsupported", why: "selftest" }], faithful: false };
         const r = t ? JSON.parse(t) : { evaluatedAt: "selftest", commit: null, judge: "selftest", rows: [] };
         r.rows.push(unfaithful);
+        return JSON.stringify(r, null, 2) + "\n";
+      },
+    },
+  },
+  /**
+   * **Proposals a designer would keep** (proactive-agent phase 11) — a
+   * READING like `summary-unfaithful`, and the first that is a rate rather
+   * than a count: the whole percent of one recorded night's proposals that a
+   * judge (the cheapest tier) would keep, given each one's source, cite and
+   * why. `night.mjs --yes` runs a real lead for one night on a scratch daemon
+   * and `judge.mjs --yes` asks; both spend money, so neither happens on a
+   * push. Until the first judged night there is no `judge.json`, and this
+   * prints `no reading yet` and exits `NO_READING` — 0% would say every
+   * proposal is unwelcome, which nobody has checked.
+   */
+  "proposal-keep-rate": {
+    what: "percent of the bench night's proposals a judge would keep — the last recorded judge run",
+    take: () => keepReading().rate,
+    names: () => keepReading().lines,
+    breakIt: {
+      file: KEEP_JUDGE,
+      // Before the first judge run the break is a reading that exists. After
+      // it, rows that pull the rate the other way: deletes when it is at or
+      // above half, keeps when it is below.
+      get create() {
+        return !existsSync(path.join(repo, KEEP_JUDGE));
+      },
+      apply: (t) => {
+        const r = t ? JSON.parse(t) : { judgedAt: "selftest", commit: null, judge: "selftest", night: {}, rows: [] };
+        const judged = r.rows.filter((row) => row.verdict === "keep" || row.verdict === "delete");
+        const kept = judged.filter((row) => row.verdict === "keep").length;
+        const verdict = judged.length && kept * 2 >= judged.length ? "delete" : "keep";
+        for (let i = 0; i < Math.max(1, judged.length * 2); i++) r.rows.push({ id: `selftest-${i}`, title: "selftest", kind: "sure", verdict, line: "selftest" });
         return JSON.stringify(r, null, 2) + "\n";
       },
     },
@@ -830,6 +874,39 @@ function summaryReading() {
     `${bad.length} is what \`summary-unfaithful\` prints. Again, ${SUMMARY_EVAL_AGAIN}`,
   ];
   return { unfaithful: bad.length, lines };
+}
+
+/**
+ * The judge's reading as a number and as lines: the whole percent of the
+ * night's judged proposals a designer would keep. A missing file is
+ * `NoReading`; so is a file that judged nothing, because a rate over nothing
+ * is not a zero.
+ */
+function keepReading() {
+  const file = path.join(repo, KEEP_JUDGE);
+  if (!existsSync(file)) {
+    throw new NoReading(`the bench's night has never been judged (no ${KEEP_JUDGE}); take it ${KEEP_JUDGE_AGAIN}`);
+  }
+  const r = JSON.parse(readFileSync(file, "utf8"));
+  const judged = (r.rows ?? []).filter((row) => row.verdict === "keep" || row.verdict === "delete");
+  if (judged.length === 0) throw new NoReading(`${KEEP_JUDGE} judged no proposal; take it again ${KEEP_JUDGE_AGAIN}`);
+  const kept = judged.filter((row) => row.verdict === "keep");
+  const rate = Math.round((100 * kept.length) / judged.length);
+  let since;
+  try {
+    const changed = run("git", ["diff", "--name-only", r.commit, "--", ...KEEP_JUDGE_SOURCES]).trim().split("\n").filter(Boolean);
+    since = changed.length ? `STALE: ${changed.join(", ")} changed since ${r.commit} — take it again` : `no bench, judge or night rule has changed since ${r.commit}`;
+  } catch {
+    since = `cannot tell whether the bench changed since ${r.commit} (that commit is not in this clone)`;
+  }
+  const lead = r.night?.lead ? `${r.night.lead.name} on ${r.night.lead.harness} (${r.night.lead.model})` : "?";
+  const lines = [
+    `judged ${r.judgedAt} at ${r.commit} by ${r.judge}; the night of ${r.night?.ranAt ?? "?"}, lead ${lead} — ${since}`,
+    `kept ${kept.length} of ${judged.length} judged proposals${(r.skipped ?? []).length ? `; ${r.skipped.length} skipped (nothing on them to keep)` : ""}`,
+    ...judged.map((row) => `${row.verdict === "keep" ? "keep  " : "delete"} ${row.kind.padEnd(6)} ${row.title}: ${row.line}`),
+    `${rate} is what \`proposal-keep-rate\` prints (a whole percent). Again, ${KEEP_JUDGE_AGAIN}`,
+  ];
+  return { rate, lines };
 }
 
 /**

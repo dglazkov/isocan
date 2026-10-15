@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–10 are CLOSED. Next: phase 11, evidence. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–10 are CLOSED and phase 11 (evidence) is built; the bench night, the judge and the walk wait on Dion. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -321,7 +321,7 @@ into the taste note.
 
 ## Phase 11 — Evidence
 
-**Status: NOT STARTED.**
+**Status: PART-DONE, 14 October 2026.** Built and not run: the night and the judge wait on Dion's yes (they spend model calls). The walk is `docs/verify/2026-10-14-proactive-agent.md` (13 steps over an evening and the next morning). `bench/night.mjs` builds a synthetic Acme bakery on a scratch daemon, enrols a lead through the real `isocan rc`, runs `/goodnight` to the morning review and records every proposal with its cites, why and kind; `bench/judge.mjs` asks the cheapest model, per proposal, whether a designer would keep it. Rehearsed with the scripted ACP stand-in (no model, 42 s): five proposals (sure, two hunches, a failure with its take, Checkout edited because named), the other screens untouched, cites resolved, the judge planning five calls and refusing without a key. `proposal-keep-rate`, owned by the design-auditor persona (at least 60%), reads "no reading yet" until a night is judged. The real run costs about $1–3 for the night and under a cent for the judge.
 
 **Outcome:** a verify walk in `docs/verify/` for what only a person can
 judge (is a proposal ever unwelcome, does the morning review earn the
@@ -335,4 +335,5 @@ number.
 
 ### Trajectory
 
-*nothing yet.*
+- **2026-10-14** — The judge sees screen text with tags stripped, never layout, so a purely visual proposal is judged as a reordering of words; the person's own Keep and Delete outrank it.
+- **2026-10-14** — Open, waits on Dion: the real night and the judge (one `--yes` each); real keeps and deletes as labels (`--keep`, Dion walks the morning, a `labels` step to compare with the judge); the walk itself.

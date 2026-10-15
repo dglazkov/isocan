@@ -311,6 +311,29 @@ describe("a reading nobody has taken yet", () => {
     }
   });
 
+  // Proactive-agent phase 11: the second reading a model judges, and a rate —
+  // 0% would say every proposal is unwelcome, which nobody has checked.
+  it("is what `proposal-keep-rate` says until the night is judged, and a whole percent after", () => {
+    const judgeFile = fileURLToPath(new URL("../docs/projects/proactive-agent/bench/judge.json", import.meta.url));
+    let out = "";
+    let status = 0;
+    try {
+      out = execFileSync("node", [measure, "proposal-keep-rate"], { cwd: repo, encoding: "utf8", timeout: 60_000 });
+    } catch (err) {
+      const e = err as { status: number; stdout: string };
+      status = e.status;
+      out = e.stdout;
+    }
+    if (existsSync(judgeFile)) {
+      expect(status).toBe(0);
+      expect(out.trim()).toMatch(/^\d+$/);
+      expect(Number(out.trim())).toBeLessThanOrEqual(100);
+    } else {
+      expect(status).toBe(3);
+      expect(out).toMatch(/^no reading yet: /);
+    }
+  });
+
   it.each(["scripts/ratchet.mjs", "scripts/persona-run.mjs", "scripts/canvas-board.mjs"])(
     "%s reads it as unread, and never as a miss",
     (file) => {
