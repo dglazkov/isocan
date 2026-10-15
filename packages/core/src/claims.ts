@@ -687,9 +687,15 @@ export function applyActorColor(
   if (op.color !== null && !isIdentityColor(op.color)) {
     throw new OpValidationError("bad-op", `not a color: ${op.color}`);
   }
+  // A surface still holding a folded actor id (`from -> into`) speaks for the
+  // person it was folded into (`actorColors` reads `resolveActor`), so writing
+  // under `op.actorId` left the person's row untouched and the old colour came
+  // back on reload.
+  const actorId = resolveActor(registry.joined, op.actorId);
   const colors = { ...registry.colors };
-  if (op.color === null) delete colors[op.actorId];
-  else colors[op.actorId] = op.color;
+  if (actorId !== op.actorId) delete colors[op.actorId];
+  if (op.color === null) delete colors[actorId];
+  else colors[actorId] = op.color;
   return { ...registry, colors };
 }
 
@@ -706,9 +712,15 @@ export function applyActorMark(
   if (op.mark !== null && !isFaceMark(op.mark)) {
     throw new OpValidationError("bad-op", `not a single emoji: ${JSON.stringify(op.mark)}`);
   }
+  // Resolve through `joined` before writing, because `actorMarks` reads
+  // `marks[resolveActor(joined, from)]`: setting a mark from a folded surface
+  // must update the person's mark rather than writing a shadowed row under the
+  // old id that `actorMarks` overwrites on the next reload.
+  const actorId = resolveActor(registry.joined, op.actorId);
   const marks = { ...(registry.marks ?? {}) };
-  if (op.mark === null) delete marks[op.actorId];
-  else marks[op.actorId] = op.mark;
+  if (actorId !== op.actorId) delete marks[op.actorId];
+  if (op.mark === null) delete marks[actorId];
+  else marks[actorId] = op.mark;
   return { ...registry, marks };
 }
 

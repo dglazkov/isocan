@@ -150,7 +150,9 @@ export function OwnCursor({ actor }: { actor: Actor }) {
   }, [shown, editing]);
 
   if (!shown) return null;
-  const label = cursorChipLabel(signal, actorName(actor));
+  // Your own cursor does not need a badge telling you your own name; the chip
+  // only appears while typing or wearing a 20-second `/` cursor signal.
+  const label = cursorChipLabel(signal, "");
   /**
    * **Your mark is your pointer, here as everywhere else** (1 Oct 2026). The
    * canvas's shape is the default; a mark you chose for your face replaces it,
@@ -168,42 +170,44 @@ export function OwnCursor({ actor }: { actor: Actor }) {
         <path d={cursorPath} fill={color} strokeWidth="1" />
       </svg>
       {mark && <b className="cursor-glyph">{mark}</b>}
-      <span className="cursor-chip" style={{ background: color }}>
-        {editing ? (
-          <span className="cursor-chip-row">
-            <input
-              ref={inputRef}
-              className="cursor-chip-input"
-              type="text"
-              maxLength={CURSOR_SIGNAL_MAX_LENGTH}
-              value={draft}
-              placeholder={actorName(actor)}
-              aria-label="Cursor message"
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setCursorSignalText(e.target.value);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  clearCursorSignal();
-                } else if (e.key === "Enter") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  commitCursorSignal(draft);
-                }
-              }}
-              onBlur={() => {
-                if (useUiStore.getState().cursorSignalEditing) commitCursorSignal(draft);
-              }}
-            />
-            <em>Esc</em>
-          </span>
-        ) : (
-          <span>{label}</span>
-        )}
-      </span>
+      {(editing || label) && (
+        <span className="cursor-chip" style={{ background: color }}>
+          {editing ? (
+            <span className="cursor-chip-row">
+              <input
+                ref={inputRef}
+                className="cursor-chip-input"
+                type="text"
+                maxLength={CURSOR_SIGNAL_MAX_LENGTH}
+                value={draft}
+                placeholder={actorName(actor)}
+                aria-label="Cursor message"
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setCursorSignalText(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearCursorSignal();
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    commitCursorSignal(draft);
+                  }
+                }}
+                onBlur={() => {
+                  if (useUiStore.getState().cursorSignalEditing) commitCursorSignal(draft);
+                }}
+              />
+              <em>Esc</em>
+            </span>
+          ) : (
+            <span>{label}</span>
+          )}
+        </span>
+      )}
     </div>
   );
 }
