@@ -67,6 +67,19 @@ export interface SummonsContext {
     asker: string;
     owner: string;
   };
+  /**
+   * Present when the ask that woke the turn comes after tries at one item
+   * that all missed (core's `stuckOn`, proactive-agent phase 7): the agent
+   * asks a question instead of making another take.
+   */
+  stuck?: {
+    itemId: string;
+    title: string;
+    person: string;
+    /** The question's address, `<item> · <ask>`. */
+    at: string;
+    facts: string[];
+  };
 }
 
 /** The fixed brief around the wait-shaped payload (phase 4's door):
@@ -91,7 +104,13 @@ export const summonsPrompt = (
     ...payload,
     ...(context?.item ? { item: context.item } : {}),
     ...(context?.thread ? { thread: context.thread } : {}),
+    ...(context?.stuck ? { stuck: context.stuck } : {}),
   };
+  const stuck = context?.stuck
+    ? `The payload's \`stuck\` says your last tries at "${context.stuck.title}" all missed: do NOT make ` +
+      `another take. Say you have been guessing and ask instead — \`isocan stuck ${context.stuck.itemId} --question …\` ` +
+      `(\`isocan --agent-help proactive\`, "Stuck"). `
+    : "";
   return (
     `You are ${agentName}, an agent enrolled on the isocan canvas "${canvasTitle}". ` +
     `This is a summons: activity addressed to you arrived while nothing was running for you. ` +
@@ -100,6 +119,7 @@ export const summonsPrompt = (
     `protocol if you need orientation, and \`isocan comment reply <threadId> "…"\` answers a comment. ` +
     `For a designed screen, HTML node or connected app, run \`isocan design workflow\` for the shared ` +
     `procedure, canvas policy and existing work; precise edits and archive imports do not start a new interview. ` +
+    stuck +
     `Address what the payload below carries, reply on its thread, and then simply finish your ` +
     `turn: do NOT run \`isocan wait\` — your session rests when you stop, and new activity ` +
     `summons you again.\n\n` +

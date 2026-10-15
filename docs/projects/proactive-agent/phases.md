@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–6 (proposals; the night watch; the morning review; explain; the brief as a card; changes ripple) are CLOSED. Next: phase 7, stuck detection. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–7 (proposals; the night watch; the morning review; explain; the brief as a card; changes ripple; stuck detection) are CLOSED. Next: phase 8, critics in the room. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -211,7 +211,7 @@ strip; the decision read-back from the lead agent.
 
 ## Phase 7 — Stuck detection
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `stuck.ts` (its own subpath): `stuckOn` reads the log as `evals.ts` does: an ask is a person's comment that summons someone about the item, a try is somebody else's new version or child of it, and a miss is a try undone, set aside or deleted, or asked about again within two minutes or in fewer words. Three misses in a row within 15 minutes is stuck; the reading carries the behaviour facts in words. The fourth ask's own summons carries `stuck` (the rc reads the log tail), so the lead asks instead of making a take: one to three observations and four now-or-instead pairs (density, brand expression, layout, tone of voice) with its guess on each; the person answers, asks for extremes, or names a product, and an answer resets the count. A lazy card on the canvas; `isocan stuck`. `stuck.test.ts` (core 14, CLI 3), the rc's summons test and the `proactive-stuck` journey (no fourth version made). Entry 692,474 → 693,041.
 
 **Outcome:** `stuckOn` in core over asks, results and `undoneSeqs`; the rc
 putting it in `SummonsContext`; derived observations (what survived each
@@ -230,6 +230,10 @@ of generating again.
 
 - **2026-10-14** — Open: the trigger (tries, time, undo speed, shrinking
   asks) and whether the four axes are fixed. Waits on Dion.
+- **2026-10-14** — Stuck rides the ask's own summons, unlike ripple: the rc reads the recent log on the fourth ask and adds `stuck` to `SummonsContext`; the person's client only shows the detection and the wait.
+- **2026-10-14** — The typed questionnaire refuses without an active design request, so the stuck question is a Chat record drawn as tiles, not a `visual-cards` set. The tiles are words; pictures wait.
+- **2026-10-14** — Chosen, Dion to confirm: three misses in a row within 15 minutes; a keep or an answer resets the count; the four axes are fixed.
+- **2026-10-14** — Open, waits on Dion: pictures on the tiles (a preview per side, or the request's questionnaire when one is active); whether the person's own ⌘Z on an agent's take counts (it reads as set aside); the phone face; the Chat record reads as one run-on paragraph, as ripple's read-back does.
 
 ## Phase 8 — Critics in the room, and the desk check
 

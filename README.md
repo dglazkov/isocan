@@ -425,6 +425,15 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   on the canvas: every screen is re-read into *assumed the old line*, *still
   holds* and *matters more now*, and the lead agent asks one clarifying
   question. `isocan design card` prints and edits the same card.
+- **Stuck, said out loud**: when three takes in a row at one item have
+  missed — set aside, undone or deleted, or asked for again at once or in
+  fewer words — your next ask gets a question instead of a fourth take. The
+  agent says it has been guessing, what it noticed in what you kept and
+  undid, and asks four now-or-instead pairs (density, brand expression,
+  layout, tone of voice) with its own guess highlighted; or **Show me
+  extremes**, or **Name a product that gets it right**. With nothing to
+  answer, the card still says what it saw and that the question waits.
+  `isocan stuck [item]` prints the same.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

@@ -9416,6 +9416,31 @@ program
   );
 
 /**
+ * **Stuck detection** (proactive-agent phase 7): several tries at one item
+ * that all missed — the agent stops guessing and asks. Reads the detection,
+ * the lead's question with its guesses, or why it waits; the lead's
+ * `--question` and the person's answer are the two acts. The body lives in
+ * `stuck.ts`, loaded on this verb only.
+ */
+program
+  .command("stuck [item]")
+  .description("Stuck detection: tries at one item that all missed — the lead asks four now-or-instead pairs instead of guessing again; the person answers")
+  .option("--question", "the lead's act: post the question instead of another take — --observe (1–3) and four --tile")
+  .option("--observe <sentence>", "with --question: what you noticed in what they kept and undid, one sentence (repeatable, three at most)", collectList)
+  .option("--tile <pair>", "with --question: \"<axis> | <now> | <instead> | <your guess: now|instead>\" — density, brand, layout, tone, each once", collectList)
+  .option("--answer <axis=side>", "the person's answer: <axis>=now|instead (repeatable)", collectList)
+  .option("--extremes", "the person's way out: show me extremes")
+  .option("--product <name>", "the person's way out: a product that gets it right")
+  .option("--canvas <canvas>")
+  .action(
+    run(async (item: string | undefined, opts: import("./stuck.ts").StuckOpts, cmd: Command) => {
+      const ctx = await ctxOf(cmd);
+      const { stuck } = await import("./stuck.ts");
+      await stuck(ctx, goodnightDeps(), item, opts);
+    }),
+  );
+
+/**
  * **What changed between two versions** (docs/projects/version-diff/design.md).
  *
  * Choosing a variation, or reviewing an agent's edit, without seeing what is

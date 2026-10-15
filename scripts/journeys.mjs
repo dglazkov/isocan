@@ -5368,6 +5368,181 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "proactive-stuck",
+    /**
+     * **Stuck** (proactive-agent phase 7, journey scene 7,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme canvas with a Header and a Footer.
+     *
+     * Maya asks Kit for a new header in the Chat three times, each ask
+     * shorter, and steps the header back to its original after each take.
+     * The fourth ask gets no fourth take: the rc's summons carries `stuck`,
+     * and Kit posts the question instead — what it noticed and four
+     * now-and-instead pairs with its guesses. Maya's card shows it with each
+     * guess highlighted and chosen by default; Header still has exactly the
+     * three takes. **Show me extremes** answers it, and the card goes.
+     *
+     * Then with the rc stopped (nothing to answer), Ravi — a person — makes
+     * three takes at the Footer that Maya sets aside; on her fourth ask the
+     * card still shows what the behaviour says, and that the question waits.
+     * Screenshots of the question, light and dark, and of the wait.
+     */
+    what: "stuck: after three takes set aside, the fourth ask gets four now-or-instead pairs with Kit's guess highlighted, not a fourth take; with nothing to answer the card says the question waits",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-stuck-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_stuck_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: told it is stuck, it asks; otherwise it makes a take at the item the ask named.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  if (!canvasId) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const stuck = /"stuck":\\s*\\{\\s*"itemId":\\s*"(itm_[\\w-]+)"/.exec(prompt)?.[1];
+  if (stuck) {
+    run("stuck", stuck, "--question",
+      "--observe", "You kept the photo every time.", "--observe", "You set aside every warmer colour.",
+      "--tile", "density | Roomy, one idea per row | Dense, more at a glance | now",
+      "--tile", "brand | Quiet, the photo speaks | Loud, the bakery's red | instead",
+      "--tile", "layout | Photo on top | Photo beside the words | now",
+      "--tile", "tone | Plain | Warm, a little playful | instead");
+    return;
+  }
+  if (prompt.includes("Stuck answer (")) return;
+  const item = /"items":\\s*\\[\\s*"(itm_[\\w-]+)"/.exec(prompt)?.[1];
+  if (!item) return;
+  const file = path.join(cwd, "take-" + Date.now() + ".html");
+  writeFileSync(file, "<!doctype html><title>Header</title><header style='padding:24px;background:#b5452a;color:#fff'><h1>Fresh bread, take " + Date.now() % 1000 + "</h1></header>");
+  run("edit", item, file);
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (args, as = {}) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env: { ...env, ...as } });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const page = (name, words) => {
+        const file = path.join(home, `${name}-${Date.now()}.html`);
+        writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>${name}</title><body style='margin:0;font:16px system-ui'><header style='padding:24px;background:#f4ede4'><h1>${words}</h1></header></body>`);
+        return file;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-stuck-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const card = `document.querySelector("[data-stuck-card]")`;
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => JSON.parse(await b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas))`));
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli(["canvas", "create", "Acme Bakery"]).canvasId;
+        const header = runCli(["--canvas", id, "add", page("Header", "Fresh bread"), "--title", "Header", "--size", "390x200", "--at", "0,0"]).itemId;
+        const footer = runCli(["--canvas", id, "add", page("Footer", "Open from seven"), "--title", "Footer", "--size", "390x200", "--at", "0,320"]).itemId;
+        const original = { [header]: runCli(["--canvas", id, "show", header]).currentVersionId, [footer]: runCli(["--canvas", id, "show", footer]).currentVersionId };
+        runCli(["--canvas", id, "rc", "add", "Kit", "--dir", kitDir]);
+        runCli(["--canvas", id, "canvas", "edit", "--prop", "proactive=Kit"]);
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli(["--canvas", id, "pass"]);
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector('[data-item-id="${footer}"]')`, "the canvas with its header and footer", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+
+        // 1. Three asks, each shorter; Kit makes a take for each; Maya steps the header back each time.
+        const versionsOf = async (itemId) => (await served(id)).items[itemId].versions.length;
+        for (const [i, ask] of ["@Kit a new header for the menu, warmer, keep the photo", "@Kit again, but warmer", "@Kit again"].entries()) {
+          runCli(["--canvas", id, "notify", ask, "--item", header]);
+          await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.canvas.items["${header}"].versions.length === ${i + 2})`, `Kit's take ${i + 1}`, 60_000);
+          runCli(["--canvas", id, "version", "promote", header, original[header]]);
+        }
+        if (await b.ev(`!!${card}`)) throw new Error("the stuck card showed before the fourth ask");
+
+        // 2. The fourth ask: a question, not a take.
+        runCli(["--canvas", id, "notify", "@Kit no", "--item", header]);
+        await until(b, `!!${card}?.querySelector('[data-stuck-section="tiles"]')`, "Kit's question on Maya's card", 60_000);
+        if ((await versionsOf(header)) !== 4) throw new Error(`the fourth ask made a take: Header has ${await versionsOf(header)} versions, not the original and three`);
+        const text = await b.ev(`${card}.textContent`);
+        for (const w of ["I've been guessing at “Header”", "Three tries in", "none of them landed", "The asks got shorter", "What I noticed", "You kept the photo every time.", "Now, or instead?", "Density", "Brand expression", "Layout", "Tone of voice", "Dense, more at a glance", "Show me extremes", "Name a product that gets it right"]) {
+          if (!text.includes(w)) throw new Error(`the card does not say ${JSON.stringify(w)}: ${text.slice(0, 1500)}`);
+        }
+        const guesses = await b.ev(`JSON.stringify([...${card}.querySelectorAll("[data-stuck-tile]")].map((t) => [t.dataset.stuckTile, t.querySelector("[data-guess]")?.dataset.stuckSide, t.querySelector('[aria-checked="true"]')?.dataset.stuckSide]))`);
+        const want = [["density", "now", "now"], ["brand", "instead", "instead"], ["layout", "now", "now"], ["tone", "instead", "instead"]];
+        if (guesses !== JSON.stringify(want)) throw new Error(`the guesses are not highlighted and chosen by default: ${guesses}`);
+        const shots = {};
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`question-${theme}`] = await shot(`question-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        const printed = runCli(["--canvas", id, "stuck", header]);
+        if (printed.question?.tiles?.length !== 4) throw new Error(`the terminal does not read the same question: ${JSON.stringify(printed).slice(0, 400)}`);
+
+        // 3. Show me extremes: an ordinary message to Kit; the card goes.
+        await rig.click("[data-stuck-extremes]", "Show me extremes");
+        await until(b, `!${card}`, "the card to go once answered", 15_000);
+        const said = Object.values((await served(id)).threads).flatMap((t) => t.comments).find((c) => c.author.name === "Maya" && c.body.includes("Stuck answer ("));
+        if (!said || !said.body.includes("show me extremes") || !said.body.startsWith("@Kit")) throw new Error(`the answer did not reach Kit: ${said?.body}`);
+
+        // 4. Nothing to answer: the rc stops; Ravi's three takes at the Footer are set aside; the fourth ask's card says the question waits.
+        rc.kill("SIGINT");
+        await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+        if (rc.exitCode === null) rc.kill("SIGKILL");
+        rc = null;
+        const ravi = { ISOCAN_SESSION_ID: "stuck-ravi" };
+        runCli(["identity", "--as", "usr_stuck_ravi", "--name", "Ravi"], ravi);
+        for (const ask of ["A footer with the opening hours and the address", "Again, shorter", "again"]) {
+          runCli(["--canvas", id, "notify", ask, "--item", footer]);
+          runCli(["--canvas", id, "edit", footer, page("Footer", `Open from seven, ${ask.length}`)], ravi);
+          runCli(["--canvas", id, "version", "promote", footer, original[footer]]);
+        }
+        runCli(["--canvas", id, "notify", "no", "--item", footer]);
+        await until(b, `${card}?.dataset.stuckCard === "${footer}" && ${card}.textContent.includes("The question waits:")`, "the card saying the question waits", 30_000);
+        const waits = await b.ev(`${card}.textContent`);
+        if (!waits.includes("has been guessing at “Footer”") || !waits.includes("none of them landed")) throw new Error(`the waiting card does not say what the behaviour shows: ${waits}`);
+        if (await b.ev(`!!${card}.querySelector('[data-stuck-section="tiles"]')`)) throw new Error("the waiting card drew tiles nobody wrote");
+        shots["waits-light"] = await shot("waits-light");
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots };
+      } catch (err) {
+        const said = await b.ev(`(document.querySelector("[data-stuck-card]")?.textContent ?? "no stuck card").slice(0, 1200)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the card ---\n${said}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
     name: "launcher",
     /** ⌘K stopped being a third composer and became the way to reach
      *  everything. A launcher that opens but does nothing is the worst version

@@ -168,6 +168,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
 - `explain <item>` — how an item got here: the versions that mattered and why, the roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
 - `ripple [item]` — a screen's settled edits read against every other screen, your read-back and previews, the person's altitude; no item: the pulse (`proactive`)
+- `stuck [item]` — tries that all missed: ask, don't guess again (`proactive`)
 - `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
@@ -3991,7 +3992,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note a delete asks you to write, the night watch (`/goodnight`), the morning review, Explain's critique, the brief as a card (`design card`), and changes that ripple (`ripple`) -->
+<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note, the night watch (`/goodnight`), the morning review, Explain's critique, the brief card (`design card`), `ripple` and `stuck` -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4229,6 +4230,44 @@ DESIGN.md that governs the source, citing the same version — and **this one
 is a one-off** marks the source `ripple=off`, which silences it. Never edit
 another screen because one changed. `isocan ripple` with no item prints the
 pulse: one tick per screen, current, behind or in conflict.
+
+## Stuck: stop guessing, and ask
+
+When a person's last tries at one item have all missed — **three in a row**,
+each set aside, undone or deleted, or asked for again within two minutes or
+in fewer words ("again", "no"), all within fifteen minutes — the next ask
+about it should get a question, not a fourth take. A summons through
+`isocan rc` says so: its payload carries `stuck` (the item, the person, and
+what the behaviour says). A parked `wait` does not; before you answer an ask
+with another version of an item, `isocan stuck <item>` tells you. A take you
+make anyway is a fourth guess.
+
+Answer the stuck ask with one command, and make nothing:
+
+```sh
+isocan stuck Header --question \
+  --observe "You kept the photo every time." --observe "You undid the colour twice." \
+  --tile "density | Roomy, one idea per row | Dense, more at a glance | now" \
+  --tile "brand | Quiet, the photo speaks | Loud, the bakery's red | instead" \
+  --tile "layout | Photo on top | Photo beside the words | now" \
+  --tile "tone | Plain | Warm, a little playful | instead"
+```
+
+- **Own the miss.** The question opens "I've been guessing", in your voice.
+  Never say the person is stuck; an observation that does is refused.
+- **Observations are what you noticed in the takes** — what survived every
+  try, what was undone twice — read from the versions (`isocan diff`), one
+  sentence each, one to three. The person can correct them.
+- **Four pairs, always the same four** — density, brand expression, layout,
+  tone of voice — each *now* (what the item does today) and *instead*, with
+  your own guess as the last part. The card highlights it.
+- The person answers with a side per pair, **show me extremes** (one take at
+  each end of every pair, side by side) or **name a product that gets it
+  right**; it reaches you as an ordinary ask, "Stuck answer (…)", and the
+  count starts again. Make one take from it.
+
+With nothing to answer, the person's card still shows what the behaviour
+says and that the question waits.
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

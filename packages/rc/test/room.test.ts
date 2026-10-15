@@ -1412,6 +1412,49 @@ describe("the summons carries thread history, item metadata, and non-owner stand
     await room.done;
   });
 
+  it("the ask after three tries that all missed carries `stuck`, and tells the agent to ask instead of guessing (proactive-agent phase 7)", async () => {
+    const clock = new HandClock();
+    const home = new AcmeHome(clock);
+    home.items["itm_header"] = { id: "itm_header", title: "Acme Header", x: 0, y: 0, width: 400, height: 200, properties: {}, versions: [], currentVersionId: "ver_0" };
+    home.enrol(PERCY, OWNER, { listen: ["*"] });
+    const ask = (n: number, body: string) =>
+      home.append(OWNER, { type: "thread.reply", threadId: "thr_main", comment: { id: `cmt_ask${n}`, body, mentions: [PERCY.id], items: ["itm_header"] } } as unknown as Operation);
+    const missedTake = async (n: number) => {
+      home.append(PERCY, { type: "item.addVersion", itemId: "itm_header", version: { id: `ver_${n}`, blobHash: `h${n}`, mimeType: "text/html", filename: "h.html", size: 1 } } as unknown as Operation);
+      await clock.advance(10_000);
+      home.append(OWNER, { type: "item.setCurrentVersion", itemId: "itm_header", versionId: "ver_0" } as unknown as Operation);
+      await clock.advance(60_000);
+    };
+    home.append(OWNER, { type: "thread.create", threadId: "thr_main", x: 0, y: 0, anchorItemId: null, main: true, comment: { id: "cmt_0", body: "Hello" } } as unknown as Operation);
+    const { deps, turns } = roomOver(home, clock);
+    const room = runRoom(deps);
+    await clock.advance(0);
+
+    ask(1, "@Percy a new header, warmer, keep the photo");
+    await clock.advance(0);
+    await missedTake(1);
+    ask(2, "@Percy again, warmer");
+    await clock.advance(0);
+    await missedTake(2);
+    ask(3, "@Percy again");
+    await clock.advance(0);
+    expect(turns.every((t) => !t.prompt.includes('"stuck"'))).toBe(true);
+    await missedTake(3);
+    ask(4, "@Percy no");
+    await clock.advance(0);
+
+    const prompt = turns.at(-1)!.prompt;
+    expect(prompt).toContain("@Percy no");
+    expect(prompt).toContain('"stuck": {');
+    expect(prompt).toContain('"itemId": "itm_header"');
+    expect(prompt).toContain('"at": "itm_header · cmt_ask4"');
+    expect(prompt).toContain("Three tries in 4 minutes, and none of them landed: three set aside.");
+    expect(prompt).toContain('your last tries at "Acme Header" all missed: do NOT make another take.');
+    expect(prompt).toContain("isocan stuck itm_header --question");
+    await room.stop();
+    await room.done;
+  });
+
   it("a summons from the owner does not claim a non-owner woke the turn", async () => {
     const clock = new HandClock();
     const home = new AcmeHome(clock);

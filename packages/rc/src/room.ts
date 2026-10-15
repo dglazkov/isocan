@@ -293,6 +293,8 @@ const keys = {
 /** How stale the persisted `seen` may run: a minute against a five-minute
  * window, so one write a minute per agent and canvas is plenty. */
 const SEEN_EVERY_MS = 60_000;
+/** How far back a summons reads the log for stuck detection: its tries fall within fifteen minutes, far inside this many ops. */
+const STUCK_LOOKBACK = 2000;
 
 /** The desk's refusal for an actor the presenting badge does not hold. */
 const NOT_YOUR_ACTOR = "not-your-actor";
@@ -899,6 +901,31 @@ async function room(
     }
   })();
 
+  /**
+   * **Stuck detection** (proactive-agent phase 7): is the ask that woke this
+   * turn the one after tries at an item that all missed? The ask is itself
+   * the summons, so the rc reads it here — the recent log, core's `stuckOn`
+   * — and the agent is told in the payload to ask instead of guessing. A log
+   * that cannot be read says nothing: the turn runs as any other.
+   */
+  // Loaded when the room starts, not at the top of this file: the CLI's `stuck` chunk shares the module,
+  // and a static import would split it into a chunk every command loads (`test/cli-bundle.test.ts`).
+  const stuckModule = import("@isocan/core/stuck").catch(() => null);
+  const stuckContext = async (flagged: WatchedLogEntry[], tip: number, snapshot: CanvasSnapshotResponse | null): Promise<Pick<SummonsContext, "stuck">> => {
+    const said = flagged.flatMap((e) => (e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply" ? [{ id: e.envelope.op.comment.id, by: e.envelope.actor.id }] : []));
+    const log = await routes.getLog(p.id, Math.max(0, tip - STUCK_LOOKBACK)).catch(() => null);
+    if (!log) return {};
+    // Nobody is stuck before their fourth ask (core's STUCK_TRIES, three tries, then the ask): only then is the module read.
+    const asked = (by: string) => log.filter((e) => e.envelope.actor.id === by && (e.envelope.op.type === "thread.create" || e.envelope.op.type === "thread.reply")).length;
+    if (!said.some((c) => asked(c.by) > 3)) return {};
+    const mod = await stuckModule;
+    const asks = new Set(said.map((c) => c.id));
+    const found = mod?.stuckAll(log).find((s) => s.pending && asks.has(s.pending.commentId));
+    if (!found) return {};
+    const title = snapshot?.canvas.items[found.itemId]?.title || "Untitled";
+    return { stuck: { itemId: found.itemId, title, person: found.person.name, at: found.at, facts: found.facts } };
+  };
+
   /** One summoned turn: adapter up, session loaded-or-new, presence on
    * while it runs and gone when it ends (journey 2's acceptance — the
    * summoned equivalent of the park's `landPresence`). */
@@ -1078,6 +1105,7 @@ async function room(
           }
         : {}),
       ...(guestAsker ? { wokenBy: { asker: guestAsker, owner: owner.name } } : {}),
+      ...(firstComment ? await stuckContext(flagged, tip, snapshot) : {}),
     };
     const beat = (patch: UpdateSessionRequest): void => {
       if (!face) return;

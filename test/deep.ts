@@ -202,6 +202,7 @@ export interface FastSpawner {
 export const FAST_SPAWNERS: readonly FastSpawner[] = [
   { file: "packages/cli/test/propose.test.ts", secs: 3.1, why: "one shared synthetic daemon; eleven-odd spawns for propose's refusals, placement and the taste note; measured 14 October" },
   { file: "packages/cli/test/brief-card.test.ts", secs: 5.6, why: "one shared synthetic daemon; about twenty spawns for the card, Right, an edit with nobody to answer, and Kit parked for the re-read and its one question; measured 14 October" },
+  { file: "packages/cli/test/stuck.test.ts", secs: 5.0, why: "one shared synthetic daemon; about thirty spawns for three tries and a fourth ask, the question's refusals, the question read back, and Kit parked for the answer; measured 14 October" },
   { file: "packages/cli/test/explain.test.ts", secs: 6.5, why: "one shared synthetic daemon; about thirty spawns for the story at each depth, the refusals, Kit parked for a critique and its proposal, and the rationale note; measured 14 October" },
   { file: "test/timing-reporter.test.ts", secs: 0.03, why: "does not walk: the reporter spawns git for metadata and imports this file's lane predicate; the audit also sees the binary names its detector spells out" },
   { file: "test/design-partner-tools.test.ts", secs: 2.118, why: "one actual stdio MCP child calls the CLI and owned Chrome; remaining boundary checks stay in process" },
