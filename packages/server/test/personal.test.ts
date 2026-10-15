@@ -383,6 +383,14 @@ it("two-home raw reads and watch fetches recheck current grants without reading 
   const stalled = new PassThrough(); stalled.write("P");
   homeBytes.mockResolvedValueOnce(stalled);
   const forwarded = vi.spyOn(connection, "sourceRequest");
+  // The forwarded answer is the whole answer, even to a caller that hangs up
+  // mid-stream. fastify resumes the lifecycle when an early-answering async
+  // hook's reply CLOSES, not only when it finishes, so without the guard the
+  // local blob route ran too — reading this replica's private state and
+  // opening the bytes a second time, after the caller had gone, and on CI
+  // writing headers onto the closed response as an unhandled rejection.
+  const localSnapshots = vi.spyOn(local.daemon.engine, "getSnapshot"); const localMeta = vi.spyOn(local.daemon.store, "blobMeta");
+  const handlerBytes = vi.spyOn(connection, "openBlob");
   const controller = new AbortController();
   const ownerHeaders = { ...localBadge.headers, [SOURCE_POLICY_HEADER]: sourcePolicyHeader({ policy: { mode: "direct", actorId: person.id, intent: "read" }, expectedHome: home.base }) };
   const canceled = fetch(`${local.base}/api/projects/${source}/blobs/${blob.blobHash}`, { headers: ownerHeaders, signal: controller.signal }).then((response) => response.arrayBuffer()).then(() => false, () => true);
@@ -391,6 +399,12 @@ it("two-home raw reads and watch fetches recheck current grants without reading 
     controller.abort(); expect(await canceled).toBe(true);
     await expect.poll(() => forwarded.mock.calls[0]?.[5].signal?.aborted).toBe(true);
     await expect.poll(() => stalled.destroyed).toBe(true);
+    // A later request through the same daemon has run its whole lifecycle,
+    // so a route handler resumed by the close has had every chance to start.
+    expect((await fetch(`${local.base}/api/healthz`)).status).toBe(200);
+    expect(localSnapshots.mock.calls.filter(([id]) => id === source)).toEqual([]);
+    expect(localMeta).not.toHaveBeenCalled(); expect(handlerBytes).not.toHaveBeenCalled();
+    expect(forwarded).toHaveBeenCalledTimes(1);
   } finally { controller.abort(); stalled.destroy(); }
 });
 

@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { cliEnv, collect, runCli, spawnCli, type Run } from "./cli.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
 import { mintTestBadge } from "./badge.ts";
+import { parkedWait } from "./parked.ts";
 
 /**
  * **`isocan explain`, over the real CLI wire** (proactive-agent phase 4).
@@ -115,11 +116,12 @@ describe("isocan explain", () => {
     });
     expect(res.status, await res.clone().text()).toBeLessThan(300);
     expect((await isocan(["--canvas", canvas, "session", "start", "--label", "Kit"], kit)).code).toBe(0);
-    const parked = spawnCli(["--canvas", canvas, "wait", "--json", "--timeout", "30"], { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port, ...kit }) });
-    await new Promise((r) => setTimeout(r, 1500));
+    // Parked means the daemon shows it waiting, and its output is gathered
+    // from the start: a woken park can exit before the command that woke it.
+    const parked = await parkedWait({ base, headers: badge.headers, canvas, actorId: "usr_ex_kit", cli: { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port, ...kit }) } });
     const asked = await json(["--canvas", canvas, "explain", checkout, "--ask"]);
     expect(asked.lead.name).toBe("Kit");
-    const woke = await collect(parked);
+    const woke = await parked.run;
     expect(woke.stdout).toContain("Critique, please: “Checkout”");
     expect((await json(["--canvas", canvas, "explain", checkout])).story.asked).toBe(true);
 

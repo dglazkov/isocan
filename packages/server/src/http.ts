@@ -1339,6 +1339,28 @@ export function registerRoutes(
           reply.status(response.status);
           for (const name of ["content-type", "content-length", "content-range", "accept-ranges", "content-security-policy", "x-content-type-options", "content-disposition"]) { const value = response.headers.get(name); if (value) reply.header(name, value); }
           reply.header("Cache-Control", "no-store");
+          /**
+           * **The forwarded answer is the whole answer, even to a caller who
+           * hangs up.** An async hook that answers early returns `reply`, and
+           * fastify then waits for the response to END before deciding
+           * whether the route still runs — except that a response which
+           * CLOSES first (the caller aborted mid-stream) counts as done
+           * without being `sent`, and the lifecycle resumes: the local route
+           * handler ran after the caller had gone, read this replica's state
+           * for a canvas whose authority is elsewhere, opened the bytes a
+           * second time, and — when its own read failed — wrote headers onto
+           * the closed response, which CI saw as an unhandled
+           * ERR_HTTP_HEADERS_SENT. Taking the reply over on a premature close
+           * is what marks it sent; the source signal already cancels the
+           * forwarded stream (`personal.test.ts`, "two-home raw reads").
+           */
+          const answered = () => { if (!reply.raw.writableEnded) reply.hijack(); };
+          if (reply.raw.destroyed) {
+            answered();
+            await response.body?.cancel().catch(() => {});
+            return reply;
+          }
+          reply.raw.once("close", answered);
           return reply.send(response.body ? Readable.fromWeb(response.body as import("node:stream/web").ReadableStream) : undefined);
         }
       }

@@ -4,8 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { type Daemon } from "@isocan/server";
 import { startDaemon } from "@isocan/server/daemon";
-import { cliEnv, collect, runCli, spawnCli, type Run } from "./cli.ts";
-import { mintTestBadge } from "./badge.ts";
+import { cliEnv, runCli, type Run } from "./cli.ts";
+import { mintTestBadge, type TestBadge } from "./badge.ts";
+import { parkedWait } from "./parked.ts";
 
 /**
  * **`isocan goodnight`, over the real CLI wire** (proactive-agent phase 2).
@@ -92,6 +93,8 @@ describe("isocan goodnight, with Kit parked", () => {
   let canvas: string;
   let ids: Screens;
   let kit: Record<string, string>;
+  let base: string;
+  let badge: TestBadge;
 
   beforeAll(async () => {
     canvas = (await json(["canvas", "create", "Acme Bakery"])).canvasId;
@@ -101,8 +104,8 @@ describe("isocan goodnight, with Kit parked", () => {
     kit = { ISOCAN_SESSION_ID: "goodnight-kit" };
     const who = await isocan(["identity", "--as", "usr_gn_kit", "--name", "Kit"], kit);
     expect(who.code, who.stderr).toBe(0);
-    const base = `http://127.0.0.1:${port}`;
-    const badge = await mintTestBadge(base);
+    base = `http://127.0.0.1:${port}`;
+    badge = await mintTestBadge(base);
     const host = { id: "usr_gn_host", name: "Host" };
     await badge.speakAs(host);
     const res = await fetch(`${base}/api/ops`, {
@@ -126,12 +129,13 @@ describe("isocan goodnight, with Kit parked", () => {
   it("reaches Kit, waits for that's the plan, and holds every promise rule", async () => {
     // Kit appears and parks — the stub agent's lap — so something can answer.
     expect((await isocan(["--canvas", canvas, "session", "start", "--label", "Kit"], kit)).code).toBe(0);
-    const parked = spawnCli(["--canvas", canvas, "wait", "--json", "--timeout", "30"], { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port, ...kit }) });
-    await new Promise((r) => setTimeout(r, 1500));
+    // Parked means the daemon shows it waiting, and its output is gathered
+    // from the start: a woken park can exit before the command that woke it.
+    const parked = await parkedWait({ base, headers: badge.headers, canvas, actorId: "usr_gn_kit", cli: { cwd: home, env: cliEnv({ ISOCAN_HOME: home, ISOCAN_PORT: port, ...kit }) } });
     const asked = await json(["--canvas", canvas, "goodnight", "start", "the basket bugs me"]);
     expect(asked.answerable, JSON.stringify(asked)).toBe(true);
     expect(asked.lead.name).toBe("Kit");
-    const woke = await collect(parked);
+    const woke = await parked.run;
     expect(woke.stdout).toContain("/goodnight @Kit the basket bugs me");
 
     // Kit reads the night, and may not write the note yet.

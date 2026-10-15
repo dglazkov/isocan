@@ -22,6 +22,15 @@ it("delivers exact image blocks and real CLI/browser actions through an actual s
   const config = { source: process.cwd(), workspace, home: fixture.home, base: fixture.base, canvasId: fixture.canvasId, condition: "B", runId: "synthetic", fixtureId: "inventory", sessionId: "study-agent", deadline: new Date(Date.now() + 25_000).toISOString(), evidence: path.join(directory, "evidence"), questions: path.join(directory, "questions") };
   const configFile = path.join(directory, "config.json"); await fs.writeFile(configFile, JSON.stringify(config));
   const client = new Client({ name: "synthetic-independent-test", version: "1" });
+  // A request the SDK gives up on fails from a timer — "MCP error -32001:
+  // Request timed out", with no line of this file in its stack — and that is
+  // all CI said on dbd408b32 (14 Oct 2026), once, 60 s into a test that passes
+  // in 6. Naming the call is what makes the next one a diagnosis.
+  const sdkCallTool = client.callTool.bind(client);
+  client.callTool = ((params: { name: string; arguments?: unknown }, ...rest: unknown[]) =>
+    (sdkCallTool as (...args: unknown[]) => ReturnType<typeof sdkCallTool>)(params, ...rest).catch((error: Error) => {
+      throw new Error(`${params.name} ${JSON.stringify(params.arguments ?? {}).slice(0, 160)} — ${error.message}`, { cause: error });
+    })) as typeof client.callTool;
   const transport = new StdioClientTransport({ command: process.execPath, args: [path.resolve("scripts/lib/design-partner-mcp.mjs"), configFile], env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" }, stderr: "pipe" });
   try {
     await client.connect(transport);
