@@ -37,6 +37,14 @@ vi.mock("../src/stores/canvasStore.ts", async (importOriginal) => ({
 const { PhoneFace } = await import("../src/components/PhoneFace.tsx");
 const { reviewOwed } = await import("../src/components/VisitDigest.tsx");
 const { useCanvasStore } = await import("../src/stores/canvasStore.ts");
+// Preload MainThreadBody's lazy children so their dynamic imports settle inside
+// act(...) rather than logging console warnings during worker teardown.
+await Promise.all([
+  import("../src/components/GoodnightPlan.tsx"),
+  import("../src/components/ChatTidy.tsx"),
+  import("../src/components/DesignTaskPanel.tsx"),
+  import("../src/components/QuestionnairePanel.tsx"),
+]);
 
 const maya: Actor = { id: "usr_acme_maya", name: "Maya" };
 const kit: Actor = { id: "usr_acme_kit", name: "Kit" };
@@ -86,52 +94,52 @@ beforeEach(() => {
   root = createRoot(host);
 });
 
-afterEach(() => {
-  act(() => root.unmount());
+afterEach(async () => {
+  await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
 });
 
-function mount(morning: string | null) {
+async function mount(morning: string | null) {
   const visit = { current: { tab: "Chat" as const, itemId: null, plan: false } };
-  act(() => root.render(h(MemoryRouter, null, h(PhoneFace, { canvasId: "prj_acme", actor: maya, visit, prior, morning }))));
+  await act(async () => root.render(h(MemoryRouter, null, h(PhoneFace, { canvasId: "prj_acme", actor: maya, visit, prior, morning }))));
 }
-const tab = (name: string) => act(() => [...host.querySelectorAll<HTMLButtonElement>(".phone-tabs button")].find((b) => b.textContent === name)!.click());
+const tab = (name: string) => act(async () => { [...host.querySelectorAll<HTMLButtonElement>(".phone-tabs button")].find((b) => b.textContent === name)!.click(); });
 const closes = () => sent.mock.calls.filter(([, , op]) => op?.type === "item.update" && op.patch?.properties?.[HANDOFF_REVIEWED_PROP]);
 const review = () => host.querySelector("[data-morning]");
 
 describe("the phone's morning review", () => {
-  it("is not drawn, and closes nothing, when the night ends during the visit the goodnight was said in", () => {
-    act(() => useCanvasStore.setState({ canvasId: "prj_acme", canvas: evening().canvas }));
+  it("is not drawn, and closes nothing, when the night ends during the visit the goodnight was said in", async () => {
+    await act(async () => useCanvasStore.setState({ canvasId: "prj_acme", canvas: evening().canvas }));
     // What CanvasPage decides on arrival: no note stood, so no review is owed.
     expect(reviewOwed(useCanvasStore.getState().canvas!, prior, Date.now())).toBe(null);
-    mount(null);
+    await mount(null);
     expect(host.querySelector(".phone-digest"), "the digest is up under Chat").not.toBe(null);
 
     // Kit's night lands while she is still here, and she switches tabs.
-    act(() => useCanvasStore.setState({ canvas: night(evening()).canvas }));
-    tab("Agents");
-    tab("Chat");
+    await act(async () => useCanvasStore.setState({ canvas: night(evening()).canvas }));
+    await tab("Agents");
+    await tab("Chat");
     expect(host.querySelector(".phone-digest"), "the digest mounted again").not.toBe(null);
     expect(review(), "a tab switch drew a review this visit does not owe").toBe(null);
     expect(closes(), "a tab switch closed the note mid-visit").toHaveLength(0);
   });
 
-  it("is drawn on the arrival that owes it, closes the note once, and stays through tab switches", () => {
+  it("is drawn on the arrival that owes it, closes the note once, and stays through tab switches", async () => {
     const back = night(evening()).canvas;
-    act(() => useCanvasStore.setState({ canvasId: "prj_acme", canvas: back }));
+    await act(async () => useCanvasStore.setState({ canvasId: "prj_acme", canvas: back }));
     const owed = reviewOwed(back, prior, Date.now());
     expect(owed).toBe("itm_note");
-    mount(owed);
+    await mount(owed);
     expect(review()?.textContent).toContain("Nothing new tonight");
     expect(closes()).toHaveLength(1);
 
     // The close echoes back; switching away and back shows the same review and writes nothing more.
     const note = back.items.itm_note!;
-    act(() => useCanvasStore.setState({ canvas: { ...back, items: { ...back.items, itm_note: { ...note, properties: { ...note.properties, [HANDOFF_REVIEWED_PROP]: iso(Date.now()) } } } } }));
-    tab("Agents");
+    await act(async () => useCanvasStore.setState({ canvas: { ...back, items: { ...back.items, itm_note: { ...note, properties: { ...note.properties, [HANDOFF_REVIEWED_PROP]: iso(Date.now()) } } } } }));
+    await tab("Agents");
     expect(review()).toBe(null);
-    tab("Chat");
+    await tab("Chat");
     expect(review()?.textContent ?? "", "the review went away on a tab switch once it was seen").toContain("Nothing new tonight");
     expect(closes()).toHaveLength(1);
   });
