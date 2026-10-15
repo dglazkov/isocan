@@ -62,6 +62,12 @@ export declare const DEFAULT_COMMAND_CATALOGUE: readonly [{
     readonly usage: "[what you want to build]";
     readonly source: "built-in";
 }, {
+    readonly name: "vocabulary";
+    readonly description: "Your design vocabulary: words you use, words seen, words the agent learned";
+    readonly usage: "";
+    readonly source: "built-in";
+    readonly local: true;
+}, {
     readonly name: "goodnight";
     readonly description: "Stopping for the day: agree what the lead agent works on overnight";
     readonly usage: "[what is on your mind]";

@@ -168,7 +168,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `goodnight start|plan|read|note|fill|done|untick|show|review` — the night watch: a talk, a note and promised frames, the morning review (`proactive`)
 - `explain <item>` — how an item got here: the versions that mattered and why, the roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
 - `ripple [item]` — a screen's settled edits read against every other screen, your read-back and previews, the person's altitude; no item: the pulse (`proactive`)
-- `stuck [item]` — tries that all missed: ask, don't guess again (`proactive`)
+- `stuck [item]` — tries that missed: ask, don't guess; `walk [flow]` — a flow as simulated people see it (`proactive`)
 - `words` — a screen's words as a copy deck; `--apply` rewords strings and touches nothing else; `words vary` makes N voices as variations; `words mix` folds a per-string pick of them home; `words lint` checks them against DESIGN.md's Voice
 - `doc status` — where one of this repo's documents stands
 
@@ -3708,6 +3708,9 @@ in the web app drives:
   filter flags. Browsing does not admit you; opening an address uses the normal
   door. Public catalogue and entry pages ask crawlers not to index them; that
   instruction is not a confidentiality boundary or a crawler guarantee.
+- `isocan share` prints a **desk check** first — audit, contrast, words,
+  wires behind, stale receipts, critics set to *before I share* — and
+  `isocan share --check` runs it alone. It never blocks (topic `proactive`).
 - `isocan share --link off` — new arrivals are turned away **and the people
   who got in on that link are expelled**. It prints how many. Anyone another
   grant still covers stays, which is why the line can say "3 expelled, 1 kept
@@ -3992,7 +3995,7 @@ then fix the cause rather than the symptom. Do not loop on the door, and do
 not delete your identity file to "start clean" — that is the one action that
 makes this refusal certain.
 
-<!-- topic: proactive | speaking first without speaking over — proposals beneath an item, their cites and why, the cap, the taste note, the night watch (`/goodnight`), the morning review, Explain's critique, the brief card (`design card`), `ripple` and `stuck` -->
+<!-- topic: proactive | speaking first without speaking over — proposals, their cites and cap, the taste note, `/goodnight` and the morning review, Explain's critique, the brief card, `ripple`, `stuck`, critics, the desk check, `walk`, vague words -->
 
 ## Proposals: work beside the person's, never over it
 
@@ -4268,6 +4271,134 @@ isocan stuck Header --question \
 
 With nothing to answer, the person's card still shows what the behaviour
 says and that the question waits.
+
+## Critics in the room: you wear the lenses
+
+A critic in the room is a **lens** — a card on the canvas named for what it
+looks for ("The Reductionist": *cut until it breaks, then add one thing
+back*), never for a person — that the person switched on. You, the lead,
+wear it: its notes are yours, posted as that critic, and its pin wears its
+colour. **Critics never edit; only you act, and only when asked.**
+
+The person sets each critic up (`isocan critic add reductionist`, `isocan
+critic new "The Purist" --lens "One typeface, nothing decorative" --refs
+"Swiss railway signage"`, `isocan critic set <critic> --on|--off --loud
+blockers|studio|everything --when pause|share|asked`; `isocan critic ls`
+lists them with their settings). A crit reaches you as a Chat message that
+starts `Crit, please (<item>@<version>…)` and names the critics, from the
+person (`isocan critique <item>`, or `--as reductionist,brand-voice`), from
+their pause, or from the desk check before a share. Answer it:
+
+```sh
+isocan get <item>          # the screen, once; read it, not the threads
+isocan critique note <item> --as reductionist --at 0.5,0.2 --kind risk \
+  "The promotion banner competes with the order button. Cut it."
+isocan critique note <item> --as brand-voice --at 0.52,0.22 --kind working \
+  "The banner's red is the only thing that says Acme. Leave it."
+isocan critique read <item> --post --say "Reduction against recognition: the banner is the noise and the brand."
+```
+
+- **Each lens on its own, from the screen alone.** Write every lens's notes
+  before you read any back, and never let one lens answer another's note.
+  Read them together only with `critique read`.
+- **Each says what its volume allows.** *Blockers only* says blockers;
+  *studio crit* the few that matter (three at most); *everything* up to
+  eight. A note quieter or one more than that is refused. A lens with
+  nothing to say at its volume says nothing; the read names it.
+- **The read of the room** is agree, split and blocker, folded from the
+  notes (`critique read <item>`); your `--say` names each tension in design
+  words. **Never average a split, and never pick a side**: a split is the
+  person's to choose.
+- **Build both** is the person's: on a split they press it (or run
+  `isocan critique both <a>+<b>`) and you are asked, in the Chat, for two
+  proposals — `isocan propose <item> <file> --cites critic:<note> --why …`,
+  one per side. Leave the screen as it is.
+
+## The desk check before a share
+
+`isocan share` and `isocan present <item>` read the canvas first and print a
+desk check above their own lines: the design audit, the system's contrast,
+the words against DESIGN.md's Voice, wires behind their design system, stale
+design receipts, and the critics set to *before I share* — who are asked of
+you as a crit, with the findings, once per screen version. `isocan share
+--check` runs it alone and changes nothing. **It reports; it never blocks**:
+a blocker a critic raises is a warning in the room, not a gate.
+A walk is not part of the check; it is offered as its last line.
+
+## Walk it as someone else
+
+A person asks for a walk of a task over a flow — a group of screens (reading
+order), a wire prototype (its links, from where it opens), or one screen —
+as one or more **walkers**: each one situation and one constraint, never a
+biography. The starters are `one-handed` (a phone in one hand, the right
+thumb), `low-vision` (about 20/80, at reading distance), `screen-reader` and
+`first-time`; a person can describe another (`--as "commuter: one hand on a
+strap, reading on a moving bus"`). **They are simulations**: every surface
+says so, and so do you — they never replace testing with people.
+
+```sh
+isocan walk "Order a loaf"                                   # the lanes, measured; writes nothing
+isocan walk "Order a loaf" --task "order a loaf for Saturday" --as one-handed --as low-vision
+```
+
+What can be measured is measured, from the screens' own code, and you never
+narrate over it: thumb reach and target size where the CSS places a target
+(44×44 outside the thumb's easy zone, 24×24 anywhere), contrast against
+WCAG with what low vision sees and the nearest fix, names and roles for a
+screen reader. Each finding has an id per screen (`3.1`). The first-time
+walker and described ones are yours to judge; their pins say so.
+
+The ask reaches you, the lead, in the Chat: "Walk it as someone else, please
+(…)" with the screens at their versions, each walker and what was measured.
+Walk each one through the task in order, then answer once:
+
+```sh
+isocan walk --stumble "one-handed | Checkout | 3.1 | Could not reach Help in the corner." \
+  --stumble "low-vision | Checkout | 3.1 | Could not see Edit beside the time." \
+  --stumble "first-time | Choose a day | judged | Did not know “slot” meant a pickup time." \
+  --outcome "one-handed | stumbled | Reached Pay, not Help." \
+  --outcome "low-vision | stumbled | Could not find Edit." --outcome "first-time | made it | …" \
+  --shared "Checkout | The secondary actions are faint and out of the thumb's reach." \
+  --fix checkout-fix.html --why "Contrast and target size: Edit darkens to 7:1 and Help grows to 48 px."
+```
+
+- **A measured walker's stumble cites what was measured on that screen** (its
+  id), or says `judged` — and a judged pin says it was not measured.
+- **Every walker ends once** — made it, stumbled or gave up — and an ending
+  agrees with the pins: no "made it" after a stumble, no "gave up" without one.
+- **Where two or more walkers stumbled on one screen, name it** (`--shared`)
+  and make **one fix**: a proposal beneath that screen citing `walk:<id>`,
+  under the cap. The walk writes the pins (comments worn as each walker), the
+  record in the Chat and that proposal — nothing else, and never the screen.
+
+`isocan walk [walk]` reads a walk back: the lanes, your pins and outcomes,
+the shared finding and the fix, or why it waits.
+
+## Say it like a designer: ask for the reading, never guess
+
+Some words a person types read more than one way: "make the header **pop**"
+is contrast, scale or colour; "it feels **cramped**" is spacing, density or
+size. The Chat underlines only those words as the person types, shows the
+three readings, and offers the sentence a designer would say (Tab takes it;
+Enter sends their own words, unchanged — both are fine, and nothing is
+graded). When they pick a reading, it travels with the message as data:
+`readings: [{ word: "pop", reading: "contrast" }]` on the comment.
+
+- **Honour a picked reading.** It is what they meant; do not re-read the word.
+- **No reading picked, and the word is in the list? Ask, in one line,
+  naming the three** — "pop as more contrast, more scale, or more colour?" —
+  rather than guess. `isocan words read "<their sentence>"` prints the
+  readings and the designer's sentence; `--pick pop=contrast` follows one.
+  It prints "nothing here reads more than one way" for a clear ask.
+- **Say it back in design words** when you answer, once, without
+  correcting them: "raised the header's contrast" teaches "contrast".
+- **Learn their own words.** When a person names something their way ("the
+  thumb button"), add it to the taste note, quoted, so the next agent uses it
+  back — and it shows in their vocabulary panel as a word you learned:
+
+```sh
+isocan taste '"the thumb button" means the main action, within thumb reach'
+```
 
 <!-- topic: reference | every verb with its flags, the older spellings, and the fine print -->
 

@@ -241,12 +241,28 @@ export interface Comment {
     /** A person deleted this proposal (an item id); its author is asked what it taught — see `proposal.ts`. */
     deleted?: string;
     /**
+     * A critic's note worn by the lead (proactive-agent phase 8, design §9):
+     * the critic card's name (`critique.critic`), so one actor is accountable
+     * for the words and the canvas colours the pin in the critic's colour.
+     */
+    persona?: string;
+    /**
      * A turn of a goodnight conversation that machinery reads (proactive-agent
      * phase 2, `goodnight.ts`): `plan`, the person saying "That's the plan";
      * `brief`, the agent's account of the night, a `record` naming its note —
      * what the morning review finds it by.
      */
     goodnight?: GoodnightMark;
+    /**
+     * The readings a person picked for their own vague words (proactive-agent
+     * phase 10, `vague-words.ts`): "pop" read as `contrast`. The body is what
+     * they typed, untouched; this says which way they meant it, and an agent
+     * honours it rather than guessing.
+     */
+    readings?: Array<{
+        word: string;
+        reading: string;
+    }>;
     /** Item ids #-referenced in the body, resolved at authoring time against
      * the live items the author could see. Absent on older comments. */
     items?: string[];

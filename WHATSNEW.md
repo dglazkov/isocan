@@ -23,6 +23,32 @@ second week.
 
 ## 14 October 2026
 
+- **Say it like a designer.** Type "make the header pop more, it feels
+  cramped" and only *pop* and *cramped* are underlined, each with the three
+  ways an agent could read it and the sentence a designer would say. Tab
+  takes that sentence; Enter sends your own words, and a reading you picked
+  goes with them. `/vocabulary` shows the design words you now use and the
+  words of yours the agent has learned. Nothing is graded.
+
+- **Walk it as someone else.** Pick a flow, say the task, and walk it
+  one-handed on a phone, with low vision, with a screen reader, as a
+  first-time visitor, or as someone you describe in a line. Each walker gets
+  a lane: the thumb's reach over each screen, the screen as low vision sees
+  it beside the fix, the reading order. The agent pins each stumble and
+  proposes one fix where several stumble. These are simulations, and every
+  surface says so: they do not replace testing with people. `isocan walk`.
+
+- **Critics in the room.** Switch on lenses for a canvas (The Reductionist,
+  The Brand Voice, or one you describe in a line), each with how loud and
+  when. Ask the room about a screen and pins land in each critic's colour;
+  the read of the room says where they agree, where they split (never
+  averaged, with **Build both**) and any blocker. Critics never edit.
+  Settings → Experiments → Critique; `isocan critic`, `isocan critique`.
+- **A desk check before you share.** `isocan share` and `isocan present`
+  first read your screens the way a reviewer would (audit, contrast, words,
+  stale receipts) and ask the critics you set to "before I share". It
+  reports and never blocks. `isocan share --check` runs it alone.
+
 - **Stuck, said out loud.** When three takes in a row at the same thing
   have missed, your next ask gets a question instead of a fourth take: the
   agent says it has been guessing and what it noticed in what you kept, then

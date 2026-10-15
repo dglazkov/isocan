@@ -30,6 +30,21 @@ export interface ModuleEdge {
     to: Item;
 }
 /**
+ * **A flow a module plays** (proactive-agent phase 9, design §11: "a walk
+ * follows a real path"): the screens one item stands for — a wireframe
+ * prototype's kept screens — the one it opens on, and where each screen's
+ * hotspots go. Item ids. Core walks it (`walk.ts`, `walkFlow`); the module
+ * only says what its own file means.
+ */
+export interface WalkGraph {
+    start: string;
+    screens: readonly string[];
+    links: readonly {
+        from: string;
+        to: string;
+    }[];
+}
+/**
  * **A kind a module adds** (phase 2): a mime first, because the file is the
  * truth — `itemKind()` asks the registry before its own mime tests, and with
  * the module gone the same file falls through to whatever the built-ins call
@@ -112,6 +127,8 @@ export interface CoreModule {
     groupIdentityProperties?: readonly string[];
     contextPieces?: (canvas: CanvasContents) => ContextPiece[];
     edges?: (canvas: CanvasContents) => ModuleEdge[];
+    /** The flow an item of this module's plays, read from its file — or null when it is not one (a walk's path; `WalkGraph`). */
+    walkFlow?: (item: Item, html: string) => WalkGraph | null;
     kinds?: readonly ModuleKind[];
     /** Marks on items, each a property — drawn on the item, toggled from its menu and a key. */
     marks?: readonly ModuleMark[];
@@ -381,6 +398,21 @@ export interface WebHost {
      * parked, nobody will.
      */
     runCommand: (text: string) => Promise<"local" | "posted">;
+    /**
+     * **Who leads here, for this viewer** (proposed: `host`; proactive-agent
+     * phase 8) — the night watch's reading (`nightLead`, `nightAnswerable`):
+     * the agent the canvas names with `proactive=`, else its first standing
+     * agent, and why it cannot answer this viewer (null when it can). A module
+     * that asks the lead — the critique module's room — addresses one agent,
+     * not every parked one. Absent on an older host: say nothing leads.
+     */
+    lead?: () => Promise<{
+        lead: {
+            id: string;
+            name: string;
+        } | null;
+        cannot: string | null;
+    }>;
     /**
      * **Take back this viewer's last change** (proposed: `host`, voice-agent
      * phase 7, 30 Sep 2026) — exactly what ⌘Z does: the home's actor-scoped

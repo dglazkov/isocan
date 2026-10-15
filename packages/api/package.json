@@ -16,7 +16,8 @@
     "./design-decision": "./src/design-decision-reader.ts",
     "./design-review": "./src/design-review.ts",
     "./design-repair": "./src/design-repair-reader.ts",
-    "./design-craft": "./src/design-craft-reader.ts"
+    "./design-craft": "./src/design-craft-reader.ts",
+    "./desk-check": "./src/desk-check-reader.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

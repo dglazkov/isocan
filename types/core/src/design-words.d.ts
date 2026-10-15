@@ -43,4 +43,6 @@ export declare function plainReadings(text: string): {
     term: string;
     means: string;
 }[];
+/** **Every term the glossary defines** — what the vocabulary panel (§12) counts as a design word. */
+export declare function glossaryTerms(): string[];
 export {};

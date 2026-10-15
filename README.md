@@ -434,6 +434,45 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   extremes**, or **Name a product that gets it right**. With nothing to
   answer, the card still says what it saw and that the question waits.
   `isocan stuck [item]` prints the same.
+- **Critics in the room**: switch on lenses — *The Reductionist*, *The Brand
+  Voice*, or one you describe in a line, after work you admire, never a
+  person — each with *how loud* (blockers only, studio crit, everything) and
+  *when* (when you pause, before you share, only when asked). The lead agent
+  wears them over a screen: pins land in each critic's colour, and the read
+  of the room says where they **agree**, where they **split** — never
+  averaged, with **Build both** making two proposals — and any **blocker**.
+  Critics never edit. `isocan critic add|new|set|ls` and `isocan critique
+  <item> [--as …]`; in the app, *Critics in the room* behind Settings →
+  Experiments → Critique.
+- **A desk check before you share**: `isocan share` and `isocan present`
+  first read the screens as a reviewer would — the design audit, contrast,
+  the words against the Voice, wires behind the design system, stale
+  receipts — and ask the critics set to *before I share*. It reports; it
+  never blocks. `isocan share --check` runs it alone.
+- **Walk it as someone else**: pick a flow — a group of screens, a wire
+  prototype, or one screen — say the task, and walk it one-handed on a phone,
+  with low vision, with a screen reader, as a first-time visitor, or as
+  someone you describe in a line (a situation and a constraint, never who
+  they are). A lane per walker draws the screens as they meet them: the
+  thumb's reach over each phone screen, the screen blurred and washed out for
+  low vision with the failing words shown as they see them beside the fix,
+  the reading order for a screen reader. What the screens' code can say is
+  measured; the lead agent walks the task, pins each stumble where it
+  happens, ends each lane (made it, stumbled, gave up), and where several
+  stumble on one screen, names it and proposes one fix. **They are
+  simulations, and say so: they do not replace testing with people.** From an
+  item's menu, or `isocan walk <flow> --task "…" [--as …]`.
+- **Say it like a designer**: type "make the header pop more, it feels
+  cramped" in the Chat and only *pop* and *cramped* are underlined, each with
+  the three ways an agent could read it (contrast, scale, colour; spacing,
+  density, size) and the sentence a designer would say. Tab takes that
+  sentence; Enter sends your own words, unchanged — both are fine, and a
+  reading you pick travels with the message so the agent need not guess.
+  Ordinary asks get no underline at all. `/vocabulary` shows the design
+  words you now use, the ones you have seen and not used, and your own words
+  the agent has learned, with *when I am vague* (offers fade as your asks
+  sharpen; always; never). Nothing is graded. `isocan words read "<sentence>"`
+  prints the same readings.
 - **A screen's words as data**: `isocan words <item>` prints its copy deck,
   every string in reading order with a role (heading, button, placeholder,
   error…) and an address. `--apply` takes the deck back with a `to` beside

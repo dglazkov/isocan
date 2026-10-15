@@ -52,10 +52,11 @@ export type ProposalConfidence = "sure" | "hunch";
 /**
  * What can prompt a proposal (design §2.3): a comment, an op by seq, an item
  * version, a DESIGN.md version, a brief fact, a promise, a docket finding,
- * a critic's note, or an Explain critique (`explain:<comment>`, phase 4).
+ * a critic's note, an Explain critique (`explain:<comment>`, phase 4), or a
+ * walk (`walk:<the ask's comment>`, phase 9).
  * The kind is checked; the ref is the kind's own id.
  */
-export declare const CITE_KINDS: readonly ["comment", "op", "version", "design", "brief", "promise", "docket", "critic", "explain"];
+export declare const CITE_KINDS: readonly ["comment", "op", "version", "design", "brief", "promise", "docket", "critic", "explain", "walk"];
 /** One trigger a proposal cites. */
 export interface ProposalCite {
     kind: (typeof CITE_KINDS)[number];
