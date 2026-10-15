@@ -535,6 +535,7 @@ function groupChangeItemIds(op) {
 var init_canvas_groups = __esm({
   "packages/core/src/canvas-groups.ts"() {
     "use strict";
+    init_model();
     init_annotation();
     init_drawing();
     init_errors();

@@ -31,8 +31,9 @@ export interface CopyBytesPort {
     /** sha256, hex — the same spelling the store addresses blobs by. */
     digest(bytes: Uint8Array, signal?: AbortSignal): Promise<string>;
 }
-/** Every face the frozen source snapshot needs: each item's current version
- *  and its visual face, deduplicated, because two items may share bytes. */
+/** Every face the frozen source snapshot needs: each item's current version,
+ *  its visual face, and any named fidelity faces, deduplicated, because two
+ *  items may share bytes. */
 export declare function copyFaces(items: readonly Item[]): CopyFace[];
 /** Read and verify every face; upload it too when the destination is another
  *  canvas, where a blob is addressed per canvas and the bytes have to be put

@@ -1,0 +1,1 @@
+import{g as r,b4 as i,b5 as c,A as d,b6 as p}from"./index-Bz3-d5Tp.js";function u(a,o){const e=r.getState();if(e.canvasId!==a)return;const t=e.canvas?.threads[o];if(t?.main)i(a,!0);else if(t&&e.canvas){const s=c(e.canvas,t),n=d.getState();n.setViewport(p(n.viewport,s.x,s.y,window.innerWidth,window.innerHeight)),n.setOpenThread(t.id)}}export{u as openConversation};

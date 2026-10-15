@@ -140,7 +140,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **Items** (`items`)
 - `add <thing> [--as file|site|doc|canvas]` — one door for a file, a site, a Google Doc or a canvas
-- `text`, `inline`, `get`, `show`, `ls [--kind|--filter|--summaries]`, `set`, `edit`, `tree`, `save` — make, read, change, write out; `summary [--refresh|--stats]` — the ≈ summary
+- `text`, `inline`, `get`, `show`, `ls [--kind|--filter|--summaries]`, `set`, `edit`, `face`, `tree`, `save` — make, read, change, switch face, write out; `summary [--refresh|--stats]` — the ≈ summary
 - `version ls|promote|prune` — the version stack (prune ⚠)
 - `mv`, `align`, `distribute`, `fit`, `tidy`, `merge`, `react`, `copy` — arrange, mark, duplicate
 - `rm`, `restore`, `trash ls|restore|empty` (empty ⚠), `undo`, `redo` — take back

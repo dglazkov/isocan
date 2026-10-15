@@ -1,6 +1,6 @@
 import type { TextAnchor } from "./text-anchor.js";
 import type { GroupAction, GroupCell, GroupPlacementPolicy } from "./canvas-group-types.js";
-import type { Actor, Comment, CommentThread, ItemVersion, VisualFace } from "./model.js";
+import type { Actor, Comment, CommentThread, ItemVersion, NamedFaceId, VisualFace } from "./model.js";
 /**
  * The operation vocabulary — the isomorphism contract. Every mutation the web
  * app or the CLI can perform is one of these, sent to the daemon's single
@@ -24,6 +24,8 @@ export interface NewVersion {
     size: number;
     /** Optional visual face (canvas iframe presentation, visualizer, inlined HTML). */
     visual?: VisualFace;
+    /** Optional named fidelity faces (`wireframe`, `mid-fi`, `hi-fi`, `prototype`). */
+    faces?: Partial<Record<NamedFaceId, VisualFace>>;
 }
 /**
  * Where to put a new item. Clients may pass an anchor (their locally selected
@@ -343,6 +345,9 @@ export type Operation = {
      * filename is a property of the version, which is why it rides here
      * rather than in the patch (which canvases share). */
     filename?: string;
+    /** Attach, update, or remove (when `null`) named fidelity faces on the
+     * current version without minting a new version history entry. */
+    faces?: Partial<Record<NamedFaceId, VisualFace | null>>;
 } | {
     type: "item.addVersion";
     itemId: string;

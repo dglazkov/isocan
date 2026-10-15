@@ -99,6 +99,23 @@ export interface VisualFace {
     size?: number;
 }
 /**
+ * The named fidelity and presentation faces an artifact version can carry
+ * alongside its source and default visual face, ordered from lowest to highest
+ * fidelity so a freshly published wireframe stays the default view until an
+ * explicit `properties.face` selection switches to a higher-fidelity face.
+ */
+export declare const NAMED_FACE_IDS: readonly ["wireframe", "mid-fi", "hi-fi", "prototype"];
+/** One of the named fidelity/presentation faces in `NAMED_FACE_IDS`. */
+export type NamedFaceId = (typeof NAMED_FACE_IDS)[number];
+/** Any selectable face of an item version: source, visual, or a named fidelity face. */
+export type ItemFaceId = "source" | "visual" | NamedFaceId;
+/** Property key on an item or containing group that selects which face to display. */
+export declare const FACE_PROP = "face";
+/** Is `value` one of the canonical named face identifiers? */
+export declare function isNamedFaceId(value: string): value is NamedFaceId;
+/** Human-readable label for a face toggle button in the canvas card or workbench stage. */
+export declare function faceLabel(face: ItemFaceId): string;
+/**
  * One entry in an item's stack: a blob by content hash, and who made it when. Versions are
  * appended, never edited — re-editing an item is `item.addVersion`, so every wording is kept.
  */
@@ -117,32 +134,56 @@ export interface ItemVersion {
      * When absent, renderers fall back to the source face (blobHash).
      */
     visual?: VisualFace;
+    /**
+     * Optional named fidelity faces (`wireframe`, `mid-fi`, `hi-fi`, `prototype`)
+     * attached to this version so an item can progress from wireframe to hi-fi
+     * without minting extra version history entries and can flip between faces.
+     */
+    faces?: Partial<Record<NamedFaceId, VisualFace>>;
     createdAt: string;
     createdBy: Actor;
 }
 /**
  * The face to render visually on the canvas card, in full screen, and in the
- * workbench preview pane. Falls back to the source face (blobHash) when no
- * distinct visual face is defined.
+ * workbench preview pane. Honors `preferredFace` when provided and available on
+ * the version; otherwise falls back to the first named face in `NAMED_FACE_IDS`,
+ * then `version.visual`, then the source face (`blobHash`).
  */
-export declare function visualFaceOf(version: ItemVersion): {
+export declare function visualFaceOf(version: ItemVersion | undefined, preferredFace?: string | null): {
     blobHash: string;
     mimeType: string;
     filename: string;
     size: number;
 };
 /**
+ * Resolve which face ID is currently active for `item`, checking the item's own
+ * `properties.face` first, then walking ancestor groups via `containerId`, and
+ * finally falling back to the version's default visual/named face.
+ */
+export declare function activeFaceIdOf(item: Pick<Item, "properties" | "containerId">, version: ItemVersion | undefined, canvas?: Pick<CanvasContents, "items"> | null): ItemFaceId;
+/**
+ * All distinct faces available on `version` in display order, for the workbench
+ * stage toggle bar and canvas face controls.
+ */
+export declare function availableFacesOf(version: ItemVersion | undefined): ItemFaceId[];
+/**
+ * Blob hashes of HTML faces on `version` other than `activeBlobHash`, so
+ * `HtmlItemView` can pre-warm their iframes in the background for a zero-flash
+ * toggle when switching between wireframe and hi-fi.
+ */
+export declare function warmFacesOf(version: ItemVersion | undefined, activeBlobHash: string): string[];
+/**
  * The source face of the artifact: shown in the workbench editor, inspected via
  * `isocan get`, and synchronized with disk via `isocan save`.
  */
-export declare function sourceFaceOf(version: ItemVersion): {
+export declare function sourceFaceOf(version: ItemVersion | undefined): {
     blobHash: string;
     mimeType: string;
     filename: string;
     size: number;
 };
-/** Is the visual face distinct from the source face? */
-export declare function hasDistinctVisualFace(version: ItemVersion): boolean;
+/** Is a visual or named face distinct from the source face? */
+export declare function hasDistinctVisualFace(version: ItemVersion | undefined): boolean;
 /**
  * One thing on the canvas: a box in world coordinates, a stack of versions, and free-form
  * `properties` — which is where every kind (text node, drawing, area) says what it is.
