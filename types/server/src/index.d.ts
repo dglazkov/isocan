@@ -30,9 +30,11 @@ export { FileWorkstation } from "./file-workstation.js";
  */
 export { admissionIn, liveAdmission, rungOfAdmission, keepsAdmission } from "./grants.js";
 export { Refusals, TakenDownError, RefusedError } from "./takedowns.js";
-export { gatewayBaseFor, readConfigFile, resolveHomeUrl, updateConfigFile } from "./config.js";
+/** Configuration readers, birth-home resolution, and per-home proxy auth lookup (`homeAuth`). */
+export { configuredHomeAuthUrl, gatewayBaseFor, homeAuthFor, readConfigFile, resolveHomeUrl, updateConfigFile, } from "./config.js";
 export { DocRefusal, clearGoogleToken, driveAccount, driveModifiedTime, fetchGoogleDoc, googleTokenFile, readGoogleToken, writeGoogleToken, type FetchedDoc, type GoogleToken, } from "./google.js";
-export type { HomeConfig } from "./config.js";
+/** Machine configuration schema (`~/.isocan/config.json`) and per-home proxy auth types. */
+export type { HomeAuthConfig, HomeAuthEntry, HomeConfig } from "./config.js";
 export { adoptIdentity, askTheDoor, bearerHeader, fileBadgeStore, knockOnDoor, readBadge, writeBadge, writeIdentityName } from "./badge-store.js";
 export type { BadgeStore, DoorAnswer, StoredBadge } from "./badge-store.js";
 export { MINT_PER_MINUTE, TOO_MANY_BADGES } from "./meter.js";

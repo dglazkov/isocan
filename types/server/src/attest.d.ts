@@ -136,6 +136,14 @@ type ProxyPrincipalOutcome = {
  */
 export declare function resolveProxyPrincipal(desk: Desk, engine: Engine, headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null, now?: number): Promise<ProxyPrincipalOutcome | null>;
 /**
+ * Ensure a valid `X-Isocan-Session` (`<harness>:<sessionId>`) on a
+ * proxy-authenticated request is claimed on `badge` before route handling.
+ *
+ * Ignored whenever `proxyAuth` is unset or `attestationFromProxy` returns null,
+ * so local daemons and unauthenticated requests keep explicit session claims.
+ */
+export declare function ensureProxySessionClaim(desk: Desk, engine: Engine, badge: BadgeRecord, headers: IncomingHttpHeaders, proxyAuth: ProxyAuthConfig | null, now?: number): Promise<BadgeRecord>;
+/**
  * What a home with this configuration can verify.
  *
  * `email` when there is an attester, and that is the whole list today.

@@ -165,3 +165,18 @@ export declare function attestedEmail(attestations: readonly Attestation[]): str
  * derive identical default human display names at the door.
  */
 export declare function attestedEmailLocalPart(attestations: readonly Attestation[]): string | null;
+/**
+ * Lowercased HTTP header carrying an agent harness session key
+ * (`<harness>:<sessionId>`) for stateless per-session agent attribution behind
+ * an authenticating reverse proxy.
+ */
+export declare const SESSION_HEADER = "x-isocan-session";
+/**
+ * Validate and normalize an `X-Isocan-Session` header value into a canonical
+ * `<harness>:<sessionId>` session key, or return null when absent or malformed.
+ *
+ * Only non-person, non-replica harnesses (`isAgentHarness(harness) === true`)
+ * with a non-empty printable ASCII `<sessionId>` (`<= 256` total characters, no
+ * whitespace or control characters) are accepted.
+ */
+export declare function parseSessionHeader(raw: string | readonly string[] | undefined | null): string | null;

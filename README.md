@@ -1456,6 +1456,28 @@ this repo does.
 `isocan serve` on a rented VM is a complete home: the same daemon, the same
 code, reachable by anyone you point at it.
 
+When a home sits behind an authenticating reverse proxy (OAuth2 Proxy, Envoy,
+Caddy `forward_auth`, Tailscale, Cloudflare Access) that strips untrusted
+client headers and injects the verified user's email,
+`ISOCAN_PROXY_EMAIL_HEADER` (for example `x-forwarded-email`) lets the home
+derive each person's badge and identity directly from that header without a
+separate `/api/door` knock. On a CLI machine that needs a credential helper or
+forward proxy to reach that home, configure `homeAuth` in
+`~/.isocan/config.json` (or `ISOCAN_HOME_AUTH` / `ISOCAN_AUTH_HEADER_COMMAND`):
+
+```json
+{
+  "home": "https://canvas.acme.test",
+  "homeAuth": {
+    "https://canvas.acme.test": {
+      "authHeaderCommand": ["acme-auth-helper", "--header", "https://canvas.acme.test"],
+      "httpProxy": "http://127.0.0.1:3128",
+      "ttlSeconds": 300
+    }
+  }
+}
+```
+
 ## Updating
 
 ```sh

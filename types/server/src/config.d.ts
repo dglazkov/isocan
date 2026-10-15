@@ -23,6 +23,27 @@ export declare function readConfigFile<T extends object>(home: string): Promise<
  * empty here too, since keeping it would mean keeping the typo.
  */
 export declare function updateConfigFile<T extends object>(home: string, patch: Partial<T>): Promise<void>;
+/**
+ * Per-home credential helper and forward-proxy entry in `~/.isocan/config.json`
+ * (`homeAuth[homeUrl]`) or `ISOCAN_HOME_AUTH`.
+ */
+export interface HomeAuthEntry {
+    /** Argv array, JSON-encoded argv string, or executable path run via `execFile` to print proxy auth headers. */
+    authHeaderCommand?: readonly string[] | string;
+    /** Optional explicit HTTP/HTTPS forward proxy URL for outbound requests to this home. */
+    httpProxy?: string;
+    /** Cache TTL in seconds for headers emitted by `authHeaderCommand` (default `300`). */
+    ttlSeconds?: number;
+}
+/** Normalized per-home credential helper and forward-proxy configuration resolved by `homeAuthFor`. */
+export interface HomeAuthConfig {
+    /** Normalized argv array (`shell: false`) executed to obtain proxy auth headers. */
+    authHeaderCommand?: readonly string[];
+    /** Normalized forward-proxy URL for this home, when configured. */
+    httpProxy?: string;
+    /** Positive cache TTL in seconds, when explicitly configured. */
+    ttlSeconds?: number;
+}
 /** The one key this package reads for itself. */
 export interface HomeConfig {
     /**
@@ -56,7 +77,31 @@ export interface HomeConfig {
      * connections substitute the gateway origin.
      */
     gateways?: Record<string, string>;
+    /**
+     * **Per-home external credential helpers and forward proxies** — keyed by
+     * canonical `homeUrl` (`"https://canvas.acme.test"`), so the CLI can run a
+     * local command (`execFile`, `shell: false`) to obtain short-lived proxy
+     * headers and optionally route through an explicit `httpProxy` without a
+     * background local gateway daemon.
+     */
+    homeAuth?: Record<string, HomeAuthEntry>;
 }
+/**
+ * Resolve the normalized external credential helper and forward-proxy settings
+ * for `homeUrl` (`ISOCAN_HOME_AUTH` JSON map first, then `config.json`'s
+ * `homeAuth`, and `ISOCAN_AUTH_HEADER_COMMAND` when `homeUrl` matches
+ * `ISOCAN_HOME_URL` or `config.json`'s `home` or when no other home is
+ * configured). Loopback URLs are intentionally preserved so local proxy tests
+ * and SSH tunnels work.
+ */
+export declare function homeAuthFor(homeUrl: string, home: string, env?: NodeJS.ProcessEnv): HomeAuthConfig | null;
+/**
+ * Return the single normalized `homeUrl` when `homeAuth` has one entry (in
+ * `ISOCAN_HOME_AUTH` or `config.json`), or `ISOCAN_HOME_URL` / `config.json`'s
+ * `home` when `ISOCAN_AUTH_HEADER_COMMAND` is set. Returns `null` when multiple
+ * homes are configured or no `homeAuth` target is unambiguous.
+ */
+export declare function configuredHomeAuthUrl(home: string, env?: NodeJS.ProcessEnv): string | null;
 /**
  * Resolve the transport dial URL for a canonical `homeUrl`, or `null` when no
  * gateway is configured (`ISOCAN_HOME_GATEWAYS` env JSON first, then `gateways`

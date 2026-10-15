@@ -1,1 +1,0 @@
-import{d7 as o,d8 as r,g as a}from"./index-DRW4voR7.js";async function d(t,e){await o(null,t,{type:"actor.setColor",actorId:t.id,color:e});const s={...a.getState().actorColors};e===null?delete s[t.id]:s[t.id]=e,a.setState({actorColors:s})}async function i(t,e,s=t){await o(null,t,{type:"actor.setMark",actorId:s.id,mark:e}),r(s.id,e)}export{d as a,i as s};

@@ -1780,13 +1780,22 @@ var init_roster = __esm({
 });
 
 // packages/core/src/claims.ts
-var CLAIM_STANDS_MS, CLAIM_REFUSAL;
+var PERSON_HARNESSES, isAgentHarness, CLAIM_STANDS_MS, CLAIM_REFUSAL;
 var init_claims = __esm({
   "packages/core/src/claims.ts"() {
     "use strict";
     init_errors();
     init_ids();
     init_identity();
+    PERSON_HARNESSES = /* @__PURE__ */ new Set(["web", "home", "cli", "person"]);
+    isAgentHarness = (harness) => harness !== null && harness !== void 0 && harness !== "" && !PERSON_HARNESSES.has(harness.toLowerCase()) && // **A relay is not a kind** (14 Oct 2026). `replica:` is the key a daemon
+    // claims under when it carries its person up to a home: transport custody,
+    // not a harness. `bindName` stopped recording it on 14 Sep, and the file
+    // store repaired the rows it had already written, but a hosted home's cloud
+    // store never did — so a person announced by their own laptop before then
+    // still read as an agent there, and folding their browser into that id
+    // turned the browser into one too ("personal canvases belong to people").
+    harness.toLowerCase() !== "replica";
     CLAIM_STANDS_MS = 30 * 60 * 1e3;
     CLAIM_REFUSAL = {
       heldElsewhere: "held-elsewhere",
@@ -2400,9 +2409,25 @@ var init_fit = __esm({
 });
 
 // packages/core/src/attest.ts
+function parseSessionHeader(raw) {
+  const first = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof first !== "string") return null;
+  if (/[\r\n\0]/.test(first)) return null;
+  const trimmed = first.trim();
+  if (!trimmed || trimmed.length > 256 || !/^[\x21-\x7e]+$/.test(trimmed)) return null;
+  const colon = trimmed.indexOf(":");
+  if (colon <= 0 || colon === trimmed.length - 1) return null;
+  const harness = trimmed.slice(0, colon);
+  const sessionId = trimmed.slice(colon + 1);
+  if (!isAgentHarness(harness) || !sessionId) return null;
+  return trimmed;
+}
+var SESSION_HEADER;
 var init_attest = __esm({
   "packages/core/src/attest.ts"() {
     "use strict";
+    init_claims();
+    SESSION_HEADER = "x-isocan-session";
   }
 });
 
@@ -3656,6 +3681,22 @@ var DaemonRoutes = class {
    * so probes never trigger retry budgets, while routing through configured proxies/gateways. */
   probeFetcher = platformFetch;
   /**
+   * Optional session key provider (`<harness>:<sessionId>`) for stateless
+   * per-session agent attribution (`X-Isocan-Session`). Populated by
+   * `DaemonClient` from the ambient harness session when not overridden by
+   * `isBadgeUpstream`, `--as`, or an enrolled `agent:` identity.
+   */
+  sessionKey;
+  /** Configure or suppress the `X-Isocan-Session` header sent on HTTP requests. */
+  useSessionKey(provider) {
+    this.sessionKey = typeof provider === "function" ? provider : () => provider;
+  }
+  async sessionHeaders() {
+    const raw = await this.sessionKey?.();
+    const valid = parseSessionHeader(raw);
+    return valid ? { [SESSION_HEADER]: valid } : {};
+  }
+  /**
    * Every request carries the badge, and a refused one heals itself and comes
    * straight back. This is what makes neither the door nor the membership
    * check a breaking change: a CLI that has never seen a badge, whose home was
@@ -3668,8 +3709,15 @@ var DaemonRoutes = class {
   async request(method, url2, body, signal, extra) {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
+    const isClaimOp = body !== null && typeof body === "object" && body.op?.type === "actor.claim";
     const send = async () => {
-      const headers = { ...await this.authHeader(), [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES, ...extra, ...this.policyHeaders() };
+      const headers = {
+        ...await this.authHeader(),
+        ...isClaimOp ? {} : await this.sessionHeaders(),
+        [CLIENT_FEATURES_HEADER]: CURRENT_CLIENT_FEATURES,
+        ...extra,
+        ...this.policyHeaders()
+      };
       signal?.throwIfAborted();
       if (body !== void 0) headers["Content-Type"] = "application/json";
       return this.fetcher(`${this.base}${url2}`, {
@@ -4591,12 +4639,13 @@ var DaemonRoutes = class {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const auth = await this.authHeader();
+      const [auth, session] = await Promise.all([this.authHeader(), this.sessionHeaders()]);
       signal?.throwIfAborted();
       return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs`, {
         method: "POST",
         headers: {
           ...auth,
+          ...session,
           ...this.policyHeaders(),
           "Content-Type": mimeType,
           [FILENAME_HEADER]: encodeFilename(filename)
@@ -4616,7 +4665,7 @@ var DaemonRoutes = class {
     signal = this.requestSignal(signal);
     signal?.throwIfAborted();
     const send = async () => {
-      const headers = { ...await this.authHeader(), ...this.policyHeaders() };
+      const headers = { ...await this.authHeader(), ...await this.sessionHeaders(), ...this.policyHeaders() };
       signal?.throwIfAborted();
       return this.fetcher(`${this.base}/api/projects/${canvasId}/blobs/${blobHash}`, {
         headers,

@@ -156,3 +156,5 @@ export declare const bindingsFile: (home: string) => string;
  * `POST /api/home/join`, which goes through the daemon like everything else.
  */
 export declare const homesFile: (home: string) => string;
+/** Short-lived credential-helper cache (`auth-cache/<sha256>.json`, mode `0600`) for `homeAuth`. */
+export declare const authCacheDir: (home: string) => string;

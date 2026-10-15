@@ -149,6 +149,16 @@ export declare class DaemonRoutes {
      * so probes never trigger retry budgets, while routing through configured proxies/gateways. */
     protected probeFetcher: typeof fetch;
     /**
+     * Optional session key provider (`<harness>:<sessionId>`) for stateless
+     * per-session agent attribution (`X-Isocan-Session`). Populated by
+     * `DaemonClient` from the ambient harness session when not overridden by
+     * `isBadgeUpstream`, `--as`, or an enrolled `agent:` identity.
+     */
+    protected sessionKey?: () => Promise<string | null> | string | null;
+    /** Configure or suppress the `X-Isocan-Session` header sent on HTTP requests. */
+    useSessionKey(provider: (() => Promise<string | null> | string | null) | string | null): void;
+    private sessionHeaders;
+    /**
      * Every request carries the badge, and a refused one heals itself and comes
      * straight back. This is what makes neither the door nor the membership
      * check a breaking change: a CLI that has never seen a badge, whose home was
