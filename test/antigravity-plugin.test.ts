@@ -12,7 +12,7 @@ import { agentEnv, findBinding, personEnv, resolveCli, workspacePaths } from "..
 // @ts-expect-error — as above.
 import { claimedName, sessionStart } from "../plugins/antigravity/scripts/session-start.mjs";
 // @ts-expect-error — as above.
-import { canvasRef, createPane, createServer, hostRoutes, isLoopback, loadPresets, sidecarDir, tabAddress } from "../plugins/antigravity/sidecars/canvas/main.mjs";
+import { canvasRef, createPane, createServer, hostRoutes, isLoopback, sidecarDir, tabAddress } from "../plugins/antigravity/sidecars/canvas/main.mjs";
 import { defaultTarget, installAntigravityPlugin, uninstallAntigravityPlugin } from "../packages/cli/src/antigravity-plugin.ts";
 
 /**
@@ -93,16 +93,6 @@ function fakeRun(answers: Record<string, string | Error> = {}) {
 }
 
 const SAVED = "identity saved: Acme Bot (usr_acme1) → /acme/.isocan/actors.json (antigravity session)\n";
-
-const SCAN = {
-  harnesses: [
-    { name: "claude-code", runnable: true, pinsModel: true },
-    { name: "acme-agent", runnable: true, pinsModel: false },
-    { name: "codex", runnable: false, pinsModel: true },
-  ],
-  default: "acme-agent",
-  source: "config",
-};
 
 describe("the plugin reads a folder's canvas exactly as the daemon does", () => {
   /** Both walks, from one directory, with the user's home at `userHome`. */
@@ -363,16 +353,8 @@ describe("the canvas pane's routes", () => {
     ...extra,
   });
 
-  it("shows the folder, its canvas, and the Agents bar as it would really run here", async () => {
+  it("shows the folder, its canvas, and the live sessions on it", async () => {
     const home = dir("isocan-home-agents");
-    fs.writeFileSync(
-      path.join(home, "rc-agents.json"),
-      JSON.stringify([
-        { canvasId: "prj_acme", actorId: "usr_bram", name: "Bram", harness: "acme-agent", model: "barium" },
-        { canvasId: "prj_acme", actorId: "usr_ada", name: "Ada", harness: "acme-agent", model: null },
-        { canvasId: "prj_other", actorId: "usr_orla", name: "Orla", harness: "claude-code", model: "claude-opus-5-5" },
-      ]),
-    );
     fs.writeFileSync(
       path.join(home, "actors.json"),
       JSON.stringify({
@@ -392,9 +374,8 @@ describe("the canvas pane's routes", () => {
     );
     fs.writeFileSync(path.join(home, "sessions", "usr_human.json"), JSON.stringify({ canvasId: "prj_acme", sessionId: "ses_h1" }));
 
-    const { run, calls } = fakeRun({ harness: JSON.stringify(SCAN) });
-    let clock = 1_000;
-    const { routes } = createPane({ env: paneEnv({ ISOCAN_HOME: home }), run, now: () => clock });
+    const { run, calls } = fakeRun();
+    const { routes } = createPane({ env: paneEnv({ ISOCAN_HOME: home }), run });
 
     const state = await routes["/api/workspace"](bindings());
     expect(state).toMatchObject({
@@ -404,7 +385,6 @@ describe("the canvas pane's routes", () => {
       title: "Acme",
       root: acme,
       cli: true,
-      defaultHarness: "acme-agent",
       sessions: [
         {
           actorId: "usr_bot",
@@ -415,25 +395,8 @@ describe("the canvas pane's routes", () => {
           bridge: { at: 42, message: { type: "isocan:focus-item", itemId: "it_hero", zoom: true } },
         },
       ],
-      enrolled: [
-        { actorId: "usr_bram", name: "Bram", harness: "acme-agent", model: "barium" },
-        { actorId: "usr_ada", name: "Ada", harness: "acme-agent", model: null },
-      ],
     });
-    const byId = Object.fromEntries(state.presets.map((p: { id: string }) => [p.id, p]));
-    expect(byId.opus).toMatchObject({ name: "Orla", runsOn: "claude-code", runnable: true, enrolled: false, pinsModel: true });
-    expect(byId.barium).toMatchObject({ name: "Bram", harness: null, runsOn: "acme-agent", runnable: true, enrolled: true, pinsModel: false });
-    expect(byId.codex).toMatchObject({ name: "Cole", runsOn: "codex", runnable: false, enrolled: false, model: null, pinsModel: null });
-
-    // One scan per minute, however often the pane asks — and as the person.
-    await routes["/api/workspace"](bindings());
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ args: ["--json", "harness"], cwd: os.homedir() });
-    expect(calls[0]?.env).not.toHaveProperty("ANTIGRAVITY_CONVERSATION_ID");
-    expect(calls[0]?.env).not.toHaveProperty("ISOCAN_CANVAS");
-    clock += 61_000;
-    await routes["/api/workspace"](bindings());
-    expect(calls).toHaveLength(2);
+    expect(calls).toEqual([]);
   });
 
   it("identifies an Antigravity conversation face even when actors.json is absent (direct mode)", async () => {
@@ -459,7 +422,7 @@ describe("the canvas pane's routes", () => {
     );
     const { routes } = createPane({
       env: paneEnv({ ISOCAN_HOME: home }),
-      run: fakeRun({ harness: JSON.stringify(SCAN) }).run,
+      run: fakeRun().run,
       now: () => 1_000,
     });
     const state = await routes["/api/workspace"](bindings());
@@ -473,25 +436,6 @@ describe("the canvas pane's routes", () => {
         conversationId: "conv-direct",
       },
     ]);
-  });
-
-  it("still shows the presets when the scan fails or the CLI is too old to say what pins", async () => {
-    const failing = createPane({ env: paneEnv(), run: fakeRun({ harness: new Error("isocan harness: boom") }).run });
-    const blind = await failing.routes["/api/workspace"](bindings());
-    expect(blind.harnessError).toBe("isocan harness: boom");
-    expect(blind.presets.every((p: { runnable: boolean; pinsModel: unknown }) => !p.runnable && p.pinsModel === null)).toBe(true);
-
-    const old = { harnesses: [{ name: "claude-code", runnable: true }], default: "claude-code" };
-    const dated = createPane({ env: paneEnv(), run: fakeRun({ harness: JSON.stringify(old) }).run });
-    const opus = (await dated.routes["/api/workspace"](bindings())).presets.find((p: { id: string }) => p.id === "opus");
-    expect(opus).toMatchObject({ runnable: true, pinsModel: null });
-
-    const broken = path.join(dir("presets"), "presets.json");
-    fs.writeFileSync(broken, JSON.stringify({ presets: 3 }));
-    const mis = createPane({ env: paneEnv({ ISOCAN_ANTIGRAVITY_PRESETS: broken }), run: fakeRun({ harness: JSON.stringify(SCAN) }).run });
-    const said = await mis.routes["/api/workspace"](bindings());
-    expect(said.presets).toEqual([]);
-    expect(said.presetsError).toContain('expected a "presets" list');
   });
 
   it("mints the frame's address in the bound folder, with a plain one for a tab", async () => {
@@ -509,19 +453,18 @@ describe("the canvas pane's routes", () => {
 
   it("binds an unbound folder to a named canvas, or to a new one, and refuses a bound one", async () => {
     const byLink = dir("acme-link");
-    const linked = fakeRun({ harness: JSON.stringify(SCAN), use: "bound\n" });
+    const linked = fakeRun({ use: "bound\n" });
     const pane = createPane({ env: paneEnv(), run: linked.run });
     await pane.routes["/api/bind"]({ workspaceUris: [byLink], ref: "https://isocan.io/p/prj_acme7?embed=1#pass" });
     expect(linked.calls.find((c) => c.args[0] === "use")).toMatchObject({ args: ["use", "prj_acme7"], cwd: byLink });
     expect(linked.calls.some((c) => c.args.includes("canvas"))).toBe(false);
 
     const fresh = dir("acme-fresh");
-    const created = fakeRun({ harness: JSON.stringify(SCAN), "canvas new": JSON.stringify({ canvasId: "prj_acmenew" }), use: "bound\n" });
+    const created = fakeRun({ "canvas new": JSON.stringify({ canvasId: "prj_acmenew" }), use: "bound\n" });
     const again = createPane({ env: paneEnv(), run: created.run });
     await again.routes["/api/bind"]({ workspaceUris: [fresh] });
     await again.routes["/api/bind"]({ workspaceUris: [dir("acme-titled")], title: "Acme Board" });
-    const acts = created.calls.filter((c) => c.args[0] !== "--json" || c.args[1] !== "harness").map((c) => c.args);
-    expect(acts).toEqual([
+    expect(created.calls.map((c) => c.args)).toEqual([
       ["--json", "canvas", "new", path.basename(fresh)],
       ["use", "prj_acmenew"],
       ["--json", "canvas", "new", "Acme Board"],
@@ -530,27 +473,6 @@ describe("the canvas pane's routes", () => {
 
     await expect(again.routes["/api/bind"](bindings())).rejects.toThrow("already bound");
     await expect(again.routes["/api/bind"]({ workspaceUris: [] })).rejects.toThrow("has not said which folder");
-  });
-
-  it("enrols a standing agent from a preset or outright, in the bound folder", async () => {
-    const enrolled = (name: string) => JSON.stringify({ enrolled: { id: `usr_${name.toLowerCase()}`, name }, canvasId: "prj_acme" });
-    const { run, calls } = fakeRun({ "rc add": enrolled("Orla") });
-    const { routes } = createPane({ env: paneEnv(), run });
-
-    const orla = await routes["/api/model-agent"]({ ...bindings(), presetId: "opus" });
-    expect(orla).toEqual({ enrolled: { id: "usr_orla", name: "Orla" }, canvasId: "prj_acme", harness: "claude-code", model: "claude-opus-5-5" });
-    await routes["/api/model-agent"]({ ...bindings(), presetId: "barium" });
-    await routes["/api/model-agent"]({ ...bindings(), name: "Ada", harness: "acme-agent" });
-    expect(calls.map((c) => c.args)).toEqual([
-      ["--json", "rc", "add", "Orla", "--dir", acme, "--harness", "claude-code", "--model", "claude-opus-5-5"],
-      ["--json", "rc", "add", "Bram", "--dir", acme, "--model", "barium"],
-      ["--json", "rc", "add", "Ada", "--dir", acme, "--harness", "acme-agent"],
-    ]);
-    expect(calls.every((c) => c.cwd === acme && c.env["ANTIGRAVITY_CONVERSATION_ID"] === undefined)).toBe(true);
-
-    await expect(routes["/api/model-agent"]({ ...bindings(), presetId: "nope" })).rejects.toThrow('no preset "nope"');
-    await expect(routes["/api/model-agent"](bindings())).rejects.toThrow("an agent needs a name");
-    await expect(routes["/api/model-agent"]({ workspaceUris: [dir("plain")], presetId: "opus" })).rejects.toThrow("not bound");
   });
 
   it("reads what a person pastes, and knows a loopback daemon when it sees one", () => {
@@ -569,27 +491,17 @@ describe("the canvas pane's routes", () => {
     expect(tabAddress("https://acme.example/p/prj_acme?embed=1&view=grid")).toBe("https://acme.example/p/prj_acme?view=grid");
   });
 
-  it("reads presets from the file beside it, or from one a person names", () => {
-    const shipped = loadPresets({});
-    expect(shipped.map((p: { id: string }) => p.id)).toEqual(["opus", "barium", "gemini-pro", "gemini-flash", "codex"]);
-
-    const own = path.join(dir("presets"), "mine.json");
-    fs.writeFileSync(own, JSON.stringify([{ name: "Ada", harness: "acme-agent" }, { label: "no name" }, { name: " " }]));
-    expect(loadPresets({ ISOCAN_ANTIGRAVITY_PRESETS: own })).toEqual([{ id: "ada", name: "Ada", label: "Ada", harness: "acme-agent", model: null }]);
-  });
-
   it("follows <home>/current when the managed build the sidecar booted from is pruned, and catches a missing page cleanly", async () => {
     const home = dir("isocan-home-managed-sidecar");
-    const makeManagedSidecar = (sha: string, presetName: string, markerText: string) => {
+    const makeManagedSidecar = (sha: string, markerText: string) => {
       const sidecar = path.join(home, "builds", sha, "node_modules", "isocan", "plugins", "antigravity", "sidecars", "canvas");
       fs.mkdirSync(path.join(sidecar, "public"), { recursive: true });
-      fs.writeFileSync(path.join(sidecar, "presets.json"), JSON.stringify([{ id: "one", name: presetName, harness: "acme-agent" }]));
       fs.writeFileSync(path.join(sidecar, "public", "index.html"), `<!doctype html><title>${markerText}</title>`);
       return sidecar;
     };
 
-    const booted = makeManagedSidecar("aaaa111", "Ada", "acme-old");
-    makeManagedSidecar("bbbb222", "Bram", "acme-new");
+    const booted = makeManagedSidecar("aaaa111", "acme-old");
+    makeManagedSidecar("bbbb222", "acme-new");
     fs.symlinkSync(path.join("builds", "bbbb222"), path.join(home, "current"), "dir");
 
     const env = paneEnv({ ISOCAN_HOME: home });
@@ -600,13 +512,7 @@ describe("the canvas pane's routes", () => {
     // Prune the build the long-running sidecar booted from (`aaaa111`).
     fs.rmSync(path.join(home, "builds", "aaaa111"), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
-    const { routes } = createPane({ env, run: fakeRun({ harness: JSON.stringify(SCAN) }).run, bootDir: booted });
-    const state = await routes["/api/workspace"](bindings());
-    expect(state.presetsError).toBeUndefined();
-    expect(state.presets).toEqual([
-      expect.objectContaining({ id: "one", name: "Bram", runsOn: "acme-agent", runnable: true }),
-    ]);
-
+    const { routes } = createPane({ env, run: fakeRun().run });
     const server = createServer(routes, { token: "tok-acme", env, bootDir: booted });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -649,7 +555,6 @@ describe("through real processes", () => {
         "switch (words[0]) {",
         `  case "identity": say(${JSON.stringify(SAVED)}); break;`,
         '  case "session": say("session started\\n"); break;',
-        `  case "harness": say(${JSON.stringify(SCAN)}); break;`,
         '  case "embed": say({ address: "http://127.0.0.1:4173/p/prj_acme?embed=1#pass_acme", canvas: "http://127.0.0.1:4173/p/prj_acme?embed=1", expiresAt: "2026-01-01T00:10:00.000Z" }); break;',
         '  default: process.stderr.write("fake isocan: nothing for " + words.join(" ") + "\\n"); process.exit(2);',
         "}",
@@ -727,7 +632,7 @@ describe("through real processes", () => {
 
       const state = await post("/api/workspace", body);
       expect(state.status).toBe(200);
-      expect(await state.json()).toMatchObject({ bound: true, canvasId: "prj_acme", defaultHarness: "acme-agent" });
+      expect(await state.json()).toMatchObject({ bound: true, canvasId: "prj_acme" });
       const embed = await (await fetch(`${base}/api/embed?token=tok-acme`, { method: "POST", body: JSON.stringify(body) })).json();
       expect(embed).toMatchObject({ tab: "http://127.0.0.1:4173/p/prj_acme", loopback: true });
 
@@ -735,8 +640,8 @@ describe("through real processes", () => {
       expect(refused.status).toBe(500);
       expect(await refused.json()).toEqual({ error: "this workspace is not bound to a canvas yet" });
 
-      const ran = calls().slice(-2);
-      expect(ran.map((c) => c["args"])).toEqual([["--json", "harness"], ["--json", "embed"]]);
+      const ran = calls().slice(-1);
+      expect(ran.map((c) => c["args"])).toEqual([["--json", "embed"]]);
       expect(ran.every((c) => c["leaked"] === null && c["conversation"] === null)).toBe(true);
     } finally {
       await new Promise((resolve) => server.close(resolve));
@@ -816,14 +721,6 @@ describe("the bundle", () => {
       expect(hostTokens.has(token), `${token} is not an Antigravity host theme token`).toBe(true);
     }
     expect(page).toContain("@media (prefers-color-scheme: dark)");
-    // `--accent` in Antigravity is a solid brand blue, not a translucent tint;
-    // painting a menu option's background with it directly puts dark/muted text
-    // on solid blue.
-    expect(page).not.toMatch(/\.menu\s+\.opt\[aria-selected="true"\]\s*\{\s*background:\s*var\(--accent/);
-    // Arrow keys in the `/` menu must update `aria-selected` and scroll in-place
-    // rather than calling `openSlash()` (whose `replaceChildren()` resets `scrollTop`).
-    expect(page).toContain("return setSlashIndex(slashIndex + (e.key === \"ArrowDown\" ? 1 : -1), true);");
-    expect(page).toContain("active.scrollIntoView?.({ block: \"nearest\" });");
     // `[data-tip]` elements must not also set `title`, or the browser draws a
     // second native tooltip on top of the styled one; and `#where` is the sole
     // "Open in browser ↗" link (no redundant `#open` button on the right).
@@ -845,24 +742,10 @@ describe("the bundle", () => {
       expect(body).toMatch(/^name: \S+/m);
       expect(body).toMatch(/^description: \S+/m);
     }
-    const fanoutSkill = read(path.join("skills", "fan-out", "SKILL.md"));
-    expect(fanoutSkill.startsWith("---\n")).toBe(true);
-    expect(fanoutSkill).toMatch(/^name:\s*fan-out$/m);
-    expect(fanoutSkill).toContain('routes["/api/fanout"]');
     const isocanSkill = read(path.join("skills", "isocan", "SKILL.md"));
     expect(isocanSkill.startsWith("---\n")).toBe(true);
     expect(isocanSkill).toMatch(/^name:\s*isocan$/m);
     expect(isocanSkill).toContain(PILL);
-  });
-
-  it("names every preset agent as an agent, never after its model or vendor", () => {
-    const vendors = ["claude", "anthropic", "gemini", "google", "openai", "gpt", "codex", "opus", "barium"];
-    const words = (s: string | null) => (s ?? "").toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 3);
-    const presets = loadPresets({});
-    expect(new Set(presets.map((p: { id: string }) => p.id)).size).toBe(presets.length);
-    for (const p of presets as { name: string; label: string; model: string | null }[]) {
-      for (const word of [...vendors, ...words(p.label), ...words(p.model)]) expect(p.name.toLowerCase()).not.toContain(word);
-    }
   });
 });
 
