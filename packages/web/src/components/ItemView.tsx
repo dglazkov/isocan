@@ -2029,18 +2029,12 @@ function HtmlItemView({
   snapshotOnly?: boolean | undefined;
   eagerSnapshot?: boolean | undefined;
 }) {
-  const origin = useContentOrigin(canvasId, snapshotOnly ? [] : [blobHash, ...warm]);
   const stack = useRef<HTMLDivElement>(null);
-  // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
-  // loaded with. A renewed signature is for the same bytes, and swapping it
-  // in would reload the document for nothing — see `frame.ts`.
-  const frame = useFrameSrc(origin, canvasId, blobHash);
   // Full screen's `#…`, for a document that opens somewhere inside itself (lib/frameanchor.ts).
   const anchor = useContext(FrameAnchor);
   const [heldSpot, setSpot] = useState<FrameSpot>({ itemId, blobHash, reported: null, carried: null });
   const spot = nextSpot(heldSpot, itemId, blobHash);
   if (spot !== heldSpot) setSpot(spot);
-  const src = !snapshotOnly && frame ? anchored(frame.src, spot.carried ?? anchor) : null;
   const warmAnchor = spot.carried ?? spot.reported ?? anchor;
   // Booleans and a band, never the raw zoom: a selector that returned the
   // scale would re-render every screen on every step of a zoom.
@@ -2051,7 +2045,7 @@ function HtmlItemView({
     blobHash,
     width ?? 880,
     height ?? 640,
-    (picture && Boolean(src)) || snapshotOnly || eagerSnapshot,
+    picture || snapshotOnly || eagerSnapshot,
     eagerSnapshot,
   );
   const [readySnapshotUrl, setReadySnapshotUrl] = useState<string | null>(null);
@@ -2069,6 +2063,12 @@ function HtmlItemView({
       wasLive: live,
     });
   if (wantLive !== live) setLive(wantLive);
+  const origin = useContentOrigin(canvasId, wantLive ? [blobHash, ...warm] : []);
+  // `useFrameSrc`, not `itemFrame` directly: a loaded frame keeps the src it
+  // loaded with while it stays live. When `wantLive` drops, the held src is
+  // released so the next mount uses a fresh signature — see `frame.ts`.
+  const frame = useFrameSrc(origin, canvasId, blobHash, wantLive);
+  const src = wantLive && frame ? anchored(frame.src, spot.carried ?? anchor) : null;
   useEffect(() => {
     if (!itemId || !actor) return;
     const hear = (e: MessageEvent) => {

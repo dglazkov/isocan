@@ -31,6 +31,7 @@ vi.mock("../src/lib/htmlsnapshot.ts", async (importActual) => {
 
 const { VersionContent } = await import("../src/components/ItemView.tsx");
 const { useUiStore } = await import("../src/stores/uiStore.ts");
+const { adoptContentBase } = await import("../src/lib/contentBase.ts");
 const { showsLiveFrame, readabilityBand, PICTURE_BELOW_SCALE } = await import("../src/lib/htmlsnapshot.ts");
 
 const actor = { id: "usr_acme", name: "Acme" };
@@ -157,6 +158,126 @@ describe("which surface an HTML screen on the canvas mounts", () => {
     show({ picture: false });
     expect(picture()).toBeNull();
     expect(frames()).toHaveLength(1);
+  });
+
+  it("drops a frozen signed src when the iframe unmounts for its picture, and re-mints when zooming back in after TTL", async () => {
+    let mintCount = 0;
+    const baseNow = Date.now();
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => baseNow);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        mintCount += 1;
+        const exp = Math.floor(Date.now() / 1000) + 300;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            urls: { [page]: `/api/projects/prj_acme/blobs/${page}?exp=${exp}&sig=mint_${mintCount}` },
+            expiresAt: exp,
+            ttlSeconds: 300,
+          }),
+        };
+      }),
+    );
+    adoptContentBase("https://isocan.store", true);
+    try {
+      // Initial mount at zoomed-out scale (< 0.3) before picture loads:
+      // mints mint_1 while live, then unmounts the iframe once pictureLoads().
+      zoom(0.1);
+      await act(async () => {
+        show();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mintCount).toBe(1);
+      expect(frames()).toHaveLength(1);
+      expect(frames()[0]!.getAttribute("src")).toContain("sig=mint_1");
+
+      await pictureLoads();
+      expect(frames()).toHaveLength(0);
+
+      // Six minutes pass while sitting zoomed out on the picture (past the 300s TTL).
+      nowSpy.mockImplementation(() => baseNow + 360_000);
+
+      // Zoom in to readable scale: must NOT reuse the expired mint_1 URL.
+      await act(async () => {
+        zoom(0.6, false);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mintCount).toBe(2);
+      expect(frames()).toHaveLength(1);
+      expect(frames()[0]!.getAttribute("src")).toContain("sig=mint_2");
+      expect(frames()[0]!.getAttribute("src")).not.toContain("sig=mint_1");
+    } finally {
+      adoptContentBase(null);
+      nowSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("waits for an in-flight fresh ticket instead of freezing a cached ticket inside its 30s renewal margin", async () => {
+    let mintCount = 0;
+    const baseNow = Date.now();
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => baseNow);
+    let resolveSecondMint: (() => void) | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        mintCount += 1;
+        if (mintCount === 2) {
+          await new Promise<void>((r) => {
+            resolveSecondMint = r;
+          });
+        }
+        const exp = Math.floor(Date.now() / 1000) + 300;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            urls: { [page]: `/api/projects/prj_acme/blobs/${page}?exp=${exp}&sig=mint_${mintCount}` },
+            expiresAt: exp,
+            ttlSeconds: 300,
+          }),
+        };
+      }),
+    );
+    adoptContentBase("https://isocan.store", true);
+    try {
+      // Mint mint_1 and then unmount the iframe via pictureLoads() at zoomed-out scale.
+      zoom(0.1);
+      await act(async () => {
+        show();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await pictureLoads();
+      expect(frames()).toHaveLength(0);
+
+      // Advance 299 seconds: mint_1 has 1 second left (usable, but NOT fresh).
+      nowSpy.mockImplementation(() => baseNow + 299_000);
+
+      // Zoom in: mint_2 starts in flight; iframe must wait rather than freeze mint_1 (1s left).
+      await act(async () => {
+        zoom(0.6, false);
+        await Promise.resolve();
+      });
+      expect(mintCount).toBe(2);
+      expect(frames()).toHaveLength(0);
+
+      await act(async () => {
+        resolveSecondMint?.();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(frames()).toHaveLength(1);
+      expect(frames()[0]!.getAttribute("src")).toContain("sig=mint_2");
+    } finally {
+      adoptContentBase(null);
+      nowSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 });
 

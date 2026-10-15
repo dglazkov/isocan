@@ -79,6 +79,13 @@ interface Ticket {
    * left to re-render it, so it is worth measuring from receipt instead.
    */
   goodUntil: number;
+  /**
+   * When this ticket enters its renewal margin on THIS tab's clock — the
+   * moment a newly mounting frame should wait for a replacement rather than
+   * freeze this URL. Capped at half of `ttlSeconds` so short test TTLs stay
+   * fresh immediately after receipt.
+   */
+  freshUntil: number;
 }
 
 const tickets = new Map<string, Ticket>();
@@ -121,7 +128,7 @@ function usable(entry: Ticket | undefined): entry is Ticket {
 }
 
 function fresh(entry: Ticket | undefined): entry is Ticket {
-  return entry !== undefined && entry.goodUntil - Date.now() / 1000 > RENEW_MARGIN_SECONDS;
+  return entry !== undefined && entry.freshUntil > Date.now() / 1000;
 }
 
 /**
@@ -155,6 +162,7 @@ export function contentOrigin(): ContentOrigin | null {
       const entry = tickets.get(cell(canvasId, blobHash));
       return usable(entry) ? entry.path : null;
     },
+    fresh: (canvasId, blobHash) => fresh(tickets.get(cell(canvasId, blobHash))),
   };
 }
 
@@ -223,9 +231,12 @@ async function mint(canvasId: string, hashes: string[], attempt = 0): Promise<vo
     for (let i = 0; i < hashes.length; i += SIGN_BLOBS_LIMIT) {
       const chunk = hashes.slice(i, i + SIGN_BLOBS_LIMIT);
       const answer = await signedBlobs(canvasId, chunk);
-      const goodUntil = Date.now() / 1000 + answer.ttlSeconds;
+      const now = Date.now() / 1000;
+      const goodUntil = now + answer.ttlSeconds;
+      const margin = Math.min(RENEW_MARGIN_SECONDS, Math.max(0, answer.ttlSeconds / 2));
+      const freshUntil = goodUntil - margin;
       for (const [hash, path] of Object.entries(answer.urls)) {
-        tickets.set(cell(canvasId, hash), { path, goodUntil });
+        tickets.set(cell(canvasId, hash), { path, goodUntil, freshUntil });
       }
     }
   } catch {
