@@ -75,24 +75,19 @@ describe("isocan explain", () => {
   it("prints the story: the moves with their reasons, the road not taken, speak design", async () => {
     const run = await isocan(["--canvas", canvas, "explain", checkout]);
     expect(run.code, run.stderr).toBe(0);
-    expect(run.stdout).toMatch(/^Explain “Checkout” \(itm_[\w-]+\) · plain/);
-    expect(run.stdout).toContain("Maya made it — no reason was written down");
-    expect(run.stdout).toContain("Maya chose “Checkout B” over 1 other take — “B: shorter form, pickup slot first");
+    expect(run.stdout).toMatch(/^Explain “Checkout” \(itm_[\w-]+\)/);
+    expect(run.stdout).toContain("v1–v3 · Maya drafted it over 3 versions — no reason recorded");
+    expect(run.stdout).toContain("v4 · Maya chose “Checkout B” over 1 other take — “B: shorter form, pickup slot first");
     expect(run.stdout).toContain("“Checkout A”, a variation by Maya, in the trash — A: one long page");
-    expect(run.stdout).toContain("“make it more obvious” — a designer would say “visual hierarchy”");
-    const deep = await isocan(["--canvas", canvas, "explain", checkout, "--depth", "deep"]);
-    expect(deep.stdout).toMatch(/v4 · Maya converged on the variation “Checkout B” over 1 sibling .*comment cmt_/);
-    const story = await json(["--canvas", canvas, "explain", checkout, "--depth", "designer"]);
+    expect(run.stdout).toContain("“make it more obvious” → visual hierarchy");
+    const story = await json(["--canvas", canvas, "explain", checkout]);
     expect(story.story.moves.map((m: { kind: string }) => m.kind)).toEqual(["made", "chose"]);
-    expect(story.sections.map((s: { key: string }) => s.key)).toEqual(["how", "roads", "moved", "speak", "critique"]);
-    const bad = await isocan(["--canvas", canvas, "explain", checkout, "--depth", "loud"]);
-    expect(bad.code).not.toBe(0);
-    expect(bad.stderr).toMatch(/--depth is plain, designer, deep/);
+    expect(story.sections.map((s: { key: string }) => s.key)).toEqual(["how", "roads", "moved", "speak"]);
   });
 
   it("writes nothing to read it", async () => {
     const before = JSON.stringify([await json(["--canvas", canvas, "ls"]), await json(["--canvas", canvas, "comment", "ls"])]);
-    for (const depth of ["plain", "designer", "deep"]) expect((await isocan(["--canvas", canvas, "explain", checkout, "--depth", depth])).code).toBe(0);
+    expect((await isocan(["--canvas", canvas, "explain", checkout])).code).toBe(0);
     expect(JSON.stringify([await json(["--canvas", canvas, "ls"]), await json(["--canvas", canvas, "comment", "ls"])])).toBe(before);
   });
 
@@ -151,7 +146,7 @@ describe("isocan explain", () => {
   });
 
   it("Copy as rationale: a note beside the item, nothing else", async () => {
-    const made = await json(["--canvas", canvas, "explain", checkout, "--rationale", "--depth", "designer"]);
+    const made = await json(["--canvas", canvas, "explain", checkout, "--rationale"]);
     expect(made.text.split("\n")[0]).toBe("# Why “Checkout” looks like this");
     const note = await json(["--canvas", canvas, "show", made.itemId]);
     const item = await json(["--canvas", canvas, "show", checkout]);

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import {
   newGroupId,
   newVersionId,
@@ -68,11 +68,13 @@ export function MermaidFocusView(facts: FocusFacts) {
   const [dsl, setDsl] = useState<string>("");
   const [zoom, setZoom] = useState<number>(1);
   const [search, setSearch] = useState<string>("");
+  const readTextRef = useRef(facts.readText);
+  readTextRef.current = facts.readText;
 
   useEffect(() => {
     let active = true;
-    void facts
-      .readText()
+    void readTextRef
+      .current()
       .then((t) => {
         if (active) setDsl(t);
       })
@@ -137,11 +139,13 @@ export function MermaidFocusEdit(facts: FocusFacts) {
   const [initialDsl, setInitialDsl] = useState<string | null>(null);
   const [draft, setDraft] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const readTextRef = useRef(facts.readText);
+  readTextRef.current = facts.readText;
 
   useEffect(() => {
     let active = true;
-    void facts
-      .readText()
+    void readTextRef
+      .current()
       .then((t) => {
         if (!active) return;
         setInitialDsl(t);

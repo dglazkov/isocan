@@ -39,12 +39,7 @@ import { textRefit } from "./textnode.ts";
  * and *Critique* (`critiqueAsk`) are the two writes, and only when asked.
  */
 
-/** How much is said: everyday words, a designer's register, or everything with its ids. */
-export type ExplainDepth = "plain" | "designer" | "deep";
-/** The three depths, in the switch's order. */
-export const EXPLAIN_DEPTHS: readonly ExplainDepth[] = ["plain", "designer", "deep"];
-
-/** How many moves Plain and Designer show; Deep shows every one. */
+/** How many moves Explain shows; a fifty-version item still reads as its key seams. */
 const SEAMS = 4;
 /** How close a version and a trashing must be to be one `choose` (one op group, sent together). */
 const CHOOSE_WINDOW_MS = 60_000;
@@ -452,14 +447,14 @@ export function explainStory(canvas: CanvasContents, itemId: string): ExplainSto
 }
 
 /**
- * **The moves that mattered**: every move at Deep; otherwise at most four —
- * the first and the latest always, then the decisive ones (a `choose`, a
- * kept proposal, an adopted decision), then those with a reason, then the
- * longest runs — in the order they happened.
+ * **The moves that mattered**: at most four — the first and the latest always,
+ * then the decisive ones (a `choose`, a kept proposal, an adopted decision),
+ * then those with a reason, then the longest runs — in the order they
+ * happened.
  */
-export function seams(story: ExplainStory, depth: ExplainDepth): { moves: ExplainMove[]; hidden: number } {
+export function seams(story: ExplainStory): { moves: ExplainMove[]; hidden: number } {
   const all = story.moves;
-  if (depth === "deep" || all.length <= SEAMS) return { moves: all, hidden: 0 };
+  if (all.length <= SEAMS) return { moves: all, hidden: 0 };
   const rank = (m: ExplainMove, i: number) =>
     i === 0 || i === all.length - 1 ? 0 : m.kind === "chose" || m.kind === "kept" || m.kind === "decided" ? 1 : m.reason ? 2 : 3;
   const picked = all
@@ -471,7 +466,7 @@ export function seams(story: ExplainStory, depth: ExplainDepth): { moves: Explai
   return { moves: picked, hidden: all.length - picked.length };
 }
 
-// ---------- the words, at each depth
+// ---------- the words
 
 /** One line of an explanation, with what a surface may link it to. */
 export interface ExplainLine {
@@ -493,38 +488,23 @@ interface ExplainSection {
 const range = (m: ExplainMove) => (m.from === m.to ? `v${m.from}` : `v${m.from}–v${m.to}`);
 const count = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
-/** The design words a reason uses, said at Designer depth. */
+/** The design words a reason uses. */
 function termsIn(text: string): string[] {
   const named = designWordSpans(text).flatMap((s) => (s.word ? [s.word.term] : []));
   return [...new Set([...named, ...plainReadings(text).map((r) => r.term)])];
 }
 
-function moveLine(story: ExplainStory, m: ExplainMove, depth: ExplainDepth): ExplainLine {
+function moveLine(story: ExplainStory, m: ExplainMove): ExplainLine {
   const n = m.to - m.from + 1;
   const why = m.reason ? `“${m.reason.text}”` : null;
-  let text: string;
-  if (depth === "plain") {
-    const did =
-      m.kind === "made" ? "made it" :
-      m.kind === "edited" ? (n > 1 ? `changed it (${count(n, "version")})` : "changed it") :
-      m.kind === "chose" ? `chose “${m.chosen!.title}”${m.chosen!.siblings ? ` over ${count(m.chosen!.siblings, "other take")}` : ""}` :
-      m.kind === "kept" ? `kept ${m.chosen!.by.name}'s proposal` :
-      "picked an option from a comparison";
-    text = `${m.who.name} ${did} — ${why ?? "no reason was written down"}`;
-  } else {
-    const did =
-      m.kind === "made" ? (n > 1 ? `drafted it over ${count(n, "version")}` : "drafted it") :
-      m.kind === "edited" ? (n > 1 ? `iterated (${count(n, "version")})` : "revised it") :
-      m.kind === "chose" ? `converged on the variation “${m.chosen!.title}”${m.chosen!.siblings ? ` over ${count(m.chosen!.siblings, "sibling")}` : ""}` :
-      m.kind === "kept" ? `kept ${m.chosen!.by.name}'s proposal “${m.chosen!.title}”` :
-      "adopted an option from a design comparison";
-    const terms = m.reason ? termsIn(m.reason.text) : [];
-    text = `${range(m)} · ${m.who.name} ${did} — ${why ?? "no reason recorded"}${terms.length ? ` (${terms.join(", ")})` : ""}`;
-    if (depth === "deep") {
-      const cite = m.reason?.commentId ? ` · comment ${m.reason.commentId}` : m.reason ? ` · from the ${m.reason.source}` : "";
-      text += ` · ${m.at.slice(0, 16).replace("T", " ")}${cite}`;
-    }
-  }
+  const did =
+    m.kind === "made" ? (n > 1 ? `drafted it over ${count(n, "version")}` : "drafted it") :
+    m.kind === "edited" ? (n > 1 ? `iterated (${count(n, "version")})` : "revised it") :
+    m.kind === "chose" ? `chose “${m.chosen!.title}”${m.chosen!.siblings ? ` over ${count(m.chosen!.siblings, "other take")}` : ""}` :
+    m.kind === "kept" ? `kept ${m.chosen!.by.name}'s proposal “${m.chosen!.title}”` :
+    "adopted an option from a design comparison";
+  const terms = m.reason ? termsIn(m.reason.text) : [];
+  const text = `${range(m)} · ${m.who.name} ${did} — ${why ?? "no reason recorded"}${terms.length ? ` (${terms.join(", ")})` : ""}`;
   return {
     text,
     ...(m.reason?.threadId ? { threadId: m.reason.threadId } : {}),
@@ -536,63 +516,60 @@ const ROAD_KIND: Record<ExplainRoad["kind"], string> = { variation: "a variation
 const WHERE: Record<ExplainRoad["where"], string> = { trash: "in the trash", canvas: "still on the canvas", gone: "no longer anywhere" };
 
 /**
- * **The explanation, in sections, at one depth** — what `isocan explain`
- * prints and the panel draws, so the two say one thing. Plain is everyday
- * words; Designer names the moves and the design words their reasons use;
- * Deep dive lists every move with its versions, times and cites.
+ * **The explanation, in sections** — what `isocan explain` prints and the
+ * panel draws, so the two say one thing. Empty optional sections (roads not
+ * taken, critique before one arrives) are omitted rather than shown as empty
+ * placeholders.
  */
-export function explainSections(story: ExplainStory, depth: ExplainDepth): ExplainSection[] {
+export function explainSections(story: ExplainStory): ExplainSection[] {
   const out: ExplainSection[] = [];
-  const { moves, hidden } = seams(story, depth);
-  const how = moves.map((m) => moveLine(story, m, depth));
-  if (hidden) how.push({ text: `…and ${count(hidden, "smaller move")} — Deep dive lists every one.` });
-  out.push({ key: "how", heading: depth === "plain" ? `How it got here (${count(story.versions, "version")})` : `How it got here — ${count(story.versions, "version")}, ${count(story.moves.length, "move")}`, lines: how });
+  const { moves, hidden } = seams(story);
+  const how = moves.map((m) => moveLine(story, m));
+  if (hidden) how.push({ text: `…and ${count(hidden, "smaller move")}.` });
+  out.push({ key: "how", heading: `How it got here — ${count(story.versions, "version")}, ${count(story.moves.length, "move")}`, lines: how });
 
-  const roads = story.roads.map((r): ExplainLine => {
-    const by = r.by ? ` by ${r.by.name}` : "";
-    const why = r.why ? ` — ${depth === "plain" ? clip(r.why, 90) : r.why}` : "";
-    const id = depth === "deep" && r.itemId ? ` · ${r.itemId}` : "";
-    return { text: `“${r.title}”, ${ROAD_KIND[r.kind]}${by}, ${WHERE[r.where]}${why}${id}`, ...(r.itemId && r.where !== "gone" ? { itemId: r.itemId } : {}), ...(r.where === "trash" ? { trash: true } : {}) };
-  });
-  out.push({ key: "roads", heading: "The roads not taken", lines: roads.length ? roads : [{ text: "None: nothing was explored beside it and set aside." }] });
+  if (story.roads.length) {
+    const roads = story.roads.map((r): ExplainLine => {
+      const by = r.by ? ` by ${r.by.name}` : "";
+      const why = r.why ? ` — ${r.why}` : "";
+      return { text: `“${r.title}”, ${ROAD_KIND[r.kind]}${by}, ${WHERE[r.where]}${why}`, ...(r.itemId && r.where !== "gone" ? { itemId: r.itemId } : {}), ...(r.where === "trash" ? { trash: true } : {}) };
+    });
+    out.push({ key: "roads", heading: "The roads not taken", lines: roads });
+  }
 
   const moved = story.moved.map((m): ExplainLine => {
     const what = m.kind === "design" ? `the design system “${m.title}”` : m.kind === "proposal" ? `a proposal beside it, “${m.title}”` : `“${m.title}”`;
-    const text = depth === "plain"
-      ? `${what} changed since — ${m.by.name}`
-      : `${what}: ${count(m.newer, "newer version")} (now v${m.latest}, ${m.by.name})${m.kind === "design" ? " — this version may not reflect it" : ""}${depth === "deep" ? ` · ${m.itemId} · ${m.at.slice(0, 16).replace("T", " ")}` : ""}`;
+    const text = `${what}: ${count(m.newer, "newer version")} (now v${m.latest}, ${m.by.name})${m.kind === "design" ? " — this version may not reflect it" : ""}`;
     return { text, itemId: m.itemId };
   });
   out.push({ key: "moved", heading: "What moved around it since", lines: moved.length ? moved : [{ text: "Nothing: its design system and its neighbours are as they were." }] });
 
-  const speak = (depth === "deep" ? story.speak : story.speak.slice(0, 4)).map((s): ExplainLine => ({
-    text: depth === "plain"
-      ? `“${s.said}” — a designer would say “${s.designer}”`
-      : `“${s.said}” → ${s.designer}${s.means ? ` — ${s.means}` : ""}${depth === "deep" ? ` · ${s.from === "lead" ? "the lead's pairing" : "the glossary"} · comment ${s.commentId}` : ""}`,
+  const speak = story.speak.slice(0, 4).map((s): ExplainLine => ({
+    text: `“${s.said}” → ${s.designer}${s.means ? ` — ${s.means}` : ""}`,
   }));
   out.push({ key: "speak", heading: "Speak design", lines: speak.length ? speak : [{ text: "Nothing typed about it yet that a designer would say differently." }] });
 
   const c = story.critique;
-  out.push({
-    key: "critique",
-    heading: c ? `${c.by.name}'s critique` : "Critique",
-    lines: c
-      ? [
-          { text: `Working: ${c.working}`, threadId: c.threadId },
-          { text: `A risk: ${c.risk}` },
-          { text: `One thing to try: ${c.tryThis}${c.proposal ? " — a proposal beneath it" : ""}`, ...(c.proposal ? { itemId: c.proposal.itemId } : {}) },
-          ...(story.asked ? [{ text: "Another critique was asked for and has not arrived yet." }] : []),
-        ]
-      : [{ text: story.asked ? "Asked for; the lead has not answered yet." : "None yet. Critique asks the canvas's lead agent." }],
-  });
-  if (story.wire && depth !== "plain") out.push({ key: "wire", heading: "A wire", lines: [{ text: `Drawn at wireframe fidelity: \`isocan wire why ${story.itemId}\` gives each slot's recorded decision and its runner-up.` }] });
+  if (c) {
+    out.push({
+      key: "critique",
+      heading: `${c.by.name}'s critique`,
+      lines: [
+        { text: `Working: ${c.working}`, threadId: c.threadId },
+        { text: `A risk: ${c.risk}` },
+        { text: `One thing to try: ${c.tryThis}${c.proposal ? " — a proposal beneath it" : ""}`, ...(c.proposal ? { itemId: c.proposal.itemId } : {}) },
+        ...(story.asked ? [{ text: "Another critique was asked for and has not arrived yet." }] : []),
+      ],
+    });
+  }
+  if (story.wire) out.push({ key: "wire", heading: "A wire", lines: [{ text: `Drawn at wireframe fidelity: \`isocan wire why ${story.itemId}\` gives each slot's recorded decision and its runner-up.` }] });
   return out;
 }
 
 /** `isocan explain`'s words: the sections, as a terminal prints them. */
-export function explainText(story: ExplainStory, depth: ExplainDepth): string {
-  const out = [`Explain “${story.title}” (${story.itemId}) · ${depth === "deep" ? "deep dive" : depth}`];
-  for (const s of explainSections(story, depth)) out.push("", s.heading, ...s.lines.map((l) => `  - ${l.text}`));
+export function explainText(story: ExplainStory): string {
+  const out = [`Explain “${story.title}” (${story.itemId})`];
+  for (const s of explainSections(story)) out.push("", s.heading, ...s.lines.map((l) => `  - ${l.text}`));
   return out.join("\n");
 }
 
@@ -601,10 +578,9 @@ export function explainText(story: ExplainStory, depth: ExplainDepth): string {
  * can read — the moves, the roads not taken, what moved, the critique when
  * there is one — in Markdown, dated, saying where it came from.
  */
-export function rationaleText(story: ExplainStory, depth: ExplainDepth, now: number): string {
+export function rationaleText(story: ExplainStory, now: number): string {
   const out = [`# Why “${story.title}” looks like this`, ""];
-  for (const s of explainSections(story, depth)) {
-    if (s.key === "speak" && depth === "plain") continue;
+  for (const s of explainSections(story)) {
     out.push(`## ${s.heading}`, ...s.lines.map((l) => `- ${l.text}`), "");
   }
   out.push(`Written from the canvas's own history by Explain, ${new Date(now).toISOString().slice(0, 10)}.`, "");

@@ -9442,7 +9442,6 @@ goodnightCmd
 program
   .command("explain <item>")
   .description("How an item got here: the versions that mattered and why, the roads not taken, what moved since, speak design, the lead's critique")
-  .option("--depth <depth>", "plain, designer or deep", "plain")
   .option("--rationale", "Copy as rationale: put the explanation on the canvas as a note beside the item")
   .option("--ask", "Critique: ask the canvas's lead agent, in the Chat, for what is working, a risk and one thing to try")
   .option("--critique", "the lead's answer: post --working, --risk and --try as the critique (a record in the Chat)")

@@ -183,7 +183,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 
 **What a canvas carries** (`extend`, and a topic per module)
 - `module add|rm|ls`, `tool ls|add`, `panel ls|add` — modules, rail tools, dock panels
-- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge`, `critic`, `critique` — module families; `--agent-help <verb>` finds each
+- `map`, `docs`, `sticker`, `sandbox`, `wire`, `competition`, `anatomy`, `voice`, `judge`, `critic`, `critique`, `lottie` — module families; `--agent-help <verb>` finds each
 
 <!-- topic: protocol | the lap in full — naming yourself, the session, who is at your terminal, parking, several of you, your inbox, asking a person, pointing at words -->
 
@@ -4132,7 +4132,7 @@ is there is kept or deleted.
 
 ## Explain this item, and the critique you are asked for
 
-`isocan explain <item> [--depth plain|designer|deep] [--json]` prints how an
+`isocan explain <item> [--json]` prints how an
 item got here — the same story the Explain panel draws, derived from the
 canvas and never generated: the versions that mattered (a run of edits by one
 hand is one move; a `choose`, a kept proposal and an adopted decision stand
@@ -4144,8 +4144,8 @@ relatives); and *speak design*, phrases typed about it beside a designer's
 term. Read it before you change an item somebody else shaped.
 
 When a person presses **Critique**, you (the canvas's lead) get a Chat message
-"Critique, please: …" naming the item. Read `isocan explain <item> --depth
-deep`, then answer in one command — what is working, one risk, one thing to
+"Critique, please: …" naming the item. Read `isocan explain <item>`, then
+answer in one command — what is working, one risk, one thing to
 try — and make the thing to try a proposal beneath it:
 
 ```sh

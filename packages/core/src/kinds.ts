@@ -170,6 +170,7 @@ export function editableText(mimeType: string): boolean {
   return (
     mimeType.startsWith("text/") ||
     mimeType === "application/json" ||
+    mimeType.endsWith("+json") ||
     mimeType === "image/svg+xml"
   );
 }

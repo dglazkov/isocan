@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  EXPLAIN_DEPTHS,
   applyOperation,
   convergeOps,
   convergePlan,
@@ -108,10 +107,9 @@ describe("the versions that mattered", () => {
       ["edited", 40, 40, "Kit"],
       ["edited", 41, 50, "Maya"],
     ]);
-    const { moves, hidden } = seams(st, "plain");
+    const { moves, hidden } = seams(st);
     expect(moves.map((m) => `v${m.from}-v${m.to}`)).toEqual(["v1-v20", "v21-v30", "v31-v31", "v41-v50"]);
     expect(hidden).toBe(2);
-    expect(seams(st, "deep").moves).toHaveLength(6);
   });
 
   it("gives the chosen variation's comment as the choice's reason, and the comment that made a run as its", () => {
@@ -159,6 +157,15 @@ describe("the roads not taken", () => {
     s = step(s, { type: "item.update", itemId: "itm_checkout", patch: { properties: { preferredOver: "itm_old" } } }, maya, T0 + 9 * 86_400_000 + 1000);
     expect(story(s).roads.at(-1)).toMatchObject({ kind: "preferred", title: "Old checkout", where: "canvas" });
   });
+
+  it("omits the roads section when there are no roads not taken", () => {
+    let s = step(null, { type: "project.create", canvasId: "prj_acme", title: "Acme Bakery", description: "" }, maya, T0);
+    s = add(s, "itm_solo", "Solo", {}, maya, T0 + 1000, 0);
+    const out = explainStory(s.canvas, "itm_solo");
+    if ("refused" in out) throw new Error(out.refused);
+    expect(out.roads).toEqual([]);
+    expect(explainSections(out).find((x) => x.key === "roads")).toBeUndefined();
+  });
 });
 
 describe("what moved around it since", () => {
@@ -180,25 +187,18 @@ describe("what moved around it since", () => {
   });
 });
 
-describe("the depth switch", () => {
-  it("says the same moves in three registers", () => {
+describe("the explanation sections", () => {
+  it("renders one clear version of the moves with version badges and design terms", () => {
     const st = story(acme());
-    const how = (d: (typeof EXPLAIN_DEPTHS)[number]) => explainSections(st, d).find((x) => x.key === "how")!.lines.map((l) => l.text);
-    const plain = how("plain");
-    expect(plain[2]).toBe("Maya chose “Checkout B” over 2 other takes — “B: shorter form, pickup slot first”");
-    expect(plain[0]).toBe("Maya made it — no reason was written down");
-    expect(plain.at(-1)).toMatch(/2 smaller moves — Deep dive lists every one/);
-    expect(plain.join(" ")).not.toMatch(/v\d/);
-    const designer = how("designer");
-    expect(designer[1]).toBe("v21–v30 · Ravi iterated (10 versions) — “Did this to make it more obvious; the total, it gets lost below the fold.” (visual hierarchy)");
-    expect(designer[2]).toMatch(/^v31 · Maya converged on the variation “Checkout B” over 2 siblings/);
-    const deep = how("deep");
-    expect(deep).toHaveLength(6);
-    expect(deep[1]).toMatch(/comment cmt_ravi/);
+    const how = explainSections(st).find((x) => x.key === "how")!.lines.map((l) => l.text);
+    expect(how[0]).toBe("v1–v20 · Maya drafted it over 20 versions — no reason recorded");
+    expect(how[1]).toBe("v21–v30 · Ravi iterated (10 versions) — “Did this to make it more obvious; the total, it gets lost below the fold.” (visual hierarchy)");
+    expect(how[2]).toBe("v31 · Maya chose “Checkout B” over 2 other takes — “B: shorter form, pickup slot first”");
+    expect(how.at(-1)).toBe("…and 2 smaller moves.");
   });
 
   it("links each move to its compare, and roads in the trash to the trash", () => {
-    const sections = explainSections(story(acme()), "designer");
+    const sections = explainSections(story(acme()));
     const how = sections.find((x) => x.key === "how")!.lines;
     expect(how[1]!.compare).toEqual({ itemId: "itm_checkout", from: "ver_itm_checkout_20", to: "ver_itm_checkout_30" });
     expect(how[0]!.compare).toBeUndefined();
@@ -208,16 +208,15 @@ describe("the depth switch", () => {
   it("speaks design: a phrase typed about the item beside the designer's term", () => {
     const st = story(acme());
     expect(st.speak.map((p) => [p.said, p.designer, p.from])).toEqual([["make it more obvious", "visual hierarchy", "glossary"], ["it gets lost", "visual hierarchy", "glossary"]]);
-    const plain = explainSections(st, "plain").find((x) => x.key === "speak")!.lines[0]!.text;
-    expect(plain).toBe("“make it more obvious” — a designer would say “visual hierarchy”");
+    const speak = explainSections(st).find((x) => x.key === "speak")!.lines[0]!.text;
+    expect(speak).toMatch(/^“make it more obvious” → visual hierarchy/);
     expect(plainReadings("Make it pop, it feels cramped").map((r) => r.term)).toEqual(["contrast", "density"]);
   });
 
-  it("prints every section from one function, at every depth", () => {
-    for (const depth of EXPLAIN_DEPTHS) {
-      const text = explainText(story(acme()), depth);
-      for (const heading of ["How it got here", "The roads not taken", "What moved around it since", "Speak design", "Critique"]) expect(text).toContain(heading);
-    }
+  it("prints the active sections from one function, omitting critique when there isn't one yet", () => {
+    const text = explainText(story(acme()));
+    for (const heading of ["How it got here", "The roads not taken", "What moved around it since", "Speak design"]) expect(text).toContain(heading);
+    expect(text).not.toContain("Critique");
   });
 });
 
@@ -238,19 +237,19 @@ describe("the critique, the lead's half", () => {
     expect(st.asked).toBe(false);
     expect(st.critique).toMatchObject({ by: { name: "Kit" }, working: "The pickup slot leads.", risk: "The total sits below the fold on small phones.", tryThis: "Pin the total beside the button.", proposal: { itemId: "itm_try" } });
     expect(st.speak[0]).toMatchObject({ said: "make the total pop", designer: "raise the total's contrast", from: "lead" });
-    const lines = explainSections(st, "plain").find((x) => x.key === "critique")!.lines;
+    const lines = explainSections(st).find((x) => x.key === "critique")!.lines;
     expect(lines.map((l) => l.text)).toEqual(["Working: The pickup slot leads.", "A risk: The total sits below the fold on small phones.", "One thing to try: Pin the total beside the button. — a proposal beneath it"]);
     expect(lines[2]!.itemId).toBe("itm_try");
   });
 
-  it("without a lead, says why nothing can critique — without the night in it", () => {
+  it("without a lead, says why nothing can critique — and omits the critique section when there isn't one yet", () => {
     const s = acme();
     const why = critiqueCannot({ agent: null, how: "none" }, maya.id, {});
     expect(why).toMatch(/^no agent stands on this canvas — enrol one/);
     expect(critiqueCannot({ agent: { actor: kit }, how: "standing" }, maya.id, {})).toMatch(/nothing is answering for Kit here/);
     expect(critiqueCannot({ agent: { actor: kit }, how: "standing" }, maya.id, { answering: { actorIds: [kit.id] } as never })).toBeNull();
     expect(story(s).critique).toBeNull();
-    expect(explainSections(story(s), "plain").find((x) => x.key === "critique")!.lines[0]!.text).toMatch(/None yet/);
+    expect(explainSections(story(s)).find((x) => x.key === "critique")).toBeUndefined();
   });
 
   it("reads a speak pair, or refuses one", () => {
@@ -263,18 +262,17 @@ describe("explain writes nothing; Copy as rationale is text and a spot", () => {
   it("leaves the canvas exactly as it found it", () => {
     const s = acme();
     const before = JSON.stringify(s.canvas);
-    for (const depth of EXPLAIN_DEPTHS) explainText(story(s), depth);
+    explainText(story(s));
     expect(JSON.stringify(s.canvas)).toBe(before);
   });
 
   it("writes a dated rationale, and stands it right of the item, clear of everything", () => {
     const s = acme();
-    const text = rationaleText(story(s), "designer", Date.UTC(2026, 9, 14));
+    const text = rationaleText(story(s), Date.UTC(2026, 9, 14));
     expect(text.split("\n")[0]).toBe("# Why “Checkout” looks like this");
     expect(text).toContain("## The roads not taken");
-    expect(text).toContain("- v31 · Maya converged on the variation “Checkout B”");
+    expect(text).toContain("- v31 · Maya chose “Checkout B”");
     expect(text.trim().split("\n").at(-1)).toBe("Written from the canvas's own history by Explain, 2026-10-14.");
-    expect(rationaleText(story(s), "plain", 0)).not.toContain("## Speak design");
     const checkout = s.canvas.items.itm_checkout!;
     const spot = rationaleSpot(s.canvas, checkout, text);
     expect(spot.x).toBeGreaterThanOrEqual(checkout.x + checkout.width);

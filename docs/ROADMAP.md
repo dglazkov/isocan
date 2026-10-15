@@ -12,7 +12,7 @@ open to anyone with the address. It is this page, published by
 that opted in with `.isocan/roadmap.json`; a publish that fails never fails a
 commit or a build, and says so in `.isocan/roadmap.log`.
 
-**51 built · 62 still open** — of which 52 partly
+**52 built · 62 still open** — of which 52 partly
 built, 10 designed, 0 blocked, and
 **0 with no verdict recorded at all**, which is the number worth
 watching: an untriaged doc is not a doc nobody needs, it is a doc nobody has
@@ -127,7 +127,7 @@ whoever built the thing for somebody who knows nothing about it.
 | research | [Semantic zoom: what a canvas becomes when you stand back](research/2026-09-07-semantic-zoom.md) | 2026-09-07 | the canvas already does four kinds of zoom-responsive drawing and every one of them SUBTRACTS — the thing maps actually do is substitute, and that needs a unit to substitute for · see ui-refresh, mindmap · [#203](https://github.com/dglazkov/isocan/issues/203) |
 | **project** | [webmcp-cobrowsing](projects/webmcp-cobrowsing/journey.md) | 2026-09-11 | roadmap defined — the WebMCP surface is designed against the verified API and the existing @isocan/mcp vocabulary; design and phases follow the census-informed design · see iso-api, embed |
 
-## Built <sub>51</sub>
+## Built <sub>52</sub>
 
 | | What | Since | |
 | --- | --- | --- | --- |
@@ -153,6 +153,7 @@ whoever built the thing for somebody who knows nothing about it.
 | research | [JSON Canvas: what adopting it would mean](research/json-canvas.md) | 2026-08-30 | export built 30 Aug (`isocan export --jsoncanvas`), and the edge question answered by the mind map's `mapParent`; residue — import is declined on purpose (the format has no room for history), and the recommended `json-canvas` skill import was never taken up and waits on somebody asking · [#154](https://github.com/dglazkov/isocan/issues/154) |
 | **project** | [keys](projects/keys/design.md) | 2026-10-02 | Model keys in one place on your machine: ~/.isocan/keys.json (0600), set from a Model keys settings area or `isocan keys`, read per call by everything that spends a key — the judge, the text model, voice, the rc's agents — with env as an override. Write-only in the UI, machine-local routes only, owner-only spend by default. Phase 0 closes a hole the survey found: the voice harness's loopback door had no Origin or Host check. · see copy-edit, voice-agent, judge |
 | research | [Live mode: voice on an isomorphic canvas](research/2026-08-24-voice.md) | 2026-09-16 | Built as `@isocan/voice-agent` (the standing harness) and `@isocan/talk` (the browser Live module, 16 Sep), sharing one provider contract (`live.ts`) and 47 function declarations planned into ordinary operations by `planForCall` — zero new op types, zero server routes. · see voice-agent, modules · [#139](https://github.com/dglazkov/isocan/issues/139) |
+| **project** | [lottie](projects/lottie/design.md) | 2026-10-15 | Built 15 Oct 2026. @isocan/lottie brings Lottie (.lottie.json) and dotLottie (.lottie) animations onto both surfaces: live deterministic SVG playback on the canvas with off-screen pause and inline Enter transport, View Focus (/i/:itemId) with frame-accurate scrubber, named markers, backdrop switcher and DevTools compatibility linter/profiler, Edit Focus (/w/:itemId) with palette remapping, DESIGN.md token binding, layer tree subtargets for Node-Anchored Chat, trim/markers, and isocan lottie inspect|palette|trim|marker|lint|poster on the CLI. · see modules, node-focus, design-partner |
 | **project** | [memory](projects/memory/journey.md) | 2026-09-02 | every phase closed 18 Sep 2026. Phases 0–5 were verified 13 Sep; phase 6 landed pin-from-source — `isocan context pin --from` and the Context picker copy one current piece of an ordinary inherited source into a local pin, in one `group.change` that one undo takes back whole, carrying durable `contextSource` provenance and importing no governing design role. It is the existing copy act with one `decorate` hook, and the byte path is now shared with `CanvasGroups.copyFrom` rather than forked. Journey 6's browser half was walked at 1440px and 390px against a real daemon, and the walk was proved able to fail. Two Open entries remain, neither a phase: no acceptance walk in this project is re-run by anything, and canvas-groups' context line reads "1 items · see context, inception, standing-agents, embed, public |
 | research | [Motion on the canvas: three kinds, and only one of them is missing](research/2026-08-28-motion.md) | 2026-08-29 | pan inertia was the one real gap; built 4 Sep with arrival motion — a Hand or middle-button drag coasts under the note's three conditions, and an item from somebody else comes in rather than popping · see ui-refresh |
 | **project** | [multi-identity](projects/multi-identity/journey.md) | 2026-09-01 | all five phases closed 1 Sep 2026 — the door starts the proof and shows who this browser may be, the refusal renders its remedy, the first machine's words lead with resumption, and actor.join folds a second actor into the person who holds both. Journeys 1–6 walked on a scratch home borrowing dev's attester. · see multiuser |
