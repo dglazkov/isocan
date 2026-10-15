@@ -5,15 +5,15 @@ import { warmHtmlSnapshot } from "./htmlsnapshot.ts";
 import type { Viewport } from "./viewport.ts";
 
 /** Minimum camera pan speed (screen px/s) before directional lookahead engages. */
-export const MIN_LOOKAHEAD_SPEED = 120;
+const MIN_LOOKAHEAD_SPEED = 120;
 /** How far ahead in time (seconds) the moving viewport projects its corridor. */
-export const LOOKAHEAD_SECONDS = 0.85;
+const LOOKAHEAD_SECONDS = 0.85;
 /** Minimum forward projection (screen px) once moving faster than MIN_LOOKAHEAD_SPEED. */
-export const MIN_LOOKAHEAD_PX = 900;
+const MIN_LOOKAHEAD_PX = 900;
 /** Maximum forward projection (screen px) during a fast fling (~3 screens ahead). */
-export const MAX_LOOKAHEAD_PX = 2800;
+const MAX_LOOKAHEAD_PX = 2800;
 /** Cross-axis screen-pixel cushion around the swept viewport corridor. */
-export const LOOKAHEAD_CROSS_PAD = 120;
+const LOOKAHEAD_CROSS_PAD = 120;
 /** Hard cap on active directional lookahead items at any moment. */
 export const MAX_LOOKAHEAD_ITEMS = 8;
 /** Hard ceiling on total held lookahead items (active + grace window). */
@@ -21,7 +21,7 @@ export const MAX_HELD_LOOKAHEAD = 12;
 /** How long a preloaded item stays mounted after leaving the corridor so `useOnScreen` can take over seamlessly when panning settles. */
 export const LOOKAHEAD_GRACE_MS = 2_000;
 
-export interface LookaheadHit {
+interface LookaheadHit {
   itemId: string;
   /** Entry fraction along the lookahead sweep: 0 = already touching/on screen, (0..1] = arriving ahead. */
   tEnter: number;
@@ -217,6 +217,12 @@ function dropItemNow(itemId: string): void {
   }
 }
 
+/**
+ * Publish the active directional lookahead corridor and kick off eager WebP
+ * snapshot warming for incoming HTML blobs while holding recently left items
+ * in a brief grace window so `IntersectionObserver` can take over without
+ * flickering back to `.item-standby` when panning settles.
+ */
 export function applyLookahead(canvasId: string, hits: readonly LookaheadHit[]): void {
   const wanted = new Set<string>();
   for (const hit of hits) {
@@ -257,6 +263,10 @@ function itemIdFrom(hit: LookaheadHit): string {
   return hit.itemId;
 }
 
+/**
+ * Drop all held lookahead items and cancel pending grace timers when the
+ * canvas viewport unmounts or switches canvases so stale item IDs never linger.
+ */
 export function clearLookahead(): void {
   for (const timer of leavingTimers.values()) clearTimeout(timer);
   leavingTimers.clear();
