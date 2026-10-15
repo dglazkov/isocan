@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { HANDOFF_REVIEWED_PROP, morningDue, nightReview, type Actor, type MorningProposal } from "@isocan/core";
+import { HANDOFF_REVIEWED_PROP, nightReview, type Actor, type MorningProposal } from "@isocan/core";
 import type { PriorVisit } from "../lib/visitdigest.ts";
 import { sendEchoed, useCanvasStore } from "../stores/canvasStore.ts";
 import "./morning.css";
@@ -12,20 +12,17 @@ const STATE: Record<MorningProposal["state"], string> = { sure: "Sure", hunch: "
  *
  * Due only after the person's own `/goodnight`, when the visit's prior seen
  * mark is older than the note's ready-by (`morningDue`). The note is decided
- * once, at the mark this visit arrived with, and then drawn live from the
- * canvas (`nightReview`), so a Keep or a Delete shows here at once. Seeing it
+ * once per arrival, by `CanvasPage` (`reviewOwed`), and arrives here as
+ * `noteId` — never decided at this component's mount, which the phone repeats
+ * on every switch back to Chat. It is drawn live from the canvas
+ * (`nightReview`), so a Keep or a Delete shows here at once. Seeing it
  * closes the note: one `handoffReviewed` write, by the person, so it stops
  * holding other people's goodnights off the items it named.
  */
-export function MorningBrief({ prior, actor, onItem, onThread }: { prior: PriorVisit; actor: Actor; onItem: (id: string) => void; onThread: (id: string) => void }) {
+export function MorningBrief({ prior, actor, noteId, onItem, onThread }: { prior: PriorVisit; actor: Actor; noteId: string | null; onItem: (id: string) => void; onThread: (id: string) => void }) {
   const canvas = useCanvasStore((s) => s.canvas);
   const joined = useCanvasStore((s) => s.actorJoins) ?? undefined;
-  const noteId = useRef<string | null | undefined>(undefined);
-  if (noteId.current === undefined && canvas) {
-    const due = prior.available ? morningDue(canvas, prior.actorId, prior.mark, Date.now(), joined) : null;
-    noteId.current = due && "noteId" in due ? due.noteId : null;
-  }
-  const review = canvas && noteId.current ? nightReview(canvas, noteId.current, Date.now(), joined) : null;
+  const review = canvas && noteId ? nightReview(canvas, noteId, Date.now(), joined) : null;
   const closing = review && !review.reviewed ? review.noteId : null;
   // Once per note: the store re-renders before the write echoes back.
   const closed = useRef<string | null>(null);
