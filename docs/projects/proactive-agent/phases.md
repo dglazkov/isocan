@@ -12,7 +12,7 @@ note: "the walk: proposals and the taste note first, because every moment uses t
 phase discovered that changes the project's course, and the Open entries a
 later phase must pay for.
 
-**Where we are, 14 Oct 2026: phases 1–5 (proposals; the night watch; the morning review; explain; the brief as a card) are CLOSED. Next: phase 6, changes ripple. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
+**Where we are, 14 Oct 2026: phases 1–6 (proposals; the night watch; the morning review; explain; the brief as a card; changes ripple) are CLOSED. Next: phase 7, stuck detection. A slimming pass of the entry chunk follows the phases (Dion). Open questions that shape a build wait on Dion, each named under the phase it blocks (what counts as leaving, settling and being stuck; caps; where a canvas's critics and brief live; how walkers are grounded).**
 
 Rules for every phase, on top of `AGENTS.md`:
 
@@ -182,7 +182,7 @@ brief's intent plus a sensed mode the person can overrule.
 
 ## Phase 6 — Changes ripple
 
-**Status: NOT STARTED.**
+**Status: CLOSED, 14 October 2026.** Core `ripple.ts` (its own subpath, out of the entry): `rippleRuns` finds a settled run, `rippleChanges` what it changed (a token's value, a replaced literal colour, type, space or shape, a term), `rippleRead` sorts every other screen in the source's group into would change, already in sync or disagrees, and `ripplePulse` makes one tick per screen; the lead's read-back is at most three decisions, a good move named once per canvas, an argued exception in one line, and one sketch set apart. The person's own client asks the lead once a run settles; previews are proposals citing `version:<src>@vN`; nothing changes until a preview is kept, the design system is chosen, or the source is marked a one-off. A pulse strip and a panel in the web (lazy); `isocan ripple`. `ripple.test.ts` (core 13, CLI 3), the `proactive-ripple` journey (every other screen unchanged byte for byte; Keep turns Checkout current and moves nothing else). Entry 692,006 → 692,474.
 
 **Outcome:** the settle trigger in the rc; `isocan ripple <item>` listing
 the screens that use the changed tokens, values or terms; previews as
@@ -202,6 +202,12 @@ strip; the decision read-back from the lead agent.
 
 - **2026-10-14** — Open: when an iteration has settled, and whether the
   default altitude should ever be the design system. Waits on Dion.
+- **2026-10-14** — The settle trigger is the person's own client, not the rc: the rc wakes on mentions and has no quiet timer, so the pulse chunk asks once, as the brief card's re-read does.
+- **2026-10-14** — Chosen, Dion to confirm: settled = three or more versions of one screen by one person (gaps of 30 minutes at most), then a minute of quiet, or an explicit ask. The default altitude is screen by screen, never the design system unasked.
+- **2026-10-14** — Keep trashes a preview too, so a trashed preview whose bytes became a version of its screen reads as kept, not as a disagreement.
+- **2026-10-14** — The diff's marks skip `:root`, so a token change outlined nothing; preview outlines come from computed styles inside the frame.
+- **2026-10-14** — `--version` was reading the 260 KB agent guide on every command; it now loads only on `--agent-help`: 5,246,984 → 4,976,380 bytes, still 40 modules.
+- **2026-10-14** — Open, waits on Dion: whether the pulse shows screens outside the ripple's group; whether `ripple=off` should tick a screen as conflict for good; the ticks are under the 24 px target size; the automatic ask carries the person's name though they typed nothing.
 
 ## Phase 7 — Stuck detection
 

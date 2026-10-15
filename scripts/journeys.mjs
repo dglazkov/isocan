@@ -5177,6 +5177,197 @@ export default async function act({ prompt, cli, cwd }) {
     },
   },
   {
+    name: "proactive-ripple",
+    /**
+     * **Changes ripple** (proactive-agent phase 6, journey scene 6,
+     * `docs/projects/proactive-agent/phases.md`).
+     *
+     * Its own home and daemon with the real `isocan rc` and
+     * `packages/cli/test/fake-acp.mjs` as Kit, the canvas's lead — **no model
+     * runs**. A synthetic Acme pre-order app of six screens: Menu, and five
+     * others of which Checkout, Profile and Orders still paint with the old
+     * accent, Basket already has the new one and About has none.
+     *
+     * Maya edits Menu three times; the last edit moves the accent. Nothing is
+     * said over the run: the pulse stays away until the run has been quiet a
+     * minute (`RIPPLE_QUIET_MS`), then it appears in the top bar, one tick per
+     * screen, and Maya's own client asks Kit — the settle trigger, with no
+     * click. Kit reads the edits back as a decision, names a good move, argues
+     * Profile is an exception, sketches one idea, and previews Checkout and
+     * Orders as proposals citing Menu's version. Every screen but Menu is byte
+     * for byte what it was; the panel shows the read-back, the three states,
+     * the previews with their changed regions outlined and tagged, the
+     * altitudes and the sketch set apart. Keep on Checkout's preview brings
+     * its tick current, and only Checkout moved. Screenshots of the panel and
+     * the pulse, light and dark.
+     */
+    what: "changes ripple: a settled run summons Kit unasked; previews arrive as proposals, the pulse shows behind and conflict, and nothing changes until Keep",
+    async run(rig) {
+      const { b } = rig;
+      const home = mkdtempSync(path.join(tmpdir(), "isocan-journey-ripple-"));
+      const kitDir = path.join(home, "kit");
+      const fakeAcp = path.join(repo, "packages/cli/test/fake-acp.mjs");
+      const act = path.join(home, "act.mjs");
+      execFileSync("mkdir", ["-p", kitDir]);
+      writeFileSync(path.join(home, "identity.json"), JSON.stringify({ id: "usr_ripple_maya", name: "Maya", createdAt: new Date().toISOString() }));
+      writeFileSync(path.join(home, "config.json"), JSON.stringify({ adapterEnv: ["FAKE_ACP_*"], acpAdapters: { "claude-code": [process.execPath, fakeAcp] }, defaultHarness: "claude-code" }));
+      // Kit, scripted: asked to ripple, it reads the ripple, previews every
+      // screen that would change but Profile (which it argues), and reads back.
+      writeFileSync(act, `
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+export default async function act({ prompt, cli, cwd }) {
+  const canvasId = /"canvasId":\\s*"([^"]+)"/.exec(prompt)?.[1];
+  const source = /Ripple, please \\((itm_[\\w-]+)@/.exec(prompt)?.[1];
+  if (!canvasId || !source) return;
+  const run = (...args) => execFileSync(process.execPath, [cli, "--canvas", canvasId, ...args], { encoding: "utf8" });
+  const json = (...args) => JSON.parse(execFileSync(process.execPath, [cli, "--json", "--canvas", canvasId, ...args], { encoding: "utf8" }));
+  const r = json("ripple", source);
+  if (r.back) return;
+  const previews = [];
+  for (const s of r.read.screens.filter((x) => x.state === "would change" && x.title !== "Profile")) {
+    const file = path.join(cwd, s.itemId + ".html");
+    writeFileSync(file, run("get", s.itemId).split("#b5452a").join("#8a3a20"));
+    previews.push("--preview", s.itemId + "=" + file);
+  }
+  run("ripple", source, "--read-back", "--decision", "a warmer, quieter accent", "--good", "you kept one accent for every action",
+    "--exception", "Profile | a settings list, not a decision screen", "--sketch", "With one accent, the brand mark could carry the colour alone.", ...previews);
+}
+`);
+      const daemon = await startDaemon(home);
+      const { origin } = daemon;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: new URL(origin).port, FAKE_ACP_ACT: act, FAKE_ACP_CLI: cli };
+      for (const name of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "ISOCAN_SESSION_ID", "ISOCAN_HARNESS", "CODEX_SANDBOX", "CODEX_THREAD_ID"]) delete env[name];
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      const page = (name, accent, words) => {
+        const file = path.join(home, `${name}-${Date.now()}.html`);
+        const style = accent ? `<style>:root{--accent:${accent}}h1{color:var(--accent);font-size:32px}a{display:inline-block;margin-top:24px;padding:12px 20px;border-radius:8px;background:var(--accent);color:#fff;text-decoration:none}</style>` : "";
+        writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>${name}</title>${style}<body style='font:16px system-ui;padding:24px'><h1>${name}</h1><p>${words}</p>${accent ? "<a href='#'>Continue</a>" : ""}</body>`);
+        return file;
+      };
+      const shot = async (name) => {
+        const file = path.join(tmpdir(), `isocan-ripple-${name}-${Date.now()}.png`);
+        writeFileSync(file, Buffer.from((await b.send("Page.captureScreenshot", { format: "png" })).data, "base64"));
+        return file;
+      };
+      const pulse = `document.querySelector("[data-ripple-pulse]")`;
+      const panel = `document.querySelector("[data-ripple-panel]")`;
+      // The canvas as the person's client reads it: a reader that says which features it decodes.
+      const features = "canvas-groups-v4,questionnaires-v1,design-requests-v1,design-requests-v2,design-decisions-v1,design-repairs-v1";
+      const served = async (id) => b.ev(`fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => JSON.stringify(r.canvas?.items ?? r))`);
+      let rc = null;
+      let rcOut = "";
+      try {
+        const id = runCli("canvas", "create", "Acme Bakery").canvasId;
+        const screens = {};
+        for (const [i, title, accent, words] of [[0, "Menu", "#b5452a", "Sourdough · Rye"], [1, "Checkout", "#b5452a", "Sourdough loaf × 1 · Pickup Saturday"], [2, "Basket", "#8a3a20", "Your basket is empty."], [3, "Profile", "#b5452a", "Notifications · Payment"], [4, "Orders", "#b5452a", "Last Saturday: two loaves"], [5, "About", null, "A neighbourhood bakery."]]) {
+          screens[title] = runCli("--canvas", id, "add", page(title, accent, words), "--title", title, "--size", "390x520", "--at", `${(i % 3) * 470},${Math.floor(i / 3) * 760}`).itemId;
+        }
+        runCli("--canvas", id, "rc", "add", "Kit", "--dir", kitDir);
+        runCli("--canvas", id, "canvas", "edit", "--prop", "proactive=Kit");
+        rc = spawn(process.execPath, [cli, "--canvas", id, "rc"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+        rc.stdout.on("data", (c) => (rcOut += c));
+        rc.stderr.on("data", (c) => (rcOut += c));
+
+        const { address } = runCli("--canvas", id, "pass");
+        await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+        const loaded = b.once("Page.loadEventFired");
+        await b.send("Page.navigate", { url: origin });
+        await Promise.race([loaded, sleep(15_000)]);
+        await b.ev(`(() => { localStorage.clear(); return true; })()`);
+        await b.send("Page.navigate", { url: address });
+        await until(b, `!!document.querySelector('[data-item-id="${screens.About}"]')`, "the canvas with its six screens", 20_000);
+        await until(b, `fetch('/api/projects/${id}/rc', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => r.parked)`, "Kit's rc to park", 20_000);
+
+        // 1. Maya's run on Menu: three edits, the last a new accent. Nothing is said over it.
+        const othersOf = (items) => JSON.stringify(Object.values(JSON.parse(items)).filter((i) => i.id !== screens.Menu && !i.properties?.proposal).map((i) => [i.id, i.currentVersionId, i.versions.length, i.x, i.y, i.properties]));
+        const before = othersOf(await served(id));
+        for (const [accent, words] of [["#b5452a", "Sourdough · Rye · Croissant"], ["#b5452a", "Sourdough · Rye · Croissant · Bun"], ["#8a3a20", "Sourdough · Rye · Croissant · Bun"]]) {
+          runCli("--canvas", id, "edit", screens.Menu, page("Menu", accent, words));
+        }
+        await sleep(3000);
+        if (await b.ev(`!!${pulse}`)) throw new Error("the pulse spoke over a run of edits that had not settled");
+
+        // 2. Quiet for a minute: the pulse appears, one tick per screen, and Maya's client asks Kit — no click.
+        await until(b, `!!${pulse}`, "the pulse after the run settled", 90_000);
+        const ticks = await b.ev(`Object.fromEntries([...${pulse}.querySelectorAll("[data-ripple-tick]")].map((t) => [t.dataset.rippleTick, t.dataset.state]))`);
+        const want = { [screens.Menu]: "current", [screens.Checkout]: "behind", [screens.Basket]: "current", [screens.Profile]: "behind", [screens.Orders]: "behind", [screens.About]: "current" };
+        if (JSON.stringify(Object.keys(ticks).sort()) !== JSON.stringify(Object.keys(want).sort()) || Object.entries(want).some(([k, v]) => ticks[k] !== v)) throw new Error(`the pulse is not one tick per screen in the right states: ${JSON.stringify(ticks)}`);
+        await until(b, `fetch('/api/projects/${id}/canvas', {headers:{'x-isocan-features':'${features}'}}).then(r => r.json()).then(r => Object.values(r.canvas.threads).some((t) => t.comments.some((c) => c.author.name === "Maya" && c.body.includes("Ripple, please ("))))`, "Maya's client to ask Kit once the run settled", 15_000);
+
+        // 3. Kit's previews arrive as proposals beneath Checkout and Orders; the read-back lands; Profile is argued, not previewed.
+        await until(b, `document.querySelectorAll("[data-proposal]").length === 2`, "Kit's two previews, as proposals", 90_000);
+        await until(b, `${pulse}?.querySelector('[data-ripple-tick="${screens.Profile}"]')?.dataset.state === "conflict"`, "Profile in conflict once Kit argued it", 20_000);
+        const items = JSON.parse(await served(id));
+        const previews = Object.values(items).filter((i) => i.properties?.proposal);
+        const parents = previews.map((p) => p.properties.parent).sort();
+        if (JSON.stringify(parents) !== JSON.stringify([screens.Checkout, screens.Orders].sort())) throw new Error(`the previews hang beneath the wrong screens: ${JSON.stringify(parents)}`);
+        for (const p of previews) {
+          const cites = JSON.parse(p.properties.proposalCites);
+          if (cites[0]?.kind !== "version" || cites[0]?.ref !== `${screens.Menu}@v4`) throw new Error(`a preview does not cite Menu's version: ${JSON.stringify(cites)}`);
+        }
+        if (othersOf(await served(id)) !== before) throw new Error("the ripple changed a screen besides Menu before anything was kept");
+
+        // 4. The panel: the read-back, the three states, the previews outlined and tagged, the altitudes, the sketch set apart.
+        await rig.click("[data-ripple-pulse-open]", "the pulse");
+        await until(b, `!!${panel}?.querySelector('[data-ripple-section="back"]')`, "the ripple panel", 15_000);
+        await until(b, `${panel}.querySelectorAll("[data-ripple-preview] iframe").length === 2`, "both previews in the panel", 15_000);
+        const text = await b.ev(`${panel}.textContent`);
+        for (const w of ["What you decided", "a warmer, quieter accent", "Caught doing it right: you kept one accent for every action", "What changed", "--accent #b5452a → #8a3a20", "Would change", "Already in sync", "Disagrees, your call", "a settings list, not a decision screen", "Screen by screen", "Put it in the design system", "This one is a one-off", "One idea this makes possible", "With one accent, the brand mark could carry the colour alone."]) {
+          if (!text.includes(w)) throw new Error(`the panel does not say ${JSON.stringify(w)}: ${text.slice(0, 1500)}`);
+        }
+        if (!(await b.ev(`${panel}.querySelector('[data-ripple-altitude="screens"]').getAttribute("aria-pressed") === "true"`))) throw new Error("screen by screen is not the default altitude");
+        if (!(await b.ev(`!!${panel}.querySelector('[data-ripple-screen="${screens.Basket}"][data-state="in sync"]') && !!${panel}.querySelector('[data-ripple-screen="${screens.Profile}"][data-state="disagrees"]')`))) throw new Error("Basket is not in sync, or Profile does not disagree, in the panel");
+        // The changed regions, outlined and tagged inside each preview: the frame's origin is opaque, so it says back how many it marked.
+        await until(b, `[...${panel}.querySelectorAll("[data-ripple-preview] .ripple-preview")].every((p) => Number(p.dataset.rippleMarked) >= 1)`, "each preview's changed regions outlined and tagged", 15_000);
+        const shots = {};
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`panel-${theme}`] = await shot(`panel-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+
+        // 5. Keep is the person's: Checkout's preview becomes its next version; its tick turns current; nothing else moved.
+        const keep = previews.find((p) => p.properties.parent === screens.Checkout).id;
+        await rig.click(`[data-ripple-keep="${keep}"]`, "Keep on Checkout's preview");
+        await until(b, `${pulse}?.querySelector('[data-ripple-tick="${screens.Checkout}"]')?.dataset.state === "current"`, "Checkout current after Keep", 20_000);
+        const after = JSON.parse(await served(id));
+        if (after[screens.Checkout].versions.length !== 2) throw new Error(`Keep did not make one new version of Checkout: ${after[screens.Checkout].versions.length}`);
+        const was = JSON.parse(before).filter((r) => r[0] !== screens.Checkout).map((r) => [r[0], r[1], r[2]]);
+        const now = Object.values(after).filter((i) => i.id !== screens.Menu && i.id !== screens.Checkout && !i.properties?.proposal).map((i) => [i.id, i.currentVersionId, i.versions.length]);
+        if (JSON.stringify(now) !== JSON.stringify(was)) throw new Error(`a Keep on Checkout moved another screen: ${JSON.stringify(now)} vs ${JSON.stringify(was)}`);
+        const printed = runCli("--canvas", id, "ripple");
+        if (printed.ticks.find((t) => t.itemId === screens.Checkout)?.state !== "current" || printed.ticks.find((t) => t.itemId === screens.Orders)?.state !== "behind") throw new Error(`the terminal's pulse does not read the same: ${JSON.stringify(printed.ticks)}`);
+        await b.ev(`(() => { ${panel}.scrollTop = 0; return true; })()`);
+        for (const theme of ["light", "dark"]) {
+          await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);
+          await sleep(400);
+          shots[`kept-${theme}`] = await shot(`kept-${theme}`);
+        }
+        await b.ev(`(() => { document.documentElement.dataset.theme = "light"; return true; })()`);
+        const errors = b.takeErrors();
+        if (errors.length > 0) throw new Error(`the page threw: ${errors[0]}`);
+        return { screenshots: shots };
+      } catch (err) {
+        const said = await b.ev(`(document.querySelector("[data-ripple-panel]")?.textContent ?? "no ripple panel").slice(0, 1200)`).catch(() => "");
+        throw new Error(`${err.message}\n--- the panel ---\n${said}\n--- rc ---\n${rcOut.slice(-3000)}`);
+      } finally {
+        if (rc) {
+          rc.kill("SIGINT");
+          await new Promise((r) => { rc.once("exit", r); setTimeout(r, 3000); });
+          if (rc.exitCode === null) rc.kill("SIGKILL");
+        }
+        await daemon.stop();
+        rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  },
+  {
     name: "launcher",
     /** ⌘K stopped being a third composer and became the way to reach
      *  everything. A launcher that opens but does nothing is the worst version

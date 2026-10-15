@@ -380,6 +380,8 @@ function oneItemEntries(one: Item, version: Item["versions"][number] | null, ctx
     }] : []),
     // How it got here (proactive-agent phase 4) — `isocan explain`; a panel beside the canvas, loaded on the click.
     { label: "Explain", run: () => explainItem(ctx.canvasId, ctx.actor, one.id) },
+    // Changes ripple (proactive-agent phase 6) — `isocan ripple`; a screen's edits read against every other screen, loaded on the click.
+    ...(version?.mimeType === "text/html" && history ? [{ label: "Ripple…", run: () => void import("../components/RipplePanel.tsx").then((m) => m.openRipple({ canvasId: ctx.canvasId, actor: ctx.actor, itemId: one.id })) }] : []),
     // N voices for a screen's words, each a variation (copy-edit phase 2) — `isocan words vary` — and, once
     // it has voices (on the screen or on one of them), all of them side by side to mix (phase 3) — `isocan
     // words mix`. Both load on the click, through the one lazy file. "Compare the copy…" stays dimmed until

@@ -215,8 +215,12 @@ describe("spacing", () => {
     // 1360 -> 1390 on 14 Oct 2026 for the brief card (phase 5): twenty-six
     // lengths in its own lazy sheet, all on existing steps, against a total
     // at 1,355; the card's lines, its editor and the re-read's three piles.
+    // 1390 -> 1420 on 14 Oct 2026 for changes ripple (phase 6): the pulse
+    // strip and the ripple panel in their own lazy sheet, all on existing
+    // steps, taking the total to 1,405; the panel restates Explain's
+    // measures rather than sharing a sheet across two lazy chunks.
     expect(spacing.length).toBeGreaterThan(SPACING_STEPS * 4);
-    expect(spacing.length).toBeLessThan(1390);
+    expect(spacing.length).toBeLessThan(1420);
   });
 });
 
