@@ -54,7 +54,7 @@ describe("the peek card and the identity menu do not stack", () => {
 /**
  * **A menu that hangs off a bar on a page that cannot scroll.**
  *
- * `.canvas-page` is `position: fixed; inset: 0; overflow: hidden`, so whatever
+ * `.canvas-page` is `position: absolute; inset: 0; overflow: hidden`, so whatever
  * the identity menu puts below the bottom edge is not reachable by any
  * gesture — there is no page scroll underneath to rescue it. Measured on the
  * canvas LIST at 1280x720, which carries the SHORT version of this menu: it

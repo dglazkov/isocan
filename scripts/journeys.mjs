@@ -5924,9 +5924,22 @@ export default async function act({ prompt, cli, cwd }) {
         const newThreads = Object.keys(after.threads).filter((k) => !before.threads[k] && !after.threads[k].main);
         if (newThreads.length !== 2) throw new Error(`the walk opened ${newThreads.length} threads, not two pins`);
         if (!(await b.ev(`!!document.querySelector('.pin [data-persona="one-handed"]') && !!document.querySelector('.pin [data-persona="low-vision"]')`))) throw new Error("the canvas does not draw the walkers' pins");
-        // The walk panel sits over the toasts' close buttons (an open issue), so wait out
-        // their 12 s lifetime, as a person who cannot reach them would.
-        await until(b, `!document.querySelector('.toast')`, "the arrival toasts to expire", 16_000);
+        // The walkers' pins arrive as comment toasts in the corner the panel is
+        // in, and by the layer scale a toast (--z-toast) sits over a floating
+        // panel (--z-float). That held only on paper while `.canvas-page` was
+        // `position: fixed`: it made the page its own stacking context, so the
+        // body-mounted panel covered every toast's close button. Guarded here
+        // by pressing them for real, and only where one actually lies over the
+        // open panel — otherwise the presses prove nothing about the layers.
+        await until(b, `!!document.querySelector('.toast-close')`, "the walkers' pins to arrive as toasts", 15_000);
+        const overPanel = JSON.parse(await b.ev(`JSON.stringify((() => { const p = ${panel}.getBoundingClientRect(); return [...document.querySelectorAll('.toast-close')].map((c) => { const r = c.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; return x > p.left && x < p.right && y > p.top && y < p.bottom; }); })())`));
+        if (!overPanel.some(Boolean)) throw new Error(`no toast's close button lies over the open walk panel, so pressing them no longer proves the toasts sit above it: ${JSON.stringify(overPanel)}`);
+        // What traps the toasts, named, when one is covered: every ancestor that makes a stacking context.
+        const traps = await b.ev(`(() => { const out = []; for (let el = document.querySelector('.toasts')?.parentElement; el && el !== document.documentElement; el = el.parentElement) { const s = getComputedStyle(el); const why = [s.position === 'fixed' || s.position === 'sticky' ? 'position: ' + s.position : '', s.zIndex !== 'auto' && s.position !== 'static' ? 'z-index: ' + s.zIndex : '', s.isolation === 'isolate' ? 'isolation' : '', s.transform !== 'none' ? 'transform' : '', s.filter !== 'none' ? 'filter' : '', /paint|layout|strict|content/.test(s.contain) ? 'contain: ' + s.contain : '', s.opacity !== '1' ? 'opacity' : ''].filter(Boolean); if (why.length) out.push((el.className || el.tagName) + ' (' + why.join(', ') + ')'); } return out.join('; ') || 'none'; })()`);
+        while (await b.ev(`!!document.querySelector('.toast-close')`)) {
+          await rig.click(".toast-close", `a toast's close button, over the open walk panel (stacking contexts above the toasts: ${traps})`);
+        }
+        await until(b, `!document.querySelector('.toast')`, "the arrival toasts to go", 10_000);
         await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1700, deviceScaleFactor: 1, mobile: false });
         for (const theme of ["light", "dark"]) {
           await b.ev(`(() => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; return true; })()`);

@@ -619,7 +619,7 @@ img { height: auto; }
   background: var(--card); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow-pop);
   /* **It hangs off a bar on a page that does not scroll.** `.canvas-page` is
-     `position: fixed; inset: 0; overflow: hidden`, so anything this menu puts
+     `position: absolute; inset: 0; overflow: hidden`, so anything this menu puts
      below the viewport is not reachable by any gesture — measured at 1280x720
      it ran 160px past the bottom edge on the canvas LIST, which is the short
      version of this menu; on a canvas it carries the Controls rows and the
@@ -886,7 +886,15 @@ img { height: auto; }
 .canvas-editor-error { font-size: 11px; color: var(--danger); }
 
 /* ---------- canvas page ---------- */
-.canvas-page { position: fixed; inset: 0; overflow: hidden; }
+/* ABSOLUTE, not fixed, and nothing else that makes a stacking context. The
+   page fills the window either way (html, body and #root are 100%, and
+   nothing scrolls), but `position: fixed` always makes a stacking context, and
+   then the whole page — toasts at --z-toast, the bar's menus at --z-popover —
+   painted as one layer at 0 beneath every panel mounted on the body: a walk
+   panel at --z-float covered the comment toasts' close buttons. Without it the
+   page's chrome and the body's panels meet on the one scale above
+   (layers.test.ts holds this rule to it). */
+.canvas-page { position: absolute; inset: 0; overflow: hidden; }
 .canvas-viewport {
   position: absolute; inset: 0;
   background: var(--ground);

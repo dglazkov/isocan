@@ -317,7 +317,7 @@ into the taste note.
 - **2026-10-14** — Chosen, Dion to confirm: the send is never blocked; readings are words, and drawing them on the person's own screen is the lead's and deferred; the count is opt-in and off; offers fade once 8 of the last 10 asks needed no translation.
 - **2026-10-14** — The vague-word list is its own core subpath: importing `design-words` from it split a chunk out of the CLI and took `--version` to 41 modules, so the glossary terms are passed in.
 - **2026-10-14** — The deep run after this phase found two rule breaks from phase 9: a `#fff` literal in the walk panel (now the `.html-view` page white the token rule allows) and two journeys that fired `.click()` directly. Real clicks found the walk panel covering the comment toasts' close buttons; that journey waits out the toasts' 12 s, and the overlap is open.
-- **2026-10-14** — Open, waits on Dion: pictures on the readings; fading per word rather than overall; panels mounted on the body (Walk, Explain) sit above the canvas's toasts.
+- **2026-10-14** — Open, waits on Dion: pictures on the readings; fading per word rather than overall. (The panels-over-toasts overlap was fixed the same day: `.canvas-page` was `position: fixed`, a stacking context that put the whole page under any body-mounted panel; it is `absolute` now, guarded in `layers.test.ts`.)
 
 ## Phase 11 — Evidence
 

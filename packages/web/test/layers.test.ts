@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { rules, selectorsOf, sheets, withoutComments } from "./cssrules.ts";
+import { appSheets, rules, selectorsOf, sheets, withoutComments } from "./cssrules.ts";
 
 /**
  * The layer scale, enforced.
@@ -263,5 +263,55 @@ describe("the marks dock clears the zoom bar", () => {
     // floating control, it does not outrank it.
     const dock = rules().find((r) => selectorsOf(r).includes(".marks") && r.at.length === 0)!;
     expect(dock.body).toMatch(/z-index:\s*calc\(var\(--z-dock\) - 1\)/);
+  });
+});
+
+/**
+ * **The canvas page is not a stacking context, so the scale holds across it.**
+ *
+ * The walk, explain and ripple panels mount themselves on `document.body`, at
+ * `--z-float`. The comment toasts live inside `.canvas-page`, at `--z-toast`.
+ * By the scale the toast wins; on screen the panel did, and a toast's close
+ * button could not be pressed while a walk was open (found by a real click in
+ * the `proactive-walk` journey, 14 Oct 2026). `.canvas-page` was
+ * `position: fixed`, which ALWAYS makes a stacking context, so everything in
+ * the page — toasts, the bar's menus, popovers — painted as one layer at 0
+ * underneath anything on the body with a z-index at all.
+ *
+ * So any rule that targets the page element itself (any modifier class, any
+ * media query but print) must not give it a stacking context.
+ */
+describe("the canvas page lets its chrome meet the body's panels on one scale", () => {
+  const TRAPS: [RegExp, string][] = [
+    [/position:\s*(fixed|sticky)/, "position: fixed/sticky"],
+    [/z-index:\s*(?!auto)[^;]+/, "a z-index"],
+    [/(?<![-\w])transform:\s*(?!none)/, "a transform"],
+    [/(?<![-\w])filter:\s*(?!none)/, "a filter"],
+    [/backdrop-filter:\s*(?!none)/, "a backdrop-filter"],
+    [/isolation:\s*isolate/, "isolation: isolate"],
+    [/contain:\s*[^;]*(paint|layout|strict|content)/, "contain"],
+    [/(?<![-\w])opacity:\s*0?\.\d/, "opacity below 1"],
+    [/will-change:\s*[^;]*(transform|opacity|filter|z-index|position)/, "will-change"],
+    [/mix-blend-mode:\s*(?!normal)/, "a blend mode"],
+    [/(?<![-\w])(clip-path|mask|perspective):\s*(?!none)/, "clip-path/mask/perspective"],
+  ];
+  /** A selector that lands on the page element itself, not a descendant. */
+  const onPage = (selector: string): boolean => /^\.canvas-page(?:[.:[][^\s>+~]*)?$/.test(selector);
+
+  const found = appSheets.flatMap((sheet) =>
+    rules(sheet.text)
+      .filter((r) => selectorsOf(r).some(onPage) && !r.at.some((at) => /\bprint\b/.test(at)))
+      .map((r) => ({ ...r, file: sheet.file })),
+  );
+
+  it("finds the page's own rule, so an empty answer cannot pass", () => {
+    expect(found.some((r) => r.selector === ".canvas-page" && r.at.length === 0)).toBe(true);
+  });
+
+  it("gives the page no stacking context", () => {
+    const bad = found.flatMap((r) =>
+      TRAPS.filter(([re]) => re.test(r.body)).map(([, why]) => `${r.file}: ${r.selector} has ${why}`),
+    );
+    expect(bad, "a stacking context on .canvas-page buries its toasts and menus under the body's panels").toEqual([]);
   });
 });
