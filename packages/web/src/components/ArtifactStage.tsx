@@ -2,7 +2,7 @@ import "./artifact-stage.css";
 import "./focus.css";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { Actor, Backing, FocusFacts } from "@isocan/core";
-import { automaticCanvasTarget, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, nodeCapabilitiesFor, sourceFaceOf, visualFaceOf, shortcut } from "@isocan/core";
+import { activeFaceIdOf, automaticCanvasTarget, availableFacesOf, faceLabel, hasDistinctVisualFace, sourceOf, backingOf, deckStep, editableText, isDesignSystem, isTextItem, nodeCapabilitiesFor, sourceFaceOf, visualFaceOf, warmFacesOf, shortcut, type ItemFaceId } from "@isocan/core";
 import { homeAnswered, readBlobText, writeItem } from "../lib/api.ts";
 import { loadBacking, useCanvasStore } from "../stores/canvasStore.ts";
 import { useUiStore } from "../stores/uiStore.ts";
@@ -217,9 +217,9 @@ function OrdinaryArtifactStage({
   // and only offered on the SAVED preview: with the editor open, the buffer
   // is the source of truth and two pens on one file is a conflict machine.
   const [textEditing, setTextEditing] = useState(false);
-  const [previewFace, setPreviewFace] = useState<"visual" | "source">("visual");
+  const [previewFace, setPreviewFace] = useState<ItemFaceId | null>(null);
   useEffect(() => {
-    setPreviewFace("visual");
+    setPreviewFace(null);
   }, [itemId]);
   /**
    * **Every hook above the early returns**, and this one taught the rule the
@@ -266,7 +266,10 @@ function OrdinaryArtifactStage({
         askAgent,
       }
     : null;
-  const hasVisual = current.visual !== undefined;
+  const hasVisual = hasDistinctVisualFace(current);
+  const availableFaces = availableFacesOf(current);
+  const defaultFace = activeFaceIdOf(item, current, canvas);
+  const activeFace: ItemFaceId = previewFace && availableFaces.includes(previewFace) ? previewFace : defaultFace;
   const editable = editableText(current.mimeType) && canEdit && !current.designRecord;
   // Not a hook — a derivation, so it may live where it is used.
   const backing = backingOf(item, disk.bound, (path) => disk.onDisk[path] ?? null);
@@ -306,7 +309,8 @@ function OrdinaryArtifactStage({
           .filter((hash): hash is string => Boolean(hash))
       : [];
 
-  const face = hasVisual && previewFace === "source" ? sourceFaceOf(current) : visualFaceOf(current);
+  const face = activeFace === "source" ? sourceFaceOf(current) : visualFaceOf(current, activeFace);
+  const warm = [...neighbours, ...warmFacesOf(current, face.blobHash)];
   const saved = (
     <VersionContent
       canvasOf={item.properties.canvas ?? null}
@@ -323,7 +327,7 @@ function OrdinaryArtifactStage({
       designSystem={isDesignSystem(item)}
       textNode={isTextItem(item)}
       reloadToken={0}
-      warm={neighbours}
+      warm={warm}
     />
   );
 
@@ -501,22 +505,18 @@ function OrdinaryArtifactStage({
                         : ` — v${item.versions.length}`}
                     </i>
                   </span>
-                  {hasVisual && (
+                  {availableFaces.length >= 2 && (
                     <div className="stage-toggle-group" role="group" aria-label="Preview face">
-                      <button
-                        type="button"
-                        className={`stage-toggle-btn${previewFace === "visual" ? " active" : ""}`}
-                        onClick={() => setPreviewFace("visual")}
-                      >
-                        {current.mimeType === "text/markdown" ? "Visualizer" : "Visual"}
-                      </button>
-                      <button
-                        type="button"
-                        className={`stage-toggle-btn${previewFace === "source" ? " active" : ""}`}
-                        onClick={() => setPreviewFace("source")}
-                      >
-                        {current.mimeType === "text/markdown" ? "Markdown" : "Source"}
-                      </button>
+                      {availableFaces.map((faceId) => (
+                        <button
+                          key={faceId}
+                          type="button"
+                          className={`stage-toggle-btn${activeFace === faceId ? " active" : ""}`}
+                          onClick={() => setPreviewFace(faceId)}
+                        >
+                          {faceLabel(faceId)}
+                        </button>
+                      ))}
                     </div>
                   )}
                   {surface !== "fullscreen" && caps.file && (

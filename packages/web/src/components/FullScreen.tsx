@@ -289,7 +289,7 @@ export function FullScreen({
         {phone && item ? (() => {
           const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0];
           if (!current) return <p>This item has no preview.</p>;
-          const visual = visualFaceOf(current);
+          const visual = visualFaceOf(current, item.properties.face);
           return <VersionContent canvasOf={item.properties.canvas ?? null} canvasSource={sourceOf(item)} canvasId={canvasId} blobHash={visual.blobHash} mimeType={visual.mimeType} filename={visual.filename ?? current.filename} entered designSystem={isDesignSystem(item)} textNode={isTextItem(item)} reloadToken={0} />;
         })() : <ArtifactStage canvasId={canvasId} itemId={itemId} actor={actor} surface="fullscreen" />}
         </FrameAnchor.Provider>

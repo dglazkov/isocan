@@ -44,8 +44,16 @@ import {
   renamedFilename,
   titleRoom,
   paperOf,
+  FACE_PROP,
+  NAMED_FACE_IDS,
+  activeFaceIdOf,
+  faceLabel,
+  newGroupId,
   visualFaceOf,
+  warmFacesOf,
   clickFromMessage,
+  type ItemFaceId,
+  type NamedFaceId,
 } from "@isocan/core";
 import { blobUrl, readBlobText } from "../lib/api.ts";
 import { loadTextFont } from "../lib/textfont.ts";
@@ -227,6 +235,9 @@ function ItemViewInner({
   const soleSelection = useUiStore(
     (s) => s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.id,
   );
+  const parentSelected = useUiStore(
+    (s) => Boolean(item.containerId && s.selectedItemIds.length === 1 && s.selectedItemIds[0] === item.containerId),
+  );
   const drag = useUiStore((s) => (s.drag?.itemIds.includes(item.id) ? s.drag : null));
   // Held, not merely carried: see `DragState.lift` and `.item.lifted`.
   const lifted = useUiStore((s) => !!(s.drag?.lift?.includes(item.id) || s.groupPreview?.lift?.includes(item.id)));
@@ -278,7 +289,17 @@ function ItemViewInner({
   const width = stackBox?.width ?? groupBox?.width ?? resize?.width ?? display.width;
   const height = stackBox?.height ?? groupBox?.height ?? resize?.height ?? display.height;
   const current = item.versions.find((v) => v.id === item.currentVersionId) ?? item.versions[0]!;
-  const visual = visualFaceOf(current);
+  const inheritedFace = useCanvasStore((s) => {
+    if (item.properties[FACE_PROP]) return item.properties[FACE_PROP];
+    const c = shown(s);
+    if (!c || !item.containerId) return null;
+    for (const ancestor of groupAncestors(c, item.id)) {
+      if (ancestor.properties[FACE_PROP]) return ancestor.properties[FACE_PROP];
+    }
+    return null;
+  });
+  const activeFaceId = (inheritedFace as ItemFaceId | null) ?? activeFaceIdOf(item, current);
+  const visual = visualFaceOf(current, activeFaceId);
   const stackDepth = Math.min(item.versions.length - 1, 2);
   // An item's chrome — its name and its version count — is UI, not content:
   // it should stay the size of a label however far out you zoom, the way the
@@ -531,6 +552,41 @@ function ItemViewInner({
   // icon? Marks count against the room — they share the line — so a marked
   // item drops to the icon sooner instead of running the row off its edge.
   const spellItOut = (held.s = (zoom & Z_SPELL) !== 0);
+  // Computed and shown only when this item is the sole selection and at close
+  // zoom (`spellItOut`), so unselected cards pay nothing for group face scans
+  // and never clutter the canvas when zoomed out.
+  const groupFacesKey = useCanvasStore((s) => {
+    if (!isCanvasGroup || !soleSelection || !spellItOut) return "";
+    const c = shown(s);
+    if (!c) return "";
+    const found = new Set<string>();
+    for (const child of groupChildren(c, item.id)) {
+      const ver = child.versions.find((v) => v.id === child.currentVersionId) ?? child.versions[0];
+      if (!ver?.faces) continue;
+      for (const faceId of NAMED_FACE_IDS) {
+        if (ver.faces[faceId]) found.add(faceId);
+      }
+    }
+    return NAMED_FACE_IDS.filter((f) => found.has(f)).join(",");
+  });
+  const toggleableFaces: NamedFaceId[] =
+    !soleSelection || !spellItOut
+      ? []
+      : isCanvasGroup
+        ? groupFacesKey
+          ? (groupFacesKey.split(",") as NamedFaceId[])
+          : []
+        : NAMED_FACE_IDS.filter((f) => current?.faces?.[f] !== undefined);
+  const currentToggleFace: ItemFaceId = isCanvasGroup
+    ? ((item.properties[FACE_PROP] as ItemFaceId | undefined) ?? (inheritedFace as ItemFaceId | null) ?? toggleableFaces[0] ?? "visual")
+    : activeFaceId;
+  // Warm alternate faces only for the selected item (or children of a selected group)
+  // at close zoom, so non-selected items keep `warm=0` and can swap to static SVG
+  // snapshots when zoomed out or panning.
+  const warmFaces = useMemo(
+    () => ((soleSelection || parentSelected) && spellItOut ? warmFacesOf(current, visual.blobHash) : []),
+    [soleSelection, parentSelected, spellItOut, current, visual.blobHash],
+  );
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -539,7 +595,8 @@ function ItemViewInner({
       target.closest(".resize-handle") ||
       target.closest(".version-badge") ||
       target.closest(".browser-reload") ||
-      target.closest(".item-focus-strip")
+      target.closest(".item-focus-strip") ||
+      target.closest(".item-face-toggle")
     )
       return;
     if (entered) return; // entered content owns the pointer
@@ -1397,6 +1454,7 @@ function ItemViewInner({
               canvasSource={source}
               size={{ width, height }}
               picture
+              warm={warmFaces}
               reloadToken={reloadToken}
               liveDoc={liveDoc && docId ? googleDocPreviewUrl(docId) : null}
               snapshotOnly={(!roomy || !observedNearWindow) && !entered}
@@ -1455,6 +1513,57 @@ function ItemViewInner({
             // already worn stay visible either way; this is just the `+`.
             visible={selected}
           />
+          {soleSelection && spellItOut && toggleableFaces.length >= 2 && canEdit && (
+            <div className="item-face-toggle" role="group" aria-label="Active face" onPointerDown={stop}>
+              {toggleableFaces.map((faceId) => (
+                <button
+                  key={faceId}
+                  type="button"
+                  className={`item-face-btn${currentToggleFace === faceId ? " active" : ""}`}
+                  aria-pressed={currentToggleFace === faceId}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const c = shown(useCanvasStore.getState());
+                    if (isCanvasGroup && c) {
+                      const groupId = newGroupId();
+                      void sendEchoed(
+                        canvasId,
+                        actor,
+                        {
+                          type: "item.update",
+                          itemId: item.id,
+                          patch: { properties: { [FACE_PROP]: faceId } },
+                        },
+                        groupId,
+                      );
+                      for (const child of groupChildren(c, item.id)) {
+                        if (child.properties[FACE_PROP] !== undefined) {
+                          void sendEchoed(
+                            canvasId,
+                            actor,
+                            {
+                              type: "item.update",
+                              itemId: child.id,
+                              patch: { removeProperties: [FACE_PROP] },
+                            },
+                            groupId,
+                          );
+                        }
+                      }
+                    } else {
+                      void sendEchoed(canvasId, actor, {
+                        type: "item.update",
+                        itemId: item.id,
+                        patch: { properties: { [FACE_PROP]: faceId } },
+                      });
+                    }
+                  }}
+                >
+                  {faceLabel(faceId)}
+                </button>
+              ))}
+            </div>
+          )}
           {underSlot === "size" && (
             <div className={`item-hint size under-right${resize ? " live" : ""}`}>
               <span>
@@ -1812,6 +1921,8 @@ function VersionFace({
 const KEEP_FRAMES = 6;
 /** How long a frame over its picture may stay unseen waiting for `load`. */
 const ARRIVE_BY_MS = 1200;
+/** How long an un-warmed frame switch waits for `load` before showing in place. */
+const FACE_ARRIVE_BY_MS = 180;
 /** One frozen empty set, so the initial state is not a new object per render. */
 const EMPTY: ReadonlySet<string> = new Set();
 
@@ -1928,6 +2039,11 @@ function HtmlItemView({
   const spot = nextSpot(heldSpot, itemId, blobHash);
   if (spot !== heldSpot) setSpot(spot);
   const src = !snapshotOnly && frame ? anchored(frame.src, spot.carried ?? anchor) : null;
+  const warmAnchor = spot.carried ?? spot.reported ?? anchor;
+  // Booleans and a band, never the raw zoom: a selector that returned the
+  // scale would re-render every screen on every step of a zoom.
+  const band = useUiStore((s) => (picture ? readabilityBand(s.viewport.scale) : 2));
+  const panning = useUiStore((s) => picture && s.panning);
   const snapshotUrl = useHtmlSnapshot(
     canvasId,
     blobHash,
@@ -1936,14 +2052,8 @@ function HtmlItemView({
     (picture && Boolean(src)) || snapshotOnly || eagerSnapshot,
     eagerSnapshot,
   );
-  const [proxyReady, setProxyReady] = useState(false);
-  useEffect(() => {
-    setProxyReady(false);
-  }, [blobHash]);
-  // Booleans and a band, never the raw zoom: a selector that returned the
-  // scale would re-render every screen on every step of a zoom.
-  const band = useUiStore((s) => (picture ? readabilityBand(s.viewport.scale) : 2));
-  const panning = useUiStore((s) => picture && s.panning);
+  const [readySnapshotUrl, setReadySnapshotUrl] = useState<string | null>(null);
+  const proxyReady = snapshotUrl !== null && readySnapshotUrl === snapshotUrl;
   const [live, setLive] = useState(!snapshotOnly);
   const wantLive =
     !snapshotOnly &&
@@ -1985,7 +2095,7 @@ function HtmlItemView({
           alt=""
           decoding="sync"
           draggable={false}
-          onLoad={() => requestAnimationFrame(() => setProxyReady(true))}
+          onLoad={() => requestAnimationFrame(() => setReadySnapshotUrl(snapshotUrl))}
         />
       )}
       {wantLive && src && frame && (
@@ -1999,8 +2109,11 @@ function HtmlItemView({
           sandbox={frame.sandbox}
           title={filename}
           warm={warm
-            .map((hash) => itemFrame(origin, canvasId, hash)?.src)
-            .filter((src): src is string => src !== undefined)}
+            .map((hash) => {
+              const f = itemFrame(origin, canvasId, hash);
+              return f ? anchored(f.src, warmAnchor) : undefined;
+            })
+            .filter((s): s is string => s !== undefined)}
         />
       )}
     </div>
@@ -2060,10 +2173,12 @@ function HtmlView({
   // looked like it was never coming (Dion, 14 Oct 2026). Past this, the frame
   // is shown loading — its words are there long before its last photograph.
   useEffect(() => {
-    if (!overPicture) return;
-    const late = setTimeout(() => setLoaded((was) => (was.has(src) ? was : new Set(was).add(src))), ARRIVE_BY_MS);
+    if (loaded.has(src)) return;
+    if (!overPicture && warmKey === "") return;
+    const waitMs = overPicture && shown.size === 0 ? ARRIVE_BY_MS : FACE_ARRIVE_BY_MS;
+    const late = setTimeout(() => setLoaded((was) => (was.has(src) ? was : new Set(was).add(src))), waitMs);
     return () => clearTimeout(late);
-  }, [src, overPicture]);
+  }, [src, overPicture, warmKey, loaded, shown.size]);
 
   useEffect(() => {
     if (!loaded.has(src)) return;

@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  FACE_PROP,
+  activeFaceIdOf,
+  availableFacesOf,
+  faceLabel,
   hasDistinctVisualFace,
+  isNamedFaceId,
   sourceFaceOf,
   visualFaceOf,
+  warmFacesOf,
   type ItemVersion,
 } from "../src/model.ts";
-import { applyOperation, type Operation } from "../src/index.ts";
+import { applyOperation, invertOperation, type Operation } from "../src/index.ts";
 import { bob, envelope, seedState } from "./helpers.ts";
 
 describe("dual faces of an artifact", () => {
@@ -128,5 +134,82 @@ describe("dual faces of an artifact", () => {
     expect(itemV2?.versions[1]?.visual?.blobHash).toBe("hash_html_v2");
     expect(visualFaceOf(itemV2!.versions[1]!).blobHash).toBe("hash_html_v2");
     expect(sourceFaceOf(itemV2!.versions[1]!).blobHash).toBe("hash_md_v2");
+  });
+
+  it("supports named fidelity faces (wireframe, mid-fi, hi-fi, prototype) and in-place item.update faces", () => {
+    expect(isNamedFaceId("wireframe")).toBe(true);
+    expect(isNamedFaceId("hi-fi")).toBe(true);
+    expect(isNamedFaceId("unknown")).toBe(false);
+    expect(faceLabel("wireframe")).toBe("Wireframe");
+    expect(faceLabel("hi-fi")).toBe("Hi-Fi");
+
+    const s = seedState();
+    const addOp: Operation = {
+      type: "item.add",
+      itemId: "itm_screen",
+      width: 400,
+      height: 800,
+      placement: { x: 100, y: 100 },
+      properties: { [FACE_PROP]: "wireframe" },
+      version: {
+        id: "ver_1",
+        blobHash: "hash_wf",
+        mimeType: "text/html",
+        filename: "home.html",
+        size: 120,
+        faces: {
+          wireframe: {
+            blobHash: "hash_wf",
+            mimeType: "text/html",
+            filename: "home.html",
+            size: 120,
+          },
+        },
+      },
+    };
+    const s2 = applyOperation(s, envelope(addOp, bob))!;
+    const item1 = s2.canvas.items["itm_screen"]!;
+    expect(activeFaceIdOf(item1, item1.versions[0]!)).toBe("wireframe");
+    expect(visualFaceOf(item1.versions[0]!, activeFaceIdOf(item1, item1.versions[0]!)).blobHash).toBe("hash_wf");
+
+    // Pre-publish hi-fi face in-place on ver_1 via item.update without bumping version count or changing active face
+    const updateFacesOp: Operation = {
+      type: "item.update",
+      itemId: "itm_screen",
+      patch: {},
+      faces: {
+        "hi-fi": {
+          blobHash: "hash_hifi",
+          mimeType: "text/html",
+          filename: "home.html",
+          size: 240,
+        },
+      },
+    };
+    const inv = invertOperation(s2, updateFacesOp);
+    const s3 = applyOperation(s2, envelope(updateFacesOp, bob))!;
+    const item2 = s3.canvas.items["itm_screen"]!;
+    expect(item2.versions.length).toBe(1);
+    expect(availableFacesOf(item2.versions[0]!)).toEqual(["wireframe", "hi-fi", "source"]);
+    // Still on wireframe until explicitly flipped
+    expect(activeFaceIdOf(item2, item2.versions[0]!)).toBe("wireframe");
+    expect(visualFaceOf(item2.versions[0]!, activeFaceIdOf(item2, item2.versions[0]!)).blobHash).toBe("hash_wf");
+    expect(warmFacesOf(item2.versions[0]!, "hash_wf")).toEqual(["hash_hifi"]);
+
+    // Flip active face to hi-fi
+    const flipOp: Operation = {
+      type: "item.update",
+      itemId: "itm_screen",
+      patch: { properties: { [FACE_PROP]: "hi-fi" } },
+    };
+    const s4 = applyOperation(s3, envelope(flipOp, bob))!;
+    const item3 = s4.canvas.items["itm_screen"]!;
+    expect(activeFaceIdOf(item3, item3.versions[0]!)).toBe("hi-fi");
+    expect(visualFaceOf(item3.versions[0]!, activeFaceIdOf(item3, item3.versions[0]!)).blobHash).toBe("hash_hifi");
+
+    // Undo face attachment removes hi-fi face cleanly
+    expect(inv).not.toBeNull();
+    const sUndone = applyOperation(s3, envelope(inv!, bob))!;
+    expect(sUndone.canvas.items["itm_screen"]!.versions[0]!.faces?.["hi-fi"]).toBeUndefined();
   });
 });

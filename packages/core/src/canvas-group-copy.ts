@@ -51,7 +51,7 @@ export function groupCopyAction(source: GroupCopySource, destinationCanvasId: st
       box: { x: item.x, y: item.y, width: item.width, height: item.height },
       ...(item.containerId && remap.has(item.containerId) ? { containerId: remap.get(item.containerId)! } : {}),
       ...(item.groupLayout ? { layout: structuredClone(item.groupLayout) } : {}),
-      version: { id: options.newVersionId(), blobHash: current.blobHash, mimeType: current.mimeType, filename: current.filename, size: current.size, ...(current.visual ? { visual: structuredClone(current.visual) } : {}) },
+      version: { id: options.newVersionId(), blobHash: current.blobHash, mimeType: current.mimeType, filename: current.filename, size: current.size, ...(current.visual ? { visual: structuredClone(current.visual) } : {}), ...(current.faces ? { faces: structuredClone(current.faces) } : {}) },
     };
   });
   return { kind: "copy", sourceCanvasId: source.canvasId, rootIds: source.rootIds.map((id) => remap.get(id)!), items,
