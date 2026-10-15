@@ -3,7 +3,7 @@ import {
   LOTTIE_ZIP_MIME,
   isLottieItem,
   lottieModule,
-} from "./core.ts";
+} from "./record.ts";
 
 /**
  * **What the web registers before the module's web half is fetched** —

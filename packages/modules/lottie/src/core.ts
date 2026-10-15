@@ -1,61 +1,21 @@
-import type {
-  CoreModule,
-  Item,
-  ItemVersion,
-  ModuleKind,
-  NodeCapabilities,
-} from "@isocan/core";
+import {
+  LOTTIE_JSON_MIME,
+  LOTTIE_KIND,
+  LOTTIE_POSTER_FRAME_PROP,
+  LOTTIE_ZIP_MIME,
+  isLottieItem,
+  lottieCapabilities,
+  lottieModule,
+} from "./record.ts";
 
-/**
- * **Lottie & dotLottie motion animations** (`docs/projects/lottie/design.md`).
- *
- * A Lottie Bodymovin JSON file (`application/vnd.lottie+json`, `.lottie.json`)
- * or dotLottie archive (`application/vnd.lottie+zip`, `.lottie`) is a structured
- * vector scene graph of layers, bezier shapes, keyframes, and named markers.
- * Removing `@isocan/lottie` leaves every `.lottie.json` readable as plain JSON
- * and every `.lottie` downloadable.
- */
-export const LOTTIE_JSON_MIME = "application/vnd.lottie+json";
-export const LOTTIE_ZIP_MIME = "application/vnd.lottie+zip";
-export const LOTTIE_POSTER_FRAME_PROP = "lottiePosterFrame";
-
-export const LOTTIE_KIND: ModuleKind = {
-  id: "lottie",
-  mimes: [LOTTIE_JSON_MIME, LOTTIE_ZIP_MIME],
-  extensions: ["lottie.json", "lottie"],
-  label: "Animations",
-  noun: "animation",
-  icon: "video",
-};
-
-export function isLottieItem(_item: Item, version: ItemVersion): boolean {
-  const mime = version.mimeType ?? "";
-  if (mime === LOTTIE_JSON_MIME || mime === LOTTIE_ZIP_MIME) return true;
-  const lower = (version.filename ?? "").toLowerCase();
-  return lower.endsWith(".lottie.json") || lower.endsWith(".lottie");
-}
-
-export function lottieCapabilities(
-  item: Item,
-  version: ItemVersion,
-): Partial<NodeCapabilities> | null {
-  if (!isLottieItem(item, version)) return null;
-  const isArchive =
-    version.mimeType === LOTTIE_ZIP_MIME ||
-    (version.filename ?? "").toLowerCase().endsWith(".lottie");
-  return {
-    view: true,
-    edit: true,
-    enter: true,
-    file: !isArchive,
-  };
-}
-
-export const lottieModule: CoreModule = {
-  name: "@isocan/lottie",
-  propertyKeys: [LOTTIE_POSTER_FRAME_PROP],
-  kinds: [LOTTIE_KIND],
-  capabilities: lottieCapabilities,
+export {
+  LOTTIE_JSON_MIME,
+  LOTTIE_KIND,
+  LOTTIE_POSTER_FRAME_PROP,
+  LOTTIE_ZIP_MIME,
+  isLottieItem,
+  lottieCapabilities,
+  lottieModule,
 };
 
 // ---------- Lottie JSON schema & inspection
