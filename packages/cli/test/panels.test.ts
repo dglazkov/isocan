@@ -95,7 +95,7 @@ describe("a panel in the dock", () => {
     const shown = await json("panel", "add", file);
     expect(shown.added).toBe(false);
     expect(shown.can.join("\n"), "the capability list is derived and shown").toContain("review.html");
-    expect(shown.can.join("\n"), "and honest about the phase it is in").toContain("cannot run yet");
+    expect(shown.can.join("\n"), "and honest about the phase it is in").toContain("cannot read what is selected yet");
     expect(await json("panel", "list"), "nothing was added").toEqual([]);
 
     const added = await json("panel", "add", file, "--yes");

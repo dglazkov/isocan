@@ -7,7 +7,8 @@ import { unreadCount, unreadThreads } from "../stores/unreadStore.ts";
 import { unreadByAuthor } from "../lib/facepile.ts";
 import { facesFor } from "../lib/facepile.ts";
 import { actorColorIn, useActorColors } from "../lib/colors.ts";
-import { chatHiddenNow, openPanel } from "../lib/panels.ts";
+import { chatHiddenNow, extensionPanelKey, openPanel } from "../lib/panels.ts";
+import { panelUnavailableSentence, useCanvasPanels } from "../lib/panelExtensions.ts";
 import { AgentsGlyph, ChatGlyph } from "./Glyphs.tsx";
 import { useActorMarks } from "../lib/marks.ts";
 
@@ -38,9 +39,12 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
   const marks = useActorMarks();
   const mainOpen = useUiStore((s) => s.mainPanelOpen);
   const filesOpen = useUiStore((s) => s.filesPanelOpen);
+  const extensionOpen = useUiStore((s) => s.extensionPanelOpen);
+  const panels = useCanvasPanels(canvasId);
 
   // The strip IS the shut rail, so it is not drawn beside an open one.
   if (!canvas || mainOpen || filesOpen) return null;
+  if (extensionOpen) return null;
 
   /**
    * **The Chat's unread, not the canvas's.**
@@ -132,6 +136,25 @@ export function RailStrip({ canvasId, actor }: { canvasId: string; actor: Actor 
           </button>
         );
       })}
+      {panels.length > 0 && <div className="strip-sep" />}
+      {panels.map((p) => (
+        <button
+          key={p.itemId}
+          className="strip-chat strip-panel-ext"
+          data-extension-color={p.color}
+          title={panelUnavailableSentence(p)}
+          aria-label={p.problem ? `${p.title} — unavailable` : `Open ${p.title}`}
+          onClick={() => openPanel(canvasId, extensionPanelKey(p.itemId))}
+        >
+          <span
+            className="strip-glyph"
+            style={{ color: p.color }}
+            aria-hidden
+          >
+            {p.title.slice(0, 1).toUpperCase()}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

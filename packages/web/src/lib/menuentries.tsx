@@ -26,7 +26,8 @@ import { browserClipboard, copyToClipboard, type CopyState } from "./copy.ts";
 import { flashNotice, sendEchoed, setNotice, useCanvasStore } from "../stores/canvasStore.ts";
 import { fetchBlobText } from "./blobtext.ts";
 import { useUiStore } from "../stores/uiStore.ts";
-import { type Panel, chatHiddenNow, openPanel } from "./panels.ts";
+import { type Panel, chatHiddenNow, extensionPanelKey, openPanel } from "./panels.ts";
+import { extensionColor, panelExtensionItems } from "@isocan/core";
 import { glideToBox, revealItem } from "./zoomactions.ts";
 import { addSpeakerNote, noteStarter } from "./notes.ts";
 import { handIn, handable } from "./sprint.ts";
@@ -771,6 +772,8 @@ export function chromeMenu(ctx: {
       icon: <PersonaGlyph size={14} />,
     },
   ];
+  const liveCanvas = useCanvasStore.getState().canvas;
+  const extPanels = liveCanvas ? panelExtensionItems(liveCanvas) : [];
   return [
     ...rail
       // Inside a pane that hides the Chat (`?embed=1`) its row would open nothing.
@@ -779,6 +782,25 @@ export function chromeMenu(ctx: {
         label: one.label,
         icon: one.icon,
         run: () => openPanel(ctx.canvasId, one.panel),
+      })),
+    ...extPanels
+      .filter((item) => !(ui().extensionPanelOpen && ui().extensionPanelId === item.id))
+      .map((item) => ({
+        label: item.title,
+        icon: (
+          <span
+            className="extension-menu-dot"
+            style={{
+              display: "inline-block",
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: extensionColor(item.id),
+            }}
+            aria-hidden
+          />
+        ),
+        run: () => openPanel(ctx.canvasId, extensionPanelKey(item.id)),
       })),
     { separator: "" },
     {

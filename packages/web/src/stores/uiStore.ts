@@ -235,6 +235,10 @@ interface UiStore {
   agentsPanelOpen: boolean;
   contextPanelOpen: boolean;
   personasPanelOpen: boolean;
+  /** Whether a canvas-carried panel extension occupies the left dock. */
+  extensionPanelOpen: boolean;
+  /** Item id of the open canvas-carried panel extension, or null. */
+  extensionPanelId: string | null;
   /** Whose WORK the camera follows: the agent whose new items it flies to,
    *  or null. Off by default — this moves the canvas on somebody's behalf, so
    *  it is a mode they choose rather than one they discover happening to
@@ -395,6 +399,8 @@ interface UiStore {
   setAgentsPanelOpen: (open: boolean) => void;
   setContextPanelOpen: (open: boolean) => void;
   setPersonasPanelOpen: (open: boolean) => void;
+  setExtensionPanelOpen: (open: boolean) => void;
+  setExtensionPanelId: (itemId: string | null) => void;
   setFollowingActor: (actorId: string | null) => void;
   setMarksOpen: (open: boolean) => void;
   setHistoryOpen: (open: boolean) => void;
@@ -746,6 +752,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     agentsPanelOpen: false,
     contextPanelOpen: false,
     personasPanelOpen: false,
+    extensionPanelOpen: false,
+    extensionPanelId: null,
     followingActorId: null,
     marksOpen: false,
     historyOpen: false,
@@ -861,6 +869,8 @@ export const useUiStore = create<UiStore>((set, get) => {
     setAgentsPanelOpen: (agentsPanelOpen) => set({ agentsPanelOpen }),
     setContextPanelOpen: (contextPanelOpen) => set({ contextPanelOpen }),
     setPersonasPanelOpen: (personasPanelOpen) => set({ personasPanelOpen }),
+    setExtensionPanelOpen: (extensionPanelOpen) => set({ extensionPanelOpen }),
+    setExtensionPanelId: (extensionPanelId) => set({ extensionPanelId }),
     setFollowingActor: (followingActorId) => set({ followingActorId }),
     setMarksOpen: (marksOpen) => set({ marksOpen }),
     setHistoryOpen: (historyOpen) => set({ historyOpen }),

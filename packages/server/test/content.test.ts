@@ -186,6 +186,15 @@ describe("invariant 1: the app origin after the extraction is the app origin bef
     expect(app.headers.get("content-security-policy")).toBe("sandbox allow-scripts");
   });
 
+  it("the served app CSP carries frame-src naming the content base, while CONTENT_CSP keeps connect-src 'none'", async () => {
+    const page = await fetch(`${base}/`, { headers: badge.headers });
+    expect(page.status).toBe(200);
+    const appCsp = page.headers.get("content-security-policy") ?? "";
+    expect(appCsp).toContain("frame-src");
+    expect(appCsp).toContain(daemon.contentBase!);
+    expect(CONTENT_CSP).toContain("connect-src 'none'");
+  });
+
   it("the content origin serves bytes badge-less, with its own policy", async () => {
     const up = await fetch(`${base}/api/projects/prj_1/blobs`, {
       method: "POST",

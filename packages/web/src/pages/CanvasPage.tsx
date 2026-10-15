@@ -114,6 +114,7 @@ import { FilesPanel } from "../components/LazyFilesPanel.tsx";
 import { AgentTray } from "../components/LazyAgentTray.tsx";
 import { ContextPanel } from "../components/LazyContextPanel.tsx";
 import { PersonasPanel } from "../components/LazyPersonasPanel.tsx";
+import { ExtensionPanel } from "../components/ExtensionPanel.tsx";
 import { ReactionBar, restoreReactionBar } from "../components/ReactionBar.tsx";
 import { CommentToasts } from "../components/CommentToasts.tsx";
 import { OfflineBar } from "../components/OfflineBar.tsx";
@@ -1268,6 +1269,7 @@ function CanvasSurface({
       <AgentTray canvasId={canvasId} actor={actor} />
       <ContextPanel canvasId={canvasId} actor={actor} />
       <PersonasPanel canvasId={canvasId} actor={actor} />
+      <ExtensionPanel canvasId={canvasId} />
       <CommentToasts />
       {/* Offline, refusals, and anything that could not be done at all
           (phase 10). Above the panels for the reason `ArrivalNotice` is:

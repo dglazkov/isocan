@@ -62,6 +62,28 @@ export function itemFrame(
 }
 
 /**
+ * The ONE builder of a panel extension frame's `src` and `sandbox` (extensions
+ * phase 4, `docs/projects/extensions/phases.md`).
+ *
+ * Unlike `itemFrame`, a panel NEVER falls back to the app origin: a panel
+ * renders in a dock slot as a sandboxed iframe whose `src` is the content base
+ * plus the blob the manifest names — never the app origin, and there is no
+ * "trusted" panel that skips the frame. When `origin` is null, or when
+ * `blobHash` is not a bare hash token, this returns `null`.
+ */
+export function panelFrame(
+  origin: ContentOrigin | null,
+  canvasId: string,
+  blobHash: string,
+): { src: string; sandbox: string } | null {
+  if (origin === null) return null;
+  if (!/^[a-zA-Z0-9_-]+$/.test(blobHash)) return null;
+  const path = origin.ticket ? origin.ticket(canvasId, blobHash) : blobUrl(canvasId, blobHash);
+  if (path === null || !path.startsWith("/")) return null;
+  return { src: `${origin.base}${path}`, sandbox: "allow-scripts allow-same-origin" };
+}
+
+/**
  * **A frame's src, frozen for as long as it stays mounted.**
  *
  * A signature gates the initial `GET` and nothing after it: the content

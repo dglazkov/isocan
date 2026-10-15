@@ -5640,6 +5640,11 @@ function registerPages(
     // The judge's Worker takes its Content-Security-Policy from this response (local-judge phase 0).
     const policy = judgeWorkerPolicy(file);
     if (policy) reply.header("Content-Security-Policy", policy);
+    else if (file === indexFile && options.contentBase) {
+      // Extensions phase 4: the served app page names the content origin in
+      // `frame-src` so a panel frame (and an item frame) may load from there.
+      reply.header("Content-Security-Policy", `frame-src 'self' ${options.contentBase} https: http: blob: data:`);
+    }
     /**
      * **What may be remembered, and what must be asked for again.**
      *
