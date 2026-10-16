@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { CanvasContents, Item } from "@isocan/core";
 import {
-  CONTENT_ZOOM_MIN,
   EDGE_ZOOM_MIN,
-  Z_CONTENT,
-  Z_EDGES,
-  contentShownAtZoom,
+  Z_ROOMY,
   edgesShownAtZoom,
-  zoomBandAt,
   zoomDecisions,
   type ZoomHeld,
 } from "../src/lib/chrome.ts";
@@ -22,15 +18,15 @@ const stamp = {
   updatedBy: actor,
 };
 
-function makeScreenItem(id = "s1", x = 0, y = 0, properties: Record<string, string> = {}): Item {
+function makeScreenItem(id = "s1", x = 0, y = 0, properties: Record<string, string> = {}, width = 320, height = 240): Item {
   return {
     id,
     title: "Checkout Screen",
     description: "",
     x,
     y,
-    width: 320,
-    height: 240,
+    width,
+    height,
     properties,
     currentVersionId: `ver_${id}`,
     versions: [
@@ -48,52 +44,29 @@ function makeScreenItem(id = "s1", x = 0, y = 0, properties: Record<string, stri
   };
 }
 
-describe("3-band zoom visibility for node content and edges", () => {
-  it("orders thresholds so CONTENT_ZOOM_MIN > EDGE_ZOOM_MIN", () => {
-    expect(CONTENT_ZOOM_MIN).toBeGreaterThan(EDGE_ZOOM_MIN);
+describe("zoom visibility for node content and directional edges", () => {
+  it("shows directional edges down to EDGE_ZOOM_MIN with hysteresis", () => {
     expect(EDGE_ZOOM_MIN).toBeGreaterThan(0);
-  });
-
-  it("classifies close, farther, and furthest zoom bands", () => {
-    const closeBand = zoomBandAt(1.0);
-    expect(closeBand).toBe("close");
-    expect(contentShownAtZoom(1.0, true)).toBe(true);
     expect(edgesShownAtZoom(1.0, true)).toBe(true);
-
-    const fartherBand = zoomBandAt(0.15);
-    expect(fartherBand).toBe("farther");
-    expect(contentShownAtZoom(0.15, true)).toBe(false);
     expect(edgesShownAtZoom(0.15, true)).toBe(true);
-
-    const furthestBand = zoomBandAt(0.04);
-    expect(furthestBand).toBe("furthest");
-    expect(contentShownAtZoom(0.04, false)).toBe(false);
     expect(edgesShownAtZoom(0.04, true)).toBe(false);
-  });
-
-  it("applies hysteresis around CONTENT_ZOOM_MIN and EDGE_ZOOM_MIN", () => {
-    expect(contentShownAtZoom(0.26, true)).toBe(true);
-    expect(contentShownAtZoom(0.26, false)).toBe(false);
 
     expect(edgesShownAtZoom(0.084, true)).toBe(true);
     expect(edgesShownAtZoom(0.084, false)).toBe(false);
   });
 
-  it("encodes Z_CONTENT and Z_EDGES bits in zoomDecisions across the 3 zoom bands", () => {
-    const item = makeScreenItem();
-    const held: ZoomHeld = { r: true, t: true, s: false, g: false, c: true, e: true };
+  it("governs item content room by screen size (width * scale, height * scale), never raw scale", () => {
+    const slide = makeScreenItem("slide", 0, 0, {}, 1600, 900);
+    const held: ZoomHeld = {};
 
-    const closeMask = zoomDecisions(item, 320, 240, 1.0, held);
-    expect((closeMask & Z_CONTENT) !== 0).toBe(true);
-    expect((closeMask & Z_EDGES) !== 0).toBe(true);
+    // At scale = 0.20, a 1600x900 slide is 320x180 screen pixels and must stay roomy.
+    const slideAt20 = zoomDecisions(slide, slide.width, slide.height, 0.20, held);
+    expect((slideAt20 & Z_ROOMY) !== 0).toBe(true);
 
-    const fartherMask = zoomDecisions(item, 320, 240, 0.15, held);
-    expect((fartherMask & Z_CONTENT) !== 0).toBe(false);
-    expect((fartherMask & Z_EDGES) !== 0).toBe(true);
-
-    const furthestMask = zoomDecisions(item, 320, 240, 0.04, held);
-    expect((furthestMask & Z_CONTENT) !== 0).toBe(false);
-    expect((furthestMask & Z_EDGES) !== 0).toBe(false);
+    // At scale = 0.20, a small 160x90 item is 32x18 screen pixels (< 56x40) and drops roomy.
+    const small = makeScreenItem("small", 0, 0, {}, 160, 90);
+    const smallAt20 = zoomDecisions(small, small.width, small.height, 0.20, {});
+    expect((smallAt20 & Z_ROOMY) !== 0).toBe(false);
   });
 
   it("folds live drag and renders directional SVG edges via NodeEdgesUnderlay", () => {

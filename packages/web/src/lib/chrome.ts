@@ -315,33 +315,21 @@ export function underSlotFor(state: {
  * again at each site is the rule that gets missed. `chrome.test.ts` holds each
  * CSS form to its JS twin, number for number, across widths and zooms.
  */
-export type ZoomHeld = { r?: boolean; t?: boolean; s?: boolean; g?: boolean; c?: boolean; e?: boolean };
+export type ZoomHeld = { r?: boolean; t?: boolean; s?: boolean; g?: boolean };
 /**
- * **Three zoom bands for node content and directional edges:**
- * - `close` (`scale >= CONTENT_ZOOM_MIN`): node content AND directional edges shown.
- * - `farther` (`EDGE_ZOOM_MIN <= scale < CONTENT_ZOOM_MIN`): node content hidden, directional edges shown.
- * - `furthest` (`scale < EDGE_ZOOM_MIN`): both node content and directional edges hidden.
+ * Minimum viewport scale at which canvas-wide directional edges stay visible.
+ *
+ * Unlike item chrome and content — which follow screen size (`width * scale`,
+ * `height * scale`) via `hasRoomForChrome` and `textIsLegible` so a large
+ * `1600 × 900` slide never blanks out while still hundreds of pixels wide on
+ * screen — directional edges are world-space 2-unit lines between items and
+ * fade past `EDGE_ZOOM_MIN`.
  */
-export const CONTENT_ZOOM_MIN = 0.25;
-/** Minimum viewport scale at which directional edges remain visible (`farther` zoom band floor). */
 export const EDGE_ZOOM_MIN = 0.08;
-type ZoomBand = "close" | "farther" | "furthest";
-
-/** Whether node content (`VersionContent`) is shown at `scale`, with hysteresis. */
-export function contentShownAtZoom(scale: number, was?: boolean): boolean {
-  return holdsAtZoom(scale, CONTENT_ZOOM_MIN, was);
-}
 
 /** Whether directional edges are shown at `scale`, with hysteresis. */
 export function edgesShownAtZoom(scale: number, was?: boolean): boolean {
   return holdsAtZoom(scale, EDGE_ZOOM_MIN, was);
-}
-
-/** Which of the three zoom bands `scale` falls into (`close`, `farther`, or `furthest`). */
-export function zoomBandAt(scale: number, held?: { c?: boolean; e?: boolean }): ZoomBand {
-  if (contentShownAtZoom(scale, held?.c)) return "close";
-  if (edgesShownAtZoom(scale, held?.e)) return "farther";
-  return "furthest";
 }
 
 /** Bit: `hasRoomForChrome` — the title bar and the row under it are drawn. */
@@ -358,10 +346,6 @@ export const Z_SPELL = 16;
 export const Z_MARK = 32;
 /** Bit: a group's or an area's members are too small to read (`textIsLegible` of their median type size, `memberPx`), so its Semantic Zoom summary card shows. */
 export const Z_GIST = 64;
-/** Bit: `contentShownAtZoom` — close zoom band where inner node content is rendered. */
-export const Z_CONTENT = 128;
-/** Bit: `edgesShownAtZoom` — close or farther zoom band where directional edges are rendered. */
-export const Z_EDGES = 256;
 /** The decisions above for one item at one zoom, each rule handed its last answer in `held`. `memberPx` is only ever handed over by Semantic Zoom's chunk, for a group or an area it has a summary for. */
 export function zoomDecisions(item: Item, width: number, height: number, scale: number, held: ZoomHeld, memberPx?: number): number {
   const row = titleRow(width, scale);
@@ -373,9 +357,7 @@ export function zoomDecisions(item: Item, width: number, height: number, scale: 
     (legible ? Z_LEGIBLE : 0) |
     (underRowSpellsItOut(width, scale, Object.keys(item.reactions ?? {}).length, held.s) ? Z_SPELL : 0) |
     (textMarkSize(width, height, scale) >= KIND_MARK_MIN ? Z_MARK : 0) |
-    (memberPx && !textIsLegible(memberPx, scale, held.g) ? Z_GIST : 0) |
-    (contentShownAtZoom(scale, held.c) ? Z_CONTENT : 0) |
-    (edgesShownAtZoom(scale, held.e) ? Z_EDGES : 0)
+    (memberPx && !textIsLegible(memberPx, scale, held.g) ? Z_GIST : 0)
   );
 }
 
