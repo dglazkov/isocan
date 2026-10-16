@@ -16,6 +16,7 @@ import { invalidateOwnActors, useOwnActors } from "../lib/ownactors.ts";
 import { refreshActorMarks, useActorMarks } from "../lib/marks.ts";
 import { type ThemePref, useTheme } from "../lib/theme.ts";
 import { DISPLAY_SWITCHES, HIDEABLE, showAllChrome } from "../lib/hideable.ts";
+import { openUiDevtools } from "../lib/uitweaks.ts";
 import { EXPERIMENTS } from "../lib/experiments.ts";
 import type { TextPictures } from "@isocan/core/text";
 import { fetchTextPictures } from "../lib/api.ts";
@@ -572,6 +573,18 @@ export function IdentityMenu({
              "Turn all 3 back on" is a sentence about the boxes above it. */
           <button type="button" className="btn chrome-show-all" onClick={showAllChrome}>
             Turn all {hiddenChrome.length} back on
+          </button>
+        )}
+        {canvasId && (
+          <button
+            type="button"
+            className="btn chrome-show-all"
+            onClick={() => {
+              openUiDevtools("glass");
+              onClose();
+            }}
+          >
+            Customize UI (Devtools)…
           </button>
         )}
       </div>

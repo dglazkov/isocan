@@ -14,6 +14,7 @@ import { hasRoomForChrome } from "./chrome.ts";
 import { canEditNow } from "./capability.ts";
 import { explainItem, walkItem } from "./itemactions.ts";
 import { hideChrome, showAllChrome, showChrome } from "./hideable.ts";
+import { openUiDevtools, startUiPiecePicker } from "./uitweaks.ts";
 import { modules, moduleViews } from "../modules.ts";
 
 /**
@@ -175,6 +176,23 @@ export const ACTIONS: readonly Action[] = [
       if (hidden) showChrome("canvas.topfade");
       else hideChrome("canvas.topfade");
     },
+  },
+  {
+    id: "ui-devtools",
+    name: "Customize UI (Devtools)…",
+    hint: "tweak control sizes, frosted glass opacity, z-index layers, radii, and colors live",
+    keys: "⌥D",
+    group: "View",
+    available: onCanvas,
+    run: () => openUiDevtools(),
+  },
+  {
+    id: "ui-pick-piece",
+    name: "Pick UI piece to tweak…",
+    hint: "point at any bar, rail, dock, or card on screen to open its Devtools",
+    group: "View",
+    available: onCanvas,
+    run: () => startUiPiecePicker(),
   },
   {
     id: "theme",

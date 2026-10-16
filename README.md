@@ -185,6 +185,14 @@ That parity is a house rule with a test behind it: see AGENTS.md.
   Full, Calm (grounds answer cursors but never move on their own, and an
   untouched one draws nothing) or Still (the painted still, no WebGL);
   reduced motion always gives Still. The menu shows each ground's picture.
+- **Live UI Devtools**: customize every part of the UI on the fly — floating
+  glass opacity and blur, top bar, tool rail, zoom cluster, minimap, docks,
+  canvas items, z-index layers, and theme colors. Right-click any chrome piece
+  for **Tweak &lt;Piece&gt;…**, press `⌥D`, or pick **Customize UI…** in `⌘K`,
+  the `···` menu, or Settings. Use **⌖ Pick** to inspect any piece on screen.
+  Tweaks preview instantly in the browser (`localStorage["isocan.uiTweaks"]`)
+  and save to the canvas (`canvas.properties["ui.tweaks"]` via `project.update`,
+  one-step undo) or from the terminal with `isocan tweak`.
 - **Inherited Recent work**: Context shows recent activity beside a linked
   canvas's design and pins, with its source and covered range. CLI
   `isocan context` and MCP summaries show the same bounded reading and say

@@ -41,6 +41,12 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["P"], does: "Pen — draw on the canvas", group: "Tools", note: "HOLD P and everything you draw is ONE drawing, however long you take between strokes" },
   { keys: ["T"], does: "Text — click the canvas and type", group: "Tools", note: "double-click a text node to re-word it; ⌘Enter or click away to commit" },
   { keys: ["C"], does: "Comment — click anywhere to start a thread", group: "Tools" },
+  {
+    keys: ["⌥D"],
+    does: "Customize UI",
+    group: "Tools",
+    note: "Open per-piece Devtools to tweak glass opacity, control sizes, z-index, spacing, and colors live",
+  },
   { keys: ["⇧C"], does: "Comment on the selection", group: "Talking", note: "Anchored to the item, so the thread rides it when somebody moves it — and @-mentioning an agent there wakes it, the same as any other thread" },
   { keys: ["Esc"], does: "Back out: leave full screen, stop watching, close a popover, drop the tool, deselect", group: "Tools", note: "One layer per press, outermost first — and how you get back to Select" },
 

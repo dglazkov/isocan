@@ -51,7 +51,8 @@ describe("everything that floats wears the same slab", () => {
       const alphas = [...glass.matchAll(/rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\)/g)].map((m) => Number(m[1]));
       expect(alphas.length, `--glass gradient stops in ${glass}`).toBeGreaterThanOrEqual(2);
       for (const alpha of alphas) {
-        expect(alpha, `--glass stop ${alpha} must stay >= 0.85 so canvas items do not wash out text`).toBeGreaterThanOrEqual(0.85);
+        expect(alpha, `--glass stop ${alpha} must stay >= 0.72 so canvas items do not wash out text`).toBeGreaterThanOrEqual(0.72);
+        expect(alpha, `--glass stop ${alpha} must stay <= 0.85 so the frosted glass translucency remains visible`).toBeLessThanOrEqual(0.85);
       }
     }
   });

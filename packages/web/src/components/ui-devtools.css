@@ -1,0 +1,264 @@
+/* ---------- live UI devtools ---------- */
+/* Loaded only when UI tweaks are active or Devtools is open. Every colour is a
+   :root token and every length reuses the app's existing scale steps. */
+
+.ui-devtools {
+  position: fixed;
+  width: 340px;
+  max-height: calc(100dvh - 40px);
+  z-index: var(--z-dialog);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink);
+  font-size: 12px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.ui-devtools-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--chip);
+  cursor: grab;
+}
+
+.ui-devtools-head:active {
+  cursor: grabbing;
+}
+
+.ui-devtools-title {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.ui-devtools-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.ui-devtools-pick {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ui-devtools-pick:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.ui-devtools-pick.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ui-devtools-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ui-devtools-tab {
+  position: relative;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.ui-devtools-tab:hover {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.ui-devtools-tab.active {
+  background: var(--chip);
+  border-color: var(--line);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ui-devtools-tab-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.ui-devtools-summary {
+  padding: 6px 10px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ui-devtools-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.ui-devtools-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ui-devtools-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ui-devtools-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ui-devtools-label.changed {
+  color: var(--accent-text);
+}
+
+.ui-devtools-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ui-devtools-range {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.ui-devtools-num {
+  width: 64px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--ink);
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-devtools-unit {
+  width: 16px;
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.ui-devtools-color-swatch {
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.ui-devtools-color-hex {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--chip);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.ui-devtools-reset-one {
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.ui-devtools-reset-one:hover:enabled {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.ui-devtools-reset-one:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.ui-devtools-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--chip);
+}
+
+.ui-devtools-foot .btn {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.ui-devtools-inspector {
+  position: fixed;
+  z-index: var(--z-dialog);
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-wash);
+  transition: top 40ms linear, left 40ms linear, width 40ms linear, height 40ms linear;
+}
+
+.ui-devtools-inspector-tag {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-pop);
+}

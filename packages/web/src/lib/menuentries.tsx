@@ -35,6 +35,7 @@ import { canEditNow } from "./capability.ts";
 import { modules as shellModules } from "../modules.ts";
 import { canvasGroupEntries, groupDeleteLabel } from "./canvasgroupmenus.ts";
 import { openGroupCreation, groupTask, groupsEnabled } from "./canvasgroups.ts";
+import { openUiDevtools } from "./uitweaks.ts";
 
 /**
  * **What the right-click menu offers, and why each thing is on it.**
@@ -662,6 +663,12 @@ export function canvasMenu(ctx: MenuContext): MenuEntry[] {
         });
       },
     },
+    { separator: "" },
+    {
+      label: "Customize UI…",
+      shortcutFor: "Customize UI",
+      run: () => openUiDevtools("layers"),
+    },
   ]);
 }
 
@@ -1011,6 +1018,11 @@ export function chromeMenu(ctx: {
           run: () => writeMotion(motion),
         })),
       ],
+    },
+    {
+      label: "Customize UI…",
+      shortcutFor: "Customize UI",
+      run: () => openUiDevtools("glass"),
     },
     /* **The cursor glow left this menu on 13 Sep** (#195 put it here). Its
        own note said it belonged "beside the minimap because it is the same

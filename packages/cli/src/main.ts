@@ -5,6 +5,7 @@ import { noteOnBench, registerBench } from "./bench.ts";
 import { summaryColumn, summaryReport, summaryStatsReport } from "./summary.ts";
 import { registerKeys } from "./keys.ts";
 import { registerModel } from "./model.ts";
+import { registerTweak } from "./tweak.ts";
 import { makeTextAnchor, resolveTextAnchor, quoteRange, SOURCE_PATH_PROP } from "@isocan/core";
 // The copy lint's tells: slop.ts is eager already, so it is handed to the lazy lint rather than imported by it.
 import { SLOP_RULES } from "@isocan/core";
@@ -10383,6 +10384,8 @@ registerBench(program, ctxOf);
 registerKeys(program);
 // ---------- the local judge's model: `registerModel`, in model.ts (local-judge phase 0) ----------
 registerModel(program);
+// ---------- live UI Devtools: `registerTweak`, in tweak.ts ----------
+registerTweak(program, ctxOf);
 
 /**
  * **Inherit a canvas's memory here** (`docs/projects/memory/design.md`,

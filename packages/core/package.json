@@ -43,7 +43,8 @@
     "./wire-words": "./src/wire-words.ts",
     "./chatclean": "./src/chatclean.ts",
     "./diff": "./src/diff.ts",
-    "./voice-dsp": "./src/voice-dsp.ts"
+    "./voice-dsp": "./src/voice-dsp.ts",
+    "./ui-tweaks": "./src/ui-tweaks.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

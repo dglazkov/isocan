@@ -125,6 +125,8 @@ import { noteVisit } from "../lib/seen.ts";
 import { OwnCursor } from "../components/OwnCursor.tsx";
 import { useCanvasHome } from "../lib/homes.ts";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
+import { chromeTweakMenu } from "../lib/chromemenu.tsx";
+import { UI_TWEAKS_PROP, toggleUiDevtools, useUiTweaksSignal } from "../lib/uitweaks.ts";
 
 /* Below the imports, and it has to stay there: vite's dev transform rewrites
  * `import { lazy } from "react"` into a binding at the import's own position,
@@ -137,6 +139,7 @@ const ElsewherePage = lazy(() =>
 const CanvasGroupPanel = lazy(() =>
   import("../components/CanvasGroupPanel.tsx").then((m) => ({ default: m.CanvasGroupPanel })),
 );
+const UiDevtools = lazy(() => import("../components/UiDevtools.tsx"));
 
 /** Arrow keys → a world-space direction. */
 const NUDGES: Record<string, [number, number]> = {
@@ -306,6 +309,8 @@ function CanvasSurface({
   const semanticZoom = useUiStore((s) => s.experiments).includes("semantic.zoom");
   const moduleOverlaysVisible = modules().some((module) => module.overlays?.length);
   const groupDialogOpen = useUiStore((s) => s.groupDialog !== null);
+  const uiTweaks = useUiTweaksSignal();
+  const hasCanvasTweaks = useCanvasStore((s) => Boolean(s.record?.properties?.[UI_TWEAKS_PROP]));
   // The canvas's own title, for the tab. Subscribed separately from the
   // contents so a rename repaints the tab and an item move does not.
   const canvasTitle = useCanvasStore((s) => s.record?.title ?? null);
@@ -1057,6 +1062,9 @@ function CanvasSurface({
       } else if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) {
         e.preventDefault();
         startCursorSignal();
+      } else if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === "KeyD" && !e.repeat) {
+        e.preventDefault();
+        toggleUiDevtools();
       } else if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.repeat) {
         // The key every app with shortcuts has trained people to try.
         e.preventDefault();
@@ -1193,7 +1201,10 @@ function CanvasSurface({
     // `resizing-panel` while the panel's edge is being dragged: chrome that
     // steps aside for the panel eases to its new place, which is right for the
     // one step of opening and wrong for a width changing every frame.
-    <div className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}>
+    <div
+      className={`canvas-page${phone ? " phone-layout" : ""}${panelResizing ? " resizing-panel" : ""}${canEdit ? "" : " read-only"}`}
+      onContextMenu={chromeTweakMenu}
+    >
       {/* Covered, the canvas keeps its state and stops its paint:
           `visibility` preserves layout and the stores keep replaying, so Esc
           lands at the zoom you left without the covered surface spending
@@ -1288,6 +1299,11 @@ function CanvasSurface({
       {helpOpen && (
         <Suspense fallback={null}>
           <HelpPanel />
+        </Suspense>
+      )}
+      {(uiTweaks.open || uiTweaks.hasLocal || hasCanvasTweaks) && (
+        <Suspense fallback={null}>
+          <UiDevtools canvasId={canvasId} actor={actor} />
         </Suspense>
       )}
       <OwnCursor actor={actor} />
