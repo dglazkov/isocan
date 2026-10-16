@@ -57,7 +57,7 @@ export const KEY_PROVIDER_INFO: Record<KeyProvider, KeyProviderInfo> = {
     id: "gemini",
     label: "Google Gemini",
     env: "GEMINI_API_KEY",
-    usedFor: ["voice: the voice harness's Live conversation and transcription", "Talk to the canvas: a short-lived Live token per session", "agents an rc summons, as GEMINI_API_KEY, when given to agents"],
+    usedFor: ["voice: the voice harness's Live conversation and transcription", "Talk to the canvas: a short-lived Live token per session", "mood board: the pictures `isocan mood explore` draws", "agents an rc summons, as GEMINI_API_KEY, when given to agents"],
   },
   typesafe: {
     id: "typesafe",

@@ -93,6 +93,7 @@ const BEHIND_EXPERIMENT: Record<string, string> = {
   stickers: "modules.stickers",
   talk: "modules.talk",
   anatomy: "modules.anatomy",
+  mood: "moodboard",
 };
 
 /**
@@ -112,6 +113,7 @@ const EXPERIMENT_HALVES: Record<string, () => Promise<{ default: ShellModule }>>
   "modules.stickers": () => import("@isocan/stickers/web") as Promise<{ default: ShellModule }>,
   "modules.talk": () => import("@isocan/talk/web") as Promise<{ default: ShellModule }>,
   "modules.anatomy": () => import("@isocan/anatomy/web") as Promise<{ default: ShellModule }>,
+  moodboard: () => import("@isocan/mood/web") as Promise<{ default: ShellModule }>,
 };
 
 /**

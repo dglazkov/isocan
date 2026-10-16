@@ -87,6 +87,11 @@ export const EXPERIMENTS: readonly Experiment[] = [
     what: "Critics on the canvas: a critic card shows its name, credit line, colour and three questions. Asking one to critique a screen, and the web's doors to add and write critics, are not built yet — `isocan critic` adds them today.",
   },
   {
+    id: "moodboard",
+    name: "Mood board",
+    what: "Explore how a thing should feel with generated pictures, drawn with your Gemini key. Nothing in the browser yet: the tray, keep and drop are not built — `isocan mood explore` draws a spread today, and its pictures are ordinary images.",
+  },
+  {
     id: "semantic.zoom",
     name: "Semantic Zoom",
     what: "Far away, a long note, a group or an area shows a short model-written summary instead of words too small to read, marked ≈.",

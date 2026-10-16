@@ -37,6 +37,7 @@ import type { JudgmentOptions } from "./judgment.ts";
 import type { KeyRouteOptions } from "./key-routes.ts";
 import type { SummaryOptions } from "./summaries.ts";
 import type { TextOptions } from "./text.ts";
+import type { ImageOptions } from "./image.ts";
 import type { LiveTokenOptions } from "./live-token.ts";
 
 export interface DaemonOptions {
@@ -235,6 +236,9 @@ export interface DaemonOptions {
   /** The talk module's Live tokens (`live-token.ts`) — tests hand it a fake
    * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
   liveToken?: LiveTokenOptions;
+  /** The mood board's image model (`image.ts`) — tests hand it a fake
+   * Google; a running home reads `GEMINI_API_KEY`, else its `keys.json`. */
+  image?: ImageOptions;
   /** The settings area's key routes (`key-routes.ts`) — tests hand them an
    * environment and a fake provider; a running home reads its own. */
   keys?: KeyRouteOptions;
@@ -579,6 +583,7 @@ export async function startDaemon(options: DaemonOptions = {}): Promise<Daemon> 
     text: { keysHome, ...options.text },
     ...(options.summaries ? { summaries: options.summaries } : {}),
     liveToken: { keysHome, ...options.liveToken },
+    image: { keysHome, ...options.image },
     ...(options.keys ? { keys: options.keys } : {}),
   };
   registerRoutes(app, engine, store, desk, presence, routeOptions);

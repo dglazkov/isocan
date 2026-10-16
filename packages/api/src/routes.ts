@@ -8,7 +8,10 @@ import { designDecisionsRoute, type DesignDecisionsResponse } from "@isocan/core
 import { designRepairsRoute, type DesignRepairsResponse } from "@isocan/core/design-repair";
 import { recapHeadRoute, type RecapHeadResponse } from "@isocan/core";
 import type { SummaryEntry, SummaryMake, SummaryRead, SummaryStats, SummaryWait } from "@isocan/core/semantic-zoom";
+import type { ImageRequest, ImageResponse } from "@isocan/core/mood";
 
+/** Core's `IMAGE_ROUTE` (`@isocan/core/mood`), spelled here for `summariesPath`'s reason: a runtime import of that subpath would re-cut the CLI bundle. The mood CLI test walks the real route, so a drift fails there. */
+const imagePath = "/api/image";
 /** Core's `summariesRoute`, spelled here: see `DaemonRoutes.summaries` for why it is not imported. */
 const summariesPath = (canvasId: string) => `/api/projects/${encodeURIComponent(canvasId)}/summaries`;
 import type {
@@ -1222,6 +1225,16 @@ export class DaemonRoutes {
    */
   judgment(request: JudgmentRequest): Promise<unknown> {
     return this.request("POST", JUDGMENT_ROUTE, request);
+  }
+
+  /**
+   * **Draw a mood-board spread** (`POST /api/image`, moodboard phase 0): the
+   * home wraps the words in its template, spends its Gemini key, and adds the
+   * tiles as `actor`; the answer names them. Refusals arrive as the home's
+   * codes (`image-refused`, `image-owner-only`, `image-unavailable`, …).
+   */
+  image(request: ImageRequest): Promise<ImageResponse> {
+    return this.request("POST", imagePath, request);
   }
 
   /** Every slash command available here: built-ins under this home's own. */
