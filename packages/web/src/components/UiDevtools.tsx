@@ -39,6 +39,80 @@ interface HoveredPiece {
   opacity: string;
 }
 
+/** Screen-space bounding box for glowing a UI piece when its pill is clicked. */
+export interface GlowBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  borderRadius: string;
+}
+
+/**
+ * CSS `left` offset for a range slider's default-value marker.
+ *
+ * Native `<input type="range">` thumbs are ~16px wide, so the thumb's centre
+ * travels from `8px` (at `min`) to `calc(100% - 8px)` (at `max`), not `0%` to
+ * `100%`. Mapping the ratio across `(100% - 16px)` keeps the tick centred
+ * under the thumb at every position along the track.
+ */
+export function defaultRangeOffset(knob: UiKnob): string {
+  const min = knob.min ?? 0;
+  const max = knob.max ?? 1;
+  const def = Number(knob.defaultValue);
+  const ratio = max > min ? Math.max(0, Math.min(1, (def - min) / (max - min))) : 0;
+  const rounded = Math.round(ratio * 10000) / 10000;
+  return `calc(8px + ${rounded} * (100% - 16px))`;
+}
+
+function glowSelectorForPiece(piece: UiPiece): string {
+  if (piece.id === "toolbar") return ".bar-cluster";
+  if (piece.id === "minimap") return ".minimap-panel, .minimap-handle";
+  return piece.selector;
+}
+
+/**
+ * Measure visible screen-space bounding boxes for every live DOM element
+ * belonging to `piece`, excluding UI Devtools itself.
+ */
+export function collectPieceGlowBoxes(piece: UiPiece): GlowBox[] {
+  if (typeof document === "undefined" || typeof window === "undefined") return [];
+  const selector = `[data-tweak-piece="${piece.id}"], ${glowSelectorForPiece(piece)}`;
+  let elements: Element[];
+  try {
+    elements = Array.from(document.querySelectorAll(selector));
+  } catch {
+    return [];
+  }
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const boxes: GlowBox[] = [];
+
+  for (const el of elements) {
+    if (el.closest(".ui-devtools, .ui-devtools-inspector, .ui-devtools-glow")) continue;
+    const style = window.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden" || parseFloat(style.opacity) === 0) {
+      continue;
+    }
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) continue;
+    if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= vw || rect.top >= vh) continue;
+
+    // Full-bleed surfaces (`:root`, `.canvas-viewport`) inset slightly so the
+    // glow frame isn't clipped against the browser window's outer edge.
+    const fullBleed = rect.width >= vw - 4 && rect.height >= vh - 4;
+    const left = fullBleed ? 6 : rect.left;
+    const top = fullBleed ? 6 : rect.top;
+    const width = fullBleed ? Math.max(0, vw - 12) : rect.width;
+    const height = fullBleed ? Math.max(0, vh - 12) : rect.height;
+    const borderRadius = fullBleed ? "12px" : style.borderRadius || "8px";
+
+    boxes.push({ left, top, width, height, borderRadius });
+    if (boxes.length >= 24) break;
+  }
+  return boxes;
+}
+
 function readStoredLocalOverrides(): UiTweaks {
   try {
     const raw = localStorage.getItem(UI_TWEAKS_STORAGE_KEY);
@@ -111,6 +185,39 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
   }));
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const [hovered, setHovered] = useState<HoveredPiece | null>(null);
+  const [glow, setGlow] = useState<{ seq: number; pieceId: UiPieceId; boxes: GlowBox[] } | null>(null);
+  const glowTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (glowTimerRef.current !== null) {
+        window.clearTimeout(glowTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!signal.open && glow !== null) {
+      setGlow(null);
+    }
+  }, [signal.open, glow]);
+
+  function triggerPieceGlow(piece: UiPiece): void {
+    if (glowTimerRef.current !== null) {
+      window.clearTimeout(glowTimerRef.current);
+      glowTimerRef.current = null;
+    }
+    const boxes = collectPieceGlowBoxes(piece);
+    if (boxes.length === 0) {
+      setGlow(null);
+      return;
+    }
+    setGlow((prev) => ({ seq: (prev?.seq ?? 0) + 1, pieceId: piece.id, boxes }));
+    glowTimerRef.current = window.setTimeout(() => {
+      setGlow(null);
+      glowTimerRef.current = null;
+    }, 1100);
+  }
 
   // Sync runtime `<style data-ui-tweaks>` into `<head>` whenever tweaks change.
   useLayoutEffect(() => {
@@ -277,6 +384,22 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
 
   return (
     <>
+      {glow &&
+        glow.boxes.map((box, idx) => (
+          <div
+            key={`${glow.seq}-${idx}`}
+            className="ui-devtools-glow"
+            data-glow-piece={glow.pieceId}
+            style={{
+              left: box.left,
+              top: box.top,
+              width: box.width,
+              height: box.height,
+              borderRadius: box.borderRadius,
+            }}
+            aria-hidden
+          />
+        ))}
       {signal.picking && hovered && (
         <div
           className="ui-devtools-inspector"
@@ -342,7 +465,10 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
                 role="tab"
                 aria-selected={active}
                 className={`ui-devtools-tab${active ? " active" : ""}`}
-                onClick={() => openUiDevtools(piece.id)}
+                onClick={() => {
+                  openUiDevtools(piece.id);
+                  triggerPieceGlow(piece);
+                }}
               >
                 {piece.name}
                 {changed && <span className="ui-devtools-tab-dot" aria-hidden />}
@@ -374,16 +500,25 @@ export default function UiDevtools({ canvasId, actor }: { canvasId: string; acto
                 </div>
                 {knob.kind === "number" ? (
                   <div className="ui-devtools-controls">
-                    <input
-                      type="range"
-                      className="ui-devtools-range"
-                      min={knob.min}
-                      max={knob.max}
-                      step={knob.step}
-                      value={typeof current === "number" ? current : Number(knob.defaultValue)}
-                      aria-label={knob.label}
-                      onChange={(e) => onKnobChange(knob, Number(e.target.value))}
-                    />
+                    <div className="ui-devtools-range-wrap">
+                      <span
+                        className={`ui-devtools-range-default${changed ? " changed" : ""}`}
+                        style={{ left: defaultRangeOffset(knob) }}
+                        title={`Default: ${knob.defaultValue}${knob.unit ?? ""}`}
+                        aria-hidden
+                      />
+                      <input
+                        type="range"
+                        className="ui-devtools-range"
+                        min={knob.min}
+                        max={knob.max}
+                        step={knob.step}
+                        value={typeof current === "number" ? current : Number(knob.defaultValue)}
+                        aria-label={knob.label}
+                        onChange={(e) => onKnobChange(knob, Number(e.target.value))}
+                        onDoubleClick={() => onKnobChange(knob, "reset")}
+                      />
+                    </div>
                     <input
                       type="number"
                       className="ui-devtools-num"

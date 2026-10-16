@@ -144,7 +144,7 @@ export const UI_KNOBS: readonly UiKnob[] = [
     label: "Backdrop blur",
     hint: "Frosted glass blur radius across floating bars, rails, and popovers.",
     kind: "number",
-    defaultValue: 22,
+    defaultValue: 6,
     min: 0,
     max: 48,
     step: 1,
@@ -988,7 +988,7 @@ export function compileUiTweaksCss(input: UiTweaks): string {
   const glassBlur = num(tweaks, "glass.blur");
   const glassSaturate = num(tweaks, "glass.saturate");
   if (glassBlur !== undefined || glassSaturate !== undefined) {
-    const b = glassBlur ?? 22;
+    const b = glassBlur ?? 6;
     const s = glassSaturate ?? 1.45;
     rules.push(
       `.floats, .minimap, .marks, .sketch-bar, .ink-well, .react-picker { -webkit-backdrop-filter: blur(${b}px) saturate(${s}); backdrop-filter: blur(${b}px) saturate(${s}); }`,

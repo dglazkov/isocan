@@ -127,6 +127,7 @@ import { useCanvasHome } from "../lib/homes.ts";
 import { canEditNow, useCanEdit } from "../lib/capability.ts";
 import { chromeTweakMenu } from "../lib/chromemenu.tsx";
 import { UI_TWEAKS_PROP, toggleUiDevtools, useUiTweaksSignal } from "../lib/uitweaks.ts";
+import { CanvasArrivalVeil } from "../components/CanvasFinding.tsx";
 
 /* Below the imports, and it has to stay there: vite's dev transform rewrites
  * `import { lazy } from "react"` into a binding at the import's own position,
@@ -242,17 +243,15 @@ export function CanvasPage(props: {
   const { canvasId } = useParams<{ canvasId: string }>();
   const where = useCanvasHome(canvasId ?? null);
   if (!canvasId) return null;
-  // A sentence, in the same voice the door uses while a pass is redeemed —
-  // not a spinner and not a blank page, for the fraction of a second a
-  // same-origin read of `/api/homes` takes.
-  if (where.state === "asking") return <div className="page-note">Finding this canvas…</div>;
   if (where.state === "elsewhere") {
     return <ElsewherePage canvasId={canvasId} home={where.home} />;
   }
+  const asking = where.state === "asking";
   return (
     <>
-      <TabTitle {...props} />
-      <CanvasSurface {...props} />
+      {!asking && <TabTitle {...props} />}
+      {!asking && <CanvasSurface {...props} />}
+      <CanvasArrivalVeil key={canvasId} canvasId={canvasId} asking={asking} />
     </>
   );
 }

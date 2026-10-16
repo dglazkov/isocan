@@ -172,7 +172,7 @@
      (held near-opaque by `menuground.test.ts` so context menus and sticky
      headers never muddle text over dark work): glass holds ~74–82% opacity so
      bright or dark items behind floating controls do not wash out text or icons,
-     while letting enough of `blur(22px)` through to feel like frosted glass with
+     while letting enough of `blur(6px)` through to feel like frosted glass with
      a crisp top specular rim (`--shadow-glass`). */
   --glass: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(250, 250, 248, 0.74) 100%);
   --glass-border: rgba(30, 34, 40, 0.11);
@@ -973,8 +973,8 @@ img { height: auto; }
   position: absolute; left: 50%; bottom: var(--edge); transform: translateX(-50%); z-index: var(--z-float);
   display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px;
   background: var(--glass);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(6px) saturate(1.45);
+  backdrop-filter: blur(6px) saturate(1.45);
   border: 1px solid var(--glass-border); border-radius: 999px; box-shadow: var(--shadow-glass);
 }
 .sketch-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
@@ -1931,8 +1931,8 @@ img { height: auto; }
   display: flex; flex-direction: column; gap: 8px;
   background: var(--glass); border: 1px solid var(--glass-border); border-radius: 12px;
   box-shadow: var(--shadow-glass);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(6px) saturate(1.45);
+  backdrop-filter: blur(6px) saturate(1.45);
 }
 .react-search {
   font: inherit; font-size: 12.5px; width: 100%; padding: 6px 9px;
@@ -2561,8 +2561,8 @@ html[data-flip="prev"]::view-transition-new(slide) { animation-name: deck-enter-
    `floats` and inherits every future change to what floating means. */
 .floats {
   background: var(--glass);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(6px) saturate(1.45);
+  backdrop-filter: blur(6px) saturate(1.45);
   border: 1px solid var(--glass-border); border-radius: var(--r-float);
   box-shadow: var(--shadow-glass);
 }
@@ -3168,8 +3168,8 @@ button.mt-card:hover { border-color: var(--accent); }
 .minimap {
   display: block;
   background: var(--glass);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(6px) saturate(1.45);
+  backdrop-filter: blur(6px) saturate(1.45);
   border: 1px solid var(--glass-border); border-radius: 6px;
   box-shadow: var(--shadow-glass);
   cursor: pointer;
@@ -3204,8 +3204,8 @@ button.mt-card:hover { border-color: var(--accent); }
   display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; padding: 0;
   background: var(--glass);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(6px) saturate(1.45);
+  backdrop-filter: blur(6px) saturate(1.45);
   border: 1px solid var(--glass-border); border-radius: 9px;
   box-shadow: var(--shadow-glass); color: var(--ink-muted);
   opacity: 0; transform: translateY(8px) scale(0.9); pointer-events: none;
@@ -3339,8 +3339,8 @@ button.mt-card:hover { border-color: var(--accent); }
   bottom: calc(var(--edge) + 53px); width: 232px; z-index: calc(var(--z-dock) - 1);
   display: flex; flex-direction: column; gap: 2px;
   background: var(--glass);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(6px) saturate(1.45);
+  backdrop-filter: blur(6px) saturate(1.45);
   border: 1px solid var(--glass-border); border-radius: 14px;
   box-shadow: var(--shadow-glass); font-size: 12px; overflow: hidden;
 }
@@ -3886,6 +3886,136 @@ button.mt-card:hover { border-color: var(--accent); }
 /* A refusal needs more than one line: what happened, and what to do about it. */
 .page-note-stack { flex-direction: column; gap: 8px; text-align: center; padding: 0 24px; }
 .page-note-hint { font-size: 12.5px; color: var(--ink-soft); max-width: 46ch; line-height: 1.45; }
+
+/* ---------- canvas arrival / finding screen ---------- */
+.canvas-finding {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--ground);
+  background-image: radial-gradient(circle 340px at 50% 45%, var(--accent-wash), transparent 72%);
+  color: var(--ink);
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.canvas-finding.fading-out {
+  opacity: 0;
+  transform: scale(1.015);
+  pointer-events: none;
+}
+.canvas-finding-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  padding: 24px;
+  animation: canvas-finding-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.canvas-finding-emblem {
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.canvas-finding-card-back {
+  fill: var(--card);
+  stroke: var(--line);
+  stroke-width: 1.5px;
+  transform-origin: 24px 24px;
+  animation: canvas-finding-back 2.4s ease-in-out infinite;
+}
+.canvas-finding-card-front {
+  fill: var(--card);
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+  transform-origin: 32px 32px;
+  animation: canvas-finding-front 2.4s ease-in-out infinite;
+}
+.canvas-finding-eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.canvas-finding-title {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--ink);
+  max-width: 28ch;
+}
+.canvas-finding-sub {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  max-width: 42ch;
+}
+.canvas-finding-bar {
+  width: 120px;
+  height: 2px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.canvas-finding-bar-fill {
+  width: 45%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: canvas-finding-glide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes canvas-finding-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes canvas-finding-back {
+  0%, 100% {
+    transform: translate(0, 0) rotate(-3deg);
+  }
+  50% {
+    transform: translate(-1.5px, -1.5px) rotate(-5deg);
+  }
+}
+@keyframes canvas-finding-front {
+  0%, 100% {
+    transform: translate(0, 0) rotate(2deg);
+  }
+  50% {
+    transform: translate(1.5px, 1.5px) rotate(4deg);
+  }
+}
+@keyframes canvas-finding-glide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(240%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-finding,
+  .canvas-finding-inner,
+  .canvas-finding-card-back,
+  .canvas-finding-card-front,
+  .canvas-finding-bar-fill {
+    animation: none;
+    transition: none;
+  }
+}
 
 /* ---------- the front page: the origin wearing a face (phase 13.5) ----------
    Scene 0's three steps, at the same address every canvas lives at. It is the
@@ -4917,8 +5047,8 @@ button.mt-card:hover { border-color: var(--accent); }
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   background: var(--glass);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(6px) saturate(1.45);
+  backdrop-filter: blur(6px) saturate(1.45);
   box-shadow: var(--shadow-glass);
 }
 .scrubber.quiet {

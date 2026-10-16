@@ -49,7 +49,7 @@ describe("ui-tweaks schema and compiler", () => {
   it("drops defaults and invalid entries when parsing and serializing", () => {
     const raw = JSON.stringify({
       "glass.opacity": 0.96,
-      "glass.blur": 22, // default, dropped
+      "glass.blur": 6, // default, dropped
       "rail.btnSize": "48",
       "unknown.knob": 10,
       "colors.accent": "#ff5500",
