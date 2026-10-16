@@ -29,6 +29,40 @@ var init_model = __esm({
 });
 
 // packages/core/src/comment-references.ts
+function commentReferencedItemIds(canvas, comment) {
+  const context = comment.context;
+  const entries = new Map(context?.entries.map((entry) => [entry.itemId, entry]));
+  return [...new Set(context ? context.rootIds : comment.items ?? [])].filter((id) => {
+    if (context) {
+      const entry = entries.get(id);
+      if (!entry || entry.excluded || entry.unavailable || !entry.version) return false;
+    }
+    const item = canvas.items[id];
+    return !!item?.versions.some((version) => version.id === item.currentVersionId);
+  });
+}
+function threadTargetItem(canvas, thread, extraItemIds) {
+  if (thread?.anchorItemId && canvas.items[thread.anchorItemId]) {
+    return canvas.items[thread.anchorItemId];
+  }
+  if (extraItemIds) {
+    for (const id of extraItemIds) {
+      if (canvas.items[id]) return canvas.items[id];
+    }
+  }
+  if (!thread) return void 0;
+  for (let i = thread.comments.length - 1; i >= 0; i--) {
+    const comment = thread.comments[i];
+    const refs = commentReferencedItemIds(canvas, comment);
+    for (const id of refs) {
+      if (canvas.items[id]) return canvas.items[id];
+    }
+    for (const id of comment.items ?? []) {
+      if (canvas.items[id]) return canvas.items[id];
+    }
+  }
+  return void 0;
+}
 var init_comment_references = __esm({
   "packages/core/src/comment-references.ts"() {
     "use strict";
@@ -4773,6 +4807,87 @@ var summonsPrompt = (canvasTitle, agentName, payload, context) => {
 The payload (the same shape \`isocan wait --json\` returns):
 ` + JSON.stringify(fullPayload, null, 2);
 };
+function clipStatus(text2, max = 64) {
+  const clean = text2.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max - 1);
+  const word = cut.lastIndexOf(" ");
+  return `${(word >= max * 0.6 ? cut.slice(0, word) : cut).trimEnd()}\u2026`;
+}
+function formatThoughtStatus(buffer) {
+  const tail = buffer.slice(-500);
+  const stripped = tail.replace(/```[\s\S]*?```/g, " ").replace(/[`*_~]/g, "").replace(/^\s*#+\s*/gm, "").replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, "");
+  const parts = stripped.split(/\n+|(?<=[.!?])\s+/).map((line) => line.replace(/\s+/g, " ").trim()).filter((line) => line.length >= 12 && line.split(" ").length >= 3);
+  const chosen = parts.at(-1);
+  if (!chosen) return null;
+  const bare = chosen.replace(/[.!?:;,]+$/, "").trim();
+  if (!bare) return null;
+  return `\u{1F4AD} ${clipStatus(bare, 64)}${bare.endsWith("\u2026") ? "" : "\u2026"}`;
+}
+function humanizeToolStatus(rawTitle, canvasItems) {
+  const raw = rawTitle.replace(/\s+/g, " ").trim();
+  if (!raw) return null;
+  let itemId;
+  let item;
+  if (canvasItems) {
+    for (const match of raw.matchAll(/\bitm_[a-zA-Z0-9_-]+\b/g)) {
+      const candidate = match[0];
+      if (canvasItems[candidate]) {
+        itemId = candidate;
+        item = canvasItems[candidate];
+        break;
+      }
+    }
+  }
+  const itemLabel = item ? clipStatus(item.title || item.id, 28) : null;
+  if (/(?:SKILL\.md|--agent-help|agent-guide\.md)/i.test(raw)) {
+    return { status: "checking canvas guide\u2026", ...itemId ? { itemId } : {} };
+  }
+  const cliMatch = raw.match(/\bisocan\s+(?:--[a-z-]+\s+)*([a-z-]+)/i);
+  if (cliMatch) {
+    const verb = cliMatch[1].toLowerCase();
+    if (verb === "show" || verb === "get" || verb === "words") {
+      return {
+        status: itemLabel ? `looking at "${itemLabel}"\u2026` : "reading canvas item\u2026",
+        ...itemId ? { itemId } : {}
+      };
+    }
+    if (verb === "edit" || verb === "set" || verb === "mv" || verb === "resize" || verb === "face") {
+      return {
+        status: itemLabel ? `updating "${itemLabel}"\u2026` : "updating canvas item\u2026",
+        ...itemId ? { itemId } : {}
+      };
+    }
+    if (verb === "add" || verb === "new" || verb === "text" || verb === "draw") {
+      return { status: "adding to the canvas\u2026", ...itemId ? { itemId } : {} };
+    }
+    if (verb === "comment") {
+      return { status: "writing a reply\u2026", ...itemId ? { itemId } : {} };
+    }
+    if (verb === "ls" || verb === "list" || verb === "status" || verb === "summary") {
+      return { status: "surveying the canvas\u2026", ...itemId ? { itemId } : {} };
+    }
+  }
+  const fileRead = raw.match(/^(?:File|Read|View|Cat)\s+(.+)$/i);
+  if (fileRead) {
+    const base2 = fileRead[1].trim().replace(/['"]/g, "").split(/[\\/]/).pop() ?? fileRead[1].trim();
+    return { status: `reading ${clipStatus(base2, 36)}\u2026`, ...itemId ? { itemId } : {} };
+  }
+  const fileWrite = raw.match(/^(?:Write|Edit|Update|Patch)\s+(.+)$/i);
+  if (fileWrite) {
+    const base2 = fileWrite[1].trim().replace(/['"]/g, "").split(/[\\/]/).pop() ?? fileWrite[1].trim();
+    return { status: `editing ${clipStatus(base2, 36)}\u2026`, ...itemId ? { itemId } : {} };
+  }
+  if (/^(?:Search|Grep|Find|Glob)\b/i.test(raw)) {
+    return { status: "searching workspace\u2026", ...itemId ? { itemId } : {} };
+  }
+  const cleaned = raw.replace(/^(?:Terminal|Bash|Run|Command):?\s*/i, "").trim();
+  if (!cleaned) return null;
+  if (itemLabel && itemId) {
+    return { status: `working on "${itemLabel}"\u2026`, itemId };
+  }
+  return { status: clipStatus(cleaned, 64) };
+}
 
 // packages/rc/src/room.ts
 init_src();
@@ -5311,19 +5426,20 @@ async function room(deps, life, announce, onLeave) {
       await keepSpend();
     }
     const face = await routes.createSession(p.id, record2.actor, void 0, harness.harness).catch(() => null);
-    const anchoredItem = thread?.anchorItemId ? snapshot?.canvas.items[thread.anchorItemId] : void 0;
+    const commentItems = firstComment?.envelope.op?.comment?.items;
+    const targetedItem = snapshot ? threadTargetItem(snapshot.canvas, thread, commentItems) : void 0;
     const item = !threadId && changedItemId ? snapshot?.canvas.items[changedItemId] : void 0;
-    const contextItem = anchoredItem ?? item;
+    const contextItem = targetedItem ?? item;
     let working = null;
     if (face) {
-      working = threadId ? { kind: "working", threadId } : item ? { kind: "working", itemId: item.id } : null;
+      working = contextItem ? { kind: "working", itemId: contextItem.id } : threadId ? { kind: "working", threadId } : null;
+      const initialCursor = contextItem ? itemCenter(contextItem) : snapshot && thread ? threadLocus(snapshot, thread) : null;
       await routes.updateSession(p.id, face.sessionId, {
         status: threadId ? "reading your comment\u2026" : "looking at what changed\u2026",
         statusSource: "lifecycle",
         ...working ? { activity: working } : {},
         ...threadId ? { onThread: threadId } : {},
-        ...snapshot && thread ? { cursor: threadLocus(snapshot, thread) } : {},
-        ...item ? { cursor: itemCenter(item) } : {}
+        ...initialCursor ? { cursor: initialCursor } : {}
       }).catch(() => {
       });
     }
@@ -5388,7 +5504,9 @@ async function room(deps, life, announce, onLeave) {
       const usdBefore = spend?.usd ?? null;
       let turnUsd = null;
       let cancelled = false;
-      let lastToolBeat = 0;
+      let lastStatusBeat = 0;
+      let lastStatusText = "";
+      let thoughtBuffer = "";
       const turn = await agent.prompt(
         session.sessionId,
         summonsPrompt(p.title, record2.actor.name, { reason, entries: flagged }, summonsContext),
@@ -5403,14 +5521,39 @@ async function room(deps, life, announce, onLeave) {
             }
           }
           if (event.kind === "permission") say(`permission ${event.detail}`);
-          if (event.kind === "tool" && event.detail && clock.now() - lastToolBeat >= 2e3) {
-            lastToolBeat = clock.now();
-            const title = event.detail.length > 80 ? `${event.detail.slice(0, 79)}\u2026` : event.detail;
-            beat({
-              status: title,
-              statusSource: "inferred",
-              ...working ? { activity: working } : {}
-            });
+          if (event.kind === "thought" && event.text) {
+            thoughtBuffer = (thoughtBuffer + event.text).slice(-600);
+            if (clock.now() - lastStatusBeat >= 1400) {
+              const status = formatThoughtStatus(thoughtBuffer);
+              if (status && status !== lastStatusText) {
+                lastStatusBeat = clock.now();
+                lastStatusText = status;
+                beat({
+                  status,
+                  statusSource: "inferred",
+                  ...working ? { activity: working } : {}
+                });
+              }
+            }
+          }
+          if (event.kind === "tool" && event.detail) {
+            const parsed = humanizeToolStatus(event.detail, snapshot?.canvas.items);
+            if (!parsed) return;
+            const nextItem = parsed.itemId ? snapshot?.canvas.items[parsed.itemId] : void 0;
+            const itemChanged = nextItem !== void 0 && !(working?.kind === "working" && "itemId" in working && working.itemId === nextItem.id);
+            if (nextItem) {
+              working = { kind: "working", itemId: nextItem.id };
+            }
+            if (itemChanged || clock.now() - lastStatusBeat >= 1400) {
+              lastStatusBeat = clock.now();
+              lastStatusText = parsed.status;
+              beat({
+                status: parsed.status,
+                statusSource: "inferred",
+                ...working ? { activity: working } : {},
+                ...itemChanged && nextItem ? { cursor: itemCenter(nextItem) } : {}
+              });
+            }
           }
         }
       );

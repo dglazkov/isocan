@@ -1,0 +1,1 @@
+import"./index-vHpDum4Y.js";const o={mood:"mood",prompt:"moodPrompt",axis:"moodAxis",parent:"moodParent",model:"moodModel",run:"moodRun"},m={name:"@isocan/mood",propertyKeys:Object.values(o)},e={core:m};export{e as default,e as moodWeb};

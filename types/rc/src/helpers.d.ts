@@ -78,3 +78,18 @@ export declare const summonsPrompt: (canvasTitle: string, agentName: string, pay
     reason: string;
     entries: WatchedLogEntry[];
 }, context?: SummonsContext) => string;
+/**
+ * Turn a streaming thought buffer from ACP (`agent_thought_chunk`) into a
+ * short, readable line for the live cursor chip (`💭 …`). Returns null until
+ * there is a meaningful clause to show.
+ */
+export declare function formatThoughtStatus(buffer: string): string | null;
+/**
+ * Turn a raw ACP tool title (`File .agents/skills/isocan-collab/SKILL.md`,
+ * `Terminal isocan edit itm_abc …`) into a readable cursor status and any
+ * referenced canvas item id.
+ */
+export declare function humanizeToolStatus(rawTitle: string, canvasItems?: Record<string, Item>): {
+    status: string;
+    itemId?: string;
+} | null;

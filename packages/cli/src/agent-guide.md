@@ -169,6 +169,7 @@ in topic `reference`. ⚠ marks what cannot be undone: ask first.
 - `explain <item>` — how an item got here: versions that mattered, roads not taken, what moved since; `--critique` answers a Critique (`proactive`)
 - `stuck [item]` — tries that missed: ask, don't guess; `walk [flow]` — a flow as simulated people see it (`proactive`)
 - `words` — a screen's copy deck; `--apply` rewords strings; `words vary` makes N voices; `words mix` folds a pick home; `words lint` checks DESIGN.md's Voice
+- `tweak ls|set|reset|css` — customize UI pieces live (glass opacity, control sizes, z-index, spacing, colors)
 - `doc status` — where one of this repo's documents stands
 
 **History** (`history`)
@@ -4433,6 +4434,7 @@ on the thread before putting one on somebody else's canvas,
 `inbox [--mentions] [--new]`, `seen [--mark] [--canvas <name>]`,
 `who [--all]`, `activity [who]`, `whoami`, `identity [--color]`,
 `command ls|show|add|rm`, `tidy [--dry-run]`, `merge`, `shortcuts`,
+`tweak ls|set|reset|css` (customize UI pieces live — glass opacity, sizes, z-index, radii, colors; writes `canvas.properties["ui.tweaks"]`),
 `design [--css|--tokens] [set|check]`, `design check [--in <scope>] [--provenance]`, `design use <item> [--off]`,
 `design direction [file] [--in <scope>|--item <id>]`, `design project <directory> [--in <scope>|--item <id>] [--refresh]`,
 `design reconcile <directory>`, `design recipes`, `design recipe <id> [--design|--out <directory>]`, `design audit [--item|--in|--file|--fail]`,
