@@ -13,8 +13,9 @@ step, then the board as a critic.
 **Phase citations name their project**: `moodboard phase 2`, never a bare
 "phase 2".
 
-**Where we are, 16 Oct 2026:** specified; nothing built. Three questions for
-Dion are open in [`design.md`](design.md) §8.
+**Where we are, 16 Oct 2026:** specified; nothing built. Dion decided the
+three open questions the same day ([`design.md`](design.md) §8): Flash by
+default, hosted homes allowed, nine tiles a spread.
 
 ---
 

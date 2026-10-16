@@ -154,13 +154,12 @@ source tile on hover.
 | *Derive from the board* | `/design-system` (or `isocan mood board --json` + `design set`) |
 | *Critique with… the board* | `isocan critique <item> --by board` |
 
-## 8. Open questions for Dion
+## 8. Decided
 
-1. **Flash or Pro by default?** Pro looks better and costs several times
-   more per image. Proposal: Flash for exploring, with a *Redraw in Pro*
-   action on a kept tile.
-2. **Hosted homes.** On isocan.io, should exploring be allowed at all (owner
-   pays, owner-only), or local-only at first? Proposal: owner-only
-   everywhere, as with `/api/text`.
-3. **Default spread.** Nine tiles across the axes, or six? Proposal: nine;
-   the cap is twelve.
+Dion, 16 Oct 2026:
+
+1. **Flash by default.** Explorations use the Flash image model, with a
+   *Redraw in Pro* action on a kept tile.
+2. **Hosted homes allowed.** Exploring works on isocan.io too: owner-only,
+   paid with the owner's key, under the same refusals as `/api/text`.
+3. **Nine tiles a spread**, across the axes; the per-run cap is twelve.
