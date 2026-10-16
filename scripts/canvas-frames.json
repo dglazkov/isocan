@@ -1,0 +1,70 @@
+{
+  "at": "2026-10-15",
+  "commit": "8792c5321",
+  "machine": "Intel(R) Xeon(R) CPU @ 2.20GHz, 94 GB, linux x64",
+  "chrome": "Chrome/155.0.8059.79",
+  "page": "1440x900@1x",
+  "throttle": 1,
+  "items": 36,
+  "html": 12,
+  "scale": 0.5,
+  "gestures": {
+    "pan": {
+      "frames": 291,
+      "p50": 16.69999999999891,
+      "p90": 16.700000000000728,
+      "p99": 33.29999999999927,
+      "worst": 33.400000000001455,
+      "over16": 119,
+      "over32": 4,
+      "cameraPositions": 46,
+      "blankFrames": 0,
+      "flickers": 0,
+      "blankItems": [],
+      "longFrames": {
+        "count": 0,
+        "scriptMs": 0,
+        "renderMs": 0,
+        "worst": []
+      }
+    },
+    "zoom": {
+      "frames": 393,
+      "p50": 16.700000000000728,
+      "p90": 16.799999999999272,
+      "p99": 50,
+      "worst": 50,
+      "over16": 202,
+      "over32": 26,
+      "cameraPositions": 20,
+      "blankFrames": 0,
+      "flickers": 0,
+      "blankItems": [],
+      "longFrames": {
+        "count": 3,
+        "scriptMs": 85.2999999821186,
+        "renderMs": 130.89999997615814,
+        "worst": [
+          {
+            "ms": 70.59999999403954,
+            "scriptMs": 35.400000005960464,
+            "renderMs": 53.79999998211861,
+            "by": "FrameRequestCallback 35 ms"
+          },
+          {
+            "ms": 58.69999998807907,
+            "scriptMs": 30,
+            "renderMs": 40.69999998807907,
+            "by": "FrameRequestCallback 30 ms"
+          },
+          {
+            "ms": 54.5,
+            "scriptMs": 19.899999976158142,
+            "renderMs": 36.400000005960464,
+            "by": "FrameRequestCallback 20 ms"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import { isArea, isDrawingItem, isGroupItem, isTextItem, visualFaceOf, type Item } from "@isocan/core";
 import { useCallback, useEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 import { useUiStore } from "../stores/uiStore.ts";
-import { warmHtmlSnapshot } from "./htmlsnapshot.ts";
+import { warmHtmlSnapshot, warmIdleHtmlSnapshot } from "./htmlsnapshot.ts";
 import type { Viewport } from "./viewport.ts";
 
 /** Minimum camera pan speed (screen px/s) before directional lookahead engages. */
@@ -16,6 +16,8 @@ const MAX_LOOKAHEAD_PX = 2800;
 const LOOKAHEAD_CROSS_PAD = 120;
 /** Hard cap on active directional lookahead items at any moment. */
 export const MAX_LOOKAHEAD_ITEMS = 8;
+/** Hard cap on items held in lookahead during a zoom gesture. */
+export const MAX_ZOOM_LOOKAHEAD = 36;
 /** Hard ceiling on total held lookahead items (active + grace window). */
 export const MAX_HELD_LOOKAHEAD = 12;
 /** How long a preloaded item stays mounted after leaving the corridor so `useOnScreen` can take over seamlessly when panning settles. */
@@ -199,6 +201,66 @@ export function lookaheadCandidates(
   return scored.slice(0, limit).map((entry) => entry.hit);
 }
 
+/**
+ * Find items inside (or just crossing into) the viewport during a zoom gesture,
+ * ordered closest to the screen center first and capped at `limit`.
+ *
+ * `useOnScreen` defers new mounts while `panning` is true (which includes wheel
+ * zoom), so zooming out pulls surrounding cards onto the screen before the
+ * observer can claim them. Holding those cards in lookahead keeps their
+ * lightweight faces (`snapshotOnly` WebP pictures and roomy Markdown bodies)
+ * visible through the zoom without mounting live iframes mid-gesture.
+ */
+export function zoomCandidates(
+  items: readonly Item[],
+  viewport: Viewport,
+  stage: { width: number; height: number },
+  limit = MAX_ZOOM_LOOKAHEAD,
+): LookaheadHit[] {
+  if (stage.width <= 0 || stage.height <= 0 || limit <= 0) return [];
+  const scored: Array<{ hit: LookaheadHit; distSq: number }> = [];
+  const midX = stage.width / 2;
+  const midY = stage.height / 2;
+  for (const item of items) {
+    const iw = item.width * viewport.scale;
+    const ih = item.height * viewport.scale;
+    if (iw < 16 || ih < 12) continue;
+    const ix = item.x * viewport.scale + viewport.tx;
+    const iy = item.y * viewport.scale + viewport.ty;
+    if (
+      ix > stage.width + LOOKAHEAD_CROSS_PAD ||
+      ix + iw < -LOOKAHEAD_CROSS_PAD ||
+      iy > stage.height + LOOKAHEAD_CROSS_PAD ||
+      iy + ih < -LOOKAHEAD_CROSS_PAD
+    ) {
+      continue;
+    }
+    const face = lookaheadFace(item);
+    if (!face) continue;
+    const dx = ix + iw / 2 - midX;
+    const dy = iy + ih / 2 - midY;
+    const { current, visual } = face;
+    scored.push({
+      distSq: dx * dx + dy * dy,
+      hit: {
+        itemId: item.id,
+        tEnter: 0,
+        ...(visual.mimeType === "text/html" && !item.properties.canvas && !current.designRecord
+          ? {
+              htmlBlob: {
+                blobHash: visual.blobHash,
+                width: item.width,
+                height: item.height,
+              },
+            }
+          : {}),
+      },
+    });
+  }
+  scored.sort((a, b) => a.distSq - b.distSq);
+  return scored.slice(0, limit).map((entry) => entry.hit);
+}
+
 // ---------- Per-item external store ----------
 
 const activeIds = new Set<string>();
@@ -352,22 +414,37 @@ export function useViewportLookahead(
       const dt = now - lastAt;
       lastAt = now;
 
+      const zooming = Math.abs(state.viewport.scale - prev.viewport.scale) > 1e-6;
       const instant = cameraVelocity(prev.viewport, state.viewport, dt);
       velocity =
-        dt > 180
+        zooming || dt > 180
           ? instant
           : {
               vx: velocity.vx * 0.35 + instant.vx * 0.65,
               vy: velocity.vy * 0.35 + instant.vy * 0.65,
             };
 
-      const hits = lookaheadCandidates(itemsRef.current, state.viewport, stageSize, velocity);
+      const hits = zooming
+        ? zoomCandidates(itemsRef.current, state.viewport, stageSize)
+        : lookaheadCandidates(itemsRef.current, state.viewport, stageSize, velocity);
       if (hits.length > 0 || activeIds.size > 0) {
         applyLookahead(canvasId, hits);
       }
     });
 
+    const warmTimer = setTimeout(() => {
+      for (const item of itemsRef.current) {
+        const face = lookaheadFace(item);
+        if (!face) continue;
+        const { current, visual } = face;
+        if (visual.mimeType === "text/html" && !item.properties.canvas && !current.designRecord) {
+          void warmIdleHtmlSnapshot(canvasId, visual.blobHash, item.width, item.height);
+        }
+      }
+    }, 120);
+
     return () => {
+      clearTimeout(warmTimer);
       ro?.disconnect();
       unsub();
       clearLookahead();

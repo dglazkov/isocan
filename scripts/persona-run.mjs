@@ -102,10 +102,10 @@ function personas() {
  * week produced three instruments that reported the first while meaning the
  * second.
  */
-function take(goal) {
+function take(goal, env = process.env) {
   let out;
   try {
-    out = execSync(goal.measuredBy, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    out = execSync(goal.measuredBy, { cwd: repo, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   } catch (err) {
     // A recorded reading nobody has taken yet is said as such, never as a number or a broken instrument.
     const line = unreadOf(err);
@@ -117,6 +117,32 @@ function take(goal) {
     return { broken: `expected a number on stdout, got ${JSON.stringify(out.trim().slice(0, 80))}` };
   }
   return { value };
+}
+
+/**
+ * **Live canvas pan/zoom frame check on CI** (`performance` persona).
+ *
+ * `scripts/measure.mjs` reads `scripts/canvas-frames.json` during fast local
+ * checks, and reads `ISOCAN_CANVAS_FRAMES` when set. On nightly CI (`CI=true`)
+ * this records a fresh pan+zoom run in a real headless browser into `os.tmpdir()`
+ * before taking the `performance` persona's numbers, keeping the checkout clean
+ * while ensuring nightly runs always check live canvas panning and zooming.
+ */
+function preparePersonaEnv(persona) {
+  if (persona.name !== "performance" || process.env.ISOCAN_CANVAS_FRAMES || process.env.CI !== "true") {
+    return process.env;
+  }
+  const tmpFile = path.join(os.tmpdir(), `isocan-canvas-frames-${process.pid}-${Date.now()}.json`);
+  const framesScript = path.join(repo, "scripts/frames.mjs");
+  const res = spawnSync(
+    process.execPath,
+    [framesScript, "--html", "12", "--items", "36", "--scale", "0.5", "--throttle", "1", "--gestures", "pan,zoom", "--record", tmpFile],
+    { cwd: repo, encoding: "utf8", timeout: 5 * 60_000 },
+  );
+  if (res.status !== 0 || !existsSync(tmpFile)) {
+    throw new Error(`live canvas frame check failed: ${(res.stderr || res.stdout || "").trim().slice(0, 300)}`);
+  }
+  return { ...process.env, ISOCAN_CANVAS_FRAMES: tmpFile };
 }
 
 /**
@@ -189,8 +215,18 @@ function smallPass(persona, missed) {
 const money = (usd) => (usd === null ? "unknown" : `$${usd.toFixed(4)}`);
 
 function runOne(persona) {
+  let personaEnv = process.env;
+  let prepareErr = null;
+  try {
+    personaEnv = preparePersonaEnv(persona);
+  } catch (err) {
+    prepareErr = String(err.message ?? err);
+  }
   const readings = persona.goals.map((goal) => {
-    const reading = { goal, ...take(goal) };
+    if (prepareErr && /canvas-(?:pan-zoom-p90-ms|flicker-frames)/.test(goal.measuredBy)) {
+      return { goal, broken: prepareErr };
+    }
+    const reading = { goal, ...take(goal, personaEnv) };
     return reading.broken || reading.unread ? reading : { ...reading, ...basisOf(goal) };
   });
   const broken = readings.filter((r) => r.broken);

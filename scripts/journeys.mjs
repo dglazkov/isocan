@@ -6588,6 +6588,146 @@ export default async function act({ prompt, cli, cwd }) {
       }
     },
   },
+  {
+    name: "canvas-pan-zoom",
+    /**
+     * **Pan and zoom stay responsive and never show blank content or flicker**
+     * (16 Oct 2026). A populated board of HTML screens and Markdown notes is
+     * panned across and zoomed out and back in while every animation frame
+     * checks the items inside the viewport. No card on screen may fall into
+     * `.item-standby` or show an undecoded HTML shell, and no rendered card may
+     * drop its face mid-gesture.
+     */
+    what: "panning and zooming across screens and notes stays responsive and never shows blank content or flickers",
+    async run(rig) {
+      const { b, home, origin } = rig;
+      const port = new URL(origin).port;
+      const env = { ...process.env, ISOCAN_HOME: home, ISOCAN_PORT: port, ISOCAN_SESSION_ID: "acme-pan-zoom-journey", ISOCAN_HARNESS: "test" };
+      const runCli = (...args) => {
+        const out = execFileSync(process.execPath, [cli, "--json", ...args], { cwd: home, encoding: "utf8", env });
+        return /^[\[{]/.test(out.trim()) ? JSON.parse(out) : out;
+      };
+      runCli("identity", "--session", "--name", "Acme Pan CLI");
+      const id = runCli("canvas", "create", "Acme pan zoom").canvasId;
+      const htmlIds = [];
+      for (let i = 0; i < 6; i++) {
+        const file = path.join(home, `screen-${i}.html`);
+        writeFileSync(
+          file,
+          `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;font-family:sans-serif;background:#f4f1ea;color:#1d2a24;padding:24px}h1{margin:0 0 12px}.box{padding:16px;background:#fff;border-radius:8px}</style></head><body><h1>Acme screen ${i}</h1><div class="box">Storefront preview ${i}</div></body></html>`,
+        );
+        htmlIds.push(runCli("--canvas", id, "add", file, "--title", `Acme screen ${i}`, "--at", `${(i % 3) * 940},${Math.floor(i / 3) * 700}`, "--size", "880x640").itemId);
+      }
+      for (let i = 0; i < 16; i++) {
+        const file = path.join(home, `note-${i}.md`);
+        writeFileSync(file, `# Acme note ${i}\n\nQuarterly check ${i} with **bold** words and \`code\`.\n`);
+        runCli("--canvas", id, "add", file, "--title", `Acme note ${i}`, "--at", `${(i % 8) * 380},${1480 + Math.floor(i / 8) * 320}`, "--size", "320x260");
+      }
+
+      await b.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+      try {
+        await b.send("Page.navigate", { url: `${origin}/p/${id}` });
+        await until(b, `document.querySelectorAll(".item[data-item-id]").length >= 16`, "the board's items to mount", 20_000);
+        // Zoom to 0.55 so screens and notes share the viewport, then wait for idle WebP snapshots to warm.
+        const worldScale = `Number((document.querySelector(".world")?.style.transform.match(/scale\\(([0-9.]+)\\)/) ?? [])[1] ?? 1)`;
+        for (let i = 0; i < 40 && (await b.ev(worldScale)) < 0.55; i++) {
+          await b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: 0, deltaY: -40, modifiers: 2 });
+          await sleep(30);
+        }
+        await sleep(3500);
+
+        const htmlLit = JSON.stringify(htmlIds);
+        await b.ev(`(() => {
+          const htmlSet = new Set(${htmlLit});
+          const world = document.querySelector(".world");
+          const boxes = [];
+          for (const el of document.querySelectorAll(".item[data-item-id]")) {
+            const itemId = el.dataset.itemId;
+            const c = el.querySelector(":scope > .item-content");
+            if (!itemId || !c) continue;
+            boxes.push({
+              id: itemId,
+              c,
+              x: parseFloat(el.style.left) || 0,
+              y: parseFloat(el.style.top) || 0,
+              w: parseFloat(el.style.width) || 0,
+              h: parseFloat(el.style.height) || 0,
+            });
+          }
+          window.__pzGaps = []; window.__pzCams = new Set(); window.__pzBlank = 0; window.__pzFlicker = 0; window.__pzBlankIds = new Set();
+          const seen = new Map();
+          let last = performance.now();
+          const sample = () => {
+            const xf = world?.style.transform ?? "";
+            const t = /translate(?:3d)?\\((-?[0-9.]+)px,\\s*(-?[0-9.]+)px/.exec(xf);
+            const s = /scale\\(([0-9.]+)\\)/.exec(xf);
+            const tx = t ? Number(t[1]) : 0, ty = t ? Number(t[2]) : 0, scale = s ? Number(s[1]) : 1;
+            let frameBlank = false;
+            for (const bx of boxes) {
+              const left = bx.x * scale + tx, top = bx.y * scale + ty, w = bx.w * scale, h = bx.h * scale;
+              if (left + w <= 4 || top + h <= 4 || left >= innerWidth - 4 || top >= innerHeight - 4 || w < 24 || h < 18) continue;
+              const c = bx.c;
+              const isHtml = htmlSet.has(bx.id) || !!c.querySelector(".html-view-surface, .html-view");
+              const roomy = w >= 180 && h >= 110;
+              if (!isHtml && !roomy && !c.querySelector(".text-mark, .sz-gist")) continue;
+              let blank = false;
+              if (c.querySelector(".item-standby") || !c.firstElementChild) blank = true;
+              else if (isHtml) {
+                const img = c.querySelector("img.html-snapshot");
+                const snapOk = !!img && img.complete && img.naturalWidth > 0;
+                const liveOk = [...c.querySelectorAll("iframe")].some((fr) => !fr.classList.contains("arriving"));
+                if (!snapOk && !liveOk) blank = true;
+              }
+              if (blank) {
+                frameBlank = true;
+                window.__pzBlankIds.add(bx.id);
+                if (seen.get(bx.id) === "ready") window.__pzFlicker++;
+                seen.set(bx.id, "blank");
+              } else {
+                seen.set(bx.id, "ready");
+              }
+            }
+            if (frameBlank) window.__pzBlank++;
+          };
+          const f = (now) => {
+            window.__pzGaps.push(now - last); last = now;
+            window.__pzCams.add(world?.style.transform ?? "");
+            sample();
+            if (window.__pzOn) requestAnimationFrame(f);
+          };
+          window.__pzOn = true;
+          sample();
+          requestAnimationFrame(f);
+          return true;
+        })()`);
+
+        const wheel = (dx, dy, modifiers = 0) => b.send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 720, y: 450, deltaX: dx, deltaY: dy, modifiers });
+        for (let i = 0; i < 40; i++) {
+          await wheel(i < 20 ? 45 : -45, i % 2 ? 30 : -30);
+          await sleep(16);
+        }
+        for (let i = 0; i < 40; i++) {
+          await wheel(0, i < 20 ? 45 : -45, 2);
+          await sleep(16);
+        }
+        await sleep(250);
+
+        const got = await b.ev(`(() => {
+          window.__pzOn = false;
+          const s = window.__pzGaps.slice(1).sort((a, b) => a - b);
+          const p90 = s.length ? s[Math.min(s.length - 1, Math.floor(0.9 * s.length))] : 0;
+          return { frames: s.length, cams: window.__pzCams.size, p90: Math.round(p90 * 10) / 10, blank: window.__pzBlank, flicker: window.__pzFlicker, blankIds: [...window.__pzBlankIds] };
+        })()`);
+        if (got.cams < 12) throw new Error(`pan and zoom moved the camera through only ${got.cams} positions`);
+        if (got.blank > 0) throw new Error(`blank content appeared on ${got.blank} frame(s) during pan/zoom (${got.blankIds.join(", ")})`);
+        if (got.flicker > 0) throw new Error(`rendered content flickered ${got.flicker} time(s) during pan/zoom`);
+        if (got.p90 > 34) throw new Error(`pan/zoom p90 frame gap was ${got.p90} ms (budget 34 ms)`);
+        return got;
+      } finally {
+        await b.send("Emulation.clearDeviceMetricsOverride").catch(() => {});
+      }
+    },
+  },
 ];
 
 /**
