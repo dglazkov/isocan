@@ -21,6 +21,16 @@ notice. A what's-new with an entry every day is one nobody believes by the
 second week.
 
 
+## 15 October 2026
+
+- **Make a person a pass admitted your machine's person.** `isocan setup
+  <pass>` on a machine that already has someone keeps them as the default.
+  `isocan identity --home --as <actor id>` now switches the machine to the
+  admitted person, without folding anyone into anyone, and the same command
+  with the old id switches back. Tools that speak for the machine — scripts,
+  direct mode — then speak as them.
+
+
 ## 14 October 2026
 
 - **Say it like a designer.** Type "make the header pop more, it feels

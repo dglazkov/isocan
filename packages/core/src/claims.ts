@@ -585,15 +585,36 @@ export function bindName(
  * pass mints a badge carrying a named claim — "Jordan's tab and her daemon"),
  * so "one actor, one holder" was never going to survive, and the narrower
  * rule is already the shape the pass needs.
+ *
+ * **The machine's person is switched, never dropped** (15 Oct 2026). A claim
+ * that re-points the `home:` key at a DIFFERENT actor — `isocan identity
+ * --home --as <id>`, making a pass-admitted person this machine's default —
+ * keeps the person it displaced as a keyless row, the same shape a pass
+ * hands over (`bindHandoff`). The badge could speak as them a moment ago and
+ * nobody asked it to stop; dropping the row would make the switch one-way,
+ * because coming back is `as`, and `as` without a row on this badge is
+ * refused the moment any other surface still speaks as them. Only the home
+ * key: a coding harness's key re-pointed by `--session --as` still leaves the
+ * abandoned actor a stranger, as above.
  */
 export function bindClaim(
   claims: readonly ActorClaim[],
   envelope: { actor: Actor; ts: string; op: ActorClaimOp },
 ): ActorClaim[] {
   const { actor, ts, op } = envelope;
-  const kept = claims.filter(
-    (row) => row.actorId !== actor.id && row.sessionKey !== op.sessionKey,
-  );
+  const switchesPerson = harnessOf(op.sessionKey) === "home";
+  const kept: ActorClaim[] = [];
+  for (const row of claims) {
+    if (row.actorId === actor.id) continue;
+    if (row.sessionKey !== op.sessionKey) kept.push(row);
+    else if (switchesPerson) {
+      kept.push({
+        actorId: row.actorId,
+        boundAt: row.boundAt,
+        ...(row.canvasId !== undefined ? { canvasId: row.canvasId } : {}),
+      });
+    }
+  }
   kept.push({
     actorId: actor.id,
     boundAt: ts,

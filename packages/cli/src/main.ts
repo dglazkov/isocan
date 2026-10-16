@@ -482,6 +482,7 @@ import { DaemonRoutes, exportCanvases, exportItem, importExport, type ExportRepo
 import { gitBackup, type GitBackupReport } from "./backup-git.ts";
 import {
   adoptIdentity,
+  becomeHomePerson,
   readIdentity,
   claimSessionIdentity,
   linkedCanvasesOf,
@@ -1042,7 +1043,9 @@ async function relabelLiveSession(cmd: Command, actor: Actor): Promise<void> {
  * owner.
  */
 function identityTarget(opts: { session?: boolean; home?: boolean; as?: string }): "session" | "home" {
-  if (opts.session || opts.as !== undefined) return "session";
+  // `--as` resumes an agent's actor unless `--home` says it is the machine's
+  // person being switched (`isocan identity --home --as <id>`).
+  if (opts.session || (opts.as !== undefined && !opts.home)) return "session";
   if (opts.home) return "home";
   return process.stdin.isTTY ? "home" : "session";
 }
@@ -1091,7 +1094,10 @@ program
   )
   .option("--home", "name the person who owns this machine (~/.isocan)")
   .option("--new", "become a new person instead of renaming this one (fresh actor id)")
-  .option("--as <actorId>", "resume an existing actor whose session is gone (implies --session)")
+  .option(
+    "--as <actorId>",
+    "resume an existing actor whose session is gone (implies --session); with --home, make an actor this machine already speaks for (e.g. one a pass admitted) the machine's person — reversible, nothing folded",
+  )
   .option(
     "--join <actorId>",
     "fold that actor into the one this session is (with --home, into the machine's person) — its comments, mentions and undo become yours; cannot be undone",
@@ -1243,6 +1249,30 @@ program
             } catch (err) {
               console.error(
                 `warning: could not bind this directory to a canvas — ${(err as Error).message}`,
+              );
+            }
+            return;
+          }
+          if (opts.as !== undefined) {
+            if (opts.name !== undefined || opts.new) {
+              throw new Error(
+                "`--home --as` switches to an existing actor under its own name — " +
+                  'rename afterwards with `isocan identity --home --name "…"`',
+              );
+            }
+            const wanted = opts.as.trim();
+            const { actor, previous } = await becomeHomePerson(client, home, wanted).catch((err: Error) => {
+              throw new Error(
+                `this machine's badge cannot make ${wanted} its person — the home said: ${err.message}`,
+              );
+            });
+            console.log(
+              `this machine's person is now ${actor.name} (${actor.id}) → ${paths.identityFile(home)}`,
+            );
+            if (previous && previous.id !== actor.id) {
+              console.log(
+                `was ${previous.name} (${previous.id}) — still on this machine's badge; ` +
+                  `switch back with \`isocan identity --home --as ${previous.id}\``,
               );
             }
             return;
@@ -4818,7 +4848,7 @@ program
               ? `${actor.name} (${actor.id}) — handed over by the pass, saved to ${paths.identityFile(home)}`
               : `this machine already answers to ${actor.name} (${actor.id}); the pass's ` +
                 `${answer.actor.name} (${answer.actor.id}) is admitted but not made default — ` +
-                "`isocan whoami` shows which";
+                `\`isocan identity --home --as ${answer.actor.id}\` makes it this machine's person (reversible)`;
           }
         }
 
