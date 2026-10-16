@@ -170,11 +170,11 @@
      floats directly over the canvas (`.floats`, `.tool-rail`, `.zoom-controls`,
      `.minimap`, `.scrubber`, `.ink-well`, `.marks`). Distinct from `--panel`
      (held near-opaque by `menuground.test.ts` so context menus and sticky
-     headers never muddle text over dark work): glass lets enough of the blurred
-     canvas through (~68–78%) to diffuse dark items into a soft liquid cloud
-     while a crisp top specular rim (`--shadow-glass`) keeps its edge continuous
-     across light and dark grounds alike. */
-  --glass: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(250, 250, 248, 0.64) 100%);
+     headers never muddle text over dark work): glass holds ~88–92% opacity so
+     bright or dark items behind floating controls never wash out text or icons,
+     while `blur(22px)` and a crisp top specular rim (`--shadow-glass`) keep its
+     frosted edge continuous across light and dark grounds alike. */
+  --glass: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(250, 250, 248, 0.88) 100%);
   --glass-border: rgba(30, 34, 40, 0.11);
   --glass-chip: rgba(30, 34, 40, 0.055);
   --glass-chip-hover: rgba(30, 34, 40, 0.095);
@@ -403,7 +403,7 @@
   --running: #3fca8b;
   --guide-spacing: #a672f0;
   --panel: rgba(23, 26, 31, 0.9);
-  --glass: linear-gradient(180deg, rgba(36, 40, 48, 0.76) 0%, rgba(23, 26, 31, 0.64) 100%);
+  --glass: linear-gradient(180deg, rgba(36, 40, 48, 0.92) 0%, rgba(23, 26, 31, 0.88) 100%);
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-chip: rgba(255, 255, 255, 0.07);
   --glass-chip-hover: rgba(255, 255, 255, 0.12);

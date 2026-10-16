@@ -44,6 +44,16 @@ describe("everything that floats wears the same slab", () => {
     expect(rule).toMatch(/border:\s*1px solid var\(--glass-border\)/);
     expect(rule).toMatch(/box-shadow:\s*var\(--shadow-glass\)/);
     expect(css, "specular top edge in --shadow-glass").toMatch(/--shadow-glass:\s*inset 0 1px 0/);
+
+    const glasses = [...css.matchAll(/--glass:\s*([^;]+);/g)].map((m) => m[1] ?? "");
+    expect(glasses.length, "--glass declared in light and dark").toBe(2);
+    for (const glass of glasses) {
+      const alphas = [...glass.matchAll(/rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\)/g)].map((m) => Number(m[1]));
+      expect(alphas.length, `--glass gradient stops in ${glass}`).toBeGreaterThanOrEqual(2);
+      for (const alpha of alphas) {
+        expect(alpha, `--glass stop ${alpha} must stay >= 0.85 so canvas items do not wash out text`).toBeGreaterThanOrEqual(0.85);
+      }
+    }
   });
 
   it("is worn by every floating surface", () => {
