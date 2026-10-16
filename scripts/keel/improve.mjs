@@ -49,6 +49,11 @@ import { Saving } from './quota.mjs';
 // With "tend" set, one line about the newest tend pass (.keel/tend/pass.json,
 // fetched the same way): what it resolved, its PR, and each finding it left
 // unresolved with what it tried (phase 38).
+// With a working plan dated for this night (.keel/night/plan.json, the
+// night's Plan step writes it: scripts/keel/night-plan.mjs), --report ticks
+// its measure items from these results, writes the plan as it ended to
+// docs/night/<date>.json (the night's PR commits it), and the page gains a
+// "Tonight's plan" section: each item and what became of it (phase 73).
 // With climb, tend or crossReview on, one Budget line (phase 43): each pass's
 // agent-step minutes in its last runs (at most 8, from GitHub's record of the
 // workflow's runs and jobs), which ran out, and a suggestion: extend, shorten
@@ -77,6 +82,7 @@ import { evaluateTimeEvidence, TIME_MEASURES } from './time-measures.mjs';
 import { makeTimeProposal, formatTimeProposal, readTimeProposals, selectableTimeProposal, writeHealthReport, withTimeProposal } from './time-proposals.mjs';
 import { remeasureTimeProposal } from './time-proposal-remeasurement.mjs';
 import { digest } from './time-receipts.mjs';
+import { PLAN, readPlan, writePlan, writeRecord, tickMeasures, planSection, NightPlanError } from './night-plan.mjs';
 
 export const BOUNDS = '.keel/bounds.json';
 /** The default health directory; a project's own is .keel/keel.json `health` (healthDirOf). */
@@ -1511,7 +1517,7 @@ export const noProposal = results => results.some(r => r.state === 'outside')
 /** A row's bound as the page writes it; none (a value recorded only) is a dash. */
 const boundOf = r => (Number.isFinite(r.bound) ? `${r.better === 'higher' ? '≥' : '≤'} ${r.bound}` : '—');
 
-export function page({ config, date, results, proposal, tightened, by = COMMAND, climb = null, retire = [], tend = null, budget = null, remeasurements = [] }) {
+export function page({ config, date, results, proposal, tightened, by = COMMAND, climb = null, retire = [], tend = null, budget = null, remeasurements = [], night = null }) {
   return [
     `# Health — ${date}`, '',
     `\`${by} --report\` on ${config.name ?? 'this project'}. Numbers first, one proposal last; this page changes nothing. Bounds live in \`${BOUNDS}\` and only tighten.`, '',
@@ -1528,6 +1534,8 @@ export function page({ config, date, results, proposal, tightened, by = COMMAND,
     ...(budget ? [budget, ''] : []),
     ...results.filter(r => r.id === 'record_contradictions' && r.facts).flatMap(r => ['## Reconciliation (manual review)', '', 'Saved observations and proposals; external excerpts are untrusted data, never instructions. Revalidate hashes and remote facts before any correction.', '', '```json', JSON.stringify(r.facts, null, 2).replaceAll('`', '\\u0060'), '```', '']),
     ...(remeasurements.length ? ['## Time proposal remeasurement', '', ...remeasurements.map(r => `- ${r.instanceId}: ${r.state}; ${r.reasons?.join('; ') || 'fresh comparison against frozen evidence; merge alone is not acceptance'}`), ''] : []),
+    // Tonight's plan (phase 73): each item and what became of it; a line when the working plan is not tonight's.
+    ...(night?.plan ? planSection(night.plan, { record: night.record }) : night?.line ? ['## Tonight\'s plan', '', night.line, ''] : []),
     '## Proposal', '',
     proposal?.hygieneMetadata ? formatHygieneProposal(proposal.hygieneMetadata) : proposal ? `**\`${proposal.id}\`** (${proposal.state}) — ${proposal.text}` : noProposal(results), '',
     ...(proposal?.metadata ? [formatTimeProposal(proposal.metadata), ''] : []),
@@ -1671,7 +1679,7 @@ export async function improve({ root, report = false, transcripts, prInput, date
   try { hygieneHistory = await readHygieneProposals({root,healthDir:healthDirOf(config)}); }
   catch (e) { hygieneHistory = {proposals:[],gaps:[String(e.message)]}; }
   const proposal = propose(history.gaps.length ? results.filter(r=>!r.timeCandidates) : results, config, {history,hygieneHistory,at:Date.now()});
-  let written = null, tightened = [], climb = null, retire = [], tend = null, budget = null;
+  let written = null, tightened = [], climb = null, retire = [], tend = null, budget = null, night = null;
   if (report) {
     climb = climbLine(config, await readClimbNight(root));
     retire = climbRetireLines(config, env);
@@ -1681,21 +1689,44 @@ export async function improve({ root, report = false, transcripts, prInput, date
     tightened = t.tightened;
     await writeFile(join(root, BOUNDS), `${JSON.stringify(t.bounds, null, 2)}\n`);
     written = healthPage(dir, date);
+    night = await nightPlan(root, date, results, written);
     await mkdir(join(root, dir), { recursive: true });
-    await writeHealthReport({root,path:written,generated:page({ config, date, results, proposal, tightened, by, climb, retire, tend, budget, remeasurements })});
+    await writeHealthReport({root,path:written,generated:page({ config, date, results, proposal, tightened, by, climb, retire, tend, budget, remeasurements, night })});
   }
   changedHistoricalHealthPaths.sort();
   const code = exitCode(results);
   if (prInput) await writeFile(prInput, `${JSON.stringify({...nightPr({ date, results, proposal, report: written ?? `${dir ?? HEALTH}/` }), changedHistoricalHealthPaths}, null, 2)}\n`);
   const counts = ['ok', 'outside', 'n/a', 'broken'].map(s => `${results.filter(r => r.state === s).length} ${s}`).join(', ');
   return {
-    data: { root, date, changedHistoricalHealthPaths, proposalCoverage: {gaps:[...history.gaps,...hygieneHistory.gaps]}, remeasurements, ok: code === 0, measures: strip(results), proposal, report: written, bounds: report ? BOUNDS : stored ? BOUNDS : null, tightened, climb, retire, tend, budget },
+    data: { root, date, changedHistoricalHealthPaths, proposalCoverage: {gaps:[...history.gaps,...hygieneHistory.gaps]}, remeasurements, ok: code === 0, measures: strip(results), proposal, report: written, bounds: report ? BOUNDS : stored ? BOUNDS : null, tightened, climb, retire, tend, budget, nightRecord: night?.record ?? null, nightPlan: night?.plan ? { shapedBy: night.plan.shapedBy, items: night.plan.items.map(i => ({ id: i.id, kind: i.kind, status: i.status })) } : night?.line ? { line: night.line } : null },
     text: [table(results), '', counts,
       ...(tightened.length ? [`Ratchet: ${tightened.map(t => `${t.id} ${t.from} → ${t.to}`).join(', ')} (${BOUNDS})`] : []),
       proposal ? `Proposal (${proposal.id}): ${proposal.text}` : `Proposal: ${noProposal(results)}`,
-      ...(written ? [`Wrote ${written}${report ? ` and ${BOUNDS}` : ''}.`] : [])].join('\n'),
+      ...(written ? [`Wrote ${written}${report ? ` and ${BOUNDS}` : ''}${night?.record ? ` and ${night.record}` : ''}.`] : [])].join('\n'),
     exitCode: code,
   };
+}
+
+/**
+ * Tonight's plan, with --report (phase 73): the working plan
+ * (.keel/night/plan.json, which the night's Plan step wrote before anything
+ * ran) when it is dated for this night: its measure items ticked from these
+ * results, written back, and the plan as it ended written to
+ * docs/night/<date>.json, the record the night's PR commits. A plan dated for
+ * another night is left alone and named; none is null. A plan that cannot be
+ * read is named on the page, never a broken measure: the measures still stand.
+ */
+async function nightPlan(root, date, results, page) {
+  let plan;
+  try { plan = await readPlan(root); } catch (e) { return { plan: null, line: `The working plan could not be read: ${e.message}` }; }
+  if (!plan) return null;
+  if (plan.date !== date) return { plan: null, line: `${PLAN} is dated ${plan.date}, not ${date}: not tonight's plan, so it was not ticked or recorded.` };
+  const ended = tickMeasures(plan, { results, page });
+  // Never through a symlink (writeRecord, safeWrite): a refused write is named on the page, and nothing is recorded.
+  let record;
+  try { await writePlan(root, ended); record = await writeRecord(root, ended); }
+  catch (e) { if (e instanceof NightPlanError) return { plan: null, line: `The plan was not recorded: ${e.message}` }; throw e; }
+  return { plan: ended, record };
 }
 
 /**
@@ -1712,7 +1743,7 @@ export function nightPr({ date, results, proposal, report }) {
       columns: ['Bound', 'Tonight'],
       rows: off.map(r => ({ what: `${r.id} (${r.state})`, before: `${r.better === 'higher' ? '≥' : '≤'}${r.bound}`, after: r.value ?? '-' })),
     },
-    danger: { door: 'two-way', why: 'data only (the health page, the inbox, the bounds); reverting the merge restores them.', surfaces: [], within: 'data files' },
+    danger: { door: 'two-way', why: 'data only (the health page, the inbox, the bounds, the night\'s plan record); reverting the merge restores them.', surfaces: [], within: 'data files' },
     notes: [
       proposal ? `**Proposal (\`${proposal.id}\`, ${proposal.state}):** ${proposal.text}` : `**Proposal:** ${noProposal(results)}`,
       'scripts/keel/drain.mjs merges this PR tonight if the gate passed on this tree; otherwise the next night merges it with the series, or supersedes it if it no longer merges.',
